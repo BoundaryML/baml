@@ -8,18 +8,18 @@
 //! refused with nothing created.
 
 use bridge_ctypes::{
+    ProtoHead,
     baml_bridge::cffi::{
-        BamlHandle, BamlHandleType, InboundClassValue, InboundEnumValue, InboundListValue,
+        BamlHandle, BamlHandleType, BamlTy, InboundClassValue, InboundEnumValue, InboundListValue,
         InboundMapEntry, InboundMapValue, InboundValue, inbound_map_entry::Key,
         inbound_value::Value,
     },
-    baml_ty_depth, runtime_ty_to_proto_ty,
+    baml_ty_depth, wire_ty_to_proto_ty,
 };
 use num_bigint::BigInt;
 
 use crate::{
-    facts::Facts,
-    host::{Host, HostValue, LeafWire, Owner, Scalar},
+    host::{Host, HostValue, LeafWire, Owner, Scalar, StatedTy},
     plan::{KeyNode, Node},
 };
 
@@ -27,28 +27,24 @@ use crate::{
 /// decoder counts them, from the plan alone. Exact for everything but a
 /// leaf's payload, whose nesting the host produces at commit and the final
 /// measure catches; this one refuses the common case before any effect.
-pub(crate) fn depth<V>(facts: &Facts, node: &Node<'_, V>) -> usize {
-    let statement = |ty: &baml_type::RuntimeTy| {
-        1 + baml_ty_depth(&runtime_ty_to_proto_ty(&facts.stated_form(ty.clone())))
-    };
+pub(crate) fn depth<V>(node: &Node<'_, V, StatedTy>) -> usize {
+    // A live head's key does not change how deep the statement nests.
+    let statement =
+        |ty: &StatedTy| 1 + baml_ty_depth(&wire_ty_to_proto_ty(ty, &mut |_| ProtoHead::Live(1)));
     match node {
         Node::Null | Node::Scalar { .. } => 0,
         // `InboundEnumValue`, `BamlHandle`: one message, no nesting.
         Node::EnumVariant { .. } | Node::Leaf { .. } => 1,
         Node::Callable { signature, .. } => statement(signature).max(1),
         // `InboundListValue` → each `InboundValue`.
-        Node::List { ty, items } => statement(ty).max(
-            1 + items
-                .iter()
-                .map(|item| 1 + depth(facts, item))
-                .max()
-                .unwrap_or(0),
-        ),
+        Node::List { ty, items } => {
+            statement(ty).max(1 + items.iter().map(|item| 1 + depth(item)).max().unwrap_or(0))
+        }
         // `InboundMapValue` → `InboundMapEntry` → `InboundValue`.
         Node::Map { ty, entries } => statement(ty).max(
             1 + entries
                 .iter()
-                .map(|(_, item)| 2 + depth(facts, item))
+                .map(|(_, item)| 2 + depth(item))
                 .max()
                 .unwrap_or(0),
         ),
@@ -56,7 +52,7 @@ pub(crate) fn depth<V>(facts: &Facts, node: &Node<'_, V>) -> usize {
         Node::Class { ty, fields } => statement(ty).max(
             1 + fields
                 .iter()
-                .map(|(_, item)| 2 + depth(facts, item))
+                .map(|(_, item)| 2 + depth(item))
                 .max()
                 .unwrap_or(0),
         ),
@@ -67,8 +63,7 @@ pub(crate) fn depth<V>(facts: &Facts, node: &Node<'_, V>) -> usize {
 /// `created`. A host failure leaves `created` holding what preceded it, for
 /// the caller to release.
 pub(crate) fn commit<V: HostValue, H: Host<V>>(
-    facts: &Facts,
-    node: &Node<'_, V>,
+    node: &Node<'_, V, StatedTy>,
     host: &H,
     created: &mut Vec<Owner>,
 ) -> Result<InboundValue, V::Error> {
@@ -104,7 +99,9 @@ pub(crate) fn commit<V: HostValue, H: Host<V>>(
                     LeafWire::Handle(handle) => Value::Handle(handle),
                     LeafWire::Media(media) => Value::MediaValue(media),
                     LeafWire::Prompt(prompt) => Value::PromptAstValue(prompt),
-                    LeafWire::TypeValue(def) => Value::TyDefValue(def),
+                    // The type as the host holds it: no alias is expanded,
+                    // the value denotes exactly the type it was.
+                    LeafWire::TypeValue(ty) => Value::TyValue(referenced(&ty, host, created)?),
                 }),
             })
         }
@@ -112,9 +109,7 @@ pub(crate) fn commit<V: HostValue, H: Host<V>>(
             let key = host.register(&value.value, signature)?;
             created.push(Owner::Callable(key));
             Ok(InboundValue {
-                value_type: Some(runtime_ty_to_proto_ty(
-                    &facts.stated_form(signature.clone()),
-                )),
+                value_type: Some(referenced(signature, host, created)?),
                 value: Some(Value::Handle(BamlHandle {
                     key: key.get(),
                     handle_type: BamlHandleType::HostValueCallable as i32,
@@ -124,10 +119,10 @@ pub(crate) fn commit<V: HostValue, H: Host<V>>(
         Node::List { ty, items } => {
             let values = items
                 .iter()
-                .map(|item| commit(facts, item, host, created))
+                .map(|item| commit(item, host, created))
                 .collect::<Result<Vec<_>, _>>()?;
             Ok(InboundValue {
-                value_type: Some(runtime_ty_to_proto_ty(&facts.stated_form(ty.clone()))),
+                value_type: Some(referenced(ty, host, created)?),
                 value: Some(Value::ListValue(InboundListValue { values })),
             })
         }
@@ -140,12 +135,12 @@ pub(crate) fn commit<V: HostValue, H: Host<V>>(
                     };
                     Ok(InboundMapEntry {
                         key: Some(key),
-                        value: Some(commit(facts, item, host, created)?),
+                        value: Some(commit(item, host, created)?),
                     })
                 })
                 .collect::<Result<Vec<_>, V::Error>>()?;
             Ok(InboundValue {
-                value_type: Some(runtime_ty_to_proto_ty(&facts.stated_form(ty.clone()))),
+                value_type: Some(referenced(ty, host, created)?),
                 value: Some(Value::MapValue(InboundMapValue { entries })),
             })
         }
@@ -155,16 +150,34 @@ pub(crate) fn commit<V: HostValue, H: Host<V>>(
                 .map(|(name, item)| {
                     Ok(InboundMapEntry {
                         key: Some(Key::StringKey(name.clone())),
-                        value: Some(commit(facts, item, host, created)?),
+                        value: Some(commit(item, host, created)?),
                     })
                 })
                 .collect::<Result<Vec<_>, V::Error>>()?;
             Ok(InboundValue {
-                value_type: Some(runtime_ty_to_proto_ty(&facts.stated_form(ty.clone()))),
+                value_type: Some(referenced(ty, host, created)?),
                 value: Some(Value::ClassValue(InboundClassValue { fields })),
             })
         }
     }
+}
+
+/// `ty` on the wire as it is, every runtime declaration it names referenced
+/// by a fresh reference of the host's, one per occurrence, each recorded for
+/// the caller to release if the request never reaches the engine.
+pub(crate) fn referenced<V: HostValue, H: Host<V>>(
+    ty: &StatedTy,
+    host: &H,
+    created: &mut Vec<Owner>,
+) -> Result<BamlTy, V::Error> {
+    let referenced = ty.try_map_live(&mut |declaration| {
+        let reference = host.reference(declaration)?;
+        created.push(Owner::Handle(reference));
+        Ok(reference)
+    })?;
+    Ok(wire_ty_to_proto_ty(&referenced, &mut |key| {
+        ProtoHead::Live(key.get())
+    }))
 }
 
 /// Bigints cross the wire in base sixteen with a leading minus.

@@ -29,11 +29,11 @@ use std::{
     },
 };
 
-use baml_type::{Name, RuntimeFunctionParamTy, TypeName};
+use baml_type::{Name, TypeName};
 use bex_engine::{
     BexEngine, BexExternalValue, CancellationToken, EngineError, FunctionCallContextBuilder,
-    RuntimeTy,
 };
+use bex_external_types::{WireFunctionParamTy, WireHead, WireTy};
 use bex_resource_types::{HostValueArc, HostValueKind};
 use bridge_ctypes::{
     OwnedHostInvocation,
@@ -323,15 +323,15 @@ fn complete_with_test_error(call_id: u32, class_name: &str, message: &str) {
 /// signature leaves a callback's error type open).
 fn callable(
     arc: &Arc<HostValueArc>,
-    params: &[RuntimeTy],
-    ret: RuntimeTy,
-    throws: RuntimeTy,
+    params: &[WireTy],
+    ret: WireTy,
+    throws: WireTy,
 ) -> BexExternalValue {
     BexExternalValue::HostCallable {
         handle: Arc::clone(arc),
         params: params
             .iter()
-            .map(|ty| RuntimeFunctionParamTy::required(None, ty.clone()))
+            .map(|ty| WireFunctionParamTy::required(None, ty.clone()))
             .collect(),
         ret: Box::new(ret),
         throws: Box::new(throws),
@@ -339,8 +339,8 @@ fn callable(
 }
 
 /// The existential type of the interface `name`.
-fn interface(name: &str) -> RuntimeTy {
-    RuntimeTy::Interface(TypeName::from_dotted_path(name), Box::new([]), Box::new([]))
+fn interface(name: &str) -> WireTy {
+    WireTy::static_interface(TypeName::from_dotted_path(name))
 }
 
 /// Register a per-key behaviour and return a `HostValueArc` whose key is
@@ -394,12 +394,7 @@ async fn host_callable_returns_int_result() {
         .call_function(
             "add_one",
             vec![
-                callable(
-                    &arc,
-                    &[RuntimeTy::int()],
-                    RuntimeTy::int(),
-                    RuntimeTy::unknown(),
-                ),
+                callable(&arc, &[WireTy::int()], WireTy::int(), WireTy::unknown()),
                 BexExternalValue::Int(41),
             ],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
@@ -449,12 +444,7 @@ async fn host_callable_handle_can_be_invoked_as_engine_entry_point() {
     let retained = engine
         .call_function(
             "retain_callable",
-            vec![callable(
-                &arc,
-                &[RuntimeTy::int()],
-                RuntimeTy::int(),
-                RuntimeTy::Never,
-            )],
+            vec![callable(&arc, &[WireTy::Int], WireTy::Int, WireTy::Never)],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             false,
         )
@@ -505,12 +495,12 @@ async fn an_explicit_type_argument_wins_over_a_live_handles_type() {
     // The closure's own type is `(int) -> int throws never`; the host binds
     // `T` to the wider `((int) -> int throws never) | null`. The frame holds
     // the host's `T`, so the list comes back at the wider element type.
-    let closure_ty = RuntimeTy::Function {
-        params: Box::new([RuntimeFunctionParamTy::required(None, RuntimeTy::int())]),
-        ret: Box::new(RuntimeTy::int()),
-        throws: Box::new(RuntimeTy::Never),
+    let closure_ty = WireTy::Function {
+        params: Box::new([WireFunctionParamTy::required(None, WireTy::int())]),
+        ret: Box::new(WireTy::int()),
+        throws: Box::new(WireTy::Never),
     };
-    let wide = RuntimeTy::Union(Box::new([closure_ty, RuntimeTy::Null]));
+    let wide = WireTy::Union(Box::new([closure_ty, WireTy::Null]));
     let wrapped = engine
         .call_function(
             "wrap",
@@ -563,7 +553,7 @@ async fn a_callable_value_takes_no_type_arguments() {
             handle,
             vec![BexExternalValue::Int(5)],
             FunctionCallContextBuilder::new(sys_types::CallId::next())
-                .with_type_args(IndexMap::from([("T".to_string(), RuntimeTy::int())]))
+                .with_type_args(IndexMap::from([("T".to_string(), WireTy::int())]))
                 .build(),
             true,
         )
@@ -623,7 +613,7 @@ async fn host_callable_arguments_preserve_closed_union_selected_arm_on_wire() {
             f(value)
         }
     "#;
-    let union_ty = RuntimeTy::union([RuntimeTy::int(), RuntimeTy::string()]);
+    let union_ty = WireTy::Union(Box::new([WireTy::Int, WireTy::String]));
     let arc = register_host_callable(|items| {
         let Some(baml_outbound_value::Value::UnionVariantValue(union)) =
             items.first().and_then(|value| value.value.as_ref())
@@ -654,7 +644,7 @@ async fn host_callable_arguments_preserve_closed_union_selected_arm_on_wire() {
                     &arc,
                     std::slice::from_ref(&union_ty),
                     union_ty.clone(),
-                    RuntimeTy::unknown(),
+                    WireTy::unknown(),
                 ),
                 BexExternalValue::Int(7),
             ],
@@ -667,7 +657,7 @@ async fn host_callable_arguments_preserve_closed_union_selected_arm_on_wire() {
         panic!("expected selected union result")
     };
     assert_eq!(metadata.union_type, union_ty);
-    assert_eq!(metadata.selected_option, RuntimeTy::string());
+    assert_eq!(metadata.selected_option, WireTy::string());
     assert!(matches!(*value, BexExternalValue::String(ref text) if text.as_str() == "seven"));
     drop(arc);
 }
@@ -713,12 +703,12 @@ async fn host_callable_argument_selects_implemented_interface_arm_on_wire() {
             "invoke",
             vec![callable(
                 &arc,
-                &[RuntimeTy::union([
+                &[WireTy::Union(Box::new([
                     interface("Failure"),
-                    RuntimeTy::string(),
-                ])],
-                RuntimeTy::string(),
-                RuntimeTy::unknown(),
+                    WireTy::String,
+                ]))],
+                WireTy::String,
+                WireTy::Unknown,
             )],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true,
@@ -743,8 +733,8 @@ async fn host_callable_union_envelope_preserves_empty_container_arm_identity() {
             f(value)
         }
     "#;
-    let int_list = RuntimeTy::List(Box::new(RuntimeTy::int()));
-    let string_list = RuntimeTy::List(Box::new(RuntimeTy::string()));
+    let int_list = WireTy::List(Box::new(WireTy::int()));
+    let string_list = WireTy::List(Box::new(WireTy::string()));
     let arc = register_host_callable(|items| {
         let Some(baml_outbound_value::Value::UnionVariantValue(union)) =
             items.first().and_then(|value| value.value.as_ref())
@@ -764,7 +754,7 @@ async fn host_callable_union_envelope_preserves_empty_container_arm_identity() {
         };
         assert!(list.items.is_empty());
         FakeReturn::Ok(BexExternalValue::Array {
-            element_type: RuntimeTy::string(),
+            element_type: WireTy::string(),
             items: vec![],
         })
     });
@@ -779,12 +769,15 @@ async fn host_callable_union_envelope_preserves_empty_container_arm_identity() {
             vec![
                 callable(
                     &arc,
-                    &[RuntimeTy::union([int_list.clone(), string_list.clone()])],
-                    RuntimeTy::union([int_list.clone(), string_list.clone()]),
-                    RuntimeTy::unknown(),
+                    &[WireTy::Union(Box::new([
+                        int_list.clone(),
+                        string_list.clone(),
+                    ]))],
+                    WireTy::Union(Box::new([int_list.clone(), string_list.clone()])),
+                    WireTy::Unknown,
                 ),
                 BexExternalValue::Array {
-                    element_type: RuntimeTy::int(),
+                    element_type: WireTy::int(),
                     items: vec![],
                 },
             ],
@@ -848,12 +841,12 @@ async fn host_callable_optional_union_is_omitted_or_sent_with_selected_arm() {
             "invoke",
             vec![BexExternalValue::HostCallable {
                 handle: Arc::clone(&arc),
-                params: Box::new([RuntimeFunctionParamTy::optional(
+                params: Box::new([WireFunctionParamTy::optional(
                     Some(Name::new("value")),
-                    RuntimeTy::union([RuntimeTy::int(), RuntimeTy::string()]),
+                    WireTy::Union(Box::new([WireTy::Int, WireTy::String])),
                 )]),
-                ret: Box::new(RuntimeTy::int()),
-                throws: Box::new(RuntimeTy::unknown()),
+                ret: Box::new(WireTy::int()),
+                throws: Box::new(WireTy::unknown()),
             }],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true,
@@ -909,7 +902,7 @@ async fn host_callable_invoked_from_native_map_continuation() {
     );
 
     let xs = BexExternalValue::Array {
-        element_type: baml_type::RuntimeTy::int(),
+        element_type: baml_type::WireTy::int(),
         items: vec![
             BexExternalValue::Int(1),
             BexExternalValue::Int(2),
@@ -920,12 +913,7 @@ async fn host_callable_invoked_from_native_map_continuation() {
         .call_function(
             "map_double",
             vec![
-                callable(
-                    &arc,
-                    &[RuntimeTy::int()],
-                    RuntimeTy::int(),
-                    RuntimeTy::unknown(),
-                ),
+                callable(&arc, &[WireTy::int()], WireTy::int(), WireTy::unknown()),
                 xs,
             ],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
@@ -974,7 +962,7 @@ async fn host_callable_invoked_from_native_map_continuation() {
 //     values are exactly the user args, in order: `[Int(7), Int(8)]`. If
 //     `args[1]` carried the ret_ty `Object::Type` instead, the glue's
 //     `BexExternalValue::Array` extraction would fail.
-//   * `args[2]` (ret_ty) — proven to carry the declared return `RuntimeTy` (`int`):
+//   * `args[2]` (ret_ty) — proven to carry the declared return `WireTy` (`int`):
 //     the host returns the sum (an `Int`), which only passes return-type
 //     validation if `type_arg_0` decoded to `int`. If `args[2]` carried the
 //     args pack instead, `as_baml_type_owned` would fail and the call would
@@ -1029,9 +1017,9 @@ async fn host_callable_sysop_operand_layout_is_pinned() {
             vec![
                 callable(
                     &arc,
-                    &[RuntimeTy::int(), RuntimeTy::int()],
-                    RuntimeTy::int(),
-                    RuntimeTy::unknown(),
+                    &[WireTy::int(), WireTy::int()],
+                    WireTy::int(),
+                    WireTy::unknown(),
                 ),
                 BexExternalValue::Int(7),
                 BexExternalValue::Int(8),
@@ -1085,8 +1073,8 @@ async fn host_callable_int_returned_for_float_is_a_contract_violation() {
         .call_function(
             "measure",
             vec![
-                callable(&float, &[], RuntimeTy::float(), RuntimeTy::unknown()),
-                callable(&size, &[], RuntimeTy::class("Size"), RuntimeTy::unknown()),
+                callable(&float, &[], WireTy::Float, WireTy::Unknown),
+                callable(&size, &[], WireTy::static_class("Size"), WireTy::unknown()),
             ],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true,
@@ -1145,7 +1133,7 @@ async fn host_thrown_panic_stays_a_panic_whatever_the_callable_declares() {
     let result = engine
         .call_function(
             "run",
-            vec![callable(&exits, &[], RuntimeTy::int(), RuntimeTy::Never)],
+            vec![callable(&exits, &[], WireTy::int(), WireTy::Never)],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true,
         )
@@ -1188,12 +1176,7 @@ async fn host_callable_wrong_return_type_panics_as_host_contract_violation() {
         .call_function(
             "add_one",
             vec![
-                callable(
-                    &arc,
-                    &[RuntimeTy::int()],
-                    RuntimeTy::int(),
-                    RuntimeTy::unknown(),
-                ),
+                callable(&arc, &[WireTy::int()], WireTy::int(), WireTy::unknown()),
                 BexExternalValue::Int(41),
             ],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
@@ -1272,9 +1255,9 @@ async fn host_callable_wrong_return_with_declared_throws_keeps_return_diagnostic
             vec![
                 callable(
                     &arc,
-                    &[RuntimeTy::int()],
-                    RuntimeTy::int(),
-                    RuntimeTy::class("ParseError"),
+                    &[WireTy::int()],
+                    WireTy::int(),
+                    WireTy::static_class("ParseError"),
                 ),
                 BexExternalValue::Int(41),
             ],
@@ -1439,8 +1422,8 @@ async fn host_callable_wrong_class_field_type_panics_as_host_contract_violation(
             vec![callable(
                 &arc,
                 &[],
-                RuntimeTy::class("Point"),
-                RuntimeTy::unknown(),
+                WireTy::static_class("Point"),
+                WireTy::unknown(),
             )],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true,
@@ -1478,7 +1461,7 @@ async fn host_callable_wrong_generic_class_field_type_panics_as_host_contract_vi
         );
         FakeReturn::Ok(BexExternalValue::Instance {
             class_name: "Box".to_string(),
-            type_args: vec![RuntimeTy::int()],
+            type_args: vec![WireTy::int()],
             fields,
         })
     });
@@ -1495,11 +1478,11 @@ async fn host_callable_wrong_generic_class_field_type_panics_as_host_contract_vi
             vec![callable(
                 &arc,
                 &[],
-                RuntimeTy::Class(
-                    TypeName::from_dotted_path("Box"),
-                    Box::new([RuntimeTy::int()]),
+                WireTy::Class(
+                    WireHead::Static(TypeName::from_dotted_path("Box")),
+                    Box::new([WireTy::int()]),
                 ),
-                RuntimeTy::unknown(),
+                WireTy::unknown(),
             )],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true,
@@ -1548,12 +1531,7 @@ async fn host_callable_bridge_failure_surfaces_as_internal_error() {
         .call_function(
             "call_cb",
             vec![
-                callable(
-                    &arc,
-                    &[RuntimeTy::int()],
-                    RuntimeTy::int(),
-                    RuntimeTy::unknown(),
-                ),
+                callable(&arc, &[WireTy::int()], WireTy::int(), WireTy::unknown()),
                 BexExternalValue::Int(1),
             ],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
@@ -1631,9 +1609,9 @@ async fn host_callable_off_contract_throw_panics_as_host_contract_violation() {
             vec![
                 callable(
                     &arc,
-                    &[RuntimeTy::int()],
-                    RuntimeTy::int(),
-                    RuntimeTy::class("ParseError"),
+                    &[WireTy::int()],
+                    WireTy::int(),
+                    WireTy::static_class("ParseError"),
                 ),
                 BexExternalValue::Int(1),
             ],
@@ -1658,7 +1636,7 @@ async fn host_callable_off_contract_throw_panics_as_host_contract_violation() {
 //         Pins the fix that routes the contract check through the canonical,
 //         program-aware type algebra (`baml_type::normalize::is_subtype` over the
 //         VM as its `TypeContext`), which resolves interface membership. The prior
-//         context-free `RuntimeTy::is_subtype_of` fork saw no membership —
+//         context-free `WireTy::is_subtype_of` fork saw no membership —
 //         `Class <: Interface` was simply `false` — and would have wrongly
 //         rejected this throw as a contract violation.
 // ============================================================================
@@ -1698,12 +1676,7 @@ async fn host_callable_throw_implementing_interface_contract_is_on_contract() {
         .call_function(
             "call_typed",
             vec![
-                callable(
-                    &arc,
-                    &[RuntimeTy::int()],
-                    RuntimeTy::int(),
-                    interface("Failure"),
-                ),
+                callable(&arc, &[WireTy::int()], WireTy::int(), interface("Failure")),
                 BexExternalValue::Int(1),
             ],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
@@ -1747,12 +1720,7 @@ async fn unhandled_throw_selects_implemented_interface_arm_in_throws_union() {
         .call_function(
             "call_typed",
             vec![
-                callable(
-                    &arc,
-                    &[RuntimeTy::int()],
-                    RuntimeTy::int(),
-                    interface("Failure"),
-                ),
+                callable(&arc, &[WireTy::int()], WireTy::int(), interface("Failure")),
                 BexExternalValue::Int(1),
             ],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
@@ -1766,7 +1734,7 @@ async fn unhandled_throw_selects_implemented_interface_arm_in_throws_union() {
                 assert!(
                     matches!(
                         &metadata.selected_option,
-                        RuntimeTy::Interface(name, _, _) if name.to_string() == "user.Failure"
+                        WireTy::Interface(WireHead::Static(name), _, _) if name.to_string() == "user.Failure"
                     ),
                     "expected the Failure interface arm, got {:?}",
                     metadata.selected_option,
@@ -1821,7 +1789,7 @@ async fn root_return_selects_implemented_interface_arm_in_union() {
     };
     assert!(matches!(
         &metadata.selected_option,
-        RuntimeTy::Interface(name, _, _) if name.to_string() == "user.Failure"
+        WireTy::Interface(WireHead::Static(name), _, _) if name.to_string() == "user.Failure"
     ));
     assert!(matches!(
         value.as_ref(),
@@ -1833,7 +1801,7 @@ async fn root_return_selects_implemented_interface_arm_in_union() {
 // ============================================================================
 // Undeclared callback ⇒ `throws unknown` contract accepts a native throw as
 //         opaque. The synthesized effect param has no frame slot, so it
-//         reaches the FFI entry boundary as `RuntimeTy::Unknown` and the contract
+//         reaches the FFI entry boundary as `WireTy::Unknown` and the contract
 //         check at `materialize_host_throw` treats any thrown value as
 //         on-contract — including the opaque `baml.errors.HostCallable`
 //         Instance the bridge synthesizes for a native host exception. The
@@ -1876,12 +1844,7 @@ async fn host_callable_undeclared_callback_accepts_native_throw_as_opaque() {
         .call_function(
             "call_untyped",
             vec![
-                callable(
-                    &arc,
-                    &[RuntimeTy::int()],
-                    RuntimeTy::int(),
-                    RuntimeTy::unknown(),
-                ),
+                callable(&arc, &[WireTy::int()], WireTy::int(), WireTy::unknown()),
                 BexExternalValue::Int(1),
             ],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
@@ -1943,10 +1906,10 @@ async fn host_callable_throw_caught_in_baml() {
             vec![
                 callable(
                     &arc,
-                    &[RuntimeTy::int()],
-                    RuntimeTy::string(),
-                    RuntimeTy::Class(
-                        TypeName::from_dotted_path("baml.errors.HostCallable"),
+                    &[WireTy::int()],
+                    WireTy::string(),
+                    WireTy::Class(
+                        WireHead::Static(TypeName::from_dotted_path("baml.errors.HostCallable")),
                         Box::new([]),
                     ),
                 ),
@@ -2010,10 +1973,10 @@ async fn host_callable_throw_normalized_as_unknown_error_preserves_context() {
             vec![
                 callable(
                     &arc,
-                    &[RuntimeTy::int()],
-                    RuntimeTy::string(),
-                    RuntimeTy::Class(
-                        TypeName::from_dotted_path("baml.errors.HostCallable"),
+                    &[WireTy::int()],
+                    WireTy::string(),
+                    WireTy::Class(
+                        WireHead::Static(TypeName::from_dotted_path("baml.errors.HostCallable")),
                         Box::new([]),
                     ),
                 ),
@@ -2097,12 +2060,7 @@ async fn host_callable_cancel_evicts_in_flight_entry() {
             .call_function(
                 "add_one",
                 vec![
-                    callable(
-                        &arc_for_call,
-                        &[RuntimeTy::int()],
-                        RuntimeTy::int(),
-                        RuntimeTy::unknown(),
-                    ),
+                    callable(&arc_for_call, &[WireTy::Int], WireTy::Int, WireTy::Unknown),
                     BexExternalValue::Int(41),
                 ],
                 ctx,
@@ -2180,8 +2138,8 @@ async fn host_callable_wrong_enum_identity_panics_as_host_contract_violation() {
             vec![callable(
                 &arc,
                 &[],
-                RuntimeTy::Enum(TypeName::from_dotted_path("Color")),
-                RuntimeTy::unknown(),
+                WireTy::Enum(WireHead::Static(TypeName::from_dotted_path("Color"))),
+                WireTy::unknown(),
             )],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true,
@@ -2210,12 +2168,7 @@ async fn host_callable_returning_a_callable_can_be_invoked() {
     let returned = register_host_callable(|_items| FakeReturn::Ok(BexExternalValue::Int(99)));
     let returned_for_cb = Arc::clone(&returned);
     let arc = register_host_callable(move |_items| {
-        FakeReturn::Ok(callable(
-            &returned_for_cb,
-            &[],
-            RuntimeTy::int(),
-            RuntimeTy::Never,
-        ))
+        FakeReturn::Ok(callable(&returned_for_cb, &[], WireTy::Int, WireTy::Never))
     });
 
     let snapshot = compile_for_engine(source);
@@ -2230,13 +2183,13 @@ async fn host_callable_returning_a_callable_can_be_invoked() {
             vec![
                 callable(
                     &arc,
-                    &[RuntimeTy::int()],
-                    RuntimeTy::Function {
+                    &[WireTy::int()],
+                    WireTy::Function {
                         params: Box::new([]),
-                        ret: Box::new(RuntimeTy::int()),
-                        throws: Box::new(RuntimeTy::Never),
+                        ret: Box::new(WireTy::int()),
+                        throws: Box::new(WireTy::Never),
                     },
-                    RuntimeTy::unknown(),
+                    WireTy::unknown(),
                 ),
                 BexExternalValue::Int(1),
             ],
@@ -2256,7 +2209,7 @@ async fn host_callable_returning_a_callable_can_be_invoked() {
 // ============================================================================
 // A moving GC during the host-call await must not invalidate return-type
 //         validation. The engine captures the declared return type as an owned
-//         `RuntimeTy` before the await; if it instead re-read the raw `args[2]` heap
+//         `WireTy` before the await; if it instead re-read the raw `args[2]` heap
 //         pointer afterward, a GC during the await could relocate/collect that
 //         `Object::Type` (the engine-local `args` Vec is not a GC root and is
 //         never forwarded), so schema validation would read a dangling pointer
@@ -2293,12 +2246,7 @@ async fn host_call_ret_ty_survives_gc_during_await() {
             .call_function(
                 "add_one",
                 vec![
-                    callable(
-                        &arc_for_call,
-                        &[RuntimeTy::int()],
-                        RuntimeTy::int(),
-                        RuntimeTy::unknown(),
-                    ),
+                    callable(&arc_for_call, &[WireTy::Int], WireTy::Int, WireTy::Unknown),
                     BexExternalValue::Int(41),
                 ],
                 FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
@@ -2332,7 +2280,7 @@ async fn host_call_ret_ty_survives_gc_during_await() {
 
     let result = call.await.expect("join call task");
     // Wrong-return-type after a GC-relocated retty must still be caught by
-    // the pre-captured owned `RuntimeTy`; the visible effect is the same as any
+    // the pre-captured owned `WireTy`; the visible effect is the same as any
     // other wrong-return-type violation — `HostContractViolation` panic.
     assert_host_contract_violation_panic(&result);
 
@@ -2372,12 +2320,7 @@ async fn host_callable_throw_in_spawn_settles_child_does_not_hang() {
     let call = engine.call_function(
         "spawn_and_await",
         vec![
-            callable(
-                &arc,
-                &[RuntimeTy::int()],
-                RuntimeTy::int(),
-                RuntimeTy::unknown(),
-            ),
+            callable(&arc, &[WireTy::int()], WireTy::int(), WireTy::unknown()),
             BexExternalValue::Int(1),
         ],
         FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
@@ -2425,12 +2368,7 @@ async fn host_callable_with_generic_return_is_rejected() {
         .call_function(
             "apply_generic",
             vec![
-                callable(
-                    &arc,
-                    &[RuntimeTy::int()],
-                    RuntimeTy::int(),
-                    RuntimeTy::unknown(),
-                ),
+                callable(&arc, &[WireTy::int()], WireTy::int(), WireTy::unknown()),
                 BexExternalValue::Int(1),
             ],
             // No `_types=` bindings: `T` is left unbound. The generic return
@@ -2511,12 +2449,7 @@ async fn spawned_awaiter_of_internal_error_future_does_not_wedge() {
 
     let call = engine.call_function(
         "main",
-        vec![callable(
-            &arc,
-            &[],
-            RuntimeTy::string(),
-            RuntimeTy::unknown(),
-        )],
+        vec![callable(&arc, &[], WireTy::string(), WireTy::unknown())],
         FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         true,
     );
@@ -2611,12 +2544,7 @@ async fn spawn_in_map_closure_with_erroring_child_does_not_wedge() {
 
     let call = engine.call_function(
         "main",
-        vec![callable(
-            &arc,
-            &[],
-            RuntimeTy::string(),
-            RuntimeTy::unknown(),
-        )],
+        vec![callable(&arc, &[], WireTy::string(), WireTy::unknown())],
         FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
         true,
     );
@@ -2790,7 +2718,7 @@ async fn explicit_never_host_callback_rejects_native_throw() {
     let result = engine
         .call_function(
             "invoke",
-            vec![callable(&arc, &[], RuntimeTy::int(), RuntimeTy::Never)],
+            vec![callable(&arc, &[], WireTy::int(), WireTy::Never)],
             FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
             true,
         )

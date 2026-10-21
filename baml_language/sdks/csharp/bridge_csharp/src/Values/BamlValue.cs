@@ -51,9 +51,11 @@ public enum BamlTypeDescriptorKind : int
     Type = 16,
     /// <summary>
     /// A type the SDK has no projection for, which a value's type can still
-    /// name: the interface of a <c>Shape[]</c>, or the function type of a list
-    /// of closures. Two opaque descriptors are equal exactly when they name
-    /// the same type.
+    /// name: the interface of a <c>Shape[]</c>, the function type of a list
+    /// of closures, or a declaration the runtime created. Two opaque
+    /// descriptors are equal exactly when they are spelled alike; a runtime
+    /// declaration is spelled by a reference (two may name one declaration)
+    /// or, beside a value, by a display label only.
     /// </summary>
     Opaque = 17,
     /// <summary>The type no value has, as the item type of an empty <c>never[]</c>.</summary>
@@ -1028,11 +1030,21 @@ public sealed class BamlTypeDescriptor : IEquatable<BamlTypeDescriptor>
                 BamlTyPrimitiveKind.BamlTyPrimitiveBytes => Leaf(BamlTypeDescriptorKind.Bytes),
                 _ => throw UnsupportedType(type),
             },
-            BamlTy.TyOneofCase.ClassTy => Nominal(
-                BamlTypeDescriptorKind.Class,
-                type.ClassTy.Name,
-                type.ClassTy.TypeArgs.Select(item => FromWire(item, budget, depth + 1))),
-            BamlTy.TyOneofCase.Enum => Nominal(BamlTypeDescriptorKind.Enum, type.Enum.Name),
+            BamlTy.TyOneofCase.ClassTy => type.ClassTy.HeadCase switch
+            {
+                BamlTyClass.HeadOneofCase.Live or BamlTyClass.HeadOneofCase.AnonymousLabel =>
+                    Unnamed(type),
+                _ => Nominal(
+                    BamlTypeDescriptorKind.Class,
+                    type.ClassTy.Name,
+                    type.ClassTy.TypeArgs.Select(item => FromWire(item, budget, depth + 1))),
+            },
+            BamlTy.TyOneofCase.Enum => type.Enum.HeadCase switch
+            {
+                BamlTyEnum.HeadOneofCase.Live or BamlTyEnum.HeadOneofCase.AnonymousLabel =>
+                    Unnamed(type),
+                _ => Nominal(BamlTypeDescriptorKind.Enum, type.Enum.Name),
+            },
             BamlTy.TyOneofCase.List => new(
                 BamlTypeDescriptorKind.List,
                 arguments: [FromWire(type.List.Item, budget, depth + 1)]),
@@ -1050,16 +1062,26 @@ public sealed class BamlTypeDescriptor : IEquatable<BamlTypeDescriptor>
                 arguments: type.Union.Options.Select(
                     item => FromWire(item, budget, depth + 1))),
             BamlTy.TyOneofCase.Literal => FromLiteral(type.Literal),
-            BamlTy.TyOneofCase.TypeAlias => CreateAlias(
-                type.TypeAlias.Name,
-                type.TypeAlias.TypeArgs.Select(
-                    item => FromWire(item, budget, depth + 1))),
+            BamlTy.TyOneofCase.TypeAlias => type.TypeAlias.HeadCase switch
+            {
+                BamlTyTypeAlias.HeadOneofCase.Live or BamlTyTypeAlias.HeadOneofCase.AnonymousLabel =>
+                    Unnamed(type),
+                _ => CreateAlias(
+                    type.TypeAlias.Name,
+                    type.TypeAlias.TypeArgs.Select(
+                        item => FromWire(item, budget, depth + 1))),
+            },
             BamlTy.TyOneofCase.Unknown => Leaf(BamlTypeDescriptorKind.Unknown),
             BamlTy.TyOneofCase.Media => Leaf(BamlTypeDescriptorKind.Media),
-            BamlTy.TyOneofCase.EnumVariant => Nominal(
-                BamlTypeDescriptorKind.Enum,
-                type.EnumVariant.Name,
-                literal: type.EnumVariant.Variant),
+            BamlTy.TyOneofCase.EnumVariant => type.EnumVariant.HeadCase switch
+            {
+                BamlTyEnumVariant.HeadOneofCase.Live or BamlTyEnumVariant.HeadOneofCase.AnonymousLabel =>
+                    Unnamed(type),
+                _ => Nominal(
+                    BamlTypeDescriptorKind.Enum,
+                    type.EnumVariant.Name,
+                    literal: type.EnumVariant.Variant),
+            },
             BamlTy.TyOneofCase.Resource => Leaf(BamlTypeDescriptorKind.Handle),
             BamlTy.TyOneofCase.PromptAst => Leaf(BamlTypeDescriptorKind.Prompt),
             BamlTy.TyOneofCase.MetaType => Leaf(BamlTypeDescriptorKind.Type),
@@ -1107,10 +1129,22 @@ public sealed class BamlTypeDescriptor : IEquatable<BamlTypeDescriptor>
 
     private static BamlTypeDescriptor Leaf(BamlTypeDescriptorKind kind) => new(kind);
 
+    // A runtime declaration has no name to project: its descriptor keeps the
+    // wire spelling (a `live` key, or a display label) as its identity only.
+    private static BamlTypeDescriptor Unnamed(BamlTy type) =>
+        new(BamlTypeDescriptorKind.Opaque, opaque: type.ToByteArray());
+
     internal static BamlTypeDescriptor CreateHandle(
         string fqn,
         IEnumerable<BamlTypeDescriptor>? arguments = null) =>
         Nominal(BamlTypeDescriptorKind.Handle, fqn, arguments);
+
+    /// <summary>
+    /// A handle to an instance of a runtime declaration, identified by the
+    /// type annotation it arrived with; it has no name.
+    /// </summary>
+    internal static BamlTypeDescriptor CreateUnnamedHandle(byte[] annotation) =>
+        new(BamlTypeDescriptorKind.Handle, opaque: annotation);
 
     private static BamlTypeDescriptor Nominal(
         BamlTypeDescriptorKind kind,

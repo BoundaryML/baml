@@ -56,7 +56,7 @@ pub fn value_satisfies_json(value: &BexExternalValue) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{RuntimeTy, TypeName};
+    use baml_type::TypeName;
     use indexmap::IndexMap;
 
     use super::*;
@@ -68,7 +68,7 @@ mod tests {
         nested.insert(
             "items".to_string(),
             BexExternalValue::Array {
-                element_type: RuntimeTy::unknown(),
+                element_type: crate::WireTy::unknown(),
                 items: vec![
                     BexExternalValue::Null,
                     BexExternalValue::Bool(true),
@@ -80,8 +80,8 @@ mod tests {
             },
         );
         let valid = BexExternalValue::Map {
-            key_type: RuntimeTy::string(),
-            value_type: RuntimeTy::unknown(),
+            key_type: crate::WireTy::string(),
+            value_type: crate::WireTy::unknown(),
             entries: nested,
         };
         assert!(value_satisfies_json(&valid));
@@ -98,8 +98,8 @@ mod tests {
 
         let forged = BexExternalValue::union(
             BexExternalValue::String("json-shaped payload".into()),
-            [RuntimeTy::bigint(), RuntimeTy::string()],
-            RuntimeTy::bigint(),
+            [crate::WireTy::Bigint, crate::WireTy::string()],
+            crate::WireTy::Bigint,
         );
         assert!(!value_satisfies_json(&forged));
     }

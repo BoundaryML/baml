@@ -83,7 +83,7 @@ func TestHostCallableTransactionRollbackAndRuntimeReleaseAreExact(t *testing.T) 
 		t.Fatal(err)
 	}
 	handle = encoded.GetHandle()
-	transaction.commitHostValues()
+	transaction.commit()
 	transaction.rollback()
 	if _, ok := lookupHostCallable(handle.Key); !ok {
 		t.Fatal("committed callback was released by transaction rollback")
@@ -276,7 +276,7 @@ func TestRejectedHostDispatchReleasesEveryNativeHandleExactlyOnce(t *testing.T) 
 		args []*cffi.BamlToHostArg
 		want []uint64
 	}{
-		{name: "unknown callable deduplicates handles", key: ^uint64(0), args: []*cffi.BamlToHostArg{handle(101), handle(101)}, want: []uint64{101}},
+		{name: "unknown callable releases each occurrence", key: ^uint64(0), args: []*cffi.BamlToHostArg{handle(101), handle(101)}, want: []uint64{101, 101}},
 		{name: "empty argument releases later handles", key: callableKey, args: []*cffi.BamlToHostArg{{}, handle(102)}, want: []uint64{102}},
 		{name: "unnamed optional metadata", key: callableKey, args: []*cffi.BamlToHostArg{{Value: outboundMediaHandle(103), IsOptionalArg: true}}, want: []uint64{103}},
 		{name: "named metadata", key: callableKey, args: []*cffi.BamlToHostArg{{Value: outboundMediaHandle(104), ArgName: "value"}}, want: []uint64{104}},

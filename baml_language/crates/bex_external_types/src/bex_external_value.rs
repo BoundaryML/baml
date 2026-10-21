@@ -34,8 +34,19 @@
 //! ```
 
 // Re-export RuntimeTy and TypeName from baml_type for convenience
-pub use baml_type::{RuntimeTy, TypeName};
+pub use baml_type::{RuntimeTy, TypeName, WireHead};
 use indexmap::IndexMap;
+
+/// A type as the engine's boundary states it: compiled declarations by name,
+/// runtime declarations by a rooted handle to the declaration object.
+pub type WireTy = baml_type::WireTy<crate::Handle>;
+/// A parameter of a [`WireTy`] function type.
+pub type WireFunctionParamTy = baml_type::RealizedFunctionParamTy<WireHead<crate::Handle>>;
+
+/// A type as an annotation beside a value crossing by reference: compiled
+/// declarations by name, runtime ones by their label. It references nothing,
+/// so it cannot carry a live head at all.
+pub type AnnotationTy = baml_type::WireTy<std::convert::Infallible>;
 
 /// Metadata about a union type, embedded with values from union-typed contexts.
 ///
@@ -55,18 +66,18 @@ pub struct UnionMetadata {
     pub is_single_pattern: bool,
 
     /// The full union type for serialization.
-    pub union_type: RuntimeTy,
+    pub union_type: WireTy,
 
     /// Which option of the union was selected (e.g., `RuntimeTy::Int`, `RuntimeTy::String`, `RuntimeTy::Class("Success")`).
-    pub selected_option: RuntimeTy,
+    pub selected_option: WireTy,
 }
 
 impl UnionMetadata {
     /// Create metadata for a union type.
-    pub fn new(union_type: RuntimeTy, selected_option: RuntimeTy) -> Self {
+    pub fn new(union_type: WireTy, selected_option: WireTy) -> Self {
         let (is_optional, is_single_pattern) = match &union_type {
-            RuntimeTy::Union(members) => {
-                let is_optional = members.iter().any(RuntimeTy::is_null);
+            WireTy::Union(members) => {
+                let is_optional = members.iter().any(WireTy::is_null);
                 let non_null_count = members.iter().filter(|member| !member.is_null()).count();
                 (is_optional, non_null_count == 1)
             }
@@ -92,21 +103,12 @@ pub enum BexExternalAdt {
     /// awaiting, so anything a sys-op holds across that boundary must survive
     /// objects moving. A tag does; an address does not.
     Type(baml_type::RuntimeTy<baml_type::TaggedTypeName>),
-    /// A reflected type carrying runtime definitions.
-    ///
-    /// The two arms are the two things a `type` value can be at a boundary,
-    /// made explicit rather than inferred:
-    ///
-    /// * [`Live`](TypeDefRef::Live) — a rooted reference back to the very
-    ///   `Object::Type` that produced it. Valid only in the engine that issued
-    ///   the handle, which is why it also carries the portable definitions:
-    ///   anywhere else (another engine, another process) it degrades to them.
-    /// * [`Portable`](TypeDefRef::Portable) — definitions alone, reconstructed
-    ///   into fresh heap objects on arrival.
-    ///
-    /// Wire encoders serialize the portable form in both cases: a handle is a
-    /// live capability, not data, so it cannot cross a process (BEP-066 H-4).
-    TypeDef(TypeDefRef),
+    /// A reflected type as the host boundary states it: a compiled
+    /// declaration by name, a runtime declaration by a rooted handle to the
+    /// declaration object. Inbound it is anchored to the declarations it
+    /// references and lands as a fresh `type` value over them; outbound every
+    /// runtime declaration it names is a row the host holds.
+    WireType(WireTy),
     /// The Rust-backed payload inside a rendered `ai.Prompt`.
     PromptAst(std::sync::Arc<bex_vm_types::PromptAst>),
     /// A media value (image, audio, etc.) passed as a function argument.
@@ -121,7 +123,7 @@ pub enum BexExternalAdt {
     /// engine can re-enter it for method calls.
     TaggedHeapHandle {
         kind: TaggedHeapHandleKind,
-        ty: baml_type::RuntimeTy,
+        ty: AnnotationTy,
         heap_handle: crate::Handle,
     },
 }
@@ -137,45 +139,6 @@ pub enum TaggedHeapHandleKind {
     Stream,
     FunctionSpec,
     RuntimeValue,
-}
-
-/// How a `type` value crosses a boundary: as a live reference into the issuing
-/// engine, or as portable definitions.
-///
-/// Both arms carry `def`, so every consumer can read the type's shape without
-/// caring which arm it got; only identity differs.
-#[derive(Clone, Debug, PartialEq)]
-pub enum TypeDefRef {
-    /// Same-engine: `handle` resolves to the originating `Object::Type`, so a
-    /// value that leaves and returns is the *same* object — its identity,
-    /// definitions and provenance are untouched. The handle also keeps that
-    /// object rooted for as long as this value lives.
-    Live {
-        handle: crate::Handle,
-        def: bex_vm_types::types::PortableTypeDef,
-    },
-    /// Definitions only: the receiving engine reconstructs heap objects and
-    /// assigns fresh identity. The form every cross-process payload takes.
-    Portable(bex_vm_types::types::PortableTypeDef),
-}
-
-impl TypeDefRef {
-    /// The portable definitions, whichever arm this is.
-    #[must_use]
-    pub fn def(&self) -> &bex_vm_types::types::PortableTypeDef {
-        match self {
-            Self::Live { def, .. } | Self::Portable(def) => def,
-        }
-    }
-
-    /// Consume into the portable definitions, dropping any live reference.
-    /// This is what a wire encoder does.
-    #[must_use]
-    pub fn into_def(self) -> bex_vm_types::types::PortableTypeDef {
-        match self {
-            Self::Live { def, .. } | Self::Portable(def) => def,
-        }
-    }
 }
 
 /// A deep-copied value tree with no heap references.
@@ -223,7 +186,7 @@ pub enum BexExternalValue {
         /// The element type of the list (`int | string` for a `(int | string)[]`).
         /// Inbound, every item must be a member of it; the list's concrete type
         /// is `element_type[]`.
-        element_type: RuntimeTy,
+        element_type: WireTy,
         /// The array items.
         items: Vec<BexExternalValue>,
     },
@@ -231,10 +194,10 @@ pub enum BexExternalValue {
     /// Owned map with string keys and type information.
     Map {
         /// The key type (usually `RuntimeTy::String`); every key must be a member.
-        key_type: RuntimeTy,
+        key_type: WireTy,
         /// The value type (`int | string` for a `map<string, int | string>`);
         /// every value must be a member.
-        value_type: RuntimeTy,
+        value_type: WireTy,
         /// The map entries.
         entries: IndexMap<String, BexExternalValue>,
     },
@@ -248,7 +211,7 @@ pub enum BexExternalValue {
         /// `GenericBox<int>` carries `[int]` (the value-level type channel,
         /// distinct from a call's `CallFunctionArgs.type_args`), and lands in
         /// the VM `Object::Instance::class_type_args`.
-        type_args: Vec<RuntimeTy>,
+        type_args: Vec<WireTy>,
         fields: IndexMap<String, BexExternalValue>,
     },
 
@@ -314,9 +277,9 @@ pub enum BexExternalValue {
         /// The callable in the host's registry
         /// (`HostValueKind::Callable`).
         handle: std::sync::Arc<bex_resource_types::HostValueArc>,
-        params: Box<[baml_type::RuntimeFunctionParamTy]>,
-        ret: Box<RuntimeTy>,
-        throws: Box<RuntimeTy>,
+        params: Box<[WireFunctionParamTy]>,
+        ret: Box<WireTy>,
+        throws: Box<WireTy>,
     },
 }
 
@@ -498,7 +461,7 @@ impl PartialEq for BexExternalValue {
 impl BexExternalAdt {
     pub fn type_name(&self) -> &'static str {
         match self {
-            BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_) => "type",
+            BexExternalAdt::Type(_) | BexExternalAdt::WireType(_) => "type",
             BexExternalAdt::PromptAst(_) => "prompt_ast",
             BexExternalAdt::Media(_) => "media",
             BexExternalAdt::TaggedHeapHandle { .. } => "tagged_heap_handle",
@@ -521,10 +484,10 @@ impl BexExternalValue {
     /// ```
     pub fn union(
         value: BexExternalValue,
-        members: impl IntoIterator<Item = RuntimeTy>,
-        selected: RuntimeTy,
+        members: impl IntoIterator<Item = WireTy>,
+        selected: WireTy,
     ) -> Self {
-        let union_type = RuntimeTy::Union(members.into_iter().collect());
+        let union_type = WireTy::Union(members.into_iter().collect());
         BexExternalValue::Union {
             value: Box::new(value),
             metadata: UnionMetadata::new(union_type, selected),
@@ -552,7 +515,7 @@ impl BexExternalValue {
     /// terse non-generic shorthand.
     pub fn instance_generic(
         class_name: impl Into<String>,
-        type_args: Vec<RuntimeTy>,
+        type_args: Vec<WireTy>,
         fields: IndexMap<&str, BexExternalValue>,
     ) -> Self {
         BexExternalValue::Instance {
@@ -847,8 +810,8 @@ impl<T: AsBexExternalValue> AsBexExternalValue for Option<T> {
 impl AsBexExternalValue for indexmap::IndexMap<String, String> {
     fn into_bex_external_value(self) -> BexExternalValue {
         BexExternalValue::Map {
-            key_type: baml_type::RuntimeTy::string(),
-            value_type: baml_type::RuntimeTy::string(),
+            key_type: WireTy::string(),
+            value_type: WireTy::string(),
             entries: self
                 .into_iter()
                 .map(|(k, v)| (k, v.into_bex_external_value()))
@@ -861,8 +824,8 @@ impl AsBexExternalValue for indexmap::IndexMap<String, String> {
 impl AsBexExternalValue for indexmap::IndexMap<String, BexExternalValue> {
     fn into_bex_external_value(self) -> BexExternalValue {
         BexExternalValue::Map {
-            key_type: baml_type::RuntimeTy::string(),
-            value_type: baml_type::RuntimeTy::unknown(),
+            key_type: WireTy::string(),
+            value_type: WireTy::unknown(),
             entries: self,
         }
         .into_bex_external_value()
@@ -872,7 +835,7 @@ impl AsBexExternalValue for indexmap::IndexMap<String, BexExternalValue> {
 impl AsBexExternalValue for Vec<String> {
     fn into_bex_external_value(self) -> BexExternalValue {
         BexExternalValue::Array {
-            element_type: baml_type::RuntimeTy::string(),
+            element_type: WireTy::string(),
             items: self
                 .into_iter()
                 .map(|s| BexExternalValue::String(bex_str::BexStr::from(s)))
@@ -971,11 +934,11 @@ mod render_readable_tests {
         );
         let value = BexExternalValue::instance_generic(
             "baml.future.AllFailed",
-            vec![RuntimeTy::class("baml.errors.Io")],
+            vec![WireTy::static_class("baml.errors.Io")],
             IndexMap::from([(
                 "errors",
                 BexExternalValue::Array {
-                    element_type: RuntimeTy::class("baml.errors.Io"),
+                    element_type: WireTy::static_class("baml.errors.Io"),
                     items: vec![inner],
                 },
             )]),

@@ -23,11 +23,11 @@
 
 use std::borrow::Cow;
 
-use baml_type::{RuntimeTy, TypeName};
+use baml_type::TypeName;
 use num_bigint::BigInt;
 
 use crate::{
-    host::{HostValue, LeafKind, Scalar, Shape},
+    host::{HostValue, LeafKind, Scalar, Shape, StatedTy},
     rules::Rules,
 };
 
@@ -73,7 +73,7 @@ pub trait JsView: Sized {
 
     /// The concrete type arguments a generic instance carries in `$types`,
     /// when it carries all of them.
-    fn type_args(&self) -> Result<Option<Vec<RuntimeTy>>, Self::Error>;
+    fn type_args(&self) -> Result<Option<Vec<StatedTy>>, Self::Error>;
 
     /// The text of a `string`. The engine's APIs copy a JavaScript string
     /// into Rust, so this is owned.

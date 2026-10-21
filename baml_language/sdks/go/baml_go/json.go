@@ -272,7 +272,7 @@ func validateJSONSelectedPayload(selected *cffi.BamlTy, payload *cffi.BamlOutbou
 	// The canonical recursive alias admits every JSON wire shape. The normal
 	// decoder below still validates the complete payload recursively.
 	if alias, ok := selected.Ty.(*cffi.BamlTy_TypeAlias); ok {
-		if alias.TypeAlias != nil && alias.TypeAlias.Name == "baml.json.json" {
+		if alias.TypeAlias.GetName() == "baml.json.json" {
 			return nil
 		}
 	}
@@ -351,7 +351,7 @@ func isJSONBAMLType(value *cffi.BamlTy, depth int) bool {
 	}
 	switch typed := value.Ty.(type) {
 	case *cffi.BamlTy_TypeAlias:
-		return typed.TypeAlias != nil && typed.TypeAlias.Name == "baml.json.json"
+		return typed.TypeAlias.GetName() == "baml.json.json"
 	case *cffi.BamlTy_Primitive:
 		if typed.Primitive == nil {
 			return false

@@ -33,7 +33,6 @@ pub fn type_args(entries: Vec<(&str, wire::BamlTy)>) -> Vec<wire::BamlTyArg> {
         .map(|(name, ty)| wire::BamlTyArg {
             type_var: name.to_string(),
             type_value: Some(ty),
-            type_definition: None,
         })
         .collect()
 }
@@ -51,7 +50,7 @@ pub fn class(
     wire::InboundValue {
         value_type: Some(wire::BamlTy {
             ty: Some(wire::baml_ty::Ty::ClassTy(wire::BamlTyClass {
-                name: fqn.to_string(),
+                head: Some(wire::baml_ty_class::Head::Name(fqn.to_string())),
                 type_args,
             })),
         }),

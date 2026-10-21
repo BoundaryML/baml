@@ -637,7 +637,7 @@ func marshalHostCallableError(
 	})
 	inbound := &pb.InboundValue{
 		ValueType: &pb.BamlTy{Ty: &pb.BamlTy_ClassTy{ClassTy: &pb.BamlTyClass{
-			Name: "baml.errors.HostCallable",
+			Head: &pb.BamlTyClass_Name{Name: "baml.errors.HostCallable"},
 		}}},
 		Value: &pb.InboundValue_ClassValue{ClassValue: &pb.InboundClassValue{
 			Fields: fields,

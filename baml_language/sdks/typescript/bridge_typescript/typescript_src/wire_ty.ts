@@ -1,10 +1,11 @@
 // Host type tokens and opaque BEP-066 reflected type definitions.
 
+import { BamlHandle, type HandleKey } from './native.js';
 import { baml_bridge } from './proto/baml_cffi.js';
 import { getTypeMap } from './typemap.js';
 
 const TyPrimitiveKind = baml_bridge.cffi.v1.BamlTyPrimitiveKind;
-const BamlTyDefMessage = baml_bridge.cffi.v1.BamlTyDef;
+const BamlTyMessage = baml_bridge.cffi.v1.BamlTy;
 
 /** The bottom type (BAML `never`). */
 export const Never: unique symbol = Symbol('baml.Never');
@@ -65,40 +66,95 @@ export class BamlTypeMetadataRow {
     ) {}
 }
 
-function cloneDefinition(
-    definition: baml_bridge.cffi.v1.IBamlTyDef,
-): baml_bridge.cffi.v1.BamlTyDef {
-    const message = BamlTyDefMessage.fromObject(definition as Record<string, unknown>);
-    return BamlTyDefMessage.decode(BamlTyDefMessage.encode(message).finish());
+function cloneTy(ty: baml_bridge.cffi.v1.IBamlTy): baml_bridge.cffi.v1.BamlTy {
+    const message = BamlTyMessage.fromObject(ty as Record<string, unknown>);
+    return BamlTyMessage.decode(BamlTyMessage.encode(message).finish());
+}
+
+type Ty = baml_bridge.cffi.v1.IBamlTy;
+
+/**
+ * Every `live` head under a wire type, once per occurrence: each is a row of
+ * the engine's handle table naming a runtime declaration.
+ */
+export function liveKeys(ty: Ty | null | undefined): HandleKey[] {
+    const keys: HandleKey[] = [];
+    const visit = (node: Ty | null | undefined): void => {
+        if (!node) return;
+        const head = (nominal: { live?: unknown } | null | undefined) => {
+            if (nominal?.live != null) keys.push(nominal.live as HandleKey);
+        };
+        head(node.classTy);
+        head(node.enum);
+        head(node.typeAlias);
+        head(node.interface);
+        head(node.enumVariant);
+        node.classTy?.typeArgs?.forEach(visit);
+        node.typeAlias?.typeArgs?.forEach(visit);
+        node.interface?.typeArgs?.forEach(visit);
+        node.interface?.bindings?.forEach((binding) => visit(binding.ty));
+        visit(node.list?.item);
+        visit(node.map?.key);
+        visit(node.map?.value);
+        visit(node.optional?.inner);
+        node.union?.options?.forEach(visit);
+        node.function?.params?.forEach((param) => visit(param.ty));
+        visit(node.function?.ret);
+        visit(node.function?.throws);
+        visit(node.future?.value);
+        visit(node.future?.error);
+        visit(node.associatedTypeProjection?.base);
+        visit(node.associatedTypeProjection?.interface);
+    };
+    visit(ty);
+    return keys;
 }
 
 /**
- * Opaque, process-local handle for a reflected BAML definition. Only the
- * composing operations required by H-11 are public. Each wire occurrence
- * carries a copied definition graph; JavaScript identity is never type
+ * The engine rows a type value's runtime declarations are held by, one per
+ * occurrence. Shared by the types composed from one value; each row is
+ * released when its handle is collected.
+ */
+class LiveRows {
+    readonly handles: readonly BamlHandle[];
+
+    constructor(keys: readonly HandleKey[]) {
+        this.handles = keys.map((key) => new BamlHandle(key, UNTAGGED_BEX_HEAP));
+    }
+}
+
+const UNTAGGED_BEX_HEAP = baml_bridge.cffi.v1.BamlHandleType.UNTAGGED_BEX_HEAP;
+
+/**
+ * Opaque, process-local handle for a reflected BAML type. Only the composing
+ * operations required by H-11 are public. A runtime declaration the type
+ * names is held by the engine row it arrived under; a type sent back states
+ * it with a reference of the call's own. JavaScript identity is never type
  * identity.
  */
 export class BamlType {
-    readonly #definition: baml_bridge.cffi.v1.BamlTyDef;
+    readonly #ty: baml_bridge.cffi.v1.BamlTy;
+    readonly #rows: LiveRows | undefined;
 
-    private constructor(definition: baml_bridge.cffi.v1.IBamlTyDef) {
-        this.#definition = cloneDefinition(definition);
+    private constructor(ty: Ty, rows: LiveRows | undefined) {
+        this.#ty = cloneTy(ty);
+        this.#rows = rows;
     }
 
-    /** @internal Bridge/codegen hook; not a host inspection surface. */
-    static _fromWire(definition: baml_bridge.cffi.v1.IBamlTyDef): BamlType {
-        return new BamlType(definition);
+    /** @internal A type the engine handed over: its `live` heads are rows this value now holds. */
+    static _fromWire(ty: Ty): BamlType {
+        return new BamlType(ty, new LiveRows(liveKeys(ty)));
     }
 
-    /** @internal Bridge hook returning a fresh protobuf graph. */
-    _wireCopy(): baml_bridge.cffi.v1.BamlTyDef {
-        return cloneDefinition(this.#definition);
+    /** @internal Bridge hook returning a fresh protobuf tree. */
+    _wireCopy(): baml_bridge.cffi.v1.BamlTy {
+        return cloneTy(this.#ty);
     }
 
     static from(token: BamlType | BamlTypeToken): BamlType {
         return token instanceof BamlType
             ? token
-            : new BamlType({ root: lowerTypeToWireTy(token) });
+            : new BamlType(lowerTypeToWireTy(token), undefined);
     }
 
     meta(options: BamlTypeMetadata = {}): BamlTypeMetadataRow {
@@ -112,15 +168,11 @@ export class BamlType {
     }
 
     array(): BamlType {
-        const definition = this._wireCopy();
-        definition.root = { list: { item: definition.root } };
-        return new BamlType(definition);
+        return new BamlType({ list: { item: this.#ty } }, this.#rows);
     }
 
     optional(): BamlType {
-        const definition = this._wireCopy();
-        definition.root = { optional: { inner: definition.root } };
-        return new BamlType(definition);
+        return new BamlType({ optional: { inner: this.#ty } }, this.#rows);
     }
 
     toJSON(): never {

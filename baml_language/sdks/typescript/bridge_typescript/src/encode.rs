@@ -21,7 +21,7 @@ use std::{
 };
 
 use baml_sdkgen_types::ProgramDescriptor;
-use baml_type::{MediaKind, Name, RuntimeTy, TypeName};
+use baml_type::{MediaKind, Name, TypeName};
 use bridge_cffi::handle_cffi;
 use bridge_ctypes::{
     HANDLE_TABLE, HostKey, TableKey,
@@ -29,8 +29,9 @@ use bridge_ctypes::{
 };
 use bridge_encode::{
     Completion, Error, Facts, FunctionSig, Host, LeafKind, LeafWire, Owner, Owners, Param, Root,
-    encode, encode_arguments,
+    SlotTy, StatedTy, encode, encode_arguments,
     js::{Js, JsKind, JsView},
+    state_type_args,
 };
 use napi::{
     Env, JsString, Status, ValueType,
@@ -116,25 +117,33 @@ pub(crate) fn encode_request<'env>(
     cancel: Option<Unknown<'env>>,
     sync: bool,
 ) -> napi::Result<Vec<u8>> {
-    if kwargs.is_none() && cancel.is_none() {
-        return Ok(args_proto.to_vec());
-    }
     let mut call = CallFunctionArgs::decode(args_proto).map_err(|error| {
         napi::Error::new(
             Status::InvalidArg,
             format!("malformed CallFunctionArgs: {error}"),
         )
     })?;
+    if kwargs.is_none() && cancel.is_none() && call.type_args.is_empty() {
+        return Ok(args_proto.to_vec());
+    }
     let facts = facts();
     let cx = Cx::new(env, sync)?;
     let mut owners = Owners::new(&cx);
     let (target, signature) = target_signature(&facts, call.call_target.as_ref());
     let outcome = (|| -> napi::Result<()> {
+        // The explicit type arguments as the wrappers hold them, restated
+        // with references of the call's own: the wrappers keep theirs.
+        let type_args: Vec<(String, StatedTy)> =
+            bridge_ctypes::proto_ty_args_to_stated(&call.type_args, &HANDLE_TABLE)
+                .map_err(|error| napi::Error::new(Status::InvalidArg, error.to_string()))?
+                .into_iter()
+                .collect();
+        call.type_args = state_type_args(&type_args, &mut owners)?;
         if let Some(cancel) = cancel {
             let encoded = encode(
                 &facts,
                 cx.value(cancel),
-                &RuntimeTy::Unknown,
+                &SlotTy::Unknown,
                 Root::Argument("$baml.cancel".into()),
                 &mut owners,
             )
@@ -149,11 +158,9 @@ pub(crate) fn encode_request<'env>(
             .into_iter()
             .map(|(name, value)| (name, cx.value(value)))
             .collect::<Vec<_>>();
-        let bindings = bridge_ctypes::proto_ty_args_to_named(&call.type_args)
-            .map_err(|error| napi::Error::new(Status::InvalidArg, error.to_string()))?
-            .type_args
-            .into_iter()
-            .map(|(name, ty)| (Name::new(&name), ty))
+        let bindings = type_args
+            .iter()
+            .map(|(name, ty)| (Name::new(name), ty.clone()))
             .collect::<HashMap<_, _>>();
         call.kwargs = encode_arguments(&facts, &signature, &bindings, arguments, &mut owners)
             .map_err(|error| raise(&target, error))?;
@@ -178,7 +185,7 @@ pub(crate) fn encode_request<'env>(
 pub(crate) fn encode_result<'env>(
     env: &'env Env,
     value: Unknown<'env>,
-    slot: &RuntimeTy,
+    slot: &StatedTy,
 ) -> Completion<napi::Error> {
     let facts = facts();
     let cx = match Cx::new(env, false) {
@@ -186,7 +193,13 @@ pub(crate) fn encode_result<'env>(
         Err(error) => return Completion::HostError(error),
     };
     let mut owners = Owners::new(&cx);
-    let result = encode(&facts, cx.value(value), slot, Root::Result, &mut owners);
+    let result = encode(
+        &facts,
+        cx.value(value),
+        &SlotTy::from(slot),
+        Root::Result,
+        &mut owners,
+    );
     if result.is_ok() {
         owners.keep();
     }
@@ -209,7 +222,7 @@ pub fn encode_inbound<'env>(
     let encoded = encode(
         &facts,
         cx.value(value),
-        &RuntimeTy::Unknown,
+        &SlotTy::Unknown,
         Root::Argument(name.unwrap_or_else(|| "value".to_string())),
         &mut owners,
     )
@@ -241,8 +254,8 @@ fn target_signature(facts: &Facts, target: Option<&CallTarget>) -> (String, Func
         class_generic_params: Vec::new(),
         generic_params: Vec::new(),
         params: Vec::new(),
-        ret: RuntimeTy::Unknown,
-        throws: RuntimeTy::Unknown,
+        ret: SlotTy::Unknown,
+        throws: SlotTy::Unknown,
     };
     match target {
         Some(CallTarget::FunctionName(name)) => (
@@ -255,7 +268,7 @@ fn target_signature(facts: &Facts, target: Option<&CallTarget>) -> (String, Func
                 Some(bridge_ctypes::CffiHandleTableEntry::Adt(
                     bex_project::BexExternalAdt::TaggedHeapHandle {
                         ty:
-                            RuntimeTy::Function {
+                            bex_project::AnnotationTy::Function {
                                 params,
                                 ret,
                                 throws,
@@ -273,12 +286,12 @@ fn target_signature(facts: &Facts, target: Option<&CallTarget>) -> (String, Func
                                 .name
                                 .as_ref()
                                 .map_or_else(|| format!("arg{index}"), ToString::to_string),
-                            ty: param.ty.clone(),
+                            ty: param.ty.as_stated().into(),
                             has_default: param.is_optional(),
                         })
                         .collect(),
-                    ret: (**ret).clone(),
-                    throws: (**throws).clone(),
+                    ret: ret.as_stated().into(),
+                    throws: throws.as_stated().into(),
                 },
                 // Not a callable, or no longer live: the request decoder
                 // reports that; the arguments go as their own types.
@@ -410,9 +423,12 @@ fn leaf_wire(kind: LeafKind, value: InboundValue) -> napi::Result<LeafWire> {
         (LeafKind::Handle, Some(Value::Handle(handle))) => Ok(LeafWire::Handle(handle)),
         (LeafKind::Media(_), Some(Value::MediaValue(media))) => Ok(LeafWire::Media(media)),
         (LeafKind::Prompt, Some(Value::PromptAstValue(prompt))) => Ok(LeafWire::Prompt(prompt)),
-        (LeafKind::TypeValue, Some(Value::TyDefValue(definition))) => {
-            Ok(LeafWire::TypeValue(definition))
-        }
+        // The type as the wrapper holds it; the wire takes fresh references
+        // to its runtime declarations at commit.
+        (LeafKind::TypeValue, Some(Value::TyValue(ty))) => Ok(LeafWire::TypeValue(
+            bridge_ctypes::proto_ty_to_stated(&ty, &HANDLE_TABLE)
+                .map_err(|error| napi::Error::new(Status::InvalidArg, error.to_string()))?,
+        )),
         (LeafKind::Handle | LeafKind::Media(_) | LeafKind::Prompt | LeafKind::TypeValue, _) => {
             Err(napi::Error::new(
                 Status::GenericFailure,
@@ -426,7 +442,7 @@ impl<'env> Host<Js<View<'_, 'env>>> for Cx<'env> {
     fn register(
         &self,
         callable: &Js<View<'_, 'env>>,
-        signature: &RuntimeTy,
+        signature: &StatedTy,
     ) -> napi::Result<HostKey> {
         if self.sync {
             return Err(napi::Error::new(
@@ -473,6 +489,14 @@ impl<'env> Host<Js<View<'_, 'env>>> for Cx<'env> {
             None => None,
         };
         Ok((leaf_wire(kind, value)?, owner))
+    }
+
+    fn reference(&self, declaration: &bex_project::Handle) -> napi::Result<TableKey> {
+        Ok(
+            HANDLE_TABLE.insert(bridge_ctypes::CffiHandleTableEntry::BexHeapHandle(
+                declaration.clone(),
+            )),
+        )
     }
 
     fn release(&self, owner: Owner) {
@@ -614,7 +638,7 @@ impl<'env> JsView for View<'_, 'env> {
             .collect())
     }
 
-    fn type_args(&self) -> napi::Result<Option<Vec<RuntimeTy>>> {
+    fn type_args(&self) -> napi::Result<Option<Vec<StatedTy>>> {
         let found = self.cx.adapter_call("typeArgsOf", self.value)?;
         if matches!(found.get_type()?, ValueType::Undefined | ValueType::Null) {
             return Ok(None);
@@ -628,7 +652,7 @@ impl<'env> JsView for View<'_, 'env> {
             let ty = BamlTy::decode(bytes.as_ref())
                 .map_err(|error| napi::Error::new(Status::InvalidArg, error.to_string()))?;
             args.push(
-                bridge_ctypes::proto_ty_to_runtime_ty(&ty)
+                bridge_ctypes::proto_ty_to_stated(&ty, &HANDLE_TABLE)
                     .map_err(|error| napi::Error::new(Status::InvalidArg, error.to_string()))?,
             );
         }

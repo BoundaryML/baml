@@ -141,7 +141,7 @@ func TestGenericAnyCannotReifyCanonicalJSONAliasTypeArgument(t *testing.T) {
 		t.Fatalf("TypeOf[any] guessed descriptor %#v", descriptor)
 	}
 	_, _, err := encodeCallForDispatchWithTypeArgs(1, nil, []TypeArgument{{Name: "T", Type: descriptor}})
-	if err == nil || !strings.Contains(err.Error(), "descriptor") {
+	if err == nil || !strings.Contains(err.Error(), "unsupported Go type token") {
 		t.Fatalf("TypeOf[any] call error = %v", err)
 	}
 	stringValue := Value{value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_StringValue{StringValue: "json"}}}
@@ -202,7 +202,7 @@ func TestGenericClassAnyPreservesTypeArgumentsAndInputMarshaler(t *testing.T) {
 	if class == nil || classType == nil {
 		t.Fatalf("class = %#v", class)
 	}
-	if classType.Name != "user.tests.Box" || len(classType.TypeArgs) != 1 {
+	if classType.GetName() != "user.tests.Box" || len(classType.TypeArgs) != 1 {
 		t.Fatalf("class type = %#v", classType)
 	}
 	if got := (BAMLType{value: classType.TypeArgs[0]}); !got.Equal(PrimitiveBAMLType(IntType)) {

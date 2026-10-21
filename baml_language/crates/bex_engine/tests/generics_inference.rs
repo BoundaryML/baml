@@ -9,8 +9,8 @@ mod common;
 
 use std::sync::Arc;
 
-use baml_type::RuntimeTy;
 use bex_engine::{BexEngine, BexExternalValue as BEV, EngineError, FunctionCallContextBuilder};
+use bex_external_types::{WireHead, WireTy};
 use bex_resource_types::{HostValueArc, HostValueKind};
 use common::compile_for_engine;
 use indexmap::{IndexMap, indexmap};
@@ -28,7 +28,7 @@ async fn call_with_bindings(
     source: &str,
     function: &str,
     args: Vec<BEV>,
-    type_args: IndexMap<&str, RuntimeTy>,
+    type_args: IndexMap<&str, WireTy>,
 ) -> Result<BEV, EngineError> {
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
@@ -59,12 +59,12 @@ fn s(v: &str) -> BEV {
 fn int_callable(arc: Arc<HostValueArc>) -> BEV {
     BEV::HostCallable {
         handle: arc,
-        params: Box::new([baml_type::RuntimeFunctionParamTy::required(
+        params: Box::new([baml_type::RealizedFunctionParamTy::required(
             None,
-            RuntimeTy::int(),
+            bex_engine::WireTy::Int,
         )]),
-        ret: Box::new(RuntimeTy::int()),
-        throws: Box::new(RuntimeTy::unknown()),
+        ret: Box::new(WireTy::int()),
+        throws: Box::new(WireTy::unknown()),
     }
 }
 
@@ -125,11 +125,11 @@ async fn infer_identity_generic_instance() {
     "#;
     let arg = BEV::instance_generic(
         "GenericBox",
-        vec![RuntimeTy::int()],
+        vec![WireTy::int()],
         indexmap::IndexMap::from_iter([("value", BEV::Int(5))]),
     );
     let out = call_infer(source, "identity", vec![arg]).await.unwrap();
-    // Exact render of the class type is determined by RuntimeTy Display; assert
+    // Exact render of the class type is determined by WireTy Display; assert
     // it mentions the class and its int arg.
     let BEV::String(rendered) = &out else {
         panic!("expected string, got {out:?}");
@@ -155,12 +155,12 @@ async fn infer_make_triple_structural() {
         function main() -> int { 0 }
     "#;
     let b = BEV::Array {
-        element_type: RuntimeTy::string(),
+        element_type: WireTy::string(),
         items: vec![s("a"), s("b")],
     };
     let c = BEV::Map {
-        key_type: RuntimeTy::string(),
-        value_type: RuntimeTy::bool(),
+        key_type: WireTy::string(),
+        value_type: WireTy::Bool,
         entries: indexmap::IndexMap::from_iter([("k".to_string(), BEV::Bool(true))]),
     };
     let out = call_infer(source, "make_triple", vec![BEV::Int(1), b, c])
@@ -186,7 +186,7 @@ async fn infer_second_of_nested_generic() {
     "#;
     let arg = BEV::instance_generic(
         "GenericPair",
-        vec![RuntimeTy::int(), RuntimeTy::string()],
+        vec![WireTy::int(), WireTy::string()],
         indexmap::IndexMap::from_iter([("first", BEV::Int(1)), ("second", s("hi"))]),
     );
     let out = call_infer(source, "second_of", vec![arg]).await.unwrap();
@@ -242,12 +242,12 @@ async fn partial_explicit_seed_then_infer() {
         function main() -> int { 0 }
     "#;
     let b = BEV::Array {
-        element_type: RuntimeTy::string(),
+        element_type: WireTy::string(),
         items: vec![s("x")],
     };
     let c = BEV::Map {
-        key_type: RuntimeTy::string(),
-        value_type: RuntimeTy::bool(),
+        key_type: WireTy::string(),
+        value_type: WireTy::Bool,
         entries: indexmap::IndexMap::from_iter([("k".to_string(), BEV::Bool(true))]),
     };
     let out = call_with_bindings(
@@ -255,8 +255,8 @@ async fn partial_explicit_seed_then_infer() {
         "make_triple",
         vec![BEV::Int(1), b, c],
         indexmap! {
-            "A" => RuntimeTy::Union(
-                Box::new([RuntimeTy::int(), RuntimeTy::float()]),
+            "A" => WireTy::Union(
+                Box::new([WireTy::int(), WireTy::Float]),
             )
         },
     )
@@ -285,8 +285,8 @@ async fn explicit_binding_widens_inferred_type() {
         "identity",
         vec![BEV::Int(5)],
         indexmap! {
-            "T" => RuntimeTy::Union(
-                Box::new([RuntimeTy::int(), RuntimeTy::string()]),
+            "T" => WireTy::Union(
+                Box::new([WireTy::int(), WireTy::string()]),
             )
         },
     )
@@ -351,7 +351,8 @@ async fn a_bounded_type_parameter_takes_one_concrete_implementor() {
         source,
         "same",
         vec![plain(), plain()],
-        indexmap! { "T" => RuntimeTy::Class(baml_type::TypeName::from_dotted_path("user.Plain"), Box::new([])) },
+        indexmap! { "T" => WireTy::Class(
+        WireHead::Static(baml_type::TypeName::from_dotted_path("user.Plain")), Box::new([])) },
     )
     .await
     .expect_err("`Plain` does not implement `Named`");
@@ -393,7 +394,7 @@ async fn a_generic_interface_parameter_takes_an_explicit_type_argument() {
             source,
             "unwrap",
             vec![boxed.clone()],
-            indexmap! { "T" => RuntimeTy::Int }
+            indexmap! { "T" => WireTy::Int }
         )
         .await
         .unwrap(),
@@ -530,13 +531,13 @@ async fn nested_generic_instances_state_their_arguments_at_every_level() {
         function identity<T>(x: T) -> string { reflect.Type.of<T>().to_string() }
         function main() -> int { 0 }
     "#;
-    let inner_ty = RuntimeTy::Class(
-        baml_type::TypeName::from_dotted_path("GenericBox"),
-        Box::new([RuntimeTy::string()]),
+    let inner_ty = WireTy::Class(
+        WireHead::Static(baml_type::TypeName::from_dotted_path("GenericBox")),
+        Box::new([WireTy::string()]),
     );
     let inner = BEV::instance_generic(
         "GenericBox",
-        vec![RuntimeTy::string()],
+        vec![WireTy::string()],
         indexmap::IndexMap::from_iter([("value", s("hello"))]),
     );
     let outer = BEV::instance_generic(
@@ -599,8 +600,8 @@ async fn j13_closure_poisoned_typevars_succeed_when_specified() {
         "apply",
         vec![f, BEV::Int(5)],
         indexmap! {
-            "T" => RuntimeTy::int(),
-            "R" => RuntimeTy::int(),
+            "T" => WireTy::int(),
+            "R" => WireTy::int(),
         },
     )
     .await
@@ -615,7 +616,7 @@ async fn infer_identity_empty_array_binds_its_stated_element_type() {
     // An empty list is a list of the element type its host states: `[]` sent
     // as an `int[]` ⇒ T = int[]. Nothing is read off the (absent) items.
     let arg = BEV::Array {
-        element_type: RuntimeTy::int(),
+        element_type: WireTy::int(),
         items: vec![],
     };
     let out = call_infer(IDENTITY, "identity", vec![arg]).await.unwrap();
@@ -626,8 +627,8 @@ async fn infer_identity_empty_array_binds_its_stated_element_type() {
 async fn infer_identity_empty_map_binds_its_stated_value_type() {
     // An empty map is a map of the key and value types its host states.
     let arg = BEV::Map {
-        key_type: RuntimeTy::string(),
-        value_type: RuntimeTy::int(),
+        key_type: WireTy::string(),
+        value_type: WireTy::int(),
         entries: indexmap::IndexMap::new(),
     };
     let out = call_infer(IDENTITY, "identity", vec![arg]).await.unwrap();
@@ -765,13 +766,13 @@ async fn infer_nonempty_map_binds_key_despite_valueless_values() {
     entries.insert(
         "a".to_string(),
         BEV::Array {
-            element_type: RuntimeTy::int(),
+            element_type: WireTy::int(),
             items: vec![],
         },
     );
     let arg = BEV::Map {
-        key_type: RuntimeTy::string(),
-        value_type: RuntimeTy::List(Box::new(RuntimeTy::int())),
+        key_type: WireTy::string(),
+        value_type: WireTy::List(Box::new(WireTy::int())),
         entries,
     };
     let out = call_infer(src, "map_key", vec![arg]).await.unwrap();
@@ -862,16 +863,16 @@ async fn unbound_instance_under_a_generic_class_formal_is_refused() {
 // function-param cases (J1–J3, J8) live only at the unifier layer (and are
 // reified at the bridge per J13). See `02e2` for the layer mapping.
 
-fn arr(element_type: RuntimeTy, items: Vec<BEV>) -> BEV {
+fn arr(element_type: WireTy, items: Vec<BEV>) -> BEV {
     BEV::Array {
         element_type,
         items,
     }
 }
 
-fn int_map(value_type: RuntimeTy, entries: &[(&str, BEV)]) -> BEV {
+fn int_map(value_type: WireTy, entries: &[(&str, BEV)]) -> BEV {
     BEV::Map {
-        key_type: RuntimeTy::string(),
+        key_type: WireTy::string(),
         value_type,
         entries: entries
             .iter()
@@ -890,8 +891,8 @@ const PAIR: &str = r#"
 async fn infer_pair_invariant_list_conflict_rejects() {
     // J4/E1: pair(int[], string[]) ⇒ a⇒T==int, b⇒T==string (both invariant) ⇒
     // no consistent T ⇒ reject (today's bug fabricated `(int|string)[]`).
-    let a = arr(RuntimeTy::int(), vec![BEV::Int(1)]);
-    let b = arr(RuntimeTy::string(), vec![s("x")]);
+    let a = arr(WireTy::int(), vec![BEV::Int(1)]);
+    let b = arr(WireTy::string(), vec![s("x")]);
     let err = call_infer(PAIR, "pair", vec![a, b])
         .await
         .expect_err("invariant list conflict must reject");
@@ -919,8 +920,8 @@ async fn infer_pair_invariant_list_conflict_rejects() {
 async fn infer_pair_invariant_list_agree_binds() {
     // J9/G1 regression: pair(int[], int[]) ⇒ two invariant occurrences AGREE ⇒
     // T = int; must still succeed (the fix narrows, it must not over-reject).
-    let a = arr(RuntimeTy::int(), vec![BEV::Int(1)]);
-    let b = arr(RuntimeTy::int(), vec![BEV::Int(2)]);
+    let a = arr(WireTy::int(), vec![BEV::Int(1)]);
+    let b = arr(WireTy::int(), vec![BEV::Int(2)]);
     let out = call_infer(PAIR, "pair", vec![a, b]).await.unwrap();
     assert_eq!(out, BEV::String("int".into()));
 }
@@ -930,8 +931,8 @@ async fn infer_choose_union_outside_container_joins() {
     // J10/G2 regression: choose(int[], string[]) ⇒ both occurrences are covariant
     // (bare `T`), so the union forms OUTSIDE the container ⇒ T = int[] | string[].
     // Proves the fix keys on position variance, not "arrays are involved."
-    let a = arr(RuntimeTy::int(), vec![BEV::Int(1)]);
-    let b = arr(RuntimeTy::string(), vec![s("x")]);
+    let a = arr(WireTy::int(), vec![BEV::Int(1)]);
+    let b = arr(WireTy::string(), vec![s("x")]);
     let out = call_infer(CHOOSE, "choose", vec![a, b]).await.unwrap();
     let BEV::String(rendered) = &out else {
         panic!("expected string, got {out:?}");
@@ -953,8 +954,8 @@ async fn infer_merge_invariant_map_value_conflict_rejects() {
         }
         function main() -> int { 0 }
     "#;
-    let a = int_map(RuntimeTy::int(), &[("k", BEV::Int(1))]);
-    let b = int_map(RuntimeTy::string(), &[("k", s("x"))]);
+    let a = int_map(WireTy::int(), &[("k", BEV::Int(1))]);
+    let b = int_map(WireTy::string(), &[("k", s("x"))]);
     let err = call_infer(src, "merge", vec![a, b])
         .await
         .expect_err("invariant map-value conflict must reject");
@@ -977,12 +978,12 @@ async fn infer_combine_invariant_class_arg_conflict_rejects() {
     "#;
     let x = BEV::instance_generic(
         "GenericBox",
-        vec![RuntimeTy::int()],
+        vec![WireTy::int()],
         indexmap::IndexMap::from_iter([("value", BEV::Int(1))]),
     );
     let y = BEV::instance_generic(
         "GenericBox",
-        vec![RuntimeTy::string()],
+        vec![WireTy::string()],
         indexmap::IndexMap::from_iter([("value", s("x"))]),
     );
     let err = call_infer(src, "combine", vec![x, y])
@@ -1002,7 +1003,7 @@ async fn infer_glue_invariant_vs_covariant_conflict_rejects() {
         function glue<T>(bare: T, arr: T[]) -> string { reflect.Type.of<T>().to_string() }
         function main() -> int { 0 }
     "#;
-    let arr_arg = arr(RuntimeTy::string(), vec![s("x")]);
+    let arr_arg = arr(WireTy::string(), vec![s("x")]);
     let err = call_infer(src, "glue", vec![BEV::Int(1), arr_arg])
         .await
         .expect_err("invariant×covariant conflict must reject");
@@ -1020,7 +1021,7 @@ async fn infer_glue_invariant_and_covariant_agree_binds() {
         function glue<T>(bare: T, arr: T[]) -> string { reflect.Type.of<T>().to_string() }
         function main() -> int { 0 }
     "#;
-    let arr_arg = arr(RuntimeTy::int(), vec![BEV::Int(2)]);
+    let arr_arg = arr(WireTy::int(), vec![BEV::Int(2)]);
     let out = call_infer(src, "glue", vec![BEV::Int(1), arr_arg])
         .await
         .unwrap();
@@ -1071,10 +1072,10 @@ async fn infer_make_triple_heterogeneous_list_element_unions() {
         function main() -> int { 0 }
     "#;
     let b = arr(
-        RuntimeTy::union([RuntimeTy::int(), RuntimeTy::string()]),
+        WireTy::Union(Box::from_iter([WireTy::int(), WireTy::string()])),
         vec![BEV::Int(1), s("x")],
     );
-    let c = int_map(RuntimeTy::bool(), &[("k", BEV::Bool(true))]);
+    let c = int_map(WireTy::Bool, &[("k", BEV::Bool(true))]);
     let out = call_infer(src, "make_triple", vec![BEV::Int(1), b, c])
         .await
         .unwrap();
@@ -1138,9 +1139,11 @@ async fn infer_identity_known_class_instance() {
 
 // ── §B: nested generic-class arg, four vars zipped ──────────────────────────
 
-fn pair_rt(first: RuntimeTy, second: RuntimeTy) -> RuntimeTy {
-    RuntimeTy::Class(
-        baml_type::TypeName::local(baml_type::Name::new("GenericPair")),
+fn pair_rt(first: WireTy, second: WireTy) -> WireTy {
+    WireTy::Class(
+        WireHead::Static(baml_type::TypeName::local(baml_type::Name::new(
+            "GenericPair",
+        ))),
         Box::new([first, second]),
     )
 }
@@ -1159,19 +1162,19 @@ async fn infer_extract_four_vars_from_nested_generic() {
     "#;
     let inner1 = BEV::instance_generic(
         "GenericPair",
-        vec![RuntimeTy::int(), RuntimeTy::string()],
+        vec![WireTy::int(), WireTy::string()],
         indexmap::IndexMap::from_iter([("first", BEV::Int(1)), ("second", s("a"))]),
     );
     let inner2 = BEV::instance_generic(
         "GenericPair",
-        vec![RuntimeTy::bool(), RuntimeTy::float()],
+        vec![WireTy::Bool, WireTy::Float],
         indexmap::IndexMap::from_iter([("first", BEV::Bool(true)), ("second", BEV::Float(1.5))]),
     );
     let arg = BEV::instance_generic(
         "GenericPair",
         vec![
-            pair_rt(RuntimeTy::int(), RuntimeTy::string()),
-            pair_rt(RuntimeTy::bool(), RuntimeTy::float()),
+            pair_rt(WireTy::int(), WireTy::string()),
+            pair_rt(WireTy::Bool, WireTy::Float),
         ],
         indexmap::IndexMap::from_iter([("first", inner1), ("second", inner2)]),
     );
@@ -1204,19 +1207,19 @@ async fn explicit_binding_contradicted_by_scalar_actual_rejects() {
         function main() -> int { 0 }
     "#;
     let b = BEV::Array {
-        element_type: RuntimeTy::string(),
+        element_type: WireTy::string(),
         items: vec![s("x")],
     };
     let c = BEV::Map {
-        key_type: RuntimeTy::string(),
-        value_type: RuntimeTy::bool(),
+        key_type: WireTy::string(),
+        value_type: WireTy::Bool,
         entries: indexmap::IndexMap::from_iter([("k".to_string(), BEV::Bool(true))]),
     };
     let err = call_with_bindings(
         src,
         "make_triple",
         vec![s("nope"), b, c],
-        indexmap! { "A" => RuntimeTy::int() },
+        indexmap! { "A" => WireTy::int() },
     )
     .await
     .expect_err("a string actual must not satisfy the explicit `A=int` binding");
@@ -1248,12 +1251,12 @@ async fn infer_choose_divergent_generic_instances_union() {
     "#;
     let x = BEV::instance_generic(
         "GenericBox",
-        vec![RuntimeTy::int()],
+        vec![WireTy::int()],
         indexmap::IndexMap::from_iter([("value", BEV::Int(1))]),
     );
     let y = BEV::instance_generic(
         "GenericBox",
-        vec![RuntimeTy::string()],
+        vec![WireTy::string()],
         indexmap::IndexMap::from_iter([("value", s("x"))]),
     );
     let out = call_infer(src, "choose", vec![x, y]).await.unwrap();
@@ -1282,7 +1285,7 @@ async fn infer_tag_or_value_binds_generic_instance() {
     "#;
     let arg = BEV::instance_generic(
         "GenericBox",
-        vec![RuntimeTy::string()],
+        vec![WireTy::string()],
         indexmap::IndexMap::from_iter([("value", s("asdf"))]),
     );
     let out = call_infer(src, "tag_or_value", vec![arg]).await.unwrap();
@@ -1323,10 +1326,12 @@ async fn infer_identity_enum_binds_enum_type() {
 
 // ── §A A3: nested *fully-bound* generic instance ────────────────────────────
 
-/// Build a `RuntimeTy` for `GenericBox<inner>` (the value-level wire type).
-fn box_rt(inner: RuntimeTy) -> RuntimeTy {
-    RuntimeTy::Class(
-        baml_type::TypeName::local(baml_type::Name::new("GenericBox")),
+/// Build a `WireTy` for `GenericBox<inner>` (the value-level wire type).
+fn box_rt(inner: WireTy) -> WireTy {
+    WireTy::Class(
+        WireHead::Static(baml_type::TypeName::local(baml_type::Name::new(
+            "GenericBox",
+        ))),
         Box::new([inner]),
     )
 }
@@ -1344,12 +1349,12 @@ async fn a3_nested_fully_bound_generic_instance() {
     "#;
     let inner = BEV::instance_generic(
         "GenericBox",
-        vec![RuntimeTy::string()],
+        vec![WireTy::string()],
         indexmap::IndexMap::from_iter([("value", s("hello"))]),
     );
     let outer = BEV::instance_generic(
         "GenericBox",
-        vec![box_rt(RuntimeTy::string())],
+        vec![box_rt(WireTy::string())],
         indexmap::IndexMap::from_iter([("value", inner)]),
     );
     let out = call_infer(source, "identity", vec![outer]).await.unwrap();
@@ -1388,17 +1393,14 @@ async fn b3_read_items_from_instance_wire_arg() {
     // type-arg, NOT by re-unifying every field.
     let shape = BEV::instance_generic(
         "ContainerShapes",
-        vec![RuntimeTy::int()],
+        vec![WireTy::int()],
         indexmap::IndexMap::from_iter([
             ("item", BEV::Int(1)),
             (
                 "items",
-                arr(
-                    RuntimeTy::int(),
-                    vec![BEV::Int(1), BEV::Int(2), BEV::Int(3)],
-                ),
+                arr(WireTy::int(), vec![BEV::Int(1), BEV::Int(2), BEV::Int(3)]),
             ),
-            ("by_key", int_map(RuntimeTy::int(), &[("k", BEV::Int(4))])),
+            ("by_key", int_map(WireTy::int(), &[("k", BEV::Int(4))])),
             ("maybe", BEV::Null),
             ("mixed", BEV::Null),
         ]),
@@ -1414,11 +1416,11 @@ async fn b6_read_items_empty_fields_bound_instance_keeps_wire_arg() {
     // synthesized from the (empty) field values. Contrast B7 (free function).
     let shape = BEV::instance_generic(
         "ContainerShapes",
-        vec![RuntimeTy::int()],
+        vec![WireTy::int()],
         indexmap::IndexMap::from_iter([
             ("item", BEV::Int(1)),
-            ("items", arr(RuntimeTy::int(), vec![])),
-            ("by_key", int_map(RuntimeTy::int(), &[])),
+            ("items", arr(WireTy::int(), vec![])),
+            ("by_key", int_map(WireTy::int(), &[])),
             ("maybe", BEV::Null),
             ("mixed", BEV::Null),
         ]),
@@ -1442,12 +1444,12 @@ async fn b4_list_head_recursive_generic_wire_arg() {
     "#;
     let tail = BEV::instance_generic(
         "GenericRecursive",
-        vec![RuntimeTy::int()],
+        vec![WireTy::int()],
         indexmap::IndexMap::from_iter([("value", BEV::Int(8)), ("next", BEV::Null)]),
     );
     let head = BEV::instance_generic(
         "GenericRecursive",
-        vec![RuntimeTy::int()],
+        vec![WireTy::int()],
         indexmap::IndexMap::from_iter([("value", BEV::Int(7)), ("next", tail)]),
     );
     let out = call_infer(src, "list_head_t", vec![head]).await.unwrap();
@@ -1464,7 +1466,7 @@ async fn b7_first_or_empty_list_free_fn_binds_stated_element_type() {
         function first_or<T>(xs: T[]) -> string { reflect.Type.of<T>().to_string() }
         function main() -> int { 0 }
     "#;
-    let out = call_infer(src, "first_or", vec![arr(RuntimeTy::int(), vec![])])
+    let out = call_infer(src, "first_or", vec![arr(WireTy::int(), vec![])])
         .await
         .unwrap();
     assert_eq!(out, BEV::String("int".into()));
@@ -1479,7 +1481,7 @@ async fn b9_values_of_empty_map_free_fn_binds_stated_value_type() {
         }
         function main() -> int { 0 }
     "#;
-    let out = call_infer(src, "values_of", vec![int_map(RuntimeTy::int(), &[])])
+    let out = call_infer(src, "values_of", vec![int_map(WireTy::int(), &[])])
         .await
         .unwrap();
     assert_eq!(out, BEV::String("int".into()));
@@ -1507,7 +1509,7 @@ async fn l1_method_class_var_from_receiver() {
     // receiver's wire type-args.
     let recv = BEV::instance_generic(
         "GenericBox",
-        vec![RuntimeTy::int()],
+        vec![WireTy::int()],
         indexmap::IndexMap::from_iter([("value", BEV::Int(5))]),
     );
     let out = call_infer(GENERIC_BOX_METHODS, "GenericBox.get", vec![recv])
@@ -1522,7 +1524,7 @@ async fn l2_method_class_and_method_vars() {
     // T=int from the receiver, method U=string inferred from `other`.
     let recv = BEV::instance_generic(
         "GenericBox",
-        vec![RuntimeTy::int()],
+        vec![WireTy::int()],
         indexmap::IndexMap::from_iter([("value", BEV::Int(5))]),
     );
     let out = call_infer(
@@ -1621,7 +1623,7 @@ async fn het_array_element_type_is_the_stated_union() {
         function main() -> int { 0 }
     "#;
     let xs = arr(
-        RuntimeTy::union([RuntimeTy::int(), RuntimeTy::string()]),
+        WireTy::Union(Box::from_iter([WireTy::int(), WireTy::string()])),
         vec![BEV::Int(1), s("x")],
     );
     let out = call_infer(src, "elem_type", vec![xs]).await.unwrap();
@@ -1646,17 +1648,14 @@ async fn container_shapes_binds_t_from_stated_arguments() {
     // `T = int` ⇒ T = int, read from the instance's argument.
     let shape = BEV::instance_generic(
         "ContainerShapes",
-        vec![RuntimeTy::int()],
+        vec![WireTy::int()],
         indexmap::IndexMap::from_iter([
             ("item", BEV::Int(1)),
             (
                 "items",
-                arr(
-                    RuntimeTy::int(),
-                    vec![BEV::Int(1), BEV::Int(2), BEV::Int(3)],
-                ),
+                arr(WireTy::int(), vec![BEV::Int(1), BEV::Int(2), BEV::Int(3)]),
             ),
-            ("by_key", int_map(RuntimeTy::int(), &[("k", BEV::Int(4))])),
+            ("by_key", int_map(WireTy::int(), &[("k", BEV::Int(4))])),
             ("maybe", BEV::Null),
             ("mixed", BEV::Null),
         ]),
@@ -1677,27 +1676,27 @@ async fn nested_generic_pair_binds_every_var_from_stated_arguments() {
         }
         function main() -> int { 0 }
     "#;
-    let pair = |first: RuntimeTy, second: RuntimeTy| {
-        RuntimeTy::Class(
-            baml_type::TypeName::from_dotted_path("GenericPair"),
+    let pair = |first: WireTy, second: WireTy| {
+        WireTy::Class(
+            WireHead::Static(baml_type::TypeName::from_dotted_path("GenericPair")),
             Box::new([first, second]),
         )
     };
     let inner1 = BEV::instance_generic(
         "GenericPair",
-        vec![RuntimeTy::int(), RuntimeTy::string()],
+        vec![WireTy::int(), WireTy::string()],
         indexmap::IndexMap::from_iter([("first", BEV::Int(1)), ("second", s("a"))]),
     );
     let inner2 = BEV::instance_generic(
         "GenericPair",
-        vec![RuntimeTy::bool(), RuntimeTy::float()],
+        vec![WireTy::Bool, WireTy::Float],
         indexmap::IndexMap::from_iter([("first", BEV::Bool(true)), ("second", BEV::Float(1.5))]),
     );
     let arg = BEV::instance_generic(
         "GenericPair",
         vec![
-            pair(RuntimeTy::int(), RuntimeTy::string()),
-            pair(RuntimeTy::bool(), RuntimeTy::float()),
+            pair(WireTy::int(), WireTy::string()),
+            pair(WireTy::Bool, WireTy::Float),
         ],
         indexmap::IndexMap::from_iter([("first", inner1), ("second", inner2)]),
     );
@@ -1726,12 +1725,12 @@ async fn nested_instance_whose_argument_contradicts_its_inner_is_refused() {
     "#;
     let inner = BEV::instance_generic(
         "GenericPair",
-        vec![RuntimeTy::bool(), RuntimeTy::float()],
+        vec![WireTy::Bool, WireTy::Float],
         indexmap::IndexMap::from_iter([("first", BEV::Bool(true)), ("second", BEV::Float(1.5))]),
     );
     let arg = BEV::instance_generic(
         "GenericPair",
-        vec![RuntimeTy::int(), RuntimeTy::string()],
+        vec![WireTy::int(), WireTy::string()],
         indexmap::IndexMap::from_iter([("first", inner), ("second", s("a"))]),
     );
     let err = call_infer(src, "extract", vec![arg]).await.unwrap_err();

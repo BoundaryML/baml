@@ -95,16 +95,18 @@ async fn serialize_via_baml_json(
     return_type: &RuntimeTy,
     helper_context: &HelperCallContext,
 ) -> Result<String> {
+    // A program's own declared type: every head is static. A return type
+    // that mentions the function's type parameters names no one type.
+    let return_type = return_type.try_into_wire().map_err(|_| {
+        anyhow!("the return type {return_type} is generic; JSON output needs a concrete type")
+    })?;
     // The result goes back in as a host value: its union envelopes are the
     // engine's description of what it handed out, not part of the value.
     let result = engine
         .call_function(
             "baml.json.serialize",
             vec![value.into_host_value()],
-            helper_context.call_context(indexmap::IndexMap::from([(
-                "T".to_string(),
-                return_type.clone(),
-            )])),
+            helper_context.call_context(indexmap::IndexMap::from([("T".to_string(), return_type)])),
             true,
         )
         .await

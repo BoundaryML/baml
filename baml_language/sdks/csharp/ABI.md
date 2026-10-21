@@ -30,7 +30,7 @@ the node's own type, and whether a node carries one is fixed by its arm:
 |---|---|---|
 | `int_value`, `float_value`, `bigint_value`, `string_value`, `bool_value`, `uint8array_value`, absent (`null`) | forbidden | implied by the arm |
 | `enum_value` | forbidden | the enum and variant the node names |
-| `media_value`, `prompt_ast_value`, `ty_value`, `ty_def_value` | forbidden | implied by the value |
+| `media_value`, `prompt_ast_value`, `ty_value` | forbidden | implied by the value |
 | `handle` to a resource, a function, media, a prompt, a type or an opaque host value | forbidden | the handle's own type, checked live |
 | `list_value` | required | `E[]` |
 | `map_value` | required | `map<K, V>` |
@@ -38,9 +38,12 @@ the node's own type, and whether a node carries one is fixed by its arm:
 | `handle` to a host callable | required | the callable's function type |
 | `js_number_value` | refused | |
 
-A statement is a realized type. The decoder refuses, before the engine sees the
-value, a statement that mentions a type variable, one that lacks a part no type
-can do without (an unspecified primitive, a literal without its value, an empty
+Every type on the wire is realized: a statement, an explicit type argument, a
+`ty_value` and every type the engine sends. A `type_var` or an
+`associated_type_projection` determines no value, so the decoder refuses one
+anywhere in a type and the engine never sends one. The decoder also refuses,
+before the engine sees the value, a statement that lacks a part no type can do
+without (an unspecified primitive, a literal without its value, an empty
 type), one of another shape than its node, a missing statement, and a statement
 on a node whose type is implied. Only a recursive alias exists as a declaration
 at run time, so a statement spells a non-recursive alias by its body. A host
@@ -58,10 +61,20 @@ and keeps the kind it first arrived under: a key under two host kinds in one
 request, or under a kind other than the one the engine already holds for it,
 is refused. A host never clones or releases a host key through the handle API.
 
-A `type_definition` in `type_args` declares fresh runtime declarations for the
-call. One named like a declaration the program has is refused: a declaration's
-identity is itself, never its name, and the program's declarations are reached
-by name alone.
+A type names each declaration by its head. A declaration compiled with the
+program is spelled by `name`, its qualified name, and resolved against the
+program's own tables only. A declaration the runtime created (`reflect.Class.new`,
+a runtime-compiled package) has no name a lookup could resolve: it is `live`,
+the key of a handle the host holds to the declaration itself, which the engine
+follows. Each occurrence of a `live` key transfers one reference, like any
+engine key, so a host sends a fresh clone per occurrence and keeps its own. A
+`ty_value` the engine returns hands the host one such reference per `live`
+head, which the host releases when it lets the type go. `anonymous_label` is
+display text: it labels an unnameable declaration in the annotation beside a
+value that crosses by reference (a runtime instance's `ty`, a container's
+element type) and creates no reference. A stated type that carries one is
+refused, and so is an instance stated by fields whose class is a runtime
+declaration: such an instance is passed back as the handle it arrived as.
 
 A class with a `$rust_type` field holds native data only the runtime creates
 (a media wrapper's payload, a cipher's state, a cancel token). A host passes

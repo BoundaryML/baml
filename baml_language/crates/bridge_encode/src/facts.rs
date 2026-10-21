@@ -10,9 +10,12 @@
 use std::collections::{HashMap, HashSet};
 
 use baml_sdkgen_types::ProgramDescriptor;
-use baml_type::{Name, ParamTy, RuntimeTy};
+use baml_type::{Name, ParamTy, RuntimeTy, WireHead};
 
-use crate::{error::FactsError, host::Head};
+use crate::{
+    error::FactsError,
+    host::{Head, SlotTy},
+};
 
 /// Every signature and declaration of one program, in the runtime type family
 /// and in stated form.
@@ -23,11 +26,11 @@ pub struct Facts {
     enums: HashMap<Head, EnumFacts>,
     /// The recursive aliases: the names the engine resolves at run time, with
     /// their bodies.
-    recursive: HashMap<Head, RuntimeTy>,
+    recursive: HashMap<Head, SlotTy>,
     /// The non-recursive aliases, by body, for a type that arrives from the
     /// host spelling one (an explicit type argument, an instance's own
     /// arguments).
-    expanded: HashMap<Head, RuntimeTy>,
+    expanded: HashMap<Head, SlotTy>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,14 +40,14 @@ pub struct FunctionSig {
     /// The callable's own type parameters.
     pub generic_params: Vec<Name>,
     pub params: Vec<Param>,
-    pub ret: RuntimeTy,
-    pub throws: RuntimeTy,
+    pub ret: SlotTy,
+    pub throws: SlotTy,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Param {
     pub name: String,
-    pub ty: RuntimeTy,
+    pub ty: SlotTy,
     pub has_default: bool,
 }
 
@@ -54,7 +57,7 @@ pub struct ClassFacts {
     pub generic_params: Vec<Name>,
     /// Field types mention the class's parameters as `TypeVar`s indexed by
     /// position in `generic_params`.
-    pub fields: Vec<(String, RuntimeTy)>,
+    pub fields: Vec<(String, SlotTy)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,7 +78,11 @@ impl Facts {
                 )
             })
             .collect();
-        let state = |ty: RuntimeTy| stated(ty, &raw, &mut Vec::new());
+        // Every fact names compiled declarations only: its heads are static.
+        let state = |ty: RuntimeTy| {
+            stated(ty, &raw, &mut Vec::new())
+                .map(|ty| ty.map_heads(&mut |name: &Head| WireHead::Static(name.clone())))
+        };
         let mut facts = Facts::default();
         for function in &descriptor.functions {
             let params = function
@@ -147,19 +154,19 @@ impl Facts {
     /// `ty` in stated form, for a type that arrives from the host spelling
     /// an alias. An alias the facts do not know is left as it is, for the
     /// engine to refuse by name.
-    pub fn stated_form(&self, ty: RuntimeTy) -> RuntimeTy {
+    pub fn stated_form(&self, ty: SlotTy) -> SlotTy {
         match ty {
-            RuntimeTy::TypeAlias(name) if !self.recursive.contains_key(&name) => {
+            SlotTy::TypeAlias(WireHead::Static(name)) if !self.recursive.contains_key(&name) => {
                 match self.expanded.get(&name) {
                     Some(body) => body.clone(),
-                    None => RuntimeTy::TypeAlias(name),
+                    None => SlotTy::TypeAlias(WireHead::Static(name)),
                 }
             }
-            RuntimeTy::Union(members) => {
-                let mut out: Vec<RuntimeTy> = Vec::with_capacity(members.len());
+            SlotTy::Union(members) => {
+                let mut out: Vec<SlotTy> = Vec::with_capacity(members.len());
                 for member in &members {
                     match self.stated_form(member.clone()) {
-                        RuntimeTy::Union(nested) => {
+                        SlotTy::Union(nested) => {
                             for member in &nested {
                                 push_distinct(&mut out, member.clone());
                             }
@@ -190,9 +197,9 @@ impl Facts {
 
     /// `ty` with a recursive alias at its head unfolded one layer: the body
     /// a value under the alias is judged against. Every other type is itself.
-    pub(crate) fn unfold<'a>(&'a self, mut ty: &'a RuntimeTy) -> &'a RuntimeTy {
+    pub(crate) fn unfold<'a>(&'a self, mut ty: &'a SlotTy) -> &'a SlotTy {
         let mut seen: Vec<&Head> = Vec::new();
-        while let RuntimeTy::TypeAlias(name) = ty {
+        while let SlotTy::TypeAlias(WireHead::Static(name)) = ty {
             // An unguarded cycle of aliases (`type A = B; type B = A`) denotes
             // `never`; the body is left at the first name seen twice, which
             // no value inhabits.
@@ -212,7 +219,7 @@ impl Facts {
     /// nested unions flattened, in declared order. A recursive member reached
     /// again on the same path contributes nothing: a self-supporting cycle
     /// proves no membership (`type A = A | A[]` is the type of `A[]`).
-    pub(crate) fn flatten<'a>(&'a self, members: &'a [RuntimeTy]) -> Vec<&'a RuntimeTy> {
+    pub(crate) fn flatten<'a>(&'a self, members: &'a [SlotTy]) -> Vec<&'a SlotTy> {
         let mut out = Vec::with_capacity(members.len());
         let mut seen = HashSet::new();
         self.flatten_into(members, &mut seen, &mut out);
@@ -221,18 +228,18 @@ impl Facts {
 
     fn flatten_into<'a>(
         &'a self,
-        members: &'a [RuntimeTy],
+        members: &'a [SlotTy],
         seen: &mut HashSet<&'a Head>,
-        out: &mut Vec<&'a RuntimeTy>,
+        out: &mut Vec<&'a SlotTy>,
     ) {
         for member in members {
             match member {
-                RuntimeTy::TypeAlias(name) => {
+                SlotTy::TypeAlias(WireHead::Static(name)) => {
                     if !seen.insert(name) {
                         continue;
                     }
                     match self.recursive.get(name) {
-                        Some(RuntimeTy::Union(nested)) => self.flatten_into(nested, seen, out),
+                        Some(SlotTy::Union(nested)) => self.flatten_into(nested, seen, out),
                         Some(body) => {
                             if !out.contains(&body) {
                                 out.push(body);
@@ -246,7 +253,7 @@ impl Facts {
                     }
                     seen.remove(name);
                 }
-                RuntimeTy::Union(nested) => self.flatten_into(nested, seen, out),
+                SlotTy::Union(nested) => self.flatten_into(nested, seen, out),
                 other => {
                     if !out.contains(&other) {
                         out.push(other);
@@ -310,14 +317,14 @@ fn stated(
     }
 }
 
-fn push_distinct(members: &mut Vec<RuntimeTy>, member: RuntimeTy) {
+fn push_distinct<N: Clone + PartialEq>(members: &mut Vec<RuntimeTy<N>>, member: RuntimeTy<N>) {
     if !members.contains(&member) {
         members.push(member);
     }
 }
 
 /// A union of `members`, or the one member alone.
-fn union_of(mut members: Vec<RuntimeTy>) -> RuntimeTy {
+fn union_of<N: Clone>(mut members: Vec<RuntimeTy<N>>) -> RuntimeTy<N> {
     match members.len() {
         1 => members.pop().expect("one member"),
         _ => RuntimeTy::Union(members.into()),
@@ -326,10 +333,10 @@ fn union_of(mut members: Vec<RuntimeTy>) -> RuntimeTy {
 
 /// `ty` with every `TypeVar` that `resolve` answers replaced by its answer.
 /// A variable `resolve` declines stays a `TypeVar`.
-pub(crate) fn substitute(
-    ty: &RuntimeTy,
-    resolve: &impl Fn(&ParamTy) -> Option<RuntimeTy>,
-) -> RuntimeTy {
+pub(crate) fn substitute<N: Clone>(
+    ty: &RuntimeTy<N>,
+    resolve: &impl Fn(&ParamTy) -> Option<RuntimeTy<N>>,
+) -> RuntimeTy<N> {
     match ty {
         RuntimeTy::TypeVar(param) => resolve(param).unwrap_or_else(|| ty.clone()),
         other => other.map_children(&mut |child| substitute(child, resolve)),
@@ -337,7 +344,7 @@ pub(crate) fn substitute(
 }
 
 /// Does `ty` mention a type variable anywhere?
-pub(crate) fn mentions_type_var(ty: &RuntimeTy) -> bool {
+pub(crate) fn mentions_type_var<N: Clone>(ty: &RuntimeTy<N>) -> bool {
     if matches!(ty, RuntimeTy::TypeVar(_)) {
         return true;
     }
@@ -347,7 +354,7 @@ pub(crate) fn mentions_type_var(ty: &RuntimeTy) -> bool {
 }
 
 /// The first type variable `ty` mentions, if any.
-pub(crate) fn first_type_var(ty: &RuntimeTy) -> Option<ParamTy> {
+pub(crate) fn first_type_var<N: Clone>(ty: &RuntimeTy<N>) -> Option<ParamTy> {
     if let RuntimeTy::TypeVar(param) = ty {
         return Some(param.clone());
     }

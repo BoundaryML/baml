@@ -486,8 +486,8 @@ func NewEnumValue(name string, options ...MetadataOption) EnumValue {
 	return EnumValue{Name: name, Metadata: metadata}
 }
 
-// TypeOf converts a supported Go token to an opaque portable definition.
-func TypeOf[T any]() Type { return baml_go.DefinitionOf[T]() }
+// TypeOf converts a supported Go token to its BAML type.
+func TypeOf[T any]() Type { return baml_go.TypeOf[T]() }
 
 func metadataInput(metadata Metadata) baml_go.Input {
 	return baml_go.Class("reflect.Meta", map[string]baml_go.Input{

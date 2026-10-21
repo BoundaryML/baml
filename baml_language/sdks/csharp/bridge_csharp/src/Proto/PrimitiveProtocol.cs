@@ -602,7 +602,7 @@ internal static class PrimitiveProtocol
             },
             PrimitiveCarrierKind.Type => new InboundValue
             {
-                TyDefValue = value.ReadType().WireCopy(),
+                TyValue = value.ReadType().Restate(ownership),
             },
             PrimitiveCarrierKind.Handle => EncodeHandle(
                 value.ReadHandle(),
@@ -678,11 +678,7 @@ internal static class PrimitiveProtocol
                 BamlGeneratedValue.CreatePromptAst(value.PromptAstValue, path),
             BamlOutboundValue.ValueOneofCase.TyValue =>
                 BamlGeneratedValue.CreateType(
-                    new global::Baml.BamlType(value.TyValue),
-                    path),
-            BamlOutboundValue.ValueOneofCase.TyDefValue =>
-                BamlGeneratedValue.CreateType(
-                    new global::Baml.BamlType(value.TyDefValue),
+                    new global::Baml.BamlType(value.TyValue, ownership.ClaimRows(value.TyValue)),
                     path),
             BamlOutboundValue.ValueOneofCase.HandleValue =>
                 DecodeHandle(value.HandleValue, path, ownership, api, budget, depth),
@@ -1016,6 +1012,22 @@ internal static class PrimitiveProtocol
                 wire.HandleType,
                 mediaContract,
                 path);
+        }
+
+        if (wire.HandleType == BamlHandleType.AdtTaggedHeapHandle
+            && wire.Ty?.TyCase == BamlTy.TyOneofCase.ClassTy
+            && wire.Ty.ClassTy.HeadCase == BamlTyClass.HeadOneofCase.AnonymousLabel)
+        {
+            // An instance of a runtime declaration: its class has no name, so
+            // the handle is held by its label and never matches a named type.
+            byte[] annotation = wire.Ty.ToByteArray();
+            return BamlGeneratedValue.CreateHandle(
+                new global::Baml.BamlHandle(
+                    ownership.Claim(wire),
+                    global::Baml.BamlTypeDescriptor.CreateUnnamedHandle(annotation),
+                    wire.HandleType,
+                    annotation),
+                sourcePath: path);
         }
 
         string fqn = wire.HandleType switch

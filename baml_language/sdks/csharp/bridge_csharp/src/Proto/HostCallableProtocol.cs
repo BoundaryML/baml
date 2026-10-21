@@ -130,6 +130,10 @@ internal static class HostCallableProtocol
                     throw InvalidArguments("The callback received too many required arguments.");
                 }
 
+                // BUG: decoded without the native API, so an engine handle or a
+                // type value's live rows in a callback argument are refused and
+                // never released; Python and TypeScript own and release them here.
+                // `BindArguments` needs the native API threaded through.
                 BamlGeneratedValue decoded = PrimitiveProtocol.Decode(supplied.Value);
                 bound[requiredIndex] = parameters[requiredIndex].Decode(decoded);
                 requiredIndex++;

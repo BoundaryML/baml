@@ -275,23 +275,44 @@ final class FFISmokeTests: XCTestCase {
         XCTAssertEqual(ints, [])
     }
 
-    func testTyDefReportsUnsupportedReflection() {
+    /// A type value has no Swift decodable: decoding one is a mismatch that
+    /// names it.
+    func testTypeValueIsRefused() {
+        var cls = BamlBridge_Cffi_V1_BamlTyClass()
+        cls.name = "user.Box"
         var raw = BamlBridge_Cffi_V1_BamlOutboundValue()
-        raw.tyDefValue = BamlBridge_Cffi_V1_BamlTyDef()
+        raw.tyValue.classTy = cls
 
-        XCTAssertThrowsError(
-            try Int._bamlDecode(BamlOutboundValue(raw))
-        ) { error in
+        XCTAssertThrowsError(try Int._bamlDecode(BamlOutboundValue(raw))) { error in
             guard case BamlDecodeError.typeMismatch(let expected, let got) = error else {
-                return XCTFail(
-                    "expected BamlDecodeError.typeMismatch, got \(error)"
-                )
+                return XCTFail("expected BamlDecodeError.typeMismatch, got \(error)")
             }
             XCTAssertEqual(expected, "Int")
-            XCTAssertTrue(got.contains("requires BEP-066 reflection support"))
-            XCTAssertTrue(got.contains("Swift SDK does not provide"))
+            XCTAssertEqual(got, "type reference")
         }
     }
+
+    /// Every `live` head is one reference, so each occurrence is found,
+    /// through every arm that nests a type; `name` heads are not references.
+    func testLiveKeysFindsEveryOccurrence() {
+        var param = BamlBridge_Cffi_V1_BamlTyFunctionParam()
+        param.ty.classTy.head = .live(1)
+        var binding = BamlBridge_Cffi_V1_BamlTyAssociatedBinding()
+        binding.ty.enumVariant.head = .live(3)
+        var interface = BamlBridge_Cffi_V1_BamlTyInterface()
+        interface.head = .live(2)
+        interface.bindings = [binding]
+        var function = BamlBridge_Cffi_V1_BamlTyFunction()
+        function.params = [param]
+        function.ret.interface = interface
+        function.throws.future.value.typeAlias.name = "user.Alias"
+        function.throws.future.error.list.item.enum.head = .live(1)
+        var ty = BamlBridge_Cffi_V1_BamlTy()
+        ty.function = function
+
+        XCTAssertEqual(liveKeys(ty), [1, 2, 3, 1])
+    }
+
 }
 
 /// Hand-written stand-ins for generated models, shaped as sdkgen_swift emits

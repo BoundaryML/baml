@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use bex_vm_types::{HeapPtr, RealizedTy, Value, types::TypeValue};
+use bex_vm_types::{HeapPtr, RealizedTy, Value};
 use indexmap::IndexMap;
 #[cfg(not(target_arch = "wasm32"))]
 use tokio::time::Instant;
@@ -15,8 +15,7 @@ use web_time::Instant;
 
 use crate::{
     ActiveHeapPermit, BexCallResult, BexEngine, BoundaryContext, CallId, EngineError,
-    LogCaptureContext, RootCallWork, RuntimeTy, ThreadOutcome, logger::TraceLogger,
-    thread::BexThread,
+    LogCaptureContext, RootCallWork, ThreadOutcome, logger::TraceLogger, thread::BexThread,
 };
 
 /// Absolute runtime-monotonic time. Never reconstructed from a relative
@@ -124,9 +123,11 @@ pub(super) struct PreparedInvocation {
     pub entry_ptr: HeapPtr,
     pub vm_args: Vec<Value>,
     pub type_args: IndexMap<String, RealizedTy>,
-    pub type_values: IndexMap<String, TypeValue>,
-    pub return_type: RuntimeTy,
-    pub throws_type: Option<RuntimeTy>,
+    /// The call's declared return and throws types, held across the run: a
+    /// runtime declaration either names is rooted, since a collection may
+    /// move it while the permit is released.
+    pub return_type: crate::hydrate::HeldTy,
+    pub throws_type: Option<crate::hydrate::HeldTy>,
     pub host_call_id: CallId,
     pub boundary: BoundaryContext,
     pub logger: TraceLogger,
@@ -167,7 +168,6 @@ impl ActiveInvocation {
                     entry_ptr,
                     vm_args,
                     type_args,
-                    type_values,
                     return_type,
                     throws_type,
                     host_call_id,
@@ -187,7 +187,7 @@ impl ActiveInvocation {
             }
             thread
                 .vm
-                .set_entry_point_with_type_values(entry_ptr, &vm_args, type_args, type_values);
+                .set_entry_point_with_type_args(entry_ptr, &vm_args, type_args);
             runtime.record_invocation_frame(host_call_id, &thread);
             // Entry setup roots the target, arguments and type values before
             // parking. GC may execute finalizers, so it belongs after admission.
@@ -320,11 +320,12 @@ mod tests {
                 thread,
                 entry,
                 vec![value],
-                IndexMap::new(),
-                IndexMap::new(),
-                IndexMap::new(),
-                RuntimeTy::Int,
-                None,
+                crate::CallSignature {
+                    type_args: IndexMap::new(),
+                    params: vec![bex_vm_types::RealizedTy::Int],
+                    ret: bex_vm_types::RealizedTy::Int,
+                    throws: None,
+                },
                 context.host_call_id,
                 context.boundary,
                 context.logger,

@@ -24,15 +24,15 @@ use std::{
 
 use bex_project::{
     BexExternalAdt, BexExternalValue, HostKey, HostValueArc, HostValueKind, MediaKind, MediaValue,
-    PromptAst, PromptAstSimple, RuntimeTy,
+    PromptAst, PromptAstSimple, WireHead, WireTy,
 };
 use indexmap::IndexMap;
 
 use crate::{
     baml_bridge::cffi::{
-        BamlHandle, BamlHandleType, BamlValueMedia, BamlValuePromptAst, BamlValuePromptAstSimple,
-        InboundClassValue, InboundEnumValue, InboundListValue, InboundMapEntry, InboundMapValue,
-        InboundValue, MediaTypeEnum, baml_value_media,
+        BamlHandle, BamlHandleType, BamlTy, BamlTyArg, BamlValueMedia, BamlValuePromptAst,
+        BamlValuePromptAstSimple, InboundClassValue, InboundEnumValue, InboundListValue,
+        InboundMapEntry, InboundMapValue, InboundValue, MediaTypeEnum, baml_value_media,
         baml_value_prompt_ast::Value as PromptAstVariant,
         baml_value_prompt_ast_simple::Value as PromptAstSimpleVariant,
         inbound_value::Value as InboundValueVariant,
@@ -143,7 +143,40 @@ impl<'a> InboundOwners<'a> {
         first_fault.map_or(Ok(()), Err)
     }
 
+    /// Record every `live` head under `ty`: each occurrence is one engine
+    /// reference the statement transfers, like a handle's.
+    fn walk_ty(&mut self, ty: &BamlTy, first_fault: &mut Option<CtypesError>) {
+        match crate::ty_decode::proto_ty_to_wire_ty(ty) {
+            Ok(stated) => stated.visit_heads(&mut |head: &WireHead<TableKey>| {
+                if let WireHead::Live(key) = head {
+                    *self.engine.entry(*key).or_insert(0) += 1;
+                }
+            }),
+            Err(fault) => {
+                if first_fault.is_none() {
+                    *first_fault = Some(fault);
+                }
+            }
+        }
+    }
+
+    /// Record every `live` head in a call's explicit type arguments before
+    /// anything is decoded: each occurrence is one engine reference the
+    /// request transfers, released with the rest if the request is refused.
+    pub fn collect_type_args(&mut self, type_args: &[BamlTyArg]) -> Result<(), CtypesError> {
+        let mut first_fault = None;
+        for arg in type_args {
+            if let Some(ty) = &arg.type_value {
+                self.walk_ty(ty, &mut first_fault);
+            }
+        }
+        first_fault.map_or(Ok(()), Err)
+    }
+
     fn walk(&mut self, value: &InboundValue, first_fault: &mut Option<CtypesError>) {
+        if let Some(stated) = &value.value_type {
+            self.walk_ty(stated, first_fault);
+        }
         match &value.value {
             Some(InboundValueVariant::Handle(handle)) => {
                 if let Err(fault) = self.record(handle)
@@ -163,6 +196,7 @@ impl<'a> InboundOwners<'a> {
             Some(InboundValueVariant::ClassValue(class)) => {
                 self.walk_entries(&class.fields, first_fault);
             }
+            Some(InboundValueVariant::TyValue(ty)) => self.walk_ty(ty, first_fault),
             Some(
                 InboundValueVariant::StringValue(_)
                 | InboundValueVariant::IntValue(_)
@@ -172,8 +206,6 @@ impl<'a> InboundOwners<'a> {
                 | InboundValueVariant::BoolValue(_)
                 | InboundValueVariant::EnumValue(_)
                 | InboundValueVariant::Uint8arrayValue(_)
-                | InboundValueVariant::TyValue(_)
-                | InboundValueVariant::TyDefValue(_)
                 | InboundValueVariant::MediaValue(_)
                 | InboundValueVariant::PromptAstValue(_),
             )
@@ -219,6 +251,41 @@ impl<'a> InboundOwners<'a> {
     /// Decode one collected value.
     pub fn decode(&mut self, value: InboundValue) -> Result<BexExternalValue, CtypesError> {
         decode_inbound(value, self.table, self)
+    }
+
+    /// Decode a collected type statement: every `live` head drains the row it
+    /// references, which must be a reference to an engine object.
+    pub fn decode_ty(&mut self, ty: &BamlTy) -> Result<WireTy, CtypesError> {
+        crate::ty_decode::proto_ty_to_wire_ty(ty)?.try_map_live(&mut |key: &TableKey| {
+            let row = self
+                .table
+                .resolve(*key)
+                .ok_or(CtypesError::InvalidHandleKey(key.get()))?;
+            let crate::CffiHandleTableEntry::BexHeapHandle(handle) = &*row else {
+                return Err(CtypesError::LiveHeadNotADeclaration(key.get()));
+            };
+            let handle = handle.clone();
+            self.table
+                .drain(*key)
+                .ok_or(CtypesError::InvalidHandleKey(key.get()))?;
+            self.drained(*key);
+            Ok(handle)
+        })
+    }
+
+    /// Decode a call's collected type arguments.
+    pub fn decode_type_args(
+        &mut self,
+        type_args: &[BamlTyArg],
+    ) -> Result<IndexMap<String, WireTy>, CtypesError> {
+        let mut decoded = IndexMap::new();
+        for arg in type_args {
+            let ty = arg.type_value.as_ref().ok_or(CtypesError::IncompleteType {
+                position: "type argument's type",
+            })?;
+            decoded.insert(arg.type_var.clone(), self.decode_ty(ty)?);
+        }
+        Ok(decoded)
     }
 
     /// Decode collected keyword arguments into engine call arguments.
@@ -282,18 +349,8 @@ fn decode_inbound(
     let stated = value
         .value_type
         .as_ref()
-        .map(crate::ty_decode::proto_ty_to_runtime_ty)
+        .map(|ty| owners.decode_ty(ty))
         .transpose()?;
-    // A type that mentions a type variable determines no value: the host
-    // binds its generics before it sends.
-    if let Some(stated) = &stated
-        && let Some(var) = crate::ty_decode::first_type_var(stated)
-    {
-        return Err(CtypesError::ValueTypeNotRealized {
-            stated: bounded(stated.to_string()),
-            var: bounded(var.name().to_string()),
-        });
-    }
     let Some(variant) = value.value else {
         implied(stated.as_ref(), "null")?;
         return Ok(BexExternalValue::Null);
@@ -337,21 +394,21 @@ fn decode_inbound(
         }
         InboundValueVariant::ListValue(list) => {
             let element = match required(stated, "list_value", "a list type")? {
-                RuntimeTy::List(element) => *element,
+                WireTy::List(element) => *element,
                 other => return Err(shape("list_value", "a list type", &other)),
             };
             convert_list(list, element, handle_table, owners)
         }
         InboundValueVariant::MapValue(map) => {
             let (key, value) = match required(stated, "map_value", "a map type")? {
-                RuntimeTy::Map { key, value } => (*key, *value),
+                WireTy::Map { key, value } => (*key, *value),
                 other => return Err(shape("map_value", "a map type", &other)),
             };
             convert_map(map, key, value, handle_table, owners)
         }
         InboundValueVariant::ClassValue(class) => {
             let (name, type_args) = match required(stated, "class_value", "a class type")? {
-                RuntimeTy::Class(name, type_args) => (name, type_args),
+                WireTy::Class(name, type_args) => (name, type_args),
                 other => return Err(shape("class_value", "a class type", &other)),
             };
             convert_class(class, &name, type_args.into_vec(), handle_table, owners)
@@ -367,11 +424,9 @@ fn decode_inbound(
         // A reflected BAML type passed as an argument value.
         InboundValueVariant::TyValue(ty) => {
             implied(stated.as_ref(), "ty_value")?;
-            crate::ty_decode::proto_ty_to_external(&ty)
-        }
-        InboundValueVariant::TyDefValue(ty) => {
-            implied(stated.as_ref(), "ty_def_value")?;
-            crate::ty_decode::proto_ty_def_to_external(&ty)
+            Ok(BexExternalValue::Adt(BexExternalAdt::WireType(
+                owners.decode_ty(&ty)?,
+            )))
         }
         InboundValueVariant::MediaValue(media) => {
             implied(stated.as_ref(), "media_value")?;
@@ -391,7 +446,7 @@ fn decode_inbound(
                 // states the function type it inhabits.
                 let (params, ret, throws) =
                     match required(stated, "handle (callable)", "a function type")? {
-                        RuntimeTy::Function {
+                        WireTy::Function {
                             params,
                             ret,
                             throws,
@@ -459,7 +514,7 @@ fn intern_host_value(
 }
 
 /// A node whose type the wire implies carries no statement.
-fn implied(stated: Option<&RuntimeTy>, node: &'static str) -> Result<(), CtypesError> {
+fn implied(stated: Option<&WireTy>, node: &'static str) -> Result<(), CtypesError> {
     match stated {
         None => Ok(()),
         Some(_) => Err(CtypesError::UnexpectedValueType { node }),
@@ -468,15 +523,15 @@ fn implied(stated: Option<&RuntimeTy>, node: &'static str) -> Result<(), CtypesE
 
 /// The statement a list, map, class or callable node has to carry.
 fn required(
-    stated: Option<RuntimeTy>,
+    stated: Option<WireTy>,
     node: &'static str,
     expected: &'static str,
-) -> Result<RuntimeTy, CtypesError> {
+) -> Result<WireTy, CtypesError> {
     stated.ok_or(CtypesError::MissingValueType { node, expected })
 }
 
 /// A statement of another shape than the node it is on.
-fn shape(node: &'static str, expected: &'static str, stated: &RuntimeTy) -> CtypesError {
+fn shape(node: &'static str, expected: &'static str, stated: &WireTy) -> CtypesError {
     CtypesError::ValueTypeShape {
         node,
         expected,
@@ -588,7 +643,7 @@ fn proto_prompt_ast_simple_to_bex_prompt_ast_simple(
 
 fn convert_list(
     list: InboundListValue,
-    element_type: RuntimeTy,
+    element_type: WireTy,
     handle_table: &CffiHandleTable,
     owners: &mut InboundOwners<'_>,
 ) -> Result<BexExternalValue, CtypesError> {
@@ -605,8 +660,8 @@ fn convert_list(
 
 fn convert_map(
     map: InboundMapValue,
-    key_type: RuntimeTy,
-    value_type: RuntimeTy,
+    key_type: WireTy,
+    value_type: WireTy,
     handle_table: &CffiHandleTable,
     owners: &mut InboundOwners<'_>,
 ) -> Result<BexExternalValue, CtypesError> {
@@ -631,11 +686,19 @@ fn convert_map(
 
 fn convert_class(
     class: InboundClassValue,
-    name: &baml_type::TypeName,
-    type_args: Vec<RuntimeTy>,
+    head: &WireHead<bex_project::Handle>,
+    type_args: Vec<WireTy>,
     handle_table: &CffiHandleTable,
     owners: &mut InboundOwners<'_>,
 ) -> Result<BexExternalValue, CtypesError> {
+    // An instance by fields is an instance of a compiled class; a runtime
+    // class's instances cross by reference.
+    let name = match head {
+        WireHead::Static(name) => name,
+        WireHead::Live(_) | WireHead::Anonymous(_) => {
+            return Err(CtypesError::ClassValueOfRuntimeClass);
+        }
+    };
     let mut fields = IndexMap::new();
     for entry in class.fields {
         let key = extract_string_key(&entry)?;
@@ -696,9 +759,16 @@ mod tests {
     use super::*;
     use crate::{baml_bridge::cffi::BamlHandle, handle_table::CffiHandleTableEntry};
 
-    fn typed_input(value_type: &RuntimeTy, value: InboundValueVariant) -> InboundValue {
+    /// A stated type on the wire; a test states compiled declarations only.
+    fn proto_of(ty: &WireTy) -> crate::baml_bridge::cffi::BamlTy {
+        crate::ty_encode::wire_ty_to_proto_ty(ty, &mut |_: &bex_project::Handle| {
+            unreachable!("a test states no runtime declaration")
+        })
+    }
+
+    fn typed_input(value_type: &WireTy, value: InboundValueVariant) -> InboundValue {
         InboundValue {
-            value_type: Some(crate::ty_encode::runtime_ty_to_proto_ty(value_type)),
+            value_type: Some(proto_of(value_type)),
             value: Some(value),
         }
     }
@@ -724,19 +794,17 @@ mod tests {
         }
     }
 
-    fn callable_ty() -> RuntimeTy {
-        RuntimeTy::Function {
+    fn callable_ty() -> WireTy {
+        WireTy::Function {
             params: Box::new([]),
-            ret: Box::new(RuntimeTy::int()),
-            throws: Box::new(RuntimeTy::Never),
+            ret: Box::new(WireTy::int()),
+            throws: Box::new(WireTy::Never),
         }
     }
 
     fn host_input(key: u64, kind: BamlHandleType) -> InboundValue {
         let value_type = match kind {
-            BamlHandleType::HostValueCallable => {
-                Some(crate::ty_encode::runtime_ty_to_proto_ty(&callable_ty()))
-            }
+            BamlHandleType::HostValueCallable => Some(proto_of(&callable_ty())),
             _ => None,
         };
         InboundValue {
@@ -755,7 +823,7 @@ mod tests {
         let table = CffiHandleTable::new();
         let engine = table.insert(CffiHandleTableEntry::FunctionRef { global_index: 3 });
         let input = typed_input(
-            &RuntimeTy::list(RuntimeTy::unknown()),
+            &WireTy::list(WireTy::unknown()),
             InboundValueVariant::ListValue(InboundListValue {
                 values: vec![
                     owned_input(engine),
@@ -797,7 +865,7 @@ mod tests {
         };
         let key = twice(7);
         let refused = typed_input(
-            &RuntimeTy::list(RuntimeTy::unknown()),
+            &WireTy::list(WireTy::unknown()),
             InboundValueVariant::ListValue(InboundListValue {
                 values: vec![
                     owned_input(key),
@@ -814,7 +882,7 @@ mod tests {
 
         let key = twice(8);
         let accepted = typed_input(
-            &RuntimeTy::list(RuntimeTy::unknown()),
+            &WireTy::list(WireTy::unknown()),
             InboundValueVariant::ListValue(InboundListValue {
                 values: vec![owned_input(key), owned_input(key)],
             }),
@@ -843,10 +911,10 @@ mod tests {
     #[test]
     fn a_zero_handle_key_is_refused_for_every_handle_kind() {
         let table = CffiHandleTable::new();
-        let callable_ty = RuntimeTy::Function {
+        let callable_ty = WireTy::Function {
             params: Box::new([]),
-            ret: Box::new(RuntimeTy::int()),
-            throws: Box::new(RuntimeTy::Never),
+            ret: Box::new(WireTy::int()),
+            throws: Box::new(WireTy::Never),
         };
         let callable = typed_input(
             &callable_ty,
@@ -891,9 +959,9 @@ mod tests {
             value: Some(value),
         };
         let map = typed_input(
-            &RuntimeTy::Map {
-                key: Box::new(RuntimeTy::string()),
-                value: Box::new(RuntimeTy::int()),
+            &WireTy::Map {
+                key: Box::new(WireTy::string()),
+                value: Box::new(WireTy::int()),
             },
             InboundValueVariant::MapValue(InboundMapValue {
                 entries: vec![entry("a", int(1)), entry("b", int(2)), entry("a", int(3))],
@@ -904,8 +972,8 @@ mod tests {
             Err(CtypesError::DuplicateKey(key)) if key == "a"
         ));
         let class = typed_input(
-            &RuntimeTy::Class(
-                baml_type::TypeName::from_dotted_path("user.P"),
+            &WireTy::Class(
+                WireHead::Static(baml_type::TypeName::from_dotted_path("user.P")),
                 Box::new([]),
             ),
             InboundValueVariant::ClassValue(InboundClassValue {
@@ -925,20 +993,20 @@ mod tests {
     #[test]
     fn one_handle_key_under_two_kinds_is_refused() {
         let table = CffiHandleTable::new();
-        let callable_ty = RuntimeTy::Function {
+        let callable_ty = WireTy::Function {
             params: Box::new([]),
-            ret: Box::new(RuntimeTy::int()),
-            throws: Box::new(RuntimeTy::Never),
+            ret: Box::new(WireTy::int()),
+            throws: Box::new(WireTy::Never),
         };
-        let as_kind = |handle_type: BamlHandleType, stated: Option<&RuntimeTy>| InboundValue {
-            value_type: stated.map(crate::ty_encode::runtime_ty_to_proto_ty),
+        let as_kind = |handle_type: BamlHandleType, stated: Option<&WireTy>| InboundValue {
+            value_type: stated.map(proto_of),
             value: Some(InboundValueVariant::Handle(BamlHandle {
                 key: 42,
                 handle_type: handle_type as i32,
             })),
         };
         let input = typed_input(
-            &RuntimeTy::list(RuntimeTy::unknown()),
+            &WireTy::list(WireTy::unknown()),
             InboundValueVariant::ListValue(InboundListValue {
                 values: vec![
                     as_kind(BamlHandleType::HostValueOpaque, None),
@@ -958,7 +1026,7 @@ mod tests {
         let first = table.insert(CffiHandleTableEntry::FunctionRef { global_index: 1 });
         let last = table.insert(CffiHandleTableEntry::FunctionRef { global_index: 2 });
         let input = typed_input(
-            &RuntimeTy::list(RuntimeTy::unknown()),
+            &WireTy::list(WireTy::unknown()),
             InboundValueVariant::ListValue(InboundListValue {
                 values: vec![
                     owned_input(first),
@@ -979,7 +1047,7 @@ mod tests {
         let table = CffiHandleTable::new();
         let key = table.insert(CffiHandleTableEntry::FunctionRef { global_index: 1 });
         let input = typed_input(
-            &RuntimeTy::Union(vec![RuntimeTy::int(), RuntimeTy::Null].into()),
+            &WireTy::Union(vec![WireTy::int(), WireTy::Null].into()),
             InboundValueVariant::ListValue(InboundListValue {
                 values: vec![owned_input(key)],
             }),
@@ -1021,7 +1089,7 @@ mod tests {
         assert_eq!(decoded, BexExternalValue::Bool(true));
 
         let error = inbound_to_external(
-            typed_input(&RuntimeTy::int(), InboundValueVariant::IntValue(7)),
+            typed_input(&WireTy::int(), InboundValueVariant::IntValue(7)),
             &CffiHandleTable::new(),
         )
         .unwrap_err();
@@ -1033,7 +1101,7 @@ mod tests {
             "{error}"
         );
         // A literal is a scalar in a type's clothing: no node states one.
-        let literal = RuntimeTy::Literal(
+        let literal = WireTy::Literal(
             baml_type::Literal::String("draft".to_string()),
             baml_type::Freshness::Regular,
         );
@@ -1175,7 +1243,7 @@ mod tests {
 
     #[test]
     fn a_list_lands_with_its_stated_element_type() {
-        let list_type = RuntimeTy::list(RuntimeTy::int());
+        let list_type = WireTy::list(WireTy::int());
         let decoded = inbound_to_external(
             typed_input(
                 &list_type,
@@ -1187,15 +1255,15 @@ mod tests {
         assert_eq!(
             decoded,
             BexExternalValue::Array {
-                element_type: RuntimeTy::int(),
+                element_type: WireTy::int(),
                 items: vec![],
             }
         );
         // A union is a fine component type.
-        let either = RuntimeTy::union([RuntimeTy::int(), RuntimeTy::string()]);
+        let either = WireTy::Union(Box::new([WireTy::int(), WireTy::string()]));
         let decoded = inbound_to_external(
             typed_input(
-                &RuntimeTy::list(either.clone()),
+                &WireTy::list(either.clone()),
                 InboundValueVariant::ListValue(InboundListValue {
                     values: vec![InboundValue {
                         value_type: None,
@@ -1218,9 +1286,9 @@ mod tests {
     #[test]
     fn a_map_lands_with_its_stated_key_and_value_types() {
         use crate::baml_bridge::cffi::inbound_map_entry::Key;
-        let map_type = RuntimeTy::Map {
-            key: Box::new(RuntimeTy::string()),
-            value: Box::new(RuntimeTy::float()),
+        let map_type = WireTy::Map {
+            key: Box::new(WireTy::string()),
+            value: Box::new(WireTy::Float),
         };
         let decoded = inbound_to_external(
             typed_input(
@@ -1241,8 +1309,8 @@ mod tests {
         assert_eq!(
             decoded,
             BexExternalValue::Map {
-                key_type: RuntimeTy::string(),
-                value_type: RuntimeTy::float(),
+                key_type: WireTy::string(),
+                value_type: WireTy::Float,
                 entries: IndexMap::from([("x".to_string(), BexExternalValue::Float(1.5))]),
             }
         );
@@ -1310,9 +1378,9 @@ mod tests {
     fn a_statement_of_another_shape_is_refused() {
         // A union, an optional, a scalar: none is the type of a list node.
         for stated in [
-            RuntimeTy::union([RuntimeTy::list(RuntimeTy::int()), RuntimeTy::string()]),
-            RuntimeTy::optional(RuntimeTy::list(RuntimeTy::int())),
-            RuntimeTy::int(),
+            WireTy::Union(Box::new([WireTy::list(WireTy::int()), WireTy::string()])),
+            WireTy::optional(WireTy::list(WireTy::int())),
+            WireTy::int(),
         ] {
             let error = inbound_to_external(
                 typed_input(
@@ -1336,7 +1404,7 @@ mod tests {
         }
         let error = inbound_to_external(
             typed_input(
-                &RuntimeTy::list(RuntimeTy::int()),
+                &WireTy::list(WireTy::int()),
                 InboundValueVariant::ClassValue(InboundClassValue { fields: vec![] }),
             ),
             &CffiHandleTable::new(),
@@ -1351,26 +1419,6 @@ mod tests {
                     ..
                 }
             ),
-            "{error}"
-        );
-    }
-
-    #[test]
-    fn a_statement_that_mentions_a_type_variable_is_refused() {
-        let open = RuntimeTy::list(RuntimeTy::TypeVar(baml_type::ParamTy::new(
-            0,
-            baml_type::Name::new("T"),
-        )));
-        let error = inbound_to_external(
-            typed_input(
-                &open,
-                InboundValueVariant::ListValue(InboundListValue { values: vec![] }),
-            ),
-            &CffiHandleTable::new(),
-        )
-        .unwrap_err();
-        assert!(
-            matches!(error, CtypesError::ValueTypeNotRealized { ref var, .. } if var == "T"),
             "{error}"
         );
     }
@@ -1421,13 +1469,13 @@ mod tests {
             key: 999,
             handle_type: BamlHandleType::HostValueCallable as i32,
         };
-        let signature = RuntimeTy::Function {
-            params: Box::new([baml_type::RuntimeFunctionParamTy::required(
+        let signature = WireTy::Function {
+            params: Box::new([baml_type::RealizedFunctionParamTy::required(
                 None,
-                RuntimeTy::int(),
+                WireTy::int(),
             )]),
-            ret: Box::new(RuntimeTy::string()),
-            throws: Box::new(RuntimeTy::Never),
+            ret: Box::new(WireTy::string()),
+            throws: Box::new(WireTy::Never),
         };
         let result = inbound_to_external(
             typed_input(&signature, InboundValueVariant::Handle(handle)),
@@ -1446,7 +1494,7 @@ mod tests {
         assert_eq!(handle.key.get(), 999);
         assert_eq!(handle.kind, bex_project::HostValueKind::Callable);
         assert_eq!(
-            RuntimeTy::Function {
+            WireTy::Function {
                 params,
                 ret,
                 throws
@@ -1486,7 +1534,7 @@ mod tests {
             "{error}"
         );
         let error = inbound_to_external(
-            typed_input(&RuntimeTy::int(), InboundValueVariant::Handle(handle)),
+            typed_input(&WireTy::int(), InboundValueVariant::Handle(handle)),
             &table,
         )
         .unwrap_err();
@@ -1659,7 +1707,10 @@ mod tests {
     fn a_class_lands_with_its_stated_class_and_arguments() {
         use crate::baml_bridge::cffi::{InboundClassValue, inbound_map_entry::Key};
         let class_name = baml_type::TypeName::from_dotted_path("user.GenericBox");
-        let class_type = RuntimeTy::Class(class_name.clone(), Box::new([RuntimeTy::int()]));
+        let class_type = WireTy::Class(
+            WireHead::Static(class_name.clone()),
+            Box::new([WireTy::int()]),
+        );
         let decoded = inbound_to_external(
             typed_input(
                 &class_type,
@@ -1680,7 +1731,7 @@ mod tests {
             decoded,
             BexExternalValue::Instance {
                 class_name: class_name.to_string(),
-                type_args: vec![RuntimeTy::int()],
+                type_args: vec![WireTy::int()],
                 fields: IndexMap::from([("value".to_string(), BexExternalValue::Int(5))]),
             }
         );

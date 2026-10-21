@@ -262,22 +262,37 @@ func TestDeferredClassCapturesFieldInputsBeforeCallerMutatesMap(t *testing.T) {
 	}
 }
 
-func TestPostNativeCleanupCoversMalformedUnionAndLaterSiblingHandles(t *testing.T) {
+func TestRollbackReleasesEveryCloneOfAnUnsentRequest(t *testing.T) {
 	lifecycle := installInputHandleLifecycle(t)
-	malformed := fakeRustTypeInput()
 	_, transaction, err := encodeCallForDispatch(42, map[string]Input{
-		"a_malformed_union": malformed,
-		"z_later_handle":    fakeRustTypeInput(),
+		"a": fakeRustTypeInput(),
+		"z": fakeRustTypeInput(),
 	})
 	if err != nil {
-		t.Fatalf("host encoding should preserve malformed metadata for native validation: %v", err)
+		t.Fatal(err)
 	}
-	// nativeCall synchronously validates union metadata before decoding its
-	// payload and stops before the later kwarg. Call's unconditional cleanup
-	// therefore must attempt both keys: neither was drained in this shape.
+	// The request never reached the engine, so every clone is still Go's.
 	transaction.rollback()
 	cloned, released := lifecycle.snapshot()
 	if !reflect.DeepEqual(cloned, []uint64{77, 77}) || !reflect.DeepEqual(released, []uint64{1001, 1002}) {
-		t.Fatalf("clone/release = %v / %v, want every undrained key cleaned", cloned, released)
+		t.Fatalf("clone/release = %v / %v, want every clone released", cloned, released)
+	}
+}
+
+func TestCommittedRequestReleasesNothing(t *testing.T) {
+	lifecycle := installInputHandleLifecycle(t)
+	_, transaction, err := encodeCallForDispatch(42, map[string]Input{
+		"a": fakeRustTypeInput(),
+		"z": fakeRustTypeInput(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The engine consumes every transfer a request carries, on success and on
+	// failure; releasing a clone afterwards would release Go's own reference.
+	transaction.commit()
+	transaction.rollback()
+	if _, released := lifecycle.snapshot(); len(released) != 0 {
+		t.Fatalf("committed request released %v", released)
 	}
 }

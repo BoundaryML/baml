@@ -93,32 +93,68 @@ class _PortablePromptAst:
         return copied
 
 
+def _live_keys(message: Any) -> typing.Iterator[int]:
+    """Every `live` head under a wire type, once per occurrence: each is a row
+    of the engine's handle table that names a runtime declaration."""
+    for field, value in message.ListFields():
+        if (
+            field.name == "live"
+            and field.containing_oneof is not None
+            and field.containing_oneof.name == "head"
+        ):
+            yield value
+        elif field.type == field.TYPE_MESSAGE:
+            if field.is_repeated:
+                for item in value:
+                    yield from _live_keys(item)
+            else:
+                yield from _live_keys(value)
+
+
+class _LiveRows:
+    """The engine rows a type value's runtime declarations are held by, one
+    per occurrence, released together when the last type sharing them goes."""
+
+    __slots__ = ("_handles",)
+
+    def __init__(self, keys: typing.Iterable[int]) -> None:
+        untagged = int(baml_handle_pb2.BamlHandleType.UNTAGGED_BEX_HEAP)
+        self._handles = [BamlPyHandle(key, untagged) for key in keys]
+
+
 class BamlType:
-    """Opaque host handle for a reflected BAML type definition.
+    """Opaque host handle for a reflected BAML type.
 
     The protobuf payload is intentionally private: the supported host surface
     is composition (`meta`, `array`, `optional`) and passing the value back to
-    BAML. Python object identity is not BAML type identity.
+    BAML. A runtime declaration the type names is held by the engine row it
+    arrived under; a type sent back states it with a reference of the call's
+    own. Python object identity is not BAML type identity.
     """
 
-    __slots__ = ("_definition",)
+    __slots__ = ("_ty", "_rows")
 
-    def __init__(self, definition: "baml_type_pb2.BamlTyDef") -> None:
-        copied = baml_type_pb2.BamlTyDef()
-        copied.CopyFrom(definition)
-        self._definition = copied
+    def __init__(self, ty: "baml_type_pb2.BamlTy", rows: Optional[_LiveRows] = None) -> None:
+        copied = baml_type_pb2.BamlTy()
+        copied.CopyFrom(ty)
+        self._ty = copied
+        self._rows = rows
+
+    @classmethod
+    def _adopt(cls, ty: "baml_type_pb2.BamlTy") -> "BamlType":
+        """A type the engine handed over: its `live` heads are rows this
+        value now holds."""
+        return cls(ty, _LiveRows(_live_keys(ty)))
 
     @classmethod
     def _from_python(cls, value: Any) -> "BamlType":
         if isinstance(value, cls):
             return value
-        definition = baml_type_pb2.BamlTyDef()
-        definition.root.CopyFrom(python_type_to_wire_ty(value))
-        return cls(definition)
+        return cls(python_type_to_wire_ty(value))
 
-    def _wire_copy(self) -> "baml_type_pb2.BamlTyDef":
-        copied = baml_type_pb2.BamlTyDef()
-        copied.CopyFrom(self._definition)
+    def _wire_copy(self) -> "baml_type_pb2.BamlTy":
+        copied = baml_type_pb2.BamlTy()
+        copied.CopyFrom(self._ty)
         return copied
 
     def meta(
@@ -138,20 +174,14 @@ class BamlType:
         )
 
     def array(self) -> "BamlType":
-        definition = self._wire_copy()
-        old_root = baml_type_pb2.BamlTy()
-        old_root.CopyFrom(definition.root)
-        definition.root.Clear()
-        definition.root.list.item.CopyFrom(old_root)
-        return BamlType(definition)
+        composed = baml_type_pb2.BamlTy()
+        composed.list.item.CopyFrom(self._ty)
+        return BamlType(composed, self._rows)
 
     def optional(self) -> "BamlType":
-        definition = self._wire_copy()
-        old_root = baml_type_pb2.BamlTy()
-        old_root.CopyFrom(definition.root)
-        definition.root.Clear()
-        definition.root.optional.inner.CopyFrom(old_root)
-        return BamlType(definition)
+        composed = baml_type_pb2.BamlTy()
+        composed.optional.inner.CopyFrom(self._ty)
+        return BamlType(composed, self._rows)
 
     def __reduce__(self):
         raise TypeError("BamlType values are runtime handles and cannot be serialized")
@@ -418,10 +448,11 @@ def encode_call_args(
             for type_var, wire_ty in type_args:
                 entry = args.type_args.add()
                 entry.type_var = type_var
-                if isinstance(wire_ty, BamlType):
-                    entry.type_definition.CopyFrom(wire_ty._definition)
-                else:
-                    entry.type_value.CopyFrom(wire_ty)
+                # The bridge restates a runtime declaration with a reference
+                # of the call's own; the wrapper keeps its rows.
+                entry.type_value.CopyFrom(
+                    wire_ty._ty if isinstance(wire_ty, BamlType) else wire_ty
+                )
         return _EncodedCall(args.SerializeToString(), retained, dict(kwargs), cancel)
     except BaseException:
         release_function_call(call_id)
@@ -920,6 +951,8 @@ def _host_call_handle_keys(holder) -> typing.Iterator[int]:
             yield from _host_call_handle_keys(field.value)
     elif which == "union_variant_value":
         yield from _host_call_handle_keys(holder.union_variant_value.value)
+    elif which == "ty_value":
+        yield from _live_keys(holder.ty_value)
 
 
 def _decode_host_call_args(data: bytes) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
@@ -1005,11 +1038,10 @@ def decode_value(
     if which == "handle_value":
         return _decode_handle(holder.handle_value, type_map, ownership)
     if which == "ty_value":
-        definition = baml_type_pb2.BamlTyDef()
-        definition.root.CopyFrom(holder.ty_value)
-        return BamlType(definition)
-    if which == "ty_def_value":
-        return BamlType(holder.ty_def_value)
+        if ownership is not None:
+            for key in _live_keys(holder.ty_value):
+                ownership[key] -= 1
+        return BamlType._adopt(holder.ty_value)
     if which == "media_value":
         return _decode_media(holder.media_value)
     if which == "prompt_ast_value":

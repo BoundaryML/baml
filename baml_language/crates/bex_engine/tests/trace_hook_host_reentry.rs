@@ -143,12 +143,12 @@ async fn host_reentry_inherits_suppression_and_context_then_restores_selection()
                         bex_resource_types::HostKey::new(1).expect("nonzero"),
                         HostValueKind::Callable,
                     ),
-                    params: Box::new([baml_type::RuntimeFunctionParamTy::required(
+                    params: Box::new([bex_external_types::WireFunctionParamTy::required(
                         None,
-                        bex_engine::RuntimeTy::class("State"),
+                        bex_external_types::WireTy::static_class("State"),
                     )]),
-                    ret: Box::new(bex_engine::RuntimeTy::int()),
-                    throws: Box::new(bex_engine::RuntimeTy::Never),
+                    ret: Box::new(bex_external_types::WireTy::int()),
+                    throws: Box::new(bex_external_types::WireTy::Never),
                 },
                 state.clone(),
             ],

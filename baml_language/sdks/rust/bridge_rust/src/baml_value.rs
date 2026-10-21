@@ -79,7 +79,7 @@ pub mod internal {
     /// non-generic class).
     pub fn class_ty(fqn: &str, type_args: Vec<wire::BamlTy>) -> wire::BamlTy {
         super::wire_ty(wire::baml_ty::Ty::ClassTy(wire::BamlTyClass {
-            name: fqn.to_string(),
+            head: Some(wire::baml_ty_class::Head::Name(fqn.to_string())),
             type_args,
         }))
     }
@@ -88,7 +88,7 @@ pub mod internal {
     /// [`__BamlValuePrivate::baml_ty`].
     pub fn enum_ty(fqn: &str) -> wire::BamlTy {
         super::wire_ty(wire::baml_ty::Ty::Enum(wire::BamlTyEnum {
-            name: fqn.to_string(),
+            head: Some(wire::baml_ty_enum::Head::Name(fqn.to_string())),
         }))
     }
 
@@ -175,7 +175,10 @@ pub mod internal {
     ) -> Vec<wire::BamlTy> {
         use wire::baml_ty::Ty;
         let class_args = |ty: &wire::BamlTy| match ty.ty.as_ref() {
-            Some(Ty::ClassTy(class)) if class.name == fqn && class.type_args.len() == arity => {
+            Some(Ty::ClassTy(class))
+                if matches!(&class.head, Some(wire::baml_ty_class::Head::Name(name)) if name == fqn)
+                    && class.type_args.len() == arity =>
+            {
                 Some(class.type_args.clone())
             }
             _ => None,
@@ -246,7 +249,7 @@ pub mod internal {
     /// (`Color.Red`).
     pub fn enum_variant_ty(fqn: &str, variant: &str) -> wire::BamlTy {
         super::wire_ty(wire::baml_ty::Ty::EnumVariant(wire::BamlTyEnumVariant {
-            name: fqn.to_string(),
+            head: Some(wire::baml_ty_enum_variant::Head::Name(fqn.to_string())),
             variant: variant.to_string(),
         }))
     }
@@ -290,7 +293,7 @@ pub mod internal {
         bindings: Vec<(&str, wire::BamlTy)>,
     ) -> wire::BamlTy {
         super::wire_ty(wire::baml_ty::Ty::Interface(wire::BamlTyInterface {
-            name: fqn.to_string(),
+            head: Some(wire::baml_ty_interface::Head::Name(fqn.to_string())),
             type_args,
             bindings: bindings
                 .into_iter()
@@ -399,7 +402,7 @@ pub(crate) fn wire_variant_kind(v: &wire::BamlOutboundValue) -> &'static str {
         Some(Out::PromptAstValue(_)) => "prompt ast",
         Some(Out::Uint8arrayValue(_)) => "uint8array",
         Some(Out::BigintValue(_)) => "bigint",
-        Some(Out::TyValue(_) | Out::TyDefValue(_)) => "type",
+        Some(Out::TyValue(_)) => "type",
     }
 }
 

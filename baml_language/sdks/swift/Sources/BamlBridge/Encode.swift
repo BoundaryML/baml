@@ -29,6 +29,8 @@ public struct BamlTypeDescriptor: @unchecked Sendable, Equatable {
         self.raw = raw
     }
 
+    /// Wire equality: a `live` head equals another only when their keys are
+    /// equal.
     public static func == (lhs: BamlTypeDescriptor, rhs: BamlTypeDescriptor) -> Bool {
         lhs.raw == rhs.raw
     }

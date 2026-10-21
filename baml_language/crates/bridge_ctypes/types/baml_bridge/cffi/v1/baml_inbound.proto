@@ -25,6 +25,10 @@ option optimize_for = LITE_RUNTIME;
 // (no type variables), never a root union or optional. The engine builds the
 // stated value as it is, converts nothing, and checks it against its slot.
 message InboundValue {
+  // Formerly `ty_def_value`: a definition graph beside a type. A runtime
+  // declaration is referenced, never redeclared.
+  reserved 14;
+  reserved "ty_def_value";
   BamlTy value_type = 1;
   oneof value {
     string string_value = 2;
@@ -39,13 +43,10 @@ message InboundValue {
     bytes uint8array_value = 11;
     string bigint_value = 12;
     // A reflected BAML type passed as a value (mirrors a `reflect.Type` BAML
-    // value, e.g. the result of `reflect.Type.of<T>()`). Accepted as an
-    // argument value so the host can pass types as data.
+    // value, e.g. the result of `reflect.Type.of<T>()`). The one spelling of
+    // a type value: compiled declarations by name, runtime declarations by
+    // the host's row to each (`BamlTyClass.live` and its siblings).
     BamlTy ty_value = 13;
-    // Definition-carrying reflected type. New hosts use this for values that
-    // must retain runtime-created class/enum schemas; tag 13 remains for
-    // rollout compatibility with structural/static type senders.
-    BamlTyDef ty_def_value = 14;
     // Rust-backed values cross as portable data, never as capability handles.
     // These message shapes are shared with the outbound side so host-created
     // and engine-created values have one canonical representation.
@@ -96,10 +97,10 @@ message InboundEnumValue {
 message BamlTyArg {
   string type_var = 1; // TypeVar name, e.g. "T", "A"
   BamlTy type_value = 2; // the concrete binding
-  // Preferred for a runtime reflected type. Mutually exclusive with
-  // `type_value` by convention; retained as separate fields for backwards
-  // compatibility with already generated SDKs.
-  BamlTyDef type_definition = 3;
+  // Formerly `type_definition`: a request to declare types for the call. A
+  // runtime declaration is made by `reflect` and referenced by its row.
+  reserved 3;
+  reserved "type_definition";
 }
 
 message CallFunctionArgs {

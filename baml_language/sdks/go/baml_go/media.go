@@ -53,19 +53,16 @@ var (
 )
 
 func ownOutboundHandles(value *cffi.BamlOutboundValue) *resultOwner {
-	keys := make(map[uint64]struct{})
-	collectOutboundHandles(value, keys)
-	return ownOutboundHandleKeys(keys)
+	return ownOutboundHandleKeys(appendOutboundHandles(nil, value))
 }
 
-func ownOutboundHandleKeys(keys map[uint64]struct{}) *resultOwner {
+// ownOutboundHandleKeys owns one engine reference per entry of keys: a key
+// that occurs twice was transferred twice.
+func ownOutboundHandleKeys(keys []uint64) *resultOwner {
 	if len(keys) == 0 {
 		return nil
 	}
-	owner := &resultOwner{keys: make([]uint64, 0, len(keys))}
-	for key := range keys {
-		owner.keys = append(owner.keys, key)
-	}
+	owner := &resultOwner{keys: keys}
 	runtime.SetFinalizer(owner, finalizeResultOwner)
 	return owner
 }
@@ -95,7 +92,10 @@ func finalizeResultOwner(owner *resultOwner) {
 	owner.keys = nil
 }
 
-func collectOutboundHandles(value *cffi.BamlOutboundValue, keys map[uint64]struct{}) {
+// appendOutboundHandles appends the engine references value transfers to
+// Go, once per occurrence: every engine handle, and every live head of a
+// returned `type` value. Host-value handles are Go's own registrations.
+func appendOutboundHandles(keys []uint64, value *cffi.BamlOutboundValue) []uint64 {
 	stack := []*cffi.BamlOutboundValue{value}
 	for len(stack) > 0 {
 		last := len(stack) - 1
@@ -111,8 +111,10 @@ func collectOutboundHandles(value *cffi.BamlOutboundValue, keys map[uint64]struc
 			}
 			handleType := item.HandleValue.HandleType
 			if handleType != cffi.BamlHandleType_HOST_VALUE_CALLABLE && handleType != cffi.BamlHandleType_HOST_VALUE_OPAQUE {
-				keys[item.HandleValue.Key] = struct{}{}
+				keys = append(keys, item.HandleValue.Key)
 			}
+		case *cffi.BamlOutboundValue_TyValue:
+			keys = append(keys, liveHeadKeys(item.TyValue)...)
 		case *cffi.BamlOutboundValue_ClassValue:
 			if item.ClassValue != nil {
 				for _, field := range item.ClassValue.Fields {
@@ -139,6 +141,7 @@ func collectOutboundHandles(value *cffi.BamlOutboundValue, keys map[uint64]struc
 			}
 		}
 	}
+	return keys
 }
 
 // releaseOutboundOpaqueHostValues releases Go-native error identities only

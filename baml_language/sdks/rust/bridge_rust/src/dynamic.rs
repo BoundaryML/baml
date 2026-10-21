@@ -117,7 +117,6 @@ fn outbound_to_inbound(value: wire::BamlOutboundValue) -> wire::InboundValue {
         Some(Out::Uint8arrayValue(value)) => Some(In::Uint8arrayValue(value)),
         Some(Out::BigintValue(value)) => Some(In::BigintValue(value)),
         Some(Out::TyValue(value)) => Some(In::TyValue(value)),
-        Some(Out::TyDefValue(value)) => Some(In::TyDefValue(value)),
         Some(Out::MediaValue(value)) => Some(In::MediaValue(value)),
         Some(Out::PromptAstValue(value)) => Some(In::PromptAstValue(value)),
         Some(Out::HandleValue(handle)) => {
@@ -220,8 +219,10 @@ fn map_key(key: String, ty: Option<&wire::BamlTy>) -> wire::inbound_map_entry::K
         {
             Key::BoolKey(key.parse().expect("runtime boolean map key"))
         }
-        Some(Ty::Enum(value)) => Key::EnumKey(wire::InboundEnumValue {
-            name: value.name.clone(),
+        Some(Ty::Enum(wire::BamlTyEnum {
+            head: Some(wire::baml_ty_enum::Head::Name(name)),
+        })) => Key::EnumKey(wire::InboundEnumValue {
+            name: name.clone(),
             value: key,
         }),
         _ => Key::StringKey(key),
@@ -261,7 +262,6 @@ fn dispatch(
                     .map(|(name, ty)| wire::BamlTyArg {
                         type_var: name,
                         type_value: Some(ty.0),
-                        type_definition: None,
                     })
                     .collect(),
             ))

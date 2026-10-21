@@ -29,18 +29,18 @@ use std::{
 };
 
 use baml_sdkgen_types::ProgramDescriptor;
-use baml_type::{Int63, MediaKind, Name, RuntimeTy, TypeName};
+use baml_type::{Int63, MediaKind, Name, TypeName};
 use bridge_cffi::handle_cffi;
 use bridge_ctypes::{
-    HANDLE_TABLE, HostKey, TableKey, WireHandle,
+    CffiHandleTableEntry, HANDLE_TABLE, HostKey, TableKey, WireHandle,
     baml_bridge::cffi::{
-        BamlHandle, BamlTy, BamlTyDef, BamlValueMedia, BamlValuePromptAst, CallFunctionArgs,
+        BamlHandle, BamlTy, BamlValueMedia, BamlValuePromptAst, CallFunctionArgs,
         call_function_args::CallTarget,
     },
 };
 use bridge_encode::{
     Completion, Error, Facts, FunctionSig, Host, HostValue, LeafKind, LeafWire, Owner, Owners,
-    Param, Root, Rules, Scalar, Shape, encode, encode_arguments,
+    Param, Root, Rules, Scalar, Shape, SlotTy, StatedTy, encode, encode_arguments, state_type_args,
 };
 use num_bigint::BigInt;
 use prost::Message;
@@ -109,11 +109,19 @@ pub(crate) fn encode_call_kwargs(
     let cx = Cx::new(py)?;
     let mut owners = Owners::new(&cx);
     let (target, signature) = target_signature(&facts, call.call_target.as_ref());
+    // The explicit type arguments as the wrappers hold them, restated with
+    // references of the call's own: the wrappers keep theirs.
+    let type_args: Vec<(String, StatedTy)> =
+        bridge_ctypes::proto_ty_args_to_stated(&call.type_args, &HANDLE_TABLE)
+            .map_err(|error| PyTypeError::new_err(error.to_string()))?
+            .into_iter()
+            .collect();
+    call.type_args = state_type_args(&type_args, &mut owners)?;
     if let Some(cancel) = cancel {
         let encoded = encode(
             &facts,
             cx.value(cancel.clone()),
-            &RuntimeTy::Unknown,
+            &SlotTy::Unknown,
             Root::Argument("_baml.cancel".into()),
             &mut owners,
         )
@@ -125,11 +133,9 @@ pub(crate) fn encode_call_kwargs(
             .iter()
             .map(|(name, value)| Ok((name.extract::<String>()?, cx.value(value))))
             .collect::<PyResult<Vec<_>>>()?;
-        let bindings = bridge_ctypes::proto_ty_args_to_named(&call.type_args)
-            .map_err(|error| PyTypeError::new_err(error.to_string()))?
-            .type_args
-            .into_iter()
-            .map(|(name, ty)| (Name::new(&name), ty))
+        let bindings = type_args
+            .iter()
+            .map(|(name, ty)| (Name::new(name), ty.clone()))
             .collect::<HashMap<_, _>>();
         call.kwargs = encode_arguments(&facts, &signature, &bindings, arguments, &mut owners)
             .map_err(|error| raise(&target, error))?;
@@ -156,7 +162,7 @@ pub fn _encode_inbound<'py>(
     let encoded = encode(
         &facts,
         cx.value(value.clone()),
-        &RuntimeTy::Unknown,
+        &SlotTy::Unknown,
         Root::Argument(name.to_string()),
         &mut owners,
     )
@@ -173,7 +179,7 @@ pub fn _encode_inbound<'py>(
 pub(crate) fn encode_result(
     py: Python<'_>,
     value: &Bound<'_, PyAny>,
-    slot: &RuntimeTy,
+    slot: &StatedTy,
 ) -> Completion<PyErr> {
     let facts = facts();
     let cx = match Cx::new(py) {
@@ -184,7 +190,7 @@ pub(crate) fn encode_result(
     let result = encode(
         &facts,
         cx.value(value.clone()),
-        slot,
+        &SlotTy::from(slot),
         Root::Result,
         &mut owners,
     );
@@ -213,8 +219,8 @@ fn target_signature(facts: &Facts, target: Option<&CallTarget>) -> (String, Func
         class_generic_params: Vec::new(),
         generic_params: Vec::new(),
         params: Vec::new(),
-        ret: RuntimeTy::Unknown,
-        throws: RuntimeTy::Unknown,
+        ret: SlotTy::Unknown,
+        throws: SlotTy::Unknown,
     };
     match target {
         Some(CallTarget::FunctionName(name)) => (
@@ -227,7 +233,7 @@ fn target_signature(facts: &Facts, target: Option<&CallTarget>) -> (String, Func
                 Some(bridge_ctypes::CffiHandleTableEntry::Adt(
                     bex_project::BexExternalAdt::TaggedHeapHandle {
                         ty:
-                            RuntimeTy::Function {
+                            bex_project::AnnotationTy::Function {
                                 params,
                                 ret,
                                 throws,
@@ -245,12 +251,12 @@ fn target_signature(facts: &Facts, target: Option<&CallTarget>) -> (String, Func
                                 .name
                                 .as_ref()
                                 .map_or_else(|| format!("arg{index}"), ToString::to_string),
-                            ty: param.ty.clone(),
+                            ty: param.ty.as_stated().into(),
                             has_default: param.is_optional(),
                         })
                         .collect(),
-                    ret: (**ret).clone(),
-                    throws: (**throws).clone(),
+                    ret: ret.as_stated().into(),
+                    throws: throws.as_stated().into(),
                 },
                 // Not a callable, or no longer live: the request decoder
                 // reports that; the arguments go as their own types.
@@ -330,11 +336,11 @@ impl<'py> Cx<'py> {
         Ok((!fqn.is_empty()).then(|| TypeName::from_dotted_path(&fqn)))
     }
 
-    fn wire_ty(&self, ty: &Bound<'py, PyAny>) -> PyResult<RuntimeTy> {
+    fn wire_ty(&self, ty: &Bound<'py, PyAny>) -> PyResult<StatedTy> {
         let encoded: Vec<u8> = ty.call_method0("SerializeToString")?.extract()?;
         let ty = BamlTy::decode(encoded.as_slice())
             .map_err(|error| PyTypeError::new_err(error.to_string()))?;
-        bridge_ctypes::proto_ty_to_runtime_ty(&ty)
+        bridge_ctypes::proto_ty_to_stated(&ty, &HANDLE_TABLE)
             .map_err(|error| PyTypeError::new_err(error.to_string()))
     }
 }
@@ -356,7 +362,7 @@ fn message_bytes(message: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
 }
 
 impl<'py> Host<PyValue<'_, 'py>> for Cx<'py> {
-    fn register(&self, callable: &PyValue<'_, 'py>, signature: &RuntimeTy) -> PyResult<HostKey> {
+    fn register(&self, callable: &PyValue<'_, 'py>, signature: &StatedTy) -> PyResult<HostKey> {
         let marker = PyModule::import(self.py, "baml_bridge._host_marker")?
             .getattr("marker_for")?
             .call1((&callable.obj,))?;
@@ -440,12 +446,16 @@ impl<'py> Host<PyValue<'_, 'py>> for Cx<'py> {
                 Ok((LeafWire::Prompt(ast), None))
             }
             LeafKind::TypeValue => {
-                let encoded = message_bytes(&obj.call_method0("_wire_copy")?)?;
-                let definition = BamlTyDef::decode(encoded.as_slice())
-                    .map_err(|error| PyTypeError::new_err(error.to_string()))?;
-                Ok((LeafWire::TypeValue(definition), None))
+                // The type as the wrapper holds it; the wire takes fresh
+                // references to its runtime declarations at commit.
+                let ty = self.wire_ty(&obj.call_method0("_wire_copy")?)?;
+                Ok((LeafWire::TypeValue(ty), None))
             }
         }
+    }
+
+    fn reference(&self, declaration: &bex_project::Handle) -> PyResult<TableKey> {
+        Ok(HANDLE_TABLE.insert(CffiHandleTableEntry::BexHeapHandle(declaration.clone())))
     }
 
     fn release(&self, owner: Owner) {
@@ -578,8 +588,7 @@ impl<'py> PyValue<'_, 'py> {
                 args.iter()
                     .map(|arg| {
                         if arg.is_instance(&self.cx.baml_type)? {
-                            let definition = arg.call_method0("_wire_copy")?;
-                            self.cx.wire_ty(&definition.getattr("root")?)
+                            self.cx.wire_ty(&arg.call_method0("_wire_copy")?)
                         } else {
                             let wire = self
                                 .cx

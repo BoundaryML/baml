@@ -299,8 +299,11 @@ async fn deserialize_via_baml_json(
     ty: &RuntimeTy,
     helper_context: &HelperCallContext,
 ) -> Result<BexExternalValue> {
+    let realized = <&baml_type::RealizedTy<baml_type::TypeName>>::try_from(ty).map_err(|_| {
+        anyhow!("the parameter has the generic type {ty}; JSON arguments need a concrete type")
+    })?;
     engine
-        .deserialize_json(json_text, ty, |type_args| {
+        .deserialize_json(json_text, realized, |type_args| {
             helper_context.call_context(type_args)
         })
         .await

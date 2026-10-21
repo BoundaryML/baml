@@ -9,9 +9,7 @@
 
 use std::fmt;
 
-use baml_type::RuntimeTy;
-
-use crate::host::Head;
+use crate::host::{Head, SlotTy};
 
 /// One step from an argument down to the node an error is about.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,9 +90,9 @@ pub enum EncodeErrorKind {
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum UnfitKind<F> {
     #[error("expected {expected}, found {found}")]
-    Mismatch { expected: RuntimeTy, found: F },
+    Mismatch { expected: SlotTy, found: F },
     #[error("expected one of {}, found {found}", render_members(members))]
-    NoMember { members: Vec<RuntimeTy>, found: F },
+    NoMember { members: Vec<SlotTy>, found: F },
     /// The value fits several members as distinct types and nothing says
     /// which is meant. A host has no way to say yet (a typed wrapper is
     /// planned), so the message does not pretend it has.
@@ -102,13 +100,21 @@ pub enum UnfitKind<F> {
         "{found} fits more than one of {} and the host cannot yet say which member is meant",
         render_members(members)
     )]
-    Ambiguous { members: Vec<RuntimeTy>, found: F },
+    Ambiguous { members: Vec<SlotTy>, found: F },
     #[error("{found} does not fit the literal type {expected}")]
-    LiteralMismatch { expected: RuntimeTy, found: F },
+    LiteralMismatch { expected: SlotTy, found: F },
     #[error("map keys must be {expected}, found {found}")]
-    MapKey { expected: RuntimeTy, found: F },
+    MapKey { expected: SlotTy, found: F },
     #[error("cannot encode {found}: it has no BAML type")]
     NoBamlType { found: F },
+    /// A slot of a declaration the engine created at run time: only a value
+    /// the engine handed out inhabits it, and the host passes that back as it
+    /// received it.
+    #[error(
+        "cannot encode {found} as a value of a runtime declaration; pass a value of one as it \
+         was received"
+    )]
+    RuntimeDeclaration { found: F },
     #[error(
         "cannot encode {found}: a callable has no type of its own; declare the slot as a \
          function type"
@@ -159,6 +165,9 @@ impl<F> UnfitKind<F> {
                 found: f(found),
             },
             UnfitKind::NoBamlType { found } => UnfitKind::NoBamlType { found: f(found) },
+            UnfitKind::RuntimeDeclaration { found } => {
+                UnfitKind::RuntimeDeclaration { found: f(found) }
+            }
             UnfitKind::UntypedCallable { found } => UnfitKind::UntypedCallable { found: f(found) },
             UnfitKind::UnknownField { class, field } => UnfitKind::UnknownField { class, field },
             UnfitKind::MissingField { class, field } => UnfitKind::MissingField { class, field },
@@ -207,11 +216,11 @@ pub enum FaultKind {
     /// may spend (a value and a type whose trials multiply).
     #[error("planning the value took more than {budget} steps")]
     TooMuchPlanning { budget: usize },
-    /// A host spelled a type argument that mentions a type variable. A host
-    /// spells realized types only; the walker never binds a variable a host
-    /// chose.
-    #[error("type argument `{ty}` mentions a type variable; type arguments must be realized types")]
-    UnrealizedTypeArgument { ty: String },
+    /// A decided node still states a type the walker left open. Planning
+    /// refuses an open slot variable at the root, so this is a bug in the
+    /// walker, reported rather than sent.
+    #[error("the walker left the type `{ty}` undecided")]
+    Undecided { ty: String },
 }
 
 /// The facts a descriptor describes could not be read.
@@ -269,8 +278,8 @@ fn render_path(path: &[PathSegment]) -> String {
     out
 }
 
-fn render_members(members: &[RuntimeTy]) -> String {
-    struct Members<'a>(&'a [RuntimeTy]);
+fn render_members(members: &[SlotTy]) -> String {
+    struct Members<'a>(&'a [SlotTy]);
     impl fmt::Display for Members<'_> {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             for (index, member) in self.0.iter().enumerate() {

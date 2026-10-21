@@ -160,6 +160,7 @@ final class HostCallableRegistry: @unchecked Sendable {
         }
         do {
             let call = try BamlBridge_Cffi_V1_BamlToHostCall(serializedBytes: argsData)
+            for arg in call.args { releaseTypeValues(arg.value) }
             try Task.checkCancellation()
             let result = try await body(BamlHostArgs(call))
             completeHostCall(callId: callId, outcome: .returned(result.raw))
@@ -220,6 +221,7 @@ func releaseControlValue(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) {
     case .mapValue(let map): for item in map.entries { releaseControlValue(item.value) }
     case .classValue(let cls): for item in cls.fields { releaseControlValue(item.value) }
     case .unionVariantValue(let variant): releaseControlValue(variant.value)
+    case .tyValue(let ty): for key in liveKeys(ty) { _ = BamlApi.handleRelease(key) }
     default: break
     }
 }

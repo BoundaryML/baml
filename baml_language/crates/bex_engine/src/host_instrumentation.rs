@@ -436,12 +436,12 @@ pub fn capture_callback_inputs(value: &crate::BexExternalValue) -> btel_snapshot
 
     use crate::BexExternalValue as V;
     fn type_copy(
-        value: &baml_type::RuntimeTy,
+        value: &bex_external_types::WireTy,
         depth: usize,
         nodes: &mut usize,
         bytes: &mut usize,
     ) -> btel_snapshot::host::HostType {
-        use baml_type::RuntimeTy as T;
+        use baml_type::{HeadDisplay, RealizedTy as T};
         use btel_snapshot::host::HostType as O;
         if depth > MAX_DEPTH || *nodes == 0 {
             return O::Unknown;
@@ -466,7 +466,7 @@ pub fn capture_callback_inputs(value: &crate::BexExternalValue) -> btel_snapshot
                     .into(),
             ),
             T::Class(name, args) if args.len() <= *nodes => {
-                let name = name.to_string();
+                let name = name.head_display_name();
                 if name.len() > *bytes {
                     return O::Unknown;
                 }
@@ -480,7 +480,7 @@ pub fn capture_callback_inputs(value: &crate::BexExternalValue) -> btel_snapshot
                 )
             }
             T::Enum(name) => {
-                let name = name.to_string();
+                let name = name.head_display_name();
                 if name.len() > *bytes {
                     return O::Unknown;
                 }

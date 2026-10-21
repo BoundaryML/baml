@@ -28,6 +28,11 @@ pub enum JsonArgumentsError {
     NotAnObject,
     #[error("missing required argument `{name}` (type: {ty})")]
     Missing { name: String, ty: RuntimeTy },
+    /// A JSON document is deserialized against a type, and a parameter whose
+    /// type mentions the function's type parameters has none until a call
+    /// binds them.
+    #[error("argument `{name}` has the generic type {ty}; JSON arguments need a concrete type")]
+    Generic { name: String, ty: RuntimeTy },
     #[error("unknown argument(s): {}", .0.join(", "))]
     Unknown(Vec<String>),
     #[error("argument `{name}`: {source}")]
@@ -48,13 +53,14 @@ impl BexEngine {
     pub async fn deserialize_json(
         self: &Arc<Self>,
         json_text: &str,
-        ty: &RuntimeTy,
-        call_ctx: impl FnOnce(IndexMap<String, RuntimeTy>) -> FunctionCallContext,
+        ty: &baml_type::RealizedTy<baml_type::TypeName>,
+        call_ctx: impl FnOnce(IndexMap<String, bex_external_types::WireTy>) -> FunctionCallContext,
     ) -> Result<BexExternalValue, EngineError> {
         self.call_function(
             "baml.json.deserialize",
             vec![BexExternalValue::String(json_text.into())],
-            call_ctx(IndexMap::from([("T".to_string(), ty.clone())])),
+            // A JSON caller names the program's own declarations: every head is static.
+            call_ctx(IndexMap::from([("T".to_string(), ty.clone().into_wire())])),
             true,
         )
         .await
@@ -69,7 +75,7 @@ impl BexEngine {
         self: &Arc<Self>,
         function_name: &str,
         json: &str,
-        call_ctx: impl Fn(IndexMap<String, RuntimeTy>) -> FunctionCallContext,
+        call_ctx: impl Fn(IndexMap<String, bex_external_types::WireTy>) -> FunctionCallContext,
     ) -> Result<HashMap<String, BexExternalValue>, Box<JsonArgumentsError>> {
         let parsed =
             serde_json::from_str(json).map_err(|e| Box::new(JsonArgumentsError::Syntax(e)))?;
@@ -86,8 +92,12 @@ impl BexEngine {
         for (name, ty, has_default) in params {
             match fields.remove(&name) {
                 Some(value) => {
+                    let Ok(realized) = <&baml_type::RealizedTy<baml_type::TypeName>>::try_from(&ty)
+                    else {
+                        return Err(Box::new(JsonArgumentsError::Generic { name, ty }));
+                    };
                     let value = self
-                        .deserialize_json(&value.to_string(), &ty, &call_ctx)
+                        .deserialize_json(&value.to_string(), realized, &call_ctx)
                         .await
                         .map_err(|source| {
                             Box::new(JsonArgumentsError::Parameter {

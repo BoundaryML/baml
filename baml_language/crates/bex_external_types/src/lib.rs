@@ -29,21 +29,15 @@ mod runtime_ty_identity;
 
 pub use baml_type::MediaKind;
 pub use bex_external_value::{
-    AsBexExternalValue, BexExternalAdt, BexExternalValue, MEDIA_WRAPPER_DATA_FIELD, RuntimeTy,
-    TaggedHeapHandleKind, ToBexExternalValue, TypeDefRef, TypeName, UnionMetadata,
-    try_convert_rust_data,
+    AnnotationTy, AsBexExternalValue, BexExternalAdt, BexExternalValue, MEDIA_WRAPPER_DATA_FIELD,
+    RuntimeTy, TaggedHeapHandleKind, ToBexExternalValue, TypeName, UnionMetadata,
+    WireFunctionParamTy, WireHead, WireTy, try_convert_rust_data,
 };
 pub use bex_resource_types::{
     HostKey, HostReleaseFn, HostValueArc, HostValueKind, host_release_dispatch, host_value,
 };
 pub use bex_str::BexStr;
-pub use bex_vm_types::{
-    BexRustData, Meter, RetainedBytes, RustDataArc,
-    types::{
-        DynWitnessDef, PortableClassDef, PortableClassFieldDef, PortableEnumDef,
-        PortableEnumVariantDef, PortableMetadata, PortableTypeDef,
-    },
-};
+pub use bex_vm_types::{BexRustData, Meter, RetainedBytes, RustDataArc};
 pub use handle::{Handle, HandleInner, WeakHeapRef};
 pub use host_outcome::{HostCallCompletion, HostException, HostOutcome};
 pub use json_alias::{is_canonical_json_alias, value_satisfies_json};

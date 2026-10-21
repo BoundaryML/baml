@@ -68,7 +68,7 @@ struct Registered {
     object: Py<PyAny>,
     /// The function type of the slot a callable was bound to. Its result and
     /// thrown value are encoded against this. `None` for opaque objects.
-    signature: Option<bex_project::RuntimeTy>,
+    signature: Option<bex_project::WireTy>,
 }
 
 /// Process-wide table of Python objects that have been handed to BAML.
@@ -81,14 +81,14 @@ static REGISTRY: LazyLock<bridge_ctypes::HostValueRegistry<Registered>> =
 
 /// The signature of each host call in flight, by callback id, from dispatch
 /// until its result or error is encoded.
-static CALLBACK_SIGNATURES: LazyLock<Mutex<HashMap<u32, Option<bex_project::RuntimeTy>>>> =
+static CALLBACK_SIGNATURES: LazyLock<Mutex<HashMap<u32, Option<bex_project::WireTy>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 // BUG: a completion whose call has no stored signature (or one that is not a
 // function type) is a bridge invariant violation; both completion paths
 // currently fall back to encoding against `unknown` instead of completing
 // the call as a bridge failure.
-fn take_callback_signature(call_id: u32) -> Option<bex_project::RuntimeTy> {
+fn take_callback_signature(call_id: u32) -> Option<bex_project::WireTy> {
     CALLBACK_SIGNATURES
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
@@ -102,7 +102,7 @@ fn take_callback_signature(call_id: u32) -> Option<bex_project::RuntimeTy> {
 pub(crate) fn register_callable(
     callable: Py<PyAny>,
     marker_key: Option<u64>,
-    signature: bex_project::RuntimeTy,
+    signature: bex_project::WireTy,
 ) -> PyResult<HostKey> {
     let descriptor =
         bridge_cffi::host_instrumentation::registration_marker(marker_key.unwrap_or(0), "python")
@@ -597,8 +597,8 @@ fn complete_with_value(py: Python<'_>, call_id: u32, value: &Bound<'_, PyAny>) {
         (owner, capture)
     });
     let ret = match take_callback_signature(call_id) {
-        Some(bex_project::RuntimeTy::Function { ret, .. }) => *ret,
-        Some(_) | None => bex_project::RuntimeTy::Unknown,
+        Some(bex_project::WireTy::Function { ret, .. }) => *ret,
+        Some(_) | None => bex_project::WireTy::Unknown,
     };
     let completion = crate::encode::encode_result(py, value, &ret);
     // The outcome the engine sees, for the caller's instrumentation: a
@@ -740,8 +740,8 @@ fn try_encode_baml_error_throw(
         return Ok(None);
     }
     let throws = match take_callback_signature(call_id) {
-        Some(bex_project::RuntimeTy::Function { throws, .. }) => *throws,
-        Some(_) | None => bex_project::RuntimeTy::Unknown,
+        Some(bex_project::WireTy::Function { throws, .. }) => *throws,
+        Some(_) | None => bex_project::WireTy::Unknown,
     };
     crate::encode::encode_result(py, &inner, &throws)
         .into_wire(Encoded::Thrown)

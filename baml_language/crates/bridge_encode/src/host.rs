@@ -10,19 +10,29 @@
 
 use std::borrow::Cow;
 
-use baml_type::{Int63, MediaKind, RuntimeTy, TypeName};
+use baml_type::{Int63, MediaKind, TypeName};
 use bridge_ctypes::{
-    HostKey, TableKey,
-    baml_bridge::cffi::{BamlHandle, BamlTyDef, BamlValueMedia, BamlValuePromptAst},
+    Handle, HostKey, TableKey,
+    baml_bridge::cffi::{BamlHandle, BamlValueMedia, BamlValuePromptAst},
 };
 use num_bigint::BigInt;
 
 use crate::rules::Rules;
 
-/// A reference to a declaration (class, enum, interface, alias). A name for
-/// now; the identity work replaces this one type with the declaration's index
-/// or handle, so nothing else in the crate spells a head as text.
+/// A declaration compiled with the program, by the name the program's facts
+/// know it under. A runtime declaration is no fact: it reaches the walker as a
+/// [`StatedTy`] head the host holds a reference to, never as a `Head`.
 pub type Head = TypeName;
+
+/// A type a node states on the wire: realized, compiled declarations by
+/// name, runtime declarations by a handle to the declaration object, which
+/// keeps it rooted for as long as the host holds the type.
+pub type StatedTy = bridge_ctypes::WireTy;
+
+/// A type the walker plans against: a declared type, which may mention the
+/// type variables of the declaration it belongs to until the call binds
+/// them. Planning narrows every statement it decides to a [`StatedTy`].
+pub type SlotTy = baml_type::RuntimeTy<baml_type::WireHead<Handle>>;
 
 /// A language's value, as the walker sees it.
 pub trait HostValue: Sized {
@@ -75,7 +85,7 @@ pub enum Shape<C> {
     /// only its head.
     Instance {
         class: Head,
-        type_args: Option<Vec<RuntimeTy>>,
+        type_args: Option<Vec<StatedTy>>,
         /// Fields under their declared (wire) names.
         fields: Vec<(String, C)>,
     },
@@ -127,19 +137,25 @@ pub enum LeafWire {
     Handle(BamlHandle),
     Media(BamlValueMedia),
     Prompt(BamlValuePromptAst),
-    TypeValue(BamlTyDef),
+    /// A type value, stated by the host; each runtime declaration it names is
+    /// referenced afresh when it ships.
+    TypeValue(StatedTy),
 }
 
 /// The effects of shipping a value. Only the commit of a decided plan calls
 /// these, each exactly once per shipped node.
 pub trait Host<V: HostValue> {
     /// Register `callable` as a host callable bound to `signature` (always a
-    /// `RuntimeTy::Function`) and return its registry key.
-    fn register(&self, callable: &V, signature: &RuntimeTy) -> Result<HostKey, V::Error>;
+    /// `StatedTy::Function`) and return its registry key.
+    fn register(&self, callable: &V, signature: &StatedTy) -> Result<HostKey, V::Error>;
 
     /// The wire form of a leaf, and the owner created for it if any (a
     /// handle clone).
     fn leaf(&self, leaf: &V, kind: LeafKind) -> Result<(LeafWire, Option<Owner>), V::Error>;
+
+    /// A reference of the host's to `declaration` for one occurrence of it in
+    /// a stated type: each occurrence transfers one.
+    fn reference(&self, declaration: &Handle) -> Result<TableKey, V::Error>;
 
     /// Let go of an owner the engine will never take over.
     fn release(&self, owner: Owner);

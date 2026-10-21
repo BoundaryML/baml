@@ -2420,10 +2420,7 @@ internal static unsafe class Program
 
         SetFakeResult(new BamlOutboundValue
         {
-            TyDefValue = new BamlTyDef
-            {
-                Root = PrimitiveType(BamlTyPrimitiveKind.BamlTyPrimitiveString),
-            },
+            TyValue = PrimitiveType(BamlTyPrimitiveKind.BamlTyPrimitiveString),
         });
         Require(
             spec.OutputType().Descriptor.Kind == BamlTypeDescriptorKind.String
@@ -2704,6 +2701,106 @@ internal static unsafe class Program
                 && rows.Type.Arguments.Count == 1
                 && rows.Type.Arguments[0].Kind == BamlTypeDescriptorKind.String,
             "generic opaque-resource descriptor arguments were dropped");
+
+        // A runtime declaration's instance is annotated by label only: it is
+        // held as a handle with no name.
+        using Baml.BamlHandle anonymous = new BamlValue(
+            PrimitiveProtocol.DecodeCallResult(
+                new BamlOutboundResult
+                {
+                    Ok = new BamlOutboundValue
+                    {
+                        HandleValue = new BamlOutboundHandle
+                        {
+                            Key = 802,
+                            HandleType = BamlHandleType.AdtTaggedHeapHandle,
+                            Ty = new BamlTy
+                            {
+                                ClassTy = new BamlTyClass { AnonymousLabel = "Widget" },
+                            },
+                        },
+                    },
+                }.ToByteArray(),
+                "anonymous",
+                api))
+            .As<Baml.BamlHandle>();
+        Require(
+            anonymous.Type.Kind == BamlTypeDescriptorKind.Handle && anonymous.Type.Fqn is null,
+            "a runtime declaration's instance borrowed a name");
+
+        VerifyReflectedTypeRows(api);
+    }
+
+    private static void VerifyReflectedTypeRows(NativeApi api)
+    {
+        // A reflected type holds one engine reference per `live` head; restating
+        // it transfers a fresh clone per occurrence and keeps its own.
+        clonedHandles = 0;
+        releasedHandles = 0;
+        var liveType = new BamlTy
+        {
+            Map = new BamlTyMap
+            {
+                Key = new BamlTy { Enum = new BamlTyEnum { Live = 900 } },
+                Value = new BamlTy { ClassTy = new BamlTyClass { Live = 902 } },
+            },
+        };
+        BamlType reflected = new BamlValue(
+            PrimitiveProtocol.DecodeCallResult(
+                new BamlOutboundResult
+                {
+                    Ok = new BamlOutboundValue { TyValue = liveType },
+                }.ToByteArray(),
+                "type",
+                api))
+            .As<BamlType>();
+        Require(
+            releasedHandles == 0
+                && reflected.Descriptor.Kind == BamlTypeDescriptorKind.Map
+                && reflected.Descriptor.Arguments.All(
+                    argument => argument.Kind == BamlTypeDescriptorKind.Opaque),
+            "a reflected type did not adopt its live heads");
+
+        using (EncodedCallArguments encoded = PrimitiveProtocol.EncodeOwnedValue(
+                   BamlGeneratedValue.CreateType(reflected),
+                   api,
+                   functionCallId: 1))
+        {
+            BamlTy restated = InboundValue.Parser.ParseFrom(encoded.Bytes).TyValue;
+            Require(
+                LiveHeads.Keys(restated).SequenceEqual([901UL, 903UL])
+                    && clonedHandles == 2
+                    && releasedHandles == 0,
+                "restating a reflected type did not transfer one fresh reference per live head");
+        }
+
+        Require(releasedHandles == 2, "an unsent restated type kept its transferred references");
+        Expect<BamlProtocolException>(() =>
+            _ = PrimitiveProtocol.Encode(BamlGeneratedValue.CreateType(reflected)));
+        reflected.Dispose();
+        reflected.Dispose();
+        Require(releasedHandles == 4, "a reflected type did not release its references exactly once");
+
+        var duplicated = new BamlValueList
+        {
+            ItemType = new BamlTy { MetaType = new BamlTyMetaType() },
+        };
+        foreach (int _ in Enumerable.Range(0, 2))
+        {
+            duplicated.Items.Add(new BamlOutboundValue
+            {
+                TyValue = new BamlTy { ClassTy = new BamlTyClass { Live = 910 } },
+            });
+        }
+        Expect<BamlProtocolException>(() =>
+            _ = PrimitiveProtocol.DecodeCallResult(
+                new BamlOutboundResult
+                {
+                    Ok = new BamlOutboundValue { ListValue = duplicated },
+                }.ToByteArray(),
+                "types",
+                api));
+        Require(releasedHandles == 5, "a failed decode did not release a reflected type's reference");
     }
 
     private static BamlOutboundResult MediaHandleResult(

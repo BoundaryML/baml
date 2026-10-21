@@ -20,7 +20,7 @@ import { hostMarker } from './host_marker.js';
 import { handleExitPanic, runHostCallback, currentExecutionState, observeHostCallbackResult, registerCallableDispatch } from './platform.js';
 import { registerHostOpaque, releaseHostOpaque, tryRehydrateHostValueByKey, } from './host_value_registry.js';
 import { getTypeMap } from './typemap.js';
-import { BamlType, lowerTypeToWireTy, outboundTyToBamlTypeToken, } from './wire_ty.js';
+import { BamlType, liveKeys, lowerTypeToWireTy, outboundTyToBamlTypeToken, } from './wire_ty.js';
 const CallFunctionArgs = baml_bridge.cffi.v1.CallFunctionArgs;
 const BamlOutboundValue = baml_bridge.cffi.v1.BamlOutboundValue;
 const BamlOutboundResult = baml_bridge.cffi.v1.BamlOutboundResult;
@@ -153,9 +153,12 @@ export function encodeCallArgs(kwargs, options) {
             throw new TypeError('exactly one BAML call target may be set');
         }
         const snapshot = snapshotInvocation(options.baml, callId);
-        const typeArgs = (options.typeArgs ?? []).map(([typeVar, value]) => value instanceof BamlType
-            ? { typeVar, typeDefinition: value._wireCopy() }
-            : { typeVar, typeValue: value });
+        // The bridge restates a runtime declaration with a reference of the
+        // call's own; the wrapper keeps its rows.
+        const typeArgs = (options.typeArgs ?? []).map(([typeVar, value]) => ({
+            typeVar,
+            typeValue: value instanceof BamlType ? value._wireCopy() : value,
+        }));
         const msg = CallFunctionArgs.fromObject({
             callId: callId.toString(),
             typeArgs,
@@ -233,7 +236,7 @@ export const hostAdapter = {
             return undefined;
         return params.map((param) => {
             const token = userTypes[param];
-            const wire = token instanceof BamlType ? token._wireCopy().root : lowerTypeToWireTy(token);
+            const wire = token instanceof BamlType ? token._wireCopy() : lowerTypeToWireTy(token);
             return baml_bridge.cffi.v1.BamlTy.encode(baml_bridge.cffi.v1.BamlTy.create(wire ?? {})).finish();
         });
     },
@@ -262,7 +265,7 @@ export const hostAdapter = {
     /** The wire payload of a value `leafKindOf` classified as a leaf, cloning a handle's key for the wire. */
     leafOf(value) {
         if (value instanceof BamlType) {
-            return { bytes: InboundValue.encode(InboundValue.create({ tyDefValue: value._wireCopy() })).finish() };
+            return { bytes: InboundValue.encode(InboundValue.create({ tyValue: value._wireCopy() })).finish() };
         }
         if (value instanceof BamlPrompt) {
             return { bytes: InboundValue.encode(InboundValue.create({ promptAstValue: value._wireCopy() })).finish() };
@@ -412,10 +415,12 @@ function decodeValueHolder(holder, typeMap, ownership) {
         return holder.boolValue;
     if (holder.uint8arrayValue != null)
         return holder.uint8arrayValue;
-    if (holder.tyDefValue)
-        return BamlType._fromWire(holder.tyDefValue);
-    if (holder.tyValue)
-        return BamlType._fromWire({ root: holder.tyValue });
+    if (holder.tyValue) {
+        // The wrapper owns each row its type names from here on.
+        for (const record of liveRecords.get(holder.tyValue) ?? [])
+            ownership?.delete(record);
+        return BamlType._fromWire(holder.tyValue);
+    }
     if (holder.classValue) {
         return decodeClass(holder.classValue, typeMap, ownership);
     }
@@ -680,6 +685,11 @@ export function decodeOutboundValue(data) {
         }
     }
 }
+/**
+ * The rows a type value's runtime declarations arrived under, as ownership
+ * records, so a failed decode releases them like any other handle.
+ */
+const liveRecords = new WeakMap();
 function collectHostCallHandles(holder, ownership) {
     if (holder.handleValue) {
         const ht = holder.handleValue.handleType;
@@ -700,6 +710,12 @@ function collectHostCallHandles(holder, ownership) {
     }
     else if (holder.unionVariantValue?.value) {
         collectHostCallHandles(holder.unionVariantValue.value, ownership);
+    }
+    else if (holder.tyValue) {
+        const records = liveKeys(holder.tyValue).map((key) => ({ key }));
+        liveRecords.set(holder.tyValue, records);
+        for (const record of records)
+            ownership.add(record);
     }
 }
 /**

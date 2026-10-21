@@ -357,7 +357,6 @@ type BamlOutboundValue struct {
 	//	*BamlOutboundValue_Uint8ArrayValue
 	//	*BamlOutboundValue_BigintValue
 	//	*BamlOutboundValue_TyValue
-	//	*BamlOutboundValue_TyDefValue
 	Value isBamlOutboundValue_Value `protobuf_oneof:"value"`
 }
 
@@ -519,13 +518,6 @@ func (x *BamlOutboundValue) GetTyValue() *BamlTy {
 	return nil
 }
 
-func (x *BamlOutboundValue) GetTyDefValue() *BamlTyDef {
-	if x, ok := x.GetValue().(*BamlOutboundValue_TyDefValue); ok {
-		return x.TyDefValue
-	}
-	return nil
-}
-
 type isBamlOutboundValue_Value interface {
 	isBamlOutboundValue_Value()
 }
@@ -596,13 +588,9 @@ type BamlOutboundValue_BigintValue struct {
 
 type BamlOutboundValue_TyValue struct {
 	// A reflected BAML type returned as a value (e.g. `reflect.Type.of<T>()`).
-	// Shares the `BamlTy` representation with the inbound side.
+	// Shares the `BamlTy` representation with the inbound side; a runtime
+	// declaration it names is a row the host now holds.
 	TyValue *BamlTy `protobuf:"bytes,21,opt,name=ty_value,json=tyValue,proto3,oneof"`
-}
-
-type BamlOutboundValue_TyDefValue struct {
-	// Definition-carrying type handle. Identity is intentionally not encoded.
-	TyDefValue *BamlTyDef `protobuf:"bytes,22,opt,name=ty_def_value,json=tyDefValue,proto3,oneof"`
 }
 
 func (*BamlOutboundValue_NullValue) isBamlOutboundValue_Value() {}
@@ -638,8 +626,6 @@ func (*BamlOutboundValue_Uint8ArrayValue) isBamlOutboundValue_Value() {}
 func (*BamlOutboundValue_BigintValue) isBamlOutboundValue_Value() {}
 
 func (*BamlOutboundValue_TyValue) isBamlOutboundValue_Value() {}
-
-func (*BamlOutboundValue_TyDefValue) isBamlOutboundValue_Value() {}
 
 // Outbound handle envelope. Mirrors `BamlHandle` (inbound) but carries an
 // extra `ty` describing the underlying tagged type as a full `BamlTy` — the
@@ -2061,7 +2047,7 @@ var file_baml_bridge_cffi_v1_baml_outbound_proto_rawDesc = []byte{
 	0x78, 0x69, 0x74, 0x5f, 0x70, 0x61, 0x6e, 0x69, 0x63, 0x18, 0x03, 0x20, 0x01, 0x28, 0x08, 0x52,
 	0x0b, 0x69, 0x73, 0x45, 0x78, 0x69, 0x74, 0x50, 0x61, 0x6e, 0x69, 0x63, 0x12, 0x1b, 0x0a, 0x09,
 	0x65, 0x78, 0x69, 0x74, 0x5f, 0x63, 0x6f, 0x64, 0x65, 0x18, 0x04, 0x20, 0x01, 0x28, 0x03, 0x52,
-	0x08, 0x65, 0x78, 0x69, 0x74, 0x43, 0x6f, 0x64, 0x65, 0x22, 0xe4, 0x08, 0x0a, 0x11, 0x42, 0x61,
+	0x08, 0x65, 0x78, 0x69, 0x74, 0x43, 0x6f, 0x64, 0x65, 0x22, 0xb4, 0x08, 0x0a, 0x11, 0x42, 0x61,
 	0x6d, 0x6c, 0x4f, 0x75, 0x74, 0x62, 0x6f, 0x75, 0x6e, 0x64, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x12,
 	0x43, 0x0a, 0x0a, 0x6e, 0x75, 0x6c, 0x6c, 0x5f, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20,
 	0x01, 0x28, 0x0b, 0x32, 0x22, 0x2e, 0x62, 0x61, 0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69, 0x64, 0x67,
@@ -2127,11 +2113,8 @@ var file_baml_bridge_cffi_v1_baml_outbound_proto_rawDesc = []byte{
 	0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x15, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1b, 0x2e, 0x62, 0x61,
 	0x6d, 0x6c, 0x5f, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76,
 	0x31, 0x2e, 0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x48, 0x00, 0x52, 0x07, 0x74, 0x79, 0x56, 0x61,
-	0x6c, 0x75, 0x65, 0x12, 0x42, 0x0a, 0x0c, 0x74, 0x79, 0x5f, 0x64, 0x65, 0x66, 0x5f, 0x76, 0x61,
-	0x6c, 0x75, 0x65, 0x18, 0x16, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x1e, 0x2e, 0x62, 0x61, 0x6d, 0x6c,
-	0x5f, 0x62, 0x72, 0x69, 0x64, 0x67, 0x65, 0x2e, 0x63, 0x66, 0x66, 0x69, 0x2e, 0x76, 0x31, 0x2e,
-	0x42, 0x61, 0x6d, 0x6c, 0x54, 0x79, 0x44, 0x65, 0x66, 0x48, 0x00, 0x52, 0x0a, 0x74, 0x79, 0x44,
-	0x65, 0x66, 0x56, 0x61, 0x6c, 0x75, 0x65, 0x42, 0x07, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65,
+	0x6c, 0x75, 0x65, 0x42, 0x07, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x4a, 0x04, 0x08, 0x16,
+	0x10, 0x17, 0x52, 0x0c, 0x74, 0x79, 0x5f, 0x64, 0x65, 0x66, 0x5f, 0x76, 0x61, 0x6c, 0x75, 0x65,
 	0x22, 0x99, 0x01, 0x0a, 0x12, 0x42, 0x61, 0x6d, 0x6c, 0x4f, 0x75, 0x74, 0x62, 0x6f, 0x75, 0x6e,
 	0x64, 0x48, 0x61, 0x6e, 0x64, 0x6c, 0x65, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01,
 	0x20, 0x01, 0x28, 0x04, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x44, 0x0a, 0x0b, 0x68, 0x61, 0x6e,
@@ -2381,8 +2364,7 @@ var file_baml_bridge_cffi_v1_baml_outbound_proto_goTypes = []interface{}{
 	(*BamlToHostArg)(nil),                    // 22: baml_bridge.cffi.v1.BamlToHostArg
 	(*BamlLiteralValue)(nil),                 // 23: baml_bridge.cffi.v1.BamlLiteralValue
 	(*BamlTy)(nil),                           // 24: baml_bridge.cffi.v1.BamlTy
-	(*BamlTyDef)(nil),                        // 25: baml_bridge.cffi.v1.BamlTyDef
-	(BamlHandleType)(0),                      // 26: baml_bridge.cffi.v1.BamlHandleType
+	(BamlHandleType)(0),                      // 25: baml_bridge.cffi.v1.BamlHandleType
 }
 var file_baml_bridge_cffi_v1_baml_outbound_proto_depIdxs = []int32{
 	4,  // 0: baml_bridge.cffi.v1.BamlOutboundResult.ok:type_name -> baml_bridge.cffi.v1.BamlOutboundValue
@@ -2401,37 +2383,36 @@ var file_baml_bridge_cffi_v1_baml_outbound_proto_depIdxs = []int32{
 	13, // 13: baml_bridge.cffi.v1.BamlOutboundValue.media_value:type_name -> baml_bridge.cffi.v1.BamlValueMedia
 	15, // 14: baml_bridge.cffi.v1.BamlOutboundValue.prompt_ast_value:type_name -> baml_bridge.cffi.v1.BamlValuePromptAst
 	24, // 15: baml_bridge.cffi.v1.BamlOutboundValue.ty_value:type_name -> baml_bridge.cffi.v1.BamlTy
-	25, // 16: baml_bridge.cffi.v1.BamlOutboundValue.ty_def_value:type_name -> baml_bridge.cffi.v1.BamlTyDef
-	26, // 17: baml_bridge.cffi.v1.BamlOutboundHandle.handle_type:type_name -> baml_bridge.cffi.v1.BamlHandleType
-	24, // 18: baml_bridge.cffi.v1.BamlOutboundHandle.ty:type_name -> baml_bridge.cffi.v1.BamlTy
-	24, // 19: baml_bridge.cffi.v1.BamlValueList.item_type:type_name -> baml_bridge.cffi.v1.BamlTy
-	4,  // 20: baml_bridge.cffi.v1.BamlValueList.items:type_name -> baml_bridge.cffi.v1.BamlOutboundValue
-	4,  // 21: baml_bridge.cffi.v1.BamlOutboundMapEntry.value:type_name -> baml_bridge.cffi.v1.BamlOutboundValue
-	24, // 22: baml_bridge.cffi.v1.BamlValueMap.key_type:type_name -> baml_bridge.cffi.v1.BamlTy
-	24, // 23: baml_bridge.cffi.v1.BamlValueMap.value_type:type_name -> baml_bridge.cffi.v1.BamlTy
-	8,  // 24: baml_bridge.cffi.v1.BamlValueMap.entries:type_name -> baml_bridge.cffi.v1.BamlOutboundMapEntry
-	8,  // 25: baml_bridge.cffi.v1.BamlValueClass.fields:type_name -> baml_bridge.cffi.v1.BamlOutboundMapEntry
-	24, // 26: baml_bridge.cffi.v1.BamlValueClass.type_args:type_name -> baml_bridge.cffi.v1.BamlTy
-	24, // 27: baml_bridge.cffi.v1.BamlValueUnionVariant.self_type:type_name -> baml_bridge.cffi.v1.BamlTy
-	4,  // 28: baml_bridge.cffi.v1.BamlValueUnionVariant.value:type_name -> baml_bridge.cffi.v1.BamlOutboundValue
-	0,  // 29: baml_bridge.cffi.v1.BamlValueMedia.media:type_name -> baml_bridge.cffi.v1.MediaTypeEnum
-	14, // 30: baml_bridge.cffi.v1.BamlValueMedia.file_content:type_name -> baml_bridge.cffi.v1.BamlValueMediaFileContent
-	18, // 31: baml_bridge.cffi.v1.BamlValuePromptAst.simple:type_name -> baml_bridge.cffi.v1.BamlValuePromptAstSimple
-	16, // 32: baml_bridge.cffi.v1.BamlValuePromptAst.message:type_name -> baml_bridge.cffi.v1.BamlValuePromptAstMessage
-	17, // 33: baml_bridge.cffi.v1.BamlValuePromptAst.multiple:type_name -> baml_bridge.cffi.v1.BamlValuePromptAstMultiple
-	18, // 34: baml_bridge.cffi.v1.BamlValuePromptAstMessage.content:type_name -> baml_bridge.cffi.v1.BamlValuePromptAstSimple
-	15, // 35: baml_bridge.cffi.v1.BamlValuePromptAstMultiple.items:type_name -> baml_bridge.cffi.v1.BamlValuePromptAst
-	13, // 36: baml_bridge.cffi.v1.BamlValuePromptAstSimple.media:type_name -> baml_bridge.cffi.v1.BamlValueMedia
-	19, // 37: baml_bridge.cffi.v1.BamlValuePromptAstSimple.multiple:type_name -> baml_bridge.cffi.v1.BamlValuePromptAstSimpleMultiple
-	18, // 38: baml_bridge.cffi.v1.BamlValuePromptAstSimpleMultiple.items:type_name -> baml_bridge.cffi.v1.BamlValuePromptAstSimple
-	22, // 39: baml_bridge.cffi.v1.BamlToHostCall.args:type_name -> baml_bridge.cffi.v1.BamlToHostArg
-	4,  // 40: baml_bridge.cffi.v1.HostInvocation.cancel:type_name -> baml_bridge.cffi.v1.BamlOutboundValue
-	4,  // 41: baml_bridge.cffi.v1.BamlToHostArg.value:type_name -> baml_bridge.cffi.v1.BamlOutboundValue
-	42, // [42:42] is the sub-list for method output_type
-	42, // [42:42] is the sub-list for method input_type
-	42, // [42:42] is the sub-list for extension type_name
-	42, // [42:42] is the sub-list for extension extendee
-	0,  // [0:42] is the sub-list for field type_name
+	25, // 16: baml_bridge.cffi.v1.BamlOutboundHandle.handle_type:type_name -> baml_bridge.cffi.v1.BamlHandleType
+	24, // 17: baml_bridge.cffi.v1.BamlOutboundHandle.ty:type_name -> baml_bridge.cffi.v1.BamlTy
+	24, // 18: baml_bridge.cffi.v1.BamlValueList.item_type:type_name -> baml_bridge.cffi.v1.BamlTy
+	4,  // 19: baml_bridge.cffi.v1.BamlValueList.items:type_name -> baml_bridge.cffi.v1.BamlOutboundValue
+	4,  // 20: baml_bridge.cffi.v1.BamlOutboundMapEntry.value:type_name -> baml_bridge.cffi.v1.BamlOutboundValue
+	24, // 21: baml_bridge.cffi.v1.BamlValueMap.key_type:type_name -> baml_bridge.cffi.v1.BamlTy
+	24, // 22: baml_bridge.cffi.v1.BamlValueMap.value_type:type_name -> baml_bridge.cffi.v1.BamlTy
+	8,  // 23: baml_bridge.cffi.v1.BamlValueMap.entries:type_name -> baml_bridge.cffi.v1.BamlOutboundMapEntry
+	8,  // 24: baml_bridge.cffi.v1.BamlValueClass.fields:type_name -> baml_bridge.cffi.v1.BamlOutboundMapEntry
+	24, // 25: baml_bridge.cffi.v1.BamlValueClass.type_args:type_name -> baml_bridge.cffi.v1.BamlTy
+	24, // 26: baml_bridge.cffi.v1.BamlValueUnionVariant.self_type:type_name -> baml_bridge.cffi.v1.BamlTy
+	4,  // 27: baml_bridge.cffi.v1.BamlValueUnionVariant.value:type_name -> baml_bridge.cffi.v1.BamlOutboundValue
+	0,  // 28: baml_bridge.cffi.v1.BamlValueMedia.media:type_name -> baml_bridge.cffi.v1.MediaTypeEnum
+	14, // 29: baml_bridge.cffi.v1.BamlValueMedia.file_content:type_name -> baml_bridge.cffi.v1.BamlValueMediaFileContent
+	18, // 30: baml_bridge.cffi.v1.BamlValuePromptAst.simple:type_name -> baml_bridge.cffi.v1.BamlValuePromptAstSimple
+	16, // 31: baml_bridge.cffi.v1.BamlValuePromptAst.message:type_name -> baml_bridge.cffi.v1.BamlValuePromptAstMessage
+	17, // 32: baml_bridge.cffi.v1.BamlValuePromptAst.multiple:type_name -> baml_bridge.cffi.v1.BamlValuePromptAstMultiple
+	18, // 33: baml_bridge.cffi.v1.BamlValuePromptAstMessage.content:type_name -> baml_bridge.cffi.v1.BamlValuePromptAstSimple
+	15, // 34: baml_bridge.cffi.v1.BamlValuePromptAstMultiple.items:type_name -> baml_bridge.cffi.v1.BamlValuePromptAst
+	13, // 35: baml_bridge.cffi.v1.BamlValuePromptAstSimple.media:type_name -> baml_bridge.cffi.v1.BamlValueMedia
+	19, // 36: baml_bridge.cffi.v1.BamlValuePromptAstSimple.multiple:type_name -> baml_bridge.cffi.v1.BamlValuePromptAstSimpleMultiple
+	18, // 37: baml_bridge.cffi.v1.BamlValuePromptAstSimpleMultiple.items:type_name -> baml_bridge.cffi.v1.BamlValuePromptAstSimple
+	22, // 38: baml_bridge.cffi.v1.BamlToHostCall.args:type_name -> baml_bridge.cffi.v1.BamlToHostArg
+	4,  // 39: baml_bridge.cffi.v1.HostInvocation.cancel:type_name -> baml_bridge.cffi.v1.BamlOutboundValue
+	4,  // 40: baml_bridge.cffi.v1.BamlToHostArg.value:type_name -> baml_bridge.cffi.v1.BamlOutboundValue
+	41, // [41:41] is the sub-list for method output_type
+	41, // [41:41] is the sub-list for method input_type
+	41, // [41:41] is the sub-list for extension type_name
+	41, // [41:41] is the sub-list for extension extendee
+	0,  // [0:41] is the sub-list for field type_name
 }
 
 func init() { file_baml_bridge_cffi_v1_baml_outbound_proto_init() }
@@ -2742,7 +2723,6 @@ func file_baml_bridge_cffi_v1_baml_outbound_proto_init() {
 		(*BamlOutboundValue_Uint8ArrayValue)(nil),
 		(*BamlOutboundValue_BigintValue)(nil),
 		(*BamlOutboundValue_TyValue)(nil),
-		(*BamlOutboundValue_TyDefValue)(nil),
 	}
 	file_baml_bridge_cffi_v1_baml_outbound_proto_msgTypes[11].OneofWrappers = []interface{}{}
 	file_baml_bridge_cffi_v1_baml_outbound_proto_msgTypes[12].OneofWrappers = []interface{}{

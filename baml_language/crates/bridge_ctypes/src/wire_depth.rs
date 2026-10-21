@@ -8,8 +8,8 @@
 //! struct nests it.
 
 use crate::baml_bridge::cffi::{
-    BamlTy, BamlTyDef, BamlValueMedia, BamlValuePromptAst, BamlValuePromptAstSimple,
-    InboundMapEntry, InboundValue, baml_ty::Ty, baml_value_media, baml_value_prompt_ast,
+    BamlTy, BamlValueMedia, BamlValuePromptAst, BamlValuePromptAstSimple, InboundMapEntry,
+    InboundValue, baml_ty::Ty, baml_value_media, baml_value_prompt_ast,
     baml_value_prompt_ast_simple, inbound_map_entry, inbound_value::Value,
 };
 
@@ -88,7 +88,6 @@ pub fn inbound_value_depth(value: &InboundValue) -> usize {
                 .unwrap_or(0)
         }
         Some(Value::TyValue(ty)) => 1 + baml_ty_depth(ty),
-        Some(Value::TyDefValue(def)) => 1 + baml_ty_def_depth(def),
         Some(Value::MediaValue(media)) => 1 + media_depth(media),
         Some(Value::PromptAstValue(prompt)) => 1 + prompt_depth(prompt),
     };
@@ -166,66 +165,6 @@ pub fn baml_ty_depth(ty: &BamlTy) -> usize {
                 .max(projection.interface.as_ref().map_or(0, |ty| nested(ty)))
         }
     }
-}
-
-/// `BamlTyDef` → `BamlClassDef` → `BamlClassFieldDef` → `BamlTy`, and the
-/// root type and witnesses alongside.
-fn baml_ty_def_depth(def: &BamlTyDef) -> usize {
-    let root = def.root.as_ref().map_or(0, |ty| 1 + baml_ty_depth(ty));
-    // Each declaration and variant may carry a `BamlTyMetadata` message.
-    let classes = def
-        .classes
-        .iter()
-        .map(|class| {
-            1 + class
-                .fields
-                .iter()
-                .map(|field| 1 + field.ty.as_ref().map_or(0, |ty| 1 + baml_ty_depth(ty)))
-                .max()
-                .unwrap_or(0)
-                .max(usize::from(class.metadata.is_some()))
-        })
-        .max()
-        .unwrap_or(0);
-    let enums = def
-        .enums
-        .iter()
-        .map(|enumeration| {
-            1 + enumeration
-                .variants
-                .iter()
-                .map(|variant| 1 + usize::from(variant.metadata.is_some()))
-                .max()
-                .unwrap_or(0)
-                .max(usize::from(enumeration.metadata.is_some()))
-        })
-        .max()
-        .unwrap_or(0);
-    let witnesses = def
-        .witnesses
-        .iter()
-        .map(|witness| {
-            1 + witness
-                .interface_args
-                .iter()
-                .map(|ty| 1 + baml_ty_depth(ty))
-                .max()
-                .unwrap_or(0)
-                .max(
-                    witness
-                        .associated_types
-                        .iter()
-                        .map(|binding| {
-                            1 + binding.ty.as_ref().map_or(0, |ty| 1 + baml_ty_depth(ty))
-                        })
-                        .max()
-                        .unwrap_or(0),
-                )
-                .max(usize::from(!witness.field_links.is_empty()))
-        })
-        .max()
-        .unwrap_or(0);
-    root.max(classes).max(enums).max(witnesses)
 }
 
 fn media_depth(media: &BamlValueMedia) -> usize {
@@ -314,8 +253,8 @@ mod tests {
     #[test]
     fn statements_and_entries_count() {
         let stated = InboundValue {
-            value_type: Some(crate::runtime_ty_to_proto_ty(&baml_type::RuntimeTy::List(
-                Box::new(baml_type::RuntimeTy::Int),
+            value_type: Some(crate::runtime_ty_to_proto_ty(&baml_type::RealizedTy::List(
+                Box::new(baml_type::RealizedTy::Int),
             ))),
             value: Some(Value::ListValue(InboundListValue { values: vec![] })),
         };

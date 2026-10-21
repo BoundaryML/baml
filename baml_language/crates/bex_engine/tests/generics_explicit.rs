@@ -16,7 +16,7 @@ async fn call_named(
     source: &str,
     function: &str,
     args: Vec<BexExternalValue>,
-    type_args: Vec<(String, baml_type::RuntimeTy)>,
+    type_args: Vec<(String, bex_external_types::WireTy)>,
 ) -> Result<BexExternalValue, EngineError> {
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
@@ -52,7 +52,7 @@ async fn inbound_named_binding_threads_to_reflect() {
         source,
         "one_type_arg",
         vec![],
-        vec![("T".to_string(), baml_type::RuntimeTy::int())],
+        vec![("T".to_string(), bex_external_types::WireTy::int())],
     )
     .await
     .unwrap();
@@ -94,14 +94,14 @@ async fn inbound_instance_arg_lands_class_type_args() {
     "#;
     let arg = BexExternalValue::instance_generic(
         "Box",
-        vec![baml_type::RuntimeTy::int()],
+        vec![bex_external_types::WireTy::int()],
         indexmap::IndexMap::from_iter([("v", BexExternalValue::Int(5))]),
     );
     let out = call_named(
         source,
         "takes_box",
         vec![arg],
-        vec![("T".to_string(), baml_type::RuntimeTy::int())],
+        vec![("T".to_string(), bex_external_types::WireTy::int())],
     )
     .await
     .unwrap();
@@ -119,7 +119,7 @@ async fn inbound_instance_arg_wrong_type_args_rejected() {
     "#;
     let arg = BexExternalValue::instance_generic(
         "Box",
-        vec![baml_type::RuntimeTy::string()],
+        vec![bex_external_types::WireTy::string()],
         indexmap::IndexMap::from_iter([("v", BexExternalValue::String("hi".into()))]),
     );
     let err = call_named(
@@ -127,7 +127,7 @@ async fn inbound_instance_arg_wrong_type_args_rejected() {
         "takes_box",
         vec![arg],
         // bind T = int, but the instance carries Box<string>
-        vec![("T".to_string(), baml_type::RuntimeTy::int())],
+        vec![("T".to_string(), bex_external_types::WireTy::int())],
     )
     .await
     .expect_err("Box<string> arg against Box<int> param must be rejected");
@@ -155,7 +155,7 @@ async fn inbound_instance_arg_missing_type_args_is_refused() {
         source,
         "takes_box",
         vec![arg],
-        vec![("T".to_string(), baml_type::RuntimeTy::int())],
+        vec![("T".to_string(), bex_external_types::WireTy::int())],
     )
     .await
     .expect_err("an instance of a generic class states its type arguments");
@@ -177,14 +177,17 @@ async fn inbound_instance_arg_wrong_arity_rejected() {
     "#;
     let arg = BexExternalValue::instance_generic(
         "Box",
-        vec![baml_type::RuntimeTy::int(), baml_type::RuntimeTy::int()],
+        vec![
+            bex_external_types::WireTy::int(),
+            bex_external_types::WireTy::int(),
+        ],
         indexmap::IndexMap::from_iter([("v", BexExternalValue::Int(5))]),
     );
     let err = call_named(
         source,
         "takes_box",
         vec![arg],
-        vec![("T".to_string(), baml_type::RuntimeTy::int())],
+        vec![("T".to_string(), bex_external_types::WireTy::int())],
     )
     .await
     .expect_err("a two-arg Box against Box<int> must be rejected");
@@ -205,15 +208,15 @@ async fn inbound_map_is_not_an_instance_of_a_class() {
     "#;
     let fields = indexmap::IndexMap::from_iter([("v".to_string(), BexExternalValue::Int(5))]);
     let map = BexExternalValue::Map {
-        key_type: baml_type::RuntimeTy::string(),
-        value_type: baml_type::RuntimeTy::int(),
+        key_type: bex_external_types::WireTy::string(),
+        value_type: bex_external_types::WireTy::int(),
         entries: fields,
     };
     let err = call_named(
         source,
         "takes_box",
         vec![map],
-        vec![("T".to_string(), baml_type::RuntimeTy::int())],
+        vec![("T".to_string(), bex_external_types::WireTy::int())],
     )
     .await
     .expect_err("a map is not an instance of a class");

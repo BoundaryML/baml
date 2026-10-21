@@ -1,6 +1,5 @@
 use bex_engine::{
-    CancellationToken, FunctionCallContext, FunctionCallContextBuilder, RuntimeTy,
-    logger::TraceLogger,
+    CancellationToken, FunctionCallContext, FunctionCallContextBuilder, logger::TraceLogger,
 };
 use indexmap::IndexMap;
 
@@ -30,7 +29,7 @@ impl HelperCallContext {
     #[must_use]
     pub(crate) fn call_context(
         &self,
-        type_args: IndexMap<String, RuntimeTy>,
+        type_args: IndexMap<String, bex_engine::WireTy>,
     ) -> FunctionCallContext {
         FunctionCallContextBuilder::new(bex_engine::CallId::next())
             .with_logger(self.logger.clone())

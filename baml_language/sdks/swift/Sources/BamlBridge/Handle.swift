@@ -94,9 +94,12 @@ extension BamlHandle: BamlDecodable {
         guard handle.handleType != .handleUnspecified else {
             throw BamlDecodeError.typeMismatch(expected: "tagged handle", got: "HANDLE_UNSPECIFIED")
         }
+        // An anonymous label is display text, never an identity.
         let classFQN: String?
-        if handle.hasTy, case .classTy(let classType)? = handle.ty.ty {
-            classFQN = classType.name.isEmpty ? nil : classType.name
+        if handle.hasTy, case .classTy(let classType)? = handle.ty.ty,
+           case .name(let fqn)? = classType.head, !fqn.isEmpty
+        {
+            classFQN = fqn
         } else {
             classFQN = nil
         }

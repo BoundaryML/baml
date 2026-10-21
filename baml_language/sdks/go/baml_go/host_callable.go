@@ -152,10 +152,14 @@ func HostCallable(callable HostCallableFunc, functionType BAMLType) Input {
 		if transaction == nil {
 			return nil, errors.New("BAML host callable requires an input transaction")
 		}
+		stated, err := functionType.stated(transaction)
+		if err != nil {
+			return nil, fmt.Errorf("BAML host callable function type: %w", err)
+		}
 		key := registerHostValue(hostValue{callable: callable})
 		transaction.ownHostValue(key)
 		value := hostValueInput(key, cffi.BamlHandleType_HOST_VALUE_CALLABLE)
-		value.ValueType = functionType.value
+		value.ValueType = stated
 		return value, nil
 	}}}
 }
@@ -237,15 +241,15 @@ func dispatchHostCall(key uint64, callID uint32, payload []byte, frames ...*host
 }
 
 func ownHostCallOutboundHandles(call *cffi.BamlToHostCall) *resultOwner {
-	allHandles := make(map[uint64]struct{})
+	var keys []uint64
 	if call != nil {
 		for _, argument := range call.Args {
 			if argument != nil {
-				collectOutboundHandles(argument.Value, allHandles)
+				keys = appendOutboundHandles(keys, argument.Value)
 			}
 		}
 	}
-	return ownOutboundHandleKeys(allHandles)
+	return ownOutboundHandleKeys(keys)
 }
 
 func runHostCall(callID uint32, callable HostCallableFunc, arguments HostCallArguments, owner *resultOwner) {
@@ -347,8 +351,7 @@ func completeHostCallReturned(callID uint32, input Input) {
 		transaction.rollback()
 		return
 	}
-	transaction.commitHostValues()
-	transaction.rollback()
+	transaction.commit()
 }
 
 // completeHostCallBridgeFailure completes the call as a failure of the
@@ -398,7 +401,7 @@ func dispatchHostInvocation(payload []byte) {
 		return
 	}
 	carrier := &invocationStateCarrier{state: envelope.EffectiveState,
-		owner: ownOutboundHandleKeys(map[uint64]struct{}{envelope.EffectiveState: {}})}
+		owner: ownOutboundHandleKeys([]uint64{envelope.EffectiveState})}
 	carrier.cancel = envelope.Cancel
 	carrier.cancelOwner = ownOutboundHandles(envelope.Cancel)
 	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), invocationStateContextKey{}, carrier))

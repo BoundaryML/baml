@@ -135,7 +135,7 @@ impl CffiHandleTableEntry {
             Self::InvocationState(_) => BamlHandleType::InvocationState,
             Self::TraceReservation(_) => BamlHandleType::TraceReservation,
             Self::Adt(adt) => match adt {
-                BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_) => BamlHandleType::AdtType,
+                BexExternalAdt::Type(_) | BexExternalAdt::WireType(_) => BamlHandleType::AdtType,
                 BexExternalAdt::PromptAst(_) => BamlHandleType::AdtPromptAst,
                 BexExternalAdt::Media(media) => match media.kind {
                     MediaKind::Image => BamlHandleType::AdtMediaImage,
@@ -673,7 +673,7 @@ mod tests {
         let adt = |h: &bex_project::Handle| {
             CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::TaggedHeapHandle {
                 kind: bex_project::TaggedHeapHandleKind::RuntimeValue,
-                ty: bex_project::RuntimeTy::int(),
+                ty: bex_project::AnnotationTy::int(),
                 heap_handle: h.clone(),
             })
         };

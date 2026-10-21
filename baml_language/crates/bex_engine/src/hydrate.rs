@@ -25,19 +25,16 @@
 use std::collections::HashMap;
 
 use baml_type::normalize;
-use bex_external_types::{BexExternalAdt, BexExternalValue, Handle, HostValueKind, TypeDefRef};
+use bex_external_types::{BexExternalAdt, BexExternalValue, Handle, HostValueKind, WireHead};
 use bex_heap::{HeapPermit, TlabHolder};
 use bex_vm::BexVm;
 use bex_vm_types::{HeapPtr, Object, RealizedTy, RuntimeTy, Ty, TypeHead, Value};
 
-use crate::{
-    BexEngine, EngineError,
-    conversion::{InboundDeclarationKind, InboundRuntimeOverlay},
-    thread::BexThread,
-};
+use crate::{BexEngine, EngineError, conversion::InboundDeclarationKind, thread::BexThread};
 
-/// A type as a host spells it: by name.
-pub(crate) type WireTy = baml_type::RuntimeTy;
+/// A type as a host states it: compiled declarations by name, runtime
+/// declarations by handle.
+pub(crate) type WireTy = bex_external_types::WireTy;
 
 /// How deep a value may nest before it is given up. A host value is a finite
 /// tree, so this bounds the stack a hostile or runaway producer can ask for.
@@ -165,7 +162,6 @@ pub(crate) enum ValueOrigin {
 struct Hydrator<'a, H: HeapPermit<BexThread>> {
     engine: &'a BexEngine,
     holder: &'a mut H,
-    overlay: InboundRuntimeOverlay<'a>,
     origin: ValueOrigin,
     path: Vec<Segment>,
     /// Membership answers for primitive values under slots the algebra has to
@@ -261,19 +257,11 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
         self.refuse(RefusalKind::Malformed(message.into()))
     }
 
-    /// A type the host spelled, over the program's live declarations.
-    fn anchor(&self, ty: &WireTy) -> Result<RuntimeTy, Refusal> {
-        self.engine
-            .anchor_wire_ty_with_runtime(self.vm(), ty, self.overlay)
-            .map_err(|error| self.malformed(error.to_string()))
-    }
-
-    /// A type the host stated for a value: anchored, and realized, since a
-    /// value's type has no variable in it.
+    /// A type the host stated for a value, over the program's declarations.
     fn realized(&self, ty: &WireTy) -> Result<RealizedTy, Refusal> {
-        RealizedTy::try_from(&self.anchor(ty)?).map_err(|error| {
-            self.malformed(format!("the stated type `{ty}` is not realized: {error}"))
-        })
+        self.engine
+            .anchor_wire_ty(self.holder.proof(), self.vm(), ty)
+            .map_err(|error| self.malformed(error.to_string()))
     }
 
     /// `value`, built, is a member of `ty`: the check a list makes on a push
@@ -452,12 +440,7 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
             } => {
                 let ptr = self
                     .engine
-                    .resolve_inbound_declaration(
-                        self.vm(),
-                        enum_name,
-                        self.overlay,
-                        InboundDeclarationKind::Enum,
-                    )
+                    .resolve_static_declaration(self.vm(), enum_name, InboundDeclarationKind::Enum)
                     .ok_or_else(|| {
                         self.malformed(format!("unknown enum `{}`", bounded(enum_name)))
                     })?;
@@ -538,15 +521,23 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                 // A reflected type names its declarations; an anonymous one has
                 // no spelling to anchor against and should have crossed as a
                 // handle, which lands as the declaration itself.
+                // A type value is realized; the lane's wider family is the
+                // sys-op boundary's, not the value's.
+                let reflected = baml_type::RealizedTy::try_from(reflected).map_err(|error| {
+                    self.malformed(format!("a reflected type is not realized: {error}"))
+                })?;
                 let named: WireTy =
                     reflected.try_map_heads(&mut |head: &baml_type::TaggedTypeName| {
-                        head.declared().cloned().ok_or_else(|| {
-                            self.malformed(format!(
+                        head.declared()
+                            .cloned()
+                            .map(WireHead::Static)
+                            .ok_or_else(|| {
+                                self.malformed(format!(
                                 "host-supplied type names the anonymous declaration `{}`, which \
                                  has no resolvable spelling; pass it as a handle instead",
                                 head.display_name()
                             ))
-                        })
+                            })
                     })?;
                 let realized = self.realized(&named)?;
                 Value::object(
@@ -556,29 +547,18 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                         .alloc_type(bex_vm_types::types::TypeValue::new(realized)),
                 )
             }
-            BexExternalValue::Adt(BexExternalAdt::TypeDef(definition)) => {
-                // A live reference from this engine lands as the object itself;
-                // a foreign engine's handle does not resolve here, and lands
-                // from its portable definition with fresh identity.
-                let live = match definition {
-                    TypeDefRef::Live { handle, .. } => {
-                        self.engine.resolve_handle(self.holder.proof(), handle)
-                    }
-                    TypeDefRef::Portable(_) => None,
-                };
-                match live {
-                    Some(ptr) => Value::object(ptr),
-                    None => {
-                        let vm = &mut self.holder.holder_mut().vm;
-                        let type_value = vm
-                            .materialize_portable_type_def(definition.def())
-                            .map_err(|message| Refusal {
-                                path: self.path.clone(),
-                                kind: RefusalKind::Malformed(message),
-                            })?;
-                        Value::object(vm.alloc_type(type_value))
-                    }
-                }
+            BexExternalValue::Adt(BexExternalAdt::WireType(stated)) => {
+                // A type the host states lands as a fresh `type` value over
+                // the declarations it references: compiled ones by name,
+                // runtime ones through the host's handles, which keep them
+                // the same declarations they were when they left.
+                let realized = self.realized(stated)?;
+                Value::object(
+                    self.holder
+                        .holder_mut()
+                        .vm
+                        .alloc_type(bex_vm_types::types::TypeValue::new(realized)),
+                )
             }
             BexExternalValue::HostValue(host) => match host.kind {
                 HostValueKind::Opaque => {
@@ -640,12 +620,7 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
     ) -> Result<Value, Refusal> {
         let class_ptr = self
             .engine
-            .resolve_inbound_declaration(
-                self.vm(),
-                class_name,
-                self.overlay,
-                InboundDeclarationKind::Class,
-            )
+            .resolve_static_declaration(self.vm(), class_name, InboundDeclarationKind::Class)
             .ok_or_else(|| self.malformed(format!("unknown class `{}`", bounded(class_name))))?;
         let type_args = type_args
             .iter()
@@ -808,20 +783,17 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
 
 impl BexEngine {
     /// Build an external value on the heap as the value it says it is.
-    /// `overlay` names the runtime declarations the call may spell; `origin`
-    /// is who built the value. The slot the value is bound for plays no part;
-    /// see [`Self::hydrate_into`].
+    /// `origin` is who built the value. The slot the value is bound for plays
+    /// no part; see [`Self::hydrate_into`].
     pub(crate) fn hydrate(
         &self,
         holder: &mut impl HeapPermit<BexThread>,
         value: &BexExternalValue,
-        overlay: InboundRuntimeOverlay<'_>,
         origin: ValueOrigin,
     ) -> Result<Value, Refusal> {
         let mut hydrator = Hydrator {
             engine: self,
             holder,
-            overlay,
             origin,
             path: Vec::new(),
             members: HashMap::new(),
@@ -834,7 +806,7 @@ impl BexEngine {
     pub(crate) fn check_member(
         holder: &impl HeapPermit<BexThread>,
         value: Value,
-        slot: &RuntimeTy,
+        slot: &RealizedTy,
     ) -> Result<(), Refusal> {
         let vm = &holder.holder().vm;
         if is_member(vm, value, slot.as_ty()) {
@@ -855,11 +827,10 @@ impl BexEngine {
         &self,
         holder: &mut impl HeapPermit<BexThread>,
         value: &BexExternalValue,
-        slot: &RuntimeTy,
-        overlay: InboundRuntimeOverlay<'_>,
+        slot: &RealizedTy,
         origin: ValueOrigin,
     ) -> Result<Value, Refusal> {
-        let built = self.hydrate(holder, value, overlay, origin)?;
+        let built = self.hydrate(holder, value, origin)?;
         Self::check_member(holder, built, slot)?;
         Ok(built)
     }
@@ -888,17 +859,18 @@ pub(crate) enum RootedHead {
 }
 
 /// A declared type held across a sys-op's await.
+#[derive(Clone)]
 pub(crate) enum HeldTy {
     /// Every declaration it names was compiled with the program, and none
     /// moves: the type is held as it is.
-    Pinned(bex_vm_types::RuntimeTy),
+    Pinned(RealizedTy),
     /// It names a runtime declaration, rooted for the span of the await.
-    Rooted(baml_type::RuntimeTy<RootedHead>),
+    Rooted(baml_type::RealizedTy<RootedHead>),
 }
 
 impl BexEngine {
     /// Hold `ty` across an await, rooting every runtime declaration it names.
-    pub(crate) fn hold_ty(&self, ty: bex_vm_types::RuntimeTy) -> HeldTy {
+    pub(crate) fn hold_ty(&self, ty: RealizedTy) -> HeldTy {
         let mut names_runtime_declaration = false;
         ty.visit_heads(&mut |head: &TypeHead| {
             names_runtime_declaration |= !self.heap.is_compile_time_ptr(head.ptr());
@@ -924,7 +896,7 @@ impl BexEngine {
         &self,
         permit: bex_heap::PermitProof<'_>,
         held: HeldTy,
-    ) -> Result<bex_vm_types::RuntimeTy, EngineError> {
+    ) -> Result<RealizedTy, EngineError> {
         match held {
             HeldTy::Pinned(ty) => Ok(ty),
             HeldTy::Rooted(ty) => ty.try_map_heads(&mut |head: &RootedHead| match head {

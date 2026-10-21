@@ -1,9 +1,12 @@
-use baml_type::{Name, RuntimeTy};
+use baml_type::{Name, RealizedTy};
 
-/// Exact semantic identity for runtime types, ignoring source-only attributes
-/// and union member ordering.
-pub fn runtime_ty_structurally_equal(left: &RuntimeTy, right: &RuntimeTy) -> bool {
-    use RuntimeTy as T;
+/// Exact semantic identity for realized types, the types values carry,
+/// ignoring source-only attributes and union member ordering.
+pub fn runtime_ty_structurally_equal<N: Clone + PartialEq>(
+    left: &RealizedTy<N>,
+    right: &RealizedTy<N>,
+) -> bool {
+    use RealizedTy as T;
     match (left, right) {
         (T::String, T::String)
         | (T::Int, T::Int)
@@ -80,7 +83,10 @@ pub fn runtime_ty_structurally_equal(left: &RuntimeTy, right: &RuntimeTy) -> boo
     }
 }
 
-fn structurally_equal_slices(left: &[RuntimeTy], right: &[RuntimeTy]) -> bool {
+fn structurally_equal_slices<N: Clone + PartialEq>(
+    left: &[RealizedTy<N>],
+    right: &[RealizedTy<N>],
+) -> bool {
     left.len() == right.len()
         && left
             .iter()
@@ -88,7 +94,10 @@ fn structurally_equal_slices(left: &[RuntimeTy], right: &[RuntimeTy]) -> bool {
             .all(|(left, right)| runtime_ty_structurally_equal(left, right))
 }
 
-fn structurally_equal_unordered_slices(left: &[RuntimeTy], right: &[RuntimeTy]) -> bool {
+fn structurally_equal_unordered_slices<N: Clone + PartialEq>(
+    left: &[RealizedTy<N>],
+    right: &[RealizedTy<N>],
+) -> bool {
     if left.len() != right.len() {
         return false;
     }
@@ -105,7 +114,10 @@ fn structurally_equal_unordered_slices(left: &[RuntimeTy], right: &[RuntimeTy]) 
     })
 }
 
-fn structurally_equal_named_types(left: &[(Name, RuntimeTy)], right: &[(Name, RuntimeTy)]) -> bool {
+fn structurally_equal_named_types<N: Clone + PartialEq>(
+    left: &[(Name, RealizedTy<N>)],
+    right: &[(Name, RealizedTy<N>)],
+) -> bool {
     if left.len() != right.len() {
         return false;
     }
@@ -130,7 +142,10 @@ fn structurally_equal_named_types(left: &[(Name, RuntimeTy)], right: &[(Name, Ru
 
 /// Compare a selected union arm while tolerating the legacy root-level
 /// representation where a non-null arm may be wrapped in `T | null`.
-pub fn selected_arm_equal(left: &RuntimeTy, right: &RuntimeTy) -> bool {
+pub fn selected_arm_equal<N: Clone + PartialEq>(
+    left: &RealizedTy<N>,
+    right: &RealizedTy<N>,
+) -> bool {
     if runtime_ty_structurally_equal(left, right) {
         return true;
     }
@@ -138,11 +153,11 @@ pub fn selected_arm_equal(left: &RuntimeTy, right: &RuntimeTy) -> bool {
         || sole_non_null(right).is_some_and(|inner| runtime_ty_structurally_equal(left, inner))
 }
 
-fn sole_non_null(ty: &RuntimeTy) -> Option<&RuntimeTy> {
-    let RuntimeTy::Union(members) = ty else {
+fn sole_non_null<N: Clone + PartialEq>(ty: &RealizedTy<N>) -> Option<&RealizedTy<N>> {
+    let RealizedTy::Union(members) = ty else {
         return None;
     };
-    if !members.iter().any(RuntimeTy::is_null) {
+    if !members.iter().any(RealizedTy::is_null) {
         return None;
     }
     let mut non_null = members.iter().filter(|member| !member.is_null());
@@ -152,18 +167,18 @@ fn sole_non_null(ty: &RuntimeTy) -> Option<&RuntimeTy> {
 
 #[cfg(test)]
 mod tests {
-    use baml_type::RuntimeTy;
+    use baml_type::RealizedTy;
 
     use super::runtime_ty_structurally_equal;
 
-    fn union(members: Vec<RuntimeTy>) -> RuntimeTy {
-        RuntimeTy::Union(members.into())
+    fn union(members: Vec<RealizedTy>) -> RealizedTy {
+        RealizedTy::Union(members.into())
     }
 
     #[test]
     fn union_structural_equality_ignores_member_order() {
-        let left = union(vec![RuntimeTy::string(), RuntimeTy::int()]);
-        let right = union(vec![RuntimeTy::int(), RuntimeTy::string()]);
+        let left = union(vec![RealizedTy::string(), RealizedTy::int()]);
+        let right = union(vec![RealizedTy::int(), RealizedTy::string()]);
 
         assert!(runtime_ty_structurally_equal(&left, &right));
         assert!(runtime_ty_structurally_equal(&right, &left));
@@ -172,14 +187,14 @@ mod tests {
     #[test]
     fn union_structural_equality_preserves_duplicate_multiplicity() {
         let left = union(vec![
-            RuntimeTy::string(),
-            RuntimeTy::string(),
-            RuntimeTy::int(),
+            RealizedTy::string(),
+            RealizedTy::string(),
+            RealizedTy::int(),
         ]);
         let right = union(vec![
-            RuntimeTy::string(),
-            RuntimeTy::int(),
-            RuntimeTy::int(),
+            RealizedTy::string(),
+            RealizedTy::int(),
+            RealizedTy::int(),
         ]);
 
         assert!(!runtime_ty_structurally_equal(&left, &right));

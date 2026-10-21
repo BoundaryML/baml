@@ -142,10 +142,7 @@ pub struct FunctionCallContext {
     /// lowers these to the positional `type_args` slot by matching names against
     /// the callee's generic params in `set_entry_point_with_type_args`.
     /// Empty for non-generic / internal calls.
-    pub type_args: IndexMap<String, baml_type::RuntimeTy>,
-    /// Definition graphs accompanying entries in `type_args`. Only host
-    /// reflected runtime types populate this map.
-    pub type_defs: IndexMap<String, bex_vm_types::types::PortableTypeDef>,
+    pub type_args: IndexMap<String, bex_external_types::WireTy>,
 }
 
 /// Builder for `FunctionCallContext`.
@@ -162,8 +159,7 @@ pub struct FunctionCallContextBuilder {
     timeout: Option<std::time::Duration>,
     deadline_ns: Option<u64>,
 
-    type_args: Option<IndexMap<String, baml_type::RuntimeTy>>,
-    type_defs: Option<IndexMap<String, bex_vm_types::types::PortableTypeDef>>,
+    type_args: Option<IndexMap<String, bex_external_types::WireTy>>,
 }
 
 impl FunctionCallContextBuilder {
@@ -182,7 +178,6 @@ impl FunctionCallContextBuilder {
             timeout: None,
             deadline_ns: None,
             type_args: None,
-            type_defs: None,
         }
     }
 
@@ -204,7 +199,6 @@ impl FunctionCallContextBuilder {
             bound_runtime: None,
 
             type_args: self.type_args.unwrap_or_default(),
-            type_defs: self.type_defs.unwrap_or_default(),
         }
     }
 
@@ -224,17 +218,11 @@ impl FunctionCallContextBuilder {
     /// be the callee's De Bruijn order. The engine resolves them to positional
     /// slots against the callee's generic params.
     #[must_use]
-    pub fn with_type_args(mut self, type_args: IndexMap<String, baml_type::RuntimeTy>) -> Self {
-        self.type_args = Some(type_args);
-        self
-    }
-
-    #[must_use]
-    pub fn with_type_defs(
+    pub fn with_type_args(
         mut self,
-        type_defs: IndexMap<String, bex_vm_types::types::PortableTypeDef>,
+        type_args: IndexMap<String, bex_external_types::WireTy>,
     ) -> Self {
-        self.type_defs = Some(type_defs);
+        self.type_args = Some(type_args);
         self
     }
 

@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -99,7 +100,7 @@ func TestZeroMediaValuesFailEncodingWithoutPanic(t *testing.T) {
 	}
 }
 
-func TestCollectOutboundHandlesFindsNestedOwnedHandlesOnlyOnce(t *testing.T) {
+func TestOutboundHandlesAreOwnedOncePerOccurrence(t *testing.T) {
 	owned := &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_HandleValue{HandleValue: &cffi.BamlOutboundHandle{
 		Key: 41, HandleType: cffi.BamlHandleType_ADT_MEDIA_IMAGE,
 	}}}
@@ -122,17 +123,16 @@ func TestCollectOutboundHandlesFindsNestedOwnedHandlesOnlyOnce(t *testing.T) {
 			{Key: "map", Value: mapValue},
 		},
 	}}}
-	keys := make(map[uint64]struct{})
-	collectOutboundHandles(root, keys)
-	if len(keys) != 1 {
-		t.Fatalf("owned keys = %#v", keys)
-	}
-	if _, ok := keys[41]; !ok {
-		t.Fatalf("owned keys = %#v, missing media handle", keys)
+	// The engine transfers one reference per occurrence, and an identity-
+	// bearing row repeats its key, so a repeated key is owned once per
+	// occurrence.
+	keys := appendOutboundHandles(nil, root)
+	if !reflect.DeepEqual(keys, []uint64{41, 41, 41}) {
+		t.Fatalf("owned keys = %v, want [41 41 41]", keys)
 	}
 }
 
-func TestCollectOutboundHandlesDoesNotDropDeeplyNestedHandles(t *testing.T) {
+func TestOutboundHandlesSurviveDeepNesting(t *testing.T) {
 	value := &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_HandleValue{HandleValue: &cffi.BamlOutboundHandle{
 		Key: 42, HandleType: cffi.BamlHandleType_ADT_MEDIA_IMAGE,
 	}}}
@@ -141,10 +141,8 @@ func TestCollectOutboundHandlesDoesNotDropDeeplyNestedHandles(t *testing.T) {
 			Items: []*cffi.BamlOutboundValue{value},
 		}}}
 	}
-	keys := make(map[uint64]struct{})
-	collectOutboundHandles(value, keys)
-	if _, ok := keys[42]; !ok || len(keys) != 1 {
-		t.Fatalf("owned keys = %#v, want only deeply nested handle 42", keys)
+	if keys := appendOutboundHandles(nil, value); !reflect.DeepEqual(keys, []uint64{42}) {
+		t.Fatalf("owned keys = %v, want only deeply nested handle 42", keys)
 	}
 }
 

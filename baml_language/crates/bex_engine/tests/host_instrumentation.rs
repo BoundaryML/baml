@@ -474,12 +474,12 @@ async fn callback_options_resolve_once_and_reserved_id_reaches_recording() {
                 name,
                 vec![BexExternalValue::HostCallable {
                     handle: callback.clone(),
-                    params: Box::new([baml_type::RuntimeFunctionParamTy::required(
+                    params: Box::new([baml_type::RealizedFunctionParamTy::required(
                         None,
-                        bex_engine::RuntimeTy::int(),
+                        bex_engine::WireTy::Int,
                     )]),
-                    ret: Box::new(bex_engine::RuntimeTy::int()),
-                    throws: Box::new(bex_engine::RuntimeTy::unknown()),
+                    ret: Box::new(bex_engine::WireTy::Int),
+                    throws: Box::new(bex_engine::WireTy::Unknown),
                 }],
                 FunctionCallContextBuilder::new(CallId::next())
                     .with_trace_options(TraceOptionsData {

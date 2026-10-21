@@ -313,10 +313,10 @@ inline void transcode_outbound_to_inbound(pb::InboundValue& out,
     case pb::BamlOutboundValue::kBigintValue:
       out.set_bigint_value(v.bigint_value());
       return;
-    case pb::BamlOutboundValue::kTyDefValue:
-      throw error(
-          "BAML decode error: a runtime type definition requires BEP-066 "
-          "reflection support, which the C++ SDK does not provide");
+    case pb::BamlOutboundValue::kTyValue:
+      // A type the host states carries its own reference per `live` head.
+      *out.mutable_ty_value() = restate_live_heads(v.ty_value());
+      return;
     default:
       throw error("cannot transcode this value back inbound");
   }
@@ -424,6 +424,13 @@ void run_host_callable(const std::function<R(Ps...)>& fn,
                              static_cast<int>(args_bytes.size()))) {
       throw error("malformed BamlToHostCall payload");
     }
+    struct release_borrowed_types {
+      pb::BamlToHostCall& call;
+      ~release_borrowed_types() {
+        for (pb::BamlToHostArg& arg : *call.mutable_args())
+          release_type_values(*arg.mutable_value());
+      }
+    } borrowed{call};
     size_t required_cursor = 0;
     for (const pb::BamlToHostArg& arg : call.args()) {
       size_t slot = n;

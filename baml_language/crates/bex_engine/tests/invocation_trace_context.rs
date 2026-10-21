@@ -102,12 +102,12 @@ async fn retained_callback_context_and_ancestry_survive_parent_completion() {
                     bex_resource_types::HostKey::new(1).expect("nonzero"),
                     HostValueKind::Callable,
                 ),
-                params: Box::new([baml_type::RuntimeFunctionParamTy::required(
+                params: Box::new([baml_type::RealizedFunctionParamTy::required(
                     None,
-                    bex_engine::RuntimeTy::int(),
+                    bex_engine::WireTy::Int,
                 )]),
-                ret: Box::new(bex_engine::RuntimeTy::int()),
-                throws: Box::new(bex_engine::RuntimeTy::unknown()),
+                ret: Box::new(bex_engine::WireTy::Int),
+                throws: Box::new(bex_engine::WireTy::Unknown),
             }],
             FunctionCallContextBuilder::new(id)
                 .with_cancel_token(input.clone())

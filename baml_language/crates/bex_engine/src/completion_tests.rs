@@ -56,22 +56,28 @@ async fn conversion_errors_and_terminal_outcomes_finalize() {
     for (source, return_type, throws_type, cancelled, outcome) in [
         (
             "function Main() -> int { 1 }",
-            RuntimeTy::int(),
+            bex_vm_types::RealizedTy::Int,
             None,
             false,
             InvocationOutcome::Ok,
         ),
         (
             "function Main() -> int { 1 }",
-            RuntimeTy::union([RuntimeTy::string(), RuntimeTy::bool()]),
+            bex_vm_types::RealizedTy::Union(Box::from_iter([
+                bex_vm_types::RealizedTy::String,
+                bex_vm_types::RealizedTy::Bool,
+            ])),
             None,
             false,
             InvocationOutcome::Errored,
         ),
         (
             "function Main() -> int throws int { throw 7; }",
-            RuntimeTy::int(),
-            Some(RuntimeTy::union([RuntimeTy::string(), RuntimeTy::bool()])),
+            bex_vm_types::RealizedTy::Int,
+            Some(bex_vm_types::RealizedTy::Union(Box::from_iter([
+                bex_vm_types::RealizedTy::String,
+                bex_vm_types::RealizedTy::Bool,
+            ]))),
             false,
             InvocationOutcome::Errored,
         ),
@@ -79,7 +85,7 @@ async fn conversion_errors_and_terminal_outcomes_finalize() {
         // token has fired, and its value stands.
         (
             "function Main() -> int { 1 }",
-            RuntimeTy::int(),
+            bex_vm_types::RealizedTy::Int,
             None,
             true,
             InvocationOutcome::Ok,
@@ -87,14 +93,14 @@ async fn conversion_errors_and_terminal_outcomes_finalize() {
         // The first checkpoint after the token fires delivers `Cancelled`.
         (
             "function Main() -> int { baml.sys.sleep(baml.time.Duration.from_milliseconds(1)); 1 }",
-            RuntimeTy::int(),
+            bex_vm_types::RealizedTy::Int,
             None,
             true,
             InvocationOutcome::Cancelled,
         ),
         (
             "function Main() -> int { baml.sys.exit(7); 1 }",
-            RuntimeTy::int(),
+            bex_vm_types::RealizedTy::Int,
             None,
             false,
             // Exit stops the call; it did not fail.
@@ -111,7 +117,14 @@ async fn conversion_errors_and_terminal_outcomes_finalize() {
             cancel.cancel();
         }
         let result = engine
-            .run_thread_event_loop(return_type, throws_type, thread, CallId::next(), None, true)
+            .run_thread_event_loop(
+                engine.hold_ty(return_type),
+                throws_type.map(|ty| engine.hold_ty(ty)),
+                thread,
+                CallId::next(),
+                None,
+                true,
+            )
             .await;
         if source.contains("baml.sys.exit") {
             assert!(matches!(result, Err(EngineError::Exit { code: 7 })));
@@ -159,7 +172,14 @@ async fn ready_and_suspended_sysop_failures_finalize() {
         let thread = entry(&engine, &cancel, &[]).await;
         let id = thread.vm.thread_id;
         let result = engine
-            .run_thread_event_loop(RuntimeTy::int(), None, thread, CallId::next(), None, true)
+            .run_thread_event_loop(
+                engine.hold_ty(bex_vm_types::RealizedTy::Int),
+                None,
+                thread,
+                CallId::next(),
+                None,
+                true,
+            )
             .await;
         assert!(result.is_err());
         assert_completed(&engine, &[(id, InvocationOutcome::Errored)]);
@@ -178,8 +198,8 @@ async fn await_lookup_failure_finalizes() {
         // fails the engine registry lookup before releasing the permit.
         let future = thread.vm.tlab_mut().alloc_future(Future::pending(
             FutureId::from_usize(usize::MAX),
-            RealizedTy::int(),
-            RealizedTy::never(),
+            RealizedTy::Int,
+            RealizedTy::Never,
             cancel.clone(),
         ));
         let (function, _) =
@@ -189,7 +209,14 @@ async fn await_lookup_failure_finalizes() {
             .set_entry_point(*function, &[Value::object(future)]);
         let id = thread.vm.thread_id;
         let result = engine
-            .run_thread_event_loop(RuntimeTy::int(), None, thread, CallId::next(), None, true)
+            .run_thread_event_loop(
+                engine.hold_ty(bex_vm_types::RealizedTy::Int),
+                None,
+                thread,
+                CallId::next(),
+                None,
+                true,
+            )
             .await;
         assert!(matches!(result, Err(EngineError::FutureNotFound { .. })));
         assert_completed(&engine, &[(id, InvocationOutcome::Errored)]);
@@ -206,8 +233,8 @@ async fn suspended_await_failure_and_cancellation_finalize() {
             let cancel = CancellationToken::new();
             let mut thread = engine.new_root_thread(cancel.clone()).await;
             let (future_id, future) = engine.futures.acquire(thread.proof()).await.new_future(
-                RealizedTy::int(),
-                RealizedTy::never(),
+                RealizedTy::Int,
+                RealizedTy::Never,
                 CancellationToken::new(),
                 "test".into(),
             );
@@ -218,7 +245,7 @@ async fn suspended_await_failure_and_cancellation_finalize() {
                 .set_entry_point(*function, &[Value::object(future)]);
             let id = thread.vm.thread_id;
             let running = engine.run_thread_event_loop(
-                RuntimeTy::int(),
+                engine.hold_ty(bex_vm_types::RealizedTy::Int),
                 None,
                 thread,
                 CallId::next(),
@@ -410,7 +437,14 @@ async fn child_internal_error_settles_and_finishes_both_threads() {
     // inside a dispatched child and propagation through its parent's await.
     let thread = entry(&engine, &cancel, &[Value::int(7)]).await;
     let result = engine
-        .run_thread_event_loop(RuntimeTy::int(), None, thread, CallId::next(), None, true)
+        .run_thread_event_loop(
+            engine.hold_ty(bex_vm_types::RealizedTy::Int),
+            None,
+            thread,
+            CallId::next(),
+            None,
+            true,
+        )
         .await;
     assert!(result.is_err());
     assert_completed(
@@ -444,7 +478,14 @@ async fn clock_restore_invalidates_inflight_timing_without_changing_execution() 
     assert_eq!(old.status(), TimingStatus::Restored);
     assert_ne!(replacement.metadata().epoch, old.metadata().epoch);
     let result = engine
-        .run_thread_event_loop(RuntimeTy::int(), None, thread, CallId::next(), None, true)
+        .run_thread_event_loop(
+            engine.hold_ty(bex_vm_types::RealizedTy::Int),
+            None,
+            thread,
+            CallId::next(),
+            None,
+            true,
+        )
         .await;
     assert!(matches!(
         result,

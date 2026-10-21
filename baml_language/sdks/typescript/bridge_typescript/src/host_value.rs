@@ -23,7 +23,9 @@
 //! sysop calls the registered [`host_dispatch_callback`] which looks the
 //! `ThreadsafeFunction` up by key and schedules a call onto the JS event
 //! loop with `(callId, argsBytes)`. The JS dispatch wrapper completes the
-//! call via [`complete_host_call`].
+//! call with what the callback did: [`complete_host_call_value`],
+//! [`complete_host_call_throw`], [`complete_host_call_raised`] or
+//! [`complete_host_call_bridge_failure`].
 //!
 //! When the engine drops its last clone of the corresponding `HostValueArc`,
 //! [`host_release_callback`] fires and removes the registry entry — the
@@ -260,7 +262,7 @@ struct Registered {
     tsfn: Arc<DispatchTsfn>,
     /// The result and thrown value are encoded against this. `None` for a
     /// callable bound under an open slot.
-    signature: Option<bex_project::RuntimeTy>,
+    signature: Option<bex_project::WireTy>,
 }
 
 /// Process-wide table of JS dispatch wrappers handed to BAML.
@@ -273,10 +275,10 @@ static REGISTRY: LazyLock<bridge_ctypes::HostValueRegistry<Registered>> =
 
 /// The signature of each host call in flight, by callback id, from dispatch
 /// until its result or error is encoded.
-static CALLBACK_SIGNATURES: LazyLock<Mutex<HashMap<u32, Option<bex_project::RuntimeTy>>>> =
+static CALLBACK_SIGNATURES: LazyLock<Mutex<HashMap<u32, Option<bex_project::WireTy>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
-fn take_callback_signature(call_id: u32) -> Option<bex_project::RuntimeTy> {
+fn take_callback_signature(call_id: u32) -> Option<bex_project::WireTy> {
     CALLBACK_SIGNATURES
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -294,7 +296,7 @@ fn take_callback_signature(call_id: u32) -> Option<bex_project::RuntimeTy> {
 pub(crate) fn register_callable(
     callable: Function<'_, DispatchArgs, ()>,
     marker_key: Option<u64>,
-    signature: bex_project::RuntimeTy,
+    signature: bex_project::WireTy,
 ) -> napi::Result<HostKey> {
     let descriptor = bridge_cffi::host_instrumentation::registration_marker(
         marker_key.unwrap_or(0),
@@ -331,8 +333,8 @@ pub fn complete_host_call_value(
     value: Unknown<'_>,
 ) -> napi::Result<String> {
     let ret = match take_callback_signature(call_id) {
-        Some(bex_project::RuntimeTy::Function { ret, .. }) => *ret,
-        Some(_) | None => bex_project::RuntimeTy::Unknown,
+        Some(bex_project::WireTy::Function { ret, .. }) => *ret,
+        Some(_) | None => bex_project::WireTy::Unknown,
     };
     // The outcome the engine sees, for the caller's instrumentation: a value
     // that completed the call as a panic is an error in the trace, whatever
@@ -360,8 +362,8 @@ pub fn complete_host_call_value(
 #[napi(js_name = "completeHostCallThrow")]
 pub fn complete_host_call_throw(env: Env, call_id: u32, value: Unknown<'_>) -> napi::Result<()> {
     let throws = match take_callback_signature(call_id) {
-        Some(bex_project::RuntimeTy::Function { throws, .. }) => *throws,
-        Some(_) | None => bex_project::RuntimeTy::Unknown,
+        Some(bex_project::WireTy::Function { throws, .. }) => *throws,
+        Some(_) | None => bex_project::WireTy::Unknown,
     };
     let wire = crate::encode::encode_result(&env, value, &throws).into_wire(Encoded::Thrown)?;
     complete(call_id, &wire);

@@ -23,7 +23,7 @@ func TestReflectedTypeInputOutputAndAny(t *testing.T) {
 	if err != nil || !got.Equal(want) {
 		t.Fatalf("Value.Type() = %#v, %v", got, err)
 	}
-	wire.GetTyValue().GetClassTy().Name = "mutated.after.decode"
+	wire.GetTyValue().GetClassTy().Head = &cffi.BamlTyClass_Name{Name: "mutated.after.decode"}
 	if !got.Equal(ClassBAMLType("example.Box", PrimitiveBAMLType(IntType))) {
 		t.Fatal("decoded BAMLType retained mutable wire storage")
 	}
@@ -74,7 +74,7 @@ func TestReflectedTypeRejectsMalformedDescriptors(t *testing.T) {
 		BigintLiteralBAMLType("not-an-integer"),
 		FloatLiteralBAMLType("NaN"),
 		{value: &cffi.BamlTy{Ty: &cffi.BamlTy_TypeAlias{TypeAlias: &cffi.BamlTyTypeAlias{
-			Name: "example.Alias", TypeArgs: []*cffi.BamlTy{PrimitiveBAMLType(IntType).value},
+			Head: &cffi.BamlTyTypeAlias_Name{Name: "example.Alias"}, TypeArgs: []*cffi.BamlTy{PrimitiveBAMLType(IntType).value},
 		}}}},
 		{value: &cffi.BamlTy{Ty: &cffi.BamlTy_AssociatedTypeProjection{AssociatedTypeProjection: &cffi.BamlTyAssociatedTypeProjection{
 			Base: PrimitiveBAMLType(IntType).value, Member: "Item",

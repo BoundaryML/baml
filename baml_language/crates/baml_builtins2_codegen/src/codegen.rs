@@ -1947,11 +1947,11 @@ fn runtime_ty_expr(ty: &BamlType, generics: &[String]) -> String {
     match ty {
         BamlType::String => "baml_type::RealizedTy::string()".to_string(),
         BamlType::Int => "baml_type::RealizedTy::int()".to_string(),
-        BamlType::Bigint => "baml_type::RealizedTy::bigint()".to_string(),
-        BamlType::Float => "baml_type::RealizedTy::float()".to_string(),
-        BamlType::Bool => "baml_type::RealizedTy::bool()".to_string(),
+        BamlType::Bigint => "baml_type::RealizedTy::Bigint".to_string(),
+        BamlType::Float => "baml_type::RealizedTy::Float".to_string(),
+        BamlType::Bool => "baml_type::RealizedTy::Bool".to_string(),
         BamlType::Null => "baml_type::RealizedTy::null()".to_string(),
-        BamlType::Uint8Array => "baml_type::RealizedTy::uint8array()".to_string(),
+        BamlType::Uint8Array => "baml_type::RealizedTy::Uint8Array".to_string(),
         BamlType::List(inner) => {
             format!(
                 "baml_type::RealizedTy::list({})",
@@ -1959,7 +1959,7 @@ fn runtime_ty_expr(ty: &BamlType, generics: &[String]) -> String {
             )
         }
         BamlType::Map(key, value) => format!(
-            "baml_type::RealizedTy::map({}, {})",
+            "baml_type::RealizedTy::Map {{ key: Box::new({}), value: Box::new({}) }}",
             runtime_ty_expr(key, generics),
             runtime_ty_expr(value, generics)
         ),

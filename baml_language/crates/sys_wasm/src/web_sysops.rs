@@ -737,15 +737,15 @@ fn timeout_duration(timeout_nanos: &num_bigint::BigInt) -> Option<std::time::Dur
 
 fn map(entries: IndexMap<String, BexExternalValue>) -> BexExternalValue {
     BexExternalValue::Map {
-        key_type: baml_type::RuntimeTy::string(),
-        value_type: baml_type::RuntimeTy::unknown(),
+        key_type: baml_type::RealizedTy::string(),
+        value_type: baml_type::RealizedTy::unknown(),
         entries,
     }
 }
 
 fn array(items: Vec<BexExternalValue>) -> BexExternalValue {
     BexExternalValue::Array {
-        element_type: baml_type::RuntimeTy::unknown(),
+        element_type: baml_type::RealizedTy::unknown(),
         items,
     }
 }

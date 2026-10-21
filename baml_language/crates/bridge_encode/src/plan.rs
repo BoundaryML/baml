@@ -11,12 +11,12 @@
 
 use std::{collections::HashMap, rc::Rc};
 
-use baml_type::{Literal, MediaKind, Name, ParamTy, RuntimeTy};
+use baml_type::{Literal, MediaKind, Name, ParamTy, WireHead};
 
 use crate::{
     error::{EncodeError, EncodeErrorKind, FaultKind, PathSegment, UnfitKind, bounded},
     facts::{Facts, first_type_var, mentions_type_var, substitute},
-    host::{Head, HostValue, LeafKind, Scalar, Shape},
+    host::{Head, HostValue, LeafKind, Scalar, Shape, SlotTy, StatedTy},
     read::Tree,
     rules::{Answer, ScalarSlot},
 };
@@ -26,10 +26,12 @@ use crate::{
 pub(crate) const FUEL: usize = 1 << 24;
 
 /// The wire shape of one value, decided. Only the four variants the wire
-/// requires a statement on carry a type: a list, map, class or callable node
-/// states its type, every other node implies it. Children are shared: a node
+/// requires a statement on carry a type `T`: a list, map, class or callable
+/// node states its type, every other node implies it. While a value is
+/// planned a statement is a [`SlotTy`], which may still be open; the plan the
+/// root returns states [`StatedTy`]s only. Children are shared: a node
 /// planned once under a slot is the same node wherever that plan is reused.
-pub(crate) enum Node<'t, V> {
+pub(crate) enum Node<'t, V, T = SlotTy> {
     Null,
     /// A scalar; the payload of a string or bytes is read from `value` when
     /// the wire is written.
@@ -49,21 +51,24 @@ pub(crate) enum Node<'t, V> {
     /// A host function, registered at commit under `signature`.
     Callable {
         value: &'t Tree<V>,
-        signature: RuntimeTy,
+        signature: T,
     },
     List {
-        ty: RuntimeTy,
-        items: Vec<Rc<Node<'t, V>>>,
+        ty: T,
+        items: Vec<Child<'t, V, T>>,
     },
     Map {
-        ty: RuntimeTy,
-        entries: Vec<(KeyNode<'t, V>, Rc<Node<'t, V>>)>,
+        ty: T,
+        entries: Vec<(KeyNode<'t, V>, Child<'t, V, T>)>,
     },
     Class {
-        ty: RuntimeTy,
-        fields: Vec<(String, Rc<Node<'t, V>>)>,
+        ty: T,
+        fields: Vec<(String, Child<'t, V, T>)>,
     },
 }
+
+/// A node under a container or class, shared with every plan that reuses it.
+pub(crate) type Child<'t, V, T = SlotTy> = Rc<Node<'t, V, T>>;
 
 /// A map key, decided. The boundary carries string keys only for now (the
 /// decoder refuses every other key kind), so this has one variant; a typed
@@ -74,20 +79,30 @@ pub(crate) enum KeyNode<'t, V> {
     String(&'t Tree<V>),
 }
 
+impl<V> Clone for KeyNode<'_, V> {
+    fn clone(&self) -> Self {
+        match self {
+            KeyNode::String(tree) => KeyNode::String(tree),
+        }
+    }
+}
+
 impl<V> Node<'_, V> {
     /// The concrete type this node has, with a [`hole`] where an empty
     /// container gives no evidence of one and [`opaque`] where a handle has
     /// a type only the engine can see.
-    pub(crate) fn ty(&self) -> RuntimeTy {
+    pub(crate) fn ty(&self) -> SlotTy {
         match self {
-            Node::Null => RuntimeTy::Null,
+            Node::Null => SlotTy::Null,
             Node::Scalar { scalar, .. } => scalar_ty(scalar),
-            Node::EnumVariant { enumeration, .. } => RuntimeTy::Enum(enumeration.clone()),
+            Node::EnumVariant { enumeration, .. } => {
+                SlotTy::Enum(WireHead::Static(enumeration.clone()))
+            }
             Node::Leaf { kind, .. } => match kind {
                 LeafKind::Handle => opaque(),
-                LeafKind::Media(kind) => RuntimeTy::Media(*kind),
-                LeafKind::Prompt => RuntimeTy::PromptAst,
-                LeafKind::TypeValue => RuntimeTy::Type,
+                LeafKind::Media(kind) => SlotTy::Media(*kind),
+                LeafKind::Prompt => SlotTy::PromptAst,
+                LeafKind::TypeValue => SlotTy::Type,
             },
             Node::Callable { signature, .. } => signature.clone(),
             Node::List { ty, .. } | Node::Map { ty, .. } | Node::Class { ty, .. } => ty.clone(),
@@ -201,6 +216,9 @@ impl<'t, V: HostValue> Failure<'t, V> {
 /// whole types.
 type Planned<'t, V> = Result<Rc<Node<'t, V>>, Box<Failure<'t, V>>>;
 
+/// A whole value's plan: every statement decided and realized.
+pub(crate) type Decided<'t, V> = Result<Rc<Node<'t, V, StatedTy>>, Box<Failure<'t, V>>>;
+
 /// How a shape stands to a union member before planning it: the order
 /// [`Planner::tiebreak`] prefers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -220,7 +238,7 @@ enum Rank {
 
 /// A planning memo key: the node (by address, which the snapshot keeps
 /// stable) and the slot.
-type MemoKey = (usize, RuntimeTy);
+type MemoKey = (usize, SlotTy);
 
 pub(crate) struct Planner<'f, 't, V: HostValue> {
     facts: &'f Facts,
@@ -248,8 +266,8 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
     /// is bound by what the value says; a value that says nothing (an empty
     /// container) or whose type only the engine can see (a handle inside a
     /// container) leaves it unbound, which is refused here: the caller names
-    /// the type.
-    pub(crate) fn plan_root(&mut self, tree: &'t Tree<V>, slot: &RuntimeTy) -> Planned<'t, V> {
+    /// the type. Every statement of the plan returned is realized.
+    pub(crate) fn plan_root(&mut self, tree: &'t Tree<V>, slot: &SlotTy) -> Decided<'t, V> {
         let node = self.plan(tree, slot)?;
         // A bare handle states nothing and is the engine's to judge: under an
         // open slot (`self: Stream<T>`) the engine binds the variable from
@@ -267,14 +285,66 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                     .map_or_else(|| "T".to_string(), |param| param.name().to_string()),
             }));
         }
-        Ok(node)
+        self.decide(&node).map_err(Failure::fault)
+    }
+
+    /// `node` with every statement in stated form and realized. The root
+    /// refused every variable the value left open, so a statement that is not
+    /// realized here is the walker's own fault.
+    fn decide(&self, node: &Node<'t, V>) -> Result<Rc<Node<'t, V, StatedTy>>, FaultKind> {
+        let state = |ty: &SlotTy| {
+            let ty = self.facts.stated_form(ty.clone());
+            StatedTy::try_from(&ty).map_err(|_| FaultKind::Undecided {
+                ty: bounded(ty.to_string()),
+            })
+        };
+        Ok(Rc::new(match node {
+            Node::Null => Node::Null,
+            Node::Scalar { value, scalar } => Node::Scalar {
+                value,
+                scalar: scalar.clone(),
+            },
+            Node::EnumVariant {
+                enumeration,
+                variant,
+            } => Node::EnumVariant {
+                enumeration: enumeration.clone(),
+                variant: variant.clone(),
+            },
+            Node::Leaf { value, kind } => Node::Leaf { value, kind: *kind },
+            Node::Callable { value, signature } => Node::Callable {
+                value,
+                signature: state(signature)?,
+            },
+            Node::List { ty, items } => Node::List {
+                ty: state(ty)?,
+                items: items
+                    .iter()
+                    .map(|item| self.decide(item))
+                    .collect::<Result<_, _>>()?,
+            },
+            Node::Map { ty, entries } => Node::Map {
+                ty: state(ty)?,
+                entries: entries
+                    .iter()
+                    .map(|(key, item)| Ok((key.clone(), self.decide(item)?)))
+                    .collect::<Result<_, FaultKind>>()?,
+            },
+            Node::Class { ty, fields } => Node::Class {
+                ty: state(ty)?,
+                fields: fields
+                    .iter()
+                    .map(|(name, item)| Ok((name.clone(), self.decide(item)?)))
+                    .collect::<Result<_, FaultKind>>()?,
+            },
+        }))
     }
 
     /// Plan `tree` against `slot`. The node's type may carry a [`hole`] or an
     /// [`opaque`] where `slot` mentions a type variable nothing in the value
     /// binds; a consumer solving that variable fills a hole from the value's
     /// siblings, and the root refuses what stays open.
-    fn plan(&mut self, tree: &'t Tree<V>, slot: &RuntimeTy) -> Planned<'t, V> {
+    fn plan(&mut self, tree: &'t Tree<V>, slot: &SlotTy) -> Planned<'t, V> {
         match self.fuel.checked_sub(1) {
             Some(left) => self.fuel = left,
             None => return Err(Failure::fault(FaultKind::TooMuchPlanning { budget: FUEL })),
@@ -305,7 +375,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
         planned
     }
 
-    fn plan_uncached(&mut self, tree: &'t Tree<V>, slot: &RuntimeTy) -> Planned<'t, V> {
+    fn plan_uncached(&mut self, tree: &'t Tree<V>, slot: &SlotTy) -> Planned<'t, V> {
         let slot = self.facts.unfold(slot);
         if let Shape::Leaf(kind) = tree.shape {
             return self.leaf_in(tree, kind, slot);
@@ -313,48 +383,56 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
         match slot {
             // The value as the language says it is. A hole or an opaque type
             // is `unknown`, as the compiler types `[]` with no annotation.
-            RuntimeTy::Unknown | RuntimeTy::Interface(..) => {
+            SlotTy::Unknown | SlotTy::Interface(..) => {
                 let node = self.natural(tree)?;
-                let ty = fill(&node.ty(), &RuntimeTy::Unknown);
+                let ty = fill(&node.ty(), &SlotTy::Unknown);
                 Ok(restate(node, ty))
             }
             // A type variable the call left open: the value's own type is the
             // evidence that binds it, holes included.
-            RuntimeTy::TypeVar(_) => self.natural(tree),
-            RuntimeTy::Union(members) => {
+            SlotTy::TypeVar(_) => self.natural(tree),
+            SlotTy::Union(members) => {
                 let members = self.facts.flatten(members);
                 self.union(tree, &members)
             }
-            RuntimeTy::Null => match tree.shape {
+            SlotTy::Null => match tree.shape {
                 Shape::Null => Ok(Rc::new(Node::Null)),
                 _ => Err(mismatch(tree, slot)),
             },
-            RuntimeTy::Int => Self::scalar(tree, slot, ScalarSlot::Int),
-            RuntimeTy::Bigint => Self::scalar(tree, slot, ScalarSlot::Bigint),
-            RuntimeTy::Float => Self::scalar(tree, slot, ScalarSlot::Float),
-            RuntimeTy::Bool => Self::scalar(tree, slot, ScalarSlot::Bool),
-            RuntimeTy::String => Self::scalar(tree, slot, ScalarSlot::String),
-            RuntimeTy::Uint8Array => Self::scalar(tree, slot, ScalarSlot::Bytes),
-            RuntimeTy::Literal(literal, _) => Self::literal(tree, slot, literal),
-            RuntimeTy::Enum(name) => self.enumeration(tree, slot, name, None),
-            RuntimeTy::EnumVariant(name, variant) => {
+            SlotTy::Int => Self::scalar(tree, slot, ScalarSlot::Int),
+            SlotTy::Bigint => Self::scalar(tree, slot, ScalarSlot::Bigint),
+            SlotTy::Float => Self::scalar(tree, slot, ScalarSlot::Float),
+            SlotTy::Bool => Self::scalar(tree, slot, ScalarSlot::Bool),
+            SlotTy::String => Self::scalar(tree, slot, ScalarSlot::String),
+            SlotTy::Uint8Array => Self::scalar(tree, slot, ScalarSlot::Bytes),
+            SlotTy::Literal(literal, _) => Self::literal(tree, slot, literal),
+            SlotTy::Enum(WireHead::Static(name)) => self.enumeration(tree, slot, name, None),
+            SlotTy::EnumVariant(WireHead::Static(name), variant) => {
                 self.enumeration(tree, slot, name, Some(variant.as_str()))
             }
-            RuntimeTy::List(inner) => self.list(tree, slot, inner),
-            RuntimeTy::Map { key, value } => self.map(tree, slot, key, value),
-            RuntimeTy::Class(name, args) => self.class(tree, slot, name, args),
-            RuntimeTy::Function { .. } => Self::callable(tree, slot),
+            SlotTy::List(inner) => self.list(tree, slot, inner),
+            SlotTy::Map { key, value } => self.map(tree, slot, key, value),
+            SlotTy::Class(WireHead::Static(name), args) => self.class(tree, slot, name, args),
+            // A declaration the engine created at run time: the facts know
+            // nothing of it, and only a value the engine handed out, a
+            // handle, inhabits it. Handles were taken above.
+            SlotTy::Enum(WireHead::Live(_) | WireHead::Anonymous(_))
+            | SlotTy::EnumVariant(WireHead::Live(_) | WireHead::Anonymous(_), _)
+            | SlotTy::Class(WireHead::Live(_) | WireHead::Anonymous(_), _) => {
+                Err(Failure::unfit(UnfitKind::RuntimeDeclaration { found: tree }))
+            }
+            SlotTy::Function { .. } => Self::callable(tree, slot),
             // Only a leaf inhabits these, and leaves were handled above.
-            RuntimeTy::Media(_)
-            | RuntimeTy::PromptAst
-            | RuntimeTy::Type
-            | RuntimeTy::Resource
-            | RuntimeTy::RustType
-            | RuntimeTy::Future(..)
-            | RuntimeTy::Never
-            | RuntimeTy::AssociatedTypeProjection { .. }
+            SlotTy::Media(_)
+            | SlotTy::PromptAst
+            | SlotTy::Type
+            | SlotTy::Resource
+            | SlotTy::RustType
+            | SlotTy::Future(..)
+            | SlotTy::Never
+            | SlotTy::AssociatedTypeProjection { .. }
             // A recursive alias the facts do not know: nothing to judge against.
-            | RuntimeTy::TypeAlias(_) => Err(mismatch(tree, slot)),
+            | SlotTy::TypeAlias(_) => Err(mismatch(tree, slot)),
         }
     }
 
@@ -404,7 +482,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                 }
                 let element = join(&mut nodes);
                 Node::List {
-                    ty: RuntimeTy::List(Box::new(element)),
+                    ty: SlotTy::List(Box::new(element)),
                     items: nodes,
                 }
             }
@@ -412,7 +490,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                 let mut keys = Vec::with_capacity(entries.len());
                 let mut nodes = Vec::with_capacity(entries.len());
                 for (key, item) in entries {
-                    keys.push(self.key(key, &RuntimeTy::String)?);
+                    keys.push(self.key(key, &SlotTy::String)?);
                     nodes.push(
                         self.natural(item)
                             .map_err(|failure| failure.at(Step::Entry(key)))?,
@@ -420,8 +498,8 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                 }
                 let value = join(&mut nodes);
                 Node::Map {
-                    ty: RuntimeTy::Map {
-                        key: Box::new(RuntimeTy::String),
+                    ty: SlotTy::Map {
+                        key: Box::new(SlotTy::String),
                         value: Box::new(value),
                     },
                     entries: keys.into_iter().zip(nodes).collect(),
@@ -435,7 +513,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                 Some(facts) => {
                     let facts = facts.clone();
                     // The arguments the value knows, or none: the fields decide.
-                    let fixed: Vec<Option<RuntimeTy>> = match type_args {
+                    let fixed: Vec<Option<SlotTy>> = match type_args {
                         Some(args) => self
                             .host_type_args(&facts, args)?
                             .into_iter()
@@ -453,11 +531,8 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                 // its fields are what they are, nothing here to fill a hole
                 // in one; the engine checks them against the class it knows.
                 None => {
-                    let args = match type_args {
-                        Some(args) => args
-                            .iter()
-                            .map(|arg| self.realized(arg))
-                            .collect::<Result<Vec<_>, _>>()?,
+                    let args: Vec<SlotTy> = match type_args {
+                        Some(args) => args.iter().map(|arg| self.host_stated(arg)).collect(),
                         None => Vec::new(),
                     };
                     let mut nodes = Vec::with_capacity(fields.len());
@@ -465,11 +540,11 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                         let node = self
                             .natural(field)
                             .map_err(|failure| failure.at(Step::Field(name.clone())))?;
-                        let ty = fill(&node.ty(), &RuntimeTy::Unknown);
+                        let ty = fill(&node.ty(), &SlotTy::Unknown);
                         nodes.push((name.clone(), restate(node, ty)));
                     }
                     Node::Class {
-                        ty: RuntimeTy::Class(class.clone(), args.into()),
+                        ty: SlotTy::Class(WireHead::Static(class.clone()), args.into()),
                         fields: nodes,
                     }
                 }
@@ -497,7 +572,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
     fn key(
         &mut self,
         key: &'t Tree<V>,
-        slot: &RuntimeTy,
+        slot: &SlotTy,
     ) -> Result<KeyNode<'t, V>, Box<Failure<'t, V>>> {
         let node = self.plan(key, slot).map_err(|failure| {
             let failure = failure.at(Step::Key(key));
@@ -532,24 +607,19 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
     // ── Host-supplied types ─────────────────────────────────────────────────
 
     /// A type the host spelled (an instance's own type arguments), in stated
-    /// form. A host spells realized types only: one that mentions a type
-    /// variable is refused, so no host-chosen variable ever reaches a solve.
-    fn realized(&self, ty: &RuntimeTy) -> Result<RuntimeTy, Box<Failure<'t, V>>> {
-        if mentions_type_var(ty) {
-            return Err(Failure::fault(FaultKind::UnrealizedTypeArgument {
-                ty: bounded(ty.to_string()),
-            }));
-        }
-        Ok(self.facts.stated_form(ty.clone()))
+    /// form. A host spells realized types only, so no host-chosen variable
+    /// ever reaches a solve.
+    fn host_stated(&self, ty: &StatedTy) -> SlotTy {
+        self.facts.stated_form(SlotTy::from(ty))
     }
 
-    /// An instance's own type arguments for `class`, realized and of the
-    /// class's arity.
+    /// An instance's own type arguments for `class`, in stated form and of
+    /// the class's arity.
     fn host_type_args(
         &self,
         class: &crate::facts::ClassFacts,
-        args: &[RuntimeTy],
-    ) -> Result<Vec<RuntimeTy>, Box<Failure<'t, V>>> {
+        args: &[StatedTy],
+    ) -> Result<Vec<SlotTy>, Box<Failure<'t, V>>> {
         if args.len() != class.generic_params.len() {
             return Err(Failure::fault(FaultKind::ClassArity {
                 class: class.name.clone(),
@@ -557,13 +627,13 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                 stated: args.len(),
             }));
         }
-        args.iter().map(|arg| self.realized(arg)).collect()
+        Ok(args.iter().map(|arg| self.host_stated(arg)).collect())
     }
 
     // ── Unions ──────────────────────────────────────────────────────────────
 
-    fn union<'m>(&mut self, tree: &'t Tree<V>, members: &[&'m RuntimeTy]) -> Planned<'t, V> {
-        let mut ranked: Vec<(Rank, &'m RuntimeTy)> = members
+    fn union<'m>(&mut self, tree: &'t Tree<V>, members: &[&'m SlotTy]) -> Planned<'t, V> {
+        let mut ranked: Vec<(Rank, &'m SlotTy)> = members
             .iter()
             .filter_map(|member| self.rank(tree, member).map(|rank| (rank, *member)))
             .collect();
@@ -620,9 +690,9 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
     fn tiebreak<'m>(
         &mut self,
         tree: &'t Tree<V>,
-        mut fits: Vec<(&'m RuntimeTy, Rc<Node<'t, V>>)>,
+        mut fits: Vec<(&'m SlotTy, Rc<Node<'t, V>>)>,
     ) -> Planned<'t, V> {
-        let mut distinct: Vec<(RuntimeTy, usize)> = Vec::new();
+        let mut distinct: Vec<(SlotTy, usize)> = Vec::new();
         for (index, (_, node)) in fits.iter().enumerate() {
             let ty = node.ty();
             if !distinct.iter().any(|(seen, _)| equivalent(seen, &ty)) {
@@ -656,43 +726,44 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
 
     /// How `tree`'s shape stands to `member`, or `None` when the shape can
     /// never take it (a list under `int`), which saves planning it.
-    fn rank(&self, tree: &Tree<V>, member: &RuntimeTy) -> Option<Rank> {
+    fn rank(&self, tree: &Tree<V>, member: &SlotTy) -> Option<Rank> {
         let member = self.facts.unfold(member);
         if matches!(
             member,
-            RuntimeTy::Unknown | RuntimeTy::Interface(..) | RuntimeTy::TypeVar(_)
+            SlotTy::Unknown | SlotTy::Interface(..) | SlotTy::TypeVar(_)
         ) {
             return Some(Rank::Open);
         }
         match (&tree.shape, member) {
-            (Shape::Null, RuntimeTy::Null) => Some(Rank::Identity),
+            (Shape::Null, SlotTy::Null) => Some(Rank::Identity),
             (Shape::Null, _) => None,
             (Shape::Scalar(scalar), member) => scalar_rank::<V>(scalar, member),
-            (Shape::EnumMember { enumeration, .. }, RuntimeTy::Enum(name))
-            | (Shape::EnumMember { enumeration, .. }, RuntimeTy::EnumVariant(name, _))
-                if enumeration == name =>
+            (Shape::EnumMember { enumeration, .. }, SlotTy::Enum(WireHead::Static(name)))
+            | (
+                Shape::EnumMember { enumeration, .. },
+                SlotTy::EnumVariant(WireHead::Static(name), _),
+            ) if enumeration == name => Some(Rank::Identity),
+            (Shape::EnumMember { .. }, _) => None,
+            (Shape::List(_), SlotTy::List(_)) => Some(Rank::Natural),
+            (Shape::List(_), _) => None,
+            (Shape::Map(_), SlotTy::Map { .. }) => Some(Rank::Natural),
+            (Shape::Map(_), SlotTy::Class(..)) => Some(Rank::Conversion),
+            (Shape::Map(_), _) => None,
+            (Shape::Instance { class, .. }, SlotTy::Class(WireHead::Static(name), _))
+                if class == name =>
             {
                 Some(Rank::Identity)
             }
-            (Shape::EnumMember { .. }, _) => None,
-            (Shape::List(_), RuntimeTy::List(_)) => Some(Rank::Natural),
-            (Shape::List(_), _) => None,
-            (Shape::Map(_), RuntimeTy::Map { .. }) => Some(Rank::Natural),
-            (Shape::Map(_), RuntimeTy::Class(..)) => Some(Rank::Conversion),
-            (Shape::Map(_), _) => None,
-            (Shape::Instance { class, .. }, RuntimeTy::Class(name, _)) if class == name => {
-                Some(Rank::Identity)
-            }
             (Shape::Instance { .. }, _) => None,
-            (Shape::Callable, RuntimeTy::Function { .. }) => Some(Rank::Natural),
+            (Shape::Callable, SlotTy::Function { .. }) => Some(Rank::Natural),
             (Shape::Callable, _) => None,
             (Shape::Leaf(LeafKind::Handle), _) => Some(Rank::Open),
-            (Shape::Leaf(LeafKind::Media(kind)), RuntimeTy::Media(declared))
+            (Shape::Leaf(LeafKind::Media(kind)), SlotTy::Media(declared))
                 if *declared == MediaKind::Generic || declared == kind =>
             {
                 Some(Rank::Identity)
             }
-            (Shape::Leaf(LeafKind::Media(kind)), RuntimeTy::Class(name, args))
+            (Shape::Leaf(LeafKind::Media(kind)), SlotTy::Class(WireHead::Static(name), args))
                 if args.is_empty()
                     && MediaKind::from_wrapper_class_name(&name.render_dotted(false))
                         .is_some_and(|wrapper| {
@@ -701,9 +772,9 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
             {
                 Some(Rank::Identity)
             }
-            (Shape::Leaf(LeafKind::Prompt), RuntimeTy::PromptAst)
-            | (Shape::Leaf(LeafKind::TypeValue), RuntimeTy::Type) => Some(Rank::Identity),
-            (Shape::Leaf(LeafKind::Prompt), RuntimeTy::Class(name, args))
+            (Shape::Leaf(LeafKind::Prompt), SlotTy::PromptAst)
+            | (Shape::Leaf(LeafKind::TypeValue), SlotTy::Type) => Some(Rank::Identity),
+            (Shape::Leaf(LeafKind::Prompt), SlotTy::Class(WireHead::Static(name), args))
                 if args.is_empty() && is_prompt_class(name) =>
             {
                 Some(Rank::Identity)
@@ -715,7 +786,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
 
     // ── Scalars, literals, enums ────────────────────────────────────────────
 
-    fn scalar(tree: &'t Tree<V>, slot: &RuntimeTy, kind: ScalarSlot) -> Planned<'t, V> {
+    fn scalar(tree: &'t Tree<V>, slot: &SlotTy, kind: ScalarSlot) -> Planned<'t, V> {
         let Shape::Scalar(scalar) = &tree.shape else {
             return Err(mismatch(tree, slot));
         };
@@ -728,7 +799,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
         }
     }
 
-    fn literal(tree: &'t Tree<V>, slot: &RuntimeTy, literal: &Literal) -> Planned<'t, V> {
+    fn literal(tree: &'t Tree<V>, slot: &SlotTy, literal: &Literal) -> Planned<'t, V> {
         let Shape::Scalar(scalar) = &tree.shape else {
             return Err(mismatch(tree, slot));
         };
@@ -785,7 +856,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
     fn enumeration(
         &mut self,
         tree: &'t Tree<V>,
-        slot: &RuntimeTy,
+        slot: &SlotTy,
         name: &Head,
         only: Option<&str>,
     ) -> Planned<'t, V> {
@@ -822,7 +893,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
 
     // ── Containers ──────────────────────────────────────────────────────────
 
-    fn list(&mut self, tree: &'t Tree<V>, slot: &RuntimeTy, inner: &RuntimeTy) -> Planned<'t, V> {
+    fn list(&mut self, tree: &'t Tree<V>, slot: &SlotTy, inner: &SlotTy) -> Planned<'t, V> {
         let Shape::List(items) = &tree.shape else {
             return Err(mismatch(tree, slot));
         };
@@ -852,7 +923,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
             );
         }
         Ok(Rc::new(Node::List {
-            ty: RuntimeTy::List(Box::new(inner)),
+            ty: SlotTy::List(Box::new(inner)),
             items: nodes,
         }))
     }
@@ -860,9 +931,9 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
     fn map(
         &mut self,
         tree: &'t Tree<V>,
-        slot: &RuntimeTy,
-        key_slot: &RuntimeTy,
-        value_slot: &RuntimeTy,
+        slot: &SlotTy,
+        key_slot: &SlotTy,
+        value_slot: &SlotTy,
     ) -> Planned<'t, V> {
         let Shape::Map(entries) = &tree.shape else {
             return Err(mismatch(tree, slot));
@@ -884,7 +955,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
         };
         // Keys are strings on the wire, so a key variable is a string.
         let key_slot = if mentions_type_var(key_slot) {
-            RuntimeTy::String
+            SlotTy::String
         } else {
             key_slot.clone()
         };
@@ -897,7 +968,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
             nodes.push((key_node, node));
         }
         Ok(Rc::new(Node::Map {
-            ty: RuntimeTy::Map {
+            ty: SlotTy::Map {
                 key: Box::new(key_slot),
                 value: Box::new(value_slot),
             },
@@ -908,9 +979,9 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
     fn class(
         &mut self,
         tree: &'t Tree<V>,
-        slot: &RuntimeTy,
+        slot: &SlotTy,
         name: &Head,
-        slot_args: &[RuntimeTy],
+        slot_args: &[SlotTy],
     ) -> Planned<'t, V> {
         let Some(facts) = self.facts.class(name) else {
             return Err(Failure::fault(FaultKind::UnknownClass(name.clone())));
@@ -925,7 +996,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
         }
         // What the slot fixes of each argument: nothing where it mentions a
         // variable the call left open.
-        let fixed: Vec<Option<RuntimeTy>> = slot_args
+        let fixed: Vec<Option<SlotTy>> = slot_args
             .iter()
             .map(|arg| (!mentions_type_var(arg)).then(|| arg.clone()))
             .collect();
@@ -964,7 +1035,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                 for (key, item) in entries {
                     let Shape::Scalar(Scalar::String) = key.shape else {
                         return Err(Failure::unfit(UnfitKind::MapKey {
-                            expected: RuntimeTy::String,
+                            expected: SlotTy::String,
                             found: key,
                         })
                         .at(Step::Key(key)));
@@ -986,7 +1057,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
     fn fields(
         &mut self,
         class: &crate::facts::ClassFacts,
-        fixed: &[Option<RuntimeTy>],
+        fixed: &[Option<SlotTy>],
         fields: &[(String, &'t Tree<V>)],
         source: FieldSource,
     ) -> Planned<'t, V> {
@@ -1001,7 +1072,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                 field: bounded(unknown.clone()),
             }));
         }
-        let args: Vec<RuntimeTy> = if fixed.iter().all(Option::is_some) {
+        let args: Vec<SlotTy> = if fixed.iter().all(Option::is_some) {
             fixed.iter().flatten().cloned().collect()
         } else {
             let known = |param: &ParamTy| {
@@ -1060,8 +1131,8 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                 None => {
                     // A field left out is null where the class allows null.
                     let nullable = match self.facts.unfold(&slot) {
-                        RuntimeTy::Null => true,
-                        RuntimeTy::Union(members) => {
+                        SlotTy::Null => true,
+                        SlotTy::Union(members) => {
                             self.facts.flatten(members).iter().any(|m| m.is_null())
                         }
                         _ => false,
@@ -1080,14 +1151,14 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
             nodes.push((name.clone(), node));
         }
         Ok(Rc::new(Node::Class {
-            ty: RuntimeTy::Class(class.name.clone(), args.into()),
+            ty: SlotTy::Class(WireHead::Static(class.name.clone()), args.into()),
             fields: nodes,
         }))
     }
 
     // ── Callables and leaves ────────────────────────────────────────────────
 
-    fn callable(tree: &'t Tree<V>, slot: &RuntimeTy) -> Planned<'t, V> {
+    fn callable(tree: &'t Tree<V>, slot: &SlotTy) -> Planned<'t, V> {
         if !matches!(tree.shape, Shape::Callable) {
             return Err(mismatch(tree, slot));
         }
@@ -1101,8 +1172,8 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
 
     /// A leaf in `slot`: a handle is judged live by the engine and fits any
     /// slot; the others fit the slot of their kind, or one that fixes nothing.
-    fn leaf_in(&mut self, tree: &'t Tree<V>, kind: LeafKind, slot: &RuntimeTy) -> Planned<'t, V> {
-        if let RuntimeTy::Union(members) = slot {
+    fn leaf_in(&mut self, tree: &'t Tree<V>, kind: LeafKind, slot: &SlotTy) -> Planned<'t, V> {
+        if let SlotTy::Union(members) = slot {
             let members = self.facts.flatten(members);
             return self.union(tree, &members);
         }
@@ -1134,9 +1205,9 @@ enum Binding {
     /// under `T | null`, `"hi"` under `T | string`): nothing pins the
     /// variable, so it is `never` unless some other value binds it.
     Absorbed,
-    Bound(RuntimeTy),
+    Bound(SlotTy),
     /// Two values disagree; the first is kept so a message can name it.
-    Conflict(RuntimeTy),
+    Conflict(SlotTy),
 }
 
 /// What a container's elements or a class's fields say its type variables
@@ -1158,7 +1229,7 @@ impl Solution {
 
     /// A solution for the variables `template` mentions: sized by the
     /// template, which comes from the program's facts, never from the host.
-    fn for_template(template: &RuntimeTy) -> Self {
+    fn for_template(template: &SlotTy) -> Self {
         let mut arity = 0;
         visit_vars(template, &mut |param| {
             if let Ok(index) = usize::try_from(param.index())
@@ -1171,9 +1242,9 @@ impl Solution {
     }
 
     /// Learn from a value of type `found` under `template`.
-    fn learn(&mut self, template: &RuntimeTy, found: &RuntimeTy) {
+    fn learn(&mut self, template: &SlotTy, found: &SlotTy) {
         match template {
-            RuntimeTy::TypeVar(param) => {
+            SlotTy::TypeVar(param) => {
                 let Some(binding) = self.slot(param) else {
                     return;
                 };
@@ -1187,13 +1258,13 @@ impl Solution {
                     Binding::Bound(bound) | Binding::Conflict(bound) => Binding::Conflict(bound),
                 };
             }
-            RuntimeTy::List(inner) => {
-                if let RuntimeTy::List(found) = found {
+            SlotTy::List(inner) => {
+                if let SlotTy::List(found) = found {
                     self.learn(inner, found);
                 }
             }
-            RuntimeTy::Map { key, value } => {
-                if let RuntimeTy::Map {
+            SlotTy::Map { key, value } => {
+                if let SlotTy::Map {
                     key: found_key,
                     value: found_value,
                 } = found
@@ -1202,8 +1273,8 @@ impl Solution {
                     self.learn(value, found_value);
                 }
             }
-            RuntimeTy::Class(name, args) => {
-                if let RuntimeTy::Class(found_name, found_args) = found
+            SlotTy::Class(name, args) => {
+                if let SlotTy::Class(found_name, found_args) = found
                     && found_name == name
                     && found_args.len() == args.len()
                 {
@@ -1216,14 +1287,14 @@ impl Solution {
             // `X`: `int` from `int`, and from `int | null` under `T | null`;
             // `Box<T> | null` learns through the one open member. A value a
             // known member took leaves the open member's variables absorbed.
-            RuntimeTy::Union(members) => {
-                let (open, fixed): (Vec<&RuntimeTy>, Vec<&RuntimeTy>) =
+            SlotTy::Union(members) => {
+                let (open, fixed): (Vec<&SlotTy>, Vec<&SlotTy>) =
                     members.iter().partition(|member| mentions_type_var(member));
                 let [open] = open[..] else {
                     return;
                 };
-                let rest: Vec<RuntimeTy> = match found {
-                    RuntimeTy::Union(found) => found
+                let rest: Vec<SlotTy> = match found {
+                    SlotTy::Union(found) => found
                         .iter()
                         .filter(|member| !fixed.iter().any(|fixed| equivalent(fixed, member)))
                         .cloned()
@@ -1234,15 +1305,15 @@ impl Solution {
                 match rest.len() {
                     0 => self.absorb(open),
                     1 => self.learn(open, &rest[0]),
-                    _ => self.learn(open, &RuntimeTy::Union(rest.into())),
+                    _ => self.learn(open, &SlotTy::Union(rest.into())),
                 }
             }
-            RuntimeTy::Function {
+            SlotTy::Function {
                 params,
                 ret,
                 throws,
             } => {
-                if let RuntimeTy::Function {
+                if let SlotTy::Function {
                     params: found_params,
                     ret: found_ret,
                     throws: found_throws,
@@ -1256,38 +1327,38 @@ impl Solution {
                     self.learn(throws, found_throws);
                 }
             }
-            RuntimeTy::Future(value, error) => {
-                if let RuntimeTy::Future(found_value, found_error) = found {
+            SlotTy::Future(value, error) => {
+                if let SlotTy::Future(found_value, found_error) = found {
                     self.learn(value, found_value);
                     self.learn(error, found_error);
                 }
             }
-            RuntimeTy::Int
-            | RuntimeTy::Bigint
-            | RuntimeTy::Float
-            | RuntimeTy::String
-            | RuntimeTy::Bool
-            | RuntimeTy::Null
-            | RuntimeTy::Uint8Array
-            | RuntimeTy::Media(_)
-            | RuntimeTy::Literal(..)
-            | RuntimeTy::Enum(_)
-            | RuntimeTy::EnumVariant(..)
-            | RuntimeTy::TypeAlias(_)
-            | RuntimeTy::Interface(..)
-            | RuntimeTy::AssociatedTypeProjection { .. }
-            | RuntimeTy::RustType
-            | RuntimeTy::Type
-            | RuntimeTy::Resource
-            | RuntimeTy::PromptAst
-            | RuntimeTy::Unknown
-            | RuntimeTy::Never => {}
+            SlotTy::Int
+            | SlotTy::Bigint
+            | SlotTy::Float
+            | SlotTy::String
+            | SlotTy::Bool
+            | SlotTy::Null
+            | SlotTy::Uint8Array
+            | SlotTy::Media(_)
+            | SlotTy::Literal(..)
+            | SlotTy::Enum(_)
+            | SlotTy::EnumVariant(..)
+            | SlotTy::TypeAlias(_)
+            | SlotTy::Interface(..)
+            | SlotTy::AssociatedTypeProjection { .. }
+            | SlotTy::RustType
+            | SlotTy::Type
+            | SlotTy::Resource
+            | SlotTy::PromptAst
+            | SlotTy::Unknown
+            | SlotTy::Never => {}
         }
     }
 
     /// A known member took the value: every variable of `open` that nothing
     /// else binds is `never`.
-    fn absorb(&mut self, open: &RuntimeTy) {
+    fn absorb(&mut self, open: &SlotTy) {
         visit_vars(open, &mut |param| {
             if let Some(binding) = self.slot(param)
                 && matches!(binding, Binding::Unbound)
@@ -1308,10 +1379,10 @@ impl Solution {
             .and_then(|index| self.bindings.get_mut(index))
     }
 
-    fn binding(&self, index: usize) -> Option<RuntimeTy> {
+    fn binding(&self, index: usize) -> Option<SlotTy> {
         match self.bindings.get(index)? {
             Binding::Unbound => None,
-            Binding::Absorbed => Some(RuntimeTy::Never),
+            Binding::Absorbed => Some(SlotTy::Never),
             Binding::Bound(ty) | Binding::Conflict(ty) => Some(ty.clone()),
         }
     }
@@ -1321,7 +1392,7 @@ impl Solution {
     }
 
     /// `template` with every solved variable substituted.
-    fn apply(&self, template: &RuntimeTy) -> RuntimeTy {
+    fn apply(&self, template: &SlotTy) -> SlotTy {
         substitute(template, &|param| {
             usize::try_from(param.index())
                 .ok()
@@ -1331,8 +1402,8 @@ impl Solution {
 }
 
 /// Every type variable `ty` mentions, in order of appearance.
-fn visit_vars(ty: &RuntimeTy, f: &mut impl FnMut(&ParamTy)) {
-    if let RuntimeTy::TypeVar(param) = ty {
+fn visit_vars(ty: &SlotTy, f: &mut impl FnMut(&ParamTy)) {
+    if let SlotTy::TypeVar(param) = ty {
         f(param);
     }
     ty.visit_children(&mut |child| visit_vars(child, f));
@@ -1354,27 +1425,27 @@ fn is_sentinel(param: &ParamTy) -> bool {
 /// a type variable nothing bound. A sibling with elements fills it. An
 /// anonymous type variable until something does; `never` would do, but
 /// `throws never` is a type a value has.
-fn hole() -> RuntimeTy {
-    RuntimeTy::TypeVar(ParamTy::new(HOLE_INDEX, Name::new("_")))
+fn hole() -> SlotTy {
+    SlotTy::TypeVar(ParamTy::new(HOLE_INDEX, Name::new("_")))
 }
 
 /// A type the value has but the host cannot see: a handle's. No sibling
 /// fills it; under `unknown` it is `unknown`, under an open type variable the
 /// call is refused.
-fn opaque() -> RuntimeTy {
-    RuntimeTy::TypeVar(ParamTy::new(OPAQUE_INDEX, Name::new("?")))
+fn opaque() -> SlotTy {
+    SlotTy::TypeVar(ParamTy::new(OPAQUE_INDEX, Name::new("?")))
 }
 
-fn is_hole(ty: &RuntimeTy) -> bool {
-    matches!(ty, RuntimeTy::TypeVar(param) if param.index() == HOLE_INDEX)
+fn is_hole(ty: &SlotTy) -> bool {
+    matches!(ty, SlotTy::TypeVar(param) if param.index() == HOLE_INDEX)
 }
 
-fn is_open(ty: &RuntimeTy) -> bool {
-    matches!(ty, RuntimeTy::TypeVar(param) if is_sentinel(param))
+fn is_open(ty: &SlotTy) -> bool {
+    matches!(ty, SlotTy::TypeVar(param) if is_sentinel(param))
 }
 
 /// Does `ty` mention a hole or an opaque type anywhere?
-fn has_open(ty: &RuntimeTy) -> bool {
+fn has_open(ty: &SlotTy) -> bool {
     if is_open(ty) {
         return true;
     }
@@ -1386,38 +1457,38 @@ fn has_open(ty: &RuntimeTy) -> bool {
 /// `ty` with every hole and opaque type filled by `with`. A union one of
 /// whose members is `unknown` is `unknown`: there is no narrower type to
 /// state.
-fn fill(ty: &RuntimeTy, with: &RuntimeTy) -> RuntimeTy {
+fn fill(ty: &SlotTy, with: &SlotTy) -> SlotTy {
     if is_open(ty) {
         return with.clone();
     }
     match ty.map_children(&mut |child| fill(child, with)) {
-        RuntimeTy::Union(members) if members.contains(&RuntimeTy::Unknown) => RuntimeTy::Unknown,
+        SlotTy::Union(members) if members.contains(&SlotTy::Unknown) => SlotTy::Unknown,
         other => other,
     }
 }
 
 /// `ty` with every type variable a hole: what a slot's variable is once the
 /// value under the slot has had its say and bound nothing.
-fn holes_for_vars(ty: &RuntimeTy) -> RuntimeTy {
+fn holes_for_vars(ty: &SlotTy) -> SlotTy {
     substitute(ty, &|_| Some(hole()))
 }
 
 /// Would `holey`, with its holes filled, be `target`? A hole takes anything,
 /// an opaque type nothing; elsewhere the two have to agree.
-fn fills(holey: &RuntimeTy, target: &RuntimeTy) -> bool {
+fn fills(holey: &SlotTy, target: &SlotTy) -> bool {
     if is_hole(holey) {
         return true;
     }
     match (holey, target) {
-        (RuntimeTy::List(holey), RuntimeTy::List(target)) => fills(holey, target),
+        (SlotTy::List(holey), SlotTy::List(target)) => fills(holey, target),
         (
-            RuntimeTy::Map {
+            SlotTy::Map {
                 key: holey_key,
                 value: holey_value,
             },
-            RuntimeTy::Map { key, value },
+            SlotTy::Map { key, value },
         ) => fills(holey_key, key) && fills(holey_value, value),
-        (RuntimeTy::Class(holey_name, holey_args), RuntimeTy::Class(name, args)) => {
+        (SlotTy::Class(holey_name, holey_args), SlotTy::Class(name, args)) => {
             holey_name == name
                 && holey_args.len() == args.len()
                 && holey_args.iter().zip(args.iter()).all(|(h, t)| fills(h, t))
@@ -1436,29 +1507,29 @@ fn fills(holey: &RuntimeTy, target: &RuntimeTy) -> bool {
 /// what stays open. The statement is pushed down to every child whose type
 /// has a hole. A node that states no type, or whose type is already closed,
 /// is itself.
-fn restate<V>(node: Rc<Node<'_, V>>, target: RuntimeTy) -> Rc<Node<'_, V>> {
+fn restate<V>(node: Rc<Node<'_, V>>, target: SlotTy) -> Rc<Node<'_, V>> {
     let own = node.ty();
     if !has_open(&own) {
         return node;
     }
     let ty = if fills(&own, &target) {
         target
-    } else if let RuntimeTy::Union(members) = &target
+    } else if let SlotTy::Union(members) = &target
         && let Some(member) = members.iter().find(|member| fills(&own, member))
     {
         member.clone()
     } else {
-        fill(&own, &RuntimeTy::Unknown)
+        fill(&own, &SlotTy::Unknown)
     };
     match (&*node, &ty) {
-        (Node::List { items, .. }, RuntimeTy::List(inner)) => {
+        (Node::List { items, .. }, SlotTy::List(inner)) => {
             let items = items
                 .iter()
                 .map(|item| restate(Rc::clone(item), (**inner).clone()))
                 .collect();
             Rc::new(Node::List { ty, items })
         }
-        (Node::Map { entries, .. }, RuntimeTy::Map { value, .. }) => {
+        (Node::Map { entries, .. }, SlotTy::Map { value, .. }) => {
             let entries = entries
                 .iter()
                 .map(|(key, item)| {
@@ -1479,7 +1550,7 @@ fn restate<V>(node: Rc<Node<'_, V>>, target: RuntimeTy) -> Rc<Node<'_, V>> {
         // does (`fill` keeps the shape).
         (Node::List { .. } | Node::Map { .. }, _) => {
             debug_assert!(false, "a {own} restated as {ty}");
-            restate(node, fill(&own, &RuntimeTy::Unknown))
+            restate(node, fill(&own, &SlotTy::Unknown))
         }
         // A class's holes are filled where it is planned; a scalar, variant
         // or leaf states nothing.
@@ -1499,8 +1570,8 @@ fn restate<V>(node: Rc<Node<'_, V>>, target: RuntimeTy) -> Rc<Node<'_, V>> {
 /// element whose type has a hole takes the type a sibling has when it can
 /// (`[[], [1]]` is `int[][]`) and is restated to it; what no sibling fills
 /// stays as it is, for the slot above to fill or refuse.
-fn join<V>(nodes: &mut [Rc<Node<'_, V>>]) -> RuntimeTy {
-    let tys: Vec<RuntimeTy> = nodes.iter().map(|node| node.ty()).collect();
+fn join<V>(nodes: &mut [Rc<Node<'_, V>>]) -> SlotTy {
+    let tys: Vec<SlotTy> = nodes.iter().map(|node| node.ty()).collect();
     let (element, restated) = merge(&tys);
     for (node, ty) in nodes.iter_mut().zip(restated) {
         if let Some(ty) = ty {
@@ -1514,14 +1585,14 @@ fn join<V>(nodes: &mut [Rc<Node<'_, V>>]) -> RuntimeTy {
 /// for the slot's variables: the one type they share, their union otherwise
 /// (`[1, "a"]` under `T[]` binds `T = int | string`, as the compiler types the
 /// literal). An element with a hole adds nothing the others already say.
-fn evidence(found: &[RuntimeTy]) -> RuntimeTy {
+fn evidence(found: &[SlotTy]) -> SlotTy {
     merge(found).0
 }
 
 /// The one type `tys` make together, and for each of them the type it is
 /// restated to when a sibling fills its holes.
-fn merge(tys: &[RuntimeTy]) -> (RuntimeTy, Vec<Option<RuntimeTy>>) {
-    let mut members: Vec<RuntimeTy> = Vec::new();
+fn merge(tys: &[SlotTy]) -> (SlotTy, Vec<Option<SlotTy>>) {
+    let mut members: Vec<SlotTy> = Vec::new();
     for ty in tys {
         if !has_open(ty) {
             push_distinct(&mut members, ty.clone());
@@ -1537,13 +1608,13 @@ fn merge(tys: &[RuntimeTy]) -> (RuntimeTy, Vec<Option<RuntimeTy>>) {
             None => push_distinct(&mut members, ty.clone()),
         }
     }
-    let element = if members.contains(&RuntimeTy::Unknown) {
-        RuntimeTy::Unknown
+    let element = if members.contains(&SlotTy::Unknown) {
+        SlotTy::Unknown
     } else {
         match members.len() {
             0 => hole(),
             1 => members.pop().expect("one element"),
-            _ => RuntimeTy::Union(members.into()),
+            _ => SlotTy::Union(members.into()),
         }
     };
     (element, restated)
@@ -1554,10 +1625,10 @@ fn merge(tys: &[RuntimeTy]) -> (RuntimeTy, Vec<Option<RuntimeTy>>) {
 /// `ty` with every union's members in one order and without duplicates, so
 /// two spellings of one type compare equal: a union's member order is never
 /// an identity.
-fn canonical(ty: &RuntimeTy) -> RuntimeTy {
+fn canonical(ty: &SlotTy) -> SlotTy {
     match ty.map_children(&mut canonical) {
-        RuntimeTy::Union(members) => {
-            let mut distinct: Vec<RuntimeTy> = Vec::with_capacity(members.len());
+        SlotTy::Union(members) => {
+            let mut distinct: Vec<SlotTy> = Vec::with_capacity(members.len());
             for member in &members {
                 if !distinct.contains(member) {
                     distinct.push(member.clone());
@@ -1566,7 +1637,7 @@ fn canonical(ty: &RuntimeTy) -> RuntimeTy {
             distinct.sort_by_cached_key(ToString::to_string);
             match distinct.len() {
                 1 => distinct.pop().expect("one member"),
-                _ => RuntimeTy::Union(distinct.into()),
+                _ => SlotTy::Union(distinct.into()),
             }
         }
         other => other,
@@ -1574,17 +1645,17 @@ fn canonical(ty: &RuntimeTy) -> RuntimeTy {
 }
 
 /// Are `a` and `b` the same type?
-fn equivalent(a: &RuntimeTy, b: &RuntimeTy) -> bool {
+fn equivalent(a: &SlotTy, b: &SlotTy) -> bool {
     a == b || canonical(a) == canonical(b)
 }
 
-fn push_distinct(tys: &mut Vec<RuntimeTy>, ty: RuntimeTy) {
+fn push_distinct(tys: &mut Vec<SlotTy>, ty: SlotTy) {
     if !tys.iter().any(|seen| equivalent(seen, &ty)) {
         tys.push(ty);
     }
 }
 
-fn mismatch<'t, V: HostValue>(tree: &'t Tree<V>, slot: &RuntimeTy) -> Box<Failure<'t, V>> {
+fn mismatch<'t, V: HostValue>(tree: &'t Tree<V>, slot: &SlotTy) -> Box<Failure<'t, V>> {
     Failure::unfit(UnfitKind::Mismatch {
         expected: slot.clone(),
         found: tree,
@@ -1592,15 +1663,15 @@ fn mismatch<'t, V: HostValue>(tree: &'t Tree<V>, slot: &RuntimeTy) -> Box<Failur
 }
 
 /// How a scalar stands to a member: by the language's rule for its slot.
-fn scalar_rank<V: HostValue>(scalar: &Scalar, member: &RuntimeTy) -> Option<Rank> {
+fn scalar_rank<V: HostValue>(scalar: &Scalar, member: &SlotTy) -> Option<Rank> {
     let kind = match member {
-        RuntimeTy::Int => ScalarSlot::Int,
-        RuntimeTy::Bigint => ScalarSlot::Bigint,
-        RuntimeTy::Float => ScalarSlot::Float,
-        RuntimeTy::Bool => ScalarSlot::Bool,
-        RuntimeTy::String => ScalarSlot::String,
-        RuntimeTy::Uint8Array => ScalarSlot::Bytes,
-        RuntimeTy::Literal(literal, _) => match literal {
+        SlotTy::Int => ScalarSlot::Int,
+        SlotTy::Bigint => ScalarSlot::Bigint,
+        SlotTy::Float => ScalarSlot::Float,
+        SlotTy::Bool => ScalarSlot::Bool,
+        SlotTy::String => ScalarSlot::String,
+        SlotTy::Uint8Array => ScalarSlot::Bytes,
+        SlotTy::Literal(literal, _) => match literal {
             Literal::Int(_) => ScalarSlot::Int,
             Literal::Bigint(_) => ScalarSlot::Bigint,
             Literal::Float(_) => return None,
@@ -1608,7 +1679,7 @@ fn scalar_rank<V: HostValue>(scalar: &Scalar, member: &RuntimeTy) -> Option<Rank
             Literal::Bool(_) => ScalarSlot::Bool,
         },
         // A string names a variant, by conversion.
-        RuntimeTy::Enum(_) | RuntimeTy::EnumVariant(..) => {
+        SlotTy::Enum(_) | SlotTy::EnumVariant(..) => {
             return matches!(scalar, Scalar::String).then_some(Rank::Conversion);
         }
         _ => return None,
@@ -1620,37 +1691,37 @@ fn scalar_rank<V: HostValue>(scalar: &Scalar, member: &RuntimeTy) -> Option<Rank
     }
 }
 
-fn scalar_ty(scalar: &Scalar) -> RuntimeTy {
+fn scalar_ty(scalar: &Scalar) -> SlotTy {
     match scalar {
-        Scalar::Int(_) => RuntimeTy::Int,
-        Scalar::BigInt(_) => RuntimeTy::Bigint,
-        Scalar::Float(_) => RuntimeTy::Float,
-        Scalar::Bool(_) => RuntimeTy::Bool,
-        Scalar::String => RuntimeTy::String,
-        Scalar::Bytes => RuntimeTy::Uint8Array,
+        Scalar::Int(_) => SlotTy::Int,
+        Scalar::BigInt(_) => SlotTy::Bigint,
+        Scalar::Float(_) => SlotTy::Float,
+        Scalar::Bool(_) => SlotTy::Bool,
+        Scalar::String => SlotTy::String,
+        Scalar::Bytes => SlotTy::Uint8Array,
     }
 }
 
 /// `ai.Prompt` is the class a rendered prompt inhabits; a program declares it
 /// as a class, the wire carries the prompt itself.
 fn is_prompt_class(name: &Head) -> bool {
-    name.render_dotted(false) == <RuntimeTy>::PromptAst.to_string()
+    name.render_dotted(false) == <SlotTy>::PromptAst.to_string()
 }
 
 /// The function type a host callable is bound to: the slot's, with a throws
 /// clause that mentions a type variable stated as `unknown`. Such a clause is
 /// an effect parameter the caller never binds (`throws E`, `throws E | Err`),
 /// and a host callable may throw anything.
-pub(crate) fn callable_signature(slot: &RuntimeTy) -> RuntimeTy {
+pub(crate) fn callable_signature(slot: &SlotTy) -> SlotTy {
     match slot {
-        RuntimeTy::Function {
+        SlotTy::Function {
             params,
             ret,
             throws,
-        } if mentions_type_var(throws) => RuntimeTy::Function {
+        } if mentions_type_var(throws) => SlotTy::Function {
             params: params.clone(),
             ret: ret.clone(),
-            throws: Box::new(RuntimeTy::Unknown),
+            throws: Box::new(SlotTy::Unknown),
         },
         other => other.clone(),
     }

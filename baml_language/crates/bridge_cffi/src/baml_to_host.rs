@@ -363,8 +363,8 @@ impl InvocationRequest {
                     .chain(&self.args.optional)
                     .map(|(key, value)| (key.clone(), value.clone()))
                     .collect(),
-                key_type: bex_project::RuntimeTy::String,
-                value_type: bex_project::RuntimeTy::Unknown,
+                key_type: bex_project::WireTy::String,
+                value_type: bex_project::WireTy::Unknown,
             })
         });
         let execution = Arc::clone(&self.runtime)
@@ -415,12 +415,15 @@ pub fn decode_invocation_request(bytes: &[u8]) -> Result<InvocationRequest, Brid
     // records every transfer first and releases whatever a refusal leaves.
     // Borrowed control/target keys are not transfers and are not journaled.
     let mut owners = InboundOwners::new(&HANDLE_TABLE);
-    let collected = owners.collect_entries(&request.kwargs).and_then(|()| {
-        match request.invocation.as_ref().and_then(|o| o.cancel.as_ref()) {
-            Some(cancel) => owners.collect(cancel),
-            None => Ok(()),
-        }
-    });
+    let collected = owners
+        .collect_entries(&request.kwargs)
+        .and_then(|()| owners.collect_type_args(&request.type_args))
+        .and_then(
+            |()| match request.invocation.as_ref().and_then(|o| o.cancel.as_ref()) {
+                Some(cancel) => owners.collect(cancel),
+                None => Ok(()),
+            },
+        );
     if request.call_id == 0 {
         decoded?;
         return Err(BridgeError::InvalidCallId);
@@ -434,11 +437,10 @@ pub fn decode_invocation_request(bytes: &[u8]) -> Result<InvocationRequest, Brid
     if matches!(target, CallTarget::FunctionHandle(_)) && !call.type_args.is_empty() {
         return Err(BridgeError::FunctionHandleTypeArgs);
     }
-    let type_args = bridge_ctypes::proto_ty_args_to_named(&call.type_args)?;
-    let mut builder = allocation
-        .context_builder()
-        .with_type_args(type_args.type_args)
-        .with_type_defs(type_args.type_defs);
+    // A runtime declaration a type argument names arrives by the host's row
+    // to it, drained here like any transfer the request carries.
+    let type_args = owners.decode_type_args(&call.type_args)?;
+    let mut builder = allocation.context_builder().with_type_args(type_args);
     let controls = call.invocation.expect("validated controls");
     builder = builder.with_host_environment(controls.host_environment);
     if let Some(deadline) = controls.deadline_ns {
@@ -544,7 +546,7 @@ pub fn decode_invocation_request(bytes: &[u8]) -> Result<InvocationRequest, Brid
                 })?;
             let CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::TaggedHeapHandle {
                 kind: bex_project::TaggedHeapHandleKind::Callable,
-                ty: bex_project::RuntimeTy::Function { params, .. },
+                ty: bex_project::AnnotationTy::Function { params, .. },
                 heap_handle,
             }) = &*entry
             else {

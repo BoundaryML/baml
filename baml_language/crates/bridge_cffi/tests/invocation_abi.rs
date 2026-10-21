@@ -228,10 +228,10 @@ async fn raw_invocation_and_callback_lifecycles() {
     let deadline = Some(bridge_cffi::invocation_clock_by_id(parent_id).unwrap() + 30_000_000_000);
     controls.deadline_ns = deadline;
     // A callable states the function type it inhabits beside its handle.
-    let callback_ty = bex_project::RuntimeTy::Function {
+    let callback_ty = baml_type::RealizedTy::Function {
         params: Box::new([]),
-        ret: Box::new(bex_project::RuntimeTy::int()),
-        throws: Box::new(bex_project::RuntimeTy::unknown()),
+        ret: Box::new(baml_type::RealizedTy::int()),
+        throws: Box::new(baml_type::RealizedTy::unknown()),
     };
     call.kwargs.push(InboundMapEntry {
         key: Some(Key::StringKey("callback".into())),

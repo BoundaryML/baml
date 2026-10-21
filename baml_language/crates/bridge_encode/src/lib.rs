@@ -32,7 +32,7 @@
 
 use std::collections::HashMap;
 
-use baml_type::{Name, ParamTy, RuntimeTy};
+use baml_type::{Name, ParamTy};
 use bridge_ctypes::{
     ARGUMENT_DEPTH, RESULT_DEPTH, WIRE_NESTING_LIMIT,
     baml_bridge::cffi::{InboundMapEntry, InboundValue, inbound_map_entry::Key},
@@ -54,7 +54,7 @@ pub use error::{
     EncodeError, EncodeErrorKind, Error, FactsError, FaultKind, PathSegment, Root, UnfitKind,
 };
 pub use facts::{ClassFacts, EnumFacts, Facts, FunctionSig, Param};
-pub use host::{Head, Host, HostValue, LeafKind, LeafWire, Owner, Scalar, Shape};
+pub use host::{Head, Host, HostValue, LeafKind, LeafWire, Owner, Scalar, Shape, SlotTy, StatedTy};
 pub use rules::Rules;
 
 use crate::{
@@ -102,6 +102,25 @@ impl<V: HostValue, H: Host<V>> Drop for Owners<'_, V, H> {
     }
 }
 
+/// A call's explicit type arguments on the wire, in the order given: each
+/// runtime declaration they name referenced afresh, one reference per
+/// occurrence, so the host keeps the rows it holds and the engine takes
+/// these.
+pub fn state_type_args<V: HostValue, H: Host<V>>(
+    type_args: &[(String, StatedTy)],
+    owners: &mut Owners<'_, V, H>,
+) -> Result<Vec<bridge_ctypes::baml_bridge::cffi::BamlTyArg>, V::Error> {
+    type_args
+        .iter()
+        .map(|(name, ty)| {
+            Ok(bridge_ctypes::baml_bridge::cffi::BamlTyArg {
+                type_var: name.clone(),
+                type_value: Some(commit::referenced(ty, owners.host, &mut owners.created)?),
+            })
+        })
+        .collect()
+}
+
 /// Encode a function's arguments against its signature.
 ///
 /// `arguments` are `(declared parameter name, value)`; `type_args` are the
@@ -113,26 +132,16 @@ impl<V: HostValue, H: Host<V>> Drop for Owners<'_, V, H> {
 pub fn encode_arguments<V: HostValue, H: Host<V>>(
     facts: &Facts,
     signature: &FunctionSig,
-    type_args: &HashMap<Name, RuntimeTy>,
+    type_args: &HashMap<Name, StatedTy>,
     arguments: Vec<(String, V)>,
     owners: &mut Owners<'_, V, H>,
 ) -> Result<Vec<InboundMapEntry>, Error<V::Error>> {
-    // The caller's type arguments are realized types in stated form: a host
+    // The caller's type arguments are realized types, in stated form: a host
     // never names a type variable, so no host-chosen variable reaches a solve.
-    for (name, ty) in type_args {
-        if facts::mentions_type_var(ty) {
-            return Err(Error::Value(EncodeError {
-                path: vec![PathSegment::Argument(name.as_str().to_string())],
-                kind: Box::new(Kind::Fault(FaultKind::UnrealizedTypeArgument {
-                    ty: error::bounded(ty.to_string()),
-                })),
-            }));
-        }
-    }
     let resolve = |param: &ParamTy| {
         type_args
             .get(&Name::new(param.as_str()))
-            .map(|ty| facts.stated_form(ty.clone()))
+            .map(|ty| facts.stated_form(SlotTy::from(ty)))
     };
     let mut budget = NODE_BUDGET;
     let mut trees = Vec::with_capacity(arguments.len());
@@ -141,7 +150,7 @@ pub fn encode_arguments<V: HostValue, H: Host<V>>(
             .params
             .iter()
             .find(|param| param.name == name)
-            .map_or(RuntimeTy::Unknown, |param| {
+            .map_or(SlotTy::Unknown, |param| {
                 facts::substitute(&param.ty, &resolve)
             });
         let tree = read::read(PathSegment::Argument(name.clone()), value, &mut budget)?;
@@ -158,7 +167,7 @@ pub fn encode_arguments<V: HostValue, H: Host<V>>(
     nodes
         .into_iter()
         .map(|(name, node)| {
-            let value = ship(facts, &node, ARGUMENT_DEPTH, owners)
+            let value = ship(&node, ARGUMENT_DEPTH, owners)
                 .map_err(|error| rooted(error, PathSegment::Argument(name.clone())))?;
             Ok(InboundMapEntry {
                 key: Some(Key::StringKey(name.clone())),
@@ -184,7 +193,7 @@ fn rooted<E>(error: Error<E>, segment: PathSegment) -> Error<E> {
 pub fn encode<V: HostValue, H: Host<V>>(
     facts: &Facts,
     value: V,
-    slot: &RuntimeTy,
+    slot: &SlotTy,
     root: Root,
     owners: &mut Owners<'_, V, H>,
 ) -> Result<InboundValue, Error<V::Error>> {
@@ -199,14 +208,13 @@ pub fn encode<V: HostValue, H: Host<V>>(
     let node = planner
         .plan_root(&tree, slot)
         .map_err(|failure| failure.into_error(segment.clone()))?;
-    ship(facts, &node, depth, owners).map_err(|error| rooted(error, segment))
+    ship(&node, depth, owners).map_err(|error| rooted(error, segment))
 }
 
 /// Commit `node` and measure the wire it makes against the decoder's limit:
 /// once from the plan, before anything is created, and once exactly, after.
 fn ship<V: HostValue, H: Host<V>>(
-    facts: &Facts,
-    node: &Node<'_, V>,
+    node: &Node<'_, V, StatedTy>,
     enclosing: usize,
     owners: &mut Owners<'_, V, H>,
 ) -> Result<InboundValue, Error<V::Error>> {
@@ -218,11 +226,10 @@ fn ship<V: HostValue, H: Host<V>>(
             })),
         })
     };
-    if enclosing + commit::depth(facts, node) > WIRE_NESTING_LIMIT {
+    if enclosing + commit::depth(node) > WIRE_NESTING_LIMIT {
         return Err(too_deep());
     }
-    let value =
-        commit::commit(facts, node, owners.host, &mut owners.created).map_err(Error::Commit)?;
+    let value = commit::commit(node, owners.host, &mut owners.created).map_err(Error::Commit)?;
     if enclosing + inbound_value_depth(&value) > WIRE_NESTING_LIMIT {
         return Err(too_deep());
     }

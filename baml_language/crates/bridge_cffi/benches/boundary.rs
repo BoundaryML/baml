@@ -8,8 +8,7 @@
 
 use std::collections::HashMap;
 
-use baml_type::TypeName;
-use bex_project::RuntimeTy;
+use baml_type::{RealizedTy, TypeName};
 use bridge_cffi::baml_bridge::cffi::{
     BamlOutboundResult, BamlTy, CallFunctionArgs, InboundClassValue, InboundListValue,
     InboundMapEntry, InboundMapValue, InboundValue, InvocationOptions, baml_outbound_result,
@@ -85,7 +84,7 @@ fn bench_call(bencher: Bencher, template: &CallFunctionArgs) {
 // the lenient and the exact engine accept.
 // ---------------------------------------------------------------------------
 
-fn stated(ty: &RuntimeTy) -> Option<BamlTy> {
+fn stated(ty: &RealizedTy) -> Option<BamlTy> {
     Some(bridge_ctypes::runtime_ty_to_proto_ty(ty))
 }
 fn int(v: i64) -> InboundValue {
@@ -112,9 +111,9 @@ fn boolean(v: bool) -> InboundValue {
         ..Default::default()
     }
 }
-fn list(element: &RuntimeTy, values: Vec<InboundValue>) -> InboundValue {
+fn list(element: &RealizedTy, values: Vec<InboundValue>) -> InboundValue {
     InboundValue {
-        value_type: stated(&RuntimeTy::List(Box::new(element.clone()))),
+        value_type: stated(&RealizedTy::List(Box::new(element.clone()))),
         value: Some(Value::ListValue(InboundListValue { values })),
     }
 }
@@ -124,23 +123,23 @@ fn entry(key: &str, value: InboundValue) -> InboundMapEntry {
         value: Some(value),
     }
 }
-fn map(value_ty: &RuntimeTy, entries: Vec<InboundMapEntry>) -> InboundValue {
+fn map(value_ty: &RealizedTy, entries: Vec<InboundMapEntry>) -> InboundValue {
     InboundValue {
-        value_type: stated(&RuntimeTy::Map {
-            key: Box::new(RuntimeTy::String),
+        value_type: stated(&RealizedTy::Map {
+            key: Box::new(RealizedTy::String),
             value: Box::new(value_ty.clone()),
         }),
         value: Some(Value::MapValue(InboundMapValue { entries })),
     }
 }
-fn class(ty: &RuntimeTy, fields: Vec<InboundMapEntry>) -> InboundValue {
+fn class(ty: &RealizedTy, fields: Vec<InboundMapEntry>) -> InboundValue {
     InboundValue {
         value_type: stated(ty),
         value: Some(Value::ClassValue(InboundClassValue { fields })),
     }
 }
-fn class_ty(name: &str) -> RuntimeTy {
-    RuntimeTy::Class(TypeName::from_dotted_path(name), Box::new([]))
+fn class_ty(name: &str) -> RealizedTy {
+    RealizedTy::Class(TypeName::from_dotted_path(name), Box::new([]))
 }
 fn request(name: &str, kwargs: Vec<InboundMapEntry>) -> CallFunctionArgs {
     CallFunctionArgs {
@@ -172,7 +171,7 @@ fn shape(i: usize) -> InboundValue {
             entry(
                 "tags",
                 map(
-                    &RuntimeTy::Int,
+                    &RealizedTy::Int,
                     (0..5)
                         .map(|t| entry(&format!("tag{t}"), int(t as i64)))
                         .collect(),
@@ -203,7 +202,7 @@ fn workloads() -> Vec<(&'static str, CallFunctionArgs)> {
                 "Ints",
                 vec![entry(
                     "xs",
-                    list(&RuntimeTy::Int, (0..1000).map(int).collect()),
+                    list(&RealizedTy::Int, (0..1000).map(int).collect()),
                 )],
             ),
         ),
@@ -214,7 +213,7 @@ fn workloads() -> Vec<(&'static str, CallFunctionArgs)> {
                 vec![entry(
                     "xs",
                     list(
-                        &RuntimeTy::String,
+                        &RealizedTy::String,
                         (0..1000).map(|i| string(&format!("s{i}"))).collect(),
                     ),
                 )],
@@ -227,7 +226,7 @@ fn workloads() -> Vec<(&'static str, CallFunctionArgs)> {
                 vec![entry(
                     "m",
                     map(
-                        &RuntimeTy::Int,
+                        &RealizedTy::Int,
                         (0..1000).map(|i| entry(&format!("k{i}"), int(i))).collect(),
                     ),
                 )],
@@ -249,7 +248,7 @@ fn workloads() -> Vec<(&'static str, CallFunctionArgs)> {
                 "Open",
                 vec![entry(
                     "v",
-                    list(&RuntimeTy::Int, (0..1000).map(int).collect()),
+                    list(&RealizedTy::Int, (0..1000).map(int).collect()),
                 )],
             ),
         ),
@@ -261,7 +260,7 @@ fn workloads() -> Vec<(&'static str, CallFunctionArgs)> {
                 vec![entry(
                     "v",
                     list(
-                        &RuntimeTy::TypeAlias(TypeName::from_dotted_path("baml.json.json")),
+                        &RealizedTy::TypeAlias(TypeName::from_dotted_path("baml.json.json")),
                         (0..1000).map(int).collect(),
                     ),
                 )],

@@ -12,8 +12,10 @@ import (
 // nullable lists use Optional around ListEncoder to represent BAML null.
 func listInput(inputs []Input, itemType *BAMLType) Input {
 	prepare := func(transaction *inputTransaction) (*cffi.InboundValue, error) {
+		var stated *cffi.BamlTy
 		if itemType != nil {
-			if err := validateBAMLType(itemType.value, 0); err != nil {
+			var err error
+			if stated, err = ListBAMLType(*itemType).stated(transaction); err != nil {
 				return nil, fmt.Errorf("list item type: %w", err)
 			}
 		}
@@ -30,12 +32,10 @@ func listInput(inputs []Input, itemType *BAMLType) Input {
 				ListValue: &cffi.InboundListValue{Values: items},
 			},
 		}
-		if itemType != nil {
-			value.ValueType = ListBAMLType(*itemType).value
-		}
+		value.ValueType = stated
 		return value, nil
 	}
-	if inputsAreStatic(inputs) {
+	if inputsAreStatic(inputs) && (itemType == nil || !itemType.transfers()) {
 		value, err := prepare(nil)
 		return Input{value: value, err: err}
 	}
@@ -92,8 +92,10 @@ func OrderedMap(valueType BAMLType, values []NamedInput) Input {
 
 func mapInput(keys []string, inputs []Input, valueType *BAMLType) Input {
 	prepare := func(transaction *inputTransaction) (*cffi.InboundValue, error) {
+		var stated *cffi.BamlTy
 		if valueType != nil {
-			if err := validateBAMLType(valueType.value, 0); err != nil {
+			var err error
+			if stated, err = MapBAMLType(PrimitiveBAMLType(StringType), *valueType).stated(transaction); err != nil {
 				return nil, fmt.Errorf("map value type: %w", err)
 			}
 		}
@@ -113,12 +115,10 @@ func mapInput(keys []string, inputs []Input, valueType *BAMLType) Input {
 				MapValue: &cffi.InboundMapValue{Entries: entries},
 			},
 		}
-		if valueType != nil {
-			value.ValueType = MapBAMLType(PrimitiveBAMLType(StringType), *valueType).value
-		}
+		value.ValueType = stated
 		return value, nil
 	}
-	if inputsAreStatic(inputs) {
+	if inputsAreStatic(inputs) && (valueType == nil || !valueType.transfers()) {
 		value, err := prepare(nil)
 		return Input{value: value, err: err}
 	}

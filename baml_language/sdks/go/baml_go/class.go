@@ -72,10 +72,11 @@ func ClassWithTypeArgs(name string, typeArgs []BAMLType, fields map[string]Input
 	prepare := func(transaction *inputTransaction) (*cffi.InboundValue, error) {
 		encodedTypeArgs := make([]*cffi.BamlTy, len(typeArgs))
 		for index, typeArg := range typeArgs {
-			if err := validateBAMLType(typeArg.value, 0); err != nil {
+			stated, err := typeArg.stated(transaction)
+			if err != nil {
 				return nil, fmt.Errorf("class %q type argument %d: %w", name, index, err)
 			}
-			encodedTypeArgs[index] = typeArg.value
+			encodedTypeArgs[index] = stated
 		}
 		entries := make([]*cffi.InboundMapEntry, 0, len(keys))
 		for index, key := range keys {
@@ -93,7 +94,7 @@ func ClassWithTypeArgs(name string, typeArgs []BAMLType, fields map[string]Input
 			ValueType: &cffi.BamlTy{
 				Ty: &cffi.BamlTy_ClassTy{
 					ClassTy: &cffi.BamlTyClass{
-						Name:     name,
+						Head:     &cffi.BamlTyClass_Name{Name: name},
 						TypeArgs: encodedTypeArgs,
 					},
 				},
@@ -105,7 +106,7 @@ func ClassWithTypeArgs(name string, typeArgs []BAMLType, fields map[string]Input
 			},
 		}, nil
 	}
-	if inputsAreStatic(inputs) {
+	if inputsAreStatic(inputs) && !typesTransfer(typeArgs) {
 		value, err := prepare(nil)
 		return Input{value: value, err: err}
 	}
@@ -150,7 +151,7 @@ func (value Value) ClassWithTypeArgs(name string, typeArgs []BAMLType) (ClassVal
 	decodedTypeArgs := make([]BAMLType, len(typeArgs))
 	for index, expected := range typeArgs {
 		actual := BAMLType{value: item.ClassValue.TypeArgs[index]}
-		if err := validateBAMLType(actual.value, 0); err != nil {
+		if err := validateBAMLType(actual.value, typeAnnotation); err != nil {
 			return ClassValue{}, fmt.Errorf("BAML class %q type argument %d: %w", name, index, err)
 		}
 		if !actual.Equal(expected) {

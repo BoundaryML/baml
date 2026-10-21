@@ -9,9 +9,9 @@ mod common;
 
 use std::sync::Arc;
 
-use baml_type::{RuntimeFunctionParamTy, TypeName};
-use bex_engine::{BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder, RuntimeTy};
-use bex_external_types::{BexExternalAdt, MediaKind};
+use baml_type::TypeName;
+use bex_engine::{BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder};
+use bex_external_types::{BexExternalAdt, MediaKind, WireFunctionParamTy, WireHead, WireTy};
 use bex_resource_types::{HostValueArc, HostValueKind};
 use common::compile_for_engine;
 use indexmap::IndexMap;
@@ -40,34 +40,6 @@ async fn call(
         .await
 }
 
-/// `call` with a host type definition bound to the type parameter `name`.
-async fn call_with_definition(
-    source: &str,
-    function: &str,
-    args: Vec<BexExternalValue>,
-    name: &str,
-    definition: bex_vm_types::types::PortableTypeDef,
-) -> Result<BexExternalValue, EngineError> {
-    let engine = Arc::new(
-        BexEngine::new(
-            compile_for_engine(source),
-            Arc::new(sys_native::SysOps::native()),
-            Vec::new(),
-        )
-        .expect("engine construction"),
-    );
-    engine
-        .call_function(
-            function,
-            args,
-            FunctionCallContextBuilder::new(sys_types::CallId::next())
-                .with_type_defs(IndexMap::from([(name.to_string(), definition)]))
-                .build(),
-            true,
-        )
-        .await
-}
-
 /// The refusal's message, or a panic with whatever else came back.
 #[track_caller]
 fn refusal(result: Result<BexExternalValue, EngineError>) -> String {
@@ -81,11 +53,14 @@ fn s(value: &str) -> BexExternalValue {
     BexExternalValue::String(value.into())
 }
 
-fn class(name: &str, args: Vec<RuntimeTy>) -> RuntimeTy {
-    RuntimeTy::Class(TypeName::from_dotted_path(name), args.into())
+fn class(name: &str, args: Vec<WireTy>) -> WireTy {
+    WireTy::Class(
+        WireHead::Static(TypeName::from_dotted_path(name)),
+        args.into(),
+    )
 }
 
-fn list(element: RuntimeTy, items: Vec<BexExternalValue>) -> BexExternalValue {
+fn list(element: WireTy, items: Vec<BexExternalValue>) -> BexExternalValue {
     BexExternalValue::Array {
         element_type: element,
         items,
@@ -94,7 +69,7 @@ fn list(element: RuntimeTy, items: Vec<BexExternalValue>) -> BexExternalValue {
 
 fn instance(
     name: &str,
-    args: Vec<RuntimeTy>,
+    args: Vec<WireTy>,
     fields: &[(&str, BexExternalValue)],
 ) -> BexExternalValue {
     BexExternalValue::Instance {
@@ -138,7 +113,7 @@ async fn a_list_is_the_type_its_host_states_and_generics_are_invariant() {
             source,
             "count",
             vec![list(
-                RuntimeTy::int(),
+                WireTy::int(),
                 vec![BexExternalValue::Int(1), BexExternalValue::Int(2)],
             )],
         )
@@ -151,7 +126,7 @@ async fn a_list_is_the_type_its_host_states_and_generics_are_invariant() {
     );
     // The same items sent as the slot's own type are taken: the host coerces,
     // the engine checks.
-    let either = RuntimeTy::union([RuntimeTy::int(), RuntimeTy::string()]);
+    let either = WireTy::Union(Box::new([WireTy::Int, WireTy::String]));
     assert_eq!(
         call(
             source,
@@ -214,7 +189,7 @@ async fn a_generic_instance_is_checked_at_the_arguments_it_states() {
             "open",
             vec![instance(
                 "Box",
-                vec![RuntimeTy::int()],
+                vec![WireTy::int()],
                 &[("v", BexExternalValue::Int(5))]
             )],
         )
@@ -226,11 +201,7 @@ async fn a_generic_instance_is_checked_at_the_arguments_it_states() {
         call(
             source,
             "open",
-            vec![instance(
-                "Box",
-                vec![RuntimeTy::string()],
-                &[("v", s("five"))],
-            )],
+            vec![instance("Box", vec![WireTy::string()], &[("v", s("five"))])],
         )
         .await,
     );
@@ -286,7 +257,9 @@ async fn the_json_alias_takes_a_json_typed_tree() {
             }
         }
     "#;
-    let json = RuntimeTy::TypeAlias(TypeName::from_dotted_path("baml.json.json"));
+    let json = WireTy::TypeAlias(WireHead::Static(TypeName::from_dotted_path(
+        "baml.json.json",
+    )));
     // A host whose slot is `json` states `json[]` for a list: that is the type
     // a list BAML parsed from JSON has.
     assert_eq!(
@@ -305,7 +278,7 @@ async fn the_json_alias_takes_a_json_typed_tree() {
         call(
             source,
             "size",
-            vec![list(RuntimeTy::int(), vec![BexExternalValue::Int(1)])],
+            vec![list(WireTy::int(), vec![BexExternalValue::Int(1)])],
         )
         .await,
     );
@@ -362,110 +335,6 @@ async fn a_class_holding_native_data_cannot_be_built_by_a_host() {
             .contains("holds native runtime data; a host passes back only what the runtime issued"),
         "{message}"
     );
-}
-
-#[tokio::test]
-async fn a_host_definition_may_not_redeclare_a_program_declaration() {
-    // A definition named like the program's `Person` would stand in for it in
-    // every value the call states; the program's declaration is the only one.
-    let source = r#"
-        class Person { name: string }
-        function hello<T>(p: Person) -> string { p.name }
-    "#;
-    let metadata = || bex_vm_types::types::PortableMetadata {
-        description: None,
-        alias: None,
-        docstring: None,
-        other: IndexMap::new(),
-    };
-    let definition = bex_vm_types::types::PortableTypeDef {
-        root: RuntimeTy::Class(
-            baml_type::QualifiedTypeName::from_dotted_path("user.Person"),
-            Box::new([]),
-        ),
-        classes: vec![bex_vm_types::types::PortableClassDef {
-            name: baml_type::QualifiedTypeName::from_dotted_path("user.Person"),
-            fields: vec![bex_vm_types::types::PortableClassFieldDef {
-                name: "z".to_string(),
-                ty: RuntimeTy::Int,
-                metadata: metadata(),
-                skip: false,
-            }],
-            metadata: metadata(),
-            generic_param_count: 0,
-        }],
-        enums: Vec::new(),
-        witnesses: Vec::new(),
-    };
-    let doppelganger = instance("user.Person", vec![], &[("z", BexExternalValue::Int(7))]);
-    let message =
-        refusal(call_with_definition(source, "hello", vec![doppelganger], "T", definition).await);
-    assert!(
-        message.contains("which the program already declares"),
-        "{message}"
-    );
-}
-
-#[tokio::test]
-async fn a_host_definition_with_nested_classes_crosses_whole() {
-    // `A { b: B }` in one definition: a value spells both classes, and both
-    // resolve to the definition's declarations.
-    let source = r#"
-        function keep<T>(x: T) -> T { x }
-    "#;
-    let metadata = || bex_vm_types::types::PortableMetadata {
-        description: None,
-        alias: None,
-        docstring: None,
-        other: IndexMap::new(),
-    };
-    let field = |name: &str, ty: RuntimeTy| bex_vm_types::types::PortableClassFieldDef {
-        name: name.to_string(),
-        ty,
-        metadata: metadata(),
-        skip: false,
-    };
-    let a_name = baml_type::QualifiedTypeName::from_dotted_path("dyn.A");
-    let b_name = baml_type::QualifiedTypeName::from_dotted_path("dyn.B");
-    let definition = bex_vm_types::types::PortableTypeDef {
-        root: RuntimeTy::Class(a_name.clone(), Box::new([])),
-        classes: vec![
-            bex_vm_types::types::PortableClassDef {
-                name: a_name,
-                fields: vec![field("b", RuntimeTy::Class(b_name.clone(), Box::new([])))],
-                metadata: metadata(),
-                generic_param_count: 0,
-            },
-            bex_vm_types::types::PortableClassDef {
-                name: b_name,
-                fields: vec![field("z", RuntimeTy::Int)],
-                metadata: metadata(),
-                generic_param_count: 0,
-            },
-        ],
-        enums: Vec::new(),
-        witnesses: Vec::new(),
-    };
-    let value = instance(
-        "A",
-        vec![],
-        &[(
-            "b",
-            instance("B", vec![], &[("z", BexExternalValue::Int(1))]),
-        )],
-    );
-    let returned = call_with_definition(source, "keep", vec![value], "T", definition)
-        .await
-        .expect("both classes of the definition resolve");
-    // A runtime declaration's instance leaves the engine by reference.
-    let BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
-        ty: RuntimeTy::Class(name, _),
-        ..
-    }) = &returned
-    else {
-        panic!("expected a handle to an `A`, got {returned:?}");
-    };
-    assert_eq!(name.name().as_str(), "A");
 }
 
 #[tokio::test]
@@ -534,10 +403,7 @@ async fn a_child_outside_its_stated_component_type_is_refused_where_it_is() {
         call(
             source,
             "sum",
-            vec![list(
-                RuntimeTy::int(),
-                vec![BexExternalValue::Int(1), s("x")],
-            )],
+            vec![list(WireTy::int(), vec![BexExternalValue::Int(1), s("x")])],
         )
         .await,
     );
@@ -592,7 +458,7 @@ async fn a_generic_instance_states_exactly_its_class_arity() {
     );
     let too_many = instance(
         "Box",
-        vec![RuntimeTy::int(), RuntimeTy::int()],
+        vec![WireTy::int(), WireTy::int()],
         &[("v", BexExternalValue::Int(5))],
     );
     let message = refusal(call(source, "open", vec![too_many]).await);
@@ -653,8 +519,8 @@ async fn a_map_states_a_key_type_its_keys_inhabit() {
             source,
             "keys",
             vec![BexExternalValue::Map {
-                key_type: RuntimeTy::string(),
-                value_type: RuntimeTy::int(),
+                key_type: WireTy::string(),
+                value_type: WireTy::int(),
                 entries: entries(&["a", "b"]),
             }],
         )
@@ -669,8 +535,8 @@ async fn a_map_states_a_key_type_its_keys_inhabit() {
             source,
             "keys",
             vec![BexExternalValue::Map {
-                key_type: RuntimeTy::int(),
-                value_type: RuntimeTy::int(),
+                key_type: WireTy::int(),
+                value_type: WireTy::int(),
                 entries: entries(&["1"]),
             }],
         )
@@ -680,7 +546,7 @@ async fn a_map_states_a_key_type_its_keys_inhabit() {
         message.contains("map keys cross the boundary as strings"),
         "{message}"
     );
-    let only_a = RuntimeTy::Literal(
+    let only_a = WireTy::Literal(
         baml_type::Literal::String("a".to_string()),
         baml_type::Freshness::Regular,
     );
@@ -690,7 +556,7 @@ async fn a_map_states_a_key_type_its_keys_inhabit() {
             "keys",
             vec![BexExternalValue::Map {
                 key_type: only_a,
-                value_type: RuntimeTy::int(),
+                value_type: WireTy::int(),
                 entries: entries(&["b"]),
             }],
         )
@@ -723,9 +589,9 @@ async fn a_host_callable_arrives_with_its_function_type() {
             bex_resource_types::HostKey::new(7_003).expect("nonzero"),
             HostValueKind::Callable,
         ),
-        params: Box::new([RuntimeFunctionParamTy::required(None, RuntimeTy::string())]),
-        ret: Box::new(RuntimeTy::string()),
-        throws: Box::new(RuntimeTy::unknown()),
+        params: Box::new([WireFunctionParamTy::required(None, WireTy::string())]),
+        ret: Box::new(WireTy::string()),
+        throws: Box::new(WireTy::unknown()),
     };
     let message = refusal(call(source, "apply", vec![stringly, BexExternalValue::Int(1)]).await);
     assert!(
@@ -738,9 +604,9 @@ async fn a_host_callable_arrives_with_its_function_type() {
             bex_resource_types::HostKey::new(7_004).expect("nonzero"),
             HostValueKind::Callable,
         ),
-        params: Box::new([RuntimeFunctionParamTy::optional(None, RuntimeTy::int())]),
-        ret: Box::new(RuntimeTy::int()),
-        throws: Box::new(RuntimeTy::unknown()),
+        params: Box::new([WireFunctionParamTy::optional(None, WireTy::int())]),
+        ret: Box::new(WireTy::int()),
+        throws: Box::new(WireTy::unknown()),
     };
     let message = refusal(call(source, "apply", vec![nameless, BexExternalValue::Int(1)]).await);
     assert!(
@@ -756,8 +622,8 @@ async fn a_union_envelope_is_not_a_host_value() {
     "#;
     let enveloped = BexExternalValue::union(
         BexExternalValue::Int(7),
-        [RuntimeTy::int(), RuntimeTy::string()],
-        RuntimeTy::int(),
+        [WireTy::int(), WireTy::string()],
+        WireTy::int(),
     );
     let message = refusal(call(source, "echo", vec![enveloped]).await);
     assert!(
@@ -807,7 +673,7 @@ async fn a_literal_field_is_checked_per_value_not_per_primitive() {
          declared type `\"square\"`"
     );
     // The same through a recursive alias that mentions a literal.
-    let kind = RuntimeTy::TypeAlias(TypeName::from_dotted_path("user.Kind"));
+    let kind = WireTy::TypeAlias(WireHead::Static(TypeName::from_dotted_path("user.Kind")));
     let message = refusal(
         call(
             source,

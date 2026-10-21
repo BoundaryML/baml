@@ -61,16 +61,33 @@ pub enum CtypesError {
         stated: String,
     },
 
-    /// A stated type mentions a type variable, so it determines no value.
-    #[error(
-        "InboundValue.value_type `{stated}` is not realized: it mentions the type variable `{var}`"
-    )]
-    ValueTypeNotRealized { stated: String, var: String },
+    /// A wire type is realized: a type variable or an associated-type
+    /// projection determines no value, so no wire position may hold one.
+    #[error("a wire type may not contain a {variant}; every type on the wire is realized")]
+    UnrealizedType { variant: &'static str },
 
     /// A wire type lacks a part no type can do without: its variant, a
     /// container's inner type, a literal's value, a kind.
     #[error("wire type is missing its {position}")]
     IncompleteType { position: &'static str },
+
+    /// A stated type names a declaration by its display label. A label is
+    /// never a reference: a runtime declaration is referenced by the row the
+    /// host received it under.
+    #[error(
+        "wire type names `{label}` by label only; a runtime declaration is referenced by its handle"
+    )]
+    AnonymousHeadStated { label: String },
+
+    /// A `live` head's row is not a reference to an engine object, so it can
+    /// name no declaration.
+    #[error("wire type references handle key {0}, which is not a declaration")]
+    LiveHeadNotADeclaration(u64),
+
+    /// A `class_value` states a runtime declaration as its class. An instance
+    /// of a runtime class crosses by reference, never by fields.
+    #[error("class_value states a runtime class; an instance of one is passed as it was received")]
+    ClassValueOfRuntimeClass,
 
     #[error("Union selected type `{selected}` is not a member of declared union `{union}`")]
     UnionSelectedTypeNotMember { selected: String, union: String },

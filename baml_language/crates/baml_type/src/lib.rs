@@ -59,6 +59,7 @@ pub mod typetag;
 pub mod unify;
 pub mod user_facing;
 pub mod wire;
+mod wire_head;
 pub use call_layout::{CallLayout, LayoutMismatch};
 pub use declaration_name::DeclarationName;
 pub use defs::*;
@@ -71,6 +72,7 @@ pub use primitive::*;
 pub use runtime_ty::*;
 pub use structural_interface::StructuralInterface;
 pub use template::SubstituteError;
+pub use wire_head::{WireHead, WireTy};
 
 /// Upper bound on the bit-length of a `bigint` value we are willing to
 /// materialize at runtime. ~268 million bits ≈ 80 million decimal digits ≈ 32
