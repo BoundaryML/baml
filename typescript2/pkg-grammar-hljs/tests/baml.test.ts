@@ -127,6 +127,10 @@ describe('BAML highlight.js language', () => {
     expect(raw.value).toContain(
       '<span class="hljs-string">r&quot;\\d\\&quot;x&quot;</span>',
     );
+    // The same holds for raw and byte strings inside an interpolation.
+    expect(escapes(String.raw`let s = ` + '`${r"\\n"} ${b"\\xFF"}`;')).toEqual([
+      String.raw`\xFF`,
+    ]);
   });
 
   it('tracks nested braces inside backtick ${...} interpolation', () => {

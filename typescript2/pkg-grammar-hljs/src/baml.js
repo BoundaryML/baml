@@ -377,6 +377,8 @@ export default function baml(hljs) {
   const INTERPOLATION_CONTAINS = [
     hljs.C_LINE_COMMENT_MODE,
     hljs.C_BLOCK_COMMENT_MODE,
+    BYTE_STRING,
+    RAW_QUOTED_STRING,
     QUOTED_STRING,
     NUMBER,
     ENV_VAR,
