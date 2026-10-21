@@ -411,7 +411,7 @@ fn variant_names(arms: &[Ty]) -> Result<Vec<String>, String> {
         }
         let mut qualified_further = false;
         for index in clashing {
-            if variant_name(&arms[index], depths[index] + 1).as_ref() != Some(&names[index]) {
+            if depths[index] < namespace_depth(&arms[index]) {
                 depths[index] += 1;
                 qualified_further = true;
             }
@@ -427,6 +427,24 @@ fn variant_names(arms: &[Ty]) -> Result<Vec<String>, String> {
                  when qualified by namespace"
             ));
         }
+    }
+}
+
+/// How many namespace segments [`variant_name`] can prefix onto an arm.
+/// Qualification is bounded by this rather than by the rendered name
+/// changing: a segment like `_` renders empty, yet the segments beyond it
+/// can still separate two arms.
+fn namespace_depth(arm: &Ty) -> usize {
+    match arm {
+        Ty::Class(name, _) | Ty::Enum(name) | Ty::EnumVariant(name, _) | Ty::TypeAlias(name) => {
+            baml_sdkgen_types::namespace_segments(name).len()
+        }
+        Ty::List(inner) | Ty::Map { value: inner, .. } => namespace_depth(inner),
+        Ty::Union(items) => match strip_null(items).0.as_slice() {
+            [only] => namespace_depth(only),
+            _ => 0,
+        },
+        _ => 0,
     }
 }
 

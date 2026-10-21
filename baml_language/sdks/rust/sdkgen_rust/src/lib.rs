@@ -968,6 +968,28 @@ mod tests {
     }
 
     #[test]
+    fn qualification_continues_past_a_namespace_segment_that_renders_empty() {
+        // `_` renders as an empty prefix; the segment above it separates the arms.
+        let a = name("user", &["a", "_"], "Foo");
+        let b = name("user", &["b", "_"], "Foo");
+        let f = name("user", &[], "f");
+        let union = Ty::Union(Box::new([
+            Ty::Class(a.clone(), Box::new([])),
+            Ty::Class(b.clone(), Box::new([])),
+        ]));
+        let pool = SymbolPool::from([
+            (a.clone(), generic_class(&a, &[], vec![])),
+            (b.clone(), generic_class(&b, &[], vec![])),
+            (f.clone(), Symbol::Function(unary_fn(&f, union, Ty::String))),
+        ]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = flat(text(&generated, "src/lib.rs"));
+        assert!(lib.contains("pubenumAFooOrBFoo{"), "{lib}");
+    }
+
+    #[test]
     fn union_arms_still_clashing_when_fully_qualified_skip_fail_closed() {
         // `a_b` and `aB` both render as the `AB` prefix.
         let snake = name("user", &["a_b"], "Foo");
