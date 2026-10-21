@@ -116,11 +116,6 @@ pub struct PackArgs {
     )]
     pub rust_workspace: Option<PathBuf>,
 
-    /// With `--rust`, list which functions compiled to Rust and why the
-    /// others did not.
-    #[arg(long, requires = "rust", help_heading = "Build options")]
-    pub rust_report: bool,
-
     /// With `--rust`, the directory the generated crate is built in.
     /// Defaults to `target/baml-rust` under the current directory.
     #[arg(
@@ -186,16 +181,28 @@ impl RustProfile {
     /// The `[profile.release]` settings of the generated crate's manifest —
     /// the build always runs as `cargo build --release`, and the profile
     /// decides what that means.
-    fn cargo_profile_settings(self) -> &'static str {
+    fn cargo_profile_settings(self) -> toml::Table {
+        let mut settings = toml::Table::new();
+        let mut set = |key: &str, value: toml::Value| {
+            settings.insert(key.to_owned(), value);
+        };
         match self {
             Self::Release => {
-                "lto = \"fat\"\ncodegen-units = 1\nopt-level = 3\nstrip = \"symbols\"\npanic = \"unwind\"\n"
+                set("lto", "fat".into());
+                set("codegen-units", 1.into());
+                set("opt-level", 3.into());
+                set("strip", "symbols".into());
             }
             Self::Fast => {
-                "lto = false\ncodegen-units = 16\nopt-level = 1\nstrip = \"none\"\n\
-                 debug = \"line-tables-only\"\npanic = \"unwind\"\n"
+                set("lto", false.into());
+                set("codegen-units", 16.into());
+                set("opt-level", 1.into());
+                set("strip", "none".into());
+                set("debug", "line-tables-only".into());
             }
         }
+        set("panic", "unwind".into());
+        settings
     }
 }
 
@@ -305,9 +312,6 @@ impl PackArgs {
                 entries.as_deref(),
             )
             .map_err(|error| anyhow!(error))?;
-            if self.rust_report {
-                reporter.suspend(|| report_rust(&module));
-            }
             Some(module)
         } else {
             None
@@ -849,42 +853,60 @@ fn canonicalize_function_name(engine: &BexEngine, name: &str) -> String {
 }
 
 fn rust_manifest(workspace: &Path, profile: RustProfile) -> String {
-    let dep = |name: &str| {
-        format!(
-            "{name} = {{ path = {:?} }}\n",
-            workspace.join("crates").join(name)
+    let table = |entries: &[(&str, toml::Value)]| -> toml::Value {
+        toml::Value::Table(
+            entries
+                .iter()
+                .map(|(key, value)| ((*key).to_owned(), value.clone()))
+                .collect(),
         )
     };
-    format!(
-        "[package]\nname = \"baml_rust_program\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\
-         publish = false\n\n[workspace]\n\n[lib]\npath = \"src/lib.rs\"\n\n\
-         [[bin]]\nname = \"baml_rust_program\"\npath = \"src/main.rs\"\n\n\
-         [dependencies]\n{}{}{}\n\
-         [profile.release]\n{}",
-        dep("bex_vm"),
-        dep("bex_vm_types"),
-        dep("baml_pack_host"),
-        profile.cargo_profile_settings(),
-    )
-}
-
-fn report_rust(module: &baml_db::rust_backend::RustModule) {
-    let mut out = String::new();
-    for function in &module.functions {
-        out.push_str(&format!("rust     {}\n", function.display));
-    }
-    for (name, rejection) in &module.rejected {
-        out.push_str(&format!("bytecode {name:<48} {rejection}\n"));
-    }
-    out.push_str(&format!(
-        "{} rust, {} bytecode\n",
-        module.functions.len(),
-        module.rejected.len()
-    ));
-    #[allow(clippy::print_stderr)]
-    {
-        eprint!("{out}");
-    }
+    let dependency = |name: &str| {
+        let path = workspace.join("crates").join(name);
+        (
+            name.to_owned(),
+            table(&[("path", path.to_string_lossy().into_owned().into())]),
+        )
+    };
+    let name = "baml_rust_program";
+    let manifest = table(&[
+        (
+            "package",
+            table(&[
+                ("name", name.into()),
+                ("version", "0.0.0".into()),
+                ("edition", "2024".into()),
+                ("publish", false.into()),
+            ]),
+        ),
+        // Its own workspace, so it is no member of the one it builds from.
+        ("workspace", table(&[])),
+        ("lib", table(&[("path", "src/lib.rs".into())])),
+        (
+            "bin",
+            toml::Value::Array(vec![table(&[
+                ("name", name.into()),
+                ("path", "src/main.rs".into()),
+            ])]),
+        ),
+        (
+            "dependencies",
+            toml::Value::Table(
+                ["bex_vm", "bex_vm_types", "baml_pack_host"]
+                    .into_iter()
+                    .map(dependency)
+                    .collect(),
+            ),
+        ),
+        (
+            "profile",
+            table(&[(
+                "release",
+                toml::Value::Table(profile.cargo_profile_settings()),
+            )]),
+        ),
+    ]);
+    toml::to_string(&manifest).expect("a TOML table serializes")
 }
 
 fn read_host_binary(target_triple: &str, reporter: &Reporter) -> Result<Vec<u8>> {
@@ -1032,7 +1054,6 @@ mod tests {
             output: None,
             rust: false,
             rust_workspace: None,
-            rust_report: false,
             rust_build_dir: None,
             rust_profile: RustProfile::Release,
             target_triple: None,
@@ -1482,41 +1503,40 @@ mod tests {
 
     #[test]
     fn test_rust_manifest_release_profile() {
-        let manifest = rust_manifest(Path::new("/ws"), RustProfile::Release);
+        let manifest = rust_manifest(Path::new("/w\"s"), RustProfile::Release);
+        let parsed: toml::Value = toml::from_str(&manifest).expect("valid TOML");
         assert_eq!(
-            manifest.replace(r"\\", "/"),
-            "[package]\nname = \"baml_rust_program\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\
-             publish = false\n\n[workspace]\n\n[lib]\npath = \"src/lib.rs\"\n\n\
-             [[bin]]\nname = \"baml_rust_program\"\npath = \"src/main.rs\"\n\n\
-             [dependencies]\n\
-             bex_vm = { path = \"/ws/crates/bex_vm\" }\n\
-             bex_vm_types = { path = \"/ws/crates/bex_vm_types\" }\n\
-             baml_pack_host = { path = \"/ws/crates/baml_pack_host\" }\n\n\
-             [profile.release]\nlto = \"fat\"\ncodegen-units = 1\nopt-level = 3\n\
-             strip = \"symbols\"\npanic = \"unwind\"\n"
+            parsed["package"]["name"].as_str(),
+            Some("baml_rust_program")
         );
-        toml::from_str::<toml::Value>(&manifest).expect("valid TOML");
+        assert_eq!(parsed["bin"][0]["path"].as_str(), Some("src/main.rs"));
+        assert!(
+            parsed["workspace"]
+                .as_table()
+                .is_some_and(toml::Table::is_empty)
+        );
+        let path = Path::new("/w\"s").join("crates").join("bex_vm");
+        assert_eq!(
+            parsed["dependencies"]["bex_vm"]["path"].as_str(),
+            path.to_str(),
+            "a path is a TOML string, escaped as TOML"
+        );
+        let release = &parsed["profile"]["release"];
+        assert_eq!(release["lto"].as_str(), Some("fat"));
+        assert_eq!(release["codegen-units"].as_integer(), Some(1));
+        assert_eq!(release["opt-level"].as_integer(), Some(3));
+        assert_eq!(release["strip"].as_str(), Some("symbols"));
     }
 
     #[test]
     fn test_rust_manifest_fast_profile() {
         let manifest = rust_manifest(Path::new("/ws"), RustProfile::Fast);
-        let release = rust_manifest(Path::new("/ws"), RustProfile::Release);
-        let (head, profile) = manifest.split_once("[profile.release]\n").unwrap();
-        assert_eq!(
-            Some(head),
-            release.split_once("[profile.release]\n").map(|(h, _)| h)
-        );
-        assert_eq!(
-            profile,
-            "lto = false\ncodegen-units = 16\nopt-level = 1\nstrip = \"none\"\n\
-             debug = \"line-tables-only\"\npanic = \"unwind\"\n"
-        );
         let parsed: toml::Value = toml::from_str(&manifest).expect("valid TOML");
-        assert_eq!(
-            parsed["profile"]["release"]["opt-level"],
-            toml::Value::Integer(1)
-        );
+        let release = &parsed["profile"]["release"];
+        assert_eq!(release["lto"].as_bool(), Some(false));
+        assert_eq!(release["opt-level"].as_integer(), Some(1));
+        assert_eq!(release["debug"].as_str(), Some("line-tables-only"));
+        assert_eq!(release["panic"].as_str(), Some("unwind"));
     }
 
     #[test]
