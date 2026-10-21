@@ -428,13 +428,6 @@ Require(
 _ = writer.Flush();
 _ = writer.Close();
 
-using Baml.Sync.Semaphore semaphore = Baml.Sync.Semaphore.New(2);
-Require(semaphore.Capacity() == 2, "Semaphore construction changed");
-_ = Expect<Baml.BamlErrorException>(() => Baml.Sync.Semaphore.New(0));
-Require(
-    semaphore.ActiveCount() == 0 && semaphore.QueuedCount() == 0,
-    "Semaphore state methods changed");
-
 _ = csvReader.Close();
 
 clonedGlob.Dispose();

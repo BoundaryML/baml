@@ -462,20 +462,10 @@ fn verify_stdlib_resources_surface(fixture: &std::path::Path) {
             ],
         ),
         (
-            // `apply` comes from `implements baml.spawn.Modifier`;
-            // interface-impl methods are not generated, which is what keeps
-            // the host-unrepresentable `baml.spawn.Plan` off this surface.
+            // `baml.sync` types cross as handles only: a host gets no
+            // operations on them (`build_symbol_pool`).
             "Sync/Semaphore.g.cs",
-            vec![
-                " New(",
-                " NewAsync(",
-                " Capacity(",
-                " CapacityAsync(",
-                " ActiveCount(",
-                " ActiveCountAsync(",
-                " QueuedCount(",
-                " QueuedCountAsync(",
-            ],
+            vec![],
         ),
         (
             "Spawn/CancelToken.g.cs",
