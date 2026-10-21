@@ -2238,7 +2238,7 @@ mod tests {
         std::fs::write(
             &file,
             format!(
-                "{}\nlet LAUNCH_ID = Initialize();\n",
+                "{}\nconst LAUNCH_ID = Initialize();\n",
                 include_str!("../tests/fixtures/launch_context/baml_src/main.baml")
             ),
         )

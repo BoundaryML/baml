@@ -3,8 +3,9 @@
 //!
 //! # What a global is
 //!
-//! A top-level `let` — a global variable written in source, a `client Foo = …`
-//! declaration, or a Session's persisted binding — is evaluated once, eagerly,
+//! A top-level let binding — a global variable written in source (`const NAME
+//! = …`), a `client Foo = …` declaration, or a Session's persisted binding — is
+//! evaluated once, eagerly,
 //! by its package's synthesized `$init`, before any request runs. Its value is
 //! then frozen into the engine's shared global table, so an initializer that
 //! reads another global must run after that global's own initializer.

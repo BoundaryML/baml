@@ -1059,7 +1059,7 @@ fn is_item_node(kind: SyntaxKind) -> bool {
             | SyntaxKind::RETRY_POLICY_DEF
             | SyntaxKind::TEMPLATE_STRING_DEF
             | SyntaxKind::TYPE_ALIAS_DEF
-            // A global variable (file-scope `let`) and a `client Name = …`
+            // A global variable (file-scope `const`) and a `client Name = …`
             // declaration: top-level bindings.
             | SyntaxKind::LET_STMT
             | SyntaxKind::CLIENT_VALUE_DEF

@@ -55,7 +55,7 @@ function load() -> int throws string {
     throw "config is missing"
 }
 
-let CONFIG = load();
+const CONFIG = load();
 
 function main() -> int {
     CONFIG
@@ -100,8 +100,8 @@ function read(source: Source) -> int {
     source.value()
 }
 
-let EARLY: int = read(ReadsLate {});
-let LATE = 41;
+const EARLY: int = read(ReadsLate {});
+const LATE = 41;
 
 function main() -> int {
     EARLY
@@ -135,7 +135,7 @@ function build(count: int) -> float[] {
     values
 }
 
-let BIG = build(700000);
+const BIG = build(700000);
 
 function main() -> int {
     BIG.length()
@@ -160,18 +160,18 @@ async fn independent_globals_initialize_in_source_order_regardless_of_load_order
     // Loaded in reverse path order on purpose.
     db.file(
         "/globals/order/b.baml",
-        "let B1 = record(\"b1\");\nlet B2 = record(\"b2\");\n",
+        "const B1 = record(\"b1\");\nconst B2 = record(\"b2\");\n",
     );
     db.file(
         "/globals/order/a.baml",
-        r#"let LOG: string[] = [];
+        r#"const LOG: string[] = [];
 
 function record(name: string) -> string {
     LOG.push(name);
     name
 }
 
-let A1 = record("a1");
+const A1 = record("a1");
 
 function main() -> string {
     LOG.join(",")
@@ -197,7 +197,7 @@ async fn a_dependency_packages_globals_are_read_through_its_name() {
     db.dependency("lib");
     db.file(
         "<builtin>/lib/main.baml",
-        r#"let BASE = 40;
+        r#"const BASE = 40;
 
 function base() -> int {
     BASE
@@ -206,7 +206,7 @@ function base() -> int {
     );
     db.file(
         "/globals/deps/main.baml",
-        r#"let DERIVED = lib.BASE + 2;
+        r#"const DERIVED = lib.BASE + 2;
 
 function main() -> int {
     DERIVED + lib.base() - lib.BASE

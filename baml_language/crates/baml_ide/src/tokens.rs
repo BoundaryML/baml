@@ -299,7 +299,7 @@ fn plain(ty: SemanticTokenType) -> Class {
 }
 
 /// Whether a `BINDING_PATTERN` names a global variable: the pattern of a
-/// file-scope `let`.
+/// file-scope `const`.
 fn declares_global(binding: &SyntaxNode) -> bool {
     binding
         .parent()

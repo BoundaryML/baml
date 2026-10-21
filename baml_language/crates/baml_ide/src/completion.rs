@@ -1221,12 +1221,13 @@ function f() -> int throws <[CURSOR]
             "interface",
             "type",
             "test",
-            "let",
+            "const",
         ] {
             assert!(labels.contains(&keyword), "missing `{keyword}`: {labels:?}");
         }
-        // Expression keywords and names do not open a declaration.
-        for absent in ["return", "await", "Later"] {
+        // Expression keywords and names do not open a declaration, and a
+        // global is declared with `const`, never `let`.
+        for absent in ["return", "await", "Later", "let"] {
             assert!(
                 !labels.contains(&absent),
                 "`{absent}` is not an item: {labels:?}"
@@ -1245,6 +1246,11 @@ function f() -> int throws <[CURSOR]
         assert_eq!(
             test_item.insert,
             CompletionInsert::Snippet("test \"${1:name}\" {\n\t$0\n}".to_string())
+        );
+        let global = items.iter().find(|item| item.label == "const").unwrap();
+        assert_eq!(
+            global.insert,
+            CompletionInsert::Snippet("const ${1:name} = $0;".to_string())
         );
     }
 

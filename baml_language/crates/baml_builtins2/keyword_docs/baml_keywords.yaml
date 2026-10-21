@@ -509,19 +509,21 @@ while:
     }
 
 let:
-  summary: "Binds a value to a name. Use `let` for all variable declarations, local and global."
+  summary: "Binds a value to a local name. Use `let` for variable declarations inside a body."
   syntax: |
     let name = "Alice"
     let count = items.length()
   details: |
-    At file scope, `let` declares a global variable: `let MAX_RETRIES = 3;` or `let MAX_RETRIES: int = 3;`. A global is evaluated once, when the program starts, in dependency order, and is visible from every body in its namespace (elsewhere, write `namespace.NAME`). The binding cannot be reassigned, but what it holds is shared by every call: changing a global's fields or elements is visible to every reader. Its initializer cannot perform io, `spawn`, `await`, or `return`.
+    A `let` binding can be reassigned (`count = count + 1`). `let` is only allowed inside a body; a global variable is declared with `const`.
 
 const:
-  summary: "Binds a value to a name; currently the same as `let`."
+  summary: "Declares a global variable at file scope; inside a body it currently behaves like `let`."
   syntax: |
     const DEFAULT_LIMIT = 100
   details: |
-    `const` is reserved for a future meaning and currently behaves exactly like `let`, so prefer `let`. At file scope it declares a global variable, which is immutable whichever keyword declares it.
+    At file scope, `const` declares a global variable: `const MAX_RETRIES = 3;` or `const MAX_RETRIES: int = 3;`. A global is evaluated once, when the program starts, in dependency order, and is visible from every body in its namespace (elsewhere, write `namespace.NAME`). The binding cannot be reassigned, but what it holds is shared by every call: changing a global's fields or elements is visible to every reader. Its initializer cannot perform io, `spawn`, `await`, or `return`. A top-level `let` is an error.
+
+    Inside a body, `const` currently behaves like `let`: immutability is not enforced yet, so prefer `let` for locals.
 
 in:
   summary: "Used with `for` loops to iterate over a collection."

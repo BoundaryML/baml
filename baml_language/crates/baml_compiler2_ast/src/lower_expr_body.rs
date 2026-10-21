@@ -124,7 +124,7 @@ pub(crate) fn lower(
     (body, source_map)
 }
 
-/// Which surface a file-scope `let` belongs to.
+/// Which surface a file-scope binding belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TopLevelLetSurface {
     /// A global variable written in an ordinary source file.
@@ -136,13 +136,14 @@ pub(crate) enum TopLevelLetSurface {
     Session,
 }
 
-/// Lower one file-scope `let` to a top-level binding.
+/// Lower one file-scope `LET_STMT` to a top-level binding.
 ///
-/// A top-level binding is exactly one name: `let NAME = value;`, or, in source,
-/// `let NAME: Type = value;`. Everything a local `let` admits beyond that — a
-/// destructure, a wildcard, an alias chain (`let a: let b`), `let … else` — is
-/// refused here, because a global is addressed by its one name from every body
-/// in the package and has no scope a refutable pattern could fall out of.
+/// A top-level binding is exactly one name: `const NAME = value;`, or, in
+/// source, `const NAME: Type = value;`. Everything a local `let` admits beyond
+/// that — a destructure, a wildcard, an alias chain (`let a: let b`), `let …
+/// else` — is refused here, because a global is addressed by its one name from
+/// every body in the package and has no scope a refutable pattern could fall
+/// out of.
 pub(crate) fn lower_top_level_let(
     node: &SyntaxNode,
     surface: TopLevelLetSurface,
@@ -154,6 +155,26 @@ pub(crate) fn lower_top_level_let(
     // also held the `NAME: Type` pattern would check that annotation a second
     // time as if a local declared it.
     let mut pattern_ctx = LoweringContext::new();
+    if surface == TopLevelLetSurface::Source {
+        // A global is declared with `const`. The introducer is the
+        // statement's first `let`/`const` token: the parser nests it in the
+        // pattern for most shapes, and an alias chain's second one follows it.
+        let introducer = node
+            .descendants_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_LET | SyntaxKind::KW_CONST));
+        if let Some(introducer) = introducer {
+            // A `let` is refused, but the binding still lowers as the global
+            // it was meant to be, so its readers resolve instead of cascading
+            // errors.
+            if introducer.kind() == SyntaxKind::KW_LET {
+                diags.push(LoweringDiagnostic::TopLevelLetIntroducer {
+                    span: introducer.text_range(),
+                });
+            }
+            pattern_ctx.file_scope_introducer = Some(introducer.text_range());
+        }
+    }
     let parts = pattern_ctx.lower_let_parts(
         node,
         LetParts {
@@ -165,15 +186,7 @@ pub(crate) fn lower_top_level_let(
     let pattern = pattern_ctx.let_binding_pattern(node, parts.pattern);
     let patterns = std::mem::take(&mut pattern_ctx.patterns);
     let (_, _, pattern_diags, _) = pattern_ctx.finish(None);
-    // At file scope `const` is no different from `let` either — but a global
-    // IS immutable, so the body-level wording ("not enforced yet") would be
-    // wrong here.
-    diags.extend(pattern_diags.into_iter().map(|diag| match (surface, diag) {
-        (TopLevelLetSurface::Source, LoweringDiagnostic::ConstBindingIntroducer { span }) => {
-            LoweringDiagnostic::TopLevelConstIntroducer { span }
-        }
-        (_, diag) => diag,
-    }));
+    diags.extend(pattern_diags);
 
     let reject = |diags: &mut Vec<LoweringDiagnostic>, session: &'static str, source| {
         diags.push(match surface {
@@ -200,7 +213,7 @@ pub(crate) fn lower_top_level_let(
         reject(
             diags,
             "session bindings do not support patterns or `else`",
-            "`let … else` needs a body to leave; a global variable's initializer must \
+            "`const … else` needs a body to leave; a global variable's initializer must \
              produce its value",
         );
         return None;
@@ -293,9 +306,10 @@ struct LoweredLetParts {
     has_else: bool,
 }
 
-/// The type a `let NAME: …` sub-pattern denotes when it is a pure type
-/// ascription: a type pattern, or an alternation of them (`let v: int | string`
-/// parses its annotation as an or-pattern of types, which is the union type).
+/// The type a `const NAME: …` sub-pattern denotes when it is a pure type
+/// ascription: a type pattern, or an alternation of them (`const V: int |
+/// string` parses its annotation as an or-pattern of types, which is the union
+/// type).
 /// Any structural sub-pattern is not an annotation.
 fn ascription_type_expr(patterns: &la_arena::Arena<Pattern>, sub: PatId) -> Option<TypeExpr> {
     match &patterns[sub] {
@@ -1479,6 +1493,11 @@ struct LoweringContext {
     /// generated nodes are distinguishable from the user-written ones they wrap
     /// — see [`AstSourceMap::synthetic_exprs`]. Consumed by inlay hints.
     synthesizing: bool,
+    /// A file-scope binding's introducer keyword, which its caller checks
+    /// itself: a global requires `const`. The body-level `const` warning
+    /// skips this one token; a nested introducer, such as an alias chain's,
+    /// still gets it.
+    file_scope_introducer: Option<TextRange>,
 }
 
 /// The elaborated form of a single `${…}` interpolation in an untagged
@@ -1508,6 +1527,7 @@ impl LoweringContext {
             needs_chain_wrap: std::collections::HashSet::new(),
             consumed_generic_args: std::collections::HashSet::new(),
             synthesizing: false,
+            file_scope_introducer: None,
         }
     }
 
@@ -1584,11 +1604,13 @@ impl LoweringContext {
     }
 
     fn warn_direct_const_introducers(&mut self, node: &SyntaxNode) {
+        let file_scope_introducer = self.file_scope_introducer;
         let spans: Vec<TextRange> = node
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .filter(|token| token.kind() == SyntaxKind::KW_CONST)
             .map(|token| token.text_range())
+            .filter(|&span| Some(span) != file_scope_introducer)
             .collect();
         for span in spans {
             self.warn_const_introducer(span);

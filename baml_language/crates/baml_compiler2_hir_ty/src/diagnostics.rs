@@ -927,8 +927,8 @@ pub enum TirTypeError {
     InitIoNotAllowed {
         /// The declaration's name.
         declaration: Name,
-        /// `client Foo = …` (true) versus a plain top-level `let` (false).
-        /// Only affects wording.
+        /// `client Foo = …` (true) versus a global variable, `const NAME = …`
+        /// (false). Only affects wording.
         is_client: bool,
         /// Fully-qualified name of the io sysop reached (`baml.env.get`).
         sysop: Name,
@@ -943,7 +943,8 @@ pub enum TirTypeError {
     InitSuspendNotAllowed {
         /// The declaration's name.
         declaration: Name,
-        /// `client Foo = …` (true) versus a plain top-level `let` (false).
+        /// `client Foo = …` (true) versus a global variable, `const NAME = …`
+        /// (false).
         is_client: bool,
         /// The suspending operation: `"spawn"` or `"await"`.
         operation: &'static str,

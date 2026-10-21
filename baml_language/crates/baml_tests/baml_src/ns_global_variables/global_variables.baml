@@ -1,28 +1,28 @@
-// Global variables: top-level `let` bindings, evaluated once at startup.
+// Global variables: top-level `const` bindings, evaluated once at startup.
 //
 // Every test in the corpus runs in one engine, so the globals here are shared
 // by all of them; the one test that mutates a global's contents asserts the
 // change it made, not an absolute value.
 
 /// How many times to retry.
-let MAX_RETRIES = 3;
-let GREETING: string = "hello";
-let NAMES: string[] = ["ada", "grace"];
-let SCORES = { "ada": 1, "grace": 2 };
-let MESSAGE = `${GREETING}, ${NAMES[0]}`;
-let OPTIONAL_LIMIT: int? = null;
-let EITHER: int | string = "text";
-let RATIO: float = 1.5;
+const MAX_RETRIES = 3;
+const GREETING: string = "hello";
+const NAMES: string[] = ["ada", "grace"];
+const SCORES = { "ada": 1, "grace": 2 };
+const MESSAGE = `${GREETING}, ${NAMES[0]}`;
+const OPTIONAL_LIMIT: int? = null;
+const EITHER: int | string = "text";
+const RATIO: float = 1.5;
 
 // Initialized in dependency order, not source order: `FORWARD` reads `LATER`,
 // declared below it, and `THROUGH_HELPER` reads `HELPER_INPUT` through a
 // function's body.
-let FORWARD = LATER + 1;
-let LATER = 41;
-let THROUGH_HELPER = helper_reads_global();
-let HELPER_INPUT = 5;
-let THROUGH_DEFAULT = default_reads_global();
-let DEFAULT_INPUT = 7;
+const FORWARD = LATER + 1;
+const LATER = 41;
+const THROUGH_HELPER = helper_reads_global();
+const HELPER_INPUT = 5;
+const THROUGH_DEFAULT = default_reads_global();
+const DEFAULT_INPUT = 7;
 
 function helper_reads_global() -> int {
     HELPER_INPUT * 2
@@ -36,10 +36,10 @@ function double(x: int) -> int {
     x * 2
 }
 
-let DOUBLED = double(MAX_RETRIES);
+const DOUBLED = double(MAX_RETRIES);
 
 // A function value: the lambda body reads a global when it is called.
-let ADD_RETRIES = (x: int) -> int {
+const ADD_RETRIES = (x: int) -> int {
     x + MAX_RETRIES
 };
 
@@ -52,27 +52,27 @@ enum Shade {
     Dark,
 }
 
-let COUNTER = Counter { n: 0 };
-let FAVORITE_SHADE = Shade.Dark;
+const COUNTER = Counter { n: 0 };
+const FAVORITE_SHADE = Shade.Dark;
 
 // A handled throw: the initializer's value is the catch arm's.
 function fails() -> int throws string {
     throw "nope"
 }
 
-let RECOVERED = fails() catch (e) {
+const RECOVERED = fails() catch (e) {
     string => -1
 };
 
 // A global named like the synthetic test collector stays reachable from tests.
-let registry = "user registry";
+const registry = "user registry";
 
 // A global named like a type does not capture that type's statics.
-let float = 2;
+const float = 2;
 
 // Reflection handles are ordinary values.
-let INT_TYPE = reflect.Type.of<int>();
-let CURRENT_PACKAGE = reflect.Package.current();
+const INT_TYPE = reflect.Type.of<int>();
+const CURRENT_PACKAGE = reflect.Package.current();
 
 function bump_counter() -> int {
     COUNTER.n += 1;
@@ -160,7 +160,7 @@ function session_reads_package_global() -> int {
 function compiled_package_globals() -> int {
     let package = reflect.Package.compile(
         {
-            "main.baml": "let BASE = 40;\nlet DERIVED = BASE + 2;\nfunction get() -> int { DERIVED }",
+            "main.baml": "const BASE = 40;\nconst DERIVED = BASE + 2;\nfunction get() -> int { DERIVED }",
         },
     );
     let get = package.get_function<() -> int>("get") ?? throw "missing get";
@@ -168,7 +168,7 @@ function compiled_package_globals() -> int {
 }
 
 function compiled_package_initializer_throw_reaches_the_caller() -> string {
-    let source = "function boom() -> int throws string { throw \"init failed\" }\nlet X = boom();";
+    let source = "function boom() -> int throws string { throw \"init failed\" }\nconst X = boom();";
     let outcome = reflect.Package.compile({ "main.baml": source }) catch (e) {
         string => {
             return e;

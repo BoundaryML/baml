@@ -428,19 +428,21 @@ Scopes and arenas are therefore orthogonal. Two consequences worth knowing:
 
 ## Global Variables and Initialization Order
 
-A top-level `let` is a **global variable**: `let NAME = value;` or
-`let NAME: Type = value;` at file scope. The same item (`ast::LetDef` /
+A top-level `const` is a **global variable**: `const NAME = value;` or
+`const NAME: Type = value;` at file scope. A top-level `let` is an error
+(`TopLevelLetIntroducer`): `let` declares a reassignable binding, which only a
+body has. It still lowers as the global it names, so its readers resolve
+instead of cascading errors. The same item (`ast::LetDef` /
 `Definition::Let`) also carries a `client Name = value;` declaration
 (`LetOrigin::Client`) and a `Session.eval` submission's persisted binding.
 
 ### Semantics
 
 - **One name, optionally annotated.** Destructuring, `_`, alias chains, and
-  `let … else` are refused at file scope (`InvalidTopLevelLet`). The binding's
-  type is its annotation, which the initializer is checked against; without
-  one it is the initializer's type, widened like any binding site
-  (`baml_compiler2_hir_ty::globals::global_value_type`). `const` at file scope
-  is accepted and means the same as `let`.
+  `const … else` are refused at file scope (`InvalidTopLevelLet`). The
+  binding's type is its annotation, which the initializer is checked against;
+  without one it is the initializer's type, widened like any binding site
+  (`baml_compiler2_hir_ty::globals::global_value_type`).
 - **Scoping.** Globals live in the value namespace of their file's namespace,
   alongside functions and clients (E0011 on a duplicate). A bare name reaches
   the file's own namespace; elsewhere a global is written `ns.NAME`,

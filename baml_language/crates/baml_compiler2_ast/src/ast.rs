@@ -1961,7 +1961,7 @@ pub struct TypeAliasDef {
     pub docstring: Option<String>,
 }
 
-/// A top-level let binding: a global variable (`let NAME: T = expr;` at file
+/// A top-level let binding: a global variable (`const NAME: T = expr;` at file
 /// scope), a compiler-generated client binding (`client Name = expr;`), or a
 /// Session submission's persisted root binding. All three share the `$init`
 /// pipeline: the initializer runs once, before any request, and the binding is

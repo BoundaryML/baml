@@ -6,45 +6,45 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × initialization cycle: global `PING` needs its own value to be initialized (`PING` → `PONG` → `PING`) — globals are initialized once, at startup, in dependency order, and no order can satisfy a
   │ cycle
-    ╭─[initializers.baml:13:12]
- 13 │ let PING = PONG + 1;
-    ·            ────
+    ╭─[initializers.baml:13:14]
+ 13 │ const PING = PONG + 1;
+    ·              ────
     ╰────
 
   [type] E0181
 
   × initialization cycle: global `THROUGH_HELPER` needs its own value to be initialized (`THROUGH_HELPER` → `reads_through_helper` → `THROUGH_HELPER`) — globals are initialized once, at startup, in
   │ dependency order, and no order can satisfy a cycle
-    ╭─[initializers.baml:17:27]
- 17 │ let THROUGH_HELPER: int = reads_through_helper();
-    ·                           ────────────────────
+    ╭─[initializers.baml:17:29]
+ 17 │ const THROUGH_HELPER: int = reads_through_helper();
+    ·                             ────────────────────
     ╰────
 
   [type] E0181
 
   × initialization cycle: global `THROUGH_DEFAULT` needs its own value to be initialized (`THROUGH_DEFAULT` → `with_default` → `THROUGH_DEFAULT`) — globals are initialized once, at startup, in
   │ dependency order, and no order can satisfy a cycle
-    ╭─[initializers.baml:24:28]
- 24 │ let THROUGH_DEFAULT: int = with_default();
-    ·                            ────────────
+    ╭─[initializers.baml:24:30]
+ 24 │ const THROUGH_DEFAULT: int = with_default();
+    ·                              ────────────
     ╰────
 
   [type] E0181
 
   × initialization cycle: global `STORED` needs its own value to be initialized (`STORED` → `STORED_PEER` → `STORED`) — globals are initialized once, at startup, in dependency order, and no order
   │ can satisfy a cycle
-    ╭─[initializers.baml:33:50]
- 33 │ let STORED: () -> int throws never = () -> int { STORED_PEER() };
-    ·                                                  ───────────
+    ╭─[initializers.baml:33:52]
+ 33 │ const STORED: () -> int throws never = () -> int { STORED_PEER() };
+    ·                                                    ───────────
     ╰────
 
   [type] E0181
 
   × initialization cycle: global `SELF_REFERENCE` needs its own value to be initialized (`SELF_REFERENCE` → `SELF_REFERENCE`) — globals are initialized once, at startup, in dependency order, and no
   │ order can satisfy a cycle
-    ╭─[initializers.baml:37:27]
- 37 │ let SELF_REFERENCE: int = SELF_REFERENCE + 1;
-    ·                           ──────────────
+    ╭─[initializers.baml:37:29]
+ 37 │ const SELF_REFERENCE: int = SELF_REFERENCE + 1;
+    ·                             ──────────────
     ╰────
 
   [type] E0180
@@ -60,34 +60,34 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × global `SPAWNED` uses `spawn` — top-level declarations are evaluated once at startup (`$init`), before anything can be scheduled or waited on; compute the value synchronously, or move the
   │ concurrent work into the function that needs it
-    ╭─[initializers.baml:56:15]
- 56 │ let SPAWNED = spawn { 1 };
-    ·               ───────────
+    ╭─[initializers.baml:56:17]
+ 56 │ const SPAWNED = spawn { 1 };
+    ·                 ───────────
     ╰────
 
   [type] E0182
 
   × global `AWAITED` reaches `await` through `waits` — top-level declarations are evaluated once at startup (`$init`), before anything can be scheduled or waited on; compute the value synchronously,
   │ or move the concurrent work into the function that needs it
-    ╭─[initializers.baml:64:15]
- 64 │ let AWAITED = waits();
-    ·               ─────
+    ╭─[initializers.baml:64:17]
+ 64 │ const AWAITED = waits();
+    ·                 ─────
     ╰────
 
   [type] E0163
 
   × global `HOME` calls `baml.env.get`, which performs io — top-level declarations are evaluated at startup (`$init`), where io is unavailable; resolve at request time instead — e.g. `env.X`, a
   │ late-bound reference read only when the request is made
-    ╭─[initializers.baml:67:12]
- 67 │ let HOME = baml.env.get("HOME");
-    ·            ────────────
+    ╭─[initializers.baml:67:14]
+ 67 │ const HOME = baml.env.get("HOME");
+    ·              ────────────
     ╰────
 
   [type] E0183
 
   ⚠ global `UNCAUGHT` can throw `string` while it is initialized — globals are evaluated once, at startup, and an uncaught throw there stops the program from starting; if that is not intended,
   │ handle it in the initializer with `catch`
-    ╭─[initializers.baml:74:5]
- 74 │ let UNCAUGHT = may_fail();
-    ·     ────────
+    ╭─[initializers.baml:74:7]
+ 74 │ const UNCAUGHT = may_fail();
+    ·       ────────
     ╰────

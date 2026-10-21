@@ -26,7 +26,8 @@ pub enum TopLevelDeclaration {
     TemplateString(TemplateStringDecl),
     TypeAlias(TypeAliasDecl),
     Generator(GeneratorDecl),
-    /// A global variable: a file-scope `let` (or `const`).
+    /// A global variable: a file-scope `const` (or a `let`, which the
+    /// compiler refuses but the formatter keeps as written).
     Let(super::LetStmt),
     Unknown(TextRange),
 }

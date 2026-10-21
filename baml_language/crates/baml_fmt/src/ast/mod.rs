@@ -424,7 +424,7 @@ impl Printable for SourceFile {
         for (idx, decl) in self.items.iter().enumerate() {
             // Items are separated by a blank line, except that a run of
             // global variables keeps the grouping it was written with:
-            // adjacent `let`s stay adjacent, and a blank line the author put
+            // adjacent globals stay adjacent, and a blank line the author put
             // between two of them stays (collapsed to one).
             let grouped_with_previous = idx > 0
                 && matches!(decl, TopLevelDeclaration::Let(_))

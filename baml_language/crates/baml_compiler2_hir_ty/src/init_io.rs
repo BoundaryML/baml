@@ -5,7 +5,7 @@
 //!
 //! Every **top-level binding with an initializer** is evaluated once, eagerly,
 //! by the synthesized `$init` chainer that `baml_compiler2_emit` appends to the
-//! program tail. Two surfaces produce one: a global variable (`let NAME =
+//! program tail. Two surfaces produce one: a global variable (`const NAME =
 //! <expr>;` at file scope) and `client Foo = <expr>;`, which
 //! `lower_client_value_def` lowers to a
 //! [`LetOrigin::Client`][baml_compiler2_ast::ast::LetOrigin] top-level let.

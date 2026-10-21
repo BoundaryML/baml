@@ -4,56 +4,56 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [hir] E0010
 
-  × invalid top-level `let`: a global variable binds a single name; destructuring and `_` are only available inside a body
+  × invalid top-level `const`: a global variable binds a single name; destructuring and `_` are only available inside a body
     ╭─[declarations.baml:12:1]
- 12 │ let [FIRST, SECOND] = [1, 2];
-    · ──────────────┬──────────────
-    ·               ╰── a global variable binds one name: `let NAME = value;` or `let NAME: Type = value;`
+ 12 │ const [FIRST, SECOND] = [1, 2];
+    · ───────────────┬───────────────
+    ·                ╰── a global variable binds one name: `const NAME = value;` or `const NAME: Type = value;`
     ╰────
 
   [hir] E0010
 
-  × invalid top-level `let`: a global variable binds a single name; destructuring and `_` are only available inside a body
+  × invalid top-level `const`: a global variable binds a single name; destructuring and `_` are only available inside a body
     ╭─[declarations.baml:15:1]
- 15 │ let _ = 3;
-    · ─────┬────
-    ·      ╰── a global variable binds one name: `let NAME = value;` or `let NAME: Type = value;`
+ 15 │ const _ = 3;
+    · ──────┬─────
+    ·       ╰── a global variable binds one name: `const NAME = value;` or `const NAME: Type = value;`
     ╰────
 
   [hir] E0010
 
-  × invalid top-level `let`: only a type annotation may follow a global variable's name
+  × invalid top-level `const`: only a type annotation may follow a global variable's name
     ╭─[declarations.baml:18:1]
- 18 │ let ALIAS: let OTHER = 4;
-    · ────────────┬────────────
-    ·             ╰── a global variable binds one name: `let NAME = value;` or `let NAME: Type = value;`
+ 18 │ const ALIAS: let OTHER = 4;
+    · ─────────────┬─────────────
+    ·              ╰── a global variable binds one name: `const NAME = value;` or `const NAME: Type = value;`
     ╰────
 
   [hir] E0010
 
-  × invalid top-level `let`: `let … else` needs a body to leave; a global variable's initializer must produce its value
+  × invalid top-level `const`: `const … else` needs a body to leave; a global variable's initializer must produce its value
     ╭─[declarations.baml:21:1]
- 21 │ let MAYBE: int = 5 else { 6 };
-    · ───────────────┬──────────────
-    ·                ╰── a global variable binds one name: `let NAME = value;` or `let NAME: Type = value;`
+ 21 │ const MAYBE: int = 5 else { 6 };
+    · ────────────────┬───────────────
+    ·                 ╰── a global variable binds one name: `const NAME = value;` or `const NAME: Type = value;`
     ╰────
 
   [hir] E0176
 
   × `baml` cannot be used as a binding name: syntax such as `spawn` and `env.X` refers to the `baml` package, which this binding would hide. A class or function may still be named `baml`.
-    ╭─[declarations.baml:24:5]
- 24 │ let baml = 7;
-    ·     ──┬─
-    ·       ╰── reserved binding name
+    ╭─[declarations.baml:24:7]
+ 24 │ const baml = 7;
+    ·       ──┬─
+    ·         ╰── reserved binding name
     ╰────
 
   [validation] E0011
 
   × name `Duplicated` defined 2 times as: let, function
-    ╭─[declarations.baml:27:5]
- 27 │ let Duplicated = 8;
-    ·     ─────┬────
-    ·          ╰── first defined as let here
+    ╭─[declarations.baml:27:7]
+ 27 │ const Duplicated = 8;
+    ·       ─────┬────
+    ·            ╰── first defined as let here
     ╰────
     ╭─[declarations.baml:29:10]
  29 │ function Duplicated() -> int {
@@ -64,43 +64,43 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0002
 
   × unresolved type: NoSuchType
-    ╭─[declarations.baml:34:17]
- 34 │ let UNRESOLVED: NoSuchType = 10;
-    ·                 ──────────
+    ╭─[declarations.baml:34:19]
+ 34 │ const UNRESOLVED: NoSuchType = 10;
+    ·                   ──────────
     ╰────
 
   [hir] E0147
 
   × the `_` wildcard type can only be inferred in a `let` binding or a `throws` clause, not in a global variable's type
-    ╭─[declarations.baml:35:11]
- 35 │ let HOLE: map<string, _> = { "eleven": 11 };
-    ·           ───────┬──────
-    ·                  ╰── `_` cannot be inferred here
+    ╭─[declarations.baml:35:13]
+ 35 │ const HOLE: map<string, _> = { "eleven": 11 };
+    ·             ───────┬──────
+    ·                    ╰── `_` cannot be inferred here
     ╰────
 
   [hir] E0110
 
   × `void` can only be used as a function return type, not as a let binding annotation
-    ╭─[declarations.baml:36:14]
- 36 │ let NOTHING: void = null;
-    ·              ──┬─
-    ·                ╰── `void` not allowed here
+    ╭─[declarations.baml:36:16]
+ 36 │ const NOTHING: void = null;
+    ·                ──┬─
+    ·                  ╰── `void` not allowed here
     ╰────
 
   [type] E0001
 
   × mismatched types
-    ╭─[declarations.baml:39:26]
- 39 │ let MISMATCHED: string = 12;
-    ·                          ─┬
-    ·                           ╰── expected `string`, found `12`
+    ╭─[declarations.baml:39:28]
+ 39 │ const MISMATCHED: string = 12;
+    ·                            ─┬
+    ·                             ╰── expected `string`, found `12`
     ╰────
 
   [hir] E0010
 
-  ⚠ `const` is treated like `let` here: every global variable is already immutable, so declare it with `let`.
-    ╭─[declarations.baml:42:1]
- 42 │ const CONSTANT = 13;
-    · ──┬──
-    ·   ╰── `const` behaves like `let` for globals
+  × global variables are declared with `const`: `const NAME = value;`
+    ╭─[declarations.baml:43:1]
+ 43 │ let WITH_LET = 13;
+    · ─┬─
+    ·  ╰── write `const` here; `let` is only allowed inside a body
     ╰────

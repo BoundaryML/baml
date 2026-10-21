@@ -1,4 +1,4 @@
-//! The IDE over global variables: a top-level `let` reads as the binding it
+//! The IDE over global variables: a top-level `const` reads as the binding it
 //! is (keyword, name, type, docs), navigates and finds references through
 //! every spelling of it — bare, namespace-qualified, `root.`-qualified — and
 //! its initializer is a body like any function's, so the features that read a
@@ -35,7 +35,7 @@ fn describe(test: &CursorTest, location: &Location) -> String {
 fn hover_on_a_global_shows_its_annotation_and_docs() {
     let test = CursorTest::new(
         r#"/// How many times to retry.
-let MAX_RETRIES: int = 3;
+const MAX_RETRIES: int = 3;
 
 function f() -> int {
     MAX_RE<[CURSOR]TRIES
@@ -43,22 +43,22 @@ function f() -> int {
 "#,
     );
     let info = hover(&test);
-    assert_eq!(info.to_hover_block(), "let MAX_RETRIES: int");
+    assert_eq!(info.to_hover_block(), "const MAX_RETRIES: int");
     assert_eq!(info.docs(), Some("How many times to retry."));
 }
 
 #[test]
 fn hover_on_an_unannotated_global_shows_the_widened_initializer_type() {
     let test = CursorTest::new(
-        r#"let LIMIT = 5;
-let NAMES = ["a", "b"];
+        r#"const LIMIT = 5;
+const NAMES = ["a", "b"];
 
 function f() -> int {
     LIM<[CURSOR]IT + NAMES.length()
 }
 "#,
     );
-    assert_eq!(hover(&test).to_hover_block(), "let LIMIT: int");
+    assert_eq!(hover(&test).to_hover_block(), "const LIMIT: int");
 }
 
 #[test]
@@ -88,11 +88,11 @@ fn goto_definition_follows_a_namespace_qualified_global() {
 }
 "#,
     );
-    builder.source("ns_settings/settings.baml", "let TIMEOUT = 30;\n");
+    builder.source("ns_settings/settings.baml", "const TIMEOUT = 30;\n");
     let test = builder.build();
     let location = definition_at(&test.db, test.cursor.file, test.cursor.offset)
         .expect("a qualified global navigates to its declaration");
-    assert_eq!(describe(&test, &location), "settings.baml:1:5 -> TIMEOUT");
+    assert_eq!(describe(&test, &location), "settings.baml:1:7 -> TIMEOUT");
 }
 
 #[test]
@@ -100,7 +100,7 @@ fn references_include_every_spelling_and_skip_shadowing_locals() {
     let mut builder = CursorTest::builder();
     builder.source(
         "main.baml",
-        r#"let LIMIT<[CURSOR] = 3;
+        r#"const LIMIT<[CURSOR] = 3;
 
 function direct() -> int {
     LIMIT
@@ -116,14 +116,14 @@ function parameter(LIMIT: int) -> int {
 }
 "#,
     );
-    builder.source("ns_child/child.baml", "let DOUBLE = root.LIMIT * 2;\n");
+    builder.source("ns_child/child.baml", "const DOUBLE = root.LIMIT * 2;\n");
     let test = builder.build();
     let found = usages(&test);
     assert_eq!(
         found,
         vec![
-            "child.baml:1:19 -> LIMIT".to_string(),
-            "main.baml:1:5 -> LIMIT".to_string(),
+            "child.baml:1:21 -> LIMIT".to_string(),
+            "main.baml:1:7 -> LIMIT".to_string(),
             "main.baml:4:5 -> LIMIT".to_string(),
         ],
     );
@@ -141,15 +141,15 @@ fn references_to_a_child_namespace_global_include_its_qualified_reads() {
     );
     builder.source(
         "ns_settings/settings.baml",
-        "let TIME<[CURSOR]OUT = 30;\nlet BUDGET = TIMEOUT * 3;\n",
+        "const TIME<[CURSOR]OUT = 30;\nconst BUDGET = TIMEOUT * 3;\n",
     );
     let test = builder.build();
     assert_eq!(
         usages(&test),
         vec![
             "main.baml:2:14 -> TIMEOUT".to_string(),
-            "settings.baml:1:5 -> TIMEOUT".to_string(),
-            "settings.baml:2:14 -> TIMEOUT".to_string(),
+            "settings.baml:1:7 -> TIMEOUT".to_string(),
+            "settings.baml:2:16 -> TIMEOUT".to_string(),
         ],
     );
 }
@@ -159,7 +159,7 @@ fn references_to_a_child_namespace_global_include_its_qualified_reads() {
 #[test]
 fn a_local_inside_a_global_initializer_hovers_and_has_references() {
     let test = CursorTest::new(
-        r#"let TOTAL = {
+        r#"const TOTAL = {
     let part = 1;
     pa<[CURSOR]rt + part
 };
@@ -178,7 +178,7 @@ fn a_local_inside_a_global_initializer_hovers_and_has_references() {
 #[test]
 fn goto_definition_on_a_local_inside_a_global_initializer() {
     let test = CursorTest::new(
-        r#"let TOTAL = {
+        r#"const TOTAL = {
     let part = 1;
     pa<[CURSOR]rt + 2
 };
@@ -196,8 +196,8 @@ fn a_member_inside_a_global_initializer_resolves() {
     retries int
 }
 
-let SETTINGS = Settings { retries: 2 };
-let RETRIES = SETTINGS.retr<[CURSOR]ies;
+const SETTINGS = Settings { retries: 2 };
+const RETRIES = SETTINGS.retr<[CURSOR]ies;
 "#,
     );
     let TypeInfo::LocalVar { name, ty, .. } = hover(&test) else {
@@ -209,7 +209,7 @@ let RETRIES = SETTINGS.retr<[CURSOR]ies;
 #[test]
 fn completion_after_a_global_offers_its_members() {
     let test = CursorTest::new(
-        r#"let NAMES: string[] = ["a"];
+        r#"const NAMES: string[] = ["a"];
 
 function f() -> int {
     NAMES.<[CURSOR]
@@ -228,8 +228,8 @@ function f() -> int {
 #[test]
 fn completion_inside_a_global_initializer_offers_members() {
     let test = CursorTest::new(
-        r#"let NAMES: string[] = ["a"];
-let COUNT = NAMES.<[CURSOR];
+        r#"const NAMES: string[] = ["a"];
+const COUNT = NAMES.<[CURSOR];
 "#,
     );
     let items = completions(&test.db, test.cursor.file, test.cursor.offset);
@@ -259,10 +259,10 @@ fn an_unannotated_global_gets_a_type_hint_like_a_local() {
     3
 }
 
-let FROM_CALL = count();
-let ANNOTATED: int = count();
-let LITERAL<[CURSOR] = 4;
-let FROM_BLOCK = {
+const FROM_CALL = count();
+const ANNOTATED: int = count();
+const LITERAL<[CURSOR] = 4;
+const FROM_BLOCK = {
     let inner = count();
     inner
 };
@@ -285,7 +285,7 @@ let FROM_BLOCK = {
 fn global_tokens_are_readonly_variables_and_qualifiers_are_namespaces() {
     use crate::tokens::{ModifierSet, SemanticTokenType, semantic_tokens};
 
-    let main = r#"let LIMIT = 3;
+    let main = r#"const LIMIT = 3;
 
 function f() -> int {
     let local = 1;
@@ -294,7 +294,7 @@ function f() -> int {
 "#;
     let mut builder = CursorTest::builder();
     builder.source("main.baml", &format!("{main}<[CURSOR]"));
-    builder.source("ns_settings/settings.baml", "let TIMEOUT = 30;\n");
+    builder.source("ns_settings/settings.baml", "const TIMEOUT = 30;\n");
     let test = builder.build();
     let tokens = semantic_tokens(&test.db, test.cursor.file);
     let class_at = |needle: &str, nth: usize| {

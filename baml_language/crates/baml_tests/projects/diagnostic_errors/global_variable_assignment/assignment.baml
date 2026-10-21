@@ -8,10 +8,10 @@ class Settings {
     retries int
 }
 
-let LIMIT = 3;
-let SETTINGS = Settings { retries: 1 };
-let ITEMS: int[] = [1, 2];
-let LOOKUP: map<string, int> = { "a": 1 };
+const LIMIT = 3;
+const SETTINGS = Settings { retries: 1 };
+const ITEMS: int[] = [1, 2];
+const LOOKUP: map<string, int> = { "a": 1 };
 
 client Model = openai.ChatClient.new(model = "gpt-4o-mini");
 

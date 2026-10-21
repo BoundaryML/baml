@@ -166,10 +166,10 @@ pub enum LoweringDiagnostic {
         span: TextRange,
     },
 
-    /// A file-scope `let` that does not bind exactly one name: a destructure,
-    /// a wildcard, an alias chain, or a `let … else`. A global variable is one
-    /// named binding (optionally annotated with `: T`); `reason` says which
-    /// rule the declaration broke.
+    /// A file-scope binding that does not bind exactly one name: a
+    /// destructure, a wildcard, an alias chain, or a `const … else`. A global
+    /// variable is one named binding (optionally annotated with `: T`);
+    /// `reason` says which rule the declaration broke.
     InvalidTopLevelLet {
         reason: &'static str,
         span: TextRange,
@@ -178,10 +178,9 @@ pub enum LoweringDiagnostic {
     /// `const` currently parses as a non-immutable alias for `let`.
     ConstBindingIntroducer { span: TextRange },
 
-    /// `const` introducing a global variable. Globals are immutable whichever
-    /// keyword declares them, so `const` adds nothing over `let` — and is
-    /// reserved for a future meaning.
-    TopLevelConstIntroducer { span: TextRange },
+    /// `let` introducing a global variable. A global is declared with `const`;
+    /// `let` declares a reassignable binding, which only a body has.
+    TopLevelLetIntroducer { span: TextRange },
 
     /// `const` is reserved as future language surface and cannot be used as a
     /// binding name.
@@ -626,9 +625,9 @@ impl LoweringDiagnostic {
             LoweringDiagnostic::InvalidTopLevelLet { reason, span } => (
                 DiagnosticId::InvalidSyntax,
                 Severity::Error,
-                format!("invalid top-level `let`: {reason}"),
+                format!("invalid top-level `const`: {reason}"),
                 *span,
-                "a global variable binds one name: `let NAME = value;` or `let NAME: Type = value;`",
+                "a global variable binds one name: `const NAME = value;` or `const NAME: Type = value;`",
             ),
             LoweringDiagnostic::ConstBindingIntroducer { span } => (
                 DiagnosticId::InvalidSyntax,
@@ -637,14 +636,12 @@ impl LoweringDiagnostic {
                 *span,
                 "`const` behaves like `let` for now",
             ),
-            LoweringDiagnostic::TopLevelConstIntroducer { span } => (
+            LoweringDiagnostic::TopLevelLetIntroducer { span } => (
                 DiagnosticId::InvalidSyntax,
-                Severity::Warning,
-                "`const` is treated like `let` here: every global variable is already immutable, \
-                 so declare it with `let`."
-                    .to_string(),
+                Severity::Error,
+                "global variables are declared with `const`: `const NAME = value;`".to_string(),
                 *span,
-                "`const` behaves like `let` for globals",
+                "write `const` here; `let` is only allowed inside a body",
             ),
             LoweringDiagnostic::ReservedConstBindingName { span } => (
                 DiagnosticId::InvalidSyntax,
