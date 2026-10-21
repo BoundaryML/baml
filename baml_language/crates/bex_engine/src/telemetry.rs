@@ -59,6 +59,13 @@ pub(crate) enum RecordingDelivery {
 }
 
 impl RecordingDelivery {
+    /// Start cloud delivery's shutdown timeout. Local files have none.
+    pub(crate) fn start_draining(&self) {
+        if let Self::Cloud { delivery, .. } = self {
+            delivery.start_draining();
+        }
+    }
+
     pub(crate) fn finish(&self) -> Result<(), btel_processor::RuntimeError> {
         match self {
             Self::Local(delivery) => delivery

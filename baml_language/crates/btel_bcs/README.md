@@ -115,7 +115,13 @@ own.
 ## Scope
 
 There is no durable spool, recovery after process exit, or URL renewal.
-Orderly shutdown drains admitted delivery work.
+Orderly shutdown drains admitted delivery work for at most `shutdown_timeout`
+(5 s), retries included, counted from when the engine starts closing telemetry
+after its last call. What is left then is dropped: an endpoint that never
+answers, or a network that drops packets, costs a process at most that much at
+exit instead of the retry windows above. A recording whose first connection
+has not succeeded by then gets the initial-failure policy (by default, the
+one-time warning).
 Cloud contract tests use local HTTP servers and require neither BCS nor AWS;
 they do not establish interoperability with a deployed server.
 
@@ -128,7 +134,8 @@ discards only that physical target. Other targets and later windows continue.
 Temporary admission saturation still applies bounded backpressure.
 
 There is no circuit breaker, cooldown, probe loop, or durable retry spool.
-Only fatal worker failures or explicit cancellation disable cloud recording.
+Only fatal worker failures, explicit cancellation, or the shutdown timeout
+disable cloud recording.
 `BexEngine::telemetry_delivery_loss_count` counts discarded groups/targets, not
 events or retry attempts. `telemetry_result` retains an error after loss even
 when later uploads succeed. Delivered recording sequences may have gaps.

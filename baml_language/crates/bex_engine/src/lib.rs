@@ -2961,6 +2961,11 @@ impl BexEngine {
                 // Transfer the shutdown guard to the joining task so it completes
                 // even if this awaiting caller is dropped.
                 match tokio::task::spawn_blocking(move || {
+                    // Every call has ended. Delivery's shutdown timeout runs
+                    // from here, so it also bounds sealing the last file.
+                    if let Some(sink) = &delivery {
+                        sink.start_draining();
+                    }
                     runtime.close_span_owners();
                     let processing = runtime.finish();
                     // Drain delivery even when processing failed. No VM or

@@ -1,4 +1,5 @@
-//! Bounded, process-local delivery. There is no durable spool or URL renewal.
+//! Bounded, process-local delivery. There is no durable spool or URL renewal:
+//! what shutdown cannot deliver within its timeout is dropped.
 use std::{
     fmt,
     io::{self, Write},
@@ -39,6 +40,8 @@ pub enum DeliveryError {
     InitialConnection(Box<DeliveryError>),
     Api(bcs_api::HttpFailure),
     Worker,
+    /// Shutdown stopped waiting: see [`DeliveryConfig::shutdown_timeout`].
+    ShutdownTimeout,
 }
 
 impl fmt::Display for DeliveryError {
@@ -101,6 +104,11 @@ pub struct DeliveryConfig {
     pub retry_delay: Duration,
     /// Initial attempt plus retries. Nonretryable HTTP and invalid plans drop immediately.
     pub max_attempts: u32,
+    /// The longest shutdown waits for delivery, retries included, counted
+    /// from [`BcsDelivery::start_draining`]. Then the rest is dropped and
+    /// delivery fails with [`DeliveryError::ShutdownTimeout`], so an
+    /// unreachable endpoint cannot hold the process for the retry windows.
+    pub shutdown_timeout: Duration,
 }
 
 impl DeliveryConfig {
@@ -126,6 +134,7 @@ impl DeliveryConfig {
             min_upload_bytes_per_second: 1024 * 1024,
             retry_delay: Duration::from_millis(200),
             max_attempts: 4,
+            shutdown_timeout: Duration::from_secs(5),
         }
     }
     fn endpoint(&self, recording_id: &str, operation: &str) -> Result<Url, DeliveryError> {
@@ -301,6 +310,8 @@ struct Shared {
     heartbeat: Heartbeat,
     config: DeliveryConfig,
     cancel: watch::Sender<bool>,
+    /// Set once shutdown starts; the shutdown timeout runs from then.
+    draining: watch::Sender<bool>,
     on_failure: Box<dyn Fn(DeliveryError) + Send + Sync>,
 }
 
@@ -337,6 +348,18 @@ impl Shared {
     fn initial_connection_failed(&self, error: DeliveryError) -> DeliveryError {
         self.state.lock().unwrap().authorization = InitialAuthorization::Failed(error.clone());
         DeliveryError::InitialConnection(Box::new(error))
+    }
+
+    /// When the first connection never succeeded, running out of shutdown
+    /// time is that connection's failure, so the initial-failure policy
+    /// applies as it would have after the retry window.
+    fn shutdown_timed_out(&self) -> DeliveryError {
+        let pending = self.state.lock().unwrap().authorization == InitialAuthorization::Pending;
+        if pending && self.config.terminal_initial_connection {
+            self.initial_connection_failed(DeliveryError::ShutdownTimeout)
+        } else {
+            DeliveryError::ShutdownTimeout
+        }
     }
 
     fn fail(&self, error: DeliveryError) {
@@ -530,6 +553,7 @@ impl BcsDeliveryHandle {
                 config,
                 capacity: Condvar::new(),
                 cancel: watch::channel(true).0,
+                draining: watch::channel(true).0,
                 heartbeat: Heartbeat::new(),
                 on_failure: Box::new(|_| {}),
             }),
@@ -887,6 +911,7 @@ impl BcsDelivery {
             config,
             capacity: Condvar::new(),
             cancel: watch::channel(false).0,
+            draining: watch::channel(false).0,
             heartbeat: Heartbeat::new(),
             on_failure: Box::new(on_failure),
         });
@@ -926,8 +951,16 @@ impl BcsDelivery {
         self.handle.clone()
     }
 
+    /// Start the [`DeliveryConfig::shutdown_timeout`]. Call it before the
+    /// processor seals its last file: that file's admission may wait on
+    /// delivery, and is bounded only from here. [`Self::finish`] calls it too.
+    pub fn start_draining(&self) {
+        self.handle.shared.draining.send_replace(true);
+    }
+
     pub fn finish(&self) -> Result<(), DeliveryError> {
         let mut worker = self.worker.lock().unwrap();
+        self.start_draining();
         let sender = {
             let mut state = self.handle.shared.state.lock().unwrap();
             if state.failure.is_none() {
@@ -1527,8 +1560,17 @@ async fn run_cancellable(client: Client, shared: Arc<Shared>, receiver: mpsc::Re
     if *cancel.borrow() {
         return;
     }
+    let mut draining = shared.draining.subscribe();
+    let out_of_time = async {
+        // `shared` holds the sender, so this returns only once draining starts.
+        let _ = draining.wait_for(|draining| *draining).await;
+        tokio::time::sleep(shared.config.shutdown_timeout).await;
+        // Before the work is dropped, so a waiting submitter cannot take its place.
+        shared.fail(shared.shutdown_timed_out());
+    };
     tokio::select! {
         _ = cancel.changed() => {}
+        () = out_of_time => {}
         result = std::panic::AssertUnwindSafe(run_worker(client, shared.clone(), receiver)).catch_unwind() => {
             if result.is_err() {
                 shared.fail(DeliveryError::Worker);
@@ -1778,6 +1820,8 @@ mod tests {
         let delivery = BcsDelivery::new(
             DeliveryConfig {
                 initial_recording_id: Some(btel_types::RecordingId::generate()),
+                // Finishing waits out the 5 s pending state below.
+                shutdown_timeout: Duration::from_secs(30),
                 ..DeliveryConfig::new(server.uri().parse().unwrap())
             },
             move |_| {
