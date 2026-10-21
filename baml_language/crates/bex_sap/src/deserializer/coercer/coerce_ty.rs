@@ -13,7 +13,7 @@ use crate::{
     sap_model::{
         ArrayTy, BigintLiteralTy, BigintTy, BoolLiteralTy, BoolTy, ClassTy, EnumTy, EnumVariantTy,
         FloatTy, IntLiteralTy, IntTy, MapTy, MediaTy, NullTy, PrimitiveTy, StreamStateTy,
-        StringLiteralTy, StringTy, TyResolvedRef, TypeIdent, UnionTy,
+        StringLiteralTy, StringTy, TupleTy, TyResolvedRef, TypeIdent, UnionTy,
     },
 };
 
@@ -39,6 +39,7 @@ where
         match self {
             TyResolvedRef::String(_)
             | TyResolvedRef::Array(_)
+            | TyResolvedRef::Tuple(_)
             | TyResolvedRef::Map(_)
             | TyResolvedRef::Class(_)
             | TyResolvedRef::Union(_)
@@ -113,6 +114,9 @@ where
                 .map(|v| v.map_value(BamlPrimitive::Bool).map_value(Into::into)),
             TyResolvedRef::Array(a) => {
                 ArrayTy::try_cast(ctx, a, value).map(|v| v.map_value(Into::into))
+            }
+            TyResolvedRef::Tuple(t) => {
+                TupleTy::try_cast(ctx, t, value).map(|v| v.map_value(Into::into))
             }
             TyResolvedRef::Map(m) => {
                 MapTy::try_cast(ctx, m, value).map(|v| v.map_value(Into::into))
@@ -263,6 +267,9 @@ where
                             .map(|v| v.map_value(BamlValue::Bool)),
                         TyResolvedRef::Array(a) => {
                             ArrayTy::coerce(ctx, a, value)?.map(|v| v.map_value(BamlValue::Array))
+                        }
+                        TyResolvedRef::Tuple(t) => {
+                            TupleTy::coerce(ctx, t, value)?.map(|v| v.map_value(BamlValue::Tuple))
                         }
                         TyResolvedRef::Map(m) => {
                             MapTy::coerce(ctx, m, value)?.map(|v| v.map_value(BamlValue::Map))

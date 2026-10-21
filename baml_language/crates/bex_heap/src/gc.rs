@@ -701,6 +701,13 @@ impl BexHeap {
                     }
                 }
             }
+            Object::Tuple(elements) => {
+                for value in elements.iter() {
+                    if let Some(ptr) = value.as_object_ptr() {
+                        worklist.push(ptr);
+                    }
+                }
+            }
             Object::Map(map) => {
                 let data = unsafe { map.data_unchecked() };
                 for value in data.keys().chain(data.values()) {
@@ -932,6 +939,11 @@ impl BexHeap {
             Object::Map(map) => {
                 let data = unsafe { map.data_unchecked_mut() };
                 for value in data.trace_values_mut() {
+                    self.fixup_value(value, forwarding);
+                }
+            }
+            Object::Tuple(elements) => {
+                for value in elements.iter_mut() {
                     self.fixup_value(value, forwarding);
                 }
             }
@@ -1257,6 +1269,14 @@ impl BexHeap {
                 worklist.extend(
                     data.keys()
                         .chain(data.values())
+                        .filter_map(Value::as_object_ptr)
+                        .filter(|ptr| self.generation_of(*ptr).is_young()),
+                );
+            }
+            Object::Tuple(elements) => {
+                worklist.extend(
+                    elements
+                        .iter()
                         .filter_map(Value::as_object_ptr)
                         .filter(|ptr| self.generation_of(*ptr).is_young()),
                 );

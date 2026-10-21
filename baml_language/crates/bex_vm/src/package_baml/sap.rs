@@ -305,6 +305,12 @@ impl ReachWalk<'_> {
                 Ok(())
             }
             RealizedTy::List(element) => self.visit(element, &origins.list_element()),
+            RealizedTy::Tuple(elements) => {
+                for (index, element) in elements.iter().enumerate() {
+                    self.visit(element, &origins.tuple_element(index))?;
+                }
+                Ok(())
+            }
             RealizedTy::Map { key, value } => {
                 self.visit(key, &origins.map_key())?;
                 self.visit(value, &origins.map_value())
@@ -666,6 +672,15 @@ fn to_heap(
                 .collect::<Result<Vec<_>, _>>()?;
             Value::object(vm.alloc_array(element, items))
         }
+        // A tuple carries no type metadata: its type is its elements'.
+        BamlValue::Tuple(tuple) => {
+            let items = tuple
+                .value
+                .iter()
+                .map(|item| to_heap(vm, item, declarations, mismatch))
+                .collect::<Result<Vec<_>, _>>()?;
+            Value::object(vm.tlab.alloc_tuple(items))
+        }
         BamlValue::Map(map) => {
             let TyResolvedRef::Map(map_ty) = value.meta.ty else {
                 return Err(invariant(format!(
@@ -830,6 +845,17 @@ fn empty_value(
         RealizedTy::List(element) => Value::object(vm.alloc_array((**element).clone(), Vec::new())),
         RealizedTy::Map { key, value } => {
             Value::object(vm.alloc_map((**key).clone(), (**value).clone(), IndexMap::new()))
+        }
+        // Every element's empty value, or none when an element has none.
+        RealizedTy::Tuple(elements) => {
+            let mut items = Vec::with_capacity(elements.len());
+            for element in elements {
+                let Some(item) = empty_value(vm, element, within)? else {
+                    return Ok(None);
+                };
+                items.push(item);
+            }
+            Value::object(vm.tlab.alloc_tuple(items))
         }
         RealizedTy::Enum(head) => {
             let Object::Enum(enm) = vm.get_object(head.ptr()) else {

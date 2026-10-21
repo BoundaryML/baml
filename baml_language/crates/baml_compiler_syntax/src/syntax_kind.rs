@@ -219,6 +219,8 @@ pub enum SyntaxKind {
     STRING_LITERAL_TYPE, // "user" | "assistant"
     FUNCTION_TYPE,       // (x: int, y: int) -> int
     FUNCTION_TYPE_PARAM, // x: int (or just int)
+    /// `'(' TYPE_EXPR ',' (TYPE_EXPR (',' TYPE_EXPR)* ','?)? ')'` not followed by `->`.
+    TUPLE_TYPE,
 
     // Attributes
     ATTRIBUTE, // @alias("name")
@@ -302,6 +304,10 @@ pub enum SyntaxKind {
     /// Desugared at AST lowering to `baml.env.get_or_panic("FIELD")`.
     ENV_ACCESS_EXPR,
     PAREN_EXPR,
+    /// `'(' expr ',' (expr (',' expr)* ','?)? ')'` — tuple literal. A comma is
+    /// what distinguishes it from `PAREN_EXPR`: `(a,)` is a 1-tuple, `(a)` is
+    /// grouping. Children are the element expressions (bare tokens for leaves).
+    TUPLE_EXPR,
     BLOCK_EXPR,
     IF_EXPR,
     /// `if let PATTERN = SCRUTINEE { THEN } (else (BLOCK | IF_EXPR | IF_LET_EXPR))?`
@@ -333,6 +339,7 @@ pub enum SyntaxKind {
     //                | ARRAY_PATTERN
     //                | TYPE_PATTERN
     //                | PAREN_PATTERN
+    //                | TUPLE_PATTERN
     //
     // `:` is split before `|`: `let x: int | string` parses as
     // `let x : (int | string)`.
@@ -357,6 +364,8 @@ pub enum SyntaxKind {
     TYPE_PATTERN,
     /// `'(' PATTERN ')'` — explicit grouping.
     PAREN_PATTERN,
+    /// `'(' PATTERN ',' (PATTERN (',' PATTERN)* ','?)? ')'` — tuple destructure.
+    TUPLE_PATTERN,
     /// `'_'` (bare) or `'let' '_'` — wildcard / discard. Distinct from
     /// `BINDING_PATTERN` so downstream code doesn't have to text-match `_`.
     WILDCARD_PATTERN,

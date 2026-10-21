@@ -4,8 +4,8 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [type] E0062
 
-  × non-exhaustive match on type reflect.Array | reflect.Class | reflect.Enum | reflect.Function | reflect.Interface | reflect.Literal | reflect.Map | reflect.Primitive | reflect.Union; missing:
-  │ reflect.Function { _ty: _ }
+  × non-exhaustive match on type reflect.Array | reflect.Class | reflect.Enum | reflect.Function | reflect.Interface | reflect.Literal | reflect.Map | reflect.Primitive | reflect.Tuple |
+  │ reflect.Union; missing: reflect.Function { _ty: _ }, reflect.Tuple { _ty: _ }
     ╭─[main.baml:2:3]
   2 │ ╭─▶   match (t.kind()) {
   3 │ │       reflect.Class => "class",

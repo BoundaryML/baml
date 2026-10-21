@@ -403,6 +403,7 @@ impl<'a> Builder<'a> {
             DecodedObject::Declaration { .. }
             | DecodedObject::Uint8Array { .. }
             | DecodedObject::List { .. }
+            | DecodedObject::Tuple { .. }
             | DecodedObject::Map { .. }
             | DecodedObject::Instance { .. }
             | DecodedObject::Cell(_)
@@ -445,10 +446,15 @@ impl<'a> Builder<'a> {
                 self.bytes(data.len())?;
                 Value::Uint8Array(data)
             }
+            // A tuple compares like the list of its elements.
             DecodedObject::List {
                 items,
                 original_len,
                 ..
+            }
+            | DecodedObject::Tuple {
+                items,
+                original_len,
             } => {
                 complete(items.len(), *original_len)?;
                 Value::List(

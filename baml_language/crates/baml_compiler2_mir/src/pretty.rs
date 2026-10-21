@@ -624,6 +624,7 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
                         write!(f, "<{}>", Names::of(db).templates(type_arg_templates))?;
                     }
                 }
+                AggregateKind::Tuple => write!(f, "tuple")?,
             }
             write!(f, " {{ ")?;
             for (i, field) in fields.iter().enumerate() {
@@ -775,6 +776,7 @@ fn type_tag_name(tag: i64) -> std::borrow::Cow<'static, str> {
         t::UINT8ARRAY => "UINT8ARRAY",
         t::BIGINT => "BIGINT",
         t::PANIC => "PANIC",
+        t::TUPLE => "TUPLE",
         other => return std::borrow::Cow::Owned(other.to_string()),
     })
 }

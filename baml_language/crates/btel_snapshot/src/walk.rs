@@ -306,6 +306,14 @@ pub(crate) fn object<V: Visitor, R: Resolver>(
             v.length(*original_len)?;
             values(v, r, s, *items)
         }
+        SnapshotObject::Tuple {
+            items,
+            original_len,
+        } => {
+            v.byte(ObjectTag::Tuple as u8)?;
+            v.length(*original_len)?;
+            values(v, r, s, *items)
+        }
         SnapshotObject::Map {
             key_type,
             value_type,

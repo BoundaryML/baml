@@ -143,6 +143,13 @@ fn extract_type_alias_deps(
                     visit(m, aliases, non_structural, structural, in_structural);
                 }
             }
+            Ty::Tuple(elements) => {
+                // A tuple is NOT a guard: unlike a list or map it has no empty
+                // value, so `type T = (int, T)` is as unproductive as `type T = T`.
+                for e in elements {
+                    visit(e, aliases, non_structural, structural, in_structural);
+                }
+            }
             Ty::Class(_, type_args) => {
                 // Nominal type_args are pass-through for cycle classification.
                 // User-defined nominal types are not structural guards like List/Map,
@@ -502,6 +509,21 @@ fn extract_required_class_deps(
                 if first.len() == 1 && variant_deps_list.iter().all(|d| d == first) {
                     deps.extend(first.iter().cloned());
                 }
+            }
+        }
+        // Every tuple element is present in every tuple value, so each
+        // element's hard dependencies are the tuple's.
+        Ty::Tuple(elements) => {
+            for element in elements {
+                extract_required_class_deps(
+                    element,
+                    class_fields,
+                    type_aliases,
+                    deps,
+                    optional,
+                    in_list_or_map,
+                    visiting,
+                );
             }
         }
         _ => {}

@@ -196,6 +196,10 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> TyVariant {
             }
         }
 
+        RuntimeTy::Tuple(elements) => TyVariant::Tuple(crate::baml_bridge::cffi::BamlTyTuple {
+            items: elements.iter().map(runtime_ty_to_proto_ty).collect(),
+        }),
+
         RuntimeTy::Literal(lit, _) => TyVariant::Literal(literal_to_proto(lit)),
         RuntimeTy::Media(kind) => TyVariant::Media(crate::baml_bridge::cffi::BamlTyMedia {
             kind: media_kind_to_proto(*kind) as i32,

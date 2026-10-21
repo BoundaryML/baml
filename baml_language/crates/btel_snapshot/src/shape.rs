@@ -902,6 +902,7 @@ impl Cuts {
                     | SnapshotObject::Uint8ArrayTruncated { .. } => false,
                     SnapshotObject::Uint8Array { data } => data.len() as u64 >= leaf_bytes,
                     SnapshotObject::List { .. }
+                    | SnapshotObject::Tuple { .. }
                     | SnapshotObject::Map { .. }
                     | SnapshotObject::Instance { .. }
                     | SnapshotObject::Cell(_)

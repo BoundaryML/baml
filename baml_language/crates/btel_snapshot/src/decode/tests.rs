@@ -737,3 +737,35 @@ fn malformed_media_is_rejected() {
         Err(BlobError::IdMismatch { .. })
     ));
 }
+
+#[test]
+fn a_tuple_object_round_trips() {
+    let pool = SnapshotPool::new(1, Limits::default());
+    let mut b = pool.try_acquire().unwrap();
+    let tuple = b.tuple([V::Int(1), V::Bool(true)].into_iter(), |_, item| item);
+    let tuple = b.leaves().object(tuple).unwrap();
+    let root = b.arguments([V::Object(tuple)].into_iter(), |_, slot| slot);
+    let snapshot = b.finish(root, &mut Shaper::default());
+
+    let decoded = decode(&encode(&snapshot)).unwrap();
+    assert_eq!(
+        decoded.id,
+        snapshot.root_id(),
+        "identity verifies over a tuple"
+    );
+    let DecodedRoot::FunctionArgs { slots, .. } = &decoded.root else {
+        panic!("argument root")
+    };
+    let DecodedValue::Object(id) = &slots[0] else {
+        panic!("object slot")
+    };
+    let DecodedObject::Tuple {
+        items,
+        original_len,
+    } = decoded.object(*id)
+    else {
+        panic!("tuple")
+    };
+    assert_eq!(*original_len, 2);
+    assert_eq!(items, &vec![DecodedValue::Int(1), DecodedValue::Bool(true)]);
+}

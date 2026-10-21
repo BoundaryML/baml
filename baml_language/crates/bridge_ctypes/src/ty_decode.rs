@@ -204,6 +204,20 @@ pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
                 .map(proto_ty_to_runtime_ty)
                 .collect::<Result<Vec<_>, _>>()?,
         ),
+        TyVariant::Tuple(t) => {
+            if t.items.is_empty() {
+                return Err(CtypesError::InternalError(
+                    "tuple type has no elements".to_string(),
+                ));
+            }
+            RuntimeTy::Tuple(
+                t.items
+                    .iter()
+                    .map(proto_ty_to_runtime_ty)
+                    .collect::<Result<Vec<_>, _>>()?
+                    .into(),
+            )
+        }
         TyVariant::Literal(lit) => literal_to_runtime_ty(lit.literal.as_ref())?,
         TyVariant::TypeAlias(n) => RuntimeTy::TypeAlias(TypeName::from_dotted_path(&n.name)),
         TyVariant::Unknown(_) => RuntimeTy::unknown(),

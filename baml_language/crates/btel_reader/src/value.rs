@@ -181,6 +181,10 @@ fn step<'a>(
                 items,
                 original_len,
                 ..
+            }
+            | DecodedObject::Tuple {
+                items,
+                original_len,
             },
             Segment::Index(index),
         ) => {
@@ -241,7 +245,7 @@ fn step<'a>(
         (DecodedObject::Truncated(limit), _) => {
             Err(Nav::Unavailable(Unavailable::Truncated(*limit)))
         }
-        (DecodedObject::List { .. }, Segment::Key(_))
+        (DecodedObject::List { .. } | DecodedObject::Tuple { .. }, Segment::Key(_))
         | (DecodedObject::Instance { .. }, Segment::Index(_))
         | (
             DecodedObject::Uint8Array { .. }
@@ -886,6 +890,7 @@ impl<'a> Renderer<'a> {
             DecodedObject::Declaration { name, .. } => self.text(&name.0.to_string()),
             DecodedObject::Uint8Array { .. }
             | DecodedObject::List { .. }
+            | DecodedObject::Tuple { .. }
             | DecodedObject::Map { .. }
             | DecodedObject::Instance { .. }
             | DecodedObject::Cell(_)
@@ -987,6 +992,24 @@ impl<'a> Renderer<'a> {
                     return Json::Array(rendered);
                 }
                 map.insert("$list".into(), Json::Array(rendered));
+                if items.len() as u64 != *original_len {
+                    map.insert("$original_len".into(), Json::from(*original_len));
+                }
+                if !whole {
+                    self.end_early(&mut map);
+                }
+            }
+            // A whole, unshared tuple renders as a plain array, like a list;
+            // otherwise the envelope says it was a tuple.
+            DecodedObject::Tuple {
+                items,
+                original_len,
+            } => {
+                let (rendered, whole) = self.sequence(blob, items, depth + 1);
+                if shared.is_none() && whole && items.len() as u64 == *original_len {
+                    return Json::Array(rendered);
+                }
+                map.insert("$tuple".into(), Json::Array(rendered));
                 if items.len() as u64 != *original_len {
                     map.insert("$original_len".into(), Json::from(*original_len));
                 }

@@ -108,7 +108,7 @@ fn type_bytes(root: &OwnedType) -> usize {
     while let Some(ty) = pending.pop() {
         use baml_type::RealizedTy::{
             Bigint, Bool, Class, Enum, EnumVariant, Float, Function, Future, Int, Interface, List,
-            Literal, Map, Media, Never, Null, PromptAst, Resource, RustType, String, Type,
+            Literal, Map, Media, Never, Null, PromptAst, Resource, RustType, String, Tuple, Type,
             TypeAlias, Uint8Array, Union, Unknown,
         };
         match ty {
@@ -141,7 +141,7 @@ fn type_bytes(root: &OwnedType) -> usize {
                     pending.push(ty);
                 }
             }
-            Union(args) => {
+            Union(args) | Tuple(args) => {
                 add(array_bytes::<OwnedType>(args.len()));
                 pending.extend(args.iter());
             }

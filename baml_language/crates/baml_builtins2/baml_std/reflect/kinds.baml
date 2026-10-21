@@ -370,3 +370,25 @@ class Function {
         $rust_function
     }
 }
+
+/// A tuple-kind view of a `type` value. Users never construct this class.
+class Tuple {
+    /// The wrapped `type` value. Private by invariant: reflection natives are
+    /// its only readers, and each kind method panics if the held type no longer
+    /// classifies as this view's kind.
+    _ty: root.Type,
+
+    implements root.TypeView {
+        //baml:vm
+        //baml:fallible
+        function as_type(self) -> root.Type throws never {
+            $rust_function
+        }
+    }
+    /// The tuple's element types, in position order (at least one).
+    //baml:mut_vm
+    //baml:fallible
+    function element_types(self) -> root.Type[] throws never {
+        $rust_function
+    }
+}

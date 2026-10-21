@@ -52,6 +52,15 @@ pub fn external_to_outbound(
                 items: values?,
             }))
         }
+        BexExternalValue::Tuple { items } => {
+            let values: Result<Vec<BamlOutboundValue>, CtypesError> = items
+                .iter()
+                .map(|v| external_to_outbound(v, options))
+                .collect();
+            Some(BamlValueVariant::TupleValue(
+                crate::baml_bridge::cffi::BamlValueTuple { items: values? },
+            ))
+        }
         BexExternalValue::Map {
             entries,
             key_type,
@@ -263,6 +272,14 @@ pub(crate) fn artifact_safe_external_to_outbound(
                 .map(artifact_safe_external_to_outbound)
                 .collect::<Result<_, _>>()?,
         })),
+        BexExternalValue::Tuple { items } => Some(BamlValueVariant::TupleValue(
+            crate::baml_bridge::cffi::BamlValueTuple {
+                items: items
+                    .iter()
+                    .map(artifact_safe_external_to_outbound)
+                    .collect::<Result<_, _>>()?,
+            },
+        )),
         BexExternalValue::Map {
             entries,
             key_type,

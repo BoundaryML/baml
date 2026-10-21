@@ -157,6 +157,24 @@ fn outbound_to_inbound(value: wire::BamlOutboundValue) -> wire::InboundValue {
                 values: list.items.into_iter().map(outbound_to_inbound).collect(),
             }))
         }
+        // Inbound has no tuple payload: a tuple crosses as a list, and its
+        // declared type (a tuple of `unknown`s) makes it a tuple again.
+        Some(Out::TupleValue(tuple)) => {
+            value_type = Some(wire::BamlTy {
+                ty: Some(wire::baml_ty::Ty::Tuple(wire::BamlTyTuple {
+                    items: tuple
+                        .items
+                        .iter()
+                        .map(|_| wire::BamlTy {
+                            ty: Some(wire::baml_ty::Ty::Unknown(wire::BamlTyUnknown {})),
+                        })
+                        .collect(),
+                })),
+            });
+            Some(In::ListValue(wire::InboundListValue {
+                values: tuple.items.into_iter().map(outbound_to_inbound).collect(),
+            }))
+        }
         Some(Out::MapValue(map)) => {
             let key_type = map.key_type.clone();
             value_type = Some(wire::BamlTy {

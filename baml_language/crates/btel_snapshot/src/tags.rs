@@ -42,6 +42,7 @@ pub(super) enum ObjectTag {
     Descriptive = 7,
     Truncated = 8,
     Media = 9,
+    Tuple = 10,
 }
 
 #[repr(u8)]

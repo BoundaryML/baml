@@ -84,6 +84,9 @@ message BamlOutboundValue {
     BamlTy ty_value = 21;
     // Definition-carrying type handle. Identity is intentionally not encoded.
     BamlTyDef ty_def_value = 22;
+    // A tuple value. Positions carry their own union envelopes where their
+    // declared slot is a union, so no per-position type rides alongside.
+    BamlValueTuple tuple_value = 23;
   }
 }
 
@@ -104,6 +107,12 @@ message BamlValueNull {}
 message BamlValueList {
   BamlTy item_type = 1;
   repeated BamlOutboundValue items = 2;
+}
+
+// A tuple value: exactly as many items as the tuple's arity (at least one).
+// Hosts send tuples inbound as a list; the declared type makes it a tuple.
+message BamlValueTuple {
+  repeated BamlOutboundValue items = 1;
 }
 
 // A helper message to represent map entries (used also in Class).

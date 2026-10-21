@@ -180,6 +180,11 @@ pub(crate) fn translate_ty(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
         // Opaque engine-owned state (`$rust_type` fields on stdlib
         // resource classes: File._handle, Response._body, media _data).
         Ty::RustType => Some("BamlHandle?".to_string()),
+        // Tuple types are not yet supported by the Swift generator: native
+        // Swift tuples cannot conform to `Codable`, and the runtime has no
+        // `BamlTupleN` family yet. `None` skips the enclosing symbol and the
+        // diagnostics manifest names the tuple as the reason.
+        Ty::Tuple(_) => None,
         // Unit is only meaningful in return position; the emitter
         // special-cases it. Everything else lands in later phases.
         _ => None,

@@ -14,7 +14,7 @@ pub use baml_type::{
 /// The exhaustive match makes new type variants require a traversal decision.
 pub fn any_type_child(ty: &Ty, mut predicate: impl FnMut(&Ty) -> bool) -> bool {
     match ty {
-        Ty::Class(_, args) | Ty::Union(args) => args.iter().any(predicate),
+        Ty::Class(_, args) | Ty::Union(args) | Ty::Tuple(args) => args.iter().any(predicate),
         Ty::Interface(_, args, associated) => {
             args.iter().any(&mut predicate) || associated.iter().any(|(_, ty)| predicate(ty))
         }

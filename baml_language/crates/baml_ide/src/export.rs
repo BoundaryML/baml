@@ -157,6 +157,8 @@ fn ty_head(db: &Db, viewer: SourceRoot, ty: &Ty) -> Option<TyHead> {
         ))),
         Ty::TypeVar(_) => Some(TyHead::Blanket),
         Ty::Union(_) => None,
+        // No impl attaches to a tuple (tuples implement no interfaces yet).
+        Ty::Tuple(_) => None,
         Ty::AssociatedTypeProjection { .. } => None,
         Ty::RustType | Ty::Type | Ty::Resource | Ty::PromptAst => None,
         Ty::Unknown | Ty::Never | Ty::Error => None,

@@ -1237,6 +1237,9 @@ pub enum AggregateKind<'db> {
         class: baml_compiler2_hir_ty::extern_loc::ClassRef<'db>,
         type_arg_templates: Vec<TyTemplate>,
     },
+    /// A tuple `(_1, _2)`. Immutable and carrying no type metadata: a tuple
+    /// value's runtime type is derived from its elements.
+    Tuple,
 }
 
 // ============================================================================

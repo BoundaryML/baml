@@ -174,7 +174,8 @@ macro_rules! walk_object_heads {
                 | Object::Uint8Array(_)
                 | Object::RustData(_)
                 | Object::Tombstone
-
+                // A tuple's type is derived from its elements: no stored head.
+                | Object::Tuple(_)
                 | Object::Float(_) => {}
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => {}

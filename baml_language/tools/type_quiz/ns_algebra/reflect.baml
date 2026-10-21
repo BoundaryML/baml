@@ -22,6 +22,7 @@ enum Kind {
     Interface,
     Primitive,
     Function,
+    Tuple,
 }
 
 function kind_of(t: reflect.Type) -> Kind throws never {
@@ -35,6 +36,7 @@ function kind_of(t: reflect.Type) -> Kind throws never {
         reflect.Interface => Kind.Interface,
         reflect.Primitive => Kind.Primitive,
         reflect.Function => Kind.Function,
+        reflect.Tuple => Kind.Tuple,
     }
 }
 
