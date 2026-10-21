@@ -66,12 +66,13 @@ fn dedent(input: &str) -> String {
         .join("\n")
 }
 
-/// The TOON schema renders descriptions as `//` lines, and models sometimes
-/// echo them back. TOON has no comment syntax, so drop them before decoding.
+/// The TOON schema renders descriptions as `// ` lines, and models sometimes
+/// echo them back. TOON has no comment syntax, so drop only those lines
+/// before decoding. A data row such as `//foo` is a valid unquoted value.
 fn strip_comment_lines(input: &str) -> String {
     input
         .lines()
-        .filter(|line| !line.trim_start().starts_with("//"))
+        .filter(|line| !line.trim_start().starts_with("// "))
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -268,6 +269,37 @@ mod tests {
             Value::Object(fields, _) if fields.len() == 2
                 && fields[0].0 == "name"
                 && fields[1].0 == "age"
+        )));
+    }
+
+    #[test]
+    fn preserves_tabular_rows_that_start_with_slashes() {
+        let values =
+            parse("sites[2]{host}:\n  // echoed description\n  //foo\n  //example.com").unwrap();
+        assert!(values.iter().any(|value| matches!(
+            value,
+            Value::Object(fields, _) if *fields == vec![(
+                "sites".into(),
+                Value::Array(
+                    vec![
+                        Value::Object(
+                            vec![(
+                                "host".into(),
+                                Value::String("//foo".into(), CompletionState::Complete),
+                            )],
+                            CompletionState::Complete,
+                        ),
+                        Value::Object(
+                            vec![(
+                                "host".into(),
+                                Value::String("//example.com".into(), CompletionState::Complete),
+                            )],
+                            CompletionState::Complete,
+                        ),
+                    ],
+                    CompletionState::Complete,
+                ),
+            )]
         )));
     }
 

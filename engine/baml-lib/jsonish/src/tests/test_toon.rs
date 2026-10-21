@@ -67,6 +67,22 @@ test_deserializer!(
 );
 
 test_deserializer!(
+    preserves_tabular_rows_that_start_with_slashes,
+    TOON_TYPES,
+    r#"people[2]{name,age}:
+  // echoed description
+  //foo,7
+  Ada,36"#,
+    TypeIR::class("People"),
+    {
+        "people": [
+            { "name": "//foo", "age": 7 },
+            { "name": "Ada", "age": 36 }
+        ]
+    }
+);
+
+test_deserializer!(
     parses_toon_after_preamble_and_recovers_bad_length,
     TOON_TYPES,
     r#"Here is the requested result:
