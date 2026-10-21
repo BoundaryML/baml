@@ -57,6 +57,12 @@ interface GraphViewProps {
   customRenderers?: Record<string, FC<ResultRendererProps>>;
   selectedNodeId: number | null;
   onNodeClick: (nodeId: number) => void;
+  /** Nodes drawn with the selection ring besides `selectedNodeId`, e.g. the
+   *  nodes a source edit touched. Keyed by CFG node id. */
+  highlightedNodeIds?: ReadonlySet<string>;
+  /** Per-node execution state, when the host knows which nodes ran. Keyed by
+   *  CFG node id; nodes not listed keep `not-started`. */
+  nodeExecutionStates?: ReadonlyMap<string, NodeExecutionState>;
 }
 
 type LayoutDirection = 'horizontal' | 'vertical';
@@ -149,8 +155,14 @@ function GraphViewInner({
   customRenderers,
   selectedNodeId,
   onNodeClick,
+  highlightedNodeIds,
+  nodeExecutionStates,
 }: GraphViewProps) {
   const theme = useGraphTheme();
+  const highlightedNodeIdsRef = useRef(highlightedNodeIds);
+  highlightedNodeIdsRef.current = highlightedNodeIds;
+  const nodeExecutionStatesRef = useRef(nodeExecutionStates);
+  nodeExecutionStatesRef.current = nodeExecutionStates;
   const chrome = getChrome(theme);
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<WorkflowEdge>([]);
@@ -273,8 +285,13 @@ function GraphViewInner({
       } = runtimeInputsRef.current;
       // Per-node execution state needs a call-to-CFG-node mapping the run
       // store no longer carries. Until it is rebuilt from profiles-v1 call
-      // sites, no node claims to have run or not run.
+      // sites, no node claims to have run or not run, unless the host passes
+      // states it derived itself (`nodeExecutionStates`).
       const runtimeByNode = new Map<string, GraphNodeRuntime>();
+      for (const [id, executionState] of nodeExecutionStatesRef.current ?? []) {
+        runtimeByNode.set(id, { executionState });
+      }
+      const highlighted = highlightedNodeIdsRef.current;
       const selectedId =
         selectedNodeIdRef.current == null
           ? null
@@ -311,7 +328,8 @@ function GraphViewInner({
             selected:
               node.id === selectedId ||
               (previewSourceNodeId != null &&
-                previewSourceNodeId === selectedId),
+                previewSourceNodeId === selectedId) ||
+              highlighted?.has(node.id) === true,
             valuePreviews,
           },
         };
@@ -431,6 +449,8 @@ function GraphViewInner({
     graphNodeValues,
     customRenderers,
     selectedNodeId,
+    highlightedNodeIds,
+    nodeExecutionStates,
     setNodes,
     decorateNodesWithRuntime,
   ]);

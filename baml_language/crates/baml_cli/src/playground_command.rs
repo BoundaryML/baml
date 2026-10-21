@@ -87,7 +87,7 @@ fn playground_banner(port: u16, roots: &[PathBuf]) -> String {
 /// with no display server. `webbrowser` would fall back to text-mode browsers
 /// (lynx/w3m) that hijack the terminal. macOS/Windows sessions are never
 /// display-less in practice, so only the SSH signal applies there.
-fn is_headless_session(has_env: impl Fn(&str) -> bool) -> bool {
+pub(crate) fn is_headless_session(has_env: impl Fn(&str) -> bool) -> bool {
     if has_env("SSH_CONNECTION") || has_env("SSH_TTY") {
         return true;
     }
@@ -126,7 +126,7 @@ fn workspace_roots(from: Option<&Path>, file: Option<&Path>) -> Result<Vec<PathB
     Ok(vec![root])
 }
 
-fn resolve_playground_assets() -> Result<Option<PathBuf>> {
+pub(crate) fn resolve_playground_assets() -> Result<Option<PathBuf>> {
     if std::env::var_os("BAML_PLAYGROUND_DEV_PORT").is_some()
         || std::env::var_os("BAML_PLAYGROUND_DIR").is_some()
     {

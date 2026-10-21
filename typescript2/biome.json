@@ -24,6 +24,7 @@
       "!**/baml_client/**",
       "!app-website/lib/baml-docs/stdlib.json",
       "!pkg-grammar/baml.tmLanguage.json",
+      "!pkg-agent-activity/src/mock/fixtures/**",
       "!app-vscode-ext/syntaxes/baml.tmLanguage.json",
       "!app-beps/**",
       "!**/.turbo/**",

@@ -24,6 +24,12 @@ pub(crate) struct AgentArgs {
 pub(crate) enum AgentCommand {
     #[command(about = "Install the BAML agent skill bundled with this toolchain")]
     Install(AgentInstallArgs),
+    #[command(about = "Watch a directory and see what a coding agent is doing to it")]
+    Watch(crate::agent_watch_command::AgentWatchArgs),
+    // Prints what `watch` sends as a project's workflows; the Agent Activity
+    // recorded sessions are generated with it.
+    #[command(about = "Print a BAML project's workflow graphs as JSON", hide = true)]
+    Workflows(crate::agent_watch_command::AgentWorkflowsArgs),
 }
 
 /// Install or refresh the BAML agent skill bundled with this toolchain.
@@ -51,6 +57,8 @@ impl AgentArgs {
     pub fn run(&self) -> Result<ExitCode> {
         match &self.command {
             AgentCommand::Install(args) => args.run(),
+            AgentCommand::Watch(args) => args.run(),
+            AgentCommand::Workflows(args) => args.run(),
         }
     }
 }

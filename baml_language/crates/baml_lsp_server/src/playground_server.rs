@@ -804,23 +804,37 @@ fn build_router(
             api_guard_middleware,
         ));
 
-    let fallback = if let Some(dir) = playground_dir_override {
+    Ok(api.fallback_service(web_bundle_router(playground_dir_override)?))
+}
+
+/// The router that serves the web bundle the playground ships in: files from
+/// `dir_override`, the Vite dev server named by `BAML_PLAYGROUND_DEV_PORT`, or
+/// files from `BAML_PLAYGROUND_DIR`, in that order. Every unknown path serves
+/// `index.html`, so other tools that ship a page in the same bundle (`baml
+/// agent watch` serves `/agent-activity`) mount this as their fallback.
+pub fn web_bundle_router(dir_override: Option<PathBuf>) -> anyhow::Result<Router> {
+    if let Some(dir) = dir_override {
         tracing::info!("Playground: serving static files from {}", dir.display());
-        static_router(dir.to_string_lossy().into_owned())
+        Ok(static_router(dir.to_string_lossy().into_owned()))
     } else if let Ok(dev_port) = std::env::var("BAML_PLAYGROUND_DEV_PORT") {
         let dev_port: u16 = dev_port
             .parse()
             .map_err(|e| anyhow::anyhow!("Invalid BAML_PLAYGROUND_DEV_PORT: {e}"))?;
         tracing::info!("Playground: dev proxy -> http://localhost:{dev_port}");
-        dev_proxy_router(format!("http://localhost:{dev_port}"))
+        Ok(dev_proxy_router(format!("http://localhost:{dev_port}")))
     } else if let Ok(dir) = std::env::var("BAML_PLAYGROUND_DIR") {
         tracing::info!("Playground: serving static files from {dir}");
-        static_router(dir)
+        Ok(static_router(dir))
     } else {
-        return Err(PlaygroundNotConfigured.into());
-    };
+        Err(PlaygroundNotConfigured.into())
+    }
+}
 
-    Ok(api.fallback_service(fallback))
+/// Whether a request's `Origin` may use the local-only APIs: no origin (a
+/// same-origin or non-browser client), a loopback page (including one
+/// reached through an `ssh -L` tunnel), or a VS Code webview.
+pub fn is_allowed_api_origin(origin: Option<&HeaderValue>) -> bool {
+    PlaygroundAccessGuard::is_allowed_origin(origin)
 }
 
 fn history_project_root_for_project(project: &str) -> PathBuf {

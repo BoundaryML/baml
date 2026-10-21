@@ -17,9 +17,11 @@ doctest = false
 workspace = true
 
 [dependencies]
+baml_agent_watch = { workspace = true }
 baml_artifact = { workspace = true }
 baml_builtins2 = { workspace = true }
 baml_codegen_types = { workspace = true }
+baml_compiler2_visualization = { workspace = true }
 baml_db = { workspace = true }
 baml_exec = { workspace = true }
 baml_fmt = { workspace = true }
@@ -71,9 +73,9 @@ webbrowser = { workspace = true }
 
 [features]
 default = [ "aws-crypto" ]
-aws-crypto = [ "bex_engine/aws-crypto", "sys_native/aws-crypto" ]
-ring-crypto = [ "bex_engine/ring-crypto", "sys_native/ring-crypto" ]
-native-tls = [ "sys_native/native-tls" ]
+aws-crypto = [ "baml_agent_watch/aws-crypto", "bex_engine/aws-crypto", "sys_native/aws-crypto" ]
+ring-crypto = [ "baml_agent_watch/ring-crypto", "bex_engine/ring-crypto", "sys_native/ring-crypto" ]
+native-tls = [ "baml_agent_watch/native-tls", "sys_native/native-tls" ]
 rustls = [ "aws-crypto" ]
 defaults = [  ]
 internal = [  ]

@@ -83,6 +83,7 @@ export default defineConfig({
       // path so every importer shares a single instance.
       react: resolve(projectRoot, 'node_modules/react'),
       'react-dom': resolve(projectRoot, 'node_modules/react-dom'),
+      '@b/pkg-agent-activity': resolve(projectRoot, '../pkg-agent-activity/src'),
       '@b/pkg-editor': resolve(projectRoot, '../pkg-editor/src'),
       '@b/pkg-playground': resolve(projectRoot, '../pkg-playground/src'),
       '@b/pkg-proto': resolve(projectRoot, '../pkg-proto/src'),

@@ -197,8 +197,8 @@ pub(crate) enum Commands {
     Ide(crate::ide_command::IdeArgs),
 
     #[command(
-        about = "Install the toolchain's BAML agent skill for this project",
-        after_long_help = "Examples:\n  Install the bundled skill:\n    baml agent install\n\n  Install in a specific project:\n    baml agent install --project ./my-project"
+        about = "Install the BAML agent skill, or watch what an agent does to a project",
+        after_long_help = "Examples:\n  Install the bundled skill:\n    baml agent install\n\n  Install in a specific project:\n    baml agent install --project ./my-project\n\n  Watch the current directory while an agent works:\n    baml agent watch"
     )]
     Agent(crate::agent_command::AgentArgs),
 
@@ -473,6 +473,12 @@ impl Commands {
             Self::Agent(crate::agent_command::AgentArgs {
                 command: crate::agent_command::AgentCommand::Install(args),
             }) => args.dir = Some(project),
+            // A positional directory wins over the global `--project`.
+            Self::Agent(crate::agent_command::AgentArgs {
+                command: crate::agent_command::AgentCommand::Watch(args),
+            }) => {
+                args.dir.get_or_insert(project);
+            }
             _ => {}
         }
     }
@@ -533,6 +539,7 @@ mod tests {
         &["ide", "install"],
         &["agent"],
         &["agent", "install"],
+        &["agent", "watch"],
         &["playground"],
         &["lsp"],
         &["help"],
@@ -913,6 +920,16 @@ mod tests {
             &["baml", "ide", "install", "--output-dir", "./extensions"],
             &["baml", "agent", "install"],
             &["baml", "agent", "install", "--project", "./my-project"],
+            &["baml", "agent", "watch"],
+            &[
+                "baml",
+                "agent",
+                "watch",
+                "../my-app",
+                "--port",
+                "4285",
+                "--no-open",
+            ],
             &["baml", "playground"],
             &[
                 "baml",

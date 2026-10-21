@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "noUncheckedIndexedAccess": false,
+    "paths": {
+      "@b/pkg-playground/*": ["../pkg-playground/src/*"],
+      "@b/pkg-proto": ["../pkg-proto/src"],
+      "@b/pkg-proto/*": ["../pkg-proto/src/*"]
+    }
+  },
+  "exclude": ["node_modules", "dist"],
+  "extends": "../tsconfig.base.json",
+  "include": ["src/**/*", "src/**/*.json"]
+}

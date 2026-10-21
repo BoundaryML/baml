@@ -19,6 +19,7 @@
     "pretest:unit:run": "pnpm --filter @b/pkg-proto generate"
   },
   "dependencies": {
+    "@b/pkg-agent-activity": "workspace:*",
     "@b/pkg-editor": "workspace:*",
     "@b/pkg-playground": "workspace:*",
     "@b/pkg-proto": "workspace:*",

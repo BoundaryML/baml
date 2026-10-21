@@ -9,6 +9,7 @@
     "paths": {
       "@/*": ["src/*"],
       "@b/bridge_wasm": ["../pkg-playground/wasm"],
+      "@b/pkg-agent-activity": ["../pkg-agent-activity/src"],
       "@b/pkg-playground": ["../pkg-playground/src"],
       "@b/pkg-playground/*": ["../pkg-playground/src/*"],
       "@b/pkg-proto": ["../pkg-proto/src"],
