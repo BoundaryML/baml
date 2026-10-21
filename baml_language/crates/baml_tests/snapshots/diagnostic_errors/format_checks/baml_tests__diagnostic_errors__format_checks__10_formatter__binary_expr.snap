@@ -131,26 +131,26 @@ function BinaryExprs(a: int, b: int, c: int, d: int, s: string, flag: bool) -> i
         && d < 1000 + 2 + 3;
 
     // ===== Long mixed precedence chain exceeding limit =====
-    a * b
-        + c * d
-        - a * b
-        + c * d
-        - a * b
-        + c * d
-        - a * b
-        + c * d
-        - a * b
-        + c * d
-        - a * b
-        + c * d
-        - a * b
-        + c * d
-        - a * b
-        + c * d
-        - a * b
-        + c * d
-        - a * b
-        + c * d;
+    a * b +
+        c * d -
+        a * b +
+        c * d -
+        a * b +
+        c * d -
+        a * b +
+        c * d -
+        a * b +
+        c * d -
+        a * b +
+        c * d -
+        a * b +
+        c * d -
+        a * b +
+        c * d -
+        a * b +
+        c * d -
+        a * b +
+        c * d;
 
     // ===== Long comparison chain exceeding limit =====
     a + b + c + d > 0

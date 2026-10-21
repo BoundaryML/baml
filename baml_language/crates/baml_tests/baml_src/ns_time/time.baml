@@ -205,21 +205,21 @@ test "instant_add_duration" {
 }
 
 test "instant_sub_duration" {
-    let t = baml.time.Instant.from_timestamp_seconds(1000n)
-        - baml.time.Duration.from_seconds(30n);
+    let t = baml.time.Instant.from_timestamp_seconds(1000n) -
+        baml.time.Duration.from_seconds(30n);
     assert.equal(t.to_timestamp_seconds(), 970n)
 }
 
 test "instant_sub_instant_is_a_duration" {
-    let gap = baml.time.Instant.from_timestamp_seconds(1000n)
-        - baml.time.Instant.from_timestamp_seconds(400n);
+    let gap = baml.time.Instant.from_timestamp_seconds(1000n) -
+        baml.time.Instant.from_timestamp_seconds(400n);
     assert.equal(gap.to_seconds(), 600n)
 }
 
 // The gap is signed, so an earlier minuend gives a negative duration.
 test "instant_sub_later_instant_is_negative" {
-    let gap = baml.time.Instant.from_timestamp_seconds(400n)
-        - baml.time.Instant.from_timestamp_seconds(1000n);
+    let gap = baml.time.Instant.from_timestamp_seconds(400n) -
+        baml.time.Instant.from_timestamp_seconds(1000n);
     assert.equal(gap.to_seconds(), -600n)
 }
 
@@ -239,8 +239,8 @@ test "plain_datetime_add_duration" {
 }
 
 test "plain_datetime_sub_duration" {
-    let t = baml.time.PlainDateTime.from_components(2024, 3, 10, hour = 8)
-        - baml.time.Duration.from_hours(3n);
+    let t = baml.time.PlainDateTime.from_components(2024, 3, 10, hour = 8) -
+        baml.time.Duration.from_hours(3n);
     assert.equal(t.hour(), 5)
 }
 
@@ -254,8 +254,8 @@ test "plain_datetime_add_crosses_into_the_next_day" {
 }
 
 test "plain_datetime_sub_plain_datetime_is_a_duration" {
-    let gap = baml.time.PlainDateTime.from_components(2024, 3, 10, hour = 12)
-        - baml.time.PlainDateTime.from_components(2024, 3, 10, hour = 9);
+    let gap = baml.time.PlainDateTime.from_components(2024, 3, 10, hour = 12) -
+        baml.time.PlainDateTime.from_components(2024, 3, 10, hour = 9);
     assert.equal(gap.to_hours(), 3n)
 }
 
@@ -293,16 +293,16 @@ test "plain_time_sub_to_exact_midnight" {
 }
 
 test "plain_time_sub_plain_time_is_a_duration" {
-    let gap = baml.time.PlainTime.from_components(9, minute = 30)
-        - baml.time.PlainTime.from_components(7);
+    let gap = baml.time.PlainTime.from_components(9, minute = 30) -
+        baml.time.PlainTime.from_components(7);
     assert.equal(gap.to_minutes(), 150n)
 }
 
 // The difference of two wall-clock times is signed and does NOT wrap — this is
 // the one `PlainTime` operator that can produce a negative result.
 test "plain_time_sub_plain_time_is_signed" {
-    let gap = baml.time.PlainTime.from_components(1)
-        - baml.time.PlainTime.from_components(23);
+    let gap = baml.time.PlainTime.from_components(1) -
+        baml.time.PlainTime.from_components(23);
     assert.equal(gap.to_hours(), -22n)
 }
 
@@ -315,8 +315,8 @@ test "zoned_add_duration" {
 }
 
 test "zoned_sub_duration" {
-    let z = baml.time.ZonedDateTime.from_components("UTC", 2024, 3, 10, hour = 8)
-        - baml.time.Duration.from_hours(3n);
+    let z = baml.time.ZonedDateTime.from_components("UTC", 2024, 3, 10, hour = 8) -
+        baml.time.Duration.from_hours(3n);
     assert.equal(z.hour(), 5)
 }
 
@@ -329,8 +329,8 @@ test "zoned_arithmetic_preserves_the_timezone" {
 }
 
 test "zoned_sub_zoned_is_a_duration" {
-    let gap = baml.time.ZonedDateTime.from_components("UTC", 2024, 3, 10, hour = 12)
-        - baml.time.ZonedDateTime.from_components("UTC", 2024, 3, 10, hour = 9);
+    let gap = baml.time.ZonedDateTime.from_components("UTC", 2024, 3, 10, hour = 12) -
+        baml.time.ZonedDateTime.from_components("UTC", 2024, 3, 10, hour = 9);
     assert.equal(gap.to_hours(), 3n)
 }
 

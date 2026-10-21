@@ -220,6 +220,7 @@ function OtherExprs(a: int, b: int) -> int {
     OtherTriple { a: OtherVec { p: OtherPoint { x: 1, y: 2 }, q: OtherPoint { x: 3, y: 4 } }, b: OtherVec { p: OtherPoint { x: 5, y: 6 }, q: OtherPoint { x: 7, y: 8 } }, c: OtherVec { p: OtherPoint { x: 9, y: 10 }, q: OtherPoint { x: 11, y: 12 } } };
 
     // ===== Trivia in object initializer (line comments) =====
+    (
     // 1 type name leading
     OtherPoint // 2 type name trailing
     // 3 open brace leading
@@ -237,9 +238,10 @@ function OtherExprs(a: int, b: int) -> int {
     2 // 15 second value trailing
     // 16 close brace leading
     } // 17 close brace trailing
-    ;
+    );
 
     // ===== Trivia in object initializer (block comments) =====
+    (
     /* 1 type name leading */
     OtherPoint /* 2 type name trailing */
     /* 3 open brace leading */
@@ -257,9 +259,10 @@ function OtherExprs(a: int, b: int) -> int {
     2 /* 15 second value trailing */
     /* 16 close brace leading */
     } /* 17 close brace trailing */
-    ;
+    );
 
     // ===== Trivia in nested object exceeding limit (line comments) =====
+    (
     // 1 leading
     OtherVec // 2 trailing
     { // 3 trailing
@@ -301,7 +304,7 @@ function OtherExprs(a: int, b: int) -> int {
     400000 // 39 trailing
     } // 40 trailing
     } // 41 trailing
-    ;
+    );
 
     // ===== Block expressions =====
     {

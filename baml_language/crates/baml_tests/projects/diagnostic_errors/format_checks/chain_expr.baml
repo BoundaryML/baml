@@ -90,6 +90,7 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
     user.profile.items.get(0);
 
     // ===== Trivia in call (line comments) =====
+    (
     // 1 callee leading
     items // 2 callee trailing
     // 3 open paren leading
@@ -101,9 +102,10 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
     0 // 9 arg trailing
     // 10 close paren leading
     ) // 11 close paren trailing
-    ;
+    );
 
     // ===== Trivia in call (block comments) =====
+    (
     /* 1 callee leading */
     items /* 2 callee trailing */
     /* 3 dot leading */
@@ -115,7 +117,7 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
     0 /* 9 arg trailing */
     /* 10 close paren leading */
     ) /* 11 close paren trailing */
-    ;
+    );
 
     // ===== Index access =====
     items[0];
@@ -124,6 +126,7 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
     user.scores[0][1];
 
     // ===== Trivia in index (line comments) =====
+    (
     // 1 base leading
     items // 2 base trailing
     // 3 open bracket leading
@@ -132,9 +135,10 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
     0 // 6 index trailing
     // 7 close bracket leading
     ] // 8 close bracket trailing
-    ;
+    );
 
     // ===== Trivia in index (block comments) =====
+    (
     /* 1 base leading */
     items /* 2 base trailing */
     /* 3 open bracket leading */
@@ -143,7 +147,7 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
     0 /* 6 index trailing */
     /* 7 close bracket leading */
     ] /* 8 close bracket trailing */
-    ;
+    );
 
     // ===== Chained calls =====
     user.name.len().to_string();
@@ -161,6 +165,7 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
     user.profile.items.slice(0, user.profile.items.len() - 1, user.profile.settings.preferences.size);
 
     // ===== Trivia in long wrapping chain (line comments) =====
+    (
     // 1 leading
     user // 2 trailing
     . // 3 trailing
@@ -190,9 +195,10 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
     len // 27 trailing
     ( // 28 trailing
     ) // 29 trailing
-    ;
+    );
 
     // ===== Trivia in long wrapping chain (block comments) =====
+    (
     /* 1 leading */
     user /* 2 trailing */
     . /* 3 trailing */
@@ -222,9 +228,10 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
     len /* 27 trailing */
     ( /* 28 trailing */
     ) /* 29 trailing */
-    ;
+    );
 
     // ===== Trivia in call with long args (line comments) =====
+    (
     // 1 leading
     user // 2 trailing
     . // 3 trailing
@@ -243,7 +250,7 @@ function ChainExprs(user: ChainUser, items: ChainItem[], m: map<string, int>) ->
     . // 16 trailing
     // 17 leading
     label // 18 trailing
-    ;
+    );
 
     // ===== Deeply nested index chains =====
     user.scores[0][0];

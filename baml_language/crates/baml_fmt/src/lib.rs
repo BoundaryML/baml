@@ -1200,20 +1200,21 @@ mod backtick_format_tests {
 }
 
 #[cfg(test)]
-mod block_operand_binary_format_tests {
+mod minus_chain_format_tests {
     use super::*;
 
-    /// The parser ends an expression at a block-closing `}` followed by a line
-    /// break when the next line could start a statement (B-1831), so a `-` or
-    /// `<` after a multi-line block operand stays on the `}`'s line; other
-    /// operators still wrap onto their own line.
+    /// Where line breaks separate statements, a line starting with `-` begins
+    /// a new one, so a multi-line chain containing `-` puts its operators at
+    /// the ends of lines. Chains without `-` keep leading operators, and `<`
+    /// stays leading because the parser reads it as a continuation.
     #[test]
-    fn minus_and_less_after_block_operand_stay_on_the_closing_brace_line() {
+    fn chains_with_minus_put_operators_at_line_ends() {
         let source = "function f(c: bool, aaaaaaaaaaaaaaaaaaaa: int, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: int) -> bool {
     let v = if (c) { let t = aaaaaaaaaaaaaaaaaaaa; t } else { bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb } - aaaaaaaaaaaaaaaaaaaa
-    let w = aaaaaaaaaaaaaaaaaaaa - match (v) { 0 => { let q = 1; q }, _ => 200 } - match (v) { 0 => { let q = 1; q }, _ => 2 }
-    let y = if (c) { let t = aaaaaaaaaaaaaaaaaaaa; t } else { bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb } + aaaaaaaaaaaaaaaaaaaa
-    if (c) { let t = aaaaaaaaaaaaaaaaaaaa; t } else { bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb } < v + w + y
+    let w = aaaaaaaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa * bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    let y = aaaaaaaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb + aaaaaaaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    let z = g(aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb)
+    if (c) { let t = aaaaaaaaaaaaaaaaaaaa; t } else { bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb } < v + w + y + z
 }
 ";
         let expected = "function f(c: bool, aaaaaaaaaaaaaaaaaaaa: int, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: int) -> bool {
@@ -1222,34 +1223,28 @@ mod block_operand_binary_format_tests {
         t
     } else {
         bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-    } - aaaaaaaaaaaaaaaaaaaa;
-    let w = aaaaaaaaaaaaaaaaaaaa
-        - match (v) {
-            0 => {
-                let q = 1;
-                q
-            },
-            _ => 200,
-        } - match (v) {
-            0 => {
-                let q = 1;
-                q
-            },
-            _ => 2,
-        };
-    let y = if (c) {
-        let t = aaaaaaaaaaaaaaaaaaaa;
-        t
-    } else {
-        bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-    }
-        + aaaaaaaaaaaaaaaaaaaa;
+    } -
+        aaaaaaaaaaaaaaaaaaaa;
+    let w = aaaaaaaaaaaaaaaaaaaa +
+        bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb -
+        aaaaaaaaaaaaaaaaaaaa * bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;
+    let y = aaaaaaaaaaaaaaaaaaaa
+        + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+        + aaaaaaaaaaaaaaaaaaaa
+        + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;
+    let z = g(
+        aaaaaaaaaaaaaaaaaaaa -
+            bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb -
+            aaaaaaaaaaaaaaaaaaaa -
+            bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,
+    );
     if (c) {
         let t = aaaaaaaaaaaaaaaaaaaa;
         t
     } else {
         bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-    } < v + w + y
+    }
+        < v + w + y + z
 }
 ";
         let options = FormatOptions::default();

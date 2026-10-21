@@ -275,12 +275,13 @@ pub enum BinaryOp {
 }
 
 impl BinaryOp {
-    /// Whether this operator's token can also begin an expression (`-x`,
-    /// `<T>(x: T) => x`). The parser does not read such a token on the line
-    /// after a block-closing `}` as a continuation of the block's expression.
+    /// Whether a line starting with this operator begins a new statement
+    /// (`-b`) rather than continuing the expression on the line before, where
+    /// line breaks separate statements. `<` continues: it begins an
+    /// expression only as a generic lambda (`<T>(x: T) => …`).
     #[must_use]
-    pub fn can_start_expression(&self) -> bool {
-        matches!(self, BinaryOp::Minus(_) | BinaryOp::Less(_))
+    pub fn begins_statement_at_line_start(&self) -> bool {
+        matches!(self, BinaryOp::Minus(_))
     }
 
     #[must_use]
