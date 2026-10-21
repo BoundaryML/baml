@@ -14143,7 +14143,11 @@ function f() -> int {
 "#;
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
-        assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 1, "only `x != null`");
+        assert_eq!(
+            count_kind(&root, SyntaxKind::BINARY_EXPR),
+            1,
+            "only `x != null`"
+        );
         assert_eq!(count_kind(&root, SyntaxKind::UNARY_EXPR), 1);
     }
 
