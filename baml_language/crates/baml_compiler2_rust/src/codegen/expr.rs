@@ -30,19 +30,19 @@ impl<'db> Generator<'_, 'db> {
             }
             Rvalue::Len(place) => {
                 let container = self.load(block, place)?;
-                let container = self.value_arg(&container.code, container.repr);
+                let container = self.value_arg(&container);
                 let code = self.fallible(block, &format!("vm.container_len({container})"))?;
                 Ok(Expr::new(code, Repr::Value))
             }
             Rvalue::Discriminant(place) => {
                 let value = self.load(block, place)?;
-                let value = self.value_arg(&value.code, value.repr);
+                let value = self.value_arg(&value);
                 let code = self.fallible(block, &format!("vm.discriminant({value})"))?;
                 Ok(Expr::new(code, Repr::Int))
             }
             Rvalue::TypeTag(place) => {
                 let value = self.load(block, place)?;
-                let value = self.value_arg(&value.code, value.repr);
+                let value = self.value_arg(&value);
                 Ok(Expr::new(
                     format!("bex_vm::compiled_rt::type_tag({value})"),
                     Repr::Int,
@@ -174,7 +174,7 @@ impl<'db> Generator<'_, 'db> {
         let mut values = Vec::with_capacity(elements.len());
         for element in elements {
             let element = self.operand(block, element)?;
-            values.push(self.value_arg(&element.code, element.repr));
+            values.push(self.value_arg(&element));
         }
         Ok(Expr::new(
             format!("vm.new_array({element_ty}, vec![{}])", values.join(", ")),
@@ -190,7 +190,7 @@ impl<'db> Generator<'_, 'db> {
         fields: &[Operand<'db>],
     ) -> Gen<Expr> {
         let name = class_display_name(self.db, class);
-        let Some((object, field_count)) = self.index.class(self.db, class)? else {
+        let Some((object, field_count)) = self.index.class(self.db, class) else {
             return unsupported(format!("class `{name}` not found in the program"));
         };
         if fields.len() != field_count {
@@ -202,7 +202,7 @@ impl<'db> Generator<'_, 'db> {
         let mut values = Vec::with_capacity(fields.len());
         for field in fields {
             let field = self.operand(block, field)?;
-            values.push(self.value_arg(&field.code, field.repr));
+            values.push(self.value_arg(&field));
         }
         let class = format!("vm.idx_to_ptr(ObjectIndex::from_raw({object}))");
         if type_arg_templates.is_empty() {
@@ -235,10 +235,7 @@ impl<'db> Generator<'_, 'db> {
             &[],
             "deep_copy",
         );
-        let Some((_, info)) = deep_copy
-            .map(|function| self.index.function(self.db, function))
-            .transpose()?
-            .flatten()
+        let Some((_, info)) = deep_copy.and_then(|function| self.index.function(self.db, function))
         else {
             return unsupported("`baml.deep_copy` not found in the program");
         };
@@ -261,7 +258,10 @@ impl<'db> Generator<'_, 'db> {
         ));
         let code = self.fallible(
             block,
-            &format!("vm.call_builtin(builtin_{ordinal}(), &[{}])", template.code),
+            &format!(
+                "vm.call_builtin(builtin_{ordinal}()?, &[{}])",
+                template.code
+            ),
         )?;
         Ok(Expr::new(code, Repr::Value))
     }
@@ -279,7 +279,7 @@ impl<'db> Generator<'_, 'db> {
                 self.lambdas.len()
             )));
         };
-        let Some(object) = self.index.lambda(self.db, &lambda.identity)? else {
+        let Some(object) = self.index.lambda(self.db, &lambda.identity) else {
             let name = lambda.identity.display_name(self.db);
             return unsupported(format!("lambda `{name}` not found in the program"));
         };
@@ -287,7 +287,7 @@ impl<'db> Generator<'_, 'db> {
         let mut cells = Vec::with_capacity(captures.len());
         for capture in captures {
             let cell = self.operand(block, capture)?;
-            cells.push(self.value_arg(&cell.code, cell.repr));
+            cells.push(self.value_arg(&cell));
         }
         Ok(Expr::new(
             format!(
@@ -307,7 +307,7 @@ impl<'db> Generator<'_, 'db> {
         receiver: &Operand<'db>,
     ) -> Gen<Expr> {
         let name = function_display_name(self.db, func);
-        let Some((object, _)) = self.index.function(self.db, func)? else {
+        let Some((object, _)) = self.index.function(self.db, func) else {
             return unsupported(format!("method `{name}` not found in the program"));
         };
         let receiver = self.value_operand(block, receiver)?;
@@ -325,7 +325,7 @@ impl<'db> Generator<'_, 'db> {
         type_arg_templates: &[TyTemplate],
     ) -> Gen<Expr> {
         let name = function_display_name(self.db, func);
-        let Some((object, _)) = self.index.function(self.db, func)? else {
+        let Some((object, _)) = self.index.function(self.db, func) else {
             return unsupported(format!("function `{name}` not found in the program"));
         };
         let Some(&global) = self.index.globals.get(&object) else {
@@ -420,7 +420,7 @@ impl<'db> Generator<'_, 'db> {
     pub(super) fn type_test(&mut self, value: &str, test: &TypeTest<'db>) -> Gen<String> {
         match test {
             TypeTest::Class { class, args } => {
-                let Some((object, _)) = self.index.class(self.db, *class)? else {
+                let Some((object, _)) = self.index.class(self.db, *class) else {
                     let name = class_display_name(self.db, *class);
                     return unsupported(format!("class `{name}` not found in the program"));
                 };
@@ -437,7 +437,7 @@ impl<'db> Generator<'_, 'db> {
                 ))
             }
             TypeTest::Enum(enum_ref) => {
-                let Some(object) = self.index.enum_(self.db, *enum_ref)? else {
+                let Some(object) = self.index.enum_(self.db, *enum_ref) else {
                     let name = enum_display_name(self.db, *enum_ref);
                     return unsupported(format!("enum `{name}` not found in the program"));
                 };
@@ -476,7 +476,7 @@ impl<'db> Generator<'_, 'db> {
             TyTemplate::Type => return Ok(tag(typetag::TYPE)),
             TyTemplate::Literal(literal, _) => ConstValue::Literal(literal.clone()),
             _ => {
-                let Some(anchored) = self.index.anchor(template)? else {
+                let Some(anchored) = self.index.anchor(template) else {
                     return unsupported(
                         "structural type test naming a declaration outside the program",
                     );
@@ -503,7 +503,7 @@ impl<'db> Generator<'_, 'db> {
             return Ok(code);
         }
         frame_free(template)?;
-        let Some(anchored) = self.index.anchor(template)? else {
+        let Some(anchored) = self.index.anchor(template) else {
             return unsupported("type naming a declaration outside the program");
         };
         let Some(index) = self
@@ -523,7 +523,7 @@ impl<'db> Generator<'_, 'db> {
         Ok(name)
     }
 
-    fn builtin_ordinal(&mut self, key: &str) -> usize {
+    pub(super) fn builtin_ordinal(&mut self, key: &str) -> usize {
         let next = self.builtins.len();
         *self.builtins.entry(key.to_owned()).or_insert(next)
     }
@@ -584,8 +584,8 @@ impl<'db> Generator<'_, 'db> {
             (Bool, Bool, BinOp::BitOr) => Expr::new(format!("({l} | {r})"), Bool),
             (Bool, Bool, BinOp::BitXor) => Expr::new(format!("({l} ^ {r})"), Bool),
             _ => {
-                let l = self.value_arg(l, left.repr);
-                let r = self.value_arg(r, right.repr);
+                let l = self.value_arg(left);
+                let r = self.value_arg(right);
                 match op {
                     BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => {
                         let code = self.fallible(
@@ -611,21 +611,21 @@ impl<'db> Generator<'_, 'db> {
         let code = &operand.code;
         Ok(match (op, operand.repr) {
             (UnaryOp::Not, Repr::Bool) => Expr::new(format!("(!{code})"), Repr::Bool),
-            (UnaryOp::Not, repr) => {
-                let value = self.value_arg(code, repr);
+            (UnaryOp::Not, _) => {
+                let value = self.value_arg(operand);
                 Expr::new(format!("vm.not({value})"), Repr::Bool)
             }
             (UnaryOp::Neg, Repr::Int) => {
                 self.fallible_expr(block, &format!("vm.neg_i64({code})"), Repr::Int)?
             }
             (UnaryOp::Neg, Repr::Float) => Expr::new(format!("(-{code})"), Repr::Float),
-            (UnaryOp::Neg, repr) => {
-                let value = self.value_arg(code, repr);
+            (UnaryOp::Neg, _) => {
+                let value = self.value_arg(operand);
                 self.fallible_expr(block, &format!("vm.neg({value})"), Repr::Value)?
             }
             (UnaryOp::Truthy, Repr::Bool) => Expr::new(code.clone(), Repr::Bool),
-            (UnaryOp::Truthy, repr) => {
-                let value = self.value_arg(code, repr);
+            (UnaryOp::Truthy, _) => {
+                let value = self.value_arg(operand);
                 Expr::new(format!("vm.is_truthy({value})"), Repr::Bool)
             }
         })

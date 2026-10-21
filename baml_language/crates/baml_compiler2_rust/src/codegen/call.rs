@@ -26,12 +26,12 @@ impl<'db> Generator<'_, 'db> {
             ));
         };
         let name = function_display_name(self.db, *func);
-        let Some((object, info)) = self.index.function(self.db, *func)? else {
+        let Some((object, info)) = self.index.function(self.db, *func) else {
             return unsupported(format!("callee `{name}` not found in the program"));
         };
         let shape = call_shape(self.body, args, ntypeargs, &self.analysis.static_types);
         let (type_args, args) = args.split_at(ntypeargs.min(args.len()));
-        let (types, _) = self.call_type_args(type_args)?;
+        let (types, _) = self.type_operands("call", type_args)?;
         let values = self.laid_out_args(block, &name, info, layout, args)?;
         let args = format!("&[{}]", values.join(", "));
         match info.kind {
@@ -63,18 +63,17 @@ impl<'db> Generator<'_, 'db> {
                         "yielding builtin `{key}` emitted inline"
                     )));
                 }
-                let next = self.builtins.len();
-                let ordinal = *self.builtins.entry(key.to_owned()).or_insert(next);
+                let ordinal = self.builtin_ordinal(key);
                 if types.is_empty() {
                     self.fallible(
                         block,
-                        &format!("vm.call_builtin(builtin_{ordinal}(), {args})"),
+                        &format!("vm.call_builtin(builtin_{ordinal}()?, {args})"),
                     )
                 } else {
                     self.fallible(
                         block,
                         &format!(
-                            "vm.call_builtin_typed(builtin_{ordinal}(), &[{}], {args})",
+                            "vm.call_builtin_typed(builtin_{ordinal}()?, &[{}], {args})",
                             types.join(", ")
                         ),
                     )
@@ -89,7 +88,7 @@ impl<'db> Generator<'_, 'db> {
     pub(super) fn callee_ptr(&mut self, block: BlockId, callee: &Operand<'db>) -> Gen<()> {
         let code = match callee {
             Operand::Constant(Constant::Function(func)) => {
-                let Some((object, _)) = self.index.function(self.db, *func)? else {
+                let Some((object, _)) = self.index.function(self.db, *func) else {
                     let name = function_display_name(self.db, *func);
                     return unsupported(format!("callee `{name}` not found in the program"));
                 };
@@ -116,11 +115,7 @@ impl<'db> Generator<'_, 'db> {
         layout: Option<&baml_type::CallLayout>,
         args: &[Operand<'db>],
     ) -> Gen<Vec<String>> {
-        let mut values = Vec::with_capacity(args.len());
-        for arg in args {
-            let arg = self.operand(block, arg)?;
-            values.push(self.value_arg(&arg.code, arg.repr));
-        }
+        let values = self.arg_values(block, args)?;
         let values = match layout {
             Some(layout) if layout.0.iter().any(Option::is_some) => layout
                 .map_to(&info.layout)
@@ -148,7 +143,7 @@ impl<'db> Generator<'_, 'db> {
         let mut values = Vec::with_capacity(args.len());
         for arg in args {
             let arg = self.operand(block, arg)?;
-            values.push(self.value_arg(&arg.code, arg.repr));
+            values.push(self.value_arg(&arg));
         }
         Ok(values)
     }
@@ -162,8 +157,8 @@ impl<'db> Generator<'_, 'db> {
         let mut types = Vec::with_capacity(operands.len());
         let mut fixed = true;
         for operand in operands {
-            let (code, primitive) = self.type_operand(what, operand)?;
-            fixed &= primitive.is_some();
+            let (code, is_static) = self.type_operand(what, operand)?;
+            fixed &= is_static;
             types.push(code);
         }
         Ok((types, fixed))
@@ -175,7 +170,7 @@ impl<'db> Generator<'_, 'db> {
         iface: &TyTemplateInterface,
     ) -> Gen<(String, String, bool)> {
         let name = decl_display_name(self.db, &iface.name);
-        let Some(object) = self.index.interface_at(&iface.name)? else {
+        let Some(object) = self.index.interface_at(&iface.name) else {
             return unsupported(format!("interface `{name}` not found in the program"));
         };
         let mut args = Vec::with_capacity(iface.generics.len());

@@ -1,10 +1,6 @@
 //! Admission, reachability, and program metadata for Rust emission.
 
-use std::{
-    borrow::Borrow,
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque, hash_map::Entry},
-    hash::Hash,
-};
+use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque, hash_map::Entry};
 
 use baml_base::SourceRoot;
 use baml_compiler2_emit::{
@@ -42,10 +38,20 @@ use crate::{
 pub enum Rejection {
     /// Outside the supported subset; execution stays in bytecode.
     Unsupported(String),
-    /// A compiler invariant failed.
+    /// A compiler invariant failed: a backend bug. It falls back to bytecode
+    /// in release builds and panics in debug builds, so tests catch it.
     Invalid(String),
     /// Unreachable from the requested entry points.
     Unreached,
+}
+
+/// Record that `name` stays bytecode.
+fn reject(rejected: &mut Vec<(String, Rejection)>, name: String, rejection: Rejection) {
+    debug_assert!(
+        !matches!(rejection, Rejection::Invalid(_)),
+        "Rust backend bug in {name}: {rejection}"
+    );
+    rejected.push((name, rejection));
 }
 
 impl std::fmt::Display for Rejection {
@@ -115,7 +121,7 @@ pub fn compile_program(
     let (bodies, functions, builtins) =
         admission_fixpoint(db, &index, &mut lowered.units, &mut lowered.rejected);
 
-    let source = render_module(&bodies, &functions, &builtins, artifact_path, fingerprint)?;
+    let source = render_module(&bodies, &functions, &builtins, artifact_path, fingerprint);
     Ok(RustModule {
         source,
         functions,
@@ -153,10 +159,11 @@ fn lower_program<'db>(
             let mir = match lower_function(db, function, opt) {
                 Ok(mir) => mir,
                 Err(error) => {
-                    rejected.push((
+                    reject(
+                        &mut rejected,
                         format!("{function:?}"),
                         Rejection::Invalid(format!("lowering failed: {error:?}")),
-                    ));
+                    );
                     continue;
                 }
             };
@@ -165,19 +172,13 @@ fn lower_program<'db>(
             };
             // Lambdas are admitted independently of their parent.
             admit_lambdas(db, index, &mut units, &mut rejected, mir, &[], package);
-            let object = match index.declared(db, function) {
-                Ok(Some(object)) => object,
-                Ok(None) => {
-                    rejected.push((
-                        mir.identity.display_name(db),
-                        Rejection::Invalid("no function of this identity in the program".into()),
-                    ));
-                    continue;
-                }
-                Err(rejection) => {
-                    rejected.push((mir.identity.display_name(db), rejection));
-                    continue;
-                }
+            let Some(object) = index.declared(db, function) else {
+                reject(
+                    &mut rejected,
+                    mir.identity.display_name(db),
+                    Rejection::Invalid("no function of this identity in the program".into()),
+                );
+                continue;
             };
             if entries.is_some() {
                 refs.insert(object, references(db, index, body, &mir.lambdas));
@@ -223,7 +224,11 @@ fn retain_reachable(index: &ProgramIndex, lowered: &mut LoweredProgram<'_>) {
     units.retain(|object, _| {
         let keep = reached.contains(object);
         if !keep {
-            rejected.push((index.name(*object).to_owned(), Rejection::Unreached));
+            reject(
+                rejected,
+                index.name(*object).to_owned(),
+                Rejection::Unreached,
+            );
         }
         keep
     });
@@ -292,7 +297,7 @@ fn admission_fixpoint(
         }
         for (object, rejection) in failed {
             units.remove(&object);
-            rejected.push((index.display(object).to_owned(), rejection));
+            reject(rejected, index.display(object).to_owned(), rejection);
         }
     }
 }
@@ -325,7 +330,7 @@ fn admit_unit<'db>(
                 },
             );
         }
-        Err(rejection) => rejected.push((name, rejection)),
+        Err(rejection) => reject(rejected, name, rejection),
     }
 }
 
@@ -348,19 +353,13 @@ fn admit_lambdas<'db>(
             continue;
         };
         let captures = capture_reprs(parent_body, lambda_idx, &values, captures);
-        let object = match index.lambda(db, &lambda.identity) {
-            Ok(Some(object)) => object,
-            Ok(None) => {
-                rejected.push((
-                    lambda.identity.display_name(db),
-                    Rejection::Invalid("no function of this identity in the program".into()),
-                ));
-                continue;
-            }
-            Err(rejection) => {
-                rejected.push((lambda.identity.display_name(db), rejection));
-                continue;
-            }
+        let Some(object) = index.lambda(db, &lambda.identity) else {
+            reject(
+                rejected,
+                lambda.identity.display_name(db),
+                Rejection::Invalid("no function of this identity in the program".into()),
+            );
+            continue;
         };
         admit_lambdas(db, index, units, rejected, lambda, &captures, package);
         admit_unit(
@@ -420,16 +419,6 @@ struct LambdaKey {
     identity: FunctionIdentity,
 }
 
-/// Typed object key with raw-index lookups for codegen.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct ObjectKey(usize);
-
-impl Borrow<usize> for ObjectKey {
-    fn borrow(&self) -> &usize {
-        &self.0
-    }
-}
-
 #[derive(Default)]
 struct ObjectInfo {
     function: Option<FunctionInfo>,
@@ -457,11 +446,9 @@ pub(crate) struct ProgramIndex {
     aliases: HashMap<DeclKey, usize>,
     /// The global slot of each top-level `let`, by identity.
     lets: HashMap<DeclKey, usize>,
-    /// Lambda (closure body) object by identity.
-    lambdas: HashMap<LambdaKey, usize>,
-    /// Duplicate claims reject all lookups of the affected identity.
-    ambiguous: HashSet<DeclKey>,
-    ambiguous_lambdas: HashSet<LambdaKey>,
+    /// Lambda (closure body) object by identity; `None` for an identity
+    /// more than one object claims, which then stays bytecode.
+    lambdas: HashMap<LambdaKey, Option<usize>>,
     objects: Vec<ObjectInfo>,
     /// Method names conservatively resolve all possible dispatch targets.
     methods: HashMap<String, Vec<usize>>,
@@ -470,7 +457,7 @@ pub(crate) struct ProgramIndex {
     /// String literal → the compile-time string object bytecode loads it from.
     pub(crate) strings: HashMap<String, usize>,
     /// Global slot used by pooled generic function values.
-    pub(crate) globals: HashMap<ObjectKey, usize>,
+    pub(crate) globals: HashMap<usize, usize>,
     /// Find a pooled generic function with the program's anchored type arguments.
     generic_functions: Vec<(usize, Box<[bex_vm_types::RealizedTy]>, usize)>,
     /// Bigint literal (as decimal text) → its pooled `Object::Bigint`.
@@ -496,6 +483,12 @@ impl Positions {
     /// The PCs of MIR block `block`.
     pub(crate) fn block(&self, block: usize) -> Option<&BlockPcs> {
         self.0.block_pcs.get(block)
+    }
+
+    /// Whether the bytecode carries no MIR positions: they are compile-time
+    /// only, so a deserialized program has none.
+    pub(crate) fn is_empty(&self) -> bool {
+        self.0.block_pcs.is_empty()
     }
 
     /// Both backends must lower the same blocks and statements.
@@ -524,19 +517,14 @@ impl ProgramIndex {
                 .collect(),
             ..Self::default()
         };
-        let mut collisions = Vec::new();
-        index.index_objects(program, &mut collisions);
+        index.index_objects(program);
         index.index_globals(program);
         index.index_bytecode(program);
-        index.index_declarations(program, &mut collisions);
-        debug_assert!(
-            collisions.is_empty(),
-            "the program's tables place two objects at one identity: {collisions:?}"
-        );
+        index.index_declarations(program);
         index
     }
 
-    fn index_objects(&mut self, program: &Program, collisions: &mut Vec<String>) {
+    fn index_objects(&mut self, program: &Program) {
         for (object, item) in program.objects.iter().enumerate() {
             match item {
                 Object::Function(function) => {
@@ -558,18 +546,19 @@ impl ProgramIndex {
                     if let (FunctionIdentity::Synthetic { .. }, Some((package, _))) =
                         (&function.identity, &placing)
                     {
-                        collisions.extend(
-                            claim(
-                                &mut self.lambdas,
-                                &mut self.ambiguous_lambdas,
-                                LambdaKey {
-                                    package: *package,
-                                    identity: function.identity.clone(),
-                                },
-                                object,
-                            )
-                            .map(|key| format!("{key:?}")),
-                        );
+                        let key = LambdaKey {
+                            package: *package,
+                            identity: function.identity.clone(),
+                        };
+                        match self.lambdas.entry(key) {
+                            Entry::Vacant(vacant) => {
+                                vacant.insert(Some(object));
+                            }
+                            Entry::Occupied(mut occupied) => {
+                                debug_assert!(false, "two lambdas claim {:?}", occupied.key());
+                                occupied.insert(None);
+                            }
+                        }
                     }
                     self.objects[object].name = name;
                     let method = match &function.identity {
@@ -637,7 +626,7 @@ impl ProgramIndex {
                     .get(object.raw())
                     .is_some_and(|info| info.function.is_some())
             {
-                self.globals.entry(ObjectKey(object.raw())).or_insert(slot);
+                self.globals.entry(object.raw()).or_insert(slot);
             }
         }
     }
@@ -667,7 +656,9 @@ impl ProgramIndex {
         }
     }
 
-    fn index_declarations(&mut self, program: &Program, collisions: &mut Vec<String>) {
+    /// Each table is keyed by its package's own declaration maps, so no two
+    /// objects can claim one identity.
+    fn index_declarations(&mut self, program: &Program) {
         for (ordinal, package) in (0u32..).zip(&program.packages) {
             let key = |path: DeclPath| DeclKey {
                 package: ordinal,
@@ -677,10 +668,7 @@ impl ProgramIndex {
             for (path, &cell) in &package.globals {
                 let slot = package.slot_base.raw() + cell as usize;
                 if matches!(path, DeclPath::Let(_)) {
-                    collisions.extend(
-                        claim(&mut self.lets, &mut self.ambiguous, key(path.clone()), slot)
-                            .map(|key| format!("{key:?}")),
-                    );
+                    self.lets.insert(key(path.clone()), slot);
                     continue;
                 }
                 if !matches!(path, DeclPath::Function(_) | DeclPath::InterfaceBody(_)) {
@@ -692,110 +680,62 @@ impl ProgramIndex {
                 if self
                     .objects
                     .get(object.raw())
-                    .is_none_or(|info| info.function.is_none())
+                    .is_some_and(|info| info.function.is_some())
                 {
-                    continue;
+                    self.functions.insert(key(path.clone()), object.raw());
                 }
-                collisions.extend(
-                    claim(
-                        &mut self.functions,
-                        &mut self.ambiguous,
-                        key(path.clone()),
-                        object.raw(),
-                    )
-                    .map(|key| format!("{key:?}")),
-                );
             }
             for (path, &object) in &package.classes {
-                let Object::Class(class) = &program.objects[object] else {
-                    continue;
-                };
-                collisions.extend(
-                    claim(
-                        &mut self.classes,
-                        &mut self.ambiguous,
+                if let Object::Class(class) = &program.objects[object] {
+                    self.classes.insert(
                         key(DeclPath::Class(path.clone())),
                         (object.raw(), class.fields.len()),
-                    )
-                    .map(|key| format!("{key:?}")),
-                );
+                    );
+                }
             }
             for (path, &object) in &package.enums {
-                collisions.extend(
-                    claim(
-                        &mut self.enums,
-                        &mut self.ambiguous,
-                        key(DeclPath::Enum(path.clone())),
-                        object.raw(),
-                    )
-                    .map(|key| format!("{key:?}")),
-                );
+                self.enums
+                    .insert(key(DeclPath::Enum(path.clone())), object.raw());
             }
             for (path, &object) in &package.interfaces {
-                collisions.extend(
-                    claim(
-                        &mut self.interfaces,
-                        &mut self.ambiguous,
-                        key(DeclPath::Interface(path.clone())),
-                        object.raw(),
-                    )
-                    .map(|key| format!("{key:?}")),
-                );
+                self.interfaces
+                    .insert(key(DeclPath::Interface(path.clone())), object.raw());
             }
             for (path, &object) in &package.type_aliases {
-                collisions.extend(
-                    claim(
-                        &mut self.aliases,
-                        &mut self.ambiguous,
-                        key(DeclPath::TypeAlias(path.clone())),
-                        object.raw(),
-                    )
-                    .map(|key| format!("{key:?}")),
-                );
+                self.aliases
+                    .insert(key(DeclPath::TypeAlias(path.clone())), object.raw());
             }
         }
     }
 
-    /// Look up a lambda, rejecting ambiguous identities.
     pub(crate) fn lambda<'db>(
         &self,
         db: &'db dyn baml_compiler2_mir::Db,
         identity: &MirFunctionId<'db>,
-    ) -> Result<Option<usize>, Rejection> {
-        let Some(&package) = self.packages.get(&identity_root(db, identity)) else {
-            return Ok(None);
-        };
+    ) -> Option<usize> {
+        let package = *self.packages.get(&identity_root(db, identity))?;
         let key = LambdaKey {
             package,
             identity: function_identity(db, identity),
         };
-        lookup_key(&self.lambdas, &self.ambiguous_lambdas, &key)
+        self.lambdas.get(&key).copied().flatten()
     }
 
-    /// Look up a declaration, rejecting ambiguous identities.
     pub(crate) fn declared(
         &self,
         db: &dyn baml_compiler2_mir::Db,
         function: FunctionLoc<'_>,
-    ) -> Result<Option<usize>, Rejection> {
-        let Some(coords) = declared_function_coords(db, function) else {
-            return Ok(None);
-        };
-        self.lookup(&self.functions, coords)
+    ) -> Option<usize> {
+        self.lookup(&self.functions, declared_function_coords(db, function)?)
     }
 
-    /// Look up a callable, rejecting ambiguous identities.
     pub(crate) fn function<'db>(
         &self,
         db: &'db dyn baml_compiler2_mir::Db,
         function: FunctionRef<'db>,
-    ) -> Result<Option<(usize, &FunctionInfo)>, Rejection> {
-        let Some(coords) = function_coords(db, function) else {
-            return Ok(None);
-        };
-        Ok(self
-            .lookup(&self.functions, coords)?
-            .map(|object| (object, self.info(object))))
+    ) -> Option<(usize, &FunctionInfo)> {
+        let object = self.lookup(&self.functions, function_coords(db, function)?)?;
+        Some((object, self.info(object)))
     }
 
     /// The (object, field count) of `class`, if the program has it.
@@ -803,29 +743,22 @@ impl ProgramIndex {
         &self,
         db: &'db dyn baml_compiler2_mir::Db,
         class: ClassRef<'db>,
-    ) -> Result<Option<(usize, usize)>, Rejection> {
+    ) -> Option<(usize, usize)> {
         self.lookup(&self.classes, class_coords(db, class))
     }
 
     /// [`Self::class`] for the class a type template's head names.
-    pub(crate) fn class_at(
-        &self,
-        head: &baml_type::DeclName,
-    ) -> Result<Option<(usize, usize)>, Rejection> {
+    pub(crate) fn class_at(&self, head: &baml_type::DeclName) -> Option<(usize, usize)> {
         self.lookup(&self.classes, class_head_coords(head))
     }
 
-    /// The object of the interface a dispatch template's head names, if the
-    /// program has it.
-    pub(crate) fn interface_at(
-        &self,
-        head: &baml_type::DeclName,
-    ) -> Result<Option<usize>, Rejection> {
+    /// The object of the interface a dispatch template's head names.
+    pub(crate) fn interface_at(&self, head: &baml_type::DeclName) -> Option<usize> {
         self.lookup(&self.interfaces, interface_head_coords(head))
     }
 
     /// [`Self::enum_`] for the enum a type template's head names.
-    pub(crate) fn enum_at(&self, head: &baml_type::DeclName) -> Result<Option<usize>, Rejection> {
+    pub(crate) fn enum_at(&self, head: &baml_type::DeclName) -> Option<usize> {
         self.lookup(&self.enums, enum_head_coords(head))
     }
 
@@ -839,10 +772,8 @@ impl ProgramIndex {
         let head_of = |decl: &baml_type::DeclName| {
             let object = self
                 .class_at(decl)
-                .ok()
-                .flatten()
                 .map(|(object, _)| object)
-                .or_else(|| self.enum_at(decl).ok().flatten())?;
+                .or_else(|| self.enum_at(decl))?;
             self.objects.get(object)?.head
         };
         let mut known = true;
@@ -871,7 +802,7 @@ impl ProgramIndex {
         &self,
         db: &'db dyn baml_compiler2_mir::Db,
         enum_ref: EnumRef<'db>,
-    ) -> Result<Option<usize>, Rejection> {
+    ) -> Option<usize> {
         self.lookup(&self.enums, enum_coords(db, enum_ref))
     }
 
@@ -881,7 +812,7 @@ impl ProgramIndex {
         &self,
         db: &'db dyn baml_compiler2_mir::Db,
         binding: LetLoc<'db>,
-    ) -> Result<Option<usize>, Rejection> {
+    ) -> Option<usize> {
         let head = baml_compiler2_hir_ty::lower::qualify_def(
             db,
             Definition::Let(binding),
@@ -909,49 +840,26 @@ impl ProgramIndex {
     pub(crate) fn anchor(
         &self,
         template: &baml_compiler2_mir::TyTemplate,
-    ) -> Result<Option<bex_vm_types::TyTemplate>, Rejection> {
-        let mut missing = None;
-        let mut failed = None;
+    ) -> Option<bex_vm_types::TyTemplate> {
+        let mut known = true;
         let anchored = template.map_heads(&mut |head: &DeclName| {
-            let tag = match self.head_object(head) {
-                Ok(Some(object)) => TypeTag::of_static_index(object),
-                Ok(None) => {
-                    missing = Some(head.clone());
-                    TypeTag::of_static_index(0)
-                }
-                Err(rejection) => {
-                    failed = Some(rejection);
-                    TypeTag::of_static_index(0)
-                }
-            };
-            TypeHead::unresolved(tag)
+            let object = self.head_object(head);
+            known &= object.is_some();
+            TypeHead::unresolved(TypeTag::of_static_index(object.unwrap_or(0)))
         });
-        if let Some(rejection) = failed {
-            return Err(rejection);
-        }
-        Ok(missing.is_none().then_some(anchored))
+        known.then_some(anchored)
     }
 
     /// The object of the declaration `head` names: a class, enum, interface
     /// or recursive alias.
-    fn head_object(&self, head: &DeclName) -> Result<Option<usize>, Rejection> {
+    fn head_object(&self, head: &DeclName) -> Option<usize> {
         let path = item_path(head);
         let root = head.root();
-        if let Some((object, _)) =
-            self.lookup(&self.classes, (root, DeclPath::Class(path.clone())))?
-        {
-            return Ok(Some(object));
-        }
-        for (table, path) in [
-            (&self.enums, DeclPath::Enum(path.clone())),
-            (&self.interfaces, DeclPath::Interface(path.clone())),
-            (&self.aliases, DeclPath::TypeAlias(path)),
-        ] {
-            if let Some(object) = self.lookup(table, (root, path))? {
-                return Ok(Some(object));
-            }
-        }
-        Ok(None)
+        self.lookup(&self.classes, (root, DeclPath::Class(path.clone())))
+            .map(|(object, _)| object)
+            .or_else(|| self.lookup(&self.enums, (root, DeclPath::Enum(path.clone()))))
+            .or_else(|| self.lookup(&self.interfaces, (root, DeclPath::Interface(path.clone()))))
+            .or_else(|| self.lookup(&self.aliases, (root, DeclPath::TypeAlias(path))))
     }
 
     /// Find a matching constant in the bytecode function's pool.
@@ -996,55 +904,16 @@ impl ProgramIndex {
         &self.objects[object].display
     }
 
-    fn lookup<T: Copy>(
-        &self,
-        table: &HashMap<DeclKey, T>,
-        (root, path): DeclCoords,
-    ) -> Result<Option<T>, Rejection> {
-        let Some(&package) = self.packages.get(&root) else {
-            return Ok(None);
-        };
-        lookup_key(table, &self.ambiguous, &DeclKey { package, path })
+    fn lookup<T: Copy>(&self, table: &HashMap<DeclKey, T>, (root, path): DeclCoords) -> Option<T> {
+        let package = *self.packages.get(&root)?;
+        table.get(&DeclKey { package, path }).copied()
     }
-}
-
-fn lookup_key<K: Hash + Eq + std::fmt::Debug, T: Copy>(
-    table: &HashMap<K, T>,
-    ambiguous: &HashSet<K>,
-    key: &K,
-) -> Result<Option<T>, Rejection> {
-    if ambiguous.contains(key) {
-        return Err(Rejection::Invalid(format!(
-            "ambiguous declaration {key:?}: more than one object of the program has it"
-        )));
-    }
-    Ok(table.get(key).copied())
 }
 
 fn item_path(head: &DeclName) -> LocalName {
     LocalName {
         namespace: head.namespace().clone(),
         name: head.name().clone(),
-    }
-}
-
-/// Conflicting claims make every later lookup of the identity fail.
-fn claim<K: Hash + Eq + Clone, T: Copy + Eq>(
-    table: &mut HashMap<K, T>,
-    ambiguous: &mut HashSet<K>,
-    key: K,
-    value: T,
-) -> Option<K> {
-    match table.entry(key) {
-        Entry::Vacant(vacant) => {
-            vacant.insert(value);
-            None
-        }
-        Entry::Occupied(occupied) if *occupied.get() == value => None,
-        Entry::Occupied(occupied) => {
-            ambiguous.insert(occupied.key().clone());
-            Some(occupied.key().clone())
-        }
     }
 }
 
@@ -1128,9 +997,6 @@ fn checked_frame_slots(
 
 #[cfg(test)]
 mod tests {
-    use baml_base::Name;
-    use bex_vm_types::{FnPath, types::LocalName};
-
     use super::*;
 
     #[test]
@@ -1167,47 +1033,6 @@ mod tests {
         assert_eq!(
             symbol_for("user.<(user.A as baml.Show)>.show", 12),
             "user___user_A_as_baml_Show___show_12"
-        );
-    }
-
-    #[test]
-    fn a_doubly_claimed_identity_is_rejected_on_lookup() {
-        let key = |name: &str| DeclKey {
-            package: 0,
-            path: DeclPath::Function(FnPath::Free(LocalName {
-                namespace: Vec::new(),
-                name: Name::new(name),
-            })),
-        };
-        let mut index = ProgramIndex::default();
-        assert_eq!(
-            claim(&mut index.functions, &mut index.ambiguous, key("f"), 3),
-            None
-        );
-        assert_eq!(
-            claim(&mut index.functions, &mut index.ambiguous, key("f"), 3),
-            None,
-            "the same object again is not a collision"
-        );
-        assert_eq!(
-            claim(&mut index.functions, &mut index.ambiguous, key("f"), 4),
-            Some(key("f"))
-        );
-        assert_eq!(
-            claim(&mut index.functions, &mut index.ambiguous, key("g"), 5),
-            None
-        );
-        assert!(matches!(
-            lookup_key(&index.functions, &index.ambiguous, &key("f")),
-            Err(Rejection::Invalid(reason)) if reason.starts_with("ambiguous declaration")
-        ));
-        assert_eq!(
-            lookup_key(&index.functions, &index.ambiguous, &key("g")),
-            Ok(Some(5))
-        );
-        assert_eq!(
-            lookup_key(&index.functions, &index.ambiguous, &key("h")),
-            Ok(None)
         );
     }
 }

@@ -8,11 +8,11 @@ use crate::{admit::Rejection, analysis::Repr, render::float_literal};
 impl<'db> Generator<'_, 'db> {
     pub(super) fn constant(&self, constant: &Constant<'db>) -> Gen<Expr> {
         Ok(match constant {
-            Constant::Int(n) => Expr::new(format!("{n}i64"), Repr::Int),
-            Constant::Float(f) => Expr::new(float_literal(*f), Repr::Float),
-            Constant::Bool(b) => Expr::new(format!("{b}"), Repr::Bool),
-            Constant::Null => Expr::new("Value::NULL", Repr::Value),
-            Constant::OmittedArg => Expr::new("Value::OMITTED_ARG", Repr::Value),
+            Constant::Int(n) => Expr::atom(format!("{n}i64"), Repr::Int),
+            Constant::Float(f) => Expr::atom(float_literal(*f), Repr::Float),
+            Constant::Bool(b) => Expr::atom(format!("{b}"), Repr::Bool),
+            Constant::Null => Expr::atom("Value::NULL", Repr::Value),
+            Constant::OmittedArg => Expr::atom("Value::OMITTED_ARG", Repr::Value),
             Constant::String(s) => match self.index.strings.get(s.as_str()) {
                 Some(object) => Expr::new(
                     format!("Value::object(vm.idx_to_ptr(ObjectIndex::from_raw({object})))"),
@@ -33,7 +33,7 @@ impl<'db> Generator<'_, 'db> {
             },
             // Pool function wrappers so repeated reads preserve identity.
             Constant::Function(func) => {
-                let Some((object, _)) = self.index.function(self.db, *func)? else {
+                let Some((object, _)) = self.index.function(self.db, *func) else {
                     let name = function_display_name(self.db, *func);
                     return unsupported(format!("function `{name}` not found in the program"));
                 };
@@ -48,7 +48,7 @@ impl<'db> Generator<'_, 'db> {
             }
             Constant::GenericFunction { func, type_args } => {
                 let name = function_display_name(self.db, *func);
-                let Some((object, _)) = self.index.function(self.db, *func)? else {
+                let Some((object, _)) = self.index.function(self.db, *func) else {
                     return unsupported(format!("function `{name}` not found in the program"));
                 };
                 let Some(object) = self.index.pooled_generic_function(object, type_args) else {
@@ -62,7 +62,7 @@ impl<'db> Generator<'_, 'db> {
                 )
             }
             Constant::GlobalItem(binding) => {
-                let Some(slot) = self.index.let_slot(self.db, *binding)? else {
+                let Some(slot) = self.index.let_slot(self.db, *binding) else {
                     return unsupported("top-level let not found in the program");
                 };
                 Expr::new(
@@ -74,7 +74,7 @@ impl<'db> Generator<'_, 'db> {
                 )
             }
             Constant::EnumVariant { enum_ref, index } => {
-                let Some(object) = self.index.enum_(self.db, *enum_ref)? else {
+                let Some(object) = self.index.enum_(self.db, *enum_ref) else {
                     let name = enum_display_name(self.db, *enum_ref);
                     return unsupported(format!("enum `{name}` not found in the program"));
                 };

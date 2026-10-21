@@ -97,7 +97,7 @@ impl<'db> Generator<'_, 'db> {
         Ok(match key {
             SwitchKey::Int(key) => format!("{key}i64"),
             SwitchKey::Class(class) => {
-                let Some((object, _)) = self.index.class(self.db, *class)? else {
+                let Some((object, _)) = self.index.class(self.db, *class) else {
                     let name = class_display_name(self.db, *class);
                     return unsupported(format!("class `{name}` not found in the program"));
                 };
@@ -123,7 +123,7 @@ impl<'db> Generator<'_, 'db> {
 
     /// Poll at a loop back edge so the engine can collect, park or cancel.
     fn loop_check(&mut self, id: BlockId, pc: Option<usize>) -> Gen<()> {
-        if !self.pauses || !self.loop_headers.contains(&id.0) {
+        if !self.pauses || !self.analysis.loop_headers.contains(&id.0) {
             return Ok(());
         }
         let live = self.header_locals(id.0);
@@ -146,8 +146,11 @@ impl<'db> Generator<'_, 'db> {
         {
             let cause = match block.handling.and_then(|h| self.body.blocks[h.0].landing) {
                 Some(landing) => {
-                    let context = format!("l{}", landing.context_local.0);
-                    self.value_arg(&context, self.repr(landing.context_local))
+                    let context = Expr::atom(
+                        format!("l{}", landing.context_local.0),
+                        self.repr(landing.context_local),
+                    );
+                    self.value_arg(&context)
                 }
                 None => "Value::NULL".to_string(),
             };
@@ -216,7 +219,7 @@ impl<'db> Generator<'_, 'db> {
                 let name = match args.get(1) {
                     Some(name) => {
                         let name = self.operand(id, name)?;
-                        self.value_arg(&name.code, name.repr)
+                        self.value_arg(&name)
                     }
                     None => "Value::NULL".to_string(),
                 };
@@ -300,14 +303,14 @@ impl<'db> Generator<'_, 'db> {
                 ..
             } => {
                 let source = self.operand(id, source)?;
-                let source_value = self.value_arg(&source.code, source.repr);
+                let source_value = self.value_arg(&source);
                 self.emit_statement(&format!("let narrowed = {source_value};"));
                 let test = self.type_test("narrowed", test)?;
                 self.emit_statement(&format!("c{} = {test};", id.0));
                 let store = self.store(
                     id,
                     &Place::Local(*destination),
-                    &Expr::new("narrowed", Repr::Value),
+                    &Expr::atom("narrowed", Repr::Value),
                 )?;
                 self.emit_statement(&format!("if c{} {{ {store} }}", id.0));
             }
@@ -341,7 +344,7 @@ impl<'db> Generator<'_, 'db> {
                 ..
             } => {
                 let operand = self.operand(id, operand)?;
-                let value = self.value_arg(&operand.code, operand.repr);
+                let value = self.value_arg(&operand);
                 self.emit_statement(&format!("let lhs = {value};"));
                 let short = match kind {
                     ShortCircuitKind::And => "!vm.is_truthy(lhs)",
@@ -349,7 +352,7 @@ impl<'db> Generator<'_, 'db> {
                     ShortCircuitKind::Coalesce => "!lhs.is_null()",
                 };
                 self.emit_statement(&format!("c{} = {short};", id.0));
-                let store = self.store(id, destination, &Expr::new("lhs", Repr::Value))?;
+                let store = self.store(id, destination, &Expr::atom("lhs", Repr::Value))?;
                 self.emit_statement(&format!("if c{} {{ {store} }}", id.0));
             }
             terminator @ Terminator::VirtualCall { destination, .. } => {
@@ -390,9 +393,7 @@ impl<'db> Generator<'_, 'db> {
                 &["iter"],
                 "Done",
             )
-            .map(|done| self.index.class(self.db, done))
-            .transpose()?
-            .flatten();
+            .and_then(|done| self.index.class(self.db, done));
             let Some((done, _)) = done else {
                 return unsupported("`baml.iter.Done` not found in the program");
             };
@@ -482,12 +483,12 @@ impl<'db> Generator<'_, 'db> {
         let value = self.store(
             block,
             &Place::Local(landing.error_local),
-            &Expr::new("thrown", Repr::Value),
+            &Expr::atom("thrown", Repr::Value),
         )?;
         let context = self.store(
             block,
             &Place::Local(landing.context_local),
-            &Expr::new("context", Repr::Value),
+            &Expr::atom("context", Repr::Value),
         )?;
         let saved = std::mem::take(&mut self.out);
         self.emit_line("vm.note_pc(depth, pc);");
