@@ -29,7 +29,7 @@ function Echo<T>(x: T) -> T { x }
 const BUILT: &str = r#"
 function main(n: int) -> int {
     let row = reflect.Class.new("Row", {
-        "name": string.type().meta(description = "Full \"name\"\nand ${more}", alias = "full_name"),
+        "name": string.type().meta(description = "Full \"name\"\nand ${more}\u{7}", alias = "full_name"),
         "age": int.type().optional(),
         "owner": Resume.type(),
         "mood": Mood.type(),
@@ -119,7 +119,7 @@ async fn recorded_runtime_types_rebuild_from_their_code() {
         text(&recorded.rows[0][1]),
         r#"{
     let type Row = reflect.Class.new("Row", {
-        "name": reflect.Type.of<string>().meta(alias = "full_name", description = "Full \"name\"\nand ${more}"),
+        "name": reflect.Type.of<string>().meta(alias = "full_name", description = "Full \"name\"\nand ${more}\u{7}"),
         "age": reflect.Type.of<int | null>(),
         "owner": reflect.Type.of<Resume>(),
         "mood": reflect.Type.of<Mood>(),
