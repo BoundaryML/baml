@@ -34,9 +34,7 @@ fn engine_for(project: &Path, source: &str) -> Arc<bex_engine::BexEngine> {
             && f.declared_name().is_some_and(|name| name == "Ask")
         {
             // Capture like an LLM function, without a model.
-            f.body_meta = Some(bex_vm_types::FunctionMeta::Llm {
-                client: "test".into(),
-            });
+            f.body_meta = Some(bex_vm_types::FunctionMeta::Llm);
         }
     }
     Arc::new(

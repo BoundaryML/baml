@@ -696,8 +696,6 @@ pub struct EngineSysOpContext {
 /// This is built during engine construction by reading function objects from the heap,
 /// so that LLM `sys_ops` don't need to access raw heap pointers.
 pub struct LlmFunctionInfo {
-    /// The client name (e.g., `"MyClient"`) declared in the function.
-    pub client_name: String,
     /// The expected return type, used for response parsing.
     pub return_type: SapTy,
 }

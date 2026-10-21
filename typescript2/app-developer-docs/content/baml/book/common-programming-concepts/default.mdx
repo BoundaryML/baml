@@ -151,6 +151,8 @@ Use double quotes for literal text and backticks when you want to insert values.
 
 Use `\n` for a line break. Backtick strings can also span several source lines, which is useful when writing prompts.
 
+A backslash starts an escape sequence: `\\` is a backslash, `\"` is a double quote, and `\u{1F600}` is a Unicode character. An unknown escape such as `\d` doesn't compile. For text with many backslashes, like a regular expression, use a raw string: `r"\d+"` keeps every backslash as written.
+
 `+` joins two strings, but it doesn't convert a number to text. Use interpolation when the value you want to insert is a number or another type.
 
 ## Functions
