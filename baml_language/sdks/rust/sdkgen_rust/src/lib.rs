@@ -1330,9 +1330,84 @@ mod tests {
             "{flat}"
         );
         assert!(
-            flat.contains("x:crate::GenericBox<::core::primitive::i64>"),
+            flat.contains("x:impl::std::borrow::Borrow<crate::GenericBox<::core::primitive::i64>>"),
             "{flat}"
         );
+    }
+
+    #[test]
+    fn class_arguments_accept_a_value_or_a_reference() {
+        // class Client { url string; merge(self, other: Client) -> string }
+        // call(client: Client, n: int, s: string, many: Client[],
+        //      maybe: Client?, fallback: Client = <expr>) -> string
+        let c = name("user", &[], "Client");
+        let client = Ty::Class(c.clone(), Box::new([]));
+        let mut merge = nullary_string_fn(&name("user", &[], "merge"));
+        merge.arguments = vec![arg("other", client.clone())];
+        let mut call = nullary_string_fn(&name("user", &[], "call"));
+        let mut fallback = arg("fallback", client.clone());
+        fallback.default =
+            Some(baml_sdkgen_types::FunctionArgumentDefault::Expression { source: None });
+        call.arguments = vec![
+            arg("client", client.clone()),
+            arg("n", Ty::Int),
+            arg("s", Ty::String),
+            arg("many", Ty::List(Box::new(client.clone()))),
+            arg("maybe", Ty::Union(Box::new([client, Ty::Null]))),
+            fallback,
+        ];
+        let pool = SymbolPool::from([
+            (
+                c.clone(),
+                class_symbol(
+                    &c,
+                    vec![baml_sdkgen_types::ClassProperty {
+                        name: baml_base::Name::new("url"),
+                        docstring: None,
+                        ty: Ty::String,
+                    }],
+                    Vec::new(),
+                    vec![merge],
+                ),
+            ),
+            (name("user", &[], "call"), Symbol::Function(call)),
+        ]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty());
+        let lib = text(&generated, "src/lib.rs");
+        let flat = flat(lib);
+        // A direct class parameter takes `impl Borrow<Class>` and is encoded
+        // through it, on all four bindings of the function and the method.
+        for param in ["client", "other"] {
+            assert_eq!(
+                flat.matches(&format!("{param}:impl::std::borrow::Borrow<crate::Client>"))
+                    .count(),
+                4,
+                "{lib}"
+            );
+            assert_eq!(
+                flat.matches(&format!(
+                    "to_baml(::std::borrow::Borrow::<crate::Client>::borrow(&{param}))"
+                ))
+                .count(),
+                4,
+                "{lib}"
+            );
+        }
+        // Everything else keeps its shape: primitives, strings, lists and
+        // optionals by value; defaulted parameters through `OptionalArg`.
+        for param in [
+            "n:::core::primitive::i64",
+            "s:::std::string::String",
+            "many:::std::vec::Vec<crate::Client>",
+            "maybe:::std::option::Option<crate::Client>",
+            "fallback:impl::std::convert::Into<::baml_bridge::OptionalArg<crate::Client>>",
+        ] {
+            assert_eq!(flat.matches(param).count(), 4, "{param}:\n{lib}");
+        }
+        // Nothing else borrows: 8 parameters plus 8 encodings.
+        assert_eq!(flat.matches("::std::borrow::Borrow").count(), 16, "{lib}");
     }
 
     #[test]
