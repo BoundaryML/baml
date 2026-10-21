@@ -225,7 +225,7 @@ fn append_passed_type_args(
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct StaticVirtualCallKey {
+pub(crate) struct StaticVirtualCallKey {
     caller_function_addr: usize,
     call_pc: usize,
     receiver: StaticVirtualReceiverKey,
@@ -243,7 +243,7 @@ struct StaticVirtualCallKey {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-enum StaticVirtualReceiverKey {
+pub(crate) enum StaticVirtualReceiverKey {
     /// Static program classes have immutable, program-unique tags. Generic
     /// arguments remain part of identity; the overwhelmingly common
     /// non-generic case clones an empty box without allocating.
@@ -257,7 +257,7 @@ enum StaticVirtualReceiverKey {
 }
 
 #[derive(Clone, Debug)]
-struct StaticVirtualCallTarget {
+pub(crate) struct StaticVirtualCallTarget {
     callee: HeapPtr,
     frame_type_args: Vec<bex_vm_types::RealizedTy>,
 }
@@ -1771,7 +1771,7 @@ pub struct BexVm {
     pending_call_type_args: Vec<bex_vm_types::RealizedTy>,
     pending_call_type_values: Vec<Option<TypeValue>>,
     /// State only compiled code uses.
-    pub compiled: compiled_rt::CompiledState,
+    pub(crate) compiled: compiled_rt::CompiledState,
     /// Set by a call that passes type arguments, for its callee's entry
     /// only: telemetry records the frame's type arguments before the call's
     /// writeback appends `pending_call_type_args` to the new frame.
@@ -6426,12 +6426,7 @@ impl BexVm {
     fn capture_stack_trace(&self) -> Vec<StackFrame> {
         // The innermost (topmost) bytecode frame's live PC lives in `cur_pc`;
         // outer frames recorded their call-site PC in `faulting_pc` at call time.
-        let top_bc = self
-            .frames
-            .iter()
-            .rposition(|frame| matches!(frame, Frame::Bytecode(_)))
-            // `cur_pc` is only live when the innermost frame runs bytecode.
-            .filter(|&idx| self.compiled_at(idx).is_none());
+        let top_bc = self.live_bytecode_frame();
         self.frames
             .iter()
             .enumerate()
@@ -6445,14 +6440,8 @@ impl BexVm {
                 }
                 let func = self.get_object(frame.function()).as_callable().ok()?;
                 match frame {
-                    Frame::Bytecode(frame) => {
-                        let pc = if self.compiled_at(idx).is_some() {
-                            self.compiled_pc(idx).unwrap_or(0)
-                        } else if Some(idx) == top_bc {
-                            self.cur_pc
-                        } else {
-                            frame.faulting_pc
-                        };
+                    Frame::Bytecode(_) => {
+                        let pc = self.frame_pc(idx, top_bc).unwrap_or(0);
                         let error_line = if let Some(compact) = &func.bytecode.compact {
                             compact.source_line_for_pc(pc)
                         } else {
@@ -7681,9 +7670,6 @@ impl BexVm {
                         self.settle();
                         match outcome {
                             Ok(value) => {
-                                if passes_type_args {
-                                    self.recycle_frame_type_args(*frame_idx);
-                                }
                                 self.stack.push(value);
                                 if let Some(state) =
                                     self.finish_bytecode_frame(frame_idx, function, value)?
@@ -7804,8 +7790,7 @@ impl BexVm {
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
         // The caller's slice may borrow a frame, so copy before entering the callee.
-        let mut pending_type_args = self.pooled_type_args();
-        pending_type_args.extend_from_slice(options.type_args);
+        let pending_type_args = options.type_args.to_vec();
         self.save_call_types();
         self.pending_call_type_args = pending_type_args;
         self.pending_call_type_values = options.type_values.to_vec();
@@ -7839,8 +7824,7 @@ impl BexVm {
                 &self.pending_call_type_values,
             );
         }
-        let pending_type_args = self.restore_call_types();
-        self.recycle_type_args(pending_type_args);
+        let _ = self.restore_call_types();
         result
     }
 
@@ -8558,7 +8542,6 @@ impl BexVm {
     /// Wraps `exec_inner` to convert `InternalError` → `TracedInternalError`
     /// with a captured stack trace.
     pub fn exec(&mut self) -> Result<VmExecState, VmError> {
-        // Execution may migrate between threads with different stack bounds.
         #[cfg(not(target_arch = "wasm32"))]
         self.stop_disabled_telemetry();
         #[cfg(not(target_arch = "wasm32"))]

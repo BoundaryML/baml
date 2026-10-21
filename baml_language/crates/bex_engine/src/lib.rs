@@ -4787,11 +4787,6 @@ impl BexEngine {
         }
     }
 
-    /// Heuristic-driven GC check that does **not** require the caller to
-    /// hold an active heap permit. Use this when the caller is already in a
-    /// permit-released state (e.g., the engine's `Await` branch waiting on
-    /// a `SetOnce`) — calling [`Self::gc_safepoint`] there would do an
-    /// extra release-and-reacquire pair around the heuristic for nothing.
     /// The heap's own heuristic, or a major collection at every safepoint under
     /// `BAML_GC_STRESS=1`.
     fn collection_due(&self) -> Option<bex_heap::CollectionLevel> {
@@ -4801,6 +4796,11 @@ impl BexEngine {
         self.heap.should_collect()
     }
 
+    /// Heuristic-driven GC check that does **not** require the caller to
+    /// hold an active heap permit. Use this when the caller is already in a
+    /// permit-released state (e.g., the engine's `Await` branch waiting on
+    /// a `SetOnce`) — calling [`Self::gc_safepoint`] there would do an
+    /// extra release-and-reacquire pair around the heuristic for nothing.
     async fn maybe_collect_garbage(self: &Arc<Self>) {
         let i_am_checking = self
             .checking_gc
