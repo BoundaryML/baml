@@ -86,13 +86,11 @@ impl ExprBody {
                 }
             }
             Expr::Is { scrutinee, .. } => out.push(BodyNode::Expr(*scrutinee)),
-            Expr::Catch { base, clauses } => {
+            Expr::Catch { base, clause } => {
                 out.push(BodyNode::Expr(*base));
-                for clause in clauses {
-                    for arm in &clause.arms {
-                        let arm = &self.catch_arms[*arm];
-                        out.push(BodyNode::Expr(arm.body));
-                    }
+                for arm in &clause.arms {
+                    let arm = &self.catch_arms[*arm];
+                    out.push(BodyNode::Expr(arm.body));
                 }
             }
             Expr::Binary { lhs, rhs, .. } => {

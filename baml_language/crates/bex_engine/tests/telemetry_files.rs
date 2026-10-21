@@ -35,9 +35,7 @@ async fn local_recording_is_readable_while_running_and_shutdown_finishes_disk_de
     for object in &mut program.objects.0 {
         if let bex_vm_types::Object::Function(f) = object {
             if f.name().rsplit('.').next() == Some("leaf") {
-                f.body_meta = Some(bex_vm_types::FunctionMeta::Llm {
-                    client: "test".into(),
-                });
+                f.body_meta = Some(bex_vm_types::FunctionMeta::Llm);
             }
         }
     }
@@ -263,9 +261,7 @@ async fn cas_storage_failure_disables_recording_but_execution_continues() {
     for object in &mut program.objects.0 {
         if let bex_vm_types::Object::Function(f) = object {
             if f.name().rsplit('.').next() == Some("leaf") {
-                f.body_meta = Some(bex_vm_types::FunctionMeta::Llm {
-                    client: "test".into(),
-                });
+                f.body_meta = Some(bex_vm_types::FunctionMeta::Llm);
             }
         }
     }

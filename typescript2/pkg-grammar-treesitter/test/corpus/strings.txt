@@ -67,6 +67,40 @@ function f() -> int {
           (arguments))))))
 
 ==================
+raw quoted strings
+==================
+
+function f() -> string {
+  let p = r"\d+\"x";
+  let r = "x";
+  r + p
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (raw_quoted_string))
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (string))
+      (expression_statement
+        (binary_expression
+          (identifier)
+          (identifier))))))
+
+==================
 raw strings: one hash with jinja content
 ==================
 

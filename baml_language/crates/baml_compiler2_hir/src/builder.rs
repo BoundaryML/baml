@@ -659,16 +659,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                 // scope (use `match` / `let` if you need that).
                 self.walk_expr(*scrutinee, body, source_map, true);
             }
-            ast::Expr::Catch { base, clauses } => {
+            ast::Expr::Catch { base, clause } => {
                 self.walk_expr(*base, body, source_map, true);
-                for clause in clauses {
-                    self.walk_catch_clause(
-                        clause,
-                        body,
-                        source_map,
-                        Self::catch_clause_scope_span(clause, source_map),
-                    );
-                }
+                self.walk_catch_clause(
+                    clause,
+                    body,
+                    source_map,
+                    Self::catch_clause_scope_span(clause, source_map),
+                );
             }
             ast::Expr::Throw { value } => {
                 self.walk_expr(*value, body, source_map, true);

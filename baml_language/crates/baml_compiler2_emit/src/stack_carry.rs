@@ -848,8 +848,7 @@ fn simulate_terminator_stack<'db>(
             // THROW consumes the thrown value from the stack when unwinding.
             sim.pop_n(1)
         }
-        Terminator::Rethrow { value, context }
-        | Terminator::ThrowIfPanic { value, context, .. } => {
+        Terminator::Rethrow { value, context } => {
             let mut sink = StackCarryPullSink {
                 sim,
                 carried_local,
@@ -861,8 +860,7 @@ fn simulate_terminator_stack<'db>(
             {
                 return false;
             }
-            // RETHROW consumes the value and its context when unwinding;
-            // THROW_IF_PANIC consumes both whether it throws or continues.
+            // RETHROW consumes the value and its context when unwinding.
             sim.pop_n(2)
         }
         Terminator::ShortCircuit { operand, .. } => {

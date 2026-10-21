@@ -815,6 +815,7 @@ module.exports = grammar({
         $.null,
         $.string,
         $.byte_string,
+        $.raw_quoted_string,
         $.raw_string,
         $.backtick_string,
         $.member_expression,
@@ -1268,6 +1269,11 @@ module.exports = grammar({
     string: (_) => token(seq('"', repeat(choice(/[^"\\]/, /\\./)), '"')),
 
     byte_string: (_) => token(seq('b"', repeat(choice(/[^"\\]/, /\\./)), '"')),
+
+    // Raw string `r"..."`: the body is verbatim, but a backslash keeps the
+    // next character (including `"`) from closing the literal.
+    raw_quoted_string: (_) =>
+      token(seq('r"', repeat(choice(/[^"\\]/, /\\./)), '"')),
 
     // Raw strings: hash levels 1..MAX_RAW_STRING_HASHES are enumerated
     // explicitly (same longest-match close-delimiter approach per level).

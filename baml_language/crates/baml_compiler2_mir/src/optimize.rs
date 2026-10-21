@@ -189,7 +189,6 @@ fn rewrite_block_ids_in_terminator(term: &mut Terminator, map: &[Option<BlockId>
             }
         }
         Terminator::Throw { .. } | Terminator::Rethrow { .. } => {}
-        Terminator::ThrowIfPanic { otherwise, .. } => remap(otherwise),
         Terminator::ShortCircuit { eval_rhs, join, .. } => {
             remap(eval_rhs);
             remap(join);
@@ -262,7 +261,6 @@ fn rewrite_block_ids_in_terminator_with_map(
             }
         }
         Terminator::Throw { .. } | Terminator::Rethrow { .. } => {}
-        Terminator::ThrowIfPanic { otherwise, .. } => remap(otherwise),
         Terminator::ShortCircuit { eval_rhs, join, .. } => {
             remap(eval_rhs);
             remap(join);
@@ -523,8 +521,7 @@ fn collect_place_bound_locals(body: &MirFunctionBody<'_>) -> HashSet<Local> {
                 Terminator::Throw { value } => {
                     scan_operand(value, &mut set);
                 }
-                Terminator::Rethrow { value, context }
-                | Terminator::ThrowIfPanic { value, context, .. } => {
+                Terminator::Rethrow { value, context } => {
                     scan_operand(value, &mut set);
                     scan_operand(context, &mut set);
                 }
@@ -839,8 +836,7 @@ fn count_in_terminator(term: &Terminator<'_>, uses: &mut [usize]) {
         Terminator::Throw { value } => {
             count_in_operand(value, uses);
         }
-        Terminator::Rethrow { value, context }
-        | Terminator::ThrowIfPanic { value, context, .. } => {
+        Terminator::Rethrow { value, context } => {
             count_in_operand(value, uses);
             count_in_operand(context, uses);
         }
@@ -1198,8 +1194,7 @@ fn apply_subst_to_terminator<'db>(
         Terminator::Throw { value } => {
             apply_subst_to_operand(value, subst);
         }
-        Terminator::Rethrow { value, context }
-        | Terminator::ThrowIfPanic { value, context, .. } => {
+        Terminator::Rethrow { value, context } => {
             apply_subst_to_operand(value, subst);
             apply_subst_to_operand(context, subst);
         }
@@ -1561,8 +1556,7 @@ fn rewrite_locals_in_terminator(term: &mut Terminator, map: &[Option<Local>]) {
         Terminator::Throw { value } => {
             remap_operand(value, map);
         }
-        Terminator::Rethrow { value, context }
-        | Terminator::ThrowIfPanic { value, context, .. } => {
+        Terminator::Rethrow { value, context } => {
             remap_operand(value, map);
             remap_operand(context, map);
         }
@@ -1838,8 +1832,7 @@ fn verify_mir(
                 Terminator::Throw { value } => {
                     check_operand(value, &blk);
                 }
-                Terminator::Rethrow { value, context }
-                | Terminator::ThrowIfPanic { value, context, .. } => {
+                Terminator::Rethrow { value, context } => {
                     check_operand(value, &blk);
                     check_operand(context, &blk);
                 }
@@ -2062,7 +2055,6 @@ fn verify_definite_assignment(
                 .chain(unwind.map(|block| (block, None)))
                 .collect(),
             Terminator::Spawn { future, resume, .. } => vec![(*resume, local_of(future))],
-            Terminator::ThrowIfPanic { otherwise, .. } => vec![(*otherwise, None)],
             Terminator::ShortCircuit {
                 destination,
                 eval_rhs,
@@ -2366,10 +2358,7 @@ fn verify_definite_assignment(
                 write_place(&state, destination);
             }
             Some(Terminator::Throw { value }) => read_operand(&state, value),
-            Some(
-                Terminator::Rethrow { value, context }
-                | Terminator::ThrowIfPanic { value, context, .. },
-            ) => {
+            Some(Terminator::Rethrow { value, context }) => {
                 read_operand(&state, value);
                 read_operand(&state, context);
             }

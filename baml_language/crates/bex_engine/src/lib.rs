@@ -327,9 +327,8 @@ pub struct UserFunctionInfo {
     /// Exposed for BEP-027 §"`baml.argv`": `argv[1]` under root-main `baml run`
     /// is the path to the file containing `main`.
     pub source_file: String,
-    /// `true` when the function carries `FunctionMeta::Llm` and was declared
-    /// with an LLM client and backtick prompt.
-    /// compiler synthesized the LLM dispatch body. Surfaced here so
+    /// `true` when the function carries `FunctionMeta::Llm`: it was declared
+    /// with an LLM client and backtick prompt. Surfaced here so
     /// `baml run --list` can annotate LLM functions inline without
     /// reaching back into the heap to inspect `body_meta`.
     pub is_llm: bool,
@@ -419,7 +418,7 @@ impl UserFunctionInfo {
             display_param_types,
             display_return_type,
             source_file: func.source_file.clone(),
-            is_llm: matches!(func.body_meta, Some(bex_vm_types::FunctionMeta::Llm { .. })),
+            is_llm: matches!(func.body_meta, Some(bex_vm_types::FunctionMeta::Llm)),
         })
     }
 }
@@ -2233,11 +2232,10 @@ impl BexEngine {
             // SAFETY: ptr is from resolved_function_names, a compile-time object
             let obj = unsafe { ptr.get() };
             if let Object::Function(func) = obj {
-                if let Some(FunctionMeta::Llm { client }) = &func.body_meta {
+                if let Some(FunctionMeta::Llm) = &func.body_meta {
                     llm_functions.insert(
                         name.clone(),
                         sys_types::LlmFunctionInfo {
-                            client_name: client.clone(),
                             return_type: declared_symbolic(&func.return_type, func)
                                 .try_map_heads(&mut bex_vm_types::TypeHead::to_tagged_name)
                                 .unwrap_or_else(|_| ::sys_types::SapTy::unknown()),

@@ -470,24 +470,14 @@ test "backtick_case_q_throw_in_interp_body" {
 // ─── TypeScript-parity cases (AA, BB, GG, HH, LL) ────────────────────────────
 
 
-// (BB) Extended C-style escapes: \b, \v, \f. None of the three are BAML
-// string-literal escapes, so the expected values are decoded from bytes.
+// (BB) C-style escapes: \b and \f decode (JSON parity). \v is not a BAML
+// escape; ns_string_literals checks that it is a compile error.
 function bt_escape_backspace() -> string {
     `a\bb`
 }
 
 test "backtick_extended_escape_backspace" {
-    // \x08 = backspace
-    assert.equal(bt_escape_backspace(), string.from_utf8(b"a\x08b"))
-}
-
-function bt_escape_vertical_tab() -> string {
-    `a\vb`
-}
-
-test "backtick_extended_escape_vertical_tab" {
-    // \x0B = vertical tab
-    assert.equal(bt_escape_vertical_tab(), string.from_utf8(b"a\x0Bb"))
+    assert.equal(bt_escape_backspace(), "a\x08b")
 }
 
 function bt_escape_form_feed() -> string {
@@ -495,8 +485,7 @@ function bt_escape_form_feed() -> string {
 }
 
 test "backtick_extended_escape_form_feed" {
-    // \x0C = form feed
-    assert.equal(bt_escape_form_feed(), string.from_utf8(b"a\x0Cb"))
+    assert.equal(bt_escape_form_feed(), "a\x0Cb")
 }
 
 // (GG) Block comment inside a `${...}` body.

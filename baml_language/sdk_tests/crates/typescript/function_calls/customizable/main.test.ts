@@ -4,6 +4,7 @@ import { describe, it, expect } from "vitest";
 import {
   hello_world,
   hello_world_async,
+  int_plus_one,
   round_trip_bool_async,
   round_trip_float_async,
   round_trip_int_async,
@@ -36,5 +37,14 @@ describe("function_calls — primitive arguments across callFunction", () => {
       "hello from the browser",
     );
     expect(await round_trip_float_async(3.25)).toBeCloseTo(3.25);
+  });
+});
+
+describe("function_calls — mistyped arguments", () => {
+  it("main_rejects_mistyped_int_argument", () => {
+    // A string for an `int` parameter is a catchable error naming the
+    // function, not a crash in the VM's integer arithmetic (#5332).
+    expect(int_plus_one(41)).toBe(42);
+    expect(() => int_plus_one("bad" as unknown as number)).toThrow(/int_plus_one/);
   });
 });
