@@ -476,6 +476,7 @@ fn a_class_reached_through_a_re_exporting_view_reads_as_the_defining_row() {
     let rows = PackageInterface::<WireName> {
         types: std::iter::empty().collect(),
         functions: std::iter::empty().collect(),
+        values: std::iter::empty().collect(),
         throw_sets: FunctionThrowSets::default(),
         namespaces: [Vec::new()].into_iter().collect(),
         impls: Vec::new(),

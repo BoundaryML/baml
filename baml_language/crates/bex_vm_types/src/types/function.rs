@@ -155,9 +155,11 @@ pub enum FunctionIdentity {
     /// A package's `$init`: runs its top-level `let` initializers in
     /// dependency order.
     Init,
-    /// The helper that evaluates a package's `ordinal`-th top-level `let`
-    /// initializer, which `$init` calls before storing the result.
-    InitLet(u32),
+    /// The helper that evaluates the initializer of the package's top-level
+    /// `let` at this path (a global variable, a client, ...), which `$init`
+    /// calls before storing the result. It is identified by its binding, so a
+    /// trace through a failing initializer names the global.
+    InitLet(ItemPath),
     /// A package's `$init_test` chainer.
     InitTest,
     /// A trampoline the VM synthesizes at run time to enter a callee from the
@@ -243,7 +245,10 @@ impl FunctionIdentity {
     /// package and namespace segments: `f` for a free function, `Class.m` for
     /// a method, `Interface.m` for a default body, `<(target as iface)>.m`
     /// for a provided one, `<lambda(parent, i)>` for a closure body (its
-    /// parent by ITS tail), and the role name of an initializer or entry.
+    /// parent by ITS tail). An initializer or entry has no package or
+    /// namespace segments, so its tail is its whole name: its role, which for
+    /// a `let` initializer's helper includes the global it initializes, in
+    /// full (`$init_let.user.ns.X`).
     /// The ONE spelling of a function's tail: [`Function::name`] prefixes it,
     /// and a nested synthetic names its parent by it, so the two cannot drift.
     /// `label` is the owning package's display label; an impl-provided body
@@ -275,7 +280,7 @@ impl FunctionIdentity {
                 format!("<{kind}({parent}, {ordinal})>")
             }
             Self::Init => "$init".to_string(),
-            Self::InitLet(ordinal) => format!("$init_let_{ordinal}"),
+            Self::InitLet(path) => crate::init_let_helper_name(&path.render_under(label)),
             Self::InitTest => "$init_test".to_string(),
             Self::Entry(callee) => format!("$entry::{callee}"),
         }

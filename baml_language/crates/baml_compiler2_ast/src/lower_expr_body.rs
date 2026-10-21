@@ -123,56 +123,213 @@ pub(crate) fn lower(
     (body, source_map)
 }
 
-/// Lower one compiler-generated persistent binding for `Session.eval`.
+/// Which surface a file-scope binding belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TopLevelLetSurface {
+    /// A global variable written in an ordinary source file.
+    Source,
+    /// One compiler-generated persistent binding of a `Session.eval`
+    /// submission. Sessions use the global representation internally so each
+    /// committed binding can be re-imported by later submissions; their
+    /// generated source never annotates a binding.
+    Session,
+}
+
+/// Lower one file-scope `LET_STMT` to a top-level binding.
 ///
-/// Ordinary source files never call this path: their root lets are rejected by
-/// file lowering. Sessions use the global representation internally so each
-/// committed binding can be re-imported by later submissions.
-pub(crate) fn lower_session_let(
+/// A top-level binding is exactly one name: `const NAME = value;`, or, in
+/// source, `const NAME: Type = value;`. Everything a local `let` admits beyond
+/// that — a destructure, a wildcard, an alias chain (`let a: let b`), `let …
+/// else` — is refused here, because a global is addressed by its one name from
+/// every body in the package and has no scope a refutable pattern could fall
+/// out of.
+pub(crate) fn lower_top_level_let(
     node: &SyntaxNode,
+    surface: TopLevelLetSurface,
     diags: &mut Vec<LoweringDiagnostic>,
     env_var_refs: &mut Vec<EnvVarRef>,
 ) -> Option<LetDef> {
-    let mut ctx = LoweringContext::new();
-    let stmt = ctx.lower_let_stmt(node);
-    let Stmt::Let {
-        pattern,
-        initializer,
-        else_branch,
-        ..
-    } = ctx.stmts[stmt].clone()
-    else {
-        unreachable!("lower_let_stmt always allocates Stmt::Let")
-    };
-    let Pattern::Bind { name, subpat } = ctx.patterns[pattern].clone() else {
-        diags.push(LoweringDiagnostic::InvalidPatternAscription {
-            reason: "session bindings require a single named binding",
-            span: node.span_range(),
+    // The binding's pattern and its initializer lower into separate
+    // contexts: the initializer becomes the global's body, and a body that
+    // also held the `NAME: Type` pattern would check that annotation a second
+    // time as if a local declared it.
+    let mut pattern_ctx = LoweringContext::new();
+    if surface == TopLevelLetSurface::Source {
+        // A global is declared with `const`. The introducer is the
+        // statement's first `let`/`const` token: the parser nests it in the
+        // pattern for most shapes, and an alias chain's second one follows it.
+        let introducer = node
+            .descendants_with_tokens()
+            .filter_map(rowan::NodeOrToken::into_token)
+            .find(|token| matches!(token.kind(), SyntaxKind::KW_LET | SyntaxKind::KW_CONST));
+        if let Some(introducer) = introducer {
+            // A `let` is refused, but the binding still lowers as the global
+            // it was meant to be, so its readers resolve instead of cascading
+            // errors.
+            if introducer.kind() == SyntaxKind::KW_LET {
+                diags.push(LoweringDiagnostic::TopLevelLetIntroducer {
+                    span: introducer.text_range(),
+                });
+            }
+            pattern_ctx.file_scope_introducer = Some(introducer.text_range());
+        }
+    }
+    let parts = pattern_ctx.lower_let_parts(
+        node,
+        LetParts {
+            pattern: true,
+            initializer: false,
+            else_branch: false,
+        },
+    );
+    let pattern = pattern_ctx.let_binding_pattern(node, parts.pattern);
+    let patterns = std::mem::take(&mut pattern_ctx.patterns);
+    let (_, _, pattern_diags, _) = pattern_ctx.finish(None);
+    diags.extend(pattern_diags);
+
+    let reject = |diags: &mut Vec<LoweringDiagnostic>, session: &'static str, source| {
+        diags.push(match surface {
+            TopLevelLetSurface::Session => LoweringDiagnostic::InvalidPatternAscription {
+                reason: session,
+                span: node.span_range(),
+            },
+            TopLevelLetSurface::Source => LoweringDiagnostic::InvalidTopLevelLet {
+                reason: source,
+                span: node.span_range(),
+            },
         });
+    };
+    let Pattern::Bind { name, subpat } = patterns[pattern].clone() else {
+        reject(
+            diags,
+            "session bindings require a single named binding",
+            "a global variable binds a single name; destructuring and `_` are only \
+             available inside a body",
+        );
         return None;
     };
-    if subpat.is_some() || else_branch.is_some() {
-        diags.push(LoweringDiagnostic::InvalidPatternAscription {
-            reason: "session bindings do not support patterns or `else`",
-            span: node.span_range(),
-        });
+    if parts.has_else {
+        reject(
+            diags,
+            "session bindings do not support patterns or `else`",
+            "`const … else` needs a body to leave; a global variable's initializer must \
+             produce its value",
+        );
         return None;
     }
+    let type_annotation = match (surface, subpat) {
+        (_, None) => None,
+        (TopLevelLetSurface::Session, Some(_)) => {
+            diags.push(LoweringDiagnostic::InvalidPatternAscription {
+                reason: "session bindings do not support patterns or `else`",
+                span: node.span_range(),
+            });
+            return None;
+        }
+        (TopLevelLetSurface::Source, Some(sub)) => {
+            let Some(mut annotation) = ascription_type_expr(&patterns, sub) else {
+                diags.push(LoweringDiagnostic::InvalidTopLevelLet {
+                    reason: "only a type annotation may follow a global variable's name",
+                    span: node.span_range(),
+                });
+                return None;
+            };
+            let span = annotation.span;
+            crate::lower_type_expr::check_wildcard_type(
+                &mut annotation,
+                "a global variable's type",
+                span,
+                diags,
+            );
+            Some(annotation)
+        }
+    };
     let name_span = node
         .descendants_with_tokens()
         .filter_map(rowan::NodeOrToken::into_token)
         .find(|token| token.text() == name.as_str())
         .map_or_else(|| node.span_range(), |token| token.text_range());
+    let mut ctx = LoweringContext::new();
+    let initializer = ctx
+        .lower_let_parts(
+            node,
+            LetParts {
+                pattern: false,
+                initializer: true,
+                else_branch: false,
+            },
+        )
+        .initializer;
     let (body, source_map, mut ctx_diags, mut ctx_env_refs) = ctx.finish(initializer);
     diags.append(&mut ctx_diags);
     env_var_refs.append(&mut ctx_env_refs);
     Some(LetDef {
         name,
+        type_annotation,
         initializer: Some((body, source_map)),
         origin: LetOrigin::Source,
+        docstring: match surface {
+            TopLevelLetSurface::Source => crate::docstring::extract_leading_docstring(node),
+            TopLevelLetSurface::Session => None,
+        },
         span: node.span_range(),
         name_span,
     })
+}
+
+/// Which parts of a `LET_STMT` [`LoweringContext::lower_let_parts`] lowers.
+#[derive(Debug, Clone, Copy)]
+struct LetParts {
+    pattern: bool,
+    initializer: bool,
+    else_branch: bool,
+}
+
+impl LetParts {
+    const ALL: Self = LetParts {
+        pattern: true,
+        initializer: true,
+        else_branch: true,
+    };
+}
+
+/// What [`LoweringContext::lower_let_parts`] lowered.
+#[derive(Debug, Default)]
+struct LoweredLetParts {
+    pattern: Option<PatId>,
+    initializer: Option<ExprId>,
+    else_branch: Option<ExprId>,
+    /// Whether the statement has a `let … else` branch, lowered or not.
+    has_else: bool,
+}
+
+/// The type a `const NAME: …` sub-pattern denotes when it is a pure type
+/// ascription: a type pattern, or an alternation of them (`const V: int |
+/// string` parses its annotation as an or-pattern of types, which is the union
+/// type).
+/// Any structural sub-pattern is not an annotation.
+fn ascription_type_expr(patterns: &la_arena::Arena<Pattern>, sub: PatId) -> Option<TypeExpr> {
+    match &patterns[sub] {
+        Pattern::Type(type_expr) => Some(type_expr.clone()),
+        Pattern::Or(alternatives) => {
+            let variants = alternatives
+                .iter()
+                .map(|&alternative| match &patterns[alternative] {
+                    Pattern::Type(type_expr) => Some(type_expr.clone()),
+                    _ => None,
+                })
+                .collect::<Option<Vec<_>>>()?;
+            let span = variants
+                .iter()
+                .map(|variant| variant.span)
+                .reduce(TextRange::cover)?;
+            Some(TypeExpr {
+                kind: crate::ast::TypeExprKind::Union { variants },
+                span,
+            })
+        }
+        _ => None,
+    }
 }
 
 pub(crate) fn lower_default_expr_nodes(
@@ -1399,6 +1556,11 @@ struct LoweringContext {
     /// generated nodes are distinguishable from the user-written ones they wrap
     /// — see [`AstSourceMap::synthetic_exprs`]. Consumed by inlay hints.
     synthesizing: bool,
+    /// A file-scope binding's introducer keyword, which its caller checks
+    /// itself: a global requires `const`. The body-level `const` warning
+    /// skips this one token; a nested introducer, such as an alias chain's,
+    /// still gets it.
+    file_scope_introducer: Option<TextRange>,
     /// See [`ExprBody::tag_values`].
     tag_values: Vec<ExprId>,
 }
@@ -1430,6 +1592,7 @@ impl LoweringContext {
             needs_chain_wrap: std::collections::HashSet::new(),
             consumed_generic_args: std::collections::HashSet::new(),
             synthesizing: false,
+            file_scope_introducer: None,
             tag_values: Vec::new(),
         }
     }
@@ -1499,11 +1662,13 @@ impl LoweringContext {
     }
 
     fn warn_direct_const_introducers(&mut self, node: &SyntaxNode) {
+        let file_scope_introducer = self.file_scope_introducer;
         let spans: Vec<TextRange> = node
             .children_with_tokens()
             .filter_map(rowan::NodeOrToken::into_token)
             .filter(|token| token.kind() == SyntaxKind::KW_CONST)
             .map(|token| token.text_range())
+            .filter(|&span| Some(span) != file_scope_introducer)
             .collect();
         for span in spans {
             self.warn_const_introducer(span);
@@ -5576,47 +5741,13 @@ impl LoweringContext {
     }
 
     fn lower_let_stmt(&mut self, node: &SyntaxNode) -> StmtId {
-        // LET_STMT shape (post-pattern-rewrite):
-        //   (KW_LET|KW_CONST)? PATTERN EQUALS <init-expr> (KW_ELSE BLOCK_EXPR)? SEMICOLON?
-        //
-        // The pattern carries its own `: T` narrow as a Chain link, so all we
-        // do here is locate the PATTERN child, the initialiser child, and an
-        // optional trailing `else { … }` block for let-else.
-        let mut pattern_id = None;
-        let mut initializer = None;
-        let mut else_branch = None;
-        let mut seen_equals = false;
-        let mut seen_else = false;
-        self.warn_direct_const_introducers(node);
-
-        for elem in node.children_with_tokens() {
-            match elem {
-                rowan::NodeOrToken::Token(token) => match token.kind() {
-                    SyntaxKind::EQUALS => seen_equals = true,
-                    SyntaxKind::KW_ELSE => seen_else = true,
-                    _ if seen_equals && !seen_else && initializer.is_none() => {
-                        if let Some(id) = self.try_lower_bare_token(&token) {
-                            initializer = Some(id);
-                        }
-                    }
-                    _ => {}
-                },
-                rowan::NodeOrToken::Node(child) => {
-                    if !seen_equals {
-                        if child.kind() == SyntaxKind::PATTERN && pattern_id.is_none() {
-                            pattern_id = Some(self.lower_pattern(&child));
-                        }
-                    } else if !seen_else && initializer.is_none() {
-                        initializer = Some(self.lower_expr(&child));
-                    } else if seen_else && else_branch.is_none() {
-                        else_branch = Some(self.lower_expr(&child));
-                    }
-                }
-            }
-        }
-
-        let pattern =
-            pattern_id.unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, node.span_range()));
+        let parts = self.lower_let_parts(node, LetParts::ALL);
+        let pattern = self.let_binding_pattern(node, parts.pattern);
+        let LoweredLetParts {
+            initializer,
+            else_branch,
+            ..
+        } = parts;
 
         self.alloc_stmt(
             Stmt::Let {
@@ -5627,6 +5758,67 @@ impl LoweringContext {
             },
             node.span_range(),
         )
+    }
+
+    /// Lower the requested parts of a `LET_STMT`.
+    ///
+    /// `LET_STMT` shape (post-pattern-rewrite):
+    /// `(KW_LET|KW_CONST)? PATTERN EQUALS <init-expr> (KW_ELSE BLOCK_EXPR)? SEMICOLON?`
+    ///
+    /// The pattern carries its own `: T` narrow as a Chain link, so all this
+    /// does is locate the PATTERN child, the initialiser child, and an
+    /// optional trailing `else { … }` block for let-else. A part not in
+    /// `parts` is not lowered — a top-level binding lowers its pattern and its
+    /// initializer into separate bodies — but its presence is still reported.
+    fn lower_let_parts(&mut self, node: &SyntaxNode, parts: LetParts) -> LoweredLetParts {
+        let mut lowered = LoweredLetParts::default();
+        let mut seen_equals = false;
+        let mut seen_else = false;
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Token(token) => match token.kind() {
+                    SyntaxKind::EQUALS => seen_equals = true,
+                    SyntaxKind::KW_ELSE => {
+                        seen_else = true;
+                        lowered.has_else = true;
+                    }
+                    _ if parts.initializer
+                        && seen_equals
+                        && !seen_else
+                        && lowered.initializer.is_none() =>
+                    {
+                        if let Some(id) = self.try_lower_bare_token(&token) {
+                            lowered.initializer = Some(id);
+                        }
+                    }
+                    _ => {}
+                },
+                rowan::NodeOrToken::Node(child) => {
+                    if !seen_equals {
+                        if parts.pattern
+                            && child.kind() == SyntaxKind::PATTERN
+                            && lowered.pattern.is_none()
+                        {
+                            lowered.pattern = Some(self.lower_pattern(&child));
+                        }
+                    } else if !seen_else && lowered.initializer.is_none() {
+                        if parts.initializer {
+                            lowered.initializer = Some(self.lower_expr(&child));
+                        }
+                    } else if seen_else && lowered.else_branch.is_none() && parts.else_branch {
+                        lowered.else_branch = Some(self.lower_expr(&child));
+                    }
+                }
+            }
+        }
+        lowered
+    }
+
+    /// A let statement's binding pattern, with the `const` warning every
+    /// binding introducer gets.
+    fn let_binding_pattern(&mut self, node: &SyntaxNode, pattern: Option<PatId>) -> PatId {
+        self.warn_direct_const_introducers(node);
+        pattern.unwrap_or_else(|| self.alloc_pattern(Pattern::Wildcard, node.span_range()))
     }
 
     fn lower_return_stmt(&mut self, node: &SyntaxNode) -> StmtId {

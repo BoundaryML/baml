@@ -426,21 +426,73 @@ Scopes and arenas are therefore orthogonal. Two consequences worth knowing:
 
 ---
 
-## Global Let Bindings and Initialization Order
+## Global Variables and Initialization Order
 
-BAML has a special challenge: names can be referenced across files. This means global variables (like clients) have cross-file dependencies that must be resolved in a specific order.
+A top-level `const` is a **global variable**: `const NAME = value;` or
+`const NAME: Type = value;` at file scope. A top-level `let` is an error
+(`TopLevelLetIntroducer`): `let` declares a reassignable binding, which only a
+body has. It still lowers as the global it names, so its readers resolve
+instead of cascading errors. The same item (`ast::LetDef` /
+`Definition::Let`) also carries a `client Name = value;` declaration
+(`LetOrigin::Client`) and a `Session.eval` submission's persisted binding.
 
-### How it works
+### Semantics
 
-1. **Collection:** Every package's top-level `Let` bindings are collected.
-2. **Topological sort of packages:** Packages are sorted by their dependency graph (e.g., `baml` before `user`).
-3. **Topological sort of lets within each package:** Within each package, `Let` bindings are topologically sorted by their dependency edges (derived from `Expr::Path` references in their initializers). If a cyclic dependency is detected, the compiler emits an error.
-4. **Init function compilation:** For each package, a `$init` function is compiled that evaluates the `Let` bindings in topological order, storing each result in a global slot.
-5. **Package init order:** The engine reads `Program::init_order` (package ordinals in dependency order) and runs each listed package's `$init` during startup.
+- **One name, optionally annotated.** Destructuring, `_`, alias chains, and
+  `const … else` are refused at file scope (`InvalidTopLevelLet`). The
+  binding's type is its annotation, which the initializer is checked against;
+  without one it is the initializer's type, widened like any binding site
+  (`baml_compiler2_hir_ty::globals::global_value_type`).
+- **Scoping.** Globals live in the value namespace of their file's namespace,
+  alongside functions and clients (E0011 on a duplicate). A bare name reaches
+  the file's own namespace; elsewhere it is written in full, like any item:
+  `root.ns.NAME`, or `dep.ns.NAME` from another package. Locals, parameters,
+  and lambda parameters shadow globals. A type's statics and enum variants win
+  over a global root (`float.nan` stays the static even beside a global named
+  `float`). A global named like a package is an item of its namespace, so it
+  shadows that package there, as any item does (#4543). `root` cannot name a
+  global (E0176).
+- **Immutable binding, shared contents.** `$init` writes each global once; the
+  binding cannot be reassigned (E0179), but what it holds is an ordinary heap
+  value shared by every call in the engine — `G.field = v` and `G.push(x)`
+  are visible to every later reader.
+- **Evaluated once, at startup.** Initializers run in the package's `$init`,
+  on a path that cannot suspend. io (E0163), `spawn`/`await` (E0182), and
+  `return` (E0180) are refused where the initializer is written; a throw
+  nothing catches is a warning (E0183), since it stops the program from
+  starting.
 
-This is exactly how Go handles global variable initialization: topological sort across the dependency graph, then evaluate in order.
+### Initialization order
 
-**Important:** Top-level `let` is **not** available in user-facing syntax (the lexer disallows it). It exists only in the AST layer for compiler-generated constructs like client desugaring.
+1. **Packages:** the linker orders packages by their dependency graph (`baml`
+   before `user`); `Program::init_order` lists the packages with an `$init`,
+   and the engine runs them in that order at startup.
+2. **Globals within a package:** Go's rule. A global depends on another of the
+   same package when its initializer refers to it — lexically, lambda bodies
+   included — or refers to a function (or method, or parameter default) whose
+   body does, transitively. References come from inference's resolution
+   tables (`InferenceResult::global_roots`, member resolutions), never from
+   spellings, so a shadowing local is not an edge and a qualified `root.ns.x`
+   is.
+   Independent globals run in source order (file path, then position). A
+   cycle is E0181, reported once at its first global. See
+   `baml_compiler2_hir_ty::globals`.
+3. **`$init`:** one helper per global, named
+   `$init_let.<package>.<namespace…>.<name>`, then
+   a `StoreGlobal` into its slot; after every package's `$init` the engine
+   freezes the slots into `SharedGlobals`.
+
+What the static analysis cannot see — a global read through a virtual call or
+a function value — is caught at runtime: during `$init` the VM tracks the
+global slots still pending (`BexVm::pending_globals`) and reports a read of
+one by name instead of reading the placeholder.
+
+### Across packages
+
+A package's interface exports its globals with their types
+(`PackageInterface::values`), so a consumer of a package served from its
+interface — a mounted package, a `Session.new(packages = …)` alias — reads
+`dep.NAME` as an import of the slot the defining package's `$init` filled.
 
 ---
 

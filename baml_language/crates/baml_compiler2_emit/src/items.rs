@@ -18,7 +18,7 @@ use baml_compiler2_hir::{
     item_data::{
         AssociatedTypeBindingData, ClassData, FieldData, InterfaceFieldLinkData, class_data,
         enum_data, function_data, impl_block_data, impl_enclosing_class, interface_data,
-        is_required_interface_method, type_alias_data,
+        is_required_interface_method, let_data, type_alias_data,
     },
     loc::{ClassLoc, DeclRef, EnumLoc, FunctionLoc, ImplLoc, LetLoc, TypeAliasLoc},
     package::located_head,
@@ -1030,9 +1030,10 @@ fn synthesized_function(
     }
 }
 
-/// The zero-arg helper `$init_let_{ordinal}` that evaluates one top-level
+/// The zero-arg helper `$init_let.<global>` that evaluates one top-level
 /// `let`'s initializer — the body `$init` calls before storing the result
-/// into the binding's slot. The initializer is lowered through MIR and
+/// into the binding's slot. Its identity is the binding it initializes, so a
+/// trace through a failing initializer names the global, not a position. The initializer is lowered through MIR and
 /// compiled like any body; its lambda children are pooled into `objects`
 /// first. A binding without an initializer gets a helper that pushes `null`.
 /// The helper itself is the caller's to pool and slot.
@@ -1041,11 +1042,9 @@ fn synthesized_function(
 ///
 /// The initializer failed to lower (an internal error, attributed to the
 /// `let`'s file).
-#[expect(clippy::too_many_arguments)]
 pub(crate) fn compile_let_helper<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     binding: LetLoc<'db>,
-    ordinal: usize,
     refs: &mut PackageRefs<'_, 'db>,
     class_fields: &ClassFieldSnapshot<'db>,
     objects: &mut ObjectPool,
@@ -1053,9 +1052,9 @@ pub(crate) fn compile_let_helper<'db>(
     opt: OptLevel,
 ) -> Result<Function, LoweringError> {
     let file = binding.file(db);
-    let identity = bex_vm_types::types::FunctionIdentity::InitLet(
-        u32::try_from(ordinal).expect("let ordinals fit u32"),
-    );
+    let identity = bex_vm_types::types::FunctionIdentity::InitLet(crate::refs::item_path(
+        &qualify_def(db, Definition::Let(binding), &let_data(db, binding).name),
+    ));
     let lowered = lower_let_body(db, binding, opt).map_err(|error| {
         crate::internal_lowering_error(
             db,
@@ -1125,13 +1124,15 @@ pub(crate) fn build_init_function(steps: &[InitStep]) -> Function {
     let mut instructions: Vec<Instruction> = Vec::new();
     let mut meta: Vec<InstructionMeta> = Vec::new();
     let mut constants: Vec<ConstValue> = Vec::new();
-    for (ordinal, step) in steps.iter().enumerate() {
+    for step in steps {
         instructions.push(Instruction::Call {
             callee: step.helper,
             ntypeargs: 0,
         });
         meta.push(InstructionMeta {
-            operand: Some(OperandMeta::Callable(format!("$init_let_{ordinal}"))),
+            operand: Some(OperandMeta::Callable(bex_vm_types::init_let_helper_name(
+                &step.target_name,
+            ))),
         });
         instructions.push(Instruction::StoreGlobal(step.target));
         meta.push(InstructionMeta {

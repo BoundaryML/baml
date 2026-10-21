@@ -1,0 +1,97 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0010
+
+  × invalid top-level `const`: a global variable binds a single name; destructuring and `_` are only available inside a body
+    ╭─[declarations.baml:12:1]
+ 12 │ const [FIRST, SECOND] = [1, 2];
+    · ───────────────┬───────────────
+    ·                ╰── a global variable binds one name: `const NAME = value;` or `const NAME: Type = value;`
+    ╰────
+
+  [hir] E0010
+
+  × invalid top-level `const`: a global variable binds a single name; destructuring and `_` are only available inside a body
+    ╭─[declarations.baml:15:1]
+ 15 │ const _ = 3;
+    · ──────┬─────
+    ·       ╰── a global variable binds one name: `const NAME = value;` or `const NAME: Type = value;`
+    ╰────
+
+  [hir] E0010
+
+  × invalid top-level `const`: only a type annotation may follow a global variable's name
+    ╭─[declarations.baml:18:1]
+ 18 │ const ALIAS: let OTHER = 4;
+    · ─────────────┬─────────────
+    ·              ╰── a global variable binds one name: `const NAME = value;` or `const NAME: Type = value;`
+    ╰────
+
+  [hir] E0010
+
+  × invalid top-level `const`: `const … else` needs a body to leave; a global variable's initializer must produce its value
+    ╭─[declarations.baml:21:1]
+ 21 │ const MAYBE: int = 5 else { 6 };
+    · ────────────────┬───────────────
+    ·                 ╰── a global variable binds one name: `const NAME = value;` or `const NAME: Type = value;`
+    ╰────
+
+  [hir] E0176
+
+  × `root` is the path to this package and cannot name a binding, an item, or a type parameter
+    ╭─[declarations.baml:24:7]
+ 24 │ const root = 7;
+    ·       ──┬─
+    ·         ╰── `root` is this package
+    ╰────
+
+  [validation] E0011
+
+  × name `Duplicated` defined 2 times as: let, function
+    ╭─[declarations.baml:27:7]
+ 27 │ const Duplicated = 8;
+    ·       ─────┬────
+    ·            ╰── first defined as let here
+    ╰────
+    ╭─[declarations.baml:29:10]
+ 29 │ function Duplicated() -> int {
+    ·          ─────┬────
+    ·               ╰── duplicate function definition
+    ╰────
+
+  [type] E0002
+
+  × unresolved type: NoSuchType
+    ╭─[declarations.baml:34:19]
+ 34 │ const UNRESOLVED: NoSuchType = 10;
+    ·                   ──────────
+    ╰────
+
+  [hir] E0147
+
+  × the `_` wildcard type can only be inferred in a `let` binding or a `throws` clause, not in a global variable's type
+    ╭─[declarations.baml:35:13]
+ 35 │ const HOLE: map<string, _> = { "eleven": 11 };
+    ·             ───────┬──────
+    ·                    ╰── `_` cannot be inferred here
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[declarations.baml:38:28]
+ 38 │ const MISMATCHED: string = 12;
+    ·                            ─┬
+    ·                             ╰── expected `string`, found `12`
+    ╰────
+
+  [hir] E0010
+
+  × global variables are declared with `const`: `const NAME = value;`
+    ╭─[declarations.baml:42:1]
+ 42 │ let WITH_LET = 13;
+    · ─┬─
+    ·  ╰── write `const` here; `let` is only allowed inside a body
+    ╰────

@@ -2,17 +2,27 @@
 
 ## Variables
 
-Variables store values that can be reused throughout your BAML code. Use `let` to declare variables:
+Variables store values that can be reused throughout your BAML code. Declare a global
+variable with `const` at the top level of a file, and a local variable with `let` inside a
+function:
 
 ```baml
 // A global variable
-let poemSubject = "Math";
+const poemSubject = "Math";
 
-// Another global variable
-let defaultPoem = ClaudePoem(poemSubject);
+// Another global variable, computed from the first
+const poemTitle = `An ode to ${poemSubject}`;
+
+// Use them from any function
+function DefaultPoem() -> string {
+    ClaudePoem(poemTitle)
+}
 ```
 
 Variables can store any value type and can reference function calls or other variables.
+A global variable is evaluated once, when your program starts, so its initializer can't
+make LLM calls or other I/O — do that in a function, as `DefaultPoem` does. A global
+can't be reassigned, but every function sees the same value.
 
 ---
 

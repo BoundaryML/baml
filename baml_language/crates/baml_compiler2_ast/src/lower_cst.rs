@@ -202,22 +202,24 @@ fn lower_file_with_path_and_test_owner_impl(
                 });
             }
             baml_compiler_syntax::SyntaxKind::LET_STMT => {
-                if is_session_submission {
-                    if let Some(let_item) =
-                        lower_expr_body::lower_session_let(&child, &mut diags, &mut env_var_refs)
-                    {
-                        items.push(Item::Let(let_item));
-                    }
+                let surface = if is_session_submission {
+                    lower_expr_body::TopLevelLetSurface::Session
                 } else {
-                    diags.push(LoweringDiagnostic::TopLevelLetNotSupported {
-                        span: child.span_range(),
-                    });
+                    lower_expr_body::TopLevelLetSurface::Source
+                };
+                if let Some(let_item) = lower_expr_body::lower_top_level_let(
+                    &child,
+                    surface,
+                    &mut diags,
+                    &mut env_var_refs,
+                ) {
+                    items.push(Item::Let(let_item));
                 }
             }
             // `let type` binds a runtime type for the rest of a block, and a
             // file has no block for it to bind in.
             baml_compiler_syntax::SyntaxKind::TYPE_BINDING_STMT => {
-                diags.push(LoweringDiagnostic::TopLevelLetNotSupported {
+                diags.push(LoweringDiagnostic::TopLevelLetType {
                     span: child.span_range(),
                 });
             }
@@ -832,8 +834,10 @@ fn lower_client_value_def(
     );
     Some(Item::Let(crate::ast::LetDef {
         name: Name::new(name_token.text()),
+        type_annotation: None,
         initializer: Some((body, source_map)),
         origin: crate::ast::LetOrigin::Client,
+        docstring: crate::docstring::extract_docstring(node),
         span: node.span_range(),
         name_span: name_token.text_range(),
     }))

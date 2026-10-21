@@ -1,29 +1,34 @@
-//! Check-time detection of io reachable from `$init` (E0158).
+//! Check-time detection of io and suspension reachable from `$init` (E0163,
+//! E0182).
 //!
 //! # What `$init` is
 //!
 //! Every **top-level binding with an initializer** is evaluated once, eagerly,
 //! by the synthesized `$init` chainer that `baml_compiler2_emit` appends to the
-//! program tail (see `is_synth_init_name` there). Today the only surface that
-//! produces one is `client Foo = <expr>;`, which `lower_client_value_def`
-//! lowers to a [`LetOrigin::Client`][baml_compiler2_ast::ast::LetOrigin]
-//! top-level let — but the analysis is keyed on the *item* (every
-//! [`LetLoc`]), not on the `client` keyword, so any future top-level binding
-//! form is covered the day it lands.
+//! program tail. Two surfaces produce one: a global variable (`const NAME =
+//! <expr>;` at file scope) and `client Foo = <expr>;`, which
+//! `lower_client_value_def` lowers to a
+//! [`LetOrigin::Client`][baml_compiler2_ast::ast::LetOrigin] top-level let.
+//! The analysis is keyed on the *item* (every [`LetLoc`]), not on either
+//! keyword.
 //!
 //! `$init` runs when the engine is *created*, before any host request, on a
 //! path that cannot suspend: the VM has no scheduler turn to yield into yet.
 //!
 //! So an io sysop reached from a top-level initializer does not fail with a
 //! BAML error the user can catch — it kills engine construction with an
-//! opaque `InitFailed("$init yielded unexpectedly: SysOp BamlEnvGet")`. That
-//! is a check-time-detectable mistake, and this module is the check.
+//! opaque `InitFailed("$init yielded unexpectedly: SysOp BamlEnvGet")`. A
+//! `spawn` (there is no scheduler to launch onto) or an `await` (nothing to
+//! wait on) fails the same way. Those are check-time-detectable mistakes,
+//! and this module is the check.
 //!
 //! # The analysis
 //!
-//! A body is **io-tainted** when its evaluated path either calls an io sysop
-//! directly (a `$rust_io_function` builtin — [`BuiltinKind::Io`]) or calls a
-//! function that is itself tainted. Two memoized layers:
+//! A body is **tainted** when its evaluated path performs an init-unsafe
+//! effect directly — calls an io sysop (a `$rust_io_function` builtin,
+//! [`BuiltinKind::Io`]), launches a task (`baml.spawn.__spawn`, which `spawn
+//! { … }` lowers to), or suspends (`await`, `baml.future.__await_any`) — or
+//! calls a function that is itself tainted. Two memoized layers:
 //!
 //! 1. [`body_evaluated_calls`] — per body owner, the callees resolved on the
 //!    body's *evaluated* path. Salsa-tracked, so the expensive half (reading
@@ -72,10 +77,22 @@ use crate::diagnostics::TirTypeError;
 /// written at (for span anchoring) and the function it resolved to.
 pub type EvaluatedCall<'db> = (ExprId, FunctionLoc<'db>);
 
-/// Wrapper so the tracked query can return by reference under salsa's
+/// A body's evaluated path: the calls it makes, and the `await`s it performs
+/// itself. Wrapper so the tracked query can return by reference under salsa's
 /// retention rules.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EvaluatedCalls<'db>(pub Vec<EvaluatedCall<'db>>);
+pub struct EvaluatedCalls<'db> {
+    pub calls: Vec<EvaluatedCall<'db>>,
+    /// `await` expressions on the evaluated path, in arena order.
+    pub awaits: Vec<ExprId>,
+}
+
+impl EvaluatedCalls<'_> {
+    const EMPTY: Self = EvaluatedCalls {
+        calls: Vec::new(),
+        awaits: Vec::new(),
+    };
+}
 
 // SAFETY: This type owns its data. Its database lifetime only appears
 // in Salsa identities; it contains no references into query storage.
@@ -95,12 +112,13 @@ unsafe impl salsa::SalsaValue for EvaluatedCalls<'_> {}
 pub fn body_evaluated_calls<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     owner: BodyOwnerId<'db>,
-) -> &'db [EvaluatedCall<'db>] {
+) -> &'db EvaluatedCalls<'db> {
+    static EMPTY: EvaluatedCalls<'static> = EvaluatedCalls::EMPTY;
     match owner {
-        BodyOwnerId::Function(function) => &function_evaluated_calls(db, function).0,
-        BodyOwnerId::Let(let_binding) => &let_evaluated_calls(db, let_binding).0,
+        BodyOwnerId::Function(function) => function_evaluated_calls(db, function),
+        BodyOwnerId::Let(let_binding) => let_evaluated_calls(db, let_binding),
         // Parameter defaults are evaluated per CALL, not at `$init`.
-        BodyOwnerId::ParameterDefaults(_) => &[],
+        BodyOwnerId::ParameterDefaults(_) => &EMPTY,
     }
 }
 
@@ -130,17 +148,17 @@ fn evaluated_calls_impl<'db>(
             FunctionBody::Expr(body) => body,
             // A builtin has no BAML body: its io-ness is a property of the
             // declaration, read by `io_sysop_of` — not an edge.
-            FunctionBody::Builtin(_) | FunctionBody::Missing => return EvaluatedCalls(Vec::new()),
+            FunctionBody::Builtin(_) | FunctionBody::Missing => return EvaluatedCalls::EMPTY,
         },
         OwnerBody::Let(let_body) => match let_body.as_ref() {
             LetBody::Expr(body) => body,
-            LetBody::Missing => return EvaluatedCalls(Vec::new()),
+            LetBody::Missing => return EvaluatedCalls::EMPTY,
         },
         // Parameter defaults are evaluated per CALL, not at `$init`.
-        OwnerBody::ParameterDefaults(_) => return EvaluatedCalls(Vec::new()),
+        OwnerBody::ParameterDefaults(_) => return EvaluatedCalls::EMPTY,
     };
     let Some(root) = body.root_expr else {
-        return EvaluatedCalls(Vec::new());
+        return EvaluatedCalls::EMPTY;
     };
 
     let inference = crate::infer::infer_body(db, owner);
@@ -149,6 +167,7 @@ fn evaluated_calls_impl<'db>(
     // lambdas excluded is the "what actually runs" filter; immediately-invoked
     // lambdas are re-seeded below.
     let mut callee_exprs: Vec<ExprId> = Vec::new();
+    let mut awaits: Vec<ExprId> = Vec::new();
     let mut seen_lambda_bodies: HashSet<ExprId> = HashSet::new();
     let mut roots = vec![root];
     while let Some(root) = roots.pop() {
@@ -173,6 +192,10 @@ fn evaluated_calls_impl<'db>(
             }
             let callee = match &body.exprs[id] {
                 Expr::Call { callee, .. } | Expr::OptionalCall { callee, .. } => *callee,
+                Expr::Await { .. } => {
+                    awaits.push(id);
+                    continue;
+                }
                 _ => continue,
             };
             callee_exprs.push(callee);
@@ -205,7 +228,9 @@ fn evaluated_calls_impl<'db>(
     // source order that the reported hop is the first one written.
     out.sort_by_key(|(expr, _)| *expr);
     out.dedup();
-    EvaluatedCalls(out)
+    awaits.sort();
+    awaits.dedup();
+    EvaluatedCalls { calls: out, awaits }
 }
 
 /// The statically-known callee behind a member resolution, when there is one.
@@ -213,7 +238,7 @@ fn evaluated_calls_impl<'db>(
 /// A virtual interface call resolves to a slot, not a body — no edge (see the
 /// under-approximation note in the module docs). Fields and enum variants are
 /// not calls at all.
-fn resolved_function<'db>(
+pub(crate) fn resolved_function<'db>(
     resolution: &crate::infer::MemberResolution<'db>,
 ) -> Option<FunctionLoc<'db>> {
     use baml_compiler2_hir::loc::DeclRef;
@@ -270,41 +295,80 @@ fn qualified_name<'db>(
     Name::new(crate::render::Viewpoint::user_facing(db, viewer).path(&decl))
 }
 
-/// Whether `func` transitively reaches an io sysop, and which one.
+/// An effect `$init` cannot perform.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum InitEffect {
+    /// An io sysop, by its fully-qualified name (`baml.env.get`).
+    Io(Name),
+    /// Launching a task (`spawn { … }`, `baml.spawn.__spawn`).
+    Spawn,
+    /// Suspending on a future (`await`, `baml.future.__await_any`).
+    Await,
+}
+
+/// The effect `func` performs by being called, when it is an effectful
+/// builtin; `None` for an ordinary function (whose body the walk descends
+/// into instead).
+fn builtin_effect_of<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    viewer: baml_base::SourceRoot,
+    func: FunctionLoc<'db>,
+) -> Option<InitEffect> {
+    match io_sysop_of(db, viewer, func) {
+        Some(sysop) => Some(InitEffect::Io(sysop)),
+        None => match baml_compiler2_hir::body::function_body(db, func).as_ref() {
+            FunctionBody::Builtin(BuiltinKind::Spawn) => Some(InitEffect::Spawn),
+            FunctionBody::Builtin(BuiltinKind::AwaitAny) => Some(InitEffect::Await),
+            _ => None,
+        },
+    }
+}
+
+/// Whether calling `func` transitively performs an init-unsafe effect, and
+/// which one. Io wins over suspension when one call reaches both — a helper
+/// that spawns a task to read the environment is reported for the read, the
+/// more specific cause — and otherwise the first effect in source order.
 ///
 /// Depth-first over the memoized [`body_evaluated_calls`] graph, on an
 /// explicit stack rather than the call stack — the graph's depth is the
 /// user's, not ours. `visited` carries across the whole walk (including
 /// sibling hops): a body already proven clean cannot become tainted, and a
 /// body already on the path is a cycle, which adds nothing either way.
-fn io_sysop_reached_from<'db>(
+fn effect_reached_from<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     viewer: baml_base::SourceRoot,
     func: FunctionLoc<'db>,
     visited: &mut HashSet<FunctionLoc<'db>>,
-) -> Option<Name> {
+) -> Option<InitEffect> {
+    let mut suspension = None;
     let mut stack = vec![func];
     while let Some(func) = stack.pop() {
         if !visited.insert(func) {
             continue;
         }
-        if let Some(sysop) = io_sysop_of(db, viewer, func) {
-            return Some(sysop);
+        match builtin_effect_of(db, viewer, func) {
+            Some(io @ InitEffect::Io(_)) => return Some(io),
+            Some(effect) => {
+                suspension.get_or_insert(effect);
+                continue;
+            }
+            None => {}
+        }
+        let evaluated = body_evaluated_calls(db, BodyOwnerId::Function(func));
+        if !evaluated.awaits.is_empty() {
+            suspension.get_or_insert(InitEffect::Await);
         }
         // Reversed so the first-written callee is explored first — the search
-        // order, and so the reported sysop, follows source order.
-        for (_, callee) in body_evaluated_calls(db, BodyOwnerId::Function(func))
-            .iter()
-            .rev()
-        {
+        // order, and so the reported effect, follows source order.
+        for (_, callee) in evaluated.calls.iter().rev() {
             stack.push(*callee);
         }
     }
-    None
+    suspension
 }
 
-/// E0158 for one top-level declaration: its initializer reaches an io sysop,
-/// which `$init` cannot run.
+/// E0163 / E0182 for one top-level declaration: its initializer reaches io,
+/// `spawn`, or `await`, none of which `$init` can run.
 ///
 /// Returns at most one diagnostic — the first offending hop in the
 /// initializer — because every later one has the same cause and the same fix.
@@ -312,39 +376,63 @@ pub fn let_init_io_diagnostics<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     let_loc: LetLoc<'db>,
 ) -> Vec<(TextRange, TirTypeError)> {
-    let calls = body_evaluated_calls(db, BodyOwnerId::Let(let_loc));
+    let evaluated = body_evaluated_calls(db, BodyOwnerId::Let(let_loc));
     let viewer = baml_compiler2_hir::file_package::file_package(db, let_loc.file(db)).root;
-    if calls.is_empty() {
+    if evaluated.calls.is_empty() && evaluated.awaits.is_empty() {
         return Vec::new();
     }
+    let Some(source_map) = baml_compiler2_hir::body::body_source_map(db, BodyOwnerId::Let(let_loc))
+    else {
+        return Vec::new();
+    };
+    let data = baml_compiler2_hir::item_data::let_data(db, let_loc);
+    let is_client = matches!(data.origin, baml_compiler2_ast::ast::LetOrigin::Client);
 
+    // Every offending site in the initializer, as (anchor, effect, via):
+    // direct `await`s, then each call hop. The first in source order wins.
     // One visited set for the whole declaration: a helper shared by two hops
-    // is walked once, and the FIRST hop that reaches io is the one reported.
+    // is walked once, and the FIRST hop that reaches an effect is reported.
     let mut visited: HashSet<FunctionLoc<'db>> = HashSet::new();
-    for (callee_expr, func) in calls {
-        let direct = io_sysop_of(db, viewer, *func);
-        let sysop = match &direct {
-            Some(sysop) => Some(sysop.clone()),
-            None => io_sysop_reached_from(db, viewer, *func, &mut visited),
+    let mut sites: Vec<(ExprId, InitEffect, Option<Name>)> = evaluated
+        .awaits
+        .iter()
+        .map(|&expr| (expr, InitEffect::Await, None))
+        .collect();
+    for (callee_expr, func) in &evaluated.calls {
+        let direct = builtin_effect_of(db, viewer, *func);
+        let effect = match &direct {
+            Some(effect) => Some(effect.clone()),
+            None => effect_reached_from(db, viewer, *func, &mut visited),
         };
-        let Some(sysop) = sysop else { continue };
-
-        let Some(source_map) =
-            baml_compiler2_hir::body::body_source_map(db, BodyOwnerId::Let(let_loc))
-        else {
-            return Vec::new();
-        };
-        let data = baml_compiler2_hir::item_data::let_data(db, let_loc);
-        return vec![(
-            source_map.expr_span(*callee_expr),
-            TirTypeError::InitIoNotAllowed {
-                declaration: data.name.clone(),
-                is_client: matches!(data.origin, baml_compiler2_ast::ast::LetOrigin::Client),
-                sysop,
-                // A direct call needs no "via": the hop IS the sysop.
-                via: direct.is_none().then(|| qualified_name(db, viewer, *func)),
-            },
-        )];
+        if let Some(effect) = effect {
+            // A direct call needs no "via": the hop IS the effect.
+            let via = direct.is_none().then(|| qualified_name(db, viewer, *func));
+            sites.push((*callee_expr, effect, via));
+        }
     }
-    Vec::new()
+    let Some((anchor, effect, via)) = sites.into_iter().min_by_key(|(expr, ..)| *expr) else {
+        return Vec::new();
+    };
+    let declaration = data.name.clone();
+    let error = match effect {
+        InitEffect::Io(sysop) => TirTypeError::InitIoNotAllowed {
+            declaration,
+            is_client,
+            sysop,
+            via,
+        },
+        InitEffect::Spawn => TirTypeError::InitSuspendNotAllowed {
+            declaration,
+            is_client,
+            operation: "spawn",
+            via,
+        },
+        InitEffect::Await => TirTypeError::InitSuspendNotAllowed {
+            declaration,
+            is_client,
+            operation: "await",
+            via,
+        },
+    };
+    vec![(source_map.expr_span(anchor), error)]
 }

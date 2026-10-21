@@ -23,10 +23,7 @@ use baml_compiler2_hir::item_data::{
     GenericParamData, class_data, function_data, function_llm_meta, interface_data,
 };
 use baml_compiler2_hir::{
-    contributions::Definition,
-    file_package::file_package,
-    loc::{FunctionLoc, LetLoc},
-    package::world_files,
+    contributions::Definition, file_package::file_package, loc::FunctionLoc, package::world_files,
 };
 use baml_compiler2_mir::{
     BuiltinKind, MirFunctionBody, MirFunctionKind, Operand, Place, RuntimeLowering, RuntimeTy,
@@ -745,78 +742,6 @@ fn build_line_starts(text: &str) -> Vec<u32> {
         }
     }
     starts
-}
-
-// ─── Let-binding helpers ─────────────────────────────────────────────────────
-
-/// Topologically sort let bindings by their dependencies.
-///
-/// Walks each binding's `ExprBody` to find `Expr::Path` references to other
-/// let bindings in the same package, then runs Kahn's algorithm. Returns an
-/// error if circular dependencies are detected.
-fn topological_sort_lets<'db>(
-    db: &'db dyn baml_compiler2_mir::Db,
-    bindings: &[(String, LetLoc<'db>, baml_base::SourceFile)],
-) -> Result<Vec<(String, LetLoc<'db>, baml_base::SourceFile)>, LoweringError> {
-    use std::collections::{HashSet, VecDeque};
-
-    // Build adjacency list: binding[i] depends on (needs) binding[j]
-    let mut deps: Vec<HashSet<usize>> = vec![HashSet::new(); bindings.len()];
-    for (i, (_name, let_loc, _file)) in bindings.iter().enumerate() {
-        let body = baml_compiler2_hir::body::let_body(db, *let_loc);
-        if let baml_compiler2_hir::body::LetBody::Expr(expr_body) = body.as_ref() {
-            // Walk all expressions to find path references to other let bindings.
-            for (_expr_id, expr) in expr_body.exprs.iter() {
-                if let baml_compiler2_ast::Expr::Path(segments) = expr {
-                    // Single-segment paths might reference another let binding.
-                    if segments.len() == 1 {
-                        let ref_name_short = segments[0].as_str();
-                        for (j, (fq, _, _)) in bindings.iter().enumerate() {
-                            if j != i && fq.ends_with(&format!(".{ref_name_short}")) {
-                                deps[i].insert(j);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Kahn's algorithm: if A depends on B, B must come first.
-    // Build reverse edges (used_by) and in-degree (dep count).
-    let mut in_degree: Vec<usize> = deps.iter().map(HashSet::len).collect();
-    let mut reverse_deps: Vec<Vec<usize>> = vec![Vec::new(); bindings.len()];
-    for (i, dep_set) in deps.iter().enumerate() {
-        for &j in dep_set {
-            reverse_deps[j].push(i);
-        }
-    }
-
-    let mut queue: VecDeque<usize> = VecDeque::new();
-    for (i, &deg) in in_degree.iter().enumerate() {
-        if deg == 0 {
-            queue.push_back(i);
-        }
-    }
-
-    let mut sorted = Vec::with_capacity(bindings.len());
-    while let Some(node) = queue.pop_front() {
-        sorted.push(node);
-        for &dependent in &reverse_deps[node] {
-            in_degree[dependent] -= 1;
-            if in_degree[dependent] == 0 {
-                queue.push_back(dependent);
-            }
-        }
-    }
-
-    if sorted.len() != bindings.len() {
-        return Err(LoweringError::Internal(
-            "Circular dependency detected among top-level let bindings".to_string(),
-        ));
-    }
-
-    Ok(sorted.into_iter().map(|i| bindings[i].clone()).collect())
 }
 
 #[derive(Clone, Default)]

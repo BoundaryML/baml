@@ -2251,9 +2251,15 @@ mod tests {
     fn launch_context_precedes_package_init() {
         let root = tempfile::tempdir().unwrap();
         let file = root.path().join("main.baml");
+        // A global whose initializer reads the launch context: `$init` must
+        // run with the context already installed. Appended here rather than
+        // in the shared fixture, whose other runs pass no context.
         std::fs::write(
             &file,
-            include_str!("../tests/fixtures/launch_context/baml_src/main.baml"),
+            format!(
+                "{}\nconst LAUNCH_ID = Initialize();\n",
+                include_str!("../tests/fixtures/launch_context/baml_src/main.baml")
+            ),
         )
         .unwrap();
         let mut args = run_args();
@@ -2261,12 +2267,13 @@ mod tests {
         args.context =
             Some(r#"{"distinct_id":"pipe-user","metadata":{"phase":"launch"}}"#.to_string());
         let reporter = Reporter::new();
-        let mut prepared = args.load_and_compile(&reporter).unwrap();
-        // User BAML cannot declare top-level lets. Exercise the loader's init
-        // path by installing this native fixture function as the root's init.
-        let init = prepared.program.rendered_callables()["user.Initialize"].object;
-        prepared.program.packages[prepared.program.root as usize].init = Some(init);
-        prepared.program.init_order.push(prepared.program.root);
+        let prepared = args.load_and_compile(&reporter).unwrap();
+        assert!(
+            prepared.program.packages[prepared.program.root as usize]
+                .init
+                .is_some(),
+            "the global gives the root package an `$init`"
+        );
         let result = args
             .execute_invocation(
                 prepared,

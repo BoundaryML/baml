@@ -471,6 +471,7 @@ pub(crate) mod tests {
             early_yield: early_yield_for_test(),
             tlab: Tlab::new(heap),
             globals: VmGlobals::Owned(GlobalPool::new()),
+            pending_globals: None,
             error_class_ptrs: Arc::from(Vec::new()),
             panic_class_ptrs: Arc::from(Vec::new()),
             stdlib_heads: Arc::new(crate::package_load::StdlibHeads::default()),
@@ -1661,6 +1662,15 @@ pub struct BexVm {
     /// shared view is a `VmInternalError`.
     pub globals: VmGlobals,
 
+    /// The program's global-variable slots whose initializer has not run yet,
+    /// indexed by slot — set by the engine for the VMs that run `$init` and
+    /// `None` for every other VM. `LoadGlobal` of a pending slot fails with
+    /// [`VmInternalError::GlobalReadBeforeInit`] instead of reading the
+    /// placeholder, and `StoreGlobal` clears the slot. The compiler orders
+    /// initializers so that never happens; this catches what its static
+    /// analysis cannot see (a global read through a virtual call).
+    pub pending_globals: Option<Box<[bool]>>,
+
     /// All loaded packages plus the program-wide interface → impl-rules index
     /// derived from them. Shared (`Arc`) across spawned VMs so workers resolve
     /// types, interfaces, and impls against the same index without rebuilding it.
@@ -2411,6 +2421,7 @@ impl BexVm {
             early_yield,
             tlab,
             globals,
+            pending_globals: None,
             error_class_ptrs,
             panic_class_ptrs,
             stdlib_heads,
@@ -6305,6 +6316,12 @@ impl BexVm {
         Some(func.name())
     }
 
+    /// The VM's current call stack as a traceback, outermost frame first:
+    /// where execution stands when the VM yields to its embedder.
+    pub fn stack_trace(&self) -> Vec<StackFrame> {
+        self.capture_stack_trace()
+    }
+
     fn capture_stack_trace(&self) -> Vec<StackFrame> {
         // The innermost (topmost) bytecode frame's live PC lives in `cur_pc`;
         // outer frames recorded their call-site PC in `faulting_pc` at call time.
@@ -9104,6 +9121,19 @@ impl BexVm {
                     OpCode::LoadGlobal => {
                         let raw = { read_u32_unchecked(code, pc) };
                         let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
+                        // During `$init`, a global whose initializer has not run
+                        // yet holds a placeholder: reading it is an
+                        // initialization-order failure, reported as one.
+                        if runtime_package.is_null()
+                            && self
+                                .pending_globals
+                                .as_ref()
+                                .is_some_and(|pending| pending.get(raw as usize) == Some(&true))
+                        {
+                            return Err(
+                                VmInternalError::GlobalReadBeforeInit { slot: global_idx }.into()
+                            );
+                        }
                         let value = self.load_global_in(runtime_package, global_idx);
                         self.stack.push(value);
                     }
@@ -9115,6 +9145,12 @@ impl BexVm {
                         // Only valid during `$init`; post-init globals are frozen in `Arc<[Value]>`
                         // and a write here is a VM internal error.
                         self.store_global_in(runtime_package, global_idx, value)?;
+                        if runtime_package.is_null()
+                            && let Some(pending) = self.pending_globals.as_mut()
+                            && let Some(slot) = pending.get_mut(raw as usize)
+                        {
+                            *slot = false;
+                        }
                     }
 
                     // ── LoadField / StoreField / InitField ────────────────────────

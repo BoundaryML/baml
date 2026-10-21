@@ -82,6 +82,11 @@ pub(super) fn classify_resolved(
             };
             Some((token_type, ModifierSet::empty()))
         }
+        // A global variable (or client) is a binding that cannot be
+        // reassigned: a `readonly` variable, like a constant.
+        ResolvedName::Item(def @ Definition::Let(_)) => {
+            Some((token_type_for_definition(*def), ModifierSet::READONLY))
+        }
         ResolvedName::Item(def) => Some((token_type_for_definition(*def), ModifierSet::empty())),
         ResolvedName::Builtin(def) => Some((
             token_type_for_definition(*def),

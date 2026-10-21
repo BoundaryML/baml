@@ -166,7 +166,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × top-level `let` bindings are not supported
+  × `let type` binds a type for the rest of a block, so it is only allowed inside a body
     ╭─[removed_scoped_type_syntax.baml:75:1]
  75 │ let type TopLevel = reflect.Type.of<string>();
     · ───────────────────────┬──────────────────────
