@@ -12,166 +12,23 @@
 //! `for_ty_pattern` against the concrete type (binding the impl's generic
 //! params), then discharge each param's declared bound as a nested obligation.
 
-use std::{
-    borrow::Cow,
-    hash::{Hash, Hasher},
-    sync::Arc,
-};
+use std::borrow::Cow;
 
 use baml_type::{Literal, Name, StructuralInterface, normalize::TypeContext};
 use bex_vm_types::{
-    HeapPtr, RealizedTy, TyTemplate, TypeHead, errors::VmInternalError, types::RuntimeImplRule,
+    RealizedTy, TyTemplate, TypeHead, errors::VmInternalError, types::RuntimeImplRule,
 };
-use indexmap::{Equivalent, IndexMap};
 
 use crate::{BexVm, type_context::StructuralEquivCtx, vec_ext::VecExt};
-
-/// An impl's bound generic args (de Bruijn order), as
-/// [`ImplResolver::resolve_implements_rule`] returns them. Shared rather than
-/// owned so a cached resolution hands out the same allocation on every hit
-/// instead of cloning a `Vec<RealizedTy>`; callers only ever read it as a
-/// slice. Empty for the common non-generic impl.
-pub(crate) type BoundTypeArgs = Arc<[RealizedTy]>;
-
-/// Per-VM memo of [`ImplResolver::resolve_implements_rule`].
-///
-/// Dispatch asks the same `(Self, Iface<Args>)` question over and over with
-/// the same answer — one per decoded class value, per `==`, per
-/// `String.from` — and each answer is a pattern unification plus bound
-/// discharge over every candidate rule. The answer is a pure function of
-/// the question, the resolver's *world* (which runtime packages it searches,
-/// see [`ResolutionWorld`]), and the rule-world epoch
-/// ([`DynDispatchTables::rule_world_epoch`](crate::package_load::DynDispatchTables::rule_world_epoch)),
-/// so it is keyed on exactly those. Negative answers are cached too: a rule
-/// can only *appear* through a witness registration, a runtime package
-/// publish, or a collection, and each of those moves the epoch, which
-/// empties the cache on the next lookup.
-///
-/// The cache lives on the VM (behind a `RefCell`, since the resolver holds
-/// `&BexVm`) rather than on the shared tables: a VM runs on one thread at a
-/// time, so no lock is needed, and the hit rate is high within one decode or
-/// loop. It stores heap *pointers* (the rule, the world's packages) and
-/// head-carrying types, so a moving collection also clears it
-/// (`BexVm::forward_roots`); the epoch bump in
-/// [`DynDispatchTables::sweep_and_forward`](crate::package_load::DynDispatchTables::sweep_and_forward)
-/// covers a VM the collection did not visit. Lookups never hold the borrow
-/// across resolution, which may re-enter the resolver through projection
-/// reduction.
-#[derive(Default)]
-pub(crate) struct ImplRuleCache {
-    epoch: u64,
-    entries: IndexMap<ImplRuleKey, Option<CachedImplRule>>,
-}
-
-impl ImplRuleCache {
-    /// Drop every memoized answer (a collection moved what they point at).
-    pub(crate) fn clear(&mut self) {
-        self.entries.clear();
-    }
-
-    /// Keep a runaway VM (one minting types forever) from growing the memo
-    /// without bound; a realistic program has far fewer distinct questions.
-    const CAPACITY: usize = 4096;
-}
-
-/// The runtime packages a resolver searches besides the static index: the
-/// root (the receiver's owner, an explicitly inspected package, or the
-/// lexical frame's) and the lexical frame's when it differs. Null for a
-/// static-only world.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-struct ResolutionWorld {
-    root: HeapPtr,
-    additional: HeapPtr,
-}
-
-struct ImplRuleKey {
-    concrete: RealizedTy,
-    iface: TypeHead,
-    iface_args: Box<[RealizedTy]>,
-    world: ResolutionWorld,
-}
-
-/// The borrowed form of [`ImplRuleKey`] a lookup probes with, so a hit never
-/// clones the concrete type or the interface args. Hashes and compares
-/// field-for-field like the owned key (both are written out by hand so they
-/// cannot drift apart).
-struct ImplRuleKeyRef<'a> {
-    concrete: &'a RealizedTy,
-    iface: TypeHead,
-    iface_args: &'a [RealizedTy],
-    world: ResolutionWorld,
-}
-
-impl Hash for ImplRuleKey {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.concrete.hash(state);
-        self.iface.hash(state);
-        self.iface_args[..].hash(state);
-        self.world.hash(state);
-    }
-}
-
-impl PartialEq for ImplRuleKey {
-    fn eq(&self, other: &Self) -> bool {
-        self.iface == other.iface
-            && self.world == other.world
-            && self.concrete == other.concrete
-            && self.iface_args == other.iface_args
-    }
-}
-
-impl Eq for ImplRuleKey {}
-
-impl Hash for ImplRuleKeyRef<'_> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.concrete.hash(state);
-        self.iface.hash(state);
-        self.iface_args.hash(state);
-        self.world.hash(state);
-    }
-}
-
-impl Equivalent<ImplRuleKey> for ImplRuleKeyRef<'_> {
-    fn equivalent(&self, key: &ImplRuleKey) -> bool {
-        self.iface == key.iface
-            && self.world == key.world
-            && *self.concrete == key.concrete
-            && self.iface_args == &key.iface_args[..]
-    }
-}
-
-impl ImplRuleKeyRef<'_> {
-    fn to_owned(&self) -> ImplRuleKey {
-        ImplRuleKey {
-            concrete: self.concrete.clone(),
-            iface: self.iface,
-            iface_args: self.iface_args.into(),
-            world: self.world,
-        }
-    }
-}
-
-/// A memoized positive answer: the selected rule by heap pointer (re-borrowed
-/// through the VM on every hit, exactly as the uncached path borrows it) and
-/// its bound type args.
-struct CachedImplRule {
-    rule: HeapPtr,
-    is_static: bool,
-    bound_args: BoundTypeArgs,
-}
 
 /// A resolver candidate borrows an immutable rule from the heap. Every rule —
 /// compiled into the static image, owned by a runtime package, or registered
 /// as an anonymous class's witness — is an `Object::ImplRule`, so no candidate
-/// ever copies rule metadata. Candidates differ only in cacheability: a
-/// static rule lives in the never-moving compile-time region.
-#[derive(Clone, Copy)]
-pub(crate) struct RuntimeImplRuleCandidate<'vm> {
-    rule: &'vm RuntimeImplRule,
-    /// The rule's heap object, what the [`ImplRuleCache`] remembers it by.
-    /// Null for a staged rule, which has no heap home (and is never cached).
-    ptr: HeapPtr,
-    is_static: bool,
+/// ever copies rule metadata. The two variants differ only in cacheability:
+/// a `Static` rule lives in the never-moving compile-time region.
+pub(crate) enum RuntimeImplRuleCandidate<'vm> {
+    Static(&'vm RuntimeImplRule),
+    Borrowed(&'vm RuntimeImplRule),
 }
 
 /// An implementation selected without adding synthetic rules to the registry.
@@ -179,7 +36,7 @@ pub(crate) struct RuntimeImplRuleCandidate<'vm> {
 pub(crate) enum ResolvedInterfaceImpl<'vm> {
     Explicit {
         rule: RuntimeImplRuleCandidate<'vm>,
-        bindings: BoundTypeArgs,
+        bindings: Vec<RealizedTy>,
     },
     Structural {
         kind: StructuralInterface,
@@ -198,18 +55,9 @@ impl ResolvedInterfaceImpl<'_> {
     }
 }
 
-impl<'vm> RuntimeImplRuleCandidate<'vm> {
+impl RuntimeImplRuleCandidate<'_> {
     pub(crate) fn is_static(&self) -> bool {
-        self.is_static
-    }
-
-    /// A staged rule: borrowed from the registration, not the heap.
-    fn staged(rule: &'vm RuntimeImplRule) -> Self {
-        Self {
-            rule,
-            ptr: HeapPtr::null(),
-            is_static: false,
-        }
+        matches!(self, Self::Static(_))
     }
 }
 
@@ -217,7 +65,9 @@ impl std::ops::Deref for RuntimeImplRuleCandidate<'_> {
     type Target = RuntimeImplRule;
 
     fn deref(&self) -> &Self::Target {
-        self.rule
+        match self {
+            Self::Static(rule) | Self::Borrowed(rule) => rule,
+        }
     }
 }
 
@@ -343,54 +193,6 @@ impl<'vm> ImplResolver<'vm> {
     /// type's docs for why a per-package search cannot be narrowed correctly. An
     /// unknown interface (not loaded) has no impls anywhere.
     fn rules_for(self, iface: TypeHead) -> Vec<RuntimeImplRuleCandidate<'vm>> {
-        let iface_ptr = iface.ptr();
-        let mut rules = self
-            .rule_pointers_for(iface)
-            .into_iter()
-            .filter_map(|rule_ptr| self.heap_candidate(rule_ptr, false))
-            .collect::<Vec<_>>();
-        rules.extend(
-            self.staged_rules
-                .iter()
-                .filter(|rule| rule.interface_head == iface_ptr)
-                .map(RuntimeImplRuleCandidate::staged),
-        );
-        rules
-    }
-
-    /// Borrow the `Object::ImplRule` at `ptr` as a candidate, or `None` when
-    /// the pointer names some other object.
-    fn heap_candidate(
-        self,
-        ptr: HeapPtr,
-        is_static: bool,
-    ) -> Option<RuntimeImplRuleCandidate<'vm>> {
-        let rule = self.vm.get_object(ptr).as_impl_rule()?;
-        Some(RuntimeImplRuleCandidate {
-            rule,
-            ptr,
-            is_static,
-        })
-    }
-
-    /// The runtime packages this resolver searches, as a cache key: the root
-    /// is the explicit one or the lexical frame's, exactly as
-    /// [`Self::rule_pointers_for`] walks them.
-    fn world(self) -> ResolutionWorld {
-        ResolutionWorld {
-            root: self
-                .root_package
-                .unwrap_or_else(|| self.vm.current_runtime_package()),
-            additional: self.additional_package.unwrap_or_else(HeapPtr::null),
-        }
-    }
-
-    /// Every published impl rule of `iface` in this resolver's world, by heap
-    /// pointer and deduplicated, in package-load order: the static index,
-    /// then the runtime package chain, then the dynamic witnesses. Staged
-    /// rules are not here (they have no heap home); [`Self::rules_for`] adds
-    /// them.
-    fn rule_pointers_for(self, iface: TypeHead) -> Vec<HeapPtr> {
         // The head *is* the canonical `Object::Interface` pointer that keys
         // every package's `impl_rules` — no name lookup on the dispatch path.
         //
@@ -403,11 +205,11 @@ impl<'vm> ImplResolver<'vm> {
         let iface_ptr = iface.ptr();
         let mut pointers = Vec::new();
         pointers.extend(self.vm.packages.impl_rules_of(iface_ptr));
-        let world = self.world();
-        let mut packages = vec![world.root];
-        if !world.additional.is_null() {
-            packages.push(world.additional);
-        }
+        let mut packages = vec![
+            self.root_package
+                .unwrap_or_else(|| self.vm.current_runtime_package()),
+        ];
+        packages.extend(self.additional_package);
         let mut seen = std::collections::HashSet::new();
         while let Some(package_ptr) = packages.pop() {
             if package_ptr.is_null() || !seen.insert(package_ptr) {
@@ -432,11 +234,24 @@ impl<'vm> ImplResolver<'vm> {
         // chain. Each rule is one candidate, so a coherence count over the
         // candidates is exact.
         let mut seen_rules = std::collections::HashSet::new();
-        pointers
+        let mut rules = pointers
             .into_iter()
             .chain(self.vm.dynamic_dispatch.rules_of(iface_ptr))
             .filter(|rule_ptr| seen_rules.insert(*rule_ptr))
-            .collect()
+            .filter_map(|rule_ptr| {
+                self.vm
+                    .get_object(rule_ptr)
+                    .as_impl_rule()
+                    .map(RuntimeImplRuleCandidate::Borrowed)
+            })
+            .collect::<Vec<_>>();
+        rules.extend(
+            self.staged_rules
+                .iter()
+                .filter(|rule| rule.interface_head == iface_ptr)
+                .map(RuntimeImplRuleCandidate::Borrowed),
+        );
+        rules
     }
 }
 
@@ -707,90 +522,28 @@ impl<'vm> ImplResolver<'vm> {
     /// a projection as opaque). Returning the first applicable rule instead would
     /// silently dispatch a different instantiation (`Converter<string>` through
     /// `Converter<int>`), reading operands and members at the wrong type.
-    ///
-    /// Memoized per VM in the [`ImplRuleCache`] (see its docs for the key and
-    /// the invalidation rule). A resolver with staged rules answers in a
-    /// world nobody else sees, so it bypasses the memo entirely.
     pub(crate) fn resolve_implements_rule(
         self,
         concrete_ty: &RealizedTy,
         iface: TypeHead,
         iface_args: &[RealizedTy],
-    ) -> Option<(RuntimeImplRuleCandidate<'vm>, BoundTypeArgs)> {
-        if !self.staged_rules.is_empty() {
-            return self
-                .resolve_implements_rule_uncached(concrete_ty, iface, iface_args)
-                .map(|(rule, bound_args)| (rule, BoundTypeArgs::from(bound_args)));
-        }
-
-        let key = ImplRuleKeyRef {
-            concrete: concrete_ty,
-            iface,
-            iface_args,
-            world: self.world(),
-        };
-        let epoch = self.vm.dynamic_dispatch.rule_world_epoch();
-        {
-            // The borrow ends before any resolution work: unification can
-            // re-enter this function through projection reduction.
-            let mut cache = self.vm.impl_rule_cache.borrow_mut();
-            if cache.epoch != epoch {
-                cache.entries.clear();
-                cache.epoch = epoch;
-            }
-            match cache.entries.get(&key) {
-                Some(None) => return None,
-                Some(Some(hit)) => {
-                    // The pointer is as fresh as the epoch: a collection or a
-                    // publish moves the epoch, which just emptied the memo.
-                    if let Some(rule) = self.heap_candidate(hit.rule, hit.is_static) {
-                        return Some((rule, Arc::clone(&hit.bound_args)));
-                    }
-                }
-                None => {}
-            }
-        }
-
-        let answer = self
-            .resolve_implements_rule_uncached(concrete_ty, iface, iface_args)
-            .map(|(rule, bound_args)| (rule, BoundTypeArgs::from(bound_args)));
-        let mut cache = self.vm.impl_rule_cache.borrow_mut();
-        // Only memoize an answer computed wholly within the epoch the memo is
-        // filled at; a change mid-resolution leaves this one uncached.
-        if cache.epoch == epoch {
-            if cache.entries.len() >= ImplRuleCache::CAPACITY {
-                cache.entries.clear();
-            }
-            cache.entries.insert(
-                key.to_owned(),
-                answer.as_ref().map(|(rule, bound_args)| CachedImplRule {
-                    rule: rule.ptr,
-                    is_static: rule.is_static,
-                    bound_args: Arc::clone(bound_args),
-                }),
-            );
-        }
-        answer
-    }
-
-    /// The uncached selection: the static image first (immutable, indexed by
-    /// the canonical interface pointer — the overwhelmingly common path,
-    /// with no candidate `Vec`, package walk, or table lock), then every
-    /// rule of this resolver's world in load order, staged rules last.
-    fn resolve_implements_rule_uncached(
-        self,
-        concrete_ty: &RealizedTy,
-        iface: TypeHead,
-        iface_args: &[RealizedTy],
     ) -> Option<(RuntimeImplRuleCandidate<'vm>, Vec<RealizedTy>)> {
-        for &rule_ptr in self.vm.packages.impl_rules_of(iface.ptr()) {
-            let Some(rule) = self.heap_candidate(rule_ptr, true) else {
-                continue;
-            };
-            if let Some(type_args) = self.requested_rule_args(&rule, concrete_ty, iface_args) {
-                return Some((rule, type_args));
+        // Static/package-image rules are immutable and already indexed by the
+        // canonical interface pointer. Try that slice directly: this is the
+        // overwhelmingly common virtual-call path and avoids candidate Vecs,
+        // runtime-package graph walks, and dynamic-table locking.
+        {
+            let iface_ptr = iface.ptr();
+            for &rule_ptr in self.vm.packages.impl_rules_of(iface_ptr) {
+                let Some(rule) = self.vm.get_object(rule_ptr).as_impl_rule() else {
+                    continue;
+                };
+                if let Some(type_args) = self.requested_rule_args(rule, concrete_ty, iface_args) {
+                    return Some((RuntimeImplRuleCandidate::Static(rule), type_args));
+                }
             }
         }
+
         for rule in self.rules_for(iface) {
             if let Some(type_args) = self.requested_rule_args(&rule, concrete_ty, iface_args) {
                 return Some((rule, type_args));
@@ -806,19 +559,13 @@ impl<'vm> ImplResolver<'vm> {
         iface_args: &[RealizedTy],
     ) -> Option<Vec<RealizedTy>> {
         let type_args = self.rule_applies(rule, concrete_ty, iface_args, &mut Vec::new())?;
-        // An empty request matches any instantiation: nothing to compare, so
-        // skip realizing the rule's interface args (a non-generic interface,
-        // the common case, would otherwise pay a substitution per candidate).
-        if iface_args.is_empty() {
-            return Some(type_args);
-        }
         // Select on the interface's input args only (associated types are outputs).
         let rule_args: Vec<RealizedTy> = rule
             .interface_args
             .iter()
             .map(|t| self.substitute_checked(t, &type_args))
             .collect();
-        self.ty_args_equivalent(&rule_args, iface_args)
+        (iface_args.is_empty() || self.ty_args_equivalent(&rule_args, iface_args))
             .then_some(type_args)
     }
 
@@ -1481,74 +1228,6 @@ mod tests {
                 .with_staged_rules(&overlapping)
                 .check_sole_implementation(&RealizedTy::Int, interface, &[])
                 .is_err()
-        );
-    }
-
-    // Pins the memo's invalidation rule: a negative answer is cached, and a
-    // witness registered afterwards (which moves the rule-world epoch) is
-    // found on the next lookup rather than shadowed by the stale `None`.
-    #[test]
-    fn memoized_negative_answer_is_invalidated_by_a_registration() {
-        use bex_heap::TlabHolder;
-        use bex_vm_types::{HeapPtr, Object, types::InterfaceDef};
-
-        let mut vm = crate::vm::tests::test_vm(Vec::new());
-        let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
-        let interface = vm.alloc(Object::Interface(Box::new(InterfaceDef {
-            path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("Marker")),
-            structural_default: None,
-            type_tag,
-            args: Vec::new(),
-            requires: Vec::new(),
-            assoc: Vec::new(),
-            fields: Vec::new(),
-            methods: Vec::new(),
-            owner: HeapPtr::null(),
-        })));
-        let head = TypeHead::new(interface, type_tag);
-        let resolver = ImplResolver::new(&vm);
-        assert!(
-            resolver
-                .resolve_implements_rule(&RealizedTy::Int, head, &[])
-                .is_none()
-        );
-        // The second ask is served from the memo.
-        assert!(
-            resolver
-                .resolve_implements_rule(&RealizedTy::Int, head, &[])
-                .is_none()
-        );
-        let rule = vm.alloc(Object::ImplRule(Box::new(RuntimeImplRule {
-            interface_head: interface,
-            for_ty_pattern: TyTemplate::Int,
-            generic_param_bounds: Vec::new(),
-            interface_args: Vec::new(),
-            interface_assoc: Vec::new(),
-            methods: indexmap::IndexMap::new(),
-            field_links: Box::default(),
-        })));
-        vm.dynamic_dispatch.register_rule(
-            interface,
-            crate::package_load::DynRuleEntry {
-                class: HeapPtr::null(),
-                rule,
-            },
-        );
-        let resolver = ImplResolver::new(&vm);
-        let (found, bound) = resolver
-            .resolve_implements_rule(&RealizedTy::Int, head, &[])
-            .expect("the registered witness is found");
-        assert!(!found.is_static());
-        assert!(bound.is_empty());
-        // The positive answer is memoized too: the same heap rule comes back.
-        let (again, _) = resolver
-            .resolve_implements_rule(&RealizedTy::Int, head, &[])
-            .expect("memoized");
-        assert_eq!(found.ptr, again.ptr);
-        assert!(
-            resolver
-                .resolve_implements_rule(&RealizedTy::String, head, &[])
-                .is_none()
         );
     }
 }

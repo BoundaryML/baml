@@ -5,7 +5,7 @@ use std::{
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    ForwardingMap, HeapPtr, ObjectType, ValueKind,
+    HeapPtr, ObjectType, ValueKind,
     types::{Array, AtomicValueSlot, Instance, Map, Object, Value},
 };
 
@@ -388,7 +388,7 @@ impl Continuation for ToStringWalkContinuation {
         roots
     }
 
-    fn apply_forwarding(&mut self, forwarding: &ForwardingMap) {
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         if let Some(ptr) = self.root.as_object_ptr() {
             if let Some(&new_ptr) = forwarding.get(&ptr) {
                 self.root = Value::object(new_ptr);

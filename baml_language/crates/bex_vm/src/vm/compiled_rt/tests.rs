@@ -1102,8 +1102,8 @@ fn compiled_delivery_survives_collection_before_resume() {
         vm.heap
             .collect_garbage_generational(&roots, CollectionLevel::Major)
     };
-    let moved_value = forwarding.forwarded(thrown_ptr);
-    let moved_context = forwarding.forwarded(context_ptr);
+    let moved_value = forwarding[&thrown_ptr];
+    let moved_context = forwarding[&context_ptr];
     assert_ne!(moved_value, thrown_ptr);
     assert_ne!(moved_context, context_ptr);
     vm.forward_roots(&forwarding);

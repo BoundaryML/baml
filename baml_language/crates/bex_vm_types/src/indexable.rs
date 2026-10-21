@@ -12,7 +12,7 @@
 //! This module provides a vector wrapper that needs specific types to index
 //! into it, thus solving the problem mentioned above at compile time.
 
-use std::{cell::UnsafeCell, marker::PhantomData, sync::Arc};
+use std::{cell::UnsafeCell, collections::HashMap, marker::PhantomData, sync::Arc};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 
@@ -428,7 +428,7 @@ impl RootHaver for SharedGlobals {
         }
     }
 
-    fn forward_roots(&mut self, roots: &crate::ForwardingMap) {
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         // SAFETY: GC parks every active permit before calling this; `&mut self`
         // additionally proves there is no concurrent reader of the
         // `SharedGlobals` permit-cell value on this thread.
@@ -657,7 +657,7 @@ mod shared_globals_tests {
             Value::object(stable),
         ]);
 
-        let mut forwarding = crate::ForwardingMap::default();
+        let mut forwarding = HashMap::new();
         forwarding.insert(old1, new1);
         forwarding.insert(old2, new2);
         globals.forward_roots(&forwarding);
@@ -687,7 +687,7 @@ mod shared_globals_tests {
         let original = SharedGlobals::from_vec(vec![Value::object(old)]);
         let mut held_by_holder = original.clone();
 
-        let mut forwarding = crate::ForwardingMap::default();
+        let mut forwarding = HashMap::new();
         forwarding.insert(old, new);
         held_by_holder.forward_roots(&forwarding);
 

@@ -1,4 +1,6 @@
-use bex_vm_types::{ForwardingMap, HeapPtr, RealizedTy, RootHaver, Value, types::TypeValue};
+use std::collections::HashMap;
+
+use bex_vm_types::{HeapPtr, RealizedTy, RootHaver, Value, types::TypeValue};
 
 use super::{Fiber, fiber::YielderPtr};
 use crate::errors::VmError;
@@ -74,7 +76,7 @@ impl RootHaver for CompiledState {
         }
     }
 
-    fn forward_roots(&mut self, roots: &ForwardingMap) {
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         let forward_ty = |ty: &mut RealizedTy| {
             ty.visit_heads_mut(&mut |head| {
                 if head.is_resolved()
