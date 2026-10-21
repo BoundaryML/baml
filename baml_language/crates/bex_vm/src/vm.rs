@@ -7137,6 +7137,162 @@ impl BexVm {
         })
     }
 
+    /// Enter a bytecode function or closure called through `CallIndirect` the
+    /// way `CallExactArgs` enters its callee, when the site pushed exactly the
+    /// callee's slots. Returns the entered function; the caller then switches
+    /// dispatch to it. `None` leaves everything untouched for the general
+    /// path, which handles hooked and pass-through callees, a pending trace
+    /// or type lane, layouts that need remapping, and every other callable.
+    ///
+    /// Kept out of line: inlined into `run_compact`, it made every ordinary
+    /// exact call about ten instructions slower.
+    #[inline(never)]
+    fn enter_indirect_bytecode_call(
+        &mut self,
+        callee_ptr: HeapPtr,
+        frame_idx: usize,
+        caller: &'static Function,
+    ) -> Result<Option<&'static Function>, VmError> {
+        if self.pending_call_trace.is_some()
+            || !self.pending_call_type_args.is_empty()
+            || !self.pending_call_type_values.is_empty()
+        {
+            return Ok(None);
+        }
+        // SAFETY: the active heap permit prevents collection during
+        // frame/stack growth, as at `CallExactArgs`; a closure's function
+        // lives at least as long as the closure.
+        let (callee, callee_fn_ptr, captured_type_args) = match unsafe { callee_ptr.get() } {
+            Object::Function(callee) => (callee, callee_ptr, &[][..]),
+            Object::Closure(closure) => match unsafe { closure.function.get() } {
+                Object::Function(callee) => {
+                    (callee, closure.function, &closure.captured_type_args[..])
+                }
+                _ => return Ok(None),
+            },
+            _ => return Ok(None),
+        };
+        if !matches!(callee.kind, FunctionKind::Bytecode)
+            || callee.trace_passthrough
+            || callee
+                .bytecode
+                .compact
+                .as_ref()
+                .is_none_or(|code| code.trace_hook_finish_pc.is_some())
+            || Self::recorded_call_layout(caller, self.cur_pc)
+                .is_some_and(|layout| !callee.argument_layout_is(layout))
+        {
+            return Ok(None);
+        }
+
+        let _popped_callee = self.stack.ensure_pop();
+        // Eager ok_or constructs/drops VmInternalError even on success.
+        #[expect(clippy::unnecessary_lazy_evaluations)]
+        let locals_offset = StackIndex::from_raw(
+            self.stack
+                .len()
+                .checked_sub(callee.arity)
+                .ok_or_else(|| VmInternalError::NotEnoughItemsOnStack(callee.arity))?,
+        );
+        let Frame::Bytecode(caller_frame) = &mut self.frames[frame_idx] else {
+            verifier_unreachable!()
+        };
+        caller_frame.faulting_pc = self.cur_pc;
+        if self.frames.len() >= MAX_FRAMES {
+            return Err(VmError::thrown_fresh(
+                self.panic_to_exception_value(VmPanic::StackOverflow),
+            ));
+        }
+        let context = self.current_context().clone();
+        if let Some(telemetry) = &mut self.telemetry {
+            telemetry.set_context(context.clone());
+        }
+        let frame_telemetry = if self.telemetry.is_some() {
+            self.enter_indirect_bytecode_telemetry(
+                frame_idx,
+                callee,
+                callee_fn_ptr,
+                locals_offset,
+                captured_type_args,
+            )
+        } else {
+            None
+        };
+        // Written in place, as in the general path.
+        self.frames.extend(std::iter::once_with(|| {
+            Frame::Bytecode(BytecodeFrame {
+                function: callee_ptr,
+                instruction_ptr: 0,
+                locals_offset,
+                // A closure made in a generic context reads the type
+                // arguments it captured.
+                type_args: captured_type_args.to_vec(),
+                type_metadata: None,
+                faulting_pc: 0,
+                telemetry: frame_telemetry,
+                context,
+            })
+        }));
+        if callee.real_local_count != 0 {
+            let new_len = self.stack.len() + callee.real_local_count;
+            self.stack.resize(new_len, Value::NULL);
+        }
+        Ok(Some(callee))
+    }
+
+    /// Telemetry entry for a bytecode callee `CallIndirect` enters directly:
+    /// what `execute_call_from_locals_offset` records for an untraced call
+    /// that passes no type arguments.
+    #[inline(never)]
+    fn enter_indirect_bytecode_telemetry(
+        &mut self,
+        frame_idx: usize,
+        callee: &Function,
+        callee_fn_ptr: HeapPtr,
+        locals_offset: StackIndex,
+        carried: &[bex_vm_types::RealizedTy],
+    ) -> Option<FrameTelemetry> {
+        let caller_frame_idx = self.bytecode_caller_index(frame_idx);
+        let actual_caller = self
+            .visible_bytecode_caller_index(frame_idx)
+            .and_then(|index| self.frame_function_identity(index));
+        let caller_is_observed = matches!(
+            self.frames.get(caller_frame_idx),
+            Some(Frame::Bytecode(BytecodeFrame {
+                telemetry: Some(_),
+                ..
+            }))
+        );
+        let caller_pc = if caller_frame_idx == frame_idx {
+            self.cur_pc
+        } else {
+            let Frame::Bytecode(caller) = &self.frames[caller_frame_idx] else {
+                unreachable!("native continuation retains its bytecode caller");
+            };
+            caller.faulting_pc
+        };
+        let caller_pc = u32::try_from(caller_pc).unwrap_or(u32::MAX);
+        let args =
+            &self.stack.0[locals_offset.raw()..locals_offset.raw().saturating_add(callee.arity)];
+        // SAFETY: arguments and callable remain live under the heap permit.
+        self.telemetry.as_mut().and_then(|telemetry| unsafe {
+            telemetry.enter_bytecode_with_trace(
+                callee,
+                callee_fn_ptr,
+                actual_caller,
+                caller_pc,
+                caller_is_observed,
+                args,
+                None,
+                CallTypeArgs {
+                    carried,
+                    passed: &[],
+                },
+                |caller, callee| Self::register_call_path_functions(&self.heap, caller, callee),
+            )
+        })
+    }
+
     fn execute_call_from_locals_offset(
         &mut self,
         callee_ptr: HeapPtr,
@@ -9979,6 +10135,22 @@ impl BexVm {
                         let callee_value = self.stack[callee_slot];
                         let callee_ptr =
                             self.as_object_ptr(callee_value, FunctionType::Callable.into())?;
+                        // Bytecode functions and closures stay in compact
+                        // dispatch, as at `CallExactArgs`.
+                        if let Some(callee) =
+                            self.enter_indirect_bytecode_call(callee_ptr, *frame_idx, function)?
+                        {
+                            *frame_idx = self.frames.len() - 1;
+                            *function = callee;
+                            runtime_package = self.runtime_package_of(function);
+                            if self.should_early_yield() {
+                                return Ok(Some(VmExecState::EarlyYield));
+                            }
+                            *pc = 0;
+                            *code = &callee.bytecode.compact.as_ref().unwrap().code;
+                            *dispatch_frame_idx = *frame_idx;
+                            continue;
+                        }
                         let obj = self.get_object(callee_ptr);
 
                         if let Object::HostClosure(host_closure) = obj {
