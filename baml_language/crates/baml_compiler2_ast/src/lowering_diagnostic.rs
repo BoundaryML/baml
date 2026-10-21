@@ -104,8 +104,13 @@ pub enum LoweringDiagnostic {
         span: TextRange,
     },
 
-    /// A byte string literal contains an invalid escape sequence.
-    InvalidByteStringEscape { message: String, span: TextRange },
+    /// A `"..."`, backtick, or `b"..."` literal contains an unknown or
+    /// malformed escape sequence, or a byte string contains a non-ASCII
+    /// character.
+    InvalidStringEscape {
+        issue: baml_base::escape::EscapeIssue,
+        span: TextRange,
+    },
 
     /// The `instanceof` operator was used; it has been removed. Use `match` instead.
     InstanceofRemoved { span: TextRange },
@@ -444,12 +449,12 @@ impl LoweringDiagnostic {
                 *span,
                 "missing options",
             ),
-            LoweringDiagnostic::InvalidByteStringEscape { message, span } => (
-                DiagnosticId::InvalidByteStringEscape,
+            LoweringDiagnostic::InvalidStringEscape { issue, span } => (
+                DiagnosticId::InvalidStringEscape,
                 Severity::Error,
-                format!("invalid byte string literal: {message}"),
+                issue.to_string(),
                 *span,
-                "invalid escape",
+                issue.kind.label(),
             ),
             LoweringDiagnostic::InstanceofRemoved { span } => (
                 DiagnosticId::RemovedFeature,

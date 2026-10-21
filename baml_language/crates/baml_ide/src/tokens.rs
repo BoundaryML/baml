@@ -392,14 +392,20 @@ fn escape_len(s: &str) -> usize {
         // `\xNN` — backslash, `x`, then at most two hex digits (fewer when
         // the next char isn't one).
         'x' => 2 + hex_digit_run(&rest[1..], 2),
-        // `\u{...}` — hex digits through the closing brace, which must
-        // directly follow the digits to count as part of the escape.
+        // `\u{...}` — hex digits (and `_` separators) through the closing
+        // brace, which must directly follow the digits to count as part of
+        // the escape.
         'u' if rest[1..].starts_with('{') => {
-            let digits = hex_digit_run(&rest[2..], usize::MAX);
+            let digits = rest[2..]
+                .bytes()
+                .take_while(|b| b.is_ascii_hexdigit() || *b == b'_')
+                .count();
             let terminated = rest[2 + digits..].starts_with('}');
             3 + digits + usize::from(terminated)
         }
-        // `\n`, `\t`, `\r`, `\0`, `\\`, `\"`, `\'`, `\u` (no brace), ... —
+        // `\uHHHH` — backslash, `u`, then at most four hex digits.
+        'u' => 2 + hex_digit_run(&rest[1..], 4),
+        // `\n`, `\t`, `\r`, `\0`, `\\`, `\"`, `\'`, ... —
         // the backslash plus one escaped char of whatever UTF-8 length.
         c => 1 + c.len_utf8(),
     }
@@ -563,7 +569,9 @@ impl Walk<'_> {
                 string_with_escapes(node, out);
             }
             // Raw / unquoted strings do not process escapes.
-            SyntaxKind::RAW_STRING_LITERAL | SyntaxKind::UNQUOTED_STRING => {
+            SyntaxKind::DEPRECATED_HASH_STRING_LITERAL
+            | SyntaxKind::RAW_STRING_LITERAL
+            | SyntaxKind::UNQUOTED_STRING => {
                 emit_node(node, SemanticTokenType::String, out);
             }
             SyntaxKind::BACKTICK_STRING_LITERAL => self.backtick_string(node, out),
@@ -1098,6 +1106,14 @@ mod tests {
         assert_eq!(escape_len(r"\u{1F600"), r"\u{1F600".len());
         // A terminated escape still includes its closing brace, and no more.
         assert_eq!(escape_len(r"\u{1F600} x"), r"\u{1F600}".len());
+    }
+
+    #[test]
+    fn unicode_escapes_span_their_digits() {
+        assert_eq!(escape_len(r"\u00E9 x"), r"\u00E9".len());
+        assert_eq!(escape_len(r"\u00E9F"), r"\u00E9".len());
+        assert_eq!(escape_len(r"\u12 x"), r"\u12".len());
+        assert_eq!(escape_len(r"\u{1F_600} x"), r"\u{1F_600}".len());
     }
 
     #[test]

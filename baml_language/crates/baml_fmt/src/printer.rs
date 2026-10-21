@@ -36,7 +36,7 @@ impl<'a> Printer<'a> {
 
     /// Prints the token byte-for-byte from the input string.
     ///
-    /// For tokens like [`crate::ast::RawString`] that implement [`Printable`], you generally should [`Self::print`].
+    /// For tokens like [`crate::ast::HashString`] that implement [`Printable`], you generally should [`Self::print`].
     pub fn print_raw_token(&mut self, token: &impl Token) {
         let text = &self.input[token.span()];
         self.output.push_str(text);

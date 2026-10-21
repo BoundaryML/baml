@@ -244,67 +244,21 @@ const numericLiteral: Rule = {
   patterns: [bigintLiteral, floatLiteral, integerLiteral],
 };
 
+// Escape sequences, matching `baml_base::escape`. Every literal kind (quoted,
+// backtick, byte) shares one escape set so JSON string bodies paste as-is:
+// `\n \t \r \b \f \0`, `\\ \" \' \/`, `` \` `` and `\$`. Strings add ASCII
+// `\xHH` and `\uHHHH` / `\u{H...}`; byte strings take any `\xHH` and reject
+// `\u`. Anything else is a compile error, so it is scoped invalid.
 const standardControlEscape: Rule = {
   key: 'string-escape-control',
   scope: 'constant.character.escape.control.baml',
-  match: String.raw`\\[ntr0bvf]`,
+  match: String.raw`\\[ntr0bf]`,
 };
 
 const quotedDelimiterEscape: Rule = {
   key: 'string-escape-quoted-delimiter',
   scope: 'constant.character.escape.delimiter.baml',
-  match: String.raw`\\["\\]`,
-};
-
-const unknownStringEscape: Rule = {
-  key: 'string-escape-unknown',
-  scope: 'constant.character.escape.unknown.baml',
-  match: String.raw`\\.`,
-};
-
-// Quoted strings decode the standard control escapes plus `\\` and `\"`.
-// Unknown escapes are preserved by the lowerer, so scope them distinctly rather
-// than marking them invalid.
-const stringEscape: Rule = {
-  key: 'string-escape',
-  patterns: [standardControlEscape, quotedDelimiterEscape, unknownStringEscape],
-};
-
-const byteStringControlEscape: Rule = {
-  key: 'byte-string-escape-control',
-  scope: 'constant.character.escape.control.baml',
-  match: String.raw`\\[ntr0]`,
-};
-
-const byteStringHexEscape: Rule = {
-  key: 'byte-string-escape-hex',
-  scope: 'constant.character.escape.hex.baml',
-  match: String.raw`\\x[0-9A-Fa-f]{2}`,
-};
-
-const byteStringInvalidHexEscape: Rule = {
-  key: 'byte-string-escape-invalid-hex',
-  scope: 'invalid.illegal.escape.hex.baml',
-  match: String.raw`\\x(?:[0-9A-Fa-f]{0,1}(?=["\\]|$)|[0-9A-Fa-f]?[^0-9A-Fa-f"\\])`,
-};
-
-const byteStringInvalidEscape: Rule = {
-  key: 'byte-string-escape-invalid',
-  scope: 'invalid.illegal.escape.baml',
-  match: String.raw`\\.`,
-};
-
-// Byte strings decode `\n`, `\t`, `\r`, `\0`, `\\`, `\"`, and `\xHH`.
-// Everything else is a lowering error.
-const byteStringEscape: Rule = {
-  key: 'byte-string-escape',
-  patterns: [
-    byteStringHexEscape,
-    byteStringControlEscape,
-    quotedDelimiterEscape,
-    byteStringInvalidHexEscape,
-    byteStringInvalidEscape,
-  ],
+  match: String.raw`\\["\\'/]`,
 };
 
 const backtickDelimiterEscape: Rule = {
@@ -314,15 +268,69 @@ const backtickDelimiterEscape: Rule = {
   match: String.raw`\\[` + '`' + String.raw`$]`,
 };
 
-// Backtick strings share normal string escapes and add \` plus \$ for literal
-// backticks and literal interpolation starts.
-const backtickStringEscape: Rule = {
-  key: 'backtick-string-escape',
+// `\x00`-`\x7F`: strings only allow ASCII code points.
+const stringHexEscape: Rule = {
+  key: 'string-escape-hex',
+  scope: 'constant.character.escape.hex.baml',
+  match: String.raw`\\x[0-7][0-9A-Fa-f]`,
+};
+
+// `\uHHHH` or `\u{H...}` with `_` allowed only between hex digits.
+const stringUnicodeEscape: Rule = {
+  key: 'string-escape-unicode',
+  scope: 'constant.character.escape.unicode.baml',
+  match: String.raw`\\u(?:[0-9A-Fa-f]{4}|\{[0-9A-Fa-f](?:_?[0-9A-Fa-f])*\})`,
+};
+
+// Unknown escapes (`\d`, `\v`, `\U...`, octal, `\x80`, ...) and a backslash at
+// the end of a line (BAML has no line continuations) are compile errors.
+const invalidStringEscape: Rule = {
+  key: 'string-escape-invalid',
+  scope: 'invalid.illegal.escape.baml',
+  match: String.raw`\\(?:x[0-9A-Fa-f]{0,2}|u(?:\{[^}"\\]*\}?|[0-9A-Fa-f]{0,3})|.|$)`,
+};
+
+const stringEscape: Rule = {
+  key: 'string-escape',
   patterns: [
     standardControlEscape,
     quotedDelimiterEscape,
     backtickDelimiterEscape,
-    unknownStringEscape,
+    stringHexEscape,
+    stringUnicodeEscape,
+    invalidStringEscape,
+  ],
+};
+
+const byteStringHexEscape: Rule = {
+  key: 'byte-string-escape-hex',
+  scope: 'constant.character.escape.hex.baml',
+  match: String.raw`\\x[0-9A-Fa-f]{2}`,
+};
+
+// A code point isn't a byte: `\u` escapes are errors in byte strings.
+const byteStringInvalidEscape: Rule = {
+  key: 'byte-string-escape-invalid',
+  scope: 'invalid.illegal.escape.baml',
+  match: String.raw`\\(?:x[0-9A-Fa-f]?|u(?:\{[^}"\\]*\}?|[0-9A-Fa-f]{0,4})|.|$)`,
+};
+
+// Non-ASCII text is an error in byte strings; spell the bytes with `\xHH`.
+const byteStringNonAscii: Rule = {
+  key: 'byte-string-non-ascii',
+  scope: 'invalid.illegal.character.baml',
+  match: String.raw`[^\x00-\x7F]+`,
+};
+
+const byteStringEscape: Rule = {
+  key: 'byte-string-escape',
+  patterns: [
+    byteStringHexEscape,
+    standardControlEscape,
+    quotedDelimiterEscape,
+    backtickDelimiterEscape,
+    byteStringInvalidEscape,
+    byteStringNonAscii,
   ],
 };
 
@@ -355,6 +363,22 @@ const byteStringLiteral: Rule = {
   end: String.raw`"`,
   endCaptures: caps0('punctuation.definition.string.end.baml'),
   patterns: [byteStringEscape],
+};
+
+// Raw string literal: `r"..."`. The body is verbatim, but a backslash still
+// keeps the next character (including `"`) from closing the literal, as in
+// Python. Like byte strings, the prefix must touch the quote.
+const rawQuotedStringLiteral: Rule = {
+  key: 'raw-quoted-string-literal',
+  scope: 'string.quoted.raw.double.baml',
+  begin: String.raw`\b(r)(")`,
+  beginCaptures: {
+    '1': { scope: 'storage.type.string.baml' },
+    '2': { scope: 'punctuation.definition.string.begin.baml' },
+  },
+  end: String.raw`"`,
+  endCaptures: caps0('punctuation.definition.string.end.baml'),
+  patterns: [{ key: 'raw-quoted-string-escaped-char', match: String.raw`\\.` }],
 };
 
 // Raw and backtick strings use a balanced run of delimiters (`##"..."##`,
@@ -401,7 +425,7 @@ function backtickStringRules(max: number): Rule[] {
     endCaptures: {
       '1': { scope: 'punctuation.definition.string.end.baml' },
     },
-    patterns: [backtickInterpolation, backtickStringEscape],
+    patterns: [backtickInterpolation, stringEscape],
   }));
 }
 
@@ -410,7 +434,8 @@ const backtickStringLiteral: Rule = {
   patterns: backtickStringRules(MAX_DELIMITER),
 };
 
-// Type literals are also valid value literals; byte strings are value-only.
+// Type literals are also valid value literals; byte and raw strings are
+// value-only.
 const typeLiteral: Rule = {
   key: 'type-literal',
   patterns: [
@@ -425,7 +450,7 @@ const typeLiteral: Rule = {
 
 const literal: Rule = {
   key: 'literal',
-  patterns: [byteStringLiteral, typeLiteral],
+  patterns: [byteStringLiteral, rawQuotedStringLiteral, typeLiteral],
 };
 
 const expression: IncludeRule = {

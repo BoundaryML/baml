@@ -33,6 +33,7 @@
 [
   (string)
   (byte_string)
+  (raw_quoted_string)
 ] @string
 
 (raw_string) @string
