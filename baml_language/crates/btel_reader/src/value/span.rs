@@ -204,6 +204,7 @@ pub(super) fn reach(
                     }
                     DecodedObject::Uint8Array { .. }
                     | DecodedObject::List { .. }
+                    | DecodedObject::Tuple { .. }
                     | DecodedObject::Map { .. }
                     | DecodedObject::Instance { .. }
                     | DecodedObject::Declaration { .. }
@@ -302,7 +303,7 @@ impl Span {
         }
         while let Some((blob, id)) = pending.pop() {
             match blob.object(id) {
-                DecodedObject::List { items, .. } => {
+                DecodedObject::List { items, .. } | DecodedObject::Tuple { items, .. } => {
                     for item in items {
                         span.visit(source, &blob, item, &mut pending);
                     }

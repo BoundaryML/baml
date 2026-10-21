@@ -350,6 +350,15 @@ impl UnionMemberParts {
         (member.kind() == SyntaxKind::WORD).then(|| (base, interface, member.clone()))
     }
 
+    /// Element types of a tuple-type member, e.g. `(int, string)` in
+    /// `A | (int, string)`.
+    pub fn tuple_type_elements(&self) -> Option<Vec<TypeExpr>> {
+        self.child_nodes
+            .iter()
+            .find(|n| n.kind() == SyntaxKind::TUPLE_TYPE)
+            .map(tuple_type_node_elements)
+    }
+
     /// Get the `TYPE_ARGS` child node if present (for generic types like map<K,V>).
     pub fn type_args(&self) -> Option<SyntaxNode> {
         self.child_nodes
@@ -390,6 +399,14 @@ impl UnionMemberParts {
     pub fn float_literal(&self) -> Option<(bool, SyntaxToken)> {
         scan_signed_literal_token(self.tokens.iter().cloned(), SyntaxKind::FLOAT_LITERAL)
     }
+}
+
+/// The element `TYPE_EXPR`s of a `TUPLE_TYPE` node.
+fn tuple_type_node_elements(node: &SyntaxNode) -> Vec<TypeExpr> {
+    node.children()
+        .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+        .map(|syntax| TypeExpr { syntax })
+        .collect()
 }
 
 impl Default for UnionMemberParts {
@@ -484,6 +501,16 @@ impl TypeExpr {
                 .filter(|t| !t.kind().is_trivia())
                 .map(|t| t.kind()),
         )
+    }
+
+    /// Element types if this type's base is a tuple type `(A, B)` / `(A,)`.
+    /// Postfix modifiers (`(A, B)[]`) sit beside the `TUPLE_TYPE` node and are
+    /// read by [`Self::postfix_modifiers`] as for any other base.
+    pub fn tuple_type_elements(&self) -> Option<Vec<TypeExpr>> {
+        self.syntax
+            .children()
+            .find(|n| n.kind() == SyntaxKind::TUPLE_TYPE)
+            .map(|n| tuple_type_node_elements(&n))
     }
 
     /// Check if this type is wrapped in parentheses (e.g., `(int | string)`).
@@ -2610,6 +2637,7 @@ impl BlockExpr {
                         | SyntaxKind::OPTIONAL_CALL_EXPR
                         | SyntaxKind::PAREN_EXPR
                         | SyntaxKind::ARRAY_LITERAL
+                        | SyntaxKind::TUPLE_EXPR
                         | SyntaxKind::OBJECT_LITERAL
                         | SyntaxKind::MAP_LITERAL
                         | SyntaxKind::STRING_LITERAL

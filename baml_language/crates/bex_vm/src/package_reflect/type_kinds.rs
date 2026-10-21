@@ -21,8 +21,9 @@ use super::{
     BamlClassReflectTypeView_for_Enum, BamlClassReflectTypeView_for_Function,
     BamlClassReflectTypeView_for_Interface, BamlClassReflectTypeView_for_Literal,
     BamlClassReflectTypeView_for_Map, BamlClassReflectTypeView_for_Primitive,
-    BamlClassReflectTypeView_for_Union, BamlClassUnion, BamlNamespaceClass, BamlNamespaceInterface,
-    BamlNamespaceReflect, PackageReflectImpl, copy,
+    BamlClassReflectTypeView_for_Tuple, BamlClassReflectTypeView_for_Union, BamlClassTuple,
+    BamlClassUnion, BamlNamespaceClass, BamlNamespaceInterface, BamlNamespaceReflect,
+    PackageReflectImpl, copy,
 };
 use crate::{BexVm, package_load::StdlibClass};
 
@@ -2121,6 +2122,22 @@ impl BamlClassArray for PackageReflectImpl {
     }
 }
 
+impl BamlClassTuple for PackageReflectImpl {
+    fn element_types(
+        vm: &mut BexVm,
+        r#type: &Value,
+    ) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
+        let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Tuple)?;
+        let bex_vm_types::RealizedTy::Tuple(elements) = ty else {
+            unreachable!("a Tuple-classified type is RealizedTy::Tuple")
+        };
+        Ok(elements
+            .into_iter()
+            .map(|ty| Value::object(vm.alloc_type(bex_vm_types::types::TypeValue::new(ty))))
+            .collect())
+    }
+}
+
 impl BamlClassFunction for PackageReflectImpl {
     fn params(vm: &mut BexVm, r#type: &Value) -> Result<Vec<Value>, crate::errors::VmRustFnError> {
         let ty = reflected_ty(vm, *r#type, baml_type::type_kind::TypeKind::Function)?;
@@ -2163,6 +2180,10 @@ impl BamlClassFunction for PackageReflectImpl {
 
 impl BamlClassReflectTypeView_for_Array for PackageReflectImpl {
     impl_as_type!(Array);
+}
+
+impl BamlClassReflectTypeView_for_Tuple for PackageReflectImpl {
+    impl_as_type!(Tuple);
 }
 
 impl BamlClassReflectTypeView_for_Class for PackageReflectImpl {

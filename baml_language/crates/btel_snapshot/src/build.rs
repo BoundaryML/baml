@@ -297,6 +297,18 @@ impl Builder {
             original_len,
         }
     }
+    /// A tuple of what `convert` makes of each element of `source`.
+    pub fn tuple<T>(
+        &mut self,
+        source: impl ExactSizeIterator<Item = T>,
+        convert: impl FnMut(&mut Leaves<'_>, T) -> SnapshotValue,
+    ) -> SnapshotObject {
+        let original_len = source.len();
+        SnapshotObject::Tuple {
+            items: self.values(source, convert),
+            original_len,
+        }
+    }
     /// A map of the keys and values `convert` makes of each item of `source`.
     pub fn map<T>(
         &mut self,

@@ -209,7 +209,7 @@ pub fn walk_rvalue_type_slots(rvalue: &Rvalue<'_>, f: &mut impl FnMut(u32)) {
                     template.for_each_type_arg_ref(f);
                 }
             }
-            AggregateKind::Array => {}
+            AggregateKind::Array | AggregateKind::Tuple => {}
         },
         Rvalue::IsType { test, .. } => test.for_each_type_arg_ref(f),
         Rvalue::SatisfiesBound { bound, .. } => bound.for_each_type_arg_ref(f),

@@ -485,6 +485,12 @@ fn collect<N: Head>(
             collect(fr, ar, variance, vars, opts, ctx);
             collect(fth, ath, variance, vars, opts, ctx);
         }
+        // Tuples are covariant elementwise: descend at the ambient variance.
+        (Ty::Tuple(f_elems), Ty::Tuple(a_elems)) if f_elems.len() == a_elems.len() => {
+            for (ft, at) in f_elems.iter().zip(a_elems.iter()) {
+                collect(ft, at, variance, vars, opts, ctx);
+            }
+        }
         (Ty::Class(fn_name, f_args), Ty::Class(an_name, a_args)) if fn_name == an_name => {
             let inv = variance.compose(Variance::Invariant);
             for (ft, at) in f_args.iter().zip(a_args.iter()) {
@@ -565,6 +571,7 @@ fn heads_correspond<N: Head>(formal: &Ty<N>, actual: &Ty<N>) -> bool {
         | (Ty::Map { .. }, Ty::Map { .. })
         | (Ty::Function { .. }, Ty::Function { .. })
         | (Ty::Future(..), Ty::Future(..)) => true,
+        (Ty::Tuple(f), Ty::Tuple(a)) => f.len() == a.len(),
         _ => false,
     }
 }
@@ -754,6 +761,12 @@ pub fn erase_typevars_matching<N: Head>(
             members
                 .iter()
                 .map(|member| erase_typevars_matching(member, should_erase))
+                .collect(),
+        ),
+        Ty::Tuple(elements) => Ty::Tuple(
+            elements
+                .iter()
+                .map(|element| erase_typevars_matching(element, should_erase))
                 .collect(),
         ),
         Ty::Future(value, error) => Ty::Future(

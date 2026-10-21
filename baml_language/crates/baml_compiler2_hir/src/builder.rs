@@ -724,7 +724,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                     self.walk_expr(spread.expr, body, source_map, true);
                 }
             }
-            ast::Expr::Array { elements } => {
+            ast::Expr::Array { elements } | ast::Expr::Tuple { elements } => {
                 for &element in elements {
                     self.walk_expr(element, body, source_map, true);
                 }
@@ -736,6 +736,7 @@ impl<'db> SemanticIndexBuilder<'db> {
                 }
             }
             ast::Expr::MemberAccess { base, .. }
+            | ast::Expr::TupleIndex { base, .. }
             | ast::Expr::OptionalMemberAccess { base, .. }
             | ast::Expr::Upcast { base, .. } => {
                 self.walk_expr(*base, body, source_map, true);
@@ -960,6 +961,14 @@ impl<'db> SemanticIndexBuilder<'db> {
                     Self::merge_with_dup_check(&mut result, inner, diagnostics);
                 }
                 for id in suffix {
+                    let inner = Self::collect_pattern_names(patterns, *id, source_map, diagnostics);
+                    Self::merge_with_dup_check(&mut result, inner, diagnostics);
+                }
+                result
+            }
+            ast::Pattern::Tuple(elements) => {
+                let mut result = PatternNames::default();
+                for id in elements {
                     let inner = Self::collect_pattern_names(patterns, *id, source_map, diagnostics);
                     Self::merge_with_dup_check(&mut result, inner, diagnostics);
                 }
@@ -1906,9 +1915,10 @@ impl<'db> SemanticIndexBuilder<'db> {
             ast::TypeExprKind::Map { key, value, .. } => {
                 Self::type_expr_contains_rust(key) || Self::type_expr_contains_rust(value)
             }
-            ast::TypeExprKind::Union { variants, .. } => {
-                variants.iter().any(Self::type_expr_contains_rust)
-            }
+            ast::TypeExprKind::Union { variants, .. }
+            | ast::TypeExprKind::Tuple {
+                elements: variants, ..
+            } => variants.iter().any(Self::type_expr_contains_rust),
             ast::TypeExprKind::Function {
                 params,
                 ret,
@@ -1941,7 +1951,21 @@ impl<'db> SemanticIndexBuilder<'db> {
                         .iter()
                         .any(|binding| Self::type_expr_contains_rust(&binding.ty))
             }
-            _ => false,
+            ast::TypeExprKind::Int
+            | ast::TypeExprKind::Bigint
+            | ast::TypeExprKind::Float
+            | ast::TypeExprKind::String
+            | ast::TypeExprKind::Bool
+            | ast::TypeExprKind::Null
+            | ast::TypeExprKind::Never
+            | ast::TypeExprKind::Uint8Array
+            | ast::TypeExprKind::Media { .. }
+            | ast::TypeExprKind::Literal { .. }
+            | ast::TypeExprKind::Unknown
+            | ast::TypeExprKind::Type
+            | ast::TypeExprKind::Error
+            | ast::TypeExprKind::Missing
+            | ast::TypeExprKind::Infer => false,
         }
     }
 
@@ -2058,6 +2082,17 @@ impl<'db> SemanticIndexBuilder<'db> {
                 .map(Self::render_type_expr)
                 .collect::<Vec<_>>()
                 .join(" | "),
+            ast::TypeExprKind::Tuple { elements } => {
+                let trailing = if elements.len() == 1 { "," } else { "" };
+                format!(
+                    "({}{trailing})",
+                    elements
+                        .iter()
+                        .map(Self::render_type_expr)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
             ast::TypeExprKind::Literal { value, .. } => value.to_string(),
             ast::TypeExprKind::Function {
                 params,

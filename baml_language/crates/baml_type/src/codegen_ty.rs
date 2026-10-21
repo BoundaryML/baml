@@ -42,6 +42,9 @@ impl CodegenTy {
                 value: Box::new(value.canonicalize()),
             },
             Self::Union(members) => canonical_union(members),
+            Self::Tuple(elements) => {
+                Self::Tuple(elements.into_iter().map(Self::canonicalize).collect())
+            }
             Self::Function {
                 params,
                 ret,

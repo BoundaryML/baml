@@ -163,6 +163,12 @@ pub enum SnapshotObject {
         items: Range<SnapshotValue>,
         original_len: usize,
     },
+    /// A tuple: its elements in position order. It carries no type of its
+    /// own; its type is its elements' types.
+    Tuple {
+        items: Range<SnapshotValue>,
+        original_len: usize,
+    },
     Map {
         key_type: TypeId,
         value_type: TypeId,
@@ -206,6 +212,10 @@ impl SnapshotObject {
                 items,
                 original_len,
                 ..
+            }
+            | Self::Tuple {
+                items,
+                original_len,
             } => items.len() != *original_len,
             Self::Map {
                 entries,

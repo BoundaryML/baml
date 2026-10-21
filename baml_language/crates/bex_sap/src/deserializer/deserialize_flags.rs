@@ -23,6 +23,9 @@ where
     ObjectToPrimitive(Cow<'v, crate::jsonish::Value<'s>>),
     ObjectToMap(Cow<'v, crate::jsonish::Value<'s>>),
     ExtraKey(Cow<'s, str>, Cow<'v, crate::jsonish::Value<'s>>),
+    /// A complete array had more items than the tuple's arity; the item at this index (and
+    /// its value) was dropped. Scored like [`Flag::ExtraKey`].
+    TupleExtraItem(usize, Cow<'v, crate::jsonish::Value<'s>>),
     StrippedNonAlphaNumeric(Cow<'s, str>),
     SubstringMatch(Cow<'s, str>),
     SingleToArray,
@@ -180,6 +183,12 @@ impl<N: TypeIdent> std::fmt::Display for Flag<'_, '_, '_, N> {
             }
             Flag::SingleToArray => {
                 write!(f, "Converted a single value to an array")?;
+            }
+            Flag::TupleExtraItem(idx, value) => {
+                write!(f, "Extra tuple item: {idx}")?;
+                writeln!(f, "----RAW----")?;
+                writeln!(f, "{value:#?}")?;
+                writeln!(f, "-----------")?;
             }
             Flag::ExtraKey(key, value) => {
                 write!(f, "Extra key: {key}")?;

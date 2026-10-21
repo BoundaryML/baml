@@ -167,6 +167,7 @@ fn is_abstract_head(head: &InferTy) -> bool {
         | InferTy::Class(..)
         | InferTy::Enum(..)
         | InferTy::List(..)
+        | InferTy::Tuple(..)
         | InferTy::Map { .. }
         | InferTy::Function { .. }
         | InferTy::Future(..)

@@ -54,6 +54,7 @@ pub(super) fn json(ty: &OwnedType) -> Json {
         }
         RealizedTy::TypeAlias(head) => Json::Object(named("alias", head)),
         RealizedTy::List(item) => node("list", [("item", json(item))]),
+        RealizedTy::Tuple(elements) => node("tuple", [("elements", list(elements))]),
         RealizedTy::Map { key, value } => node("map", [("key", json(key)), ("value", json(value))]),
         RealizedTy::Union(members) => {
             if !ty.is_nullable_union() {

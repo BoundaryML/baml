@@ -703,6 +703,7 @@ fn convert_tir_leaf(
             value: Box::new(convert(v)),
         },
         TirTy::Union(members) => cg::Ty::Union(members.iter().map(convert).collect()),
+        TirTy::Tuple(elements) => cg::Ty::Tuple(elements.iter().map(convert).collect()),
         TirTy::Function {
             params,
             ret,

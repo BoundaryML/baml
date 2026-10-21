@@ -1436,7 +1436,7 @@ fn undeclared_alias_issue(
         Ty::List(item) => undeclared_alias_issue(pool, item, complete_types),
         Ty::Map { key, value, .. } => undeclared_alias_issue(pool, key, complete_types)
             .or_else(|| undeclared_alias_issue(pool, value, complete_types)),
-        Ty::Union(items) => items
+        Ty::Union(items) | Ty::Tuple(items) => items
             .iter()
             .find_map(|item| undeclared_alias_issue(pool, item, complete_types)),
         Ty::Function {
@@ -1484,6 +1484,9 @@ fn incomplete_stored_type_issue(
         Ty::Union(items) => items
             .iter()
             .filter(|item| !matches!(item, Ty::Null))
+            .find_map(|item| incomplete_stored_type_issue(pool, item, complete_types)),
+        Ty::Tuple(items) => items
+            .iter()
             .find_map(|item| incomplete_stored_type_issue(pool, item, complete_types)),
         _ => None,
     }
@@ -1717,6 +1720,14 @@ fn translate_ty(
             } else {
                 inner
             }
+        }
+        // Tuple types are not yet supported by the C++ generator
+        // (`std::tuple<...>` plus a codec specialization is future work);
+        // the enclosing symbol is skipped and reported.
+        Ty::Tuple(_) => {
+            return Translated::Unsupported(format!(
+                "tuple type {ty} (tuple types are not yet supported by the C++ generator)"
+            ));
         }
         other => return Translated::Unsupported(format!("type {other}")),
     };

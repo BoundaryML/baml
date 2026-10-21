@@ -176,6 +176,7 @@ fn collect_to_json_overrides(
     // Snapshot children (owned), dropping the heap borrow before recursing.
     let children: Vec<Value> = match vm.get_object(ptr) {
         Object::Array(values) => values.to_vec(),
+        Object::Tuple(elements) => elements.to_vec(),
         Object::Map(map) => map
             .snapshot_entries()
             .into_iter()
@@ -288,6 +289,8 @@ fn render_to_serde(
         Object::String(s) => Snap::Leaf(serde_json::Value::String(s.to_string())),
         Object::Bigint(b) => Snap::Leaf(bigint_to_serde(b)),
         Object::Array(values) => Snap::Seq(values.to_vec()),
+        // A tuple is a JSON array, in element order.
+        Object::Tuple(elements) => Snap::Seq(elements.to_vec()),
         Object::Map(map) => match string_map_entries(vm, map) {
             Ok(entries) => Snap::Entries(
                 entries
@@ -704,7 +707,12 @@ fn value_to_serde_at(
         ValueKind::Int(i) => serde_json::Value::Number(i.into()),
         ValueKind::OmittedArg => serde_json::Value::Null,
         ValueKind::Object(ptr) => {
-            let is_container = matches!(vm.get_object(ptr), Object::Array(_) | Object::Map(_));
+            // A tuple is immutable but can still reach itself through a
+            // mutable element (a list inside it), so it is tracked too.
+            let is_container = matches!(
+                vm.get_object(ptr),
+                Object::Array(_) | Object::Map(_) | Object::Tuple(_)
+            );
             if is_container {
                 if active.contains(&ptr) {
                     return Err(ValueToSerdeError {
@@ -739,6 +747,16 @@ fn object_to_serde_at(
             let arr = arr.to_vec();
             let mut out = Vec::with_capacity(arr.len());
             for (i, el) in arr.into_iter().enumerate() {
+                out.push(with_path_segment(path, format_args!("[{i}]"), |p| {
+                    value_to_serde_at(vm, el, p, active)
+                })?);
+            }
+            serde_json::Value::Array(out)
+        }
+        Object::Tuple(elements) => {
+            let elements = elements.to_vec();
+            let mut out = Vec::with_capacity(elements.len());
+            for (i, el) in elements.into_iter().enumerate() {
                 out.push(with_path_segment(path, format_args!("[{i}]"), |p| {
                     value_to_serde_at(vm, el, p, active)
                 })?);
@@ -868,6 +886,24 @@ fn ty_value_to_serde(
             for (i, item) in items.into_iter().enumerate() {
                 let elem_json = with_path_segment(path, format_args!("[{i}]"), |p| {
                     ty_value_to_serde(vm, item, elem, p)
+                })?;
+                out.push(elem_json);
+            }
+            Ok(serde_json::Value::Array(out))
+        }
+
+        RealizedTy::Tuple(slots) => {
+            let items: Vec<Value> = match value.as_object_ptr() {
+                Some(ptr) => match vm.get_object(ptr) {
+                    Object::Tuple(elements) if elements.len() == slots.len() => elements.to_vec(),
+                    _ => return Err(raise_serialize(vm, "expected tuple", path, "tuple")),
+                },
+                None => return Err(raise_serialize(vm, "expected tuple", path, "tuple")),
+            };
+            let mut out = Vec::with_capacity(items.len());
+            for (i, (item, slot)) in items.into_iter().zip(slots.iter()).enumerate() {
+                let elem_json = with_path_segment(path, format_args!("[{i}]"), |p| {
+                    ty_value_to_serde(vm, item, slot, p)
                 })?;
                 out.push(elem_json);
             }
@@ -1327,6 +1363,30 @@ fn ty_serde_to_value(
             _ => Err(raise_decode(vm, "expected array", path)),
         },
 
+        // A tuple decodes from a JSON array of exactly its arity.
+        RealizedTy::Tuple(slots) => match json {
+            serde_json::Value::Array(arr) if arr.len() == slots.len() => {
+                let mut items = Vec::with_capacity(arr.len());
+                for (i, (item, slot)) in arr.iter().zip(slots.iter()).enumerate() {
+                    let v = with_path_segment(path, format_args!("[{i}]"), |p| {
+                        ty_serde_to_value(vm, item, slot, p)
+                    })?;
+                    items.push(v);
+                }
+                Ok(Value::object(vm.tlab.alloc_tuple(items)))
+            }
+            serde_json::Value::Array(arr) => Err(raise_decode(
+                vm,
+                format!(
+                    "expected an array of {} elements, got {}",
+                    slots.len(),
+                    arr.len()
+                ),
+                path,
+            )),
+            _ => Err(raise_decode(vm, "expected array", path)),
+        },
+
         RealizedTy::Map { key, .. } if !baml_type::normalize::is_string_key(key.as_ty(), vm) => {
             Err(raise_decode(vm, STRING_MAP_REQUIRED, path))
         }
@@ -1740,6 +1800,14 @@ enum Container {
         element: RealizedTy,
         decoded: Vec<Value>,
     },
+    /// A tuple, opened over a JSON array of exactly its arity: one slot type
+    /// per element.
+    Tuple {
+        source: HeapPtr,
+        elements: Vec<Value>,
+        slots: Vec<RealizedTy>,
+        decoded: Vec<Value>,
+    },
     Map {
         source: HeapPtr,
         entries: Vec<(bex_vm_types::BexStr, Value)>,
@@ -1753,9 +1821,10 @@ impl Container {
     /// The JSON object or array this container was opened over.
     fn source(&self) -> HeapPtr {
         match self {
-            Self::Class { source, .. } | Self::List { source, .. } | Self::Map { source, .. } => {
-                *source
-            }
+            Self::Class { source, .. }
+            | Self::List { source, .. }
+            | Self::Tuple { source, .. }
+            | Self::Map { source, .. } => *source,
         }
     }
 
@@ -1777,6 +1846,14 @@ impl Container {
             } => elements
                 .get(decoded.len())
                 .map(|json| (*json, element.clone())),
+            Self::Tuple {
+                elements,
+                slots,
+                decoded,
+                ..
+            } => elements
+                .get(decoded.len())
+                .map(|json| (*json, slots[decoded.len()].clone())),
             Self::Map {
                 entries,
                 value,
@@ -1802,6 +1879,9 @@ impl Container {
             },
             Self::List {
                 elements, decoded, ..
+            }
+            | Self::Tuple {
+                elements, decoded, ..
             } => (decoded.len() < elements.len()).then(|| format!("[{}]", decoded.len())),
             Self::Map {
                 entries, decoded, ..
@@ -1814,7 +1894,9 @@ impl Container {
     /// Record the next child's decoded value.
     fn push(&mut self, child: Value) {
         match self {
-            Self::Class { decoded, .. } | Self::List { decoded, .. } => decoded.push(child),
+            Self::Class { decoded, .. }
+            | Self::List { decoded, .. }
+            | Self::Tuple { decoded, .. } => decoded.push(child),
             Self::Map {
                 entries, decoded, ..
             } => {
@@ -1843,6 +1925,8 @@ impl Container {
             Self::List {
                 element, decoded, ..
             } => vm.tlab.alloc(Object::Array(Array::new(element, decoded))),
+            // A tuple carries no type metadata: its type is its elements'.
+            Self::Tuple { decoded, .. } => vm.tlab.alloc_tuple(decoded),
             // Type-directed: the declared key type (string-keyed, checked at
             // opening) and the value type it decoded.
             Self::Map {
@@ -1873,7 +1957,10 @@ impl Container {
     /// Repoint everything [`Self::roots`] reported after a collection.
     fn forward(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         match self {
-            Self::Class { source, .. } | Self::List { source, .. } | Self::Map { source, .. } => {
+            Self::Class { source, .. }
+            | Self::List { source, .. }
+            | Self::Tuple { source, .. }
+            | Self::Map { source, .. } => {
                 if let Some(moved) = forwarding.get(source) {
                     *source = *moved;
                 }
@@ -1913,6 +2000,9 @@ impl Container {
                 .for_each(visit),
             Self::List {
                 elements, decoded, ..
+            }
+            | Self::Tuple {
+                elements, decoded, ..
             } => elements.iter().chain(decoded).for_each(visit),
             Self::Map {
                 entries, decoded, ..
@@ -1936,6 +2026,9 @@ impl Container {
                 .for_each(visit),
             Self::List {
                 elements, decoded, ..
+            }
+            | Self::Tuple {
+                elements, decoded, ..
             } => elements.iter_mut().chain(decoded).for_each(visit),
             Self::Map {
                 entries, decoded, ..
@@ -1957,6 +2050,7 @@ impl Container {
                 .chain(fields.iter().map(|(_, ty)| ty))
                 .for_each(visit),
             Self::List { element, .. } => visit(element),
+            Self::Tuple { slots, .. } => slots.iter().for_each(visit),
             Self::Map { key, value, .. } => {
                 visit(key);
                 visit(value);
@@ -1974,6 +2068,7 @@ impl Container {
                 .chain(fields.iter_mut().map(|(_, ty)| ty))
                 .for_each(visit),
             Self::List { element, .. } => visit(element),
+            Self::Tuple { slots, .. } => slots.iter_mut().for_each(visit),
             Self::Map { key, value, .. } => {
                 visit(key);
                 visit(value);
@@ -2170,6 +2265,7 @@ fn decode_one(
             }
         }
         RealizedTy::List(element) => open_list(vm, json, element, path).map(Decoded::Open),
+        RealizedTy::Tuple(slots) => open_tuple(vm, json, slots, path).map(Decoded::Open),
         RealizedTy::Map { key, value } => open_map(vm, json, key, value, path).map(Decoded::Open),
         RealizedTy::Class(head, _) | RealizedTy::Interface(head, _, _)
             if vm.stdlib_heads().media_kind(*head).is_some() =>
@@ -2304,6 +2400,36 @@ fn open_list(
                 elements,
                 element: element.clone(),
             })
+        }
+        Some(_) | None => Err(raise_decode(vm, "expected JSON array", path)),
+    }
+}
+
+/// A tuple of `slots`, opened over the JSON array `json`, which must have
+/// exactly one element per slot.
+fn open_tuple(
+    vm: &mut BexVm,
+    json: Value,
+    slots: &[RealizedTy],
+    path: &str,
+) -> Result<Container, VmRustFnError> {
+    match json.as_object_ptr().map(|ptr| (ptr, vm.get_object(ptr))) {
+        Some((source, Object::Array(array))) if array.len() == slots.len() => {
+            let elements = array.to_vec();
+            Ok(Container::Tuple {
+                source,
+                decoded: Vec::with_capacity(elements.len()),
+                elements,
+                slots: slots.to_vec(),
+            })
+        }
+        Some((_, Object::Array(array))) => {
+            let message = format!(
+                "expected an array of {} elements, got {}",
+                slots.len(),
+                array.len()
+            );
+            Err(raise_decode(vm, message, path))
         }
         Some(_) | None => Err(raise_decode(vm, "expected JSON array", path)),
     }

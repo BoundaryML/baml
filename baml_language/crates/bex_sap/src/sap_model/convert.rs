@@ -10,7 +10,7 @@ use indexmap::{IndexMap, IndexSet};
 use crate::sap_model::{
     self, AnnotatedEnumVariant, AnnotatedField, ArrayTy, BigintLiteralTy, BigintTy, BoolLiteralTy,
     BoolTy, ClassTy, DefaultValue, EnumTy, EnumVariantTy, FloatTy, IntLiteralTy, IntTy, MapTy,
-    MediaTy, NullTy, StringLiteralTy, StringTy, Ty, TyResolved, TypeRefDb, UnionTy,
+    MediaTy, NullTy, StringLiteralTy, StringTy, TupleTy, Ty, TyResolved, TypeRefDb, UnionTy,
 };
 
 /// A type as the parse model takes it: realized, so it names no type parameter
@@ -578,6 +578,12 @@ impl TypeCtx {
             ParseTy::List(ty) => Ty::Resolved(TyResolved::Array(ArrayTy {
                 ty: Box::new(self.convert_ty(ty)?),
             })),
+            ParseTy::Tuple(items) => Ty::Resolved(TyResolved::Tuple(TupleTy {
+                items: items
+                    .iter()
+                    .map(|ty| self.convert_ty(ty))
+                    .collect::<Result<Vec<_>, _>>()?,
+            })),
             ParseTy::Map { key, value } => Ty::Resolved(TyResolved::Map(MapTy {
                 key: Box::new(self.convert_ty(key)?),
                 value: Box::new(self.convert_ty(value)?),
@@ -723,6 +729,13 @@ fn is_sap_parseable(ty: &ParseTy) -> Result<Vec<NamedTy>, ()> {
         ParseTy::Class(..) | ParseTy::Interface(..) => Ok(NamedTy::of(ty).into_iter().collect()),
         ParseTy::Enum(..) | ParseTy::EnumVariant(..) => Ok(Vec::new()),
         ParseTy::List(inner) => is_sap_parseable(inner),
+        ParseTy::Tuple(items) => {
+            let mut names = Vec::new();
+            for item in items {
+                names.extend(is_sap_parseable(item)?);
+            }
+            Ok(names)
+        }
         ParseTy::Map { key, value, .. } => {
             let keys = is_sap_parseable(key)?;
             let values = is_sap_parseable(value)?;

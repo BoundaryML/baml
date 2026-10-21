@@ -159,6 +159,7 @@ pub(crate) fn wire_variant_kind(v: &wire::BamlOutboundValue) -> &'static str {
         Some(Out::EnumValue(_)) => "enum",
         Some(Out::LiteralValue(_)) => "literal",
         Some(Out::ListValue(_)) => "list",
+        Some(Out::TupleValue(_)) => "tuple",
         Some(Out::MapValue(_)) => "map",
         Some(Out::UnionVariantValue(_)) => "union variant",
         Some(Out::HandleValue(_)) => "handle",
@@ -362,6 +363,56 @@ impl<T: __BamlValuePrivate> __BamlValuePrivate for Vec<T> {
         })))
     }
 }
+
+/// BAML tuples `(A, B, ...)` map to Rust tuples of arity 1 through 12. A
+/// tuple travels inbound as a list (the engine materializes it against the
+/// declared tuple type) and outbound as a `tuple_value`.
+macro_rules! impl_baml_tuple {
+    ($len:literal; $($name:ident : $idx:tt),+) => {
+        impl<$($name: __BamlValuePrivate),+> __BamlValuePrivate for ($($name,)+) {
+            fn to_baml(&self) -> wire::InboundValue {
+                internal::annotate_selected_type(
+                    inbound(In::ListValue(wire::InboundListValue {
+                        values: vec![$(self.$idx.to_baml()),+],
+                    })),
+                    Self::baml_ty(),
+                )
+            }
+
+            fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
+                let v = unwrap(v);
+                match v.value {
+                    Some(Out::TupleValue(tuple)) if tuple.items.len() == $len => {
+                        let mut items = tuple.items.into_iter();
+                        Ok(($(
+                            $name::from_baml(items.next().expect("length checked"))?,
+                        )+))
+                    }
+                    _ => Err(wrong_type(concat!($len, "-tuple"), &v)),
+                }
+            }
+
+            fn baml_ty() -> wire::BamlTy {
+                wire_ty(wire::baml_ty::Ty::Tuple(wire::BamlTyTuple {
+                    items: vec![$($name::baml_ty()),+],
+                }))
+            }
+        }
+    };
+}
+
+impl_baml_tuple!(1; A: 0);
+impl_baml_tuple!(2; A: 0, B: 1);
+impl_baml_tuple!(3; A: 0, B: 1, C: 2);
+impl_baml_tuple!(4; A: 0, B: 1, C: 2, D: 3);
+impl_baml_tuple!(5; A: 0, B: 1, C: 2, D: 3, E: 4);
+impl_baml_tuple!(6; A: 0, B: 1, C: 2, D: 3, E: 4, F: 5);
+impl_baml_tuple!(7; A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6);
+impl_baml_tuple!(8; A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7);
+impl_baml_tuple!(9; A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8);
+impl_baml_tuple!(10; A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J: 9);
+impl_baml_tuple!(11; A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J: 9, K: 10);
+impl_baml_tuple!(12; A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8, J: 9, K: 10, L: 11);
 
 /// A key of a BAML `map`. The language currently restricts map keys to
 /// strings (E0067), so [`String`] is the only impl; the trait is the

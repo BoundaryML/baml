@@ -46,6 +46,7 @@ impl ExprBody {
             | Expr::Missing => {}
             Expr::GenericApply { base, .. }
             | Expr::MemberAccess { base, .. }
+            | Expr::TupleIndex { base, .. }
             | Expr::OptionalMemberAccess { base, .. }
             | Expr::Upcast { base, .. } => {
                 out.push(BodyNode::Expr(*base));
@@ -111,7 +112,7 @@ impl ExprBody {
                 out.extend(fields.iter().map(|field| BodyNode::Expr(field.value)));
                 out.extend(spreads.iter().map(|s| BodyNode::Expr(s.expr)));
             }
-            Expr::Array { elements } => {
+            Expr::Array { elements } | Expr::Tuple { elements } => {
                 out.extend(elements.iter().copied().map(BodyNode::Expr));
             }
             Expr::Map { entries } => {

@@ -14,6 +14,8 @@ pub use trivia_classifier::{EmittableTrivia, TriviaInfo};
 
 #[cfg(test)]
 mod formatter_scenario_tests;
+#[cfg(test)]
+mod tuple_tests;
 
 /// Runs the formatter on the given source code.
 ///
