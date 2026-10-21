@@ -8457,8 +8457,9 @@ impl<'db> LoweringContext<'db> {
         // Check if callee is a method call (MemberAccess or multi-segment Path with a
         // MemberResolution::Method/Free). Field and Variant resolutions are not callable.
         // If the base is a real value (not a package namespace), prepend it as self.
-        let mut receiver_base_for_class_type_args: Option<AstExprId> = None;
-        let mut receiver_path_tir_ty: Option<Tir2Ty> = None;
+        // Whether the callee is reached through a value — the call plan's
+        // owner prefix is then the receiver's class arguments.
+        let mut has_value_receiver = false;
         // The owner frame a statically-resolved impl-method callee expects,
         // carried by the resolution (impl generic bindings for an override,
         // `[Self, iface args..]` for an adopted default). When present, the
@@ -8523,7 +8524,7 @@ impl<'db> LoweringContext<'db> {
                     // For immediate calls, emit the callee as a plain function constant
                     // (not MakeBoundMethod) since the receiver is passed explicitly as self.
                     let receiver_op = self.lower_to_operand(*base)?;
-                    receiver_base_for_class_type_args = Some(*base);
+                    has_value_receiver = true;
                     let callee_op = {
                         let resolution = self.tir_resolution(callee).cloned();
                         if let Some(MemberResolution::Method {
@@ -8557,7 +8558,7 @@ impl<'db> LoweringContext<'db> {
                     // skipped, but its STATIC type must still fill the callee
                     // frame — the shared prepend below reads it from here.
                     if base_is_value {
-                        receiver_base_for_class_type_args = Some(*base);
+                        has_value_receiver = true;
                     }
                     let callee_op = {
                         let resolution = self.tir_resolution(callee).cloned();
@@ -8655,7 +8656,7 @@ impl<'db> LoweringContext<'db> {
                     // Same class-frame rule as the MemberAccess spelling: the
                     // receiver prefix's static type fills the callee frame.
                     let prefix_idx = segments.len() - 2;
-                    receiver_path_tir_ty = self.tir_path_segment_type(callee, prefix_idx).cloned();
+                    has_value_receiver = self.tir_path_segment_type(callee, prefix_idx).is_some();
                     (callee_op, self.lower_call_arg_operands(expr_id, args)?)
                 } else {
                     let receiver_op = if receiver_segments.len() == 1 {
@@ -8673,7 +8674,7 @@ impl<'db> LoweringContext<'db> {
                         Operand::Copy(Place::local(recv_local))
                     };
                     let prefix_idx = segments.len() - 2;
-                    receiver_path_tir_ty = self.tir_path_segment_type(callee, prefix_idx).cloned();
+                    has_value_receiver = self.tir_path_segment_type(callee, prefix_idx).is_some();
                     let mut all_args = vec![receiver_op];
                     all_args.extend(self.lower_call_arg_operands(expr_id, args)?);
                     (callee_op, all_args)
@@ -8702,7 +8703,7 @@ impl<'db> LoweringContext<'db> {
                     .map(Operand::Copy);
                 if let Some(receiver_op) = receiver_op {
                     let prefix_idx = segments.len() - 2;
-                    receiver_path_tir_ty = self.tir_path_segment_type(callee, prefix_idx).cloned();
+                    has_value_receiver = self.tir_path_segment_type(callee, prefix_idx).is_some();
                     let mut all_args = vec![receiver_op];
                     all_args.extend(self.lower_call_arg_operands(expr_id, args)?);
                     (callee_op, all_args)
@@ -8810,28 +8811,9 @@ impl<'db> LoweringContext<'db> {
         // the method's own type args. This preserves De Bruijn ordering:
         //   frame.type_args = [class_T, class_U, ..., fn_A, fn_B, ...]
         // matching `enclosing_generic_params()` = class_params ++ fn_params.
-        //
-        // There are two receiver paths:
-        //   1. MemberAccess callee (`base.method()`): receiver type from `expr_types[recv_base_id]`.
-        //   2. Path callee (`b.describe()` compiled as Path(["b","describe"])): receiver type
-        //      from `path_root_types[callee_expr_id]` (TIR records root segment type there).
-        // `x?.m()` narrows: reading the class args off the recorded
-        // `Class<..> | null` union would seed an empty class prefix and shift
-        // every De Bruijn slot the method's own type args occupy.
-        let receiver_tir_ty: Option<Tir2Ty> =
-            if let Some(recv_base_id) = receiver_base_for_class_type_args {
-                self.call_receiver_tir_ty(callee, recv_base_id)
-            } else {
-                receiver_path_tir_ty
-            };
         #[expect(deprecated)]
-        let owner_prefix_tys = self.callee_owner_prefix(
-            expr_id,
-            callee,
-            &callee_operand,
-            carried_owner_frame,
-            receiver_tir_ty.as_ref(),
-        );
+        let owner_prefix_tys =
+            self.callee_owner_prefix(expr_id, callee, carried_owner_frame, has_value_receiver);
         let receiver_class_type_arg_operands: Vec<Operand<'db>> = if !owner_prefix_tys.is_empty() {
             let generic_params = self.enclosing_generic_params();
             owner_prefix_tys
@@ -9765,83 +9747,69 @@ impl<'db> LoweringContext<'db> {
     }
 
     /// The owner frame a statically resolved callee expects ahead of its own
-    /// type arguments, from whichever of three places happens to know it.
-    /// Exactly one applies to a call:
+    /// type arguments, from whichever of two places knows it. Exactly one
+    /// applies to a call:
     ///
     /// 1. a matched impl's method carries its frame on the resolution (the
     ///    impl's generic bindings for a provided method, `[Self, iface args..]`
     ///    for an adopted default) — an impl body's frame is not its receiver
     ///    class's, and the two only coincide for in-class impls of non-generic
     ///    interfaces;
-    /// 2. a method reached through a value takes its receiver's class
-    ///    arguments, read back off the receiver's static type;
-    /// 3. a static reached through no value takes what its qualifier pins
-    ///    (`type IntBox = Box<int>`, then `IntBox.of(7)`): the call plan's
-    ///    owner prefix, empty when the qualifier pins nothing and the whole
-    ///    frame rides as the call's own arguments.
+    /// 2. any other method takes the call plan's owner prefix: for a method
+    ///    reached through a value, the receiver's class arguments as the
+    ///    checker solved them; for a static reached through no value, what its
+    ///    qualifier pins (`type IntBox = Box<int>`, then `IntBox.of(7)`),
+    ///    empty when the qualifier pins nothing and the whole frame rides as
+    ///    the call's own arguments.
     ///
-    /// The checker solves the callee's whole frame in every one of these
-    /// cases and records it on the call plan; (2) re-derives a part of that
-    /// answer, and (3) reads the part (2) has no receiver to derive.
+    /// (2) must not re-derive the prefix from the receiver's static type: that
+    /// type can be spelled through an alias (`type Key = string[]`, then
+    /// `k.join(".")`), or be a `Future<V, E>`, and a receiver whose head is
+    /// not literally a class, list or map then seeded no frame at all — the
+    /// callee's first read of its `T` failed in the VM. The checker already
+    /// saw through the spelling when it solved the frame.
     #[deprecated(
-        note = "three partial sources of one fact. Superseded once the call plan carries the \
+        note = "two partial sources of one fact. Superseded once the call plan carries the \
                 whole frame of every statically resolved callee and call lowering reads it"
     )]
     fn callee_owner_prefix(
         &self,
         call: AstExprId,
         callee: AstExprId,
-        callee_operand: &Operand<'db>,
         carried_owner_frame: Option<Vec<Tir2Ty>>,
-        receiver_ty: Option<&Tir2Ty>,
+        has_value_receiver: bool,
     ) -> Vec<Tir2Ty> {
         use crate::inference_provider::MemberResolution;
         if let Some(frame) = carried_owner_frame {
             return frame;
         }
-        let Some(receiver_ty) = receiver_ty else {
-            return match self.tir_resolution(callee) {
-                Some(MemberResolution::Method {
-                    callee: MethodCallee::Inherent(_),
-                    receiver: Receiver::Unbound,
-                }) => self
-                    .tir_call_plan(call)
-                    .map_or_else(Vec::new, |plan| plan.type_args[..plan.own_offset].to_vec()),
-                Some(
-                    MemberResolution::Method {
-                        callee: MethodCallee::Inherent(_),
-                        receiver: Receiver::Bound,
-                    }
-                    | MemberResolution::Method {
-                        callee: MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. },
-                        receiver: Receiver::Bound | Receiver::Unbound,
-                    }
-                    | MemberResolution::Free { .. }
-                    | MemberResolution::Field { .. }
-                    | MemberResolution::Variant { .. }
-                    | MemberResolution::InterfaceVirtualField { .. },
-                )
-                | None => Vec::new(),
-            };
+        let plan_owner_prefix = || {
+            self.tir_call_plan(call)
+                .map_or_else(Vec::new, |plan| plan.type_args[..plan.own_offset].to_vec())
         };
-        // BUG: only a class, a list and a map are seen here, so a receiver of
-        // any other kind with class arguments — `Future<V, E>` — seeds no
-        // owner prefix at all, though the call plan records one. Harmless
-        // only while every method of such a type is native and never reads
-        // its frame.
-        match (callee_operand, receiver_ty) {
-            (_, Tir2Ty::Class(_, class_type_args)) => class_type_args.to_vec(),
-            (Operand::Constant(Constant::Function(func)), Tir2Ty::List(inner))
-                if self.callee_owner_is_lang(*func, baml_base::LangPackage::Baml, "Array") =>
-            {
-                vec![inner.as_ref().clone()]
-            }
-            (Operand::Constant(Constant::Function(func)), Tir2Ty::Map { key, value, .. })
-                if self.callee_owner_is_lang(*func, baml_base::LangPackage::Baml, "Map") =>
-            {
-                vec![key.as_ref().clone(), value.as_ref().clone()]
-            }
-            _ => Vec::new(),
+        if has_value_receiver {
+            return plan_owner_prefix();
+        }
+        match self.tir_resolution(callee) {
+            Some(MemberResolution::Method {
+                callee: MethodCallee::Inherent(_),
+                receiver: Receiver::Unbound,
+            }) => plan_owner_prefix(),
+            Some(
+                MemberResolution::Method {
+                    callee: MethodCallee::Inherent(_),
+                    receiver: Receiver::Bound,
+                }
+                | MemberResolution::Method {
+                    callee: MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. },
+                    receiver: Receiver::Bound | Receiver::Unbound,
+                }
+                | MemberResolution::Free { .. }
+                | MemberResolution::Field { .. }
+                | MemberResolution::Variant { .. }
+                | MemberResolution::InterfaceVirtualField { .. },
+            )
+            | None => Vec::new(),
         }
     }
 

@@ -6904,9 +6904,10 @@ impl BexVm {
 
     /// The class-level type arguments to curry into a bound method whose
     /// receiver is `receiver`: the receiver instance's `class_type_args` (De
-    /// Bruijn class-param order — the method's `Self`), or empty for a
-    /// non-instance receiver (a primitive, `type`, `uint8array`, …, which has no
-    /// class generics). Captured at `MakeBoundMethod` time so the value is fully
+    /// Bruijn class-param order — the method's `Self`), an array's `[T]` or a
+    /// map's `[K, V]` (the frame of `baml.Array<T>` / `baml.Map<K, V>`), or
+    /// empty for any other receiver (a primitive, `type`, `uint8array`, …,
+    /// which has no class generics). Captured at `MakeBoundMethod` time so the value is fully
     /// realized; installed as the callee's `frame.type_args` at `CallIndirect`
     /// (see the `Object::BoundMethod` arm of `execute_call_from_locals_offset`).
     ///
@@ -6924,6 +6925,10 @@ impl BexVm {
         match receiver.as_object_ptr() {
             Some(ptr) => match self.get_object(ptr) {
                 Object::Instance(inst) => inst.class_type_args.clone(),
+                Object::Array(array) => Box::new([array.element_ty.as_ref().clone()]),
+                Object::Map(map) => {
+                    Box::new([map.key_ty.as_ref().clone(), map.value_ty.as_ref().clone()])
+                }
                 _ => Box::new([]),
             },
             None => Box::new([]),
