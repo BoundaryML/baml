@@ -560,11 +560,10 @@ fn interface_dispatch_compiles_as_a_runtime_resolved_call() {
             .split_whitespace()
             .collect::<String>()
     };
-    // The call site owns its inline cache, resolves through it, and lays the
-    // arguments over the callee it resolved before requesting the call.
+    // The call site resolves through the VM, and lays the arguments over the
+    // callee it resolved before requesting the call.
     let total = compact("user.total");
-    assert!(total.contains("staticS"), "{total}");
-    assert!(total.contains("vm.virtual_target(&S"), "{total}");
+    assert!(total.contains("vm.virtual_target("), "{total}");
     assert!(
         total.contains("matchvm.call_inline(callee,&[") && total.contains("Ok(Some(v))=>Ok(v)"),
         "{total}"
@@ -1034,14 +1033,14 @@ function bound(t: reflect.Type) -> bool { type U = unreflect(t); reflect.Type.of
     );
     // A nested generic call passes the substituted type on.
     let twice = compact("user.twice");
-    assert!(twice.contains("vm.call_compiled_with_types("), "{twice}");
+    assert!(twice.contains("vm.call_compiled("), "{twice}");
     assert!(twice.contains("&[ty0.clone()]"), "{twice}");
     // A generic class instance carries its class type arguments ...
     let boxed = compact("user.boxed");
     assert!(boxed.contains("vm.new_generic_instance("), "{boxed}");
     // ... and a call of its method passes them as the owner's arguments.
     let unbox = compact("user.unbox");
-    assert!(unbox.contains("vm.call_compiled_with_types("), "{unbox}");
+    assert!(unbox.contains("vm.call_compiled("), "{unbox}");
     // `is Box<int>` compares the instance's arguments.
     let is_box_int = compact("user.is_box_int");
     assert!(is_box_int.contains("vm.is_instance_of_at("), "{is_box_int}");
@@ -1363,10 +1362,7 @@ fn runtime_types_dispatch_and_bound_methods_compile() {
             .collect::<String>()
     };
     let describe = compact("user.generic_describe");
-    assert!(
-        describe.contains("vm.virtual_target_uncached("),
-        "{describe}"
-    );
+    assert!(describe.contains("vm.virtual_target("), "{describe}");
     assert!(!describe.contains("staticS"), "{describe}");
     let fns = compact("user.fns");
     assert!(fns.contains("vm.frame_type_constant(depth,"), "{fns}");
@@ -1501,14 +1497,11 @@ fn runtime_bound_type_arguments_compile() {
         .rfind("vm.frame_type_arg(depth,0)?")
         .expect("the type is read from the frame");
     assert!(bound < read, "{call}");
-    assert!(call.contains("vm.call_compiled_with_types("), "{call}");
+    assert!(call.contains("vm.call_compiled("), "{call}");
     assert!(!call.contains("vm.type_operand("), "{call}");
     let dispatch = compact("user.bound_dispatch");
     assert!(dispatch.contains("vm.bind_type(depth,0,"), "{dispatch}");
-    assert!(
-        dispatch.contains("vm.virtual_target_uncached("),
-        "{dispatch}"
-    );
+    assert!(dispatch.contains("vm.virtual_target("), "{dispatch}");
     assert!(!dispatch.contains("staticS"), "{dispatch}");
     assert!(dispatch.contains("vm.make_virtual_function("), "{dispatch}");
     syn::parse_file(&module.source).expect("generated module parses as Rust");

@@ -301,16 +301,11 @@ impl BexVm {
             })
             .take(MAX_ERROR_FRAMES)
             .map(|idx| match &self.frames[idx] {
-                Frame::Bytecode(frame) => ErrorFrame {
+                Frame::Bytecode(_) => ErrorFrame {
                     function: self.frame_registered_function(idx),
-                    pc: (if self.compiled_at(idx).is_some() {
-                        self.compiled_pc(idx)
-                    } else if Some(idx) == raise_frame {
-                        Some(self.cur_pc)
-                    } else {
-                        Some(frame.faulting_pc)
-                    })
-                    .map(|pc| u32::try_from(pc).unwrap_or(u32::MAX)),
+                    pc: self
+                        .frame_pc(idx, raise_frame)
+                        .map(|pc| u32::try_from(pc).unwrap_or(u32::MAX)),
                     native: false,
                 },
                 Frame::Native(native) => ErrorFrame {

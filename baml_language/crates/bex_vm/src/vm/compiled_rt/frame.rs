@@ -57,17 +57,6 @@ pub(crate) fn exact_type_values(type_args: &[bex_vm_types::RealizedTy]) -> Vec<O
         .collect()
 }
 
-/// A frame position returned by [`BexVm::frame_position`].
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum FramePosition {
-    /// The next bytecode instruction.
-    Bytecode(usize),
-    /// A compiled body on the Rust stack, or not yet started.
-    CompiledRunning,
-    /// A compiled body suspended at an offset into its function's stub.
-    CompiledStub(usize),
-}
-
 impl BytecodeFrame {
     /// Create a running compiled frame whose locals live on the Rust stack.
     pub(crate) fn compiled(
@@ -135,7 +124,6 @@ impl BexVm {
 
     /// Enter or resume the compiled body of the top frame, which stands at
     /// its stub, and carry out what it asks for next.
-    #[cold]
     #[inline(never)]
     pub(crate) fn resume_compiled(
         &mut self,
@@ -336,8 +324,7 @@ impl BexVm {
     }
 
     /// Return the compact bytecode offset corresponding to the compiled frame's recorded PC.
-    #[must_use]
-    pub fn compiled_pc(&self, idx: usize) -> Option<usize> {
+    pub(crate) fn compiled_pc(&self, idx: usize) -> Option<usize> {
         self.compiled_at(idx)?;
         let Frame::Bytecode(frame) = &self.frames[idx] else {
             return None;
@@ -363,25 +350,36 @@ impl BexVm {
     }
 
     /// Return whether the frame at `idx` runs a compiled body.
-    #[must_use]
-    pub fn frame_is_compiled(&self, idx: usize) -> bool {
+    pub(crate) fn frame_is_compiled(&self, idx: usize) -> bool {
         self.compiled_at(idx).is_some()
     }
 
-    /// Return the frame's bytecode or compiled position, or `None` for a native continuation.
+    /// The innermost bytecode frame when it is executing bytecode: the one
+    /// frame whose position is `cur_pc` rather than a recorded pc.
     #[must_use]
-    pub fn frame_position(&self, idx: usize) -> Option<FramePosition> {
+    pub fn live_bytecode_frame(&self) -> Option<usize> {
+        self.frames
+            .iter()
+            .rposition(|frame| matches!(frame, Frame::Bytecode(_)))
+            .filter(|&idx| self.compiled_at(idx).is_none())
+    }
+
+    /// The compact pc frame `idx` stands at: a compiled frame's recorded
+    /// instruction, `cur_pc` for `live` (see [`Self::live_bytecode_frame`]),
+    /// or the call site a bytecode frame recorded when it descended. `None`
+    /// for a native frame or a compiled position with no compact offset.
+    #[must_use]
+    pub fn frame_pc(&self, idx: usize, live: Option<usize>) -> Option<usize> {
+        if self.compiled_at(idx).is_some() {
+            return self.compiled_pc(idx);
+        }
         let Frame::Bytecode(frame) = &self.frames[idx] else {
             return None;
         };
-        Some(match self.compiled_at(idx) {
-            None => FramePosition::Bytecode(frame.instruction_ptr),
-            Some(crate::compiled_rt::CompiledAt::Running) => FramePosition::CompiledRunning,
-            Some(crate::compiled_rt::CompiledAt::Suspended) => {
-                let function = self.get_object(frame.function).as_callable().ok()?;
-                let stub = crate::compiled_rt::stub_start(function)?;
-                FramePosition::CompiledStub(frame.instruction_ptr - stub)
-            }
+        Some(if Some(idx) == live {
+            self.cur_pc
+        } else {
+            frame.faulting_pc
         })
     }
 
@@ -480,32 +478,14 @@ impl BexVm {
     }
 
     /// Bind pending type arguments before a body runs in place inside the call path.
-    #[cold]
-    #[inline(never)]
     pub(crate) fn bind_passed_type_args(&mut self, frame_idx: usize) {
         let Frame::Bytecode(frame) = &mut self.frames[frame_idx] else {
             unreachable!("a compiled frame is a bytecode frame");
         };
-        if frame.type_args.capacity() == 0
-            && let Some(pooled) = self.compiled.type_arg_pool.pop()
-        {
-            frame.type_args = pooled;
-        }
         append_passed_type_args(
             frame,
             &self.pending_call_type_args,
             &self.pending_call_type_values,
         );
-    }
-
-    /// Return a compiled frame's type-argument vector to the pool before popping it.
-    #[cold]
-    #[inline(never)]
-    pub(crate) fn recycle_frame_type_args(&mut self, frame_idx: usize) {
-        let Frame::Bytecode(frame) = &mut self.frames[frame_idx] else {
-            unreachable!("a compiled frame is a bytecode frame");
-        };
-        let type_args = std::mem::take(&mut frame.type_args);
-        self.recycle_type_args(type_args);
     }
 }

@@ -1,11 +1,11 @@
 //! Captured locals share cells between the enclosing scope and its closures.
 
-use bex_vm_types::{HeapPtr, Object, ObjectType, StackIndex, Value, types::Cell};
+use bex_vm_types::{HeapPtr, Object, ObjectType, Value, types::Cell};
 
 use super::CompiledFn;
 use crate::{
-    errors::{VmError, VmInternalError, VmPanic},
-    vm::{BexVm, Frame},
+    errors::{VmError, VmInternalError},
+    vm::BexVm,
 };
 
 impl BexVm {
@@ -97,52 +97,6 @@ impl BexVm {
             return None;
         }
         super::compiled_fn(function)
-    }
-
-    /// Call a compiled body with the callee's captures and type arguments.
-    #[inline]
-    pub fn call_closure_compiled(
-        &mut self,
-        callee: HeapPtr,
-        body: CompiledFn,
-        args: &[Value],
-        pc: u32,
-    ) -> Result<Value, Box<VmError>> {
-        self.note_call_pc(pc);
-        if self.frames.len() >= crate::vm::MAX_FRAMES {
-            return Err(Box::new(VmError::thrown_fresh(
-                self.panic_to_exception_value(VmPanic::StackOverflow),
-            )));
-        }
-        self.stack_room()?;
-        self.call_closure_compiled_here(callee, body, args)
-    }
-
-    #[inline]
-    fn call_closure_compiled_here(
-        &mut self,
-        callee: HeapPtr,
-        body: CompiledFn,
-        args: &[Value],
-    ) -> Result<Value, Box<VmError>> {
-        if self.telemetry.is_some() {
-            return self.call_compiled_funnelled(callee, &[], args);
-        }
-        let context = self.current_context().clone();
-        let locals_offset = StackIndex::from_raw(self.stack.len());
-        let type_args = match self.get_object(callee) {
-            Object::Closure(closure) => closure.captured_type_args.to_vec(),
-            _ => Vec::new(),
-        };
-        let frame =
-            crate::vm::BytecodeFrame::compiled(callee, locals_offset, type_args, context, None);
-        self.frames.push(Frame::Bytecode(frame));
-        let result = body(self, args);
-        if result.is_ok() {
-            self.frames.pop();
-            self.stack.truncate(locals_offset.raw());
-        }
-        result
     }
 }
 

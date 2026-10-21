@@ -7,23 +7,16 @@
 //! pointers from `idx_to_ptr` or from values it has just loaded or reloaded
 //! from its frame slots after a suspension.
 
-use bex_vm_types::{HeapPtr, Object, RealizedTy, StackIndex, Value, types::Function};
+use bex_vm_types::{HeapPtr, Object, RealizedTy, StackIndex, Value};
 
 use super::{CompiledFn, Step};
 use crate::{
     errors::{VmError, VmInternalError, VmPanic},
     indexable::EvalStackTrait,
     package_baml::{NativeCallResult, NativeFunction},
-    telemetry::{CallTypeArgs, InvocationOutcome},
     types::ObjectTrait as _,
     vm::{BexVm, BytecodeFrame, Frame, VmExecState},
 };
-
-#[cfg(test)]
-thread_local! {
-    /// Force calls through the VM call path to test telemetry equivalence.
-    pub(crate) static FORCE_CALL_FUNNEL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-}
 
 impl BexVm {
     #[inline]
@@ -118,23 +111,6 @@ impl BexVm {
         self.compiled.call_type_args.push(ty);
     }
 
-    /// Return a settled future's value if awaiting it requires no yield.
-    #[inline]
-    pub fn ready(&mut self, future: Value) -> Option<Value> {
-        if self.early_yield.is_due() {
-            return None;
-        }
-        let value = match self.get_object(future.as_object_ptr()?) {
-            Object::Future(future) => match future.read() {
-                bex_vm_types::FutureRead::Ready(value) => value,
-                _ => return None,
-            },
-            _ => return None,
-        };
-        self.early_yield.tick();
-        Some(value)
-    }
-
     /// Whether a loop should suspend with [`Step::Yield`] at this back edge: the
     /// interpreter's own poll, forced under `BAML_GC_STRESS=1`.
     #[inline]
@@ -150,8 +126,7 @@ impl BexVm {
     }
 
     /// Record the call instruction index before pushing the callee's frame.
-    #[allow(clippy::inline_always)]
-    #[inline(always)]
+    #[inline]
     pub(crate) fn note_call_pc(&mut self, pc: u32) {
         if let Some(crate::vm::Frame::Bytecode(frame)) = self.frames.last_mut() {
             frame.faulting_pc = pc as usize;
@@ -159,7 +134,6 @@ impl BexVm {
     }
 
     /// Record a bytecode instruction index for stack traces at frame depth `depth`.
-    #[cold]
     pub fn note_pc(&mut self, depth: usize, pc: u32) {
         if let Some(crate::vm::Frame::Bytecode(frame)) = depth
             .checked_sub(1)
@@ -229,236 +203,83 @@ impl BexVm {
         .map(drop)
     }
 
-    /// Call a compiled body with a VM frame, retaining the frame on error for unwinding.
+    /// Call a compiled body with a VM frame whose type arguments are
+    /// `type_args`, in the callee's De Bruijn order. The frame stays on error
+    /// for the unwinder. With telemetry on, the call takes the VM's call path.
     #[inline]
     pub fn call_compiled(
         &mut self,
         callee: HeapPtr,
         body: CompiledFn,
+        type_args: &[RealizedTy],
         args: &[Value],
         pc: u32,
     ) -> Result<Value, Box<VmError>> {
+        self.check_compiled_call(pc)?;
+        if self.telemetry.is_some() {
+            return self.call_compiled_funnelled(callee, type_args, args);
+        }
+        // Runtime declarations need exact type values in addition to realized types.
+        let type_values = super::frame::exact_type_values(type_args);
+        let metadata = (!type_values.is_empty()).then(|| {
+            Box::new(crate::vm::FrameTypeMetadata {
+                values: type_values,
+            })
+        });
+        self.run_compiled_frame(callee, body, type_args.to_vec(), metadata, args)
+    }
+
+    /// [`Self::call_compiled`] for a closure, whose frame carries its captured
+    /// type arguments.
+    #[inline]
+    pub fn call_closure_compiled(
+        &mut self,
+        callee: HeapPtr,
+        body: CompiledFn,
+        args: &[Value],
+        pc: u32,
+    ) -> Result<Value, Box<VmError>> {
+        self.check_compiled_call(pc)?;
+        if self.telemetry.is_some() {
+            return self.call_compiled_funnelled(callee, &[], args);
+        }
+        let type_args = match self.get_object(callee) {
+            Object::Closure(closure) => closure.captured_type_args.to_vec(),
+            _ => Vec::new(),
+        };
+        self.run_compiled_frame(callee, body, type_args, None, args)
+    }
+
+    /// Record the call site and check the frame and fiber-stack limits.
+    #[inline]
+    fn check_compiled_call(&mut self, pc: u32) -> Result<(), Box<VmError>> {
         self.note_call_pc(pc);
         if self.frames.len() >= crate::vm::MAX_FRAMES {
             return Err(Box::new(VmError::thrown_fresh(
                 self.panic_to_exception_value(VmPanic::StackOverflow),
             )));
         }
-        self.stack_room()?;
-        self.call_compiled_here(callee, body, args)
+        self.stack_room()
     }
 
     #[inline]
-    fn call_compiled_here(
+    fn run_compiled_frame(
         &mut self,
         callee: HeapPtr,
         body: CompiledFn,
+        type_args: Vec<RealizedTy>,
+        type_metadata: Option<Box<crate::vm::FrameTypeMetadata>>,
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
-        if self.telemetry.is_some() {
-            return self.call_compiled_cold(callee, body, args);
-        }
         let context = self.current_context().clone();
         let locals_offset = StackIndex::from_raw(self.stack.len());
-        self.frames.push(crate::vm::Frame::Bytecode(
-            crate::vm::BytecodeFrame::compiled(callee, locals_offset, Vec::new(), context, None),
-        ));
+        let mut frame = BytecodeFrame::compiled(callee, locals_offset, type_args, context, None);
+        frame.type_metadata = type_metadata;
+        self.frames.push(Frame::Bytecode(frame));
         let result = body(self, args);
         if result.is_ok() {
             self.frames.pop();
             self.stack.truncate(locals_offset.raw());
-        }
-        result
-    }
-
-    /// Call a compiled body with type arguments in the callee's De Bruijn order.
-    #[inline]
-    pub fn call_compiled_with_types(
-        &mut self,
-        callee: HeapPtr,
-        body: CompiledFn,
-        type_args: &[RealizedTy],
-        args: &[Value],
-        pc: u32,
-    ) -> Result<Value, Box<VmError>> {
-        self.note_call_pc(pc);
-        if self.frames.len() >= crate::vm::MAX_FRAMES {
-            return Err(Box::new(VmError::thrown_fresh(
-                self.panic_to_exception_value(VmPanic::StackOverflow),
-            )));
-        }
-        self.stack_room()?;
-        self.call_compiled_with_types_here(callee, body, type_args, args)
-    }
-
-    #[inline]
-    fn call_compiled_with_types_here(
-        &mut self,
-        callee: HeapPtr,
-        body: CompiledFn,
-        type_args: &[RealizedTy],
-        args: &[Value],
-    ) -> Result<Value, Box<VmError>> {
-        if self.telemetry.is_some() {
-            return self.call_compiled_funnelled(callee, type_args, args);
-        }
-        let context = self.current_context().clone();
-        let locals_offset = StackIndex::from_raw(self.stack.len());
-        let mut frame_type_args = self.pooled_type_args();
-        frame_type_args.extend_from_slice(type_args);
-        let mut frame = crate::vm::BytecodeFrame::compiled(
-            callee,
-            locals_offset,
-            frame_type_args,
-            context,
-            None,
-        );
-        // Runtime declarations need exact type values in addition to realized types.
-        let type_values = super::frame::exact_type_values(type_args);
-        if !type_values.is_empty() {
-            frame.type_metadata = Some(Box::new(crate::vm::FrameTypeMetadata {
-                values: type_values,
-            }));
-        }
-        self.frames.push(crate::vm::Frame::Bytecode(frame));
-        let result = body(self, args);
-        if result.is_ok() {
-            if let Some(crate::vm::Frame::Bytecode(frame)) = self.frames.pop() {
-                self.recycle_type_args(frame.type_args);
-            }
-            self.stack.truncate(locals_offset.raw());
-        }
-        result
-    }
-
-    /// Take a pooled type-argument vector or return an empty one.
-    #[inline]
-    pub(crate) fn pooled_type_args(&mut self) -> Vec<RealizedTy> {
-        self.compiled.type_arg_pool.pop().unwrap_or_default()
-    }
-
-    /// Clear and pool an allocated type-argument vector.
-    #[inline]
-    pub(crate) fn recycle_type_args(&mut self, mut type_args: Vec<RealizedTy>) {
-        const POOL: usize = 16;
-        if type_args.capacity() != 0 && self.compiled.type_arg_pool.len() < POOL {
-            type_args.clear();
-            self.compiled.type_arg_pool.push(type_args);
-        }
-    }
-
-    #[cold]
-    #[inline(never)]
-    fn call_compiled_cold(
-        &mut self,
-        callee: HeapPtr,
-        body: CompiledFn,
-        args: &[Value],
-    ) -> Result<Value, Box<VmError>> {
-        self.call_compiled_observed(callee, body, args)
-    }
-
-    /// Enter a plain compiled callee with telemetry, falling back to the VM call path when needed.
-    #[inline(never)]
-    #[allow(unsafe_code)]
-    pub(super) fn call_compiled_observed(
-        &mut self,
-        callee: HeapPtr,
-        body: CompiledFn,
-        args: &[Value],
-    ) -> Result<Value, Box<VmError>> {
-        // SAFETY: the callee lives in the compile-time heap, which is never
-        // collected; see `load_function`.
-        let function: &'static Function = match unsafe { callee.get() } {
-            Object::Function(function) => function,
-            _ => return self.call_compiled_funnelled(callee, &[], args),
-        };
-        let hooked = function
-            .bytecode
-            .compact
-            .as_ref()
-            .is_some_and(|code| code.trace_hook_finish_pc.is_some());
-        #[cfg(test)]
-        let forced = FORCE_CALL_FUNNEL.with(std::cell::Cell::get);
-        #[cfg(not(test))]
-        let forced = false;
-        if hooked
-            || forced
-            || self.pending_call_trace.is_some()
-            || self.pending_call_passes_type_args
-        {
-            return self.call_compiled_funnelled(callee, &[], args);
-        }
-        debug_assert_eq!(args.len(), function.arity);
-
-        let top = self.frames.len() - 1;
-        let caller_frame_idx = self.bytecode_caller_index(top);
-        let visible_caller = self
-            .visible_bytecode_caller_index(top)
-            .and_then(|index| self.frame_function_identity(index));
-        let caller_is_observed = matches!(
-            self.frames.get(caller_frame_idx),
-            Some(Frame::Bytecode(BytecodeFrame {
-                telemetry: Some(_),
-                ..
-            }))
-        );
-        let caller_pc = self.caller_pc(caller_frame_idx, top, 0);
-        let context = self.current_context().clone();
-        let telemetry = self
-            .telemetry
-            .as_mut()
-            .expect("observed compiled call has telemetry");
-        if !telemetry.has_context(&context) {
-            telemetry.set_context(context.clone());
-        }
-        // SAFETY: the heap permit is held, and the caller's locals keep the
-        // arguments and callee live.
-        let frame_telemetry = unsafe {
-            telemetry.enter_bytecode_with_trace(
-                function,
-                callee,
-                visible_caller,
-                caller_pc,
-                caller_is_observed,
-                args,
-                None,
-                CallTypeArgs::default(),
-                |caller, callee| Self::register_call_path_functions(&self.heap, caller, callee),
-            )
-        };
-        let locals_offset = StackIndex::from_raw(self.stack.len());
-        self.frames.push(Frame::Bytecode(BytecodeFrame::compiled(
-            callee,
-            locals_offset,
-            Vec::new(),
-            context,
-            frame_telemetry,
-        )));
-        let result = body(self, args);
-        if let Ok(value) = result {
-            let Some(Frame::Bytecode(frame)) = self.frames.pop() else {
-                unreachable!("a compiled callee has a bytecode frame");
-            };
-            self.stack.truncate(locals_offset.raw());
-            if let Some(frame_telemetry) = frame.telemetry {
-                let telemetry = self
-                    .telemetry
-                    .as_mut()
-                    .expect("observed compiled call has telemetry");
-                if !telemetry.has_context(&frame.context) {
-                    telemetry.set_context(frame.context);
-                }
-                // SAFETY: the heap permit is held and the result is live.
-                unsafe {
-                    telemetry.complete_invocation(
-                        frame_telemetry,
-                        function,
-                        InvocationOutcome::Ok,
-                        Some(value),
-                    );
-                }
-            }
         }
         result
     }
@@ -502,40 +323,5 @@ impl BexVm {
             )),
             Err(error) => Err(Box::new(error)),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::sync::{Arc, atomic::AtomicBool};
-
-    use bex_vm_types::RealizedTy;
-
-    use crate::vm::BexVm;
-
-    fn vm() -> BexVm {
-        let program = baml_test_support::compile_source("function Main() -> int { 1 }");
-        BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap()
-    }
-
-    #[test]
-    fn type_arg_vectors_are_pooled_by_capacity() {
-        let mut vm = vm();
-        let mut first = vm.pooled_type_args();
-        assert_eq!(first.capacity(), 0, "an empty pool hands out a new vector");
-        first.extend_from_slice(&[RealizedTy::Int, RealizedTy::String]);
-        let capacity = first.capacity();
-        vm.recycle_type_args(first);
-        vm.recycle_type_args(Vec::new());
-        assert_eq!(vm.compiled.type_arg_pool.len(), 1);
-        let again = vm.pooled_type_args();
-        assert!(again.is_empty());
-        assert_eq!(again.capacity(), capacity);
-        assert!(vm.compiled.type_arg_pool.is_empty());
-        vm.recycle_type_args(again);
-        for _ in 0..40 {
-            vm.recycle_type_args(Vec::with_capacity(4));
-        }
-        assert_eq!(vm.compiled.type_arg_pool.len(), 16);
     }
 }

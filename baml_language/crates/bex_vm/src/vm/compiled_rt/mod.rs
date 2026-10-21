@@ -6,8 +6,8 @@ mod cell;
 mod fiber;
 mod frame;
 pub(crate) use frame::attach_compiled_bodies;
-pub use frame::{CompiledBodies, CompiledBodyTable, FramePosition};
-pub use state::CompiledState;
+pub use frame::{CompiledBodies, CompiledBodyTable};
+pub(crate) use state::CompiledState;
 pub(crate) use state::SavedCallTypes;
 mod heap;
 mod program;
@@ -34,11 +34,8 @@ pub use baml_type::Freshness;
 use bex_vm_types::{HeapPtr, Value, types::Function};
 /// Severity of a log emitted by generated code.
 pub use btel_records::LogLevel;
-#[cfg(test)]
-pub(crate) use call::FORCE_CALL_FUNNEL;
 pub(crate) use fiber::{Fiber, Request};
 pub use trace::TraceHookMode;
-pub use r#virtual::VirtualSite;
 
 use crate::{
     errors::{ThrowKind, VmError, VmInternalError, VmThrown},
@@ -198,17 +195,6 @@ pub fn rethrow(value: Value, context: Value) -> Box<VmError> {
         throw_kind: ThrowKind::Rethrow,
         context: (!context.is_null()).then_some(context),
     }))
-}
-
-/// Control reached a block the checker proved unreachable.
-#[must_use]
-pub fn unreachable() -> Box<VmError> {
-    Box::new(
-        VmInternalError::CompiledBody {
-            message: "compiled body reached an unreachable block".to_string(),
-        }
-        .into(),
-    )
 }
 
 /// The runtime type tag of a value, as `TypeTag` and `IsTypeTag` read it.

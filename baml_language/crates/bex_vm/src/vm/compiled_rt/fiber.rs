@@ -16,10 +16,7 @@
 //! below the waiting one, so nesting on the fiber always mirrors the VM's
 //! frame stack.
 //!
-//! Every VM that runs compiled code has its own fiber, and a program that
-//! spawns many short tasks makes many VMs. Their stacks come from a process-wide
-//! pool: a fiber dropped with no body on it hands its stack back, and the next
-//! fiber takes it instead of mapping a fresh one.
+//! Every VM that runs compiled code has its own fiber, mapped on first use.
 //!
 //! Compiled bodies are packed for native hosts only. Targets without stack
 //! switching (wasm, Windows on aarch64) build the VM with a fiber that is never
@@ -58,8 +55,7 @@ pub(crate) enum Message {
         vm: NonNull<BexVm>,
         outcome: Result<Value, Box<VmError>>,
     },
-    /// Leave the fiber. Sent only with no body on it, so the coroutine returns
-    /// and its stack can be reused.
+    /// Leave the fiber. Sent only with no body on it, so the coroutine returns.
     Stop,
 }
 
@@ -128,20 +124,12 @@ impl BexVm {
 
 #[cfg(not(any(target_arch = "wasm32", all(windows, target_arch = "aarch64"))))]
 pub(crate) use stackful::{Fiber, YielderPtr};
-#[cfg(all(
-    test,
-    not(any(target_arch = "wasm32", all(windows, target_arch = "aarch64")))
-))]
-pub(crate) use stackful::{POOL_LIMIT, StackPool};
 #[cfg(any(target_arch = "wasm32", all(windows, target_arch = "aarch64")))]
 pub(crate) use stackless::{Fiber, YielderPtr};
 
 #[cfg(not(any(target_arch = "wasm32", all(windows, target_arch = "aarch64"))))]
 mod stackful {
-    use std::{
-        ptr::NonNull,
-        sync::{Mutex, PoisonError},
-    };
+    use std::ptr::NonNull;
 
     use bex_vm_types::Value;
     use corosensei::{
@@ -169,49 +157,8 @@ mod stackful {
     /// and unwinding.
     const STACK_RED_ZONE: usize = 256 << 10;
 
-    /// Idle stacks kept mapped; any beyond this many are unmapped.
-    pub(crate) const POOL_LIMIT: usize = 64;
-
-    /// Stacks of fibers dropped with no body on them, for the fibers that
-    /// come next. Mapping and unmapping a stack per VM is measurable system
-    /// time in a program that spawns many short tasks.
-    ///
-    /// A pooled stack holds no frames: the fiber that returns it has made its
-    /// coroutine return first (see [`Fiber::drop`]). The pages keep whatever
-    /// the last fiber wrote, which the next coroutine overwrites as it runs.
-    pub(crate) struct StackPool(Mutex<Vec<DefaultStack>>);
-
-    static POOL: StackPool = StackPool::new();
-
-    impl StackPool {
-        pub(crate) const fn new() -> Self {
-            Self(Mutex::new(Vec::new()))
-        }
-
-        /// A pooled stack, or a freshly mapped one.
-        fn take(&self) -> std::io::Result<DefaultStack> {
-            let pooled = self.0.lock().unwrap_or_else(PoisonError::into_inner).pop();
-            pooled.map_or_else(|| DefaultStack::new(STACK_SIZE), Ok)
-        }
-
-        /// Keep `stack` for the next fiber, or unmap it when the pool is full.
-        fn put(&self, stack: DefaultStack) {
-            let mut stacks = self.0.lock().unwrap_or_else(PoisonError::into_inner);
-            if stacks.len() < POOL_LIMIT {
-                stacks.push(stack);
-            }
-            // Otherwise `stack` is unmapped on return, after the lock is released.
-        }
-
-        #[cfg(test)]
-        pub(crate) fn len(&self) -> usize {
-            self.0.lock().unwrap_or_else(PoisonError::into_inner).len()
-        }
-    }
-
     pub(crate) struct Fiber {
-        /// Taken only by `drop`, which needs the coroutine by value.
-        coroutine: Option<Coroutine<Message, Request, ()>>,
+        coroutine: Coroutine<Message, Request, ()>,
         /// Lowest address a compiled callee may start at; see [`BexVm::stack_room`].
         floor: usize,
         /// Bodies running or waiting on the fiber. Each [`Message::Enter`]
@@ -219,8 +166,6 @@ mod stackful {
         /// coroutine is parked in its top-level loop (or has never started)
         /// and the stack holds no frame of ours.
         bodies: usize,
-        /// Where the stack goes when the fiber is dropped idle.
-        pool: &'static StackPool,
     }
 
     // SAFETY: a fiber is only resumed by the thread that owns its VM, and
@@ -235,12 +180,7 @@ mod stackful {
 
     impl Fiber {
         pub(crate) fn new() -> std::io::Result<Self> {
-            Self::with_pool(&POOL)
-        }
-
-        /// A fiber whose stack comes from, and returns to, `pool`.
-        pub(crate) fn with_pool(pool: &'static StackPool) -> std::io::Result<Self> {
-            let stack = pool.take()?;
+            let stack = DefaultStack::new(STACK_SIZE)?;
             let floor = stack.limit().get() + STACK_RED_ZONE;
             let coroutine = Coroutine::with_stack(stack, |yielder, mut message| {
                 loop {
@@ -258,10 +198,9 @@ mod stackful {
                 }
             });
             Ok(Self {
-                coroutine: Some(coroutine),
+                coroutine,
                 floor,
                 bodies: 0,
-                pool,
             })
         }
 
@@ -273,11 +212,7 @@ mod stackful {
             if matches!(message, Message::Enter { .. }) {
                 self.bodies += 1;
             }
-            let coroutine = self
-                .coroutine
-                .as_mut()
-                .expect("a fiber keeps its coroutine until it is dropped");
-            match coroutine.resume(message) {
+            match self.coroutine.resume(message) {
                 CoroutineResult::Yield(request) => {
                     if matches!(request, Request::Done(_)) {
                         self.bodies -= 1;
@@ -288,11 +223,6 @@ mod stackful {
             }
         }
 
-        #[cfg(test)]
-        pub(crate) fn bodies(&self) -> usize {
-            self.bodies
-        }
-
         /// Lowest address a compiled callee may start at; see [`BexVm::stack_room`].
         pub(crate) fn floor(&self) -> usize {
             self.floor
@@ -301,23 +231,19 @@ mod stackful {
 
     impl Drop for Fiber {
         fn drop(&mut self) {
-            let Some(mut coroutine) = self.coroutine.take() else {
-                return;
-            };
             // A waiting body keeps frames on the stack: dropping the coroutine
-            // unwinds them, and the stack is unmapped with it. A panic in
-            // flight gets the same, with no stack switch during unwinding.
-            if self.bodies != 0 || std::thread::panicking() {
+            // unwinds them. A panic in flight gets the same, with no stack
+            // switch during unwinding. A coroutine that never ran holds nothing.
+            if self.bodies != 0 || std::thread::panicking() || !self.coroutine.started() {
                 return;
             }
-            // The coroutine is parked in its top-level loop, or has never run:
-            // either way `Stop` makes it return at once, and a returned
-            // coroutine gives up its stack with nothing on it.
-            match coroutine.resume(Message::Stop) {
+            // The coroutine is parked in its top-level loop: `Stop` makes it
+            // return at once, which is cheaper than the forced unwind that
+            // dropping it suspended would take.
+            match self.coroutine.resume(Message::Stop) {
                 CoroutineResult::Return(()) => {}
                 CoroutineResult::Yield(_) => unreachable!("a stopped fiber returns"),
             }
-            self.pool.put(coroutine.into_stack());
         }
     }
 

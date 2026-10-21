@@ -257,15 +257,6 @@ impl EarlyYieldCheck {
         self.counter == 0
     }
 
-    /// Whether the next [`Self::tick`] elapses: a caller that must not poll
-    /// yet (compiled code taking an `await` fast path) leaves that tick to the
-    /// instruction that can yield.
-    #[inline]
-    #[must_use]
-    pub fn is_due(&self) -> bool {
-        self.counter <= 1
-    }
-
     /// Make the next [`Self::tick`] elapse, so the flags are polled at the
     /// next control-flow check instead of up to an interval later. For a VM
     /// that has just learned it took spending over the GC budget.

@@ -150,7 +150,7 @@ impl BexVm {
     /// Build a catchable `baml.panics.IndexOutOfBounds` throw.
     #[cold]
     #[inline(never)]
-    pub fn index_out_of_bounds(&mut self, index: i64, length: usize) -> VmError {
+    pub(crate) fn index_out_of_bounds(&mut self, index: i64, length: usize) -> VmError {
         VmError::thrown_fresh(
             self.panic_to_exception_value(VmPanic::IndexOutOfBounds { index, length }),
         )

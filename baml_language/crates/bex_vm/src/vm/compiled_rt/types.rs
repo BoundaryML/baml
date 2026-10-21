@@ -1,7 +1,7 @@
 //! Runtime type arguments, type values, structural tests, and generic callables.
 
 use bex_vm_types::{
-    GlobalIndex, HeapPtr, Object, ObjectType, RealizedTy, TyTemplate, TypeHead, Value,
+    GlobalIndex, HeapPtr, Object, ObjectType, RealizedTy, TypeHead, Value,
     types::{FunctionType, GenericFunction, TypeValue},
 };
 
@@ -13,8 +13,7 @@ use crate::{
 impl BexVm {
     /// Return frame type arguments in De Bruijn order, with owner arguments first.
     #[inline]
-    #[must_use]
-    pub fn frame_type_args(&self, depth: usize) -> &[RealizedTy] {
+    pub(crate) fn frame_type_args(&self, depth: usize) -> &[RealizedTy] {
         let frame = self.compiled_frame(depth);
         &frame.type_args
     }
@@ -32,17 +31,6 @@ impl BexVm {
                 },
             ))),
         }
-    }
-
-    /// Resolve a template against the frame's type arguments.
-    pub fn substitute(
-        &self,
-        depth: usize,
-        template: &TyTemplate,
-    ) -> Result<RealizedTy, Box<VmError>> {
-        template
-            .substitute(self.frame_type_args(depth), self)
-            .map_err(|error| Box::new(substitution_error(&error)))
     }
 
     /// Create a type value, preserving the identity of an explicitly bound `slot`.
@@ -257,7 +245,7 @@ fn substitution_error(error: &baml_type::SubstituteError) -> VmError {
 mod tests {
     use std::sync::{Arc, atomic::AtomicBool};
 
-    use bex_vm_types::{RealizedTy, StackIndex, TyTemplate, Value};
+    use bex_vm_types::{RealizedTy, StackIndex, Value};
 
     use crate::vm::{BexVm, BytecodeFrame, Frame};
 
@@ -282,11 +270,6 @@ mod tests {
         let vm = vm_with_frame(&[RealizedTy::Int, RealizedTy::String]);
         let depth = vm.frame_depth();
         assert_eq!(vm.frame_type_arg(depth, 1).unwrap(), RealizedTy::String);
-        let list_of_t = TyTemplate::List(Box::new(TyTemplate::TypeArgRef(0)));
-        assert_eq!(
-            vm.substitute(depth, &list_of_t).unwrap(),
-            RealizedTy::List(Box::new(RealizedTy::Int))
-        );
         let out_of_range = vm.frame_type_arg(depth, 2).unwrap_err();
         assert!(
             matches!(
@@ -297,7 +280,6 @@ mod tests {
             ),
             "{out_of_range:?}"
         );
-        assert!(vm.substitute(depth, &TyTemplate::TypeArgRef(7)).is_err());
     }
 
     #[test]

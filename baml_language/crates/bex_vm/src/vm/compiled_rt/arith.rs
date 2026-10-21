@@ -23,15 +23,6 @@ impl BexVm {
         self.cmpop_values(op, left, right).map_err(Box::new)
     }
 
-    /// Add tagged integers with i63 overflow checking.
-    #[inline]
-    pub fn add_int(&mut self, l: Value, r: Value) -> Result<Value, Box<VmError>> {
-        match Value::tagged_int_add_checked(l, r) {
-            Some(v) => Ok(v),
-            None => Err(Box::new(self.tagged_int_overflow(l, '+', r))),
-        }
-    }
-
     /// Box a float for use as a tagged value.
     #[inline]
     pub fn float_value(&mut self, f: f64) -> Value {
@@ -71,7 +62,7 @@ impl BexVm {
     /// Build a catchable `baml.panics.DivisionByZero` throw for `l / 0`.
     #[cold]
     #[inline(never)]
-    pub fn division_by_zero(&mut self, l: i64, r: i64) -> VmError {
+    pub(crate) fn division_by_zero(&mut self, l: i64, r: i64) -> VmError {
         VmError::thrown_fresh(self.panic_to_exception_value(VmPanic::DivisionByZero {
             left: Value::int(l),
             right: Value::int(r),
