@@ -830,12 +830,14 @@ impl<'a> Parser<'a> {
 
     /// Whether the current token can begin an expression. `<` does only when
     /// it opens a generic lambda (`<T>(x: T) => x`); otherwise it is a
-    /// comparison continuing the expression before it.
+    /// comparison continuing the expression before it. The contextual
+    /// `catch_all_panics` keyword is lexed as a `Word` but, like `catch`,
+    /// opens a clause that continues the expression before it.
     fn at_expression_start(&self) -> bool {
         self.current().is_some_and(|token| {
             Self::is_start_of_expression(token.kind)
                 && (token.kind != TokenKind::Less || self.looks_like_generic_lambda())
-        })
+        }) && !self.at_catch_clause_start()
     }
 
     /// Check if there's a newline before the next non-trivia token.
@@ -14283,6 +14285,21 @@ function f() -> int {
         assert_no_errors(&errors);
         assert_eq!(count_kind(&root, SyntaxKind::CALL_EXPR), 1);
         assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 3);
+    }
+
+    #[test]
+    fn catch_clause_line_continues_the_expression() {
+        // `catch`, `catch_all` and the contextual `catch_all_panics` (lexed as
+        // a plain word) on the next line attach a clause to the expression
+        // before them rather than starting a new statement.
+        for keyword in ["catch", "catch_all", "catch_all_panics"] {
+            let source = format!(
+                "function f(g: () -> int) -> int {{\n    g()\n    {keyword} (e) {{\n        _ => 0\n    }}\n}}\n"
+            );
+            let (root, errors) = parse_source(&source);
+            assert_no_errors(&errors);
+            assert_eq!(count_kind(&root, SyntaxKind::CATCH_EXPR), 1, "{keyword}");
+        }
     }
 
     #[test]
