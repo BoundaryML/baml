@@ -96,13 +96,21 @@ BAML splits TypeScript's `number` into `int` for integers and `float` for floati
 
 ## Strings
 
-<PerspectiveNote kind="same" summary="Double quotes, backticks, and escapes">
+<PerspectiveNote kind="same" summary="Double quotes and backticks">
 
 ```typescript
 "Hello\nworld"         // Newline
 `Hello ${name}`        // Interpolation
 "Hello ${name}"        // Literal text
 ```
+
+</PerspectiveNote>
+
+<PerspectiveNote kind="modified" summary="Escapes and raw strings">
+
+BAML accepts the JSON escapes (including `\uD83D\uDE00` surrogate pairs), `\'`, `\0`, ASCII `\xHH`, and `\u{1F600}`. An unknown escape is a compile error, where TypeScript drops the backslash: `"\d+"` is `d+` in TypeScript and rejected in BAML. `\v` is not supported.
+
+Instead of `` String.raw`\d+` ``, write a raw string: `r"\d+"`.
 
 </PerspectiveNote>
 

@@ -189,8 +189,10 @@ pub enum DiagnosticId {
     MissingConfigKey,
     MalformedAttribute,
 
-    // Byte string literal errors (E0109)
-    InvalidByteStringEscape,
+    // String literal escape errors (E0109): an unknown or malformed escape
+    // sequence in a `"..."`, backtick, or `b"..."` literal, or a non-ASCII
+    // character in a byte string.
+    InvalidStringEscape,
 
     // E0110 is retired and not to be reused: it reported `void` outside a
     // return position, and `void` is a type like any other (BEP-079).
@@ -560,8 +562,8 @@ impl DiagnosticId {
             DiagnosticId::MissingConfigKey => "E0104",
             DiagnosticId::MalformedAttribute => "E0105",
 
-            // Byte string literal errors
-            DiagnosticId::InvalidByteStringEscape => "E0109",
+            // String literal escape errors
+            DiagnosticId::InvalidStringEscape => "E0109",
 
             DiagnosticId::WildcardTypeNotAllowed => "E0147",
 
