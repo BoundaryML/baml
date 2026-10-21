@@ -53,9 +53,9 @@ pub struct FrameRecord {
     level: u32,
     entry: bool,
     receipt: Cell<Option<FrameTelemetry>>,
-    /// Type arguments in the callee's De Bruijn order. An entry record's are
-    /// its VM frame's.
-    type_args: UnsafeCell<Vec<RealizedTy>>,
+    /// Type arguments in the callee's De Bruijn order; `None` for none. An
+    /// entry record's are its VM frame's.
+    type_args: UnsafeCell<Option<Box<[RealizedTy]>>>,
 }
 
 impl FrameRecord {
@@ -103,6 +103,16 @@ impl FrameRecord {
         self.receipt.get()
     }
 
+    /// Whether the record holds a receipt, reading only its tag.
+    #[inline]
+    fn has_receipt(&self) -> bool {
+        // SAFETY: nothing else borrows the cell's contents.
+        #[allow(unsafe_code)]
+        unsafe {
+            (*self.receipt.as_ptr()).is_some()
+        }
+    }
+
     #[inline]
     pub(crate) fn set_receipt(&self, receipt: Option<FrameTelemetry>) {
         self.receipt.set(receipt);
@@ -113,7 +123,7 @@ impl FrameRecord {
     pub(crate) fn own_type_args(&self) -> &[RealizedTy] {
         // SAFETY: the vector is replaced or mutated only by collection
         // forwarding, which runs while no body holds a borrow of it.
-        unsafe { &*self.type_args.get() }
+        unsafe { (*self.type_args.get()).as_deref().unwrap_or(&[]) }
     }
 
     #[inline]
@@ -146,7 +156,8 @@ impl FrameRecord {
         forward(&self.package);
         // SAFETY: collection runs while every body is parked, so nothing
         // borrows the type arguments.
-        for ty in unsafe { &mut *self.type_args.get() } {
+        let type_args = unsafe { &mut *self.type_args.get() };
+        for ty in type_args.iter_mut().flat_map(|types| types.iter_mut()) {
             ty.visit_heads_mut(&mut |head| {
                 if head.is_resolved()
                     && let Some(&moved) = roots.get(&head.ptr())
@@ -339,7 +350,7 @@ impl BexVm {
             let args = args(vm);
             vm.enter_record_receipt(caller, function, callee, &[], &[], args.as_ref())
         };
-        self.call_record_in(callee, caller.package.get(), Vec::new(), observe, body)
+        self.call_record_in(callee, caller.package.get(), None, observe, body)
     }
 
     /// [`Self::call_record`] for a generic callee, whose frame starts with
@@ -363,7 +374,7 @@ impl BexVm {
         self.call_record_in(
             callee,
             caller.package.get(),
-            type_args.to_vec(),
+            boxed_types(type_args.to_vec()),
             observe,
             body,
         )
@@ -388,9 +399,13 @@ impl BexVm {
             let function = vm.observed_callee(callee)?;
             vm.enter_record_receipt(caller, function, callee, carried, &[], args)
         };
-        self.call_record_in(callee, package, type_args, observe, |vm, frame| {
-            body(vm, frame, args)
-        })
+        self.call_record_in(
+            callee,
+            package,
+            boxed_types(type_args),
+            observe,
+            |vm, frame| body(vm, frame, args),
+        )
     }
 
     #[allow(
@@ -404,7 +419,7 @@ impl BexVm {
         &mut self,
         callee: HeapPtr,
         package: HeapPtr,
-        type_args: Vec<RealizedTy>,
+        type_args: Option<Box<[RealizedTy]>>,
         observe: impl FnOnce(&mut BexVm, &[RealizedTy]) -> Option<FrameTelemetry>,
         body: impl FnOnce(&mut BexVm, &FrameRecord) -> Result<T, Box<VmError>>,
     ) -> Result<T, Box<VmError>> {
@@ -418,13 +433,6 @@ impl BexVm {
             return Err(Box::new(self.record_overflow()));
         }
         self.stack_room()?;
-        // The invocation is entered with the caller still innermost, as the
-        // call path enters it before pushing the callee's frame.
-        let receipt = if self.telemetry.is_some() {
-            observe(self, &type_args)
-        } else {
-            None
-        };
         let base = self.stack.len();
         let record = FrameRecord {
             prev: Cell::new(links.top.get()),
@@ -435,9 +443,16 @@ impl BexVm {
             base: base as u32,
             level: level as u32,
             entry: false,
-            receipt: Cell::new(receipt),
+            receipt: Cell::new(None),
             type_args: UnsafeCell::new(type_args),
         };
+        // The invocation is entered with the caller still innermost, as the
+        // call path enters it before pushing the callee's frame. The receipt
+        // is written into the record out of line: a receipt built on this
+        // path and moved in would be a store-forwarding stall on every call.
+        if self.telemetry.is_some() && self.observed_callee(callee).is_some() {
+            self.observe_into(&record, observe);
+        }
         links.top.set(&raw const record);
         links.count.set(count + 1);
         let pop = Pop {
@@ -450,8 +465,8 @@ impl BexVm {
             Ok(value) => {
                 self.stack.truncate(base);
                 drop(pop);
-                if let Some(receipt) = record.receipt.take() {
-                    self.complete_record(receipt, record.function(), value);
+                if record.has_receipt() {
+                    self.complete_record(&record, value);
                 }
             }
             Err(_) => {
@@ -489,14 +504,10 @@ impl BexVm {
         passed: &[RealizedTy],
         args: &[Value],
     ) -> Option<FrameTelemetry> {
-        let (visible_caller, caller_pc, caller_is_observed) =
-            self.record_caller_facts(Self::record_frame(caller));
-        let context = self.current_context().clone();
+        let (visible_caller, caller_pc, caller_is_observed) = self.direct_caller_facts(caller);
         let callee_fn = self.callable_function_identity(callee).unwrap_or(callee);
+        self.select_current_context();
         let telemetry = self.telemetry.as_mut()?;
-        if !telemetry.has_context(&context) {
-            telemetry.set_context(context);
-        }
         // SAFETY: the heap permit is held, and the caller keeps the
         // arguments and callee live.
         unsafe {
@@ -514,15 +525,25 @@ impl BexVm {
         }
     }
 
+    /// Enter the invocation of the callee with `record`, before it is linked.
+    #[cold]
+    #[inline(never)]
+    fn observe_into(
+        &mut self,
+        record: &FrameRecord,
+        observe: impl FnOnce(&mut BexVm, &[RealizedTy]) -> Option<FrameTelemetry>,
+    ) {
+        record.receipt.set(observe(self, record.own_type_args()));
+    }
+
     /// Complete a directly called callee's invocation with its result.
     #[cold]
     #[inline(never)]
-    fn complete_record<T: RecordResult>(
-        &mut self,
-        receipt: FrameTelemetry,
-        callee: HeapPtr,
-        value: &T,
-    ) {
+    fn complete_record<T: RecordResult>(&mut self, record: &FrameRecord, value: &T) {
+        let Some(receipt) = record.receipt.take() else {
+            return;
+        };
+        let callee = record.function();
         let value = value.to_value(self);
         // SAFETY: the callee is rooted by its caller for the call.
         #[allow(unsafe_code)]
@@ -584,7 +605,7 @@ impl BexVm {
             level: (idx + links.count.get() as usize) as u32,
             entry: true,
             receipt: Cell::new(None),
-            type_args: UnsafeCell::new(Vec::new()),
+            type_args: UnsafeCell::new(None),
         };
         links.top.set(&raw const record);
         let pop = Pop {
@@ -975,6 +996,50 @@ impl BexVm {
         )
     }
 
+    /// Caller facts for a call compiled code makes directly: the calling
+    /// body's identity, the compact offset of the call site it recorded, and
+    /// whether its invocation is observed, all read from its own record (an
+    /// entry record's frame is observed through its VM frame). A body making
+    /// a call runs; it is neither a native continuation nor a hook target
+    /// whose hook is evaluating, which [`Self::record_caller_facts`] resolves.
+    fn direct_caller_facts(&self, caller: &FrameRecord) -> (Option<HeapPtr>, u32, bool) {
+        let ptr = caller.function();
+        let identity = self.callable_function_identity(ptr);
+        let pc = self
+            .get_object(ptr)
+            .as_callable()
+            .ok()
+            .and_then(|function| {
+                function
+                    .bytecode
+                    .compact
+                    .as_ref()?
+                    .offset_of(caller.pc() as usize)
+            })
+            .map_or(0, |pc| u32::try_from(pc).unwrap_or(u32::MAX));
+        let observed = match Self::record_vm_frame(caller) {
+            Some(idx) => matches!(
+                &self.frames[idx],
+                Frame::Bytecode(frame) if frame.telemetry.is_some()
+            ),
+            None => caller.has_receipt(),
+        };
+        (identity, pc, observed)
+    }
+
+    /// Make the current context telemetry's, cloning it only when it changed.
+    fn select_current_context(&mut self) {
+        let Some(telemetry) = self.telemetry.as_ref() else {
+            return;
+        };
+        if !telemetry.has_context(self.current_context()) {
+            let context = self.current_context().clone();
+            if let Some(telemetry) = self.telemetry.as_mut() {
+                telemetry.set_context(context);
+            }
+        }
+    }
+
     /// Enter a compiled callee's invocation for telemetry, with caller facts
     /// read from `caller`.
     #[allow(unsafe_code)]
@@ -1016,18 +1081,20 @@ impl BexVm {
         function: &Function,
         value: Value,
     ) {
-        let context = self.current_context().clone();
+        self.select_current_context();
         let Some(telemetry) = self.telemetry.as_mut() else {
             return;
         };
-        if !telemetry.has_context(&context) {
-            telemetry.set_context(context);
-        }
         // SAFETY: the heap permit is held and the result is live.
         unsafe {
             telemetry.complete_invocation(receipt, function, InvocationOutcome::Ok, Some(value));
         }
     }
+}
+
+/// Type arguments as a record holds them.
+fn boxed_types(type_args: Vec<RealizedTy>) -> Option<Box<[RealizedTy]>> {
+    (!type_args.is_empty()).then(|| type_args.into_boxed_slice())
 }
 
 /// What a compiled body returns, boxed for telemetry's output capture.
