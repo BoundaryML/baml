@@ -580,8 +580,9 @@ function case_1_1_full_response() -> bool {
         let cl = typesafeai.Client.new(api_key = "test-key", base_url = mock.base_url());
         let result = ai.Agent.new(client = cl).run(IsUrgent@spec(tier(), message()));
         assert.is_true(result.value);
-        assert.equal(result.usage.input_tokens, 142);
-        assert.equal(result.usage.output_tokens, 9);
+        let usage = ai.events.usage_for(result.usage, ai.events.ModelKey { provider: "typesafeai", model: "jev-latest" });
+        assert.equal(usage?.input_tokens, 142);
+        assert.equal(usage?.output_tokens, 9);
         assert.equal(mock.last_request().header("authorization"), "Bearer test-key");
         true
     })
@@ -1268,7 +1269,7 @@ function case_3_1_envelope() -> bool {
         let seen: string[] = [];
         let _ = AssessTicket@spec(tier(), message()).call(client = cl, on_event = (event: ai.events.Event) -> {
             match (event) {
-                let call: ai.events.LLMCall => {
+                let call: ai.events.ModelCall => {
                     seen.push(call.http_response?.body ?? "<none>");
                     null
                 },
@@ -1287,15 +1288,15 @@ test "3.1 the full envelope is visible through the call hook" {
 // ─── 4 not JEV-convertible ───────────────────────────────────────────────────
 
 test "4 reject string" {
-    assert.is_true(type_rejected(reflect.Type.of<string>()))
+    assert.is_true(type_rejected(string.type()))
 }
 
 test "4 reject int" {
-    assert.is_true(type_rejected(reflect.Type.of<int>()))
+    assert.is_true(type_rejected(int.type()))
 }
 
 test "4 reject bigint" {
-    assert.is_true(type_rejected(reflect.Type.of<bigint>()))
+    assert.is_true(type_rejected(bigint.type()))
 }
 
 test "4 reject string array" {
@@ -1331,11 +1332,11 @@ test "4 reject mixed structural union" {
 }
 
 test "4 reject class with unsupported leaf" {
-    assert.is_true(type_rejected(reflect.Type.of<WithNotes>()))
+    assert.is_true(type_rejected(WithNotes.type()))
 }
 
 test "4 reject recursive class" {
-    assert.is_true(type_rejected(reflect.Type.of<Node>()))
+    assert.is_true(type_rejected(Node.type()))
 }
 
 test "4 reject recursive alias" {
@@ -1343,15 +1344,15 @@ test "4 reject recursive alias" {
 }
 
 test "4 reject image output" {
-    assert.is_true(type_rejected(reflect.Type.of<image>()))
+    assert.is_true(type_rejected(image.type()))
 }
 
 test "4 reject audio output" {
-    assert.is_true(type_rejected(reflect.Type.of<audio>()))
+    assert.is_true(type_rejected(audio.type()))
 }
 
 test "4 reject pdf output" {
-    assert.is_true(type_rejected(reflect.Type.of<pdf>()))
+    assert.is_true(type_rejected(pdf.type()))
 }
 
 test "4 reject image input" {
@@ -1369,11 +1370,11 @@ test "5 standalone literal is rejected" {
 }
 
 test "5 single-variant enum is rejected" {
-    assert.is_true(type_rejected(reflect.Type.of<Only>()))
+    assert.is_true(type_rejected(Only.type()))
 }
 
 test "5 empty class is rejected" {
-    assert.is_true(type_rejected(reflect.Type.of<Empty>()))
+    assert.is_true(type_rejected(Empty.type()))
 }
 
 test "5 literal-typed field rejects the class" {

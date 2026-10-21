@@ -28,7 +28,9 @@ claiming requires provable overlap so a rigid arm never covers `null`
 [B-633 live half], non-exhaustive matches type as Error. S10b (flow
 narrowing, the settled eager-forward design - no CFG, BAML control flow
 is structured): `flow` overlay (`BindingId -> Ty`, cloned at branches,
-capture-guarded), `CondFacts` with walk-time De Morgan [B-688],
+capture-guarded), `CondFacts` with walk-time De Morgan [B-688], the
+right operand of `&&` / `||` typed under the left operand's facts (the
+operators short-circuit; facts are for uncaptured bare locals only),
 divergence-aware branch merge subsuming early-return narrowing, loop
 havoc + entry-join [B-735], assignments checked against DECLARED with
 narrow-on-assign [B-618], match residual accumulation and else-side

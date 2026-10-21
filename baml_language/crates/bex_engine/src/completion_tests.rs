@@ -138,7 +138,7 @@ async fn conversion_errors_and_terminal_outcomes_finalize() {
 async fn ready_and_suspended_sysop_failures_finalize() {
     for suspended in [false, true] {
         let mut ops = sys_native::SysOps::native();
-        ops.baml_sys_sleep = Arc::new(move |_, _, _, _, _| {
+        ops.baml_sys__sleep = Arc::new(move |_, _, _, _, _| {
             let failure = Err(sys_types::OpError::new(
                 SysOp::BamlSysSleep,
                 bex_vm_types::errors::VmInternalError::BridgeFailure {
@@ -348,7 +348,7 @@ async fn queued_and_running_child_cancellation_finish_once() {
     ] {
         let (started_tx, mut started_rx) = tokio::sync::mpsc::unbounded_channel();
         let mut ops = sys_native::SysOps::native();
-        ops.baml_sys_sleep = Arc::new(move |_, _, _, _, _| {
+        ops.baml_sys__sleep = Arc::new(move |_, _, _, _, _| {
             let started_tx = started_tx.clone();
             SysOpResult::Async(Box::pin(async move {
                 // Report only after this child's sys-op future is polled.

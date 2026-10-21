@@ -180,7 +180,7 @@ pub enum DiagnosticId {
     RemovedFeature,
 
     // Namespace diagnostics (E0099)
-    NamespaceShadow,
+    NamespaceNameCollision,
 
     // Lowering diagnostics (E0101-E0105)
     MissingName,
@@ -189,11 +189,13 @@ pub enum DiagnosticId {
     MissingConfigKey,
     MalformedAttribute,
 
-    // Byte string literal errors (E0109)
-    InvalidByteStringEscape,
+    // String literal escape errors (E0109): an unknown or malformed escape
+    // sequence in a `"..."`, backtick, or `b"..."` literal, or a non-ASCII
+    // character in a byte string.
+    InvalidStringEscape,
 
-    // Void type position errors (E0110)
-    VoidInNonReturnPosition,
+    // E0110 is retired and not to be reused: it reported `void` outside a
+    // return position, and `void` is a type like any other (BEP-079).
 
     // Wildcard `_` type in a non-inferable position (E0147)
     WildcardTypeNotAllowed,
@@ -382,12 +384,13 @@ pub enum DiagnosticId {
     /// A condition whose static type decides the branch (always truthy /
     /// always falsy) - B-1563 truthiness.
     ConditionAlwaysConstant,
-    /// `unreflect(value)` was written somewhere other than as the whole
-    /// right-hand side of a body-level `type T = …;` binding. The binding is
-    /// the one spelling that lifts a runtime type; every other position names
-    /// the bound `T`.
+    /// Retired (E0168): `unreflect(value)` written anywhere other than as the
+    /// whole right-hand side of a body-level `type T = …;` binding. Nothing
+    /// produces it since `let type T = value;` replaced both spellings (their
+    /// removal reports E0098); the variant stays so later variants keep their
+    /// cached discriminants.
     RuntimeTypeMustBeNamed,
-    /// `reflect.function.Type.specialize` was given type arguments the
+    /// `reflect.Function.specialize` was given type arguments the
     /// callable cannot accept: the wrong number of them, one that fails a
     /// declared interface bound, or any at all for a callable with nothing
     /// left to bind.
@@ -399,14 +402,14 @@ pub enum DiagnosticId {
     /// `map<string>`), diagnosed at AST lowering before the arguments could
     /// be silently erased.
     InvalidBuiltinTypeArguments,
-    /// A value typed by a body-scoped `type T = …` binding would be
+    /// A value typed by a body-scoped `let type T = …` binding would be
     /// observable outside the block that binds `T`: the block's value, a
     /// thrown type a published clause would carry, or a type still being
     /// inferred that would be decided as one.
     ScopedTypeEscapesBlock,
-    /// A value binding or body type binding took a name the compiler emits as
-    /// a path root in its desugars, which the binding would shadow.
-    ReservedBindingName,
+    /// A binding, item, type parameter, or namespace was named `root`, the
+    /// path to the package itself.
+    RootIsReserved,
     /// A class literal named a class that holds a `$rust_type` field. That
     /// state is created only by the class's own native functions; a literal
     /// could only copy a handle out of another value, which relabels what the
@@ -571,7 +574,7 @@ impl DiagnosticId {
             // Removed feature errors
             DiagnosticId::RemovedFeature => "E0098",
 
-            DiagnosticId::NamespaceShadow => "E0099",
+            DiagnosticId::NamespaceNameCollision => "E0099",
 
             // Lowering diagnostics
             DiagnosticId::MissingName => "E0107",
@@ -580,11 +583,9 @@ impl DiagnosticId {
             DiagnosticId::MissingConfigKey => "E0104",
             DiagnosticId::MalformedAttribute => "E0105",
 
-            // Byte string literal errors
-            DiagnosticId::InvalidByteStringEscape => "E0109",
+            // String literal escape errors
+            DiagnosticId::InvalidStringEscape => "E0109",
 
-            // Void type position errors
-            DiagnosticId::VoidInNonReturnPosition => "E0110",
             DiagnosticId::WildcardTypeNotAllowed => "E0147",
 
             // Interface diagnostics
@@ -664,7 +665,7 @@ impl DiagnosticId {
             DiagnosticId::InvalidBuiltinTypeArguments => "E0171",
             DiagnosticId::ScopedTypeEscapesBlock => "E0172",
             DiagnosticId::CannotConstructOpaqueClass => "E0173",
-            DiagnosticId::ReservedBindingName => "E0176",
+            DiagnosticId::RootIsReserved => "E0176",
             DiagnosticId::ServedInterfaceExportsFunctionsOnly => "E0178",
             DiagnosticId::CallSiteBuiltinValue => "E0177",
             DiagnosticId::AssignmentToGlobal => "E0179",
@@ -955,7 +956,7 @@ mod tests {
             DiagnosticId::DuplicateName,
             DiagnosticId::LoweringError,
             DiagnosticId::RemovedFeature,
-            DiagnosticId::NamespaceShadow,
+            DiagnosticId::NamespaceNameCollision,
         ];
 
         for id in ids {
@@ -979,7 +980,7 @@ mod tests {
         // new variants are appended.
         assert_eq!(
             borsh::to_vec(&DiagnosticId::ScopedTypeEscapesBlock).unwrap(),
-            vec![140]
+            vec![139]
         );
         assert_eq!(borsh::to_vec(&Severity::Error).unwrap(), vec![0]);
         assert_eq!(borsh::to_vec(&Severity::Warning).unwrap(), vec![1]);

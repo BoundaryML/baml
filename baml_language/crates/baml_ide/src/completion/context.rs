@@ -464,6 +464,7 @@ fn in_prose(token: &SyntaxToken) -> bool {
             | SyntaxKind::BACKTICK_IF_OPEN
             | SyntaxKind::BACKTICK_ELSE_IF => return false,
             SyntaxKind::STRING_LITERAL
+            | SyntaxKind::DEPRECATED_HASH_STRING_LITERAL
             | SyntaxKind::RAW_STRING_LITERAL
             | SyntaxKind::BYTE_STRING_LITERAL
             | SyntaxKind::BACKTICK_STRING_LITERAL

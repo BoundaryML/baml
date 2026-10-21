@@ -8,7 +8,10 @@ pub(super) const SOURCE: &str =
     include_str!("../../../baml_tests/baml_src/ns_trace_context/recording.baml");
 
 /// The entries of a context map, which must have been captured whole.
-fn whole_map(snapshot: &DecodedSnapshot, id: btel_snapshot::NodeId) -> &[(Box<str>, DecodedValue)] {
+fn whole_map(
+    snapshot: &DecodedSnapshot,
+    id: btel_snapshot::NodeId,
+) -> BTreeMap<&str, &DecodedValue> {
     let DecodedObject::Map {
         entries,
         original_len,
@@ -29,17 +32,21 @@ fn whole_map(snapshot: &DecodedSnapshot, id: btel_snapshot::NodeId) -> &[(Box<st
         "context captured whole"
     );
     entries
+        .iter()
+        .map(|(key, value)| {
+            let DecodedValue::String(key) = key else {
+                panic!("context keys must be strings");
+            };
+            (key.as_ref(), value)
+        })
+        .collect()
 }
 
 fn metadata(snapshot: &DecodedSnapshot) -> (Option<&str>, BTreeMap<&str, &DecodedValue>) {
     let DecodedRoot::Value(DecodedValue::Object(root)) = snapshot.root else {
         panic!("context root must be a map");
     };
-    let entries = whole_map(snapshot, root);
-    let fields: BTreeMap<_, _> = entries
-        .iter()
-        .map(|(key, value)| (key.as_ref(), value))
-        .collect();
+    let fields = whole_map(snapshot, root);
     let identity = match fields["distinct_id"] {
         DecodedValue::String(identity) => Some(identity.as_ref()),
         DecodedValue::Null => None,
@@ -48,14 +55,7 @@ fn metadata(snapshot: &DecodedSnapshot) -> (Option<&str>, BTreeMap<&str, &Decode
     let DecodedValue::Object(metadata) = fields["metadata"] else {
         panic!("context metadata must be a map");
     };
-    let entries = whole_map(snapshot, *metadata);
-    (
-        identity,
-        entries
-            .iter()
-            .map(|(key, value)| (key.as_ref(), value))
-            .collect(),
-    )
+    (identity, whole_map(snapshot, *metadata))
 }
 
 /// Inspect uploaded/persisted bytes, not the producer's in-memory context.

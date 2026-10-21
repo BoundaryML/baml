@@ -199,11 +199,11 @@ impl BexVm {
         match opcode {
             Some(OpCode::Throw) => RaiseKind::Throw,
             Some(OpCode::Rethrow) => RaiseKind::Rethrow,
-            Some(OpCode::ThrowIfPanic) => RaiseKind::PanicRethrow,
             Some(OpCode::Await) if thrown.throw_kind == ThrowKind::Rethrow => RaiseKind::Await,
             Some(OpCode::Await) => RaiseKind::AwaitCancelled,
             Some(
                 OpCode::Call
+                | OpCode::CallHooked
                 | OpCode::CallExactArgs
                 | OpCode::CallIndirect
                 | OpCode::VirtualCall
@@ -282,6 +282,12 @@ impl BexVm {
     fn error_frames(&self, raise_frame: Option<usize>) -> Vec<ErrorFrame> {
         (0..self.frames.len())
             .rev()
+            .filter(|idx| {
+                !self
+                    .pending_trace_hooks
+                    .iter()
+                    .any(|hook| hook.frame == *idx && hook.evaluating)
+            })
             .take(MAX_ERROR_FRAMES)
             .map(|idx| match &self.frames[idx] {
                 Frame::Bytecode(frame) => ErrorFrame {
@@ -597,6 +603,12 @@ impl BexVm {
             handler_function,
             u32::try_from(handler_pc).ok(),
         );
+    }
+
+    /// A hook failure was handled by the VM's transparent decision boundary.
+    #[cold]
+    pub(super) fn error_hook_fallback(&mut self, evidence: UnwindEvidence) {
+        self.write_unwind_end(evidence, UnwindResult::Caught, None, None);
     }
 
     /// Unwinding stopped without a handler, or failed.

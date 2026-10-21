@@ -1,0 +1,5 @@
+name = "parallel sum sequential 1m"
+description = "the same 1,000,000-element sum, sequentially, as a baseline"
+expect = "499999500000"
+jobs = 32
+warmup = 2

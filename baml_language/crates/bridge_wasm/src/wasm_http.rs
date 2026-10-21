@@ -5,7 +5,7 @@
 //! `WasmHttp` instance, so there are no globals.
 
 use std::{
-    any::{Any as _, TypeId},
+    any::TypeId,
     sync::{
         Arc,
         atomic::{AtomicU64, Ordering},
@@ -16,8 +16,8 @@ use bex_events::run::{HeaderObservation, InMemoryRunStore};
 use js_sys::{Function, Object, Promise, Reflect};
 use sys_ops::io::{self, IoClassHttpResponse, IoNamespaceHttp};
 use sys_types::{
-    BexHeap, CallId, SysOpContext, SysOpOutput, VmBamlError, VmInternalError, VmPanic,
-    VmRustFnError,
+    BexHeap, CallId, RustDataArc as _, SysOpContext, SysOpOutput, VmBamlError, VmInternalError,
+    VmPanic, VmRustFnError,
 };
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
@@ -218,7 +218,7 @@ impl WasmHttp {
             }
 
             let key = registry.store_body_promise(body_promise);
-            let body: Arc<dyn std::any::Any + Send + Sync> =
+            let body: Arc<dyn sys_types::BexRustData> =
                 Arc::new(WasmResponseBody { registry, key });
 
             Ok(io::owned::http::Response {
@@ -458,7 +458,7 @@ impl io::IoClassHttpSseStream for WasmHttp {
         let handle = sse_stream
             ._handle
             .clone()
-            .downcast::<WasmSseStreamHandle>()
+            .downcast_payload::<WasmSseStreamHandle>()
             .ok();
         let Some(handle) = handle else {
             return SysOpOutput::err(VmInternalError::RustTypeError {
@@ -509,6 +509,7 @@ impl io::IoClassHttpSseStream for WasmHttp {
 
             match event {
                 Some(Ok(first)) => {
+                    handle.received(&first);
                     let mut events = vec![first];
                     // Drain any additional events that arrived while we were awaiting.
                     match drain_receiver(&handle) {
@@ -574,7 +575,10 @@ fn drain_receiver(handle: &WasmSseStreamHandle) -> DrainResult {
     let mut events = Vec::new();
     loop {
         match receiver.try_recv() {
-            Ok(Ok(event)) => events.push(event),
+            Ok(Ok(event)) => {
+                handle.received(&event);
+                events.push(event);
+            }
             Ok(Err(e)) => {
                 // Drop receiver to signal background task.
                 guard.take();
@@ -625,6 +629,7 @@ async fn sse_background_task(
     byte_stream: crate::registry::ByteStream,
     content_type: Option<String>,
     sender: futures::channel::mpsc::UnboundedSender<Result<sys_types::sse::SseEvent, String>>,
+    retained: Arc<sys_types::RetainedBytes>,
 ) {
     use futures::StreamExt;
 
@@ -642,10 +647,12 @@ async fn sse_background_task(
                     }
                 };
                 for event in events {
+                    let bytes = event.retained_bytes();
                     if sender.unbounded_send(Ok(event)).is_err() {
                         // Receiver dropped — stream was closed.
                         return;
                     }
+                    retained.add(bytes);
                 }
             }
             Some(Err(e)) => {
@@ -662,9 +669,11 @@ async fn sse_background_task(
                     }
                 };
                 for event in final_events {
+                    let bytes = event.retained_bytes();
                     if sender.unbounded_send(Ok(event)).is_err() {
                         return;
                     }
+                    retained.add(bytes);
                 }
                 return;
             }
@@ -767,14 +776,16 @@ impl IoNamespaceHttp for WasmHttp {
 
             // Create channel and spawn background task to parse SSE events.
             let (sender, receiver) = futures::channel::mpsc::unbounded();
+            let retained = Arc::new(sys_types::RetainedBytes::new(0));
             wasm_bindgen_futures::spawn_local(sse_background_task(
                 byte_stream,
                 content_type,
                 sender,
+                Arc::clone(&retained),
             ));
 
-            let handle: Arc<dyn std::any::Any + Send + Sync> =
-                Arc::new(WasmSseStreamHandle::new(receiver));
+            let handle: Arc<dyn sys_types::BexRustData> =
+                Arc::new(WasmSseStreamHandle::new(receiver, retained));
 
             Ok(io::owned::http::SseStream {
                 url,

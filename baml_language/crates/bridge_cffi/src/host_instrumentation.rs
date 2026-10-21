@@ -1,7 +1,7 @@
 //! Shared host instrumentation bindings. No host body is executed here.
 use std::sync::Arc;
 
-use bex_project::{HostDefinition, HostInvocation, TraceOptionsData};
+use bex_project::{HostDefinition, HostInvocation, RustDataArc as _, TraceOptionsData};
 use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE, InvocationStateHandle};
 
 use crate::BridgeError;
@@ -13,7 +13,12 @@ fn invalid(message: &str) -> BridgeError {
 /// Validate marker configuration without capturing a runtime or ambient parent.
 pub fn options(key: u64) -> Result<TraceOptionsData, BridgeError> {
     if key == 0 {
-        return Ok(TraceOptionsData::default());
+        // Bare Python/Node instrumentation uses the same capture defaults as span().
+        return Ok(TraceOptionsData {
+            output: Some(true),
+            error: Some(true),
+            ..Default::default()
+        });
     }
     let entry = HANDLE_TABLE
         .resolve(key)
@@ -21,8 +26,7 @@ pub fn options(key: u64) -> Result<TraceOptionsData, BridgeError> {
     let CffiHandleTableEntry::RustData(data) = &*entry else {
         return Err(invalid("instrument accepts generated trace.Options only"));
     };
-    data.0
-        .downcast_ref::<TraceOptionsData>()
+    data.downcast_ref::<TraceOptionsData>()
         .cloned()
         .ok_or_else(|| {
             invalid("instrument accepts generated trace.Options only; reservations are unsupported")
@@ -103,16 +107,44 @@ pub fn registration_marker(
     let CffiHandleTableEntry::RustData(data) = &*entry else {
         return Err(invalid("expected a host marker"));
     };
-    Arc::clone(&data.0)
-        .downcast::<bex_project::HostMarker>()
+    Arc::clone(data)
+        .downcast_payload::<bex_project::HostMarker>()
         .map_err(|_| invalid("expected a host marker"))
 }
 
 pub fn callback(call_id: u32) -> Option<Arc<bex_project::CallbackHostInvocation>> {
     let capture = sys_native::host_dispatch::execution_capture(call_id)?;
     capture
-        .downcast::<bex_project::InvocationCapture>()
+        .downcast_payload::<bex_project::InvocationCapture>()
         .ok()?
         .host
         .clone()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bare_instrumentation_requests_outputs_and_errors_but_not_inputs() {
+        let resolved = options(0).unwrap();
+        assert_eq!(resolved.inputs, None);
+        assert_eq!(resolved.output, Some(true));
+        assert_eq!(resolved.error, Some(true));
+    }
+
+    #[test]
+    fn explicit_empty_span_keeps_capture_disabled() {
+        let key = HANDLE_TABLE.insert(CffiHandleTableEntry::RustData(Arc::new(TraceOptionsData {
+            inputs: Some(false),
+            output: Some(false),
+            error: Some(false),
+            ..Default::default()
+        })));
+        let resolved = options(key).unwrap();
+        assert_eq!(resolved.inputs, Some(false));
+        assert_eq!(resolved.output, Some(false));
+        assert_eq!(resolved.error, Some(false));
+        assert!(HANDLE_TABLE.release(key));
+    }
 }

@@ -2,7 +2,7 @@ use std::{cell::UnsafeCell, collections::HashMap};
 
 use indexmap::IndexMap;
 
-use crate::{Value, lazy_biased_mutex::LazyBiasedMutex};
+use crate::{AllocDebt, Value, lazy_biased_mutex::LazyBiasedMutex};
 
 /// Heap-mutable structural container. Pairs a dynamic backing store with a
 /// [`LazyBiasedMutex`] so cross-fiber `spawn`-racing mutations don't corrupt
@@ -62,15 +62,25 @@ impl<T> LockedContainer<T> {
     /// `&mut self`) so callers can lock through a shared reference
     /// obtained from the shared heap (`get_object`, not the unsound
     /// `get_object_mut`).
-    pub fn lock_mut(&self) -> LockedWriteGuard<'_, T> {
+    ///
+    /// Whatever the backing store grows or shrinks by while the guard is
+    /// held is charged to `debt` when the guard is dropped. There is no way
+    /// to reach the store mutably without naming an account, so growth is
+    /// never unaccounted for.
+    pub fn lock_mut<'a>(&'a self, debt: &'a AllocDebt) -> LockedWriteGuard<'a, T>
+    where
+        T: Footprint,
+    {
         let access = self.mutex.enter();
         // SAFETY: the access guard provides mutual exclusion against
         // all other lock holders for this container. The returned
         // `&mut T` lifetime is bounded by the guard's lifetime.
         let data = unsafe { &mut *self.data.get() };
         LockedWriteGuard {
+            before: data.footprint(),
             data,
             _access: access,
+            debt,
         }
     }
 
@@ -107,11 +117,37 @@ impl<T> LockedContainer<T> {
         // SAFETY: caller upholds the contract.
         unsafe { &mut *self.data.get() }
     }
+
+    /// The backing store, through exclusive access to the container. No lock
+    /// is taken: `&mut self` already proves nothing else can reach it.
+    pub fn get_mut(&mut self) -> &mut T {
+        self.data.get_mut()
+    }
 }
 
 impl<T> From<T> for LockedContainer<T> {
     fn from(data: T) -> Self {
         Self::new(data)
+    }
+}
+
+/// The bytes a value's backing storage occupies in its own allocations.
+///
+/// This is capacity, not length: it is what the allocator handed out, so a
+/// container that grew and was then emptied still reports the buffer it holds.
+pub trait Footprint {
+    fn footprint(&self) -> usize;
+}
+
+impl<T> Footprint for Vec<T> {
+    fn footprint(&self) -> usize {
+        self.capacity().saturating_mul(size_of::<T>())
+    }
+}
+
+impl Footprint for Box<MapData> {
+    fn footprint(&self) -> usize {
+        size_of::<MapData>().saturating_add(self.backing_bytes())
     }
 }
 
@@ -166,20 +202,40 @@ impl<T> std::ops::Deref for LockedReadGuard<'_, T> {
 }
 
 /// Write guard for a [`LockedContainer`]. Holds the container's
-/// [`LazyBiasedMutex`] for the duration of the guard's lifetime.
-pub struct LockedWriteGuard<'a, T> {
+/// [`LazyBiasedMutex`] for the duration of the guard's lifetime, and charges
+/// the change in the store's footprint to an [`AllocDebt`] when dropped.
+pub struct LockedWriteGuard<'a, T: Footprint> {
     data: &'a mut T,
     _access: crate::lazy_biased_mutex::AccessGuard<'a>,
+    debt: &'a AllocDebt,
+    /// The store's footprint when the guard was taken.
+    before: usize,
 }
 
-impl<T> std::ops::Deref for LockedWriteGuard<'_, T> {
+impl<T: Footprint> Drop for LockedWriteGuard<'_, T> {
+    fn drop(&mut self) {
+        // Still under the container's lock, so the footprint cannot change
+        // between measuring it and charging it. Growth is positive; a store
+        // replaced by a smaller one, or shrunk, is a release.
+        let after = self.data.footprint();
+        let before = self.before;
+        let delta = if after >= before {
+            isize::try_from(after - before).unwrap_or(isize::MAX)
+        } else {
+            isize::try_from(before - after).map_or(isize::MIN, |shrink| -shrink)
+        };
+        self.debt.add(delta);
+    }
+}
+
+impl<T: Footprint> std::ops::Deref for LockedWriteGuard<'_, T> {
     type Target = T;
     fn deref(&self) -> &T {
         self.data
     }
 }
 
-impl<T> std::ops::DerefMut for LockedWriteGuard<'_, T> {
+impl<T: Footprint> std::ops::DerefMut for LockedWriteGuard<'_, T> {
     fn deref_mut(&mut self) -> &mut T {
         self.data
     }
@@ -206,8 +262,8 @@ impl Array {
     }
 
     /// Lock the backing store for writing (see [`LockedContainer::lock_mut`]).
-    pub fn lock_mut(&self) -> ArrayWriteGuard<'_> {
-        self.data.lock_mut()
+    pub fn lock_mut<'a>(&'a self, debt: &'a AllocDebt) -> ArrayWriteGuard<'a> {
+        self.data.lock_mut(debt)
     }
 
     /// Locked convenience: number of elements.
@@ -334,6 +390,22 @@ impl MapData {
 
     pub fn epoch(&self) -> u64 {
         self.epoch
+    }
+
+    /// Everything this map allocates: the entry storage, its index, and the
+    /// per-hash buckets. Estimated from capacities without walking entries.
+    fn backing_bytes(&self) -> usize {
+        // An entry stores its id, the entry and its hash, plus an index slot.
+        let entry = size_of::<EntryId>() + size_of::<MapEntry>() + 2 * size_of::<usize>();
+        // A bucket-table slot stores the hash, the bucket and a control byte.
+        let bucket_slot = size_of::<u64>() + size_of::<Vec<EntryId>>() + 1;
+        // Each distinct hash has a bucket, whose first allocation holds four ids.
+        let bucket = 4 * size_of::<EntryId>();
+        self.entries
+            .capacity()
+            .saturating_mul(entry)
+            .saturating_add(self.buckets.capacity().saturating_mul(bucket_slot))
+            .saturating_add(self.buckets.len().saturating_mul(bucket))
     }
 
     pub fn len(&self) -> usize {
@@ -479,8 +551,8 @@ impl Map {
     }
 
     /// Lock the backing store for writing (see [`LockedContainer::lock_mut`]).
-    pub fn lock_mut(&self) -> MapWriteGuard<'_> {
-        self.data.lock_mut()
+    pub fn lock_mut<'a>(&'a self, debt: &'a AllocDebt) -> MapWriteGuard<'a> {
+        self.data.lock_mut(debt)
     }
 
     /// Unlocked read of the backing store. See [`LockedContainer::data_unchecked`].
@@ -542,21 +614,64 @@ impl Map {
 
     pub fn set_if_epoch(
         &self,
+        debt: &AllocDebt,
         epoch: u64,
         id: Option<EntryId>,
         hash: u64,
         key: Value,
         value: Value,
     ) -> Result<Option<Value>, MapEpochChanged> {
-        self.lock_mut().set_if_epoch(epoch, id, hash, key, value)
+        self.lock_mut(debt)
+            .set_if_epoch(epoch, id, hash, key, value)
     }
 
     pub fn remove_if_epoch(
         &self,
+        debt: &AllocDebt,
         epoch: u64,
         id: Option<EntryId>,
     ) -> Result<Option<Value>, MapEpochChanged> {
-        self.lock_mut().remove_if_epoch(epoch, id)
+        self.lock_mut(debt).remove_if_epoch(epoch, id)
+    }
+}
+
+#[cfg(test)]
+mod guard_tests {
+    use super::*;
+
+    /// A write guard charges what the store's footprint changed by while it
+    /// was held: growth is charged, a shrink is credited, and an in-place
+    /// write charges nothing.
+    #[test]
+    fn write_guards_charge_the_change_in_footprint() {
+        let debt = AllocDebt::new();
+        let array: ArrayContainer = LockedContainer::new(vec![Value::int(1); 4]);
+
+        array.lock_mut(&debt)[..].fill(Value::int(0));
+        assert_eq!(debt.balance(), 0, "an in-place write costs nothing");
+
+        {
+            let mut guard = array.lock_mut(&debt);
+            guard.extend((0..100).map(Value::int));
+        }
+        let grown = debt.balance();
+        assert!(
+            grown >= 96 * size_of::<Value>().cast_signed(),
+            "{grown} bytes charged for growing from 4 to at least 104 elements"
+        );
+
+        array.lock_mut(&debt).clear();
+        assert_eq!(debt.balance(), grown, "clearing keeps the capacity");
+
+        // The initial four elements were never charged through a guard, so
+        // replacing the store credits them too: a guard reports the change
+        // it saw, not the history of the account.
+        *array.lock_mut(&debt) = Vec::new();
+        assert_eq!(
+            debt.balance(),
+            -(4 * size_of::<Value>().cast_signed()),
+            "replacing the store credits its whole capacity"
+        );
     }
 }
 

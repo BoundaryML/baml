@@ -29,6 +29,19 @@ pub trait Bex: Send + Sync {
         ))
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn begin_stream_invocation(
+        self: Arc<Self>,
+        function_name: &str,
+        context: &FunctionCallContext,
+        inputs: Option<&crate::HostCapture>,
+    ) -> Result<crate::HostInvocation, RuntimeError> {
+        let _ = (function_name, context, inputs);
+        Err(RuntimeError::Other(
+            "runtime does not support retained stream tracing".into(),
+        ))
+    }
+
     /// Nanoseconds in this runtime's fixed monotonic invocation clock domain.
     fn invocation_clock_ns(&self) -> Result<u64, RuntimeError>;
     /// Freeze relative controls before argument binding or adapter queueing.
@@ -82,6 +95,10 @@ pub trait Bex: Send + Sync {
 
     fn set_unhandled_spawn_error_handler(&self, handler: Option<UnhandledSpawnErrorHandler>);
 
+    /// Finalize the host's BAML lifetime before closing its telemetry recording.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn record_process_exit(&self, status: bex_engine::ProcessStatus);
+
     /// Wait for in-flight calls and spawned work, report unreachable
     /// unobserved errors, and close the runtime. `grace` bounds the whole
     /// wait (`None` waits for as long as the work takes); see
@@ -107,6 +124,18 @@ impl Bex for BexEngine {
         inputs: Option<&crate::HostCapture>,
     ) -> Result<crate::HostInvocation, RuntimeError> {
         BexEngine::begin_host_invocation(&self, definition, inherited, options, caller, inputs)
+            .map_err(RuntimeError::from)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    async fn begin_stream_invocation(
+        self: Arc<Self>,
+        function_name: &str,
+        context: &FunctionCallContext,
+        inputs: Option<&crate::HostCapture>,
+    ) -> Result<crate::HostInvocation, RuntimeError> {
+        BexEngine::begin_stream_invocation(&self, function_name, context, inputs)
+            .await
             .map_err(RuntimeError::from)
     }
 
@@ -229,6 +258,11 @@ impl Bex for BexEngine {
 
     fn set_unhandled_spawn_error_handler(&self, handler: Option<UnhandledSpawnErrorHandler>) {
         BexEngine::set_unhandled_spawn_error_handler(self, handler);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn record_process_exit(&self, status: bex_engine::ProcessStatus) {
+        BexEngine::record_process_exit(self, status);
     }
 
     async fn shutdown(self: Arc<Self>, grace: Option<std::time::Duration>) {

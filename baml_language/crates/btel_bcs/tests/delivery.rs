@@ -564,7 +564,10 @@ async fn mixed_plan_prunes_without_serializing_and_uploads_canonical_envelopes()
             (body.upload_id == "1-0").then_some(&recording_bytes)
         );
         for object in body.cas_objects {
-            assert_eq!(object.snapshot_format_version, 3);
+            assert_eq!(
+                object.snapshot_format_version,
+                btel_settings::snapshot::BLOB_VERSION
+            );
             assert_eq!(object.blob_sha256, Sha256::digest(&object.blob).to_vec());
             uploaded.push((object.snapshot_id, object.blob));
         }
@@ -1721,7 +1724,7 @@ async fn a_short_part_of_a_long_string_goes_with_its_recording() {
     // document's own memory: each holds all of it.
     let mut sent = Vec::new();
     for (file, end) in files(2).into_iter().zip([1000, 3000]) {
-        let part = document.substring(0, end);
+        let part = document.byte_slice(0..end);
         let mut b = pool.try_acquire().unwrap();
         let value = b.leaves().string_value(&part);
         let snapshot = b.finish(value, &mut btel_snapshot::Shaper::default());

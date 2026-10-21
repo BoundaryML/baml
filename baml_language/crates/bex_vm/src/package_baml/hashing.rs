@@ -1,6 +1,6 @@
 use std::{
-    collections::{HashMap, HashSet, hash_map::DefaultHasher},
-    sync::{Arc, Mutex},
+    collections::{HashMap, HashSet},
+    sync::Arc,
 };
 
 use bex_vm_types::{HeapPtr, Object, RealizedTy, Value, ValueKind};
@@ -12,7 +12,7 @@ enum Work {
     Value(Value, bool),
     Exit(HeapPtr),
     MapEntry(Value, Value),
-    FinishMapEntry(Value, Arc<Mutex<DefaultHasher>>),
+    FinishMapEntry(Value, Arc<super::hasher::HasherState>),
     FinishMap,
 }
 
@@ -84,9 +84,7 @@ impl HashDriver {
                         let Some(ty) = vm.value_concrete_ty(value).map(RealizedTy::from) else {
                             return panic("Value does not implement baml.Hash");
                         };
-                        let Some(head) = vm.declaration_head(
-                            &baml_type::QualifiedTypeName::from_dotted_path("baml.Hash"),
-                        ) else {
+                        let Some(head) = vm.lang_head(crate::lang_items::BAML_HASH) else {
                             return panic("baml.Hash is unavailable");
                         };
                         let resolver = ImplResolver::for_value(vm, value);
@@ -188,9 +186,7 @@ impl HashDriver {
             let Some(ty) = vm.value_concrete_ty(self.state).map(RealizedTy::from) else {
                 return panic("Hash state does not implement baml.hash.Hasher");
             };
-            let Some(head) = vm.declaration_head(&baml_type::QualifiedTypeName::from_dotted_path(
-                "baml.hash.Hasher",
-            )) else {
+            let Some(head) = vm.lang_head(crate::lang_items::BAML_HASH_HASHER) else {
                 return panic("baml.hash.Hasher is unavailable");
             };
             let resolver = ImplResolver::for_value(vm, self.state);

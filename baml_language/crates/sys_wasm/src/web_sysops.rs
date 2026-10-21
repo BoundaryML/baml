@@ -123,6 +123,15 @@ impl WebHttp {
 #[derive(Debug)]
 struct BufferedResponseBody(Mutex<Option<Vec<u8>>>);
 
+impl sys_types::BexRustData for BufferedResponseBody {
+    fn measure(&self, meter: &mut sys_types::Meter) {
+        // Taken once, by the read on the VM thread; nothing else locks it.
+        if let Ok(body) = self.0.try_lock() {
+            meter.bytes(body.as_ref().map_or(0, Vec::capacity));
+        }
+    }
+}
+
 fn take_response_body(response: &io::owned::http::Response) -> Result<Vec<u8>, VmRustFnError> {
     let body = response
         ._body
@@ -362,6 +371,15 @@ impl io::IoClassFsFile for WebFs {
         _n: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<Vec<u8>>> {
+        host_unavailable("filesystem")
+    }
+    fn bytes(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::fs::File,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
         host_unavailable("filesystem")
     }
     fn close(

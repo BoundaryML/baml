@@ -27,7 +27,9 @@ pub use bex_engine::{
     register_inbound_union_ambiguity_policy,
 };
 #[cfg(not(target_arch = "wasm32"))]
-pub use bex_engine::{CallbackHostInvocation, HostCallSite, HostDefinition, HostInvocation};
+pub use bex_engine::{
+    CallbackHostInvocation, HostCallSite, HostDefinition, HostInvocation, capture_callback_inputs,
+};
 pub use bex_external_types::{
     BexExternalAdt, BexExternalValue, DynWitnessDef, Handle, HostReleaseFn, HostReturnTypeError,
     HostValueArc, HostValueKind, MediaKind, PortableClassDef, PortableClassFieldDef,
@@ -36,7 +38,8 @@ pub use bex_external_types::{
     runtime_ty_structurally_equal, selected_arm_equal, try_convert_rust_data, validate_host_return,
 };
 pub use bex_vm_types::{
-    HeapPtr, MediaContent, MediaValue, Program, PromptAst, PromptAstSimple,
+    BexRustData, HeapPtr, MediaContent, MediaValue, Meter, Program, PromptAst, PromptAstSimple,
+    RetainedBytes, RustDataArc, TestRustData,
     trace::{HostMarker, ReservedSpanData, TraceOptionsData},
 };
 use indexmap::IndexMap;

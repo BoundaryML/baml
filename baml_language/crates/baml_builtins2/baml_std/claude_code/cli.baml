@@ -44,8 +44,12 @@ class ClaudeCodeClient {
     }
 
     implements ai.Client {
-        function id(self) -> string {
-            `claude-code/${self.model}`
+        function requested_model(self) -> string {
+            self.model
+        }
+
+        function provider(self) -> string {
+            "claude-code"
         }
 
         /// Claude Code is a process-backed client rather than an HTTP client;

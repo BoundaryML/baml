@@ -19,9 +19,7 @@
 
 use std::collections::HashSet;
 
-use crate::ast::{
-    Expr, ExprBody, ExprId, Stmt, StmtId, TemplateSegment, TemplateTag, TypeBindingValue,
-};
+use crate::ast::{Expr, ExprBody, ExprId, Stmt, StmtId, TemplateSegment, TemplateTag};
 
 /// A direct child of an expression or statement.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -88,13 +86,11 @@ impl ExprBody {
                 }
             }
             Expr::Is { scrutinee, .. } => out.push(BodyNode::Expr(*scrutinee)),
-            Expr::Catch { base, clauses } => {
+            Expr::Catch { base, clause } => {
                 out.push(BodyNode::Expr(*base));
-                for clause in clauses {
-                    for arm in &clause.arms {
-                        let arm = &self.catch_arms[*arm];
-                        out.push(BodyNode::Expr(arm.body));
-                    }
+                for arm in &clause.arms {
+                    let arm = &self.catch_arms[*arm];
+                    out.push(BodyNode::Expr(arm.body));
                 }
             }
             Expr::Binary { lhs, rhs, .. } => {
@@ -161,13 +157,13 @@ impl ExprBody {
                 out.push(BodyNode::Expr(*expr));
             }
             Stmt::TypeBinding {
-                value: TypeBindingValue::Runtime(operand),
+                operand,
+                else_branch,
                 ..
-            } => out.push(BodyNode::Expr(*operand)),
-            Stmt::TypeBinding {
-                value: TypeBindingValue::Static(_),
-                ..
-            } => {}
+            } => {
+                out.push(BodyNode::Expr(*operand));
+                out.extend(else_branch.map(BodyNode::Expr));
+            }
             Stmt::Return(expr) => out.extend(expr.map(BodyNode::Expr)),
             Stmt::Let {
                 initializer,
@@ -245,6 +241,9 @@ fn template_segment_children(segment: &TemplateSegment, out: &mut Vec<BodyNode>)
     match segment {
         TemplateSegment::Text(_) => {}
         TemplateSegment::Interp(expr) => out.push(BodyNode::Expr(*expr)),
+        TemplateSegment::Effect { stmts, .. } => {
+            out.extend(stmts.iter().copied().map(BodyNode::Stmt));
+        }
         TemplateSegment::For {
             collection, body, ..
         } => {

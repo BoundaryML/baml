@@ -39,17 +39,13 @@ type Ty = baml_type::Ty<TypeHead>;
 type Interface = baml_type::Interface<TypeHead>;
 
 impl TypeContext<TypeHead> for BexVm {
-    /// Resolve a *name* to the declaration it refers to, and hand back a head
-    /// pointing at it.
-    ///
-    /// This is one of the few places a name legitimately enters the runtime:
-    /// the algebra's `reflect.AnyFunction` special case is spelled as a name in
-    /// the algebra's own source. It resolves through the package surfaces —
-    /// never by content-addressing a guess — so the head it returns carries the
+    /// The declaration the algebra special-cases, by identity: the item of
+    /// the `reflect` language package the head names, off the loaded package
+    /// — never a name resolved through the program's spellings, and never a
+    /// content-addressed guess — so the head it returns carries the
     /// declaration's real tag and pointer.
     fn well_known(&self, head: baml_type::normalize::WellKnownHead) -> Option<TypeHead> {
-        use baml_type::normalize::SpelledHead as _;
-        self.declaration_head(&baml_type::TypeName::well_known(head))
+        self.lang_head(head.item())
     }
 
     fn alias_def(&self, head: &TypeHead) -> Option<Ty> {

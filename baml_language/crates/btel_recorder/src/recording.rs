@@ -241,6 +241,9 @@ impl RecordingBuilder {
             .next_sequence
             .ok_or(RecordingError::SequenceExhausted)?;
         let ready = self.buffer.take();
+        let process_exit = end
+            .then(|| self.process.as_ref().and_then(|p| p.exit.get()))
+            .flatten();
         let mut file = proto::RecordingFile {
             header: Some(proto::RecordingHeader {
                 format_major: encoding::FORMAT_MAJOR,
@@ -250,6 +253,20 @@ impl RecordingBuilder {
                     .format_minor()
                     .max(if self.process.is_some() {
                         btel_settings::encoding::PROCESS_CONTEXT_FORMAT_MINOR
+                    } else {
+                        0
+                    })
+                    .max(
+                        if process_exit
+                            .is_some_and(|exit| exit.status == btel_types::ProcessStatus::Unknown)
+                        {
+                            btel_settings::encoding::UNKNOWN_PROCESS_OUTCOME_FORMAT_MINOR
+                        } else {
+                            0
+                        },
+                    )
+                    .max(if defines_model_invoke(&ready.definitions) {
+                        btel_settings::encoding::MODEL_USAGE_FORMAT_MINOR
                     } else {
                         0
                     }),
@@ -276,23 +293,18 @@ impl RecordingBuilder {
             spans: self.buffer.spans.is_empty().then(proto::SpanBatch::default),
             clock_states: Some(ready.clock_states),
             end: end.then(|| proto::RecordingEnd {
-                process_end: self
-                    .process
-                    .as_ref()
-                    .and_then(|p| p.exit.get())
-                    .map(|exit| proto::ProcessEnd {
-                        status: match exit.status {
-                            btel_types::ProcessStatus::Success => proto::ProcessStatus::Success,
-                            btel_types::ProcessStatus::Error => proto::ProcessStatus::Error,
-                            btel_types::ProcessStatus::Panicked => proto::ProcessStatus::Panicked,
-                        } as i32,
-                        at_unix_ns: exit.at_unix_ns,
-                    }),
+                process_end: process_exit.map(|exit| proto::ProcessEnd {
+                    status: match exit.status {
+                        btel_types::ProcessStatus::Unknown => proto::ProcessStatus::Unknown,
+                        btel_types::ProcessStatus::Success => proto::ProcessStatus::Success,
+                        btel_types::ProcessStatus::Error => proto::ProcessStatus::Error,
+                        btel_types::ProcessStatus::Panicked => proto::ProcessStatus::Panicked,
+                    } as i32,
+                    at_unix_ns: exit.at_unix_ns,
+                }),
             }),
             // Appended below from its pre-encoded body.
             errors: None,
-            // Only read now: cost comes from network spans.
-            usage: None,
         };
         // Absent without exceptions, so error-free files keep their bytes.
         let errors_len = if ready.errors.is_empty() {
@@ -637,3 +649,12 @@ enum Sealing {
 mod tests;
 #[cfg(test)]
 use std::{num::NonZeroUsize, sync::Arc, time::Duration};
+
+fn defines_model_invoke(definitions: &proto::Definitions) -> bool {
+    definitions.functions.iter().any(|function| {
+        matches!(
+            &function.resolution,
+            Some(proto::function_definition::Resolution::Metadata(metadata)) if metadata.model_invoke
+        )
+    })
+}

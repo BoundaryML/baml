@@ -525,6 +525,7 @@ mod tests {
         wait_for_waiters(&auth, 2).await;
         let failure = crate::HttpFailure {
             status: StatusCode::FORBIDDEN,
+            retry_after: None,
             body: Some(Arc::new(crate::ApiErrorBody {
                 code: "ACCESS_REQUIRED".into(),
                 retryable: false,

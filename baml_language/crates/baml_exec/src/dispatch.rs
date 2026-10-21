@@ -130,9 +130,15 @@ pub async fn dispatch_target_with_context(
 
     match result {
         Ok(value) => {
-            // No stdout for `void` return; value-carrying types like `int?`
-            // still emit their serialization even when null.
-            if !matches!(func_info.return_type, RuntimeTy::Void) {
+            // A unit return (`-> void` / `-> null`) carries no information, so
+            // the human format prints nothing for it. JSON output is a document
+            // a consumer parses, so it always prints one — `null` for unit.
+            // Value-carrying types like `int?` print in both, even when null.
+            let elide = match output_format {
+                OutputFormat::Debug => func_info.return_type.is_unit(),
+                OutputFormat::Json => false,
+            };
+            if !elide {
                 write_output_with_context(
                     &engine,
                     value,

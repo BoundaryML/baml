@@ -636,10 +636,6 @@ func validateBAMLType(value *cffi.BamlTy, depth int) error {
 		if item.PromptAst == nil {
 			return fmt.Errorf("prompt AST descriptor is missing")
 		}
-	case *cffi.BamlTy_Void:
-		if item.Void == nil {
-			return fmt.Errorf("void descriptor is missing")
-		}
 	case *cffi.BamlTy_TypeVar:
 		if item.TypeVar == nil || item.TypeVar.Name == "" {
 			return fmt.Errorf("type variable descriptor has no name")

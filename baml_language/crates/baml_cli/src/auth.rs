@@ -412,7 +412,7 @@ pub(crate) fn now_unix() -> u64 {
 
 impl Credentials {
     /// Combines anonymous feedback state with the selected endpoint's cached
-    /// caller profile. The OS credential store is the source of login identity.
+    /// caller profile. The local credential file is the source of login identity.
     pub fn read() -> Result<Option<Self>> {
         let path = creds_path()?;
         let content = if path.exists() {
@@ -426,7 +426,7 @@ impl Credentials {
         // Invalid endpoint configuration must fail even for anonymous feedback;
         // a credential-store outage can omit identity, but cannot change the endpoint.
         let endpoint = crate::cloud_config::login_endpoint()?;
-        // Anonymous feedback remains usable when an OS credential store is
+        // Anonymous feedback remains usable when a local credential file is
         // unavailable. Explicit auth commands report that failure themselves.
         let stored = bcs_api::Store::new(&endpoint)
             .and_then(|store| store.read())
@@ -443,7 +443,7 @@ impl Credentials {
     /// other users.
     pub fn write(&self) -> Result<()> {
         let path = creds_path()?;
-        // Caller identity is read from the endpoint-scoped keyring, never from this
+        // Caller identity is read from the endpoint-scoped credential file, never from this
         // global analytics file. It contains only the anonymous feedback identifier.
         let anonymous = Credentials {
             posthog_distinct_id: self.posthog_distinct_id.clone(),

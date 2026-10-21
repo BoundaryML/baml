@@ -40,11 +40,11 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0176
 
-  × `baml` cannot be used as a binding name: syntax such as `spawn` and `env.X` refers to the `baml` package, which this binding would hide. A class or function may still be named `baml`.
+  × `root` is the path to this package and cannot name a binding, an item, or a type parameter
     ╭─[declarations.baml:24:7]
- 24 │ const baml = 7;
+ 24 │ const root = 7;
     ·       ──┬─
-    ·         ╰── reserved binding name
+    ·         ╰── `root` is this package
     ╰────
 
   [validation] E0011
@@ -78,20 +78,11 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                    ╰── `_` cannot be inferred here
     ╰────
 
-  [hir] E0110
-
-  × `void` can only be used as a function return type, not as a let binding annotation
-    ╭─[declarations.baml:36:16]
- 36 │ const NOTHING: void = null;
-    ·                ──┬─
-    ·                  ╰── `void` not allowed here
-    ╰────
-
   [type] E0001
 
   × mismatched types
-    ╭─[declarations.baml:39:28]
- 39 │ const MISMATCHED: string = 12;
+    ╭─[declarations.baml:38:28]
+ 38 │ const MISMATCHED: string = 12;
     ·                            ─┬
     ·                             ╰── expected `string`, found `12`
     ╰────
@@ -99,8 +90,8 @@ source: crates/baml_tests/src/generated_tests.rs
   [hir] E0010
 
   × global variables are declared with `const`: `const NAME = value;`
-    ╭─[declarations.baml:43:1]
- 43 │ let WITH_LET = 13;
+    ╭─[declarations.baml:42:1]
+ 42 │ let WITH_LET = 13;
     · ─┬─
     ·  ╰── write `const` here; `let` is only allowed inside a body
     ╰────

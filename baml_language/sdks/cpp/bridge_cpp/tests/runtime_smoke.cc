@@ -307,6 +307,25 @@ static void TestTyDefReportsUnsupportedReflection() {
           "BEP-066 reflection");
 }
 
+// A media value holds content, never a path. Content that was read from a
+// file keeps the base name of that file.
+static void TestMediaContentReadFromAFileKeepsItsName() {
+  const baml::image named =
+      baml::image::from_file_content("/nowhere/cat.jpg", "aGk=");
+  Require(named.name() == std::optional<std::string>("cat.jpg"),
+          "named content lost its name");
+  Require(named.mime_type() == std::optional<std::string>("image/jpeg"),
+          "named content did not infer its MIME type");
+  Require(named.base64() == std::optional<std::string>("aGk="),
+          "named content lost its content");
+  Require(!named.url(), "named content has a URL");
+  Require(named == baml::image::from_file_content("/elsewhere/cat.jpg", "aGk="),
+          "equal named content compared unequal");
+  Require(named != baml::image::from_base64("aGk=", "image/jpeg"),
+          "content with and without a name compared equal");
+  Require(!baml::image::from_base64("aGk=").name(), "base64 media has a name");
+}
+
 static void RunTest(const char* name, void (*test)()) {
   std::fprintf(stderr, "running %s\n", name);
   std::fflush(stderr);
@@ -326,6 +345,8 @@ int main() {
           TestPortableValuesTranscodeWithoutHandles);
   RunTest("typed spec, stream, prompt, and media codecs",
           TestTypedSpecStreamAndPortableValueCodecs);
+  RunTest("media reads files now and keeps their names",
+          TestMediaContentReadFromAFileKeepsItsName);
   RunTest("unhandled_spawn_error_uses_host_default",
           TestUnhandledSpawnErrorUsesHostDefault);
   RunTest("ty_def_reports_unsupported_reflection",

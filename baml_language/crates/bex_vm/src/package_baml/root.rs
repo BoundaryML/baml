@@ -238,7 +238,7 @@ fn has_to_string_override(
     value: Value,
 ) -> Result<bool, crate::errors::VmInternalError> {
     Ok(matches!(
-        super::shim_rule_method(vm, value, "ToString", "to_string")?,
+        super::shim_rule_method(vm, value, crate::lang_items::BAML_TO_STRING, "to_string")?,
         Some(resolved) if !resolved.is_default
     ))
 }
@@ -621,9 +621,9 @@ pub(super) fn render_to_sink(
             let (class_name, paired) = match vm.get_object(inst.class) {
                 Object::Class(class) => {
                     let name = if state.qualified_class_names {
-                        class.name.to_string()
+                        class.name().to_string()
                     } else {
-                        class.name.item_name().to_string()
+                        class.path.name.to_string()
                     };
                     let fields = inst
                         .fields
@@ -897,6 +897,7 @@ fn deep_copy_value_recursive(
                 // the closure semantics (shared handle).
                 Object::HostClosure(hc) => vm.tlab.alloc(Object::HostClosure(hc)),
                 Object::Cell(cell) => vm.tlab.alloc(Object::Cell(cell)),
+                Object::Tombstone => Object::tombstone_reached(),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(kind) => vm.tlab.alloc(Object::Sentinel(kind)),
             };

@@ -88,12 +88,12 @@ function RuntimeClassify<T>(input: string) -> T {
 }
 
 function runtime_enum_llm_companions_compile() -> string {
-    let category = reflect.enum.new("Category", [
-        reflect.enum.value("RED", alias = "k7", description = "warm"),
+    let category = reflect.Enum.new("Category", [
+        reflect.Enum.value("RED", alias = "k7", description = "warm"),
         "BLUE",
     ])
-    type Category = unreflect(category)
+    let type Category = category;
     let prompt = RuntimeClassify@render_prompt<Category>("sample").text()
     let parsed = RuntimeClassify@parse<Category>(`"k7"`)
-    return prompt + reflect.enum.get_value(parsed)
+    return prompt + reflect.Enum.get_value(parsed)
 }

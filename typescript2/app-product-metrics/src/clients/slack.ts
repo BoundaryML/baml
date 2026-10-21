@@ -71,12 +71,15 @@ async function slackApi<T extends SlackApiResponse = SlackPostResponse>(
   return result;
 }
 
+/** Return a channel ID directly, or resolve a public channel name using pagination. */
 export async function resolveSlackChannelId(
   token: string,
   channelName: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<string> {
-  const normalizedChannelName = channelName.trim().replace(/^#/, '');
+  const channel = channelName.trim();
+  if (/^[CG][A-Z0-9]+$/.test(channel)) return channel;
+  const normalizedChannelName = channel.replace(/^#/, '');
   if (!normalizedChannelName) throw new Error('Slack channel name is required');
 
   let cursor: string | undefined;
@@ -93,10 +96,10 @@ export async function resolveSlackChannelId(
       fetchImpl,
       'form',
     );
-    const channel = result.channels?.find(
+    const match = result.channels?.find(
       ({ name }) => name === normalizedChannelName,
     );
-    if (channel?.id) return channel.id;
+    if (match?.id) return match.id;
     const nextCursor =
       result.response_metadata?.next_cursor?.trim() || undefined;
     if (nextCursor && nextCursor === cursor) {

@@ -20,7 +20,7 @@
 //! which converts a whole batch in one pass over the haystack rather than
 //! re-counting from the start for each span.
 
-use std::{any::Any, sync::Arc};
+use std::sync::Arc;
 
 use bex_heap::TlabHolder;
 use bex_str::BexStr;
@@ -38,7 +38,7 @@ use crate::{
 };
 
 /// Fully-qualified name of the enum classifying a `baml.regex.Error`.
-const ERROR_KIND_FQN: &str = "baml.regex.ErrorKind";
+const ERROR_KIND: baml_base::LangItem = crate::lang_items::BAML_REGEX_ERROR_KIND;
 
 // =============================================================================
 // Building BAML values
@@ -63,7 +63,7 @@ fn offset_value(chars: usize) -> Value {
 
 /// Build a capture with a shared substring and precomputed codepoint offsets.
 fn group_value(vm: &mut BexVm, hay: &BexStr, span: (usize, usize), chars: (usize, usize)) -> Value {
-    let text = Value::object(vm.alloc_string(hay.substring(span.0, span.1)));
+    let text = Value::object(vm.alloc_string(hay.byte_slice(span.0..span.1)));
     copy::regex::Group {
         text,
         start: offset_int(chars.0),
@@ -136,7 +136,7 @@ fn match_value(
     // Group 0 is the whole match and always participates, so its text and
     // offsets are the match's own.
     let (start_byte, end_byte) = raw.span();
-    let text = Value::object(vm.alloc_string(hay.substring(start_byte, end_byte)));
+    let text = Value::object(vm.alloc_string(hay.byte_slice(start_byte..end_byte)));
     let (start, end) = if raw.groups.first().is_some_and(Option::is_some) {
         (chars[0], chars[1])
     } else {
@@ -159,11 +159,7 @@ fn match_value(
 
 /// Materialize a classified construction error and translate its byte span to codepoints.
 fn error_value(vm: &mut BexVm, pattern: &str, err: &BuildError) -> Result<Value, VmRustFnError> {
-    let enum_ptr = vm.lookup_type_by_fqn(ERROR_KIND_FQN).ok_or_else(|| {
-        VmInternalError::MissingNativeFunction {
-            name: ERROR_KIND_FQN.to_string(),
-        }
-    })?;
+    let enum_ptr = vm.lang_object(ERROR_KIND);
     let variant = match vm.get_object(enum_ptr) {
         Object::Enum(en) => en
             .variants
@@ -172,7 +168,7 @@ fn error_value(vm: &mut BexVm, pattern: &str, err: &BuildError) -> Result<Value,
         _ => None,
     }
     .ok_or_else(|| VmInternalError::MissingNativeFunction {
-        name: format!("{ERROR_KIND_FQN}.{}", err.kind.variant_name()),
+        name: format!("{ERROR_KIND}.{}", err.kind.variant_name()),
     })?;
 
     // The engine reports byte offsets into the pattern; the BAML class
@@ -206,16 +202,32 @@ fn throw_build_error(vm: &mut BexVm, pattern: &str, err: &BuildError) -> VmRustF
     }
 }
 
+/// A compiled program as `$rust_type` data.
+struct RegexProgram(Program);
+
+impl bex_vm_types::BexRustData for RegexProgram {
+    fn measure(&self, meter: &mut bex_vm_types::Meter) {
+        meter.bytes(self.0.retained_bytes());
+    }
+}
+
+impl std::ops::Deref for RegexProgram {
+    type Target = Program;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 /// Store the compiled program behind a shareable native handle owned by the BAML value.
 fn regex_value(vm: &mut BexVm, prog: Program) -> Value {
-    let handle: Arc<dyn Any + Send + Sync> = Arc::new(prog);
+    let handle: Arc<dyn bex_vm_types::BexRustData> = Arc::new(RegexProgram(prog));
     copy::regex::Regex { _handle: handle }.to_value(vm)
 }
 
 /// Clone the `Arc` out of `Regex._handle` so the program stays alive while
 /// `&mut BexVm` is borrowed for allocation.
-fn program_of(vm: &BexVm, regex: Value) -> Result<Arc<Program>, VmRustFnError> {
-    Ok(vm.rust_data_field::<Program>(&regex, 0)?)
+fn program_of(vm: &BexVm, regex: Value) -> Result<Arc<RegexProgram>, VmRustFnError> {
+    Ok(vm.rust_data_field::<RegexProgram>(&regex, 0)?)
 }
 
 /// A search that ran out of budget is a panic, not a "no match".
@@ -300,7 +312,7 @@ impl BamlClassRegexRegex for PackageBamlImpl {
         // substring of the haystack, so each is a zero-copy slice.
         Ok(pieces
             .into_iter()
-            .map(|(start, end)| haystack.substring(start, end))
+            .map(|(start, end)| haystack.byte_slice(start..end))
             .collect())
     }
 
@@ -352,7 +364,7 @@ impl BamlNamespaceRegex for PackageBamlImpl {
     fn _index_of_from(haystack: &BexStr, search: &BexStr, start: i64) -> Option<i64> {
         let start = usize::try_from(start).ok()?;
         haystack
-            .char_index_of_from(search.as_str(), start)
+            .char_find_from(search.as_str(), start)
             .map(|i| i as i64)
     }
 

@@ -217,14 +217,14 @@ impl<'a> BexValue<'a> {
         }
     }
 
-    /// Extract an opaque `Arc<dyn Any + Send + Sync>` from a RustData value.
+    /// Extract the opaque `Arc<dyn BexRustData>` from a RustData value.
     /// Handles both external values (`BexExternalValue::RustData`) and
     /// heap values (`Object::RustData`).
     pub fn as_rust_data(
         self,
         heap: &BexHeap,
         permit: PermitProof<'a>,
-    ) -> Result<std::sync::Arc<dyn std::any::Any + Send + Sync>, AccessError> {
+    ) -> Result<std::sync::Arc<dyn bex_vm_types::BexRustData>, AccessError> {
         match self {
             BexValue::ExternalValue(BexExternalValue::RustData(data)) => {
                 Ok(std::sync::Arc::clone(data))
@@ -348,10 +348,10 @@ impl<'a> BexValue<'a> {
                         actual: class_obj.to_string(),
                     });
                 };
-                if class.name.display_name().as_str() != expected_class_name {
+                if class.name().display_name().as_str() != expected_class_name {
                     return Err(AccessError::TypeMismatch {
                         expected: expected_class_name,
-                        actual: class.name.to_string(),
+                        actual: class.name().to_string(),
                     });
                 }
                 Ok(BexClass::Value(class, instance))
@@ -705,7 +705,7 @@ fn convert_object(
                 })
                 .collect::<Result<_, _>>()?;
             Ok(BexExternalValue::Instance {
-                class_name: class.name.to_string(),
+                class_name: class.name().to_string(),
                 // Instances store realized class type args; widen them into the
                 // `RuntimeTy` the external boundary carries.
                 type_args: instance
@@ -747,7 +747,7 @@ fn convert_object(
                         expected: format!("variant index {}", variant.index),
                     })?;
             Ok(BexExternalValue::Variant {
-                enum_name: enum_.name.to_string(),
+                enum_name: enum_.name().to_string(),
                 variant_name: variant_def.name.clone(),
             })
         }
@@ -783,6 +783,7 @@ fn convert_object(
             &hc.handle,
         ))),
         Object::Cell(_) => unconvertible("cell"),
+        Object::Tombstone => Object::tombstone_reached(),
         #[cfg(feature = "heap_debug")]
         Object::Sentinel(sentinel_kind) => unconvertible(&format!("sentinel: {:?}", sentinel_kind)),
     }

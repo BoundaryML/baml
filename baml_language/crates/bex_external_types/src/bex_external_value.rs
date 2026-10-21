@@ -270,7 +270,7 @@ pub enum BexExternalValue {
 
     /// Opaque Rust data for `$rust_type` fields.
     /// Engine converts to `Object::RustData` on the VM heap.
-    RustData(std::sync::Arc<dyn std::any::Any + Send + Sync>),
+    RustData(std::sync::Arc<dyn bex_vm_types::BexRustData>),
 
     /// Reference to a function by its global index.
     ///
@@ -835,7 +835,7 @@ impl AsBexExternalValue for Vec<u8> {
 /// Implement this for any type that is stored as `RustData` on the VM heap and
 /// needs to survive the VM-to-external conversion boundary (e.g. `PromptAst`,
 /// `MediaValue`).
-pub trait ToBexExternalValue: std::any::Any + Send + Sync {
+pub trait ToBexExternalValue: bex_vm_types::BexRustData {
     fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue;
 }
 
@@ -851,6 +851,79 @@ pub trait ToBexExternalValue: std::any::Any + Send + Sync {
 /// contract (e.g. an unbound `GenericBox(value=5)` must stay distinct from a
 /// bound `GenericBox[int]`). See `03c-impl-guide` "Host-only roundtripping".
 pub struct OpaqueExternalValue(pub BexExternalValue);
+
+impl bex_vm_types::BexRustData for OpaqueExternalValue {
+    fn measure(&self, meter: &mut bex_vm_types::Meter) {
+        measure_external_value(&self.0, meter);
+    }
+}
+
+/// Report what a host value keeps alive. Strings and payloads shared with
+/// the heap are reported through the meter's own rules; anything the heap or
+/// the host owns (a handle, a function reference, a host object) is not
+/// counted here.
+pub fn measure_external_value(value: &BexExternalValue, meter: &mut bex_vm_types::Meter) {
+    use bex_vm_types::BexRustData;
+    match value {
+        BexExternalValue::Null
+        | BexExternalValue::Int(_)
+        | BexExternalValue::Float(_)
+        | BexExternalValue::JsNumber(_)
+        | BexExternalValue::Bool(_)
+        | BexExternalValue::FunctionRef { .. }
+        | BexExternalValue::Handle(_) => {}
+        BexExternalValue::Bigint(bigint) => {
+            meter.bytes(usize::try_from(bigint.bits().div_ceil(8)).unwrap_or(usize::MAX));
+        }
+        BexExternalValue::String(text) => meter.string(text),
+        BexExternalValue::Array { items, .. } => {
+            meter.bytes(items.capacity() * size_of::<BexExternalValue>());
+            for item in items {
+                measure_external_value(item, meter);
+            }
+        }
+        BexExternalValue::Map { entries, .. } => {
+            meter.bytes(entries.capacity() * size_of::<(String, BexExternalValue)>());
+            for (key, entry) in entries {
+                meter.bytes(key.capacity());
+                measure_external_value(entry, meter);
+            }
+        }
+        BexExternalValue::Instance {
+            class_name,
+            type_args,
+            fields,
+        } => {
+            meter.bytes(class_name.capacity());
+            meter.bytes(type_args.capacity() * size_of::<RuntimeTy>());
+            meter.bytes(fields.capacity() * size_of::<(String, BexExternalValue)>());
+            for (key, field) in fields {
+                meter.bytes(key.capacity());
+                measure_external_value(field, meter);
+            }
+        }
+        BexExternalValue::Variant {
+            enum_name,
+            variant_name,
+        } => meter.bytes(enum_name.capacity() + variant_name.capacity()),
+        BexExternalValue::Union { value, .. } => {
+            meter.bytes(size_of::<BexExternalValue>());
+            measure_external_value(value, meter);
+        }
+        BexExternalValue::Uint8Array(bytes) => meter.bytes(bytes.capacity()),
+        BexExternalValue::RustData(data) => meter.shared(data, |meter| data.measure(meter)),
+        BexExternalValue::Adt(adt) => match adt {
+            BexExternalAdt::PromptAst(prompt) => {
+                meter.shared(prompt, |meter| prompt.measure(meter));
+            }
+            BexExternalAdt::Media(media) => meter.shared(media, |meter| media.measure(meter)),
+            BexExternalAdt::Type(_)
+            | BexExternalAdt::TypeDef(_)
+            | BexExternalAdt::TaggedHeapHandle { .. } => {}
+        },
+        BexExternalValue::HostValue(host) => meter.shared(host, |meter| host.measure(meter)),
+    }
+}
 
 impl ToBexExternalValue for OpaqueExternalValue {
     fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue {
@@ -875,25 +948,26 @@ impl ToBexExternalValue for bex_vm_types::MediaValue {
     }
 }
 
-/// Try to convert an `Arc<dyn Any + Send + Sync>` from `Object::RustData` to a
+/// Try to convert the payload of an `Object::RustData` to a
 /// [`BexExternalValue`] by attempting downcast to known [`ToBexExternalValue`]
 /// implementors.
 ///
 /// Returns `None` if the concrete type is not recognised.
 pub fn try_convert_rust_data(
-    arc: &std::sync::Arc<dyn std::any::Any + Send + Sync>,
+    arc: &std::sync::Arc<dyn bex_vm_types::BexRustData>,
 ) -> Option<BexExternalValue> {
-    if let Ok(typed) = arc.clone().downcast::<bex_vm_types::PromptAst>() {
+    use bex_vm_types::RustDataArc;
+    if let Ok(typed) = arc.clone().downcast_payload::<bex_vm_types::PromptAst>() {
         return Some(typed.to_bex_external_value());
     }
-    if let Ok(typed) = arc.clone().downcast::<bex_vm_types::MediaValue>() {
+    if let Ok(typed) = arc.clone().downcast_payload::<bex_vm_types::MediaValue>() {
         return Some(typed.to_bex_external_value());
     }
     // A structural host-only value stashed verbatim on the way in (an unbound
     // generic instance, a host-only map/array): re-emit it exactly as it
     // arrived so the host decoder reconstructs the same value. See
     // [`OpaqueExternalValue`].
-    if let Ok(typed) = arc.clone().downcast::<OpaqueExternalValue>() {
+    if let Ok(typed) = arc.clone().downcast_payload::<OpaqueExternalValue>() {
         return Some(typed.to_bex_external_value());
     }
     // A `HostValueArc` wrapped into `Object::RustData` (e.g. the `_handle`
@@ -902,7 +976,10 @@ pub fn try_convert_rust_data(
     // encoder emits a `Handle(HOST_VALUE_{CALLABLE,ERROR})` carrying the
     // same `(key, kind)` — letting the originating bridge resolve the
     // handle back to the original native object on round-trip.
-    if let Ok(typed) = arc.clone().downcast::<bex_resource_types::HostValueArc>() {
+    if let Ok(typed) = arc
+        .clone()
+        .downcast_payload::<bex_resource_types::HostValueArc>()
+    {
         return Some(BexExternalValue::HostValue(typed));
     }
     None

@@ -19,13 +19,10 @@ async fn function_metadata_derives_owner_type_for_class_methods() {
     "#;
 
     let snapshot = compile_for_engine(source);
-    let expected_functions: Vec<_> = snapshot
-        .objects
-        .iter()
-        .filter_map(|object| match object {
-            bex_vm_types::Object::Function(function) => Some(function.name.clone()),
-            _ => None,
-        })
+    // Rendered as the loader will render them: under the label of the
+    // package whose cells hold each function.
+    let expected_functions: Vec<_> = (0..snapshot.objects.len())
+        .filter_map(|index| snapshot.function_name(bex_vm_types::ObjectIndex::from_raw(index)))
         .collect();
     let engine =
         BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new()).unwrap();
@@ -54,6 +51,69 @@ async fn function_metadata_derives_owner_type_for_class_methods() {
         method.owner_type,
         Some(bex_events::DefinitionKey("class:user.Holder".to_string()))
     );
+}
+
+/// Every function kind's metadata is read off its identity: a class method
+/// owns up to its class, an interface default body to its interface, an
+/// impl-provided body to nothing (its for-target is a pattern), and a lambda
+/// names its parent by the parent's definition key.
+#[tokio::test]
+async fn function_metadata_reads_owner_and_parent_off_the_identity() {
+    let source = r#"
+        interface Speaker {
+            function speak(self) -> string throws never
+            function twice(self) -> string throws never { self.speak() + self.speak() }
+        }
+
+        class Dog {
+            name string
+
+            function bark(self) -> string {
+                let shout = (s: string) -> string { s + "!" };
+                shout(self.name)
+            }
+
+            implements Speaker {
+                function speak(self) -> string throws never { self.name }
+            }
+        }
+    "#;
+    let snapshot = compile_for_engine(source);
+    let engine =
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new()).unwrap();
+    let metadata = engine.program_metadata().await;
+    let by_fqn = |fqn: &str| {
+        metadata
+            .function_table
+            .functions
+            .iter()
+            .find(|metadata| metadata.fqn == fqn)
+            .unwrap_or_else(|| panic!("expected metadata for `{fqn}`"))
+    };
+
+    assert_eq!(
+        by_fqn("user.Dog.bark").owner_type,
+        Some(bex_events::DefinitionKey("class:user.Dog".to_string()))
+    );
+    assert_eq!(
+        by_fqn("user.Speaker.twice").owner_type,
+        Some(bex_events::DefinitionKey(
+            "interface:user.Speaker".to_string()
+        ))
+    );
+    let provided = by_fqn("user.<(user.Dog as user.Speaker)>.speak");
+    assert_eq!(provided.owner_type, None);
+    assert_eq!(provided.namespace, Vec::<String>::new());
+
+    let lambda = by_fqn(".<lambda(Dog.bark, 0)>");
+    assert_eq!(
+        lambda.parent_function,
+        Some(bex_events::DefinitionKey(
+            "function:user.Dog.bark".to_string()
+        ))
+    );
+    assert_eq!(lambda.lambda_path.as_deref(), Some("<lambda(Dog.bark, 0)>"));
+    assert_eq!(lambda.package_name.as_deref(), Some("user"));
 }
 
 #[tokio::test]

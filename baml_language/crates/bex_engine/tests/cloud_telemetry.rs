@@ -424,12 +424,18 @@ async fn cloud_shutdown_drains_recordings_and_respects_cas_plan() {
         }
         assert!(!actual.contains(&skipped_id));
         for candidate in candidates {
-            assert_eq!(candidate["snapshot_format_version"], 3);
+            assert_eq!(
+                candidate["snapshot_format_version"],
+                btel_settings::snapshot::BLOB_VERSION
+            );
             offered.insert(candidate["snapshot_id"].as_str().unwrap().to_owned());
         }
         for object in envelope.cas_objects {
             uploaded += 1;
-            assert_eq!(object.snapshot_format_version, 3);
+            assert_eq!(
+                object.snapshot_format_version,
+                btel_settings::snapshot::BLOB_VERSION
+            );
             assert_eq!(object.snapshot_id.len(), 16);
             assert_eq!(object.blob_sha256.len(), 32);
             assert!(object.blob.len() >= 38);

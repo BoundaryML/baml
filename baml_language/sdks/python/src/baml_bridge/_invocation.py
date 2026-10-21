@@ -9,7 +9,7 @@ from .baml_py import (
     _trace_selection,
     invocation_clock_ns,
 )
-from ._execution_context import current
+from ._execution_context import _current_trace_options, current
 from .cffi.v1 import baml_inbound_pb2
 
 
@@ -45,6 +45,17 @@ def normalize(options: Any, call_id: int):
     if active is not None:
         wire.inherited_state = active._key_for_invocation()
     retained = [active]
+    if "trace" not in snapshot:
+        for handle in _current_trace_options.get():
+            selection, reservation = _trace_selection(handle, call_id)
+            inherited = baml_inbound_pb2.TraceSelection.FromString(bytes(selection))
+            # Only mode/capture are defaults. Tags already flow through the
+            # runtime state; replaying their patches would overwrite contexts
+            # established inside BAML before a Python callback.
+            inherited.options.ClearField("distinct_id")
+            inherited.options.ClearField("metadata")
+            wire.trace.MergeFrom(inherited)
+            retained.extend((handle, reservation))
     trace = snapshot.get("trace")
     if trace is not None:
         type_map = get_type_map()
@@ -117,6 +128,12 @@ def invoke(target, arguments, *, _types=None, _baml=None):
     from .proto import decode_call_result
 
     _, encoded = _dynamic_args(target, arguments, _types, _baml)
+    if isinstance(target, str) and target.endswith("@stream"):
+        from ._stream import _decode_stream_result
+
+        return _decode_stream_result(
+            get_runtime().call_function_sync(encoded, stream=True)
+        )
     return decode_call_result(get_runtime().call_function_sync(encoded))
 
 
@@ -127,8 +144,15 @@ async def invoke_async(target, arguments, *, _types=None, _baml=None):
 
     call_id, encoded = _dynamic_args(target, arguments, _types, _baml)
     try:
-        result = await get_runtime().call_function(encoded)
+        if isinstance(target, str) and target.endswith("@stream"):
+            result = await get_runtime().call_function(encoded, stream=True)
+        else:
+            result = await get_runtime().call_function(encoded)
     except asyncio.CancelledError:
         cancel_function_call(call_id)
         raise
+    if isinstance(target, str) and target.endswith("@stream"):
+        from ._stream import _decode_stream_result
+
+        return _decode_stream_result(result, asynchronous=True)
     return _decode_call_result_async(result)

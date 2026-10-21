@@ -10,3 +10,13 @@ export function instrument<F extends Body>(options: unknown, body: F, display?: 
 export function instrument<F extends Body>(_optionsOrBody: unknown, _body?: F, _display?: Display): F {
   throw new TraceUsageError('Host instrumentation is currently supported by the Node bridge');
 }
+
+type CaptureHandler<T> = (value: T) => unknown;
+
+export function registerCapture<T>(_valueType: new (...args: any[]) => T, _handler: CaptureHandler<T>): CaptureHandler<T> {
+  throw new TraceUsageError('Host capture registration is currently supported by the Node bridge');
+}
+
+export function captureFor<T>(_valueType: new (...args: any[]) => T): (handler: CaptureHandler<T>) => CaptureHandler<T> {
+  throw new TraceUsageError('Host capture registration is currently supported by the Node bridge');
+}

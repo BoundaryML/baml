@@ -1,0 +1,157 @@
+{
+  "nightly": "0.22.3-nightly.20261013.b",
+  "local": "working tree with pass-through tracing and owned function spans",
+  "telemetry": "high",
+  "results": {
+    "nightly": {
+      "columns": [
+        "span_name",
+        "span_reason",
+        "status",
+        "input",
+        "output",
+        "error_value"
+      ],
+      "rows": [
+        [
+          "user.Extract@stream",
+          "other",
+          "return",
+          null,
+          null,
+          null
+        ],
+        [
+          "user.Extract@spec",
+          "other",
+          "return",
+          null,
+          null,
+          null
+        ],
+        [
+          "user.Extract@stream",
+          "other",
+          "return",
+          null,
+          null,
+          null
+        ],
+        [
+          "user.Extract@spec",
+          "other",
+          "return",
+          null,
+          null,
+          null
+        ],
+        [
+          "user.Extract@stream",
+          "other",
+          "return",
+          null,
+          null,
+          null
+        ],
+        [
+          "user.Extract@spec",
+          "other",
+          "return",
+          null,
+          null,
+          null
+        ]
+      ],
+      "sealed": true,
+      "diagnostics": []
+    },
+    "local": {
+      "columns": [
+        "span_name",
+        "span_reason",
+        "status",
+        "input",
+        "output",
+        "error_value"
+      ],
+      "rows": [
+        [
+          "user.Extract",
+          "other",
+          "return",
+          "success",
+          42,
+          null
+        ],
+        [
+          "user.Extract",
+          "other",
+          "user_error",
+          "parse failure",
+          null,
+          {
+            "$class": "baml.errors.Context",
+            "error": {
+              "$class": "ai.errors.ParseFailed",
+              "provider": "scripted",
+              "raw_output": "not valid output",
+              "message": "<implied:value>: Expected int, got String(\"not valid output\", Complete)."
+            },
+            "stack_trace": {
+              "$class": "baml.errors.StackTrace",
+              "frames": [
+                {
+                  "$class": "baml.errors.StackFrame",
+                  "file": "main.baml",
+                  "line": 63,
+                  "function_name": "user.main"
+                },
+                {
+                  "$class": "baml.errors.StackFrame",
+                  "file": "main.baml",
+                  "line": 45,
+                  "function_name": "user.consume"
+                }
+              ]
+            },
+            "cause": {
+              "$class": "baml.errors.Context",
+              "error": {
+                "$class": "baml.errors.LlmClient",
+                "message": "<implied:value>: Expected int, got String(\"not valid output\", Complete)."
+              },
+              "stack_trace": {
+                "$class": "baml.errors.StackTrace",
+                "frames": [
+                  {
+                    "$class": "baml.errors.StackFrame",
+                    "file": "main.baml",
+                    "line": 63,
+                    "function_name": "user.main"
+                  },
+                  {
+                    "$class": "baml.errors.StackFrame",
+                    "file": "main.baml",
+                    "line": 45,
+                    "function_name": "user.consume"
+                  }
+                ]
+              },
+              "cause": null
+            }
+          }
+        ],
+        [
+          "user.Extract",
+          "other",
+          "closed",
+          "abandoned",
+          null,
+          null
+        ]
+      ],
+      "sealed": true,
+      "diagnostics": []
+    }
+  }
+}

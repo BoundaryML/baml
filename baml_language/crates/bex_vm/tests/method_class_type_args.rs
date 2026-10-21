@@ -12,7 +12,7 @@
 use std::sync::{Arc, atomic::AtomicBool};
 
 use baml_test_support::compile_source;
-use baml_type::{Name, RealizedTy, TyTemplate, TypeName};
+use baml_type::{Name, RealizedTy, TyTemplate};
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{
     ConstValue, Instruction, Object, ObjectIndex, Value,
@@ -24,6 +24,15 @@ use bex_vm_types::{
 const STUB_SOURCE: &str = r#"
 function _stub() -> int { 42 }
 "#;
+
+/// The identity of an injected test function named `name`: a free function at
+/// the root namespace (a pooled function's package is its owner, which these
+/// tests never bind).
+fn test_identity(name: &str) -> bex_vm_types::types::FunctionIdentity {
+    bex_vm_types::types::FunctionIdentity::Declared(bex_vm_types::types::FnPath::Free(
+        bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new(name)),
+    ))
+}
 
 /// Add a synthetic bytecode function to an existing `Program`.
 fn inject_function(
@@ -39,10 +48,9 @@ fn inject_function(
         ..Bytecode::default()
     };
     let func = Function {
-        name: fn_name.to_string(),
+        identity: test_identity(fn_name),
         source_file: String::new(),
         docstring: None,
-        declared_name: None,
         arity,
         real_local_count: 0,
         bytecode,
@@ -64,11 +72,10 @@ fn inject_function(
         display_return_type: "int".to_string(),
         throws_type: baml_type::TyTemplate::Never,
         origin: FunctionOrigin::UserDefined,
-        is_interface_body: false,
         native_key: None,
         body_meta: None,
-
-        runtime_package: bex_vm_types::HeapPtr::null(),
+        trace_passthrough: false,
+        owner: bex_vm_types::HeapPtr::null(),
     };
     let fn_obj_idx = program.add_object(Object::Function(Box::new(func)));
     program.add_global(ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx)));
@@ -100,7 +107,7 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
 
     // Add a synthetic class to the object pool.
     let class_ptr_idx = program.add_object(Object::Class(Box::new(Class {
-        name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("TestBox"))),
+        path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("TestBox")),
         fields: vec![],
         description: None,
         alias: None,
@@ -108,7 +115,7 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
         other: indexmap::IndexMap::new(),
         stream_done: false,
         type_tag: baml_type::typetag::TypeTag::from_i64(100),
-        has_cleanup: false,
+        cleanup: None,
         methods: indexmap::IndexMap::new(),
         generic_param_count: 0,
         owner: bex_vm_types::types::Owner::anonymous(),
@@ -156,7 +163,7 @@ fn alloc_instance_ntypeargs_zero_gives_empty_class_type_args() {
     let mut program = compile_source(STUB_SOURCE);
 
     let class_ptr_idx = program.add_object(Object::Class(Box::new(Class {
-        name: bex_vm_types::DeclarationName::Declared(TypeName::local(Name::new("MonoClass"))),
+        path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("MonoClass")),
         fields: vec![],
         description: None,
         alias: None,
@@ -164,7 +171,7 @@ fn alloc_instance_ntypeargs_zero_gives_empty_class_type_args() {
         other: indexmap::IndexMap::new(),
         stream_done: false,
         type_tag: baml_type::typetag::TypeTag::from_i64(101),
-        has_cleanup: false,
+        cleanup: None,
         methods: indexmap::IndexMap::new(),
         generic_param_count: 0,
         owner: bex_vm_types::types::Owner::anonymous(),
@@ -323,6 +330,7 @@ fn map_result_element_ty_is_closure_return_not_receiver() {
 function f() -> string[] {
     [1, 2].map((x: int) -> string { "s" })
 }
+
 "#,
     );
     let f = program.rendered_callables()["user.f"].object.raw();
@@ -339,4 +347,29 @@ function f() -> string[] {
         ),
         other => panic!("expected Object::Array result, got {other:?}"),
     }
+}
+
+#[test]
+fn explicit_bound_method_specialization_preserves_receiver_and_aliases() {
+    let program = compile_source(
+        r#"
+class Holder<T> {
+    item: T,
+    function check<U>(self, value: U) -> bool {
+        reflect.Type.of<T>() == reflect.Type.of_value(self.item)
+            && reflect.Type.of<U>() == reflect.Type.of_value(value)
+    }
+}
+function f() -> bool {
+    let holder = Holder<int> { item: 3 };
+    let text = holder.check<string>;
+    let alias = text;
+    let number = holder.check<int>;
+    text("value") && number(5) && alias("again")
+}
+"#,
+    );
+    let f = program.rendered_callables()["user.f"].object.raw();
+    let (result, _) = run_fn(program, f);
+    assert_eq!(result.as_bool(), Some(true));
 }

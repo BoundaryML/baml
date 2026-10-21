@@ -247,6 +247,40 @@ impl<T: Into<PromptAstSimple>> From<T> for PromptAst {
     }
 }
 
+impl crate::BexRustData for PromptAst {
+    fn measure(&self, meter: &mut crate::Meter) {
+        match self {
+            PromptAst::Simple(simple) => meter.shared(simple, |meter| simple.measure(meter)),
+            PromptAst::Message { role, content, .. } => {
+                meter.bytes(role.capacity());
+                meter.shared(content, |meter| content.measure(meter));
+            }
+            PromptAst::Vec(parts) => {
+                meter.bytes(parts.capacity() * size_of::<Arc<PromptAst>>());
+                for part in parts {
+                    meter.shared(part, |meter| part.measure(meter));
+                }
+            }
+        }
+    }
+}
+
+impl crate::BexRustData for PromptAstSimple {
+    fn measure(&self, meter: &mut crate::Meter) {
+        match self {
+            PromptAstSimple::String(text) => meter.bytes(text.capacity()),
+            PromptAstSimple::Media(media) => meter.shared(media, |meter| media.measure(meter)),
+            PromptAstSimple::CacheDelimiter(_) => {}
+            PromptAstSimple::Multiple(parts) => {
+                meter.bytes(parts.capacity() * size_of::<Arc<PromptAstSimple>>());
+                for part in parts {
+                    meter.shared(part, |meter| part.measure(meter));
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

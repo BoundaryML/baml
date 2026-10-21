@@ -33,10 +33,7 @@
 //! mutability, and concurrent `update` calls on one hasher across `spawn` fibers
 //! must be serialized rather than racing on the compression state.
 
-use std::{
-    any::Any,
-    sync::{Arc, Mutex, PoisonError},
-};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use aes_gcm_siv::aead::{
     Aead, AeadCore, KeyInit, Payload,
@@ -56,11 +53,11 @@ use super::{
 };
 use crate::{
     BexVm,
-    errors::{VmBamlError, VmInternalError, VmRustFnError},
+    errors::{VmBamlError, VmRustFnError},
 };
 
 /// Fully-qualified name of the class thrown when a ciphertext is rejected.
-const DECRYPTION_FAILURE_FQN: &str = "baml.crypto.DecryptionFailure";
+const DECRYPTION_FAILURE: baml_base::LangItem = crate::lang_items::BAML_CRYPTO_DECRYPTION_FAILURE;
 
 /// The per-algorithm facts the shared seal and open paths report on.
 ///
@@ -248,11 +245,7 @@ fn open_error(vm: &mut BexVm, algorithm: &str, err: OpenError) -> VmRustFnError 
         OpenError::Invalid(e) => return e,
         OpenError::Rejected(reason) => reason,
     };
-    let Some(class_ptr) = vm.lookup_type_by_fqn(DECRYPTION_FAILURE_FQN) else {
-        return VmRustFnError::InternalError(VmInternalError::MissingNativeFunction {
-            name: DECRYPTION_FAILURE_FQN.to_string(),
-        });
-    };
+    let class_ptr = vm.lang_object(DECRYPTION_FAILURE);
     let algorithm = Value::object(vm.alloc_string(algorithm.to_string()));
     let reason = Value::object(vm.alloc_string(reason));
     VmRustFnError::thrown_fresh(Value::object(
@@ -273,12 +266,33 @@ fn open_error(vm: &mut BexVm, algorithm: &str, err: OpenError) -> VmRustFnError 
 /// block's methods), so a blanket impl cannot express this and a macro is
 /// what keeps the four from drifting apart the way four hand-written copies
 /// would.
+/// A cipher as `$rust_type` data: a key schedule of fixed size.
+struct AeadCipher<C>(C);
+
+impl<C: Send + Sync + 'static> bex_vm_types::BexRustData for AeadCipher<C> {
+    fn measure(&self, _: &mut bex_vm_types::Meter) {}
+}
+
+/// A digest in progress as `$rust_type` data: fixed size.
+struct Sha256State(Mutex<sha2::Sha256>);
+
+impl bex_vm_types::BexRustData for Sha256State {
+    fn measure(&self, _: &mut bex_vm_types::Meter) {}
+}
+
+impl std::ops::Deref for Sha256State {
+    type Target = Mutex<sha2::Sha256>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 macro_rules! impl_aead_class {
     ($class_trait:ident, $aead_trait:ident, $class:ident, $cipher:ty, $algorithm:expr) => {
         impl $class_trait for PackageBamlImpl {
             fn new(vm: &mut BexVm, key: &[u8]) -> Result<Value, VmRustFnError> {
                 let cipher: $cipher = build_cipher(&$algorithm, key)?;
-                let state: Arc<dyn Any + Send + Sync> = Arc::new(cipher);
+                let state: Arc<dyn bex_vm_types::BexRustData> = Arc::new(AeadCipher(cipher));
                 Ok(copy::crypto::$class { _cipher: state }.to_value(vm))
             }
         }
@@ -297,7 +311,7 @@ macro_rules! impl_aead_class {
             ) -> Result<Vec<u8>, VmRustFnError> {
                 seal(
                     &$algorithm,
-                    cipher._cipher::<$cipher>(vm),
+                    &cipher._cipher::<AeadCipher<$cipher>>(vm).0,
                     nonce,
                     plaintext,
                     aad,
@@ -321,7 +335,7 @@ macro_rules! impl_aead_class {
                     };
                     open(
                         &$algorithm,
-                        view._cipher::<$cipher>(vm),
+                        &view._cipher::<AeadCipher<$cipher>>(vm).0,
                         nonce,
                         ciphertext,
                         aad,
@@ -382,14 +396,15 @@ fn lock_hasher<'v>(
         reason = "the `_state` view accessor is generated from the private BAML field"
     )]
     hasher
-        ._state::<Mutex<sha2::Sha256>>(vm)
+        ._state::<Sha256State>(vm)
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
 }
 
 impl BamlClassCryptoSha256 for PackageBamlImpl {
     fn new(vm: &mut BexVm) -> Value {
-        let state: Arc<dyn Any + Send + Sync> = Arc::new(Mutex::new(sha2::Sha256::new()));
+        let state: Arc<dyn bex_vm_types::BexRustData> =
+            Arc::new(Sha256State(Mutex::new(sha2::Sha256::new())));
         copy::crypto::Sha256 { _state: state }.to_value(vm)
     }
 }

@@ -107,7 +107,7 @@ async fn generated_bridge_honors_only_the_publishers_recording_variable() {
 async fn bridge_embedded_ingestion_respects_binding_and_build_boundaries() {
     use btel_settings::artifact::{
         ArtifactTelemetry, DestinationOverrides, EmbeddedIngestion, IngestionDestination,
-        InitialFailureAction, InitialFailurePolicy, PublicCredential, build_digest,
+        PublicCredential, build_digest,
     };
     const SCENARIO: &str = "BAML_TEST_BRIDGE_EMBEDDED";
     let Some(scenario) = baml_env::raw_var(SCENARIO) else {
@@ -186,10 +186,6 @@ async fn bridge_embedded_ingestion_respects_binding_and_build_boundaries() {
     let bytecode = baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program).unwrap();
     let mut policy = ArtifactTelemetry {
         recording_level_envvar: Some("ACME_TELEMETRY".into()),
-        initial_failure: InitialFailurePolicy {
-            action: InitialFailureAction::Warn,
-            warning_message: Some("Telemetry unavailable; continuing.".into()),
-        },
         destination_overrides: if scenario == "custom" {
             DestinationOverrides::Named {
                 project: "ACME_PROJECT".into(),

@@ -75,7 +75,7 @@ test "role_construction_isolation" {
 function pt_role_messages_fn() -> string {
     let name = "World"
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(reflect.Type.of<string>()) }
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(string.type()) }
     let render = ai.prompt`${role("system")}You are helpful.${role("user")}Hi ${name}!`
     render(ctx).text()
 }
@@ -92,7 +92,7 @@ test "prompt_tag_builds_promptast_with_role_messages" {
 function pt_unqualified_prompt_fn() -> string {
     let name = "World"
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(reflect.Type.of<string>()) }
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(string.type()) }
     let render = prompt`${role("system")}You are helpful.${role("user")}Hi ${name}!`
     render(ctx).text()
 }
@@ -116,7 +116,7 @@ function pt_class_array_interp_fn() -> string {
     let p = Point { x: 1, y: 2 }
     let xs = [10, 20, 30]
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system"] }
-    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(reflect.Type.of<string>()) }
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(string.type()) }
     let render = prompt`Point ${p} list ${xs}`
     let from_prompt = render(ctx).text()
     let from_string = `Point ${p} list ${xs}`
@@ -139,7 +139,7 @@ test "prompt_interpolates_class_and_array_like_ordinary_string" {
 function pt_tostring_override_fn() -> string {
     let v = Labeled { tag: "hi" }
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system", "user"] }
-    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(reflect.Type.of<string>()) }
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(string.type()) }
     let render = prompt`${role("system")}head ${v}${role("user")}tail ${v}`
     render(ctx).text()
 }
@@ -183,7 +183,7 @@ function pt_nested_media_fn() -> string {
         lookup: { "copy": bundle },
     }
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(reflect.Type.of<string>()) }
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(string.type()) }
     let render = prompt`${role("user")}Inspect ${envelope}`
     render(ctx).text()
 }
@@ -207,7 +207,7 @@ function pt_nested_tostring_and_media_fn() -> string {
         picture: image.from_url("https://example.com/picture.png", "image/png"),
     }
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(reflect.Type.of<string>()) }
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(string.type()) }
     let render = prompt`${value}`
     render(ctx).text()
 }
@@ -224,7 +224,7 @@ function pt_parent_tostring_owns_media_fn() -> string {
         picture: image.from_url("https://example.com/secret.png", "image/png"),
     }
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(reflect.Type.of<string>()) }
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(string.type()) }
     let render = prompt`${value}`
     render(ctx).text()
 }
@@ -240,7 +240,7 @@ test "prompt_parent_tostring_override_owns_media_subtree" {
 // assembled prompt embeds its rendered schema.
 function pt_ctx_output_format_fn() -> string {
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-    let of = ai.internal.build_output_format(reflect.Type.of<Person>())
+    let of = ai.internal.build_output_format(Person.type())
     let ctx = ai.Context { client: cc, tags: {}, _output_format: of }
     let render = ai.prompt`Answer using this schema:
 ${ctx.output_format()}`
@@ -332,7 +332,7 @@ test "spec_prompt_render_keeps_media_in_promptast" {
 // optional params called with most omitted.
 function pt_output_format_prefix_fn() -> string {
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-    let rt = reflect.Type.of<Person>()
+    let rt = Person.type()
     let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(rt) }
     let render = ai.prompt`${ctx.output_format(prefix = "Use this exact schema:")}`
     render(ctx).text()
@@ -354,7 +354,7 @@ test "prompt_interpolates_ctx_output_format_options" {
 // before it) is omitted. Must render the schema, not panic.
 function pt_output_format_omitted_leading_fn() -> string {
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-    let rt = reflect.Type.of<Person>()
+    let rt = Person.type()
     let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(rt) }
     let render = ai.prompt`${ctx.output_format(quote_class_fields = true)}`
     render(ctx).text()
@@ -370,7 +370,7 @@ test "prompt_output_format_omits_leading_optional_arg" {
 // the optional `nickname` field with `string or omit`.
 function pt_output_format_null_as_omit_fn() -> string {
     let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-    let rt = reflect.Type.of<PersonNick>()
+    let rt = PersonNick.type()
     let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(rt) }
     let render = ai.prompt`${ctx.output_format(render_null_as = "omit")}`
     render(ctx).text()

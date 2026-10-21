@@ -26,8 +26,11 @@ class ScriptedStreamClient {
     probe: StreamProbe,
 
     implements ai.Client {
-        function id(self) -> string {
+        function requested_model(self) -> string {
             self.client_id
+        }
+        function provider(self) -> string {
+            "test"
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
@@ -43,9 +46,9 @@ class ScriptedStreamClient {
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             let _ = input;
             ai.ModelTurn { calls: [],
+                child_turns: [],
                 content: [ai.content.Text { text: self.chunks.join("") }],
                 stop_reason: ai.content.StopReason.Complete,
-                usage: null,
             }
         }
     }
@@ -140,9 +143,12 @@ class NonStreamingClient {
     probe: StreamProbe,
 
     implements ai.Client {
-        function id(self) -> string {
+        function requested_model(self) -> string {
             self.probe.events.push(`id:${self.client_id}`);
             self.client_id
+        }
+        function provider(self) -> string {
+            "test"
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
@@ -158,9 +164,9 @@ class NonStreamingClient {
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             let _ = input;
             ai.ModelTurn { calls: [],
+                child_turns: [],
                 content: [ai.content.Text { text: "not streamed" }],
                 stop_reason: ai.content.StopReason.Complete,
-                usage: null,
             }
         }
     }
@@ -171,8 +177,11 @@ class SyntheticInvokeClient {
     cancel_immediately: bool,
 
     implements ai.Client {
-        function id(self) -> string {
+        function requested_model(self) -> string {
             "synthetic-invoke"
+        }
+        function provider(self) -> string {
+            "test"
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
@@ -248,7 +257,7 @@ function failure_name(error: unknown) -> string {
         let network: ai.errors.NetworkFailure => `NetworkFailure:${network.detail}`,
         let unsafe: ai.errors.StepBudgetExceeded => `StepBudgetExceeded:${unsafe.steps}`,
         let unsupported: ai.errors.StreamingUnsupported => {
-            `StreamingUnsupported:${unsupported.client_id}`
+            `StreamingUnsupported:${unsupported.requested_model}`
         },
         let cancelled: baml.panics.Cancelled => `Cancelled:${cancelled.message}`,
         let timeout: baml.errors.Timeout => `Timeout:${timeout.message}`,
@@ -502,7 +511,7 @@ function streaming_composites_enforce_member_capability_case() -> string {
 test "streaming_composites_enforce_member_capability" {
     assert.equal(
         streaming_composites_enforce_member_capability_case(),
-        "fallback=ok:id:plain,open:streaming:1|retry=StreamingUnsupported:retry-plain:id:retry-plain|round_robin=StreamingUnsupported:rr-plain,next:id:rr-plain,open:rr-streaming:1",
+        "fallback=ok:id:plain,id:plain,open:streaming:1|retry=StreamingUnsupported:retry-plain:id:retry-plain|round_robin=StreamingUnsupported:rr-plain,next:id:rr-plain,open:rr-streaming:1",
     )
 }
 

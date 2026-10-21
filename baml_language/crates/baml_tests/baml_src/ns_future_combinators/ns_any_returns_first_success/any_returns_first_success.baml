@@ -7,12 +7,9 @@ function bad() -> int throws string {
 }
 
 function good() -> int throws string {
-    // sleep's own `throws baml.errors.Io` is swallowed so the declared
-    // surface stays exactly `string`, matching `bad` (Future's error
-    // param is invariant, so the spawns must agree).
-    baml.sys.sleep(baml.time.Duration.from_milliseconds(80n)) catch (e) {
-        let e => null
-    };
+    // The declared surface is exactly `string`, matching `bad` (Future's
+    // error param is invariant, so the spawns must agree).
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(80n));
     42
 }
 

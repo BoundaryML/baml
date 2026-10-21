@@ -30,7 +30,7 @@ use baml_db::{ProjectDatabase, testing::assert_no_diagnostic_errors};
 use baml_linker_types::CompilationUnit;
 use baml_tests::engine::TestDbExt;
 use bex_vm_types::{
-    RuntimeCompileRequest, RuntimeMountEdge, RuntimeMountSurface, RuntimeMountedClass,
+    MountHead, RuntimeCompileRequest, RuntimeMountEdge, RuntimeMountSurface, RuntimeMountedClass,
     RuntimeMountedEnum, RuntimeMountedFieldAttrs, RuntimeMountedImpl, RuntimeMountedVariantAttrs,
     RuntimePackageIdentity, RuntimePackageMount, RuntimeProjectedSurface, RuntimeReExport,
     RuntimeReExportKind, types::EdgeKind,
@@ -191,7 +191,9 @@ fn wire_contract(unit: &CompilationUnit) -> String {
             baml_linker_types::Locator::Direct { edge, .. } => {
                 format!("dep @{slot} {edge} direct, digested")
             }
-            baml_linker_types::Locator::Prelude { edge } => format!("dep @{slot} {edge} prelude"),
+            baml_linker_types::Locator::Prelude(language) => {
+                format!("dep @{slot} {} prelude", language.manifest_name())
+            }
             baml_linker_types::Locator::Transitive { via, edge } => {
                 format!("dep @{slot} {edge} via @{}", via.0)
             }
@@ -253,7 +255,7 @@ fn runtime_mount_consumer_unit_is_byte_identical_to_the_source_dependency_compil
     let app_slot = mounted_unit
         .dependencies
         .iter()
-        .position(|locator| locator.edge().as_str() == "app")
+        .position(|locator| locator.edge().is_some_and(|edge| edge.as_str() == "app"))
         .map(baml_linker_types::DepSlot::of_dependency_index)
         .expect("the consumer reaches `app`");
     assert!(
@@ -311,12 +313,20 @@ fn with_types_consumer_wire_contract_is_pinned() {
     let minted = RuntimePackageIdentity::synthetic(2);
     let level = RuntimePackageIdentity::synthetic(3);
     let view = RuntimePackageIdentity::synthetic(4);
-    let local = |name: &str| baml_type::QualifiedTypeName::local(Name::new(name));
-    let through = |edge: &str, name: &str| {
-        baml_type::QualifiedTypeName::new(Name::new(edge), Vec::new(), Name::new(name))
+    let path = |name: &str| bex_vm_types::types::LocalName {
+        namespace: Vec::new(),
+        name: Name::new(name),
     };
-    let to_string = baml_type::Interface::<baml_type::TypeName>::new(
-        baml_type::QualifiedTypeName::from_dotted_path("baml.ToString"),
+    let local = |name: &str| MountHead::Own(path(name));
+    let through = |edge: &str, name: &str| MountHead::Edge {
+        edge: Name::new(edge),
+        path: path(name),
+    };
+    let to_string = baml_type::Interface::<MountHead>::new(
+        MountHead::Prelude {
+            package: baml_base::LangPackage::Baml,
+            path: path("ToString"),
+        },
         Box::new([]),
         Box::new([]),
     );
@@ -328,7 +338,7 @@ fn with_types_consumer_wire_contract_is_pinned() {
                 docstring: Some("A minted class".to_string()),
                 fields: vec![(
                     Name::new("value"),
-                    baml_type::Ty::string(),
+                    baml_type::Ty::String,
                     RuntimeMountedFieldAttrs::default(),
                 )],
             }],
@@ -380,14 +390,14 @@ fn with_types_consumer_wire_contract_is_pinned() {
                 Name::new("$0"),
                 RuntimeMountEdge {
                     target: minted,
-                    kind: EdgeKind::Anonymous,
+                    kind: EdgeKind::Dependency,
                 },
             ),
             (
                 Name::new("$1"),
                 RuntimeMountEdge {
                     target: level,
-                    kind: EdgeKind::Anonymous,
+                    kind: EdgeKind::Dependency,
                 },
             ),
         ]

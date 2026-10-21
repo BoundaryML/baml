@@ -223,8 +223,9 @@ function wireMedia(value: BamlMediaValue): baml_bridge.cffi.v1.IBamlValueMedia {
     const mimeType = value.mimeType() ?? undefined;
     const url = value.url();
     if (url !== null) return { media, mimeType, url };
-    const file = value.file();
-    if (file !== null) return { media, mimeType, file };
+    const name = value.name();
+    // Content read from a file keeps the file's name.
+    if (name !== null) return { media, mimeType, fileContent: { name, base64: value.base64() } };
     return { media, mimeType, base64: value.base64() };
 }
 
@@ -700,12 +701,15 @@ function decodeValueHolder(
         const mimeType = media.mimeType ?? undefined;
         const construct = <T>(type: {
             fromUrl(value: string, mimeType?: string): T;
-            fromFile(value: string, mimeType?: string): T;
+            fromFileContent(file: string, base64: string, mimeType?: string): T;
             fromBase64(value: string, mimeType?: string): T;
         }): T => {
             if (media.url != null) return type.fromUrl(media.url, mimeType);
-            if (media.file != null) return type.fromFile(media.file, mimeType);
             if (media.base64 != null) return type.fromBase64(media.base64, mimeType);
+            // Content read from a file keeps the file's name.
+            if (media.fileContent != null) {
+                return type.fromFileContent(media.fileContent.name ?? '', media.fileContent.base64 ?? '', mimeType);
+            }
             throw new BamlError('decoded media value has no payload');
         };
         switch (media.media) {

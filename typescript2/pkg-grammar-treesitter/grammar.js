@@ -697,6 +697,7 @@ module.exports = grammar({
 
     _statement: ($) =>
       choice(
+        $.let_type_declaration,
         $.let_declaration,
         $.expression_statement,
         $.while_statement,
@@ -726,6 +727,27 @@ module.exports = grammar({
             optional(field('else', $.else_clause)),
             optional(';'),
           ),
+        ),
+      ),
+
+    // `let type T = t;` `let type U extends Named & Tagged = t else { return null };`
+    // binds a type parameter for the rest of the block.
+    let_type_declaration: ($) =>
+      prec.right(
+        seq(
+          'let',
+          'type',
+          field('name', $.identifier),
+          optional(
+            seq(
+              'extends',
+              field('bound', seq($._type, repeat(seq('&', $._type)))),
+            ),
+          ),
+          '=',
+          field('value', $._expression),
+          optional(field('else', $.else_clause)),
+          optional(';'),
         ),
       ),
 
@@ -793,6 +815,7 @@ module.exports = grammar({
         $.null,
         $.string,
         $.byte_string,
+        $.raw_quoted_string,
         $.raw_string,
         $.backtick_string,
         $.member_expression,
@@ -1246,6 +1269,11 @@ module.exports = grammar({
     string: (_) => token(seq('"', repeat(choice(/[^"\\]/, /\\./)), '"')),
 
     byte_string: (_) => token(seq('b"', repeat(choice(/[^"\\]/, /\\./)), '"')),
+
+    // Raw string `r"..."`: the body is verbatim, but a backslash keeps the
+    // next character (including `"`) from closing the literal.
+    raw_quoted_string: (_) =>
+      token(seq('r"', repeat(choice(/[^"\\]/, /\\./)), '"')),
 
     // Raw strings: hash levels 1..MAX_RAW_STRING_HASHES are enumerated
     // explicitly (same longest-match close-delimiter approach per level).

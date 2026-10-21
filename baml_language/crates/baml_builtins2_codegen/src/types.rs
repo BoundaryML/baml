@@ -14,9 +14,10 @@ pub struct NativeBuiltin {
     /// The declaring namespace (no package, no class): `"fs"` for
     /// `baml.fs.File.read`, `""` for a top-level class or item.
     /// Carried STRUCTURALLY from extraction — the `path` alone cannot be
-    /// split, because an impl-block class segment embeds the WRITTEN
-    /// interface target, which may itself be dotted
-    /// (`root.io.Read$for$File`).
+    /// split, because an impl-block class segment embeds the interface
+    /// target as the native key spells it — a written `root.` as the
+    /// package's fixed name — which may itself be dotted
+    /// (`baml.io.Read$for$File`).
     pub namespace: String,
     /// The full class segment (`Class` or `{iface}$for${Class}`) for a
     /// method; `None` for a free item. Same structural-carry rationale as
@@ -113,6 +114,20 @@ pub struct Receiver {
     /// Generic type parameters of the class (e.g. `["T"]` for `Array<T>`).
     pub class_generics: Vec<String>,
     pub receiver_type: ReceiverType,
+    /// Whether the receiver may be one of the builtins the glue special-cases
+    /// by class name (the containers, `String`, the numeric companions, the
+    /// media classes). Those all live in the `baml` package, so a same-named
+    /// class of another package (`reflect.Array`, `reflect.Map`) is not one.
+    pub builtin: bool,
+}
+
+impl Receiver {
+    /// The class name builtin-receiver handling matches on: the class name
+    /// when the receiver may be a builtin ([`Self::builtin`]), else `""`,
+    /// which no builtin is called.
+    pub fn builtin_name(&self) -> &str {
+        if self.builtin { &self.class_name } else { "" }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -219,8 +234,8 @@ mod tests {
             "BamlRandomRngForSystemRandomRandom"
         );
         assert_eq!(
-            variant("baml.fs.root.io.Read$for$File.read"),
-            "BamlFsRootIoReadForFileRead"
+            variant("baml.fs.baml.io.Read$for$File.read"),
+            "BamlFsBamlIoReadForFileRead"
         );
     }
 }

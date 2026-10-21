@@ -124,7 +124,7 @@ func Test_go_codegen_context_deadline(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	start := time.Now()
-	_, err := baml_sdk.ThrowsTestSleepMs(ctx, 2000)
+	err := baml_sdk.ThrowsTestSleepMs(ctx, 2000)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("deadline error = %v", err)
 	}

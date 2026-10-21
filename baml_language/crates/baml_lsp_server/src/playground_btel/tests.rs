@@ -31,12 +31,10 @@ fn engine_for(project: &Path, source: &str) -> Arc<bex_engine::BexEngine> {
     let mut program = baml_test_support::compile_source(source);
     for object in &mut program.objects.0 {
         if let bex_vm_types::Object::Function(f) = object
-            && f.name.ends_with(".Ask")
+            && f.declared_name().is_some_and(|name| name == "Ask")
         {
             // Capture like an LLM function, without a model.
-            f.body_meta = Some(bex_vm_types::FunctionMeta::Llm {
-                client: "test".into(),
-            });
+            f.body_meta = Some(bex_vm_types::FunctionMeta::Llm);
         }
     }
     Arc::new(
@@ -81,12 +79,26 @@ async fn recorded_playground_runs_appear_on_refresh_with_captured_values() {
     assert!(executions.is_empty() && missing);
 
     let engine = engine(&project);
+    // GC has its own root span; it must not become a playground run.
+    engine
+        .collect_garbage(bex_heap::CollectionLevel::Major)
+        .await;
     call(&engine, "ann").await;
     // The default recording flushes on a deadline; poll like the UI does.
     let listed = tokio::time::timeout(Duration::from_secs(10), async {
         loop {
             let (executions, missing) = telemetry.list_executions(&project_text).unwrap();
-            if !missing && !executions.is_empty() {
+            let gc_recorded = telemetry
+                .with_index(&project_text, |index| {
+                    super::run(
+                        index,
+                        "SELECT COUNT(*) FROM spans WHERE span_name = 'baml.gc'",
+                        vec![],
+                    )
+                })
+                .unwrap()
+                .is_some_and(|result| result.rows[0][0].as_i64().unwrap() > 0);
+            if !missing && !executions.is_empty() && gc_recorded {
                 return executions;
             }
             tokio::time::sleep(Duration::from_millis(50)).await;
@@ -100,6 +112,9 @@ async fn recorded_playground_runs_appear_on_refresh_with_captured_values() {
 
     // A second run becomes visible on a later refresh of the same index.
     call(&engine, "bob").await;
+    engine
+        .collect_garbage(bex_heap::CollectionLevel::Major)
+        .await;
     let listed = tokio::time::timeout(Duration::from_secs(10), async {
         loop {
             let (executions, _) = telemetry.list_executions(&project_text).unwrap();
@@ -195,6 +210,9 @@ async fn recorded_playground_runs_appear_on_refresh_with_captured_values() {
     let value: Value = serde_json::from_str(error["value"].as_str().unwrap()).unwrap();
     assert_eq!(value["reason"], "boom");
     engine.shutdown().await;
+    let (executions, _) = telemetry.list_executions(&project_text).unwrap();
+    assert_eq!(executions.len(), 3, "shutdown GC is not another run");
+    assert!(executions.iter().all(|e| e["entryFqn"] == "user.main"));
 
     // Outside the served workspace: refused.
     let elsewhere = tempfile::tempdir().unwrap();

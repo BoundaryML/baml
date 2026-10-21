@@ -849,7 +849,7 @@ impl<'db> InterfaceMethodSpec<'db> {
         // lower through the same road as written types.
         let mut scratch = baml_compiler2_hir::type_ref::TypeRefBuilder::new();
         let self_id = scratch.alloc_synthetic(baml_compiler2_hir::type_ref::TypeRefKind::Path {
-            segments: vec![Name::new("Self")],
+            path: baml_base::Path::bare(Name::new("Self")),
             generic_args: Box::new([]),
             associated_type_bindings: Box::new([]),
         });
@@ -1792,7 +1792,6 @@ fn collect_ty_packages(ty: &Ty, out: &mut Vec<baml_base::SourceRoot>) {
         | Ty::Type
         | Ty::Resource
         | Ty::PromptAst
-        | Ty::Void
         | Ty::Unknown
         | Ty::Never
         | Ty::Error => {}

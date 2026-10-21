@@ -1,0 +1,5 @@
+name = "shared array 1w 4r"
+description = "one writer and four readers on a shared array"
+expect = "50001"
+jobs = 32
+warmup = 2

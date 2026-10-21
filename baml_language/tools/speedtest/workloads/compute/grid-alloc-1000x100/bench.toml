@@ -1,0 +1,5 @@
+name = "grid alloc 1000x100"
+description = "allocate a 1,000 x 100 grid of rows and sum it"
+expect = "4999950000"
+jobs = 16
+warmup = 1

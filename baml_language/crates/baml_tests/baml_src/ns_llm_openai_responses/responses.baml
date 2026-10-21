@@ -48,6 +48,18 @@ function OaiSystemLook(pic: image) -> string {
     `
 }
 
+class OaiPickedTool {
+    tool: string,
+}
+
+function OaiPickTool() -> OaiPickedTool {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        Pick the tool to run.
+        ${ctx.output_format()}
+    `
+}
+
 // A per-message directive, authored on the role marker.
 function OaiMetaEcho(question: string) -> string {
     client: "openai/gpt-4o-mini"
@@ -74,6 +86,39 @@ function _oai_image_response() -> string {
 function _oai_sparse_usage_response() -> string {
     let body = `{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"pong"}]}],"usage":{}}`;
     body
+}
+
+// One assistant `message` output item with a `phase`.
+function _oai_phase_message(phase: string, text: string) -> map<string, unknown> {
+    {
+        "type": "message",
+        "phase": phase,
+        "role": "assistant",
+        "content": [{ "type": "output_text", "text": text }],
+    }
+}
+
+function _oai_response_with_output(output: map<string, unknown>[]) -> string {
+    _oai_json(
+        {
+            "id": "resp_commentary",
+            "model": "gpt-6-luna",
+            "status": "completed",
+            "output": output,
+            "usage": { "input_tokens": 3, "output_tokens": 1, "total_tokens": 4 },
+        },
+    )
+}
+
+// The shape gpt-6-luna returns when it splits one answer: a reasoning item,
+// `commentary` messages, then a `final_answer` message.
+function _oai_commentary_response(commentaries: string[], final_answer: string) -> string {
+    let output: map<string, unknown>[] = [{ "type": "reasoning", "content": [], "summary": [] }];
+    for (let text in commentaries) {
+        output.push(_oai_phase_message("commentary", text));
+    }
+    output.push(_oai_phase_message("final_answer", final_answer));
+    _oai_response_with_output(output)
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -321,7 +366,8 @@ function oai_tools_and_journal() -> json {
                     ai.content.Text { text: "on it" },
                     ai.content.ToolUse { id: "call_1", name: "lookup", args: args },
                 ],
-                client_id: "openai/gpt-4o-mini",
+                resolved_model: ai.events.ModelKey { provider: "openai", model: "gpt-4o-mini" },
+                requested_model: "gpt-4o-mini",
             },
         ],
     };
@@ -662,6 +708,11 @@ test "oai_role_metadata_is_not_forwarded" {
 
 // ─── response parsing ────────────────────────────────────────────────────────
 
+/// The usage a run billed to `gpt-4o-mini` on OpenAI, the model these tests use.
+function _oai_usage(usage: ai.events.ModelUsage[]) -> ai.events.Usage? {
+    ai.events.usage_for(usage, ai.events.ModelKey { provider: "openai", model: "gpt-4o-mini" })
+}
+
 // total/cached/reasoning token details reach ai.events.Usage.
 function oai_usage_details() -> string {
     root.llm_mock.mock_json_serve(
@@ -673,11 +724,12 @@ function oai_usage_details() -> string {
                 base_url = mock.base_url(),
             );
             let result = ai.Agent.new(client = cl).run(OaiEcho@spec("Say pong."));
+            let usage = _oai_usage(result.usage);
             [
-                result.usage.input_tokens.to_string(),
-                result.usage.output_tokens.to_string(),
-                (result.usage.cached_input_tokens ?? -1).to_string(),
-                (result.usage.reasoning_tokens ?? -1).to_string(),
+                (usage?.input_tokens ?? -1).to_string(),
+                (usage?.output_tokens ?? -1).to_string(),
+                (usage?.cached_input_tokens ?? -1).to_string(),
+                (usage?.reasoning_tokens ?? -1).to_string(),
             ].join("|")
         },
     )
@@ -688,7 +740,7 @@ test "oai_usage_details" {
 }
 
 // A `usage` object with no counts at all still parses (the fields are optional
-// on purpose) and contributes zeroes.
+// on purpose) and reports no counts: unreported is not zero.
 function oai_sparse_usage() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_oai_sparse_usage_response())],
@@ -699,13 +751,130 @@ function oai_sparse_usage() -> string {
                 base_url = mock.base_url(),
             );
             let result = ai.Agent.new(client = cl).run(OaiEcho@spec("Say pong."));
-            `${result.value}|${result.usage.input_tokens}|${result.usage.output_tokens}`
+            let usage = _oai_usage(result.usage);
+            `${result.value}|${usage?.input_tokens ?? -1}|${usage?.output_tokens ?? -1}`
         },
     )
 }
 
 test "oai_sparse_usage" {
-    assert.equal(oai_sparse_usage(), "pong|0|0")
+    assert.equal(oai_sparse_usage(), "pong|-1|-1")
+}
+
+// A commentary message that parses into a structured output type is the
+// turn's output. The final answer is the fallback.
+function oai_commentary_answer(commentaries: string[], final_answer: string) -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_oai_commentary_response(commentaries, final_answer))],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            ai.Agent.new(client = cl).run(OaiPickTool@spec()).value.tool
+        },
+    )
+}
+
+test "oai_commentary_answer" {
+    let tool_call = "{\"tool\": \"search_workouts\"} \n";
+    // the commentary wins over an empty final answer and over one that parses
+    assert.equal(oai_commentary_answer([tool_call], ""), "search_workouts");
+    assert.equal(oai_commentary_answer([tool_call], `{"tool": "none"}`), "search_workouts");
+    // commentary messages are tried in order
+    assert.equal(
+        oai_commentary_answer([`{"tool": "first"}`, `{"tool": "second"}`], `{"tool": "none"}`),
+        "first",
+    );
+    assert.equal(
+        oai_commentary_answer(["Let me look that up.", `{"tool": "second"}`], `{"tool": "none"}`),
+        "second",
+    );
+    // a commentary that does not parse leaves the final answer
+    assert.equal(oai_commentary_answer(["Let me look that up."], `{"tool": "none"}`), "none")
+}
+
+// The turn's content is the whole response, in order, whatever was parsed. A
+// string output is never taken from the commentary: any text parses as a
+// string, so a preamble would replace the answer.
+function oai_commentary_string_output() -> string {
+    root.llm_mock.mock_json_serve(
+        [
+            root.llm_mock.MockResponse.ok(_oai_commentary_response(["Let me look."], "pong")),
+            root.llm_mock.MockResponse.ok(_oai_commentary_response(["Let me look."], "pong")),
+        ],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let spec = OaiEcho@spec("Say pong.");
+            let turn = cl.invoke(_oai_input(spec, ai.Journal.new(spec), ai.tools.Toolbox.new([])));
+            let texts: string[] = [];
+            for (let block in turn.content) {
+                if let text: ai.content.Text = block {
+                    texts.push(text.text);
+                }
+            }
+            let decoded = if (turn.parsed_output == null) {
+                "not decoded"
+            } else {
+                "decoded"
+            };
+            let value = ai.Agent.new(client = cl).run(OaiEcho@spec("Say pong.")).value;
+            [texts.join("|"), decoded, value].join("~")
+        },
+    )
+}
+
+test "oai_commentary_string_output" {
+    assert.equal(oai_commentary_string_output(), "Let me look.|pong~not decoded~pong")
+}
+
+// With a native tool call in the response, the commentary is the preamble to
+// that call, not the output.
+function oai_commentary_with_tool_call() -> string {
+    let call: map<string, unknown> = {
+        "type": "function_call",
+        "id": "fc_1",
+        "call_id": "call_1",
+        "name": "lookup",
+        "arguments": "{}",
+    };
+    let body = _oai_response_with_output(
+        [_oai_phase_message("commentary", `{"tool": "search_workouts"}`), call],
+    );
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(body)],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let spec = OaiPickTool@spec();
+            let turn = cl.invoke(
+                ai.ModelTurnInput {
+                    prompt: spec.prompt_template,
+                    journal: ai.Journal.new(spec),
+                    toolbox: ai.tools.Toolbox.new([]),
+                    output_type: spec.output_type(),
+                },
+            );
+            let decoded = if (turn.parsed_output == null) {
+                "not decoded"
+            } else {
+                "decoded"
+            };
+            `${turn.tool_uses().length()} tool call|${decoded}`
+        },
+    )
+}
+
+test "oai_commentary_with_tool_call" {
+    assert.equal(oai_commentary_with_tool_call(), "1 tool call|not decoded")
 }
 
 // Malformed `arguments` on a function_call item is PROVIDER-malformed output:
@@ -835,7 +1004,7 @@ function oai_stream_usage_splits_the_cache() -> string {
                 base_url = mock.base_url(),
             );
             let spec = OaiEcho@spec("Say pong.");
-            let u = cl
+            let turn = cl
                 .invoke_stream(
                 ai.ModelTurnInput {
                     prompt: spec.prompt_template,
@@ -844,8 +1013,8 @@ function oai_stream_usage_splits_the_cache() -> string {
                     output_type: spec.output_type(),
                 },
                 )
-                .final_turn()
-                .usage;
+                .final_turn();
+            let u = ai.events.usage_for(ai.events.call_usage(turn.calls), ai.events.ModelKey { provider: "openai", model: "gpt-4o-mini" });
             `${u?.input_tokens ?? -1}/${u?.cached_input_tokens ?? -1}/${u?.cache_write_input_tokens ?? -1}/${u?.uncached_input_tokens ?? -1}/${u?.output_tokens ?? -1}/${u?.reasoning_tokens ?? -1}`
         },
     )
@@ -1306,7 +1475,7 @@ function _oai_live_client() -> openai.ResponsesClient {
 function oai_live_answers() -> bool {
     let result = ai.Agent.new(client = _oai_live_client())
         .run(OaiEcho@spec("Say pong."));
-    result.value.trim().length() > 0 && result.usage.output_tokens > 0
+    result.value.trim().length() > 0 && (_oai_usage(result.usage)?.output_tokens ?? 0) > 0
 }
 
 function oai_live_streams() -> bool {

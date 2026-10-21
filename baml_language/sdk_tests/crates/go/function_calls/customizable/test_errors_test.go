@@ -81,7 +81,7 @@ func Test_error_call_cancellation_preserves_context_identity(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	timer := time.AfterFunc(50*time.Millisecond, cancel)
 	defer timer.Stop()
-	_, err := baml_sdk.ThrowsTestSleepMs(ctx, 2000)
+	err := baml_sdk.ThrowsTestSleepMs(ctx, 2000)
 	if err != ctx.Err() {
 		t.Fatalf("cancellation error identity = %v, want exact ctx.Err() %v", err, ctx.Err())
 	}

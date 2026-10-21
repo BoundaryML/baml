@@ -26,7 +26,7 @@ use std::{
     sync::Arc,
 };
 
-use baml_type::{Name, TypeName, normalize::TypeContext};
+use baml_type::normalize::TypeContext;
 use bex_str::BexStr;
 use bex_vm_types::{
     HeapPtr, RealizedTy, ValueKind,
@@ -115,24 +115,24 @@ impl BamlNamespaceOps for PackageBamlImpl {
     // (an operand erased to a union / interface-existential / type variable), so
     // the impl is selected from the operands' runtime types.
     fn __union_add(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
-        drive_binary_op(vm, "Add", "add", *a, *b)
+        drive_binary_op(vm, crate::lang_items::BAML_OPS_ADD, "add", *a, *b)
     }
     fn __union_sub(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
-        drive_binary_op(vm, "Subtract", "sub", *a, *b)
+        drive_binary_op(vm, crate::lang_items::BAML_OPS_SUBTRACT, "sub", *a, *b)
     }
     fn __union_mul(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
-        drive_binary_op(vm, "Multiply", "mul", *a, *b)
+        drive_binary_op(vm, crate::lang_items::BAML_OPS_MULTIPLY, "mul", *a, *b)
     }
     fn __union_div(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
-        drive_binary_op(vm, "Divide", "div", *a, *b)
+        drive_binary_op(vm, crate::lang_items::BAML_OPS_DIVIDE, "div", *a, *b)
     }
     fn __union_rem(vm: &mut BexVm, a: &Value, b: &Value) -> NativeCallResult {
-        drive_binary_op(vm, "Remainder", "rem", *a, *b)
+        drive_binary_op(vm, crate::lang_items::BAML_OPS_REMAINDER, "rem", *a, *b)
     }
     fn __union_neg(vm: &mut BexVm, a: &Value) -> NativeCallResult {
         // Negation is single dispatch on `a` (`Negate` has no `Rhs`), so the
         // interface request carries no args.
-        dispatch_op(vm, "Negate", "neg", vec![*a], &[])
+        dispatch_op(vm, crate::lang_items::BAML_OPS_NEGATE, "neg", vec![*a], &[])
     }
 }
 
@@ -142,7 +142,7 @@ impl BamlNamespaceOps for PackageBamlImpl {
 /// *both* operand types.
 fn drive_binary_op(
     vm: &mut BexVm,
-    iface: &str,
+    iface: baml_base::LangItem,
     method: &str,
     a: Value,
     b: Value,
@@ -163,15 +163,14 @@ fn drive_binary_op(
 /// invariant break, surfaced as an internal error.
 fn dispatch_op(
     vm: &mut BexVm,
-    iface: &str,
+    iface: baml_base::LangItem,
     method: &str,
     args: Vec<Value>,
     iface_args: &[RealizedTy],
 ) -> NativeCallResult {
-    let op_qtn = TypeName::new(Name::new("baml"), vec![Name::new("ops")], Name::new(iface));
-    // A stdlib FQN constant is one of the three places a name legitimately
-    // becomes a head; it resolves once, off the declaration.
-    let Some(op_head) = vm.declaration_head(&op_qtn) else {
+    // The operator interface by identity; `None` only in a program without
+    // the stdlib, where no operator body can be running.
+    let Some(op_head) = vm.lang_head(iface) else {
         return NativeCallResult::from(unresolved_op(iface, method));
     };
     let Some(self_ty) = vm.value_concrete_ty(args[0]) else {
@@ -199,9 +198,9 @@ fn dispatch_op(
 /// The internal error for an operator dispatch the type checker promised could
 /// not miss: no concrete receiver type, or no applicable impl. (Resolving the
 /// method off a found rule reports its own, finer-grained errors.)
-fn unresolved_op(iface: &str, method: &str) -> VmInternalError {
+fn unresolved_op(iface: baml_base::LangItem, method: &str) -> VmInternalError {
     VmInternalError::UnresolvedVirtualCall {
-        method: format!("baml.ops.{iface}.{method}"),
+        method: format!("{iface}.{method}"),
     }
 }
 
@@ -607,6 +606,8 @@ impl EqualsDriver {
             #[cfg(feature = "heap_debug")]
             (Object::Sentinel(_), _) => Cmp::NotEqual,
 
+            (Object::Tombstone, _) => Object::tombstone_reached(),
+
             (Object::RustData(x), Object::RustData(y)) => {
                 match (
                     x.downcast_ref::<bex_vm_types::trace::SpanId>(),
@@ -794,8 +795,10 @@ fn resolve_equals_eq(
     // `Equals` is non-generic — no interface args to select on; off the resolved
     // rule, `eq` is the concrete method (the impl's own, or the adopted default),
     // invoked with its frame realized against the impl's bound type args.
-    let Some(equals_head) = vm.declaration_head(&equals_qtn()) else {
-        return Ok(None);
+    let Some(equals_head) = vm.lang_head(crate::lang_items::BAML_OPS_EQUALS) else {
+        // The `baml` package is required at load; `Equals` missing from it is
+        // the stdlib and the runtime out of step, never "no custom eq".
+        return Err(unresolved_op(crate::lang_items::BAML_OPS_EQUALS, "eq"));
     };
     let resolver = resolve::ImplResolver::for_value(vm, value);
     let Some((rule, bound_args)) = resolver.resolve_implements_rule(concrete, equals_head, &[])
@@ -819,15 +822,6 @@ fn resolve_equals_eq(
 
 pub(super) fn equals_structural_default(vm: &mut BexVm, a: Value, b: Value) -> NativeCallResult {
     EqualsDriver::new(a, b).drive(vm)
-}
-
-/// The `baml.ops.Equals` interface name.
-fn equals_qtn() -> TypeName {
-    TypeName::new(
-        Name::new("baml"),
-        vec![Name::new("ops")],
-        Name::new("Equals"),
-    )
 }
 
 /// Read a `baml.ops.Ordering` value back as a Rust [`std::cmp::Ordering`].

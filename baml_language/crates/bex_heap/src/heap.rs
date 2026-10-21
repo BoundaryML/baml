@@ -17,7 +17,7 @@ use std::{
     collections::HashMap,
     sync::{
         Arc, Mutex, RwLock, Weak,
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
 };
 
@@ -132,6 +132,7 @@ pub struct BexHeap {
     /// These are permanent: functions, classes, enums, string literals.
     compile_time: Vec<Object>,
     pub(crate) functions: btel_types::FunctionLookup<HeapPtr>,
+    pub(crate) span_definitions: std::sync::Mutex<HashMap<String, btel_types::FunctionId>>,
 
     /// Gen0 nursery — all TLAB allocations land here.
     /// Uses ChunkedVec for stable pointers during concurrent access.
@@ -204,29 +205,30 @@ pub struct BexHeap {
     /// BEP-042: instances whose `cleanup` finalizer must run after the current
     /// collection. Populated during a collection (`copy_collection` /
     /// `copy_collection_minor`) when a dead-but-not-yet-cleaned instance of a
-    /// `has_cleanup` class is discovered and kept alive; the pointers are the
+    /// class with a finalizer is discovered and kept alive; the pointers are the
     /// **new** (post-copy) locations. Drained by the engine via
     /// [`take_pending_finalizers`](Self::take_pending_finalizers) at the same
     /// safepoint, before any other collection runs, so the pointers stay valid.
     ///
-    /// Each entry pairs the instance's post-copy `HeapPtr` with its resolved
-    /// `cleanup` function name (`{class_fqn}.cleanup`), computed by the GC while
-    /// it still has the class in hand — so the engine drain needs no heap read
-    /// to dispatch.
-    pending_finalizers: Mutex<Vec<(HeapPtr, String)>>,
+    /// Each entry pairs the instance's post-copy `HeapPtr` with its class's
+    /// `cleanup` function, read off the class by the GC while it has the
+    /// class in hand — so the engine drain needs no heap read to dispatch.
+    pending_finalizers: Mutex<Vec<(HeapPtr, HeapPtr)>>,
 
     /// Unobserved errors discovered while collecting unreachable futures.
     /// Entries contain post-copy values and are drained before execution
     /// resumes or another collection runs.
     pending_unhandled_spawn_errors: Mutex<Vec<UnhandledSpawnError>>,
 
-    /// BEP-042 fast path: `true` iff at least one compile-time `Class` opts into
-    /// a `cleanup` finalizer (`has_cleanup`). Classes are fixed at compile time,
-    /// so this is computed once at construction. When `false`, the per-collection
-    /// finalizer scan ([`scan_dead_finalizers`](Self::scan_dead_finalizers)) is
-    /// skipped entirely — programs that define no `cleanup` (the common case) pay
-    /// no per-GC scan cost.
-    pub(crate) has_finalizable_classes: bool,
+    /// BEP-042 fast path: `true` iff some `Class` on this heap opts into a
+    /// `cleanup` finalizer (`Class::cleanup`): computed over the compile-time
+    /// classes at construction and raised when a graft adopts a class with one
+    /// ([`note_finalizable_class`](Self::note_finalizable_class)); never lowered.
+    /// When `false`, the per-collection finalizer scan
+    /// ([`scan_dead_finalizers`](Self::scan_dead_finalizers)) is skipped
+    /// entirely — programs that define no `cleanup` (the common case) pay no
+    /// per-GC scan cost.
+    pub(crate) has_finalizable_classes: AtomicBool,
 
     /// TLAB chunk size for new allocations.
     tlab_size: usize,
@@ -242,7 +244,10 @@ pub struct BexHeap {
     /// lock-free within a TLAB.
     growth_lock: Mutex<()>,
 
-    /// Actual object allocations since last GC (profiling only).
+    /// Actual object allocations since last GC (profiling only). A shared
+    /// counter every allocation would write, so it exists only in builds
+    /// that read it.
+    #[cfg(feature = "gc_profiling")]
     allocs_since_gc: AtomicUsize,
 
     /// Debug instrumentation state and config.
@@ -345,11 +350,12 @@ impl BexHeap {
         // so the per-collection finalizer scan can be skipped when none do.
         let has_finalizable_classes = compile_time_objects
             .iter()
-            .any(|o| matches!(o, Object::Class(c) if c.has_cleanup));
+            .any(|o| matches!(o, Object::Class(c) if c.cleanup.is_some()));
 
         Self {
             compile_time: compile_time_objects,
             functions: btel_types::FunctionLookup::default(),
+            span_definitions: std::sync::Mutex::default(),
             gen0: UnsafeCell::new(ChunkedVec::new()),
             gen1: UnsafeCell::new(ChunkedVec::new()),
             gen2: UnsafeCell::new(ChunkedVec::new()),
@@ -361,13 +367,14 @@ impl BexHeap {
             next_handle_key: AtomicUsize::new(0),
             pending_finalizers: Mutex::new(Vec::new()),
             pending_unhandled_spawn_errors: Mutex::new(Vec::new()),
-            has_finalizable_classes,
+            has_finalizable_classes: AtomicBool::new(has_finalizable_classes),
             tlab_size,
             max_tlab_size: tlab_size,
             gc_policy: crate::gc_policy::AllocationBudget::new(),
             root_release_epoch: AtomicUsize::new(0),
             gc_activity: Arc::new(tokio::sync::Notify::new()),
             growth_lock: Mutex::new(()),
+            #[cfg(feature = "gc_profiling")]
             allocs_since_gc: AtomicUsize::new(0),
             debug_state: HeapDebuggerState::new(debug),
         }
@@ -538,11 +545,11 @@ impl BexHeap {
                     return;
                 }
                 let context = match object {
-                    Object::Class(class) => format!("class {}", class.name),
-                    Object::Enum(enm) => format!("enum {}", enm.name),
-                    Object::Interface(interface) => format!("interface {}", interface.name),
-                    Object::TypeAlias(alias) => format!("type alias {}", alias.name),
-                    Object::Function(function) => format!("function {}", function.name),
+                    Object::Class(class) => format!("class {}", class.name()),
+                    Object::Enum(enm) => format!("enum {}", enm.name()),
+                    Object::Interface(interface) => format!("interface {}", interface.name()),
+                    Object::TypeAlias(alias) => format!("type alias {}", alias.name()),
+                    Object::Function(function) => format!("function {}", function.name()),
                     Object::ImplRule(rule) => format!("impl rule at {:?}", rule.interface_head),
                     other => format!("{:?} object", bex_vm_types::ObjectType::of(other)),
                 };
@@ -586,7 +593,7 @@ impl BexHeap {
                     .map(|(index, table)| {
                         format!(
                             "  function {}: switch table {index} over [{}]",
-                            function.name,
+                            function.name(),
                             table.key_names.join(", ")
                         )
                     })
@@ -839,7 +846,7 @@ impl BexHeap {
     /// Used by the engine's post-`forward_roots` integrity sweep to detect
     /// stale references the GC failed to forward. The inactive space's
     /// chunks still exist (their slots have been overwritten with
-    /// `Sentinel::FromSpacePoison` in heap_debug builds), so checking
+    /// `Object::Tombstone` in heap_debug builds), so checking
     /// `ptr_in_chunked_vec` against `inactive` is safe even after
     /// `finalize_inactive_space` has run.
     #[cfg(feature = "heap_debug")]
@@ -951,7 +958,7 @@ impl BexHeap {
     /// - **Safepoint GC**: Collection only runs when no VMs are executing
     /// - **ChunkedVec**: Growing never moves existing elements
     #[inline]
-    pub unsafe fn write_runtime_object(&self, runtime_idx: usize, obj: Object) {
+    pub(crate) unsafe fn write_runtime_object(&self, runtime_idx: usize, obj: Object) {
         // SAFETY: Caller ensures exclusive access to this index.
         // ChunkedVec's set() is internally safe for concurrent access to different indices.
         // All TLAB allocations target Gen0.
@@ -992,13 +999,16 @@ impl BexHeap {
     /// Returns a `TlabChunk` describing the exclusive region for the VM.
     /// The VM can then allocate objects within this region without locks.
     pub fn alloc_tlab_chunk(&self) -> TlabChunk {
-        self.alloc_tlab_chunk_sized(self.tlab_size)
+        self.alloc_tlab_chunk_sized(self.tlab_size, 0).0
     }
 
-    pub(crate) fn alloc_tlab_chunk_sized(&self, size: usize) -> TlabChunk {
+    /// Reserve `size` slots and settle `payload` bytes of the caller's
+    /// balance with them. Returns the chunk and whether the settlement
+    /// crossed the budget.
+    pub(crate) fn alloc_tlab_chunk_sized(&self, size: usize, payload: isize) -> (TlabChunk, bool) {
         assert!(size > 0);
-        self.gc_policy
-            .charge(size.saturating_mul(size_of::<Object>()));
+        let slots = isize::try_from(size.saturating_mul(size_of::<Object>())).unwrap_or(isize::MAX);
+        let crossed = self.gc_policy.adjust(slots.saturating_add(payload));
         self.debug_verify_tlab_canaries();
 
         let use_canary = self.debug_config().enabled;
@@ -1047,10 +1057,13 @@ impl BexHeap {
             let canary_idx = ct_len + runtime_end;
             self.record_tlab_canary(canary_idx);
         }
-        TlabChunk {
-            start: ct_len + runtime_start,
-            end: ct_len + runtime_end,
-        }
+        (
+            TlabChunk {
+                start: ct_len + runtime_start,
+                end: ct_len + runtime_end,
+            },
+            crossed,
+        )
     }
 
     /// Read an object by HeapPtr (direct pointer dereference).
@@ -1105,11 +1118,13 @@ impl BexHeap {
     }
 
     /// Reset the allocation counter after GC.
-    pub fn reset_gc_counter(&self) {
+    #[cfg(feature = "gc_profiling")]
+    pub(crate) fn reset_gc_counter(&self) {
         self.allocs_since_gc.store(0, Ordering::Relaxed);
     }
 
     /// Increment allocation counter (called by TLAB on alloc).
+    #[cfg(feature = "gc_profiling")]
     pub(crate) fn record_alloc(&self) {
         self.allocs_since_gc.fetch_add(1, Ordering::Relaxed);
     }
@@ -1175,21 +1190,29 @@ impl BexHeap {
             .collect();
     }
 
-    /// BEP-042: record an instance (by its post-copy `HeapPtr`) and its resolved
-    /// `cleanup` function name, to be finalized after the current collection.
+    /// BEP-042: a class with a `cleanup` finalizer now lives on this heap — a
+    /// runtime-compiled package or session declared one — so every collection
+    /// from here on scans for finalizable instances.
+    pub fn note_finalizable_class(&self) {
+        self.has_finalizable_classes.store(true, Ordering::Release);
+    }
+
+    /// BEP-042: record an instance and its class's `cleanup` function (both by
+    /// post-copy `HeapPtr`), to be finalized after the current collection.
     /// Called by the GC when it discovers and keeps alive a dead, not-yet-cleaned
-    /// instance of a `has_cleanup` class.
-    pub(crate) fn push_pending_finalizer(&self, ptr: HeapPtr, cleanup_fn: String) {
+    /// instance of a class with a finalizer.
+    pub(crate) fn push_pending_finalizer(&self, instance: HeapPtr, cleanup: HeapPtr) {
         self.pending_finalizers
             .lock()
             .expect("pending_finalizers lock poisoned")
-            .push((ptr, cleanup_fn));
+            .push((instance, cleanup));
     }
 
     /// BEP-042: take and clear the queue of instances awaiting `cleanup`. The
     /// engine drains this right after a collection (still at the GC safepoint,
     /// before resuming normal execution) and invokes each instance's `cleanup`.
-    pub fn take_pending_finalizers(&self) -> Vec<(HeapPtr, String)> {
+    /// Each entry is `(instance, its class's cleanup function)`.
+    pub fn take_pending_finalizers(&self) -> Vec<(HeapPtr, HeapPtr)> {
         std::mem::take(
             &mut *self
                 .pending_finalizers
@@ -1322,10 +1345,14 @@ mod tests {
             Bytecode, Function, FunctionKind, bytecode::Instruction, types::FunctionOrigin,
         };
         Object::Function(Box::new(Function {
-            name: "user.pick".to_string(),
+            identity: bex_vm_types::types::FunctionIdentity::Declared(
+                bex_vm_types::types::FnPath::Free(bex_vm_types::types::LocalName::new(
+                    Vec::new(),
+                    baml_base::Name::new("pick"),
+                )),
+            ),
             source_file: "user.baml".to_string(),
             docstring: None,
-            declared_name: None,
             arity: 0,
             real_local_count: 0,
             bytecode: Bytecode {
@@ -1351,10 +1378,10 @@ mod tests {
             display_return_type: String::new(),
             throws_type: bex_vm_types::TyTemplate::Never,
             origin: FunctionOrigin::Internal,
-            is_interface_body: false,
             native_key: None,
             body_meta: None,
-            runtime_package: HeapPtr::null(),
+            trace_passthrough: false,
+            owner: HeapPtr::null(),
         }))
     }
 
@@ -1383,7 +1410,7 @@ mod tests {
     /// image that holds one is refused where it is loaded rather than where
     /// a value first reaches the switch.
     #[test]
-    #[should_panic(expected = "function user.pick: switch table 0 over [one, hundred]")]
+    #[should_panic(expected = "function pick: switch table 0 over [one, hundred]")]
     fn an_image_with_an_unsolved_switch_is_refused() {
         use bex_vm_types::bytecode::SwitchTable;
         let heap = BexHeap::build_unsealed_default(vec![function_switching_through(

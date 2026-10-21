@@ -331,6 +331,60 @@ pub struct InvocationRequest {
 }
 
 impl InvocationRequest {
+    /// Python's generated streaming entry retains the originating function
+    /// invocation instead of recording its short-lived handle constructor.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn retain_stream(
+        &mut self,
+    ) -> Result<(bex_project::HostInvocation, u64), BridgeError> {
+        let InvocationTarget::Named(name) = &self.target else {
+            return Err(BridgeError::InvocationProtocol(
+                "stream entry must be named".into(),
+            ));
+        };
+        if !name.ends_with("@stream") {
+            return Err(BridgeError::InvocationProtocol(
+                "expected an LLM stream companion".into(),
+            ));
+        }
+        let capture_inputs = self
+            .context
+            .trace_reservation
+            .as_ref()
+            .map(|reservation| &reservation.options)
+            .or(self.context.trace_options.as_ref())
+            .is_some_and(|options| options.inputs == Some(true));
+        let inputs = capture_inputs.then(|| {
+            bex_project::capture_callback_inputs(&BexExternalValue::Map {
+                entries: self
+                    .args
+                    .required
+                    .iter()
+                    .chain(&self.args.optional)
+                    .map(|(key, value)| (key.clone(), value.clone()))
+                    .collect(),
+                key_type: bex_project::RuntimeTy::String,
+                value_type: bex_project::RuntimeTy::Unknown,
+            })
+        });
+        let execution = Arc::clone(&self.runtime)
+            .begin_stream_invocation(name, &self.context, inputs.as_ref())
+            .await?;
+        self.context.inherited_state = Some(execution.inherited_state());
+        self.context.trace_options = Some(bex_project::TraceOptionsData {
+            mode: Some(btel_types::InvocationMode::Hidden),
+            ..Default::default()
+        });
+        self.context.trace_reservation = None;
+        let key = HANDLE_TABLE.insert(CffiHandleTableEntry::InvocationState(
+            bridge_ctypes::InvocationStateHandle {
+                owner: Arc::clone(&self.runtime),
+                state: execution.inherited_state(),
+            },
+        ));
+        Ok((execution, key))
+    }
+
     /// Identity of the SDK entry, used by adapters to route callbacks to that
     /// entry's execution environment. The target remains pinned and private.
     pub fn host_call_id(&self) -> u64 {

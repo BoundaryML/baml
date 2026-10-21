@@ -493,8 +493,8 @@ fn function_display_name(
             format!("{}.{}", iface.name, data.name)
         }
         Some(MethodOwner::Impl(block)) => {
-            // Same owner rendering as hover (`info.rs`): the impl's
-            // for-target is the subject a reader knows the method by.
+            // The impl's for-target is the subject a reader knows the method
+            // by, spelled canonically: a playground name has no reader.
             match baml_compiler2_hir_ty::impls::impl_facts(db, block)
                 .resolved()
                 .map(|facts| crate::render::display_owner_ty(db, &facts.for_ty_pattern.to_plain()))
@@ -1776,7 +1776,7 @@ prompt: `Summarize ${input}`
             std::path::Path::new("/cfg-test/ns_workflows/workflow.baml"),
             r#"
 function Workflow(input: string) -> string {
-prompts.Summarize(input)
+root.workflows.prompts.Summarize(input)
 }
 "#,
         );
@@ -1786,7 +1786,7 @@ prompts.Summarize(input)
         let call_node = graph
             .nodes
             .values()
-            .find(|node| node.label == "prompts.Summarize(input)")
+            .find(|node| node.label == "root.workflows.prompts.Summarize(input)")
             .expect("caller graph should contain the cross-namespace LLM call node");
         assert!(
             matches!(call_node.node_type, NodeType::LlmFunction),

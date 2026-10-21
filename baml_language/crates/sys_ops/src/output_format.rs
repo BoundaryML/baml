@@ -104,6 +104,73 @@ pub struct OutputFormatContent {
     build_error: Option<RenderError>,
 }
 
+impl bex_vm_types::BexRustData for OutputFormatContent {
+    fn measure(&self, meter: &mut bex_vm_types::Meter) {
+        meter.bytes(self.enums.capacity() * size_of::<(String, Enum)>());
+        meter.bytes(self.classes.capacity() * size_of::<(String, Class)>());
+        meter.bytes(self.enum_reference_order.capacity() * size_of::<String>());
+        meter.bytes(self.recursive_classes.capacity() * size_of::<String>());
+        meter.bytes(self.recursive_type_aliases.capacity() * size_of::<(String, SapTy)>());
+        for (key, enm) in &self.enums {
+            meter.bytes(key.capacity() + enm.name.capacity());
+            measure_text(
+                meter,
+                enm.alias.as_ref(),
+                enm.description.as_ref(),
+                enm.docstring.as_ref(),
+            );
+            meter.bytes(enm.values.capacity() * size_of::<EnumValue>());
+            for value in &enm.values {
+                meter.bytes(value.name.capacity());
+                measure_text(
+                    meter,
+                    value.alias.as_ref(),
+                    value.description.as_ref(),
+                    value.docstring.as_ref(),
+                );
+            }
+        }
+        for (key, class) in &self.classes {
+            meter.bytes(key.capacity() + class.name.capacity());
+            measure_text(
+                meter,
+                class.alias.as_ref(),
+                class.description.as_ref(),
+                class.docstring.as_ref(),
+            );
+            meter.bytes(class.fields.capacity() * size_of::<ClassField>());
+            for field in &class.fields {
+                meter.bytes(field.name.capacity());
+                measure_text(
+                    meter,
+                    field.alias.as_ref(),
+                    field.description.as_ref(),
+                    field.docstring.as_ref(),
+                );
+            }
+        }
+        for name in self
+            .enum_reference_order
+            .iter()
+            .chain(self.recursive_classes.iter())
+            .chain(self.recursive_type_aliases.keys())
+        {
+            meter.bytes(name.capacity());
+        }
+    }
+}
+
+fn measure_text(
+    meter: &mut bex_vm_types::Meter,
+    alias: Option<&String>,
+    description: Option<&String>,
+    docstring: Option<&String>,
+) {
+    for text in [alias, description, docstring].into_iter().flatten() {
+        meter.bytes(text.capacity());
+    }
+}
+
 impl OutputFormatContent {
     /// Create a new `OutputFormatContent` with the given target type.
     pub fn new(target: ::sys_types::SapTy) -> Self {
@@ -720,7 +787,6 @@ impl OutputFormatContent {
             }
 
             SapTy::Function { .. }
-            | SapTy::Void
             | SapTy::Unknown
             | SapTy::EnumVariant(..)
             | SapTy::Future(..)
@@ -897,7 +963,10 @@ fn class_is_hoisted(ty: &SapTy, hoisted: &indexmap::IndexSet<String>) -> bool {
 
 /// Key a class definition by its realized generic instantiation. A generic
 /// class's display name alone is insufficient: `Box<int>` and `Box<string>`
-/// have different field schemas even though both are named `Box`.
+/// have different field schemas even though both are named `Box`. Each
+/// argument's union is spelled flat ([`SapTy::flatten_union`]), so
+/// `Box<(int | null) | null>` and `Box<int | null>` share a definition, as they
+/// share a parse model.
 fn class_instantiation_key(ty: &SapTy) -> String {
     let (SapTy::Class(type_name, type_args) | SapTy::Interface(type_name, type_args, _)) = ty
     else {
@@ -911,7 +980,7 @@ fn class_instantiation_key(ty: &SapTy) -> String {
             type_name.display_name(),
             type_args
                 .iter()
-                .map(ToString::to_string)
+                .map(|arg| arg.clone().flatten_union().to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         )
@@ -1204,6 +1273,15 @@ fn walk_ty(
 ) -> Result<(), RenderError> {
     match ty {
         SapTy::Class(type_name, type_args) => {
+            // One spelling per instantiation, as SAP keys it: with each
+            // argument's union flat, `Opt<T?>` at `int?` is `Opt<int?>` again,
+            // so a recursion through unions alone closes.
+            let type_args: &[SapTy] = &type_args
+                .iter()
+                .cloned()
+                .map(SapTy::flatten_union)
+                .collect::<Box<[_]>>();
+            let ty = &SapTy::Class(type_name.clone(), type_args.into());
             let output_key = class_instantiation_key(ty);
             let output_name = type_name.display_name().to_string();
 
@@ -1392,6 +1470,27 @@ fn walk_ty(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn schema_measurement_includes_definition_and_variant_text() {
+        use bex_vm_types::{BexRustData, Meter};
+        let content =
+            super::OutputFormatContent::new(sys_types::SapTy::String).with_enum(super::Enum {
+                name: "Choice".into(),
+                alias: None,
+                description: Some("d".repeat(50_000)),
+                docstring: None,
+                values: vec![super::EnumValue {
+                    name: "v".repeat(10_000),
+                    alias: Some("a".repeat(20_000)),
+                    description: None,
+                    docstring: None,
+                }],
+            });
+        let mut meter = Meter::census();
+        content.measure(&mut meter);
+        assert!(meter.total() >= 80_000);
+    }
+
     use std::sync::Arc;
 
     use baml_type::{DeclarationName, Freshness, TypeName};
@@ -4191,6 +4290,52 @@ Answer in JSON using this type: A"#
                 && ancestor == "Chain<int>"
                 && instantiation == "Chain<Chain<int>>"
         ));
+    }
+
+    /// `class Opt<T> { inner: Opt<T?>? }` grows its argument only through a
+    /// union, and `(int?)?` is `int?`: it renders `Opt<int>` and `Opt<int | null>`
+    /// once each, rather than being rejected or walked forever.
+    #[test]
+    fn test_render_output_format_closes_union_only_recursive_generic() {
+        let opt = key(&baml_type::TypeName::local("Opt".into()));
+        let target = RuntimeTy::Class(opt.clone(), Box::new([ty_int()]));
+        let optional = |inner| baml_type::TyTemplate::union([inner, baml_type::TyTemplate::Null]);
+        let inner_template = optional(baml_type::TyTemplate::class(
+            opt.clone(),
+            Box::new([optional(baml_type::TyTemplate::TypeArgRef(0))]),
+        ));
+        let inner_realized = RuntimeTy::optional(RuntimeTy::Class(
+            opt.clone(),
+            Box::new([RuntimeTy::optional(ty_int())]),
+        ));
+
+        let mut classes = indexmap::IndexMap::new();
+        classes.insert(
+            opt.clone(),
+            ctx_class_definition(
+                &opt,
+                vec![ctx_class_field(
+                    "inner",
+                    inner_realized,
+                    Some(inner_template),
+                )],
+            ),
+        );
+
+        let mut ctx = sys_types::SysOpContext::empty();
+        ctx.class_definitions = Arc::new(classes);
+
+        let content = build_output_format_content(&target, &ctx);
+        assert_eq!(
+            content
+                .classes
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            ["Opt<int>", "Opt<int | null>"]
+        );
+        render_output_format_content(&content, &RenderOptions::default())
+            .expect("a recursion through unions alone renders");
     }
 
     #[test]

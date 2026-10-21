@@ -22,7 +22,7 @@ impl Snapshot {
             .iter()
             .chain(graph.labels.iter())
             .map(string_bytes)
-            .chain(graph.entries.iter().map(|entry| string_bytes(&entry.key)))
+            .chain(graph.fields.iter().map(|entry| string_bytes(&entry.key)))
             .chain(graph.bigints.iter().map(|bigint| {
                 // The shared allocation: its two counts and the bigint.
                 (2 * size_of::<usize>() + size_of::<BigInt>())
@@ -46,6 +46,7 @@ impl Snapshot {
         size_of_val(&*graph.objects)
             + size_of_val(&*graph.values)
             + size_of_val(&*graph.entries)
+            + size_of_val(&*graph.fields)
             + size_of_val(&*graph.bytes)
             + size_of_val(&*graph.strings)
             + size_of_val(&*graph.labels)
@@ -108,11 +109,11 @@ fn type_bytes(root: &OwnedType) -> usize {
         use baml_type::RealizedTy::{
             Bigint, Bool, Class, Enum, EnumVariant, Float, Function, Future, Int, Interface, List,
             Literal, Map, Media, Never, Null, PromptAst, Resource, RustType, String, Type,
-            TypeAlias, Uint8Array, Union, Unknown, Void,
+            TypeAlias, Uint8Array, Union, Unknown,
         };
         match ty {
             Int | Bigint | Float | String | Bool | Null | Uint8Array | Media(..) | RustType
-            | Type | Resource | PromptAst | Void | Unknown | Never => {}
+            | Type | Resource | PromptAst | Unknown | Never => {}
             Literal(literal, ..) => add(match literal {
                 baml_type::Literal::Bigint(value) => bigint_limb_bytes(value),
                 baml_type::Literal::String(value) | baml_type::Literal::Float(value) => {
@@ -208,16 +209,16 @@ mod tests {
     fn accounts_full_shared_slice_parents_for_values_and_keys() {
         let pool = SnapshotPool::new(1, Limits::default());
         let source = bex_str::BexStr::from("a".repeat(100_000));
-        let slice = source.substring(0, 100);
+        let slice = source.byte_slice(0..100);
         let mut snapshot = scalar(&pool);
         let Storage { graph, meter, .. } = &mut *snapshot.0;
         graph.strings.reserve(1, meter);
-        graph.entries.reserve(1, meter);
+        graph.fields.reserve(1, meter);
         let before = snapshot.retained_bytes();
         let Storage { graph, meter, .. } = &mut *snapshot.0;
         graph.strings.push(slice.clone(), meter);
-        graph.entries.push(
-            crate::MapEntry {
+        graph.fields.push(
+            crate::FieldEntry {
                 key: slice,
                 value: SnapshotValue::Null,
             },

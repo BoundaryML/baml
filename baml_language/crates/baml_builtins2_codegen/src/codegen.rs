@@ -7,7 +7,7 @@
 //! - **`BamlClass*`** traits (leaf): required methods with bare names, `__glue_*`
 //!   defaults, and a `__dispatch_*` method that maps method names to glue fns.
 //! - **`BamlNamespace*`** traits (aggregators): supertraits of child classes,
-//!   own free-function methods, and a `__dispatch_*` that routes via `split_once('.')`.
+//!   own free-function methods, and a `__dispatch_ns_*` that routes via `split_once('.')`.
 //! - **`BamlPackageBaml`** (root): supertraits of all top-level classes and namespaces,
 //!   root free functions, and `get_native_fn(path)` entry point.
 
@@ -153,8 +153,9 @@ fn build_namespace_tree<'a>(builtins: &'a [NativeBuiltin], package: &str) -> Nam
 
         // The class is the first uppercase-initial segment before the final
         // method segment (if any). An implements-block method's segment is
-        // `{Iface}$for${Class}` — for a DOTTED written interface
-        // (`root.io.Read$for$File`) the interface's path components parse
+        // `{Iface}$for${Class}` — for a DOTTED interface target (a written
+        // `root.io.Read` spelled `baml.io.Read$for$File` in the key) the
+        // interface's path components parse
         // as namespace segments here, which lands correctly only because
         // namespace segments are lowercase and the `$for$` segment starts
         // with the interface's uppercase name. Contingent, not designed —
@@ -258,10 +259,10 @@ fn emit_view_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
         let field_name = rust_field_ident(raw_name);
         match &field.field_type {
             BamlType::RustType => {
-                // Generic downcast accessor: fn _data<T: 'static>(&self, vm: &BexVm) -> &T
+                // Generic downcast accessor: fn _data<T: BexRustData>(&self, vm: &BexVm) -> &T
                 writeln!(
                     out,
-                    "{inner}pub fn {field_name}<'v, T: 'static>(&self, vm: &'v BexVm) -> &'v T {{"
+                    "{inner}pub fn {field_name}<'v, T: bex_vm_types::BexRustData>(&self, vm: &'v BexVm) -> &'v T {{"
                 )
                 .unwrap();
                 writeln!(
@@ -568,15 +569,15 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
     }
     writeln!(out, "{indent}}}\n").unwrap();
 
-    // Impl with to_value()
-    let fqn = format!("{}.{}", def.namespace_prefix, def.name);
+    // Impl with to_value(): the class by identity, never by a spelled name.
+    let item = crate::lang_item::lang_item_expr(&def.namespace_prefix, &def.name);
     writeln!(out, "{indent}impl {class_ident} {{").unwrap();
     writeln!(
         out,
         "{inner}pub fn to_value(self, vm: &mut BexVm) -> bex_vm_types::Value {{"
     )
     .unwrap();
-    writeln!(out, "{inner2}let class_ptr = vm.resolve_class({fqn:?});").unwrap();
+    writeln!(out, "{inner2}let class_ptr = vm.lang_object({item});").unwrap();
 
     // Convert each field to a Value
     for field in &def.fields {
@@ -608,7 +609,7 @@ fn emit_copy_struct(out: &mut String, class_name: &str, def: &NativeClassDef, de
 /// Map `BamlType` to the owned Rust type used in copy structs.
 fn copy_field_type(ty: &BamlType) -> String {
     match ty {
-        BamlType::RustType => "Arc<dyn Any + Send + Sync>".to_string(),
+        BamlType::RustType => "Arc<dyn bex_vm_types::BexRustData>".to_string(),
         BamlType::Int => "i64".to_string(),
         BamlType::Bigint => "Arc<num_bigint::BigInt>".to_string(),
         BamlType::Float => "f64".to_string(),
@@ -732,8 +733,11 @@ fn namespace_trait_name(name: &str) -> String {
     format!("BamlNamespace{pascal}")
 }
 
+/// `__dispatch_ns_<ns>`: the `ns_` keeps a namespace's router apart from a
+/// same-named root class's `__dispatch_<class>` (the `class` namespace and the
+/// `Class` view of `reflect`), since both are methods of the package trait.
 fn namespace_dispatch_name(name: &str) -> String {
-    format!("__dispatch_{}", sanitize_ident(&name.replace('.', "_")))
+    format!("__dispatch_ns_{}", sanitize_ident(&name.replace('.', "_")))
 }
 
 // ============================================================================
@@ -1231,13 +1235,18 @@ fn clean_return_type(b: &NativeBuiltin) -> String {
     }
 }
 
-/// If this is a static constructor for a media class (no instance receiver, path has a media class segment),
-/// return the class name. Used to determine copy return type.
+/// If this is a static constructor for a media class (no instance receiver, path has a media class segment,
+/// and it returns media), return the class name. Used to determine copy return type.
 fn constructor_media_class(b: &NativeBuiltin) -> Option<&str> {
     if b.receiver
         .as_ref()
         .is_some_and(|r| !r.receiver_type.is_static())
     {
+        return None;
+    }
+    // A static that returns something else, such as a MIME type, constructs
+    // nothing.
+    if !matches!(b.return_type, BamlType::Media(_)) {
         return None;
     }
     // Indexed from the end, so this needs no package knowledge: the class is
@@ -1314,7 +1323,7 @@ fn emit_immut_receiver_extraction_indented(
     needs_owned: bool,
     arraymap_needs_owned: bool,
 ) {
-    match recv.class_name.as_str() {
+    match recv.builtin_name() {
         // A read array receiver is passed as an `ArrayView` carrying its element
         // type alongside the data. The data is owned (`to_vec`) when the glue
         // later needs `&mut vm` (may_yield / mut_vm), else a cheap read guard;
@@ -1425,7 +1434,7 @@ fn emit_mut_receiver_extraction_indented(
         return;
     }
 
-    let expr = match recv.class_name.as_str() {
+    let expr = match recv.builtin_name() {
         "Array" => "vm.as_array_mut(&args[0])?".to_string(),
         "Map" => "vm.as_map_mut(&args[0])?".to_string(),
         "String" => "vm.as_string_mut(&args[0])?".to_string(),
@@ -1435,7 +1444,7 @@ fn emit_mut_receiver_extraction_indented(
     // Container receivers now return a guard rather than `&mut Vec/IndexMap`.
     // Bind mutably so the call site can take `&mut name` and let the DerefMut
     // impl coerce to the underlying container.
-    let mut_kw = match recv.class_name.as_str() {
+    let mut_kw = match recv.builtin_name() {
         "Array" | "Map" | "Uint8Array" => "mut ",
         _ => "",
     };
@@ -1496,7 +1505,7 @@ fn receiver_immut_extraction_expr(
     needs_owned: bool,
     arraymap_needs_owned: bool,
 ) -> String {
-    match recv.class_name.as_str() {
+    match recv.builtin_name() {
         // Clone for container read receivers when the glue function would
         // later need `&mut vm` after extraction (per `arraymap_needs_owned`).
         // Otherwise `vm.as_array(...)?` returns a guard whose lock is
@@ -1701,13 +1710,13 @@ fn call_arg_list(b: &NativeBuiltin, needs_owned: bool, arraymap_needs_owned: boo
                 let arg = if matches!(b.vm_usage, VmUsage::MutRef) && b.may_yield {
                     name
                 } else {
-                    match recv.class_name.as_str() {
+                    match recv.builtin_name() {
                         "Array" | "Map" | "Uint8Array" => format!("&mut {name}"),
                         _ => name,
                     }
                 };
                 args.push(arg);
-            } else if needs_owned && is_media_class(recv.class_name.as_str()) {
+            } else if needs_owned && is_media_class(recv.builtin_name()) {
                 // For `//baml:mut_vm` media methods the extraction emits
                 // `let pdf = &args[0];` (a `&Value` copy).  Pass `name` directly —
                 // it is already the `&Value` the trait method expects.
@@ -1716,13 +1725,13 @@ fn call_arg_list(b: &NativeBuiltin, needs_owned: bool, arraymap_needs_owned: boo
                 // Instance-backed receiver extracted as a `view::<ns>::<Class>`
                 // value; the trait method takes it by reference.
                 args.push(format!("&{name}"));
-            } else if recv.class_name == "Array" || recv.class_name == "Map" {
+            } else if matches!(recv.builtin_name(), "Array" | "Map") {
                 // A read array/map receiver is materialized as an `ArrayView` /
                 // `MapView` value (element or key/value types + data) and the
                 // trait method takes it by value.
                 args.push(name);
             } else {
-                let recv_is_ref = match recv.class_name.as_str() {
+                let recv_is_ref = match recv.builtin_name() {
                     "Array" | "Map" | "Uint8Array" => arraymap_is_ref,
                     _ => is_ref,
                 };
@@ -1907,7 +1916,7 @@ fn reads_multiple_containers(b: &NativeBuiltin) -> bool {
         b.receiver
             .as_ref()
             .filter(|r| !r.receiver_type.is_static())
-            .is_some_and(|r| matches!(r.class_name.as_str(), "Array" | "Map" | "Uint8Array")),
+            .is_some_and(|r| matches!(r.builtin_name(), "Array" | "Map" | "Uint8Array")),
     );
     let param_containers = b
         .params
@@ -2149,7 +2158,7 @@ fn receiver_view_path(recv: &Receiver) -> String {
 /// parameter required for mutating-VM methods.  Passing the raw `Value` (which
 /// is `Copy`) instead avoids the split-borrow.
 fn receiver_input_type_with_vm_usage(recv: &Receiver, vm_usage: VmUsage) -> String {
-    match recv.class_name.as_str() {
+    match recv.builtin_name() {
         "Array" => {
             if recv.receiver_type.is_mut() && matches!(vm_usage, VmUsage::MutRef) {
                 "&Value".to_string()
@@ -2227,7 +2236,7 @@ fn receiver_input_type_with_vm_usage(recv: &Receiver, vm_usage: VmUsage) -> Stri
 }
 
 fn receiver_baml_type(recv: &Receiver) -> BamlType {
-    match recv.class_name.as_str() {
+    match recv.builtin_name() {
         "Array" => BamlType::List(Box::new(BamlType::Generic("T".to_string()))),
         "Map" => BamlType::Map(
             Box::new(BamlType::Generic("K".to_string())),
@@ -2422,8 +2431,8 @@ mod tests {
             "missing __dispatch_string:\n{output}"
         );
         assert!(
-            output.contains("fn __dispatch_media(rest: &str)"),
-            "missing __dispatch_media:\n{output}"
+            output.contains("fn __dispatch_ns_media(rest: &str)"),
+            "missing __dispatch_ns_media:\n{output}"
         );
         assert!(
             output.contains("fn __dispatch_media_pdf(method: &str)"),
@@ -2441,8 +2450,8 @@ mod tests {
             "get_native_fn should dispatch Array to __dispatch_array:\n{output}"
         );
         assert!(
-            output.contains("(\"media\", rest)) => Self::__dispatch_media(rest)"),
-            "get_native_fn should dispatch media to __dispatch_media:\n{output}"
+            output.contains("(\"media\", rest)) => Self::__dispatch_ns_media(rest)"),
+            "get_native_fn should dispatch media to __dispatch_ns_media:\n{output}"
         );
     }
 
@@ -2553,11 +2562,11 @@ mod tests {
 
         assert!(
             output.contains("(\"Pdf\", method)) => Self::__dispatch_media_pdf(method)"),
-            "__dispatch_media should route Pdf to __dispatch_media_pdf:\n{output}"
+            "__dispatch_ns_media should route Pdf to __dispatch_media_pdf:\n{output}"
         );
         assert!(
             output.contains("(\"Audio\", method)) => Self::__dispatch_media_audio(method)"),
-            "__dispatch_media should route Audio to __dispatch_media_audio:\n{output}"
+            "__dispatch_ns_media should route Audio to __dispatch_media_audio:\n{output}"
         );
     }
 
@@ -2594,9 +2603,9 @@ mod tests {
             output.contains("pub instance: &'a Instance"),
             "Pdf view should hold &Instance:\n{output}"
         );
-        // _data accessor should be generic with downcast
+        // _data accessor downcasts to any payload type.
         assert!(
-            output.contains("fn _data<'v, T: 'static>"),
+            output.contains("fn _data<'v, T: bex_vm_types::BexRustData>"),
             "Pdf._data should be generic downcast accessor:\n{output}"
         );
     }
@@ -2606,9 +2615,9 @@ mod tests {
         let (builtins, _io_builtins, class_defs) = extract_native_builtins().unwrap();
         let output = generate_native_trait(&builtins, &class_defs);
 
-        // copy::media::Pdf should have _data: Arc<dyn Any + Send + Sync>
+        // copy::media::Pdf should have _data: Arc<dyn bex_vm_types::BexRustData>
         assert!(
-            output.contains("Arc<dyn Any + Send + Sync>"),
+            output.contains("Arc<dyn bex_vm_types::BexRustData>"),
             "copy struct should have Arc<dyn Any> field:\n{output}"
         );
         // to_value method

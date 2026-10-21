@@ -47,6 +47,12 @@ function chat_get_weather(city: string) -> string {
     answer
 }
 
+/// The usage a chat turn billed under the chat client's provider id and the
+/// model it reports.
+function _chat_usage(turn: ai.ModelTurn) -> ai.events.Usage? {
+    ai.events.usage_for(ai.events.call_usage(turn.calls), ai.events.ModelKey { provider: "openai-chat", model: turn.resolved_model?.model })
+}
+
 // A turn input below the runner: no SAP, no journal, no toolbox.
 function _chat_input(question: string) -> ai.ModelTurnInput {
     let spec = ChatEcho@spec(question);
@@ -70,7 +76,8 @@ function _chat_input_with_history() -> ai.ModelTurnInput {
                     ai.content.Text { text: "checking" },
                     ai.content.ToolUse { id: "call_1", name: "chat_get_weather", args: args },
                 ],
-                client_id: "openai-chat/gpt-4o-mini",
+                resolved_model: ai.events.ModelKey { provider: "openai-chat", model: "gpt-4o-mini" },
+                requested_model: "gpt-4o-mini",
             },
             ai.events.ToolCompleted.new("call_1", "sunny in SF"),
         ],
@@ -151,7 +158,7 @@ function chat_openai_request_shape() -> string {
                 _chat_top_keys(body),
                 turn.terminal_text() ?? "-",
                 `${turn.stop_reason}`,
-                `${turn.usage?.input_tokens ?? -1}/${turn.usage?.output_tokens ?? -1}/${turn.usage?.cached_input_tokens ?? -1}/${turn.usage?.reasoning_tokens ?? -1}`,
+                `${_chat_usage(turn)?.input_tokens ?? -1}/${_chat_usage(turn)?.output_tokens ?? -1}/${_chat_usage(turn)?.cached_input_tokens ?? -1}/${_chat_usage(turn)?.reasoning_tokens ?? -1}`,
             ].join("|")
         },
     )
@@ -434,7 +441,7 @@ function chat_generic_collapses_text() -> string {
                 sent.header("authorization") ?? "absent",
                 baml.json.path<string>(body, ".model"),
                 baml.json.path<string>(body, ".messages[0].content").trim(),
-                cl.id(),
+                cl.requested_model(),
             ].join("|")
         },
     )
@@ -443,7 +450,7 @@ function chat_generic_collapses_text() -> string {
 test "chat_generic_collapses_text" {
     assert.equal(
         chat_generic_collapses_text(),
-        "absent|qwen3|You are terse.|openai-generic/qwen3",
+        "absent|qwen3|You are terse.|qwen3",
     )
 }
 
@@ -608,7 +615,7 @@ function chat_azure_url_auth_and_max_tokens() -> string {
                 sent.header("api-key") ?? "-",
                 sent.header("authorization") ?? "absent",
                 `${baml.json.path<int>(sent.json(), ".max_tokens")}`,
-                cl.id(),
+                cl.requested_model(),
             ].join("|")
         },
     )
@@ -617,7 +624,7 @@ function chat_azure_url_auth_and_max_tokens() -> string {
 test "chat_azure_url_auth_and_max_tokens" {
     assert.equal(
         chat_azure_url_auth_and_max_tokens(),
-        "/chat/completions|api-version=2024-10-21|azure-key|absent|4096|azure/gpt-4o",
+        "/chat/completions|api-version=2024-10-21|azure-key|absent|4096|gpt-4o",
     )
 }
 
@@ -825,13 +832,13 @@ test "chat_azure_skips_default_max_tokens" {
 // only under it, and sys_llm's `:11434` default 404s on every call.
 function chat_ollama_defaults() -> string {
     let cl = openai.OllamaClient.new(model = "llama3.2");
-    `${cl.resolved_base_url()}|${cl.id()}|${cl.resolved_api_key() ?? "none"}`
+    `${cl.resolved_base_url()}|${cl.requested_model()}|${cl.resolved_api_key() ?? "none"}`
 }
 
 test "chat_ollama_defaults" {
     assert.equal(
         chat_ollama_defaults(),
-        "http://localhost:11434/v1|ollama/llama3.2|none",
+        "http://localhost:11434/v1|llama3.2|none",
     )
 }
 
@@ -874,7 +881,7 @@ function chat_openrouter_request_shape() -> string {
                 sent.header("http-referer") ?? "-",
                 sent.header("x-title") ?? "-",
                 baml.json.path<string>(sent.json(), ".model"),
-                cl.id(),
+                cl.requested_model(),
             ].join("|")
         },
     )
@@ -883,25 +890,25 @@ function chat_openrouter_request_shape() -> string {
 test "chat_openrouter_request_shape" {
     assert.equal(
         chat_openrouter_request_shape(),
-        "Bearer or-key|https://myapp.com|My App|openai/gpt-4o-mini|openrouter/openai/gpt-4o-mini",
+        "Bearer or-key|https://myapp.com|My App|openai/gpt-4o-mini|openai/gpt-4o-mini",
     )
 }
 
 // Every wrapper's default base URL and identity, in one place.
 function chat_client_identities() -> string {
     [
-        openai.ChatClient.new(model = "m").id(),
-        openai.GenericClient.new(model = "m").id(),
-        openai.AzureClient.new(model = "m").id(),
-        openai.OllamaClient.new(model = "m").id(),
-        openai.OpenRouterClient.new(model = "m").id(),
+        openai.ChatClient.new(model = "m").requested_model(),
+        openai.GenericClient.new(model = "m").requested_model(),
+        openai.AzureClient.new(model = "m").requested_model(),
+        openai.OllamaClient.new(model = "m").requested_model(),
+        openai.OpenRouterClient.new(model = "m").requested_model(),
     ].join(" ")
 }
 
 test "chat_client_identities" {
     assert.equal(
         chat_client_identities(),
-        "openai-chat/m openai-generic/m azure/m ollama/m openrouter/m",
+        "m m m m m",
     )
 }
 
@@ -1005,7 +1012,7 @@ function chat_sse_decodes_text_and_usage() -> string {
                 deltas.join(","),
                 turn.terminal_text() ?? "-",
                 `${turn.stop_reason}`,
-                `${turn.usage?.input_tokens ?? -1}/${turn.usage?.output_tokens ?? -1}`,
+                `${_chat_usage(turn)?.input_tokens ?? -1}/${_chat_usage(turn)?.output_tokens ?? -1}`,
                 _chat_top_keys(sent.json()),
                 `${baml.json.path_or<bool>(sent.json(), ".stream_options.include_usage", false)}`,
             ].join("|")
@@ -1031,7 +1038,7 @@ function chat_sse_usage_splits_the_cache() -> string {
         ],
         (mock: root.llm_mock.MockSseServer) -> {
             let cl = openai.ChatClient.new(api_key = "k", base_url = mock.base_url());
-            let u = cl.invoke_stream(_chat_input("Say pong.")).final_turn().usage;
+            let u = _chat_usage(cl.invoke_stream(_chat_input("Say pong.")).final_turn());
             `${u?.input_tokens ?? -1}/${u?.cached_input_tokens ?? -1}/${u?.cache_write_input_tokens ?? -1}/${u?.uncached_input_tokens ?? -1}/${u?.output_tokens ?? -1}/${u?.reasoning_tokens ?? -1}`
         },
     )
@@ -1346,6 +1353,31 @@ test "chat_pdf_url_is_inlined" {
     assert.equal(
         chat_pdf_url_is_inlined(),
         "file|doc.pdf|data:application/pdf;base64,JVBERi0xLjQ=|absent|absent",
+    )
+}
+
+// A PDF read from a file holds its content and the file's base name, never
+// the path: the filename sent is that name.
+function chat_pdf_from_file_is_named() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_chat_ok_body())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ChatClient.new(api_key = "k", base_url = mock.base_url());
+            let doc = baml.media.Pdf.from_file_content("/reports/2026/q3.pdf", "JVBERi0xLjQ=", null);
+            let _ = cl.invoke(_chat_doc_input(doc));
+            let body = mock.last_request().json();
+            [
+                baml.json.path<string>(body, ".messages[0].content[1].file.filename"),
+                baml.json.path<string>(body, ".messages[0].content[1].file.file_data"),
+            ].join("|")
+        },
+    )
+}
+
+test "chat_pdf_from_file_is_named" {
+    assert.equal(
+        chat_pdf_from_file_is_named(),
+        "q3.pdf|data:application/pdf;base64,JVBERi0xLjQ=",
     )
 }
 

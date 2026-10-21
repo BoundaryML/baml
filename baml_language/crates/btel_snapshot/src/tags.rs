@@ -1,4 +1,4 @@
-//! Stable tag assignments shared by CAS blob and snapshot hash formats 1 to 3.
+//! Stable tag assignments shared by CAS blob and snapshot hash formats 1 to 4.
 //! Changing an assignment requires a format version change.
 
 use baml_type::MediaKind;

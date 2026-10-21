@@ -33,6 +33,7 @@
 [
   (string)
   (byte_string)
+  (raw_quoted_string)
 ] @string
 
 (raw_string) @string
@@ -168,6 +169,7 @@
 (named_type_argument name: (identifier) @property)
 (destructure_pattern type: (identifier) @type)
 (generic_parameter name: (identifier) @type)
+(let_type_declaration name: (identifier) @type)
 (client_type kind: (identifier) @type.builtin)
 
 ((type_path

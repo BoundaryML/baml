@@ -49,6 +49,46 @@ function CheckBatch(nodes: BenchNode[]) -> int {
 }
 function Payload(text: string) -> string { text }
 function CheckPayload(text: string) -> int { text.length() }
+function BytesLoop(seed: uint8array, iterations: int) -> int {
+    let i = 0;
+    let total = 0;
+    while (i < iterations) {
+        let copy = seed.reverse();
+        total = total + copy.length();
+        i = i + 1;
+    }
+    total
+}
+function Grow(n: int) -> int {
+    let values: int[] = [];
+    let i = 0;
+    while (i < n) {
+        values.push(i);
+        i = i + 1;
+    }
+    values.length()
+}
+function Append(chunk: string, n: int) -> int {
+    let text = "";
+    let i = 0;
+    while (i < n) {
+        text = text + chunk;
+        i = i + 1;
+    }
+    text.length()
+}
+function AppendRead(chunk: string, n: int) -> int {
+    let text = "";
+    let hits = 0;
+    let i = 0;
+    while (i < n) {
+        text = text + chunk;
+        if (text.starts_with(chunk)) { hits = hits + 1; }
+        i = i + 1;
+    }
+    hits
+}
+function Split(text: string) -> int { text.split("\n").length() }
 function AsyncBatch(n: int) -> int {
     let nodes = Batch(n);
     baml.sys.sleep(baml.time.Duration.from_milliseconds(1n));
@@ -164,6 +204,37 @@ fn rss_mib(value: Option<usize>) -> Option<f64> {
     value.map(|bytes| bytes as f64 / MIB as f64)
 }
 
+/// The process's high-water RSS. Unlike the samples taken between calls, this
+/// sees memory that grows and is released within a single call; it also
+/// includes startup and compilation.
+#[cfg(unix)]
+#[expect(
+    unsafe_code,
+    reason = "getrusage requires an FFI call with initialized output storage"
+)]
+fn lifetime_peak_rss_bytes() -> Option<usize> {
+    let mut usage = std::mem::MaybeUninit::<libc::rusage>::uninit();
+    // SAFETY: `usage` is valid for writes; it is read only after success.
+    let usage = unsafe {
+        if libc::getrusage(libc::RUSAGE_SELF, usage.as_mut_ptr()) != 0 {
+            return None;
+        }
+        usage.assume_init()
+    };
+    let max_rss = usize::try_from(usage.ru_maxrss).ok()?;
+    // macOS reports bytes; Linux reports kilobytes.
+    if cfg!(target_os = "macos") {
+        Some(max_rss)
+    } else {
+        max_rss.checked_mul(1024)
+    }
+}
+
+#[cfg(not(unix))]
+fn lifetime_peak_rss_bytes() -> Option<usize> {
+    None
+}
+
 #[expect(
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
@@ -200,6 +271,12 @@ fn compare_gc_policy() {
             "churn" | "cache" => (1_024, 4_096, "Churn", true),
             "retained" | "burst" | "burst_idle" => (1_024, 2_048, "Batch", false),
             "payload" => (2_048, 65_536, "Payload", false),
+            // Few objects, many bytes: `n` is the size of the payload each call works on.
+            "bytes_loop" => (16, 4 * MIB, "BytesLoop", true),
+            "push_scalar" => (32, 1_048_576, "Grow", true),
+            "rope_append" => (64, 10_000, "Append", true),
+            "rope_read" => (64, 1_000, "AppendRead", true),
+            "slices" => (256, 4 * MIB, "Split", true),
             _ => panic!("unknown workload: {workload}"),
         };
         let calls = setting("GC_CALLS", default_calls);
@@ -209,9 +286,20 @@ fn compare_gc_policy() {
         let warmup = setting("GC_WARMUP", 32);
         assert!(calls > 0, "GC_CALLS must be positive");
         let cache_n = i64::try_from(setting("GC_CACHE_N", 262_144)).expect("GC_CACHE_N must fit in a BAML int");
-        let make_args = || if workload == "payload" {
-            vec![BexExternalValue::String("x".repeat(n_size).into())]
-        } else { vec![BexExternalValue::Int(n)] };
+        let iterations = i64::try_from(setting("GC_ITERATIONS", 64)).expect("GC_ITERATIONS must fit in a BAML int");
+        let chunk_size = setting("GC_CHUNK", 100);
+        assert!(chunk_size > 1, "GC_CHUNK must leave room for a line break");
+        let chunk = bex_str::BexStr::from("x".repeat(chunk_size));
+        // One shared buffer: every call slices the same text into `GC_CHUNK`-byte lines.
+        let line_count = n_size / chunk_size;
+        let lines = bex_str::BexStr::from(format!("{}\n", "x".repeat(chunk_size - 1)).repeat(line_count));
+        let make_args = || match workload.as_str() {
+            "payload" => vec![BexExternalValue::String("x".repeat(n_size).into())],
+            "bytes_loop" => vec![BexExternalValue::Uint8Array(vec![1; n_size]), BexExternalValue::Int(iterations)],
+            "rope_append" | "rope_read" => vec![BexExternalValue::String(chunk.clone()), BexExternalValue::Int(n)],
+            "slices" => vec![BexExternalValue::String(lines.clone())],
+            _ => vec![BexExternalValue::Int(n)],
+        };
         for _ in 0..warmup {
             engine.call_function(function, make_args(), context(), copy_result).await.unwrap();
         }
@@ -231,6 +319,9 @@ fn compare_gc_policy() {
         let mut peak_rss = initial_rss;
         let mut peak_slots = engine.heap_stats().runtime_objects;
         let mut snapshots = vec![];
+        // Payload-heavy matrices make few calls, so sample RSS after each one.
+        let rss_every = if calls <= 512 { 1 } else { 32 };
+        let budget_before = engine.heap().gc_budget();
         let start = Instant::now();
         for call in 0..calls {
             if workload == "burst" && call == calls / 2 { kept.clear(); }
@@ -259,6 +350,11 @@ fn compare_gc_policy() {
                     _ => panic!("wrong return shape"),
                 },
                 "churn" | "cache" => assert_eq!(result, BexExternalValue::Int(n * (n-1) / 2)),
+                "bytes_loop" => assert_eq!(result, BexExternalValue::Int(iterations * n)),
+                "push_scalar" | "rope_read" => assert_eq!(result, BexExternalValue::Int(n)),
+                "rope_append" => assert_eq!(result, BexExternalValue::Int(n * i64::try_from(chunk_size).unwrap())),
+                // The text ends with a line break, so the split has one empty trailing piece.
+                "slices" => assert_eq!(result, BexExternalValue::Int(i64::try_from(line_count + 1).unwrap())),
                 _ => {
                     assert!(matches!(result, BexExternalValue::Handle(_)));
                     if workload == "retained" || workload == "payload" || workload == "burst_idle" || call < calls / 2 {
@@ -269,7 +365,7 @@ fn compare_gc_policy() {
             }
             call_ms.push(call_start.elapsed().as_secs_f64() * 1000.0);
             peak_slots = peak_slots.max(engine.heap_stats().runtime_objects);
-            if call % 32 == 0 || call == calls-1 {
+            if call % rss_every == 0 || call == calls-1 {
                 peak_rss = peak_rss.max(rss_bytes());
             }
             if (call+1) % (calls/10).max(1) == 0 || call+1 == calls {
@@ -282,6 +378,10 @@ fn compare_gc_policy() {
         let elapsed = start.elapsed().as_secs_f64();
         let end_slots = engine.heap_stats().runtime_objects;
         let end_rss = rss_bytes();
+        let budget_after = engine.heap().gc_budget();
+        // Every full collection bumps the engine's counter; the ones this harness
+        // requested are known, so the rest were triggered by the engine's own policy.
+        let automatic_full_collections = (budget_after.full_collections - budget_before.full_collections).saturating_sub(major_count);
         let idle_observation = if workload == "burst_idle" {
             kept.clear();
             let before = engine.heap_stats().runtime_objects;
@@ -308,6 +408,7 @@ fn compare_gc_policy() {
                 "call":call, "at_seconds":at, "trigger":"policy_before_host_call", "level":format!("{:?}",stats.level),
                 "nursery_reserved_bytes":nursery, "budget_bytes":budget, "profile":profile_json(stats),
                 "copied_objects":stats.live_count, "reclaimed_slots":stats.collected_count,
+                "live_payload_bytes":stats.live_payload_bytes,
                 "promoted_gen1":stats.promoted_to_gen1, "promoted_gen2":stats.promoted_to_gen2,
             })).collect();
             std::fs::write(path, serde_json::to_vec_pretty(&events).unwrap()).unwrap();
@@ -324,9 +425,15 @@ fn compare_gc_policy() {
             "end_slot_mib":end_slots as f64*slot_size as f64/MIB as f64,
             "initial_rss_mib":rss_mib(initial_rss), "peak_sampled_rss_mib":rss_mib(peak_rss),
             "end_rss_mib":rss_mib(end_rss), "retained_handles_verified":kept.len(), "snapshots":snapshots,
+            "lifetime_peak_rss_mib":rss_mib(lifetime_peak_rss_bytes()),
+            "automatic_full_collections":automatic_full_collections,
+            "budget_spent_mib":budget_after.bytes_since_full_gc as f64/MIB as f64,
+            "budget_mib":budget_after.full_budget_bytes as f64/MIB as f64,
+            "iterations":iterations, "chunk":chunk_size,
             "cache_objects":if cache.is_some() {cache_n} else {0},
             "cache_verified":cache.is_some(), "idle_observation":idle_observation,
             "validation_gc_live_objects":validation_gc.live_count,
+            "validation_gc_live_payload_mib":validation_gc.live_payload_bytes.map(|bytes| bytes as f64/MIB as f64),
             "cycle_coverage":"harness-requested collections only; automatic cycles require engine tracing",
         }));
         kept.clear();

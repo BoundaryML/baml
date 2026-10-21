@@ -1,4 +1,4 @@
-use std::{any::Any, sync::Arc};
+use std::sync::Arc;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 
@@ -116,13 +116,19 @@ pub enum Object {
 
     /// Opaque Rust-managed data, accessed via `Arc<dyn Any>` downcast.
     /// Used for `$rust_type` fields in builtin classes (including media classes Pdf, Audio, Video, Image).
-    RustData(Arc<dyn Any + Send + Sync>),
+    RustData(Arc<dyn crate::BexRustData>),
 
     /// A type descriptor value — wraps a [`crate::types::TypeValue`]. The
     /// described type is the whole of it: `==` is type equivalence, so a GC
     /// copy, a `baml.deep_copy`, and a wire round trip all denote the same
     /// type by construction.
     Type(Box<crate::types::TypeValue>),
+
+    /// What is left in a slot whose object is gone: a collection moved it to
+    /// another space. Nothing live points at a tombstone, so one is only ever
+    /// seen by code that walks slots by position; reaching one by following a
+    /// reference is a use-after-free.
+    Tombstone,
 
     #[cfg(feature = "heap_debug")]
     Sentinel(crate::types::SentinelKind),
@@ -134,14 +140,26 @@ const _: () = assert!(
 );
 
 impl Object {
-    /// The qualified name of a nominal declaration, if it has one.
+    /// The failure for code that followed a reference and found an
+    /// [`Object::Tombstone`]. Code that walks slots by position never calls
+    /// this: a tombstone there is expected and simply has no contents.
+    #[cold]
+    #[track_caller]
+    pub fn tombstone_reached() -> ! {
+        unreachable!("followed a reference to a tombstone: the object it named is gone")
+    }
+
+    /// The qualified name of a nominal declaration, if it has one: its path
+    /// under its package's display name, put together on demand (see
+    /// `declaration_name`). An anonymous (runtime-created) declaration has
+    /// none. Display and boundary spelling only — never an identity.
     #[must_use]
-    pub fn declaration_name(&self) -> Option<&baml_type::TypeName> {
+    pub fn declaration_name(&self) -> Option<baml_type::TypeName> {
         match self {
-            Object::Class(class) => class.name.declared(),
-            Object::Enum(enm) => enm.name.declared(),
-            Object::Interface(interface) => Some(&interface.name),
-            Object::TypeAlias(alias) => Some(&alias.name),
+            Object::Class(class) => class.name().declared().cloned(),
+            Object::Enum(enm) => enm.name().declared().cloned(),
+            Object::Interface(interface) => interface.name().declared().cloned(),
+            Object::TypeAlias(alias) => alias.name().declared().cloned(),
             _ => None,
         }
     }
@@ -173,7 +191,8 @@ impl Object {
             | Object::Map(_)
             | Object::Float(_)
             | Object::Future(_)
-            | Object::RustData(_) => None,
+            | Object::RustData(_)
+            | Object::Tombstone => None,
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => None,
         }
@@ -205,7 +224,8 @@ impl Object {
             | Object::Map(_)
             | Object::Float(_)
             | Object::Future(_)
-            | Object::RustData(_) => return false,
+            | Object::RustData(_)
+            | Object::Tombstone => return false,
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => return false,
         }
@@ -329,6 +349,12 @@ impl BorshSerialize for Object {
                     "HostClosure cannot be serialized",
                 ));
             }
+            Self::Tombstone => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Tombstone cannot be serialized",
+                ));
+            }
             #[cfg(feature = "heap_debug")]
             Self::Sentinel(_) => {
                 return Err(std::io::Error::new(
@@ -381,7 +407,7 @@ impl std::fmt::Display for Object {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Object::Function(function) => function.fmt(f),
-            Object::Interface(interface) => write!(f, "<interface {}>", interface.name),
+            Object::Interface(interface) => write!(f, "<interface {}>", interface.name()),
             Object::Package(_) => write!(f, "<package>"),
             Object::ImplRule(_) => write!(f, "<impl_rule>"),
             Object::Class(class) => class.fmt(f),
@@ -419,6 +445,7 @@ impl std::fmt::Display for Object {
             Object::Type(tv) => write!(f, "<type: {}>", tv.ty),
             Object::Future(future) => write!(f, "{}", future.read()),
             Object::Float(v) => write!(f, "{v}"),
+            Object::Tombstone => write!(f, "<tombstone>"),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(kind) => write!(f, "<sentinel {kind:?}>"),
             // Object::BamlType(type_ir) => write!(f, "<baml type: {type_ir}>"),
@@ -451,6 +478,8 @@ pub enum ObjectType {
     Type,
     RustData,
     Float,
+    /// Not a value: the slot's object is gone. See [`Object::Tombstone`].
+    Tombstone,
 }
 
 impl ObjectType {
@@ -480,6 +509,7 @@ impl ObjectType {
             Object::Type(_) => Self::Type,
             Object::Future(fut) => Self::Future(fut.into()),
             Object::Float(_) => Self::Float,
+            Object::Tombstone => Self::Tombstone,
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Self::Any,
             // Object::BamlType(_) => Self::Any, // TODO
@@ -523,6 +553,7 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Type => write!(f, "type"),
             ObjectType::RustData => write!(f, "rust_data"),
             ObjectType::Float => write!(f, "float"),
+            ObjectType::Tombstone => write!(f, "tombstone"),
         }
     }
 }

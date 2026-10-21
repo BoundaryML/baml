@@ -572,8 +572,6 @@ impl ProjectDatabase {
     ///
     /// Invariants enforced (each is a [`SourceRootError`]):
     /// - at most one live root per canonical path;
-    /// - one live root per wire name (`self_name`, else the unnamed default)
-    ///   — the interim consequence of name-spelled type heads;
     /// - every declared dependency names a live root, under a name that is
     ///   neither reserved nor declared twice;
     /// - a served-from-interface root's bytes decode as a `PackageInterface`.
@@ -614,6 +612,7 @@ impl ProjectDatabase {
                 );
                 root.set_kind(self).to(kind);
                 root.set_self_name(self).to(self_name);
+                root.set_exclude_tests(self).to(false);
                 root.set_interface(self).to(interface);
                 root.set_dependencies(self).to(dependencies);
                 root
@@ -1159,6 +1158,19 @@ impl ProjectDatabase {
 
     // ── Bytecode ─────────────────────────────────────────────────────────────
 
+    /// Exclude test/testset blocks from subsequent compilation of `root` and
+    /// its source dependencies. This is a tracked semantic-input change, so
+    /// already-queried HIR and package interfaces are invalidated as well.
+    ///
+    /// SDK generation calls this after checking the complete project. Compile
+    /// the resulting program fresh: cached programs/packages include tests.
+    pub fn exclude_tests(&mut self, root: SourceRoot) {
+        let roots = baml_compiler2_hir::package::world_roots(self, root).clone();
+        for root in roots {
+            root.set_exclude_tests(self).to(true);
+        }
+    }
+
     /// The compiled bytecode of `root`'s program — the root and its
     /// dependency closure, never another workspace root that shares this
     /// database.
@@ -1484,7 +1496,14 @@ mod tests {
                 .collect()
         };
         assert_eq!(edges("log"), vec![]);
-        assert_eq!(edges("baml"), vec![("log".to_string(), root_of("log"))]);
+        assert_eq!(
+            edges("baml"),
+            vec![
+                ("log".to_string(), root_of("log")),
+                ("reflect".to_string(), root_of("reflect")),
+                ("trace".to_string(), root_of("trace")),
+            ]
+        );
         assert_eq!(
             edges("testing"),
             vec![("baml".to_string(), root_of("baml"))]
@@ -1547,10 +1566,43 @@ mod tests {
             .iter()
             .map(|edge| edge.name.as_str())
             .collect();
-        for (prefix, package, _) in baml_compiler2_ast::SHORTHAND_PROVIDERS {
+        for (prefix, constructor) in baml_compiler2_ast::SHORTHAND_PROVIDERS {
+            let package = constructor[0].as_str();
             assert!(
-                prelude.contains(package),
+                prelude.contains(&package),
                 "shorthand `{prefix}/…` constructs a client from `{package}`, which is not a prelude package"
+            );
+        }
+    }
+
+    /// The compiler's package table and the stdlib's own inventory are one
+    /// set: every stdlib package can be named by identity (a desugar may write
+    /// a path into any of them), and nothing is named that the stdlib does not
+    /// ship.
+    #[test]
+    fn the_language_package_table_is_the_stdlib_inventory() {
+        let mut known: Vec<&str> = baml_base::LangPackage::ALL
+            .into_iter()
+            .map(baml_base::LangPackage::manifest_name)
+            .collect();
+        let mut shipped = baml_builtins2::stdlib_package_names().to_vec();
+        known.sort_unstable();
+        shipped.sort_unstable();
+        assert_eq!(known, shipped);
+    }
+
+    /// Every language package is installed by [`ProjectDatabase::ensure_stdlib_sources`],
+    /// so a compiler-written path into any of them resolves.
+    #[test]
+    fn every_language_package_is_installed_with_the_stdlib() {
+        let mut db = ProjectDatabase::new();
+        db.ensure_stdlib_sources();
+        let lang = baml_compiler2_hir::package::lang_roots(&db);
+        for package in baml_base::LangPackage::ALL {
+            assert!(
+                lang.get(package).is_some(),
+                "`{}` is not installed",
+                package.manifest_name()
             );
         }
     }
@@ -1610,17 +1662,12 @@ mod tests {
             db.add_source_root(workspace_spec("/ws")),
             Err(SourceRootError::PathTaken(workspace))
         );
-        // Spellings are not an identity: two roots may share one, and the
-        // boundary that needs the spelling table injective reports it.
+        // A name is not an identity: two roots may declare one, and both
+        // are live roots.
         let dep = db.add_source_root(dependency_spec("/dep", "dep")).unwrap();
         let dep2 = db.add_source_root(dependency_spec("/dep2", "dep")).unwrap();
-        assert_eq!(
-            baml_compiler2_hir::package::spelling(&db).collisions(),
-            &[baml_compiler2_hir::package::SpellingCollision::SharedName {
-                name: Name::new("dep"),
-                roots: vec![dep, dep2],
-            }]
-        );
+        assert_ne!(dep, dep2);
+        assert_eq!(dep.self_name(&db), dep2.self_name(&db));
         // Dependency roots sort before the workspace root; Dynamic roots
         // (runtime-loaded) sort after it, whatever the insertion order.
         let dynamic = db
@@ -1769,6 +1816,7 @@ mod tests {
         assert!(!revived.is_session_submission(&db));
     }
 
+    /// Revived inputs retain their identities and restore fresh-root compilation defaults.
     #[test]
     fn removed_roots_are_revived_and_files_tombstoned() {
         let mut db = ProjectDatabase::new();
@@ -1776,6 +1824,7 @@ mod tests {
         let path = Path::new("/dep/a.baml");
         let file = db.add_or_update_file_in(dep, path, "class A {}");
         let file_id = file.file_id(&db);
+        db.exclude_tests(dep);
 
         db.remove_source_root(dep);
         assert!(db.source_roots().is_empty());
@@ -1791,10 +1840,22 @@ mod tests {
             revived.self_name(&db).as_ref().map(Name::as_str),
             Some("dep2")
         );
-        let file_again = db.add_or_update_file_in(revived, path, "class B {}");
+        let file_again =
+            db.add_or_update_file_in(revived, path, "class B {} test \"restored\" { null }");
         assert_eq!(file_again.file_id(&db), file_id);
         assert_eq!(file_again.source_root(&db), revived);
         assert_eq!(db.root_files(revived), vec![file_again]);
+        assert!(
+            baml_compiler2_hir::item_data::file_functions(&db, file_again)
+                .iter()
+                .any(|&function| {
+                    baml_compiler2_hir::item_data::function_data(&db, function)
+                        .metadata
+                        .origin
+                        == baml_compiler2_ast::FunctionOrigin::TestInitializer
+                }),
+            "a revived root must include tests by default"
+        );
     }
 
     #[test]

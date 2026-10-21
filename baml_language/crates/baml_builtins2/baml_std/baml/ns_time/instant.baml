@@ -92,7 +92,7 @@ class Instant {
         $rust_function
     }
 
-    implements baml.ToString {
+    implements root.ToString {
         /// Serializes `self` to a [RFC 3339](https://datatracker.ietf.org/doc/html/rfc3339)
         /// and [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601)-compatible
         /// timestamp string.
@@ -137,7 +137,7 @@ class Instant {
     function _to_string_impl(self) -> string throws root.errors.InvalidArgument {
         $rust_function
     }
-    implements baml.FromJson {
+    implements root.FromJson {
         /// Decodes an `Instant` from a JSON string, accepting exactly what
         /// `Instant.parse` accepts.
         ///
@@ -145,22 +145,22 @@ class Instant {
         ///
         /// - `baml.json.DecodeError` if the value is not a string, or is a
         ///   string `Instant.parse` rejects.
-        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
+        function from_json(j: root.json.json) -> Self throws root.json.DecodeError {
             match (j) {
                 string => {
                     Instant.parse(j) catch (_) {
                         root.errors.ParseError { message } => {
-                            throw baml.json.DecodeError { message: message, path: "" }
+                            throw root.json.DecodeError { message: message, path: "" }
                         },
                     }
                 },
                 _ => {
-                    throw baml.json.DecodeError { message: "Expected timestamp string", path: "" }
+                    throw root.json.DecodeError { message: "Expected timestamp string", path: "" }
                 },
             }
         }
     }
-    implements baml.ToJson {
+    implements root.ToJson {
         /// Encodes `self` as the same UTC RFC 3339 string `to_string` produces.
         ///
         /// # Throws
@@ -169,10 +169,10 @@ class Instant {
         ///   four-digit range. The same failure panics in `to_string`: a
         ///   serializer is called with a caller standing by to react, so it
         ///   gets the error channel.
-        function to_json(self) -> baml.json.json throws baml.json.SerializationError {
+        function to_json(self) -> root.json.json throws root.json.SerializationError {
             self._to_string_impl() catch (_) {
                 root.errors.InvalidArgument { message } => {
-                    throw baml.json.SerializationError {
+                    throw root.json.SerializationError {
                         message: message,
                         path: "",
                         reason: "unserializable",

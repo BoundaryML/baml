@@ -12,6 +12,8 @@ import { encodeCallArgs, decodeCallResult } from './proto.js';
 import { installShutdownOnExit } from './exit_hook.js';
 import { wrapNativeError } from './errors.js';
 import { attachInvocation } from './call_context.js';
+// Adds `fromFile` to the native media classes.
+import './media.js';
 
 export {
     BamlRuntime,
@@ -162,4 +164,5 @@ installShutdownOnExit();
 export { current as _currentExecutionContext, ExecutionContext as _ExecutionContext, currentContext as _currentTraceContext, currentContextAsync as _currentTraceContextAsync, currentCancelToken as _currentCancelToken, withExecutionContext as _withExecutionContext } from './execution_context.js';
 export { invoke as _invoke, invokeAsync as _invokeAsync } from './invocation.js';
 export { instrument as _instrument, TraceUsageError } from './instrumentation.js';
+export { registerCapture, captureFor } from './host_capture.js';
 import type { InvocationOptions } from './invocation.js';

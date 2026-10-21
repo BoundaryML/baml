@@ -54,7 +54,7 @@ function redact_url_secrets(text: string) -> string {
 }
 
 /// Replace credential-bearing request headers with "REDACTED" before a
-/// request snapshot rides an `ai.events.LLMCall`. Unlike previews, the
+/// request snapshot rides an `ai.events.ModelCall`. Unlike previews, the
 /// request `invoke` actually sends DOES carry auth headers (`x-api-key`,
 /// `authorization`, Azure's `api-key`, ...), so captured requests must be
 /// scrubbed. Matching is case-insensitive; values are replaced, names kept.
@@ -150,22 +150,24 @@ function send_as<T>(req: baml.http.Request, provider: string) -> T {
 /// `send_as_with_wire`'s result: the decoded envelope plus the wire record.
 class SentAs<T> {
     value: T,
-    call: root.events.LLMCall,
+    call: root.events.ModelCall,
 }
 
-/// Same contract as `send_as`, plus the LLMCall wire record. On a non-2xx or
-/// transport failure this still throws the same classified error `send_as`
-/// throws — composite clients build failed-leg records from the error itself
-/// (`_failed_leg_call`), so no record accompanies a throw. `capture_wire`
+/// Same contract as `send_as`, plus the ModelCall record billed to `model`;
+/// its `usage` and resolved model are the caller's to fill once it decodes the
+/// response (`ai.internal.with_own_call`). On a non-2xx or transport failure
+/// this still throws the same classified error `send_as` throws — composite
+/// clients build failed attempts from the error itself (`_failed_attempt`),
+/// so no record accompanies a throw. `capture_wire`
 /// gates the request/response bodies; status, headers, and timing are always
 /// recorded. The request URL and captured response body are redacted with
 /// `redact_url_secrets` before storing.
 function send_as_with_wire<T>(
     req: baml.http.Request,
-    provider: string,
-    client_name: string,
+    model: root.events.ModelKey,
     capture_wire: bool = true,
 ) -> SentAs<T> {
+    let provider = model.provider;
     let started = baml.time.Instant.now();
     let resp = baml.http.send(req) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
@@ -200,14 +202,10 @@ function send_as_with_wire<T>(
             }
         },
     };
-    let call = root.events.LLMCall {
-        client_name: client_name,
-        provider: provider,
-        timing: root.events.Timing {
-            start_time_utc_ms: started.to_timestamp_milliseconds(),
-            duration_ms: started.elapsed().to_milliseconds(),
-            ttft_ms: null,
-        },
+    let call = root.events.ModelCall {
+        resolved_model: model,
+        usage: null,
+        timing: root.events.Timing { start_time: started, duration: started.elapsed(), ttft: null },
         http_request: if (capture_wire) {
             baml.http.Request {
                 method: req.method,
@@ -227,10 +225,6 @@ function send_as_with_wire<T>(
                 null
             },
         },
-        // The provider parse fills the turn-level usage; the wire record does
-        // not re-derive it here.
-        usage: null,
-        selected: true,
         sse_responses: null,
     };
     SentAs { value: value, call: call }
@@ -243,8 +237,8 @@ function render_output_format(t: reflect.Type) -> string throws reflect.errors.C
     root.internal.render_output_format(t)
 }
 
-/// Provider-neutral media payload after resolving local files and, when
-/// requested, ordinary HTTP(S) URLs. Google Cloud `gs://` URLs remain URLs.
+/// Provider-neutral media payload after resolving, when requested, ordinary
+/// HTTP(S) URLs. Google Cloud `gs://` URLs remain URLs.
 class ResolvedMedia {
     url: string?,
     base64: string?,
@@ -252,92 +246,77 @@ class ResolvedMedia {
 }
 
 /// Resolve BAML media for provider request lowering. This mirrors the media
-/// resolution pass in `sys_llm`: local files become base64, existing base64 is
-/// retained, and URL fetching is selected by the provider.
-function resolve_media(media: ai.MediaPart, fetch_url: bool) -> ResolvedMedia {
+/// resolution pass in `sys_llm`: existing base64 is retained, and URL fetching
+/// is selected by the provider. Media built from a file already holds its
+/// content as base64.
+function resolve_media(media: root.MediaPart, fetch_url: bool) -> ResolvedMedia {
     match (media) {
         let image: baml.media.Image => {
-            let source = image.file() ?? image.url() ?? "";
             root.internal._resolve_media_content(
                 image.url(),
-                image.file(),
                 image.base64(),
-                root.internal._media_mime_type(image.mime_type(), source, "image"),
+                image.mime_type() ?? baml.media.Image.infer_mime_type(image.url() ?? ""),
                 fetch_url,
             )
         },
         let audio: baml.media.Audio => {
-            let source = audio.file() ?? audio.url() ?? "";
             root.internal._resolve_media_content(
                 audio.url(),
-                audio.file(),
                 audio.base64(),
-                root.internal._media_mime_type(audio.mime_type(), source, "audio"),
+                audio.mime_type() ?? baml.media.Audio.infer_mime_type(audio.url() ?? ""),
                 fetch_url,
             )
         },
         let video: baml.media.Video => {
-            let source = video.file() ?? video.url() ?? "";
             root.internal._resolve_media_content(
                 video.url(),
-                video.file(),
                 video.base64(),
-                root.internal._media_mime_type(video.mime_type(), source, "video"),
+                video.mime_type() ?? baml.media.Video.infer_mime_type(video.url() ?? ""),
                 fetch_url,
             )
         },
         let pdf: baml.media.Pdf => {
-            let source = pdf.file() ?? pdf.url() ?? "";
             root.internal._resolve_media_content(
                 pdf.url(),
-                pdf.file(),
                 pdf.base64(),
-                root.internal._media_mime_type(pdf.mime_type(), source, "pdf"),
+                pdf.mime_type() ?? baml.media.Pdf.infer_mime_type(pdf.url() ?? ""),
                 fetch_url,
             )
         },
     }
 }
 
-/// Resolve media for a request preview without reading a file or fetching a
-/// URL. Existing base64 and `data:` payloads are preserved; provider-specific
-/// renderers decide whether an ordinary URL is supported on their wire form.
-function resolve_media_preview(media: ai.MediaPart) -> ResolvedMedia {
+/// Resolve media for a request preview without fetching a URL. Existing base64
+/// and `data:` payloads are preserved; provider-specific renderers decide
+/// whether an ordinary URL is supported on their wire form.
+function resolve_media_preview(media: root.MediaPart) -> ResolvedMedia {
     match (media) {
         let image: baml.media.Image => {
-            let source = image.file() ?? image.url() ?? "";
             root.internal._resolve_media_preview_content(
                 image.url(),
-                image.file(),
                 image.base64(),
-                root.internal._media_mime_type(image.mime_type(), source, "image"),
+                image.mime_type() ?? baml.media.Image.infer_mime_type(image.url() ?? ""),
             )
         },
         let audio: baml.media.Audio => {
-            let source = audio.file() ?? audio.url() ?? "";
             root.internal._resolve_media_preview_content(
                 audio.url(),
-                audio.file(),
                 audio.base64(),
-                root.internal._media_mime_type(audio.mime_type(), source, "audio"),
+                audio.mime_type() ?? baml.media.Audio.infer_mime_type(audio.url() ?? ""),
             )
         },
         let video: baml.media.Video => {
-            let source = video.file() ?? video.url() ?? "";
             root.internal._resolve_media_preview_content(
                 video.url(),
-                video.file(),
                 video.base64(),
-                root.internal._media_mime_type(video.mime_type(), source, "video"),
+                video.mime_type() ?? baml.media.Video.infer_mime_type(video.url() ?? ""),
             )
         },
         let pdf: baml.media.Pdf => {
-            let source = pdf.file() ?? pdf.url() ?? "";
             root.internal._resolve_media_preview_content(
                 pdf.url(),
-                pdf.file(),
                 pdf.base64(),
-                root.internal._media_mime_type(pdf.mime_type(), source, "pdf"),
+                pdf.mime_type() ?? baml.media.Pdf.infer_mime_type(pdf.url() ?? ""),
             )
         },
     }
@@ -401,16 +380,17 @@ function merge_request_body(base: baml.json.json, overrides: baml.json.json?) ->
 //   * REASONING SIGNATURES. `ai.content.Reasoning` is a readable summary with
 //     no signature/encrypted-payload field, so there is no signature to strip
 //     and no redacted variant to detect. What IS keyed on identity: reasoning
-//     produced by a DIFFERENT client id is dropped, since replaying one
+//     produced by a DIFFERENT client is dropped, since replaying one
 //     model's thinking to another is what the signature would have guarded.
 //   * TOOL-CALL ID REWRITING (pi's per-API `normalizeToolCallId`) is not done
 //     here: the id shape a provider accepts is that provider's business, and
 //     rewriting ids centrally would desynchronize them from the journal.
 //
-// Client identity is `ai.events.AssistantMessage.client_id`, which the runner
-// fills from `Client.id()` — `provider/model` for the built-in clients, so a
-// model switch inside one provider counts as a different client, exactly like
-// pi's provider+api+model comparison.
+// Client identity is the provider of `ai.events.AssistantMessage.resolved_model`
+// plus its `requested_model`, which the runner copies from the answering
+// turn. The requested model, not the resolved one, because a client knows only
+// what it asks for; a model switch inside one provider still counts as a
+// different client, like pi's provider+api+model comparison.
 
 // ---------------------------------------------------------------------------
 // Content blocks on the wire. Every turn a client lowers — a rendered prompt
@@ -429,7 +409,7 @@ function merge_request_body(base: baml.json.json, overrides: baml.json.json?) ->
 /// `Text`, a media part is `Media` with null provenance. The rendered prompt
 /// then lowers through the same path as the journal's turns.
 ///
-/// A `root.CacheDelimiter` is dropped, and the text on either side of it is
+/// A `ai.CacheDelimiter` is dropped, and the text on either side of it is
 /// joined back into one `Text` block, so a client that lowers these blocks
 /// sends exactly what it would send for the same prompt without the
 /// `${cache(...)}`. A client whose wire has a cache marker lowers
@@ -646,12 +626,12 @@ function degrade_tool_media(j: root.Journal, carries: string[]) -> root.Journal 
     root.Journal { log: out }
 }
 
-/// Make one run's journal safe to replay to `client_id`, and return the
-/// sanitized copy. Every client should lower
-/// `ai.wire.sanitize_for_client(input.journal, self.id())` instead of
-/// `input.journal`. The rules, in the order they apply per event:
+/// Make one run's journal safe to replay to a client of `provider` asking for
+/// `requested_model`, and return the sanitized copy. Every client should lower
+/// `ai.wire.sanitize_for_client(input.journal, provider, self.requested_model())`
+/// instead of `input.journal`. The rules, in the order they apply per event:
 ///
-///  1. An assistant turn from a DIFFERENT `client_id` loses its
+///  1. An assistant turn from a DIFFERENT provider or requested model loses its
 ///     `ai.content.Reasoning` blocks: one model's thinking is not replayable
 ///     to another (and providers that check reasoning signatures reject it).
 ///  2. Empty and whitespace-only `ai.content.Text` blocks are dropped from
@@ -665,11 +645,15 @@ function degrade_tool_media(j: root.Journal, carries: string[]) -> root.Journal 
 ///     synthesized `ToolFailed { message: "No result provided" }`, because
 ///     most APIs reject a tool call that was never answered.
 ///
-/// Journal-only events (`RunStarted`, `ToolRequested`, `Usage`,
-/// `FinalProduced`) pass through untouched — clients skip them anyway — and,
+/// Journal-only events (`RunStarted`, `ToolRequested`, `FinalProduced`)
+/// pass through untouched — clients skip them anyway — and,
 /// like the clients' own lowering, they never close an open tool-result group.
 /// Nothing here mutates the journal it is given.
-function sanitize_for_client(j: root.Journal, client_id: string) -> root.Journal {
+function sanitize_for_client(
+    j: root.Journal,
+    provider: string,
+    requested_model: string,
+) -> root.Journal {
     let out: root.events.Event[] = [];
     // ids of tool calls emitted by the last assistant turn, still unanswered
     let pending: string[] = [];
@@ -677,12 +661,15 @@ function sanitize_for_client(j: root.Journal, client_id: string) -> root.Journal
         match (event) {
             let assistant: root.events.AssistantMessage => {
                 root.internal._flush_orphaned_calls(out, pending);
-                let blocks = root.internal._wire_blocks(assistant.content, assistant.client_id == client_id);
+                let same_model = assistant.resolved_model?.provider == provider
+                    && assistant.requested_model == requested_model;
+                let blocks = root.internal._wire_blocks(assistant.content, same_model);
                 if (blocks.length() > 0) {
                     out.push(
                         root.events.AssistantMessage {
                             content: blocks,
-                            client_id: assistant.client_id,
+                            resolved_model: assistant.resolved_model,
+                            requested_model: assistant.requested_model,
                         },
                     );
                     for (let block in blocks) {

@@ -6,14 +6,12 @@
 //! thread, which sanitizes and records each event. Raw header values pass
 //! through the queue in memory, so it stays private to the engine.
 
-use std::{
-    any::Any,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
-    },
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, Ordering},
 };
 
+use bex_vm_types::{BexRustData, RustDataArc};
 use bytes::Bytes;
 
 /// A request as the program sent it. Raw: the VM sanitizes it.
@@ -174,26 +172,30 @@ impl std::fmt::Debug for NetworkContext {
 /// queued for the next drain.
 pub struct NetworkTraced {
     network: NetworkContext,
-    data: Arc<dyn Any + Send + Sync>,
+    data: Arc<dyn BexRustData>,
+}
+
+impl BexRustData for NetworkTraced {
+    fn measure(&self, meter: &mut bex_vm_types::Meter) {
+        // The context is the engine's; only the wrapped value is this payload's.
+        meter.shared(&self.data, |meter| self.data.measure(meter));
+    }
 }
 
 impl NetworkTraced {
     /// `data` as `$rust_type` data that carries `network`.
-    pub fn wrap(
-        network: NetworkContext,
-        data: Arc<dyn Any + Send + Sync>,
-    ) -> Arc<dyn Any + Send + Sync> {
+    pub fn wrap(network: NetworkContext, data: Arc<dyn BexRustData>) -> Arc<dyn BexRustData> {
         Arc::new(Self { network, data })
     }
 
     /// The traced request `data` came from, if it came from one.
-    pub fn of(data: &(dyn Any + Send + Sync)) -> Option<&Self> {
+    pub fn of(data: &dyn BexRustData) -> Option<&Self> {
         data.downcast_ref::<Self>()
     }
 
     /// The IO side's own value: unwrapped when traced, as it is otherwise.
-    pub fn inner(data: Arc<dyn Any + Send + Sync>) -> Arc<dyn Any + Send + Sync> {
-        match data.downcast::<Self>() {
+    pub fn inner(data: Arc<dyn BexRustData>) -> Arc<dyn BexRustData> {
+        match data.downcast_payload::<Self>() {
             Ok(traced) => Arc::clone(&traced.data),
             Err(data) => data,
         }
@@ -212,6 +214,8 @@ impl NetworkTraced {
 
 #[cfg(test)]
 mod tests {
+    use bex_vm_types::TestRustData;
+
     use super::*;
 
     fn context(sink: &Arc<NetworkQueue>) -> NetworkContext {
@@ -250,16 +254,22 @@ mod tests {
     #[test]
     fn traced_data_gives_its_span_once_and_unwraps_to_the_inner_value() {
         let sink = Arc::new(NetworkQueue::default());
-        let traced = NetworkTraced::wrap(context(&sink), Arc::new(42_u32));
-        let plain: Arc<dyn Any + Send + Sync> = Arc::new(5_u32);
+        let traced = NetworkTraced::wrap(context(&sink), Arc::new(TestRustData(42)));
+        let plain: Arc<dyn BexRustData> = Arc::new(TestRustData(5));
         assert!(NetworkTraced::of(plain.as_ref()).is_none());
         let view = NetworkTraced::of(traced.as_ref()).unwrap();
         assert_eq!(view.network().span, 7);
         assert_eq!(view.take_span(), Some(7));
         assert_eq!(view.take_span(), None);
         let inner = NetworkTraced::inner(traced);
-        assert_eq!(inner.downcast_ref::<u32>(), Some(&42));
-        assert_eq!(NetworkTraced::inner(plain).downcast_ref::<u32>(), Some(&5));
+        assert_eq!(
+            inner.downcast_ref::<TestRustData>(),
+            Some(&TestRustData(42))
+        );
+        assert_eq!(
+            NetworkTraced::inner(plain).downcast_ref::<TestRustData>(),
+            Some(&TestRustData(5))
+        );
     }
 
     #[test]
@@ -275,7 +285,7 @@ mod tests {
         // Queued before the span ended, drained after: dropped.
         reader.push(NetworkEventKind::StreamEnd);
         other.push(NetworkEventKind::StreamEnd);
-        let traced = NetworkTraced::wrap(network, Arc::new(()));
+        let traced = NetworkTraced::wrap(network, Arc::new(TestRustData(0)));
         assert_eq!(
             NetworkTraced::of(traced.as_ref()).unwrap().take_span(),
             Some(7)

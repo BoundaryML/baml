@@ -88,7 +88,7 @@ async fn package_functions(
                     function
                         .telemetry_function_id
                         .expect("identity assigned before execution"),
-                    function.name.clone(),
+                    function.name(),
                 )),
                 _ => None,
             }
@@ -107,7 +107,7 @@ function dependent(dep: reflect.Package) -> reflect.Package {
   reflect.Package.compile({"use.baml": "function use_leaf() -> int { dep.identity_leaf() }"}, packages = {"dep": dep})
 }
 function invoke(pkg: reflect.Package) -> int {
-  let f = pkg.get_function<() -> int>("root.use_leaf") ?? throw "missing function"
+  let f = pkg.get_function<() -> int>("root.use_leaf")
   f()
 }
 "#,
@@ -381,7 +381,7 @@ async fn initial_ids_match_metadata_and_runtime_identity_is_not_serialized() {
             };
             let id = function.telemetry_function_id.unwrap();
             assert!(ids.insert(id));
-            assert_eq!(table.get(id).unwrap().fqn, function.name);
+            assert_eq!(table.get(id).unwrap().fqn, function.name());
             assert_eq!(
                 id.get() as usize,
                 ids.len(),

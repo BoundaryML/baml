@@ -57,6 +57,7 @@ macro_rules! visit_bytecode_index_operands {
             | I::StoreGlobal(slot)
             | I::SysOp(slot)
             | I::MakeBoundMethod(slot)
+            | I::CallHooked { callee: slot, .. }
             | I::Call { callee: slot, .. }
             | I::MakeGenericFunction { function: slot, .. } => {
                 $visit($operand::Global(slot));
@@ -139,11 +140,18 @@ macro_rules! visit_bytecode_index_operands {
             | I::Await
             | I::AwaitAny
             | I::CallIndirect
+            | I::BeginTraceHook(_)
+            | I::EndTraceHook
+        | I::TraceHookHidden
+        | I::TraceHookTiming
+        | I::TraceHookSpan
+        | I::TraceHookRich
+        | I::TraceHookEmptySpan
+        | I::SatisfiesBound
             | I::SetCallTrace
             | I::Throw
             | I::Rethrow
             | I::Return
-            | I::ThrowIfPanic
             | I::Unreachable
             | I::MakeGenericFunctionFromValue { .. }
             | I::MakeCell
@@ -291,7 +299,8 @@ pub fn visit_object_operands(object: &mut crate::Object, visit: impl FnMut(Index
         | Object::Map(..)
         | Object::Float(..)
         | Object::Future(..)
-        | Object::RustData(..) => {}
+        | Object::RustData(..)
+        | Object::Tombstone => {}
     }
 }
 
@@ -349,10 +358,11 @@ mod tests {
             ..Bytecode::default()
         };
         Function {
-            name: "test".to_string(),
+            identity: crate::types::FunctionIdentity::Declared(crate::types::FnPath::Free(
+                crate::types::LocalName::new(Vec::new(), baml_base::Name::new("test")),
+            )),
             source_file: String::new(),
             docstring: None,
-            declared_name: None,
             arity: 0,
             real_local_count: 0,
             bytecode,
@@ -374,10 +384,10 @@ mod tests {
             display_return_type: String::new(),
             throws_type: crate::TyTemplate::Never,
             origin: FunctionOrigin::Internal,
-            is_interface_body: false,
             native_key: None,
             body_meta: None,
-            runtime_package: HeapPtr::null(),
+            trace_passthrough: false,
+            owner: HeapPtr::null(),
         }
     }
 

@@ -1,0 +1,384 @@
+---
+title: "OpenAI Decisions is coming to BAML v1"
+description: "Use BAML return types to ask OpenAI Decisions for predicates, probabilities, and classifications in the next supporting BAML v1 nightly."
+slug: openai-decisions
+date: October 13, 2026
+isPublished: true
+tags: ['Announcements', 'Tutorials']
+author:
+  name: Sam Lijin
+  imageUrl: /profile-sam.png
+  linkedin: https://www.linkedin.com/in/sxlijin/
+---
+
+Starting with the next BAML v1 nightly containing the [OpenAI Decisions integration](https://github.com/BoundaryML/baml/pull/5200), you can use the [Decisions API](https://developers.openai.com/api/docs/guides/decisions) directly from a BAML function:
+
+```baml
+function IsUrgent(message: string) -> bool {
+    client: "openai-decisions/gpt-6-luna"
+    prompt: `
+        ${role("instructions")}
+        Does this ticket require immediate attention?
+        ${role("user")}
+        ${message}
+    `
+}
+```
+
+That function returns a `bool`. Change its return type to `float`, and you get the probability that the same condition is true. Return an enum, and the model chooses a variant. Return a class, and BAML prepares one question per supported leaf field, sends them in one request, and reconstructs the typed result.
+
+The return type defines what judgments to make. The prompt and descriptions explain how to make them. If you have used the [TypeSafe AI integration](/blog/typesafe-ai-jev), this follows the same type mapping, using OpenAI's predicate and choice questions.
+
+## Get started on the supporting nightly
+
+This integration uses BAML v1 function syntax. It will first be available in a nightly containing [PR #5200](https://github.com/BoundaryML/baml/pull/5200); earlier releases do not include this provider.
+
+Once that nightly is available, select and update it:
+
+```bash
+baml toolchain use nightly
+baml toolchain update
+```
+
+If your project pins a different toolchain in `baml.toml`, update the project selection with `baml toolchain pin nightly`. See the [BAML quickstart](/quickstart) to install the CLI or create a project.
+
+Set `OPENAI_API_KEY`, add `IsUrgent` to your project, and call it:
+
+```bash
+export OPENAI_API_KEY="your-openai-api-key"
+baml run IsUrgent -- --message "Production is down and customers cannot log in."
+```
+
+The default client uses `gpt-6-luna` and sends requests to `https://api.openai.com/v1/decisions`. Credentials are resolved when invoking the function, so constructing the client does not read the API key.
+
+All the BAML examples below can be added to the same project. Example answers are illustrative; use labeled examples from your application to choose thresholds and evaluate classification quality.
+
+## What your return type means
+
+The [Decisions API](https://developers.openai.com/api/docs/guides/decisions#choose-a-question-type) evaluates shared input against classification questions. BAML derives those questions from the function's realized return type:
+
+| BAML return type | Decisions question | BAML result |
+| --- | --- | --- |
+| `bool` | `predicate` | `true` when `probability >= 0.5` |
+| `float` | `predicate` | The probability, between `0.0` and `1.0` |
+| Enum | `choice` | The selected enum variant |
+| Finite union of literals, enums, enum variants, or null | `choice` | The selected typed member |
+| Class with supported fields | One question per leaf field | An instance of the declared class |
+
+BAML uses reflection to inspect these types and their metadata. Planning, answer decoding, and reconstruction happen in the BAML standard library.
+
+### Keep the probability when you need your own threshold
+
+A predicate answer of `0.91` becomes `true` for a `bool` return type. So does `0.5`; `0.49` becomes `false`.
+
+Use `float` when your application should choose the threshold:
+
+```baml
+function UrgencyProbability(message: string) -> float {
+    client: "openai-decisions/gpt-6-luna"
+    prompt: `
+        ${role("instructions")}
+        Does this ticket require immediate attention?
+        ${role("user")}
+        ${message}
+    `
+}
+
+function NeedsPaging(message: string) -> bool {
+    UrgencyProbability(message) >= 0.8
+}
+```
+
+`IsUrgent` and `UrgencyProbability` ask the same predicate question. Their return types determine whether BAML thresholds the probability or preserves it.
+
+### A float is a predicate probability, not a rubric score
+
+The OpenAI API also supports `score` questions with ordered `levels`, each with a label and description. A score is a probability-weighted average of the level indices and can fall between levels. **This BAML integration does not support `score` questions or `levels`.** A `float` return type always asks a predicate question.
+
+Similarly, `1 | 2 | 3 | 4 | 5` asks a choice question and returns one of those integers. It does not request an interpolated score such as `3.1`. See the [OpenAI scoring guide](https://developers.openai.com/api/docs/guides/decisions#score-against-a-rubric) for the distinction.
+
+## Route a ticket with an enum
+
+An enum supplies the available choices. Its `@@description` supplies the question, and variant descriptions explain when each choice applies:
+
+```baml
+enum Team {
+    Billing @description("Payments and refunds"),
+    Technical @alias("tech") @description("Bugs and outages"),
+    Account,
+    Hidden @skip,
+
+    @@description("Which team should handle this ticket?")
+}
+
+function RouteTicket(message: string) -> Team {
+    client: "openai-decisions/gpt-6-luna"
+    prompt: `${message}`
+}
+```
+
+Calling `RouteTicket("Our production integration is down.")` prepares this request body:
+
+```json
+{
+  "model": "gpt-6-luna",
+  "input": "Our production integration is down.",
+  "questions": [
+    {
+      "type": "choice",
+      "name": "result",
+      "instructions": "Which team should handle this ticket?",
+      "choices": [
+        { "value": "Billing", "description": "Payments and refunds" },
+        { "value": "tech", "description": "Bugs and outages" },
+        { "value": "Account" }
+      ]
+    }
+  ]
+}
+```
+
+The enum alias makes `"tech"` the wire value for `Technical`. A variant without a description omits that property, as `Account` does here. `@skip` removes `Hidden` from the offered choices.
+
+An answer such as this selects `Team.Technical`:
+
+```json
+{
+  "type": "choice",
+  "name": "result",
+  "choice": "tech",
+  "confidence": 0.8,
+  "probabilities": [
+    { "value": "Billing", "probability": 0.05 },
+    { "value": "tech", "probability": 0.9 },
+    { "value": "Account", "probability": 0.05 }
+  ]
+}
+```
+
+BAML uses the returned `choice` to select the original typed value. It does not recompute the winner from `probabilities`. Scalar outputs use the question name `result`.
+
+## Use finite unions and optional choices
+
+Literal unions work without an enum:
+
+```baml
+type Mood = "calm" | "angry";
+
+function ClassifyMood(message: string) -> Mood {
+    client: "openai-decisions/gpt-6-luna"
+    prompt: `
+        ${role("instructions")}
+        What is the customer's mood?
+        ${role("user")}
+        ${message}
+    `
+}
+
+function StarRating(review: string) -> 1 | 2 | 3 | 4 | 5 {
+    client: "openai-decisions/gpt-6-luna"
+    prompt: `
+        ${role("instructions")}
+        How many stars does this review give the product?
+        ${role("user")}
+        ${review}
+    `
+}
+```
+
+Choices are encoded as strings in this integration. An answer of `"3"` becomes the integer literal `3`; boolean and bigint literals are also restored to their original BAML types. Native boolean choice values on the OpenAI wire are not used.
+
+An optional enum adds an abstention choice:
+
+```baml
+function RouteOrLeave(message: string) -> Team? {
+    client: "openai-decisions/gpt-6-luna"
+    prompt: `
+        ${role("instructions")}
+        Which team should handle this ticket, if any?
+        ${role("user")}
+        ${message}
+    `
+}
+```
+
+`Team?` is `Team | null`: the client offers the enum values plus `"<null>"`, then maps that sentinel back to `null`. Enum subsets such as `Team.Billing | Team.Technical` and unions such as `Team | "hold"` work too.
+
+A union does not inherit an enum member's type description. Give a scalar union its own `role("instructions")`; for a class field, use `@description` or shared instructions. Avoid colliding wire values: if two members offer the same key, the first reflected member owns it. Reflected union order is canonicalized by the compiler and is not necessarily source declaration order.
+
+## One class becomes multiple questions in one request
+
+Here is the full return type for a ticket assessment, using `Team` and `Mood` from above:
+
+```baml
+class Sentiment {
+    angry: bool @description("Is this person angry?"),
+    churn: float @description("How likely is cancellation?"),
+}
+
+class Report {
+    route: Team @alias("department"),
+    customer: Sentiment @alias("the customer"),
+    agent: Sentiment @alias("the agent"),
+    mood: Mood @description("What is the mood?"),
+}
+
+function AssessTicket(message: string) -> Report {
+    client: "openai-decisions/gpt-6-luna"
+    prompt: `
+        ${role("instructions")}
+        You are triaging support tickets.
+        ${role("user")}
+        ${message}
+    `
+}
+```
+
+BAML recursively walks `Report` and prepares six questions:
+
+| Question name | Type | Result field |
+| --- | --- | --- |
+| `route` | `choice` | `Report.route` |
+| `customer.angry` | `predicate` | `Report.customer.angry` |
+| `customer.churn` | `predicate` | `Report.customer.churn` |
+| `agent.angry` | `predicate` | `Report.agent.angry` |
+| `agent.churn` | `predicate` | `Report.agent.churn` |
+| `mood` | `choice` | `Report.mood` |
+
+Every question uses the same `input`, containing `${message}`. BAML sends the six questions in one HTTP request, matches the answers by name, and reconstructs a `Report` with both nested `Sentiment` values.
+
+For example, the `agent.churn` entry is:
+
+```json
+{
+  "type": "predicate",
+  "name": "agent.churn",
+  "instructions": "You are triaging support tickets.\n\nthe agent.churn: How likely is cancellation?"
+}
+```
+
+Each part comes from a specific declaration:
+
+- `"predicate"` comes from the `float` type of `Sentiment.churn`.
+- `"agent.churn"` comes from the actual field path. Aliases do not change question names or returned field names.
+- `"You are triaging support tickets."` comes from the prompt under `role("instructions")` and prefixes every question.
+- `"the agent.churn:"` supplies context for the nested field, using `Report.agent`'s alias and the nested field name `churn`.
+- `"How likely is cancellation?"` comes from `Sentiment.churn`'s description. The adapter inserts a blank line between the shared and field-specific instructions.
+
+The `role("instructions")` content is removed from `input`; the other prompt messages and journal text supply evidence in order. A field description takes precedence over an enum's type description. For `route`, there is no field description, so the client uses `Team`'s question with the contextual prefix `department:`. A description on a parent class-valued field does not propagate to its leaves; describe the leaves and use aliases to distinguish branches.
+
+A returned `Report` might serialize to JSON like this:
+
+```json
+{
+  "route": "Technical",
+  "customer": { "angry": true, "churn": 0.8 },
+  "agent": { "angry": false, "churn": 0.2 },
+  "mood": "angry"
+}
+```
+
+In BAML, `route` is the enum value `Team.Technical`. The JSON representation uses its variant name, while the Decisions wire value used its alias `"tech"`.
+
+## Include images as evidence
+
+Predicates and choices can evaluate image evidence too:
+
+```baml
+function HasVisibleDamage(picture: image) -> bool {
+    client: "openai-decisions/gpt-6-luna"
+    prompt: `
+        ${role("instructions")}
+        Does the product have a visible crack, tear, or dent? Ignore its packaging.
+        ${role("user")}
+        Inspect this product: ${picture}
+    `
+}
+
+function CheckProductPhoto(path: string) -> bool {
+    HasVisibleDamage(baml.media.Image.from_file(path, null))
+}
+```
+
+The adapter sends user content containing `input_text` and `input_image` parts. Inline and file-backed images become base64 data URLs. For an image constructed with `baml.media.Image.from_url(...)`, this adapter downloads its bytes and inlines them on invocation. It accepts at most 128 images per request.
+
+Request previews never download images. Previewing a remote image raises `ai.errors.PreviewUnsupported`; inline images can be previewed. Image `detail` is not configurable in this release.
+
+## Configure the client and preview a request
+
+Use the shorthand for defaults, or construct `openai.DecisionsClient` explicitly:
+
+```baml
+function IsUrgentWithTimeout(message: string) -> bool {
+    client: openai.DecisionsClient.new(
+        model = "gpt-6-luna",
+        api_key = env.OPENAI_API_KEY,
+        base_url = "https://api.openai.com/v1",
+        timeout = baml.time.Duration.from_seconds(10),
+        capture_wire = true,
+    )
+    prompt: `
+        ${role("instructions")}
+        Does this ticket require immediate attention?
+        ${role("user")}
+        ${message}
+    `
+}
+```
+
+`timeout` accepts a duration or `ai.LlmTimeoutOptions`, which can also set a connection timeout. Streaming token deadlines do not apply to this client. The default limits are five minutes total and ten seconds to connect.
+
+Use a function spec to inspect the generated request without resolving the API key or sending it:
+
+```baml
+function PreviewReport(message: string) -> baml.http.Request {
+    AssessTicket@spec(message).build_request()
+}
+```
+
+Previews omit authorization headers. The preview body shows the shared `input`, the generated `questions` array, and each question's instructions and choices.
+
+## Inspect confidence and token usage
+
+Typed choice results contain the selected value. They do not include the API's `confidence` or per-option `probabilities`. Those fields remain available in the captured response envelope:
+
+```baml
+function RouteWithEvidence(message: string) -> Team {
+    let runner = ai.Agent.new(on_event = (event: ai.events.Event) -> void {
+        if let call: ai.events.LLMCall = event {
+            if let body: string = call.http_response?.body {
+                log.info(body);
+            }
+        }
+    });
+    runner.run(RouteTicket@spec(message)).value
+}
+```
+
+Wire capture is enabled by default, and captured authorization headers are redacted. `capture_wire = false` omits request and response bodies. Token counts, cache reads and writes, reasoning tokens, and derived uncached input tokens are available through usage events and `ai.RunResult.usage`. The API's `total_tokens` is not separately exposed.
+
+Adding `route_confidence: float` to your return type asks a new independent predicate question. It does not extract `confidence` from the existing `route` answer. Use the captured envelope for that metadata.
+
+## Current support and limits
+
+The request body contains `model`, `input`, and generated `questions`. Questions support `type`, `name`, `instructions`, and, for choices, `choices[].value` and optional `description`. The client does not expose arbitrary raw question definitions, `score`/`levels`, or `safety_identifier`.
+
+Return types must describe a fixed set of supported judgments:
+
+- Free-form `string`, `int`, and `bigint` outputs are unsupported; finite literal unions are supported.
+- Arrays, maps, recursive classes, class unions, and optional classes are unsupported.
+- `bool?` and `float?` are unsupported. Nullable finite choices such as `Team?` work.
+- Empty classes and choices with fewer than two or more than 255 distinct values are unsupported. A standalone literal or a literal-valued discriminator field is not a valid choice question.
+- Audio, video, PDF, media outputs, tools, and streaming are unsupported.
+
+Unsupported output shapes and empty question instructions raise `ai.errors.InvalidRequest` before an HTTP request is sent. These checks happen at request construction time. One unsupported leaf makes the enclosing class unsupported.
+
+Skipped class fields are omitted from `questions` and reconstructed as null; their declared types must accept null. Skipped enum variants are omitted from choices. Class reconstruction uses JSON, so an enum variant and a string literal with the same JSON representation can remain ambiguous within a union.
+
+A refused question raises `ai.errors.Refused`. Missing answers, duplicate names, unexpected answer types, out-of-range predicate probabilities, and unoffered choices fail instead of producing a partial typed result. HTTP errors use the existing BAML error types, including `ai.errors.InvalidRequest`, `ai.errors.RateLimited`, and `ai.errors.NetworkFailure`.
+
+## Try it with your own classifications
+
+Start with a `bool` for a yes/no judgment, a `float` for a probability you will threshold yourself, or an enum for routing. Combine independent judgments in a class when they share the same evidence. Keep descriptions close to the fields and put shared guidance under `role("instructions")`.
+
+Once the supporting BAML v1 nightly ships, set `OPENAI_API_KEY` and select `client: "openai-decisions/gpt-6-luna"`. The [OpenAI guide](https://developers.openai.com/api/docs/guides/decisions) and [API reference](https://developers.openai.com/api/reference/resources/decisions/methods/create) describe the underlying protocol; BAML handles its request construction and returns the type your function declares.

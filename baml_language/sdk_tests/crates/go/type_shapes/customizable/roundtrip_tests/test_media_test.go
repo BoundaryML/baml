@@ -3,6 +3,7 @@ package sdk_test
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -153,8 +154,8 @@ func Test_media_constructors_and_accessors(t *testing.T) {
 	if url, err := image.Url(); err != nil || url != nil {
 		t.Fatalf("base64 image URL = %#v, %v; want nil", url, err)
 	}
-	if path, err := image.File(); err != nil || path != nil {
-		t.Fatalf("base64 image file = %#v, %v; want nil", path, err)
+	if name, err := image.Name(); err != nil || name != nil {
+		t.Fatalf("base64 image name = %#v, %v; want nil", name, err)
 	}
 
 	audio, err := baml_go.NewAudioFromUrl(mediaURL, nil)
@@ -169,8 +170,8 @@ func Test_media_constructors_and_accessors(t *testing.T) {
 	if got, err := audio.MimeType(); err != nil || got != nil {
 		t.Fatalf("URL audio MIME type = %#v, %v; want nil", got, err)
 	}
-	if got, err := audio.File(); err != nil || got != nil {
-		t.Fatalf("URL audio file = %#v, %v; want nil", got, err)
+	if got, err := audio.Name(); err != nil || got != nil {
+		t.Fatalf("URL audio name = %#v, %v; want nil", got, err)
 	}
 
 	file, err := os.CreateTemp(t.TempDir(), "media-*")
@@ -187,11 +188,21 @@ func Test_media_constructors_and_accessors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	path, err := video.File()
+	// The value holds the file's content and base name, read now.
+	if err := os.Remove(file.Name()); err != nil {
+		t.Fatal(err)
+	}
+	name, err := video.Name()
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertOptionalString(t, path, file.Name())
+	assertOptionalString(t, name, filepath.Base(file.Name()))
+	if content, err := video.Base64(); err != nil || content != "cGF5bG9hZA==" {
+		t.Fatalf("file video base64 = %q, %v", content, err)
+	}
+	if _, err := baml_go.NewVideoFromFile(file.Name(), &mime); err == nil {
+		t.Fatal("a missing file was accepted")
+	}
 	if got, err := video.Url(); err != nil || got != nil {
 		t.Fatalf("file video URL = %#v, %v; want nil", got, err)
 	}
@@ -210,8 +221,8 @@ func Test_media_constructors_and_accessors(t *testing.T) {
 	if got, err := pdf.Url(); err != nil || got != nil {
 		t.Fatalf("base64 PDF URL = %#v, %v; want nil", got, err)
 	}
-	if got, err := pdf.File(); err != nil || got != nil {
-		t.Fatalf("base64 PDF file = %#v, %v; want nil", got, err)
+	if got, err := pdf.Name(); err != nil || got != nil {
+		t.Fatalf("base64 PDF name = %#v, %v; want nil", got, err)
 	}
 	if _, err := baml_sdk.MediaRoundTripPdf(context.Background(), pdf); err != nil {
 		t.Fatal(err)

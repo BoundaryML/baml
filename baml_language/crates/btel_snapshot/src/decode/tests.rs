@@ -74,8 +74,8 @@ fn rich_snapshot(pool: &SnapshotPool) -> Snapshot {
     let value = b.leaves().ty(int_type());
     let text = b.leaves().string(&"hello λ".into()).unwrap();
     let entries = [("greeting", V::String(text)), ("list", V::Object(list))];
-    let map = b.map(key, value, entries.into_iter(), |_, (key, value)| {
-        (key.into(), value)
+    let map = b.map(key, value, entries.into_iter(), |leaves, (key, value)| {
+        (leaves.string_value(&key.into()), value)
     });
     let map = b.leaves().object(map).unwrap();
     let bytes = b.bytes(&[1, 2, 3]);
@@ -440,9 +440,12 @@ fn map_entry_keys_hash_like_the_producer() {
     let mut b = pool.try_acquire().unwrap();
     let key = b.leaves().ty(int_type());
     let value = b.leaves().ty(int_type());
-    let map = b.map(key, value, [("b", 2), ("a", 1)].into_iter(), |_, (k, v)| {
-        (k.into(), V::Int(v))
-    });
+    let map = b.map(
+        key,
+        value,
+        [("b", 2), ("a", 1)].into_iter(),
+        |leaves, (k, v)| (leaves.string_value(&k.into()), V::Int(v)),
+    );
     let map = b.leaves().object(map).unwrap();
     let snapshot = b.finish(V::Object(map), &mut Shaper::default());
     let decoded = decode(&encode(&snapshot)).unwrap();
@@ -452,8 +455,8 @@ fn map_entry_keys_hash_like_the_producer() {
     assert_eq!(
         entries,
         &vec![
-            ("b".into(), DecodedValue::Int(2)),
-            ("a".into(), DecodedValue::Int(1))
+            (DecodedValue::String("b".into()), DecodedValue::Int(2)),
+            (DecodedValue::String("a".into()), DecodedValue::Int(1))
         ]
     );
     let _: &[MapEntry] = snapshot.entries(entries_range(&snapshot));

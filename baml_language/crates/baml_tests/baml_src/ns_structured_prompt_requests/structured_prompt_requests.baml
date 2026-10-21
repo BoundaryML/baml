@@ -68,7 +68,7 @@ function _input_for(spec: ai.FunctionSpec<string>) -> ai.ModelTurnInput {
         prompt: spec.prompt_template,
         journal: ai.Journal { log: [] },
         toolbox: ai.tools.Toolbox.new([]),
-        output_type: reflect.Type.of<string>(),
+        output_type: string.type(),
     }
 }
 
@@ -128,7 +128,7 @@ class Outer<T> {
 }
 
 test "generic nested output format uses concrete class arguments" {
-    let rendered = ai.wire.render_output_format(reflect.Type.of<Outer<Choice>>());
+    let rendered = ai.wire.render_output_format(Outer<Choice>.type());
     assert.is_true(rendered.includes("'Empty'"));
     assert.is_true(!rendered.includes("TypeVar"));
     assert.is_true(!rendered.includes("T[]"))
@@ -186,13 +186,12 @@ function MediaShape(photo: image) -> string {
     prompt: `${role("user")}Inspect:${photo}`
 }
 
-test "preview media never reads files or fetches urls" {
-    assert.equal(
-        MediaShape@build_request(image.from_file("/definitely/not-a-real-preview-file.png", "image/png")).body catch_all (e) {
-            ai.errors.PreviewUnsupported => "preview",
+test "preview media never fetches urls" {
+    // Content read from a file is already in the value: a preview sends it.
+    assert.is_true(
+        (MediaShape@build_request(image.from_file_content("/photos/cat.png", "aGk=", null)).body catch_all (e) {
             _ => `wrong:${e.to_string()}`,
-        },
-        "preview",
+        }).includes("data:image/png;base64,aGk="),
     );
     assert.is_true(
         (MediaShape@build_request(image.from_url("http://127.0.0.1:9/image.png", "image/png")).body catch_all (e) {
@@ -763,8 +762,11 @@ test "default_cache_args per client" {
 // method costs an existing implementer nothing.
 class NoCacheClient {
     implements ai.Client {
-        function id(self) -> string {
+        function requested_model(self) -> string {
             "no-cache"
+        }
+        function provider(self) -> string {
+            "test"
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {

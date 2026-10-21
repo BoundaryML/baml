@@ -142,7 +142,9 @@ pub(crate) fn display_instruction(
         Instruction::LoadGlobal(index) | Instruction::StoreGlobal(index) => {
             display_global_ref(*index, globals, objects, compile_time_globals)
         }
-        Instruction::Call { callee, .. } | Instruction::SysOp(callee) => {
+        Instruction::Call { callee, .. }
+        | Instruction::CallHooked { callee, .. }
+        | Instruction::SysOp(callee) => {
             display_global_ref(*callee, globals, objects, compile_time_globals)
         }
         Instruction::MakeGenericFunction { function, .. } => {
@@ -211,7 +213,14 @@ pub(crate) fn display_instruction(
                 format!("(switch table {table_idx})")
             }
         }
-        Instruction::Pop(_)
+        Instruction::BeginTraceHook(_)
+        | Instruction::EndTraceHook
+        | Instruction::TraceHookHidden
+        | Instruction::TraceHookTiming
+        | Instruction::TraceHookSpan
+        | Instruction::TraceHookRich
+        | Instruction::TraceHookEmptySpan
+        | Instruction::Pop(_)
         | Instruction::Copy(_)
         | Instruction::BinOp(_)
         | Instruction::CmpOp(_)
@@ -255,7 +264,6 @@ pub(crate) fn display_instruction(
         | Instruction::Discriminant
         | Instruction::TypeTag
         | Instruction::IsType(_)
-        | Instruction::ThrowIfPanic
         | Instruction::Unreachable
         | Instruction::MakeClosure { .. }
         | Instruction::MakeBoundMethod(_)
@@ -272,7 +280,8 @@ pub(crate) fn display_instruction(
         | Instruction::ContainerLen
         | Instruction::Spawn
         | Instruction::LoadType(_)
-        | Instruction::BindType(_) => String::new(),
+        | Instruction::BindType(_)
+        | Instruction::SatisfiesBound => String::new(),
     };
 
     (instruction.to_string(), metadata)
@@ -327,9 +336,9 @@ fn display_object_from_pool(index: usize, objects: &ObjectPool) -> String {
     if let Some(obj) = objects.get(index) {
         match obj {
             Object::String(s) => format!("{s:?}"),
-            Object::Function(f) => format!("<fn {}>", f.name),
-            Object::Class(c) => format!("<class {}>", c.name),
-            Object::Enum(e) => format!("<enum {}>", e.name),
+            Object::Function(f) => format!("<fn {}>", f.name()),
+            Object::Class(c) => format!("<class {}>", c.name()),
+            Object::Enum(e) => format!("<enum {}>", e.name()),
             _ => format!("<object {index}>"),
         }
     } else {
@@ -347,7 +356,7 @@ fn display_object_ptr(ptr: HeapPtr) -> String {
             // SAFETY: During debug display, we assume the pointer is valid
             let class = unsafe { instance.class.get() };
             match class {
-                Object::Class(class) => format!("<{} instance>", class.name),
+                Object::Class(class) => format!("<{} instance>", class.name()),
                 // This will most likely never happen, but we're trying not
                 // to panic.
                 other => format!("<{other} instance>"),
@@ -358,7 +367,7 @@ fn display_object_ptr(ptr: HeapPtr) -> String {
             // SAFETY: During debug display, we assume the pointer is valid
             let enm = unsafe { variant.enm.get() };
             match enm {
-                Object::Enum(enm) => format!("<{} variant>", enm.name),
+                Object::Enum(enm) => format!("<{} variant>", enm.name()),
                 other => format!("<{other} variant>"),
             }
         }
@@ -429,6 +438,14 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::JumpTable { .. }
         | Instruction::DenseTag(_) => Style::new().yellow(),
         Instruction::Call { .. }
+        | Instruction::CallHooked { .. }
+        | Instruction::BeginTraceHook(_)
+        | Instruction::EndTraceHook
+        | Instruction::TraceHookHidden
+        | Instruction::TraceHookTiming
+        | Instruction::TraceHookSpan
+        | Instruction::TraceHookRich
+        | Instruction::TraceHookEmptySpan
         | Instruction::CallIndirect
         | Instruction::SetCallTrace
         | Instruction::VirtualCall { .. } => Style::new().magenta(),
@@ -451,7 +468,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::NarrowBind { .. }
         | Instruction::LoadType(_)
         | Instruction::BindType(_)
-        | Instruction::ThrowIfPanic => Style::new().blue().bright(),
+        | Instruction::SatisfiesBound => Style::new().blue().bright(),
         Instruction::Unreachable => Style::new().red().bright(),
         Instruction::MakeClosure { .. }
         | Instruction::MakeBoundMethod(_)
@@ -940,6 +957,15 @@ fn display_instruction_textual(
 
         // --- Calls ---
         Instruction::Call { .. } => format!("call {}", meta_str(&"")),
+        Instruction::CallHooked { .. } => format!("call_hooked {}", meta_str(&"")),
+        Instruction::BeginTraceHook(value) => format!("begin_trace_hook {value}"),
+        Instruction::EndTraceHook => "end_trace_hook".into(),
+        Instruction::TraceHookHidden => "trace_hook_hidden".into(),
+        Instruction::TraceHookTiming => "trace_hook_timing".into(),
+        Instruction::TraceHookSpan => "trace_hook_span".into(),
+        Instruction::TraceHookRich => "trace_hook_rich".into(),
+        Instruction::TraceHookEmptySpan => "trace_hook_empty_span".into(),
+        Instruction::SatisfiesBound => "satisfies_bound".into(),
 
         Instruction::CallIndirect => "call_indirect".to_string(),
         Instruction::SetCallTrace => "set_call_trace".to_string(),
@@ -991,7 +1017,6 @@ fn display_instruction_textual(
                 .unwrap_or_default();
             format!("dense_tag [{names}]")
         }
-        Instruction::ThrowIfPanic => "throw_if_panic".to_string(),
 
         // --- Closures and cells ---
         Instruction::MakeClosure {
@@ -1199,6 +1224,14 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::InitField(_)
         | Instruction::InitSpread(_)
         | Instruction::Call { .. }
+        | Instruction::CallHooked { .. }
+        | Instruction::BeginTraceHook(_)
+        | Instruction::EndTraceHook
+        | Instruction::TraceHookHidden
+        | Instruction::TraceHookTiming
+        | Instruction::TraceHookSpan
+        | Instruction::TraceHookRich
+        | Instruction::TraceHookEmptySpan
         | Instruction::SysOp(_)
         | Instruction::AllocInstance { .. }
         | Instruction::InitInstance(_)
@@ -1280,8 +1313,14 @@ pub fn display_compact_bytecode(
         write!(f, "{offset:04}  {op:<24}")?;
 
         match op {
+            OpCode::BeginTraceHook => {
+                let value = code[pc];
+                pc += 1;
+                writeln!(f, "{value}")?;
+            }
             // Unit ops: no operands
             OpCode::Return
+            | OpCode::SatisfiesBound
             | OpCode::Await
             | OpCode::AwaitAny
             | OpCode::Throw
@@ -1291,11 +1330,16 @@ pub fn display_compact_bytecode(
             | OpCode::StoreArrayElement
             | OpCode::StoreMapElement
             | OpCode::CallIndirect
+            | OpCode::EndTraceHook
+            | OpCode::TraceHookHidden
+            | OpCode::TraceHookTiming
+            | OpCode::TraceHookSpan
+            | OpCode::TraceHookRich
+            | OpCode::TraceHookEmptySpan
             | OpCode::SetCallTrace
             | OpCode::Discriminant
             | OpCode::TypeTag
             | OpCode::Truthy
-            | OpCode::ThrowIfPanic
             | OpCode::Unreachable
             | OpCode::MakeCell
             | OpCode::SendEvent
@@ -1434,7 +1478,7 @@ pub fn display_compact_bytecode(
                 )?;
             }
 
-            OpCode::Call | OpCode::CallExactArgs => {
+            OpCode::Call | OpCode::CallExactArgs | OpCode::CallHooked => {
                 let callee = read_u32(code, &mut pc);
                 let ntypeargs = read_u16(code, &mut pc);
                 writeln!(f, "callee={callee}  ntypeargs={ntypeargs}")?;

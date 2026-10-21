@@ -5,7 +5,9 @@
  * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
+import './bridge_path.js';
 import { BamlRuntime } from './native.js';
+import './media.js';
 export { BamlRuntime, BamlHandle, getRuntime, getBridgeRuntimeVersion, getToolchainVersion, getVersion, } from './native.js';
 export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
 export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';
@@ -46,5 +48,6 @@ export declare function callFunction(rt: BamlRuntime, functionName: string, kwar
 export { current as _currentExecutionContext, ExecutionContext as _ExecutionContext, currentContext as _currentTraceContext, currentContextAsync as _currentTraceContextAsync, currentCancelToken as _currentCancelToken, withExecutionContext as _withExecutionContext } from './execution_context.js';
 export { invoke as _invoke, invokeAsync as _invokeAsync } from './invocation.js';
 export { instrument as _instrument, TraceUsageError } from './instrumentation.js';
+export { registerCapture, captureFor } from './host_capture.js';
 import type { InvocationOptions } from './invocation.js';
 //# sourceMappingURL=index.d.ts.map

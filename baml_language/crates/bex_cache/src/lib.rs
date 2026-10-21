@@ -177,7 +177,41 @@ use sha2::{Digest, Sha256};
 /// `callable_throws` fragments from their file's; a dependency table is a
 /// list of `Locator`s; and the executable is laid out package-major in
 /// link-set order.
-pub const FORMAT_VERSION: u32 = 18;
+///
+/// Version 19: BEP-079's unit type. `void` is a spelling of `null`, so
+/// `DiagnosticId` lost `VoidInNonReturnPosition` (E0110) from the middle of
+/// the enum, which renumbers the Borsh discriminant of every diagnostic id
+/// declared after it in the manifest's per-file diagnostics rows. The type
+/// family lost `Void` (Borsh discriminant 22, now reserved) with it: a
+/// cached unit carrying the retired discriminant no longer decodes.
+///
+/// Version 20: `Function::source_file` and the name of a file's `$init_test_…`
+/// function are root-relative for every non-stdlib root — a unit no longer
+/// carries the absolute path of the checkout it was compiled from — and a
+/// pooled `Class`, `Enum`, `Interface` and `TypeAlias` carries its path
+/// inside its package (`path`) where it used to carry a package-qualified
+/// name. `Class::has_cleanup` became `Class::cleanup`, the finalizer's
+/// position in the class's method table. A `ProgramPackage` carries its
+/// `PackageKind` (`Language(LangPackage)` or `Ordinary`) and each edge its
+/// `EdgeKind` (`Dependency` or `ReExported`); a dependency table's prelude
+/// entry is `Locator::Prelude(LangPackage)`, bound by identity through no
+/// edge. A pooled `Function` carries a structural `FunctionIdentity` (its
+/// path, body key, closure parent or initializer role) where it carried a
+/// rendered name (`name`, `declared_name`, `is_interface_body` are gone), and
+/// a `ProgramPackage` carries `objects`, the pool range the linker placed it
+/// as, which owns every function in it.
+///
+/// Version 21: `FunctionMeta` gained the appended `ModelInvoke` variant.
+///
+/// Version 22: the `ThrowIfPanic` instruction is gone. A catch's wildcard
+/// arm that does not trap panics is now entered after an `IsType` test
+/// against the `PANIC` pseudo-tag (`baml_type::typetag::PANIC`), so the
+/// discriminants of every opcode declared after `TypeTag` shifted down by
+/// one.
+///
+/// Version 23: `FunctionMeta::Llm` lost its `client` string and marks every
+/// LLM function, including one whose client is an expression.
+pub const FORMAT_VERSION: u32 = 23;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

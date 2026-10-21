@@ -36,9 +36,12 @@ pub use bex_resource_types::{
     HostReleaseFn, HostValueArc, HostValueKind, host_release_dispatch, host_value,
 };
 pub use bex_str::BexStr;
-pub use bex_vm_types::types::{
-    DynWitnessDef, PortableClassDef, PortableClassFieldDef, PortableEnumDef,
-    PortableEnumVariantDef, PortableMetadata, PortableTypeDef,
+pub use bex_vm_types::{
+    BexRustData, Meter, RetainedBytes, RustDataArc,
+    types::{
+        DynWitnessDef, PortableClassDef, PortableClassFieldDef, PortableEnumDef,
+        PortableEnumVariantDef, PortableMetadata, PortableTypeDef,
+    },
 };
 pub use handle::{Handle, HandleInner, WeakHeapRef};
 pub use host_return::{

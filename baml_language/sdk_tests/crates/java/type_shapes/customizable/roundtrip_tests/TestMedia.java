@@ -1,7 +1,7 @@
 // Roundtrip coverage for `baml_sdk.media`.
 //
 // Media wrappers are native-backed inside Java, while bridge traffic uses the
-// canonical portable kind + URL/file/base64 representation. These tests verify
+// canonical portable kind + URL/base64 representation. These tests verify
 // both wrapper reification and preservation of the portable URL payload.
 //
 // Port of python_pydantic2/type_shapes/customizable/roundtrip_tests/
@@ -14,13 +14,19 @@ package roundtrip_tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import baml_bridge.BamlError;
 import baml_sdk.baml.media.Audio;
 import baml_sdk.baml.media.Image;
 import baml_sdk.baml.media.Pdf;
 import baml_sdk.baml.media.Video;
 import baml_sdk.media.Fns;
 import baml_sdk.media.Media;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 class TestMedia {
@@ -96,5 +102,26 @@ class TestMedia {
         assertEquals(URL, roundTripped.audio_field().url());
         assertEquals(URL, roundTripped.video_field().url());
         assertEquals(URL, roundTripped.pdf_field().url());
+    }
+
+    // --- from_file: BAML's from_file, which reads the file now ---------------
+
+    // SDK_PARITY_LINT(skip): validates the Java media wrapper's from_file, which is BAML's from_file
+    @Test
+    void test_media_from_file_reads_now_and_keeps_the_base_name() throws Exception {
+        Path path = Files.createTempFile("baml-media-", ".pdf");
+        Files.write(path, "%PDF-1.7".getBytes(StandardCharsets.UTF_8));
+        Pdf pdf = Pdf.from_file(path.toString());
+        // The file can go: the value holds its content.
+        Files.delete(path);
+        assertEquals("JVBERi0xLjc=", pdf.base64());
+        assertEquals(path.getFileName().toString(), pdf.name());
+        assertEquals("application/pdf", pdf.mime_type());
+        assertNull(pdf.url());
+        // The name crosses the call boundary both ways.
+        assertEquals(pdf.name(), Fns.round_trip_pdf(pdf).name());
+        // A file that cannot be read fails when the value is built, with the
+        // error BAML code would get.
+        assertThrows(BamlError.class, () -> Pdf.from_file(path.toString()));
     }
 }

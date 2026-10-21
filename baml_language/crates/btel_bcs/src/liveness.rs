@@ -267,7 +267,7 @@ pub(crate) async fn post(
             .await
             .map_err(|error| {
                 if let Some(failure) = error.http_failure() {
-                    return if failure.body.is_some() {
+                    return if failure.body.is_some() || failure.retry_after.is_some() {
                         HeartbeatError::Api(failure.clone())
                     } else {
                         HeartbeatError::Status(failure.status.as_u16())

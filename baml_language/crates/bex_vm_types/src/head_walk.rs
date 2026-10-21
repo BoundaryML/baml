@@ -173,6 +173,7 @@ macro_rules! walk_object_heads {
                 | Object::Bigint(_)
                 | Object::Uint8Array(_)
                 | Object::RustData(_)
+                | Object::Tombstone
 
                 | Object::Float(_) => {}
                 #[cfg(feature = "heap_debug")]

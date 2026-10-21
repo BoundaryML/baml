@@ -189,9 +189,9 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
             value_satisfies_ty(inner, ty)
         }
 
-        // A host bridge represents a completed `void` callback as Null on the
-        // wire.
-        RuntimeTy::Void | RuntimeTy::Null => {
+        // The unit type: a host bridge reports a completed `void` callback
+        // as Null on the wire.
+        RuntimeTy::Null => {
             matches!(value, BexExternalValue::Null)
         }
         RuntimeTy::Bool => matches!(value, BexExternalValue::Bool(_)),
@@ -566,8 +566,6 @@ mod tests {
             .is_ok()
         );
         assert!(validate_host_return(&BexExternalValue::Null, &RuntimeTy::null()).is_ok());
-        assert!(validate_host_return(&BexExternalValue::Null, &RuntimeTy::Void).is_ok());
-        assert!(validate_host_return(&BexExternalValue::Int(1), &RuntimeTy::Void).is_err());
         // Cross-tag rejections.
         assert!(
             validate_host_return(&BexExternalValue::String("x".into()), &RuntimeTy::int()).is_err()
@@ -576,10 +574,10 @@ mod tests {
     }
 
     #[test]
-    fn void_requires_the_null_boundary_value() {
-        let void = RuntimeTy::Void;
-        assert!(validate_host_return(&BexExternalValue::Null, &void).is_ok());
-        assert!(validate_host_return(&BexExternalValue::Int(1), &void).is_err());
+    fn unit_requires_the_null_boundary_value() {
+        let unit = RuntimeTy::null();
+        assert!(validate_host_return(&BexExternalValue::Null, &unit).is_ok());
+        assert!(validate_host_return(&BexExternalValue::Int(1), &unit).is_err());
     }
 
     #[test]

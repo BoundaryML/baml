@@ -150,9 +150,10 @@ fn find_item_usages(
             }
 
             // Confirm this token resolves to the same definition — through
-            // the same road goto-definition takes from it. A bare-name lookup
-            // at the token is not enough: it cannot see a namespace-qualified
-            // spelling (`settings.TIMEOUT`), and at the name of a local `let`
+            // the same road goto-definition takes from it, which also names a
+            // served package's exported row. A bare-name lookup at the token
+            // is not enough: it cannot see a qualified spelling
+            // (`root.settings.TIMEOUT`), and at the name of a local `let`
             // that shadows the item it still sees the item, because the local
             // only comes into scope after its own statement.
             let same = symbol_at(db, sf, tok.text_range().start()) == Some(SymbolTarget::Item(def));

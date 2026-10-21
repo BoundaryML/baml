@@ -106,8 +106,15 @@ fn compile_body<'db>(
         capture_types: &empty_capture_types,
         spawn_capture_indices: &empty_spawn_capture_indices,
     };
-    let mut function = compile_mir_function(body, mir.arity, mir.span, line_starts, ctx, opt);
-    function.name = mir.identity.link_name(db);
+    let mut function = compile_mir_function(
+        body,
+        mir.arity,
+        crate::refs::function_identity(db, &mir.identity),
+        mir.span,
+        line_starts,
+        ctx,
+        opt,
+    );
     function.source_file = source_file.to_string();
     function
 }
@@ -171,10 +178,9 @@ fn emit_bodies_serial<'db>(
                     opt,
                 ),
                 MirFunctionKind::Builtin(kind) => {
-                    let fq_name = mir.identity.link_name(db);
                     match builtin_emit_function(
                         *kind,
-                        &fq_name,
+                        crate::refs::function_identity(db, &mir.identity),
                         &native_key_for(db, function),
                         mir.arity,
                     ) {
@@ -184,16 +190,7 @@ fn emit_bodies_serial<'db>(
                     }
                 }
             };
-            let fq_name = compiled.name.clone();
-            attach_function_metadata(
-                db,
-                function,
-                &lowering,
-                builtin,
-                &fq_name,
-                &mut refs,
-                &mut compiled,
-            );
+            attach_function_metadata(db, function, &lowering, builtin, &mut refs, &mut compiled);
             place_function(&types.tables, &mut code, &mut offsets, function, compiled);
         }
     }
@@ -333,10 +330,9 @@ fn emit_bodies_parallel<'db>(
                 let MirFunctionKind::Builtin(kind) = &mir.kind else {
                     unreachable!("Stage B compiles every bytecode function")
                 };
-                let fq_name = mir.identity.link_name(db);
                 match builtin_emit_function(
                     *kind,
-                    &fq_name,
+                    crate::refs::function_identity(db, &mir.identity),
                     &native_key_for(db, function),
                     mir.arity,
                 ) {
@@ -345,13 +341,11 @@ fn emit_bodies_parallel<'db>(
                 }
             }
         };
-        let fq_name = compiled.name.clone();
         attach_function_metadata(
             db,
             function,
             &lowering,
             seed.is_builtin_file,
-            &fq_name,
             &mut refs,
             &mut compiled,
         );

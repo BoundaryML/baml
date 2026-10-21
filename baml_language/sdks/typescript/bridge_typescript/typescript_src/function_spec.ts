@@ -84,12 +84,12 @@ export class BamlFunctionSpec<TOut> {
         return await this._callAsync('ai.FunctionSpec.tools', {}, options);
     }
 
-    clientId(options?: { $baml?: InvocationOptions | null }): string {
-        return this._callSync('ai.FunctionSpec.client_id', {}, options) as string;
+    requestedModel(options?: { $baml?: InvocationOptions | null }): string {
+        return this._callSync('ai.FunctionSpec.requested_model', {}, options) as string;
     }
 
-    async clientIdAsync(options?: { $baml?: InvocationOptions | null }): Promise<string> {
-        return await this._callAsync('ai.FunctionSpec.client_id', {}, options) as string;
+    async requestedModelAsync(options?: { $baml?: InvocationOptions | null }): Promise<string> {
+        return await this._callAsync('ai.FunctionSpec.requested_model', {}, options) as string;
     }
 
     buildRequest(options?: BamlFunctionSpecBuildRequestOptions): unknown {

@@ -468,8 +468,8 @@ fn enriched_interface_borsh_round_trips() {
     // The stdlib exercises the gnarly idioms — round-trip it too.
     let stdlib = package_interface(
         &db,
-        baml_compiler2_hir::package::spelling(&db)
-            .root(&Name::new("baml"))
+        baml_compiler2_hir::package::lang_roots(&db)
+            .get(baml_base::LangPackage::Baml)
             .unwrap(),
     );
     let bytes = borsh::to_vec(stdlib).expect("serialize stdlib interface");
@@ -494,15 +494,15 @@ fn enriched_interface_derivation_is_deterministic() {
 
     let baml1 = borsh::to_vec(package_interface(
         &db1,
-        baml_compiler2_hir::package::spelling(&db1)
-            .root(&Name::new("baml"))
+        baml_compiler2_hir::package::lang_roots(&db1)
+            .get(baml_base::LangPackage::Baml)
             .unwrap(),
     ))
     .expect("serialize");
     let baml2 = borsh::to_vec(package_interface(
         &db2,
-        baml_compiler2_hir::package::spelling(&db2)
-            .root(&Name::new("baml"))
+        baml_compiler2_hir::package::lang_roots(&db2)
+            .get(baml_base::LangPackage::Baml)
             .unwrap(),
     ))
     .expect("serialize");
@@ -514,11 +514,12 @@ fn stdlib_interfaces_derive_enriched() {
     let db = make_db();
 
     // Every stdlib package derives its enriched interface without panicking.
-    for name in baml_builtins2::stdlib_package_names().iter().copied() {
+    for package in baml_base::LangPackage::ALL {
+        let name = package.manifest_name();
         let iface = package_interface(
             &db,
-            baml_compiler2_hir::package::spelling(&db)
-                .root(&Name::new(name))
+            baml_compiler2_hir::package::lang_roots(&db)
+                .get(package)
                 .unwrap(),
         );
         assert!(
@@ -531,8 +532,8 @@ fn stdlib_interfaces_derive_enriched() {
     // Iterable<Item = Self.Item, Error = Self.Error>`.
     let baml = package_interface(
         &db,
-        baml_compiler2_hir::package::spelling(&db)
-            .root(&Name::new("baml"))
+        baml_compiler2_hir::package::lang_roots(&db)
+            .get(baml_base::LangPackage::Baml)
             .unwrap(),
     );
     let ExportedType::Interface {
@@ -847,12 +848,15 @@ fn generic_impl_exports_params_bounds_and_patterns() {
 
 #[test]
 fn dep_interface_rows_resolve_only_for_mounted_packages() {
-    // BEP-066 mounted-package linking: an `ExportedType::Interface` row resolves through both
-    // `PackageResolutionContext::resolve_type` paths ONLY when the dependency
+    // BEP-066 mounted-package linking: an `ExportedType::Interface` row resolves through
+    // `PackageResolutionContext::resolve_type` ONLY when the dependency
     // is a MOUNTED (source-less) package — its rows are the sole
     // representation. A source-backed dependency's interface rows stay
     // invisible (its interfaces resolve through source items on the loc path),
     // preserving pre-export resolution for every source-backed dep.
+    //
+    // Every path into a dependency is written in full, from its edge name: a
+    // path that starts at one of its namespaces (`iter.Range`) names nothing.
     use baml_compiler2_tir::package_interface::package_resolution_context;
 
     let mut db = make_db();
@@ -874,8 +878,8 @@ fn dep_interface_rows_resolve_only_for_mounted_packages() {
     // The source-backed row IS exported…
     let baml = package_interface(
         &db,
-        baml_compiler2_hir::package::spelling(&db)
-            .root(&Name::new("baml"))
+        baml_compiler2_hir::package::lang_roots(&db)
+            .get(baml_base::LangPackage::Baml)
             .unwrap(),
     );
     assert!(
@@ -894,29 +898,28 @@ fn dep_interface_rows_resolve_only_for_mounted_packages() {
             .is_none(),
         "source-backed dep interface row must stay invisible to package-prefixed resolution"
     );
-    assert!(
-        res_ctx
-            .resolve_type(&db, &path(&["iter", "Iterator"]), &[])
-            .is_none(),
-        "source-backed dep interface row must stay invisible to the own-then-deps walk"
-    );
 
-    // A MOUNTED dependency's interface row resolves on both paths.
+    // A MOUNTED dependency's interface row resolves.
     let (_, ty) = res_ctx
         .resolve_type(&db, &path(&["app", "Marker"]), &[])
         .expect("mounted interface row resolves via the package-prefixed path");
     assert!(matches!(ty, Ty::Interface(ref qtn, _, _, _) if qtn.name().as_str() == "Marker"));
 
     // Contrast: a dep CLASS in the same namespace still resolves through the
-    // interface rows on both paths — the gate is interface-specific.
+    // interface rows — the gate is interface-specific.
     let (_, ty) = res_ctx
         .resolve_type(&db, &path(&["baml", "iter", "Range"]), &[])
         .expect("dep class resolves via the package-prefixed path");
     assert!(matches!(ty, Ty::Class(ref qtn, _, _) if qtn.name().as_str() == "Range"));
-    let (_, ty) = res_ctx
-        .resolve_type(&db, &path(&["iter", "Range"]), &[])
-        .expect("dep class resolves via the own-then-deps walk");
-    assert!(matches!(ty, Ty::Class(ref qtn, _, _) if qtn.name().as_str() == "Range"));
+
+    // Without the edge name in front, neither is a path to anything.
+    for unqualified in [&["iter", "Iterator"][..], &["iter", "Range"], &["Marker"]] {
+        assert!(
+            res_ctx.resolve_type(&db, &path(unqualified), &[]).is_none(),
+            "`{}` names a dependency's item without its edge name",
+            unqualified.join(".")
+        );
+    }
 }
 
 #[test]
@@ -1008,11 +1011,12 @@ fn stdlib_impls_export_and_int_equals_is_complete() {
     let db = make_db();
 
     // Every stdlib package derives its impls table without panicking.
-    for name in baml_builtins2::stdlib_package_names().iter().copied() {
+    for package in baml_base::LangPackage::ALL {
+        let name = package.manifest_name();
         let _ = &package_interface(
             &db,
-            baml_compiler2_hir::package::spelling(&db)
-                .root(&Name::new(name))
+            baml_compiler2_hir::package::lang_roots(&db)
+                .get(package)
                 .unwrap(),
         )
         .impls;
@@ -1021,8 +1025,8 @@ fn stdlib_impls_export_and_int_equals_is_complete() {
     // Spot-check `implement Equals for int` (baml.ops).
     let baml = package_interface(
         &db,
-        baml_compiler2_hir::package::spelling(&db)
-            .root(&Name::new("baml"))
+        baml_compiler2_hir::package::lang_roots(&db)
+            .get(baml_base::LangPackage::Baml)
             .unwrap(),
     );
     assert!(!baml.impls.is_empty(), "the stdlib exports impl rows");
@@ -1082,19 +1086,14 @@ pub(super) mod mounted {
     /// out of scope for this PR).
     pub(crate) fn app_blob(files: &[(&str, &str)]) -> Vec<u8> {
         let mut db = make_db();
-        db.dependency("app");
+        let app = db.dependency("app");
         for (path, src) in files {
             // A source-bearing `Dependency` root at `<builtin>/app`: library
             // fixtures ride the same `<builtin>/` emit group the stdlib does.
             db.file(format!("<builtin>/app/{path}"), src);
         }
         assert_no_diagnostic_errors(&db);
-        let iface = package_interface(
-            &db,
-            baml_compiler2_hir::package::spelling(&db)
-                .root(&Name::new("app"))
-                .unwrap(),
-        );
+        let iface = package_interface(&db, app);
         assert!(
             iface.types.values().any(|ns| !ns.is_empty()),
             "the library fixture must export at least one type"

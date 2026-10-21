@@ -16,7 +16,8 @@ const BOUNDARY_API_KEY: &str = "BOUNDARY_API_KEY";
 
 /// One recording per engine, delivered to local files or BCS. Cloud payload
 /// failures discard that payload and allow later delivery. Initial cloud authorization
-/// rejection cancels execution; later revocation only disables recording. Local storage
+/// failure warns and disables recording by default; artifacts can explicitly opt into
+/// aborting execution. Later revocation only disables recording. Local storage
 /// and fatal worker failures disable recording. Delivery errors remain available through
 /// `BexEngine::telemetry_result` and initial refusal through
 /// `BexEngine::initial_cloud_authorization_error`.
@@ -201,9 +202,6 @@ impl TelemetryRecording {
                         let saved =
                             match bcs_api::Store::new(&endpoint).and_then(|store| store.read()) {
                                 Ok(saved) => saved,
-                                Err(_) if policy.embedded.is_none() => {
-                                    return Ok(Self::user_files(RecordingConfig::default()));
-                                }
                                 Err(error) => {
                                     return Err(artifact_configuration_error(
                                         policy,
@@ -321,13 +319,23 @@ impl TelemetryRecording {
         };
         let key = match api_key {
             Some(key) => key,
-            None => bcs_api::Store::new(&endpoint)
-                .ok()?
-                .read()
-                .ok()??
-                .refresh_token
-                .expose()
-                .to_owned(),
+            None => match bcs_api::Store::new(&endpoint).and_then(|store| store.read()) {
+                Ok(Some(saved)) => saved.refresh_token.expose().to_owned(),
+                Ok(None) => return None,
+                Err(error) => {
+                    let mut recording = Self::user_files(RecordingConfig::default());
+                    recording.destination = Destination::InvalidConfiguration(Box::new(
+                        AuthorizationContext {
+                            endpoint: Some(endpoint),
+                            source: CredentialSource::SavedLogin,
+                            operation: Operation::Ingest,
+                        }
+                        .report(error, Outcome::ExecutionCancelled)
+                        .diagnostic,
+                    ));
+                    return Some(recording);
+                }
+            },
         };
         let target = bcs_api::credentials::Target {
             project: baml_env::string_var("BOUNDARY_PROJECT")
@@ -387,7 +395,7 @@ impl TelemetryRecording {
     }
 
     /// Write to `<project-root>/.baml/btel/recordings/<recording-id>`.
-    /// Snapshots share `<project-root>/.baml/btel/cas/v3` across recordings.
+    /// Snapshots share `<project-root>/.baml/btel/cas/v4` across recordings.
     /// The caller supplies the resolved BAML project root; the engine does not
     /// rediscover it from the working directory or source paths. Packed binary
     /// hosts without a project root should use [`Self::user_files`].
@@ -413,7 +421,7 @@ impl TelemetryRecording {
     }
 
     /// Override the root: recordings use `<directory>/<recording-id>` and shared
-    /// CAS uses `<directory>/cas/v3`. No I/O or worker
+    /// CAS uses `<directory>/cas/v4`. No I/O or worker
     /// starts until engine construction; `BAML_TELEMETRY=off` ignores this output.
     /// Existing recording directories are never reused. Shutdown awaits writes.
     pub fn local_files_in(directory: impl Into<PathBuf>, config: RecordingConfig) -> Self {
@@ -431,11 +439,11 @@ impl TelemetryRecording {
         }
     }
 
-    /// Write beneath the current user's home: `~/.baml/btel/recordings`.
-    /// Packed programs share `~/.baml/btel/cas/v3` on this machine.
-    /// Resolve the home directory only when the enabled engine starts recording.
-    /// Fail explicitly if no home directory can be determined; never fall back
-    /// to the working directory. Intended for packed programs without a project.
+    /// Write recordings and shared CAS blobs beneath the BAML home: `BAML_HOME`
+    /// when non-empty, otherwise `~/.baml` (or `.baml` when no home is available).
+    /// Uses `btel/recordings` and `btel/cas` within that root.
+    /// Resolve the BAML home only when the enabled engine starts recording.
+    /// Intended for packed programs and SDK hosts without a project.
     pub fn user_files(config: RecordingConfig) -> Self {
         Self {
             id: RecordingId::generate(),
@@ -559,14 +567,12 @@ impl TelemetryRecording {
                     process,
                 );
             }
-            Destination::UserFiles => std::env::home_dir()
-                .map(|home| {
-                    (
-                        home.join(btel_settings::local_files::RECORDINGS_DIRECTORY),
-                        home.join(btel_settings::local_files::CAS_DIRECTORY),
-                    )
-                })
-                .ok_or_else(|| std::io::Error::other("cannot determine telemetry home directory")),
+            Destination::UserFiles => {
+                let home =
+                    baml_env::baml_home_from(baml_env::os_var("BAML_HOME"), std::env::home_dir());
+                let btel = home.join("btel");
+                Ok((btel.join("recordings"), btel.join("cas")))
+            }
             Destination::LocalFiles { recordings, cas } => Ok((recordings, cas)),
         };
         let mut delivery = None;
@@ -612,6 +618,7 @@ impl TelemetryRecording {
         Ok((runtime, delivery.map(RecordingDelivery::Local)))
     }
 
+    /// Start bounded cloud recording; only an explicit abort policy may cancel application work.
     #[expect(clippy::too_many_arguments)]
     fn start_cloud(
         id: RecordingId,
@@ -633,7 +640,10 @@ impl TelemetryRecording {
         EngineError,
     > {
         delivery_config.initial_recording_id = Some(id);
-        delivery_config.terminal_initial_connection = initial_failure.is_some();
+        // Apply the resolved policy to every initial connection failure.
+        delivery_config.terminal_initial_connection = true;
+        // Telemetry observes execution. Reuse the artifact fail-open policy unless
+        // the publisher explicitly selected a different initial-failure action.
         let initial_failure = initial_failure.cloned().unwrap_or_default();
         let initial_auth_cancel = crate::CancellationToken::new();
         let mut delivery = None;
@@ -797,8 +807,9 @@ impl BexEngine {
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    /// The process is exiting with `status`: engines shut down after this
-    /// end their recordings with it. Hosts call it once, before shutdown.
+    /// The host is finalizing its BAML lifetime with `status`: engines shut
+    /// down after this end their recordings with it. Hosts call it before
+    /// shutdown; SDK hosts use `Unknown` when the OS exit outcome is not known.
     pub fn record_process_exit(&self, status: btel_types::ProcessStatus) {
         if let Some(exit) = self
             .telemetry
@@ -866,7 +877,7 @@ impl BexEngine {
             .and_then(super::telemetry_state::EngineTelemetry::result)
     }
 
-    /// Initial ingestion refusal is fatal to the host execution, unlike later revocation.
+    /// Initial ingestion failure is fatal only under an explicit abort policy.
     /// Shutdown joins the initial request even when the program produces no recordings.
     pub fn initial_cloud_authorization_error(&self) -> Option<EngineError> {
         self.telemetry
@@ -876,7 +887,7 @@ impl BexEngine {
             .initial_auth_error()
     }
 
-    /// The artifact already warned or deliberately ignored an initial failure.
+    /// The recording policy already warned or deliberately ignored an initial failure.
     /// Delivery errors remain inspectable through `telemetry_result`.
     pub fn initial_telemetry_failure_handled(&self) -> bool {
         self.telemetry

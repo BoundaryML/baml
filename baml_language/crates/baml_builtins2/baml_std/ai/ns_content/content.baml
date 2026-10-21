@@ -71,7 +71,7 @@ type ModelBlock = Block | Reasoning | ToolUse;
 /// Content blocks from ordinary values: a bare `string` becomes `Text`, a bare
 /// `image` / `audio` / `video` / `pdf` becomes `Media` with null provenance, and
 /// a block already built passes through. The one constructor behind
-/// `root.events.UserMessage.of` and `root.events.ToolCompleted.of`.
+/// `ai.events.UserMessage.of` and `ai.events.ToolCompleted.of`.
 function blocks(items: (string | image | audio | video | pdf | Text | Media)[]) -> Block[] {
     let out: Block[] = [];
     for (let item in items) {
@@ -119,4 +119,6 @@ enum StopReason {
     ToolUse,
     MaxTokens,
     Refused,
+    /// The attempt threw; see `ModelTurn.error`.
+    Failed,
 }

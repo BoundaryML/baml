@@ -10,7 +10,7 @@
 //! the op fails or is cancelled: the span then ends with the thrown value, in
 //! `inject_sysop_throw`. A response that is never read stays open.
 
-use std::{any::Any, sync::Arc};
+use std::sync::Arc;
 
 use bex_external_types::BexExternalValue;
 use bex_heap::{ActiveHeapPermit, HeapPermit as _};
@@ -18,7 +18,7 @@ use bex_vm::{
     BexVm,
     telemetry::{ClockInstant, InvocationOutcome, TelemetryId},
 };
-use bex_vm_types::{Object, SysOp, Value};
+use bex_vm_types::{BexRustData, Object, SysOp, Value};
 use sys_types::network::{NetworkContext, NetworkEventKind, NetworkRequest, NetworkTraced};
 
 use crate::{BexEngine, thread::BexThread};
@@ -36,7 +36,7 @@ pub(crate) enum NetworkOp {
     /// whose response came from `url`.
     Reads {
         operation: SysOp,
-        traced: Arc<dyn Any + Send + Sync>,
+        traced: Arc<dyn BexRustData>,
         url: Option<String>,
     },
 }
@@ -85,7 +85,7 @@ fn quoted_forms(url: &str) -> Vec<String> {
     forms
 }
 
-fn take_span(traced: &Arc<dyn Any + Send + Sync>) -> Option<TelemetryId> {
+fn take_span(traced: &Arc<dyn BexRustData>) -> Option<TelemetryId> {
     NetworkTraced::of(traced.as_ref())?
         .take_span()
         .and_then(TelemetryId::from_raw)

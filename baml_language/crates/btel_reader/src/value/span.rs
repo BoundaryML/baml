@@ -307,11 +307,14 @@ impl Span {
                         span.visit(source, &blob, item, &mut pending);
                     }
                 }
-                DecodedObject::Map { entries, .. }
-                | DecodedObject::Instance {
-                    fields: entries, ..
-                } => {
-                    for (_, value) in entries {
+                DecodedObject::Map { entries, .. } => {
+                    for (key, value) in entries {
+                        span.visit(source, &blob, key, &mut pending);
+                        span.visit(source, &blob, value, &mut pending);
+                    }
+                }
+                DecodedObject::Instance { fields, .. } => {
+                    for (_, value) in fields {
                         span.visit(source, &blob, value, &mut pending);
                     }
                 }

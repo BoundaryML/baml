@@ -13,18 +13,18 @@ import {
 
 describe("BEP-066 TypeScript host boundary", () => {
   it("runtime_enum_definition_decodes_alias", () => {
-    const red = reflect.enum.value("RED", { alias: "k7", description: "warm" });
-    const category = reflect.enum.new("Category", [red, "BLUE"]);
+    const red = reflect.Enum.value("RED", { alias: "k7", description: "warm" });
+    const category = reflect.Enum.new("Category", [red, "BLUE"]);
 
     expect(category).toBeInstanceOf(BamlType);
     expect(HostParse<string>('"k7"', { $types: { T: category } })).toBe("RED");
   });
 
   it("runtime_class_definition_preserves_nested_metadata", () => {
-    const category = reflect.enum.new("Category", [
-      reflect.enum.value("RED", { alias: "k7" }),
+    const category = reflect.Enum.new("Category", [
+      reflect.Enum.value("RED", { alias: "k7" }),
     ]);
-    const record = reflect.class.new("RuntimeRecord", {
+    const record = reflect.Class.new("RuntimeRecord", {
       label: reflect.Type.of(String).meta({ alias: "display_label" }),
       category,
       scores: reflect.Type.of("int").array(),
@@ -48,13 +48,24 @@ describe("BEP-066 TypeScript host boundary", () => {
     expect(compiled).toBeInstanceOf(BamlType);
     expect(
       HostParse<Record<string, unknown>>('{"amount":7}', {
-        $types: { T: compiled! },
+        $types: { T: compiled },
       }),
     ).toEqual({ amount: 7, note: null });
+
+    let thrown: unknown;
+    try {
+      pkg.get_class("Missing");
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(BamlError);
+    expect((thrown as BamlError).className).toBe("reflect.errors.NotFound");
+    expect(pkg.find_class("CompiledRow")).toBeInstanceOf(BamlType);
+    expect(pkg.find_class("Missing")).toBeNull();
   }, 30_000);
 
   it("wire_occurrences_are_fresh_and_handles_reject_serialization", () => {
-    const runtimeType = reflect.class.new("Fresh", {
+    const runtimeType = reflect.Class.new("Fresh", {
       value: reflect.Type.of("int"),
     });
     expect(HostTypeEqual({ $types: { A: runtimeType, B: runtimeType } })).toBe(false);

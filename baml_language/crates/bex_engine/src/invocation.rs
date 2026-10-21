@@ -183,6 +183,7 @@ impl ActiveInvocation {
                 thread
                     .vm
                     .set_entry_trace(&reservation.options, registration.reserved_id);
+                thread.vm.set_entry_reservation(&reservation);
             }
             thread
                 .vm
@@ -191,6 +192,8 @@ impl ActiveInvocation {
             // Entry setup roots the target, arguments and type values before
             // parking. GC may execute finalizers, so it belongs after admission.
             drop(vm_args);
+            // Converting the arguments allocated on this thread's account.
+            thread.vm.tlab.flush_alloc_debt();
             let inactive = thread.release();
             Box::pin(runtime.collect_before_call(&registration.work_guard)).await;
             let thread = inactive.acquire().await;
@@ -378,6 +381,31 @@ mod tests {
             engine.trace_scope,
             bex_vm_types::trace::TraceOptionsData::default(),
         ))
+    }
+
+    #[tokio::test]
+    async fn forwarded_reservation_cannot_start_an_independent_invocation() {
+        let engine = engine();
+        let reserved = reservation(&engine);
+        let id = reserved.attach(engine.trace_scope).unwrap();
+        let forwarded = Arc::new(reserved.claimed_view(reserved.options.clone()));
+        let result = engine
+            .call_function(
+                "main",
+                vec![crate::BexExternalValue::Int(42)],
+                crate::FunctionCallContextBuilder::new(CallId::next())
+                    .with_trace_reservation(forwarded.clone())
+                    .build(),
+                true,
+            )
+            .await;
+        assert!(matches!(result, Err(EngineError::TypeMismatch { message })
+            if message.contains("cannot start an independent invocation")));
+        assert_eq!(engine.active_call_count(), 0);
+        // Rejection neither refunds the original attachment nor consumes the
+        // authorized continuation's opportunity to create the operation span.
+        assert!(reserved.attach(engine.trace_scope).is_err());
+        assert_eq!(forwarded.materialize(engine.trace_scope), Ok(id));
     }
 
     #[tokio::test]

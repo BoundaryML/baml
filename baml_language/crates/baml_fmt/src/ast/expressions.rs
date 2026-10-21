@@ -42,9 +42,10 @@ pub enum Expression {
     ArrayInitializer(ArrayInitializer),
     MapInitializer(MapLiteral),
     ObjectInitializer(ObjectInitializer),
-    RawString(t::RawString),
+    HashString(t::HashString),
     BacktickString(t::BacktickString),
     ByteString(t::ByteString),
+    RawString(t::RawString),
     Lambda(Box<LambdaExpr>),
     /// A `spawn name? (with opts)? { … }` task-spawn expression (BEP-034).
     Spawn(Box<SpawnExpr>),
@@ -213,14 +214,17 @@ impl FromCST for Expression {
             SyntaxKind::OBJECT_LITERAL => {
                 ObjectInitializer::from_cst(elem).map(Expression::ObjectInitializer)?
             }
-            SyntaxKind::RAW_STRING_LITERAL => {
-                t::RawString::from_cst(elem).map(Expression::RawString)?
+            SyntaxKind::DEPRECATED_HASH_STRING_LITERAL => {
+                t::HashString::from_cst(elem).map(Expression::HashString)?
             }
             SyntaxKind::BACKTICK_STRING_LITERAL => {
                 t::BacktickString::from_cst(elem).map(Expression::BacktickString)?
             }
             SyntaxKind::BYTE_STRING_LITERAL => {
                 t::ByteString::from_cst(elem).map(Expression::ByteString)?
+            }
+            SyntaxKind::RAW_STRING_LITERAL => {
+                t::RawString::from_cst(elem).map(Expression::RawString)?
             }
             SyntaxKind::LAMBDA_EXPR => Expression::Lambda(Box::new(LambdaExpr::from_cst(elem)?)),
             SyntaxKind::SPAWN_EXPR => Expression::Spawn(Box::new(SpawnExpr::from_cst(elem)?)),
@@ -260,7 +264,7 @@ impl Expression {
             Expression::ArrayInitializer(array) => array.single_line_width(input),
             Expression::MapInitializer(map) => map.single_line_width(input),
             Expression::ObjectInitializer(obj) => obj.single_line_width(input),
-            Expression::RawString(raw) => {
+            Expression::HashString(raw) => {
                 if input.input[raw.span()].contains('\n') {
                     None
                 } else {
@@ -275,6 +279,13 @@ impl Expression {
                 }
             }
             Expression::ByteString(bs) => Some(usize::from(bs.span().len())),
+            Expression::RawString(raw) => {
+                if input.input[raw.span()].contains('\n') {
+                    None
+                } else {
+                    Some(usize::from(raw.span().len()))
+                }
+            }
             Expression::Lambda(_) => None,
             Expression::Spawn(spawn) => spawn.single_line_width(input),
             Expression::Return(_) | Expression::Break(_) | Expression::Continue(_) => None,
@@ -325,9 +336,10 @@ impl Printable for Expression {
             Expression::ArrayInitializer(array) => array.print(shape, printer),
             Expression::MapInitializer(map) => map.print(shape, printer),
             Expression::ObjectInitializer(obj) => obj.print(shape, printer),
-            Expression::RawString(raw) => raw.print(shape, printer),
+            Expression::HashString(raw) => raw.print(shape, printer),
             Expression::BacktickString(bt) => bt.print(shape, printer),
             Expression::ByteString(bs) => bs.print(shape, printer),
+            Expression::RawString(raw) => raw.print(shape, printer),
             Expression::Lambda(lambda) => lambda.print(shape, printer),
             Expression::Spawn(spawn) => spawn.print(shape, printer),
             // Print the raw `return …` / `break` / `continue` text. The arm
@@ -377,9 +389,10 @@ impl Printable for Expression {
             Expression::ArrayInitializer(array) => array.leftmost_token(),
             Expression::MapInitializer(map) => map.leftmost_token(),
             Expression::ObjectInitializer(obj) => obj.leftmost_token(),
-            Expression::RawString(raw) => raw.leftmost_token(),
+            Expression::HashString(raw) => raw.leftmost_token(),
             Expression::BacktickString(bt) => bt.leftmost_token(),
             Expression::ByteString(bs) => bs.leftmost_token(),
+            Expression::RawString(raw) => raw.leftmost_token(),
             Expression::Lambda(lambda) => lambda.leftmost_token(),
             Expression::Spawn(spawn) => spawn.leftmost_token(),
             Expression::Return(span)
@@ -412,9 +425,10 @@ impl Printable for Expression {
             Expression::ArrayInitializer(array) => array.rightmost_token(),
             Expression::MapInitializer(map) => map.rightmost_token(),
             Expression::ObjectInitializer(obj) => obj.rightmost_token(),
-            Expression::RawString(raw) => raw.rightmost_token(),
+            Expression::HashString(raw) => raw.rightmost_token(),
             Expression::BacktickString(bt) => bt.rightmost_token(),
             Expression::ByteString(bs) => bs.rightmost_token(),
+            Expression::RawString(raw) => raw.rightmost_token(),
             Expression::Lambda(lambda) => lambda.rightmost_token(),
             Expression::Spawn(spawn) => spawn.rightmost_token(),
             Expression::Return(span)
@@ -515,18 +529,11 @@ pub struct PathExpr {
     pub generic_args: Option<GenericArgs>,
 }
 
+/// Mirrors the segment set of `parse_path_or_ident` in `baml_compiler_parser`:
+/// every word-like keyword, so a member such as `reflect.Class.extends` keeps
+/// its path shape.
 fn is_path_segment_kind(kind: SyntaxKind) -> bool {
-    matches!(
-        kind,
-        SyntaxKind::WORD
-            | SyntaxKind::KW_CLIENT
-            | SyntaxKind::KW_SPAWN
-            | SyntaxKind::KW_AWAIT
-            | SyntaxKind::KW_CLASS
-            | SyntaxKind::KW_ENUM
-            | SyntaxKind::KW_INTERFACE
-            | SyntaxKind::KW_FUNCTION
-    )
+    t::is_word_like(kind)
 }
 
 fn path_segment_from_cst(elem: SyntaxElement) -> Result<t::Word, StrongAstError> {
@@ -922,9 +929,10 @@ impl Expression {
             Expression::Path(_)
             | Expression::EnvAccess(_)
             | Expression::ArrayInitializer(_)
-            | Expression::RawString(_)
+            | Expression::HashString(_)
             | Expression::BacktickString(_)
-            | Expression::ByteString(_) => true,
+            | Expression::ByteString(_)
+            | Expression::RawString(_) => true,
             Expression::Literal(lit) => matches!(lit, Literal::String(_)),
             _ => false,
         }

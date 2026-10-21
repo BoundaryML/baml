@@ -4,14 +4,14 @@
 //!
 //! `CancelToken` and `Limit` are opaque classes whose `_handle` field holds an
 //! `Object::RustData(Arc<…>)`. They are built with the standard
-//! `resolve_class` + `alloc_rust_data` + `alloc_instance` pattern and read
+//! `lang_object` + `alloc_rust_data` + `alloc_instance` pattern and read
 //! back via `as_instance` + `load_field(0)` + `as_rust_data`.
 
 use std::{num::NonZeroUsize, sync::Arc};
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    HeapPtr, LimitInner, LimitSet, Object, ObjectType, RealizedTy,
+    HeapPtr, LimitInner, LimitSet, Object, ObjectType, RealizedTy, RustDataArc as _,
     cancellation::CancellationSource,
     types::{CancellationToken, Value},
 };
@@ -41,6 +41,13 @@ struct CancelTokenState {
     inputs: Box<[CancellationSource]>,
 }
 
+impl bex_vm_types::BexRustData for CancelTokenState {
+    fn measure(&self, meter: &mut bex_vm_types::Meter) {
+        // The tokens themselves are shared with the tasks they cancel.
+        meter.bytes(size_of_val(&*self.inputs));
+    }
+}
+
 impl CancelTokenState {
     fn fresh() -> Self {
         Self {
@@ -66,7 +73,7 @@ impl CancelTokenState {
 /// optional argument).
 pub fn cancel_token_members(vm: &BexVm, value: Value) -> Option<Vec<CancellationSource>> {
     let instance = vm.as_instance(&value).ok()?;
-    if instance.class != vm.resolve_class("baml.spawn.CancelToken") {
+    if instance.class != vm.lang_object(crate::lang_items::BAML_SPAWN_CANCEL_TOKEN) {
         return None;
     }
     let handle = instance.load_field(0);
@@ -79,7 +86,7 @@ pub fn cancel_token_members(vm: &BexVm, value: Value) -> Option<Vec<Cancellation
 pub fn projected_cancel_token_data(
     own: CancellationToken,
     inputs: Vec<CancellationSource>,
-) -> Arc<dyn std::any::Any + Send + Sync> {
+) -> Arc<dyn bex_vm_types::BexRustData> {
     Arc::new(CancelTokenState {
         own,
         inputs: inputs.into_boxed_slice(),
@@ -104,7 +111,7 @@ pub fn alloc_projected_cancel_token(
 
 /// Allocate a `baml.spawn.CancelToken` instance holding `state`.
 fn alloc_cancel_token(vm: &mut BexVm, state: CancelTokenState) -> Value {
-    let class = vm.resolve_class("baml.spawn.CancelToken");
+    let class = vm.lang_object(crate::lang_items::BAML_SPAWN_CANCEL_TOKEN);
     let handle = Value::object(vm.alloc_rust_data(Arc::new(state)));
     Value::object(vm.alloc_instance(class, vec![handle]))
 }
@@ -228,7 +235,7 @@ pub fn spawn_launch(vm: &BexVm, plan: Value) -> Result<SpawnLaunch, VmInternalEr
 
 /// Allocate a fresh `baml.spawn.Limit` instance wrapping `inner`.
 fn alloc_limit(vm: &mut BexVm, inner: Arc<LimitInner>) -> Value {
-    let class = vm.resolve_class("baml.spawn.Limit");
+    let class = vm.lang_object(crate::lang_items::BAML_SPAWN_LIMIT);
     let handle = Value::object(vm.alloc_rust_data(inner));
     Value::object(vm.alloc_instance(class, vec![handle]))
 }
@@ -242,7 +249,7 @@ fn limit_inner(vm: &BexVm, limit: Value) -> Result<Arc<LimitInner>, VmInternalEr
     };
     match handle.as_object_ptr().map(|ptr| vm.get_object(ptr)) {
         Some(Object::RustData(data)) => Arc::clone(data)
-            .downcast::<LimitInner>()
+            .downcast_payload::<LimitInner>()
             .map_err(|_| mismatch()),
         _ => Err(mismatch()),
     }

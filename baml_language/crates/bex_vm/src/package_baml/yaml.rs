@@ -114,6 +114,6 @@ fn convert_yaml_number(vm: &mut BexVm, n: &serde_yaml::Number) -> Result<Value, 
 
 fn make_yaml_parse_error(vm: &mut BexVm, message: String) -> Value {
     let err_msg = Value::object(vm.alloc_string(message));
-    let class = vm.resolve_class("baml.yaml.ParseError");
+    let class = vm.lang_object(crate::lang_items::BAML_YAML_PARSE_ERROR);
     Value::object(vm.alloc_instance(class, vec![err_msg]))
 }

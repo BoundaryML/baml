@@ -11,6 +11,40 @@ test "defaults preserve automatic capture" {
     assert.equal(trace.span().inspect().mode, trace.Mode.Span);
 }
 
+test "span defaults capture outputs and errors with explicit inputs" {
+    let direct = trace.span().inspect();
+    let chained = trace.options().span().inspect();
+    assert.equal(direct.capture.inputs, null);
+    assert.equal(direct.capture.output, true);
+    assert.equal(direct.capture.error, true);
+    assert.equal(chained.capture.inputs, null);
+    assert.equal(chained.capture.output, true);
+    assert.equal(chained.capture.error, true);
+    assert.equal(trace.span(inputs = true).inspect().capture.inputs, true);
+    assert.equal(trace.span(output = null, error = null).inspect().capture.output, null);
+    assert.equal(trace.span(output = null, error = null).inspect().capture.error, null);
+}
+
+test "empty spans clear capture requests and preserve context" {
+    let direct = trace.empty_span().inspect();
+    let base = trace.context(metadata = { "key": "value" }).span(inputs = true);
+    let empty = base.empty_span();
+    let chained = empty.inspect();
+    assert.equal(direct.mode, trace.Mode.Span);
+    assert.equal(direct.capture.inputs, false);
+    assert.equal(direct.capture.output, false);
+    assert.equal(direct.capture.error, false);
+    assert.equal(chained.mode, trace.Mode.Span);
+    assert.equal(chained.capture.inputs, false);
+    assert.equal(chained.capture.output, false);
+    assert.equal(chained.capture.error, false);
+    assert.equal(chained.context.metadata["key"], "value");
+    assert.equal(base.inspect().capture.inputs, true);
+    assert.equal(base.inspect().capture.output, true);
+    assert.equal(base.inspect().capture.error, true);
+    assert.equal(empty.reserve().inspect().capture.output, false);
+}
+
 test "builders are immutable and mode preserves capture" {
     let base = trace.span(inputs = false, output = true, error = null);
     let hidden = base.mode(trace.Mode.Hidden);
@@ -24,7 +58,7 @@ test "builders are immutable and mode preserves capture" {
     assert.equal(restored.inspect().capture.output, true);
     assert.equal(restored.inspect().capture.error, null);
     assert.equal(replaced.inspect().capture.inputs, null);
-    assert.equal(replaced.inspect().capture.output, null);
+    assert.equal(replaced.inspect().capture.output, true);
     assert.equal(replaced.inspect().capture.error, true);
     assert.equal(base.inspect().capture.error, null);
 }
@@ -193,13 +227,14 @@ test "attachments work on methods closures and nested calls" {
 }
 
 function unsupported_native_does_not_leak(native: () -> trace.SpanId?) -> bool {
+    let observed_before = own_id() != null;
     let rejected = {
         native($trace = trace.span());
         false
     } catch_all_panics (error) {
         _ => true,
     };
-    assert.equal(own_id(), null);
+    assert.equal(own_id() != null, observed_before);
     rejected
 }
 

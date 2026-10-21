@@ -2,9 +2,11 @@
 //!
 //! Mirrors `bridge_python/src/media.rs`. Each class wraps a `HANDLE_TABLE`
 //! row that is a `CffiHandleTableEntry::Adt(BexExternalAdt::Media(arc))`.
-//! Static constructors (`fromUrl`/`fromFile`/`fromBase64`) and accessors
-//! (`url`/`file`/`base64`/`mimeType`) dispatch natively here instead of
-//! round-tripping through the BAML engine.
+//! Static constructors (`fromUrl`/`fromFileContent`/`fromBase64`) and
+//! accessors (`url`/`name`/`base64`/`mimeType`) dispatch natively here instead
+//! of round-tripping through the BAML engine. `fromFile` is the exception: it
+//! reads a file, which is BAML's `from_file`, so `typescript_src/media.ts`
+//! adds it as a call into the engine.
 //!
 //! These four are runtime-owned stdlib value classes: codegen does NOT emit
 //! a structural class body for them — it re-exports them from
@@ -25,12 +27,14 @@ use napi_derive::napi;
 
 use crate::handle::{BamlHandle, handle_clone, status_to_napi};
 
-type MediaConstructor =
-    fn(MediaKind, &str, Option<&str>) -> std::result::Result<HandleParts, HandleError>;
 type MediaAccessor<T> = fn(u64, i32) -> std::result::Result<T, HandleError>;
 
 fn create_media(
-    constructor: MediaConstructor,
+    constructor: impl FnOnce(
+        MediaKind,
+        &str,
+        Option<&str>,
+    ) -> std::result::Result<HandleParts, HandleError>,
     media_kind: MediaKind,
     value: String,
     mime_type: Option<String>,
@@ -84,14 +88,29 @@ macro_rules! define_media_napi_class {
                 Ok(Self { key, handle_type })
             }
 
-            #[napi(factory, js_name = "fromFile")]
-            pub fn from_file(file: String, mime_type: Option<String>) -> napi::Result<Self> {
+            /// Base64 content that was read from `file`: named by its base
+            /// name, with the MIME type it implies unless one is given.
+            /// Reads nothing.
+            #[napi(factory, js_name = "fromFileContent")]
+            pub fn from_file_content(
+                file: String,
+                base64: String,
+                mime_type: Option<String>,
+            ) -> napi::Result<Self> {
+                if base64.contains('\0') {
+                    return Err(napi::Error::new(
+                        napi::Status::InvalidArg,
+                        "base64 cannot contain NUL".to_owned(),
+                    ));
+                }
                 let (key, handle_type) = create_media(
-                    handle_cffi::media_from_file,
+                    |kind, file, mime_type| {
+                        handle_cffi::media_from_file_content(kind, file, &base64, mime_type)
+                    },
                     $media_kind,
                     file,
                     mime_type,
-                    "fromFile",
+                    "fromFileContent",
                 )?;
                 Ok(Self { key, handle_type })
             }
@@ -113,9 +132,10 @@ macro_rules! define_media_napi_class {
                 media_string(self.key, self.handle_type, handle_cffi::media_url, "url")
             }
 
+            /// The base name of the file the content was read from, if any.
             #[napi]
-            pub fn file(&self) -> napi::Result<Option<String>> {
-                media_string(self.key, self.handle_type, handle_cffi::media_file, "file")
+            pub fn name(&self) -> napi::Result<Option<String>> {
+                media_string(self.key, self.handle_type, handle_cffi::media_name, "name")
             }
 
             #[napi]

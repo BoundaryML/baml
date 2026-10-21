@@ -309,17 +309,14 @@ impl IoNamespaceSys for WasmSys {
         }))
     }
 
-    fn sleep(
+    fn _sleep(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        delay: BexExternalValue,
+        delay_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        let millis = match sleep_millis_from_delay(delay) {
-            Ok(millis) => millis,
-            Err(err) => return SysOpOutput::err(err),
-        };
+        let millis = sleep_millis(&delay_nanos);
         let promise = js_sys::Promise::new(&mut |resolve, _reject| {
             set_timeout(&resolve, millis);
         });
@@ -358,37 +355,14 @@ fn host_process_pid() -> Option<i64> {
     <i64 as num_traits::FromPrimitive>::from_f64(pid).filter(|pid| *pid > 0)
 }
 
-fn sleep_millis_from_delay(delay: BexExternalValue) -> Result<i32, VmRustFnError> {
-    match delay {
-        BexExternalValue::Instance {
-            class_name,
-            mut fields,
-            ..
-        } if class_name == "baml.time.Duration" => {
-            let Some(nanos) = fields.swap_remove("_nanoseconds") else {
-                return Err(VmRustFnError::from(VmBamlError::Io {
-                    message: "sleep delay is missing Duration._nanoseconds".to_string(),
-                }));
-            };
-            let BexExternalValue::Bigint(nanos) = nanos else {
-                return Err(VmRustFnError::from(VmBamlError::Io {
-                    message: "sleep delay Duration._nanoseconds is not a bigint".to_string(),
-                }));
-            };
-            if nanos.sign() == num_bigint::Sign::Plus {
-                let nanos = u64::try_from(&nanos).unwrap_or(u64::MAX);
-                let rounded_millis = nanos.saturating_add(999_999) / 1_000_000;
-                Ok(i32::try_from(rounded_millis).unwrap_or(i32::MAX))
-            } else {
-                Ok(0)
-            }
-        }
-        BexExternalValue::Union { value, .. } => sleep_millis_from_delay(*value),
-        other => Err(VmRustFnError::from(VmBamlError::Io {
-            message: format!(
-                "sleep delay must be baml.time.Duration, got {}",
-                other.type_name()
-            ),
-        })),
+/// The `setTimeout` delay for a sleep of `delay_nanos`: whole milliseconds,
+/// rounded up so the wait is never shorter than asked. Zero or negative does
+/// not wait, and a delay past what `setTimeout` takes clamps to its maximum.
+fn sleep_millis(delay_nanos: &num_bigint::BigInt) -> i32 {
+    if delay_nanos.sign() != num_bigint::Sign::Plus {
+        return 0;
     }
+    let nanos = u64::try_from(delay_nanos).unwrap_or(u64::MAX);
+    let rounded_millis = nanos.saturating_add(999_999) / 1_000_000;
+    i32::try_from(rounded_millis).unwrap_or(i32::MAX)
 }

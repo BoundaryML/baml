@@ -145,9 +145,9 @@ test "a served interface method dispatches on its later Self parameter" {
         },
         packages = { "app": lib },
     );
-    let run = consumer.get_function<(int, bool) -> int>("root.run") ?? throw "missing root.run";
+    let run = consumer.get_function<(int, bool) -> int>("root.run");
     assert.equal(run(2, false), 42);
     assert.equal(run(6, true), 42);
-    let run_bounded = consumer.get_function<(int) -> int>("root.run_bounded") ?? throw "missing root.run_bounded";
+    let run_bounded = consumer.get_function<(int) -> int>("root.run_bounded");
     assert.equal(run_bounded(2), 42);
 }

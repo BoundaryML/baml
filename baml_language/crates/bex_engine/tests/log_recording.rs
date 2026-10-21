@@ -96,7 +96,12 @@ fn object(snapshot: &DecodedSnapshot) -> &DecodedObject {
 fn fields(entries: &btel_snapshot::Entries) -> BTreeMap<&str, &DecodedValue> {
     entries
         .iter()
-        .map(|(key, value)| (key.as_ref(), value))
+        .map(|(key, value)| {
+            let DecodedValue::String(key) = key else {
+                panic!("expected string map key");
+            };
+            (key.as_ref(), value)
+        })
         .collect()
 }
 
@@ -241,7 +246,7 @@ fn assert_logs(
     let DecodedObject::Instance { fields: values, .. } = object(named("class")) else {
         panic!("class")
     };
-    assert_eq!(fields(values)["value"], &DecodedValue::Int(7));
+    assert_eq!(values, &vec![("value".into(), DecodedValue::Int(7))]);
     assert!(
         matches!(root(named("enum")), DecodedValue::Enum { variant: 0, name, .. } if name.as_ref() == "First")
     );

@@ -88,8 +88,9 @@ inline bool prompt_media_equal(const pb::BamlValueMedia& lhs,
       return lhs.url() == rhs.url();
     case pb::BamlValueMedia::kBase64:
       return lhs.base64() == rhs.base64();
-    case pb::BamlValueMedia::kFile:
-      return lhs.file() == rhs.file();
+    case pb::BamlValueMedia::kFileContent:
+      return lhs.file_content().name() == rhs.file_content().name() &&
+             lhs.file_content().base64() == rhs.file_content().base64();
     case pb::BamlValueMedia::VALUE_NOT_SET:
       return true;
   }

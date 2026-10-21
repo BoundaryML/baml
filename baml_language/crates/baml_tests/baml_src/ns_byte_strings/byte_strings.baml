@@ -261,3 +261,39 @@ test "literal_as_call_argument" {
 test "index_read_direct" {
     assert.equal(byte_strings_index_read_direct(), 65)
 }
+
+// ─── escapes ──────────────────────────────────────────────────────────────────
+//
+// Byte strings use the string escapes, except that `\xHH` accepts any byte and
+// `\u` escapes are errors.
+
+function byte_strings_extended_escapes() -> uint8array {
+    let x = b"\'\b\f\/\`\$";
+    x
+}
+
+test "byte strings decode the string escapes" {
+    assert.equal(byte_strings_extended_escapes(), b"\x27\x08\x0C\x2F\x60\x24")
+}
+
+test "unicode escapes in byte strings suggest UTF-8 bytes" {
+    root.compiler.AssertHasMessage(
+        { "main.baml": `function f() -> uint8array { b"\\u{E9}" }` },
+        "did you mean b\"\\xC3\\xA9\" (UTF-8 bytes)?",
+    )
+}
+
+test "non-ASCII characters in byte strings suggest UTF-8 bytes" {
+    root.compiler.AssertHasMessage(
+        { "main.baml": `function f() -> uint8array { b"é" }` },
+        "non-ASCII character b\"é\" in byte string",
+    )
+}
+
+test "unknown escapes in byte strings are compile errors" {
+    root.compiler.AssertHasMessage(
+        { "main.baml": `function f() -> uint8array { b"\\d" }` },
+        "did you mean b\"\\\\d\" (escaped backslash)?",
+    );
+    root.compiler.AssertHasCode({ "main.baml": `function f() -> uint8array { b"\\v" }` }, "E0109")
+}

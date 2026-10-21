@@ -359,7 +359,8 @@ impl<'a> GoTypeProjection<'a> {
                     })
                     .collect::<Vec<_>>();
                 let ret = match ret.as_ref() {
-                    Ty::Void | Ty::Never => None,
+                    Ty::Never => None,
+                    ret if ret.is_unit() => None,
                     ret => Some(Box::new(self.project_inner(ret, aliases))),
                 };
                 if params

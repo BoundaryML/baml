@@ -25,6 +25,14 @@ var (
 	_ func(string, *string) (Pdf, error)   = NewPdfFromUrl
 	_ func(string, *string) (Pdf, error)   = NewPdfFromFile
 	_ func(string, *string) (Pdf, error)   = NewPdfFromBase64
+
+	_ func(string, string, *string) (Image, error) = NewImageFromFileContent
+	_ func(string, string, *string) (Audio, error) = NewAudioFromFileContent
+	_ func(string, string, *string) (Video, error) = NewVideoFromFileContent
+	_ func(string, string, *string) (Pdf, error)   = NewPdfFromFileContent
+
+	_ func(Image) (*string, error) = Image.Name
+	_ func(Pdf) (*string, error)   = Pdf.Name
 )
 
 func TestMediaDescriptorsAreExactAndDistinct(t *testing.T) {
@@ -243,6 +251,36 @@ func TestDecodePortableMediaReconstructsTheTypedWrapper(t *testing.T) {
 	}
 	if image.media.handle == nil || image.media.handle.key != 77 {
 		t.Fatalf("decoded portable media = %#v", image)
+	}
+}
+
+func TestDecodeNamedPortableMediaKeepsTheName(t *testing.T) {
+	previous := constructPortableNamedMedia
+	defer func() { constructPortableNamedMedia = previous }()
+	constructPortableNamedMedia = func(kind mediaKind, file string, base64 string, mimeType *string) (mediaValue, error) {
+		if kind != mediaKindPDF || file != "q3.pdf" || base64 != "JVBERi0xLjc=" || mimeType != nil {
+			t.Fatalf("named portable media = %v / %q / %q / %#v", kind, file, base64, mimeType)
+		}
+		return mediaValue{
+			handle: &mediaHandle{key: 78, handleType: cffi.BamlHandleType_ADT_MEDIA_PDF},
+			kind:   mediaKindPDF,
+		}, nil
+	}
+
+	value := Value{value: &cffi.BamlOutboundValue{Value: &cffi.BamlOutboundValue_MediaValue{
+		MediaValue: &cffi.BamlValueMedia{
+			Media: cffi.MediaTypeEnum_PDF,
+			Value: &cffi.BamlValueMedia_FileContent{
+				FileContent: &cffi.BamlValueMediaFileContent{Name: "q3.pdf", Base64: "JVBERi0xLjc="},
+			},
+		},
+	}}}
+	pdf, err := value.Pdf()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pdf.media.handle == nil || pdf.media.handle.key != 78 {
+		t.Fatalf("decoded named portable media = %#v", pdf)
 	}
 }
 

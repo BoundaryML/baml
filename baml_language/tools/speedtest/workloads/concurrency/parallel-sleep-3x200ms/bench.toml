@@ -1,0 +1,5 @@
+name = "parallel sleep 3x200ms"
+description = "three 200 ms sleeps awaited together"
+expect = "3"
+jobs = 3
+warmup = 1

@@ -1,0 +1,23 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:11:42]
+ 11 │ ╭─▶ function from_root_namespace() -> Widget {
+ 12 │ │       root.gadgets.Gear { teeth: 7 }
+ 13 │ ├─▶ }
+    · ╰──── expected `Widget`, found `root.gadgets.Gear`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+   ╭─[gear.baml:6:42]
+ 6 │ ╭─▶ function from_nested_namespace() -> Gear {
+ 7 │ │       root.Widget { id: 1 }
+ 8 │ ├─▶ }
+   · ╰──── expected `Gear`, found `root.Widget`
+   ╰────

@@ -10,14 +10,11 @@
 //! - `Glob.matches(path)` — pure-Rust glob matching via the compiled
 //!   `GlobPattern` from the handle.
 
-use std::{
-    any::{Any as _, TypeId},
-    sync::Arc,
-};
+use std::{any::TypeId, sync::Arc};
 
 use sys_glob::GlobPattern;
 use sys_ops::io::{self, BexExternalValue, CallId, SysOpContext, SysOpOutput, VmBamlError, owned};
-use sys_types::{BexHeap, VmInternalError, VmPanic};
+use sys_types::{BexHeap, RustDataArc as _, VmInternalError, VmPanic};
 
 use crate::{send_wrapper::SendWrapper, wasm_vfs::WasmVfs};
 
@@ -43,15 +40,29 @@ impl WasmIoGlob {
 // IoNamespaceGlob — `baml.glob.new(pattern)` creates a Glob handle.
 // ============================================================================
 
-type GlobHandle = GlobPattern;
+/// A compiled pattern as `$rust_type` data.
+struct GlobHandle(GlobPattern);
+
+impl sys_types::BexRustData for GlobHandle {
+    fn measure(&self, _: &mut sys_types::Meter) {
+        // Bounded by the pattern text; the regex crate does not report its size.
+    }
+}
+
+impl std::ops::Deref for GlobHandle {
+    type Target = GlobPattern;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 fn downcast_glob_handle(glob: &owned::glob::Glob) -> Result<Arc<GlobHandle>, VmInternalError> {
     glob._handle
         .clone()
-        .downcast::<GlobHandle>()
+        .downcast_payload::<GlobHandle>()
         .map_err(|_| VmInternalError::RustTypeError {
             expected: TypeId::of::<GlobHandle>(),
-            got: glob._handle.type_id(),
+            got: glob._handle.payload_type_id(),
         })
 }
 
@@ -65,7 +76,7 @@ impl io::IoNamespaceGlob for WasmIoGlob {
     ) -> SysOpOutput<owned::glob::Glob> {
         match GlobPattern::new(&pattern) {
             Ok(compiled) => {
-                let handle: Arc<dyn std::any::Any + Send + Sync> = Arc::new(compiled);
+                let handle: Arc<dyn sys_types::BexRustData> = Arc::new(GlobHandle(compiled));
                 SysOpOutput::ok(owned::glob::Glob { _handle: handle })
             }
             Err(e) => SysOpOutput::err(VmBamlError::ParseError { message: e }),

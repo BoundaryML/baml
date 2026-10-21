@@ -404,14 +404,20 @@ fn escape_len(s: &str) -> usize {
         // `\xNN` — backslash, `x`, then at most two hex digits (fewer when
         // the next char isn't one).
         'x' => 2 + hex_digit_run(&rest[1..], 2),
-        // `\u{...}` — hex digits through the closing brace, which must
-        // directly follow the digits to count as part of the escape.
+        // `\u{...}` — hex digits (and `_` separators) through the closing
+        // brace, which must directly follow the digits to count as part of
+        // the escape.
         'u' if rest[1..].starts_with('{') => {
-            let digits = hex_digit_run(&rest[2..], usize::MAX);
+            let digits = rest[2..]
+                .bytes()
+                .take_while(|b| b.is_ascii_hexdigit() || *b == b'_')
+                .count();
             let terminated = rest[2 + digits..].starts_with('}');
             3 + digits + usize::from(terminated)
         }
-        // `\n`, `\t`, `\r`, `\0`, `\\`, `\"`, `\'`, `\u` (no brace), ... —
+        // `\uHHHH` — backslash, `u`, then at most four hex digits.
+        'u' => 2 + hex_digit_run(&rest[1..], 4),
+        // `\n`, `\t`, `\r`, `\0`, `\\`, `\"`, `\'`, ... —
         // the backslash plus one escaped char of whatever UTF-8 length.
         c => 1 + c.len_utf8(),
     }
@@ -575,7 +581,9 @@ impl Walk<'_> {
                 string_with_escapes(node, out);
             }
             // Raw / unquoted strings do not process escapes.
-            SyntaxKind::RAW_STRING_LITERAL | SyntaxKind::UNQUOTED_STRING => {
+            SyntaxKind::DEPRECATED_HASH_STRING_LITERAL
+            | SyntaxKind::RAW_STRING_LITERAL
+            | SyntaxKind::UNQUOTED_STRING => {
                 emit_node(node, SemanticTokenType::String, out);
             }
             SyntaxKind::BACKTICK_STRING_LITERAL => self.backtick_string(node, out),
@@ -979,6 +987,15 @@ fn classify_token(token: &SyntaxToken) -> Option<Class> {
             .and_then(|p| p.name())
             .filter(|name| name.text_range() == token.text_range())
             .map(|_| decl(SemanticTokenType::TypeParameter)),
+        // `let type T = …`: the first word is the bound type parameter's
+        // declaration (the operand is an expression and classifies on its
+        // own).
+        SyntaxKind::TYPE_BINDING_STMT => parent
+            .children_with_tokens()
+            .filter_map(NodeOrToken::into_token)
+            .find(|t| t.kind() == SyntaxKind::WORD)
+            .filter(|name| name.text_range() == token.text_range())
+            .map(|_| decl(SemanticTokenType::TypeParameter)),
         SyntaxKind::ENUM_DEF => word.then_some(decl(SemanticTokenType::Enum)),
         SyntaxKind::ENUM_VARIANT => word.then_some(decl(SemanticTokenType::EnumMember)),
         SyntaxKind::CLASS_DEF => word.then_some(decl(SemanticTokenType::Class)),
@@ -1112,6 +1129,14 @@ mod tests {
     }
 
     #[test]
+    fn unicode_escapes_span_their_digits() {
+        assert_eq!(escape_len(r"\u00E9 x"), r"\u00E9".len());
+        assert_eq!(escape_len(r"\u00E9F"), r"\u00E9".len());
+        assert_eq!(escape_len(r"\u12 x"), r"\u12".len());
+        assert_eq!(escape_len(r"\u{1F_600} x"), r"\u{1F_600}".len());
+    }
+
+    #[test]
     fn escape_len_always_ends_on_a_char_boundary() {
         // `\x` adjacent to a multi-byte char: the old byte count (4) split 🐑.
         assert_eq!(escape_len("\\x🐑"), r"\x".len());
@@ -1198,6 +1223,34 @@ function projection(b: B) -> string throws never { (B as Shows).show(b) }
             "only the name, not the receiver"
         );
         assert_eq!(painted.token_type, SemanticTokenType::Method);
+    }
+
+    /// `let type T extends Named = t else { … };`: the keywords are keywords,
+    /// `T` is a type-parameter declaration, and the bound is a type reference.
+    #[test]
+    fn let_type_declares_a_type_parameter() {
+        let (db, file) = test_db(
+            r#"interface Named { name string }
+
+function f(t: reflect.Type) -> reflect.Type {
+    let type T extends Named = t else { return t };
+    reflect.Type.of<T>()
+}
+"#,
+        );
+        let tokens = semantic_tokens(&db, file);
+        let rendered = render(&db, file, tokens);
+        for expected in [
+            "keyword        \"let\"",
+            "keyword        \"type\"",
+            "typeParameter  [declaration] \"T\"",
+            "interface      \"Named\"",
+        ] {
+            assert!(
+                rendered.contains(expected),
+                "missing `{expected}` in:\n{rendered}"
+            );
+        }
     }
 
     fn test_db(source: &str) -> (ProjectDatabase, SourceFile) {

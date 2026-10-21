@@ -20,8 +20,8 @@ const ALIAS: let OTHER = 4;
 // ── `const … else` has no body to leave ──────────────────────────────────────
 const MAYBE: int = 5 else { 6 };
 
-// ── `baml` would hide the package every `spawn` and `env.X` desugars to ─────
-const baml = 7;
+// ── `root` is the path to the package itself, so no global may take it ──────
+const root = 7;
 
 // ── A global shares the value namespace with functions, clients, and types ──
 const Duplicated = 8;
@@ -33,7 +33,6 @@ function Duplicated() -> int {
 // ── The annotation is a declaration-level type ───────────────────────────────
 const UNRESOLVED: NoSuchType = 10;
 const HOLE: map<string, _> = { "eleven": 11 };
-const NOTHING: void = null;
 
 // ── The initializer is checked against the annotation ────────────────────────
 const MISMATCHED: string = 12;

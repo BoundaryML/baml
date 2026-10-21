@@ -51,7 +51,9 @@ use baml_sdkgen_types::{Class, CodegenFunctionParamMode, Enum, Function, Ty};
 
 use crate::{
     routing::{java_identifier, java_method_identifier},
-    translate_ty::{CallbackInterface, TranslateCtx, TyPosition, UnionSink, translate_ty},
+    translate_ty::{
+        CallbackInterface, CallbackReturn, TranslateCtx, TyPosition, UnionSink, translate_ty,
+    },
 };
 
 /// Per-holder pool of return-type decode descriptors. Each distinct descriptor
@@ -820,12 +822,7 @@ fn render_callable_pair(
     let param_decls: Vec<String> = required
         .iter()
         .map(|a| {
-            // `void` is legal only as a return type; a unit-typed
-            // parameter (stdlib type-position args) boxes to Void.
             let mut ty = translate_ty(&a.ty, TyPosition::TopLevel, ctx, sink);
-            if ty == "void" {
-                ty = "java.lang.Void".to_string();
-            }
             // A nullable required param (`x: T?`) carries `@Nullable` so callers
             // (Kotlin especially) see it accepts `null`.
             if crate::translate_ty::is_nullable(&a.ty, ctx.aliases) {
@@ -880,7 +877,12 @@ fn render_callable_pair(
         }
     }
 
+    // A unit return (`-> void` / `-> null`) is a Java `void` method: the result
+    // carries no information. Its async sibling completes with `java.lang.Void`,
+    // Java's own spelling of a value-less future.
+    let returns_unit = function.return_type.is_unit();
     let mut ret_top = match &function.return_type {
+        _ if returns_unit => "void".to_string(),
         Ty::Function { params, ret, .. } => {
             crate::translate_ty::translate_return_callable(params, ret, ctx, sink)
         }
@@ -894,9 +896,9 @@ fn render_callable_pair(
     };
     // A nullable return (`-> T?`) carries `@Nullable` on both the sync signature
     // and the async future's element type (`CompletableFuture<@Nullable T>`). A
-    // nullable type is always a boxed reference, so `ret_top == "void"` (the
-    // void-return sentinel checked downstream) can never be a nullable type.
-    if crate::translate_ty::is_nullable(&function.return_type, ctx.aliases) {
+    // unit return is not one: `void` has no value to annotate, which keeps
+    // `ret_top == "void"` (the void-return sentinel checked downstream) exact.
+    if !returns_unit && crate::translate_ty::is_nullable(&function.return_type, ctx.aliases) {
         ret_top = crate::translate_ty::annotate_nullable(&ret_top);
         ret_boxed = crate::translate_ty::annotate_nullable(&ret_boxed);
     }
@@ -1578,18 +1580,28 @@ pub(crate) fn render_callback_interface(iface: &CallbackInterface) -> String {
         "public interface {} extends baml_bridge.BamlHostCallable {{\n",
         iface.name
     ));
+    // A unit SAM is a `void` method; its value-shaped surfaces (`__bamlDispatch`,
+    // `callAsync`) answer the unit value, `null`.
+    let (sam_ret, future_ret) = match &iface.ret {
+        CallbackReturn::Unit => ("void", "java.lang.Void"),
+        CallbackReturn::Value(ty) => (ty.as_str(), ty.as_str()),
+    };
     out.push_str(&format!(
-        "    {} apply({});\n\n",
-        iface.ret,
+        "    {sam_ret} apply({});\n\n",
         apply_params.join(", ")
     ));
     out.push_str(
         "    /**\n     * Bridge dispatch: reshape the engine's flat declared-order arg list\n     * into this callable's SAM. Required args arrive positionally; supplied\n     * optionals fold into the always-non-null {@code Opts} bag.\n     */\n    @Override\n    default java.lang.Object __bamlDispatch(java.util.List<java.lang.Object> $positional, java.util.Map<java.lang.String, java.lang.Object> $optional) {\n",
     );
-    out.push_str(&format!(
-        "        return apply({});\n    }}\n",
-        apply_args.join(", ")
-    ));
+    out.push_str(&match iface.ret {
+        CallbackReturn::Unit => format!(
+            "        apply({});\n        return null;\n    }}\n",
+            apply_args.join(", ")
+        ),
+        CallbackReturn::Value(_) => {
+            format!("        return apply({});\n    }}\n", apply_args.join(", "))
+        }
+    });
 
     let bare_names = iface
         .required
@@ -1603,11 +1615,24 @@ pub(crate) fn render_callback_interface(iface: &CallbackInterface) -> String {
         "{params}{}@BAML_OPTIONS_FACADE@ $baml",
         if params.is_empty() { "" } else { ", " }
     );
+    let (call_body, async_body) = match iface.ret {
+        CallbackReturn::Unit => (
+            format!("apply({bare_names});"),
+            format!(
+                "call({bare_names}); return java.util.concurrent.CompletableFuture.completedFuture(null);"
+            ),
+        ),
+        CallbackReturn::Value(_) => (
+            format!("return apply({bare_names});"),
+            format!(
+                "return java.util.concurrent.CompletableFuture.completedFuture(call({bare_names}));"
+            ),
+        ),
+    };
     let _ = std::fmt::Write::write_fmt(
         &mut out,
         format_args!(
-            "    default {} call({params}) {{ return apply({bare_names}); }}\n    default {} call({controlled}) {{ throw new UnsupportedOperationException(\"Controls require a returned BAML callable\"); }}\n    default java.util.concurrent.CompletableFuture<{}> callAsync({params}) {{ return java.util.concurrent.CompletableFuture.completedFuture(call({bare_names})); }}\n    default java.util.concurrent.CompletableFuture<{}> callAsync({controlled}) {{ throw new UnsupportedOperationException(\"Controls require a returned BAML callable\"); }}\n",
-            iface.ret, iface.ret, iface.ret, iface.ret
+            "    default {sam_ret} call({params}) {{ {call_body} }}\n    default {sam_ret} call({controlled}) {{ throw new UnsupportedOperationException(\"Controls require a returned BAML callable\"); }}\n    default java.util.concurrent.CompletableFuture<{future_ret}> callAsync({params}) {{ {async_body} }}\n    default java.util.concurrent.CompletableFuture<{future_ret}> callAsync({controlled}) {{ throw new UnsupportedOperationException(\"Controls require a returned BAML callable\"); }}\n",
         ),
     );
 

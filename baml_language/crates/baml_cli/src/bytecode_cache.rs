@@ -517,8 +517,8 @@ impl CacheContext {
             .map(|file| (rel_path(root_path, &file.path(db)), file.text(db).as_str()))
             .collect();
         let dependencies: Vec<(String, [u8; 32])> = edge_table(db, root)
-            .into_iter()
-            .map(|(edge, dependency)| (edge.to_string(), self.interface_digest(db, dependency)))
+            .iter()
+            .map(|(edge, dependency)| (edge.to_string(), self.interface_digest(db, *dependency)))
             .collect();
         package_key(&PackageKeyInputs {
             compiler_fingerprint: self.fingerprint,
@@ -1897,12 +1897,12 @@ mod tests {
             "the stored output is the fresh one"
         );
 
-        // The same output with its first function renamed.
+        // The same output with its first function's source file changed.
         let mut forged = fresh.clone();
         let Some(bex_vm_types::Object::Function(function)) = forged.unit.code.first_mut() else {
             panic!("the user package's code starts with a function");
         };
-        function.name.push('!');
+        function.source_file.push('!');
         ctx.cache
             .store_package_shared(&key, &forged)
             .expect("the forged entry stores");
@@ -2023,11 +2023,8 @@ mod tests {
 
     #[test]
     fn seeded_stdlib_interface_short_circuits_derivation() {
-        use baml_db::{
-            Name,
-            baml_compiler2_hir_ty::package_interface::{
-                FunctionThrowSets, PackageInterface, WireInterface, package_interface,
-            },
+        use baml_db::baml_compiler2_hir_ty::package_interface::{
+            FunctionThrowSets, PackageInterface, WireInterface, package_interface,
         };
 
         // A fresh db derives a non-empty `log` interface (it exports log.info,
@@ -2060,8 +2057,8 @@ mod tests {
         );
         db.set_seeded_stdlib_interface(seed);
 
-        let log_id = baml_db::baml_compiler2_hir::package::spelling(&db)
-            .root(&Name::new("log"))
+        let log_id = baml_db::baml_compiler2_hir::package::lang_roots(&db)
+            .get(baml_db::LangPackage::Log)
             .unwrap();
         let iface = package_interface(&db, log_id);
         assert!(

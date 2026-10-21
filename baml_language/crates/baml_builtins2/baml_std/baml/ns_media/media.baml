@@ -1,6 +1,7 @@
 /// A PDF document value.
 ///
-/// May be backed by a URL, local file path, or base64-encoded content.
+/// Backed by a URL or by base64-encoded content. A file is read when the
+/// value is built from it: the value holds its content, never its path.
 class Pdf {
     _data: $rust_type,
 
@@ -10,9 +11,10 @@ class Pdf {
         $rust_function
     }
 
-    /// Returns the file path of this PDF, or `null` if it was not constructed from a file path.
+    /// Returns the name of this PDF, or `null` if it has none. A PDF built from a
+    /// file is named by the file's base name.
     //baml:vm
-    function file(self) -> string? throws never {
+    function name(self) -> string? throws never {
         $rust_function
     }
 
@@ -33,8 +35,40 @@ class Pdf {
         $rust_function
     }
 
-    /// Creates a `Pdf` value from a local file path. Optionally specify `mime_type`.
-    function from_file(file: string, mime_type: string?) -> pdf throws never {
+    /// Creates a `Pdf` value from the content of a local file, which is
+    /// read now. The value is named by the file's base name. Optionally
+    /// specify `mime_type`; otherwise it is inferred from the file's name.
+    ///
+    /// # Throws
+    ///
+    /// - `Io` if the file cannot be opened or read.
+    /// - `InvalidArgument` only as `baml.fs.open` declares it: a path that
+    ///   cannot be opened is `Io`.
+    function from_file(
+        file: string,
+        mime_type: string?,
+    ) -> pdf throws root.errors.Io | root.errors.InvalidArgument {
+        let handle = root.fs.open(file, "r");
+        defer { handle.close() }
+        Pdf.from_file_content(file, handle.bytes().to_base64(), mime_type)
+    }
+
+    /// Creates a `Pdf` value from base64-encoded content that was read
+    /// from `file`. The value is named by the file's base name. Optionally
+    /// specify `mime_type`; otherwise it is inferred from the file's name.
+    function from_file_content(
+        file: string,
+        base64: string,
+        mime_type: string?,
+    ) -> pdf throws never {
+        $rust_function
+    }
+
+    /// Returns the MIME type that `source`, a file name or URL, implies for
+    /// a PDF: by its extension, or the usual type for a PDF when the
+    /// extension says nothing. A URL's query and fragment are not part of
+    /// its extension.
+    function infer_mime_type(source: string) -> string throws never {
         $rust_function
     }
 
@@ -46,7 +80,8 @@ class Pdf {
 
 /// An audio clip value.
 ///
-/// May be backed by a URL, local file path, or base64-encoded content.
+/// Backed by a URL or by base64-encoded content. A file is read when the
+/// value is built from it: the value holds its content, never its path.
 class Audio {
     _data: $rust_type,
 
@@ -56,9 +91,10 @@ class Audio {
         $rust_function
     }
 
-    /// Returns the file path of this audio clip, or `null` if it was not constructed from a file path.
+    /// Returns the name of this audio clip, or `null` if it has none. An audio clip built from a
+    /// file is named by the file's base name.
     //baml:vm
-    function file(self) -> string? throws never {
+    function name(self) -> string? throws never {
         $rust_function
     }
 
@@ -79,8 +115,40 @@ class Audio {
         $rust_function
     }
 
-    /// Creates an `Audio` value from a local file path. Optionally specify `mime_type`.
-    function from_file(file: string, mime_type: string?) -> audio throws never {
+    /// Creates an `Audio` value from the content of a local file, which is
+    /// read now. The value is named by the file's base name. Optionally
+    /// specify `mime_type`; otherwise it is inferred from the file's name.
+    ///
+    /// # Throws
+    ///
+    /// - `Io` if the file cannot be opened or read.
+    /// - `InvalidArgument` only as `baml.fs.open` declares it: a path that
+    ///   cannot be opened is `Io`.
+    function from_file(
+        file: string,
+        mime_type: string?,
+    ) -> audio throws root.errors.Io | root.errors.InvalidArgument {
+        let handle = root.fs.open(file, "r");
+        defer { handle.close() }
+        Audio.from_file_content(file, handle.bytes().to_base64(), mime_type)
+    }
+
+    /// Creates an `Audio` value from base64-encoded content that was read
+    /// from `file`. The value is named by the file's base name. Optionally
+    /// specify `mime_type`; otherwise it is inferred from the file's name.
+    function from_file_content(
+        file: string,
+        base64: string,
+        mime_type: string?,
+    ) -> audio throws never {
+        $rust_function
+    }
+
+    /// Returns the MIME type that `source`, a file name or URL, implies for
+    /// an audio clip: by its extension, or the usual type for an audio clip when the
+    /// extension says nothing. A URL's query and fragment are not part of
+    /// its extension.
+    function infer_mime_type(source: string) -> string throws never {
         $rust_function
     }
 
@@ -92,7 +160,8 @@ class Audio {
 
 /// A video clip value.
 ///
-/// May be backed by a URL, local file path, or base64-encoded content.
+/// Backed by a URL or by base64-encoded content. A file is read when the
+/// value is built from it: the value holds its content, never its path.
 class Video {
     _data: $rust_type,
 
@@ -102,9 +171,10 @@ class Video {
         $rust_function
     }
 
-    /// Returns the file path of this video clip, or `null` if it was not constructed from a file path.
+    /// Returns the name of this video clip, or `null` if it has none. A video clip built from a
+    /// file is named by the file's base name.
     //baml:vm
-    function file(self) -> string? throws never {
+    function name(self) -> string? throws never {
         $rust_function
     }
 
@@ -125,8 +195,40 @@ class Video {
         $rust_function
     }
 
-    /// Creates a `Video` value from a local file path. Optionally specify `mime_type`.
-    function from_file(file: string, mime_type: string?) -> video throws never {
+    /// Creates a `Video` value from the content of a local file, which is
+    /// read now. The value is named by the file's base name. Optionally
+    /// specify `mime_type`; otherwise it is inferred from the file's name.
+    ///
+    /// # Throws
+    ///
+    /// - `Io` if the file cannot be opened or read.
+    /// - `InvalidArgument` only as `baml.fs.open` declares it: a path that
+    ///   cannot be opened is `Io`.
+    function from_file(
+        file: string,
+        mime_type: string?,
+    ) -> video throws root.errors.Io | root.errors.InvalidArgument {
+        let handle = root.fs.open(file, "r");
+        defer { handle.close() }
+        Video.from_file_content(file, handle.bytes().to_base64(), mime_type)
+    }
+
+    /// Creates a `Video` value from base64-encoded content that was read
+    /// from `file`. The value is named by the file's base name. Optionally
+    /// specify `mime_type`; otherwise it is inferred from the file's name.
+    function from_file_content(
+        file: string,
+        base64: string,
+        mime_type: string?,
+    ) -> video throws never {
+        $rust_function
+    }
+
+    /// Returns the MIME type that `source`, a file name or URL, implies for
+    /// a video clip: by its extension, or the usual type for a video clip when the
+    /// extension says nothing. A URL's query and fragment are not part of
+    /// its extension.
+    function infer_mime_type(source: string) -> string throws never {
         $rust_function
     }
 
@@ -138,7 +240,8 @@ class Video {
 
 /// An image value.
 ///
-/// May be backed by a URL, local file path, or base64-encoded content.
+/// Backed by a URL or by base64-encoded content. A file is read when the
+/// value is built from it: the value holds its content, never its path.
 class Image {
     _data: $rust_type,
 
@@ -148,9 +251,10 @@ class Image {
         $rust_function
     }
 
-    /// Returns the file path of this image, or `null` if it was not constructed from a file path.
+    /// Returns the name of this image, or `null` if it has none. An image built from a
+    /// file is named by the file's base name.
     //baml:vm
-    function file(self) -> string? throws never {
+    function name(self) -> string? throws never {
         $rust_function
     }
 
@@ -171,8 +275,40 @@ class Image {
         $rust_function
     }
 
-    /// Creates an `Image` value from a local file path. Optionally specify `mime_type`.
-    function from_file(file: string, mime_type: string?) -> image throws never {
+    /// Creates an `Image` value from the content of a local file, which is
+    /// read now. The value is named by the file's base name. Optionally
+    /// specify `mime_type`; otherwise it is inferred from the file's name.
+    ///
+    /// # Throws
+    ///
+    /// - `Io` if the file cannot be opened or read.
+    /// - `InvalidArgument` only as `baml.fs.open` declares it: a path that
+    ///   cannot be opened is `Io`.
+    function from_file(
+        file: string,
+        mime_type: string?,
+    ) -> image throws root.errors.Io | root.errors.InvalidArgument {
+        let handle = root.fs.open(file, "r");
+        defer { handle.close() }
+        Image.from_file_content(file, handle.bytes().to_base64(), mime_type)
+    }
+
+    /// Creates an `Image` value from base64-encoded content that was read
+    /// from `file`. The value is named by the file's base name. Optionally
+    /// specify `mime_type`; otherwise it is inferred from the file's name.
+    function from_file_content(
+        file: string,
+        base64: string,
+        mime_type: string?,
+    ) -> image throws never {
+        $rust_function
+    }
+
+    /// Returns the MIME type that `source`, a file name or URL, implies for
+    /// an image: by its extension, or the usual type for an image when the
+    /// extension says nothing. A URL's query and fragment are not part of
+    /// its extension.
+    function infer_mime_type(source: string) -> string throws never {
         $rust_function
     }
 

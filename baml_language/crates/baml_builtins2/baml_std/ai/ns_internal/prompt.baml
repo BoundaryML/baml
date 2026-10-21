@@ -11,7 +11,7 @@ function validate_output_type(
 ) -> void throws reflect.errors.CompilationError {
     return_type._validate_renderable();
     match (return_type.as_enum()) {
-        let enum_type: reflect.enum.Type => {
+        let enum_type: reflect.Enum => {
             if (enum_type.values().length() == 0) {
                 let message = "empty enum `"
                     + return_type.to_string()

@@ -848,8 +848,7 @@ fn simulate_terminator_stack<'db>(
             // THROW consumes the thrown value from the stack when unwinding.
             sim.pop_n(1)
         }
-        Terminator::Rethrow { value, context }
-        | Terminator::ThrowIfPanic { value, context, .. } => {
+        Terminator::Rethrow { value, context } => {
             let mut sink = StackCarryPullSink {
                 sim,
                 carried_local,
@@ -861,8 +860,7 @@ fn simulate_terminator_stack<'db>(
             {
                 return false;
             }
-            // RETHROW consumes the value and its context when unwinding;
-            // THROW_IF_PANIC consumes both whether it throws or continues.
+            // RETHROW consumes the value and its context when unwinding.
             sim.pop_n(2)
         }
         Terminator::ShortCircuit { operand, .. } => {
@@ -1331,6 +1329,11 @@ struct StackCarryPullSink<'a> {
 impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
     type Error = ();
 
+    fn trace_hook_settings(&mut self, _with_settings: bool) -> Result<(), Self::Error> {
+        self.sim.push();
+        Ok(())
+    }
+
     fn pull_constant(
         &mut self,
         _constant: &baml_compiler2_mir::Constant<'a>,
@@ -1556,7 +1559,16 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         Ok(())
     }
 
-    fn load_current_package(&mut self, _package: &str) -> Result<(), Self::Error> {
+    fn load_current_package(&mut self) -> Result<(), Self::Error> {
+        self.sim.push();
+        Ok(())
+    }
+
+    fn satisfies_bound(&mut self) -> Result<(), Self::Error> {
+        // Consumes the type and the bound, pushes the bool.
+        if !self.sim.pop_n(2) {
+            return Err(());
+        }
         self.sim.push();
         Ok(())
     }

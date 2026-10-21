@@ -17,8 +17,8 @@ function type_of_spelling(declarations: string, spelling: string) -> Spelled thr
         }
 
         function probe() -> reflect.Type? throws never {
-            match (reflect.Type.of<ProbeHolder>().as_class()) {
-                let holder: reflect.class.Type => match (holder.fields().at(0)) {
+            match (ProbeHolder.type().as_class()) {
+                let holder: reflect.Class => match (holder.fields().at(0)) {
                     let field: reflect.class.Field => field.type,
                     null => null,
                 },
@@ -30,7 +30,7 @@ function type_of_spelling(declarations: string, spelling: string) -> Spelled thr
         let failed: CompileFailed => failed,
         let threw: InitThrew => threw,
         let package: reflect.Package => {
-            let probe = package.get_function<ProbeFn>("root.probe") catch (e) {
+            let probe = package.find_function<ProbeFn>("root.probe") catch (e) {
                 reflect.errors.CompilationError => null,
             };
             // Narrowed by null check rather than a function-typed pattern:

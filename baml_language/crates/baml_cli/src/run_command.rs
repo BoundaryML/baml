@@ -143,45 +143,6 @@ fn parse_script_body(tokens: &[String]) -> Result<ScriptExpansion> {
 // CLI Args
 // ============================================================================
 
-fn load_launch_context(source: &str) -> Result<btel_types::context::Context> {
-    use btel_types::context::{Context, ContextPatch, ContextValue};
-    use serde_json::Value;
-
-    let value = baml_exec::load_json_source(source).context("invalid --context source")?;
-    let object = value
-        .as_object()
-        .ok_or_else(|| anyhow!("--context must be a JSON object"))?;
-    let mut patch = ContextPatch::default();
-    for (key, value) in object {
-        match (key.as_str(), value) {
-            ("distinct_id", Value::Null) => {}
-            ("distinct_id", Value::String(id)) => patch.distinct_id = Some(id.clone()),
-            ("distinct_id", _) => anyhow::bail!("--context distinct_id must be a string or null"),
-            ("metadata", Value::Object(metadata)) => {
-                for (key, value) in metadata {
-                    let scalar = match value {
-                        Value::String(value) => ContextValue::String(value.clone()),
-                        Value::Bool(value) => ContextValue::Bool(*value),
-                        Value::Number(value) if value.is_i64() => {
-                            ContextValue::Int(value.as_i64().expect("checked integer"))
-                        }
-                        Value::Number(value) if value.is_f64() => {
-                            ContextValue::Float(value.as_f64().expect("checked float"))
-                        }
-                        _ => anyhow::bail!(
-                            "--context metadata[{key:?}] must be a string, int64, float64, or bool"
-                        ),
-                    };
-                    patch.metadata.insert(key.clone(), Some(scalar));
-                }
-            }
-            ("metadata", _) => anyhow::bail!("--context metadata must be an object"),
-            _ => anyhow::bail!("unknown --context field {key:?}; expected distinct_id or metadata"),
-        }
-    }
-    Ok(Context::default().with_patch(&patch))
-}
-
 /// Run a BAML function, script, or expression.
 ///
 /// Choose one execution mode: a positional function or script, one or more
@@ -244,14 +205,20 @@ pub struct RunArgs {
     )]
     pub expression: Option<String>,
 
-    /// Set process launch context from JSON.
+    /// Set process launch context from JSON; overrides BAML_CONTEXT.
     ///
     /// Accepts `distinct_id` (string or null) and `metadata` (a map whose values
     /// are strings, integers, floats, or booleans).
     ///
     /// Use `--context @file` to read JSON from a file or `--context -` for
     /// standard input.
-    #[arg(long, value_name = "SOURCE", help_heading = "Target options")]
+    #[arg(
+        long,
+        env = baml_exec::CONTEXT_ENV,
+        hide_env = true,
+        value_name = "SOURCE",
+        help_heading = "Target options"
+    )]
     pub context: Option<String>,
 
     /// Load one standalone source file instead of discovering a project.
@@ -442,17 +409,18 @@ impl RunArgs {
     fn launch_context(&self) -> Result<btel_types::context::Context> {
         self.context
             .as_deref()
-            .map(load_launch_context)
+            .map(|source| baml_exec::load_launch_context(source).context("invalid --context"))
             .transpose()
             .map(Option::unwrap_or_default)
     }
 
     fn validate_stdin_consumer(&self, input_source: Option<&str>, input_flag: &str) -> Result<()> {
-        anyhow::ensure!(
-            self.context.as_deref() != Some("-") || input_source != Some("-"),
-            "--context - and {input_flag} - both read stdin; only one stdin consumer is allowed"
-        );
-        Ok(())
+        baml_exec::ensure_single_stdin_consumer(
+            self.context.as_deref(),
+            "--context",
+            input_source,
+            input_flag,
+        )
     }
 
     pub fn run(&self) -> Result<crate::ExitCode> {
@@ -1076,9 +1044,9 @@ impl RunArgs {
 
     /// Evaluate a BAML expression.
     ///
-    /// Wraps the expression in a synthetic `function $expr_main() { <body> }`
-    /// and compiles/runs it. An explicit `--file` is compiled with the
-    /// expression as its standalone context. Otherwise, expressions are first
+    /// Wraps the expression in a synthetic function (see
+    /// [`expression_source`]) and compiles/runs it. An explicit `--file` is
+    /// compiled with the expression as its standalone context. Otherwise, expressions are first
     /// compiled with only the standard library in scope, so unrelated project
     /// errors cannot block an independent probe. If that fails and a project is
     /// available, retry with project context so expressions can reference its
@@ -1093,12 +1061,14 @@ impl RunArgs {
             expr_body.len()
         ));
 
-        // `-> unknown` lets any return type through.
-        let synthetic = format!("function baml_run_expr_main__() -> unknown {{\n{expr_body}\n}}");
-
         // An explicit standalone file is always part of the expression's
         // compilation context. Without one, preserve the isolation-first path
         // that keeps unrelated project errors from blocking independent probes.
+        // BUG: isolation first means a path reads differently from the project
+        // it runs beside: `log.info("x")` is the stdlib here but the project's
+        // own `log` item in a function of the project (an item of the root
+        // namespace shadows the package). Compile in the project when it is
+        // found and compiles, and fall back to isolation only on its errors.
         let standalone = self
             .file
             .as_deref()
@@ -1128,7 +1098,12 @@ impl RunArgs {
             Some(standalone) => (standalone.db, standalone.package),
             None => workspace_db(&isolated_root),
         };
-        expression_db.add_or_update_file_in(expression_workspace, &expression_path, &synthetic);
+        let synthetic = expression_source(
+            &mut expression_db,
+            expression_workspace,
+            &expression_path,
+            expr_body,
+        );
         let expression_diagnostics = baml_db::collect_diagnostics(&expression_db);
         let expression_has_errors = expression_diagnostics
             .iter()
@@ -1196,14 +1171,14 @@ impl RunArgs {
         let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
         let engine = Arc::new(engine);
         let return_type = engine
-            .function_return_type("baml_run_expr_main__")
+            .function_return_type(EXPRESSION_ENTRY)
             .unwrap_or(bex_engine::RuntimeTy::Null);
         let output_format = self.output_format;
         let (call_context, logs) = self.call_context(CallId::next());
         let helper_context = baml_exec::HelperCallContext::from_call_context(&call_context);
         let call_result = self.block_on_with_logs(
             &rt,
-            engine.call_function("baml_run_expr_main__", vec![], call_context, true),
+            engine.call_function(EXPRESSION_ENTRY, vec![], call_context, true),
             logs.as_ref(),
         );
         let output_succeeded: std::result::Result<bool, bex_engine::EngineError> = self
@@ -1211,22 +1186,23 @@ impl RunArgs {
                 &rt,
                 async {
                     let value = call_result?;
-                    if !matches!(return_type, bex_engine::RuntimeTy::Void) {
-                        if let Err(e) = baml_exec::write_output_with_context(
-                            &engine,
-                            value,
-                            &return_type,
-                            output_format,
-                            &helper_context,
-                            || self.print_logs(logs.as_ref()),
-                        )
-                        .await
-                        {
-                            crate::reporter::print_error(format_args!(
-                                "failed to serialize output: {e}"
-                            ));
-                            return Ok(false);
-                        }
+                    // An expression always prints its value: the synthetic
+                    // main is declared `-> unknown`, so there is no unit
+                    // return type to elide the way a named target's is.
+                    if let Err(e) = baml_exec::write_output_with_context(
+                        &engine,
+                        value,
+                        &return_type,
+                        output_format,
+                        &helper_context,
+                        || self.print_logs(logs.as_ref()),
+                    )
+                    .await
+                    {
+                        crate::reporter::print_error(format_args!(
+                            "failed to serialize output: {e}"
+                        ));
+                        return Ok(false);
                     }
                     Ok(true)
                 },
@@ -1897,6 +1873,49 @@ fn load_expression_source(source: &str) -> Result<String> {
 }
 
 /// Choose a synthetic expression path that cannot replace a loaded source.
+/// The function a `-e` expression is compiled into.
+const EXPRESSION_ENTRY: &str = "baml_run_expr_main__";
+
+/// Writes the synthetic source for a `-e` expression to `path` and returns
+/// it. The expression's text keeps its own lines in either form, so its
+/// positions are the same.
+///
+/// The text is the body of [`EXPRESSION_ENTRY`], declared `-> unknown` so
+/// that any value is let through, one typed by a `let type T = …` of the body
+/// included. That holds when the body ends in a final expression. One that
+/// ends in a statement (`log.info(1);`, `return 5;`, nothing at all) has no
+/// value for that return type to take, so it runs as a lambda instead: a
+/// lambda's return type is what its `return`s make it, and `null` when it
+/// has none.
+fn expression_source(
+    db: &mut ProjectDatabase,
+    package: SourceRoot,
+    path: &Path,
+    expr_body: &str,
+) -> String {
+    use baml_db::baml_compiler2_hir::{
+        body::function_body,
+        item_data::{file_functions, function_data},
+    };
+
+    let as_body = format!("function {EXPRESSION_ENTRY}() -> unknown {{\n{expr_body}\n}}");
+    let file = db.add_or_update_file_in(package, path, &as_body);
+    let entry = file_functions(db, file)
+        .iter()
+        .copied()
+        .find(|&function| function_data(db, function).name.as_str() == EXPRESSION_ENTRY);
+    // Text that leaves no such function did not parse as a body; its
+    // diagnostics read best against the plain form.
+    if entry.is_none_or(|entry| function_body(db, entry).has_final_expr()) {
+        return as_body;
+    }
+    let as_lambda = format!(
+        "function {EXPRESSION_ENTRY}() -> unknown {{ let baml_run_expr_body__ = () -> {{\n{expr_body}\n}}\n; baml_run_expr_body__() }}"
+    );
+    db.add_or_update_file_in(package, path, &as_lambda);
+    as_lambda
+}
+
 fn synthetic_expression_path(root: &Path, occupied: &[PathBuf]) -> PathBuf {
     let mut suffix = 0;
     loop {
@@ -2288,46 +2307,6 @@ mod tests {
             from: None,
             target_args: Vec::new(),
         }
-    }
-
-    #[test]
-    fn launch_context_validates_shape_and_preserves_scalar_types() {
-        use btel_types::context::ContextValue;
-
-        for source in ["{}", r#"{"distinct_id":null,"metadata":{}}"#] {
-            assert!(load_launch_context(source).unwrap().is_empty());
-        }
-        let context = load_launch_context(
-            r#"{"distinct_id":"user","metadata":{"s":"","i":-9223372036854775808,"f":1.0,"b":false}}"#,
-        )
-        .unwrap();
-        assert_eq!(context.distinct_id(), Some("user"));
-        assert_eq!(context.metadata()["s"], ContextValue::String(String::new()));
-        assert_eq!(context.metadata()["i"], ContextValue::Int(i64::MIN));
-        assert_eq!(context.metadata()["f"], ContextValue::Float(1.0));
-        assert_eq!(context.metadata()["b"], ContextValue::Bool(false));
-        for invalid in [
-            "not JSON",
-            "[]",
-            "null",
-            r#"{"unknown":1}"#,
-            r#"{"distinct_id":42}"#,
-            r#"{"metadata":null}"#,
-            r#"{"metadata":{"x":null}}"#,
-            r#"{"metadata":{"x":[]}}"#,
-            r#"{"metadata":{"x":{}}}"#,
-            r#"{"metadata":{"x":9223372036854775808}}"#,
-            r#"{"metadata":{"x":18446744073709551616}}"#,
-            r#"{"metadata":{"x":-9223372036854775809}}"#,
-            r#"{"metadata":{"x":1e400}}"#,
-        ] {
-            assert!(load_launch_context(invalid).is_err(), "{invalid}");
-        }
-        let file = tempfile::NamedTempFile::new().unwrap();
-        std::fs::write(file.path(), r#"{"metadata":{"x":null}}"#).unwrap();
-        assert!(load_launch_context(&format!("@{}", file.path().display())).is_err());
-        std::fs::write(file.path(), "{").unwrap();
-        assert!(load_launch_context(&format!("@{}", file.path().display())).is_err());
     }
 
     // ── Dispatch-mode mutex ───────────────────────────────────────────

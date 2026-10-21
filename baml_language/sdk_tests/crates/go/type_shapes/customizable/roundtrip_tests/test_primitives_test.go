@@ -35,7 +35,7 @@ func Test_return_bool(t *testing.T) {
 	}
 }
 func Test_return_null(t *testing.T) {
-	if _, err := baml_sdk.PrimitivesReturnNull(context.Background()); err != nil {
+	if err := baml_sdk.PrimitivesReturnNull(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -71,7 +71,7 @@ func Test_round_trip_bool(t *testing.T) {
 	}
 }
 func Test_round_trip_null(t *testing.T) {
-	if _, err := baml_sdk.PrimitivesRoundTripNull(context.Background(), baml_go.Null{}); err != nil {
+	if err := baml_sdk.PrimitivesRoundTripNull(context.Background(), baml_go.Null{}); err != nil {
 		t.Fatal(err)
 	}
 }

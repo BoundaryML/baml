@@ -27,7 +27,7 @@ use baml_compiler2_hir::{
 };
 use baml_compiler2_mir::{
     BuiltinKind, MirFunctionBody, MirFunctionKind, Operand, Place, RuntimeLowering, RuntimeTy,
-    Rvalue, StatementKind, definition_link_name, lower_function,
+    Rvalue, StatementKind, definition_display_name, lower_function,
     memory::{self, CellId},
 };
 use baml_type::ParamTy;
@@ -37,20 +37,13 @@ use bex_vm_types::{
 pub(crate) use emit::compile_mir_function;
 pub use package::{emit_package, emit_session_submission};
 
-/// Is `name` spelled under a language package? Such a function is a builtin
-/// whatever file it comes from.
-fn is_builtin_function_name(name: &str) -> bool {
-    name.split('.')
-        .next()
-        .is_some_and(|package| baml_builtins2::stdlib_package_names().contains(&package))
-}
-
+/// The wire origin of an emitted function: every function of a stdlib file
+/// is a builtin, whatever its metadata says; otherwise the metadata's.
 fn emitted_function_origin(
-    fq_name: &str,
     is_builtin_file: bool,
     origin: baml_compiler2_ast::FunctionOrigin,
 ) -> FunctionOrigin {
-    if is_builtin_file || is_builtin_function_name(fq_name) {
+    if is_builtin_file {
         FunctionOrigin::Builtin
     } else {
         match origin {
@@ -246,7 +239,6 @@ fn apply_signature_metadata(
     f.return_type = anchor.anchor_template(&sig.return_type);
     f.throws_type = anchor.anchor_template(&sig.throws_type);
     f.docstring.clone_from(&sig.docstring);
-    f.declared_name.clone_from(&sig.name);
     f.display_type_params.clone_from(&sig.display_type_params);
     f.type_param_names.clone_from(&sig.type_param_names);
     f.generic_param_bounds = sig
@@ -278,7 +270,7 @@ fn apply_signature_metadata(
 /// A bare single-segment path type expression for `name`.
 fn type_expr_for_name(name: Name) -> TypeExpr {
     baml_compiler2_ast::TypeExprKind::Path {
-        segments: vec![name],
+        path: baml_base::Path::bare(name),
         generic_args: Vec::new(),
         associated_type_bindings: Vec::new(),
     }
@@ -293,7 +285,7 @@ fn type_expr_for_name_with_generic_args(
     generic_params: &[GenericParamData],
 ) -> TypeExpr {
     baml_compiler2_ast::TypeExprKind::Path {
-        segments: vec![name],
+        path: baml_base::Path::bare(name),
         generic_args: generic_params
             .iter()
             .map(|param| type_expr_for_name(param.name.clone()))
@@ -345,9 +337,14 @@ fn compute_function_metadata<'db>(
             .unzip()
     }
 
+    // The display fields face a host reading the package as a whole (`baml
+    // run --list`), so they are spelled from the package's root namespace —
+    // never from the declaring file's, which would mix two viewpoints in one
+    // signature. The package is the function's own: a unit cannot know who
+    // roots the program.
     let vp = baml_compiler2_hir_ty::render::Viewpoint::user_facing(
         db,
-        file_package(db, func_loc.file(db)).root,
+        func_loc.file(db).source_root(db),
     );
 
     let file = func_loc.file(db);
@@ -696,7 +693,6 @@ fn compute_function_metadata<'db>(
         // clause (a declared clause is a firewall the inference respects).
         throws_type: compute_throws_type(db, file, &func.name, cache, &frame_params),
         docstring: func.docstring.clone(),
-        name: Some(func.name.to_string()),
         display_type_params,
         type_param_names: baml_type::RuntimeGenericLayout::new(&frame_params)
             .params()
@@ -713,24 +709,24 @@ fn compute_function_metadata<'db>(
 ///
 /// `Function::source_file` is display/metadata-only (backtraces, event
 /// metadata, reflection locations) — never opened from disk — so stripping
-/// the root keeps serialized `Program`s location-independent (a cached or
-/// packed blob is byte-identical wherever the project lives) and backtraces
-/// machine-independent. Only `Workspace` roots are stripped: `Stdlib` and
-/// `Dependency` roots keep their paths verbatim, because their
-/// `<builtin>/…` unit paths are a wire contract
-/// (`bex_vm_types/src/link.rs` string-matches the prefix).
+/// the root keeps the checkout's location out of the unit: a cached or packed
+/// blob reads the same wherever the package lives (a dependency checked out
+/// under two paths is one package), and backtraces are machine-independent.
+/// A `Stdlib` root keeps its path verbatim: it is the virtual
+/// `<builtin>/<package>/…`, location-free already, and the `<builtin>/`
+/// prefix is the wire contract the traceback filter reads
+/// (`bex_vm_types::errors::BUILTIN_SOURCE_PREFIX`).
 fn relative_source_path(db: &dyn baml_compiler2_mir::Db, file: baml_base::SourceFile) -> String {
-    let path = file.path(db);
     let root = file.source_root(db);
     match root.kind(db) {
-        baml_base::SourceRootKind::Workspace => path
-            .strip_prefix(root.path(db))
-            .unwrap_or(&path)
-            .display()
-            .to_string(),
-        baml_base::SourceRootKind::Stdlib
+        baml_base::SourceRootKind::Workspace
         | baml_base::SourceRootKind::Dependency
-        | baml_base::SourceRootKind::Dynamic => path.display().to_string(),
+        | baml_base::SourceRootKind::Dynamic => {
+            baml_compiler2_hir::file_package::root_relative_path(db, file)
+                .display()
+                .to_string()
+        }
+        baml_base::SourceRootKind::Stdlib => file.path(db).display().to_string(),
     }
 }
 
@@ -885,7 +881,7 @@ fn lowered<'db>(
         internal_lowering_error(
             db,
             function.file(db),
-            &definition_link_name(db, Definition::Function(function)),
+            &definition_display_name(db, Definition::Function(function)),
             error,
         )
     })
@@ -1018,7 +1014,7 @@ impl GenericFunctionInterner {
 /// a `Terminator::AwaitAny` suspend point).
 fn builtin_emit_function(
     kind: BuiltinKind,
-    fq_name: &str,
+    identity: bex_vm_types::types::FunctionIdentity,
     native_path: &str,
     arity: usize,
 ) -> Option<Function> {
@@ -1036,10 +1032,9 @@ fn builtin_emit_function(
     // spelling); `fq_name` is the display name and need not coincide.
     let native_key = matches!(kind, FunctionKind::NativeUnresolved).then(|| native_path.into());
     Some(Function {
-        name: fq_name.to_string(),
+        identity,
         source_file: String::new(), // builtins have no source file
         docstring: None,
-        declared_name: None,
         arity,
         real_local_count: 0,
         bytecode: Bytecode::default(),
@@ -1061,11 +1056,10 @@ fn builtin_emit_function(
         display_return_type: "null".to_string(),
         throws_type: bex_vm_types::TyTemplate::Never,
         origin: FunctionOrigin::Builtin,
-        is_interface_body: false, // set from the item tree by attach_function_metadata
         native_key,
         body_meta: None,
-
-        runtime_package: bex_vm_types::HeapPtr::null(),
+        trace_passthrough: false,
+        owner: bex_vm_types::HeapPtr::null(),
     })
 }
 
@@ -1079,7 +1073,6 @@ fn attach_function_metadata<'db>(
     func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
     cache: &RuntimeLowering<'_>,
     is_builtin_file: bool,
-    fq_name: &str,
     anchor: &mut refs::PackageRefs<'_, '_>,
     compiled_fn: &mut Function,
 ) {
@@ -1089,10 +1082,11 @@ fn attach_function_metadata<'db>(
         baml_compiler2_hir::signature::function_parameter_defaults(db, func_loc);
     let signature_metadata = compute_function_metadata(db, func_loc, &parameter_defaults, cache);
     apply_signature_metadata(compiled_fn, &signature_metadata, anchor);
-    compiled_fn.origin = emitted_function_origin(fq_name, is_builtin_file, func.metadata.origin);
-    compiled_fn.is_interface_body = baml_compiler2_mir::function_is_interface_body(db, func_loc);
+    compiled_fn.trace_passthrough = func.metadata.trace_passthrough;
+    compiled_fn.origin = emitted_function_origin(is_builtin_file, func.metadata.origin);
 
-    // Set LLM-specific body_meta if this is an LLM function with a client.
+    // Set LLM-specific body_meta for every LLM function, whether its client is
+    // a model string or an expression.
     //
     // NOTE (canary merge): canary removed the runtime `Function.stream_return_type`
     // field and its plumbing (the pre-existing streaming infra from PRs #3362/#3755).
@@ -1100,12 +1094,38 @@ fn attach_function_metadata<'db>(
     // `return_type` (see `baml_compiler2_ast`'s `companions::llm_stream`), so the
     // old emit-side pre-computation block was dropped. BEP-049 M5e stream-path rendering
     // of `ctx.output_format()` should be re-verified against canary's streaming.
-    if let Some(llm_meta) = function_llm_meta(db, func_loc)
-        && let Some(client) = &llm_meta.client_name
-    {
-        compiled_fn.body_meta = Some(FunctionMeta::Llm {
-            client: client.to_string(),
-        });
+    if function_llm_meta(db, func_loc).is_some() {
+        compiled_fn.body_meta = Some(FunctionMeta::Llm);
+    } else if is_model_invoke(db, func_loc) {
+        compiled_fn.body_meta = Some(FunctionMeta::ModelInvoke);
+    }
+}
+
+/// An `ai.Client.invoke` implementation, or `ai.stream.TurnStream._settle`:
+/// the functions whose returned turn telemetry charges as model usage.
+fn is_model_invoke<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> bool {
+    use baml_compiler2_hir::loc::DeclRef;
+    use baml_compiler2_hir_ty::callable::{callable_display_name, callable_owner_type};
+    let function = DeclRef::Source(func_loc);
+    let Some(owner) = callable_owner_type(db, function) else {
+        return false;
+    };
+    if !baml_compiler2_hir::package::lang_roots(db).is(baml_base::LangPackage::Ai, owner.root()) {
+        return false;
+    }
+    let namespace: Vec<&str> = owner.namespace().iter().map(Name::as_str).collect();
+    match (
+        namespace.as_slice(),
+        owner.name().as_str(),
+        callable_display_name(db, function).as_str(),
+    ) {
+        // The interface's own `invoke` is abstract, so only implementations
+        // reach codegen.
+        ([], "Client", "invoke") | (["stream"], "TurnStream", "_settle") => true,
+        _ => false,
     }
 }
 
@@ -1146,7 +1166,10 @@ fn compile_lambdas<'db>(
     let mut result = Vec::with_capacity(lambdas.len());
     for (lambda_idx, lambda) in lambdas.iter().enumerate() {
         let capture_info = capture_infos.get(lambda_idx).cloned().unwrap_or_default();
-        let lambda_name = lambda.identity.link_name(db);
+        let identity = refs::function_identity(db, &lambda.identity);
+        // The operand metadata spells the closure as its identity renders with
+        // no package segment — the historical `.<lambda(parent, i)>`.
+        let lambda_name = identity.render(None);
         let obj_idx = match &lambda.kind {
             MirFunctionKind::Bytecode(body) => {
                 // Recursively compile any nested lambdas within this lambda.
@@ -1179,9 +1202,15 @@ fn compile_lambdas<'db>(
                     capture_types: &capture_info.capture_types,
                     spawn_capture_indices: &capture_info.spawn_capture_indices,
                 };
-                let mut f =
-                    compile_mir_function(body, lambda.arity, lambda.span, line_starts, ctx, opt);
-                f.name.clone_from(&lambda_name);
+                let mut f = compile_mir_function(
+                    body,
+                    lambda.arity,
+                    identity,
+                    lambda.span,
+                    line_starts,
+                    ctx,
+                    opt,
+                );
                 f.source_file = source_file.to_string();
                 // Stamp the runtime signature `lower_lambda` recorded — the
                 // same struct and writer as a top-level declaration (lambdas
@@ -1218,24 +1247,6 @@ mod tests {
     use salsa::Setter;
 
     use super::*;
-
-    #[test]
-    fn builtin_function_names_follow_the_stdlib_inventory() {
-        for package in baml_builtins2::stdlib_package_names() {
-            assert!(is_builtin_function_name(&format!(
-                "{package}.nested.function"
-            )));
-        }
-        for name in [
-            "",
-            "root.function",
-            "user.function",
-            "env.function",
-            "boundary.function",
-        ] {
-            assert!(!is_builtin_function_name(name), "{name}");
-        }
-    }
 
     #[salsa::db]
     pub(crate) struct TestDb {
@@ -1435,7 +1446,6 @@ mod tests {
         };
         let cache = RuntimeLowering {
             aliases: &aliases,
-            spelling: baml_compiler2_hir::package::spelling(&db),
             db: &db,
         };
 
@@ -1467,7 +1477,6 @@ mod tests {
         };
         let cache = RuntimeLowering {
             aliases: &aliases,
-            spelling: baml_compiler2_hir::package::spelling(&db),
             db: &db,
         };
         let root = file_package(&db, file).root;

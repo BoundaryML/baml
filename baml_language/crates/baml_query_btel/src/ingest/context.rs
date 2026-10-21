@@ -231,6 +231,20 @@ fn identity(cas: &CasStore, snapshot: &Arc<DecodedSnapshot>) -> Result<Option<St
         return Err(());
     };
     for (name, value) in entries {
+        let child;
+        let name = if let DecodedValue::External(index) = name {
+            child = btel_reader::value::BlobSource::load(cas, metadata.blob().child(*index))
+                .map_err(|_| ())?;
+            let DecodedRoot::Value(name) = &child.root else {
+                return Err(());
+            };
+            name
+        } else {
+            name
+        };
+        let DecodedValue::String(name) = name else {
+            return Err(());
+        };
         let scalar = match value {
             DecodedValue::String(_)
             | DecodedValue::Int(_)

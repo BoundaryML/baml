@@ -148,6 +148,18 @@ impl BamlClassType for PackageReflectImpl {
             ));
         }
 
+        // An output of the unit type carries no information, so there is
+        // nothing for a model to produce. `null` is data only as part of a
+        // larger type (`string?`, a field).
+        if type_value.ty.as_runtime_ty().is_unit() {
+            let diagnostic = baml_compiler_diagnostics::runtime_type::non_data_type_at_render(
+                &type_value.ty.to_string(),
+            );
+            return Err(VmRustFnError::thrown_fresh(
+                super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
+            ));
+        }
+
         let mut visited = std::collections::HashSet::new();
         if let Some((path, non_data_ty)) =
             first_non_data_type(vm, &type_value.ty, &root, &mut visited)
@@ -186,18 +198,28 @@ impl BamlClassType for PackageReflectImpl {
         }
     }
 
-    /// BEP-044: `class_t.implements(iface_t)`.
+    /// BEP-044: `t.implements(iface_t)`, for any concrete type `t` (a class,
+    /// an enum, a primitive, a list, ...).
     ///
     /// Selects over the program-wide impl-rule index: an impl applies when its
-    /// `for_ty_pattern` matches `class_t` (with bounds satisfied) and its
+    /// `for_ty_pattern` matches `t` (with bounds satisfied) and its
     /// implemented-interface args / associated bindings match the requested
     /// instantiation. Candidates are every impl of the interface in the program —
-    /// the orphan rule does *not* localize them to `class_t`'s or the interface's
+    /// the orphan rule does *not* localize them to `t`'s or the interface's
     /// package (see [`crate::package_load::PackageIndex`]); bound obligations
-    /// recurse the same way. Because the compiler (E0125) forces a class to
-    /// implement every interface in its `requires` closure, "direct impl" already
-    /// covers transitive satisfaction.
-    fn implements(vm: &BexVm, self_value: &Value, other: &Value) -> bool {
+    /// recurse the same way. Because the compiler (E0125) forces an implementor
+    /// to implement every interface in its `requires` closure, "direct impl"
+    /// already covers transitive satisfaction.
+    ///
+    /// `iface_t` is an interface-existential type value, which carries every
+    /// associated binding (the compiler fills the defaults), so the selected
+    /// impl must bind exactly those: unlike a generic bound, the request cannot
+    /// leave an associated type open.
+    ///
+    /// Both sides are `type` values: `implements` and `implemented_by` call
+    /// `as_type()` on their `reflect.TypeView` argument in BAML, and
+    /// `implemented_by` swaps the two before it gets here.
+    fn _implements(vm: &BexVm, self_value: &Value, other: &Value) -> bool {
         let Some(self_ty) = type_value_ty(vm, *self_value) else {
             return false;
         };
@@ -210,12 +232,6 @@ impl BamlClassType for PackageReflectImpl {
             &iface_args,
             &iface_assoc,
         )
-    }
-
-    /// BEP-044: `iface_t.implemented_by(class_t)` — same answer as
-    /// `class_t.implements(iface_t)` but with the receiver flipped.
-    fn implemented_by(vm: &BexVm, self_value: &Value, other: &Value) -> bool {
-        Self::implements(vm, other, self_value)
     }
 }
 
@@ -270,9 +286,17 @@ impl RenderDefinitionValidator<'_> {
                 if let Some(conflict) = self.check_name(&definition) {
                     return Some(conflict);
                 }
+                // One spelling per instantiation, as SAP keys it: with each
+                // argument's union flat, `Opt<T?>` at `int?` is `Opt<int?>`
+                // again, so a recursion through unions alone closes.
+                let args: &[bex_vm_types::RealizedTy] = &args
+                    .iter()
+                    .cloned()
+                    .map(bex_vm_types::RealizedTy::flatten_union)
+                    .collect::<Box<[_]>>();
                 let identity = RealizedClassIdentity {
                     head: *head,
-                    args: args.clone(),
+                    args: args.into(),
                 };
                 if let Some(start) = self
                     .class_ancestry
@@ -516,9 +540,9 @@ fn render_definition_display_name(vm: &BexVm, definition: &RenderDefinition) -> 
     | RenderDefinition::Enum(ptr)
     | RenderDefinition::TypeAlias(ptr)) = definition;
     match vm.get_object(*ptr) {
-        Object::Class(class) => class.name.display_name().to_string(),
-        Object::Enum(enm) => enm.name.display_name().to_string(),
-        Object::TypeAlias(alias) => alias.name.display_name().to_string(),
+        Object::Class(class) => class.name().display_name().to_string(),
+        Object::Enum(enm) => enm.name().display_name().to_string(),
+        Object::TypeAlias(alias) => alias.name().display_name().to_string(),
         _ => unreachable!("a render definition points at a nominal declaration"),
     }
 }
@@ -546,7 +570,7 @@ fn rendered_realized_class_name(
     class: &bex_vm_types::Class,
     args: &[bex_vm_types::RealizedTy],
 ) -> String {
-    let display_name = class.name.display_name();
+    let display_name = class.name().display_name();
     let base = class.alias.as_deref().unwrap_or(display_name.as_str());
     if args.is_empty() {
         base.to_string()
@@ -841,7 +865,14 @@ fn first_open_interface(
             // substitutes class arguments into field templates, so `Box<int>`
             // and `Box<OpenIface>` reach different field types — a declaration
             // key would let whichever arrives first swallow the other's walk.
-            if !visited.insert(ty.clone()) {
+            // Each argument's union is spelled flat, so a recursion through
+            // unions alone (`Opt<T?>`) meets its instantiation again and stops.
+            let args: &[bex_vm_types::RealizedTy] = &args
+                .iter()
+                .cloned()
+                .map(bex_vm_types::RealizedTy::flatten_union)
+                .collect::<Box<[_]>>();
+            if !visited.insert(bex_vm_types::RealizedTy::Class(*head, args.into())) {
                 return None;
             }
             let Object::Class(class) = vm.get_object(head.ptr()) else {
@@ -916,7 +947,6 @@ fn is_non_data_render_type(ty: &bex_vm_types::RealizedTy) -> bool {
         | bex_vm_types::RealizedTy::Type
         | bex_vm_types::RealizedTy::Resource
         | bex_vm_types::RealizedTy::PromptAst
-        | bex_vm_types::RealizedTy::Void
         | bex_vm_types::RealizedTy::Unknown
         | bex_vm_types::RealizedTy::Never => true,
         bex_vm_types::RealizedTy::Int
@@ -1010,7 +1040,6 @@ fn first_non_data_type(
         | bex_vm_types::RealizedTy::Type
         | bex_vm_types::RealizedTy::Resource
         | bex_vm_types::RealizedTy::PromptAst
-        | bex_vm_types::RealizedTy::Void
         | bex_vm_types::RealizedTy::Unknown
         | bex_vm_types::RealizedTy::Never => None,
     }
@@ -1150,7 +1179,7 @@ fn render_witness_sources(
             continue;
         };
         source.push_str("\n  implements ");
-        source.push_str(interface.name.render_user_facing().as_str());
+        source.push_str(interface.name().display_name().as_str());
         let args = rule
             .interface_args
             .iter()
@@ -1271,8 +1300,8 @@ fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
     let mut spellings = indexmap::IndexMap::new();
     for ptr in enum_ptrs.iter().chain(&class_ptrs) {
         let (tag, base) = match vm.get_object(*ptr) {
-            Object::Class(class) => (class.type_tag, class.name.display_name().to_string()),
-            Object::Enum(enm) => (enm.type_tag, enm.name.display_name().to_string()),
+            Object::Class(class) => (class.type_tag, class.name().display_name().to_string()),
+            Object::Enum(enm) => (enm.type_tag, enm.name().display_name().to_string()),
             _ => continue,
         };
         if spellings.contains_key(&tag) {
@@ -1289,7 +1318,7 @@ fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
         };
         let name = spellings
             .get(&enm.type_tag)
-            .map_or_else(|| enm.name.display_name().to_string(), Clone::clone);
+            .map_or_else(|| enm.name().display_name().to_string(), Clone::clone);
         if !rendered_declarations.insert(name.clone()) {
             continue;
         }
@@ -1327,7 +1356,7 @@ fn render_type_value_source(vm: &BexVm, type_value: &TypeValue) -> String {
         };
         let name = spellings
             .get(&class.type_tag)
-            .map_or_else(|| class.name.display_name().to_string(), Clone::clone);
+            .map_or_else(|| class.name().display_name().to_string(), Clone::clone);
         if !rendered_declarations.insert(name.clone()) {
             continue;
         }
@@ -1434,26 +1463,7 @@ mod renderability_tests {
     use super::*;
 
     fn empty_package() -> bex_vm_types::types::Package {
-        bex_vm_types::types::Package {
-            name: baml_type::Name::default(),
-            edges: indexmap::IndexMap::new(),
-            classes: indexmap::IndexMap::new(),
-            enums: indexmap::IndexMap::new(),
-            interfaces: indexmap::IndexMap::new(),
-            impl_rules: indexmap::IndexMap::new(),
-            type_aliases: indexmap::IndexMap::new(),
-            globals: indexmap::IndexMap::new(),
-            slots: bex_vm_types::types::Slots::Own {
-                cells: Box::new([]),
-                initialized: true,
-            },
-            objects: bex_vm_types::types::Objects::Own(Box::new([])),
-            surface: bex_vm_types::types::ExportSurface::Projected,
-            init: None,
-            test_init: None,
-            diagnostics: Vec::new(),
-            session: None,
-        }
+        bex_vm_types::types::Package::empty(baml_type::Name::new(baml_type::RESERVED_USER_PACKAGE))
     }
 
     fn alloc_test_class(
@@ -1464,7 +1474,7 @@ mod renderability_tests {
     ) -> (bex_vm_types::HeapPtr, baml_type::typetag::TypeTag) {
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let ptr = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
-            name: bex_vm_types::DeclarationName::Anonymous(baml_type::Name::new(name)),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new(name)),
             fields: Vec::new(),
             description: description.map(str::to_string),
             alias: None,
@@ -1472,7 +1482,7 @@ mod renderability_tests {
             other: indexmap::IndexMap::new(),
             stream_done: false,
             type_tag,
-            has_cleanup: false,
+            cleanup: None,
             methods: IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::Package(owner),
@@ -1502,13 +1512,16 @@ mod renderability_tests {
         let (second_shared, _) =
             alloc_test_class(&mut vm, "Shared", Some("second definition"), second_package);
 
-        let Object::Package(package) = vm.get_object_mut(first_package) else {
+        let mut metered = vm.get_object_mut(first_package);
+
+        let Object::Package(package) = &mut *metered else {
             unreachable!("test package pointer")
         };
         package
             .classes
             .insert(package_member_name("Shared"), first_shared);
-        let Object::Package(package) = vm.get_object_mut(second_package) else {
+        let mut metered = vm.get_object_mut(second_package);
+        let Object::Package(package) = &mut *metered else {
             unreachable!("test package pointer")
         };
         package
@@ -1554,7 +1567,6 @@ mod renderability_tests {
             bex_vm_types::RealizedTy::Type,
             bex_vm_types::RealizedTy::Resource,
             bex_vm_types::RealizedTy::PromptAst,
-            bex_vm_types::RealizedTy::Void,
             bex_vm_types::RealizedTy::unknown(),
             bex_vm_types::RealizedTy::never(),
         ];

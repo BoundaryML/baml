@@ -7,6 +7,7 @@ use std::{
     },
 };
 
+use bex_project::RustDataArc as _;
 use bridge_cffi::baml_bridge::cffi::{
     BamlHandle, BamlHandleType, BamlOutboundResult, CallFunctionArgs, InboundMapEntry,
     InboundValue, InvocationOptions, TraceSelection, baml_outbound_result, baml_outbound_value,
@@ -158,9 +159,8 @@ async fn raw_invocation_and_callback_lifecycles() {
         panic!("expected reservation RustData")
     };
     let reservation = data
-        .0
         .clone()
-        .downcast::<bex_project::ReservedSpanData>()
+        .downcast_payload::<bex_project::ReservedSpanData>()
         .unwrap();
     let reservation_key = HANDLE_TABLE.insert(CffiHandleTableEntry::TraceReservation(
         TraceReservationHandle {

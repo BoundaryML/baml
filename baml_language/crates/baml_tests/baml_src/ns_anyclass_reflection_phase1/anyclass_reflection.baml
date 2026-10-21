@@ -27,8 +27,8 @@ test "requires_and_bounded_impl_membership_agree_for_real_classes" {
                 let boxed = Box<Record> { value: record }
                 record.tag() == "record:ok"
                     && boxed.wrapped() == "wrapped:Record"
-                    && reflect.Type.of<Record>().implements(reflect.Type.of<Tagged>())
-                    && reflect.Type.of<Box<Record>>().implements(reflect.Type.of<Wrapped>())
+                    && Record.type().implements(reflect.Type.of<Tagged>())
+                    && Box<Record>.type().implements(reflect.Type.of<Wrapped>())
                     && !reflect.Type.of<Box<int>>().implements(reflect.Type.of<Wrapped>())
             }
         `,
@@ -54,8 +54,8 @@ test "membership_is_class_only_and_kind_views_are_ordinary_classes" {
 
             function main() -> bool {
                 let numbers = { "one": 1 }
-                let class_kind = reflect.Type.of<Point>().as_class() ?? throw "class kind"
-                let enum_kind = reflect.Type.of<Color>().as_enum() ?? throw "enum kind"
+                let class_kind = Point.type().as_class() ?? throw "class kind"
+                let enum_kind = Color.type().as_enum() ?? throw "enum kind"
                 let union_kind = reflect.Type.of<int | string>().as_union() ?? throw "union kind"
                 let literal_kind = reflect.Type.of<"fixed">().as_literal() ?? throw "literal kind"
                 let array_kind = reflect.Type.of<int[]>().as_array() ?? throw "array kind"
@@ -105,18 +105,18 @@ test "reflected_membership_and_static_field_handles_agree_with_narrowing" {
                 let narrowed: reflect.AnyClass = point else {
                     throw "Expected class"
                 }
-                let field: reflect.class.Field = narrowed.get_field("x") else {
+                let field: reflect.class.Field = narrowed.find_field("x") else {
                     throw "Expected x"
                 }
-                let point_type: reflect.class.Type = reflect.Type.of<Point>().as_class() else {
+                let point_type: reflect.Class = Point.type().as_class() else {
                     throw "Point type"
                 }
                 let type_side_field = point_type.fields()[0]
 
-                reflect.Type.of<Point>().implements(any_class_t)
-                    && any_class_view.implemented_by(reflect.Type.of<Point>())
-                    && reflect.Type.of<reflect.class.Type>().implements(any_class_t)
-                    && reflect.Type.of<reflect.enum.Type>().implements(any_class_t)
+                Point.type().implements(any_class_t)
+                    && any_class_view.implemented_by(Point.type())
+                    && reflect.Class.type().implements(any_class_t)
+                    && reflect.Enum.type().implements(any_class_t)
                     && !reflect.Type.of<int>().implements(any_class_t)
                     && narrowed.name() == "Point"
                     && narrowed.attributes().alias == "point"
@@ -143,7 +143,9 @@ test "concrete_members_keep_precedence_until_explicitly_narrowed" {
 
             class ExistingMethods {
                 function get(self, name: string) -> string { "get:" + name }
+                function find(self, name: string) -> string { "find:" + name }
                 function get_field(self, name: string) -> string { "get_field:" + name }
+                function find_field(self, name: string) -> string { "find_field:" + name }
                 function has_field(self, name: string) -> string { "has_field:" + name }
                 function list_fields(self) -> string { "list_fields" }
                 function name(self) -> string { "name" }
@@ -186,13 +188,15 @@ test "concrete_members_keep_precedence_until_explicitly_narrowed" {
                     && fields.type == 7
                     && fields.attributes == "field-attributes"
                     && methods.get("x") == "get:x"
+                    && methods.find("x") == "find:x"
                     && methods.get_field("x") == "get_field:x"
+                    && methods.find_field("x") == "find_field:x"
                     && methods.has_field("x") == "has_field:x"
                     && methods.list_fields() == "list_fields"
                     && methods.name() == "name"
                     && methods.type() == "type"
                     && methods.attributes() == "attributes"
-                    && reflect.Type.of_value(boxed_value) == reflect.Type.of<string>()
+                    && reflect.Type.of_value(boxed_value) == string.type()
                     && reflected.name() == "ExistingFields"
                     && reflected.get<string>("name") == "field-name"
             }

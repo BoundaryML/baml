@@ -37,7 +37,6 @@ const TABLES: &[(&str, &str)] = &[
     ("epoch_state", "rec, epoch_id"),
     ("aggregate", "rec, node"),
     ("sysop", "rec, call_path_id"),
-    ("model_usage", "rec, sequence, position"),
     ("call", "rec, call_id"),
     ("network_span", "rec, span_id"),
     ("network_event", "rec, span_id, seq"),
@@ -58,6 +57,8 @@ function Deferred(n: int) -> int throws Failure {
     Middle(n)
 }
 function main(n: int) -> int {
+    let span = trace.start_span(Pick<int>, inputs = { "x": n });
+    let closed = trace.start_span("closed");
     let a = Middle(n) catch (e) { Failure => 1 };
     let b = { Middle(n) catch (e) { Failure => { throw e } } } catch (outer) { Failure => 2 };
     let c = Recur(3) catch (e) { Failure => 3 };
@@ -65,6 +66,8 @@ function main(n: int) -> int {
     let child = spawn { Middle(n) };
     let e = (await child) catch (x) { Failure => 5 };
     let f = Pick(Box { value: n }).map((v) -> string { "v" }).value;
+    span.finish(n);
+    closed.close();
     a + b + c + d + e + Pick(f.length())
 }
 function crash(n: int) -> int { Middle(n) }
@@ -202,11 +205,12 @@ async fn fresh_and_incremental_indexes_are_identical() {
     let metrics = incremental.refresh().unwrap();
     assert_eq!(metrics.transactions, metrics.files_applied);
     let fresh = dump(&fresh);
-    // Pick<T> and Box<T>.map<U> recorded their type arguments.
+    // Two Pick<T> calls, Box<T>.map<U>, and the explicitly owned Pick<int>
+    // span each record type arguments on every main execution.
     let calls = &fresh.iter().find(|(table, _)| table == "call").unwrap().1;
     assert_eq!(
         calls.iter().filter(|row| row[9] != Value::Null).count(),
-        24 * 3,
+        24 * 4,
         "type_args_cas"
     );
     assert_same(&fresh, &dump(&incremental));
@@ -393,16 +397,29 @@ mod crafted {
         })
     }
 
-    fn usage(node: u64, model: &str, input: u64) -> proto::ModelUsage {
+    fn usage(model: &str, input: u64) -> proto::ModelUsage {
         proto::ModelUsage {
-            node_id: node,
-            thread_id: T2,
+            provider: "openai".into(),
             model: Some(model.into()),
-            input_tokens: input,
-            output_tokens: 10,
+            calls: 1,
+            input_tokens: Some(input),
+            output_tokens: Some(10),
             cache_read_tokens: Some(5),
             cache_write_tokens: None,
             reasoning_tokens: None,
+        }
+    }
+
+    /// `completion`, carrying the model usage charged to its span.
+    fn charged(event: Event, usage: Vec<proto::ModelUsage>) -> Event {
+        match event {
+            Event::FunctionCompletion(completion) => {
+                Event::FunctionCompletion(proto::FunctionCompletion {
+                    usage,
+                    ..completion
+                })
+            }
+            _ => unreachable!("a function completion"),
         }
     }
 
@@ -420,7 +437,10 @@ mod crafted {
                         T2,
                         vec![
                             Event::ThreadAnnouncement(proto::ThreadAnnouncement {}),
-                            completion(100, T2, 2, 20),
+                            charged(
+                                completion(100, T2, 2, 20),
+                                vec![usage("claude-opus-5-5", 1000)],
+                            ),
                         ],
                     ),
                     // A request's events and completion before its announcement.
@@ -443,9 +463,6 @@ mod crafted {
                     sysops: 2,
                     total_ticks: 6,
                 }],
-            }),
-            usage: Some(proto::UsageBatch {
-                entries: vec![usage(100, "claude-opus-5-5", 1000)],
             }),
             ..Default::default()
         };
@@ -470,10 +487,12 @@ mod crafted {
                             Event::ThreadCompletion(proto::ThreadCompletion {
                                 completed_at_ticks: 90,
                                 outcome: 1,
+                                usage: vec![usage("unknown-model", 7)],
                                 ..Default::default()
                             }),
                             // Late: its completion was in the first file.
                             Event::FunctionAnnouncement(proto::FunctionAnnouncement {
+                                manual: false,
                                 id: 100,
                                 parent_id: T2,
                                 call_path_id: 2,
@@ -485,7 +504,14 @@ mod crafted {
                     ),
                     section(
                         T3,
-                        vec![completion(101, T3, 4, 30), completion(101, T3, 4, 31)],
+                        // The later completion's usage replaces the first's.
+                        vec![
+                            charged(
+                                completion(101, T3, 4, 30),
+                                vec![usage("claude-opus-5-5", 3)],
+                            ),
+                            charged(completion(101, T3, 4, 31), vec![usage("jev-1.13.0", 50)]),
+                        ],
                     ),
                     section(
                         T2,
@@ -508,14 +534,17 @@ mod crafted {
                     total_ticks: 4,
                 }],
             }),
-            usage: Some(proto::UsageBatch {
-                entries: vec![usage(100, "jev-1.13.0", 50), usage(T2, "unpriced-model", 7)],
-            }),
             ..Default::default()
         };
         let third = proto::RecordingFile {
             definitions: Some(proto::Definitions {
-                functions: vec![metadata(CALLEE, "user.Callee", 7)],
+                functions: vec![{
+                    let mut callee = metadata(CALLEE, "user.Callee", 7);
+                    if let Some(Resolution::Metadata(metadata)) = &mut callee.resolution {
+                        metadata.model_invoke = true;
+                    }
+                    callee
+                }],
                 call_paths: vec![
                     path(1, 0, None, 0, CALLER, 1),
                     path(4, 1, Some(CALLER), 2, CALLEE, 1),
@@ -538,6 +567,7 @@ mod crafted {
                             completed_at_ticks: 95,
                             outcome: 2,
                             panicked: true,
+                            usage: Vec::new(),
                         }),
                         announce(200, 4, "POST", 22),
                         network_event(200, "await", 41, None),

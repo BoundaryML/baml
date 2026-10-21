@@ -397,12 +397,12 @@ test "non_generic_optional_calls_unchanged" {
 
 function reflected_field_read_fn() -> int? throws reflect.errors.TypeMismatch {
     let value: reflect.AnyClass = Point { x: 7, label: "a" } else { return null }
-    value.get_field("x")?.value<int>()
+    value.find_field("x")?.value<int>()
 }
 
 function reflected_missing_field_fn() -> int? throws reflect.errors.TypeMismatch {
     let value: reflect.AnyClass = Point { x: 7, label: "a" } else { return null }
-    value.get_field("absent")?.value<int>()
+    value.find_field("absent")?.value<int>()
 }
 
 test "reflected_field_read_through_optional_chain" {
@@ -414,7 +414,7 @@ test "reflected_field_read_through_optional_chain" {
 /// (`reflect.errors.TypeMismatch`), not a frame-layout failure.
 function reflected_field_wrong_type_arg_fn() -> string {
     let value: reflect.AnyClass = Point { x: 7, label: "a" } else { return "no-class" }
-    let read = value.get_field("x")?.value<string>() catch (e) {
+    let read = value.find_field("x")?.value<string>() catch (e) {
         reflect.errors.TypeMismatch { message } => { return "type-mismatch" }
     }
     read ?? "null"

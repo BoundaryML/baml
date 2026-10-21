@@ -21,11 +21,9 @@ class ParseError {
 
 /// A parsed JSON value that does not fit the expected BAML type.
 ///
-/// `path` locates the offending node in jq-ish notation: `.field` for a class
-/// field, `[0]` for an array element, `["key"]` for a map entry. Only
-/// `from_string<T>` threads it end to end from the decode root. The
-/// override-honoring drivers (`to<T>`, `from_json<T>`, `deserialize<T>`)
-/// re-enter per node, so there it is `""` or relative to the failing leaf.
+/// `path` locates the offending node from the decode root in jq-ish
+/// notation: `.field` for a class field, `[0]` for an array element,
+/// `["key"]` for a map entry; `""` is the root itself.
 class DecodeError {
     message: string,
     path: string,
@@ -186,8 +184,8 @@ function from_string<T>(s: string) -> T throws ParseError | DecodeError {
     $rust_function
 }
 
-/// Decodes a `json` value into `T`, honoring `baml.FromJson` overrides on
-/// classes through arrays, maps, and optionals.
+/// Decodes a `json` value into `T`, honoring `baml.FromJson` overrides at
+/// every depth.
 ///
 /// The second spelling of `to<T>` — same dispatcher, same override handling,
 /// same result. `to<T>` reaches it through one extra dispatch hop, which is the
@@ -213,12 +211,18 @@ function from_json<T>(j: json) -> T throws DecodeError {
 /// target type at every depth.
 ///
 /// The decode counterpart of `baml.json.from<T>`: `json.from` serializes a `T`
-/// to json, `json.to` reads json back as a `T`. A type that
-/// `implements baml.FromJson` is constructed through its override; everything
-/// else decodes structurally, field by field, walking lists, maps, and
-/// optionals and honoring nested overrides. Resolution is on the target type
-/// `T`, delivered via the type-arg channel, so an override declared in any
-/// package is honored, not just one visible to this one.
+/// to json, `json.to` reads json back as a `T`. It mirrors `==`, which lets a
+/// provided `baml.ops.Equals` win and compares the rest structurally: wherever
+/// the walk meets a class or enum — at the root, as a field, under an
+/// optional, in a list, in a map — a type that `implements baml.FromJson` is
+/// constructed through its override, and anything else decodes structurally,
+/// field by field, its children by the same rule. Resolution is on the target
+/// type `T`, delivered via the type-arg channel, so an override declared in
+/// any package is honored, not just one visible to this one.
+///
+/// A union is the one place shape decides: its member is the first one the
+/// value fits structurally, and that member then decodes as above. An
+/// override's own reading of a shape does not make its type a member.
 ///
 /// `T` is not inert here, as it is in `from<T>`. Serialization dispatches on
 /// the runtime *value*; decoding has only the target type to go on. Supplying
@@ -236,9 +240,9 @@ function from_json<T>(j: json) -> T throws DecodeError {
 ///
 /// # Throws
 ///
-/// - `baml.json.DecodeError` if `j` does not fit `T`, or if a
-///   `baml.FromJson` override rejects it. Decoding an already-parsed `json`
-///   never re-parses, so no `ParseError` arises here.
+/// - `baml.json.DecodeError` if `j` does not fit `T`, if a `baml.FromJson`
+///   override rejects it, or if `j` contains itself. Decoding an
+///   already-parsed `json` never re-parses, so no `ParseError` arises here.
 //baml:mut_vm
 //baml:may_yield
 function to<T>(j: json) -> T throws DecodeError {
@@ -457,11 +461,20 @@ function path_or<T>(j: json, selector: string, default: T) -> T throws never {
 /// `additionalProperties`, and unions use `anyOf`. Enums lower to a string
 /// `enum` of their variant names, `uint8array` to `string`, and `unknown` to
 /// the empty schema `{}`. A nullable type becomes a `["T", "null"]` type list
-/// where it can, and `anyOf` otherwise.
+/// where it can, and `anyOf` otherwise. A nullable enum also lists `null` in
+/// its `enum`, and a nullable literal uses `anyOf`, because `enum` and `const`
+/// restrict the value whatever `type` says.
 ///
 /// This pass *does* respect `@alias` and `@skip`, where the value conversions
 /// do not — a schema is read by something outside BAML, so it must describe
 /// the wire names. That is also why an enum variant lowers under its alias.
+///
+/// Documentation becomes `description`, with the text the output format
+/// shows: a class's or a field's `@description`, then its `///` docstring. A
+/// field's `description` sits beside the `$ref` when the field is a class. An
+/// enum's `description` holds its own documentation and one
+/// `- <variant>: <documentation>` line per documented variant, because JSON
+/// Schema has no description per `enum` value.
 ///
 /// The root type is emitted inline, and every class and named alias beneath it
 /// goes into `$defs` to be reached by `$ref`. That is what lets a recursive

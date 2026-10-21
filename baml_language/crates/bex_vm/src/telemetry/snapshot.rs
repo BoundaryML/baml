@@ -148,31 +148,12 @@ impl Scratch {
                     let key_type = b.leaves().ty(owned_type(&data.key_ty));
                     let value_type = b.leaves().ty(owned_type(&data.value_ty));
                     let data = data.lock();
-                    let entries: Option<Vec<_>> = data
-                        .iter()
-                        .map(|(key, value)| {
-                            let ptr = key.as_object_ptr()?;
-                            // SAFETY: capture holds the heap permit throughout traversal.
-                            let Object::String(key) = (unsafe { ptr.get() }) else {
-                                return None;
-                            };
-                            Some((key, *value))
-                        })
-                        .collect();
-                    match entries {
-                        Some(entries) => b.map(
-                            key_type,
-                            value_type,
-                            entries.iter(),
-                            |leaves, (key, value)| {
-                                let key = rewritten(&self.rewrites, key).into_owned();
-                                (key, self.add(leaves, *value, depth + 1))
-                            },
-                        ),
-                        // The telemetry wire map is string-keyed. Mark the whole map
-                        // unavailable rather than omit or stringify unsupported keys.
-                        None => SnapshotObject::NonSnapshotableValue {},
-                    }
+                    b.map(key_type, value_type, data.iter(), |leaves, (key, value)| {
+                        (
+                            self.add(leaves, *key, depth + 1),
+                            self.add(leaves, *value, depth + 1),
+                        )
+                    })
                 }
                 Object::Instance(instance) => {
                     let class = Value::object(instance.class);
@@ -197,14 +178,14 @@ impl Scratch {
                         _ => unreachable!("class declaration is an object"),
                     }
                 }
-                Object::Class(class) => b.declaration(&class.name, class.type_tag, false),
-                Object::Enum(enm) => b.declaration(&enm.name, enm.type_tag, true),
+                Object::Class(class) => b.declaration(&class.name(), class.type_tag, false),
+                Object::Enum(enm) => b.declaration(&enm.name(), enm.type_tag, true),
                 Object::Cell(cell) => {
                     SnapshotObject::Cell(self.add(&mut b.leaves(), cell.load(), depth + 1))
                 }
                 Object::Function(f) => SnapshotObject::Descriptive {
                     kind: Description::Function,
-                    name: b.leaves().label(&f.name.as_str().into()),
+                    name: b.leaves().label(&f.name().as_str().into()),
                 },
                 Object::Closure(_) => describe(Description::Closure),
                 Object::BoundMethod(_) => describe(Description::BoundMethod),
@@ -215,6 +196,7 @@ impl Scratch {
                 Object::Interface(_) => describe(Description::Interface),
                 Object::ImplRule(_) => describe(Description::Implementation),
                 Object::TypeAlias(_) => describe(Description::TypeAlias),
+                Object::Tombstone => Object::tombstone_reached(),
                 #[cfg(feature = "heap_debug")]
                 Object::Sentinel(_) => describe(Description::Sentinel),
                 Object::Float(_)
@@ -325,7 +307,7 @@ fn string_map(b: &mut Builder, entries: &[(String, String)]) -> SnapshotValue {
         key_type,
         value_type,
         entries.iter(),
-        |leaves, (key, value)| (key.as_str().into(), text(leaves, value)),
+        |leaves, (key, value)| (text(leaves, key), text(leaves, value)),
     );
     object(b, map)
 }
@@ -333,9 +315,12 @@ fn string_map(b: &mut Builder, entries: &[(String, String)]) -> SnapshotValue {
 fn map(b: &mut Builder, value_type: OwnedType, fields: &[(&str, SnapshotValue)]) -> SnapshotValue {
     let key_type = b.leaves().ty(OwnedType::string());
     let value_type = b.leaves().ty(value_type);
-    let map = b.map(key_type, value_type, fields.iter(), |_, (key, value)| {
-        ((*key).into(), *value)
-    });
+    let map = b.map(
+        key_type,
+        value_type,
+        fields.iter(),
+        |leaves, (key, value)| (text(leaves, key), *value),
+    );
     object(b, map)
 }
 fn object(b: &mut Builder, object: SnapshotObject) -> SnapshotValue {
@@ -352,8 +337,8 @@ fn owned_type(ty: &bex_vm_types::RealizedTy) -> btel_snapshot::OwnedType {
     })
 }
 /// A media value as the runtime holds it: its kind, MIME type and source, and
-/// loaded content as base64 text shared by handle. Reads no file and fetches
-/// nothing. A part past the byte limit truncates the whole object.
+/// loaded content as base64 text shared by handle. Fetches nothing. A part
+/// past the byte limit truncates the whole object.
 fn media(
     leaves: &mut Leaves<'_>,
     rewrites: &[(String, String)],
@@ -375,11 +360,19 @@ fn media(
                 url: leaves.label(&rewritten(rewrites, &url.as_str().into()))?,
                 data: loaded(leaves, base64_data.as_ref())?,
             },
-            MediaContent::File { file, base64_data } => MediaSource::File {
-                path: leaves.label(&file.as_str().into())?,
-                data: loaded(leaves, base64_data.as_ref())?,
+            // Content read from a file. Its name is all that is left of the
+            // path, and the content is always there.
+            MediaContent::Base64 {
+                base64_data,
+                name: Some(name),
+            } => MediaSource::File {
+                path: leaves.label(&name.as_str().into())?,
+                data: Some(leaves.string(base64_data)?),
             },
-            MediaContent::Base64 { base64_data } => MediaSource::Base64 {
+            MediaContent::Base64 {
+                base64_data,
+                name: None,
+            } => MediaSource::Base64 {
                 data: leaves.string(base64_data)?,
             },
         })
@@ -411,7 +404,12 @@ pub(super) fn json(snapshot: &Snapshot, value: SnapshotValue) -> serde_json::Val
             SnapshotObject::Map { entries, .. } => snapshot
                 .entries(*entries)
                 .iter()
-                .map(|entry| (entry.key.as_str().to_owned(), json(snapshot, entry.value)))
+                .map(|entry| {
+                    (
+                        json(snapshot, entry.key).as_str().unwrap().to_owned(),
+                        json(snapshot, entry.value),
+                    )
+                })
                 .collect::<serde_json::Map<_, _>>()
                 .into(),
             SnapshotObject::Uint8Array { data } => snapshot.bytes(*data).into(),
@@ -455,13 +453,14 @@ mod tests {
         let Object::Array(array) = (unsafe { list.get() }) else {
             unreachable!()
         };
-        array.lock_mut().push(Value::object(list));
+        let scratch = bex_vm_types::AllocDebt::new();
+        array.lock_mut(&scratch).push(Value::object(list));
         let snapshot = capture(&[Value::object(list)]);
-        array.lock_mut().clear();
+        array.lock_mut(&scratch).clear();
         let Object::Uint8Array(data) = (unsafe { bytes.get() }) else {
             unreachable!()
         };
-        data.lock_mut().fill(7);
+        data.lock_mut(&scratch).fill(7);
         // Captures are independent: the graph does not contribute any GC roots.
         unsafe {
             vm.heap
@@ -495,7 +494,7 @@ mod tests {
         ));
         let big = vm.tlab.alloc_bigint(num_bigint::BigInt::from(123));
         let float = vm.tlab.alloc_float(2.5);
-        let opaque: Arc<dyn std::any::Any + Send + Sync> = Arc::new(7_u64);
+        let opaque: Arc<dyn bex_vm_types::BexRustData> = Arc::new(bex_vm_types::TestRustData(7));
         let weak = Arc::downgrade(&opaque);
         let first = vm.tlab.alloc_rust_data(opaque.clone());
         let second = vm.tlab.alloc_rust_data(opaque.clone());
@@ -541,7 +540,7 @@ mod tests {
         ));
     }
     #[test]
-    fn media_is_captured_by_content_without_reading_files_or_retaining_sources() {
+    fn media_is_captured_by_content_without_retaining_sources() {
         let mut vm = crate::vm::tests::test_vm(Vec::new());
         // Longer than the inline capacity, so the payload is heap-backed.
         let payload = bex_str::BexStr::from("iVBORw0K".repeat(64));
@@ -549,10 +548,12 @@ mod tests {
             panic!("expected a heap-backed payload, got {payload:?}")
         };
         let stored = Arc::clone(stored);
-        let sources: [Arc<dyn std::any::Any + Send + Sync>; 3] = [
-            MediaValue::from_file(
+        let sources: [Arc<dyn bex_vm_types::BexRustData>; 3] = [
+            // Content that was read from a file: only its name is kept.
+            MediaValue::from_file_content(
                 baml_type::MediaKind::Image,
-                "/nonexistent/telemetry-must-not-read.png",
+                "/photos/2026/cat.png",
+                payload.clone(),
                 None,
             ),
             MediaValue::from_url(
@@ -560,7 +561,11 @@ mod tests {
                 "https://example.test/report.pdf",
                 Some("application/pdf"),
             ),
-            MediaValue::from_base64(baml_type::MediaKind::Audio, payload, Some("audio/wav")),
+            MediaValue::from_base64(
+                baml_type::MediaKind::Audio,
+                payload.clone(),
+                Some("audio/wav"),
+            ),
         ];
         let weak: Vec<_> = sources.iter().map(Arc::downgrade).collect();
         // Two host wrappers of one media value are one captured object.
@@ -591,14 +596,23 @@ mod tests {
             ),
             other => panic!("expected media, got {other:?}"),
         };
-        let (kind, mime_type, MediaSource::File { path, data: None }) = media(roots[0]) else {
-            panic!("expected a file without content")
+        let (
+            kind,
+            mime_type,
+            MediaSource::File {
+                path,
+                data: Some(content),
+            },
+        ) = media(roots[0])
+        else {
+            panic!("expected named content")
         };
-        assert_eq!((kind, mime_type), (baml_type::MediaKind::Image, None));
         assert_eq!(
-            snapshot.label(path).as_str(),
-            "/nonexistent/telemetry-must-not-read.png"
+            (kind, mime_type),
+            (baml_type::MediaKind::Image, Some("image/png"))
         );
+        assert_eq!(snapshot.label(path).as_str(), "cat.png");
+        assert_eq!(snapshot.string(content).as_str(), payload.as_str());
         let (kind, mime_type, MediaSource::Url { url, data: None }) = media(roots[1]) else {
             panic!("expected a URL without content")
         };
@@ -630,10 +644,11 @@ mod tests {
         let Object::Array(array) = (unsafe { ptr.get() }) else {
             unreachable!()
         };
+        let scratch = bex_vm_types::AllocDebt::new();
         std::thread::scope(|scope| {
             let writer = scope.spawn(|| {
                 for i in 0..500 {
-                    let mut a = array.lock_mut();
+                    let mut a = array.lock_mut(&scratch);
                     a.clear();
                     a.resize(8, Value::int(i));
                 }
@@ -687,7 +702,7 @@ mod tests {
             Value::object(vm.tlab.alloc_uint8array(vec![7; length]))
         };
         let image = |vm: &mut crate::BexVm, length: usize| {
-            let media: Arc<dyn std::any::Any + Send + Sync> = MediaValue::from_base64(
+            let media: Arc<dyn bex_vm_types::BexRustData> = MediaValue::from_base64(
                 baml_type::MediaKind::Image,
                 bex_str::BexStr::from("A".repeat(length)),
                 None,
@@ -744,9 +759,10 @@ mod tests {
     fn maps_instances_and_variants_keep_identity_and_fields_after_gc() {
         let mut vm = crate::vm::tests::test_vm(Vec::new());
         let class_ptr = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
-            name: bex_vm_types::DeclarationName::Declared(baml_type::TypeName::local(
+            path: bex_vm_types::types::LocalName::new(
+                Vec::new(),
                 baml_type::Name::new("TestClass"),
-            )),
+            ),
             fields: vec![
                 bex_vm_types::ClassField {
                     name: "x".to_string(),
@@ -781,16 +797,14 @@ mod tests {
             other: indexmap::IndexMap::default(),
             type_tag: baml_type::typetag::TypeTag::from_i64(100),
             stream_done: false,
-            has_cleanup: false,
+            cleanup: None,
             methods: indexmap::IndexMap::new(),
             generic_param_count: 1,
             owner: bex_vm_types::types::Owner::anonymous(),
         })));
         let enum_ptr = vm.tlab.alloc(Object::Enum(Box::new(bex_vm_types::Enum {
             type_tag: baml_type::typetag::TypeTag::from_i64(200),
-            name: bex_vm_types::DeclarationName::Declared(baml_type::TypeName::local(
-                baml_type::Name::new("Color"),
-            )),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("Color")),
             variants: vec![
                 bex_vm_types::EnumVariant {
                     name: "Red".to_string(),
@@ -849,7 +863,7 @@ mod tests {
             let Object::Map(map) = map.get() else {
                 unreachable!()
             };
-            map.lock_mut().clear();
+            map.lock_mut(&bex_vm_types::AllocDebt::new()).clear();
             vm.heap
                 .collect_garbage_generational(&[], bex_heap::CollectionLevel::Major);
         }
@@ -859,7 +873,7 @@ mod tests {
         };
         let entries = snapshot.entries(*entries);
         assert_eq!(entries.len(), 2);
-        assert_eq!(entries[0].key.as_str(), "instance");
+        assert_eq!(json(&snapshot, entries[0].key), "instance");
         let Obj::Instance {
             declaration,
             fields,
@@ -885,7 +899,7 @@ mod tests {
         };
         assert_eq!(snapshot.name(*name).item_name().as_str(), "TestClass");
         assert_eq!(*tag, baml_type::typetag::TypeTag::from_i64(100));
-        let fields = snapshot.entries(*fields);
+        let fields = snapshot.fields(*fields);
         assert_eq!(fields[0].key.as_str(), "x");
         assert!(matches!(fields[0].value, Val::Int(10)));
         let Val::Enum {
@@ -941,7 +955,9 @@ mod tests {
         let Object::Array(array) = (unsafe { list.get() }) else {
             unreachable!()
         };
-        array.lock_mut().push(Value::object(list));
+        array
+            .lock_mut(&bex_vm_types::AllocDebt::new())
+            .push(Value::object(list));
         let map = vm.tlab.alloc_map(
             ty(),
             ty(),
@@ -1046,10 +1062,12 @@ mod tests {
                 scratch.work.capacity() <= 4,
                 "primitive elements must not enter work stack"
             );
-            assert!(
-                scratch.seen.capacity() <= 4,
-                "floats must not populate identity map"
-            );
+            if source != map {
+                assert!(
+                    scratch.seen.capacity() <= 4,
+                    "floats must not populate identity map"
+                );
+            }
             match captured_object(&snapshot, snapshot.value().unwrap()) {
                 Obj::List { items, .. } => {
                     let values = snapshot.values(*items);
@@ -1061,8 +1079,8 @@ mod tests {
                 Obj::Map { entries, .. } => {
                     let entries = snapshot.entries(*entries);
                     assert_eq!(entries.len(), 10_000);
-                    assert_eq!(std::mem::size_of_val(entries), 720_000);
-                    assert_eq!(entries[9999].key.as_str(), "9999");
+                    assert_eq!(std::mem::size_of_val(entries), 320_000);
+                    assert_eq!(json(&snapshot, entries[9999].key), "9999");
                     assert_eq!(entries[9999].value, Val::Int(9999));
                 }
                 _ => panic!(),
@@ -1096,7 +1114,7 @@ mod tests {
         let mut vm = crate::vm::tests::test_vm(Vec::new());
         let raw = "https://example.test/report.pdf?key=secret";
         let clean = "https://example.test/report.pdf?key=sha256:0123";
-        let media: Arc<dyn std::any::Any + Send + Sync> =
+        let media: Arc<dyn bex_vm_types::BexRustData> =
             MediaValue::from_url(baml_type::MediaKind::Pdf, raw, None);
         let message = format!("GET {raw} failed");
         let values = [
@@ -1229,8 +1247,12 @@ mod tests {
             panic!()
         };
         source.store(Value::object(cell));
-        let a = vm.tlab.alloc_rust_data(Arc::new(1_u64));
-        let b = vm.tlab.alloc_rust_data(Arc::new(1_u64));
+        let a = vm
+            .tlab
+            .alloc_rust_data(Arc::new(bex_vm_types::TestRustData(1)));
+        let b = vm
+            .tlab
+            .alloc_rust_data(Arc::new(bex_vm_types::TestRustData(1)));
         let snapshot = capture(&[Value::object(cell), Value::object(a), Value::object(b)]);
         source.store(Value::int(5));
         drop(vm);

@@ -353,11 +353,20 @@ mod schema {
             Ok(json!({ "anyOf": schemas }))
         }
 
+        /// Widens a schema to accept `null`. A plain `type` becomes a type
+        /// list. `enum` and `const` restrict the value whatever `type` says:
+        /// an `enum` also gains a `null` member, and a `const`, which has room
+        /// for one value only, becomes one side of an `anyOf`.
         fn with_null(base: Value) -> Value {
             if let Value::Object(mut object) = base {
-                if let Some(Value::String(kind)) = object.get("type") {
+                if !object.contains_key("const")
+                    && let Some(Value::String(kind)) = object.get("type")
+                {
                     let widened = json!([kind, "null"]);
                     object.insert("type".to_string(), widened);
+                    if let Some(Value::Array(values)) = object.get_mut("enum") {
+                        values.push(Value::Null);
+                    }
                     return Value::Object(object);
                 }
                 return json!({ "anyOf": [Value::Object(object), { "type": "null" }] });
@@ -371,16 +380,11 @@ mod schema {
             let variants: Vec<Value> = enum_def
                 .variants
                 .iter()
-                .map(|variant| {
-                    json!(
-                        variant
-                            .alias
-                            .clone()
-                            .unwrap_or_else(|| variant.name.clone())
-                    )
-                })
+                .map(|variant| json!(variant_wire_name(variant)))
                 .collect();
-            Ok(json!({ "type": "string", "enum": variants }))
+            let mut schema = json!({ "type": "string", "enum": variants });
+            describe(&mut schema, enum_documentation(enum_def));
+            Ok(schema)
         }
 
         fn class_ref(&mut self, head: &::sys_types::DefKey) -> Result<Value, String> {
@@ -428,18 +432,96 @@ mod schema {
                     continue;
                 }
                 let prop_name = field.alias.clone().unwrap_or_else(|| field.name.clone());
-                properties.insert(prop_name.clone(), self.ty_schema(&field.field_type)?);
+                let mut property = self.ty_schema(&field.field_type)?;
+                describe(
+                    &mut property,
+                    documentation(field.description.as_deref(), field.docstring.as_deref()),
+                );
+                properties.insert(prop_name.clone(), property);
                 if !(field.field_type.is_nullable_union() || field.field_type.is_null()) {
                     required.push(json!(prop_name));
                 }
             }
 
-            Ok(json!({
+            let mut object = json!({
                 "type": "object",
                 "properties": properties,
                 "required": required,
-            }))
+            });
+            describe(
+                &mut object,
+                documentation(
+                    class_def.description.as_deref(),
+                    class_def.docstring.as_deref(),
+                ),
+            );
+            Ok(object)
         }
+    }
+
+    /// A declaration's documentation as the output format shows it: its
+    /// `@description`, then its `///` docstring, each trimmed. `None` when both
+    /// are blank.
+    fn documentation(description: Option<&str>, docstring: Option<&str>) -> Option<String> {
+        let docs = [description, docstring]
+            .into_iter()
+            .flatten()
+            .map(str::trim)
+            .filter(|docs| !docs.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
+        (!docs.is_empty()).then_some(docs)
+    }
+
+    /// The name a variant has on the wire: its `@alias`, else its name.
+    fn variant_wire_name(variant: &sys_types::EnumVariantDefinition) -> String {
+        variant
+            .alias
+            .clone()
+            .unwrap_or_else(|| variant.name.clone())
+    }
+
+    /// What an enum's schema says about it: the enum's own documentation, then
+    /// one `- <variant>: <documentation>` line per documented variant, the form
+    /// the output format lists them in. JSON Schema has no description per
+    /// `enum` value, so the variants' documentation goes here.
+    fn enum_documentation(enum_def: &sys_types::EnumDefinition) -> Option<String> {
+        let variants = enum_def
+            .variants
+            .iter()
+            .filter_map(|variant| {
+                let docs = variant.rendered_description()?;
+                Some(format!("- {}: {docs}", variant_wire_name(variant)))
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let sections = [
+            documentation(
+                enum_def.description.as_deref(),
+                enum_def.docstring.as_deref(),
+            ),
+            (!variants.is_empty()).then_some(variants),
+        ];
+        let text = sections
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        (!text.is_empty()).then_some(text)
+    }
+
+    /// Sets `documentation` as the schema's `description`. A schema that
+    /// already has one (an enum that documents its variants) keeps it, after
+    /// `documentation`.
+    fn describe(schema: &mut Value, documentation: Option<String>) {
+        let (Some(documentation), Value::Object(object)) = (documentation, schema) else {
+            return;
+        };
+        let description = match object.get("description").and_then(Value::as_str) {
+            Some(existing) => format!("{documentation}\n\n{existing}"),
+            None => documentation,
+        };
+        object.insert("description".to_string(), Value::String(description));
     }
 
     /// The `$defs` key a type is published under in the emitted JSON schema.
@@ -668,6 +750,210 @@ mod schema {
             assert_eq!(
                 schema,
                 json!({ "type": "string", "enum": ["ready-now", "Done"] })
+            );
+        }
+
+        fn documented(mut field: ClassFieldDefinition, description: &str) -> ClassFieldDefinition {
+            field.description = Some(description.to_string());
+            field
+        }
+
+        fn variant(name: &str, description: Option<&str>) -> EnumVariantDefinition {
+            EnumVariantDefinition {
+                name: name.to_string(),
+                description: description.map(str::to_string),
+                docstring: None,
+                alias: None,
+            }
+        }
+
+        /// `GymType`, documented at the enum and on two of its three variants.
+        fn gym_type_enum() -> EnumDefinition {
+            EnumDefinition {
+                name: "GymType".to_string(),
+                description: Some("The kind of place the user trains in.".to_string()),
+                docstring: None,
+                alias: None,
+                variants: vec![
+                    variant("COMMERCIAL", Some("Commercial gym")),
+                    EnumVariantDefinition {
+                        docstring: Some("A gym at home.".to_string()),
+                        alias: Some("garage".to_string()),
+                        ..variant("GARAGE", Some("Garage gym"))
+                    },
+                    variant("CUSTOM", None),
+                ],
+            }
+        }
+
+        #[test]
+        fn class_and_field_descriptions_reach_the_schema() {
+            let gym = type_name("pkg.Gym");
+            let owner = type_name("pkg.Owner");
+            let mut classes = indexmap::IndexMap::new();
+            classes.insert(
+                key(&gym),
+                ClassDefinition {
+                    description: Some("A gym to save for the user.".to_string()),
+                    docstring: Some("Saved per user.".to_string()),
+                    ..class_definition(
+                        &gym,
+                        vec![
+                            ClassFieldDefinition {
+                                docstring: Some("Shown on the card.".to_string()),
+                                ..documented(field("name", RuntimeTy::string()), "Short gym name.")
+                            },
+                            documented(field("owner", class_ty(&owner)), "Who owns it."),
+                            field("capacity", RuntimeTy::int()),
+                        ],
+                    )
+                },
+            );
+            classes.insert(
+                key(&owner),
+                ClassDefinition {
+                    description: Some("A HYBRD user.".to_string()),
+                    ..class_definition(&owner, vec![field("id", RuntimeTy::string())])
+                },
+            );
+            let mut ctx = SysOpContext::empty();
+            ctx.class_definitions = Arc::new(classes);
+
+            let schema = json_schema(&class_ty(&gym), &ctx).expect("schema should lower");
+            assert_eq!(
+                schema["description"],
+                "A gym to save for the user.\nSaved per user."
+            );
+            assert_eq!(
+                schema["properties"]["name"],
+                json!({ "type": "string", "description": "Short gym name.\nShown on the card." })
+            );
+            assert_eq!(
+                schema["properties"]["owner"],
+                json!({ "$ref": "#/$defs/pkg.Owner", "description": "Who owns it." })
+            );
+            assert_eq!(
+                schema["properties"]["capacity"],
+                json!({ "type": "integer" })
+            );
+            assert_eq!(schema["$defs"]["pkg.Owner"]["description"], "A HYBRD user.");
+        }
+
+        #[test]
+        fn blank_descriptions_add_nothing() {
+            let gym = type_name("pkg.Gym");
+            let mut classes = indexmap::IndexMap::new();
+            classes.insert(
+                key(&gym),
+                ClassDefinition {
+                    description: Some("  ".to_string()),
+                    ..class_definition(
+                        &gym,
+                        vec![documented(field("name", RuntimeTy::string()), "\n")],
+                    )
+                },
+            );
+            let mut ctx = SysOpContext::empty();
+            ctx.class_definitions = Arc::new(classes);
+
+            let schema = json_schema(&class_ty(&gym), &ctx).expect("schema should lower");
+            assert_eq!(
+                schema,
+                json!({
+                    "type": "object",
+                    "properties": { "name": { "type": "string" } },
+                    "required": ["name"],
+                })
+            );
+        }
+
+        #[test]
+        fn enum_descriptions_document_the_variants() {
+            let gym_type = type_name("pkg.GymType");
+            let mut enums = indexmap::IndexMap::new();
+            enums.insert(key(&gym_type), gym_type_enum());
+            let mut ctx = SysOpContext::empty();
+            ctx.enum_definitions = Arc::new(enums);
+
+            let schema =
+                json_schema(&RuntimeTy::Enum(key(&gym_type)), &ctx).expect("schema should lower");
+            assert_eq!(
+                schema,
+                json!({
+                    "type": "string",
+                    "enum": ["COMMERCIAL", "garage", "CUSTOM"],
+                    "description": "The kind of place the user trains in.\n\n- COMMERCIAL: Commercial gym\n- garage: Garage gym A gym at home.",
+                })
+            );
+        }
+
+        #[test]
+        fn a_field_description_precedes_its_enum_documentation() {
+            let gym = type_name("pkg.Gym");
+            let gym_type = type_name("pkg.GymType");
+            let mut classes = indexmap::IndexMap::new();
+            classes.insert(
+                key(&gym),
+                class_definition(
+                    &gym,
+                    vec![documented(
+                        field(
+                            "gym_type",
+                            RuntimeTy::optional(RuntimeTy::Enum(key(&gym_type))),
+                        ),
+                        "Where the user trains.",
+                    )],
+                ),
+            );
+            let mut enums = indexmap::IndexMap::new();
+            enums.insert(
+                key(&gym_type),
+                EnumDefinition {
+                    description: None,
+                    ..gym_type_enum()
+                },
+            );
+            let mut ctx = SysOpContext::empty();
+            ctx.class_definitions = Arc::new(classes);
+            ctx.enum_definitions = Arc::new(enums);
+
+            let schema = json_schema(&class_ty(&gym), &ctx).expect("schema should lower");
+            assert_eq!(
+                schema["properties"]["gym_type"],
+                json!({
+                    "type": ["string", "null"],
+                    "enum": ["COMMERCIAL", "garage", "CUSTOM", null],
+                    "description": "Where the user trains.\n\n- COMMERCIAL: Commercial gym\n- garage: Garage gym A gym at home.",
+                })
+            );
+        }
+
+        #[test]
+        fn nullable_enum_and_literal_accept_null() {
+            let gym_type = type_name("pkg.GymType");
+            let mut enums = indexmap::IndexMap::new();
+            enums.insert(key(&gym_type), gym_type_enum());
+            let mut ctx = SysOpContext::empty();
+            ctx.enum_definitions = Arc::new(enums);
+
+            let nullable_enum =
+                json_schema(&RuntimeTy::optional(RuntimeTy::Enum(key(&gym_type))), &ctx)
+                    .expect("schema should lower");
+            assert_eq!(nullable_enum["type"], json!(["string", "null"]));
+            assert_eq!(
+                nullable_enum["enum"],
+                json!(["COMMERCIAL", "garage", "CUSTOM", null])
+            );
+
+            let literal = RuntimeTy::Literal(
+                baml_type::Literal::String("auto".to_string()),
+                baml_type::Freshness::Regular,
+            );
+            let nullable_literal =
+                json_schema(&RuntimeTy::optional(literal), &ctx).expect("schema should lower");
+            assert_eq!(
+                nullable_literal,
+                json!({ "anyOf": [{ "type": "string", "const": "auto" }, { "type": "null" }] })
             );
         }
 
@@ -902,7 +1188,7 @@ fn wrap_output_format(
     content: std::sync::Arc<crate::output_format::OutputFormatContent>,
 ) -> io::owned::ai::OutputFormat {
     io::owned::ai::OutputFormat {
-        _data: content as std::sync::Arc<dyn std::any::Any + Send + Sync>,
+        _data: content as std::sync::Arc<dyn bex_vm_types::BexRustData>,
     }
 }
 
@@ -911,10 +1197,11 @@ fn wrap_output_format(
 fn unwrap_output_format(
     owned: &io::owned::ai::OutputFormat,
 ) -> std::sync::Arc<crate::output_format::OutputFormatContent> {
+    use bex_vm_types::RustDataArc as _;
     owned
         ._data
         .clone()
-        .downcast::<crate::output_format::OutputFormatContent>()
+        .downcast_payload::<crate::output_format::OutputFormatContent>()
         .expect("OutputFormat._data downcast failed: expected Arc<OutputFormatContent>. This indicates a bug in wrap_output_format or a type mismatch.")
 }
 
@@ -975,6 +1262,18 @@ impl io::IoClassFsFile for DefaultIoOps {
         _n: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<Vec<u8>>> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn bytes(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::fs::File,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
         SysOpOutput::err(VmPanic::HostUnavailable {
             resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
@@ -1869,11 +2168,11 @@ impl io::IoNamespaceSys for DefaultIoOps {
         })
     }
 
-    fn sleep(
+    fn _sleep(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        _delay: BexExternalValue,
+        _delay_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -2285,10 +2584,10 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_fs_write_bytes(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_fs_root_io_read_for_file_read = {
+        self.inner.baml_fs_baml_io_read_for_file_read = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_root_io_read_for_file_read(heap, permit, args, ctx, call_id)
+                t.__glue_baml_fs_baml_io_read_for_file_read(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_file_close = {
@@ -2303,16 +2602,16 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_fs_file_seek_from(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_fs_root_io_write_for_file_write_some = {
+        self.inner.baml_fs_baml_io_write_for_file_write_some = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_root_io_write_for_file_write_some(heap, permit, args, ctx, call_id)
+                t.__glue_baml_fs_baml_io_write_for_file_write_some(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_fs_root_io_write_for_file_flush = {
+        self.inner.baml_fs_baml_io_write_for_file_flush = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_root_io_write_for_file_flush(heap, permit, args, ctx, call_id)
+                t.__glue_baml_fs_baml_io_write_for_file_flush(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_read_dir = {
@@ -2532,16 +2831,16 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_net_tcpstream__connect(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_root_io_read_for_tcpstream_read = {
+        self.inner.baml_net_baml_io_read_for_tcpstream_read = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_root_io_read_for_tcpstream_read(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_baml_io_read_for_tcpstream_read(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_root_io_write_for_tcpstream_write_some = {
+        self.inner.baml_net_baml_io_write_for_tcpstream_write_some = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_root_io_write_for_tcpstream_write_some(
+                t.__glue_baml_net_baml_io_write_for_tcpstream_write_some(
                     heap, permit, args, ctx, call_id,
                 )
             })
@@ -2634,10 +2933,10 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_sys_readpipe_close(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_sys_root_io_read_for_readpipe_read = {
+        self.inner.baml_sys_baml_io_read_for_readpipe_read = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_root_io_read_for_readpipe_read(heap, permit, args, ctx, call_id)
+                t.__glue_baml_sys_baml_io_read_for_readpipe_read(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_sys_writepipe_close = {
@@ -2646,18 +2945,18 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_sys_writepipe_close(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_sys_root_io_write_for_writepipe_write_some = {
+        self.inner.baml_sys_baml_io_write_for_writepipe_write_some = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_root_io_write_for_writepipe_write_some(
+                t.__glue_baml_sys_baml_io_write_for_writepipe_write_some(
                     heap, permit, args, ctx, call_id,
                 )
             })
         };
-        self.inner.baml_sys_root_io_write_for_writepipe_flush = {
+        self.inner.baml_sys_baml_io_write_for_writepipe_flush = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_root_io_write_for_writepipe_flush(
+                t.__glue_baml_sys_baml_io_write_for_writepipe_flush(
                     heap, permit, args, ctx, call_id,
                 )
             })
@@ -2680,10 +2979,10 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_sys_shell(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_sys_sleep = {
+        self.inner.baml_sys__sleep = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_sleep(heap, permit, args, ctx, call_id)
+                t.__glue_baml_sys__sleep(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_sys_collect_garbage = {

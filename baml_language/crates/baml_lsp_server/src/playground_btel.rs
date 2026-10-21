@@ -6,8 +6,9 @@
 //! index is reused across requests. All of it is blocking work: callers run
 //! it on a blocking thread, never on the async executor.
 //!
-//! An execution is a root call: a future span without a parent. It opens
-//! with the spans below it, found through `parent_span_id`: its futures
+//! An execution is a root call: a future span without a parent, excluding
+//! runtime GC roots. It opens with the spans below it, found through
+//! `parent_span_id`: its futures
 //! (timeline lanes) and its retained calls with their captured values, and
 //! the errors those calls ended with. Calling contexts come from the
 //! profiler, which exists only once the process that ran the call ended.
@@ -22,13 +23,15 @@ use std::{
 use baml_query_btel::{Index, IndexOptions, QueryRequest, QueryResult, SqlParam};
 use serde_json::{Value, json};
 
-/// Rows the list shows; the newest root calls first.
+/// Rows the list shows; the newest root calls first. Runtime GC pauses are
+/// independent roots, but are not playground executions.
 const LIST_SQL: &str = "
 SELECT a.span_id, a.span_name, s.status, a.start_time, s.duration, p.status
 FROM span_announcements a
 LEFT JOIN spans s ON s.span_id = a.span_id
 LEFT JOIN processes p ON p.process_id = a.process_id
 WHERE a.span_type = 'future' AND a.parent_span_id IS NULL
+  AND (a.span_name IS NULL OR a.span_name <> 'baml.gc')
 ORDER BY a.start_time DESC
 LIMIT 200";
 

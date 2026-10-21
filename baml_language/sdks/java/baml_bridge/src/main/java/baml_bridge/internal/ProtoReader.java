@@ -105,7 +105,12 @@ public final class ProtoReader {
     private static final int MEDIA_MIME_TYPE = 2;
     private static final int MEDIA_URL = 3;
     private static final int MEDIA_BASE64 = 4;
-    private static final int MEDIA_FILE = 5;
+    // Field 5 once named a file and is reserved.
+    private static final int MEDIA_FILE_CONTENT = 6;
+
+    // BamlValueMediaFileContent
+    private static final int FILE_CONTENT_NAME = 1;
+    private static final int FILE_CONTENT_BASE64 = 2;
 
     // BamlValueUnionVariant
     private static final int UNION_SELF_TYPE = 4;
@@ -158,7 +163,6 @@ public final class ProtoReader {
     private static final int TY_MEDIA = 11;
     private static final int TY_FUNCTION = 14;
     private static final int TY_RUST_TYPE = 16;
-    private static final int TY_VOID = 20;
 
     // Sub-message field numbers on the BamlTy variants.
     private static final int TY_NAME = 1; // BamlTyClass/BamlTyEnum.name
@@ -579,6 +583,7 @@ public final class ProtoReader {
         String mimeType = null;
         int source = 0;
         String value = null;
+        String name = null;
         while (r.hasRemaining()) {
             int tag = r.readTag();
             int field = WireReader.fieldOf(tag);
@@ -586,9 +591,24 @@ public final class ProtoReader {
             switch (field) {
                 case MEDIA_KIND -> kind = (int) r.readVarint();
                 case MEDIA_MIME_TYPE -> mimeType = r.readString();
-                case MEDIA_URL, MEDIA_BASE64, MEDIA_FILE -> {
+                case MEDIA_URL, MEDIA_BASE64 -> {
                     source = field;
                     value = r.readString();
+                }
+                case MEDIA_FILE_CONTENT -> {
+                    source = field;
+                    // proto3 omits an empty string: absent means empty.
+                    name = "";
+                    value = "";
+                    WireReader content = r.readMessage();
+                    while (content.hasRemaining()) {
+                        int contentTag = content.readTag();
+                        switch (WireReader.fieldOf(contentTag)) {
+                            case FILE_CONTENT_NAME -> name = content.readString();
+                            case FILE_CONTENT_BASE64 -> value = content.readString();
+                            default -> content.skipField(WireReader.wireOf(contentTag));
+                        }
+                    }
                 }
                 default -> r.skipField(wire);
             }
@@ -598,14 +618,14 @@ public final class ProtoReader {
                     "BEX emitted a portable media value with no content", List.of(), null);
         }
         return switch (kind) {
-            case 1 -> constructMedia(source, value, mimeType,
-                    Image::from_url, Image::from_base64, Image::from_file);
-            case 2 -> constructMedia(source, value, mimeType,
-                    Audio::from_url, Audio::from_base64, Audio::from_file);
-            case 3 -> constructMedia(source, value, mimeType,
-                    Pdf::from_url, Pdf::from_base64, Pdf::from_file);
-            case 4 -> constructMedia(source, value, mimeType,
-                    Video::from_url, Video::from_base64, Video::from_file);
+            case 1 -> constructMedia(source, value, name, mimeType,
+                    Image::from_url, Image::from_base64, Image::from_file_content);
+            case 2 -> constructMedia(source, value, name, mimeType,
+                    Audio::from_url, Audio::from_base64, Audio::from_file_content);
+            case 3 -> constructMedia(source, value, name, mimeType,
+                    Pdf::from_url, Pdf::from_base64, Pdf::from_file_content);
+            case 4 -> constructMedia(source, value, name, mimeType,
+                    Video::from_url, Video::from_base64, Video::from_file_content);
             default -> throw new BamlError(
                     "BEX emitted unsupported portable media kind " + kind, List.of(), null);
         };
@@ -616,17 +636,24 @@ public final class ProtoReader {
         Object construct(String value, String mimeType);
     }
 
+    @FunctionalInterface
+    private interface NamedMediaConstructor {
+        Object construct(String file, String base64, String mimeType);
+    }
+
     private static Object constructMedia(
             int source,
             String value,
+            String name,
             String mimeType,
             MediaConstructor fromUrl,
             MediaConstructor fromBase64,
-            MediaConstructor fromFile) {
+            NamedMediaConstructor fromFileContent) {
         return switch (source) {
             case MEDIA_URL -> fromUrl.construct(value, mimeType);
             case MEDIA_BASE64 -> fromBase64.construct(value, mimeType);
-            case MEDIA_FILE -> fromFile.construct(value, mimeType);
+            // Content read from a file keeps the file's name.
+            case MEDIA_FILE_CONTENT -> fromFileContent.construct(name, value, mimeType);
             default -> throw new AssertionError("unknown portable media source " + source);
         };
     }
@@ -825,7 +852,7 @@ public final class ProtoReader {
 
     /**
      * Read one {@code BamlTy} into its {@link BamlType}, or {@code null} when it is
-     * outside the token grammar (media / function / rust_type / void / unknown, and
+     * outside the token grammar (media / function / rust_type / unknown, and
      * the {@code null} / {@code bytes} / {@code bigint} primitive kinds). Named
      * types (class / enum / type_alias) become a bare {@link BamlType#classByFqn}
      * (matching the emitter's arm rendering — a wire optional unwraps to its inner,

@@ -56,10 +56,10 @@ export declare class BamlFunctionSpec<TOut> {
     toolsAsync(options?: {
         $baml?: InvocationOptions | null;
     }): Promise<unknown>;
-    clientId(options?: {
+    requestedModel(options?: {
         $baml?: InvocationOptions | null;
     }): string;
-    clientIdAsync(options?: {
+    requestedModelAsync(options?: {
         $baml?: InvocationOptions | null;
     }): Promise<string>;
     buildRequest(options?: BamlFunctionSpecBuildRequestOptions): unknown;

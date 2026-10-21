@@ -22,8 +22,9 @@ use crate::{
     Shaper, Snapshot, SnapshotPool,
     arena::{Arena, Meter},
     graph::{
-        Bigint, FunctionArgs, Graph, LabelId, Limit, MapEntry, NameId, ObjectId, OwnedType, Range,
-        SnapshotObject, SnapshotRoot, SnapshotValue, StringId, Type, TypeId, Uint8ArrayData,
+        Bigint, FieldEntry, FunctionArgs, Graph, LabelId, Limit, MapEntry, NameId, ObjectId,
+        OwnedType, Range, SnapshotObject, SnapshotRoot, SnapshotValue, StringId, Type, TypeId,
+        Uint8ArrayData,
     },
     hash::{self, Absorb as _},
     pool::{Lease, Limits, Storage},
@@ -67,7 +68,7 @@ impl Leaves<'_> {
     /// or a path. It is written wherever it is used. `None` when it is over
     /// the leaf limit, or no more names can be numbered.
     pub fn label(&mut self, text: &BexStr) -> Option<LabelId> {
-        if !self.limits.holds_leaf(text.len()) || self.labels.len() >= ARENA_ITEMS {
+        if !self.limits.holds_leaf(text.byte_len()) || self.labels.len() >= ARENA_ITEMS {
             return None;
         }
         let id = LabelId(u32::try_from(self.labels.len()).expect("bounded labels"));
@@ -77,7 +78,7 @@ impl Leaves<'_> {
     /// Hold content by handle: a string value, or a media value's text. `None`
     /// when it is over the leaf limit, or no more strings can be numbered.
     pub fn string(&mut self, text: &BexStr) -> Option<StringId> {
-        if !self.limits.holds_leaf(text.len()) || self.strings.len() >= ARENA_ITEMS {
+        if !self.limits.holds_leaf(text.byte_len()) || self.strings.len() >= ARENA_ITEMS {
             return None;
         }
         // A slice caches its hash in its own handle, not in what it views.
@@ -155,6 +156,7 @@ struct Parts<'b> {
     leaves: Leaves<'b>,
     values: &'b mut Arena<SnapshotValue>,
     entries: &'b mut Arena<MapEntry>,
+    fields: &'b mut Arena<FieldEntry>,
     meter: &'b Meter,
 }
 
@@ -176,6 +178,7 @@ impl Builder {
             objects,
             values,
             entries,
+            fields,
             bytes: _,
             strings,
             labels,
@@ -195,6 +198,7 @@ impl Builder {
             },
             values,
             entries,
+            fields,
             meter,
         }
     }
@@ -215,6 +219,7 @@ impl Builder {
             mut leaves,
             values,
             entries: _,
+            fields: _,
             meter,
         } = self.parts();
         let start = values.len();
@@ -230,15 +235,16 @@ impl Builder {
     /// One run of entries: as many of `source` as the value limit allows. A
     /// key is written where its entry is, so an entry whose key is over the
     /// leaf limit is left out, and the count says the container is cut.
-    fn entries<T>(
+    fn fields<T>(
         &mut self,
         source: impl ExactSizeIterator<Item = T>,
         mut convert: impl FnMut(&mut Leaves<'_>, T) -> (BexStr, SnapshotValue),
-    ) -> Range<MapEntry> {
+    ) -> Range<FieldEntry> {
         let Parts {
             mut leaves,
             values: _,
-            entries,
+            entries: _,
+            fields: entries,
             meter,
         } = self.parts();
         let start = entries.len();
@@ -247,9 +253,33 @@ impl Builder {
         entries.reserve(count, meter);
         for item in source.take(count) {
             let (key, value) = convert(&mut leaves, item);
-            if leaves.limits.holds_leaf(key.len()) {
-                entries.push(MapEntry { key, value }, meter);
+            if leaves.limits.holds_leaf(key.byte_len()) {
+                entries.push(FieldEntry { key, value }, meter);
             }
+        }
+        Range::new(start, entries.len() - start)
+    }
+    fn entries<T>(
+        &mut self,
+        source: impl ExactSizeIterator<Item = T>,
+        mut convert: impl FnMut(&mut Leaves<'_>, T) -> (SnapshotValue, SnapshotValue),
+    ) -> Range<MapEntry> {
+        let Parts {
+            mut leaves,
+            entries,
+            meter,
+            ..
+        } = self.parts();
+        let start = entries.len();
+        let room = leaves
+            .limits
+            .max_values
+            .map_or(ARENA_ITEMS, |values| values / 2);
+        let count = source.len().min(room.saturating_sub(start));
+        entries.reserve(count, meter);
+        for item in source.take(count) {
+            let (key, value) = convert(&mut leaves, item);
+            entries.push(MapEntry { key, value }, meter);
         }
         Range::new(start, entries.len() - start)
     }
@@ -268,13 +298,12 @@ impl Builder {
         }
     }
     /// A map of the keys and values `convert` makes of each item of `source`.
-    /// An entry whose key is over the leaf limit is left out.
     pub fn map<T>(
         &mut self,
         key_type: TypeId,
         value_type: TypeId,
         source: impl ExactSizeIterator<Item = T>,
-        convert: impl FnMut(&mut Leaves<'_>, T) -> (BexStr, SnapshotValue),
+        convert: impl FnMut(&mut Leaves<'_>, T) -> (SnapshotValue, SnapshotValue),
     ) -> SnapshotObject {
         let original_len = source.len();
         SnapshotObject::Map {
@@ -303,7 +332,7 @@ impl Builder {
         SnapshotObject::Instance {
             type_arguments,
             declaration,
-            fields: self.entries(source, convert),
+            fields: self.fields(source, convert),
             original_len,
         }
     }
@@ -401,7 +430,7 @@ pub fn string_map(
         entries[..fit].iter(),
         |leaves, (key, value)| {
             (
-                BexStr::from(key.as_str()),
+                leaves.string_value(&BexStr::from(key.as_str())),
                 leaves.string_value(&BexStr::from(value.as_str())),
             )
         },

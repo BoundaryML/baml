@@ -10,8 +10,9 @@ use crate::{
     BexEngine, CallId, EngineError, InheritedInvocationState, RootCallWork, thread::TaskCancel,
 };
 
-/// Owns actual host work. The SDK separately retains `inherited_state()` in
-/// its language carrier; that copy owns neither this guard nor the producer.
+/// Owns an externally executed span. Ordinary host bodies also retain work
+/// registration; idle stream handles retain only recording lifetime. The SDK
+/// separately retains `inherited_state()`; that carrier owns no producer.
 pub struct HostInvocation {
     state: InheritedInvocationState,
     telemetry: Option<TelemetryState>,
@@ -19,7 +20,8 @@ pub struct HostInvocation {
     output: bool,
     error: bool,
     // Execution registration drops after recording completion.
-    registration: RootCallWork,
+    engine: Arc<BexEngine>,
+    registration: Option<RootCallWork>,
 }
 
 impl BexEngine {
@@ -48,11 +50,6 @@ impl BexEngine {
                 message: "host context belongs to a different runtime".into(),
             });
         }
-        let context = inherited.map_or_else(Default::default, |state| state.context.clone());
-        let context = options
-            .context
-            .as_ref()
-            .map_or(context.clone(), |patch| context.with_patch(patch));
         let cancellation = inherited.map_or_else(
             || TaskCancel::detached([]),
             |state| state.cancellation.child([]),
@@ -106,11 +103,110 @@ impl BexEngine {
                     namespace: vec![definition.language.clone()],
                     argument_layout: None,
                     source_map: None,
+                    model_invoke: false,
                 });
                 definitions.insert(definition.key(), Arc::clone(&metadata));
                 metadata
             }
         };
+        self.begin_external_invocation(
+            &metadata,
+            inherited,
+            options,
+            caller,
+            inputs,
+            reserved_id,
+            cancellation,
+            Some(registration),
+        )
+    }
+
+    /// A host-held stream owns telemetry, but idle stream handles are not
+    /// executable work that runtime shutdown must wait for.
+    pub async fn begin_stream_invocation(
+        self: &Arc<Self>,
+        function_name: &str,
+        call: &crate::FunctionCallContext,
+        inputs: Option<&btel_snapshot::host::HostValue>,
+    ) -> Result<HostInvocation, EngineError> {
+        let (function, _) = self
+            .resolved_function_names
+            .get(function_name)
+            .ok_or_else(|| EngineError::Other(format!("Function not found: {function_name}")))?;
+        // SAFETY: named entry functions are sealed compile-time objects.
+        let bex_vm_types::Object::Function(function) = (unsafe { function.get() }) else {
+            return Err(EngineError::Other("stream entry is not a function".into()));
+        };
+        let metadata = function
+            .runtime_metadata()
+            .ok_or_else(|| EngineError::Other("stream entry has no function metadata".into()))?;
+        let mut options = call
+            .trace_reservation
+            .as_ref()
+            .map(|reservation| reservation.options.clone())
+            .or_else(|| call.trace_options.clone())
+            .unwrap_or_default();
+        options.mode.get_or_insert(InvocationMode::Span);
+        options.error.get_or_insert(true);
+        let mut thread = self
+            .new_entry_thread(call.cancel.clone(), call.inherited_state.as_ref())
+            .await;
+        self.prepare_cancellation(
+            &mut thread,
+            None,
+            call.cancel.clone(),
+            &call.cancel_tokens,
+            call.inherited_state.clone(),
+            call.deadline,
+        )?;
+        let cancellation = thread.cancel.clone();
+        drop(thread);
+        // Reject pre-cancelled/shutdown entries and claim reservations at
+        // the same locked boundary as ordinary SDK invocation admission.
+        // Release this transient work registration before returning an idle
+        // handle; subsequent pulls register their own executable work.
+        let admission = RootCallWork::register(
+            Arc::clone(self),
+            call.host_call_id,
+            cancellation.clone(),
+            call.trace_reservation.as_deref(),
+        )?;
+        let reserved_id = admission.reserved_id;
+        self.begin_external_invocation(
+            &metadata,
+            call.inherited_state.as_ref(),
+            &options,
+            &HostCallSite {
+                source_file: String::new(),
+                line: 0,
+            },
+            inputs,
+            reserved_id,
+            cancellation,
+            None,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn begin_external_invocation(
+        self: &Arc<Self>,
+        metadata: &FunctionMetadata,
+        inherited: Option<&InheritedInvocationState>,
+        options: &bex_vm_types::trace::TraceOptionsData,
+        caller: &HostCallSite,
+        inputs: Option<&btel_snapshot::host::HostValue>,
+        reserved_id: Option<btel_types::TelemetryId>,
+        cancellation: TaskCancel,
+        registration: Option<RootCallWork>,
+    ) -> Result<HostInvocation, EngineError> {
+        let context = inherited.map_or_else(
+            || self.launch_context.clone(),
+            |state| state.context.clone(),
+        );
+        let context = options
+            .context
+            .as_ref()
+            .map_or(context.clone(), |patch| context.with_patch(patch));
         let caller_pc = if caller.line == 0 {
             0 // The core's absent-call-site representation.
         } else {
@@ -142,13 +238,19 @@ impl BexEngine {
         let frame = telemetry.as_mut().and_then(|telemetry| {
             let _scope = telemetry.host_recording_scope();
             telemetry.set_context(context.clone());
+            telemetry.name_root_thread(&metadata.fqn);
             telemetry.start_thread();
             telemetry.mark_running();
-            let captured_inputs = inputs
-                .filter(|_| options.inputs == Some(true))
-                .and_then(|value| telemetry.capture_host(value));
+            let captured_inputs =
+                inputs
+                    .filter(|_| options.inputs == Some(true))
+                    .and_then(|value| {
+                        telemetry.capture_host_with(value, |name| {
+                            self.host_capture_declarations.get(name)
+                        })
+                    });
             telemetry.enter_host(
-                &metadata,
+                metadata,
                 caller_pc,
                 options.mode.unwrap_or(InvocationMode::Span),
                 captured_inputs,
@@ -164,6 +266,7 @@ impl BexEngine {
                 .map(TelemetryState::hidden_spawn_context)
                 .or_else(|| inherited.and_then(|state| state.ancestry.clone())),
             host_environment: inherited.map_or(0, |state| state.host_environment),
+            hook_suppression: inherited.is_some_and(|state| state.hook_suppression),
         };
         Ok(HostInvocation {
             state,
@@ -171,6 +274,7 @@ impl BexEngine {
             frame,
             output: options.output == Some(true),
             error: options.error == Some(true),
+            engine: Arc::clone(self),
             registration,
         })
     }
@@ -206,7 +310,11 @@ impl HostInvocation {
             if let Some(frame) = self.frame.take() {
                 let captured = value
                     .filter(|_| self.wants_value(outcome))
-                    .and_then(|value| telemetry.capture_host(value));
+                    .and_then(|value| {
+                        telemetry.capture_host_with(value, |name| {
+                            self.engine.host_capture_declarations.get(name)
+                        })
+                    });
                 telemetry.complete_host(frame, outcome, captured);
             }
             telemetry.complete_thread(outcome);
@@ -321,15 +429,68 @@ pub(crate) fn resolve_callback_options(
     }
 }
 
-pub(crate) fn capture_callback_inputs(
-    value: &crate::BexExternalValue,
-) -> btel_snapshot::host::HostValue {
+pub fn capture_callback_inputs(value: &crate::BexExternalValue) -> btel_snapshot::host::HostValue {
     use btel_snapshot::{
         Limit,
         host::{HostValue as H, MAX_BYTES, MAX_DEPTH, MAX_VALUES},
     };
 
     use crate::BexExternalValue as V;
+    fn type_copy(
+        value: &baml_type::RuntimeTy,
+        depth: usize,
+        nodes: &mut usize,
+        bytes: &mut usize,
+    ) -> btel_snapshot::host::HostType {
+        use baml_type::RuntimeTy as T;
+        use btel_snapshot::host::HostType as O;
+        if depth > MAX_DEPTH || *nodes == 0 {
+            return O::Unknown;
+        }
+        *nodes -= 1;
+        match value {
+            T::Int => O::Int,
+            T::String => O::String,
+            T::Bool => O::Bool,
+            T::Float => O::Float,
+            T::Null => O::Null,
+            T::List(inner) => O::List(Box::new(type_copy(inner, depth + 1, nodes, bytes))),
+            T::Map { key, value } => O::Map {
+                key: Box::new(type_copy(key, depth + 1, nodes, bytes)),
+                value: Box::new(type_copy(value, depth + 1, nodes, bytes)),
+            },
+            T::Union(options) if options.len() <= *nodes => O::Union(
+                options
+                    .iter()
+                    .map(|ty| type_copy(ty, depth + 1, nodes, bytes))
+                    .collect::<Vec<_>>()
+                    .into(),
+            ),
+            T::Class(name, args) if args.len() <= *nodes => {
+                let name = name.to_string();
+                if name.len() > *bytes {
+                    return O::Unknown;
+                }
+                *bytes -= name.len();
+                O::Class(
+                    name,
+                    args.iter()
+                        .map(|ty| type_copy(ty, depth + 1, nodes, bytes))
+                        .collect::<Vec<_>>()
+                        .into(),
+                )
+            }
+            T::Enum(name) => {
+                let name = name.to_string();
+                if name.len() > *bytes {
+                    return O::Unknown;
+                }
+                *bytes -= name.len();
+                O::Enum(name)
+            }
+            _ => O::Unknown,
+        }
+    }
     fn copy(value: &V, depth: usize, nodes: &mut usize, bytes: &mut usize) -> H {
         if depth > MAX_DEPTH {
             return H::Truncated(Limit::Depth);
@@ -344,10 +505,10 @@ pub(crate) fn capture_callback_inputs(
             V::Int(v) => H::Int(*v),
             V::Float(v) => H::Float(*v),
             V::String(v) => {
-                if v.len() > *bytes {
+                if v.byte_len() > *bytes {
                     H::Truncated(Limit::Bytes)
                 } else {
-                    *bytes -= v.len();
+                    *bytes -= v.byte_len();
                     H::String(v.as_str().to_owned())
                 }
             }
@@ -381,6 +542,48 @@ pub(crate) fn capture_callback_inputs(
                     values.push((key.clone(), copy(value, depth + 1, nodes, bytes)));
                 }
                 H::Map(values)
+            }
+            V::Instance {
+                class_name,
+                type_args,
+                fields,
+            } => {
+                if class_name.len() > *bytes {
+                    return H::Truncated(Limit::Bytes);
+                }
+                if fields.len().saturating_add(type_args.len()) > *nodes {
+                    return H::Truncated(Limit::Values);
+                }
+                *bytes -= class_name.len();
+                let mut values = Vec::new();
+                for (key, value) in fields {
+                    if key.len() > *bytes {
+                        return H::Truncated(Limit::Bytes);
+                    }
+                    *bytes -= key.len();
+                    values.push((key.clone(), copy(value, depth + 1, nodes, bytes)));
+                }
+                H::Instance {
+                    name: class_name.clone(),
+                    fields: values,
+                    type_args: type_args
+                        .iter()
+                        .map(|ty| type_copy(ty, depth + 1, nodes, bytes))
+                        .collect(),
+                }
+            }
+            V::Variant {
+                enum_name,
+                variant_name,
+            } => {
+                if enum_name.len().saturating_add(variant_name.len()) > *bytes {
+                    return H::Truncated(Limit::Bytes);
+                }
+                *bytes -= enum_name.len() + variant_name.len();
+                H::Enum {
+                    name: enum_name.clone(),
+                    variant: variant_name.clone(),
+                }
             }
             _ => H::Unavailable,
         }

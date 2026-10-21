@@ -24,6 +24,23 @@ pub struct SseBuffer {
     pub events: Vec<SseEvent>,
     pub done: bool,
     pub error: Option<VmBamlError>,
+    /// The events' footprint, shared with the stream's handle so the heap
+    /// can read it without this buffer's lock.
+    pub retained: Arc<sys_types::RetainedBytes>,
+}
+
+impl SseBuffer {
+    /// Publish the events' footprint after changing them.
+    pub fn publish_retained(&self) {
+        self.retained.set(
+            self.events.capacity() * size_of::<SseEvent>()
+                + self
+                    .events
+                    .iter()
+                    .map(SseEvent::retained_bytes)
+                    .sum::<usize>(),
+        );
+    }
 }
 
 /// An SSE stream resource with buffered events.
@@ -176,6 +193,7 @@ impl ResourceRegistry {
         notify: Arc<Notify>,
         abort_handle: AbortHandle,
         url: String,
+        retained: Arc<sys_types::RetainedBytes>,
     ) -> ResourceHandle {
         let key = self.next_key.fetch_add(1, Ordering::SeqCst);
         let resource = SseStreamResource {
@@ -191,11 +209,12 @@ impl ResourceRegistry {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(key, RegistryEntry::SseStream(resource));
 
-        ResourceHandle::new(
+        ResourceHandle::new_retaining(
             key,
             ResourceType::SseStream,
             url,
             Arc::clone(self) as Arc<dyn ResourceRegistryRef>,
+            retained,
         )
     }
 

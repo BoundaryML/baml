@@ -54,7 +54,7 @@ export interface BamlTypeMetadata {
     other?: Record<string, string>;
 }
 
-/** Internal row consumed by the generated `reflect.class.new` binding. */
+/** Internal row consumed by the generated `reflect.Class.new` binding. */
 export class BamlTypeMetadataRow {
     constructor(
         readonly ty: BamlType,

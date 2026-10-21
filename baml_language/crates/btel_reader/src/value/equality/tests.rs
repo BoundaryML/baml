@@ -47,7 +47,10 @@ fn map(entries: Vec<(&str, DecodedValue)>) -> DecodedObject {
         key_type: ty(),
         value_type: ty(),
         original_len: entries.len() as u64,
-        entries: entries.into_iter().map(|(k, v)| (k.into(), v)).collect(),
+        entries: entries
+            .into_iter()
+            .map(|(k, v)| (DecodedValue::String(k.into()), v))
+            .collect(),
     }
 }
 
@@ -79,6 +82,36 @@ fn compared(
 
 fn eq(a: &DecodedSnapshot, b: &DecodedSnapshot) -> Result<Option<bool>, Error> {
     compared(a, CmpOp::Eq, b, &Limits::default())
+}
+
+#[test]
+fn typed_map_keys_compare_structurally_without_stringification() {
+    use DecodedValue as V;
+    let a = snapshot(
+        V::Object(NodeId(0)),
+        vec![
+            DecodedObject::Map {
+                key_type: ty(),
+                value_type: ty(),
+                original_len: 3,
+                entries: vec![
+                    (V::Int(1), V::Int(10)),
+                    (V::String("1".into()), V::Int(20)),
+                    (V::Object(NodeId(1)), V::Int(30)),
+                ],
+            },
+            list(vec![V::Int(2), V::Int(3)]),
+        ],
+    );
+    let mut b = a.clone();
+    b.id = CasId::from_bytes([1; 16]);
+    let DecodedObject::Map { entries, .. } = &mut b.objects[0] else {
+        panic!()
+    };
+    entries.reverse();
+    assert_eq!(eq(&a, &b), Ok(Some(true)));
+    b.objects[1] = list(vec![V::Int(2), V::Int(4)]);
+    assert_eq!(eq(&a, &b), Ok(Some(false)));
 }
 
 fn is(a: &DecodedSnapshot, literal: &Json) -> Result<Option<bool>, Error> {

@@ -14,5 +14,9 @@
     "types": ["@cloudflare/vitest-pool-workers/types", "node", "vitest"]
   },
   "include": ["workers/**/*.ts"],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "workers/host_common_types.test.ts",
+    "workers/host_recording_audit.test.ts"
+  ]
 }

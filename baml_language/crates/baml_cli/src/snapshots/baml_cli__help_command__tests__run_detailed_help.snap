@@ -59,7 +59,7 @@ Target options:
           exclusive with `<TARGET>` and `--function`.
 
       --context <SOURCE>
-          Set process launch context from JSON.
+          Set process launch context from JSON; overrides BAML_CONTEXT.
 
           Accepts `distinct_id` (string or null) and `metadata` (a map whose values are strings,
           integers, floats, or booleans).

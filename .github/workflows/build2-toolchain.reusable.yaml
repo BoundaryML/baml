@@ -134,6 +134,7 @@ jobs:
           test -f staging/assets/playground/index.html
           test -f staging/assets/playground/assets/index.js
           test -f staging/assets/playground/assets/index.css
+          cp LICENSE staging/LICENSE
           echo "$VERSION" > staging/VERSION
           if [[ "$TARGET" == *windows-msvc ]]; then
             (cd staging && 7z a "../baml-language-$VERSION-$TARGET.zip" .)

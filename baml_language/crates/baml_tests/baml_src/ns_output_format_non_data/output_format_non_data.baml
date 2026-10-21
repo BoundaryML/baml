@@ -60,7 +60,7 @@ test "static_never_specialization_throws_compilation_error" {
 
 test "runtime_never_specialization_uses_the_same_diagnostic" {
     let runtime_type = reflect.Type.of<never>();
-    type RuntimeNever = unreflect(runtime_type)
+    let type RuntimeNever = runtime_type;
     let result = GenericList@render_prompt<RuntimeNever>("items") catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
         _ => "wrong error",
@@ -105,9 +105,9 @@ test "nested_non_data_class_field_reports_the_full_path" {
 }
 
 test "runtime_minted_nested_non_data_field_is_rejected" {
-    let inner = reflect.class.new("RuntimeInner", { "payload": reflect.Type.of<unknown>() });
-    let outer = reflect.class.new("RuntimeOuter", { "inner": inner.as_type() });
-    type RuntimeOuterType = unreflect(outer.as_type())
+    let inner = reflect.Class.new("RuntimeInner", { "payload": reflect.Type.of<unknown>() });
+    let outer = reflect.Class.new("RuntimeOuter", { "inner": inner });
+    let type RuntimeOuterType = outer;
     let result = GenericValue@render_prompt<RuntimeOuterType>("runtime") catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
         _ => "wrong error",
@@ -146,10 +146,10 @@ test "generic_class_output_fails_before_provider_io" {
 }
 
 test "never_nested_in_a_runtime_class_field_is_rejected_not_panicked" {
-    let outer = reflect.class.new("RuntimeOuter", { "items": reflect.Type.of<never>().array().as_type() }) catch (e) {
-        _ => throw "class.new threw",
+    let outer = reflect.Class.new("RuntimeOuter", { "items": reflect.Type.of<never>().array() }) catch (e) {
+        _ => throw "reflect.Class.new threw",
     };
-    type RuntimeOuterType = unreflect(outer.as_type())
+    let type RuntimeOuterType = outer;
     let result = GenericValue@render_prompt<RuntimeOuterType>("runtime") catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
         _ => "wrong error",
@@ -158,4 +158,46 @@ test "never_nested_in_a_runtime_class_field_is_rejected_not_panicked" {
         result,
         "E0164|field `RuntimeOuter.items` has non-data type `never`, which cannot be rendered as an LLM output schema",
     )
+}
+
+// A unit output carries no information for a model to produce, however the
+// unit type is spelled. `null` stays data inside a larger type.
+type NothingAtAll = void
+
+function ReturnsNothing(topic: string) -> void {
+    client: OutputFormatTestClient
+    prompt: `Describe ${topic}.`
+}
+
+function unit_output_error<T>() -> string {
+    {
+        GenericValue@render_prompt<T>("nothing");
+        "no error"
+    } catch (e) {
+        reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
+        _ => "wrong error",
+    }
+}
+
+test "unit_output_is_rejected_under_every_spelling" {
+    let expected = "E0164|non-data type `null` cannot be rendered as an LLM output schema";
+    assert.equal(unit_output_error<void>(), expected);
+    assert.equal(unit_output_error<null>(), expected);
+    assert.equal(unit_output_error<NothingAtAll>(), expected)
+}
+
+test "unit_returning_llm_function_fails_before_network_io" {
+    let result = {
+        ReturnsNothing("nothing");
+        "no error"
+    } catch (e) {
+        reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
+        _ => "wrong error",
+    };
+    assert.equal(result, "E0164|non-data type `null` cannot be rendered as an LLM output schema")
+}
+
+test "null_inside_an_output_type_still_renders" {
+    let rendered = GenericValue@render_prompt<string?>("something").text();
+    assert.contains(rendered, "null")
 }

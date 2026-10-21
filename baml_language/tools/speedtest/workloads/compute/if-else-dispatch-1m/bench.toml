@@ -1,0 +1,5 @@
+name = "if else dispatch 1m"
+description = "1,000,000 branches through an if/else chain"
+expect = "3000000"
+jobs = 8
+warmup = 1

@@ -62,14 +62,12 @@ async fn recorded_argument_layouts_align_with_captured_input_slots() {
     for object in &mut program.objects.0 {
         if let bex_vm_types::Object::Function(f) = object
             && matches!(
-                f.name.rsplit('.').next(),
+                f.name().rsplit('.').next(),
                 Some("greet" | "Extract" | "Nothing")
             )
         {
             // Exercise real input capture without network/LLM calls.
-            f.body_meta = Some(bex_vm_types::FunctionMeta::Llm {
-                client: "test".into(),
-            });
+            f.body_meta = Some(bex_vm_types::FunctionMeta::Llm);
         }
     }
     let recording = TelemetryRecording::local_files(root.path(), RecordingConfig::default());

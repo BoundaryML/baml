@@ -448,3 +448,27 @@ fn lower<'db>(
         },
     )
 }
+
+/// Span-free declaration hook reference. Editing its position doesn't change
+/// its meaning; the directive's source span is queried separately.
+#[salsa::tracked(returns(ref))]
+pub fn function_trace_hook<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+) -> Option<Vec<Name>> {
+    crate::file_item_tree(db, function.file(db))[function.id(db)]
+        .trace_hook
+        .as_ref()
+        .map(|hook| hook.path.clone())
+}
+
+#[salsa::tracked]
+pub fn function_trace_hook_span<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+) -> Option<TextRange> {
+    crate::file_item_tree(db, function.file(db))[function.id(db)]
+        .trace_hook
+        .as_ref()
+        .map(|hook| hook.span)
+}

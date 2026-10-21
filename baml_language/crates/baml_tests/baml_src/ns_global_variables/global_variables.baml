@@ -130,20 +130,20 @@ function type_static_through_global_name() -> bool {
 }
 
 function qualified_child_global() -> int {
-    settings.TIMEOUT_SECONDS
+    root.global_variables.settings.TIMEOUT_SECONDS
 }
 
 function qualified_function_value_call() -> int {
-    settings.SCALE(21)
+    root.global_variables.settings.SCALE(21)
 }
 
 function qualified_field_mutation() -> int {
-    settings.STATE.n += 1;
-    settings.STATE.n
+    root.global_variables.settings.STATE.n += 1;
+    root.global_variables.settings.STATE.n
 }
 
 function optional_chain_on_qualified_global() -> int {
-    settings.MAYBE_STATE?.n ?? -1
+    root.global_variables.settings.MAYBE_STATE?.n ?? -1
 }
 
 function root_qualified_global() -> int {
@@ -259,15 +259,15 @@ testset "global_variables" {
     test "qualified globals" {
         assert.equal(qualified_child_global(), 30);
         assert.equal(root_qualified_global(), 3);
-        assert.equal(settings.TIMEOUT_SECONDS, 30);
-        assert.equal(settings.RETRY_BUDGET, 90);
+        assert.equal(root.global_variables.settings.TIMEOUT_SECONDS, 30);
+        assert.equal(root.global_variables.settings.RETRY_BUDGET, 90);
         assert.equal(qualified_function_value_call(), 42);
         assert.equal(optional_chain_on_qualified_global(), 7);
         assert.equal(root.global_variables.ADD_RETRIES(1), 4)
     }
 
     test "a qualified global's contents are shared and mutable" {
-        let before = settings.STATE.n;
+        let before = root.global_variables.settings.STATE.n;
         assert.equal(qualified_field_mutation(), before + 1)
     }
 

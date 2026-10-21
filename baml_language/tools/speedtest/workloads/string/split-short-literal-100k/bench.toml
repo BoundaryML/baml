@@ -1,0 +1,5 @@
+name = "split short literal 100k"
+description = "split a short string 100,000 times"
+expect = "600000"
+jobs = 8
+warmup = 1

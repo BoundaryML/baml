@@ -48,6 +48,7 @@ class String {
     /// "😀".length()     // 1
     /// "".length()       // 0
     /// ```
+    /// baml:$trace=trace.hidden
     function length(self) -> int throws never {
         self.char_count()
     }
@@ -65,6 +66,7 @@ class String {
     /// "".is_empty()       // true
     /// "hello".is_empty()  // false
     /// ```
+    /// baml:$trace=trace.hidden
     function is_empty(self) -> bool throws never {
         self.byte_length() == 0
     }

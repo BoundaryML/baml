@@ -722,9 +722,9 @@ test "page: an adaptive sitting downloads, reads back, and reviews with what it 
 /// than by a list here, so a knob added later without a domain fails this
 /// instead of reaching a learner's save unchecked. Booleans have no domain.
 function knob_domains_report() -> string throws never {
-    let declared = reflect.Type.of<root.engine.Knobs>().as_class()
+    let declared = root.engine.Knobs.type().as_class()
         ?? return "Knobs is not a class";
-    let boolean = reflect.Type.of<bool>();
+    let boolean = bool.type();
     let numeric = declared.fields()
         .filter((field) -> {
             field.type != boolean

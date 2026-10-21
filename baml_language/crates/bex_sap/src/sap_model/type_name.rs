@@ -141,6 +141,9 @@ impl<N: TypeIdent> TypeName for EnumVariantTy<'_, N> {
 
 impl<N: TypeIdent> TypeName for UnionTy<'_, N> {
     fn type_name(&self) -> Cow<'static, str> {
+        if self.variants.is_empty() {
+            return Cow::Borrowed("never");
+        }
         let variants: Vec<_> = self.variants.iter().map(Ty::type_name).collect();
         Cow::Owned(variants.join(" | "))
     }

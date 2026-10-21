@@ -4,7 +4,7 @@ namespace Baml.Cffi;
 
 internal sealed unsafe partial class NativeApi
 {
-    private const uint AbiVersion = 3;
+    private const uint AbiVersion = 4;
     private const uint CSharpBridgeLanguage = 5;
 
     private static readonly Lazy<NativeApi> Current = new(
@@ -318,6 +318,8 @@ internal sealed unsafe partial class NativeApi
         Require(api->RegisterHostCancelCallback is not null, "register_host_cancel_callback");
         Require(api->TraceSelection is not null, "trace_selection");
         Require(api->InvocationContext is not null, "invocation_context");
+        Require(api->MediaName is not null, "media_name");
+        Require(api->MediaFromFileContent is not null, "media_from_file_content");
     }
 
     private static NativeApi Load()

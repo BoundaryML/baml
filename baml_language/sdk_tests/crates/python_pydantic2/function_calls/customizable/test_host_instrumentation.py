@@ -2,7 +2,9 @@
 
 import asyncio
 import contextvars
+import enum
 import inspect
+import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
@@ -12,6 +14,98 @@ from baml_sdk import host_callable_tests as baml
 from baml_sdk import trace
 from baml_sdk import execution_context_tests as context_baml
 from baml_sdk.baml.spawn import CancelToken
+from baml_bridge import _host_capture
+from baml_bridge.typemap import BamlTypeMap, get_type_map, set_type_map
+
+
+# SDK_PARITY_LINT(skip): Python instrumentation defaults Python-to-BAML span/capture requests
+@pytest.mark.parametrize("asynchronous", [False, True], ids=["sync", "async"])
+async def test_host_defaults_baml_span_and_error_capture_python_only(monkeypatch, asynchronous):
+    from baml_bridge import BamlError, _invocation
+    from baml_bridge.cffi.v1.baml_inbound_pb2 import TRACE_MODE_SPAN
+    from baml_sdk.ai.errors import ParseFailed
+    from baml_sdk.ai_error_test import ExtractInt, ExtractInt_async
+
+    tags = trace.span(error=True).context(
+        metadata={"feature": "chat.title", "user_id": "u1"}, distinct_id="u1"
+    )
+    observed = []
+    normalize = _invocation.normalize
+
+    def observe(options, call_id):
+        result = normalize(options, call_id)
+        observed.append(result[0])
+        return result
+
+    monkeypatch.setattr(_invocation, "normalize", observe)
+
+    # A context-only inner decorator must preserve the outer capture defaults.
+    @trace.instrument(trace.context(metadata={"nested": True}))
+    def sync_body():
+        assert context_baml.leaf_has_span()
+        current = context_baml.current_context()
+        assert current.distinct_id == "u1"
+        assert current.metadata == {"feature": "chat.title", "user_id": "u1", "nested": True}
+        ExtractInt()  # deterministic client returns "not a number"; no network
+
+    @trace.instrument(tags)
+    def sync_parent():
+        sync_body()
+
+    @trace.instrument(tags)
+    async def async_parent():
+        assert await context_baml.leaf_has_span_async()
+        current = await context_baml.current_context_async()
+        assert current.distinct_id == "u1"
+        assert current.metadata == {"feature": "chat.title", "user_id": "u1"}
+        await ExtractInt_async()
+
+    # Ignore the options-builder calls above; inspect the real failing call's
+    # controls as well as the span ID observed inside an actual BAML function.
+    observed.clear()
+    with pytest.raises(BamlError) as caught:
+        if asynchronous:
+            await async_parent()
+        else:
+            sync_parent()
+    assert isinstance(caught.value.value, ParseFailed)
+    assert caught.value.value.raw_output == "not a number"
+    assert observed[-1].trace.options.mode == TRACE_MODE_SPAN
+    assert observed[-1].trace.options.error is True
+    assert not observed[-1].trace.options.metadata
+    assert not observed[-1].trace.options.HasField("distinct_id")
+
+    # A failure restores both the tags and the Python call defaults.
+    context_baml.current_context()
+    assert not observed[-1].HasField("trace")
+    assert trace.current_context().metadata == {}
+    assert trace.current_cancel_token() is None
+
+
+# SDK_PARITY_LINT(skip): explicit Python call controls override instrumentation defaults
+async def test_host_baml_trace_override_and_callback_context_python_only():
+    hidden = trace.hidden()
+    tags = trace.span(error=True).context(metadata={"phase": "root", "keep": 7, "remove": 9})
+
+    @trace.instrument(tags)
+    async def parent():
+        assert await context_baml.leaf_has_span_async(_baml={"timeout_ms": 1000})
+        assert not await context_baml.leaf_has_span_async(_baml={"trace": hidden})
+        assert not await context_baml.leaf_has_span_async(_baml={"trace": None})
+
+        async def callback(value):
+            # Inherited capture options must not reapply the parent's tag patch.
+            current = await context_baml.current_context_async()
+            assert current.distinct_id == "internal-id"
+            assert current.metadata == {"phase": "internal", "keep": 7}
+            assert await context_baml.leaf_has_span_async()
+            return value
+
+        assert await context_baml.internal_context_async(callback, 7) == 7
+        assert trace.current_context().metadata == {"phase": "root", "keep": 7, "remove": 9}
+
+    await parent()
+    assert trace.current_context().metadata == {}
 
 
 # SDK_PARITY_LINT(skip): covers Python decorator forms
@@ -587,3 +681,60 @@ def test_callback_marker_sync_entry_python_only():
         == 7
     )
     assert trace.current_cancel_token() is None
+
+
+class CaptureSeverity(str, enum.Enum):
+    None_ = "None"
+    Low = "Low"
+
+
+class CountingMeta(type):
+    compared = 0
+
+    def __eq__(cls, other):
+        CountingMeta.compared += 1
+        return NotImplemented
+
+    __hash__ = type.__hash__
+
+
+class MetaCompared(metaclass=CountingMeta):
+    pass
+
+
+# SDK_PARITY_LINT(skip): checks the Python capture adapter's wire output directly
+def test_host_capture_wire_stays_decodable_python_only():
+    # A lone surrogate drops only its own string, not the whole observation.
+    assert json.loads(_host_capture.capture({"ok": 1, "path": "file\udcff.txt"})) == [
+        "map",
+        [["ok", ["number", 1]], ["path", ["unavailable"]]],
+    ]
+
+    # Depth markers count against the value budget, so the wire stays small.
+    nested = [[0] * 255] * 256
+    for _ in range(7):
+        nested = [nested]
+    wire = _host_capture.capture(nested)
+    assert len(wire) < 16 * 1024 and '["values"]' in wire
+
+    # Enum captures carry the BAML variant, not a renamed Python member name.
+    previous = get_type_map()
+    set_type_map(
+        BamlTypeMap.from_lazy_entries(
+            classes={},
+            enums={"user.CaptureSeverity": (__name__, "CaptureSeverity")},
+            type_aliases={},
+        )
+    )
+    try:
+        assert json.loads(_host_capture.capture(CaptureSeverity.None_)) == [
+            "enum",
+            "user.CaptureSeverity",
+            "None",
+        ]
+    finally:
+        set_type_map(previous)
+
+    # Base-class checks never call an application metaclass's __eq__.
+    assert json.loads(_host_capture.capture(MetaCompared())) == ["unavailable"]
+    assert CountingMeta.compared == 0

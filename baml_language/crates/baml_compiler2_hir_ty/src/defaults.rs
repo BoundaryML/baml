@@ -5,7 +5,7 @@
 
 use baml_base::Name;
 use baml_compiler2_ast as ast;
-use baml_compiler2_ast::{Expr, ExprBody, ExprId, PatId, Stmt, StmtId, TypeBindingValue};
+use baml_compiler2_ast::{Expr, ExprBody, ExprId, PatId, Stmt, StmtId};
 use baml_compiler2_hir::loc::FunctionLoc;
 use rustc_hash::FxHashSet;
 use text_size::TextRange;
@@ -165,29 +165,27 @@ fn collect_default_expr_forward_references(
         Expr::Is { scrutinee, .. } => {
             collect_default_expr_forward_references(*scrutinee, body, later_params, shadowed, refs);
         }
-        Expr::Catch { base, clauses } => {
+        Expr::Catch { base, clause } => {
             collect_default_expr_forward_references(*base, body, later_params, shadowed, refs);
-            for clause in clauses {
-                let clause_saved_len = shadowed.len();
-                push_pattern_bindings(clause.binding, body, shadowed);
-                if let Some(stack_trace_binding) = clause.stack_trace_binding {
-                    push_pattern_bindings(stack_trace_binding, body, shadowed);
-                }
-                for arm_id in &clause.arms {
-                    let arm = &body.catch_arms[*arm_id];
-                    let arm_saved_len = shadowed.len();
-                    push_pattern_bindings(arm.pattern, body, shadowed);
-                    collect_default_expr_forward_references(
-                        arm.body,
-                        body,
-                        later_params,
-                        shadowed,
-                        refs,
-                    );
-                    shadowed.truncate(arm_saved_len);
-                }
-                shadowed.truncate(clause_saved_len);
+            let clause_saved_len = shadowed.len();
+            push_pattern_bindings(clause.binding, body, shadowed);
+            if let Some(stack_trace_binding) = clause.stack_trace_binding {
+                push_pattern_bindings(stack_trace_binding, body, shadowed);
             }
+            for arm_id in &clause.arms {
+                let arm = &body.catch_arms[*arm_id];
+                let arm_saved_len = shadowed.len();
+                push_pattern_bindings(arm.pattern, body, shadowed);
+                collect_default_expr_forward_references(
+                    arm.body,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+                shadowed.truncate(arm_saved_len);
+            }
+            shadowed.truncate(clause_saved_len);
         }
         Expr::Throw { value } | Expr::Unary { expr: value, .. } => {
             collect_default_expr_forward_references(*value, body, later_params, shadowed, refs);
@@ -359,7 +357,7 @@ fn collect_default_expr_forward_references_in_template_segments(
     for seg in segments {
         match seg {
             ast::TemplateSegment::Text(_) => {}
-            ast::TemplateSegment::Interp(e) => {
+            ast::TemplateSegment::Interp(e) | ast::TemplateSegment::Effect { block: e, .. } => {
                 collect_default_expr_forward_references(*e, body, later_params, shadowed, refs);
             }
             ast::TemplateSegment::For {
@@ -477,15 +475,21 @@ fn collect_default_stmt_forward_references(
             collect_default_expr_forward_references(*expr, body, later_params, shadowed, refs);
         }
         Stmt::TypeBinding {
-            value: TypeBindingValue::Runtime(operand),
+            operand,
+            else_branch,
             ..
         } => {
             collect_default_expr_forward_references(*operand, body, later_params, shadowed, refs);
+            if let Some(else_expr) = else_branch {
+                collect_default_expr_forward_references(
+                    *else_expr,
+                    body,
+                    later_params,
+                    shadowed,
+                    refs,
+                );
+            }
         }
-        Stmt::TypeBinding {
-            value: TypeBindingValue::Static(_),
-            ..
-        } => {}
         Stmt::Let {
             pattern,
             initializer,
@@ -591,10 +595,12 @@ mod tests {
         let mut binding_body = ExprBody::default();
         let value = binding_body
             .exprs
-            .alloc(Expr::Path(vec![Name::new("later")]));
+            .alloc(Expr::Path(baml_base::Path::bare(Name::new("later"))));
         let stmt = binding_body.stmts.alloc(Stmt::TypeBinding {
             name: Name::new("T"),
-            value: TypeBindingValue::Runtime(value),
+            operand: value,
+            bounds: Vec::new(),
+            else_branch: None,
         });
         let block = binding_body.exprs.alloc(Expr::Block {
             stmts: vec![stmt],

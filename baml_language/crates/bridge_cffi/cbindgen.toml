@@ -43,12 +43,13 @@ header = """#ifndef BAML_CFFI_H
 #  endif
 #endif"""
 
-trailer = """/* ABI revision 3 requires every invocation operation below. */
+trailer = """/* ABI revision 4 requires every operation through media_from_file_content. */
 #define BAML_API_V1_MIN_SIZE \\
-  (offsetof(BamlApiV1, invocation_context) + sizeof(((BamlApiV1 *)0)->invocation_context))
+  (offsetof(BamlApiV1, media_from_file_content) + \\
+   sizeof(((BamlApiV1 *)0)->media_from_file_content))
 
 /*
- * Validate the complete revision-3 table while permitting appended fields.
+ * Validate the complete revision-4 table while permitting appended fields.
  */
 static inline bool baml_api_v1_is_compatible(const BamlApiV1 *api) {
   return api != NULL && api->abi_version == BAML_API_V1_ABI_VERSION &&
@@ -94,6 +95,7 @@ include = [
   "BamlHandleCloneFn",
   "BamlHandleReleaseFn",
   "BamlMediaConstructorFn",
+  "BamlMediaFromFileContentFn",
   "BamlMediaAccessorFn",
   "BamlRegisterBridgeFn",
   "BamlGetApiV1Fn",
@@ -123,6 +125,8 @@ exclude = [
   "baml_media_file",
   "baml_media_base64",
   "baml_media_mime_type",
+  "baml_media_name",
+  "baml_media_from_file_content",
   "register_host_dispatch_callback",
   "register_host_release_callback",
   "register_unhandled_spawn_error_callback",

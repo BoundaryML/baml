@@ -402,7 +402,10 @@ pub enum SyntaxKind {
     WHILE_LET_STMT,
     FOR_EXPR,
     LET_STMT,
-    /// Body-level type binding: `type T = unreflect(expr)` or `type T = <type>`.
+    /// Scoped runtime type binding:
+    /// `let type T [extends A & B] = expr [else { … }];`. Also the recovery
+    /// node for the removed `type T = <type>;` body statement, which has no
+    /// `KW_LET` and a `TYPE_EXPR` right-hand side.
     TYPE_BINDING_STMT,
     BREAK_STMT,
     CONTINUE_STMT,
@@ -416,7 +419,8 @@ pub enum SyntaxKind {
     CALL_ARGS,
     CALL_ARG,
     GENERIC_ARGS,
-    /// Contextual runtime type atom: `unreflect(expr)`.
+    /// The removed `unreflect(expr)` type atom, kept so it recovers with a
+    /// diagnostic that points at `let type`.
     UNREFLECT_TYPE,
     /// Declaration-site generic type parameter list: `<T>` or `<K, V>` on class/function defs.
     GENERIC_PARAM_LIST,
@@ -434,8 +438,9 @@ pub enum SyntaxKind {
 
     // String components (assembled by parser)
     STRING_LITERAL,
-    RAW_STRING_LITERAL,
-    BYTE_STRING_LITERAL,
+    DEPRECATED_HASH_STRING_LITERAL, // removed `#"..."#` strings, kept for diagnostics
+    RAW_STRING_LITERAL,             // r"..."
+    BYTE_STRING_LITERAL,            // b"..."
     UNQUOTED_STRING,
 
     // Backtick interpolated string (BEP-049)

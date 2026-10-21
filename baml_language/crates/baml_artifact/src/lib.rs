@@ -77,8 +77,44 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 ///
 /// Version 14 adds publisher-owned telemetry policy to the packed dispatch envelope.
 ///
-/// Version 15 carries embedded public ingestion registration and destination bindings.
-pub const FORMAT_VERSION: u32 = 15;
+/// Version 16 carries declared trace-hook opcodes and compact continuation metadata.
+///
+/// Version 17: BEP-079's unit type. The type family lost `Void` (Borsh
+/// discriminant 22, now reserved): `void` is a spelling of `null`, and an
+/// artifact carrying the retired discriminant no longer decodes.
+///
+/// Version 18: a pooled `Class` carries its finalizer as a position in its
+/// method table (`cleanup: Option<usize>`) where it carried a `has_cleanup`
+/// flag, so the collector reads the method off the class and resolves no
+/// name; and a pooled `Class`, `Enum`, `Interface` and `TypeAlias` carries
+/// its path inside its package (`path`) where it used to carry a
+/// package-qualified name (`name`): a declaration's name is put together from
+/// its package's display name when one is wanted, so no serialized
+/// declaration states which package it belongs to or what that package is
+/// called. An interface's dependency table names a language package by
+/// identity (`Locator::Prelude(LangPackage)`) rather than by an edge name;
+/// a `ProgramPackage` carries its `PackageKind` (`Language(LangPackage)` or
+/// `Ordinary`) and each of its edges an `EdgeKind` (`Dependency` or
+/// `ReExported`).
+///
+/// Version 19: `SatisfiesBound` and `BoundMismatch` (the run-time bound check
+/// of `let type T extends I = …`) appended to the instruction set.
+///
+/// Version 20: `BoundMismatch` removed from the end of the instruction set. A
+/// bounded `let type` must have an `else` block, so a missed bound never
+/// throws.
+///
+/// Version 21 adds pass-through tracing strategy to serialized function metadata.
+///
+/// Version 22: the `ThrowIfPanic` instruction is gone. A catch's wildcard
+/// arm that does not trap panics is now entered after an `IsType` test
+/// against the `PANIC` pseudo-tag (`baml_type::typetag::PANIC`), so the
+/// discriminants of every opcode declared after `TypeTag` shifted down by
+/// one.
+///
+/// Version 23: `FunctionMeta::Llm` lost its `client` string and marks every
+/// LLM function, including one whose client is an expression.
+pub const FORMAT_VERSION: u32 = 23;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.

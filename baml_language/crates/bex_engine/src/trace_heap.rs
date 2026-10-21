@@ -82,8 +82,11 @@ pub struct TraceMediaValue {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TraceMediaContent {
     Url(String),
-    Base64(String),
-    File(String),
+    Base64 {
+        base64: String,
+        /// The base name of the file the content was read from.
+        name: Option<String>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -407,7 +410,7 @@ impl TraceSnapshotBuilder {
                     }
                     // A trace is read by a person: the display name, never an
                     // internal identity.
-                    let type_name = Self::copy_str(&class.name.to_string())?;
+                    let type_name = Self::copy_str(&class.name().to_string())?;
                     self.alloc(TraceValue::Instance {
                         type_name,
                         type_args,
@@ -434,7 +437,7 @@ impl TraceSnapshotBuilder {
                         "variant index was outside the enum definition",
                     );
                 };
-                let type_name = Self::copy_str(&enum_.name.to_string())?;
+                let type_name = Self::copy_str(&enum_.name().to_string())?;
                 let variant = Self::copy_str(&variant_def.name)?;
                 self.alloc(TraceValue::Enum { type_name, variant })
             }
@@ -465,6 +468,7 @@ impl TraceSnapshotBuilder {
                     unsupported_object_message(object),
                 ),
             },
+            Object::Tombstone => Object::tombstone_reached(),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => self.omitted(
                 TraceOmissionReason::InvalidRuntimeValue,
@@ -506,10 +510,10 @@ impl TraceSnapshotBuilder {
     fn copy_media(&mut self, media: &MediaValue) -> Result<TraceValueRef, CopyError> {
         let content = media.read_content(|content| match content {
             MediaContent::Url { url, .. } => Self::copy_str(url).map(TraceMediaContent::Url),
-            MediaContent::Base64 { base64_data } => {
-                Self::copy_str(base64_data).map(TraceMediaContent::Base64)
-            }
-            MediaContent::File { file, .. } => Self::copy_str(file).map(TraceMediaContent::File),
+            MediaContent::Base64 { base64_data, name } => Ok(TraceMediaContent::Base64 {
+                base64: Self::copy_str(base64_data)?,
+                name: name.as_deref().map(Self::copy_str).transpose()?,
+            }),
         })?;
         let mime_type = media
             .read_mime_type(|mime_type| mime_type.map(Self::copy_str))
@@ -551,6 +555,7 @@ fn unsupported_object_message(object: &Object) -> &'static str {
         Object::Future(_) => "future",
         Object::RustData(_) => "host-owned rust data",
         Object::Type(_) => "type descriptor",
+        Object::Tombstone => Object::tombstone_reached(),
         #[cfg(feature = "heap_debug")]
         Object::Sentinel(_) => "heap sentinel",
         Object::String(_)
@@ -726,7 +731,9 @@ mod tests {
             .await;
         let host_owned = permit
             .tlab_mut()
-            .alloc(Object::RustData(std::sync::Arc::new(1_u64)));
+            .alloc(Object::RustData(std::sync::Arc::new(
+                bex_vm_types::TestRustData(1),
+            )));
         let trace_heap = TraceHeap::new();
 
         let handle = trace_heap.copy_values_from_bex_heap(
@@ -780,7 +787,10 @@ mod tests {
         assert_eq!(media.mime_type.as_deref(), Some("image/png"));
         assert_eq!(
             media.content,
-            TraceMediaContent::Base64("aW1hZ2UtYnl0ZXM=".to_string())
+            TraceMediaContent::Base64 {
+                base64: "aW1hZ2UtYnl0ZXM=".to_string(),
+                name: None,
+            }
         );
     }
 

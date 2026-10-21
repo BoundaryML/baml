@@ -91,8 +91,9 @@ fn io_package_name(builtin: &NativeBuiltin) -> &str {
 fn io_namespace_name(builtin: &NativeBuiltin) -> &str {
     // Carried structurally from extraction ([`NativeBuiltin::namespace`]):
     // the path alone cannot be split, because an impl-block class segment
-    // embeds the WRITTEN interface target, which may itself be dotted
-    // (`root.io.Read$for$FileHandle`).
+    // embeds the interface target as the key spells it (a written `root.`
+    // as the package's fixed name), which may itself be dotted
+    // (`baml.io.Read$for$FileHandle`).
     &builtin.namespace
 }
 
@@ -179,8 +180,8 @@ fn build_io_namespace_tree<'a>(
 
 /// Collect the set of namespace prefixes that contain IO builtins.
 /// Structural, like [`io_namespace_name`]: the path alone cannot be
-/// dot-split once an impl-block class segment embeds a dotted written
-/// interface (`root.io.Read$for$File`).
+/// dot-split once an impl-block class segment embeds a dotted interface
+/// target (`baml.io.Read$for$File`).
 fn io_namespace_prefixes(io_builtins: &[NativeBuiltin]) -> BTreeSet<String> {
     io_builtins
         .iter()
@@ -252,7 +253,7 @@ fn owned_rust_type(
         BamlType::Float => quote! { f64 },
         BamlType::Bool => quote! { bool },
         BamlType::Null => quote! { () },
-        BamlType::RustType => quote! { std::sync::Arc<dyn std::any::Any + Send + Sync> },
+        BamlType::RustType => quote! { std::sync::Arc<dyn bex_vm_types::BexRustData> },
         BamlType::List(inner) => {
             let inner_ty = owned_rust_type(inner, class_ns_map, paths);
             quote! { Vec<#inner_ty> }
@@ -310,7 +311,7 @@ fn view_return_type(ty: &BamlType, needs_heap: &mut bool) -> TokenStream {
         }
         BamlType::RustType => {
             *needs_heap = true;
-            quote! { Result<std::sync::Arc<dyn std::any::Any + Send + Sync>, AccessError> }
+            quote! { Result<std::sync::Arc<dyn bex_vm_types::BexRustData>, AccessError> }
         }
         // The `type` metatype's owned representation is `RuntimeTy` (see the
         // owned-field mapping), so the accessor must return it too — not the
@@ -640,7 +641,7 @@ fn clean_rust_type(
         BamlType::Float => quote! { f64 },
         BamlType::Bool => quote! { bool },
         BamlType::Null => quote! { () },
-        BamlType::RustType => quote! { std::sync::Arc<dyn std::any::Any + Send + Sync> },
+        BamlType::RustType => quote! { std::sync::Arc<dyn bex_vm_types::BexRustData> },
         BamlType::List(inner) => {
             let inner_ty = clean_rust_type(inner, class_ns_map, paths);
             quote! { Vec<#inner_ty> }
@@ -1818,7 +1819,7 @@ fn emit_one_namespace_trait(
         // stripping the class-segment prefix (with its trailing dot): the
         // bare class name for direct methods, `{Iface}$for${Class}` for
         // implements-block methods — the latter may itself be DOTTED
-        // (`root.io.Read$for$File`), so a `split_once('.')` peel can never
+        // (`baml.io.Read$for$File`), so a `split_once('.')` peel can never
         // match it and prefix-stripping is the one correct route. Longer
         // segments strip first so a segment that extends another
         // dot-for-dot cannot be shadowed.
@@ -2106,7 +2107,7 @@ fn emit_root_trait(tree: &BTreeMap<String, IoNamespaceNode>) -> TokenStream {
     // segment is DOTTED (a relatively-written cross-namespace interface,
     // `implements io.Read` → segment `io.Read$for$X`) would misroute into a
     // same-named sibling namespace. The stdlib writes such targets
-    // absolutely (`root.io.Read`); enforce the convention instead of
+    // absolutely (`root.io.Read`, keyed `baml.io.Read`); enforce the convention instead of
     // relying on it.
     for node in tree.values() {
         if !node.namespace.is_empty() {
@@ -2895,7 +2896,7 @@ fn emit_build_runtime_io() -> TokenStream {
 
 /// Order class-segment routes LONGEST-FIRST (ties lexicographic): the
 /// dispatcher tries `strip_prefix` in this order, so a segment that extends
-/// another dot-for-dot (`root.io.Read$for$File` vs a hypothetical `root`)
+/// another dot-for-dot (`baml.io.Read$for$File` vs a hypothetical `baml`)
 /// cannot be shadowed by its prefix.
 fn sort_segment_routes(routes: &mut [(String, &str)]) {
     routes.sort_by(|a, b| b.0.len().cmp(&a.0.len()).then(a.0.cmp(&b.0)));
@@ -2907,8 +2908,8 @@ mod tests {
     fn segment_routes_sort_longest_first() {
         let mut routes = vec![
             ("File.".to_string(), "File"),
-            ("root.io.Read$for$File.".to_string(), "File"),
-            ("root.io.Write$for$File.".to_string(), "File"),
+            ("baml.io.Read$for$File.".to_string(), "File"),
+            ("baml.io.Write$for$File.".to_string(), "File"),
             ("Rng$for$SystemRandom.".to_string(), "SystemRandom"),
         ];
         super::sort_segment_routes(&mut routes);
@@ -2916,8 +2917,8 @@ mod tests {
         assert_eq!(
             order,
             [
-                "root.io.Write$for$File.",
-                "root.io.Read$for$File.",
+                "baml.io.Write$for$File.",
+                "baml.io.Read$for$File.",
                 "Rng$for$SystemRandom.",
                 "File.",
             ]

@@ -356,9 +356,11 @@ impl CloudPublisher {
             .map(|blob| (blob.index(), blob.id(), blob.encoded_len()))
             .collect();
         // A capture with nothing left to write is let go too.
-        let structure = structure
-            .filter(|_| !kept.is_empty())
-            .map(|structure| (structure, whole.saturating_sub(given)));
+        let structure = structure.filter(|_| !kept.is_empty()).map(|structure| {
+            // Measurement may allocate component indexes after preflight.
+            let size = whole.saturating_sub(given).max(structure.retained_bytes());
+            (structure, size)
+        });
         let size = leaves
             .iter()
             .map(Leaf::retained_bytes)
@@ -837,6 +839,107 @@ mod tests {
         )
         .unwrap();
         (delivery, publisher)
+    }
+
+    #[test]
+    fn owned_spans_are_delivered_with_what_they_hold_and_their_usage() {
+        use btel_recorder::proto::{self, span_event::Event};
+        use prost::Message as _;
+        for detached in [false, true] {
+            let (_delivery, mut publisher) = publisher(CloudPublisherConfig::default());
+            let thread = allocate_telemetry_id();
+            let deliver = |publisher: &mut CloudPublisher, mut record: SpanRecord<_, _>| {
+                if detached {
+                    publisher.before_detached_span(&record);
+                }
+                publisher.span(thread, &mut record);
+            };
+            let (owned, child) = (allocate_telemetry_id(), allocate_telemetry_id());
+            deliver(
+                &mut publisher,
+                SpanRecord::ManualSpanAnnouncement(Box::new(
+                    btel_records::ManualSpanAnnouncement {
+                        id: owned,
+                        parent_id: thread,
+                        call_path: CallPathId::ROOT,
+                        entered_at: ClockInstant::from_ticks(1),
+                        captured_inputs: None,
+                        captured_type_args: None,
+                    },
+                )),
+            );
+            deliver(
+                &mut publisher,
+                SpanRecord::FunctionSpanAnnouncement {
+                    id: child,
+                    parent_id: owned,
+                    call_path: CallPathId::ROOT,
+                    entered_at: ClockInstant::from_ticks(2),
+                    captured_inputs: None,
+                    captured_type_args: None,
+                },
+            );
+            deliver(
+                &mut publisher,
+                SpanRecord::SpanUsage(Box::new(btel_records::SpanUsage {
+                    node: owned,
+                    entries: vec![btel_records::ModelUsage {
+                        provider: "openai".into(),
+                        model: Some("gpt-6-sol".into()),
+                        calls: 1,
+                        input_tokens: Some(100),
+                        output_tokens: Some(10),
+                        cache_read_tokens: None,
+                        cache_write_tokens: None,
+                        reasoning_tokens: None,
+                    }],
+                })),
+            );
+            deliver(
+                &mut publisher,
+                SpanRecord::ManualSpanCompletion(Box::new(btel_records::ManualSpanCompletion {
+                    await_time: btel_types::AwaitDuration::ZERO,
+                    id: owned,
+                    parent_id: thread,
+                    call_path: CallPathId::ROOT,
+                    entered_at: ClockInstant::from_ticks(1),
+                    exited_at: ClockInstant::from_ticks(3),
+                    outcome: None,
+                    requires_announcement: false,
+                    captured_value: None,
+                })),
+            );
+            assert_eq!(publisher.failure, None);
+            let sealed = publisher.recording.end_recording().unwrap().unwrap();
+            let file = proto::RecordingFile::decode(sealed.bytes()).unwrap();
+            let events: Vec<Event> = file
+                .spans
+                .iter()
+                .flat_map(|batch| &batch.sections)
+                .flat_map(|section| &section.events)
+                .filter_map(|event| event.event.clone())
+                .collect();
+            // The owned span is announced under its thread, what it holds hangs under it, and
+            // it closes without an outcome, carrying the usage charged to it.
+            assert!(events.iter().any(|event| matches!(
+                event,
+                Event::FunctionAnnouncement(entry)
+                    if entry.id == owned.get() && entry.parent_id == thread.get()
+            )));
+            assert!(events.iter().any(|event| matches!(
+                event,
+                Event::FunctionAnnouncement(entry)
+                    if entry.id == child.get() && entry.parent_id == owned.get()
+            )));
+            let completion = events.iter().find_map(|event| match event {
+                Event::FunctionCompletion(done) if done.id == owned.get() => Some(done),
+                _ => None,
+            });
+            let completion = completion.expect("the owned span's completion is delivered");
+            assert_eq!(completion.completion_flags, 16);
+            assert_eq!(completion.usage.len(), 1);
+            assert_eq!(completion.usage[0].input_tokens, Some(100));
+        }
     }
 
     fn offer(publisher: &mut CloudPublisher, snapshot: Snapshot) {
@@ -1329,6 +1432,8 @@ mod tests {
         let mut window = publisher.take_window();
         assert_eq!(window.candidates.len(), 4);
         assert_eq!(window.owners.len(), 1);
+        // Include component-index storage allocated while splitting the capture.
+        assert_eq!(window.sizes[0], window.owners[0].retained_bytes());
         publisher.release_window(&window);
         assert_eq!(publisher.retained_bytes, 0);
         assert!(held > 600);

@@ -1,8 +1,8 @@
 //! The IDE over global variables: a top-level `const` reads as the binding it
 //! is (keyword, name, type, docs), navigates and finds references through
-//! every spelling of it — bare, namespace-qualified, `root.`-qualified — and
-//! its initializer is a body like any function's, so the features that read a
-//! body's locals and members answer inside it too.
+//! every spelling of it — bare and `root.`-qualified — and its initializer is
+//! a body like any function's, so the features that read a body's locals and
+//! members answer inside it too.
 
 use crate::{
     completion::completions,
@@ -84,7 +84,7 @@ fn goto_definition_follows_a_namespace_qualified_global() {
     builder.source(
         "main.baml",
         r#"function f() -> int {
-    settings.TIME<[CURSOR]OUT
+    root.settings.TIME<[CURSOR]OUT
 }
 "#,
     );
@@ -135,7 +135,7 @@ fn references_to_a_child_namespace_global_include_its_qualified_reads() {
     builder.source(
         "main.baml",
         r#"function f() -> int {
-    settings.TIMEOUT + 1
+    root.settings.TIMEOUT + 1
 }
 "#,
     );
@@ -147,7 +147,7 @@ fn references_to_a_child_namespace_global_include_its_qualified_reads() {
     assert_eq!(
         usages(&test),
         vec![
-            "main.baml:2:14 -> TIMEOUT".to_string(),
+            "main.baml:2:19 -> TIMEOUT".to_string(),
             "settings.baml:1:7 -> TIMEOUT".to_string(),
             "settings.baml:2:16 -> TIMEOUT".to_string(),
         ],
@@ -289,7 +289,7 @@ fn global_tokens_are_readonly_variables_and_qualifiers_are_namespaces() {
 
 function f() -> int {
     let local = 1;
-    LIMIT + settings.TIMEOUT + local
+    LIMIT + root.settings.TIMEOUT + local
 }
 "#;
     let mut builder = CursorTest::builder();

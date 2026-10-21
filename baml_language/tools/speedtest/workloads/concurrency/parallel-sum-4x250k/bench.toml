@@ -1,0 +1,5 @@
+name = "parallel sum 4x250k"
+description = "four 250,000-element sums spawned and awaited together"
+expect = "499999500000"
+jobs = 64
+warmup = 4

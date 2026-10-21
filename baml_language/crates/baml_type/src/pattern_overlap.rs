@@ -282,7 +282,6 @@ fn pattern_atom_meet(pat: &Ty, member: &Ty, env: &PatternOverlapEnv<'_>) -> Over
             | Ty::Type
             | Ty::Resource
             | Ty::PromptAst
-            | Ty::Void
             | Ty::TypeAlias(..)
             | Ty::TypeVar(..)
             | Ty::Never,

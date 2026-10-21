@@ -199,8 +199,11 @@ pub fn validate_file(
                             || !valid_node(done.node)
                             || CompletionFlags::from_wire(done.completion_flags, late).is_none_or(
                                 |flags| {
-                                    done.panicked
-                                        && flags.outcome() != btel_types::InvocationOutcome::Errored
+                                    (flags.is_closed()
+                                        && (done.panicked || done.value_cas_id.is_some()))
+                                        || (done.panicked
+                                            && flags.outcome()
+                                                != btel_types::InvocationOutcome::Errored)
                                 },
                             )
                         {
@@ -225,16 +228,8 @@ pub fn validate_file(
             }
         }
     }
-    if let Some(usage) = &file.usage
-        && usage
-            .entries
-            .iter()
-            .any(|entry| entry.node_id == 0 || entry.thread_id == 0)
-    {
-        return Err("invalid model usage".into());
-    }
     if let Some(end) = file.end.as_ref().and_then(|end| end.process_end.as_ref())
-        && !(1..=3).contains(&end.status)
+        && !(1..=4).contains(&end.status)
     {
         return Err("invalid process end".into());
     }

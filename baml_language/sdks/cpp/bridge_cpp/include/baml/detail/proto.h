@@ -209,7 +209,7 @@ class args_encoder {
           throw error("runtime clock failed");
         const uint64_t duration =
             static_cast<uint64_t>(*controls.timeout) * 1000000;
-        if (duration > std::numeric_limits<uint64_t>::max() - now)
+        if (duration > (std::numeric_limits<uint64_t>::max)() - now)
           throw error("deadline overflow");
         invocation->set_deadline_ns(now + duration);
       }

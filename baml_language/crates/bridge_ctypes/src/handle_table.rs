@@ -26,6 +26,12 @@ impl std::fmt::Debug for InvocationStateHandle {
     }
 }
 
+impl bex_project::BexRustData for InvocationStateHandle {
+    fn measure(&self, _: &mut bex_project::Meter) {
+        // The engine owns everything this names.
+    }
+}
+
 #[derive(Clone)]
 pub struct TraceReservationHandle {
     pub owner: Arc<dyn bex_project::Bex>,
@@ -40,14 +46,9 @@ impl std::fmt::Debug for TraceReservationHandle {
     }
 }
 
-/// Newtype wrapper around opaque `$rust_type` objects
-/// (`Arc<dyn Any + Send + Sync>`) stored as a handle.
-#[derive(Clone)]
-pub struct BexRustData(pub Arc<dyn std::any::Any + Send + Sync>);
-
-impl std::fmt::Debug for BexRustData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("BexRustData").finish()
+impl bex_project::BexRustData for TraceReservationHandle {
+    fn measure(&self, meter: &mut bex_project::Meter) {
+        meter.shared(&self.reservation, |meter| self.reservation.measure(meter));
     }
 }
 
@@ -64,7 +65,7 @@ pub enum CffiHandleTableEntry {
     BexHeapHandle(Handle),
     FunctionRef { global_index: usize },
     Adt(BexExternalAdt),
-    RustData(BexRustData),
+    RustData(Arc<dyn bex_project::BexRustData>),
     InvocationState(InvocationStateHandle),
     TraceReservation(TraceReservationHandle),
 }
@@ -139,7 +140,7 @@ impl TryFrom<BexExternalValue> for CffiHandleTableEntry {
                 Ok(Self::FunctionRef { global_index })
             }
             BexExternalValue::Adt(a) => Ok(Self::Adt(a)),
-            BexExternalValue::RustData(arc) => Ok(Self::RustData(BexRustData(arc))),
+            BexExternalValue::RustData(arc) => Ok(Self::RustData(arc)),
             // HostValue uses a separate per-bridge registry, not HANDLE_TABLE.
             BexExternalValue::HostValue(_)
             | BexExternalValue::Null
@@ -169,7 +170,7 @@ impl From<CffiHandleTableEntry> for BexExternalValue {
                 BexExternalValue::FunctionRef { global_index }
             }
             CffiHandleTableEntry::Adt(a) => BexExternalValue::Adt(a),
-            CffiHandleTableEntry::RustData(BexRustData(arc)) => BexExternalValue::RustData(arc),
+            CffiHandleTableEntry::RustData(arc) => BexExternalValue::RustData(arc),
             CffiHandleTableEntry::InvocationState(state) => {
                 BexExternalValue::RustData(Arc::new(state))
             }
@@ -614,7 +615,7 @@ mod tests {
     #[test]
     fn identity_free_entries_never_dedup() {
         let table = CffiHandleTable::new();
-        let rust_data = BexRustData(Arc::new(42_u32));
+        let rust_data: Arc<dyn bex_project::BexRustData> = Arc::new(bex_project::TestRustData(42));
         let key1 = table.insert(CffiHandleTableEntry::RustData(rust_data.clone()));
         let key2 = table.insert(CffiHandleTableEntry::RustData(rust_data));
         assert_ne!(key1, key2, "RustData carries no identity");

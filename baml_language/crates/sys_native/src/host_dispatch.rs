@@ -132,7 +132,7 @@ struct InflightCall {
     // Includes the owning invocation context and original argument/callable
     // owners. Wire host keys are borrowed and cannot keep those owners alive.
     resources: Option<Box<dyn Send + Sync>>,
-    capture: Option<Arc<dyn std::any::Any + Send + Sync>>,
+    capture: Option<Arc<dyn sys_types::BexRustData>>,
 }
 
 static TABLE: Lazy<RwLock<HashMap<u32, InflightCall>>> = Lazy::new(|| RwLock::new(HashMap::new()));
@@ -200,7 +200,7 @@ pub fn insert_with_capture(
     origin: CallId,
     completion: CompletionHandle,
     resources: Box<dyn Send + Sync>,
-    capture: Option<Arc<dyn std::any::Any + Send + Sync>>,
+    capture: Option<Arc<dyn sys_types::BexRustData>>,
 ) -> bool {
     let mut table = TABLE.write().unwrap();
     let collision = call_id == 0 || table.contains_key(&call_id);
@@ -234,7 +234,7 @@ pub fn insert_with_capture(
     true
 }
 
-pub fn execution_capture(call_id: u32) -> Option<Arc<dyn std::any::Any + Send + Sync>> {
+pub fn execution_capture(call_id: u32) -> Option<Arc<dyn sys_types::BexRustData>> {
     TABLE.read().unwrap().get(&call_id)?.capture.clone()
 }
 
@@ -519,6 +519,10 @@ mod tests {
     }
 
     struct ExitProbe(Arc<std::sync::atomic::AtomicUsize>);
+
+    impl sys_types::BexRustData for ExitProbe {
+        fn measure(&self, _: &mut sys_types::Meter) {}
+    }
 
     impl Drop for ExitProbe {
         fn drop(&mut self) {

@@ -29,7 +29,7 @@ use btel_recorder::{RecordingId, SealedFile};
 pub use btel_settings::local_files::LocalDeliveryConfig;
 
 mod cas;
-pub use cas::cas_path;
+pub use cas::{cas_path, cas_path_versioned};
 mod publisher;
 pub use publisher::LocalPublisher;
 mod reader;

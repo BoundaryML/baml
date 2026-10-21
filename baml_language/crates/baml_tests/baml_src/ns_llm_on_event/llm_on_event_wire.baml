@@ -1,11 +1,14 @@
-// Part 2 wire-record regressions: the selected LLMCall rides the journal to
-// the listener per attempt (test 6), and retry wrappers record failed legs
-// with `selected: false` prepended oldest-first (test 7).
+// Part 2 wire-record regressions: the ModelCall rides the journal to the
+// listener per attempt (test 6), and a retry's failed attempts record their
+// calls oldest-first (test 7).
 
 class WireClient {
     implements ai.Client {
-        function id(self) -> string {
+        function requested_model(self) -> string {
             "wire-scripted"
+        }
+        function provider(self) -> string {
+            "test"
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
@@ -16,21 +19,23 @@ class WireClient {
         function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
             let _ = input;
             ai.ModelTurn {
+                child_turns: [],
                 calls: [
-                    ai.events.LLMCall {
-                        client_name: "wire-scripted",
-                        provider: "scripted",
-                        timing: ai.events.Timing { start_time_utc_ms: 1000n, duration_ms: 42n, ttft_ms: null },
+                    ai.events.ModelCall {
+                        resolved_model: ai.events.ModelKey { provider: "scripted", model: null },
+                        usage: null,
+                        timing: ai.events.Timing {
+                            start_time: baml.time.Instant.from_timestamp_milliseconds(1000n),
+                            duration: baml.time.Duration.from_milliseconds(42n),
+                            ttft: null,
+                        },
                         http_request: null,
                         http_response: ai.events.HttpResponse { status: 200, headers: {}, body: null },
-                        usage: null,
-                        selected: true,
                         sse_responses: null,
                     },
                 ],
                 content: [ai.content.Text { text: "{\"message\": \"hi\"}" }],
                 stop_reason: ai.content.StopReason.Complete,
-                usage: null,
             }
         }
     }
@@ -40,8 +45,11 @@ class FlakyClient {
     fails_left: int,
 
     implements ai.Client {
-        function id(self) -> string {
+        function requested_model(self) -> string {
             "flaky"
+        }
+        function provider(self) -> string {
+            "test"
         }
 
         function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
@@ -56,21 +64,21 @@ class FlakyClient {
                 throw ai.errors.classify_http("flaky", 503, "unavailable")
             }
             ai.ModelTurn {
+                child_turns: [],
                 calls: [],
                 content: [ai.content.Text { text: "{\"message\": \"ok\"}" }],
                 stop_reason: ai.content.StopReason.Complete,
-                usage: null,
             }
         }
     }
 }
 
-test "selected wire record is delivered after AssistantMessage" {
+test "successful wire record is delivered after AssistantMessage" {
     let probe = Probe { labels: [] };
     let cb = (e: ai.events.Event) -> void {
         match (e) {
-            let c: ai.events.LLMCall => {
-                probe.labels.push(`LLMCall:${c.provider}:${if (c.selected) { "sel" } else { "leg" }}`);
+            let c: ai.events.ModelCall => {
+                probe.labels.push(`ModelCall:${c.resolved_model.provider}`);
             },
             _ => {
                 probe.labels.push(label_of(e));
@@ -79,16 +87,16 @@ test "selected wire record is delivered after AssistantMessage" {
     };
     let g = Greet("world", client = WireClient {  }, on_event = cb);
     assert.equal(g.message, "hi");
-    assert.equal(probe.labels, ["RunStarted", "AssistantMessage", "LLMCall:scripted:sel", "FinalProduced"])
+    assert.equal(probe.labels, ["RunStarted", "AssistantMessage", "ModelCall:scripted", "FinalProduced"])
 }
 
-test "retry failed legs are recorded with status and prepended" {
+test "a retry's failed attempts record their calls oldest first" {
     let probe = Probe { labels: [] };
     let cb = (e: ai.events.Event) -> void {
         match (e) {
-            let c: ai.events.LLMCall => {
+            let c: ai.events.ModelCall => {
                 let status = c.http_response?.status ?? -1;
-                probe.labels.push(`LLMCall:${status}:${if (c.selected) { "sel" } else { "leg" }}`);
+                probe.labels.push(`ModelCall:${status}`);
             },
             _ => {
                 probe.labels.push(label_of(e));
@@ -100,6 +108,6 @@ test "retry failed legs are recorded with status and prepended" {
     assert.equal(g.message, "ok");
     assert.equal(
         probe.labels,
-        ["RunStarted", "AssistantMessage", "LLMCall:503:leg", "LLMCall:503:leg", "FinalProduced"],
+        ["RunStarted", "AssistantMessage", "ModelCall:503", "ModelCall:503", "FinalProduced"],
     )
 }

@@ -44,7 +44,7 @@ pub fn capture_with_builder(
                 ContextValue::Float(value) => SnapshotValue::Float(*value),
                 ContextValue::Bool(value) => SnapshotValue::Bool(*value),
             };
-            (key.as_str().into(), value)
+            (text(leaves, key), value)
         },
     );
     if metadata.is_cut() {
@@ -63,7 +63,7 @@ pub fn capture_with_builder(
         key_type,
         value_type,
         fields.into_iter(),
-        |_, (key, value)| (key.into(), value),
+        |leaves, (key, value)| (text(leaves, key), value),
     );
     if cut || root.is_cut() {
         return None;
@@ -114,7 +114,10 @@ mod tests {
             panic!("context root must be a map");
         };
         let entries = snapshot.entries(*entries);
-        assert_eq!(entries[0].key.as_str(), "distinct_id");
+        let SnapshotValue::String(key) = entries[0].key else {
+            panic!("expected string key")
+        };
+        assert_eq!(snapshot.string(key).as_str(), "distinct_id");
         let SnapshotValue::String(identity) = entries[0].value else {
             panic!("identity must be a string");
         };

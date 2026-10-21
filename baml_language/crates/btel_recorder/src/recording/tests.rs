@@ -21,6 +21,47 @@ fn config() -> RecordingConfig {
 }
 
 #[test]
+fn sdk_completion_is_emitted_only_in_the_terminal_file() {
+    let exit = Arc::new(btel_types::ProcessExitSlot::default());
+    let mut builder = RecordingBuilder::new(RecordingId::generate(), RecordingConfig::default())
+        .unwrap()
+        .with_process(ProcessRecording {
+            info: btel_types::ProcessInfo {
+                process_id: [9; 16],
+                ..Default::default()
+            },
+            sources: None,
+            context: None,
+            exit: Arc::clone(&exit),
+        });
+    exit.set(btel_types::ProcessExit {
+        status: btel_types::ProcessStatus::Unknown,
+        at_unix_ns: 123,
+    });
+    builder.aggregate(AggregateDelta {
+        node: CallPathNodeId::new(CallPathId::new_non_root(7).unwrap(), false),
+        count: 1,
+        total_duration: ClockDuration::from_ticks(3),
+        ..Default::default()
+    });
+    let flushed = decode(&builder.flush_recording().unwrap().unwrap());
+    assert!(flushed.end.is_none());
+    assert_eq!(
+        flushed.header.unwrap().format_minor,
+        btel_settings::encoding::PROCESS_CONTEXT_FORMAT_MINOR
+    );
+    let ended = decode(&builder.end_recording().unwrap().unwrap());
+    assert_eq!(
+        ended.header.unwrap().format_minor,
+        btel_settings::encoding::UNKNOWN_PROCESS_OUTCOME_FORMAT_MINOR
+    );
+    let completion = ended.end.unwrap().process_end.unwrap();
+    assert_eq!(completion.status, proto::ProcessStatus::Unknown as i32);
+    assert_eq!(completion.at_unix_ns, 123);
+    assert!(builder.end_recording().unwrap().is_none());
+}
+
+#[test]
 fn metadata_prefix_merges_before_newer_resolution_and_clock_observations() {
     use proto::function_definition::Resolution;
 
@@ -953,6 +994,7 @@ fn type_args_round_trip_at_minor_eight_beside_inputs() {
     assert_eq!(
         event.event,
         Some(Event::FunctionAnnouncement(proto::FunctionAnnouncement {
+            manual: false,
             id: id.get(),
             parent_id: thread.get(),
             call_path_id: path.get(),
@@ -1128,6 +1170,83 @@ fn network_spans_round_trip_at_minor_seven() {
 }
 
 #[test]
+fn span_usage_rides_its_completion_at_minor_eleven() {
+    use proto::span_event::Event;
+
+    let files = RefCell::new(Vec::new());
+    let (thread, _, path) = ids();
+    let mut p = RecordingPublisher::new(RecordingId::generate(), config(), |f| {
+        files.borrow_mut().push(f);
+    })
+    .unwrap();
+    let span = allocate_telemetry_id();
+    let entry = btel_records::ModelUsage {
+        provider: "anthropic".into(),
+        model: Some("claude-opus-5-5".into()),
+        calls: 2,
+        input_tokens: Some(900),
+        output_tokens: Some(30),
+        cache_read_tokens: None,
+        cache_write_tokens: Some(100),
+        reasoning_tokens: None,
+    };
+    p.span(
+        thread,
+        &mut SpanRecord::SpanUsage(Box::new(btel_records::SpanUsage {
+            node: span,
+            entries: vec![entry],
+        })),
+    );
+    // Usage alone seals nothing: it waits for its node's completion, even
+    // across a flush.
+    p.flush_recording().unwrap();
+    assert!(files.borrow().is_empty());
+    p.span(
+        thread,
+        &mut SpanRecord::FunctionSpanCompletionOk {
+            id: span,
+            parent_id: thread,
+            call_path: path,
+            entered_at: ClockInstant::from_ticks(1),
+            exited_at: ClockInstant::from_ticks(2),
+            await_time: AwaitDuration::ZERO,
+            captured_value: None,
+        },
+    );
+    p.flush_recording().unwrap();
+    let file = decode(&files.borrow()[0]);
+    assert_eq!(
+        file.header.unwrap().format_minor,
+        btel_settings::encoding::MODEL_USAGE_FORMAT_MINOR
+    );
+    let event = file
+        .spans
+        .unwrap()
+        .sections
+        .remove(0)
+        .events
+        .remove(0)
+        .event;
+    let Some(Event::FunctionCompletion(completion)) = event else {
+        panic!("a function completion: {event:?}")
+    };
+    assert_eq!(completion.id, span.get());
+    assert_eq!(
+        completion.usage,
+        vec![proto::ModelUsage {
+            provider: "anthropic".into(),
+            model: Some("claude-opus-5-5".into()),
+            calls: 2,
+            input_tokens: Some(900),
+            output_tokens: Some(30),
+            cache_read_tokens: None,
+            cache_write_tokens: Some(100),
+            reasoning_tokens: None,
+        }]
+    );
+}
+
+#[test]
 fn captures_move_after_chunk_recycle_and_duplicates_release_before_file_flush() {
     use btel_snapshot::{Limits, SnapshotPool, SnapshotValue};
     let snapshots = SnapshotPool::new(2, Limits::default());
@@ -1261,6 +1380,7 @@ fn known_function_metadata_is_published_once_and_unknown_functions_stay_placehol
             }],
         }),
         source_map: None,
+        model_invoke: false,
     };
     let table = std::sync::Arc::new(btel_types::FunctionMetadataTable {
         functions: vec![metadata_for(known)],
@@ -1615,4 +1735,83 @@ fn processor_ends_the_recording_only_after_producers_stop_writing() {
         .map(|state| state.0)
         .collect::<std::collections::BTreeSet<_>>();
     assert_eq!(finals.len(), 2, "both runs are final by the end");
+}
+
+#[test]
+fn owned_span_uses_function_wire_shape_and_general_neutral_close() {
+    use proto::span_event::Event;
+    let files = RefCell::new(Vec::new());
+    let (thread, _, path) = ids();
+    let id = allocate_telemetry_id();
+    let mut p = RecordingPublisher::with_snapshot_receiver(
+        RecordingId::generate(),
+        config(),
+        |f| files.borrow_mut().push(f),
+        |_| {},
+    )
+    .unwrap();
+    p.span(
+        thread,
+        &mut SpanRecord::ManualSpanAnnouncement(Box::new(btel_records::ManualSpanAnnouncement {
+            id,
+            parent_id: thread,
+            call_path: path,
+            entered_at: ClockInstant::from_ticks(1),
+            captured_inputs: None,
+            captured_type_args: Some(snapshot()),
+        })),
+    );
+    p.flush_recording().unwrap();
+    let file = decode(&files.borrow()[0]);
+    assert_eq!(
+        file.header.unwrap().format_minor,
+        btel_settings::encoding::OWNED_SPAN_FORMAT_MINOR
+    );
+    let Some(Event::FunctionAnnouncement(entry)) = file
+        .spans
+        .unwrap()
+        .sections
+        .remove(0)
+        .events
+        .remove(0)
+        .event
+    else {
+        panic!("owned entry must use a function announcement");
+    };
+    assert!(!entry.manual);
+    assert!(entry.type_args_cas_id.is_some());
+    p.span(
+        thread,
+        &mut SpanRecord::ManualSpanCompletion(Box::new(btel_records::ManualSpanCompletion {
+            id,
+            parent_id: thread,
+            call_path: path,
+            entered_at: ClockInstant::from_ticks(1),
+            exited_at: ClockInstant::from_ticks(9),
+            await_time: AwaitDuration::ZERO.saturating_add(ClockDuration::from_ticks(4)),
+            outcome: None,
+            requires_announcement: true,
+            captured_value: None,
+        })),
+    );
+    p.flush_recording().unwrap();
+    let file = decode(&files.borrow()[1]);
+    assert_eq!(
+        file.header.unwrap().format_minor,
+        btel_settings::encoding::OWNED_SPAN_FORMAT_MINOR
+    );
+    let Some(Event::FunctionCompletion(done)) = file
+        .spans
+        .unwrap()
+        .sections
+        .remove(0)
+        .events
+        .remove(0)
+        .event
+    else {
+        panic!("owned completion must use a function completion");
+    };
+    assert_eq!(done.completion_flags, 16 | 8);
+    assert_eq!(done.self_await_ticks, 4);
+    assert_eq!(done.exited_at_ticks, 9);
 }

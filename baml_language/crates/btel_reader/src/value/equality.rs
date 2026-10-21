@@ -111,6 +111,7 @@ enum Value<'a> {
     Enum(&'a DecodedName, &'a str),
     List(Vec<Self>),
     Map(Fields<'a>),
+    GeneralMap(Vec<(Self, Self)>),
     Class(&'a DecodedName, Fields<'a>),
     /// Kind, MIME type and source: media compares as captured, by its base64
     /// text, not by the bytes that text encodes.
@@ -125,8 +126,9 @@ enum Source<'a> {
 }
 
 impl Value<'_> {
-    fn equal(&self, other: &Self) -> bool {
-        match (self, other) {
+    fn equal(&self, other: &Self, remaining: &mut usize) -> Result<bool, Error> {
+        *remaining = remaining.checked_sub(1).ok_or(Error::Limit)?;
+        Ok(match (self, other) {
             (Self::Unsigned(a), Self::Unsigned(b)) => a == b,
             (Self::Unsigned(n), Self::Scalar(b)) | (Self::Scalar(b), Self::Unsigned(n)) => {
                 compare(Leaf::Bigint(&(*n).into()), CmpOp::Eq, *b) == Some(true)
@@ -136,10 +138,42 @@ impl Value<'_> {
             (Self::Uint8Array(a), Self::Uint8Array(b)) => a == b,
             (Self::Enum(a, x), Self::Enum(b, y)) => a == b && x == y,
             (Self::List(a), Self::List(b)) => {
-                a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.equal(y))
+                if a.len() != b.len() {
+                    return Ok(false);
+                }
+                for (x, y) in a.iter().zip(b) {
+                    if !x.equal(y, remaining)? {
+                        return Ok(false);
+                    }
+                }
+                true
             }
-            (Self::Map(a), Self::Map(b)) => fields_equal(a, b),
-            (Self::Class(a, x), Self::Class(b, y)) => a == b && fields_equal(x, y),
+            (Self::Map(a), Self::Map(b)) => fields_equal(a, b, remaining)?,
+            (Self::GeneralMap(a), Self::GeneralMap(b)) => {
+                if a.len() != b.len() {
+                    return Ok(false);
+                }
+                let mut used = vec![false; b.len()];
+                for (key, value) in a {
+                    let mut found = false;
+                    for (index, (other_key, other_value)) in b.iter().enumerate() {
+                        *remaining = remaining.checked_sub(1).ok_or(Error::Limit)?;
+                        if !used[index]
+                            && key.equal(other_key, remaining)?
+                            && value.equal(other_value, remaining)?
+                        {
+                            used[index] = true;
+                            found = true;
+                            break;
+                        }
+                    }
+                    if !found {
+                        return Ok(false);
+                    }
+                }
+                true
+            }
+            (Self::Class(a, x), Self::Class(b, y)) => a == b && fields_equal(x, y, remaining)?,
             (Self::Media(kind, mime_type, source), Self::Media(other_kind, other_mime, other)) => {
                 kind == other_kind && mime_type == other_mime && source == other
             }
@@ -151,16 +185,25 @@ impl Value<'_> {
                 | Self::Enum(..)
                 | Self::List(_)
                 | Self::Map(_)
+                | Self::GeneralMap(_)
                 | Self::Class(..)
                 | Self::Media(..),
                 _,
             ) => false,
-        }
+        })
     }
 }
 
-fn fields_equal(a: &Fields<'_>, b: &Fields<'_>) -> bool {
-    a.len() == b.len() && a.iter().zip(b).all(|((k, x), (l, y))| k == l && x.equal(y))
+fn fields_equal(a: &Fields<'_>, b: &Fields<'_>, remaining: &mut usize) -> Result<bool, Error> {
+    if a.len() != b.len() {
+        return Ok(false);
+    }
+    for ((k, x), (l, y)) in a.iter().zip(b) {
+        if k != l || !x.equal(y, remaining)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 struct Builder<'a> {
@@ -419,7 +462,35 @@ impl<'a> Builder<'a> {
                 entries,
                 original_len,
                 ..
-            } => Value::Map(self.fields(s, entries, *original_len, depth)?),
+            } => {
+                complete(entries.len(), *original_len)?;
+                let entries = entries
+                    .iter()
+                    .map(|(key, value)| {
+                        Ok((
+                            self.value(s, key, depth + 1)?,
+                            self.value(s, value, depth + 1)?,
+                        ))
+                    })
+                    .collect::<Result<Vec<_>, Error>>()?;
+                if entries
+                    .iter()
+                    .all(|(key, _)| matches!(key, Value::Scalar(Leaf::Text(_))))
+                {
+                    let mut fields = BTreeMap::new();
+                    for (key, value) in entries {
+                        let Value::Scalar(Leaf::Text(key)) = key else {
+                            unreachable!()
+                        };
+                        if fields.insert(key, value).is_some() {
+                            return Err(Error::Unsupported);
+                        }
+                    }
+                    Value::Map(fields)
+                } else {
+                    Value::GeneralMap(entries)
+                }
+            }
             DecodedObject::Instance {
                 declaration,
                 fields,
@@ -534,7 +605,13 @@ pub fn captured(
     let mut builder = Builder::new(limits, &span);
     let a = builder.captured(&from_left, left.names)?;
     let b = builder.captured(&from_right, right.names)?;
-    Ok(a.zip(b).map(|(a, b)| a.equal(&b) == (op == CmpOp::Eq)))
+    let mut remaining = limits.max_nodes;
+    a.zip(b)
+        .map(|(a, b)| {
+            a.equal(&b, &mut remaining)
+                .map(|equal| equal == (op == CmpOp::Eq))
+        })
+        .transpose()
 }
 
 pub fn json(
@@ -558,7 +635,12 @@ pub fn json(
     let mut builder = Builder::new(limits, &span);
     let a = builder.captured(&from_left, left.names)?;
     let b = builder.json(right, 0)?;
-    Ok(a.map(|a| a.equal(&b) == (op == CmpOp::Eq)))
+    let mut remaining = limits.max_nodes;
+    a.map(|a| {
+        a.equal(&b, &mut remaining)
+            .map(|equal| equal == (op == CmpOp::Eq))
+    })
+    .transpose()
 }
 
 #[cfg(test)]

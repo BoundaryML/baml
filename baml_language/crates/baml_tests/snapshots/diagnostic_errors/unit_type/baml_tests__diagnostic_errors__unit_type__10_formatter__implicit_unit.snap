@@ -1,0 +1,126 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// BEP-079: an implicit unit where a type other than the unit type is expected.
+//
+// A block with no final expression, an `if` with no `else`, and a bare
+// `return;` each evaluate to `null` without the author writing it. That is
+// admitted only where `null` itself is expected: `null <: int?`, so plain
+// subtyping would turn a forgotten value into a silent `null`.
+
+function side() -> int {
+    1
+}
+
+function takes_optional(x: int?) -> int {
+    1
+}
+
+// --- a block with no final expression ---
+
+function body_optional() -> int? {
+    side();
+}
+
+function body_int() -> int {
+    side();
+}
+
+function body_unknown() -> unknown {
+    side();
+}
+
+function body_generic<T>(x: T) -> T {
+    side();
+}
+
+function body_empty() -> int? {}
+
+// What the block discards decides the remedy. A value of the expected type
+// wants its `;` removed (`body_optional`, `body_int`); a unit one leaves
+// `null` to be written where the context admits it.
+function body_optional_after_unit() -> int? {
+    nothing();
+}
+
+function body_int_after_unit() -> int {
+    nothing();
+}
+
+function block_bound() -> int {
+    let x: int? = {
+        side();
+    };
+    1
+}
+
+function block_argument() -> int {
+    takes_optional(
+        {
+            side();
+        },
+    )
+}
+
+function lambda_body() -> int {
+    let f = () -> int? {
+        side();
+    };
+    1
+}
+
+function if_else_arm(c: bool) -> int? {
+    if (c) {
+        side();
+    } else {
+        1
+    }
+}
+
+function match_arm(x: int) -> int? {
+    match (x) {
+        1 => {
+            side();
+        },
+        _ => 2,
+    }
+}
+
+// --- an `if` with no `else` ---
+
+function lone_if_body(c: bool) -> int? {
+    if (c) {
+        side();
+    }
+}
+
+function lone_if_bound(c: bool) -> int {
+    let x: int? = if (c) {
+        side();
+    };
+    1
+}
+
+// The branch's value is not what is reported: the `if` itself is refused.
+function lone_if_with_value(c: bool) -> int {
+    let x: int? = if (c) {
+        1
+    };
+    2
+}
+
+// --- a bare `return;` ---
+
+function bare_return(c: bool) -> int? {
+    if (c) {
+        return;
+    }
+    1
+}
+
+function bare_return_unknown(c: bool) -> unknown {
+    if (c) {
+        return;
+    }
+    1
+}

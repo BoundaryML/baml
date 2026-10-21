@@ -22,8 +22,8 @@ use bex_heap::TlabHolder;
 use bex_vm_types::{
     DeclPath, FnPath, HeapPtr, Interface, Object, RealizedTy, SessionEvalLease, Ty, TyTemplate,
     types::{
-        Edge, EdgeKind, ExportSurface, LocalName, Objects, Package, SessionState, Slots,
-        TypeAliasDef, TypeValue, Value,
+        Edge, EdgeKind, ExportSurface, LocalName, Objects, Package, PackageKind, SessionState,
+        Slots, TypeAliasDef, TypeValue, Value,
     },
 };
 use indexmap::IndexMap;
@@ -32,6 +32,7 @@ use super::{
     BamlClassPackage, BamlClassSession, BamlPackageReflect, Continuation, ImplResolver,
     NativeCallResult, PackageReflectImpl, copy,
     graft::{Commit, LoadTarget, load_package},
+    type_kinds::invalid_argument,
 };
 use crate::{
     BexVm,
@@ -39,7 +40,7 @@ use crate::{
         ArtifactKind, PinnedArtifact, RuntimeCompileArtifact, RuntimeCompileArtifactSlot,
         RuntimeSessionCompileArtifact, RuntimeSessionStepKind,
     },
-    errors::{VmBamlError, VmRustFnError},
+    errors::VmRustFnError,
     vm::CallableSignature,
 };
 
@@ -53,7 +54,7 @@ fn compilation_error(vm: &mut BexVm, id: DiagnosticId, message: String) -> VmRus
 
 /// Element tag for the `Arg[]` / `map<string, Arg>` containers. The class
 /// instances themselves are built through the generated `copy::` structs.
-const ARG_FQN: &str = "reflect.Arg";
+const ARG: baml_base::LangItem = crate::lang_items::REFLECT_ARG;
 
 /// Materialize the public wrapper for the package selected by the lexical
 /// `Package.current()` instruction. Dynamic code uses its owning package;
@@ -107,12 +108,12 @@ fn runtime_edges(
                 baml_type::Name::new(alias),
                 Edge {
                     target: *ptr,
-                    kind: EdgeKind::Declared,
+                    kind: EdgeKind::Dependency,
                 },
             )
         })
         .collect();
-    add_prelude(vm, &mut edges);
+    vm.add_prelude(&mut edges);
     edges
 }
 
@@ -141,82 +142,65 @@ fn view_edges(
     );
     let mut next = 0;
     for &reached in reached {
-        let (target, kind) = match reached {
-            Reached::Package(package) => (package, EdgeKind::Declared),
-            Reached::Anonymous(declaration) => (declaration, EdgeKind::Anonymous),
+        let target = match reached {
+            Reached::Package(package) => package,
+            Reached::Anonymous(declaration) => declaration,
         };
         if target == base
-            || (kind == EdgeKind::Declared && vm.packages.is_prelude(target))
+            || vm.is_language_package(target)
             || edges.values().any(|edge| edge.target == target)
         {
             continue;
         }
         edges.insert(
             baml_type::Name::new(format!("${next}")),
-            Edge { target, kind },
+            Edge {
+                target,
+                kind: EdgeKind::Dependency,
+            },
         );
         next += 1;
     }
-    add_prelude(vm, &mut edges);
+    vm.add_prelude(&mut edges);
     edges
 }
 
 /// The edge name a view reaches its base under.
 const REEXPORTED_BASE_EDGE: &str = "$base";
 
-/// The language packages under their fixed names, as the host image's root
-/// reaches them, added to `edges` where the name is free.
-fn add_prelude(vm: &BexVm, edges: &mut IndexMap<baml_type::Name, Edge>) {
-    for name in baml_builtins2::stdlib_package_names() {
-        let name = baml_type::Name::new(name);
-        if !edges.contains_key(&name)
-            && let Some(target) = vm.packages.accessible(&name)
-        {
-            edges.insert(
-                name,
-                Edge {
-                    target,
-                    kind: EdgeKind::Prelude,
-                },
-            );
-        }
-    }
-}
-
-fn package_ptr(vm: &BexVm, value: Value) -> Result<HeapPtr, VmRustFnError> {
+/// The `Object::Package` a `reflect.Package` (or `reflect.Session`) value
+/// holds, or why it holds none.
+fn package_object(vm: &BexVm, value: Value) -> Result<HeapPtr, &'static str> {
     let Some(wrapper_ptr) = value.as_object_ptr() else {
-        return Err(VmBamlError::InvalidArgument {
-            message: "reflect.Package receiver is not an instance".to_string(),
-        }
-        .into());
+        return Err("reflect.Package receiver is not an instance");
     };
     let Object::Instance(wrapper) = vm.get_object(wrapper_ptr) else {
-        return Err(VmBamlError::InvalidArgument {
-            message: "reflect.Package receiver is not an instance".to_string(),
-        }
-        .into());
+        return Err("reflect.Package receiver is not an instance");
     };
     let Some(ptr) = wrapper.load_field(0).as_object_ptr() else {
-        return Err(VmBamlError::InvalidArgument {
-            message: "reflect.Package is not initialized".to_string(),
-        }
-        .into());
+        return Err("reflect.Package is not initialized");
     };
     if !matches!(vm.get_object(ptr), Object::Package(_)) {
-        return Err(VmBamlError::InvalidArgument {
-            message: "reflect.Package has an invalid runtime payload".to_string(),
-        }
-        .into());
+        return Err("reflect.Package has an invalid runtime payload");
     }
     Ok(ptr)
 }
 
+/// [`package_object`], throwing `reflect.errors.InvalidArgument` for a value
+/// that holds no package.
+fn package_ptr(vm: &mut BexVm, value: Value) -> Result<HeapPtr, VmRustFnError> {
+    package_object(vm, value).map_err(|message| invalid_argument(vm, message))
+}
+
+/// Take the compiled artifact out of its `reflect.CompileArtifact` wrapper,
+/// or say why it cannot be taken; the caller throws the message as
+/// `reflect.errors.InvalidArgument`.
 fn take_compile_artifact(
     vm: &BexVm,
     value: Value,
     invalid_message: &str,
     consumed_message: &str,
-) -> Result<PinnedArtifact, VmRustFnError> {
+) -> Result<PinnedArtifact, String> {
     let Some(inner) = value
         .as_object_ptr()
         .and_then(|pointer| match vm.get_object(pointer) {
@@ -224,24 +208,15 @@ fn take_compile_artifact(
             _ => None,
         })
     else {
-        return Err(VmBamlError::InvalidArgument {
-            message: invalid_message.to_string(),
-        }
-        .into());
+        return Err(invalid_message.to_string());
     };
     let slot = vm
         .as_rust_data::<RuntimeCompileArtifactSlot>(&inner)
-        .map_err(|_| VmBamlError::InvalidArgument {
-            message: invalid_message.to_string(),
-        })?;
-    let mut slot = slot.lock().map_err(|_| VmBamlError::InvalidArgument {
-        message: format!("{invalid_message}: artifact state is unavailable"),
-    })?;
-    slot.take().ok_or_else(|| {
-        VmRustFnError::from(VmBamlError::InvalidArgument {
-            message: consumed_message.to_string(),
-        })
-    })
+        .map_err(|_| invalid_message.to_string())?;
+    let taken = slot
+        .take()
+        .map_err(|_| format!("{invalid_message}: artifact state is unavailable"))?;
+    taken.ok_or_else(|| consumed_message.to_string())
 }
 
 fn local_name(path: &str) -> Option<LocalName> {
@@ -601,18 +576,10 @@ fn package_interface_type(vm: &mut BexVm, interface_ptr: HeapPtr) -> Value {
     super::type_kinds::alloc_kind_view(vm, baml_type::type_kind::TypeKind::Interface, ty_value)
 }
 
-/// `testing.TestCollector.new`, through the prelude package's tables: the
-/// stdlib package by its fixed name, the class by its item path, the
-/// constructor through the class's method table.
+/// `testing.TestCollector.new`: the class by identity in the `testing`
+/// language package, the constructor through the class's method table.
 fn test_collector_constructor(vm: &BexVm) -> Option<HeapPtr> {
-    let package_ptr = vm.packages.accessible(&baml_type::Name::new("testing"))?;
-    let Object::Package(package) = vm.get_object(package_ptr) else {
-        return None;
-    };
-    let class_ptr = *package.classes.get(&LocalName {
-        namespace: Vec::new(),
-        name: baml_type::Name::new("TestCollector"),
-    })?;
+    let class_ptr = vm.lang_declaration(crate::lang_items::TESTING_TEST_COLLECTOR)?;
     let Object::Class(class) = vm.get_object(class_ptr) else {
         return None;
     };
@@ -662,9 +629,9 @@ fn function_type(vm: &mut BexVm, package: HeapPtr, name: &LocalName) -> Option<V
     ))
 }
 
-/// The `F` contract check `Package.get_function` runs: the callable's
-/// reconstructed function type must be a subtype of the contract the caller
-/// asked for.
+/// The `F` contract check `Package.get_function` and `find_function` run: the
+/// callable's reconstructed function type must be a subtype of the contract
+/// the caller asked for.
 ///
 /// A runtime package roots the subtype context at itself so its own impls are
 /// visible; a statically compiled callable has no such root and uses the VM's
@@ -706,11 +673,104 @@ fn check_function_contract(
     ))
 }
 
-fn reflected_class_ty(vm: &BexVm, fqn: &str) -> RealizedTy {
-    let qtn = baml_type::QualifiedTypeName::from_dotted_path(fqn);
+/// The exported class `Package.find_class` answers with, or `None` for a miss.
+fn find_class(vm: &mut BexVm, ptr: HeapPtr, name: &str) -> Option<Value> {
+    let local = local_name(name)?;
+    let class_ptr = find_export(vm, ptr, |_, _, package| {
+        package.classes.get(&local).copied()
+    })?;
+    Some(package_class_type(vm, class_ptr))
+}
+
+/// The exported enum `Package.find_enum` answers with, or `None` for a miss.
+fn find_enum(vm: &mut BexVm, ptr: HeapPtr, name: &str) -> Option<Value> {
+    let local = local_name(name)?;
+    let enum_ptr = find_export(vm, ptr, |_, _, package| package.enums.get(&local).copied())?;
+    Some(package_enum_type(vm, enum_ptr))
+}
+
+/// The exported interface `Package.find_interface` answers with, or `None`
+/// for a miss.
+fn find_interface(vm: &mut BexVm, ptr: HeapPtr, name: &str) -> Option<Value> {
+    let local = local_name(name)?;
+    let interface_ptr = find_export(vm, ptr, |_, _, package| {
+        package.interfaces.get(&local).copied()
+    })?;
+    Some(package_interface_type(vm, interface_ptr))
+}
+
+/// The exported function `Package.find_function<F>` answers with, or `None`
+/// for a miss. A function that exists but does not satisfy the caller's `F`
+/// is an error, not a miss.
+fn find_function(
+    vm: &mut BexVm,
+    package: Value,
+    name: &bex_str::BexStr,
+) -> Result<Option<Value>, VmRustFnError> {
+    let package_ptr = package_ptr(vm, package)?;
+    let Some(local) = local_name(name.as_str()) else {
+        return Ok(None);
+    };
+    // The package the function lives in: a view answers with its base's.
+    let path = DeclPath::Function(FnPath::Free(local.clone()));
+    let Some((package_ptr, function)) = find_export(vm, package_ptr, |vm, ptr, package| {
+        let cell = *package.globals.get(&path)?;
+        let function = super::graft::cell_value(vm, package, cell)?.as_object_ptr()?;
+        Some((ptr, function))
+    }) else {
+        return Ok(None);
+    };
+    if matches!(
+        vm.get_object(function),
+        Object::Function(function)
+            if function.origin == bex_vm_types::FunctionOrigin::Internal
+    ) {
+        return Ok(None);
+    }
+    let Some(function_value) = package_function_value(vm, package_ptr, &local) else {
+        return Ok(None);
+    };
+    let Some(signature) = vm.callable_signature(function_value) else {
+        if vm
+            .unspecialized_generic_callable_name(function_value)
+            .is_some()
+        {
+            let diagnostic =
+                runtime_type::unspecialized_reflected_generic(&display_local_name(&local));
+            return Err(VmRustFnError::thrown_fresh(
+                super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
+            ));
+        }
+        return Ok(None);
+    };
+    // Signature reconstruction only sees the declared surface. A companion
+    // whose surface is free of its parent's `T` gets this far and would be
+    // handed out as an ordinary function value — and calling one directly
+    // fails inside its body as a VM internal error no `catch` can see. Refuse
+    // it here, where the caller still has a diagnostic channel.
+    if let Some(name) = vm.generic_callable_body_needs_type_args(function_value) {
+        let diagnostic = runtime_type::unspecialized_reflected_generic_call(&name);
+        return Err(VmRustFnError::thrown_fresh(
+            super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
+        ));
+    }
+    check_function_contract(vm, package_ptr, name.as_str(), &signature)?;
+    Ok(Some(function_value))
+}
+
+/// The `reflect.errors.NotFound` a `get_*` lookup throws where its `find_*`
+/// counterpart returns `null`.
+fn not_found(vm: &mut BexVm, kind: &str, name: &bex_str::BexStr) -> VmRustFnError {
+    let message = Value::object(
+        vm.alloc_string(format!("no {kind} named {} in this package", name.as_str())),
+    );
+    VmRustFnError::thrown_fresh(copy::errors::NotFound { message }.to_value(vm))
+}
+
+fn reflected_class_ty(vm: &BexVm, class: baml_base::LangItem) -> RealizedTy {
     let head = vm
-        .declaration_head(&qtn)
-        .unwrap_or_else(|| unreachable!("`{fqn}` is declared by the stdlib"));
+        .lang_head(class)
+        .unwrap_or_else(|| unreachable!("`{class}` is declared by the stdlib"));
     RealizedTy::Class(head, Box::new([]))
 }
 
@@ -759,7 +819,7 @@ fn diagnostic_highlights_value(
         })
         .collect();
     Value::object(vm.tlab.alloc_array(
-        reflected_class_ty(vm, "reflect.DiagnosticHighlight"),
+        reflected_class_ty(vm, crate::lang_items::REFLECT_DIAGNOSTIC_HIGHLIGHT),
         values,
     ))
 }
@@ -783,8 +843,10 @@ pub(super) fn diagnostic_value(
     let (phase, headline, primary_label, message_highlights, annotations, related_info) =
         match diagnostic.details.as_ref() {
             None => {
-                let annotation_ty = reflected_class_ty(vm, "reflect.DiagnosticAnnotation");
-                let related_ty = reflected_class_ty(vm, "reflect.DiagnosticRelatedInfo");
+                let annotation_ty =
+                    reflected_class_ty(vm, crate::lang_items::REFLECT_DIAGNOSTIC_ANNOTATION);
+                let related_ty =
+                    reflected_class_ty(vm, crate::lang_items::REFLECT_DIAGNOSTIC_RELATED_INFO);
                 (
                     Value::NULL,
                     Value::object(vm.alloc_string(diagnostic.message.as_str())),
@@ -827,7 +889,8 @@ pub(super) fn diagnostic_value(
                         .to_value(vm)
                     })
                     .collect();
-                let annotation_ty = reflected_class_ty(vm, "reflect.DiagnosticAnnotation");
+                let annotation_ty =
+                    reflected_class_ty(vm, crate::lang_items::REFLECT_DIAGNOSTIC_ANNOTATION);
                 let annotations =
                     Value::object(vm.tlab.alloc_array(annotation_ty, annotation_values));
                 let related_values = details
@@ -850,7 +913,8 @@ pub(super) fn diagnostic_value(
                         .to_value(vm)
                     })
                     .collect();
-                let related_ty = reflected_class_ty(vm, "reflect.DiagnosticRelatedInfo");
+                let related_ty =
+                    reflected_class_ty(vm, crate::lang_items::REFLECT_DIAGNOSTIC_RELATED_INFO);
                 let related_info = Value::object(vm.tlab.alloc_array(related_ty, related_values));
                 (
                     phase,
@@ -884,7 +948,8 @@ struct FinishPackage {
 
 impl Continuation for FinishPackage {
     fn call(self: Box<Self>, vm: &mut BexVm, _value: Value) -> NativeCallResult {
-        let Object::Package(package) = vm.get_object_mut(self.package) else {
+        let mut metered = vm.get_object_mut(self.package);
+        let Object::Package(package) = &mut *metered else {
             unreachable!("finish continuation retained a Package")
         };
         let Slots::Own { initialized, .. } = &mut package.slots else {
@@ -928,12 +993,10 @@ struct RegisterPackageTests {
 }
 
 impl Continuation for RegisterPackageTests {
-    fn call(self: Box<Self>, _vm: &mut BexVm, collector: Value) -> NativeCallResult {
+    fn call(self: Box<Self>, vm: &mut BexVm, collector: Value) -> NativeCallResult {
         let Some(collector_ptr) = collector.as_object_ptr() else {
-            return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-                message: "testing.TestCollector.new returned a non-instance".to_string(),
-            })
-            .into();
+            return invalid_argument(vm, "testing.TestCollector.new returned a non-instance")
+                .into();
         };
         NativeCallResult::YieldToCall {
             callee: self.test_init,
@@ -963,10 +1026,8 @@ impl Continuation for FinishPackageTests {
         let tests_value = match vm.get_object(self.collector_ptr) {
             Object::Instance(collector) => collector.load_field(1),
             _ => {
-                return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-                    message: "test collector changed kind during registration".to_string(),
-                })
-                .into();
+                return invalid_argument(vm, "test collector changed kind during registration")
+                    .into();
             }
         };
         let registrations = match vm.as_array(&tests_value) {
@@ -1019,20 +1080,22 @@ impl BamlClassPackage for PackageReflectImpl {
             "Package compile artifact has already been consumed",
         ) {
             Ok(artifact) => artifact,
-            Err(error) => return error.into(),
+            Err(message) => return invalid_argument(vm, message).into(),
         };
         if !matches!(&artifact.kind, ArtifactKind::Package) {
-            return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-                message: "reflect.Package._finish received a Session.eval artifact".to_string(),
-            })
+            return invalid_argument(
+                vm,
+                "reflect.Package._finish received a Session.eval artifact",
+            )
             .into();
         }
         let dependencies = match pinned_dependencies(vm, &pins, packages) {
             Ok(dependencies) => dependencies,
-            Err(error) => return error.into(),
+            Err(message) => return invalid_argument(vm, message).into(),
         };
         let package = Package {
             name: baml_type::Name::new(baml_type::RESERVED_USER_PACKAGE),
+            kind: PackageKind::Ordinary,
             edges: runtime_edges(vm, &dependencies),
             classes: IndexMap::new(),
             enums: IndexMap::new(),
@@ -1055,7 +1118,7 @@ impl BamlClassPackage for PackageReflectImpl {
         let loaded =
             match load_package(vm, package_ptr, LoadTarget::Package, &artifact.emitted, &[]) {
                 Ok(loaded) => loaded,
-                Err(error) => return error.into(),
+                Err(error) => return error.into_native_error(vm).into(),
             };
 
         // Linking is complete. First telemetry observation may now register
@@ -1078,7 +1141,8 @@ impl BamlClassPackage for PackageReflectImpl {
                 }),
             }
         } else {
-            let Object::Package(package) = vm.get_object_mut(package_ptr) else {
+            let mut metered = vm.get_object_mut(package_ptr);
+            let Object::Package(package) = &mut *metered else {
                 unreachable!()
             };
             let Slots::Own { initialized, .. } = &mut package.slots else {
@@ -1089,32 +1153,49 @@ impl BamlClassPackage for PackageReflectImpl {
         }
     }
 
-    fn get_class(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
-        let ptr = package_ptr(vm, *package).ok()?;
-        let local = local_name(name.as_str())?;
-        let class_ptr = find_export(vm, ptr, |_, _, package| {
-            package.classes.get(&local).copied()
-        })?;
-        Some(package_class_type(vm, class_ptr))
+    fn get_class(
+        vm: &mut BexVm,
+        package: &Value,
+        name: &bex_str::BexStr,
+    ) -> Result<Value, VmRustFnError> {
+        let ptr = package_ptr(vm, *package)?;
+        find_class(vm, ptr, name.as_str()).ok_or_else(|| not_found(vm, "class", name))
     }
 
-    fn get_enum(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
-        let ptr = package_ptr(vm, *package).ok()?;
-        let local = local_name(name.as_str())?;
-        let enum_ptr = find_export(vm, ptr, |_, _, package| package.enums.get(&local).copied())?;
-        Some(package_enum_type(vm, enum_ptr))
+    fn find_class(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
+        let ptr = package_object(vm, *package).ok()?;
+        find_class(vm, ptr, name.as_str())
     }
 
-    fn get_interface(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
-        let ptr = package_ptr(vm, *package).ok()?;
-        let local = local_name(name.as_str())?;
-        let interface_ptr = find_export(vm, ptr, |_, _, package| {
-            package.interfaces.get(&local).copied()
-        })?;
-        Some(package_interface_type(vm, interface_ptr))
+    fn get_enum(
+        vm: &mut BexVm,
+        package: &Value,
+        name: &bex_str::BexStr,
+    ) -> Result<Value, VmRustFnError> {
+        let ptr = package_ptr(vm, *package)?;
+        find_enum(vm, ptr, name.as_str()).ok_or_else(|| not_found(vm, "enum", name))
     }
 
-    fn with_types(
+    fn find_enum(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
+        let ptr = package_object(vm, *package).ok()?;
+        find_enum(vm, ptr, name.as_str())
+    }
+
+    fn get_interface(
+        vm: &mut BexVm,
+        package: &Value,
+        name: &bex_str::BexStr,
+    ) -> Result<Value, VmRustFnError> {
+        let ptr = package_ptr(vm, *package)?;
+        find_interface(vm, ptr, name.as_str()).ok_or_else(|| not_found(vm, "interface", name))
+    }
+
+    fn find_interface(vm: &mut BexVm, package: &Value, name: &bex_str::BexStr) -> Option<Value> {
+        let ptr = package_object(vm, *package).ok()?;
+        find_interface(vm, ptr, name.as_str())
+    }
+
+    fn _with_types(
         vm: &mut BexVm,
         package: &Value,
         types: &IndexMap<bex_str::BexStr, Value>,
@@ -1144,24 +1225,13 @@ impl BamlClassPackage for PackageReflectImpl {
                 namespace: Vec::new(),
                 name: baml_type::Name::new(&export),
             };
-            let Some(mut type_ptr) = value.as_object_ptr() else {
+            let Some(type_ptr) = value.as_object_ptr() else {
                 return Err(compilation_error(
                     vm,
                     DiagnosticId::TypeMismatch,
                     format!("with_types value for `{export}` must be a type"),
                 ));
             };
-            // A kind view mounts the `type` value it wraps.
-            if let Some(ty_value) = super::type_kinds::as_view_type_value(vm, *value) {
-                let Some(inner) = ty_value.as_object_ptr() else {
-                    return Err(compilation_error(
-                        vm,
-                        DiagnosticId::TypeMismatch,
-                        format!("with_types value for `{export}` must be a type"),
-                    ));
-                };
-                type_ptr = inner;
-            }
             let Object::Type(type_value) = vm.get_object(type_ptr) else {
                 return Err(compilation_error(
                     vm,
@@ -1177,10 +1247,10 @@ impl BamlClassPackage for PackageReflectImpl {
             additions.add(vm, &chain, local, addition, Stated::ByKey)?;
             for declaration in crate::reachable::runtime_definitions(vm, &ty) {
                 let item = match vm.get_object(declaration) {
-                    Object::Class(class) => class.name.item_name().clone(),
-                    Object::Enum(enm) => enm.name.item_name().clone(),
-                    Object::Interface(interface) => interface.name.name().clone(),
-                    Object::TypeAlias(alias) => alias.name.name().clone(),
+                    Object::Class(class) => class.path.name.clone(),
+                    Object::Enum(enm) => enm.path.name.clone(),
+                    Object::Interface(interface) => interface.path.name.clone(),
+                    Object::TypeAlias(alias) => alias.path.name.clone(),
                     _ => continue,
                 };
                 additions.add(
@@ -1205,6 +1275,7 @@ impl BamlClassPackage for PackageReflectImpl {
         };
         let view = Package {
             name: base.name.clone(),
+            kind: PackageKind::Ordinary,
             edges: view_edges(vm, base_ptr, &reached),
             classes: additions.classes,
             enums: additions.enums,
@@ -1228,13 +1299,14 @@ impl BamlClassPackage for PackageReflectImpl {
         let view_ptr = vm.alloc(Object::Package(Box::new(view)));
         for (local, definition) in additions.aliases {
             let alias = vm.alloc(Object::TypeAlias(Box::new(TypeAliasDef {
-                name: baml_type::TypeName::local(local.name.clone()),
+                path: LocalName::new(Vec::new(), local.name.clone()),
                 type_tag: baml_type::typetag::TypeTag::fresh_dynamic(),
                 definition,
                 owner: view_ptr,
             })));
             vm.tlab.heap().write_barrier(view_ptr, Value::object(alias));
-            let Object::Package(view) = vm.get_object_mut(view_ptr) else {
+            let mut metered = vm.get_object_mut(view_ptr);
+            let Object::Package(view) = &mut *metered else {
                 unreachable!("the view was just allocated")
             };
             view.type_aliases.insert(local, alias);
@@ -1249,60 +1321,20 @@ impl BamlClassPackage for PackageReflectImpl {
         vm: &mut BexVm,
         package: &Value,
         name: &bex_str::BexStr,
+    ) -> Result<Value, VmRustFnError> {
+        find_function(vm, *package, name)?.ok_or_else(|| not_found(vm, "function", name))
+    }
+
+    fn find_function(
+        vm: &mut BexVm,
+        package: &Value,
+        name: &bex_str::BexStr,
     ) -> Result<Option<Value>, VmRustFnError> {
-        let package_ptr = package_ptr(vm, *package)?;
-        let Some(local) = local_name(name.as_str()) else {
-            return Ok(None);
-        };
-        // The package the function lives in: a view answers with its base's.
-        let path = DeclPath::Function(FnPath::Free(local.clone()));
-        let Some((package_ptr, function)) = find_export(vm, package_ptr, |vm, ptr, package| {
-            let cell = *package.globals.get(&path)?;
-            let function = super::graft::cell_value(vm, package, cell)?.as_object_ptr()?;
-            Some((ptr, function))
-        }) else {
-            return Ok(None);
-        };
-        if matches!(
-            vm.get_object(function),
-            Object::Function(function)
-                if function.origin == bex_vm_types::FunctionOrigin::Internal
-        ) {
-            return Ok(None);
-        }
-        let Some(function_value) = package_function_value(vm, package_ptr, &local) else {
-            return Ok(None);
-        };
-        let Some(signature) = vm.callable_signature(function_value) else {
-            if vm
-                .unspecialized_generic_callable_name(function_value)
-                .is_some()
-            {
-                let diagnostic =
-                    runtime_type::unspecialized_reflected_generic(&display_local_name(&local));
-                return Err(VmRustFnError::thrown_fresh(
-                    super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
-                ));
-            }
-            return Ok(None);
-        };
-        // Signature reconstruction only sees the declared surface. A companion
-        // whose surface is free of its parent's `T` gets this far and would be
-        // handed out as an ordinary function value — and calling one directly
-        // fails inside its body as a VM internal error no `catch` can see. Refuse
-        // it here, where the caller still has a diagnostic channel.
-        if let Some(name) = vm.generic_callable_body_needs_type_args(function_value) {
-            let diagnostic = runtime_type::unspecialized_reflected_generic_call(&name);
-            return Err(VmRustFnError::thrown_fresh(
-                super::type_kinds::alloc_compilation_error(vm, &[diagnostic]),
-            ));
-        }
-        check_function_contract(vm, package_ptr, name.as_str(), &signature)?;
-        Ok(Some(function_value))
+        find_function(vm, *package, name)
     }
 
     fn classes(vm: &mut BexVm, package: &Value) -> IndexMap<bex_str::BexStr, Value> {
-        let Ok(ptr) = package_ptr(vm, *package) else {
+        let Ok(ptr) = package_object(vm, *package) else {
             return IndexMap::new();
         };
         exported_declarations(vm, ptr, |package| &package.classes)
@@ -1317,7 +1349,7 @@ impl BamlClassPackage for PackageReflectImpl {
     }
 
     fn enums(vm: &mut BexVm, package: &Value) -> IndexMap<bex_str::BexStr, Value> {
-        let Ok(ptr) = package_ptr(vm, *package) else {
+        let Ok(ptr) = package_object(vm, *package) else {
             return IndexMap::new();
         };
         exported_declarations(vm, ptr, |package| &package.enums)
@@ -1327,7 +1359,7 @@ impl BamlClassPackage for PackageReflectImpl {
     }
 
     fn interfaces(vm: &mut BexVm, package: &Value) -> IndexMap<bex_str::BexStr, Value> {
-        let Ok(ptr) = package_ptr(vm, *package) else {
+        let Ok(ptr) = package_object(vm, *package) else {
             return IndexMap::new();
         };
         exported_declarations(vm, ptr, |package| &package.interfaces)
@@ -1342,7 +1374,7 @@ impl BamlClassPackage for PackageReflectImpl {
     }
 
     fn functions(vm: &mut BexVm, package: &Value) -> IndexMap<bex_str::BexStr, Value> {
-        let Ok(ptr) = package_ptr(vm, *package) else {
+        let Ok(ptr) = package_object(vm, *package) else {
             return IndexMap::new();
         };
         // Every free function along the export chain, each under the first
@@ -1405,7 +1437,7 @@ impl BamlClassPackage for PackageReflectImpl {
     }
 
     fn diagnostics(vm: &mut BexVm, package: &Value) -> Vec<Value> {
-        let Ok(ptr) = package_ptr(vm, *package) else {
+        let Ok(ptr) = package_object(vm, *package) else {
             return Vec::new();
         };
         let diagnostics = match vm.get_object(ptr) {
@@ -1423,18 +1455,15 @@ impl BamlClassPackage for PackageReflectImpl {
 /// compiled against, by the alias the compile spelled each under. The
 /// caller's `packages` must be exactly that map — same aliases, same package
 /// objects — or the artifact's references would bind to declarations the
-/// compiler never read.
+/// compiler never read. A mismatch is a message the caller throws as
+/// `reflect.errors.InvalidArgument`.
 fn pinned_dependencies(
     vm: &BexVm,
     pins: &IndexMap<String, bex_heap::Handle>,
     packages: &IndexMap<bex_str::BexStr, Value>,
-) -> Result<IndexMap<String, HeapPtr>, VmRustFnError> {
+) -> Result<IndexMap<String, HeapPtr>, String> {
     use bex_heap::WeakHeapRef as _;
-    let mismatch = |message: String| {
-        VmRustFnError::from(VmBamlError::InvalidArgument {
-            message: format!("reflect.Package._finish: {message}"),
-        })
-    };
+    let mismatch = |message: String| format!("reflect.Package._finish: {message}");
     let mut dependencies = IndexMap::with_capacity(pins.len());
     for (alias, handle) in pins {
         let pinned = vm
@@ -1446,7 +1475,7 @@ fn pinned_dependencies(
                 "the artifact was compiled against package `{alias}`, which `packages` omits"
             )));
         };
-        if package_ptr(vm, *given)? != pinned {
+        if package_object(vm, *given)? != pinned {
             return Err(mismatch(format!(
                 "package `{alias}` is not the one the artifact was compiled against"
             )));
@@ -1505,7 +1534,8 @@ impl Continuation for SessionExecution {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         let action = self.actions[self.current];
         {
-            let Object::Package(package) = vm.get_object_mut(self.package) else {
+            let mut metered = vm.get_object_mut(self.package);
+            let Object::Package(package) = &mut *metered else {
                 unreachable!("Session continuation retained its package")
             };
             let bex_vm_types::types::Slots::Own { cells, .. } = &package.slots else {
@@ -1610,7 +1640,8 @@ fn graft_session_submission(
         LoadTarget::Session,
         &artifact.emitted,
         &commits,
-    )?;
+    )
+    .map_err(|error| error.into_native_error(vm))?;
     let actions = loaded
         .commits
         .iter()
@@ -1622,7 +1653,8 @@ fn graft_session_submission(
         })
         .collect();
     // The load published the image; what follows holds no heap pointers.
-    let Object::Package(package) = vm.get_object_mut(package_ptr) else {
+    let mut metered = vm.get_object_mut(package_ptr);
+    let Object::Package(package) = &mut *metered else {
         unreachable!("Session payload is a Package")
     };
     package.surface = ExportSurface::Compiled(artifact.interface_blob.clone());
@@ -1661,6 +1693,7 @@ impl BamlClassSession for PackageReflectImpl {
         }
         let package = Package {
             name: baml_type::Name::new(baml_type::RESERVED_USER_PACKAGE),
+            kind: PackageKind::Ordinary,
             edges: runtime_edges(vm, &dependencies),
             classes: IndexMap::new(),
             enums: IndexMap::new(),
@@ -1706,7 +1739,7 @@ impl BamlClassSession for PackageReflectImpl {
             "Session artifact has already been consumed",
         ) {
             Ok(artifact) => artifact,
-            Err(error) => return error.into(),
+            Err(message) => return invalid_argument(vm, message).into(),
         };
         debug_assert!(
             pins.is_empty(),
@@ -1716,10 +1749,8 @@ impl BamlClassSession for PackageReflectImpl {
         let (metadata, lease) = match kind {
             ArtifactKind::Session { meta, lease } => (meta, lease),
             ArtifactKind::Package => {
-                return VmRustFnError::BamlError(VmBamlError::InvalidArgument {
-                    message: "Session._finish received a Package.compile artifact".to_string(),
-                })
-                .into();
+                return invalid_argument(vm, "Session._finish received a Package.compile artifact")
+                    .into();
             }
         };
         let actions = match graft_session_submission(vm, package, &artifact, &metadata) {
@@ -1745,7 +1776,7 @@ impl BamlClassSession for PackageReflectImpl {
     }
 
     fn diagnostics(vm: &mut BexVm, session: &Value) -> Vec<Value> {
-        let Ok(package) = package_ptr(vm, *session) else {
+        let Ok(package) = package_object(vm, *session) else {
             return Vec::new();
         };
         let diagnostics = match vm.get_object(package) {
@@ -1780,15 +1811,12 @@ fn non_callable_error(what: &str) -> VmRustFnError {
     })
 }
 
-/// The `reflect.Arg` class type, for array/map element tags.
-///
-/// A stdlib FQN constant resolving to a head — one of the sanctioned name
-/// boundaries; the head comes off the declaration, never from the name's hash.
+/// The `reflect.Arg` class type, for array/map element tags: the class by
+/// identity, its head off the declaration.
 fn ty_arg(vm: &BexVm) -> RealizedTy {
-    let qtn = baml_type::QualifiedTypeName::from_dotted_path(ARG_FQN);
     let head = vm
-        .declaration_head(&qtn)
-        .unwrap_or_else(|| unreachable!("`{ARG_FQN}` is declared by the stdlib"));
+        .lang_head(ARG)
+        .unwrap_or_else(|| unreachable!("`{ARG}` is declared by the stdlib"));
     RealizedTy::Class(head, Box::new([]))
 }
 
@@ -1900,23 +1928,19 @@ fn value_realized_ty(vm: &BexVm, value: Value) -> RealizedTy {
         .map_or_else(RealizedTy::unknown, RealizedTy::from)
 }
 
-/// Whether `value` fits the parameter type `expected`, by the canonical
-/// algebra over the runtime context. Fails OPEN when the value's type cannot
-/// be reconstructed — an opaque native handle (see `value_concrete_ty`) has no
-/// BAML type to compare against, and refusing what we cannot check would
-/// reject working calls; the callee remains dynamically safe either way
-/// (values stay tagged).
+/// Whether `value` fits the parameter type `expected`: the membership test
+/// `is` asks ([`crate::type_match::value_is_member`]), so the string `"auto"`
+/// fits a parameter typed `"auto" | "manual"`. Fails OPEN when the value has
+/// no BAML type to compare — an opaque native handle (see
+/// `value_concrete_ty`) — because refusing what we cannot check would reject
+/// working calls; the callee remains dynamically safe either way (values stay
+/// tagged).
 fn value_fits(vm: &BexVm, value: Value, expected: &RealizedTy) -> bool {
-    let Some(actual) = vm.value_concrete_ty(value) else {
-        return true;
-    };
     // No convention patching is needed on the way in: a reconstructed
     // signature spells "cannot throw" as `never`, exactly as the static
     // algebra does.
-    let actual: Ty = actual.into();
     let expected: Ty = expected.clone().into();
-    // The VM itself is the runtime `TypeContext`.
-    normalize::is_subtype(&actual, &expected, vm)
+    crate::type_match::value_is_member(vm, value, &expected).unwrap_or(true)
 }
 
 /// `reflect.call_any` mirrors the ordinary call boundary's one numeric

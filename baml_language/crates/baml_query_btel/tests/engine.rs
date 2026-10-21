@@ -18,9 +18,9 @@ fn rows(result: &baml_query_btel::QueryResult) -> Vec<Vec<Json>> {
 const STATS_SQL: &str = "SELECT function_name, SUM(invocation_count) AS n FROM profiler
      WHERE node_type = 'function' GROUP BY function_name ORDER BY n DESC";
 
-/// Completed spans per name: retained calls and futures, while recording.
-const SPANS_SQL: &str =
-    "SELECT span_name, COUNT(*) AS n FROM spans GROUP BY span_name ORDER BY n DESC";
+/// Application spans per name: retained calls and futures, while recording.
+const SPANS_SQL: &str = "SELECT span_name, COUNT(*) AS n FROM spans WHERE span_name != 'baml.gc'
+     GROUP BY span_name ORDER BY n DESC";
 
 fn stats(index: &mut baml_query_btel::Index) -> BTreeMap<String, i64> {
     counts_of(&sql(index, STATS_SQL))
@@ -110,7 +110,7 @@ async fn population_outcomes_include_timing_only_calls_and_recursive_errors() {
         "SELECT function_name, SUM(invocation_count), SUM(return_count), SUM(error_count),
            SUM(nonpanic_error_count), SUM(panic_error_count), SUM(future_cancel_count),
            SUM(missing_count)
-         FROM profiler GROUP BY function_name ORDER BY function_name",
+         FROM profiler WHERE node_type = 'function' GROUP BY function_name ORDER BY function_name",
     );
     let counts = |name, n, ok, errors| {
         vec![
@@ -179,7 +179,8 @@ async fn acceptance_queries_answer_from_real_recordings() {
     let roots = sql(
         &mut index,
         "SELECT span_name, status, duration > 0, start_time < end_time FROM spans
-         WHERE span_type = 'future' AND parent_span_id IS NULL ORDER BY start_time",
+         WHERE span_type = 'future' AND parent_span_id IS NULL AND span_name != 'baml.gc'
+         ORDER BY start_time",
     );
     let run = |name, status| vec![json!(name), json!(status), json!(1), json!(1)];
     assert_eq!(
@@ -503,11 +504,10 @@ async fn concurrent_first_queries_share_one_index_without_duplicates() {
     assert_eq!(stats(&mut index(&path)), expected_stats(3, 0));
 }
 
-/// Each model request is a network span of its own, priced from its
-/// response, so two calls made on one thread from different steps are two
-/// rows, each under the step that made it.
+/// Each `ai.Client.invoke` is a span carrying the usage of the calls it made,
+/// and every span above it totals them.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn each_model_request_is_its_own_span() {
+async fn each_invoke_is_a_span_with_its_own_usage() {
     let project = tempfile::tempdir().unwrap();
     let source = r##"
         class Canned {
@@ -558,55 +558,34 @@ async fn each_model_request_is_its_own_span() {
     let results = record_program(project.path(), source, &[], &[("main", 0)]).await;
     assert_eq!(results, vec![Ok(bex_engine::BexExternalValue::Int(10))]);
     let mut index = index(project.path());
-    // The request's network span, under the innermost span that made it:
-    // here the root call, since neither step is a span. The root carries no
-    // cost of its own.
-    let requests = sql(
+    // Each invoke sits under the Summarize operation it ran for; the root
+    // call has no usage of its own but totals both.
+    let invokes = sql(
         &mut index,
-        "SELECT s.span_type, s.span_name LIKE 'POST http://127.0.0.1:%/v1/messages',
-           parent.span_name, parent.temporary_projections,
-           s.temporary_projections['model_calls'], round(s.temporary_projections['cost'], 6)
+        "SELECT s.span_name, parent.span_name, s.self_usage[0]['model'],
+           s.self_usage[0]['calls'], s.self_usage[0]['input_tokens'],
+           s.total_usage = s.self_usage
          FROM spans s JOIN spans parent ON parent.span_id = s.parent_span_id
-         WHERE s.temporary_projections IS NOT NULL",
+         WHERE s.self_usage[0] IS NOT NULL",
     );
-    let request = vec![
-        json!("network_span"),
+    let invoke = vec![
+        json!("anthropic.<(anthropic.Client as ai.Client)>.invoke"),
+        json!("user.Summarize"),
+        json!("claude-opus-5-5"),
         json!(1),
-        json!("user.main"),
-        Json::Null,
+        json!(900),
         json!(1),
-        json!(0.00474),
     ];
-    assert_eq!(requests.rows, vec![request.clone(), request]);
-    assert_eq!(cost(&mut index), (json!(0.00948), json!(0.00948)));
-    // Each request's call path leads up to the step that made it: a step's
-    // cost is the sum over the requests below it.
-    let steps = sql(
-        &mut index,
-        "WITH RECURSIVE up(span, cost, node) AS (
-           SELECT span_id, temporary_projections['cost'], profiler_node_id
-           FROM spans WHERE temporary_projections IS NOT NULL
-           UNION ALL
-           SELECT u.span, u.cost, p.parent_profiler_node_id
-           FROM up u JOIN profiler p ON p.profiler_node_id = u.node
-         )
-         SELECT p.function_name, count(*), round(sum(u.cost), 6)
-         FROM up u JOIN profiler p ON p.profiler_node_id = u.node
-         WHERE p.function_name IN ('user.Group', 'user.Draft')
-         GROUP BY p.function_name ORDER BY p.function_name",
-    );
+    assert_eq!(invokes.rows, vec![invoke.clone(), invoke]);
     assert_eq!(
-        steps.rows,
-        vec![
-            vec![json!("user.Draft"), json!(1), json!(0.00474)],
-            vec![json!("user.Group"), json!(1), json!(0.00474)],
-        ]
+        usage(&mut index, "user.main"),
+        vec![json!([]), json!(2), json!(1800)]
     );
+    assert_eq!(input_tokens(&mut index), json!(1800));
 }
 
-/// A streamed turn is priced like a non-streamed one with the same tokens:
-/// its cache reads and writes reach the network span's
-/// `temporary_projections`.
+/// A streamed turn's usage lands on its settle span when the stream ends,
+/// cache reads and writes included, as for a non-streamed turn.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn streamed_usage_keeps_the_cache_split() {
     let project = tempfile::tempdir().unwrap();
@@ -667,42 +646,161 @@ async fn streamed_usage_keeps_the_cache_split() {
     let results = record_program(project.path(), source, &[], &[("main", 0)]).await;
     assert_eq!(results, vec![Ok(bex_engine::BexExternalValue::Int(5))]);
     let mut index = index(project.path());
-    let usage = sql(
+    let settled = sql(
         &mut index,
-        "SELECT s.span_type, parent.span_name, grandparent.span_name,
-           s.temporary_projections['model_name'], s.temporary_projections['model_calls'],
-           s.temporary_projections['input_tokens'], s.temporary_projections['output_tokens'],
-           s.temporary_projections['cache_read_tokens'],
-           s.temporary_projections['cache_write_tokens'], round(s.temporary_projections['cost'], 6)
+        "SELECT s.span_name, parent.span_name, s.self_usage[0]['model'],
+           s.self_usage[0]['calls'], s.self_usage[0]['input_tokens'],
+           s.self_usage[0]['output_tokens'], s.self_usage[0]['cache_read_tokens'],
+           s.self_usage[0]['cache_write_tokens']
          FROM spans s JOIN spans parent ON parent.span_id = s.parent_span_id
-         JOIN spans grandparent ON grandparent.span_id = parent.parent_span_id
-         WHERE s.temporary_projections IS NOT NULL",
+         WHERE s.self_usage[0] IS NOT NULL",
     );
-    // The request's network span, directly in the caller's span; the same
-    // tokens and price as the non-streamed turn above.
     assert_eq!(
-        usage.rows,
+        settled.rows,
         vec![vec![
-            json!("network_span"),
-            json!("user.Stream"),
-            json!("user.main"),
+            json!("ai.stream.TurnStream._settle"),
+            json!("user.Summarize"),
             json!("claude-opus-5-5"),
             json!(1),
             json!(900),
             json!(30),
             json!(200),
-            json!(100),
-            json!(0.00474)
+            json!(100)
         ]]
     );
-    assert_eq!(cost(&mut index), (json!(0.00474), json!(0.00474)));
+    assert_eq!(
+        sql(
+            &mut index,
+            "SELECT request.future_id = owner.future_id FROM spans request
+         JOIN spans owner ON request.parent_span_id = owner.span_id
+         WHERE request.span_type = 'network_span' AND owner.span_type = 'function' AND owner.span_name = 'user.Summarize'"
+        )
+        .rows,
+        vec![vec![json!(1)]]
+    );
+    assert_eq!(
+        sql(
+            &mut index,
+            "WITH RECURSIVE ancestry(child, ancestor) AS (
+            SELECT span_id, parent_span_id FROM spans
+            UNION ALL
+            SELECT a.child, s.parent_span_id FROM ancestry a
+              JOIN spans s ON s.span_id = a.ancestor
+            WHERE s.parent_span_id IS NOT NULL
+         )
+         SELECT count(*) FROM spans child JOIN ancestry a ON a.child = child.span_id
+         JOIN spans owner ON a.ancestor = owner.span_id
+         WHERE child.span_type = 'future' AND owner.span_type = 'function' AND owner.span_name = 'user.Summarize'"
+        )
+        .rows,
+        vec![vec![json!(0)]]
+    );
+    assert_eq!(
+        usage(&mut index, "user.Stream"),
+        vec![json!([]), json!(1), json!(900)]
+    );
+    assert_eq!(input_tokens(&mut index), json!(900));
+}
+
+/// A streamed LLM function owns one `Summarize` operation through final parsing.
+/// The HTTP evidence is below it; `Summarize@stream` is only a forwarding entry.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_streamed_llm_function_is_its_own_span() {
+    let project = tempfile::tempdir().unwrap();
+    let source = r##"
+        class Sse {
+            server: baml.http.Server,
+            events: string[],
+
+            function handle(self, req: baml.http.ServerRequest) -> baml.http.Response {
+                let resp = baml.http.Response.new_streaming(200, { "content-type": "text/event-stream" });
+                let events = self.events;
+                spawn {
+                    for (let event in events) {
+                        resp.write((event + "\n\n").to_utf8());
+                    }
+                    resp.end();
+                    null
+                };
+                resp
+            }
+        }
+
+        function sse(name: string, data: string) -> string {
+            "event: " + name + "\ndata: " + data
+        }
+
+        function Summarize(text: string) -> string {
+            client: "anthropic/claude-opus-5-5"
+            prompt: `Summarize ${text}`
+        }
+
+        function main(n: int) -> int {
+            let server = Sse {
+                server: baml.http.Server.bind("127.0.0.1:0"),
+                events: [
+                    sse("message_start", `{"type":"message_start","message":{"id":"m","model":"claude-opus-5-5","usage":{"input_tokens":900}}}`),
+                    sse("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`),
+                    sse("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"short"}}`),
+                    sse("message_delta", `{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":30}}`),
+                    sse("message_stop", `{"type":"message_stop"}`),
+                ],
+            };
+            let task = spawn { server.server.serve(server.handle) };
+            let cl = anthropic.Client.new(
+                model = "claude-opus-5-5",
+                api_key = "test-key",
+                base_url = "http://" + server.server.addr,
+            );
+            let text = Summarize@stream("hi", client = cl).final();
+            task.cancel();
+            text.length()
+        }
+    "##;
+    let results = record_program(project.path(), source, &[], &[("main", 0)]).await;
+    assert_eq!(results, vec![Ok(bex_engine::BexExternalValue::Int(5))]);
+    let mut index = index(project.path());
+    let spans = sql(
+        &mut index,
+        "SELECT s.span_type, parent.span_type, parent.span_name, grandparent.span_name,
+           parent.input_args['text']
+         FROM spans s JOIN spans parent ON parent.span_id = s.parent_span_id
+         JOIN spans grandparent ON grandparent.span_id = parent.parent_span_id
+         WHERE s.span_type = 'network_span'",
+    );
+    assert_eq!(
+        spans.rows,
+        vec![vec![
+            json!("network_span"),
+            json!("function"),
+            json!("user.Summarize"),
+            json!("user.main"),
+            json!("hi"),
+        ]]
+    );
+    assert_eq!(
+        sql(
+            &mut index,
+            "SELECT output_value, status FROM spans WHERE span_type = 'function' AND span_name = 'user.Summarize'",
+        )
+        .rows,
+        vec![vec![json!("short"), json!("return")]],
+    );
+    assert_eq!(
+        sql(
+            &mut index,
+            "SELECT count(*) FROM spans WHERE span_type = 'function' AND span_name = 'user.Summarize@stream'",
+        )
+        .rows,
+        vec![vec![json!(0)]],
+    );
 }
 
 /// `OpenAI` chat (a whole body, and a stream with `include_usage`) and a
-/// responses stream, through the stdlib clients: each request's network
-/// span is priced from the usage its response reported.
+/// responses stream, through the stdlib clients: each invoke or settle span
+/// carries the usage its response reported.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn openai_requests_are_priced_on_their_network_spans() {
+async fn openai_usage_reaches_its_invoke_and_settle_spans() {
     let project = tempfile::tempdir().unwrap();
     let source = r##"
         class OpenAi {
@@ -779,69 +877,175 @@ async fn openai_requests_are_priced_on_their_network_spans() {
     let results = record_program(project.path(), source, &[], &[("main", 0)]).await;
     assert_eq!(results, vec![Ok(bex_engine::BexExternalValue::Int(15))]);
     let mut index = index(project.path());
-    let usage = sql(
+    let spans = sql(
         &mut index,
-        "SELECT s.span_name, parent.span_name, s.temporary_projections['model_name'],
-           s.temporary_projections['model_calls'], s.temporary_projections['input_tokens'],
-           s.temporary_projections['output_tokens'], s.temporary_projections['cache_read_tokens'],
-           s.temporary_projections['cache_write_tokens'],
-           s.temporary_projections['reasoning_tokens'], round(s.temporary_projections['cost'], 6)
-         FROM spans s JOIN spans parent ON parent.span_id = s.parent_span_id
-         WHERE s.span_type = 'network_span' ORDER BY s.start_time",
+        "SELECT s.span_name, s.self_usage[0]['model'], s.self_usage[0]['calls'],
+           s.self_usage[0]['input_tokens'], s.self_usage[0]['output_tokens'],
+           s.self_usage[0]['cache_read_tokens'], s.self_usage[0]['cache_write_tokens'],
+           s.self_usage[0]['reasoning_tokens']
+         FROM spans s WHERE s.self_usage[0] IS NOT NULL ORDER BY s.start_time",
     );
-    // 1000 fresh input at $2/M, 200 cached at $0.20/M, 300 output at $10/M.
-    // Each request sits under the root call: no client function is a span.
-    let priced = |path: &str| {
-        let host = usage.rows[0][0]
-            .as_str()
-            .unwrap()
-            .split("/v1/")
-            .next()
-            .unwrap();
+    // 1000 fresh input, 200 cached, 300 output, 100 of them reasoning, each
+    // under the model the response named.
+    let entry = |name: &str, model: &str| {
         vec![
-            json!(format!("{host}/v1/{path}")),
-            json!("user.main"),
-            json!("gpt-6-sol-2026-08-01"),
+            json!(name),
+            json!(model),
             json!(1),
             json!(1000),
             json!(300),
             json!(200),
             Json::Null,
             json!(100),
-            json!(0.00504),
         ]
     };
     assert_eq!(
-        usage.rows,
+        spans.rows,
         vec![
-            priced("chat/completions"),
-            priced("chat/completions"),
-            priced("responses"),
+            entry(
+                "openai.<(openai.ChatClient as ai.Client)>.invoke",
+                "gpt-6-sol-2026-08-01"
+            ),
+            entry("ai.stream.TurnStream._settle", "gpt-6-sol-2026-08-01"),
+            entry("ai.stream.TurnStream._settle", "gpt-6-sol-2026-08-01"),
         ]
     );
-    assert_eq!(cost(&mut index), (json!(0.01512), json!(0.01512)));
+    // The root totals all three, the Responses call apart from the two Chat
+    // calls: one model name, two providers.
+    let main = sql(
+        &mut index,
+        "SELECT total_usage[0]['provider'], total_usage[0]['model'], total_usage[0]['calls'],
+           total_usage[1]['provider'], total_usage[1]['model'], total_usage[1]['calls'],
+           total_usage[2]
+         FROM spans WHERE span_name = 'user.main'",
+    );
+    assert_eq!(
+        main.rows,
+        vec![vec![
+            json!("openai"),
+            json!("gpt-6-sol-2026-08-01"),
+            json!(1),
+            json!("openai-chat"),
+            json!("gpt-6-sol-2026-08-01"),
+            json!(2),
+            Json::Null
+        ]]
+    );
 }
 
-/// The cost summed over every span, and over network spans alone: equal
-/// when nothing is counted twice.
-fn cost(index: &mut baml_query_btel::Index) -> (Json, Json) {
-    let total = |index: &mut baml_query_btel::Index, filter: &str| {
-        sql(
-            index,
-            &format!("SELECT round(sum(temporary_projections['cost']), 6) FROM spans {filter}"),
-        )
-        .rows[0][0]
-            .clone()
-    };
-    (
-        total(index, ""),
-        total(index, "WHERE span_type = 'network_span'"),
+/// `[self_usage, calls, input_tokens]` of the span named `name`, the last two
+/// from its total's first model.
+fn usage(index: &mut baml_query_btel::Index, name: &str) -> Vec<Json> {
+    sql(
+        index,
+        &format!(
+            "SELECT self_usage, total_usage[0]['calls'], total_usage[0]['input_tokens']
+             FROM spans WHERE span_name = '{name}'"
+        ),
     )
+    .rows
+    .remove(0)
+}
+
+/// Input tokens summed over every span's own usage (one model each here):
+/// what a whole run used, with nothing counted twice.
+fn input_tokens(index: &mut baml_query_btel::Index) -> Json {
+    sql(
+        index,
+        "SELECT sum(self_usage[0]['input_tokens']) FROM spans",
+    )
+    .rows[0][0]
+        .clone()
+}
+
+/// An invoke that is not a span charges its usage to the owned operation
+/// it ran under: the operation totals it, and has none of its own.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_hidden_invokes_usage_reaches_its_owned_operation() {
+    let project = tempfile::tempdir().unwrap();
+    let source = r#"
+        class Probe {
+            implements ai.Client {
+                function requested_model(self) -> string {
+                    "claude-opus-5-5"
+                }
+                function provider(self) -> string {
+                    "test"
+                }
+
+                function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
+                    baml.http.Request { method: "POST", url: "https://probe.invalid", headers: {}, body: "" }
+                }
+
+                function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
+                    ai.internal.with_own_call(
+                        ai.ModelTurn {
+                            calls: [],
+                            child_turns: [],
+                            content: [ai.content.Text { text: "\"short\"" }],
+                            stop_reason: ai.content.StopReason.Complete,
+                        },
+                        ai.events.ModelCall {
+                            resolved_model: ai.events.ModelKey { provider: "anthropic", model: "claude-opus-5-5" },
+                            usage: null,
+                            timing: ai.events.Timing { start_time: null, duration: null, ttft: null },
+                            http_request: null,
+                            http_response: null,
+                            sse_responses: null,
+                        },
+                        ai.events.Usage { input_tokens: 900, output_tokens: 30 },
+                        "claude-opus-5-5",
+                        null,
+                    )
+                }
+            }
+        }
+
+        function Summarize(text: string) -> string {
+            client: "anthropic/claude-opus-5-5"
+            prompt: `Summarize ${text}`
+        }
+
+        function main(n: int) -> int {
+            let spec = Summarize@spec("hi");
+            let input = ai.ModelTurnInput {
+                prompt: spec.prompt_template,
+                journal: ai.Journal.new(spec),
+                toolbox: spec.tools(),
+                output_type: spec.output_type(),
+            };
+            let span = trace.start_span("op");
+            let turn = span.run(() -> {
+                Probe {}.invoke(input, $trace = trace.hidden())
+            });
+            span.finish(turn.content.length());
+            turn.content.length()
+        }
+    "#;
+    let results = record_program(project.path(), source, &[], &[("main", 0)]).await;
+    assert_eq!(results, vec![Ok(bex_engine::BexExternalValue::Int(1))]);
+    let mut index = index(project.path());
+    assert_eq!(
+        sql(
+            &mut index,
+            "SELECT count(*) FROM spans WHERE span_name LIKE '%Probe%'"
+        )
+        .rows,
+        vec![vec![json!(0)]],
+        "the invoke is hidden"
+    );
+    assert_eq!(
+        usage(&mut index, "op"),
+        vec![json!([]), json!(1), json!(900)]
+    );
+    assert_eq!(
+        usage(&mut index, "user.main"),
+        vec![json!([]), json!(1), json!(900)]
+    );
 }
 
 /// Panics, future names and sysop time, as the engine records them. A model
-/// client that makes no HTTP request has no cost: cost comes only from the
-/// network spans of the requests it sends.
+/// client that makes no HTTP request still has its usage on its invoke span.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn panics_names_and_sysop_time_reach_the_tables() {
     let project = tempfile::tempdir().unwrap();
@@ -854,8 +1058,11 @@ async fn panics_names_and_sysop_time_reach_the_tables() {
 
         class Probe {
             implements ai.Client {
-                function id(self) -> string {
-                    "probe"
+                function requested_model(self) -> string {
+                    "claude-opus-5-5"
+                }
+                function provider(self) -> string {
+                    "test"
                 }
 
                 function render(self, input: ai.ModelTurnInput) -> baml.http.Request {
@@ -863,11 +1070,22 @@ async fn panics_names_and_sysop_time_reach_the_tables() {
                 }
 
                 function invoke(self, input: ai.ModelTurnInput) -> ai.ModelTurn {
-                    ai.ModelTurn {
-                        calls: [],
-                        content: [ai.content.Text { text: "\"short\"" }],
-                        stop_reason: ai.content.StopReason.Complete,
-                        usage: ai.events.Usage {
+                    ai.internal.with_own_call(
+                        ai.ModelTurn {
+                            calls: [],
+                            child_turns: [],
+                            content: [ai.content.Text { text: "\"short\"" }],
+                            stop_reason: ai.content.StopReason.Complete,
+                        },
+                        ai.events.ModelCall {
+                            resolved_model: ai.events.ModelKey { provider: "anthropic", model: "claude-opus-5-5" },
+                            usage: null,
+                            timing: ai.events.Timing { start_time: null, duration: null, ttft: null },
+                            http_request: null,
+                            http_response: null,
+                            sse_responses: null,
+                        },
+                        ai.events.Usage {
                             input_tokens: 1200,
                             output_tokens: 30,
                             cached_input_tokens: 200,
@@ -875,8 +1093,9 @@ async fn panics_names_and_sysop_time_reach_the_tables() {
                             cache_write_input_tokens: 100,
                             uncached_input_tokens: 900,
                         },
-                        model: "claude-opus-5-5",
-                    }
+                        "claude-opus-5-5",
+                        null,
+                    )
                 }
             }
         }
@@ -915,12 +1134,11 @@ async fn panics_names_and_sysop_time_reach_the_tables() {
     let results = record_program(project.path(), source, &[], &[("main", 0)]).await;
     assert_eq!(results, vec![Ok(bex_engine::BexExternalValue::Int(5))]);
     let mut index = index(project.path());
-    let usage = sql(
-        &mut index,
-        "SELECT (SELECT count(*) FROM spans WHERE span_name = 'user.Step'),
-           (SELECT count(temporary_projections) FROM spans)",
+    assert_eq!(
+        usage(&mut index, "user.Step"),
+        vec![json!([]), json!(1), json!(900)]
     );
-    assert_eq!(usage.rows, vec![vec![json!(1), json!(0)]]);
+    assert_eq!(input_tokens(&mut index), json!(900));
     let statuses = sql(
         &mut index,
         "SELECT span_name, status FROM spans WHERE span_name IN ('user.Boom', 'reader')
@@ -1285,7 +1503,8 @@ async fn generic_calls_record_their_type_args_by_name() {
         let futures = sql(
             &mut index,
             &format!(
-                "SELECT COUNT(*), COUNT(type_args) FROM {relation} WHERE span_type = 'future'"
+                "SELECT COUNT(*), COUNT(type_args) FROM {relation}
+                 WHERE span_type = 'future' AND span_name != 'baml.gc'"
             ),
         );
         assert_eq!(futures.rows, vec![vec![json!(2), json!(0)]], "{relation}");
@@ -1321,11 +1540,733 @@ fn the_agent_runner_names_its_output_type() {
         .0
         .iter()
         .filter_map(|object| match object {
-            bex_vm_types::Object::Function(f) if f.name == "ai.<(ai.Agent as ai.Runner)>.run" => {
+            // The body `ai.Agent` provides for `ai.Runner.run`.
+            bex_vm_types::Object::Function(f)
+                if matches!(
+                    &f.identity,
+                    bex_vm_types::types::FunctionIdentity::InterfaceBody(
+                        bex_vm_types::types::BodyKey::ImplMethod(body),
+                    ) if body.method.as_str() == "run"
+                        && body.interface.path.name.as_str() == "Runner"
+                ) =>
+            {
                 Some(f.type_param_names.as_slice())
             }
             _ => None,
         })
         .collect();
     assert_eq!(names, [["Out"]]);
+}
+
+// The contract is the persisted evidence: BAML assertions cannot see BTEL
+// parent IDs, snapshot timing, outcome tags, or population aggregates.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn manual_span_lifetime_values_and_population() {
+    let project = tempfile::tempdir().unwrap();
+    let source = r#"
+        function Associated(value: int) -> int { value + 100 }
+        function Child() -> int { 9 }
+        function main(n: int) -> int {
+            let input: map<string, unknown> = { "value": n };
+            let span = trace.start_span(Associated, inputs = input, metadata = { "owner": "stream" });
+            input["value"] = 99;
+            span.run(() -> { log.info("manual child"); Child($trace = trace.span()); });
+            span.finish(42);
+            span.fail("ignored");
+            span.close();
+            let closed = trace.start_span("abandoned");
+            closed.close();
+            let failure = trace.start_span("failed");
+            failure.fail("broken");
+            let dropped = trace.start_span("dropped");
+            0
+        }
+    "#;
+    assert_eq!(
+        record_program(project.path(), source, &[], &[("main", 7)]).await,
+        vec![Ok(bex_engine::BexExternalValue::Int(0))]
+    );
+    let mut index = index(project.path());
+    let result = sql(
+        &mut index,
+        "SELECT span_name, status, input_args['value'], output_value FROM spans
+         WHERE span_type = 'function' AND span_name IN ('abandoned', 'dropped', 'failed', 'user.Associated') ORDER BY span_name",
+    );
+    assert_eq!(
+        result.rows,
+        vec![
+            vec![json!("abandoned"), json!("closed"), Json::Null, Json::Null],
+            vec![json!("dropped"), json!("closed"), Json::Null, Json::Null],
+            vec![json!("failed"), json!("user_error"), Json::Null, Json::Null],
+            vec![
+                json!("user.Associated"),
+                json!("return"),
+                json!(7),
+                json!(42)
+            ],
+        ]
+    );
+    assert_eq!(
+        sql(
+            &mut index,
+            "SELECT SUM(invocation_count) FROM profiler WHERE function_name = 'user.Associated'"
+        )
+        .rows,
+        vec![vec![json!(1)]]
+    );
+    let ancestry = sql(
+        &mut index,
+        "WITH RECURSIVE ancestors(child_id, ancestor_id) AS (
+           SELECT span_id, parent_span_id FROM spans
+           UNION ALL
+           SELECT a.child_id, s.parent_span_id FROM ancestors a
+           JOIN spans s ON s.span_id = a.ancestor_id
+         )
+         SELECT count(*) FROM spans child
+         JOIN ancestors a ON a.child_id = child.span_id
+         JOIN spans owner ON owner.span_id = a.ancestor_id
+         WHERE child.span_name = 'user.Child' AND child.span_type = 'function'
+           AND owner.span_type = 'function' AND owner.span_name = 'user.Associated'",
+    );
+    assert_eq!(ancestry.rows, vec![vec![json!(1)]]);
+    assert_eq!(
+        sql(
+            &mut index,
+            "SELECT count(*) FROM spans WHERE span_type = 'future' AND span_name != 'baml.gc'"
+        )
+        .rows,
+        vec![vec![json!(1)]],
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn manual_span_can_resume_in_another_root_call_and_close_during_gc() {
+    use std::sync::Arc;
+
+    use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder, TelemetryRecording};
+    use sys_native::SysOpsExt;
+
+    let project = tempfile::tempdir().unwrap();
+    let program = baml_test_support::compile_source(
+        r#"
+        function open(n: int) -> trace.Span {
+            trace.start_span("retained", inputs = { "n": n }, metadata = { "phase": "owner" })
+        }
+        function child() -> int { 77 }
+        function resume(span: trace.Span) -> int {
+            let value = span.run(() -> {
+                assert.equal(trace.current_context().metadata["phase"], "owner");
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(5));
+                child($trace = trace.span())
+            });
+            span.run(() -> { throw "expected"; }) catch_all (e) { _ => {} };
+            assert.equal(trace.current_context().metadata, {});
+            span.finish(value);
+            value
+        }
+        function after_gc() -> int { 1 }
+    "#,
+    );
+    let engine = Arc::new(
+        BexEngine::new_with_telemetry_recording(
+            program,
+            Arc::new(sys_native::SysOps::native()),
+            vec![],
+            None,
+            btel_clock::ClockMode::Monotonic,
+            TelemetryRecording::local_files(project.path(), RecordingConfig::default()),
+        )
+        .unwrap(),
+    );
+    let context = || FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
+    let span = engine
+        .call_function("open", vec![BexExternalValue::Int(1)], context(), false)
+        .await
+        .unwrap();
+    // Holding the span between root calls extends its lifetime, not its await time.
+    tokio::time::sleep(Duration::from_millis(20)).await;
+    assert_eq!(
+        engine
+            .call_function("resume", vec![span], context(), true)
+            .await
+            .unwrap(),
+        BexExternalValue::Int(77)
+    );
+    let dropped = engine
+        .call_function("open", vec![BexExternalValue::Int(2)], context(), false)
+        .await
+        .unwrap();
+    drop(dropped);
+    engine
+        .collect_garbage(bex_heap::CollectionLevel::Major)
+        .await;
+    engine
+        .collect_garbage(bex_heap::CollectionLevel::Major)
+        .await;
+    engine
+        .call_function("after_gc", vec![], context(), true)
+        .await
+        .unwrap();
+    engine.record_process_exit(ProcessStatus::Success);
+    tokio::time::timeout(Duration::from_secs(10), engine.shutdown())
+        .await
+        .unwrap();
+    assert_eq!(engine.telemetry_result(), Some(Ok(())));
+    let mut index = index(project.path());
+    let result = sql(
+        &mut index,
+        "SELECT input_args['n'], status, output_value FROM spans
+        WHERE span_type = 'function' AND span_name = 'retained' ORDER BY start_time",
+    );
+    assert_eq!(
+        result.rows,
+        vec![
+            vec![json!(1), json!("return"), json!(77)],
+            vec![json!(2), json!("closed"), Json::Null],
+        ]
+    );
+    let (waited, lifetime): (i64, i64) = index
+        .connection()
+        .query_row(
+            "SELECT c.self_await_ticks, c.exited_ticks - c.entered_ticks
+         FROM call c JOIN call_path p USING (rec, call_path_id)
+         JOIN function_def f ON f.rec = c.rec AND f.function_id = p.callee_function_id
+         WHERE f.fqn = 'retained' AND c.outcome = 1",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert!(
+        waited > 0,
+        "the wait in a later root is charged to its owned span"
+    );
+    assert!(
+        waited < lifetime,
+        "holding an inactive span is not counted as await time"
+    );
+    // The resumed child uses the new root's execution and clock, while its
+    // manual parent remains associated with the original root.
+    assert_eq!(
+        sql(
+            &mut index,
+            "WITH RECURSIVE ancestry(child, ancestor) AS (
+                SELECT span_id, parent_span_id FROM spans
+                UNION ALL
+                SELECT a.child, s.parent_span_id FROM ancestry a
+                  JOIN spans s ON s.span_id = a.ancestor
+                WHERE s.parent_span_id IS NOT NULL
+             )
+             SELECT child.future_id = resumed.span_id, owner.future_id != child.future_id,
+                child.start_time >= resumed.start_time, child.end_time <= resumed.end_time
+         FROM spans child JOIN ancestry a ON a.child = child.span_id
+         JOIN spans owner ON a.ancestor = owner.span_id AND owner.span_type = 'function' AND owner.span_name = 'retained'
+         JOIN spans resumed ON resumed.span_name = 'user.resume' AND resumed.span_type = 'future'
+         WHERE child.span_name = 'user.child' AND child.span_type = 'function'"
+        )
+        .rows,
+        vec![vec![json!(1), json!(1), json!(1), json!(1)]]
+    );
+    assert_eq!(
+        sql(
+            &mut index,
+            "SELECT count(*) FROM spans WHERE span_type = 'future' AND span_name != 'baml.gc'"
+        )
+        .rows,
+        vec![vec![json!(4)]]
+    );
+    let collected_before_shutdown = sql(
+        &mut index,
+        "SELECT owner.end_time <= marker.start_time FROM spans owner JOIN spans marker
+         ON marker.span_name = 'user.after_gc' AND marker.span_type = 'future'
+         WHERE owner.span_type = 'function' AND owner.span_name = 'retained' AND owner.input_args['n'] = 2",
+    );
+    assert_eq!(collected_before_shutdown.rows, vec![vec![json!(1)]]);
+    assert!(!result.outcome.unsealed);
+    assert!(
+        result.outcome.diagnostics.is_empty(),
+        "{:?}",
+        result.outcome.diagnostics
+    );
+}
+
+// BAML cannot inspect persisted parent/future IDs or profiler attribution.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn manual_scopes_preserve_execution_spawn_and_unwind_ancestry() {
+    let project = tempfile::tempdir().unwrap();
+    let source = r#"
+        function Leaf() -> int { 1 }
+        function Boom() -> int { throw "expected"; }
+        function main(n: int) -> int {
+            let outer = trace.start_span("outer", metadata = { "scope": "outer" });
+            let inner = trace.start_span("inner", parent = outer, metadata = { "scope": "inner" });
+            outer.run(() -> {
+                inner.run(() -> {
+                    assert.equal(trace.current_context().metadata["scope"], "inner");
+                    Boom($trace = trace.span());
+                }) catch_all (e) { _ => {} };
+                assert.equal(trace.current_context().metadata["scope"], "outer");
+                Leaf($trace = trace.span());
+                let task = spawn {
+                    assert.equal(trace.current_context().metadata["scope"], "outer");
+                    inner.run(() -> {
+                        assert.equal(trace.current_context().metadata["scope"], "inner");
+                        Leaf($trace = trace.span())
+                    });
+                    assert.equal(trace.current_context().metadata["scope"], "outer");
+                    Leaf($trace = trace.span())
+                };
+                assert.equal(await task, 1);
+                assert.equal(trace.current_context().metadata["scope"], "outer");
+            });
+            assert.equal(trace.current_context().metadata, {});
+            inner.close();
+            outer.close();
+            Leaf($trace = trace.span())
+        }
+    "#;
+    assert_eq!(
+        record_program(project.path(), source, &[], &[("main", 0)]).await,
+        vec![Ok(bex_engine::BexExternalValue::Int(1))]
+    );
+    let mut index = index(project.path());
+    // High telemetry retains real lambda/function frames between the leaf and
+    // its owned operation. Follow identities to the nearest owner, including
+    // the future of work spawned inside that owner, instead of requiring an
+    // immediate parent or a shared execution thread.
+    let ancestry = "WITH RECURSIVE owner_of(child, ancestor) AS (
+        SELECT span_id, parent_span_id FROM spans
+        UNION ALL
+        SELECT a.child, s.parent_span_id FROM owner_of a
+          JOIN spans s ON s.span_id = a.ancestor
+        WHERE s.parent_span_id IS NOT NULL AND
+          (s.span_type != 'function' OR s.span_name NOT IN ('inner', 'outer'))
+    )";
+    let result = sql(
+        &mut index,
+        &format!(
+            "{ancestry}
+         SELECT parent.span_name, child.future_id = parent.future_id, count(*)
+         FROM spans child JOIN owner_of a ON a.child = child.span_id
+         JOIN spans parent ON a.ancestor = parent.span_id
+         WHERE child.span_name = 'user.Leaf' AND child.span_type = 'function'
+           AND parent.span_type = 'function' AND parent.span_name IN ('inner', 'outer')
+         GROUP BY parent.span_name, child.future_id = parent.future_id
+         ORDER BY parent.span_name, child.future_id = parent.future_id"
+        ),
+    );
+    assert_eq!(
+        result.rows,
+        vec![
+            vec![json!("inner"), json!(0), json!(1)],
+            vec![json!("outer"), json!(0), json!(1)],
+            vec![json!("outer"), json!(1), json!(1)],
+        ]
+    );
+    assert_eq!(
+        sql(
+            &mut index,
+            "SELECT count(*) FROM spans WHERE span_type = 'future' AND span_name != 'baml.gc'"
+        )
+        .rows,
+        vec![vec![json!(2)]]
+    );
+    assert_eq!(
+        sql(
+            &mut index,
+            &format!(
+                "{ancestry}
+         SELECT parent.span_name, child.status FROM spans child
+         JOIN owner_of a ON a.child = child.span_id
+         JOIN spans parent ON a.ancestor = parent.span_id
+         WHERE child.span_name = 'user.Boom' AND child.span_type = 'function'
+           AND parent.span_type = 'function' AND parent.span_name IN ('inner', 'outer')"
+            )
+        )
+        .rows,
+        vec![vec![json!("inner"), json!("user_error")]]
+    );
+    assert_eq!(sql(&mut index,
+        "SELECT sum(invocation_count), sum(return_count) FROM profiler WHERE function_name = 'user.Leaf'"
+    ).rows, vec![vec![json!(4), json!(4)]]);
+    assert!(!result.outcome.unsealed);
+    assert!(result.outcome.diagnostics.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn owned_operation_rows_match_across_execution_paths() {
+    let project = tempfile::tempdir().unwrap();
+    assert_eq!(
+        record_program(
+            project.path(),
+            include_str!("support/owned_spans.baml"),
+            &[],
+            &[("main", 0)]
+        )
+        .await,
+        vec![Ok(bex_engine::BexExternalValue::Int(42))]
+    );
+    let mut index = index(project.path());
+    let rows = sql(
+        &mut index,
+        "SELECT input_args, output_value, error_value, span_reason FROM spans
+         WHERE span_type = 'function' AND span_name = 'user.Extract' AND status = 'return' ORDER BY start_time",
+    );
+    assert_eq!(
+        rows.rows.len(),
+        5,
+        "one row each for direct, pointer, Agent, call, and stream"
+    );
+    for row in &rows.rows {
+        assert_eq!(row, &rows.rows[0]);
+        assert_eq!(row[0]["input"], json!("shared"));
+        assert_eq!(row[1]["value"], json!(42));
+        assert_eq!(row[2], Json::Null);
+        assert_eq!(row[3], json!("other"));
+    }
+    assert_eq!(sql(&mut index,
+        "SELECT context_metadata['hook'], context_metadata['hook_only'], context_metadata['caller']
+         FROM spans WHERE span_type = 'function' AND span_name = 'user.Extract' AND status = 'return' ORDER BY start_time").rows,
+        vec![
+            vec![json!("reserved"), json!("yes"), json!("held")],
+            vec![json!("hook"), json!("yes"), Json::Null],
+            vec![Json::Null, Json::Null, Json::Null],
+            vec![Json::Null, Json::Null, Json::Null],
+            vec![Json::Null, Json::Null, Json::Null],
+        ]);
+    let errors = sql(
+        &mut index,
+        "SELECT error_value FROM spans WHERE span_type = 'function' AND span_name = 'user.Extract' AND status = 'user_error'",
+    );
+    assert_eq!(errors.rows.len(), 1);
+    assert_eq!(errors.rows[0][0]["$class"], json!("baml.errors.Context"));
+    assert_eq!(
+        errors.rows[0][0]["error"]["$class"],
+        json!("ai.errors.ParseFailed")
+    );
+    assert!(
+        errors.rows[0][0]["stack_trace"]["frames"]
+            .as_array()
+            .is_some_and(|frames| !frames.is_empty())
+    );
+    assert_eq!(sql(&mut index,
+        "SELECT count(*) FROM spans WHERE span_type = 'function' AND span_name = 'user.Extract' AND status = 'closed' AND output_value IS NULL AND error_value IS NULL").rows,
+        vec![vec![json!(1)]]);
+    assert_eq!(sql(&mut index,
+        "SELECT count(*) FROM spans WHERE span_type = 'function' AND span_name IN ('user.Extract@spec', 'user.Extract@stream', 'ai.Agent.run', 'ai.FunctionSpec.call', 'ai.stream.from_spec')").rows,
+        vec![vec![json!(0)]]);
+    assert_eq!(
+        sql(
+            &mut index,
+            "SELECT sum(invocation_count) FROM profiler WHERE function_name = 'user.Extract'"
+        )
+        .rows,
+        vec![vec![json!(6)]]
+    );
+    assert!(!rows.outcome.unsealed);
+    assert!(rows.outcome.diagnostics.is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn concurrent_spec_executions_keep_separate_claims_and_bind_defaults_once() {
+    let project = tempfile::tempdir().unwrap();
+    let source = format!(
+        "{}\n{}",
+        include_str!("support/owned_spans.baml"),
+        r#"
+        class Bindings { defaults: int, }
+        function bind_input(counts: Bindings) -> string {
+            counts.defaults += 1;
+            "bound once"
+        }
+        function Defaulted(counts: Bindings, input: string = bind_input(counts)) -> Answer {
+            client: "openai/gpt-4o-mini"
+            prompt: `Extract ${input}. ${ctx.output_format()}`
+        }
+        function overlap(event: ai.events.Event) -> void {
+            match (event) {
+                ai.events.RunStarted => {
+                    baml.sys.sleep(baml.time.Duration.from_milliseconds(100));
+                },
+                _ => {},
+            }
+        }
+        function concurrent(n: int) -> int {
+            let counts = Bindings { defaults: 0 };
+            let spec = Defaulted@spec(counts);
+            assert.equal(counts.defaults, 1);
+            let first = trace.span(inputs = true).context(metadata = { "execution": "first" }).reserve();
+            let second = trace.span(inputs = true).context(metadata = { "execution": "second" }).reserve();
+            assert.equal(first.id() == second.id(), false);
+            let a = spawn {
+                spec.call(client = Scripted { chunks: ["{\"value\":42}"] }, on_event = overlap, $trace = first)
+            };
+            let b = spawn {
+                ai.Agent.new(client = Scripted { chunks: ["{\"value\":43}"] }, on_event = overlap)
+                    .run(spec, $trace = second).value
+            };
+            assert.equal((await a).value, 42);
+            assert.equal((await b).value, 43);
+            assert.equal(counts.defaults, 1);
+            assert.equal(spec.arguments().has("client"), false);
+            assert.equal(spec.arguments().has("on_event"), false);
+            0
+        }
+        "#,
+    );
+    assert_eq!(
+        record_program(project.path(), &source, &[], &[("concurrent", 0)]).await,
+        vec![Ok(bex_engine::BexExternalValue::Int(0))]
+    );
+    let mut index = index(project.path());
+    let result = sql(
+        &mut index,
+        "SELECT context_metadata['execution'], input_args['input'],
+                input_args['counts']['defaults'], output_value['value'], status
+         FROM spans WHERE span_type = 'function' AND span_name = 'user.Defaulted'
+         ORDER BY output_value['value']",
+    );
+    assert_eq!(
+        result.rows,
+        vec![
+            vec![
+                json!("first"),
+                json!("bound once"),
+                json!(1),
+                json!(42),
+                json!("return")
+            ],
+            vec![
+                json!("second"),
+                json!("bound once"),
+                json!(1),
+                json!(43),
+                json!("return")
+            ],
+        ]
+    );
+    assert_eq!(
+        sql(
+            &mut index,
+            "SELECT a.span_id != b.span_id, a.future_id != b.future_id,
+                    a.start_time < b.end_time AND b.start_time < a.end_time
+             FROM spans a JOIN spans b
+             WHERE a.span_type = 'function' AND a.span_name = 'user.Defaulted' AND b.span_type = 'function' AND b.span_name = 'user.Defaulted'
+               AND a.output_value['value'] = 42 AND b.output_value['value'] = 43"
+        )
+        .rows,
+        vec![vec![json!(1), json!(1), json!(1)]]
+    );
+    assert!(!result.outcome.unsealed);
+    assert!(result.outcome.diagnostics.is_empty());
+}
+
+/// BAMLGH-112: with no `$trace` hook and the default telemetry level, an LLM
+/// function whose client is an expression still owns a span named after it,
+/// and as an entry point it names its root future.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn expression_client_llm_function_owns_its_span_and_names_its_entry_future() {
+    let project = tempfile::tempdir().unwrap();
+    let source = format!(
+        "{}\n{}",
+        include_str!("support/owned_spans.baml"),
+        r#"
+        function scripted() -> ai.Client {
+            Scripted { chunks: ["{\"value\":42}"] }
+        }
+        function Plain(n: int) -> Answer {
+            client: scripted()
+            prompt: `Extract ${n}. ${ctx.output_format()}`
+        }
+        function nested(n: int) -> int {
+            Plain(n).value
+        }
+        "#
+    );
+    let int = |n| bex_engine::BexCallArg::Provided(Box::new(bex_engine::BexExternalValue::Int(n)));
+    let omitted = || bex_engine::BexCallArg::OmittedDefault;
+    let results = record_program_calls(
+        project.path(),
+        &source,
+        &[],
+        vec![
+            // `client` and `on_event` are the compiler-injected overrides.
+            ("Plain", vec![int(1), omitted(), omitted()]),
+            ("nested", vec![int(2)]),
+        ],
+        RecordingConfig::default(),
+    )
+    .await;
+    assert!(results.iter().all(Result::is_ok), "{results:?}");
+    let mut index = index(project.path());
+    assert_eq!(
+        sql(
+            &mut index,
+            "SELECT span_name FROM spans WHERE span_type = 'future' AND parent_span_id IS NULL
+             AND span_name != 'baml.gc' ORDER BY start_time"
+        )
+        .rows,
+        vec![vec![json!("user.Plain")], vec![json!("user.nested")]]
+    );
+    assert_eq!(
+        sql(
+            &mut index,
+            "SELECT parent.span_type, parent.span_name FROM spans child
+             JOIN spans parent ON parent.span_id = child.parent_span_id
+             WHERE child.span_type = 'function' AND child.span_name = 'user.Plain'
+             ORDER BY child.start_time"
+        )
+        .rows,
+        vec![
+            vec![json!("future"), json!("user.Plain")],
+            vec![json!("future"), json!("user.nested")],
+        ]
+    );
+    assert_eq!(
+        sql(
+            &mut index,
+            "SELECT parent.span_name FROM spans child
+             JOIN spans parent ON parent.span_id = child.parent_span_id
+             WHERE child.span_name LIKE '%.invoke' ORDER BY child.start_time"
+        )
+        .rows,
+        vec![vec![json!("user.Plain")], vec![json!("user.Plain")]]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn owned_spans_preserve_callable_type_arguments_and_exact_input_maps() {
+    let project = tempfile::tempdir().unwrap();
+    let source = r#"
+        function Target<T>(value: T) -> T { value }
+        class Holder<T> {
+            item: T,
+            function target<U>(self, value: U) -> U { value }
+        }
+        function closure<T>(value: T) -> () -> T throws never { () -> { value } }
+        function main(n: int) -> int {
+            let generic = trace.start_span(Target<int>, inputs = { "misspelled": n, "extra": true });
+            generic.finish(7);
+            let holder = Holder<int> { item: n };
+            let method = trace.start_span(holder.target<string>, inputs = {});
+            holder.item = n + 1;
+            method.finish("done");
+            let captured = trace.start_span(closure<string>("captured"), inputs = {});
+            captured.finish("captured");
+            0
+        }
+    "#;
+    assert_eq!(
+        record_program(project.path(), source, &[], &[("main", 3)]).await,
+        vec![Ok(bex_engine::BexExternalValue::Int(0))]
+    );
+    let mut index = index(project.path());
+    let result = sql(
+        &mut index,
+        "SELECT span_name, type_args, input_args FROM spans
+        WHERE span_type = 'function' AND output_value IS NOT NULL ORDER BY span_name",
+    );
+    let int = json!({"$type": {"type": "int"}});
+    let string = json!({"$type": {"type": "string"}});
+    assert_eq!(
+        result.rows,
+        vec![
+            vec![
+                json!(".<lambda(closure, 0)>"),
+                json!({"T": string}),
+                json!({})
+            ],
+            vec![
+                json!("user.Holder.target"),
+                json!({"T": int, "U": string}),
+                json!({})
+            ],
+            vec![
+                json!("user.Target"),
+                json!({"T": int}),
+                json!({"misspelled": 3, "extra": true})
+            ],
+        ]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn generic_and_method_operations_preserve_bindings_across_execution_paths() {
+    let project = tempfile::tempdir().unwrap();
+    let source = format!(
+        "{}\n{}",
+        include_str!("support/owned_spans.baml"),
+        r#"
+        function Generic<T>(input: string) -> T {
+            client: "openai/gpt-4o-mini"
+            prompt: `Extract ${input}. ${ctx.output_format()}`
+        }
+        class Extractor<T> {
+            label: T,
+            function Extract<U>(self, input: string) -> U {
+                client: "openai/gpt-4o-mini"
+                prompt: `Extract ${input} for ${self.label}. ${ctx.output_format()}`
+            }
+        }
+        function bindings(n: int) -> int {
+            let provider = Scripted { chunks: ["{\"value\":42}"] };
+            Generic<Answer>("shared", client = provider);
+            let generic = Generic<Answer>;
+            generic("shared", client = provider);
+            ai.Agent.new(client = provider).run(Generic@spec<Answer>("shared"));
+            Generic@spec<Answer>("shared").call(client = provider);
+            Generic@stream<Answer>("shared", client = provider).final();
+
+            let extractor = Extractor<string> { label: "target" };
+            extractor.Extract<Answer>("shared", client = provider);
+            let method = extractor.Extract<Answer>;
+            method("shared", client = provider);
+            ai.Agent.new(client = provider).run(extractor.Extract@spec<Answer>("shared"));
+            extractor.Extract@spec<Answer>("shared").call(client = provider);
+            extractor.Extract@stream<Answer>("shared", client = provider).final();
+            0
+        }
+    "#
+    );
+    assert_eq!(
+        record_program(project.path(), &source, &[], &[("bindings", 0)]).await,
+        vec![Ok(bex_engine::BexExternalValue::Int(0))]
+    );
+    let mut index = index(project.path());
+    for target in ["user.Generic", "user.Extractor.Extract"] {
+        let result = sql(
+            &mut index,
+            &format!(
+                "SELECT type_args, input_args, output_value, status
+            FROM spans WHERE span_type = 'function' AND span_name = '{target}' ORDER BY start_time"
+            ),
+        );
+        assert_eq!(
+            result.rows.len(),
+            5,
+            "{target}: direct, pointer, Agent, call, stream"
+        );
+        for row in &result.rows {
+            assert_eq!(
+                row, &result.rows[0],
+                "{target}: bindings and values agree across paths"
+            );
+            assert_eq!(row[2]["value"], json!(42));
+            assert_eq!(row[3], json!("return"));
+        }
+        if target == "user.Generic" {
+            assert_eq!(
+                result.rows[0][0],
+                json!({"T": {"$type": {"type": "class", "name": "user.Answer"}}})
+            );
+        } else {
+            assert_eq!(
+                result.rows[0][0],
+                json!({
+                    "T": {"$type": {"type": "string"}},
+                    "U": {"$type": {"type": "class", "name": "user.Answer"}},
+                })
+            );
+        }
+        assert!(result.outcome.diagnostics.is_empty());
+    }
 }

@@ -137,7 +137,6 @@ internal static class BamlGeneratedTypeMetadata
         BamlTy.TyOneofCase.MetaType => "type",
         BamlTy.TyOneofCase.Resource => "baml.llm.Resource",
         BamlTy.TyOneofCase.PromptAst => "baml.llm.PromptAst",
-        BamlTy.TyOneofCase.Void => "void",
         BamlTy.TyOneofCase.TypeVar => RequireName(type.TypeVar.Name, type),
         BamlTy.TyOneofCase.Never => "never",
         _ => throw UnsupportedOption(type),

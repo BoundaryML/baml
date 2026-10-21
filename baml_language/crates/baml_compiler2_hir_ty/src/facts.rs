@@ -50,6 +50,12 @@ impl<'db> Facts<'db> {
         }
     }
 
+    /// Bound one more rigid parameter: a body's `let type T extends I = …`
+    /// binding, which enters the env where its statement runs.
+    pub(crate) fn add_bounds(&mut self, param: ParamTy, bounds: Vec<Interface>) {
+        self.bounds.insert(param, bounds);
+    }
+
     /// The scope's param env verbatim - the overlap oracle's `bounds` input
     /// shares this shape (`TypeVarBoundsMap`).
     pub fn bounds(&self) -> &rustc_hash::FxHashMap<ParamTy, Vec<Interface>> {

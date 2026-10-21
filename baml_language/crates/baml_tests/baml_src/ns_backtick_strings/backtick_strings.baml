@@ -170,14 +170,17 @@ test "backtick_cross_site_let_leaks_to_later_segment" {
 }
 
 // BEP §4: a block whose tail evaluates to unit renders "". An `if` without
-// `else` is void-typed; it renders "" rather than erroring on a missing
-// `to_string`.
-function bt_void_tail() -> string {
-    `a${ if (false) { "x" } }b`
+// `else` is unit-typed, and so is its branch: it runs for its effects and
+// renders "" rather than erroring on a missing `to_string`. A branch that
+// produces a value is a compile error (`projects/diagnostic_errors/unit_type`).
+function bt_void_tail(seen: string[]) -> string {
+    `a${ if (true) { seen.push("ran"); } }b`
 }
 
 test "backtick_void_tail_renders_empty" {
-    assert.equal(bt_void_tail(), "ab")
+    let seen: string[] = []
+    assert.equal(bt_void_tail(seen), "ab")
+    assert.equal(seen, ["ran"])
 }
 
 // A backtick string inside an interpolation inside another backtick string.
@@ -467,24 +470,14 @@ test "backtick_case_q_throw_in_interp_body" {
 // ─── TypeScript-parity cases (AA, BB, GG, HH, LL) ────────────────────────────
 
 
-// (BB) Extended C-style escapes: \b, \v, \f. None of the three are BAML
-// string-literal escapes, so the expected values are decoded from bytes.
+// (BB) C-style escapes: \b and \f decode (JSON parity). \v is not a BAML
+// escape; ns_string_literals checks that it is a compile error.
 function bt_escape_backspace() -> string {
     `a\bb`
 }
 
 test "backtick_extended_escape_backspace" {
-    // \x08 = backspace
-    assert.equal(bt_escape_backspace(), string.from_utf8(b"a\x08b"))
-}
-
-function bt_escape_vertical_tab() -> string {
-    `a\vb`
-}
-
-test "backtick_extended_escape_vertical_tab" {
-    // \x0B = vertical tab
-    assert.equal(bt_escape_vertical_tab(), string.from_utf8(b"a\x0Bb"))
+    assert.equal(bt_escape_backspace(), "a\x08b")
 }
 
 function bt_escape_form_feed() -> string {
@@ -492,8 +485,7 @@ function bt_escape_form_feed() -> string {
 }
 
 test "backtick_extended_escape_form_feed" {
-    // \x0C = form feed
-    assert.equal(bt_escape_form_feed(), string.from_utf8(b"a\x0Cb"))
+    assert.equal(bt_escape_form_feed(), "a\x0Cb")
 }
 
 // (GG) Block comment inside a `${...}` body.

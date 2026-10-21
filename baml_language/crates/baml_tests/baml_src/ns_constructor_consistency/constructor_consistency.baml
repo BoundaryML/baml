@@ -1,14 +1,14 @@
 test "reserved words are rejected as reflection constructor names" {
-    let class_name = reflect.class.new("type", {}) catch (e) {
+    let class_name = reflect.Class.new("type", {}) catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
     };
-    let field_name = reflect.class.new("ValidClass", { "test": reflect.Type.of<string>() }) catch (e) {
+    let field_name = reflect.Class.new("ValidClass", { "test": string.type() }) catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
     };
-    let enum_name = reflect.enum.new("class", []) catch (e) {
+    let enum_name = reflect.Enum.new("class", []) catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
     };
-    let variant_name = reflect.enum.new("ValidEnum", ["function"]) catch (e) {
+    let variant_name = reflect.Enum.new("ValidEnum", ["function"]) catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
     };
 
@@ -38,8 +38,8 @@ test "reserved words are rejected as reflection constructor names" {
     )
 }
 
-function make_enum() -> reflect.enum.Type {
-    reflect.enum.new("PreciseEnum", [])
+function make_enum() -> reflect.Enum {
+    reflect.Enum.new("PreciseEnum", [])
 }
 
 function accept_runtime_type<T>() -> string {
@@ -47,13 +47,13 @@ function accept_runtime_type<T>() -> string {
 }
 
 function use_precise_enum_as_runtime_type() -> string {
-    let enum_t = reflect.enum.new("RuntimeEnum", []);
-    type E = unreflect(enum_t);
+    let enum_t = reflect.Enum.new("RuntimeEnum", []);
+    let type E = enum_t;
     accept_runtime_type<E>()
 }
 
 test "enum constructor has its precise declared kind" {
-    let enum_type: reflect.enum.Type = make_enum();
-    assert.is_true(enum_type is reflect.enum.Type);
+    let enum_type: reflect.Enum = make_enum();
+    assert.is_true(enum_type is reflect.Enum);
     assert.equal(use_precise_enum_as_runtime_type(), "ok")
 }

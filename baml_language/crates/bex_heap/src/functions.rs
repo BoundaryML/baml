@@ -9,6 +9,23 @@ use btel_types::{FunctionId, FunctionMetadata, FunctionMetadataTable};
 use crate::{BexHeap, CollectionLevel, Generation};
 
 impl BexHeap {
+    /// Named manual operations share a definition across all VMs in this heap.
+    pub fn named_span_function_id(
+        &self,
+        name: &str,
+    ) -> Result<FunctionId, btel_types::FunctionIdExhausted> {
+        let mut definitions = self
+            .span_definitions
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(id) = definitions.get(name) {
+            return Ok(*id);
+        }
+        let id = self.functions.allocate_id()?;
+        definitions.insert(name.to_owned(), id);
+        Ok(id)
+    }
+
     /// Reserve a definition identity without constructing a VM heap object.
     pub fn allocate_host_function_id(&self) -> Result<FunctionId, btel_types::FunctionIdExhausted> {
         self.functions.allocate_id()

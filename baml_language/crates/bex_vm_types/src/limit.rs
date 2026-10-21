@@ -43,7 +43,7 @@ use std::{
     hash::{Hash, Hasher},
     num::NonZeroUsize,
     sync::{
-        Arc, Mutex, MutexGuard,
+        Arc, Mutex,
         atomic::{AtomicU64, Ordering},
     },
     task::Poll,
@@ -55,7 +55,7 @@ use tokio_util::sync::CancellationToken;
 /// Shared admission state behind a `baml.spawn.Limit` value.
 pub struct LimitInner {
     capacity: NonZeroUsize,
-    state: Mutex<LimitState>,
+    state: crate::MeteredMutex<LimitState>,
 }
 
 impl std::fmt::Debug for LimitInner {
@@ -75,6 +75,15 @@ struct LimitState {
     /// limits too is queued in each of them, in the same group, and leaves all
     /// of them at once. A group is removed when it empties.
     queues: HashMap<LimitSet, BTreeMap<u64, Arc<Waiter>>>,
+}
+
+impl crate::RetainedFootprint for LimitState {
+    fn retained_bytes(&self) -> usize {
+        // One map node per queued waiter and one per group; the waiters
+        // themselves belong to the parked tasks.
+        self.queued() * size_of::<(u64, Arc<Waiter>)>()
+            + self.queues.len() * size_of::<(LimitSet, BTreeMap<u64, Arc<Waiter>>)>()
+    }
 }
 
 impl LimitState {
@@ -198,7 +207,7 @@ fn address(limit: &Arc<LimitInner>) -> usize {
 }
 
 /// Lock every limit of a set, in the set's (address) order.
-fn lock_all(limits: &[Arc<LimitInner>]) -> Vec<MutexGuard<'_, LimitState>> {
+fn lock_all(limits: &[Arc<LimitInner>]) -> Vec<crate::MeteredGuard<'_, LimitState>> {
     debug_assert!(
         limits
             .windows(2)
@@ -213,17 +222,18 @@ impl LimitInner {
     pub fn new(capacity: NonZeroUsize) -> Arc<Self> {
         Arc::new(Self {
             capacity,
-            state: Mutex::new(LimitState {
+            state: crate::MeteredMutex::new(LimitState {
                 active: 0,
                 queues: HashMap::new(),
             }),
         })
     }
 
-    fn lock(&self) -> MutexGuard<'_, LimitState> {
-        self.state
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    /// Admission and release run on whichever thread finishes a launch, with
+    /// no allocation account at hand: the queues' footprint is published for
+    /// the census and never charged between collections.
+    fn lock(&self) -> crate::MeteredGuard<'_, LimitState> {
+        self.state.lock_uncharged()
     }
 
     /// How many launches this limit admits at a time.
@@ -501,6 +511,12 @@ impl Drop for Admission {
         for limit in self.limits.iter() {
             limit.promote();
         }
+    }
+}
+
+impl crate::BexRustData for LimitInner {
+    fn measure(&self, meter: &mut crate::Meter) {
+        meter.bytes(self.state.retained_bytes());
     }
 }
 

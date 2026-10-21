@@ -59,3 +59,89 @@ function with_timeout_caller_cancelled_at_deadline() -> string {
 test "with_timeout reports its caller's cancellation over its deadline" {
     assert.equal(with_timeout_caller_cancelled_at_deadline(), "caller cancelled")
 }
+
+// A body that is a function VALUE, not a lambda written at the call. The call
+// throws what the type of the value says, plus the timeout: a `catch` must see
+// both facts, and a `catch_all` binding must be a value of them.
+class WithTimeoutBodyError {
+    code: int,
+}
+
+function with_timeout_body_fails() -> string throws WithTimeoutBodyError {
+    throw WithTimeoutBodyError { code: 7 }
+}
+
+function with_timeout_body_sleeps() -> string throws never {
+    baml.sys.sleep(baml.time.Duration.from_seconds(60));
+    "finished"
+}
+
+function with_timeout_of_function_value(body: () -> string throws WithTimeoutBodyError) -> string {
+    baml.future.with_timeout(baml.time.Duration.from_seconds(30), body) catch (e) {
+        baml.errors.Timeout => "timed out",
+        WithTimeoutBodyError => `body error ${e.code}`,
+    }
+}
+
+test "with_timeout of a function value: catch sees the error of the value" {
+    assert.equal(with_timeout_of_function_value(with_timeout_body_fails), "body error 7")
+}
+
+function with_timeout_catch_all_of_function_value(body: () -> string throws unknown) -> string {
+    baml.future.with_timeout(baml.time.Duration.from_milliseconds(25), body) catch_all (e) {
+        _ => e.to_string(),
+    }
+}
+
+test "with_timeout of a function value: a catch_all binding is the thrown value" {
+    assert.equal(
+        with_timeout_catch_all_of_function_value(with_timeout_body_fails),
+        "WithTimeoutBodyError { code: 7 }",
+    );
+    assert.equal(
+        with_timeout_catch_all_of_function_value(with_timeout_body_sleeps),
+        "Timeout { message: \"operation timed out after 25ms\", duration: Duration { _nanoseconds: 25000000 }, timeout_type: \"limit\" }",
+    )
+}
+
+// The same through a generic caller, as a wrapper of `with_timeout` is written.
+class WithTimeoutSettled {
+    detail: string,
+}
+
+function with_timeout_settle<T>(body: () -> T throws unknown) -> T | WithTimeoutSettled {
+    baml.future.with_timeout(baml.time.Duration.from_seconds(30), body) catch_all (e) {
+        _ => WithTimeoutSettled { detail: e.to_string() },
+    }
+}
+
+test "with_timeout of a function value in a generic wrapper" {
+    let settled = with_timeout_settle(with_timeout_body_fails);
+    match (settled) {
+        let failure: WithTimeoutSettled => {
+            assert.equal(failure.detail, "WithTimeoutBodyError { code: 7 }")
+        },
+        let value: string => assert.is_true(false),
+    }
+}
+
+// The function value reaches `with_timeout` through another generic call.
+function with_timeout_pass_through<F>(value: F) -> F {
+    value
+}
+
+function with_timeout_of_passed_through_function_value() -> string {
+    baml.future.with_timeout(
+        baml.time.Duration.from_seconds(30),
+        with_timeout_pass_through(with_timeout_body_fails),
+    ) catch_all (e) {
+        _ => e.to_string(),
+    }
+}
+
+test "with_timeout of a function value behind a generic call: a catch_all binding is the thrown value" {
+    assert.equal(
+        with_timeout_of_passed_through_function_value(),
+        "WithTimeoutBodyError { code: 7 }",
+    )
+}

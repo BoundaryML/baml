@@ -392,8 +392,8 @@ fn same_object(
     b: Side<'_>,
     y: &btel_snapshot::DecodedObject,
 ) -> bool {
-    use btel_snapshot::{DecodedObject as O, Entries};
-    let same_entries = |x: &Entries, y: &Entries| {
+    use btel_snapshot::{DecodedObject as O, Fields};
+    let same_fields = |x: &Fields, y: &Fields| {
         x.len() == y.len()
             && x.iter()
                 .zip(y)
@@ -430,7 +430,15 @@ fn same_object(
                 entries: y,
                 original_len: len_y,
             },
-        ) => key_x == key_y && value_x == value_y && len_x == len_y && same_entries(x, y),
+        ) => {
+            key_x == key_y
+                && value_x == value_y
+                && len_x == len_y
+                && x.len() == y.len()
+                && x.iter().zip(y).all(|((key_x, x), (key_y, y))| {
+                    same_value(a, key_x, b, key_y) && same_value(a, x, b, y)
+                })
+        }
         (
             O::Instance {
                 type_arguments: arguments_x,
@@ -453,7 +461,7 @@ fn same_object(
                     b,
                     b.blob.object(*declaration_y),
                 )
-                && same_entries(x, y)
+                && same_fields(x, y)
         }
         (O::Cell(x), O::Cell(y)) => same_value(a, x, b, y),
         (O::Media(x), O::Media(y)) => same_media(a, x, b, y),
@@ -629,6 +637,61 @@ async fn capture_flags(program: &Program) {
     }
 }
 
+async fn span_defaults(program: &Program) {
+    for empty in [false, true] {
+        for fail in [false, true] {
+            let value = text("hook defaults");
+            let (result, recording) = Recording::run(
+                program,
+                "matrix_hook_defaults",
+                vec![value.clone(), External::Bool(empty), External::Bool(fail)],
+            )
+            .await;
+            assert_eq!(result.is_err(), fail);
+            assert_eq!(recording.spans.len(), 1);
+            let (_, entry, done) = &recording.spans[0];
+            assert!(entry.inputs_cas_id.is_none());
+            let returned = snapshot(false, std::slice::from_ref(&value));
+            let expected = (!empty).then_some(&returned);
+            if fail {
+                recording.assert_error_capture(done.value_cas_id.as_ref(), expected);
+            } else {
+                recording.assert_capture(done.value_cas_id.as_ref(), expected);
+            }
+        }
+        for chained in [false, true] {
+            for reserved in [false, true] {
+                for fail in [false, true] {
+                    let value = text("span defaults");
+                    let (result, recording) = Recording::run(
+                        program,
+                        "matrix_span_defaults",
+                        vec![
+                            value.clone(),
+                            External::Bool(empty),
+                            External::Bool(chained),
+                            External::Bool(reserved),
+                            External::Bool(fail),
+                        ],
+                    )
+                    .await;
+                    assert_eq!(result.is_err(), fail);
+                    assert_eq!(recording.spans.len(), 1);
+                    let (_, entry, done) = &recording.spans[0];
+                    assert!(entry.inputs_cas_id.is_none());
+                    let returned = snapshot(false, std::slice::from_ref(&value));
+                    let expected = (!empty).then_some(&returned);
+                    if fail {
+                        recording.assert_error_capture(done.value_cas_id.as_ref(), expected);
+                    } else {
+                        recording.assert_capture(done.value_cas_id.as_ref(), expected);
+                    }
+                }
+            }
+        }
+    }
+}
+
 async fn scalar_values(program: &Program) {
     let values = [
         External::Null,
@@ -683,29 +746,68 @@ async fn scalar_values(program: &Program) {
     }
 }
 
+/// The class `program` declares whose display name ends with `name`, beside
+/// the name a loaded instance's declaration answers with. A pooled class
+/// carries only its path; the package tables say which package declares it,
+/// and so what it is called.
+fn class_named<'p>(
+    program: &'p Program,
+    name: &str,
+) -> (&'p bex_vm_types::Class, bex_vm_types::DeclarationName) {
+    program
+        .packages
+        .iter()
+        .flat_map(|package| {
+            package
+                .classes
+                .iter()
+                .map(move |(path, object)| (path.under(&package.name), *object))
+        })
+        .find(|(qualified, _)| qualified.display_name().ends_with(name))
+        .map(|(qualified, object)| {
+            let bex_vm_types::Object::Class(class) = &program.objects[object] else {
+                panic!("the class table names a class");
+            };
+            (&**class, bex_vm_types::DeclarationName::Declared(qualified))
+        })
+        .unwrap_or_else(|| panic!("the program declares a class named `{name}`"))
+}
+
+/// [`class_named`], for an enum.
+fn enum_named<'p>(
+    program: &'p Program,
+    name: &str,
+) -> (&'p bex_vm_types::Enum, bex_vm_types::DeclarationName) {
+    program
+        .packages
+        .iter()
+        .flat_map(|package| {
+            package
+                .enums
+                .iter()
+                .map(move |(path, object)| (path.under(&package.name), *object))
+        })
+        .find(|(qualified, _)| qualified.display_name().ends_with(name))
+        .map(|(qualified, object)| {
+            let bex_vm_types::Object::Enum(enm) = &program.objects[object] else {
+                panic!("the enum table names an enum");
+            };
+            (&**enm, bex_vm_types::DeclarationName::Declared(qualified))
+        })
+        .unwrap_or_else(|| panic!("the program declares an enum named `{name}`"))
+}
+
 fn graph_snapshot(program: &Program, scenario: &str, args: bool, value: i64) -> Snapshot {
     use baml_type::RealizedTy;
-    use bex_vm_types::Object;
 
     let pool = SnapshotPool::new(1, Limits::default());
     let mut b = pool.try_acquire().unwrap();
-    let class = |suffix: &str| {
-        program
-            .objects
-            .0
-            .iter()
-            .find_map(|object| match object {
-                Object::Class(class) if class.name.display_name().ends_with(suffix) => Some(class),
-                _ => None,
-            })
-            .unwrap()
-    };
     let field =
         |_: &mut btel_snapshot::Leaves<'_>, (key, value): (&str, Value)| (key.into(), value);
     let root = match scenario {
         "cycle" | "node" => {
-            let class = class("MatrixNode");
-            let named = b.declaration(&class.name, class.type_tag, false);
+            let (class, class_name) = class_named(program, "MatrixNode");
+            let named = b.declaration(&class_name, class.type_tag, false);
             let declaration = b.leaves().object(named).unwrap();
             let slot = b.leaves().reserve().unwrap();
             let object = Value::Object(slot.id());
@@ -720,18 +822,8 @@ fn graph_snapshot(program: &Program, scenario: &str, args: bool, value: i64) -> 
             object
         }
         "enum" => {
-            let enm = program
-                .objects
-                .0
-                .iter()
-                .find_map(|object| match object {
-                    Object::Enum(enm) if enm.name.display_name().ends_with("MatrixChoice") => {
-                        Some(enm)
-                    }
-                    _ => None,
-                })
-                .unwrap();
-            let named = b.declaration(&enm.name, enm.type_tag, true);
+            let (enm, enum_name) = enum_named(program, "MatrixChoice");
+            let named = b.declaration(&enum_name, enm.type_tag, true);
             Value::Enum {
                 declaration: b.leaves().object(named).unwrap(),
                 variant: 1,
@@ -752,8 +844,8 @@ fn graph_snapshot(program: &Program, scenario: &str, args: bool, value: i64) -> 
             Value::Object(b.leaves().object(empty).unwrap())
         }
         "generic" => {
-            let class = class("MatrixBox");
-            let named = b.declaration(&class.name, class.type_tag, false);
+            let (class, class_name) = class_named(program, "MatrixBox");
+            let named = b.declaration(&class_name, class.type_tag, false);
             let declaration = b.leaves().object(named).unwrap();
             let fields = [("value", Value::Int(7))];
             let instance = b.instance(declaration, [RealizedTy::Int], fields.into_iter(), field);
@@ -767,7 +859,12 @@ fn graph_snapshot(program: &Program, scenario: &str, args: bool, value: i64) -> 
             } else {
                 &[("first", Value::Int(1)), ("second", Value::Int(2))]
             };
-            let map = b.map(key_type, value_type, entries.iter().copied(), field);
+            let map = b.map(
+                key_type,
+                value_type,
+                entries.iter().copied(),
+                |leaves, (key, value)| (leaves.string_value(&key.into()), value),
+            );
             Value::Object(b.leaves().object(map).unwrap())
         }
         _ => unreachable!(),
@@ -838,6 +935,77 @@ async fn arguments_and_graphs(program: &Program) {
             done.value_cas_id.as_ref(),
             Some(&graph_snapshot(program, scenario, false, after)),
         );
+    }
+}
+
+async fn typed_map_keys() {
+    use btel_snapshot::{DecodedObject as O, DecodedRoot, DecodedValue as V};
+
+    let program = baml_test_support::compile_source(include_str!(
+        "../../../baml_tests/baml_src/ns_trace_capture/map_keys.baml"
+    ));
+    for scenario in [
+        "int", "bool", "float", "null", "bigint", "enum", "array", "class",
+    ] {
+        let (result, recording) =
+            Recording::run(&program, "map_keys_capture", vec![text(scenario)]).await;
+        assert_eq!(result.unwrap(), External::Int(1), "{scenario}");
+        assert_eq!(recording.spans.len(), 1, "{scenario}");
+        let (_, entry, done) = &recording.spans[0];
+        let inputs = recording.blobs(capture_id(entry.inputs_cas_id.as_ref().unwrap()));
+        let output = recording.blobs(capture_id(done.value_cas_id.as_ref().unwrap()));
+        let DecodedRoot::FunctionArgs { slots, .. } = &inputs.root().blob.root else {
+            panic!("expected captured arguments");
+        };
+        let DecodedRoot::Value(value) = &output.root().blob.root else {
+            panic!("expected captured output");
+        };
+        assert_eq!(slots.len(), 1);
+        assert!(same_value(inputs.root(), &slots[0], output.root(), value));
+        let (side, value) = output.root().resolve(value);
+        let V::Object(id) = value else {
+            panic!("expected captured map");
+        };
+        let O::Map {
+            entries,
+            original_len,
+            ..
+        } = side.blob.object(id)
+        else {
+            panic!("expected captured map for {scenario}");
+        };
+        assert_eq!(*original_len, 1);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].1, V::String(scenario.into()));
+        let (side, key) = side.resolve(&entries[0].0);
+        match (scenario, key) {
+            ("int", V::Int(7)) | ("bool", V::Bool(true)) | ("null", V::Null) => {}
+            ("float", V::Float(value)) => assert_eq!(value.to_bits(), 1.5_f64.to_bits()),
+            ("bigint", V::Bigint(value)) => assert_eq!(value.to_string(), "9007199254740993"),
+            ("enum", V::Enum { variant, name, .. }) => {
+                assert_eq!(variant, 0);
+                assert_eq!(&*name, "First");
+            }
+            ("array", V::Object(id)) => {
+                let O::List {
+                    items,
+                    original_len,
+                    ..
+                } = side.blob.object(id)
+                else {
+                    panic!("expected array key");
+                };
+                assert_eq!(*original_len, 2);
+                assert_eq!(items, &[V::Int(1), V::Int(2)]);
+            }
+            ("class", V::Object(id)) => {
+                let O::Instance { fields, .. } = side.blob.object(id) else {
+                    panic!("expected class key");
+                };
+                assert_eq!(fields, &vec![("id".into(), V::Int(7))]);
+            }
+            (_, key) => panic!("unexpected {scenario} key: {key:?}"),
+        }
     }
 }
 
@@ -947,21 +1115,11 @@ fn one_field_instance(
     args: bool,
     additional_args: &[External],
 ) -> Snapshot {
-    let class = program
-        .objects
-        .0
-        .iter()
-        .find_map(|object| match object {
-            bex_vm_types::Object::Class(class) if class.name.display_name().ends_with(name) => {
-                Some(class)
-            }
-            _ => None,
-        })
-        .unwrap();
+    let (class, class_name) = class_named(program, name);
     assert_eq!(class.fields.len(), 1);
     let pool = SnapshotPool::new(1, Limits::default());
     let mut b = pool.try_acquire().unwrap();
-    let named = b.declaration(&class.name, class.type_tag, false);
+    let named = b.declaration(&class_name, class.type_tag, false);
     let declaration = b.leaves().object(named).unwrap();
     let value = scalar(&mut b, field);
     let instance = b.instance(declaration, [], std::iter::once(value), |_, value| {
@@ -1121,7 +1279,7 @@ async fn unions_and_opaque_values(program: &Program) {
     assert_eq!(result.unwrap(), External::Int(1));
     assert_eq!(recording.spans.len(), 1);
     let (_, entry, done) = &recording.spans[0];
-    let placeholder = External::RustData(Arc::new(()));
+    let placeholder = External::RustData(Arc::new(bex_vm_types::TestRustData(0)));
     recording.assert_capture(
         entry.inputs_cas_id.as_ref(),
         Some(&one_field_instance(
@@ -1321,9 +1479,11 @@ fn trace_contract_end_to_end() {
                 }
             }
             if mode == "medium" {
+                span_defaults(&program).await;
                 Box::pin(capture_flags(&program)).await;
                 Box::pin(scalar_values(&program)).await;
                 Box::pin(arguments_and_graphs(&program)).await;
+                Box::pin(typed_map_keys()).await;
                 Box::pin(call_structure(&program)).await;
                 Box::pin(callable_shapes(&program)).await;
                 exceptional_completion(&program).await;

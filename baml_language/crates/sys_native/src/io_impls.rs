@@ -5,7 +5,7 @@
 //! `lib.rs` during the transition.
 
 use std::{
-    any::{Any, TypeId},
+    any::TypeId,
     sync::{Arc, OnceLock},
 };
 
@@ -15,7 +15,7 @@ use sys_ops::io::{
 };
 #[cfg(feature = "bundle-http")]
 use sys_ops::io::{ObjectType, Type};
-use sys_types::VmInternalError;
+use sys_types::{BexRustData, RustDataArc as _, VmInternalError};
 
 const MAX_READ_CHUNK: usize = 64 * 1024;
 
@@ -425,12 +425,24 @@ impl io::IoNamespaceIo for NativeSysOps {
 // File System
 // ============================================================================
 
-type FsFileHandle = tokio::sync::Mutex<Option<tokio::fs::File>>;
+/// An open file as `$rust_type` data.
+struct FsFileHandle(tokio::sync::Mutex<Option<tokio::fs::File>>);
+
+impl BexRustData for FsFileHandle {
+    fn measure(&self, _: &mut sys_types::Meter) {}
+}
+
+impl std::ops::Deref for FsFileHandle {
+    type Target = tokio::sync::Mutex<Option<tokio::fs::File>>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 fn downcast_handle(file: &owned::fs::File) -> Result<Arc<FsFileHandle>, VmInternalError> {
     file._handle
         .clone()
-        .downcast::<FsFileHandle>()
+        .downcast_payload::<FsFileHandle>()
         .map_err(|_| VmInternalError::RustTypeError {
             expected: TypeId::of::<FsFileHandle>(),
             got: file._handle.type_id(),
@@ -483,6 +495,27 @@ impl io::IoClassFsFile for NativeSysOps {
                     Ok(Some(buf))
                 }
             }
+        })
+    }
+
+    fn bytes(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        file: owned::fs::File,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Vec<u8>> {
+        SysOpOutput::async_op(async move {
+            use tokio::io::AsyncReadExt;
+
+            let handle = downcast_handle(&file)?;
+            let mut guard = handle.lock().await;
+            let f = guard.as_mut().ok_or_else(closed_err)?;
+            let mut buf = Vec::new();
+            f.read_to_end(&mut buf).await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to read file: {e}"),
+            })?;
+            Ok(buf)
         })
     }
 
@@ -686,8 +719,8 @@ impl io::IoNamespaceFs for NativeSysOps {
             .map_err(|e| VmBamlError::Io {
                 message: format!("Failed to open file '{}': {e}", path.display()),
             })?;
-            let handle: Arc<dyn std::any::Any + Send + Sync> =
-                Arc::new(tokio::sync::Mutex::new(Some(file)));
+            let handle: Arc<dyn BexRustData> =
+                Arc::new(FsFileHandle(tokio::sync::Mutex::new(Some(file))));
             Ok(owned::fs::File { _handle: handle })
         })
     }
@@ -1078,12 +1111,26 @@ async fn write_path(path: &std::path::Path, data: &[u8]) -> Result<i64, VmBamlEr
 
 use sys_glob::GlobPattern;
 
-type GlobHandle = GlobPattern;
+/// A compiled pattern as `$rust_type` data.
+struct GlobHandle(GlobPattern);
+
+impl BexRustData for GlobHandle {
+    fn measure(&self, _: &mut sys_types::Meter) {
+        // Bounded by the pattern text; the regex crate does not report its size.
+    }
+}
+
+impl std::ops::Deref for GlobHandle {
+    type Target = GlobPattern;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 fn downcast_glob_handle(glob: &owned::glob::Glob) -> Result<Arc<GlobHandle>, VmInternalError> {
     glob._handle
         .clone()
-        .downcast::<GlobHandle>()
+        .downcast_payload::<GlobHandle>()
         .map_err(|_| VmInternalError::RustTypeError {
             expected: TypeId::of::<GlobHandle>(),
             got: glob._handle.type_id(),
@@ -1100,7 +1147,7 @@ impl io::IoNamespaceGlob for NativeSysOps {
     ) -> SysOpOutput<owned::glob::Glob> {
         match GlobPattern::new(&pattern) {
             Ok(gp) => {
-                let handle: Arc<dyn std::any::Any + Send + Sync> = Arc::new(gp);
+                let handle: Arc<dyn BexRustData> = Arc::new(GlobHandle(gp));
                 SysOpOutput::ok(owned::glob::Glob { _handle: handle })
             }
             Err(e) => SysOpOutput::err(VmBamlError::ParseError { message: e }),
@@ -1284,15 +1331,33 @@ struct LiveProcessHandle {
     label: String,
 }
 
+impl BexRustData for LiveProcessHandle {
+    fn measure(&self, meter: &mut sys_types::Meter) {
+        meter.bytes(self.label.capacity());
+    }
+}
+
 struct ReadPipeHandle {
     reader: tokio::sync::Mutex<Option<Box<dyn tokio::io::AsyncRead + Send + Unpin>>>,
     close_tx: tokio::sync::watch::Sender<bool>,
     label: String,
 }
 
+impl BexRustData for ReadPipeHandle {
+    fn measure(&self, meter: &mut sys_types::Meter) {
+        meter.bytes(self.label.capacity());
+    }
+}
+
 struct WritePipeHandle {
     writer: tokio::sync::Mutex<Option<Box<dyn tokio::io::AsyncWrite + Send + Unpin>>>,
     label: String,
+}
+
+impl BexRustData for WritePipeHandle {
+    fn measure(&self, meter: &mut sys_types::Meter) {
+        meter.bytes(self.label.capacity());
+    }
 }
 
 fn stderr_stdio(
@@ -1330,7 +1395,7 @@ fn stderr_stdio(
 fn downcast_read_pipe(pipe: &owned::sys::ReadPipe) -> Result<Arc<ReadPipeHandle>, VmInternalError> {
     pipe._pipe
         .clone()
-        .downcast::<ReadPipeHandle>()
+        .downcast_payload::<ReadPipeHandle>()
         .map_err(|_| VmInternalError::RustTypeError {
             expected: TypeId::of::<ReadPipeHandle>(),
             got: pipe._pipe.type_id(),
@@ -1342,7 +1407,7 @@ fn downcast_write_pipe(
 ) -> Result<Arc<WritePipeHandle>, VmInternalError> {
     pipe._pipe
         .clone()
-        .downcast::<WritePipeHandle>()
+        .downcast_payload::<WritePipeHandle>()
         .map_err(|_| VmInternalError::RustTypeError {
             expected: TypeId::of::<WritePipeHandle>(),
             got: pipe._pipe.type_id(),
@@ -1392,7 +1457,7 @@ fn downcast_process_handle(
     process
         ._handle
         .clone()
-        .downcast::<LiveProcessHandle>()
+        .downcast_payload::<LiveProcessHandle>()
         .map_err(|_| VmInternalError::RustTypeError {
             expected: TypeId::of::<LiveProcessHandle>(),
             got: process._handle.type_id(),
@@ -1908,19 +1973,17 @@ impl io::IoNamespaceSys for NativeSysOps {
         })
     }
 
-    fn sleep(
+    fn _sleep(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        delay: BexExternalValue,
+        delay_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        let nanos = match sleep_nanos_from_delay(delay) {
-            Ok(nanos) => nanos,
-            Err(err) => return SysOpOutput::err(err),
-        };
+        // Zero or negative does not wait; past `u64` nanoseconds clamps.
+        let delay = timeout_from_nanos(&delay_nanos).unwrap_or_default();
         SysOpOutput::async_op(async move {
-            tokio::time::sleep(std::time::Duration::from_nanos(nanos)).await;
+            tokio::time::sleep(delay).await;
             Ok(())
         })
     }
@@ -1929,39 +1992,6 @@ impl io::IoNamespaceSys for NativeSysOps {
         // `std::process::id` is a `u32` on every platform this crate builds
         // for, so the widening into BAML's i63 `int` is always exact.
         SysOpOutput::ok(i64::from(std::process::id()))
-    }
-}
-
-fn sleep_nanos_from_delay(delay: BexExternalValue) -> Result<u64, VmRustFnError> {
-    match delay {
-        BexExternalValue::Instance {
-            class_name,
-            mut fields,
-            ..
-        } if class_name == "baml.time.Duration" => {
-            let Some(nanos) = fields.swap_remove("_nanoseconds") else {
-                return Err(VmRustFnError::from(VmBamlError::Io {
-                    message: "sleep delay is missing Duration._nanoseconds".to_string(),
-                }));
-            };
-            let BexExternalValue::Bigint(nanos) = nanos else {
-                return Err(VmRustFnError::from(VmBamlError::Io {
-                    message: "sleep delay Duration._nanoseconds is not a bigint".to_string(),
-                }));
-            };
-            if nanos.sign() == num_bigint::Sign::Plus {
-                Ok(u64::try_from(&nanos).unwrap_or(u64::MAX))
-            } else {
-                Ok(0)
-            }
-        }
-        BexExternalValue::Union { value, .. } => sleep_nanos_from_delay(*value),
-        other => Err(VmRustFnError::from(VmBamlError::Io {
-            message: format!(
-                "sleep delay must be baml.time.Duration, got {}",
-                other.type_name()
-            ),
-        })),
     }
 }
 
@@ -1982,8 +2012,37 @@ struct NetTcpStreamHandle {
     close_tx: tokio::sync::watch::Sender<bool>,
 }
 
-type NetTcpListenerHandle = tokio::sync::Mutex<Option<Arc<tokio::net::TcpListener>>>;
-type NetUdpSocketHandle = tokio::sync::Mutex<Option<Arc<tokio::net::UdpSocket>>>;
+impl BexRustData for NetTcpStreamHandle {
+    fn measure(&self, _: &mut sys_types::Meter) {}
+}
+
+/// A bound listener as `$rust_type` data.
+struct NetTcpListenerHandle(tokio::sync::Mutex<Option<Arc<tokio::net::TcpListener>>>);
+
+impl BexRustData for NetTcpListenerHandle {
+    fn measure(&self, _: &mut sys_types::Meter) {}
+}
+
+impl std::ops::Deref for NetTcpListenerHandle {
+    type Target = tokio::sync::Mutex<Option<Arc<tokio::net::TcpListener>>>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+/// A bound socket as `$rust_type` data.
+struct NetUdpSocketHandle(tokio::sync::Mutex<Option<Arc<tokio::net::UdpSocket>>>);
+
+impl BexRustData for NetUdpSocketHandle {
+    fn measure(&self, _: &mut sys_types::Meter) {}
+}
+
+impl std::ops::Deref for NetUdpSocketHandle {
+    type Target = tokio::sync::Mutex<Option<Arc<tokio::net::UdpSocket>>>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 /// Convert a `Duration._nanoseconds` value (carried as a bigint across the
 /// sys-op boundary) into an operation timeout. Zero or negative disables it
@@ -2006,7 +2065,7 @@ fn downcast_tcpstream(
     stream
         ._handle
         .clone()
-        .downcast::<NetTcpStreamHandle>()
+        .downcast_payload::<NetTcpStreamHandle>()
         .map_err(|_| VmInternalError::RustTypeError {
             expected: TypeId::of::<NetTcpStreamHandle>(),
             got: stream._handle.type_id(),
@@ -2035,7 +2094,7 @@ fn downcast_tcplistener(
     listener
         ._handle
         .clone()
-        .downcast::<NetTcpListenerHandle>()
+        .downcast_payload::<NetTcpListenerHandle>()
         .map_err(|_| VmInternalError::RustTypeError {
             expected: TypeId::of::<NetTcpListenerHandle>(),
             got: listener._handle.type_id(),
@@ -2048,7 +2107,7 @@ fn downcast_udpsocket(
     socket
         ._handle
         .clone()
-        .downcast::<NetUdpSocketHandle>()
+        .downcast_payload::<NetUdpSocketHandle>()
         .map_err(|_| VmInternalError::RustTypeError {
             expected: TypeId::of::<NetUdpSocketHandle>(),
             got: socket._handle.type_id(),
@@ -2222,8 +2281,9 @@ impl io::IoClassNetTcpListener for NativeSysOps {
                     .map_err(|e| VmBamlError::Io {
                         message: format!("Failed to bind '{addr}': {e}"),
                     })?;
-            let handle: Arc<dyn std::any::Any + Send + Sync> =
-                Arc::new(tokio::sync::Mutex::new(Some(Arc::new(listener))));
+            let handle: Arc<dyn BexRustData> = Arc::new(NetTcpListenerHandle(
+                tokio::sync::Mutex::new(Some(Arc::new(listener))),
+            ));
             Ok(owned::net::TcpListener { _handle: handle })
         })
     }
@@ -2286,8 +2346,9 @@ impl io::IoClassNetUdpSocket for NativeSysOps {
                 .map_err(|e| VmBamlError::Io {
                     message: format!("Failed to bind UDP '{addr}': {e}"),
                 })?;
-            let handle: Arc<dyn std::any::Any + Send + Sync> =
-                Arc::new(tokio::sync::Mutex::new(Some(Arc::new(socket))));
+            let handle: Arc<dyn BexRustData> = Arc::new(NetUdpSocketHandle(
+                tokio::sync::Mutex::new(Some(Arc::new(socket))),
+            ));
             Ok(owned::net::UdpSocket { _handle: handle })
         })
     }
@@ -2736,8 +2797,8 @@ fn push_connection(
 #[cfg(feature = "bundle-http")]
 fn traced(
     network: Option<sys_types::network::NetworkContext>,
-    data: Arc<dyn Any + Send + Sync>,
-) -> Arc<dyn Any + Send + Sync> {
+    data: Arc<dyn BexRustData>,
+) -> Arc<dyn BexRustData> {
     match network {
         Some(network) => sys_types::network::NetworkTraced::wrap(network, data),
         None => data,
@@ -2872,10 +2933,10 @@ impl io::IoClassHttpSseStream for NativeSysOps {
 
         SysOpOutput::async_op(async move {
             let handle = sys_types::network::NetworkTraced::inner(sse_stream._handle)
-                .downcast::<bex_resource_types::ResourceHandle>()
+                .downcast_payload::<bex_resource_types::ResourceHandle>()
                 .map_err(|handle| VmInternalError::RustTypeError {
                     expected: TypeId::of::<bex_resource_types::ResourceHandle>(),
-                    got: handle.as_ref().type_id(),
+                    got: handle.payload_type_id(),
                 })?;
 
             let (buffer, notify, closed) = crate::registry::REGISTRY
@@ -2895,7 +2956,9 @@ impl io::IoClassHttpSseStream for NativeSysOps {
                         return Ok(None);
                     }
                     if !buf.events.is_empty() {
-                        let events: Vec<serde_json::Value> = std::mem::take(&mut buf.events)
+                        let taken = std::mem::take(&mut buf.events);
+                        buf.publish_retained();
+                        let events: Vec<serde_json::Value> = taken
                             .into_iter()
                             .map(|e| {
                                 serde_json::json!({
@@ -3155,10 +3218,12 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 .get(reqwest::header::CONTENT_TYPE)
                 .and_then(|v| v.to_str().ok())
                 .map(str::to_owned);
+            let retained = Arc::new(sys_types::RetainedBytes::new(0));
             let buffer = Arc::new(TokioMutex::new(SseBuffer {
                 events: Vec::new(),
                 done: false,
                 error: None,
+                retained: Arc::clone(&retained),
             }));
             let closed = Arc::new(AtomicBool::new(false));
             let notify = Arc::new(Notify::new());
@@ -3228,6 +3293,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                                 push_events(network, &events);
                                 let mut buf = buf_clone.lock().await;
                                 buf.events.extend(events);
+                                buf.publish_retained();
                                 notify_clone.notify_waiters();
                             }
                         }
@@ -3268,6 +3334,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 let mut buf = buf_clone.lock().await;
                 if !final_events.is_empty() {
                     buf.events.extend(final_events);
+                    buf.publish_retained();
                 }
                 buf.done = true;
                 notify_clone.notify_waiters();
@@ -3280,6 +3347,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 notify,
                 consumer.abort_handle(),
                 url.clone(),
+                retained,
             );
             Ok(owned::http::SseStream {
                 url,
@@ -3350,10 +3418,10 @@ fn ws_resource(
     websocket: &owned::ws::WebSocket,
 ) -> Result<Arc<crate::registry::WsStreamResource>, VmInternalError> {
     let handle = Arc::clone(&websocket._handle)
-        .downcast::<bex_resource_types::ResourceHandle>()
+        .downcast_payload::<bex_resource_types::ResourceHandle>()
         .map_err(|handle| VmInternalError::RustTypeError {
             expected: TypeId::of::<bex_resource_types::ResourceHandle>(),
-            got: handle.as_ref().type_id(),
+            got: handle.payload_type_id(),
         })?;
     crate::registry::REGISTRY.get_ws_stream(handle.key()).ok_or(
         VmInternalError::UnresolvedResourceHandle {

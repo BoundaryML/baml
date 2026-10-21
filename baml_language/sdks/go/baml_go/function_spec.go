@@ -152,9 +152,9 @@ func (spec FunctionSpec[TOut]) Tools(ctx context.Context, options ...CallOption)
 	return Call(ctx, "ai.FunctionSpec.tools", map[string]Input{"self": spec.BAMLInput()}, options...)
 }
 
-// ClientID returns the identifier of the spec's bound default client.
-func (spec FunctionSpec[TOut]) ClientID(ctx context.Context, options ...CallOption) (string, error) {
-	value, err := Call(ctx, "ai.FunctionSpec.client_id", map[string]Input{"self": spec.BAMLInput()}, options...)
+// RequestedModel returns the model the spec's bound default client asks for.
+func (spec FunctionSpec[TOut]) RequestedModel(ctx context.Context, options ...CallOption) (string, error) {
+	value, err := Call(ctx, "ai.FunctionSpec.requested_model", map[string]Input{"self": spec.BAMLInput()}, options...)
 	if err != nil {
 		return "", err
 	}

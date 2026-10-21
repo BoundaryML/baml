@@ -106,7 +106,6 @@ pub(super) fn json(ty: &OwnedType) -> Json {
         RealizedTy::Type => leaf("type"),
         RealizedTy::Resource => leaf("resource"),
         RealizedTy::PromptAst => leaf("promptAst"),
-        RealizedTy::Void => leaf("void"),
         RealizedTy::Unknown => leaf("unknown"),
         RealizedTy::Never => leaf("never"),
     }

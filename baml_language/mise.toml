@@ -68,8 +68,8 @@ sources = ["sdks/cpp/**/*.h", "sdks/cpp/**/*.cc", "sdk_tests/crates/cpp/**/*.h",
 [tasks.insta-update]
 description = "Run all snapshot tests with INSTA_UPDATE=always"
 env = { INSTA_UPDATE = "always" }
-run = "scripts/with-test-keyring.sh cargo test --workspace"
-sources = ["**/*.rs", "**/Cargo.toml", "scripts/with-test-keyring.sh"]
+run = "cargo test --workspace"
+sources = ["**/*.rs", "**/Cargo.toml"]
 
 [tasks.fmt-stdlib]
 description = "Run the BAML formatter on the standard library packages"

@@ -1,0 +1,33 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0105
+
+  × Invalid trace hook `bad_hook` for function `target`.
+  │ The hook returns `int`, but must return `trace.Options` or `null`.
+  │ help: Return tracing options (for example `trace.span(inputs = true)`) or `null` to keep the current settings.
+    ╭─[main.baml:10:1]
+ 10 │ /// baml:$trace=bad_hook
+    · ────────────────────────
+    ╰────
+  ╰─▶   ☞ hook declared here
+         ╭─[main.baml:6:10]
+       6 │ function bad_hook(settings: trace.Settings) -> int throws never {
+         ·          ────────
+         ╰────
+
+  [type] E0105
+
+  × Invalid trace hook `bad_hook` for function `plain_target`.
+  │ The hook returns `int`, but must return `trace.Options` or `null`.
+  │ help: Return tracing options (for example `trace.span(inputs = true)`) or `null` to keep the current settings.
+    ╭─[main.baml:15:1]
+ 15 │ /// baml:$trace=bad_hook
+    · ────────────────────────
+    ╰────
+  ╰─▶   ☞ hook declared here
+         ╭─[main.baml:6:10]
+       6 │ function bad_hook(settings: trace.Settings) -> int throws never {
+         ·          ────────
+         ╰────

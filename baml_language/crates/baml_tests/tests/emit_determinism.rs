@@ -9,8 +9,11 @@
 
 use std::path::{Path, PathBuf};
 
+use baml_base::{Dependency, Name};
 use baml_compiler2_emit::OptLevel;
-use baml_db::{ProjectDatabase, compile_program, discover_baml_files};
+use baml_db::{
+    ProjectDatabase, SourceRootKind, SourceRootSpec, compile_program, discover_baml_files,
+};
 use baml_tests::engine::TestDbExt;
 use bex_vm_types::RuntimeCompileRequest;
 
@@ -138,5 +141,65 @@ function count(value: RuntimeValue) -> int throws never {
         borsh::to_vec(&normalize_package_unit(full.unit))
             .expect("serialize normalized full-compile unit"),
         "Package.compile artifact differs from the full-source compile",
+    );
+}
+
+/// A dependency's unit does not depend on where its root lives on disk: the
+/// same package emits byte-identical units from every checkout, so one cached
+/// entry serves all of them. Two things in a unit are derived from a file's
+/// path — `Function::source_file` and the name of the file's `$init_test_…`
+/// function — and both read the root-relative path.
+#[test]
+fn a_dependency_emits_identically_wherever_its_root_lives() {
+    fn dependency_unit(dependency_root: &str) -> baml_linker_types::CompilationUnit {
+        let mut db = ProjectDatabase::new();
+        let workspace = db.workspace(Path::new("/app"));
+        let dependency = db
+            .add_source_root(
+                SourceRootSpec::new(dependency_root, SourceRootKind::Dependency)
+                    .named(Name::new("lib")),
+            )
+            .expect("a dependency root at an absolute path");
+        db.add_dependency(
+            workspace,
+            Dependency {
+                name: Name::new("lib"),
+                root: dependency,
+            },
+        )
+        .expect("the workspace depends on the dependency");
+        db.add_or_update_file_in(
+            dependency,
+            &Path::new(dependency_root).join("lib.baml"),
+            "function shout(s: string) -> string throws never { s }\n\
+             test \"shout_is_identity\" { assert.equal(shout(\"a\"), \"a\") }\n",
+        );
+        baml_compiler2_emit::emit_package(&db, dependency, OptLevel::Two)
+            .expect("the dependency emits on its own")
+            .unit
+    }
+    let here = dependency_unit("/home/alice/deps/lib");
+    let there = dependency_unit("/opt/build/checkout/lib");
+    let mut names = Vec::new();
+    for object in &here.code {
+        if let bex_vm_types::Object::Function(function) = object {
+            assert_eq!(
+                function.source_file,
+                "lib.baml",
+                "`{}` carries its root's location",
+                function.name()
+            );
+            names.push(function.name());
+        }
+    }
+    // Unplaced, so unlabelled: the loader prefixes the package's label.
+    assert!(
+        names.iter().any(|name| name == "$init_test_lib"),
+        "the test initializer is named from the root-relative path, found {names:?}"
+    );
+    assert_eq!(
+        borsh::to_vec(&normalize_package_unit(here)).expect("serialize the first unit"),
+        borsh::to_vec(&normalize_package_unit(there)).expect("serialize the second unit"),
+        "the dependency's unit depends on where its root lives",
     );
 }

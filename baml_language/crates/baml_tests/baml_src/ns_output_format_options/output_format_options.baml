@@ -41,7 +41,7 @@ test "declarative output format supports every legacy option" {
 }
 
 function of_context() -> ai.Context {
-    let return_type = reflect.Type.of<OfOptionResult>()
+    let return_type = OfOptionResult.type()
     ai.Context {
         client: ai.ContextClient {
             name: "test",

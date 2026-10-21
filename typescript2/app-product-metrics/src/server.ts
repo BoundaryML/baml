@@ -53,7 +53,6 @@ const sheepCouncilZoomMeetingId =
 const dailyExternalDataSyncCron =
   process.env.DAILY_EXTERNAL_DATA_SYNC_CRON ?? '0 5 * * *';
 const dailySnapshotCron = process.env.DAILY_SNAPSHOT_CRON ?? '0 6 * * *';
-const weeklyPostCron = process.env.WEEKLY_POST_CRON ?? '0 9 * * 1';
 const weeklyPostTimezone =
   process.env.WEEKLY_POST_TIMEZONE ?? 'America/Los_Angeles';
 
@@ -309,31 +308,17 @@ const dailySnapshot = new Cron(
   },
 );
 
-const weeklyPost = new Cron(
-  weeklyPostCron,
-  { protect: true, timezone: weeklyPostTimezone },
-  async () => {
-    try {
-      await post();
-      console.log(`Posted weekly Slack message to ${slackChannel}`);
-    } catch (error) {
-      console.error(error);
-    }
-  },
-);
-
 await new Promise<void>((resolve) => {
   server.listen(port, '0.0.0.0', resolve);
 });
 
 console.log(
-  `Product metrics listening on 0.0.0.0:${port}; next external data sync at ${dailyExternalDataSync.nextRun()?.toISOString() ?? 'unknown'}; next daily snapshot at ${dailySnapshot.nextRun()?.toISOString() ?? 'unknown'}; next weekly Slack post at ${weeklyPost.nextRun()?.toISOString() ?? 'unknown'}`,
+  `Product metrics listening on 0.0.0.0:${port}; next external data sync at ${dailyExternalDataSync.nextRun()?.toISOString() ?? 'unknown'}; next daily snapshot at ${dailySnapshot.nextRun()?.toISOString() ?? 'unknown'}`,
 );
 
 function shutdown(): void {
   dailyExternalDataSync.stop();
   dailySnapshot.stop();
-  weeklyPost.stop();
   server.close();
   void disconnectDatabase();
 }

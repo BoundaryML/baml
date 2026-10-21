@@ -10,7 +10,7 @@ use crate::{
         baml_outbound_value::Value as BamlValueVariant,
     },
     error::CtypesError,
-    handle_table::{BexRustData, CffiHandleTableEntry, CffiHandleTableOptions},
+    handle_table::{CffiHandleTableEntry, CffiHandleTableOptions},
 };
 
 /// Convert `BexExternalValue` to `BamlOutboundValue` for FFI return.
@@ -140,7 +140,7 @@ pub fn external_to_outbound(
             if let Some(converted) = bex_project::try_convert_rust_data(arc) {
                 return external_to_outbound(&converted, options);
             }
-            let table_value = CffiHandleTableEntry::RustData(BexRustData(arc.clone()));
+            let table_value = CffiHandleTableEntry::RustData(arc.clone());
             let ht = table_value.handle_type();
             let key = options.table.insert(table_value);
             Some(BamlValueVariant::HandleValue(BamlOutboundHandle {
@@ -453,17 +453,24 @@ fn bex_media_to_proto_media(
     media: &bex_project::MediaValue,
 ) -> crate::baml_bridge::cffi::BamlValueMedia {
     use crate::baml_bridge::cffi::{
-        BamlValueMedia, baml_value_media::Value as BamlValueMediaValue,
+        BamlValueMedia, BamlValueMediaFileContent, baml_value_media::Value as BamlValueMediaValue,
     };
     BamlValueMedia {
         media: media_kind_to_proto_enum(media.kind).into(),
         mime_type: media.mime_type(),
         value: Some(media.read_content(|content| match content {
             bex_project::MediaContent::Url { url, .. } => BamlValueMediaValue::Url(url.clone()),
-            bex_project::MediaContent::Base64 { base64_data } => {
-                BamlValueMediaValue::Base64(base64_data.as_str().to_owned())
-            }
-            bex_project::MediaContent::File { file, .. } => BamlValueMediaValue::File(file.clone()),
+            bex_project::MediaContent::Base64 {
+                base64_data,
+                name: None,
+            } => BamlValueMediaValue::Base64(base64_data.as_str().to_owned()),
+            bex_project::MediaContent::Base64 {
+                base64_data,
+                name: Some(name),
+            } => BamlValueMediaValue::FileContent(BamlValueMediaFileContent {
+                name: name.clone(),
+                base64: base64_data.as_str().to_owned(),
+            }),
         })),
     }
 }
@@ -760,7 +767,7 @@ mod tests {
 
     #[test]
     fn rust_data_unknown_type_inserts_handle() {
-        let unknown: Arc<dyn std::any::Any + Send + Sync> = Arc::new(42u32);
+        let unknown: Arc<dyn bex_project::BexRustData> = Arc::new(bex_project::TestRustData(42));
         let value = BexExternalValue::RustData(unknown);
         let options = CffiHandleTableOptions::for_in_process();
         let handle = extract_handle(external_to_outbound(&value, &options).unwrap());
@@ -827,7 +834,7 @@ mod tests {
 
     #[test]
     fn artifact_safe_unknown_rust_data_omits_without_inserting_handle() {
-        let unknown: Arc<dyn std::any::Any + Send + Sync> = Arc::new(42u32);
+        let unknown: Arc<dyn bex_project::BexRustData> = Arc::new(bex_project::TestRustData(42));
         let value = BexExternalValue::RustData(unknown);
         let encoded =
             artifact_safe_external_to_outbound(&value).expect("artifact-safe encode succeeds");
@@ -872,6 +879,7 @@ mod tests {
             bex_project::MediaKind::Image,
             MediaContent::Base64 {
                 base64_data: "aW1hZ2U=".into(),
+                name: None,
             },
             Some("image/png".to_string()),
         ));
@@ -901,5 +909,32 @@ mod tests {
             encoded_prompt.value,
             Some(BamlValueVariant::PromptAstValue(_))
         ));
+    }
+
+    #[test]
+    fn portable_media_carries_its_name_with_its_content() {
+        use crate::baml_bridge::cffi::baml_value_media::Value;
+
+        let named = MediaValue::from_file_content(
+            bex_project::MediaKind::Pdf,
+            "/reports/q3.pdf",
+            "JVBERi0xLjc=".into(),
+            None,
+        );
+        let encoded = bex_media_to_proto_media(&named);
+        assert_eq!(encoded.mime_type.as_deref(), Some("application/pdf"));
+        let Some(Value::FileContent(content)) = encoded.value else {
+            panic!("expected named content, got {:?}", encoded.value)
+        };
+        assert_eq!(
+            (content.name.as_str(), content.base64.as_str()),
+            ("q3.pdf", "JVBERi0xLjc=")
+        );
+
+        let plain = MediaValue::from_base64(bex_project::MediaKind::Image, "aW1hZ2U=".into(), None);
+        assert_eq!(
+            bex_media_to_proto_media(&plain).value,
+            Some(Value::Base64("aW1hZ2U=".to_string()))
+        );
     }
 }

@@ -215,8 +215,14 @@ function shell(
     $rust_io_function
 }
 
-/// Suspends the current thread for `delay`.
-function sleep(delay: root.time.Duration) -> null throws root.errors.Io {
+/// Suspends the current thread for `delay`. A zero or negative `delay` does
+/// not wait.
+function sleep(delay: root.time.Duration) -> null throws never {
+    _sleep(delay.to_nanoseconds())
+}
+
+/// (internal)
+function _sleep(delay_nanos: bigint) -> null throws never {
     $rust_io_function
 }
 

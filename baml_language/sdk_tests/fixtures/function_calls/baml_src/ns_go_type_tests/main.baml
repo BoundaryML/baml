@@ -25,7 +25,7 @@ function round_trip_type(value: reflect.Type) -> reflect.Type {
 }
 
 function reflected_int() -> reflect.Type {
-  reflect.Type.of<int>()
+  int.type()
 }
 
 function reflected_container() -> reflect.Type {
@@ -38,14 +38,14 @@ function reflected_union() -> reflect.Type {
 
 function reflected_primitives() -> reflect.Type[] {
   [
-    reflect.Type.of<string>(),
-    reflect.Type.of<int>(),
-    reflect.Type.of<bigint>(),
-    reflect.Type.of<float>(),
-    reflect.Type.of<bool>(),
+    string.type(),
+    int.type(),
+    bigint.type(),
+    float.type(),
+    bool.type(),
     reflect.Type.of<null>(),
-    reflect.Type.of<uint8array>(),
-    reflect.Type.of<reflect.Type>(),
+    uint8array.type(),
+    reflect.Type.type(),
   ]
 }
 
@@ -59,11 +59,11 @@ function reflected_literals() -> reflect.Type[] {
 }
 
 function get_reflected_class() -> reflect.Type {
-  reflect.Type.of<ReflectedClass>()
+  ReflectedClass.type()
 }
 
 function get_reflected_enum() -> reflect.Type {
-  reflect.Type.of<ReflectedEnum>()
+  ReflectedEnum.type()
 }
 
 function get_reflected_alias() -> reflect.Type {
@@ -71,7 +71,7 @@ function get_reflected_alias() -> reflect.Type {
 }
 
 function reflected_generic_class() -> reflect.Type {
-  reflect.Type.of<root.generic_tests.GenericBox<int>>()
+  root.generic_tests.GenericBox<int>.type()
 }
 
 function round_trip_optional_type(value: reflect.Type?) -> reflect.Type? {

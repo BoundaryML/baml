@@ -8,6 +8,7 @@ use bex_engine::{
     BexEngine, BexExternalValue, CallId, FunctionCallContextBuilder, HostDefinition,
     TelemetryRecording,
 };
+use bex_vm_types::RustDataArc as _;
 use btel_recorder::{RecordingConfig, proto};
 use btel_types::{
     InvocationMode, InvocationOutcome,
@@ -332,6 +333,13 @@ async fn host_definitions_and_call_sites_are_structural_across_modes() {
             }
         }
         assert_eq!(spans, 5, "Timing and Hidden must not emit function spans");
+        // Runtime roots such as shutdown GC have their own paths. Count
+        // only the host definitions whose tracing modes this test exercises.
+        paths.retain(|path| {
+            functions
+                .iter()
+                .any(|function| path.callee_function_id == function.function_id.get())
+        });
         assert_eq!(paths.len(), 6, "Hidden must not emit a host call path");
         let repeated: Vec<_> = paths
             .iter()
@@ -364,7 +372,7 @@ extern "C" fn callback_dispatch(request: *const u8, length: usize) {
     assert!(sys_native::host_dispatch::start_execution(id).is_some());
     let capture = sys_native::host_dispatch::execution_capture(id)
         .unwrap()
-        .downcast::<bex_engine::InvocationCapture>()
+        .downcast_payload::<bex_engine::InvocationCapture>()
         .unwrap_or_else(|_| panic!("typed capture"));
     CALLBACK_CONTEXTS
         .lock()

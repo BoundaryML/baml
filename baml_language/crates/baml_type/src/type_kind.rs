@@ -1,6 +1,6 @@
 //! Closed BEP-066 reflection-kind classification.
 
-use baml_base::{LangPackage, LangRoots, SourceRoot};
+use baml_base::{LangItem, LangPackage, LangRoots, SourceRoot, lang_item};
 
 use crate::{
     DeclName, Name, QualifiedTypeName, RealizedTy, TypeName,
@@ -34,7 +34,8 @@ impl TypeKind {
         Self::Function,
     ];
 
-    pub const fn namespace(self) -> &'static str {
+    /// The kind's lowercase name, as messages spell it (`class-kind`).
+    pub const fn name(self) -> &'static str {
         match self {
             Self::Class => "class",
             Self::Enum => "enum",
@@ -48,22 +49,32 @@ impl TypeKind {
         }
     }
 
-    /// The builtin class that is the sealed view for this kind, by wire name.
-    pub fn class_name(self) -> QualifiedTypeName {
-        QualifiedTypeName::new(
-            Name::new("reflect"),
-            vec![Name::new(self.namespace())],
-            Name::new("Type"),
-        )
+    /// The builtin class that is the sealed view for this kind, by identity:
+    /// `reflect.<Kind>` at the root of the package. [`Self::class_name`] and
+    /// [`Self::class_decl`] derive from it.
+    pub const fn class(self) -> LangItem {
+        match self {
+            Self::Class => lang_item!(Reflect: Class),
+            Self::Enum => lang_item!(Reflect: Enum),
+            Self::Union => lang_item!(Reflect: Union),
+            Self::Literal => lang_item!(Reflect: Literal),
+            Self::Array => lang_item!(Reflect: Array),
+            Self::Map => lang_item!(Reflect: Map),
+            Self::Interface => lang_item!(Reflect: Interface),
+            Self::Primitive => lang_item!(Reflect: Primitive),
+            Self::Function => lang_item!(Reflect: Function),
+        }
     }
 
-    /// [`Self::class_name`] in the installed `reflect` package.
+    /// [`Self::class`] by wire name.
+    pub fn class_name(self) -> QualifiedTypeName {
+        TypeName::of_lang_item(self.class())
+    }
+
+    /// [`Self::class`] in the installed `reflect` package.
     pub fn class_decl(self, reflect: SourceRoot) -> DeclName {
-        DeclName::in_root(
-            reflect,
-            vec![Name::new(self.namespace())],
-            Name::new("Type"),
-        )
+        let class = self.class();
+        DeclName::in_root(reflect, class.namespace().to_vec(), class.name().clone())
     }
 }
 
@@ -97,13 +108,9 @@ pub fn is_type_kind_class_decl(lang: LangRoots, name: &DeclName) -> bool {
         && is_type_kind_class_path(name.namespace(), name.name())
 }
 
-/// The `<kind>.Type` shape inside the `reflect` package.
+/// A root-level `<Kind>` class inside the `reflect` package.
 fn is_type_kind_class_path(namespace: &[Name], name: &Name) -> bool {
-    namespace.len() == 1
-        && TypeKind::ALL
-            .iter()
-            .any(|kind| namespace[0].as_str() == kind.namespace())
-        && name.as_str() == "Type"
+    namespace.is_empty() && TypeKind::ALL.iter().any(|kind| kind.class().name() == name)
 }
 
 /// A builtin type and where its values actually come from, for the
@@ -197,10 +204,15 @@ mod tests {
     fn kind_names_are_closed_and_recognized() {
         for kind in TypeKind::ALL {
             assert!(is_type_kind_class(&kind.class_name()));
+            // Every view is a root-level class of `reflect`.
+            assert!(kind.class().namespace().is_empty());
         }
-        assert!(!is_type_kind_class(&QualifiedTypeName::from_dotted_path(
-            "reflect.Type"
-        )));
+        for path in ["reflect.Type", "reflect.class.Field", "reflect.enum.Value"] {
+            assert!(
+                !is_type_kind_class(&QualifiedTypeName::from_dotted_path(path)),
+                "{path} is not a kind view"
+            );
+        }
     }
 
     #[test]
@@ -239,7 +251,7 @@ mod tests {
             // Namespaced `baml` classes are out of scope, including the
             // field-carrying reflect classes the stdlib itself constructs.
             "reflect.class.Field",
-            "reflect.class.Type",
+            "reflect.Class",
             "baml.iter.Done",
             // A root-namespace `baml` class that really does hold fields.
             "baml.TaggedString",

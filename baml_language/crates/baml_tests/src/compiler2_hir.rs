@@ -1581,9 +1581,7 @@ function foo(user: User) -> string {
 
         let pkg_info = file_package(&db, file);
         assert_eq!(
-            baml_compiler2_hir::package::spelling(&db)
-                .of(pkg_info.root)
-                .as_str(),
+            baml_compiler2_hir_ty::render::Viewpoint::canonical(&db).display_package(pkg_info.root),
             "user"
         );
         assert_eq!(
@@ -1603,9 +1601,7 @@ function foo(user: User) -> string {
 
         let pkg_info = file_package(&db, file);
         assert_eq!(
-            baml_compiler2_hir::package::spelling(&db)
-                .of(pkg_info.root)
-                .as_str(),
+            baml_compiler2_hir_ty::render::Viewpoint::canonical(&db).display_package(pkg_info.root),
             "user"
         );
         assert_eq!(
@@ -1625,9 +1621,7 @@ function foo(user: User) -> string {
 
         let pkg_info = file_package(&db, file);
         assert_eq!(
-            baml_compiler2_hir::package::spelling(&db)
-                .of(pkg_info.root)
-                .as_str(),
+            baml_compiler2_hir_ty::render::Viewpoint::canonical(&db).display_package(pkg_info.root),
             "user"
         );
         assert_eq!(
@@ -1647,9 +1641,7 @@ function foo(user: User) -> string {
 
         let pkg_info = file_package(&db, file);
         assert_eq!(
-            baml_compiler2_hir::package::spelling(&db)
-                .of(pkg_info.root)
-                .as_str(),
+            baml_compiler2_hir_ty::render::Viewpoint::canonical(&db).display_package(pkg_info.root),
             "user"
         );
         assert!(
@@ -1668,9 +1660,7 @@ function foo(user: User) -> string {
 
         let pkg_info = file_package(&db, file);
         assert_eq!(
-            baml_compiler2_hir::package::spelling(&db)
-                .of(pkg_info.root)
-                .as_str(),
+            baml_compiler2_hir_ty::render::Viewpoint::canonical(&db).display_package(pkg_info.root),
             "user"
         );
         assert!(
@@ -1689,9 +1679,7 @@ function foo(user: User) -> string {
 
         let pkg_info = file_package(&db, file);
         assert_eq!(
-            baml_compiler2_hir::package::spelling(&db)
-                .of(pkg_info.root)
-                .as_str(),
+            baml_compiler2_hir_ty::render::Viewpoint::canonical(&db).display_package(pkg_info.root),
             "user"
         );
         assert!(

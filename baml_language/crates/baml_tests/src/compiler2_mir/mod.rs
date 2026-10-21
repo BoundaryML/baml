@@ -5,7 +5,6 @@
 
 use std::fmt::Write;
 
-use baml_base::Name;
 use baml_compiler2_hir::item_data::{file_functions, function_data, function_source_map};
 use baml_compiler2_hir_ty::{callable::ExternalLinkability, package_interface::export_interface};
 use baml_compiler2_mir::{
@@ -108,10 +107,11 @@ function generic<T>(value: T) -> map<string, T> {
         let bex_vm_types::Object::Function(function) = object else {
             continue;
         };
-        if !["maps", "nested", "generic"]
-            .iter()
-            .any(|name| function.name.ends_with(name))
-        {
+        if !["maps", "nested", "generic"].iter().any(|name| {
+            function
+                .declared_name()
+                .is_some_and(|declared| declared == *name)
+        }) {
             continue;
         }
         for instruction in &function.bytecode.instructions {
@@ -123,7 +123,7 @@ function generic<T>(value: T) -> map<string, T> {
                         | bex_vm_types::Instruction::AllocMap(1..)
                 ),
                 "legacy map instruction in {}: {instruction:?}",
-                function.name,
+                function.name(),
             );
         }
     }
@@ -160,7 +160,11 @@ function roundtrip(value: int) -> bool {
         .objects
         .iter()
         .find_map(|object| match object {
-            bex_vm_types::Object::Function(function) if function.name.ends_with("roundtrip") => {
+            bex_vm_types::Object::Function(function)
+                if function
+                    .declared_name()
+                    .is_some_and(|declared| declared == "roundtrip") =>
+            {
                 Some(function)
             }
             _ => None,
@@ -247,12 +251,7 @@ function untrusted_await_any<T, E>(futures: baml.future.Future<T, E>[]) -> int t
 "#,
     );
     assert_no_diagnostic_errors(&dependency);
-    let mut interface = export_interface(
-        &dependency,
-        baml_compiler2_hir::package::spelling(&dependency)
-            .root(&Name::new("dependency"))
-            .unwrap(),
-    );
+    let mut interface = export_interface(&dependency, dependency.dependency_named("dependency"));
     let exported = interface
         .rows
         .functions
@@ -322,12 +321,7 @@ function forged_type_of<T>() -> reflect.Type {
 "#,
     );
     assert_no_diagnostic_errors(&dependency);
-    let mut interface = export_interface(
-        &dependency,
-        baml_compiler2_hir::package::spelling(&dependency)
-            .root(&Name::new("dependency"))
-            .unwrap(),
-    );
+    let mut interface = export_interface(&dependency, dependency.dependency_named("dependency"));
     // Model a hostile/corrupt mounted blob that widens its own linkability.
     // (A row that also claimed a lang address — `log.info`, `reflect.Type.of`
     // — cannot mount at all: import refuses a target other than the row's
@@ -431,7 +425,9 @@ function f(result: Ok | Warn | Err) -> string {
     );
     assert_no_diagnostic_errors(&db);
     let output = render_mir(&db, file);
-    assert!(output.contains(".value#0 as HasValue"), "{output}");
+    // Canonical rendering spells every package, the unnamed root under its
+    // stand-in label.
+    assert!(output.contains(".value#0 as user.HasValue"), "{output}");
 }
 
 macro_rules! mir_snapshot {
@@ -615,15 +611,14 @@ fn generic_class_destructure_field_projection_uses_instantiated_type() {
         "#,
     );
     let output = render_mir(&db, file);
-    // Scope the check to `user.f`'s body — auto-derived `to_json` /
-    // `from_json` methods on `Box<T>` legitimately have `void` locals
-    // because T isn't instantiated in the auto-derive body.
+    // The destructured field's local carries the field type at the
+    // instantiation the pattern names, `int`, not the declaration's `T`.
     let f_body = function_mir(&output, "f");
     assert!(
-        !f_body
+        f_body
             .lines()
-            .any(|line| line.trim_start().starts_with("let _") && line.contains(": void")),
-        "generic class destructure lowered a projected field through a void local:\n{output}"
+            .any(|line| line.trim_start().starts_with("let _") && line.contains(": int // value")),
+        "generic class destructure did not type the projected field's local `int`:\n{output}"
     );
 }
 
@@ -792,7 +787,7 @@ fn runtime_type_plan_operations_are_explicit() {
 function accept<T>(value: T) -> T { value }
 
 function f(t: reflect.Type, value: unknown) -> bool {
-    type T = unreflect(t)
+    let type T = t;
     match (value) {
         let x: T => accept<T>(x) is T,
         _ => false,
@@ -807,35 +802,39 @@ function f(t: reflect.Type, value: unknown) -> bool {
     );
 }
 
-/// A static right-hand side loads its template into the binding's slot; every
+/// A `let type` binding stores its operand in the binding's slot, and every
 /// later mention of the name reads that slot, including nested under a
-/// constructor (`Bound?`, `Bound[]`).
+/// constructor (`Bound?`). Each `extends` bound is then checked against the
+/// type now in the slot, in written order, by `satisfies_bound`: the bound
+/// travels as an interface constraint (only the associated types it pins),
+/// never as a type. A miss of any bound branches into the `else` block, which
+/// a bounded binding must have.
 #[test]
-fn static_type_binding_loads_its_template_into_the_slot() {
+fn bounded_type_binding_checks_its_bounds_after_binding_the_slot() {
     let mut db = make_db();
     let file = db.file(
         "test.baml",
         r#"
-class Wrapper<T> { value T }
+interface Named { name string }
+interface Tagged { tag string }
 
 function erase<T>() -> string { "ok" }
 
-function f(value: unknown) -> bool {
-    type Bound = Wrapper<string>
-    let annotated: Bound? = null
+function checked(t: reflect.Type) -> bool {
+    let type Bound extends Named & Tagged = t else { return false };
+    let annotated: Bound? = null;
+    erase<Bound>() == "ok" && annotated == null
+}
+
+function guarded(t: reflect.Type) -> bool {
+    let type Bound extends Named = t else { return false };
     erase<Bound>() == "ok"
-        && annotated == null
-        && value is Bound
-        && match value {
-            Bound => true,
-            _ => false,
-        }
 }
 "#,
     );
     baml_db::testing::assert_no_diagnostic_errors(&db);
     mir_snapshot!(
-        "static_type_binding_loads_its_template_into_the_slot",
+        "bounded_type_binding_checks_its_bounds_after_binding_the_slot",
         render_mir(&db, file)
     );
 }
@@ -854,9 +853,7 @@ fn mounted_loc_free_runtime_call_target_is_explicit() {
     baml_db::testing::assert_no_diagnostic_errors(&library);
     let interface = baml_compiler2_hir_ty::package_interface::export_interface(
         &library,
-        baml_compiler2_hir::package::spelling(&library)
-            .root(&Name::new("app"))
-            .unwrap(),
+        library.dependency_named("app"),
     );
     let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
         .expect("serialize mounted interface");
@@ -867,7 +864,7 @@ fn mounted_loc_free_runtime_call_target_is_explicit() {
         "test.baml",
         r#"
 function f(t: reflect.Type, value: unknown) -> unknown {
-    type T = unreflect(t)
+    let type T = t;
     match (value) {
         let x: T => app.accept<T>(x),
         _ => null,

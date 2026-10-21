@@ -31,8 +31,8 @@ pub use ffi::{
     handle::{
         __testonly_seed_function_ref, __testonly_seed_generic_media, __testonly_seed_heap_handle,
         BamlCffiStatus, baml_handle_clone, baml_handle_release, baml_media_base64, baml_media_file,
-        baml_media_from_base64, baml_media_from_file, baml_media_from_url, baml_media_mime_type,
-        baml_media_url,
+        baml_media_from_base64, baml_media_from_file, baml_media_from_file_content,
+        baml_media_from_url, baml_media_mime_type, baml_media_name, baml_media_url,
     },
     host_value::{
         HostDispatchFn, complete_host_call, register_host_cancel_callback,
@@ -84,8 +84,9 @@ pub fn initialize_runtime(
 ) -> Result<Arc<dyn Bex>, BridgeError> {
     let physical_fs = vfs::PhysicalFS::new("/");
     let vfs_root = vfs::VfsPath::new(physical_fs);
+    // VFS rejects trailing slashes even though they name the same project directory.
     let vfs_path = vfs_root
-        .join(root_path)
+        .join(root_path.trim_end_matches('/'))
         .map_err(|e| bex_project::RuntimeError::Other(e.to_string()))?;
 
     let files = src_files

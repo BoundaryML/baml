@@ -5,7 +5,8 @@
 > (`deferred_checks` / `RuntimeCheck`), the `unreflect` pattern, and the
 > streaming/`from_json` slot rules (rows T-01, B-01, B-05 through B-08, B-13,
 > B-18, B-19, B-21, B-22) — was replaced by the rigid statement model:
-> `type T = unreflect(e)` is the only spelling, `T` is a rigid frame parameter,
+> `type T = unreflect(e)` is the only spelling (since respelled
+> `let type T = e;`, which also has a bounded form), `T` is a rigid frame parameter,
 > nothing is deferred to a runtime gate, and nothing typed by `T` leaves its
 > block (E0172). See `baml_language/TYPE_SYSTEM.md`, "Scoped runtime type
 > bindings". Rows marked done below describe the superseded behavior as it
@@ -67,7 +68,7 @@ that code exists.
 > `CallTypeArgPlan::Runtime` and its `occurrence_ty` (the plan is a struct of
 > `ty` + `emission_ty`), `CallPlan::deferred_checks`, and `RuntimeCheck`. There
 > are no runtime gates or call flags: a runtime type reaches a type position
-> only as a `type T = unreflect(e);` binding's rigid frame parameter, and every
+> only as a `let type T = e;` binding's rigid frame parameter, and every
 > use of `T` is checked statically. See `baml_language/TYPE_SYSTEM.md`,
 > "Scoped runtime type bindings".
 

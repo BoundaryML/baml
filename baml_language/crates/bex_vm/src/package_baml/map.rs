@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, hash_map::DefaultHasher},
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, sync::Arc};
 
 use bex_vm_types::{EntryId, HeapPtr, MapData, Object, Value};
 
@@ -23,7 +20,7 @@ struct MapDriver {
     key: Value,
     value: Value,
     state: Value,
-    hasher: Option<Arc<Mutex<DefaultHasher>>>,
+    hasher: Option<Arc<super::hasher::HasherState>>,
     operation: Operation,
     hash: u64,
     epoch: u64,
@@ -108,14 +105,15 @@ impl MapDriver {
                     other => return super::chain(vm, other, Box::new(self)),
                 }
             }
+            let debt = vm.tlab.alloc_debt();
             let result = match self.operation {
                 Operation::Set => {
-                    map.set_if_epoch(self.epoch, matched, self.hash, self.key, self.value)
+                    map.set_if_epoch(debt, self.epoch, matched, self.hash, self.key, self.value)
                 }
                 Operation::GetOrInsert if matched.is_none() => map
-                    .set_if_epoch(self.epoch, None, self.hash, self.key, self.value)
+                    .set_if_epoch(debt, self.epoch, None, self.hash, self.key, self.value)
                     .map(|_| Some(self.value)),
-                Operation::Delete => map.remove_if_epoch(self.epoch, matched),
+                Operation::Delete => map.remove_if_epoch(debt, self.epoch, matched),
                 _ => map.get_if_epoch(self.epoch, matched),
             };
             let Ok(previous) = result else {

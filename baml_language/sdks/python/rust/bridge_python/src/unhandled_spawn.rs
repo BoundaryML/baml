@@ -17,8 +17,9 @@ pub fn register_unhandled_spawn_error_callback(callback: Py<PyAny>) {
     }
 }
 
-/// Shut down the BAML runtime: wait for in-flight calls and spawned work,
-/// report errors nothing observed, and release the runtime.
+/// Finalize the SDK lifetime: wait for in-flight calls and spawned work,
+/// report errors nothing observed, and finish recording and telemetry delivery.
+/// Repeated calls are harmless; the OS process's exit outcome remains unknown.
 ///
 /// `timeout` (seconds) bounds the wait: once it passes, work still running is
 /// cancelled and then abandoned. Without one the wait lasts as long as the

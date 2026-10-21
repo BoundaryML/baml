@@ -42,7 +42,8 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
           }
         ],
         "returns": {
-          "display": "void"
+          "display": "null",
+          "head": "T:baml.Null"
         },
         "throws": {
           "display": "never"
@@ -78,7 +79,8 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
           }
         ],
         "returns": {
-          "display": "void"
+          "display": "null",
+          "head": "T:baml.Null"
         },
         "throws": {
           "display": "never"
@@ -112,7 +114,8 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
           }
         ],
         "returns": {
-          "display": "void"
+          "display": "null",
+          "head": "T:baml.Null"
         },
         "throws": {
           "display": "never"
@@ -141,7 +144,8 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
           }
         ],
         "returns": {
-          "display": "void"
+          "display": "null",
+          "head": "T:baml.Null"
         },
         "throws": {
           "display": "never"
@@ -203,7 +207,8 @@ expression: "serde_json::to_string_pretty(&export).unwrap()"
           }
         ],
         "returns": {
-          "display": "void"
+          "display": "null",
+          "head": "T:baml.Null"
         },
         "throws": {
           "display": "never"

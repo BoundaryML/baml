@@ -3,35 +3,38 @@
 //!
 //! VM natives, not sys ops: parsing does no IO, so it runs on the calling VM
 //! with the heap at hand. `_new_parse_cache<T>` builds the parse model from the
-//! declarations `T` reaches, and the parse methods allocate their result
-//! directly on the heap, so no definition table is copied and no value tree is
-//! landed by name.
+//! class instantiations and declarations `T` reaches, and the parse methods
+//! allocate their result directly on the heap, so no definition table is
+//! copied and no value tree is landed by name.
 
-use std::{any::Any, collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+    sync::Arc,
+};
 
-use baml_type::{DeclarationName, Literal, typetag::TypeTag};
+use baml_type::{Literal, typetag::TypeTag};
 use bex_heap::TlabHolder;
 use bex_sap::{
     CompiledSapModel,
     baml_value::BamlValue,
     deserializer::{coercer::ParsingContext, types::BamlValueWithFlags},
     jsonish,
-    sap_model::{TyResolvedRef, TypeCtx, TypeRefDb},
+    sap_model::{ConvertError, NamedTy, NamedTyKind, ParseTy, TyResolvedRef, TypeCtx},
     to_baml_ty::ToBamlTy,
 };
 use bex_str::BexStr;
 use bex_vm_types::{
-    HeapPtr, RealizedTy, RuntimeTy, TypeHead,
-    types::{Instance, Object, Value},
+    HeapPtr, RealizedTy, TyTemplate, TypeHead,
+    types::{Class, Instance, Object, Value},
 };
 use indexmap::IndexMap;
-use sys_types::{DefKey, SapTy};
+use sys_types::DefKey;
 
 use super::{BamlNamespaceSap, BamlNamespaceSap_ParseCache, PackageBamlImpl};
 use crate::{
     BexVm, definitions,
     errors::{VmBamlError, VmInternalError, VmPanic, VmRustFnError},
-    reachable,
 };
 
 /// The `_data` of a `baml.sap._ParseCache<T>`: the parse model for `T`.
@@ -43,25 +46,57 @@ struct ParseCache {
     model: CompiledSapModel,
 }
 
+impl bex_vm_types::BexRustData for ParseCache {
+    fn measure(&self, _: &mut bex_vm_types::Meter) {
+        // The model is bounded by the class instantiations the target type
+        // reaches, not by data, and the parser crate does not expose its size.
+    }
+}
+
 impl BamlNamespaceSap for PackageBamlImpl {
     fn _new_parse_cache(vm: &mut BexVm) -> Result<Value, VmRustFnError> {
         let target = parse_target(vm)?;
-        let model = build_model(vm, &target).map_err(|e| {
+        let (_, model) = build_model(vm, &target).map_err(|e| {
             // `throws never`: a `T` the parser cannot model comes from the
             // caller's own `parse<T>`, a program bug rather than bad input.
             VmPanic::UserPanic {
                 message: format!("schema-aligned parsing cannot model this type: {e}"),
             }
         })?;
-        let data: Arc<dyn Any + Send + Sync> = Arc::new(ParseCache { model });
+        let data: Arc<dyn bex_vm_types::BexRustData> = Arc::new(ParseCache { model });
         let data = Value::object(vm.alloc_rust_data(data));
-        let class = vm.resolve_class("baml.sap._ParseCache");
+        let class = vm.lang_object(crate::lang_items::BAML_SAP_PARSE_CACHE);
         let cache = vm.tlab.alloc(Object::Instance(Instance::new(
             class,
             Box::new([target]),
             vec![data],
         )));
         Ok(Value::object(cache))
+    }
+
+    fn coerce(vm: &mut BexVm, value: &Value) -> Result<Value, VmRustFnError> {
+        let target = parse_target(vm)?;
+        // `throws ParseError`, where `parse<T>` panics: the type of a coercion
+        // is often data, so one the parser cannot model is an answer for the
+        // caller, not a bug of the program.
+        let (reach, model) = build_model(vm, &target).map_err(|e| {
+            parse_error(format!(
+                "schema-aligned parsing cannot model this type: {e}"
+            ))
+        })?;
+        if let Some(unfillable) = unfillable_skipped_field(vm, &reach)? {
+            return Err(parse_error(unfillable));
+        }
+        let json = super::json::json_value_to_serde(vm, *value);
+        let aligned = align(
+            vm,
+            &model,
+            &target,
+            &parsed_tree(&json),
+            Completion::Final,
+            parse_error,
+        )?;
+        aligned.ok_or_else(|| parse_error("a complete value did not align to a value"))
     }
 }
 
@@ -79,7 +114,7 @@ impl BamlNamespaceSap_ParseCache for PackageBamlImpl {
         match parse(vm, *cache, json, Completion::Partial)? {
             Some(value) => Ok(value),
             None => {
-                let no_yield = vm.resolve_class("baml.sap._NoYield");
+                let no_yield = vm.lang_object(crate::lang_items::BAML_SAP_NO_YIELD);
                 Ok(Value::object(vm.alloc_instance(no_yield, Vec::new())))
             }
         }
@@ -104,57 +139,346 @@ fn parse_target(vm: &BexVm) -> Result<RealizedTy, VmRustFnError> {
     })
 }
 
-/// The declarations the parse model of `target` needs: those `target` names,
-/// then those a reached class's field types name (except `@skip` fields, which
-/// the parser drops) and those a reached alias's body names.
-fn parsed_declarations(vm: &BexVm, target: &RealizedTy) -> Vec<HeapPtr> {
-    reachable::declarations_reached(vm, target, |object, visit| match object {
-        Object::Class(class) => {
-            for field in class.fields.iter().filter(|field| !field.skip) {
-                field.field_type.visit_heads(&mut |head| visit(head));
-            }
-        }
-        Object::TypeAlias(alias) => alias.definition.visit_heads(&mut |head| visit(head)),
-        _ => {}
-    })
+/// What a parse of `target` can build, and every declaration it can name.
+///
+/// The parser builds each class at every instantiation the target reaches
+/// through the fields it reads (not `@skip` ones). A generic class is a type
+/// constructor, so `Box<int>` and `Box<string>` are reached as two classes,
+/// each with its field types realized at its own arguments. Realization goes
+/// through the VM, so a field typed by an associated-type projection resolves
+/// to its implementation's binding.
+///
+/// An instantiation is identified by its arguments with each union spelled
+/// flat and without repeats ([`RealizedTy::flatten_union`]), the spelling the
+/// parse model keys it by. So `class Opt<T> { inner: Opt<T?>? }` at `int`
+/// reaches `Opt<int?>` and then `Opt<int?>` again, not a new `Opt<(int?)?>`.
+struct ParseReach {
+    /// Each class instantiation reached, in the order its walk finished.
+    classes: Vec<ReachedClass>,
+    /// The enums reached, in the order first reached.
+    enums: Vec<TypeHead>,
+    /// The type aliases reached, in the order first reached.
+    aliases: Vec<TypeHead>,
+    /// The interface-existential types reached, in the order first reached. Nothing parses
+    /// as one, but the model names each, so a container of one is typed
+    /// exactly.
+    interfaces: Vec<RealizedTy>,
+    /// Every nominal head, of any kind, that a type of the parse model names:
+    /// those of the target, of the read fields' types (type arguments
+    /// included), and of alias bodies. A parsed value's types name no other.
+    heads: Vec<TypeHead>,
 }
 
-/// The parse model for `target`, built from the declarations it reaches.
+struct ReachedClass {
+    head: TypeHead,
+    /// The instantiation's arguments, each union spelled flat.
+    args: Box<[RealizedTy]>,
+    /// The type of every field, `@skip` ones included, realized at `args`.
+    fields: Vec<RealizedTy>,
+}
+
+/// Why a target has no parse model.
+enum ReachError {
+    /// A generic class that reaches itself at ever-growing arguments, as
+    /// `class Nest<T> { inner: Nest<T[]>? }` does: it has infinitely many
+    /// instantiations, so no finite parse model (nor output format).
+    NonRegular {
+        class: String,
+        from: String,
+        to: String,
+    },
+    /// A class type with the wrong number of type arguments, such as a
+    /// generic class reflected without its arguments: it names no type.
+    Arity {
+        class: String,
+        expected: usize,
+        found: usize,
+    },
+}
+
+impl fmt::Display for ReachError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NonRegular { class, from, to } => write!(
+                f,
+                "non-regular recursive generic class `{class}` expands from `{from}` to `{to}`"
+            ),
+            Self::Arity {
+                class,
+                expected,
+                found,
+            } => {
+                let arguments = if *expected == 1 {
+                    "argument"
+                } else {
+                    "arguments"
+                };
+                write!(
+                    f,
+                    "class `{class}` takes {expected} type {arguments}, but is given {found}"
+                )
+            }
+        }
+    }
+}
+
+/// Origins of the type being walked relative to each class instantiation on
+/// the ancestry stack, to tell a recursive class that closes from one whose
+/// arguments grow forever. The output-format renderer and the render validator
+/// apply the same test to the same flat spelling of arguments.
+type ReachOrigins = baml_type::template::TyTemplateOrigins<TypeHead>;
+
+impl ParseReach {
+    fn of(vm: &BexVm, target: &RealizedTy) -> Result<Self, ReachError> {
+        let mut walk = ReachWalk {
+            vm,
+            seen_classes: HashSet::new(),
+            seen_declarations: HashSet::new(),
+            seen_heads: HashSet::new(),
+            ancestry: Vec::new(),
+            reach: ParseReach {
+                classes: Vec::new(),
+                enums: Vec::new(),
+                aliases: Vec::new(),
+                interfaces: Vec::new(),
+                heads: Vec::new(),
+            },
+        };
+        walk.record_heads(target);
+        walk.visit(target, &ReachOrigins::root())?;
+        Ok(walk.reach)
+    }
+}
+
+struct ReachWalk<'vm> {
+    vm: &'vm BexVm,
+    seen_classes: HashSet<(TypeHead, Box<[RealizedTy]>)>,
+    seen_declarations: HashSet<TypeHead>,
+    seen_heads: HashSet<TypeHead>,
+    /// The class instantiations whose fields are being walked, outermost first.
+    ancestry: Vec<(TypeHead, Box<[RealizedTy]>)>,
+    reach: ParseReach,
+}
+
+impl ReachWalk<'_> {
+    /// Records every head `ty` names (see [`ParseReach::heads`]).
+    fn record_heads(&mut self, ty: &RealizedTy) {
+        let Self {
+            seen_heads, reach, ..
+        } = self;
+        ty.visit_heads(&mut |head: &TypeHead| {
+            if seen_heads.insert(*head) {
+                reach.heads.push(*head);
+            }
+        });
+    }
+
+    fn visit(&mut self, ty: &RealizedTy, origins: &ReachOrigins) -> Result<(), ReachError> {
+        match ty {
+            RealizedTy::Class(head, args) => self.visit_class(*head, args, origins),
+            RealizedTy::Enum(head) | RealizedTy::EnumVariant(head, _) => {
+                if self.seen_declarations.insert(*head) {
+                    self.reach.enums.push(*head);
+                }
+                Ok(())
+            }
+            RealizedTy::TypeAlias(head) => {
+                if !self.seen_declarations.insert(*head) {
+                    return Ok(());
+                }
+                self.reach.aliases.push(*head);
+                let Object::TypeAlias(alias) = self.vm.get_object(head.ptr()) else {
+                    unreachable!("a type alias's head is a type alias: {head:?}")
+                };
+                self.record_heads(&alias.definition);
+                // An alias takes no type arguments, so its body is relative to
+                // no enclosing class.
+                self.visit(
+                    &alias.definition,
+                    &ReachOrigins::opaque(self.ancestry.len()),
+                )
+            }
+            RealizedTy::Interface(..) => {
+                if !self.reach.interfaces.contains(ty) {
+                    self.reach.interfaces.push(ty.clone());
+                }
+                Ok(())
+            }
+            RealizedTy::List(element) => self.visit(element, &origins.list_element()),
+            RealizedTy::Map { key, value } => {
+                self.visit(key, &origins.map_key())?;
+                self.visit(value, &origins.map_value())
+            }
+            RealizedTy::Union(members) => {
+                for (index, member) in members.iter().enumerate() {
+                    self.visit(member, &origins.union_member(index))?;
+                }
+                Ok(())
+            }
+            // Nothing the parser builds is named below these; whether it can
+            // model them at all is the converter's call.
+            RealizedTy::Null
+            | RealizedTy::Unknown
+            | RealizedTy::Int
+            | RealizedTy::Bigint
+            | RealizedTy::Float
+            | RealizedTy::Bool
+            | RealizedTy::String
+            | RealizedTy::Uint8Array
+            | RealizedTy::Literal(..)
+            | RealizedTy::Media(_)
+            | RealizedTy::Function { .. }
+            | RealizedTy::Future(..)
+            | RealizedTy::RustType
+            | RealizedTy::Type
+            | RealizedTy::Resource
+            | RealizedTy::PromptAst
+            | RealizedTy::Never => Ok(()),
+        }
+    }
+
+    fn visit_class(
+        &mut self,
+        head: TypeHead,
+        args: &[RealizedTy],
+        origins: &ReachOrigins,
+    ) -> Result<(), ReachError> {
+        let class = reached_class(self.vm, head);
+        if args.len() != class.generic_param_count {
+            return Err(ReachError::Arity {
+                class: baml_type::HeadDisplay::head_display_name(&head),
+                expected: class.generic_param_count,
+                found: args.len(),
+            });
+        }
+        let args: Box<[RealizedTy]> = args
+            .iter()
+            .cloned()
+            .map(RealizedTy::flatten_union)
+            .collect();
+        let identity = (head, args);
+        if self.seen_classes.contains(&identity) {
+            return Ok(());
+        }
+        for (index, (ancestor, ancestor_args)) in self.ancestry.iter().enumerate() {
+            if *ancestor == head
+                && origins.class_transform_expands(index, &head, ancestor_args.len())
+            {
+                return Err(ReachError::NonRegular {
+                    class: baml_type::HeadDisplay::head_display_name(&head),
+                    from: RealizedTy::Class(*ancestor, ancestor_args.clone()).to_string(),
+                    to: RealizedTy::Class(head, identity.1).to_string(),
+                });
+            }
+        }
+        let fields: Vec<RealizedTy> = class
+            .fields
+            .iter()
+            .map(|field| self.vm.realize_field_ty(&field.field_template, &identity.1))
+            .collect();
+        self.seen_classes.insert(identity.clone());
+        self.ancestry.push(identity);
+        for (field, field_ty) in class.fields.iter().zip(&fields) {
+            if field.skip {
+                continue;
+            }
+            self.record_heads(field_ty);
+            // NOTE: an associated-type projection in a field template has no
+            // origin through its realized binding, so an instantiation that
+            // grows only through an impl's binding is not caught as non-regular
+            // (the output-format renderer shares the gap); the walk would not
+            // terminate. No such program compiles today: a projection on a
+            // class's own type parameter crashes emit (see the `BUG:` in
+            // `baml_compiler2_emit::items`), and one with another base reduces
+            // at compile time, so the walk sees its binding's template.
+            let field_origins =
+                origins.through_field(&head, class.generic_param_count, &field.field_template);
+            self.visit(field_ty, &field_origins)?;
+        }
+        let (head, args) = self
+            .ancestry
+            .pop()
+            .unwrap_or_else(|| unreachable!("this visit pushed its own frame"));
+        self.reach.classes.push(ReachedClass { head, args, fields });
+        Ok(())
+    }
+}
+
+/// The declaration of a reached class. Total by invariant: a class type's head
+/// is a live class declaration.
+fn reached_class(vm: &BexVm, head: TypeHead) -> &Class {
+    let Object::Class(class) = vm.get_object(head.ptr()) else {
+        unreachable!("a class type's head is a class: {head:?}")
+    };
+    class
+}
+
+/// The parse model's name for `class` instantiated at `args`: also how a
+/// failure about one of its fields names it, on every path.
+fn model_name(class: &Class, args: &[RealizedTy]) -> NamedTy {
+    NamedTy::class(
+        DefKey::new(class.type_tag, class.name()),
+        args.iter().map(definitions::lane_realized_ty),
+    )
+}
+
+/// Why the parser cannot model a target.
+enum ModelError {
+    Reach(ReachError),
+    Convert(ConvertError),
+}
+
+impl fmt::Display for ModelError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Reach(e) => e.fmt(f),
+            Self::Convert(e) => e.fmt(f),
+        }
+    }
+}
+
+/// The parse model for `target`, built from what it reaches, with that reach.
 fn build_model(
     vm: &BexVm,
     target: &RealizedTy,
-) -> Result<CompiledSapModel, bex_sap::sap_model::ConvertError> {
-    let mut classes = IndexMap::new();
+) -> Result<(ParseReach, CompiledSapModel), ModelError> {
+    let reach = ParseReach::of(vm, target).map_err(ModelError::Reach)?;
+    let classes = reach.classes.iter().map(|reached| {
+        let class = reached_class(vm, reached.head);
+        (
+            model_name(class, &reached.args),
+            definitions::parse_class(class, &reached.fields),
+        )
+    });
     let mut enums = IndexMap::new();
     let mut aliases = HashMap::new();
-    for ptr in parsed_declarations(vm, target) {
-        match vm.get_object(ptr) {
-            Object::Class(class) => {
-                classes.insert(
-                    DefKey::new(class.type_tag, class.name.clone()),
-                    definitions::class_definition(class),
-                );
-            }
-            Object::Enum(enm) => {
-                enums.insert(
-                    DefKey::new(enm.type_tag, enm.name.clone()),
-                    definitions::enum_definition(enm),
-                );
-            }
-            Object::TypeAlias(alias) => {
-                aliases.insert(
-                    DefKey::new(
-                        alias.type_tag,
-                        DeclarationName::Declared(alias.name.clone()),
-                    ),
-                    definitions::lane_ty(&RuntimeTy::from(alias.definition.clone())),
-                );
-            }
-            _ => {}
-        }
+    for head in &reach.enums {
+        let Object::Enum(enm) = vm.get_object(head.ptr()) else {
+            unreachable!("an enum type's head is an enum: {head:?}")
+        };
+        enums.insert(
+            DefKey::new(enm.type_tag, enm.name()),
+            definitions::enum_definition(enm),
+        );
     }
-    let target = definitions::lane_ty(&RuntimeTy::from(target.clone()));
-    CompiledSapModel::from_type_ctx(TypeCtx::new(&classes, enums, &aliases), target)
+    for head in &reach.aliases {
+        let Object::TypeAlias(alias) = vm.get_object(head.ptr()) else {
+            unreachable!("a type alias's head is a type alias: {head:?}")
+        };
+        aliases.insert(
+            DefKey::new(alias.type_tag, alias.name()),
+            definitions::lane_realized_ty(&alias.definition),
+        );
+    }
+    let target = definitions::lane_realized_ty(target);
+    let interfaces = reach.interfaces.iter().map(|interface| {
+        NamedTy::of(&definitions::lane_realized_ty(interface))
+            .unwrap_or_else(|| unreachable!("an interface type is named: {interface}"))
+    });
+    let model =
+        CompiledSapModel::from_type_ctx(TypeCtx::new(classes, enums, &aliases, interfaces), target)
+            .map_err(ModelError::Convert)?;
+    Ok((reach, model))
 }
 
 /// Parse `text` with the model in `cache` and allocate the result, or `None`
@@ -167,9 +491,10 @@ fn parse(
 ) -> Result<Option<Value>, VmRustFnError> {
     let cache = vm.rust_data_field::<ParseCache>(&cache, 0)?;
     let target_type = parse_target(vm)?;
-    let model = &cache.model;
-    // An unresolvable target is a schema bug, not an incomplete reply.
-    let target = model
+    // An unresolvable target is a schema bug, not an incomplete reply: it
+    // reports before the text is looked at.
+    cache
+        .model
         .resolved_target()
         .map_err(|e| llm_client(e.to_string()))?;
     let is_done = completion == Completion::Final;
@@ -180,25 +505,80 @@ fn parse(
         // be coerced until the JSON starts: skip the partial, wait for text.
         Err(_) => return Ok(None),
     };
+    align(
+        vm,
+        &cache.model,
+        &target_type,
+        &value,
+        completion,
+        llm_client,
+    )
+}
+
+/// Align `value` to the target of `model` and allocate the result, or `None`
+/// for a partial value that does not align yet: the second stage of a parse,
+/// and the whole of a coercion. `mismatch` raises a value that does not align.
+fn align(
+    vm: &mut BexVm,
+    model: &CompiledSapModel,
+    target_type: &RealizedTy,
+    value: &jsonish::Value<'_>,
+    completion: Completion,
+    mismatch: impl Fn(String) -> VmRustFnError,
+) -> Result<Option<Value>, VmRustFnError> {
+    let target = model
+        .resolved_target()
+        .map_err(|e| mismatch(e.to_string()))?;
+    let is_done = completion == Completion::Final;
     let context = ParsingContext::new(model.db());
-    let parsed = match TyResolvedRef::coerce(&context, target, &value) {
+    let parsed = match TyResolvedRef::coerce(&context, target, value) {
         Ok(parsed) => parsed,
-        Err(e) if is_done => return Err(llm_client(e.to_string())),
+        Err(e) if is_done => return Err(mismatch(e.to_string())),
         Err(_) => return Ok(None),
     };
     // Only a value to allocate needs the declarations: a partial that does not
     // parse yet skips the walk.
     parsed
         .map(|parsed| {
-            let declarations = Declarations::reached_by(vm, &target_type);
-            to_heap(vm, &parsed, model.db(), &declarations)
+            let declarations = Declarations::reached_by(vm, target_type)?;
+            to_heap(vm, &parsed, &declarations, &mismatch)
         })
         .transpose()
+}
+
+/// The tree the text stage would have produced for `json`, had it been
+/// written out: every value complete, nothing repaired.
+fn parsed_tree(json: &serde_json::Value) -> jsonish::Value<'_> {
+    use jsonish::CompletionState::Complete;
+    match json {
+        serde_json::Value::Null => jsonish::Value::Null,
+        serde_json::Value::Bool(value) => jsonish::Value::Boolean(*value),
+        serde_json::Value::Number(number) => jsonish::Value::Number(number.clone(), Complete),
+        serde_json::Value::String(text) => jsonish::Value::String(text.as_str().into(), Complete),
+        serde_json::Value::Array(items) => {
+            jsonish::Value::Array(items.iter().map(parsed_tree).collect(), Complete)
+        }
+        serde_json::Value::Object(entries) => jsonish::Value::Object(
+            entries
+                .iter()
+                .map(|(key, value)| (key.as_str().into(), parsed_tree(value)))
+                .collect(),
+            Complete,
+        ),
+    }
 }
 
 /// A parse failure, as `baml.errors.LlmClient`.
 fn llm_client(message: impl Into<String>) -> VmRustFnError {
     VmBamlError::LlmClient {
+        message: message.into(),
+    }
+    .into()
+}
+
+/// A coercion failure, as `baml.errors.ParseError`.
+fn parse_error(message: impl Into<String>) -> VmRustFnError {
+    VmBamlError::ParseError {
         message: message.into(),
     }
     .into()
@@ -210,21 +590,16 @@ fn llm_client(message: impl Into<String>) -> VmRustFnError {
 struct Declarations(HashMap<TypeTag, HeapPtr>);
 
 impl Declarations {
-    fn reached_by(vm: &BexVm, target: &RealizedTy) -> Self {
-        Self(
-            parsed_declarations(vm, target)
-                .into_iter()
-                .filter_map(|ptr| {
-                    let tag = match vm.get_object(ptr) {
-                        Object::Class(class) => class.type_tag,
-                        Object::Enum(enm) => enm.type_tag,
-                        Object::TypeAlias(alias) => alias.type_tag,
-                        _ => return None,
-                    };
-                    Some((tag, ptr))
-                })
+    fn reached_by(vm: &BexVm, target: &RealizedTy) -> Result<Self, VmRustFnError> {
+        // The target's model was built, so its reach closes.
+        let reach = ParseReach::of(vm, target).map_err(|e| invariant(e.to_string()))?;
+        Ok(Self(
+            reach
+                .heads
+                .iter()
+                .map(|head| (head.tag(), head.ptr()))
                 .collect(),
-        )
+        ))
     }
 
     fn get(&self, name: &DefKey) -> Result<HeapPtr, VmRustFnError> {
@@ -236,12 +611,10 @@ impl Declarations {
     }
 
     /// `ty` with each tagged name replaced by the head of its declaration.
-    fn realize(&self, ty: &SapTy) -> Result<RealizedTy, VmRustFnError> {
-        let ty = ty.try_map_heads(&mut |name: &DefKey| {
+    fn realize(&self, ty: &ParseTy) -> Result<RealizedTy, VmRustFnError> {
+        ty.try_map_heads(&mut |name: &DefKey| {
             self.get(name).map(|ptr| TypeHead::new(ptr, name.tag()))
-        })?;
-        RealizedTy::try_from(ty)
-            .map_err(|e| invariant(format!("a parsed value's type is not realized: {e}")))
+        })
     }
 }
 
@@ -250,16 +623,18 @@ fn invariant(message: String) -> VmRustFnError {
 }
 
 /// Allocate `value`: the same value the parser produced, on the heap.
+/// `mismatch` raises a value the heap cannot hold: the parser's integer is
+/// wider than the VM's.
 fn to_heap(
     vm: &mut BexVm,
-    value: &BamlValueWithFlags<'_, '_, '_, DefKey>,
-    db: &TypeRefDb<'_, DefKey>,
+    value: &BamlValueWithFlags<'_, '_, '_, NamedTy>,
     declarations: &Declarations,
+    mismatch: &impl Fn(String) -> VmRustFnError,
 ) -> Result<Value, VmRustFnError> {
     Ok(match &value.value {
         BamlValue::String(s) => Value::object(vm.alloc_string(s.value.as_ref())),
         BamlValue::Int(i) => Value::try_int(i.value).ok_or_else(|| {
-            llm_client(format!(
+            mismatch(format!(
                 "integer {} is outside the BAML integer range [{}, {}]",
                 i.value,
                 Value::INT_MIN,
@@ -276,35 +651,44 @@ fn to_heap(
             ));
         }
         BamlValue::Array(array) => {
-            let element = match value.meta.ty {
-                TyResolvedRef::Array(array) => array.ty.to_baml_ty(db),
-                _ => SapTy::unknown(),
+            let TyResolvedRef::Array(array_ty) = value.meta.ty else {
+                return Err(invariant(format!(
+                    "a parsed list is typed `{}`, not as a list",
+                    value.meta.ty.to_baml_ty()
+                )));
             };
+            let element = array_ty.ty.to_baml_ty();
             let element = declarations.realize(&element)?;
             let items = array
                 .value
                 .iter()
-                .map(|item| to_heap(vm, item, db, declarations))
+                .map(|item| to_heap(vm, item, declarations, mismatch))
                 .collect::<Result<Vec<_>, _>>()?;
             Value::object(vm.alloc_array(element, items))
         }
         BamlValue::Map(map) => {
-            let (key, value_ty) = match value.meta.ty {
-                TyResolvedRef::Map(map) => (map.key.to_baml_ty(db), map.value.to_baml_ty(db)),
-                _ => (SapTy::string(), SapTy::unknown()),
+            let TyResolvedRef::Map(map_ty) = value.meta.ty else {
+                return Err(invariant(format!(
+                    "a parsed map is typed `{}`, not as a map",
+                    value.meta.ty.to_baml_ty()
+                )));
             };
+            let (key, value_ty) = (map_ty.key.to_baml_ty(), map_ty.value.to_baml_ty());
             let (key, value_ty) = (
                 declarations.realize(&key)?,
                 declarations.realize(&value_ty)?,
             );
             let mut entries = IndexMap::with_capacity(map.value.len());
             for (k, v) in &map.value {
-                entries.insert(BexStr::from(k.as_ref()), to_heap(vm, v, db, declarations)?);
+                entries.insert(
+                    BexStr::from(k.as_ref()),
+                    to_heap(vm, v, declarations, mismatch)?,
+                );
             }
             Value::object(vm.alloc_map(key, value_ty, entries))
         }
         BamlValue::Enum(e) => {
-            let enm = declarations.get(e.name)?;
+            let enm = declarations.get(e.name.decl())?;
             let Object::Enum(declaration) = vm.get_object(enm) else {
                 return Err(invariant(format!("`{}` is not an enum", e.name)));
             };
@@ -318,20 +702,30 @@ fn to_heap(
             Value::object(vm.alloc_variant(enm, index))
         }
         BamlValue::Class(c) => {
-            let class = declarations.get(c.name)?;
+            let NamedTyKind::Class(decl, args) = c.name.kind() else {
+                return Err(invariant(format!("`{}` is not a class", c.name)));
+            };
+            let class = declarations.get(decl)?;
+            let type_args = args
+                .iter()
+                .map(|arg| declarations.realize(arg))
+                .collect::<Result<Box<[_]>, _>>()?;
             let Object::Class(declaration) = vm.get_object(class) else {
                 return Err(invariant(format!("`{}` is not a class", c.name)));
             };
-            let fields: Vec<(String, bool, RuntimeTy)> = declaration
+            let fields: Vec<(String, bool, TyTemplate)> = declaration
                 .fields
                 .iter()
-                .map(|field| (field.name.clone(), field.skip, field.field_type.clone()))
+                .map(|field| (field.name.clone(), field.skip, field.field_template.clone()))
                 .collect();
             let mut values = Vec::with_capacity(fields.len());
-            for (name, skip, field_type) in fields {
+            for (name, skip, field_template) in fields {
                 let field_value = match c.value.get(name.as_str()) {
-                    Some(parsed) => to_heap(vm, parsed, db, declarations)?,
-                    None if skip => skipped_field_default(vm, c.name, &name, &field_type)?,
+                    Some(parsed) => to_heap(vm, parsed, declarations, mismatch)?,
+                    None if skip => {
+                        let field_type = vm.realize_field_ty(&field_template, &type_args);
+                        skipped_field_default(vm, c.name, &name, &field_type)?
+                    }
                     None => {
                         return Err(invariant(format!(
                             "the parsed `{}` has no field `{name}`",
@@ -341,7 +735,10 @@ fn to_heap(
                 };
                 values.push(field_value);
             }
-            Value::object(vm.alloc_instance(class, values))
+            Value::object(
+                vm.tlab
+                    .alloc_instance_with_type_args(class, type_args, values),
+            )
         }
         BamlValue::StreamState(_) => {
             return Err(invariant(
@@ -355,9 +752,9 @@ fn to_heap(
 /// the field, so it gets its type's empty value.
 fn skipped_field_default(
     vm: &mut BexVm,
-    class: &DefKey,
+    class: &NamedTy,
     field: &str,
-    field_type: &RuntimeTy,
+    field_type: &RealizedTy,
 ) -> Result<Value, VmRustFnError> {
     let no_default = |ty: &str| -> VmRustFnError {
         VmPanic::UserPanic {
@@ -368,9 +765,36 @@ fn skipped_field_default(
         }
         .into()
     };
-    let realized = RealizedTy::try_from(field_type.clone())
-        .map_err(|_| no_default("of a generic parameter"))?;
-    empty_value(vm, &realized, &mut Vec::new())?.ok_or_else(|| no_default(&realized.to_string()))
+    empty_value(vm, field_type, &mut Vec::new())?.ok_or_else(|| no_default(&field_type.to_string()))
+}
+
+/// The first `@skip` field, among the classes a parse can build (`reach`),
+/// whose type has no value to hold, as the message for it. A parse that builds
+/// such a class panics ([`skipped_field_default`]).
+fn unfillable_skipped_field(
+    vm: &mut BexVm,
+    reach: &ParseReach,
+) -> Result<Option<String>, VmRustFnError> {
+    for reached in &reach.classes {
+        let class = reached_class(vm, reached.head);
+        let name = model_name(class, &reached.args);
+        let skipped: Vec<(String, &RealizedTy)> = class
+            .fields
+            .iter()
+            .zip(&reached.fields)
+            .filter(|(field, _)| field.skip)
+            .map(|(field, field_type)| (field.name.clone(), field_type))
+            .collect();
+        for (field, field_type) in skipped {
+            if empty_value(vm, field_type, &mut Vec::new())?.is_none() {
+                return Ok(Some(format!(
+                    "the `@skip` field `{name}.{field}` has a type with no default value for \
+                     schema-aligned parsing to fill in"
+                )));
+            }
+        }
+    }
+    Ok(None)
 }
 
 /// The empty value of `ty`: `null` for a nullable type, the zero of a number,
@@ -497,7 +921,6 @@ fn empty_value(
         | RealizedTy::Type
         | RealizedTy::Resource
         | RealizedTy::PromptAst
-        | RealizedTy::Void
         | RealizedTy::Never => return Ok(None),
     }))
 }

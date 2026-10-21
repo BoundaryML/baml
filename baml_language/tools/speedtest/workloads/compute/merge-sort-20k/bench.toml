@@ -1,0 +1,6 @@
+name = "merge sort 20k"
+description = "bottom-up merge sort of 20,000 integers in four orders"
+origin = "native-bench 02_merge_sort"
+expect = "258903182"
+jobs = 3
+warmup = 1

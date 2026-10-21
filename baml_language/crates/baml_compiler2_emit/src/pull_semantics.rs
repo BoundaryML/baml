@@ -29,6 +29,7 @@ pub(crate) enum LocalPullAction<'db> {
 /// `'db` is the lifetime of the MIR the sink traverses (the inlined rvalues a
 /// [`LocalPullAction::Inline`] hands back are clones out of that MIR).
 pub(crate) trait PullSink<'db> {
+    fn trace_hook_settings(&mut self, with_settings: bool) -> Result<(), Self::Error>;
     type Error;
 
     fn pull_constant(&mut self, constant: &Constant<'db>) -> Result<(), Self::Error>;
@@ -82,7 +83,11 @@ pub(crate) trait PullSink<'db> {
     /// Emits `Instruction::LoadType(const_idx)` in the bytecode emitter.
     fn load_type(&mut self, template: &TyTemplate) -> Result<(), Self::Error>;
     /// Reify the package statically selected at this call site.
-    fn load_current_package(&mut self, package: &str) -> Result<(), Self::Error>;
+    fn load_current_package(&mut self) -> Result<(), Self::Error>;
+    /// Pop a bound (an `Object::Type` of the interface constraint) and a type
+    /// value, push whether the type satisfies the bound
+    /// (`Rvalue::SatisfiesBound`).
+    fn satisfies_bound(&mut self) -> Result<(), Self::Error>;
     fn make_closure(&mut self, lambda_idx: usize, capture_count: usize) -> Result<(), Self::Error>;
 
     /// Same as `make_closure` but with an additional `ntypeargs` count for
@@ -380,6 +385,7 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
     rvalue: &Rvalue<'db>,
 ) -> Result<(), S::Error> {
     match rvalue {
+        Rvalue::TraceHookSettings { with_settings } => sink.trace_hook_settings(*with_settings),
         Rvalue::Use(operand) => walk_operand_pull(sink, operand),
         Rvalue::BinaryOp { op, left, right } => {
             walk_operand_pull(sink, left)?;
@@ -462,6 +468,13 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
             walk_operand_pull(sink, operand)?;
             sink.is_type_tag(*tag)
         }
+        // The bound is a constraint, loaded the way a virtual call loads the
+        // interface it dispatches through.
+        Rvalue::SatisfiesBound { ty, bound } => {
+            walk_operand_pull(sink, ty)?;
+            sink.load_type(&bound.to_template())?;
+            sink.satisfies_bound()
+        }
         Rvalue::MakeClosure {
             lambda_idx,
             captures,
@@ -517,6 +530,6 @@ pub(crate) fn walk_rvalue_pull<'db, S: PullSink<'db>>(
             sink.make_generic_function_from_value(type_arg_templates.len())
         }
         Rvalue::LoadType(template) => sink.load_type(template),
-        Rvalue::CurrentPackage(package) => sink.load_current_package(package),
+        Rvalue::CurrentPackage => sink.load_current_package(),
     }
 }

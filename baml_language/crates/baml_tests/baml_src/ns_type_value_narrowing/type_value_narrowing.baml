@@ -17,7 +17,7 @@
 // ── Group A: `is reflect.Type` on a bare `type` value ─────────────────────────────────
 
 function type_is_type() -> string {
-    let v = reflect.Type.of<int>()
+    let v = int.type()
     `${v is reflect.Type}|${v is int}|${v is string}`
 }
 
@@ -39,7 +39,7 @@ test "non_type_values_are_not_type" {
 
 // A `type` value stays a `type` whichever type it reflects.
 function type_of_various_is_type() -> string {
-    let a = reflect.Type.of<string>()
+    let a = string.type()
     let b = reflect.Type.of<int[]>()
     let c = reflect.Type.of<map<string, int>>()
     `${a is reflect.Type}|${b is reflect.Type}|${c is reflect.Type}`
@@ -52,7 +52,7 @@ test "type_of_any_argument_is_type" {
 // ── Group B: `reflect.Type | int` union, both directions ──────────────────────────────
 
 function union_holding_type_is() -> string {
-    let v: reflect.Type | int = reflect.Type.of<int>()
+    let v: reflect.Type | int = int.type()
     `${v is reflect.Type}|${v is int}`
 }
 
@@ -71,7 +71,7 @@ test "union_holding_int_narrows_to_int" {
 
 // `if let` over the union, both inhabitants.
 function union_if_let_type() -> string {
-    let v: reflect.Type | int = reflect.Type.of<bool>()
+    let v: reflect.Type | int = bool.type()
     if let t: reflect.Type = v {
         `type:${t.to_string()}`
     } else {
@@ -105,7 +105,7 @@ function union_match_type_first(v: reflect.Type | int) -> string {
 }
 
 test "union_match_type_arm_fires_for_type" {
-    assert.equal(union_match_type_first(reflect.Type.of<string>()), "type:string")
+    assert.equal(union_match_type_first(string.type()), "type:string")
 }
 
 test "union_match_int_arm_fires_for_int" {
@@ -122,7 +122,7 @@ function union_match_int_first(v: reflect.Type | int) -> string {
 }
 
 test "reversed_match_type_arm_fires_for_type" {
-    assert.equal(union_match_int_first(reflect.Type.of<int>()), "type:int")
+    assert.equal(union_match_int_first(int.type()), "type:int")
 }
 
 test "reversed_match_int_arm_fires_for_int" {
@@ -139,7 +139,7 @@ function union_three_way(v: reflect.Type | int | string) -> string {
 }
 
 test "three_way_union_dispatches_type" {
-    assert.equal(union_three_way(reflect.Type.of<bool>()), "type:bool")
+    assert.equal(union_three_way(bool.type()), "type:bool")
 }
 
 test "three_way_union_dispatches_string" {
@@ -153,7 +153,7 @@ test "three_way_union_dispatches_int" {
 // ── Group C: `reflect.Type?` optionals ────────────────────────────────────────────────
 
 function optional_type_present() -> string {
-    let v: reflect.Type? = reflect.Type.of<float>()
+    let v: reflect.Type? = float.type()
     let is_t = v is reflect.Type
     if let t: reflect.Type = v {
         `${is_t}|${t.to_string()}`
@@ -184,7 +184,7 @@ test "optional_type_absent_does_not_narrow" {
 
 function classify_mixed_list() -> string {
     let items: (reflect.Type | string)[] = [
-        reflect.Type.of<int>(),
+        int.type(),
         "plain",
         reflect.Type.of<bool[]>(),
     ]
@@ -205,7 +205,7 @@ test "mixed_list_classifies_each_element" {
 
 function render_mixed_list() -> string {
     let items: (reflect.Type | string)[] = [
-        reflect.Type.of<int>(),
+        int.type(),
         "plain",
         reflect.Type.of<bool[]>(),
     ]
@@ -226,9 +226,9 @@ test "mixed_list_match_renders_each_element" {
 // ── Group E: `reflect.Type.of` equality is unaffected ─────────────────────────
 
 function type_equality() -> string {
-    let a = reflect.Type.of<int>()
-    let b = reflect.Type.of<int>()
-    let c = reflect.Type.of<string>()
+    let a = int.type()
+    let b = int.type()
+    let c = string.type()
     `${a == b}|${a == c}|${a != c}`
 }
 

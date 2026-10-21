@@ -17,7 +17,6 @@ use crate::{
     ast::{
         AssociatedTypeBinding, FunctionTypeParam as AstFunctionTypeParam, TypeExpr, TypeExprKind,
     },
-    lowering_diagnostic::TypeExprOwner,
 };
 
 /// Convert a CST `TypeExpr` node to our `ast::TypeExpr` recursive enum.
@@ -26,26 +25,21 @@ use crate::{
 pub(crate) fn lower_type_expr_node(
     type_expr: &CstTypeExpr,
     diags: &mut Vec<LoweringDiagnostic>,
-    owner: TypeExprOwner,
 ) -> TypeExpr {
     if type_expr.is_union() {
-        return lower_union(type_expr, diags, owner);
+        return lower_union(type_expr, diags);
     }
 
-    let base = lower_base(type_expr, diags, owner);
+    let base = lower_base(type_expr, diags);
     apply_modifiers(base, &type_expr.postfix_modifiers())
 }
 
 /// Lower a union `TYPE_EXPR` member by member.
-fn lower_union(
-    type_expr: &CstTypeExpr,
-    diags: &mut Vec<LoweringDiagnostic>,
-    owner: TypeExprOwner,
-) -> TypeExpr {
+fn lower_union(type_expr: &CstTypeExpr, diags: &mut Vec<LoweringDiagnostic>) -> TypeExpr {
     let variants: Vec<TypeExpr> = type_expr
         .union_member_parts()
         .iter()
-        .map(|m| lower_union_member(m, diags, owner))
+        .map(|m| lower_union_member(m, diags))
         .collect();
 
     // Apply postfix modifiers (e.g., `(A | B)[]`)
@@ -84,34 +78,20 @@ fn apply_modifiers(
 
 /// Extract the base type (function types, parens, terminals).
 /// No modifier handling. Unions are handled by `lower_union`.
-fn lower_base(
-    type_expr: &CstTypeExpr,
-    diags: &mut Vec<LoweringDiagnostic>,
-    owner: TypeExprOwner,
-) -> TypeExpr {
-    lower_base_terminal(type_expr, diags, owner)
+fn lower_base(type_expr: &CstTypeExpr, diags: &mut Vec<LoweringDiagnostic>) -> TypeExpr {
+    lower_base_terminal(type_expr, diags)
 }
 
 /// Parse the base type (no modifiers, not a union).
-fn lower_base_terminal(
-    type_expr: &CstTypeExpr,
-    diags: &mut Vec<LoweringDiagnostic>,
-    owner: TypeExprOwner,
-) -> TypeExpr {
+fn lower_base_terminal(type_expr: &CstTypeExpr, diags: &mut Vec<LoweringDiagnostic>) -> TypeExpr {
     let span = type_expr.syntax().span_range();
     if let Some(unreflect) = type_expr
         .syntax()
         .children()
         .find(|node| node.kind() == SyntaxKind::UNREFLECT_TYPE)
     {
-        // The parser admits `unreflect(expr)` as a type atom everywhere so
-        // the removed inline spelling still recovers cleanly; only a body
-        // `type T = unreflect(expr);` statement lowers it (and never through
-        // this road). Every other position is the one diagnostic.
-        diags.push(LoweringDiagnostic::UnreflectOutsideTypeBinding {
-            span: unreflect.span_range(),
-            owner,
-        });
+        // The parser keeps the removed `unreflect(expr)` as a type atom so it
+        // recovers cleanly, and has already reported it (E0098).
         return TypeExprKind::Error.at(unreflect.span_range());
     }
     // BUG: a qualified projection captures only a single member — `(base as I).A.B`
@@ -121,8 +101,8 @@ fn lower_base_terminal(
     // full member chain after `(base as I)` and fold it into nested projections here.
     if let Some((base, interface, member)) = type_expr.associated_type_projection() {
         return TypeExprKind::AssociatedTypeProjection {
-            base: Box::new(lower_type_expr_node(&base, diags, owner)),
-            interface: Some(Box::new(lower_type_expr_node(&interface, diags, owner))),
+            base: Box::new(lower_type_expr_node(&base, diags)),
+            interface: Some(Box::new(lower_type_expr_node(&interface, diags))),
             member: Name::new(member.text()),
         }
         .at(span);
@@ -140,18 +120,18 @@ fn lower_base_terminal(
                 let optional = p.is_optional();
                 let ty = p
                     .ty()
-                    .map(|t| lower_type_expr_node(&t, diags, owner))
+                    .map(|t| lower_type_expr_node(&t, diags))
                     .unwrap_or_else(|| TypeExprKind::Missing.at(span));
                 AstFunctionTypeParam { name, optional, ty }
             })
             .collect();
         let ret = type_expr
             .function_return_type()
-            .map(|t| lower_type_expr_node(&t, diags, owner))
+            .map(|t| lower_type_expr_node(&t, diags))
             .unwrap_or_else(|| TypeExprKind::Missing.at(span));
         let throws = type_expr
             .function_throws_type()
-            .map(|t| Box::new(lower_type_expr_node(&t, diags, owner)));
+            .map(|t| Box::new(lower_type_expr_node(&t, diags)));
         return TypeExprKind::Function {
             params,
             ret: Box::new(ret),
@@ -162,7 +142,7 @@ fn lower_base_terminal(
 
     // Handle parenthesized types like `(int | string)`
     if let Some(inner) = type_expr.inner_type_expr() {
-        return lower_type_expr_node(&inner, diags, owner);
+        return lower_type_expr_node(&inner, diags);
     }
 
     // Handle parenthesized unions: `(A | B)` where the union is inside parens
@@ -172,7 +152,7 @@ fn lower_base_terminal(
             let members: Vec<TypeExpr> = params
                 .iter()
                 .filter_map(FunctionTypeParam::ty)
-                .map(|t| lower_type_expr_node(&t, diags, owner))
+                .map(|t| lower_type_expr_node(&t, diags))
                 .collect();
             if !members.is_empty() {
                 return TypeExprKind::Union { variants: members }.at(span);
@@ -180,14 +160,10 @@ fn lower_base_terminal(
         }
     }
 
-    lower_base_type(type_expr, diags, owner)
+    lower_base_type(type_expr, diags)
 }
 
-fn lower_base_type(
-    type_expr: &CstTypeExpr,
-    diags: &mut Vec<LoweringDiagnostic>,
-    owner: TypeExprOwner,
-) -> TypeExpr {
+fn lower_base_type(type_expr: &CstTypeExpr, diags: &mut Vec<LoweringDiagnostic>) -> TypeExpr {
     let span = type_expr.syntax().span_range();
     if let Some(s) = type_expr.string_literal() {
         return TypeExprKind::Literal {
@@ -233,12 +209,12 @@ fn lower_base_type(
         let associated_type_bindings = type_expr
             .type_arg_associated_bindings()
             .iter()
-            .filter_map(|b| lower_associated_type_binding(b, diags, owner))
+            .filter_map(|b| lower_associated_type_binding(b, diags))
             .collect();
         // Named type (primitive or user-defined), preserving generic args
         let generic_args: Vec<TypeExpr> = args
             .iter()
-            .map(|arg| lower_type_expr_node(arg, diags, owner))
+            .map(|arg| lower_type_expr_node(arg, diags))
             .collect();
         return lower_from_type_name_with_generic_args(
             &name,
@@ -256,9 +232,8 @@ fn lower_base_type(
 fn lower_union_member(
     parts: &baml_compiler_syntax::ast::UnionMemberParts,
     diags: &mut Vec<LoweringDiagnostic>,
-    owner: TypeExprOwner,
 ) -> TypeExpr {
-    let base = lower_union_member_base(parts, diags, owner);
+    let base = lower_union_member_base(parts, diags);
     apply_modifiers(base, &parts.postfix_modifiers())
 }
 
@@ -266,7 +241,6 @@ fn lower_union_member(
 fn lower_union_member_base(
     parts: &baml_compiler_syntax::ast::UnionMemberParts,
     diags: &mut Vec<LoweringDiagnostic>,
-    owner: TypeExprOwner,
 ) -> TypeExpr {
     let span = parts.span().unwrap_or_default();
     if let Some(unreflect) = parts
@@ -274,16 +248,13 @@ fn lower_union_member_base(
         .iter()
         .find(|node| node.kind() == SyntaxKind::UNREFLECT_TYPE)
     {
-        diags.push(LoweringDiagnostic::UnreflectOutsideTypeBinding {
-            span: unreflect.span_range(),
-            owner,
-        });
+        // Reported by the parser (E0098), like the atom form above.
         return TypeExprKind::Error.at(unreflect.span_range());
     }
     if let Some((base, interface, member)) = parts.associated_type_projection() {
         return TypeExprKind::AssociatedTypeProjection {
-            base: Box::new(lower_type_expr_node(&base, diags, owner)),
-            interface: Some(Box::new(lower_type_expr_node(&interface, diags, owner))),
+            base: Box::new(lower_type_expr_node(&base, diags)),
+            interface: Some(Box::new(lower_type_expr_node(&interface, diags))),
             member: Name::new(member.text()),
         }
         .at(span);
@@ -291,7 +262,7 @@ fn lower_union_member_base(
 
     // Check for parenthesized type first (e.g., `(int | string)` in `A | (int | string)`)
     if let Some(type_expr) = parts.type_expr() {
-        return lower_type_expr_node(&type_expr, diags, owner);
+        return lower_type_expr_node(&type_expr, diags);
     }
 
     // Check for FUNCTION_TYPE_PARAM child (new parser structure for parenthesized types)
@@ -301,7 +272,7 @@ fn lower_union_member_base(
             .find(|n| n.kind() == baml_compiler_syntax::SyntaxKind::TYPE_EXPR)
         {
             if let Some(type_expr) = baml_compiler_syntax::ast::TypeExpr::cast(inner_type_expr) {
-                return lower_type_expr_node(&type_expr, diags, owner);
+                return lower_type_expr_node(&type_expr, diags);
             }
         }
     }
@@ -350,7 +321,7 @@ fn lower_union_member_base(
                 let associated_bindings = type_args_node
                     .children()
                     .filter_map(baml_compiler_syntax::ast::AssociatedTypeDecl::cast)
-                    .filter_map(|binding| lower_associated_type_binding(&binding, diags, owner))
+                    .filter_map(|binding| lower_associated_type_binding(&binding, diags))
                     .collect();
                 (type_args, associated_bindings)
             })
@@ -358,7 +329,7 @@ fn lower_union_member_base(
 
         let generic_args: Vec<TypeExpr> = type_arg_exprs
             .iter()
-            .map(|arg| lower_type_expr_node(arg, diags, owner))
+            .map(|arg| lower_type_expr_node(arg, diags))
             .collect();
 
         return match name.as_str() {
@@ -390,12 +361,11 @@ fn lower_union_member_base(
 pub(crate) fn lower_associated_type_binding(
     binding: &baml_compiler_syntax::ast::AssociatedTypeDecl,
     diags: &mut Vec<LoweringDiagnostic>,
-    owner: TypeExprOwner,
 ) -> Option<AssociatedTypeBinding> {
     let name = binding.name()?;
     let ty = binding
         .default_or_binding()
-        .map(|ty| lower_type_expr_node(&ty, diags, owner))
+        .map(|ty| lower_type_expr_node(&ty, diags))
         .unwrap_or_else(|| TypeExprKind::Missing.at(TextRange::default()));
     Some(AssociatedTypeBinding {
         name: Name::new(name.text()),
@@ -415,7 +385,7 @@ fn lower_from_type_name_with_generic_args(
         compiler_aliases::{self, AliasTarget},
     };
     let path = |generic_args, associated_type_bindings| TypeExprKind::Path {
-        segments: name.split('.').map(Name::new).collect(),
+        path: baml_base::Path::new(name.split('.').map(Name::new).collect()),
         generic_args,
         associated_type_bindings,
     };
@@ -452,7 +422,9 @@ fn lower_from_type_name_with_generic_args(
                 },
             },
             AliasTarget::Never => TypeExprKind::Never,
-            AliasTarget::Void => TypeExprKind::Void,
+            // `void` is the unit type's second spelling: it denotes `null` in
+            // every position, so it lowers to the very same node.
+            AliasTarget::Void => TypeExprKind::Null,
             AliasTarget::Unknown => TypeExprKind::Unknown,
             AliasTarget::Type => TypeExprKind::Type,
             AliasTarget::Map => {
@@ -466,7 +438,7 @@ fn lower_from_type_name_with_generic_args(
             AliasTarget::Json => {
                 let definition = alias.definition.expect("json has an alias declaration");
                 TypeExprKind::Path {
-                    segments: definition.source_segments().map(Name::new).collect(),
+                    path: definition.source_path(),
                     generic_args,
                     associated_type_bindings,
                 }
@@ -482,77 +454,6 @@ fn lower_from_type_name_with_generic_args(
         }
     };
     kind.at(span)
-}
-
-/// Recursively check that `void` does not appear in a non-return-type position.
-///
-/// `void` is only valid as the *bare* return type of a function. It must not
-/// appear in parameter types, field types, union members, list/optional
-/// wrappers, or function-type parameter positions. When `void` IS used as the
-/// return type of a `TypeExprKind::Function`, it is exempt.
-///
-/// Set `allow_root_void = true` when calling on a function return-type annotation
-/// to permit a bare `-> void` while still rejecting `-> void?` or `-> void[]`.
-///
-/// Emits `VoidInNonReturnPosition` for every invalid occurrence.
-pub(crate) fn check_void_type(
-    type_expr: &TypeExpr,
-    context: String,
-    span: TextRange,
-    allow_root_void: bool,
-    diags: &mut Vec<LoweringDiagnostic>,
-) {
-    match &type_expr.kind {
-        TypeExprKind::Void if !allow_root_void => {
-            diags.push(LoweringDiagnostic::VoidInNonReturnPosition { context, span });
-        }
-        TypeExprKind::Void => {}
-        TypeExprKind::Optional { inner, .. } => {
-            // Once inside a wrapper, void is never allowed (even in return position).
-            check_void_type(
-                inner,
-                "an optional type (`void?`)".to_string(),
-                span,
-                false,
-                diags,
-            );
-        }
-        TypeExprKind::List { inner, .. } => {
-            check_void_type(
-                inner,
-                "a list type (`void[]`)".to_string(),
-                span,
-                false,
-                diags,
-            );
-        }
-        TypeExprKind::Map { key, value, .. } => {
-            check_void_type(key, "a map key type".to_string(), span, false, diags);
-            check_void_type(value, "a map value type".to_string(), span, false, diags);
-        }
-        TypeExprKind::Union { variants, .. } => {
-            for v in variants {
-                check_void_type(v, "a union member".to_string(), span, false, diags);
-            }
-        }
-        TypeExprKind::Function {
-            params,
-            ret: _,
-            throws,
-            ..
-        } => {
-            // ret is exempt — void IS allowed as function-type return type.
-            // But void in param types is not allowed.
-            for p in params {
-                check_void_type(&p.ty, context.clone(), span, false, diags);
-            }
-            if let Some(throws) = throws {
-                check_void_type(throws, "a throws type".to_string(), span, false, diags);
-            }
-        }
-        // All other variants (primitives, path, etc.) cannot contain void.
-        _ => {}
-    }
 }
 
 /// Validate `_` placement in a `throws` clause, neutralizing illegal holes.

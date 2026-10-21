@@ -7,12 +7,9 @@ source: crates/baml_tests/src/corpus.rs
   ⚠ extraneous throws declaration: string
     ╭─[any_returns_first_success.baml:9:38]
   9 │ ╭─▶ function good() -> int throws string {
- 10 │ │       // sleep's own `throws baml.errors.Io` is swallowed so the declared
- 11 │ │       // surface stays exactly `string`, matching `bad` (Future's error
- 12 │ │       // param is invariant, so the spawns must agree).
- 13 │ │       baml.sys.sleep(baml.time.Duration.from_milliseconds(80n)) catch (e) {
- 14 │ │           let e => null
- 15 │ │       };
- 16 │ │       42
- 17 │ ╰─▶ }
+ 10 │ │       // The declared surface is exactly `string`, matching `bad` (Future's
+ 11 │ │       // error param is invariant, so the spawns must agree).
+ 12 │ │       baml.sys.sleep(baml.time.Duration.from_milliseconds(80n));
+ 13 │ │       42
+ 14 │ ╰─▶ }
     ╰────
