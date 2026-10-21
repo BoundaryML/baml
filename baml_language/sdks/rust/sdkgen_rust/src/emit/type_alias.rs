@@ -1,7 +1,6 @@
 //! Type-alias emission: a plain `pub type` item.
 //!
-//! Alias *references* are inlined by the pool builder (in-package,
-//! non-recursive) or resolved as paths to these items, and Rust aliases
+//! Alias references resolve as paths to these items, and Rust aliases
 //! are transparent — so no conversion impls are needed; the item exists
 //! to keep the user's named types on the SDK surface.
 

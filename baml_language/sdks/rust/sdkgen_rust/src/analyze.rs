@@ -14,9 +14,10 @@ pub(crate) struct Analysis {
     /// reference to anything else in a signature or field makes the
     /// referencing symbol unsupported.
     pub(crate) emitted: HashSet<Name>,
-    /// Strongly-connected-component id per emitted class. Two classes in
-    /// the same SCC form a containment cycle through non-heap fields;
-    /// class references between them are boxed at the field site.
+    /// Strongly-connected-component id per emitted class and type alias.
+    /// Two nodes in the same SCC form a containment cycle through non-heap
+    /// fields; class and alias references between them are boxed at the
+    /// field site.
     scc: HashMap<Name, usize>,
     /// Module-path renames: a namespace segment that collides with a type
     /// name emitted in its parent module gets a trailing underscore
@@ -153,11 +154,10 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         }
     }
 
-    // Type aliases join the same fixpoint. Non-recursive alias
-    // *references* are inlined by the pool builder, so the alias items
-    // themselves are the SDK-surface representation of the user's named
-    // types; only recursive aliases (unrepresentable as a plain Rust
-    // `type`) and structurally unsupported right-hand sides skip.
+    // Type aliases join the same fixpoint. Alias references stay nominal in
+    // the pool, so the alias items are the SDK-surface representation of
+    // the user's named types; only recursive aliases (unrepresentable as a
+    // plain Rust `type`) and structurally unsupported right-hand sides skip.
     for (name, alias) in &aliases {
         if name.name().as_str().contains('$') {
             warnings.push(SkipWarning {
@@ -220,10 +220,12 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
     let mut emitted = alive;
     emitted.extend(enums.iter().cloned());
 
-    // Containment graph over emitted classes: an edge per class reference
-    // reachable without crossing a heap-indirected container (`Vec`,
-    // `Map`); those already break cycles, so only direct/optional
-    // references participate.
+    // Containment graph over emitted classes and type aliases: an edge per
+    // class or alias reference reachable without crossing a heap-indirected
+    // container (`Vec`, `Map`); those already break cycles, so only
+    // direct/optional references participate. A Rust `type` alias holds its
+    // target inline, so `type Part = Text | Extra` with `class Extra { part
+    // Part }` is a cycle through the alias.
     let class_edges: BTreeMap<&Name, Vec<&Name>> = classes
         .iter()
         .filter(|(name, _)| emitted.contains(*name))
@@ -234,6 +236,16 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             }
             (*name, targets)
         })
+        .chain(
+            aliases
+                .iter()
+                .filter(|(name, _)| emitted.contains(*name))
+                .map(|(name, alias)| {
+                    let mut targets = Vec::new();
+                    non_heap_class_refs(&alias.resolves_to, &emitted, &enums, &mut targets);
+                    (*name, targets)
+                }),
+        )
         .collect();
     let scc = compute_sccs(&class_edges);
 
@@ -326,9 +338,8 @@ fn field_deps(ty: &Ty, generic_params: &[&str], deps: &mut Vec<Name>) -> Result<
             deps.push(name.clone());
             Ok(())
         }
-        // Opaque alias references (the pool builder inlines in-package
-        // non-recursive aliases, so these are recursive or cross-package
-        // ones): representable iff the alias item itself is emitted.
+        // Alias references: representable iff the alias item itself is
+        // emitted.
         Ty::TypeAlias(name) => {
             deps.push(name.clone());
             Ok(())
@@ -388,8 +399,9 @@ fn collect_non_recursive_type_vars<'a>(ty: &'a Ty, self_name: &Name, used: &mut 
     }
 }
 
-/// Collect emitted-class references reachable without crossing `Vec` /
-/// `Map` (heap indirection already breaks the containment cycle there).
+/// Collect emitted class and type-alias references reachable without
+/// crossing `Vec` / `Map` (heap indirection already breaks the containment
+/// cycle there).
 fn non_heap_class_refs<'a>(
     ty: &'a Ty,
     emitted: &HashSet<Name>,
@@ -416,11 +428,9 @@ fn non_heap_class_refs<'a>(
         }
         // Heap-indirected containers end the walk.
         Ty::List(..) | Ty::Map { .. } => {}
-        // Opaque alias references contribute no containment edges: an
-        // in-package non-recursive alias is inlined before it reaches
-        // codegen, and a cross-package alias cannot sit on a class cycle
-        // because package dependencies are acyclic.
-        Ty::TypeAlias(..) => {}
+        // An alias is a node of its own; its edges are what its target
+        // holds inline.
+        Ty::TypeAlias(name) if emitted.contains(name) => out.push(name),
         _ => {}
     }
 }
