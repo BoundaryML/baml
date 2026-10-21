@@ -77,6 +77,16 @@ fn split_companion(name: &str) -> Option<(&str, &str)> {
     Some((&name[..pos], &name[pos + 1..]))
 }
 
+/// `baml.sync` types cross into host SDKs only as opaque handles, so an
+/// object holding a lock still round-trips with its identity. Their methods
+/// and the namespace's functions are not part of the host surface: a host call
+/// is its own task, so a lock it took would be released as the call returned,
+/// and a host callback run inside one could deadlock re-entering BAML.
+fn host_has_no_operations(pkg: &baml_type::Package, ns_path: &[Name]) -> bool {
+    matches!(pkg, baml_type::Package::Dep(label) if label.as_str() == "baml")
+        && matches!(ns_path, [ns] if ns.as_str() == "sync")
+}
+
 /// Only the spec and stream callable companions are part of generated host
 /// SDKs. The remaining companions stay available inside BAML through their
 /// ordinary `@...` function symbols.
@@ -228,7 +238,9 @@ pub fn build_symbol_pool(db: &ProjectDatabase, viewer: SourceRoot) -> SymbolPool
                     continue;
                 }
 
-                if hide_from_host_sdk(method.name.as_str()) {
+                if hide_from_host_sdk(method.name.as_str())
+                    || host_has_no_operations(&pkg, &ns_path)
+                {
                     continue;
                 }
 
@@ -457,7 +469,7 @@ pub fn build_symbol_pool(db: &ProjectDatabase, viewer: SourceRoot) -> SymbolPool
                 continue;
             }
 
-            if hide_from_host_sdk(func.name.as_str()) {
+            if hide_from_host_sdk(func.name.as_str()) || host_has_no_operations(&pkg, &ns_path) {
                 continue;
             }
 
@@ -856,6 +868,51 @@ mod tests {
                 matches!(pool.get(key), Some(cg::Symbol::Function(_))),
                 "{expected} must be a Function symbol",
             );
+        }
+    }
+
+    /// `baml.sync` types reach host SDKs as opaque handles with no operations:
+    /// a host call is its own task, so a lock it took would be released as the
+    /// call returned.
+    #[test]
+    fn sync_types_reach_hosts_without_operations() {
+        let root = Path::new("/tmp/sync_host_surface");
+        let mut db = ProjectDatabase::new();
+        db.workspace(root);
+        db.file(
+            root.join("main.baml").as_path(),
+            "class Counter {\n    n int\n    lock baml.sync.Lock\n}\n",
+        );
+
+        let pool = build_symbol_pool(&db, db.workspace_root().unwrap());
+        let in_sync = |name: &cg::Name| {
+            name.package().as_str() == "baml"
+                && name.namespace().iter().map(Name::as_str).eq(["sync"])
+        };
+
+        let lock = pool
+            .iter()
+            .find_map(|(name, symbol)| match symbol {
+                cg::Symbol::Class(class) if in_sync(name) && name.name().as_str() == "Lock" => {
+                    Some(class)
+                }
+                _ => None,
+            })
+            .expect("baml.sync.Lock crosses as a handle");
+        assert_eq!(lock.properties.len(), 1, "only the handle");
+
+        for (name, symbol) in &pool {
+            if !in_sync(name) {
+                continue;
+            }
+            match symbol {
+                cg::Symbol::Class(class) => assert!(
+                    class.static_methods.is_empty() && class.instance_methods.is_empty(),
+                    "{name} must reach hosts without methods",
+                ),
+                cg::Symbol::Function(_) => panic!("{name} must not reach hosts"),
+                _ => {}
+            }
         }
     }
 

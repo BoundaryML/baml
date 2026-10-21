@@ -312,7 +312,7 @@ fn is_public_resource_stdlib_function(name: &Name) -> bool {
         && name.namespace().first().is_some_and(|namespace| {
             matches!(
                 namespace.as_str(),
-                "csv" | "fs" | "glob" | "http" | "net" | "spawn" | "sync"
+                "csv" | "fs" | "glob" | "http" | "net" | "spawn"
             )
         })
 }
