@@ -207,7 +207,8 @@ class            baml.panics.NegativeBitShift     <builtin>/baml/ns_panics/panic
 class            baml.panics.SdkPanic             <builtin>/baml/ns_panics/panics.baml:166
 class            baml.panics.HostContractViolation <builtin>/baml/ns_panics/panics.baml:173
 class            baml.panics.IntegerOverflow      <builtin>/baml/ns_panics/panics.baml:189
-type             baml.panics.Panic                <builtin>/baml/ns_panics/panics.baml:193
+class            baml.panics.LockNotHeld          <builtin>/baml/ns_panics/panics.baml:195
+type             baml.panics.Panic                <builtin>/baml/ns_panics/panics.baml:199
 interface        baml.random.Rng                  <builtin>/baml/ns_random/random.baml:7
 class            baml.random.SystemRandom         <builtin>/baml/ns_random/random.baml:45
 class            baml.random.Xoshiro256PlusPlus   <builtin>/baml/ns_random/random.baml:68
@@ -227,6 +228,8 @@ interface        baml.spawn.Modifier              <builtin>/baml/ns_spawn/spawn.
 class            baml.spawn.Plan                  <builtin>/baml/ns_spawn/spawn.baml:78
 class            baml.spawn.Limit                 <builtin>/baml/ns_spawn/spawn.baml:146
 class            baml.spawn.Root                  <builtin>/baml/ns_spawn/spawn.baml:183
+class            baml.sync.Lock                   <builtin>/baml/ns_sync/sync.baml:33
+class            baml.sync.Guard                  <builtin>/baml/ns_sync/sync.baml:113
 class            baml.sys.ProcessOptions          <builtin>/baml/ns_sys/sys.baml:2
 enum             baml.sys.StderrMode              <builtin>/baml/ns_sys/sys.baml:18
 class            baml.sys.ShellOutput             <builtin>/baml/ns_sys/sys.baml:29

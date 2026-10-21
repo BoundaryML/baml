@@ -190,6 +190,12 @@ class IntegerOverflow {
     message: string,
 }
 
+/// A `baml.sync.Guard` was released by a task other than the one that
+/// acquired it, while that task still holds the lock.
+class LockNotHeld {
+    message: string,
+}
+
 type Panic = DivisionByZero
     | IndexOutOfBounds
     | InvalidFieldAccess
@@ -205,4 +211,5 @@ type Panic = DivisionByZero
     | NegativeBitShift
     | SdkPanic
     | HostContractViolation
-    | IntegerOverflow;
+    | IntegerOverflow
+    | LockNotHeld;
