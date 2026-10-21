@@ -147,6 +147,55 @@ function main() -> int {
     );
 }
 
+/// Reflection reads a global as a direct read does: before its initializer
+/// ran is the same named error. A lookup by name is no edge the static order
+/// could follow, so only this check catches it.
+#[test]
+fn reading_a_global_through_reflection_before_its_initializer_ran_is_reported() {
+    let program = baml_tests::engine::compile_source_with_opt(
+        r#"
+const EARLY: int = reflect.Package.current().get_global<int>("LATE");
+const LATE = 41;
+
+function main() -> int {
+    EARLY
+}
+"#,
+        OptLevel::One,
+    );
+    let message = init_failure(program);
+    assert!(
+        message.contains("global `user.LATE` was read before its initializer ran"),
+        "{message}"
+    );
+    assert!(
+        message.contains("while initializing global `user.EARLY`"),
+        "{message}"
+    );
+}
+
+/// `globals()` during `$init` lists the globals that have a value: one whose
+/// initializer has not run yet is left out rather than read as a placeholder.
+#[tokio::test]
+async fn globals_during_init_leave_out_uninitialized_globals() {
+    let program = baml_tests::engine::compile_source_with_opt(
+        r#"
+const SEEN_EARLY = reflect.Package.current().globals().has("root.LATE");
+const LATE = 41;
+
+function main() -> bool {
+    SEEN_EARLY
+}
+"#,
+        OptLevel::One,
+    );
+    let engine = engine(program).expect("`$init` runs");
+    assert_eq!(
+        call(&engine, "user.main").await,
+        BexExternalValue::Bool(false)
+    );
+}
+
 /// Enough allocation during `$init` to cross the collector's budget makes the
 /// VM offer a safe point (an early yield). No collector exists until `$init`
 /// finishes, so `$init` resumes past it instead of failing engine creation.
