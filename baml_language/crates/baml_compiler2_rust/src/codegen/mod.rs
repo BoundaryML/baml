@@ -22,8 +22,8 @@ use baml_compiler2_mir::{
 use crate::{
     admit::Rejection,
     analysis::{
-        Analysis, Repr, array_iter_walk, array_next_call, reads_frame, suspends_directly,
-        user_callee,
+        Analysis, Repr, Signature, array_iter_walk, array_next_call, reads_frame,
+        suspends_directly, user_callee,
     },
     index::{Positions, ProgramIndex},
     render::coerce,
@@ -65,6 +65,8 @@ pub(crate) struct ProgramContext<'a, 'db> {
     pub(crate) pausing: &'a BTreeSet<usize>,
     /// Functions whose bodies run with a VM frame, never a frame record.
     pub(crate) framed: &'a BTreeSet<usize>,
+    /// Typed signatures of the direct entries of compiled bodies.
+    pub(crate) signatures: &'a HashMap<usize, Signature>,
 }
 
 pub(crate) struct Generator<'a, 'db> {
@@ -77,6 +79,7 @@ pub(crate) struct Generator<'a, 'db> {
     pub(crate) pausing: &'a BTreeSet<usize>,
     /// Functions whose bodies run with a VM frame, never a frame record.
     pub(crate) framed: &'a BTreeSet<usize>,
+    pub(crate) signatures: &'a HashMap<usize, Signature>,
     /// First spill slot used to root values across a suspension.
     pub(crate) spill_base: usize,
     /// Whether this body may suspend: it then polls at loop back edges and
@@ -127,6 +130,7 @@ impl<'a, 'db> Generator<'a, 'db> {
             symbols: program.symbols,
             pausing: program.pausing,
             framed: program.framed,
+            signatures: program.signatures,
             spill_base: 0,
             pauses: program.pausing.contains(&object),
             recursive: unit.recursive,
@@ -184,12 +188,41 @@ impl<'db> Generator<'_, 'db> {
         let stmts = structured.stmts.clone();
         self.structured = Some(structured);
         self.out.clear();
-        // Every closure exit records the current PC before returning an error.
+        let signature = self.analysis.signature(self.body);
+        // The VM and runtime-dispatched calls enter with boxed arguments; a
+        // compiled caller calls the typed direct entry.
+        let params: Vec<String> = signature
+            .params
+            .iter()
+            .enumerate()
+            .map(|(i, repr)| coerce(&format!("args[{i}]"), Repr::Value, *repr))
+            .collect();
         self.emit_line(&format!(
             "#[inline]\npub fn {symbol}(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> R<Value> {{"
         ));
+        let passed = params.iter().fold(String::new(), |mut out, param| {
+            let _ = write!(out, ", {param}");
+            out
+        });
+        self.emit_line(&format!("let r = {symbol}_d(vm, fr{passed});"));
+        self.emit_line(&format!("Ok({})", coerce("r?", signature.ret, Repr::Value)));
+        self.emit_line("}");
+        let ret = signature.ret.rust_type();
+        let typed =
+            signature
+                .params
+                .iter()
+                .enumerate()
+                .fold(String::new(), |mut out, (i, repr)| {
+                    let _ = write!(out, ", arg{i}: {}", repr.rust_type());
+                    out
+                });
+        // Every closure exit records the current PC before returning an error.
+        self.emit_line(&format!(
+            "#[inline]\npub fn {symbol}_d(vm: &mut BexVm, fr: &FrameRecord{typed}) -> R<{ret}> {{"
+        ));
         self.emit_line("let mut pc: u32 = 0;");
-        self.emit_line("let result = (|| -> R<Value> {");
+        self.emit_line(&format!("let result = (|| -> R<{ret}> {{"));
         self.declare_locals(!self.analysis.loop_headers.is_empty());
         // The call path leaves the arguments in a hooked body's leading slots.
         if self.slots > self.slot_base() {
@@ -204,7 +237,7 @@ impl<'db> Generator<'_, 'db> {
         self.stmts(&stmts)?;
         // Every path ends in an `Exit`; this keeps the closure well-typed.
         self.emit_line("#[allow(unreachable_code)]");
-        self.emit_line("Ok(Value::NULL)");
+        self.emit_line(&format!("Ok({})", signature.ret.default_value()));
         self.emit_line("})();");
         self.emit_line("if result.is_err() {");
         self.emit_line("fr.note_pc(pc);");
@@ -238,12 +271,13 @@ impl<'db> Generator<'_, 'db> {
                 continue;
             }
             let ty = repr.rust_type();
+            // Parameters arrive typed as `Signature` holds them.
             let init = if !(1..=arity).contains(&i) {
                 repr.default_value().to_string()
             } else if self.body.locals[i].is_captured {
-                format!("vm.new_cell(args[{}])", i - 1)
+                format!("vm.new_cell(arg{})", i - 1)
             } else {
-                coerce(&format!("args[{}]", i - 1), Repr::Value, repr)
+                format!("arg{}", i - 1)
             };
             self.emit_line(&format!("let mut l{i}: {ty} = {init};"));
         }

@@ -417,10 +417,11 @@ impl<'db> Generator<'_, 'db> {
         match block.terminator.as_ref().expect("checked in Analysis") {
             Terminator::Return => {
                 // Type locals have no runtime binding.
+                // The result is held as the body's `Signature` returns it.
                 let result = if self.analysis.is_type_local(0) {
                     self.load(id, &Place::Local(Local(0)))?.code
                 } else {
-                    coerce("l0", self.repr(Local(0)), Repr::Value)
+                    "l0".to_string()
                 };
                 self.emit_statement(&format!("return Ok({result});"));
             }

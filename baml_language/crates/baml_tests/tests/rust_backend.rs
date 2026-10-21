@@ -306,9 +306,10 @@ fn body_of(module: &RustModule, name: &str) -> String {
         .find(|f| f.display == name)
         .unwrap_or_else(|| panic!("{name} should compile"))
         .symbol;
+    // The body is the typed direct entry; `{symbol}` boxes its arguments.
     let start = module
         .source
-        .find(&format!("pub fn {symbol}("))
+        .find(&format!("pub fn {symbol}_d("))
         .expect("body is emitted");
     // Generated code is unindented, so a body ends where the next item starts.
     let mut end = module.source.len();

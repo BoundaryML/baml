@@ -60,6 +60,15 @@ impl Repr {
     }
 }
 
+/// The typed signature of a body's direct entry: its parameters and result
+/// held as the body holds them, so a compiled caller passes and receives
+/// scalars unboxed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Signature {
+    pub(crate) params: Vec<Repr>,
+    pub(crate) ret: Repr,
+}
+
 pub(crate) struct Analysis {
     pub(crate) arity: usize,
     /// Captured slots hold cells; other slots hold their values.
@@ -91,6 +100,26 @@ pub(crate) struct Analysis {
 }
 
 impl Analysis {
+    /// The body's [`Signature`]. A captured parameter is boxed into its cell
+    /// from a `Value`, and a type parameter has no value binding.
+    pub(crate) fn signature(&self, body: &MirFunctionBody<'_>) -> Signature {
+        let params = (1..=self.arity)
+            .map(|i| {
+                if i >= body.locals.len() || self.is_type_local(i) || body.locals[i].is_captured {
+                    Repr::Value
+                } else {
+                    self.reprs[i]
+                }
+            })
+            .collect();
+        let ret = if self.is_type_local(0) {
+            Repr::Value
+        } else {
+            self.reprs[0]
+        };
+        Signature { params, ret }
+    }
+
     pub(crate) fn new<'db>(
         db: &'db dyn baml_compiler2_mir::Db,
         index: &ProgramIndex,

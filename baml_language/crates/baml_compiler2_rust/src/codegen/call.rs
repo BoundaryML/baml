@@ -1,5 +1,7 @@
 //! Generates inline calls, suspension requests, and interface dispatch operands.
 
+use std::fmt::Write as _;
+
 use baml_compiler2_mir::{BlockId, Constant, Operand, TyTemplateInterface, function_display_name};
 use bex_vm_types::FunctionKind;
 
@@ -8,6 +10,7 @@ use crate::{
     admit::Rejection,
     analysis::{EQUALS_EQUALS, Repr, builtin_is_callable, call_shape, operand_ty},
     index::FunctionInfo,
+    render::coerce,
 };
 
 impl<'db> Generator<'_, 'db> {
@@ -71,8 +74,9 @@ impl<'db> Generator<'_, 'db> {
     }
 
     /// A call to a compiled body. A callee without VM-frame state runs with
-    /// a frame record when the VM allows ([`bex_vm::BexVm::direct_calls`]);
-    /// otherwise, and for a callee that needs one, it runs with a VM frame.
+    /// a frame record through its typed direct entry when the VM allows
+    /// ([`bex_vm::BexVm::direct_calls`]); otherwise, and for a callee that
+    /// needs one, it runs with a VM frame through its boxed entry.
     #[allow(clippy::too_many_arguments)]
     fn compiled_call(
         &mut self,
@@ -102,30 +106,93 @@ impl<'db> Generator<'_, 'db> {
             format!("&{name}")
         };
         let slots = self.laid_out_operands(block, name, info, layout, args)?;
-        let values: Vec<String> = slots
-            .iter()
-            .map(|slot| match slot {
-                Some(expr) => self.value_arg(expr),
+        let signature = self.signatures.get(&object).cloned();
+        let typed = signature.as_ref().filter(|signature| {
+            !self.framed.contains(&object)
+                && signature.params.len() == slots.len()
+                && slots
+                    .iter()
+                    .zip(&signature.params)
+                    .all(|(slot, repr)| slot.is_some() || *repr == Repr::Value)
+        });
+        let Some(signature) = typed else {
+            let values: Vec<String> = slots
+                .iter()
+                .map(|slot| match slot {
+                    Some(expr) => self.value_arg(expr),
+                    None => "Value::OMITTED_ARG".to_string(),
+                })
+                .collect();
+            let values = format!("&[{}]", values.join(", "));
+            let framed =
+                format!("vm.call_compiled(fr, {callee}, {symbol}, {type_args}, {values}, {site})");
+            // Through the boxed entry, with a frame record when the callee
+            // has no VM-frame state.
+            let call = if self.framed.contains(&object) {
+                framed
+            } else if types.is_empty() {
+                format!(
+                    "(if vm.direct_calls() {{ vm.call_record(fr, {callee}, {site}, |vm, fr| {symbol}(vm, fr, {values})) }} else {{ {framed} }})"
+                )
+            } else {
+                format!(
+                    "(if vm.direct_calls_typed({type_args}) {{ vm.call_record_typed(fr, {callee}, {type_args}, {site}, |vm, fr| {symbol}(vm, fr, {values})) }} else {{ {framed} }})"
+                )
+            };
+            let code = self.call_code(block, object, &call)?;
+            return Ok(Expr::new(code, Repr::Value));
+        };
+        // Arguments are bound once, as the callee holds them.
+        let mut typed_args = Vec::with_capacity(slots.len());
+        for (slot, repr) in slots.iter().zip(&signature.params) {
+            let code = match slot {
+                Some(expr) => coerce(&expr.code, expr.repr, *repr),
                 None => "Value::OMITTED_ARG".to_string(),
-            })
-            .collect();
-        let values = format!("&[{}]", values.join(", "));
-        let framed =
-            format!("vm.call_compiled(fr, {callee}, {symbol}, {type_args}, {values}, {site})");
-        // A callee without VM-frame state runs with a frame record.
-        let call = if self.framed.contains(&object) {
-            framed
-        } else if types.is_empty() {
+            };
+            let temp = format!("a{}", self.temps);
+            self.temps += 1;
+            self.pending
+                .push(format!("let {temp}: {} = {code};", repr.rust_type()));
+            typed_args.push(temp);
+        }
+        let direct_args = typed_args.iter().fold(String::new(), |mut out, arg| {
+            let _ = write!(out, ", {arg}");
+            out
+        });
+        let direct = if types.is_empty() {
             format!(
-                "(if vm.direct_calls() {{ vm.call_record(fr, {callee}, {site}, |vm, fr| {symbol}(vm, fr, {values})) }} else {{ {framed} }})"
+                "vm.call_record(fr, {callee}, {site}, |vm, fr| {symbol}_d(vm, fr{direct_args}))"
             )
         } else {
             format!(
-                "(if vm.direct_calls_typed({type_args}) {{ vm.call_record_typed(fr, {callee}, {type_args}, {site}, |vm, fr| {symbol}(vm, fr, {values})) }} else {{ {framed} }})"
+                "vm.call_record_typed(fr, {callee}, {type_args}, {site}, |vm, fr| {symbol}_d(vm, fr{direct_args}))"
             )
         };
+        let mut boxed = String::from("{ ");
+        let mut values = Vec::with_capacity(typed_args.len());
+        for (j, (arg, repr)) in typed_args.iter().zip(&signature.params).enumerate() {
+            let _ = write!(boxed, "let v{j} = {}; ", coerce(arg, *repr, Repr::Value));
+            values.push(format!("v{j}"));
+        }
+        let unbox = match signature.ret {
+            Repr::Int => "bex_vm::compiled_rt::expect_int(v)",
+            Repr::Bool => "bex_vm::compiled_rt::expect_bool(v)",
+            Repr::Float => "bex_vm::compiled_rt::expect_f64(v)",
+            Repr::Value => "Ok(v)",
+        };
+        let _ = write!(
+            boxed,
+            "match vm.call_compiled(fr, {callee}, {symbol}, {type_args}, &[{}], {site}) {{ Ok(v) => {unbox}, Err(e) => Err(e) }} }}",
+            values.join(", ")
+        );
+        let allowed = if types.is_empty() {
+            "vm.direct_calls()".to_string()
+        } else {
+            format!("vm.direct_calls_typed({type_args})")
+        };
+        let call = format!("(if {allowed} {{ {direct} }} else {boxed})");
         let code = self.call_code(block, object, &call)?;
-        Ok(Expr::new(code, Repr::Value))
+        Ok(Expr::new(code, signature.ret))
     }
 
     /// Route a compiled call's error, rooting the caller's live values when

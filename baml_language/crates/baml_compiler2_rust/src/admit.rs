@@ -14,7 +14,7 @@ use baml_compiler2_mir::{
 use bex_vm_types::{FunctionKind, Program};
 
 use crate::{
-    analysis::{Analysis, Repr, capture_reprs, value_reprs},
+    analysis::{Analysis, Repr, Signature, capture_reprs, value_reprs},
     codegen::{Generator, ProgramContext},
     index::ProgramIndex,
     reach::{reachable, references},
@@ -259,6 +259,10 @@ fn admission_fixpoint(
             })
             .map(|(&object, _)| object)
             .collect();
+        let signatures: HashMap<usize, Signature> = units
+            .iter()
+            .map(|(&object, unit)| (object, unit.analysis.signature(body_of(unit.mir))))
+            .collect();
         let symbols: HashMap<usize, String> = units
             .keys()
             .map(|&object| (object, symbol_for(index.display(object), object)))
@@ -274,6 +278,7 @@ fn admission_fixpoint(
                 symbols: &symbols,
                 pausing: &pausing,
                 framed: &framed,
+                signatures: &signatures,
             };
             let mut generator = Generator::new(&program, &mut builtins, object, unit);
             match generator.function(&symbols[&object]) {
