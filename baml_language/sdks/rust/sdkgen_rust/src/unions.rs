@@ -199,7 +199,11 @@ pub(crate) fn filter_throws_type(ty: &Ty, analysis: &Analysis) -> Option<Ty> {
                 .collect::<Option<Box<[_]>>>()?;
             Some(Ty::Class(name.clone(), args))
         }
-        Ty::TypeAlias(name) if !analysis.is_emitted(name) => None,
+        Ty::TypeAlias(name)
+            if !crate::translate_ty::is_canonical_json(name) && !analysis.is_emitted(name) =>
+        {
+            None
+        }
         _ => Some(ty.clone()),
     }
 }
@@ -246,6 +250,16 @@ pub(crate) fn shape_error(arms: &[Ty]) -> Option<String> {
     let mut has_string_literal_arm = false;
     for arm in arms {
         match arm {
+            // `json` already spans null, bool, numbers, strings, lists and
+            // maps, so beside any other arm the wire value alone cannot pick
+            // the arm, and an engine-selected arm index may name either side
+            // of the overlap — fail closed.
+            Ty::TypeAlias(name) if crate::translate_ty::is_canonical_json(name) => {
+                return Some(format!(
+                    "unsupported union arm: {arm} alongside other arms (it overlaps them on \
+                     the wire)"
+                ));
+            }
             Ty::Literal(baml_base::Literal::String(_), ..) => has_string_literal_arm = true,
             // Non-string literal arms have no variant-name story yet.
             Ty::Literal(lit, ..) => {
@@ -350,6 +364,7 @@ pub(crate) fn arm_is_representable(ty: &Ty, analysis: &Analysis) -> bool {
         // use site is enforced when the reference is translated.
         Ty::TypeVar(..) => true,
         Ty::Class(name, args) => args.is_empty() && analysis.is_emitted(name),
+        Ty::TypeAlias(name) if crate::translate_ty::is_canonical_json(name) => true,
         Ty::Enum(name) | Ty::EnumVariant(name, _) | Ty::TypeAlias(name) => {
             analysis.is_emitted(name)
         }
