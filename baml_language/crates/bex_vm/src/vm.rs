@@ -18,7 +18,6 @@ use std::{collections::HashMap, sync::Arc};
 
 use baml_type::{Int63, IntShiftError, Name, normalize::TypeContext};
 use btel_types::context::{Context, ContextPatch};
-use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 
 use crate::{
@@ -95,7 +94,7 @@ macro_rules! verifier_unreachable {
 
 use ::bex_heap::TlabHolder;
 use ::bex_vm_types::{
-    EarlyYieldCheck, ForwardingMap, RootHaver,
+    EarlyYieldCheck, RootHaver,
     types::{ErrorClass, FutureId},
 };
 use ::core::any::TypeId;
@@ -388,7 +387,7 @@ impl RootHaver for BytecodeFrame {
             });
         }
     }
-    fn forward_roots(&mut self, roots: &ForwardingMap) {
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         self.function = roots.get(&self.function).copied().unwrap_or(self.function);
         for ty in &mut self.type_args {
             ty.visit_heads_mut(&mut |head| {
@@ -432,7 +431,7 @@ impl RootHaver for NativeFrame {
         roots.push(self.function);
         roots.extend_from_slice(&self.continuation.gc_roots());
     }
-    fn forward_roots(&mut self, roots: &ForwardingMap) {
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         self.function = roots.get(&self.function).copied().unwrap_or(self.function);
         self.continuation.apply_forwarding(roots);
     }
@@ -471,7 +470,6 @@ pub(crate) mod tests {
         bytecode::Bytecode,
         types::{BoundMethod, Closure, Function, FunctionOrigin, TypeValue, type_tags},
     };
-    use rustc_hash::FxHashMap;
 
     use super::{
         BexVm, Frame, FrameTypeMetadata, TakenTypeArgs, VmExecState,
@@ -527,9 +525,8 @@ pub(crate) mod tests {
             pending_call_type_values: Vec::new(),
             compiled: super::compiled_rt::CompiledState::default(),
             pending_call_passes_type_args: false,
-            static_load_type_cache: FxHashMap::default(),
-            static_virtual_call_cache: FxHashMap::default(),
-            impl_rule_cache: std::cell::RefCell::default(),
+            static_load_type_cache: HashMap::new(),
+            static_virtual_call_cache: HashMap::new(),
             telemetry: Some(TelemetryState::new_root(
                 Arc::new(TelemetryPolicies::new()),
                 btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
@@ -775,7 +772,7 @@ pub(crate) mod tests {
             fn gc_roots(&self) -> Vec<HeapPtr> {
                 vec![self.0]
             }
-            fn apply_forwarding(&mut self, roots: &bex_vm_types::ForwardingMap) {
+            fn apply_forwarding(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
                 self.0 = roots.get(&self.0).copied().unwrap_or(self.0);
             }
         }
@@ -1480,7 +1477,7 @@ impl RootHaver for Frame {
             Frame::Native(f) => f.collect_roots(roots),
         }
     }
-    fn forward_roots(&mut self, roots: &ForwardingMap) {
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         match self {
             Frame::Bytecode(f) => f.forward_roots(roots),
             Frame::Native(f) => f.forward_roots(roots),
@@ -1783,22 +1780,13 @@ pub struct BexVm {
     /// Created-once immutable type objects for fully realized `LoadType`
     /// constants in static functions. The compact numeric key keeps the
     /// per-iteration lookup cheaper than re-hashing the full realized type.
-    /// Entries are explicit VM GC roots. Fx-hashed: the key is a function
-    /// address and a site index, nothing a program chooses, and the map is
-    /// only ever iterated to rebuild itself or to list its values as roots.
-    static_load_type_cache: FxHashMap<(usize, TypeValueSite), HeapPtr>,
+    /// Entries are explicit VM GC roots.
+    static_load_type_cache: HashMap<(usize, TypeValueSite), HeapPtr>,
     /// Monomorphic static virtual-call results keyed by caller site and the
     /// receiver/interface instantiation observed there. Only immutable
     /// program-image rules enter this cache, so runtime package loading and
     /// dynamic builder registration remain live on every dynamic dispatch.
-    static_virtual_call_cache: FxHashMap<StaticVirtualCallKey, StaticVirtualCallTarget>,
-    /// Memoized impl-rule selections
-    /// ([`ImplResolver::resolve_implements_rule`](crate::package_baml::ImplResolver::resolve_implements_rule)),
-    /// keyed on the question and the resolver's world, dropped whenever the
-    /// shared rule-world epoch moves or a collection runs. Interior
-    /// mutability because the resolver holds `&BexVm`; a VM runs on one
-    /// thread at a time, so no lock. See `ImplRuleCache`.
-    pub(crate) impl_rule_cache: std::cell::RefCell<crate::package_baml::ImplRuleCache>,
+    static_virtual_call_cache: HashMap<StaticVirtualCallKey, StaticVirtualCallTarget>,
 }
 
 /// VM execution state.
@@ -2529,9 +2517,8 @@ impl BexVm {
             pending_call_type_values: Vec::new(),
             compiled: compiled_rt::CompiledState::default(),
             pending_call_passes_type_args: false,
-            static_load_type_cache: FxHashMap::default(),
-            static_virtual_call_cache: FxHashMap::default(),
-            impl_rule_cache: std::cell::RefCell::default(),
+            static_load_type_cache: HashMap::new(),
+            static_virtual_call_cache: HashMap::new(),
             telemetry,
             trace_scope,
             manual_activations: Vec::new(),
@@ -11751,7 +11738,7 @@ impl ::bex_vm_types::RootHaver for BexVm {
         // so they're already included in the stack iteration above.
     }
 
-    fn forward_roots(&mut self, roots: &ForwardingMap) {
+    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
         // The GC has reset the heap's TLAB cursor (`gen0_next_chunk`) and
         // swapped semispaces, so this VM's cached `alloc_ptr`/`alloc_limit`
         // now point into a region the heap will hand out to other VMs as a
@@ -11818,9 +11805,6 @@ impl ::bex_vm_types::RootHaver for BexVm {
                 self.static_virtual_call_cache.insert(key, target);
             }
         }
-        // Every memoized impl selection names heap objects by address; the
-        // collection may have moved or freed them.
-        self.impl_rule_cache.get_mut().clear();
         for transfer in &mut self.context_transfers {
             for value in [&mut transfer.handling, &mut transfer.target] {
                 if let Some(ptr) = value.as_object_ptr()

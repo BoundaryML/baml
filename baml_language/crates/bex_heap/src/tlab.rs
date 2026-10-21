@@ -164,10 +164,6 @@ impl Tlab {
             self.refill();
         }
 
-        // Read before `obj` is moved into the heap; listed once the address
-        // is known.
-        let finalizable = self.heap.finalizable(&obj);
-
         let global_idx = self.alloc_ptr;
         self.alloc_ptr += 1;
 
@@ -190,11 +186,7 @@ impl Tlab {
         let ptr = unsafe { (*self.heap.gen0.get()).get_ptr(runtime_idx) };
 
         // SAFETY: The pointer is valid and points to a valid object we just wrote
-        let ptr = unsafe { self.heap.make_heap_ptr(ptr) };
-        if finalizable {
-            self.heap.list_finalizable(ptr);
-        }
-        ptr
+        unsafe { self.heap.make_heap_ptr(ptr) }
     }
 
     /// Assign a fresh telemetry identity without registering a weak reference.

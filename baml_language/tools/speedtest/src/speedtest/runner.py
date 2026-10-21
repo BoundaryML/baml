@@ -1,8 +1,7 @@
 """The run loop: build, verify, measure, summarize, write the bundle.
 
     1. Build: pack every workload's main.baml with the speedtest driver into one
-       executable per BAML backend in the run (pack time and executable size
-       are results).
+       executable (pack time and executable size are results).
     2. Verify: run every (workload, row) once and compare its result with the
        workload's `expect`; a row that fails is reported, never measured.
     3. Measure: `trials` rounds; each round runs every (workload, row) once, in
@@ -14,7 +13,6 @@
 
 import csv
 import os
-import queue
 import random
 import re
 import shutil
@@ -22,7 +20,6 @@ import subprocess
 import sys
 import tempfile
 import time
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from statistics import median, stdev
 
@@ -58,50 +55,23 @@ def _cli_env():
     return {**os.environ, "DEV_BAML_CLI_DISABLE_AGENT_DETECTION": "1"}
 
 
-def build_baml(cli, workload, stage, backend, repo, build_dir):
-    """Pack main.baml plus the driver into one executable with `backend`. Returns a build record."""
-    project = stage / backend / workload["id"].replace("/", "__")
+def build_baml(cli, workload, stage):
+    """Pack main.baml plus the driver into one executable. Returns a build record."""
+    project = stage / workload["id"].replace("/", "__")
     src = project / "baml_src"
     src.mkdir(parents=True)
-    # Bind BAML_TELEMETRY so the packed binary honours the row's level; an
-    # unbound pack runs at the baked default (medium) whatever the env says.
-    (project / "baml.toml").write_text(
-        '[package]\nname = "speedtest_workload"\n[pack.env_var_names]\nBAML_TELEMETRY = "BAML_TELEMETRY"\n'
-    )
+    (project / "baml.toml").write_text('[package]\nname = "speedtest_workload"\n')
     shutil.copy(workload["files"]["baml"], src / "main.baml")
     shutil.copy(SETUP_DRIVER if _has_setup(workload["baml"]) else DRIVER, src / "speedtest_driver.baml")
     out = project / "workload"
-    cmd = [str(cli), "--no-progress", "--color", "never", "pack"]
-    if backend == "rust":
-        # The runtime compiles once per build directory; each workload's crate reuses it.
-        cmd += ["--rust", "--rust-workspace", str(repo), "--rust-build-dir", str(build_dir)]
     start = time.perf_counter()
-    r = subprocess.run(cmd + ["speedtest_driver", "-o", str(out)],
+    r = subprocess.run([str(cli), "--no-progress", "--color", "never", "pack", "speedtest_driver", "-o", str(out)],
                        cwd=project, capture_output=True, text=True, env=_cli_env(), stdin=subprocess.DEVNULL)
     seconds = time.perf_counter() - start
     if r.returncode != 0 or not out.exists():
         lines = [l for l in r.stderr.strip().splitlines() if l.strip() and not l.startswith("warning:")]
         return {"status": "failed", "error": (lines[-1] if lines else f"exit {r.returncode}")[:400]}
     return {"status": "ok", "artifact": str(out), "seconds": seconds, "bytes": out.stat().st_size}
-
-
-def _build_all(cli, workloads, backends, stage, repo, jobs):
-    """Pack every (workload, backend), `jobs` at a time. Rust packs are mostly a
-    single-threaded LTO link, so parallel slots each get their own build
-    directory and pay for the runtime once."""
-    dirs = queue.Queue()
-    for slot in range(max(jobs, 1)):
-        dirs.put(stage / f"rust-build-{slot}")
-
-    def one(w, backend):
-        build_dir = dirs.get()
-        try:
-            return (w["id"], backend), build_baml(cli, w, stage, backend, repo, build_dir)
-        finally:
-            dirs.put(build_dir)
-
-    with ThreadPoolExecutor(max_workers=max(jobs, 1)) as pool:
-        return dict(pool.map(lambda wb: one(*wb), [(w, b) for w in workloads for b in backends]))
 
 
 def _stats(values):
@@ -235,24 +205,22 @@ def cmd_run(args):
     if load_start[0] > (os.cpu_count() or 1) / 4:
         _log(f"warning: load average {load_start[0]:.1f} on {os.cpu_count()} cores; results will be noisy")
     try:
-        backends = sorted({r.backend for r in row_list if r.is_baml})
-        _log(f"building {len(workloads)} workloads as {', '.join(backends)} with {cli}")
-        builds = _build_all(cli, workloads, backends, stage, repo, args.build_jobs)
-        for (wid, backend), b in builds.items():
+        _log(f"building {len(workloads)} workloads with {cli}")
+        for w in workloads:
+            builds[w["id"]] = build_baml(cli, w, stage)
+            b = builds[w["id"]]
             if b["status"] != "ok":
-                _log(f"  {wid} [{backend}]: pack failed: {b['error']}")
-        builds = {w["id"]: {backend: builds[(w["id"], backend)] for backend in backends} for w in workloads}
+                _log(f"  {w['name']}: pack failed: {b['error']}")
 
         _log(f"verifying {len(cells)} (workload, row) pairs")
         for (wid, _), cell in cells.items():
             if not cell.row.is_baml and versions.get(cell.row.kind) is None:
                 cell.status, cell.reason = "unavailable", f"{cell.row.kind} is not installed"
                 continue
-            build = builds[wid].get(cell.row.backend, {})
-            if cell.row.is_baml and build["status"] != "ok":
-                cell.fail(f"pack failed: {build['error']}")
+            if cell.row.is_baml and builds[wid]["status"] != "ok":
+                cell.fail(f"pack failed: {builds[wid]['error']}")
                 continue
-            t = _trial(cell, build.get("artifact"), 1, 0, stage, args.cpu)
+            t = _trial(cell, builds[wid].get("artifact"), 1, 0, stage, args.cpu)
             if t.ok:
                 cell.status = "ok"
             else:
@@ -268,8 +236,7 @@ def cmd_run(args):
             for cell in order:
                 w = cell.workload
                 jobs = args.jobs or w["jobs"]
-                artifact = builds[w["id"]].get(cell.row.backend, {}).get("artifact")
-                t = _trial(cell, artifact, jobs, w["warmup"], stage, args.cpu)
+                t = _trial(cell, builds[w["id"]].get("artifact"), jobs, w["warmup"], stage, args.cpu)
                 cell.trials.append(t)
                 if not t.ok:
                     _log(f"  trial {i + 1}: {w['name']} [{cell.row.key}]: {t.error}")

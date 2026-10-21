@@ -571,7 +571,7 @@ fn unsupported_object_message(object: &Object) -> &'static str {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use std::{collections::HashMap, sync::Arc};
 
     use bex_external_types::MediaKind;
     use bex_heap::{BexHeap, HeapPermit as _, HeapPermitManager, Tlab, TlabHolder};
@@ -585,7 +585,11 @@ mod tests {
 
     impl RootHaver for EmptyRoots {
         fn collect_roots(&self, _roots: &mut Vec<bex_vm_types::HeapPtr>) {}
-        fn forward_roots(&mut self, _forward: &bex_vm_types::ForwardingMap) {}
+        fn forward_roots(
+            &mut self,
+            _forward: &HashMap<bex_vm_types::HeapPtr, bex_vm_types::HeapPtr>,
+        ) {
+        }
     }
 
     impl TlabHolder for EmptyRoots {

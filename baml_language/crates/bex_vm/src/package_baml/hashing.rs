@@ -1,6 +1,9 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
-use bex_vm_types::{ForwardingMap, HeapPtr, Object, RealizedTy, Value, ValueKind};
+use bex_vm_types::{HeapPtr, Object, RealizedTy, Value, ValueKind};
 
 use super::{Continuation, ImplResolver, NativeCallResult};
 use crate::{BexVm, VmPanic, errors::VmRustFnError};
@@ -230,7 +233,7 @@ impl Continuation for HashDriver {
         roots
     }
 
-    fn apply_forwarding(&mut self, forwarding: &ForwardingMap) {
+    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         let forward = |ptr| forwarding.get(&ptr).copied().unwrap_or(ptr);
         if let Some(ptr) = self.state.as_object_ptr() {
             self.state = Value::object(forward(ptr));

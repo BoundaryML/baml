@@ -15,16 +15,16 @@
 //! reserve a placeholder slot per impl rule and per package, build the heap
 //! unsealed, fill each slot with its resolved pointers, then seal.
 
-use std::sync::{
-    Arc, RwLock,
-    atomic::{AtomicU64, Ordering},
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
 };
 
 use baml_base::{LangItem, LangPackage};
 use baml_type::{MediaKind, Name};
 use bex_heap::{BexHeap, Generation};
 use bex_vm_types::{
-    ForwardingMap, HeapPtr, Object, ObjectIndex, TypeHead,
+    HeapPtr, Object, ObjectIndex, TypeHead,
     types::{
         LocalName, MethodImpl, Package, PackageKind, ProgramImplRule, ProgramPackage,
         RuntimeImplRule,
@@ -58,15 +58,6 @@ pub struct DynRuleEntry {
 #[derive(Default, Debug)]
 pub struct DynDispatchTables {
     impl_rules: RwLock<IndexMap<HeapPtr, Vec<DynRuleEntry>>>,
-    /// Generation of the *rule world*: everything an impl-resolution answer
-    /// can depend on beyond the immutable program image — this table, every
-    /// runtime package's published `impl_rules`, and the heap addresses of
-    /// the rules and packages themselves. Each VM's
-    /// [`ImplRuleCache`](crate::package_baml::ImplRuleCache) remembers the
-    /// epoch it was filled at and drops everything when the epoch moves, so a
-    /// cached answer (including a negative one) never outlives the world it
-    /// was computed in. Shared by every VM of an engine through the `Arc`.
-    rule_world_epoch: AtomicU64,
 }
 
 impl DynDispatchTables {
@@ -77,23 +68,6 @@ impl DynDispatchTables {
             .entry(interface)
             .or_default()
             .push(entry);
-        self.note_rule_world_changed();
-    }
-
-    /// The current rule-world generation; see [`Self::note_rule_world_changed`].
-    #[inline]
-    pub fn rule_world_epoch(&self) -> u64 {
-        self.rule_world_epoch.load(Ordering::Acquire)
-    }
-
-    /// Record that the set of impl rules any resolver can see, or where they
-    /// live, has changed: a witness was registered, a runtime package
-    /// published a load, or a collection moved or freed heap objects. Every
-    /// per-VM resolution cache filled under an older epoch is stale from
-    /// here on. Call *after* the change is visible so a VM that observes the
-    /// new epoch resolves against the new world.
-    pub fn note_rule_world_changed(&self) {
-        self.rule_world_epoch.fetch_add(1, Ordering::AcqRel);
     }
 
     /// The witness rules registered for `interface`, as pointers to their heap
@@ -140,7 +114,7 @@ impl DynDispatchTables {
     /// pointers the collection left in place.
     pub fn sweep_and_forward(
         &self,
-        forwarding: &ForwardingMap,
+        forwarding: &HashMap<HeapPtr, HeapPtr>,
         survived: impl Fn(HeapPtr) -> bool,
     ) {
         // Forward a weak pointer, or report it dead.
@@ -179,11 +153,6 @@ impl DynDispatchTables {
                 table.entry(interface).or_default().extend(rules);
             }
         }
-        // A collection moved or freed rules, packages, and the declarations
-        // cached answers point at; every VM's resolution cache must refill.
-        // (Each VM also clears its own in `forward_roots`; this covers a VM
-        // that was not a permit holder while the collection ran.)
-        self.note_rule_world_changed();
     }
 
     #[cfg(test)]
@@ -214,7 +183,7 @@ impl DynDispatchRoot {
 impl bex_vm_types::RootHaver for DynDispatchRoot {
     fn collect_roots(&self, _roots: &mut Vec<HeapPtr>) {}
 
-    fn forward_roots(&mut self, forwarding: &ForwardingMap) {
+    fn forward_roots(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
         // A pointer the collection left in place is one that still lives in
         // Gen2 (a minor collection never moves or frees Gen2; a major moves
         // every survivor to a fresh buffer, so no stale address lands there)
@@ -1021,10 +990,9 @@ mod tests {
         #[expect(unsafe_code, reason = "standalone stop-the-world GC test")]
         let (_, _, forwarding) =
             unsafe { heap.collect_garbage_generational(&[], CollectionLevel::Minor) };
-        assert_eq!(
-            forwarding.get(&old_class).copied().unwrap_or(old_class),
-            old_class,
-            "precondition: a minor collection leaves an unvisited Gen2 object where it is"
+        assert!(
+            !forwarding.contains_key(&old_class),
+            "precondition: an unvisited Gen2 object is absent from a minor forwarding map"
         );
         hook.forward_roots(&forwarding);
         assert_eq!(
