@@ -13,6 +13,7 @@ use super::function::{Receiver, doc_attrs, emit_method};
 use crate::{
     SkipWarning, idents,
     translate_ty::{self, TyCtx},
+    wire_ty,
 };
 
 /// Emit the struct + conversion impls for a class the analysis marked
@@ -83,6 +84,18 @@ pub(crate) fn emit(
     let ident = idents::ident(name.name().as_str());
     let docs = doc_attrs(class.docstring.as_deref());
 
+    // A field is stated under the type it declares, the class's own type
+    // variables spelled as the type arguments the instance is stated with
+    // (bound in the emitted `to_baml_in`).
+    let type_args_ident = quote::format_ident!("__baml_type_args");
+    let instance_type_var = |name: &str| {
+        class_params
+            .iter()
+            .position(|param| param == name)
+            .map(|index| {
+                quote! { #type_args_ident[#index].clone() }
+            })
+    };
     let mut field_defs = Vec::new();
     let mut encode_entries = Vec::new();
     let mut decode_fields = Vec::new();
@@ -96,6 +109,14 @@ pub(crate) fn emit(
                 u.reason
             ),
         })?;
+        let field_slot =
+            wire_ty::wire_ty(&prop.ty, &field_ctx, &instance_type_var).map_err(|u| SkipWarning {
+                fqn: fqn.clone(),
+                reason: format!(
+                    "generator bug: analysis accepted field `{field_name}` but its type has no wire spelling: {}",
+                    u.reason
+                ),
+            })?;
         let field_docs = doc_attrs(prop.docstring.as_deref());
         field_defs.push(quote! {
             #(#field_docs)*
@@ -104,7 +125,10 @@ pub(crate) fn emit(
         encode_entries.push(quote! {
             (
                 #field_name,
-                ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(&self.#field_ident),
+                ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml_in(
+                    &self.#field_ident,
+                    &#field_slot,
+                ),
             )
         });
         decode_fields.push(quote! {
@@ -152,6 +176,41 @@ pub(crate) fn emit(
         )
     };
 
+    // A generic instance is stated with the type arguments of the slot it
+    // fills, which can be narrower than its Rust type arguments spell (a
+    // `Box<"a">` is a `Box<String>` in Rust); a non-generic class has only
+    // the one instantiation.
+    let arity = param_idents.len();
+    let to_baml_in = if param_idents.is_empty() {
+        quote! {
+            fn to_baml_in(
+                &self,
+                _slot: &::baml_bridge::wire::BamlTy,
+            ) -> ::baml_bridge::wire::InboundValue {
+                ::baml_bridge::encode::class(
+                    #fqn,
+                    ::std::vec![],
+                    ::std::vec![#(#encode_entries,)*],
+                )
+            }
+        }
+    } else {
+        quote! {
+            fn to_baml_in(
+                &self,
+                slot: &::baml_bridge::wire::BamlTy,
+            ) -> ::baml_bridge::wire::InboundValue {
+                let #type_args_ident = ::baml_bridge::baml_value::internal::class_slot_args::<Self>(
+                    slot,
+                    #fqn,
+                    #arity,
+                );
+                let fields = ::std::vec![#(#encode_entries,)*];
+                ::baml_bridge::encode::class(#fqn, #type_args_ident, fields)
+            }
+        }
+    };
+
     let methods_impl = if method_tokens.is_empty() {
         TokenStream::new()
     } else {
@@ -175,12 +234,10 @@ pub(crate) fn emit(
             for #ident #type_generics
         {
             fn to_baml(&self) -> ::baml_bridge::wire::InboundValue {
-                ::baml_bridge::encode::class(
-                    #fqn,
-                    #wire_type_args,
-                    ::std::vec![#(#encode_entries,)*],
-                )
+                self.to_baml_in(&<Self as ::baml_bridge::baml_value::internal::__BamlValuePrivate>::baml_ty())
             }
+
+            #to_baml_in
 
             fn from_baml(
                 v: ::baml_bridge::wire::BamlOutboundValue,

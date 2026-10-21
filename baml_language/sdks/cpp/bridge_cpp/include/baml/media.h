@@ -285,10 +285,10 @@ struct codec<basic_media<Expected>> {
     return ty;
   }
 
+  // The media kind implies the type; the node states none.
   static void encode(detail::pb::InboundValue& target,
                      const basic_media<Expected>& value) {
     target.mutable_media_value()->CopyFrom(value.value_);
-    target.mutable_value_type()->CopyFrom(baml_ty());
   }
 
   static basic_media<Expected> decode(

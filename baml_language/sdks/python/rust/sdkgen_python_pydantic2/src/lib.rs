@@ -419,7 +419,11 @@ fn to_source_code_internal(
     // pre-populated.
     out.insert(
         PathBuf::from("_typemap.py"),
-        render_typemap_module(&bodies, "baml_sdk"),
+        render_typemap_module(
+            &bodies,
+            "baml_sdk",
+            &baml_sdkgen_types::ProgramDescriptor::describe(pool).encode_embedded(),
+        ),
     );
     out.insert(
         PathBuf::from("_function_registry.py"),
@@ -940,6 +944,20 @@ mod tests {
         assert!(out.contains_key(&PathBuf::from("_typemap.py")));
         assert!(!out.contains_key(&PathBuf::from("baml/_inlinedbaml.py")));
         assert!(out.contains_key(&PathBuf::from("py.typed")));
+
+        // The typemap carries the program descriptor the bridge encodes
+        // arguments against, embedded the same way as the bytecode.
+        let typemap = &out[&PathBuf::from("_typemap.py")];
+        let embedded = typemap
+            .lines()
+            .find_map(|line| line.strip_prefix("_DESCRIPTOR: bytes = b\""))
+            .and_then(|rest| rest.strip_suffix('"'))
+            .expect("typemap embeds the descriptor on one line");
+        assert_eq!(
+            baml_sdkgen_types::ProgramDescriptor::decode_embedded(embedded.as_bytes()).unwrap(),
+            baml_sdkgen_types::ProgramDescriptor::describe(&pool)
+        );
+        assert!(typemap.contains("    descriptor=_DESCRIPTOR,\n)"));
 
         let root = &out[&PathBuf::from("__init__.py")];
         assert!(root.contains("from baml_bridge import BamlRuntime, set_type_map"));

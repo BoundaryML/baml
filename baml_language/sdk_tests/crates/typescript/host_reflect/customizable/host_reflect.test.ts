@@ -68,7 +68,8 @@ describe("BEP-066 TypeScript host boundary", () => {
     const runtimeType = reflect.Class.new("Fresh", {
       value: reflect.Type.of("int"),
     });
-    expect(HostTypeEqual({ $types: { A: runtimeType, B: runtimeType } })).toBe(false);
+    // A runtime declaration crosses by reference, so both arguments name it.
+    expect(HostTypeEqual({ $types: { A: runtimeType, B: runtimeType } })).toBe(true);
     expect(() => JSON.stringify(runtimeType)).toThrow(/cannot be serialized/);
   });
 

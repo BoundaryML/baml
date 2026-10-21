@@ -7,6 +7,14 @@ export class CancellationWatch {
     [Symbol.dispose](): void;
 }
 
+/**
+ * Encode one JavaScript value as the bridge would send it where the program
+ * declares no type: the value's own type, stated on the wire where a
+ * container or class needs it. Returns `InboundValue` bytes; raises for a
+ * value the bridge cannot send. For inspection and tests.
+ */
+export function _encodeWebInbound(value: any, name?: string | null): Uint8Array;
+
 export function _testHandleTableEntryCount(): number;
 
 export function _testWebFireHostRelease(key: bigint): void;
@@ -21,9 +29,20 @@ export function _testWebMissingHostCallableError(key: bigint): Promise<string>;
 
 export function _testWebSyncPendingHostCallableError(key: bigint): string;
 
-export function callFunction(encoded_args: Uint8Array): Promise<Uint8Array>;
+/**
+ * Call a BAML function asynchronously. Arguments as for
+ * [`call_function_sync`]; they are encoded before the first await.
+ */
+export function callFunction(encoded_args: Uint8Array, kwargs: any, cancel: any): Promise<Uint8Array>;
 
-export function callFunctionSync(encoded_args: Uint8Array): Uint8Array;
+/**
+ * Call a BAML function synchronously. `encoded_args` carries the call's
+ * control part with no `kwargs`; `kwargs` are the arguments by declared
+ * parameter name as JavaScript values, encoded here against the target's
+ * declared types, and `cancel` the `$baml.cancel` token. A value that does
+ * not fit raises before anything is sent.
+ */
+export function callFunctionSync(encoded_args: Uint8Array, kwargs: any, cancel: any): Uint8Array;
 
 export function cancelFunctionCall(call_id: bigint): boolean;
 
@@ -32,32 +51,51 @@ export function cloneHandle(key: bigint): bigint;
 export function cloneOutboundValue(wire: Uint8Array): Uint8Array;
 
 /**
- * Complete an in-flight host call from JS.
+ * Complete an in-flight host call from the JS dispatch wrapper with a
+ * protobuf-encoded `HostCallCompletion`: the callable's result or thrown
+ * value encoded against its declared types, an exception of the host's own,
+ * a broken contract, or a bridge failure. The engine holds the values to the
+ * declared types and builds every panic itself.
  *
- * Exposed to JS as `completeHostCall(callId, isError, content)`.
- *
- * On success (`is_error == 0`), `content` is a protobuf-encoded `InboundValue`
- * (host→engine direction, no type metadata — engine re-validates against the
- * declared return type).
- *
- * On error (`is_error != 0`), `content` is a protobuf-encoded `InboundValue`
- * representing the thrown value. The host bridge SDK wraps native exceptions
- * in a synthetic `Instance` of class `baml.errors.HostCallable` carrying
- * `message` / `class_name` / `language` / `traceback` fields; codegenned
- * BAML errors flow through as their own `Instance` shape. The engine's
- * `materialize_host_throw` runs the declared-throws contract check on the
- * decoded value and either re-injects it as a catchable throw or escalates
- * to a `HostContractViolation` panic.
- *
- * `call_id` is globally unique, so it resolves the originating runtime's
- * pending call unambiguously. Returns `true` when a live entry was removed and
- * completed. An unknown ID returns `false` after a bounded warning, making a
- * Promise settlement racing with cancellation an observable benign stale
- * completion.
+ * Returns `true` when the id named an in-flight call. An unknown id is a
+ * late completion: its transfers are still consumed and released, and it
+ * returns `false` after a bounded warning, making a Promise settlement racing
+ * cancellation an observable benign stale completion.
  */
-export function completeHostCall(call_id: number, is_error: number, content: Uint8Array): boolean;
+export function completeHostCall(call_id: number, content: Uint8Array): boolean;
 
-export function completeWebHostCall(call_id: number, is_error: number, content: Uint8Array): boolean;
+/**
+ * Complete an in-flight host call as a failure of the bridge's own, which
+ * the engine surfaces as `baml.panics.SdkPanic`.
+ */
+export function completeWebHostCallBridgeFailure(call_id: number, message: string): boolean;
+
+/**
+ * Complete an in-flight host call as the host's own exception: the engine
+ * builds the `baml.errors.HostCallable` whose `_handle` is `handle`, the
+ * JS-side registration of the error object (a decimal host-value key).
+ */
+export function completeWebHostCallRaised(call_id: number, class_name: string, message: string, stack: string | null | undefined, handle: string): boolean;
+
+/**
+ * Complete an in-flight host call with a thrown BAML value, encoded against
+ * the throws type of the slot the callable was bound to; a `baml.panics.*`
+ * value is a panic whatever the slot declares.
+ */
+export function completeWebHostCallThrow(call_id: number, value: any): boolean;
+
+/**
+ * Complete an in-flight host call with its JavaScript result, encoded
+ * against the return type of the slot the dispatched callable was bound to
+ * (the runtime's own I/O callables have none, and send their results as the
+ * types they have). A value that does not fit completes the call as a
+ * `baml.panics.HostContractViolation`; a value the bridge could not carry as
+ * a `baml.panics.SdkPanic`; an error the callable's own code raised while
+ * the value was read is raised here, and the runtime completes the call with
+ * it. Returns the outcome the engine sees, `"ok"` or `"error"`, for the
+ * runtime's instrumentation.
+ */
+export function completeWebHostCallValue(call_id: number, value: any): string;
 
 export function configureWebSysops(fetch_key: bigint, read_file_sync_key: bigint): void;
 
@@ -110,13 +148,20 @@ export function mediaUrl(key: bigint, handle_type: number): string | undefined;
 
 /**
  * Mint a key for a JS-owned opaque value from the same keyspace used by
- * callable host values. Both kinds share one engine handle table.
+ * callable host values: both are the engine's references to host objects.
  */
 export function mintHostValueKey(): bigint;
 
 export function mintWebHostValueKey(): bigint;
 
 export function newFunctionCall(): bigint;
+
+/**
+ * Install the runtime's adapter: `classOf(value)`, `typeArgsOf(value)`,
+ * `leafKindOf(value)`, `leafOf(value)`, `dispatchFor(fn)` and
+ * `describe(value)`.
+ */
+export function registerHostAdapter(adapter: object): void;
 
 /**
  * Register a JS callable in the WASM host-value table and return its key.
@@ -135,6 +180,12 @@ export function registerHostCancelCallback(callback: Function): boolean;
  * registry when the engine drops its last corresponding `HostValueArc`.
  */
 export function registerHostValueReleaseCallback(callback: Function): boolean;
+
+/**
+ * Install the program descriptor a generated SDK embeds in its typemap
+ * (`setTypeMap` calls this), or clear it with `null`.
+ */
+export function registerProgramDescriptor(descriptor?: string | null): void;
 
 export function registerWebHostCallable(callable: Function): bigint;
 
@@ -174,6 +225,11 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
+    readonly _testHandleTableEntryCount: () => [number, number, number];
+    readonly cloneHandle: (a: bigint) => [bigint, number, number];
+    readonly releaseHandle: (a: bigint) => number;
+    readonly seedFunctionRefHandle: (a: number) => [bigint, number, number];
+    readonly seedGenericMediaHandle: () => [bigint, number, number];
     readonly cancelFunctionCall: (a: bigint) => number;
     readonly configureWorkerdRuntime: () => void;
     readonly getBridgeRuntimeVersion: () => [number, number];
@@ -184,6 +240,11 @@ export interface InitOutput {
     readonly invocationProtocolVersion: () => number;
     readonly newFunctionCall: () => [bigint, number, number];
     readonly releaseFunctionCall: (a: bigint) => number;
+    readonly _encodeWebInbound: (a: any, b: number, c: number) => [number, number, number, number];
+    readonly completeWebHostCallThrow: (a: number, b: any) => [number, number, number];
+    readonly completeWebHostCallValue: (a: number, b: any) => [number, number, number, number];
+    readonly registerHostAdapter: (a: any) => void;
+    readonly registerProgramDescriptor: (a: number, b: number) => [number, number];
     readonly mediaBase64: (a: bigint, b: number) => [number, number, number, number];
     readonly mediaFromBase64: (a: number, b: number, c: number, d: number, e: number) => [bigint, number, number];
     readonly mediaFromFileBytes: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [bigint, number, number];
@@ -192,53 +253,50 @@ export interface InitOutput {
     readonly mediaMimeType: (a: bigint, b: number) => [number, number, number, number];
     readonly mediaName: (a: bigint, b: number) => [number, number, number, number];
     readonly mediaUrl: (a: bigint, b: number) => [number, number, number, number];
+    readonly callFunction: (a: number, b: number, c: any, d: any) => any;
+    readonly callFunctionSync: (a: number, b: number, c: any, d: any) => [number, number, number, number];
+    readonly stageRuntimeBytecode: (a: any, b: number, c: number) => [number, number];
+    readonly stageRuntimeSources: (a: number, b: number, c: any) => [number, number];
     readonly __wbg_cancellationwatch_free: (a: number, b: number) => void;
     readonly cloneOutboundValue: (a: number, b: number) => [number, number, number, number];
     readonly invocationContext: (a: bigint) => [number, number, number, number];
     readonly isInvocationCancelled: (a: bigint) => [number, number, number];
     readonly traceSelection: (a: bigint, b: bigint) => [number, number, number];
     readonly watchInvocationCancellation: (a: bigint, b: any) => [number, number, number];
-    readonly callFunction: (a: number, b: number) => any;
-    readonly callFunctionSync: (a: number, b: number) => [number, number];
-    readonly stageRuntimeBytecode: (a: any, b: number, c: number) => [number, number];
-    readonly stageRuntimeSources: (a: number, b: number, c: any) => [number, number];
-    readonly _testHandleTableEntryCount: () => [number, number, number];
-    readonly cloneHandle: (a: bigint) => [bigint, number, number];
-    readonly releaseHandle: (a: bigint) => number;
-    readonly seedFunctionRefHandle: (a: number) => [bigint, number, number];
-    readonly seedGenericMediaHandle: () => [bigint, number, number];
     readonly _testWebFireHostRelease: (a: bigint) => void;
     readonly _testWebHostCallableCount: () => number;
     readonly _testWebHostReleaseCallbackInstalled: () => number;
     readonly _testWebInFlightHostCallCount: () => number;
     readonly _testWebMissingHostCallableError: (a: bigint) => any;
     readonly _testWebSyncPendingHostCallableError: (a: bigint) => [number, number];
-    readonly completeWebHostCall: (a: number, b: number, c: number, d: number) => number;
+    readonly completeWebHostCallBridgeFailure: (a: number, b: number, c: number) => number;
+    readonly completeWebHostCallRaised: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number];
     readonly configureWebSysops: (a: bigint, b: bigint) => [number, number];
     readonly mintWebHostValueKey: () => bigint;
     readonly registerWebHostCallable: (a: any) => bigint;
     readonly registerWebHostCancelCallback: (a: any) => number;
     readonly registerWebHostValueReleaseCallback: (a: any) => number;
     readonly releaseWebHostCallable: (a: bigint) => void;
-    readonly completeHostCall: (a: number, b: number, c: number, d: number) => number;
+    readonly completeHostCall: (a: number, b: number, c: number) => number;
     readonly mintHostValueKey: () => bigint;
     readonly registerHostCallable: (a: any) => bigint;
     readonly registerHostCancelCallback: (a: any) => number;
     readonly registerHostValueReleaseCallback: (a: any) => number;
     readonly releaseHostCallable: (a: bigint) => void;
+    readonly free_buffer: (a: number) => void;
     readonly cancel_function_call: (a: bigint) => number;
     readonly new_function_call: () => bigint;
     readonly release_function_call: (a: bigint) => number;
-    readonly free_buffer: (a: number) => void;
     readonly wasm_bindgen_d111f01290b9b4d6___convert__closures_____invoke___wasm_bindgen_d111f01290b9b4d6___JsValue__core_f0fd674eaa06beef___result__Result_____wasm_bindgen_d111f01290b9b4d6___JsError___true_: (a: number, b: number, c: any) => [number, number];
     readonly wasm_bindgen_d111f01290b9b4d6___convert__closures_____invoke___js_sys_738bc4453a2434d1___Function_fn_wasm_bindgen_d111f01290b9b4d6___JsValue_____wasm_bindgen_d111f01290b9b4d6___sys__Undefined___js_sys_738bc4453a2434d1___Function_fn_wasm_bindgen_d111f01290b9b4d6___JsValue_____wasm_bindgen_d111f01290b9b4d6___sys__Undefined_______true_: (a: number, b: number, c: any, d: any) => void;
+    readonly wasm_bindgen_d111f01290b9b4d6___convert__closures_____invoke___wasm_bindgen_d111f01290b9b4d6___JsValue______true_: (a: number, b: number, c: any) => void;
     readonly wasm_bindgen_d111f01290b9b4d6___convert__closures_____invoke___bool__true_: (a: number, b: number) => number;
     readonly wasm_bindgen_d111f01290b9b4d6___convert__closures_____invoke_______true_: (a: number, b: number) => void;
-    readonly __wbindgen_malloc_command_export: (a: number, b: number) => number;
-    readonly __wbindgen_realloc_command_export: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store_command_export: (a: number) => void;
     readonly __externref_table_alloc_command_export: () => number;
     readonly __wbindgen_externrefs: WebAssembly.Table;
+    readonly __wbindgen_malloc_command_export: (a: number, b: number) => number;
+    readonly __wbindgen_realloc_command_export: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_destroy_closure_command_export: (a: number, b: number) => void;
     readonly __wbindgen_free_command_export: (a: number, b: number, c: number) => void;
     readonly __externref_table_dealloc_command_export: (a: number) => void;

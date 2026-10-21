@@ -4,7 +4,6 @@
 //! module provides an API that takes a `PermitProof<'_>` (obtained from any
 //! held `ActiveHeapPermit<T>`) to witness GC-exclusion at the type level.
 
-use baml_type::RuntimeTy;
 use bex_external_types::{BexExternalAdt, BexExternalValue, WeakHeapRef};
 use bex_vm_types::{HeapPtr, Object, PermitProof, Value};
 
@@ -406,17 +405,43 @@ impl<'a> BexValue<'a> {
             BexValue::ExternalValue(BexExternalValue::Adt(BexExternalAdt::Type(ty))) => {
                 Ok(ty.clone())
             }
-            // The portable definition graph is name-headed and carries no
-            // identities, so it cannot be read onto the lane. Its one real
-            // consumer is the inbound authoring path, which resolves names
-            // against the VM to obtain declarations (and therefore tags); that
-            // resolution is not available here. Dies with the graph itself.
-            BexValue::ExternalValue(BexExternalValue::Adt(BexExternalAdt::TypeDef(_))) => {
-                Err(AccessError::TypeMismatch {
-                    expected: "a type value",
-                    actual: "a portable type definition".to_string(),
+            // A wire type names its runtime declarations by handle; each is
+            // read for its identity here, so the lane sees the declaration,
+            // not the reference. A compiled declaration keeps its spelling for
+            // the VM to resolve; a label beside a value is no reference at all.
+            BexValue::ExternalValue(BexExternalValue::Adt(BexExternalAdt::WireType(wire))) => wire
+                .try_map_heads(&mut |head: &bex_external_types::WireHead<_>| match head {
+                    bex_external_types::WireHead::Static(name) => {
+                        Ok(baml_type::TaggedTypeName::spelled(name.clone()))
+                    }
+                    bex_external_types::WireHead::Live(handle) => {
+                        let ptr = heap.resolve_handle_ptr(handle.slab_key()).ok_or(
+                            AccessError::InvalidHandle {
+                                expected: "declaration",
+                            },
+                        )?;
+                        let (tag, name) = match unsafe { ptr.get() } {
+                            Object::Class(class) => (class.type_tag, class.name()),
+                            Object::Enum(enm) => (enm.type_tag, enm.name()),
+                            Object::Interface(iface) => (iface.type_tag, iface.name()),
+                            Object::TypeAlias(alias) => (alias.type_tag, alias.name()),
+                            other => {
+                                return Err(AccessError::TypeMismatch {
+                                    expected: "a declaration",
+                                    actual: other.to_string(),
+                                });
+                            }
+                        };
+                        Ok(baml_type::TaggedTypeName::new(tag, name))
+                    }
+                    bex_external_types::WireHead::Anonymous(label) => {
+                        Err(AccessError::TypeMismatch {
+                            expected: "a type value",
+                            actual: format!("a type labelled `{label}` that references nothing"),
+                        })
+                    }
                 })
-            }
+                .map(|realized| baml_type::RuntimeTy::from(&realized)),
             BexValue::ExternalValue(BexExternalValue::Handle(handle)) => {
                 let ptr = heap
                     .resolve_handle_ptr(handle.slab_key())
@@ -508,7 +533,6 @@ fn owned_inner(
             BexExternalValue::Int(i) => Ok(BexExternalValue::Int(*i)),
             BexExternalValue::Bigint(b) => Ok(BexExternalValue::Bigint(b.clone())),
             BexExternalValue::Float(f) => Ok(BexExternalValue::Float(*f)),
-            BexExternalValue::JsNumber(f) => Ok(BexExternalValue::JsNumber(*f)),
             BexExternalValue::Bool(b) => Ok(BexExternalValue::Bool(*b)),
             BexExternalValue::String(s) => Ok(BexExternalValue::String(s.clone())),
             BexExternalValue::Array {
@@ -581,6 +605,17 @@ fn owned_inner(
             BexExternalValue::HostValue(hv) => {
                 Ok(BexExternalValue::HostValue(std::sync::Arc::clone(hv)))
             }
+            BexExternalValue::HostCallable {
+                handle,
+                params,
+                ret,
+                throws,
+            } => Ok(BexExternalValue::HostCallable {
+                handle: std::sync::Arc::clone(handle),
+                params: params.clone(),
+                ret: ret.clone(),
+                throws: throws.clone(),
+            }),
         },
         // Object path: either `HeapPtr` directly, or a `Value` whose payload
         // is an object pointer. The two cases share a single object deep-
@@ -641,7 +676,7 @@ fn convert_object(
         // Deep-copy path for trace payloads: no declared type is available here,
         // so placeholder types with default attr are used.
         Object::Array(array) => Ok(BexExternalValue::Array {
-            element_type: RuntimeTy::Unknown,
+            element_type: bex_external_types::WireTy::Unknown,
             items: array
                 .to_vec()
                 .into_iter()
@@ -656,14 +691,13 @@ fn convert_object(
             }
             let key_type = map
                 .key_ty
-                .try_map_heads(&mut bex_vm_types::TypeHead::to_overlay_name)
-                .map(|named| RuntimeTy::from(&named))
+                .try_map_heads(&mut bex_vm_types::TypeHead::to_annotation_head)
                 .map_err(|_| AccessError::CannotConvertToOwned {
                     reason: "cannot name map key type for SDK interchange".to_owned(),
                 })?;
             Ok(BexExternalValue::Map {
                 key_type,
-                value_type: RuntimeTy::Unknown,
+                value_type: bex_external_types::WireTy::Unknown,
                 entries: map
                     .snapshot_entries()
                     .into_iter()
@@ -706,20 +740,19 @@ fn convert_object(
                 .collect::<Result<_, _>>()?;
             Ok(BexExternalValue::Instance {
                 class_name: class.name().to_string(),
-                // Instances store realized class type args; widen them into the
-                // `RuntimeTy` the external boundary carries.
+                // Instances store realized class type args, which the external
+                // boundary carries as annotations.
                 type_args: instance
                     .class_type_args
                     .iter()
                     .map(|arg| {
-                        arg.try_map_heads(&mut bex_vm_types::TypeHead::to_overlay_name)
-                            .map(|named| baml_type::RuntimeTy::from(&named))
+                        arg.try_map_heads(&mut bex_vm_types::TypeHead::to_annotation_head)
                             .or_else(|head| {
                                 // Lossy mode (traces) degrades the one
                                 // unnameable argument to `unknown` instead of
                                 // discarding the whole value tree.
                                 if lossy {
-                                    return Ok(baml_type::RuntimeTy::unknown());
+                                    return Ok(bex_external_types::WireTy::unknown());
                                 }
                                 Err(AccessError::TypeMismatch {
                                     expected: "a nameable type argument",
@@ -885,9 +918,8 @@ mod tests {
             literal("a"),
             RealizedTy::Union(vec![literal("a"), literal("b")].into_boxed_slice()),
         ] {
-            let expected = key_ty
-                .try_map_heads(&mut bex_vm_types::TypeHead::to_overlay_name)
-                .map(|ty| baml_type::RuntimeTy::from(&ty))
+            let expected: bex_external_types::WireTy = key_ty
+                .try_map_heads(&mut bex_vm_types::TypeHead::to_annotation_head)
                 .unwrap();
             for entries in [
                 indexmap::IndexMap::new(),

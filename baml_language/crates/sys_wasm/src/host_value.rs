@@ -73,15 +73,13 @@ use std::{
     sync::Arc,
 };
 
-use bex_project::{HostValueArc, HostValueKind, host_release_dispatch, validate_host_return};
-use bridge_ctypes::{
-    CffiHandleTableOptions, HANDLE_TABLE, baml_bridge::cffi::InboundValue, inbound_to_external,
-};
+use bex_project::{HostKey, HostValueArc, HostValueKind, host_release_dispatch};
+use bridge_ctypes::{CffiHandleTableOptions, HANDLE_TABLE, decode_host_call_completion};
 use indexmap::IndexMap;
 use js_sys::Function;
 use prost::Message;
 use sys_ops::io::{
-    self, BexExternalValue, CallId, OpError, SysOpContext, SysOpOutput, SysOpResult, VmRustFnError,
+    self, BexExternalValue, CallId, OpError, SysOpContext, SysOpOutput, SysOpResult,
 };
 use sys_types::{BexHeap, CompletionHandle, SysOp};
 use wasm_bindgen::prelude::*;
@@ -97,14 +95,23 @@ use crate::send_wrapper::SendWrapper;
 // most one entry across the whole process. Only the *dispatch callback* is
 // per-runtime (see `WasmHost`).
 
-type HostExecution = (Box<dyn Send + Sync>, Option<SendWrapper<Function>>);
+/// What a dispatched host call keeps alive until it completes.
+struct HostExecution {
+    /// The callable's key, so the completion can find what it was bound to.
+    key: HostKey,
+    /// The invocation context, callable and arguments the call reads; held
+    /// only so they outlive the dispatch.
+    _retained: Box<dyn Send + Sync>,
+    /// The runtime's cancellation observer, if it installed one.
+    cancel: Option<SendWrapper<Function>>,
+}
 
 thread_local! {
     /// `u64 → user JS callable`. Populated by [`register_host_callable`] from
     /// the JS encoder; removed by [`host_release_callback`] when the Rust
     /// runtime drops the last clone of the corresponding `HostValueArc`. Keys
     /// are globally unique, so release-by-key is unambiguous across runtimes.
-    static CALLABLES: RefCell<HashMap<u64, SendWrapper<Function>>> = RefCell::new(HashMap::new());
+    static CALLABLES: RefCell<HashMap<HostKey, SendWrapper<Function>>> = RefCell::new(HashMap::new());
 
     /// Optional SDK callback used to release host-owned opaque values kept in
     /// a JS-side registry. Playground consumers do not need to install one.
@@ -166,14 +173,14 @@ struct InFlightHostCall {
     completion: CompletionHandle,
 }
 
-fn next_key() -> u64 {
+fn next_key() -> HostKey {
     NEXT_KEY.with(|cell| {
         let mut next = cell.borrow_mut();
         loop {
             let k = *next;
             *next = next.wrapping_add(1);
-            if k != 0 {
-                return k;
+            if let Some(key) = HostKey::new(k) {
+                return key;
             }
         }
     })
@@ -186,6 +193,12 @@ fn next_call_id() -> u32 {
         *next = next.checked_add(1).unwrap_or(1);
         id
     })
+}
+
+/// The key of the host callable an in-flight call `call_id` was dispatched
+/// to, or `None` once the call has completed or was never dispatched.
+pub fn host_callable_key_for_call(call_id: u32) -> Option<HostKey> {
+    EXECUTIONS.with(|cell| cell.borrow().get(&call_id).map(|execution| execution.key))
 }
 
 #[wasm_bindgen(js_name = registerHostCancelCallback)]
@@ -272,7 +285,7 @@ impl Drop for WasmInflightGuard {
             let callback = EXECUTIONS.with(|cell| {
                 cell.borrow()
                     .get(&self.call_id)
-                    .and_then(|(_, callback)| callback.clone())
+                    .and_then(|execution| execution.cancel.clone())
             });
             if let Some(callback) = callback {
                 let _ = callback.call1(&JsValue::NULL, &JsValue::from(self.call_id));
@@ -297,25 +310,26 @@ pub fn register_host_callable(callable: Function) -> u64 {
     CALLABLES.with(|cell| {
         cell.borrow_mut().insert(key, SendWrapper::new(callable));
     });
-    key
+    key.get()
 }
 
 /// Retain an existing registered callable as an engine host value.
-#[allow(dead_code)]
 pub(crate) fn retain_host_callable(key: u64) -> Result<Arc<HostValueArc>, String> {
+    let key = HostKey::new(key).ok_or_else(|| "host callable key 0 names nothing".to_string())?;
     let registered = CALLABLES.with(|cell| cell.borrow().contains_key(&key));
     if !registered {
         return Err(format!("host callable key {key} is not registered"));
     }
     ensure_release_dispatch_installed();
-    Ok(HostValueArc::intern(key, HostValueKind::Callable))
+    HostValueArc::try_intern(key, HostValueKind::Callable)
+        .map_err(|_live| format!("host value key {key} is live as an opaque value"))
 }
 
 /// Mint a key for a JS-owned opaque value from the same keyspace used by
-/// callable host values. Both kinds share one engine handle table.
+/// callable host values: both are the engine's references to host objects.
 #[wasm_bindgen(js_name = mintHostValueKey)]
 pub fn mint_host_value_key() -> u64 {
-    next_key()
+    next_key().get()
 }
 
 /// Register the JS callback that releases opaque values from the SDK's local
@@ -336,9 +350,11 @@ pub fn register_host_value_release_callback(callback: Function) -> bool {
 /// Remove a callable that was registered but never transferred to the engine.
 #[wasm_bindgen(js_name = releaseHostCallable)]
 pub fn release_host_callable(key: u64) {
-    CALLABLES.with(|cell| {
-        cell.borrow_mut().remove(&key);
-    });
+    if let Some(key) = HostKey::new(key) {
+        CALLABLES.with(|cell| {
+            cell.borrow_mut().remove(&key);
+        });
+    }
 }
 
 #[doc(hidden)]
@@ -364,10 +380,13 @@ pub fn test_fire_host_release(key: u64) {
 #[doc(hidden)]
 pub async fn test_missing_host_callable_error(key: u64) -> String {
     let host = WasmHost::direct();
-    let callable = HostValueArc::new(key, HostValueKind::Callable);
+    let callable = HostValueArc::new(
+        HostKey::new(key).expect("test keys are nonzero"),
+        HostValueKind::Callable,
+    );
     let output = host.call_registered_callable(
         SysOp::BamlHostCallHostValue,
-        callable.as_ref(),
+        &callable,
         &[],
         &IndexMap::new(),
     );
@@ -385,13 +404,12 @@ pub async fn test_missing_host_callable_error(key: u64) -> String {
 pub fn test_sync_pending_host_callable_error(key: u64) -> String {
     with_web_sync_mode(|| {
         let host = WasmHost::direct();
-        let callable = HostValueArc::new(key, HostValueKind::Callable);
-        let output = host.call_registered_callable(
-            SysOp::BamlFsRead,
-            callable.as_ref(),
-            &[],
-            &IndexMap::new(),
+        let callable = HostValueArc::new(
+            HostKey::new(key).expect("test keys are nonzero"),
+            HostValueKind::Callable,
         );
+        let output =
+            host.call_registered_callable(SysOp::BamlFsRead, &callable, &[], &IndexMap::new());
         match output {
             SysOpOutput::Ready(Err(error)) => error.to_string(),
             SysOpOutput::Async(future) => match futures::executor::block_on(future) {
@@ -403,38 +421,25 @@ pub fn test_sync_pending_host_callable_error(key: u64) -> String {
     })
 }
 
-/// Complete an in-flight host call from JS.
+/// Complete an in-flight host call from the JS dispatch wrapper with a
+/// protobuf-encoded `HostCallCompletion`: the callable's result or thrown
+/// value encoded against its declared types, an exception of the host's own,
+/// a broken contract, or a bridge failure. The engine holds the values to the
+/// declared types and builds every panic itself.
 ///
-/// Exposed to JS as `completeHostCall(callId, isError, content)`.
-///
-/// On success (`is_error == 0`), `content` is a protobuf-encoded `InboundValue`
-/// (host→engine direction, no type metadata — engine re-validates against the
-/// declared return type).
-///
-/// On error (`is_error != 0`), `content` is a protobuf-encoded `InboundValue`
-/// representing the thrown value. The host bridge SDK wraps native exceptions
-/// in a synthetic `Instance` of class `baml.errors.HostCallable` carrying
-/// `message` / `class_name` / `language` / `traceback` fields; codegenned
-/// BAML errors flow through as their own `Instance` shape. The engine's
-/// `materialize_host_throw` runs the declared-throws contract check on the
-/// decoded value and either re-injects it as a catchable throw or escalates
-/// to a `HostContractViolation` panic.
-///
-/// `call_id` is globally unique, so it resolves the originating runtime's
-/// pending call unambiguously. Returns `true` when a live entry was removed and
-/// completed. An unknown ID returns `false` after a bounded warning, making a
-/// Promise settlement racing with cancellation an observable benign stale
-/// completion.
+/// Returns `true` when the id named an in-flight call. An unknown id is a
+/// late completion: its transfers are still consumed and released, and it
+/// returns `false` after a bounded warning, making a Promise settlement racing
+/// cancellation an observable benign stale completion.
 #[wasm_bindgen(js_name = completeHostCall)]
-pub fn complete_host_call(call_id: u32, is_error: i32, content: &[u8]) -> bool {
+pub fn complete_host_call(call_id: u32, content: &[u8]) -> bool {
     // Actual exit retires execution independently of waiter delivery.
     let _execution = EXECUTIONS.with(|cell| cell.borrow_mut().remove(&call_id));
     let completion = IN_FLIGHT.with(|cell| cell.borrow_mut().remove(&call_id));
+    let decoded = decode_host_call_completion(content, &HANDLE_TABLE);
     let Some(in_flight) = completion else {
         // Late payloads still transfer wire owners, including host-owned values.
-        if let Ok(inbound) = InboundValue::decode(content) {
-            drop(inbound_to_external(inbound, &HANDLE_TABLE));
-        }
+        drop(decoded);
         host_release_dispatch::drain();
         log::warn!("completeHostCall for unknown call id {call_id}");
         return false;
@@ -443,95 +448,7 @@ pub fn complete_host_call(call_id: u32, is_error: i32, content: &[u8]) -> bool {
         operation,
         completion,
     } = in_flight;
-
-    // Strict 0/1 contract: any other value is a bridge wire-protocol bug
-    // (an `i32` could carry uninitialised memory, a forgotten cast, or
-    // someone repurposing the flag) — surface it as `BridgeFailure` so the
-    // bug is loud, instead of silently aliasing into the throw branch.
-    if is_error != 0 && is_error != 1 {
-        completion.complete(Err(OpError::new(
-            operation,
-            sys_types::VmInternalError::BridgeFailure {
-                message: format!(
-                    "completeHostCall: invalid isError value {is_error}; \
-                     expected 0 (success) or 1 (error)"
-                ),
-            },
-        )));
-        return true;
-    }
-
-    if is_error == 0 {
-        // Success: decode InboundValue → BexExternalValue.
-        if content.is_empty() {
-            // No payload → Null return.
-            completion.complete(Ok(BexExternalValue::Null));
-            return true;
-        }
-        let inbound = match InboundValue::decode(content) {
-            Ok(v) => v,
-            Err(e) => {
-                completion.complete(Err(OpError::new(
-                    operation,
-                    sys_types::VmInternalError::BridgeFailure {
-                        message: format!("completeHostCall decode failure: {e}"),
-                    },
-                )));
-                return true;
-            }
-        };
-        match inbound_to_external(inbound, &HANDLE_TABLE) {
-            Ok(v) => completion.complete(Ok(v)),
-            Err(e) => completion.complete(Err(OpError::new(
-                operation,
-                sys_types::VmInternalError::BridgeFailure {
-                    message: format!("completeHostCall decode failure: {e}"),
-                },
-            ))),
-        }
-    } else {
-        // Throw: decode `InboundValue` → `BexExternalValue` → engine. The
-        // engine's `materialize_host_throw` runs the declared-throws
-        // contract check on the decoded value.
-        let mapped = if content.is_empty() {
-            // An empty throw payload is a host bridge bug, not a user
-            // contract violation: `is_error == 1` requires a protobuf-
-            // encoded `InboundValue`, and only the bridge itself decides
-            // what to send on the wire. A misbehaving bridge is an
-            // infrastructure fault — surface it as `BridgeFailure` (which
-            // codegens to `baml.panics.SdkPanic` on the host side), not as
-            // `HostContractViolation` (which would falsely accuse the
-            // user's callable of returning the wrong shape).
-            OpError::new(
-                operation,
-                sys_types::VmInternalError::BridgeFailure {
-                    message: "host bridge called completeHostCall(isError=1) \
-                              with no payload; expected a protobuf-encoded \
-                              InboundValue describing the thrown value"
-                        .to_string(),
-                },
-            )
-        } else {
-            match InboundValue::decode(content) {
-                Ok(inbound) => match inbound_to_external(inbound, &HANDLE_TABLE) {
-                    Ok(v) => OpError::host_thrown_value(operation, v),
-                    Err(e) => OpError::new(
-                        operation,
-                        sys_types::VmInternalError::BridgeFailure {
-                            message: format!("completeHostCall throw-payload decode failure: {e}"),
-                        },
-                    ),
-                },
-                Err(e) => OpError::new(
-                    operation,
-                    sys_types::VmInternalError::BridgeFailure {
-                        message: format!("completeHostCall throw-payload decode failure: {e}"),
-                    },
-                ),
-            }
-        };
-        completion.complete(Err(mapped));
-    }
+    completion.complete(OpError::from_completion(operation, decoded));
     true
 }
 
@@ -551,9 +468,11 @@ pub fn complete_host_call(call_id: u32, is_error: i32, content: &[u8]) -> bool {
 /// Keys are globally unique, so this removes exactly the right entry regardless
 /// of which runtime registered the callable.
 extern "C" fn host_release_callback(key: u64) {
-    CALLABLES.with(|cell| {
-        cell.borrow_mut().remove(&key);
-    });
+    if let Some(key) = HostKey::new(key) {
+        CALLABLES.with(|cell| {
+            cell.borrow_mut().remove(&key);
+        });
+    }
     HOST_VALUE_RELEASE_CALLBACK.with(|cell| {
         let callback = cell
             .borrow()
@@ -628,7 +547,7 @@ impl WasmHost {
     pub(crate) fn call_registered_callable(
         &self,
         originating_sysop: SysOp,
-        callable: &HostValueArc,
+        callable: &Arc<HostValueArc>,
         positional: &[BexExternalValue],
         optional: &IndexMap<String, BexExternalValue>,
     ) -> SysOpOutput<BexExternalValue> {
@@ -644,7 +563,7 @@ impl WasmHost {
     fn call_registered_callable_with_context(
         &self,
         originating_sysop: SysOp,
-        callable: &HostValueArc,
+        callable: &Arc<HostValueArc>,
         positional: &[BexExternalValue],
         optional: &IndexMap<String, BexExternalValue>,
         ctx: Option<&SysOpContext>,
@@ -703,15 +622,18 @@ impl WasmHost {
             EXECUTIONS.with(|cell| {
                 cell.borrow_mut().insert(
                     call_id,
-                    (
-                        Box::new((
+                    HostExecution {
+                        key: callable.key,
+                        // The callable outlives the dispatch: the engine's
+                        // reference is held here until the call exits.
+                        _retained: Box::new((
                             ctx.cloned(),
-                            HostValueArc::intern(callable.key, callable.kind),
+                            Arc::clone(callable),
                             positional.to_vec(),
                             optional.clone(),
                         )),
-                        callback,
-                    ),
+                        cancel: callback,
+                    },
                 )
             });
             let call_id_js = JsValue::from_f64(f64::from(call_id));
@@ -745,7 +667,7 @@ impl WasmHost {
                     }
                 }
                 WasmHostDispatch::RuntimeCallback(host_dispatch) => {
-                    let key_js = JsValue::from(callable.key);
+                    let key_js = JsValue::from(callable.key.get());
                     if frame.is_some() {
                         host_dispatch.call1(&JsValue::NULL, &args_js.into())
                     } else {
@@ -800,7 +722,7 @@ impl io::IoNamespaceHost for WasmHost {
         _call_id: CallId,
         handle: BexExternalValue,
         args: Vec<BexExternalValue>,
-        type_arg_0: ::sys_types::SapTy,
+        _type_arg_0: ::sys_types::SapTy,
         _type_arg_1: ::sys_types::SapTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
@@ -846,15 +768,14 @@ impl io::IoNamespaceHost for WasmHost {
                 });
             }
         };
-        validate_host_output(
-            self.call_registered_callable_with_context(
-                SysOp::BamlHostCallHostValue,
-                host_arc.as_ref(),
-                &positional,
-                &optional,
-                Some(ctx),
-            ),
-            expected_wire_ty(&type_arg_0),
+        // The engine admits the returned value to the declared return type
+        // where it lands.
+        self.call_registered_callable_with_context(
+            SysOp::BamlHostCallHostValue,
+            &host_arc,
+            &positional,
+            &optional,
+            Some(ctx),
         )
     }
 }
@@ -864,14 +785,8 @@ impl io::IoNamespaceHost for WasmHost {
 /// `BexExternalValue`; on error we strip the `SysOp` wrapper to expose only
 /// the kind (the trait's contract).
 ///
-/// On success the host's returned value is strictly validated against the
-/// declared return type `expected` via the shared [`validate_host_return`]
-/// guard — the same check the native bridge performs — so a host that returns
-/// a value violating the declared `T` surfaces as a catchable
-/// `root.errors.HostCallable` rather than corrupting the VM. Class *field
-/// types* are validated engine-side where the resolved schema is available;
-/// this guard covers scalar discrimination (including contextual JavaScript
-/// `number` resolution), container recursion, enum identity, and class-name identity.
+/// The returned value is not judged here: the engine admits it to the
+/// declared return type where it lands.
 ///
 /// When `install_guard` is true, `call_id` owns the in-flight entry installed
 /// by the caller, and a [`WasmInflightGuard`] for it is moved into the async
@@ -893,8 +808,8 @@ fn drain_pending_unvalidated(
         SysOpResult::Ready(Err(err)) => match err.payload {
             sys_types::OpErrorPayload::Vm(kind) => SysOpOutput::err(kind),
             // `SysOpResult::pending` always yields `Async`, so a Ready(Err)
-            // here can't actually originate from the host-throw path.
-            sys_types::OpErrorPayload::HostThrown(_) => {
+            // here can't actually originate from a thrown value.
+            sys_types::OpErrorPayload::Engine(_) | sys_types::OpErrorPayload::Host(_) => {
                 unreachable!("Ready(Err) is never produced for the host-callable sysop")
             }
         },
@@ -913,59 +828,6 @@ fn drain_pending_unvalidated(
     }
 }
 
-fn validate_host_output(
-    output: SysOpOutput<BexExternalValue>,
-    expected: baml_type::RuntimeTy,
-) -> SysOpOutput<BexExternalValue> {
-    match output {
-        SysOpOutput::Ready(Ok(value)) => match validate_host_return_value(&value, &expected) {
-            Ok(()) => SysOpOutput::ok(value),
-            Err(error) => SysOpOutput::err(error),
-        },
-        SysOpOutput::Ready(Err(error)) => SysOpOutput::Ready(Err(error)),
-        SysOpOutput::Async(future) => {
-            SysOpOutput::Async(Box::pin(crate::send_wrapper::SendFuture(async move {
-                let value = future.await?;
-                validate_host_return_value(&value, &expected)?;
-                Ok(value)
-            })))
-        }
-    }
-}
-
-/// Strictly validate a host-returned value against the declared return type.
-/// A mismatch is a `baml.panics.HostContractViolation` panic — the host has
-/// violated its typed contract, so the call cannot be reasonably continued.
-/// Mirrors the native bridge's `validate_return_value` in
-/// `sys_native::host_impls`.
-/// Project a lane type into the name-headed form the contract check reads.
-///
-/// See the note in `sys_native`'s equivalent: the check is name-based, so an
-/// anonymous declaration widens to `unknown` rather than being given a
-/// spelling it does not have.
-fn expected_wire_ty(expected: &::sys_types::SapTy) -> baml_type::RuntimeTy {
-    expected
-        .clone()
-        .try_map_heads(&mut |head: &baml_type::TaggedTypeName| head.declared().cloned().ok_or(()))
-        .unwrap_or_else(|()| baml_type::RuntimeTy::unknown())
-}
-
-fn validate_host_return_value(
-    value: &BexExternalValue,
-    expected: &baml_type::RuntimeTy,
-) -> Result<(), VmRustFnError> {
-    validate_host_return(value, expected).map_err(|err| {
-        sys_types::VmPanic::HostContractViolation {
-            message: format!(
-                "host callable returned a value of the wrong type: {err} (expected {expected})"
-            ),
-            class_name: None,
-            language: None,
-        }
-        .into()
-    })
-}
-
 #[cfg(test)]
 mod tests {
     //! Host-target unit tests for the id-routing layer.
@@ -981,9 +843,20 @@ mod tests {
 
     use std::collections::HashSet;
 
-    use bridge_ctypes::baml_bridge::cffi::inbound_value::Value as InboundVariant;
+    use bridge_ctypes::baml_bridge::cffi::{
+        HostCallCompletion, InboundValue, host_call_completion::Outcome,
+        inbound_value::Value as InboundVariant,
+    };
 
     use super::*;
+
+    /// A completion whose callable returned `null`.
+    fn returned_null() -> Vec<u8> {
+        HostCallCompletion {
+            outcome: Some(Outcome::Returned(InboundValue::default())),
+        }
+        .encode_to_vec()
+    }
 
     fn insert_pending_call() -> (u32, SysOpResult) {
         let call_id = next_call_id();
@@ -996,15 +869,14 @@ mod tests {
         (call_id, result)
     }
 
-    /// Minted keys must be unique, monotonic, and never 0 (0 is the reserved
-    /// "invalid" sentinel). Globally-unique keys are what make release-by-key
-    /// routing unambiguous across runtimes.
+    /// Minted keys must be unique (a `HostKey` is nonzero by type).
+    /// Globally-unique keys are what make release-by-key routing unambiguous
+    /// across runtimes.
     #[test]
-    fn next_key_is_unique_and_nonzero() {
+    fn next_key_is_unique() {
         let mut seen = HashSet::new();
         for _ in 0..1000 {
             let k = next_key();
-            assert_ne!(k, 0, "minted key must never be the reserved 0");
             assert!(seen.insert(k), "minted key {k} was handed out twice");
         }
     }
@@ -1058,8 +930,8 @@ mod tests {
             panic!("pending() must produce an async result");
         };
 
-        // Complete A with an empty success payload (→ Null). B must stay pending.
-        complete_host_call(id_a, 0, &[]);
+        // Complete A with a null return. B must stay pending.
+        complete_host_call(id_a, &returned_null());
 
         // A's future is now resolved with Null; B's table entry is still present.
         let a = futures::executor::block_on(fut_a).expect("A completes successfully");
@@ -1076,7 +948,7 @@ mod tests {
         });
 
         // An unknown id is a silent no-op (stale completion / dropped runtime).
-        complete_host_call(u32::MAX, 0, &[]);
+        complete_host_call(u32::MAX, &returned_null());
 
         // B's future must still be pending (not yet polled to completion).
         let waker = futures::task::noop_waker();
@@ -1087,7 +959,7 @@ mod tests {
         );
 
         // Now complete B and confirm it resolves independently.
-        complete_host_call(id_b, 0, &[]);
+        complete_host_call(id_b, &returned_null());
         let b = futures::executor::block_on(fut_b).expect("B completes successfully");
         assert!(matches!(b, BexExternalValue::Null), "B resolved with Null");
     }
@@ -1138,7 +1010,7 @@ mod tests {
         };
 
         // Host completes normally — this removes-and-fires the handle.
-        complete_host_call(call_id, 0, &[]);
+        complete_host_call(call_id, &returned_null());
         assert!(
             !IN_FLIGHT.with(|c| c.borrow().contains_key(&call_id)),
             "completion must remove the in-flight entry"
@@ -1156,7 +1028,7 @@ mod tests {
     #[test]
     fn malformed_completion_is_bridge_failure_and_removes_entry() {
         let (call_id, result) = insert_pending_call();
-        complete_host_call(call_id, 0, &[0xff]);
+        complete_host_call(call_id, &[0xff]);
         assert!(!IN_FLIGHT.with(|cell| cell.borrow().contains_key(&call_id)));
 
         let SysOpResult::Async(future) = result else {
@@ -1172,15 +1044,15 @@ mod tests {
     }
 
     #[test]
-    fn invalid_is_error_is_bridge_failure_and_removes_entry() {
+    fn a_completion_with_no_outcome_is_bridge_failure_and_removes_entry() {
         let (call_id, result) = insert_pending_call();
-        assert!(complete_host_call(call_id, 2, &[]));
+        assert!(complete_host_call(call_id, &[]));
         assert!(!IN_FLIGHT.with(|cell| cell.borrow().contains_key(&call_id)));
 
         let SysOpResult::Async(future) = result else {
             panic!("pending() must produce an async result");
         };
-        let error = futures::executor::block_on(future).expect_err("invalid isError must fail");
+        let error = futures::executor::block_on(future).expect_err("no outcome must fail");
         assert!(matches!(
             error.payload,
             sys_types::OpErrorPayload::Vm(sys_types::VmRustFnError::InternalError(
@@ -1219,7 +1091,7 @@ mod tests {
             ))
         ));
 
-        assert!(complete_host_call(call_id, 0, &[]));
+        assert!(complete_host_call(call_id, &returned_null()));
         let SysOpResult::Async(first_future) = first_result else {
             panic!("pending() must produce an async result");
         };
@@ -1231,12 +1103,14 @@ mod tests {
     #[test]
     fn structured_user_error_removes_entry() {
         let (call_id, result) = insert_pending_call();
-        let payload = InboundValue {
-            value_type: None,
-            value: Some(InboundVariant::StringValue("boom".to_string())),
+        let payload = HostCallCompletion {
+            outcome: Some(Outcome::Thrown(InboundValue {
+                value_type: None,
+                value: Some(InboundVariant::StringValue("boom".to_string())),
+            })),
         }
         .encode_to_vec();
-        complete_host_call(call_id, 1, &payload);
+        complete_host_call(call_id, &payload);
         assert!(!IN_FLIGHT.with(|cell| cell.borrow().contains_key(&call_id)));
 
         let SysOpResult::Async(future) = result else {
@@ -1245,7 +1119,7 @@ mod tests {
         let error = futures::executor::block_on(future).expect_err("throw must fail the sysop");
         assert!(matches!(
             error.payload,
-            sys_types::OpErrorPayload::HostThrown(ref value)
+            sys_types::OpErrorPayload::Host(sys_types::HostOutcome::Thrown(ref value))
                 if matches!(value.as_ref(), BexExternalValue::String(value) if value.as_str() == "boom")
         ));
     }
@@ -1253,8 +1127,8 @@ mod tests {
     #[test]
     fn duplicate_completion_is_a_noop_after_first_removal() {
         let (call_id, result) = insert_pending_call();
-        complete_host_call(call_id, 0, &[]);
-        complete_host_call(call_id, 0, &[0xff]);
+        complete_host_call(call_id, &returned_null());
+        complete_host_call(call_id, &[0xff]);
         assert!(!IN_FLIGHT.with(|cell| cell.borrow().contains_key(&call_id)));
 
         let SysOpResult::Async(future) = result else {

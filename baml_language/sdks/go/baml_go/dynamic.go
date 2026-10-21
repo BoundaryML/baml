@@ -11,9 +11,12 @@ import (
 	"github.com/boundaryml/baml-go/internal/cffi"
 )
 
-// InputMarshaler is implemented by generated closed-union values. It only
-// answers whether a Go value can cross the ABI; BAML remains authoritative for
-// semantic assignability to a function's declared parameter type.
+// InputMarshaler is implemented by generated classes and closed unions, which
+// encode themselves under their declared field and member types: Go's
+// surface erases some of those (a `json` field is `any`, a `"a"[]` field is
+// `[]string`), so reflecting over the value would state the wrong type. BAML
+// remains authoritative for assignability to a function's declared parameter
+// type.
 type InputMarshaler interface {
 	BAMLInput() Input
 }
@@ -65,7 +68,7 @@ func DynamicUnionDecoder(candidates ...DynamicDecodeCandidate) func(Value) (any,
 			return nil, err
 		}
 		for index, candidate := range candidates {
-			if err := validateBAMLTypeValue(candidate.Type); err != nil {
+			if err := validateBAMLTypeValue(candidate.Type, typeHeld); err != nil {
 				return nil, fmt.Errorf("dynamic union candidate %d: %w", index, err)
 			}
 			if candidate.Decode == nil {
@@ -98,38 +101,16 @@ func InvalidInput(message string) Input {
 	return Input{err: fmt.Errorf("%s", message)}
 }
 
-// SelectedUnionInput projects a generated union to its selected payload and
-// attaches that arm's exact node type. The enclosing union stays in the BAML
-// callable's declared type; inbound values never carry a union envelope.
-func SelectedUnionInput(payload Input, unionType, selectedType BAMLType) Input {
-	if payload.err != nil {
-		return payload
+// dynamicElementType is the BAML type a dynamic container states for its
+// elements of Go type typ. An interface position, at any depth, is `unknown`
+// (each element then states its own type), so `[][]any` states
+// `unknown[][]`. It is nil only when typ has no BAML shape at all; encoding
+// a non-empty container of it fails on its first element.
+func dynamicElementType(typ reflect.Type) *BAMLType {
+	if inferred, ok := reflectBAMLType(typ, interfacesAreUnknown); ok {
+		return &inferred
 	}
-	if payload.value == nil && payload.deferred == nil {
-		return InvalidInput("selected union payload is uninitialized")
-	}
-	if unionType.value == nil || selectedType.value == nil {
-		return InvalidInput("selected union type metadata is uninitialized")
-	}
-	prepare := func(transaction *inputTransaction) (*cffi.InboundValue, error) {
-		value, err := payload.encodeValue(transaction)
-		if err != nil {
-			return nil, fmt.Errorf("selected union payload: %w", err)
-		}
-		annotated := &cffi.InboundValue{
-			ValueType: value.ValueType,
-			Value:     value.Value,
-		}
-		if annotated.ValueType == nil {
-			annotated.ValueType = selectedType.value
-		}
-		return annotated, nil
-	}
-	if payload.deferred == nil {
-		value, err := prepare(nil)
-		return Input{value: value, err: err}
-	}
-	return Input{deferred: &inputEncoder{encode: prepare}}
+	return nil
 }
 
 // Any converts an ordinary dynamic Go value into the generic ABI value tree.
@@ -141,47 +122,63 @@ func Any(value any) Input {
 
 // AnyEncoder is the generic-function form of Any. Its type parameter lets Go
 // preserve element types when it is composed with ListEncoder/MapEncoder.
+//
+// Generated code encodes a value filling a type variable's slot with it: the
+// Go type T spells the variable's binding, which the call or class states as
+// TypeOf[T]. A T that Go cannot reify (one containing an interface) is refused
+// where that binding is stated, so beneath it every position has the static
+// type the binding names, and generated classes and unions inside encode
+// themselves under their declared types.
 func AnyEncoder[T any](value T) Input { return Any(value) }
 
-// GeneratedClassInput encodes one generated class without redispatching to
-// its BAMLInput method. Generated methods call this helper so Any can preserve
-// normal InputMarshaler precedence without recursing back into the method.
-func GeneratedClassInput(value any) Input {
-	reflected := reflect.ValueOf(value)
-	for reflected.IsValid() && reflected.Kind() == reflect.Pointer {
-		if reflected.IsNil() {
-			return NullInput(Null{})
+// DynamicEncodeCandidate encodes a dynamic union's value under one member when
+// the value has that member's Go type, and reports whether it did.
+type DynamicEncodeCandidate func(value any) (Input, bool)
+
+// DynamicEncodeAs is the candidate for a member whose Go type is T, encoded
+// by encode.
+func DynamicEncodeAs[T any](encode func(T) Input) DynamicEncodeCandidate {
+	return func(value any) (Input, bool) {
+		typed, ok := value.(T)
+		if !ok {
+			return Input{}, false
 		}
-		reflected = reflected.Elem()
+		return encode(typed), true
 	}
-	if !reflected.IsValid() || reflected.Kind() != reflect.Struct {
-		return InvalidInput(fmt.Sprintf("generated BAML class has Go type %T, expected struct", value))
+}
+
+// DynamicUnionEncoder constructs the encoder of one union position whose Go
+// representation is `any` and whose members mention a type variable, so no
+// generated codec can spell it. Generated code lists a candidate for every
+// member whose declared type the value's Go type alone does not state (a
+// class, a container, a type variable), in declaration order; the first that
+// takes the value encodes it. Any other value implies its own type and is
+// encoded by fallback: JSON when a member is `baml.json.json`, else Any.
+func DynamicUnionEncoder(fallback func(any) Input, candidates ...DynamicEncodeCandidate) func(any) Input {
+	return func(value any) Input {
+		for _, candidate := range candidates {
+			if encoded, ok := candidate(value); ok {
+				return encoded
+			}
+		}
+		return fallback(value)
 	}
-	return encodeGeneratedClass(reflected, make(map[visit]bool), "value", 0)
 }
 
 // TypeOf returns the canonical BAML descriptor for T. Unsupported host-only
-// Go shapes return an uninitialized descriptor; CallWithTypeArgs reports that
-// as a normal input error before invoking the native runtime.
+// Go shapes return an invalid descriptor; CallWithTypeArgs reports that as a
+// normal input error before invoking the native runtime.
 //
 // In particular, Go's `any` erases the nominal identity of BAML's canonical
 // `baml.json.json` alias. JSON remains native `any` in non-generic generated
 // APIs, but a generic API instantiated as `any` cannot reify that type argument
 // and fails normally instead of guessing an unsound descriptor.
 func TypeOf[T any]() BAMLType {
-	typeOf, _ := reflectedBAMLType(reflect.TypeFor[T]())
-	return typeOf
-}
-
-// DefinitionOf promotes a known sparse token to the portable definition form
-// used by reflected handles. Unsupported Go-only shapes remain invalid.
-func DefinitionOf[T any]() BAMLType {
-	value := TypeOf[T]()
-	definition, err := value.definitionCopy()
-	if err != nil {
+	typeOf, ok := reflectedBAMLType(reflect.TypeFor[T]())
+	if !ok {
 		return BAMLType{err: fmt.Errorf("unsupported Go type token %s", reflect.TypeFor[T]())}
 	}
-	return BAMLType{definition: definition}
+	return typeOf
 }
 
 // DecodeAs decodes a BAML value into the concrete Go instantiation T.
@@ -235,7 +232,26 @@ func anyMap(values map[string]Input, valueType *BAMLType) Input {
 	return mapInput(keys, inputs, valueType)
 }
 
+// interfacePolicy is what an interface-typed Go position reflects to.
+type interfacePolicy bool
+
+const (
+	// interfacesAreErased: a type token cannot reify an interface. Go's `any`
+	// also carries `baml.json.json`, whose nominal identity it erases, so
+	// guessing would state a type the value may not inhabit.
+	interfacesAreErased interfacePolicy = false
+	// interfacesAreUnknown: a dynamic value's container states `unknown` for an
+	// interface position; every element beneath it states its own type.
+	interfacesAreUnknown interfacePolicy = true
+)
+
+// reflectedBAMLType is the exact BAML type of Go type typ, or false when Go's
+// surface erases it.
 func reflectedBAMLType(typ reflect.Type) (BAMLType, bool) {
+	return reflectBAMLType(typ, interfacesAreErased)
+}
+
+func reflectBAMLType(typ reflect.Type, interfaces interfacePolicy) (BAMLType, bool) {
 	if typ == reflect.TypeOf(BAMLType{}) {
 		return MetaTypeBAMLType(), true
 	}
@@ -244,7 +260,7 @@ func reflectedBAMLType(typ reflect.Type) (BAMLType, bool) {
 		return PrimitiveBAMLType(BigintType), true
 	}
 	if typ.Kind() == reflect.Pointer {
-		inner, ok := reflectedBAMLType(typ.Elem())
+		inner, ok := reflectBAMLType(typ.Elem(), interfaces)
 		if !ok {
 			return BAMLType{}, false
 		}
@@ -253,6 +269,9 @@ func reflectedBAMLType(typ reflect.Type) (BAMLType, bool) {
 	// Marker interfaces describe concrete generated/runtime values. Their zero
 	// interface value has no dynamic receiver and must not be invoked.
 	if typ.Kind() == reflect.Interface {
+		if interfaces == interfacesAreUnknown {
+			return UnknownBAMLType(), true
+		}
 		return BAMLType{}, false
 	}
 	if typ.Implements(reflect.TypeOf((*DynamicType)(nil)).Elem()) {
@@ -283,7 +302,7 @@ func reflectedBAMLType(typ reflect.Type) (BAMLType, bool) {
 		}
 		fallthrough
 	case reflect.Array:
-		inner, ok := reflectedBAMLType(typ.Elem())
+		inner, ok := reflectBAMLType(typ.Elem(), interfaces)
 		if !ok {
 			return BAMLType{}, false
 		}
@@ -292,7 +311,7 @@ func reflectedBAMLType(typ reflect.Type) (BAMLType, bool) {
 		if typ.Key().Kind() != reflect.String {
 			return BAMLType{}, false
 		}
-		value, ok := reflectedBAMLType(typ.Elem())
+		value, ok := reflectBAMLType(typ.Elem(), interfaces)
 		if !ok {
 			return BAMLType{}, false
 		}
@@ -326,11 +345,10 @@ func encodeAny(value reflect.Value, active map[visit]bool, path string, depth in
 			return Type(reflectedType)
 		}
 		if marshaler, ok := value.Interface().(InputMarshaler); ok {
-			// Generated classes must stay inside this traversal so pointer cycle
-			// and depth state is not reset by their public BAMLInput hook.
-			if _, generatedClass := value.Interface().(DynamicClass); !generatedClass {
-				return marshaler.BAMLInput()
-			}
+			// A generated class's input is built when the call is encoded, which
+			// bounds a cycle through it (GeneratedClass); every other cycle stays
+			// within this traversal.
+			return marshaler.BAMLInput()
 		}
 		if integer, ok := value.Interface().(*big.Int); ok {
 			return BigInt(integer)
@@ -391,11 +409,7 @@ func encodeAny(value reflect.Value, active map[visit]bool, path string, depth in
 				return items[index]
 			}
 		}
-		var itemType *BAMLType
-		if inferred, ok := reflectedBAMLType(value.Type().Elem()); ok {
-			itemType = &inferred
-		}
-		return anyList(items, itemType)
+		return anyList(items, dynamicElementType(value.Type().Elem()))
 	case reflect.Map:
 		if value.Type().Key().Kind() != reflect.String {
 			return InvalidInput(fmt.Sprintf("%s: BAML maps require string keys, got %s", path, value.Type().Key()))
@@ -410,48 +424,9 @@ func encodeAny(value reflect.Value, active map[visit]bool, path string, depth in
 			}
 			entries[key] = encoded
 		}
-		var valueType *BAMLType
-		if inferred, ok := reflectedBAMLType(value.Type().Elem()); ok {
-			valueType = &inferred
-		}
-		return anyMap(entries, valueType)
-	case reflect.Struct:
-		if !value.CanInterface() {
-			break
-		}
-		if _, ok := value.Interface().(DynamicClass); !ok {
-			break
-		}
-		return encodeGeneratedClass(value, active, path, depth)
+		return anyMap(entries, dynamicElementType(value.Type().Elem()))
 	}
 	return InvalidInput(fmt.Sprintf("%s: unsupported Go value of type %s", path, value.Type()))
-}
-
-func encodeGeneratedClass(value reflect.Value, active map[visit]bool, path string, depth int) Input {
-	class := value.Interface().(DynamicClass)
-	fields := make(map[string]Input)
-	for index := 0; index < value.NumField(); index++ {
-		fieldInfo := value.Type().Field(index)
-		wireName := fieldInfo.Tag.Get("baml")
-		if wireName == "" || wireName == "-" {
-			continue
-		}
-		field := encodeAny(value.Field(index), active, path+"."+fieldInfo.Name, depth+1)
-		if field.err != nil {
-			return field
-		}
-		fields[wireName] = field
-	}
-	descriptor, ok := reflectedBAMLType(value.Type())
-	if !ok || descriptor.value.GetClassTy() == nil {
-		return InvalidInput(fmt.Sprintf("%s: generated BAML class %s has no class descriptor", path, value.Type()))
-	}
-	typeArgs := descriptor.value.GetClassTy().GetTypeArgs()
-	publicTypeArgs := make([]BAMLType, len(typeArgs))
-	for index, typeArg := range typeArgs {
-		publicTypeArgs[index] = BAMLType{value: typeArg}
-	}
-	return ClassWithTypeArgs(class.BAMLClassName(), publicTypeArgs, fields)
 }
 
 func decodeReflected(value Value, typ reflect.Type, path string, depth int) (reflect.Value, error) {
@@ -652,8 +627,6 @@ func decodeDynamicValue(value Value, path string, depth int) (any, error) {
 		return item.BoolValue, nil
 	case *cffi.BamlOutboundValue_Uint8ArrayValue:
 		return append([]byte(nil), item.Uint8ArrayValue...), nil
-	case *cffi.BamlOutboundValue_TyDefValue:
-		return value.Type()
 	case *cffi.BamlOutboundValue_LiteralValue:
 		if item.LiteralValue == nil {
 			return nil, fmt.Errorf("%s: BAML literal payload is empty", path)

@@ -400,13 +400,24 @@ impl TraceSnapshotBuilder {
                     }
                     let mut type_args = Self::vec_with_capacity(instance.class_type_args.len())?;
                     for type_arg in &instance.class_type_args {
-                        // Snapshots retain the wire form of the runtime type.
-                        let Ok(wire) = crate::conversion::overlay_wire_ty(
-                            &bex_vm_types::RuntimeTy::from(type_arg),
-                        ) else {
+                        // A snapshot is display data: a compiled declaration
+                        // by name, a runtime declaration by its label.
+                        let Ok(annotated) =
+                            crate::conversion::to_annotation::<std::convert::Infallible>(type_arg)
+                        else {
                             continue;
                         };
-                        type_args.push(wire);
+                        type_args.push(baml_type::RuntimeTy::from(&annotated.map_heads(
+                            &mut |head: &bex_external_types::WireHead<std::convert::Infallible>| {
+                                match head {
+                                    bex_external_types::WireHead::Static(name) => name.clone(),
+                                    bex_external_types::WireHead::Live(never) => match *never {},
+                                    bex_external_types::WireHead::Anonymous(label) => {
+                                        baml_type::TypeName::local(label.clone())
+                                    }
+                                }
+                            },
+                        )));
                     }
                     // A trace is read by a person: the display name, never an
                     // internal identity.

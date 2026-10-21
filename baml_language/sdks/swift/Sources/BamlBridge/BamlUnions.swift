@@ -62,19 +62,24 @@ extension BamlUnion2: Hashable where T0: Hashable, T1: Hashable {}
 extension BamlUnion2: Sendable where T0: Sendable, T1: Sendable {}
 
 extension BamlUnion2: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable {
-    public static var _bamlType: BamlTypeDescriptor? {
-        let options = [T0._bamlType, T1._bamlType]
-        guard options.allSatisfy({ $0 != nil }) else { return nil }
-        return .union(options.compactMap { $0 })
-    }
-
-    // The selected arm's value rides bare, annotated with that arm's exact
-    // current-node type rather than an inbound union wrapper.
-    public func _bamlEncode() -> BamlInboundValue {
+    // A union states nothing itself: the selected arm's value rides
+    // bare, as a node of that arm's slot.
+    public func _bamlEncode(as slot: BamlSlot<Self>) -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T0._bamlType)
-        case .t1(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T1._bamlType)
+        case .t0(let v): return v._bamlEncode(as: slot.unionArm(0))
+        case .t1(let v): return v._bamlEncode(as: slot.unionArm(1))
         }
+    }
+}
+
+extension BamlUnion2: BamlTyped where T0: BamlTyped, T1: BamlTyped {
+    public static var _bamlSlot: BamlSlot<Self> { BamlSlots.union(T0._bamlSlot, T1._bamlSlot) }
+}
+
+extension BamlSlots {
+    /// The slot of a `BamlUnion2`: one slot per arm, in case order.
+    public static func union<T0, T1>(_ t0: BamlSlot<T0>, _ t1: BamlSlot<T1>) -> BamlSlot<BamlUnion2<T0, T1>> {
+        union([t0.node, t1.node])
     }
 }
 
@@ -82,8 +87,8 @@ extension BamlUnion2: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable {
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         // 1. Canonical wire discriminator.
         if let selected = try v.unionSelectedType() {
-            if T0._bamlDecodeType == selected { return .t0(try T0._bamlDecode(v)) }
-            if T1._bamlDecodeType == selected { return .t1(try T1._bamlDecode(v)) }
+            if T0._bamlDecodeSelects(selected) { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeSelects(selected) { return .t1(try T1._bamlDecode(v)) }
             throw BamlDecodeError.typeMismatch(expected: "BamlUnion2", got: "selected type not present in host union")
         }
         // 2. Legacy/display metadata.
@@ -158,18 +163,25 @@ extension BamlUnion3: Hashable where T0: Hashable, T1: Hashable, T2: Hashable {}
 extension BamlUnion3: Sendable where T0: Sendable, T1: Sendable, T2: Sendable {}
 
 extension BamlUnion3: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, T2: BamlEncodable {
-    public static var _bamlType: BamlTypeDescriptor? {
-        let options = [T0._bamlType, T1._bamlType, T2._bamlType]
-        guard options.allSatisfy({ $0 != nil }) else { return nil }
-        return .union(options.compactMap { $0 })
-    }
-
-    public func _bamlEncode() -> BamlInboundValue {
+    // A union states nothing itself: the selected arm's value rides
+    // bare, as a node of that arm's slot.
+    public func _bamlEncode(as slot: BamlSlot<Self>) -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T0._bamlType)
-        case .t1(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T1._bamlType)
-        case .t2(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T2._bamlType)
+        case .t0(let v): return v._bamlEncode(as: slot.unionArm(0))
+        case .t1(let v): return v._bamlEncode(as: slot.unionArm(1))
+        case .t2(let v): return v._bamlEncode(as: slot.unionArm(2))
         }
+    }
+}
+
+extension BamlUnion3: BamlTyped where T0: BamlTyped, T1: BamlTyped, T2: BamlTyped {
+    public static var _bamlSlot: BamlSlot<Self> { BamlSlots.union(T0._bamlSlot, T1._bamlSlot, T2._bamlSlot) }
+}
+
+extension BamlSlots {
+    /// The slot of a `BamlUnion3`: one slot per arm, in case order.
+    public static func union<T0, T1, T2>(_ t0: BamlSlot<T0>, _ t1: BamlSlot<T1>, _ t2: BamlSlot<T2>) -> BamlSlot<BamlUnion3<T0, T1, T2>> {
+        union([t0.node, t1.node, t2.node])
     }
 }
 
@@ -177,9 +189,9 @@ extension BamlUnion3: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         // 1. Canonical wire discriminator.
         if let selected = try v.unionSelectedType() {
-            if T0._bamlDecodeType == selected { return .t0(try T0._bamlDecode(v)) }
-            if T1._bamlDecodeType == selected { return .t1(try T1._bamlDecode(v)) }
-            if T2._bamlDecodeType == selected { return .t2(try T2._bamlDecode(v)) }
+            if T0._bamlDecodeSelects(selected) { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeSelects(selected) { return .t1(try T1._bamlDecode(v)) }
+            if T2._bamlDecodeSelects(selected) { return .t2(try T2._bamlDecode(v)) }
             throw BamlDecodeError.typeMismatch(expected: "BamlUnion3", got: "selected type not present in host union")
         }
         // 2. Legacy/display metadata.
@@ -263,19 +275,26 @@ extension BamlUnion4: Hashable where T0: Hashable, T1: Hashable, T2: Hashable, T
 extension BamlUnion4: Sendable where T0: Sendable, T1: Sendable, T2: Sendable, T3: Sendable {}
 
 extension BamlUnion4: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, T2: BamlEncodable, T3: BamlEncodable {
-    public static var _bamlType: BamlTypeDescriptor? {
-        let options = [T0._bamlType, T1._bamlType, T2._bamlType, T3._bamlType]
-        guard options.allSatisfy({ $0 != nil }) else { return nil }
-        return .union(options.compactMap { $0 })
-    }
-
-    public func _bamlEncode() -> BamlInboundValue {
+    // A union states nothing itself: the selected arm's value rides
+    // bare, as a node of that arm's slot.
+    public func _bamlEncode(as slot: BamlSlot<Self>) -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T0._bamlType)
-        case .t1(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T1._bamlType)
-        case .t2(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T2._bamlType)
-        case .t3(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T3._bamlType)
+        case .t0(let v): return v._bamlEncode(as: slot.unionArm(0))
+        case .t1(let v): return v._bamlEncode(as: slot.unionArm(1))
+        case .t2(let v): return v._bamlEncode(as: slot.unionArm(2))
+        case .t3(let v): return v._bamlEncode(as: slot.unionArm(3))
         }
+    }
+}
+
+extension BamlUnion4: BamlTyped where T0: BamlTyped, T1: BamlTyped, T2: BamlTyped, T3: BamlTyped {
+    public static var _bamlSlot: BamlSlot<Self> { BamlSlots.union(T0._bamlSlot, T1._bamlSlot, T2._bamlSlot, T3._bamlSlot) }
+}
+
+extension BamlSlots {
+    /// The slot of a `BamlUnion4`: one slot per arm, in case order.
+    public static func union<T0, T1, T2, T3>(_ t0: BamlSlot<T0>, _ t1: BamlSlot<T1>, _ t2: BamlSlot<T2>, _ t3: BamlSlot<T3>) -> BamlSlot<BamlUnion4<T0, T1, T2, T3>> {
+        union([t0.node, t1.node, t2.node, t3.node])
     }
 }
 
@@ -283,10 +302,10 @@ extension BamlUnion4: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         // 1. Canonical wire discriminator.
         if let selected = try v.unionSelectedType() {
-            if T0._bamlDecodeType == selected { return .t0(try T0._bamlDecode(v)) }
-            if T1._bamlDecodeType == selected { return .t1(try T1._bamlDecode(v)) }
-            if T2._bamlDecodeType == selected { return .t2(try T2._bamlDecode(v)) }
-            if T3._bamlDecodeType == selected { return .t3(try T3._bamlDecode(v)) }
+            if T0._bamlDecodeSelects(selected) { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeSelects(selected) { return .t1(try T1._bamlDecode(v)) }
+            if T2._bamlDecodeSelects(selected) { return .t2(try T2._bamlDecode(v)) }
+            if T3._bamlDecodeSelects(selected) { return .t3(try T3._bamlDecode(v)) }
             throw BamlDecodeError.typeMismatch(expected: "BamlUnion4", got: "selected type not present in host union")
         }
         // 2. Legacy/display metadata.
@@ -379,20 +398,27 @@ extension BamlUnion5: Hashable where T0: Hashable, T1: Hashable, T2: Hashable, T
 extension BamlUnion5: Sendable where T0: Sendable, T1: Sendable, T2: Sendable, T3: Sendable, T4: Sendable {}
 
 extension BamlUnion5: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, T2: BamlEncodable, T3: BamlEncodable, T4: BamlEncodable {
-    public static var _bamlType: BamlTypeDescriptor? {
-        let options = [T0._bamlType, T1._bamlType, T2._bamlType, T3._bamlType, T4._bamlType]
-        guard options.allSatisfy({ $0 != nil }) else { return nil }
-        return .union(options.compactMap { $0 })
-    }
-
-    public func _bamlEncode() -> BamlInboundValue {
+    // A union states nothing itself: the selected arm's value rides
+    // bare, as a node of that arm's slot.
+    public func _bamlEncode(as slot: BamlSlot<Self>) -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T0._bamlType)
-        case .t1(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T1._bamlType)
-        case .t2(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T2._bamlType)
-        case .t3(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T3._bamlType)
-        case .t4(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T4._bamlType)
+        case .t0(let v): return v._bamlEncode(as: slot.unionArm(0))
+        case .t1(let v): return v._bamlEncode(as: slot.unionArm(1))
+        case .t2(let v): return v._bamlEncode(as: slot.unionArm(2))
+        case .t3(let v): return v._bamlEncode(as: slot.unionArm(3))
+        case .t4(let v): return v._bamlEncode(as: slot.unionArm(4))
         }
+    }
+}
+
+extension BamlUnion5: BamlTyped where T0: BamlTyped, T1: BamlTyped, T2: BamlTyped, T3: BamlTyped, T4: BamlTyped {
+    public static var _bamlSlot: BamlSlot<Self> { BamlSlots.union(T0._bamlSlot, T1._bamlSlot, T2._bamlSlot, T3._bamlSlot, T4._bamlSlot) }
+}
+
+extension BamlSlots {
+    /// The slot of a `BamlUnion5`: one slot per arm, in case order.
+    public static func union<T0, T1, T2, T3, T4>(_ t0: BamlSlot<T0>, _ t1: BamlSlot<T1>, _ t2: BamlSlot<T2>, _ t3: BamlSlot<T3>, _ t4: BamlSlot<T4>) -> BamlSlot<BamlUnion5<T0, T1, T2, T3, T4>> {
+        union([t0.node, t1.node, t2.node, t3.node, t4.node])
     }
 }
 
@@ -400,11 +426,11 @@ extension BamlUnion5: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         // 1. Canonical wire discriminator.
         if let selected = try v.unionSelectedType() {
-            if T0._bamlDecodeType == selected { return .t0(try T0._bamlDecode(v)) }
-            if T1._bamlDecodeType == selected { return .t1(try T1._bamlDecode(v)) }
-            if T2._bamlDecodeType == selected { return .t2(try T2._bamlDecode(v)) }
-            if T3._bamlDecodeType == selected { return .t3(try T3._bamlDecode(v)) }
-            if T4._bamlDecodeType == selected { return .t4(try T4._bamlDecode(v)) }
+            if T0._bamlDecodeSelects(selected) { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeSelects(selected) { return .t1(try T1._bamlDecode(v)) }
+            if T2._bamlDecodeSelects(selected) { return .t2(try T2._bamlDecode(v)) }
+            if T3._bamlDecodeSelects(selected) { return .t3(try T3._bamlDecode(v)) }
+            if T4._bamlDecodeSelects(selected) { return .t4(try T4._bamlDecode(v)) }
             throw BamlDecodeError.typeMismatch(expected: "BamlUnion5", got: "selected type not present in host union")
         }
         // 2. Legacy/display metadata.
@@ -506,21 +532,28 @@ extension BamlUnion6: Hashable where T0: Hashable, T1: Hashable, T2: Hashable, T
 extension BamlUnion6: Sendable where T0: Sendable, T1: Sendable, T2: Sendable, T3: Sendable, T4: Sendable, T5: Sendable {}
 
 extension BamlUnion6: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, T2: BamlEncodable, T3: BamlEncodable, T4: BamlEncodable, T5: BamlEncodable {
-    public static var _bamlType: BamlTypeDescriptor? {
-        let options = [T0._bamlType, T1._bamlType, T2._bamlType, T3._bamlType, T4._bamlType, T5._bamlType]
-        guard options.allSatisfy({ $0 != nil }) else { return nil }
-        return .union(options.compactMap { $0 })
-    }
-
-    public func _bamlEncode() -> BamlInboundValue {
+    // A union states nothing itself: the selected arm's value rides
+    // bare, as a node of that arm's slot.
+    public func _bamlEncode(as slot: BamlSlot<Self>) -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T0._bamlType)
-        case .t1(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T1._bamlType)
-        case .t2(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T2._bamlType)
-        case .t3(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T3._bamlType)
-        case .t4(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T4._bamlType)
-        case .t5(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T5._bamlType)
+        case .t0(let v): return v._bamlEncode(as: slot.unionArm(0))
+        case .t1(let v): return v._bamlEncode(as: slot.unionArm(1))
+        case .t2(let v): return v._bamlEncode(as: slot.unionArm(2))
+        case .t3(let v): return v._bamlEncode(as: slot.unionArm(3))
+        case .t4(let v): return v._bamlEncode(as: slot.unionArm(4))
+        case .t5(let v): return v._bamlEncode(as: slot.unionArm(5))
         }
+    }
+}
+
+extension BamlUnion6: BamlTyped where T0: BamlTyped, T1: BamlTyped, T2: BamlTyped, T3: BamlTyped, T4: BamlTyped, T5: BamlTyped {
+    public static var _bamlSlot: BamlSlot<Self> { BamlSlots.union(T0._bamlSlot, T1._bamlSlot, T2._bamlSlot, T3._bamlSlot, T4._bamlSlot, T5._bamlSlot) }
+}
+
+extension BamlSlots {
+    /// The slot of a `BamlUnion6`: one slot per arm, in case order.
+    public static func union<T0, T1, T2, T3, T4, T5>(_ t0: BamlSlot<T0>, _ t1: BamlSlot<T1>, _ t2: BamlSlot<T2>, _ t3: BamlSlot<T3>, _ t4: BamlSlot<T4>, _ t5: BamlSlot<T5>) -> BamlSlot<BamlUnion6<T0, T1, T2, T3, T4, T5>> {
+        union([t0.node, t1.node, t2.node, t3.node, t4.node, t5.node])
     }
 }
 
@@ -528,12 +561,12 @@ extension BamlUnion6: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         // 1. Canonical wire discriminator.
         if let selected = try v.unionSelectedType() {
-            if T0._bamlDecodeType == selected { return .t0(try T0._bamlDecode(v)) }
-            if T1._bamlDecodeType == selected { return .t1(try T1._bamlDecode(v)) }
-            if T2._bamlDecodeType == selected { return .t2(try T2._bamlDecode(v)) }
-            if T3._bamlDecodeType == selected { return .t3(try T3._bamlDecode(v)) }
-            if T4._bamlDecodeType == selected { return .t4(try T4._bamlDecode(v)) }
-            if T5._bamlDecodeType == selected { return .t5(try T5._bamlDecode(v)) }
+            if T0._bamlDecodeSelects(selected) { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeSelects(selected) { return .t1(try T1._bamlDecode(v)) }
+            if T2._bamlDecodeSelects(selected) { return .t2(try T2._bamlDecode(v)) }
+            if T3._bamlDecodeSelects(selected) { return .t3(try T3._bamlDecode(v)) }
+            if T4._bamlDecodeSelects(selected) { return .t4(try T4._bamlDecode(v)) }
+            if T5._bamlDecodeSelects(selected) { return .t5(try T5._bamlDecode(v)) }
             throw BamlDecodeError.typeMismatch(expected: "BamlUnion6", got: "selected type not present in host union")
         }
         // 2. Legacy/display metadata.
@@ -644,22 +677,29 @@ extension BamlUnion7: Hashable where T0: Hashable, T1: Hashable, T2: Hashable, T
 extension BamlUnion7: Sendable where T0: Sendable, T1: Sendable, T2: Sendable, T3: Sendable, T4: Sendable, T5: Sendable, T6: Sendable {}
 
 extension BamlUnion7: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, T2: BamlEncodable, T3: BamlEncodable, T4: BamlEncodable, T5: BamlEncodable, T6: BamlEncodable {
-    public static var _bamlType: BamlTypeDescriptor? {
-        let options = [T0._bamlType, T1._bamlType, T2._bamlType, T3._bamlType, T4._bamlType, T5._bamlType, T6._bamlType]
-        guard options.allSatisfy({ $0 != nil }) else { return nil }
-        return .union(options.compactMap { $0 })
-    }
-
-    public func _bamlEncode() -> BamlInboundValue {
+    // A union states nothing itself: the selected arm's value rides
+    // bare, as a node of that arm's slot.
+    public func _bamlEncode(as slot: BamlSlot<Self>) -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T0._bamlType)
-        case .t1(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T1._bamlType)
-        case .t2(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T2._bamlType)
-        case .t3(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T3._bamlType)
-        case .t4(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T4._bamlType)
-        case .t5(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T5._bamlType)
-        case .t6(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T6._bamlType)
+        case .t0(let v): return v._bamlEncode(as: slot.unionArm(0))
+        case .t1(let v): return v._bamlEncode(as: slot.unionArm(1))
+        case .t2(let v): return v._bamlEncode(as: slot.unionArm(2))
+        case .t3(let v): return v._bamlEncode(as: slot.unionArm(3))
+        case .t4(let v): return v._bamlEncode(as: slot.unionArm(4))
+        case .t5(let v): return v._bamlEncode(as: slot.unionArm(5))
+        case .t6(let v): return v._bamlEncode(as: slot.unionArm(6))
         }
+    }
+}
+
+extension BamlUnion7: BamlTyped where T0: BamlTyped, T1: BamlTyped, T2: BamlTyped, T3: BamlTyped, T4: BamlTyped, T5: BamlTyped, T6: BamlTyped {
+    public static var _bamlSlot: BamlSlot<Self> { BamlSlots.union(T0._bamlSlot, T1._bamlSlot, T2._bamlSlot, T3._bamlSlot, T4._bamlSlot, T5._bamlSlot, T6._bamlSlot) }
+}
+
+extension BamlSlots {
+    /// The slot of a `BamlUnion7`: one slot per arm, in case order.
+    public static func union<T0, T1, T2, T3, T4, T5, T6>(_ t0: BamlSlot<T0>, _ t1: BamlSlot<T1>, _ t2: BamlSlot<T2>, _ t3: BamlSlot<T3>, _ t4: BamlSlot<T4>, _ t5: BamlSlot<T5>, _ t6: BamlSlot<T6>) -> BamlSlot<BamlUnion7<T0, T1, T2, T3, T4, T5, T6>> {
+        union([t0.node, t1.node, t2.node, t3.node, t4.node, t5.node, t6.node])
     }
 }
 
@@ -667,13 +707,13 @@ extension BamlUnion7: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         // 1. Canonical wire discriminator.
         if let selected = try v.unionSelectedType() {
-            if T0._bamlDecodeType == selected { return .t0(try T0._bamlDecode(v)) }
-            if T1._bamlDecodeType == selected { return .t1(try T1._bamlDecode(v)) }
-            if T2._bamlDecodeType == selected { return .t2(try T2._bamlDecode(v)) }
-            if T3._bamlDecodeType == selected { return .t3(try T3._bamlDecode(v)) }
-            if T4._bamlDecodeType == selected { return .t4(try T4._bamlDecode(v)) }
-            if T5._bamlDecodeType == selected { return .t5(try T5._bamlDecode(v)) }
-            if T6._bamlDecodeType == selected { return .t6(try T6._bamlDecode(v)) }
+            if T0._bamlDecodeSelects(selected) { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeSelects(selected) { return .t1(try T1._bamlDecode(v)) }
+            if T2._bamlDecodeSelects(selected) { return .t2(try T2._bamlDecode(v)) }
+            if T3._bamlDecodeSelects(selected) { return .t3(try T3._bamlDecode(v)) }
+            if T4._bamlDecodeSelects(selected) { return .t4(try T4._bamlDecode(v)) }
+            if T5._bamlDecodeSelects(selected) { return .t5(try T5._bamlDecode(v)) }
+            if T6._bamlDecodeSelects(selected) { return .t6(try T6._bamlDecode(v)) }
             throw BamlDecodeError.typeMismatch(expected: "BamlUnion7", got: "selected type not present in host union")
         }
         // 2. Legacy/display metadata.
@@ -793,23 +833,30 @@ extension BamlUnion8: Hashable where T0: Hashable, T1: Hashable, T2: Hashable, T
 extension BamlUnion8: Sendable where T0: Sendable, T1: Sendable, T2: Sendable, T3: Sendable, T4: Sendable, T5: Sendable, T6: Sendable, T7: Sendable {}
 
 extension BamlUnion8: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, T2: BamlEncodable, T3: BamlEncodable, T4: BamlEncodable, T5: BamlEncodable, T6: BamlEncodable, T7: BamlEncodable {
-    public static var _bamlType: BamlTypeDescriptor? {
-        let options = [T0._bamlType, T1._bamlType, T2._bamlType, T3._bamlType, T4._bamlType, T5._bamlType, T6._bamlType, T7._bamlType]
-        guard options.allSatisfy({ $0 != nil }) else { return nil }
-        return .union(options.compactMap { $0 })
-    }
-
-    public func _bamlEncode() -> BamlInboundValue {
+    // A union states nothing itself: the selected arm's value rides
+    // bare, as a node of that arm's slot.
+    public func _bamlEncode(as slot: BamlSlot<Self>) -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T0._bamlType)
-        case .t1(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T1._bamlType)
-        case .t2(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T2._bamlType)
-        case .t3(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T3._bamlType)
-        case .t4(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T4._bamlType)
-        case .t5(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T5._bamlType)
-        case .t6(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T6._bamlType)
-        case .t7(let v): return v._bamlEncode()._bamlAnnotatingSelectedType(T7._bamlType)
+        case .t0(let v): return v._bamlEncode(as: slot.unionArm(0))
+        case .t1(let v): return v._bamlEncode(as: slot.unionArm(1))
+        case .t2(let v): return v._bamlEncode(as: slot.unionArm(2))
+        case .t3(let v): return v._bamlEncode(as: slot.unionArm(3))
+        case .t4(let v): return v._bamlEncode(as: slot.unionArm(4))
+        case .t5(let v): return v._bamlEncode(as: slot.unionArm(5))
+        case .t6(let v): return v._bamlEncode(as: slot.unionArm(6))
+        case .t7(let v): return v._bamlEncode(as: slot.unionArm(7))
         }
+    }
+}
+
+extension BamlUnion8: BamlTyped where T0: BamlTyped, T1: BamlTyped, T2: BamlTyped, T3: BamlTyped, T4: BamlTyped, T5: BamlTyped, T6: BamlTyped, T7: BamlTyped {
+    public static var _bamlSlot: BamlSlot<Self> { BamlSlots.union(T0._bamlSlot, T1._bamlSlot, T2._bamlSlot, T3._bamlSlot, T4._bamlSlot, T5._bamlSlot, T6._bamlSlot, T7._bamlSlot) }
+}
+
+extension BamlSlots {
+    /// The slot of a `BamlUnion8`: one slot per arm, in case order.
+    public static func union<T0, T1, T2, T3, T4, T5, T6, T7>(_ t0: BamlSlot<T0>, _ t1: BamlSlot<T1>, _ t2: BamlSlot<T2>, _ t3: BamlSlot<T3>, _ t4: BamlSlot<T4>, _ t5: BamlSlot<T5>, _ t6: BamlSlot<T6>, _ t7: BamlSlot<T7>) -> BamlSlot<BamlUnion8<T0, T1, T2, T3, T4, T5, T6, T7>> {
+        union([t0.node, t1.node, t2.node, t3.node, t4.node, t5.node, t6.node, t7.node])
     }
 }
 
@@ -817,14 +864,14 @@ extension BamlUnion8: BamlDecodable where T0: BamlDecodable, T1: BamlDecodable, 
     public static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {
         // 1. Canonical wire discriminator.
         if let selected = try v.unionSelectedType() {
-            if T0._bamlDecodeType == selected { return .t0(try T0._bamlDecode(v)) }
-            if T1._bamlDecodeType == selected { return .t1(try T1._bamlDecode(v)) }
-            if T2._bamlDecodeType == selected { return .t2(try T2._bamlDecode(v)) }
-            if T3._bamlDecodeType == selected { return .t3(try T3._bamlDecode(v)) }
-            if T4._bamlDecodeType == selected { return .t4(try T4._bamlDecode(v)) }
-            if T5._bamlDecodeType == selected { return .t5(try T5._bamlDecode(v)) }
-            if T6._bamlDecodeType == selected { return .t6(try T6._bamlDecode(v)) }
-            if T7._bamlDecodeType == selected { return .t7(try T7._bamlDecode(v)) }
+            if T0._bamlDecodeSelects(selected) { return .t0(try T0._bamlDecode(v)) }
+            if T1._bamlDecodeSelects(selected) { return .t1(try T1._bamlDecode(v)) }
+            if T2._bamlDecodeSelects(selected) { return .t2(try T2._bamlDecode(v)) }
+            if T3._bamlDecodeSelects(selected) { return .t3(try T3._bamlDecode(v)) }
+            if T4._bamlDecodeSelects(selected) { return .t4(try T4._bamlDecode(v)) }
+            if T5._bamlDecodeSelects(selected) { return .t5(try T5._bamlDecode(v)) }
+            if T6._bamlDecodeSelects(selected) { return .t6(try T6._bamlDecode(v)) }
+            if T7._bamlDecodeSelects(selected) { return .t7(try T7._bamlDecode(v)) }
             throw BamlDecodeError.typeMismatch(expected: "BamlUnion8", got: "selected type not present in host union")
         }
         // 2. Legacy/display metadata.

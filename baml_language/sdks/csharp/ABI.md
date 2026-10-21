@@ -12,11 +12,163 @@ exact handle release.
 The unified `call_function(encoded_args, length, callback_id)` signature is function-table ABI revision 2. Revision-1 hosts and runtimes reject revision-2 counterparts before reading the changed function-pointer slot, preventing mixed-revision calls from invoking incompatible layouts.
 
 The canonical protobuf schemas live in
-`crates/bridge_ctypes/types/baml_bridge/cffi/v1`. Schema evolution is additive:
-field numbers are stable, new metadata is optional on the wire, and decoders
-must accept legacy messages that omit it. Present but malformed collection or
-union metadata fails closed. The C# runtime consumes these schemas directly
-with build-time `Grpc.Tools`; it does not maintain a private schema copy.
+`crates/bridge_ctypes/types/baml_bridge/cffi/v1`. Field numbers are stable and
+a new field is optional on the wire. The inbound value contract below is the
+exception: it fixes which nodes carry `value_type`, and malformed or missing
+metadata fails closed. The C# runtime consumes these schemas directly with
+build-time `Grpc.Tools`; it does not maintain a private schema copy.
+
+## Inbound value contract
+
+An inbound value is the serialization of a concretely typed value graph. The
+engine builds exactly what the wire says, converts nothing, and checks the
+built value once for membership in the slot it fills: a parameter, a host
+callback's return or throw, or a sys-op result. `InboundValue.value_type` is
+the node's own type, and whether a node carries one is fixed by its arm:
+
+| `InboundValue` arm | `value_type` | The node's type |
+|---|---|---|
+| `int_value`, `float_value`, `bigint_value`, `string_value`, `bool_value`, `uint8array_value`, absent (`null`) | forbidden | implied by the arm |
+| `enum_value` | forbidden | the enum and variant the node names |
+| `media_value`, `prompt_ast_value`, `ty_value` | forbidden | implied by the value |
+| `handle` to a resource, a function, media, a prompt, a type or an opaque host value | forbidden | the handle's own type, checked live |
+| `list_value` | required | `E[]` |
+| `map_value` | required | `map<K, V>` |
+| `class_value` | required | the class with every type argument |
+| `handle` to a host callable | required | the callable's function type |
+| `js_number_value` | refused | |
+
+Every type on the wire is realized: a statement, an explicit type argument, a
+`ty_value` and every type the engine sends. A `type_var` or an
+`associated_type_projection` determines no value, so the decoder refuses one
+anywhere in a type and the engine never sends one. The decoder also refuses,
+before the engine sees the value, a statement that lacks a part no type can do
+without (an unspecified primitive, a literal without its value, an empty
+type), one of another shape than its node, a missing statement, and a statement
+on a node whose type is implied. Only a recursive alias exists as a declaration
+at run time, so a statement spells a non-recursive alias by its body. A host
+states a callback's open effect parameter as `unknown`. A handle's key is
+nonzero: key 0 names no slot and is refused.
+
+A handle's `handle_type` decides which of two reference tables its key names.
+`HOST_VALUE_CALLABLE` and `HOST_VALUE_OPAQUE` keys are the engine's references
+to objects the host registered, numbered by the host; every other key is the
+host's reference to an engine object, numbered by the engine. The two spaces
+may share numbers and are never compared. Each occurrence of an engine key
+transfers one reference, which the engine drains or, on a refusal anywhere in
+the request, releases; a host key is one registration however often it occurs,
+and keeps the kind it first arrived under: a key under two host kinds in one
+request, or under a kind other than the one the engine already holds for it,
+is refused. A host never clones or releases a host key through the handle API.
+
+A type names each declaration by its head. A declaration compiled with the
+program is spelled by `name`, its qualified name, and resolved against the
+program's own tables only. A declaration the runtime created (`reflect.Class.new`,
+a runtime-compiled package) has no name a lookup could resolve: it is `live`,
+the key of a handle the host holds to the declaration itself, which the engine
+follows. Each occurrence of a `live` key transfers one reference, like any
+engine key, so a host sends a fresh clone per occurrence and keeps its own. A
+`ty_value` the engine returns hands the host one such reference per `live`
+head, which the host releases when it lets the type go. `anonymous_label` is
+display text: it labels an unnameable declaration in the annotation beside a
+value that crosses by reference (a runtime instance's `ty`, a container's
+element type) and creates no reference. A stated type that carries one is
+refused, and so is an instance stated by fields whose class is a runtime
+declaration: such an instance is passed back as the handle it arrived as.
+
+A class with a `$rust_type` field holds native data only the runtime creates
+(a media wrapper's payload, a cipher's state, a cancel token). A host passes
+such an instance back as it received it, the field holding a handle to the
+runtime's data; a value of the host's own in that field is refused. The
+exception is `baml.errors.HostCallable`, whose payload is the host's own
+handle to the exception it raised: the runtime builds that class from a
+callback's `raised` outcome and only carries it back.
+
+Map keys, class field names and keyword-argument names cross the boundary as
+strings only. The decoder refuses an `int_key`, `bool_key` or `enum_key`
+rather than spelling it as a string, so a `map<int, V>` or `map<Color, V>`
+parameter cannot be called from a host until the boundary carries typed keys;
+the key arms stay on the wire for that day.
+
+The engine then hydrates the stated graph. Every child is checked against the
+structure its parent states (each element of a stated `(int | string)[]` must
+inhabit `int | string`), a class's fields against its declaration with the
+stated type arguments substituted, and the root against its slot. A generic
+function's type arguments are inferred from the landed values' concrete types
+and from explicit `type_args`. A variable that occurs under a union or optional
+(`x: T | string | null`, `x: T?`) in a parameter whose value arrived, and that
+the value did not pin because a concrete sibling took it (`"hi"`, `null`), is
+`never`: the value could be a `T` or not, and the tie breaks to the type no
+value has. A call that leaves a variable unbound otherwise (nothing arrived
+for it, or only an empty container) is refused. A type parameter with an
+interface bound (`T extends baml.ops.Compare`) takes one concrete type that
+implements every bound at the bound's own arguments, whether the type was
+inferred (`int` and `"x"` join to `int | string`, which is not one concrete
+type) or stated in `type_args`; otherwise the call is refused. A callable
+value is already specialized and takes no `type_args`. A refusal from the engine
+names the parameter and the path; a refusal from the decoder names the node:
+
+```
+argument `items` of `Total`: at `.items[0].x`: Value of type 'int' does not match the declared type `float`
+```
+
+A callback has one completion channel, `complete_host_call`, whose payload is
+a `HostCallCompletion` with one of five outcomes. The host encodes a `returned`
+value against the callable's declared return type and a `thrown` BAML value
+against its declared throws type; the engine holds each to that type, and a
+value that does not inhabit it is the callable's breach of contract, a
+`baml.panics.HostContractViolation`. A thrown `baml.panics.*` instance is a
+panic whatever the callable declares. An exception of the host's own is
+`raised` with its identity and the host's registration of the exception
+object; the engine builds the `baml.errors.HostCallable` around that handle,
+and holds it to the declared throws type the same way, so a host never builds
+that class itself. A `contract_violation` is a value the host already found
+not to fit its declared type. A `bridge_failure` (a value too deep for the
+wire, a handle that could not be cloned, a payload the engine could not
+decode) is the bridge's own and fatal to the call, a `baml.panics.SdkPanic`;
+so is a completion that carries no outcome. The same contract holds for the
+runtime's own operations: an error one throws outside its declared throws type
+is an internal error, never a catchable throw of an undeclared class.
+
+### How the dynamic hosts state types
+
+Python and TypeScript have no static type to state from, so their bridges
+walk each value against the declared type (`crates/bridge_encode`) and state
+what the walk decides:
+
+- A value under a realized slot states the slot. A value under `unknown` states
+  the type it has: scalars by kind, a list by the one type its elements share
+  or their union, a class instance by its head with type arguments solved from
+  its fields.
+- An empty container has no element type of its own. A sibling's type fills it
+  (`[[], [1]]` is `int[][]`); under `unknown` it is `unknown[]`; under an open
+  type variable (`xs: T[]`) the call is refused until the caller names `T`.
+- A handle inside a container has a type only the engine can see. No sibling
+  fills it: under `unknown` the container is `unknown[]`; under an open type
+  variable the call is refused.
+- A union member is chosen in one place, by rank: a value that knows its type
+  (an instance of a class, an enum member) takes that member; a value's own
+  shape (a list under a list member, a dict under a map member) comes next;
+  an interface, type variable or `unknown` member takes the value as it is
+  and leaves the judgment to the engine, which beats a conversion (a dict
+  standing in for a class, an `int` where a `float` is declared, a string
+  naming a variant). Members that take the value as the same type
+  count as one; the value's own type breaks a tie among distinct ones; a value
+  that fits two distinct member types in no preferred way is refused as
+  ambiguous (`[]` under `string[] | int[]`). Member order is never consulted.
+  A host-side wrapper naming the member is planned; until it exists such a
+  value cannot be sent.
+- A dynamic host reads at most 1,048,576 nodes per argument (a shared or cyclic
+  value expands to a tree on the wire) and refuses a value that would nest
+  deeper than the wire's 100 protobuf messages, before anything is created.
+
+This contract is not additive. A list, map, class or callable node without a
+`value_type`, a `value_type` on a self-evident node, and `js_number_value` are
+refused rather than interpreted, where earlier runtimes filled the gap from the
+slot. A host must ship with a bridge of the same revision; every SDK in this
+repository encodes against the declared types, through the shared walker in
+`crates/bridge_encode` or its generated code, and ships lockstep with the
+runtime.
 
 Generated C# types carry canonical serialized `BamlTy` metadata through names,
 union cases, descriptors, registry factories, and codecs. The C# generator
@@ -39,6 +191,7 @@ big-endian unsigned integer with the high bit cleared. Generation rejects zero
 and collisions within an enum.
 
 Opaque resource values are emitted only for classes whose compiled metadata
-uses the tagged heap-handle representation. Inbound handles must belong to the
-active heap, still resolve, match their declared type arguments, and resolve
-to an instance of a tagged resource class. User classes remain structural.
+uses the tagged heap-handle representation. An inbound handle carries no
+statement; it must belong to the active heap and still resolve, and the live
+value it names is checked against its slot like any other. User classes remain
+structural.

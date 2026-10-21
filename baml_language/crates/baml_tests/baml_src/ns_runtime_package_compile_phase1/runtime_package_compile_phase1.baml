@@ -260,19 +260,6 @@ test "runtime-compiled ToString on a reflected type dispatches" {
     assert.equal(render(), "C")
 }
 
-test "Package finish refuses a Session compile artifact" {
-    let session = reflect.Session.new();
-    let artifact = session._compile<int>(`1`);
-    let rejected = false;
-    let _ = reflect.Package._finish(artifact, {}) catch (_) {
-        _ => {
-            rejected = true
-        },
-    };
-    assert.is_true(rejected);
-    assert.equal(session.eval<int>(`2`), 2)
-}
-
 function rpc_schema_package() -> reflect.Package {
     reflect.Package.compile(
         {

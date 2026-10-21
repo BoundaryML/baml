@@ -13,69 +13,6 @@
 //! `ty` is stored **as spelled**, never canonicalized in place: unreflection
 //! feeds SAP and the LLM boundary, where union member order is semantic.
 
-use baml_type::{Name, QualifiedTypeName, RealizedTy};
-use indexmap::IndexMap;
-
-/// Heap-independent definition graph used at host boundaries. It contains no
-/// pointers, so serializing it cannot leak engine state. The VM reconstructs
-/// ordinary `Class`/`Enum` objects — fresh declarations, distinct from any
-/// same-named ones it already has — whenever one arrives from a host.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PortableTypeDef {
-    pub root: baml_type::RuntimeTy,
-    pub classes: Vec<PortableClassDef>,
-    pub enums: Vec<PortableEnumDef>,
-    pub witnesses: Vec<DynWitnessDef>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PortableMetadata {
-    pub description: Option<String>,
-    pub alias: Option<String>,
-    pub docstring: Option<String>,
-    pub other: IndexMap<String, String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PortableClassDef {
-    pub name: QualifiedTypeName,
-    pub fields: Vec<PortableClassFieldDef>,
-    pub metadata: PortableMetadata,
-    pub generic_param_count: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PortableClassFieldDef {
-    pub name: String,
-    pub ty: baml_type::RuntimeTy,
-    pub metadata: PortableMetadata,
-    pub skip: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PortableEnumDef {
-    pub name: QualifiedTypeName,
-    pub variants: Vec<PortableEnumVariantDef>,
-    pub metadata: PortableMetadata,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PortableEnumVariantDef {
-    pub name: String,
-    pub metadata: PortableMetadata,
-    pub skip: bool,
-}
-
-/// Heap-independent witness contribution carried by a minted definition.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DynWitnessDef {
-    pub interface: QualifiedTypeName,
-    pub interface_args: Vec<RealizedTy>,
-    pub associated_types: Vec<(Name, RealizedTy)>,
-    /// Interface field name -> physical class field name, in interface order.
-    pub field_links: Vec<(Name, Name)>,
-}
-
 /// What an `Object::Type` wraps: the type this value denotes.
 ///
 /// Carried data only — see the module doc for why there is no identity token

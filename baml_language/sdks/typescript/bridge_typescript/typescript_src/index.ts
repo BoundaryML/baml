@@ -8,8 +8,13 @@ import {
     cancelFunctionCall as nativeCancelFunctionCall,
     newFunctionCall as nativeNewFunctionCall,
 } from './native.js';
-import { encodeCallArgs, decodeCallResult } from './proto.js';
+import { encodeCallArgs, decodeCallResult, hostAdapter } from './proto.js';
+import { registerHostAdapter } from './native.js';
 import { installShutdownOnExit } from './exit_hook.js';
+
+// The bridge encodes arguments against the program's declared types and
+// reaches back into the runtime for what only it knows (see `hostAdapter`).
+registerHostAdapter(hostAdapter);
 import { wrapNativeError } from './errors.js';
 import { attachInvocation } from './call_context.js';
 // Adds `fromFile` to the native media classes.
@@ -111,8 +116,8 @@ export function callFunctionSync(
     // the sync path blocks the Node main thread on a tokio `block_on`,
     // starving libuv so the dispatch could never run.
     const callId = newFunctionCall();
-    const argsProto = encodeCallArgs(kwargs, { syncMode: true, callId, functionName, baml });
-    const callCtxBinding = attachInvocation(argsProto, callId);
+    const encoded = encodeCallArgs(kwargs, { syncMode: true, callId, functionName, baml });
+    const callCtxBinding = attachInvocation(encoded.bytes, callId);
     // Only the napi call gets `wrapNativeError`'d — its `napi::Error`
     // messages need parsing into typed `Baml*Error` subclasses. The
     // decoder's throws (`BamlError`/`BamlPanic`, *or* a re-raised
@@ -121,7 +126,7 @@ export function callFunctionSync(
     try {
         let resultBytes: Buffer;
         try {
-            resultBytes = rt.callFunctionSync(argsProto);
+            resultBytes = rt.callFunctionSync(encoded.bytes, encoded.kwargs, encoded.cancel);
         } catch (err) {
             throw wrapNativeError(err);
         }
@@ -138,8 +143,8 @@ export async function callFunction(
     baml?: InvocationOptions | null,
 ): Promise<FunctionResult> {
     const callId = newFunctionCall();
-    const argsProto = encodeCallArgs(kwargs, { callId, functionName, baml });
-    const callCtxBinding = attachInvocation(argsProto, callId);
+    const encoded = encodeCallArgs(kwargs, { callId, functionName, baml });
+    const callCtxBinding = attachInvocation(encoded.bytes, callId);
     // Only the napi call gets `wrapNativeError`'d — its `napi::Error`
     // messages need parsing into typed `Baml*Error` subclasses. The
     // decoder's throws (`BamlError`/`BamlPanic`, *or* a re-raised
@@ -148,7 +153,7 @@ export async function callFunction(
     try {
         let resultBytes: Buffer;
         try {
-            resultBytes = await rt.callFunction(argsProto);
+            resultBytes = await rt.callFunction(encoded.bytes, encoded.kwargs, encoded.cancel);
         } catch (err) {
             throw wrapNativeError(err);
         }

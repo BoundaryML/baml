@@ -101,8 +101,9 @@ func Test_wire_occurrences_are_fresh_and_handles_reject_serialization(t *testing
 		baml_go.WithTypeArg("A", runtimeType),
 		baml_go.WithTypeArg("B", runtimeType),
 	)
-	if err != nil || equal {
-		t.Fatalf("fresh wire definitions equal = %v, %v; want false", equal, err)
+	// A runtime declaration crosses by reference, so both arguments name it.
+	if err != nil || !equal {
+		t.Fatalf("one runtime type sent twice equal = %v, %v; want true", equal, err)
 	}
 	if _, err := json.Marshal(runtimeType); err == nil || !strings.Contains(err.Error(), "cannot be serialized") {
 		t.Fatalf("json serialization error = %v", err)

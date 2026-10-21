@@ -39,7 +39,10 @@ pub use baml_sdkgen_types::{NamingConvention, OutputType};
 use crate::{
     emit::{render_class, render_enum, render_fns_holder, render_union},
     routing::{PackagePath, java_identifier, route},
-    translate_ty::{AliasTable, TranslateCtx, UnionSink, descriptor_expr_opt, registry_arm_expr},
+    translate_ty::{
+        AliasTable, TranslateCtx, UnionSink, descriptor_expr, descriptor_expr_opt,
+        registry_arm_expr,
+    },
 };
 
 /// Banner prepended to every generated `.java` file. Mirrors the TS
@@ -104,6 +107,18 @@ pub fn to_source_code(
     to_source_code_internal(pool, baml_bytecode, None, naming_convention)
 }
 
+/// One generated class's `TypeRegistry.registerClass` call: the BAML FQN, the
+/// Java binary name, field names and descriptor expressions in declaration
+/// order, and the type parameter names of a generic class.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct ClassRegistration {
+    fqn: String,
+    java_name: String,
+    fields: Vec<String>,
+    descriptors: Vec<String>,
+    type_params: Vec<String>,
+}
+
 fn to_source_code_internal(
     pool: &SymbolPool,
     baml_bytecode: &[u8],
@@ -156,13 +171,18 @@ fn to_source_code_internal(
     // getDeclaredFields() order and the decoder constructs via the
     // canonical constructor positionally. Classes also carry a parallel
     // per-field decode-descriptor array (same order as the field idents).
-    let mut class_registry: Vec<(String, String, Vec<String>, Vec<String>)> = Vec::new();
+    let mut class_registry: Vec<ClassRegistration> = Vec::new();
     let mut enum_registry: Vec<EnumRegistration> = Vec::new();
     let mut fns_per_package: BTreeMap<PackagePath, Vec<(u32, String, &Function)>> = BTreeMap::new();
     let mut type_idents_per_package: BTreeMap<PackagePath, BTreeSet<String>> = BTreeMap::new();
     let mut type_files: Vec<(PackagePath, String, String)> = Vec::new(); // (pkg, ident, body)
     let mut recursive_aliases: Vec<(PackagePath, String, String, &Ty)> = Vec::new();
     let mut union_registry: Vec<UnionReg> = Vec::new();
+    // (alias FQN, body descriptor expression) per recursive alias. A
+    // descriptor names a recursive alias rather than expanding it, and an
+    // alias is transparent, so the bridge reads the body to find the member
+    // a value inhabits (an empty list under `json` is a `json[]`).
+    let mut alias_bodies: Vec<(String, String)> = Vec::new();
 
     for (name, symbol) in pool {
         let pkg = route(name);
@@ -192,15 +212,15 @@ fn to_source_code_internal(
                     .entry(pkg.clone())
                     .or_default()
                     .insert(ident.clone());
-                class_registry.push((
-                    symbol_fqn.clone(),
-                    format!("{}.{}", pkg.java_package(), ident),
-                    class
+                class_registry.push(ClassRegistration {
+                    fqn: symbol_fqn.clone(),
+                    java_name: format!("{}.{}", pkg.java_package(), ident),
+                    fields: class
                         .properties
                         .iter()
                         .map(|prop| java_identifier(prop.name.as_str()))
                         .collect(),
-                    class
+                    descriptors: class
                         .properties
                         .iter()
                         .map(|prop| {
@@ -208,7 +228,12 @@ fn to_source_code_internal(
                                 .unwrap_or_else(|| "null".to_string())
                         })
                         .collect(),
-                ));
+                    type_params: class
+                        .generic_params
+                        .iter()
+                        .map(|param| param.as_str().to_string())
+                        .collect(),
+                });
                 type_files.push((
                     pkg,
                     ident,
@@ -302,6 +327,7 @@ fn to_source_code_internal(
             aliases: &aliases,
             pkg: pkg.clone(),
         };
+        alias_bodies.push((alias_fqn.clone(), descriptor_expr(resolves_to, &aliases)));
         let body = if let Ty::Union(items) = resolves_to {
             let arms: Vec<Ty> = items
                 .iter()
@@ -364,7 +390,13 @@ fn to_source_code_internal(
     enum_registry.sort();
     union_registry.sort();
     union_registry.dedup();
+    alias_bodies.sort();
     let mut registrations = String::new();
+    for (alias_fqn, body) in &alias_bodies {
+        registrations.push_str(&format!(
+            "        baml_bridge.TypeRegistry.registerAliasBody({alias_fqn:?}, {body});\n"
+        ));
+    }
     for reg in &union_registry {
         // Arm tokens are BamlType builder EXPRESSIONS (emitted raw); record binary
         // names are strings. The structural key is derived runtime-side from the
@@ -385,12 +417,33 @@ fn to_source_code_internal(
             )),
         }
     }
-    for (fqn, java_name, fields, descriptors) in &class_registry {
+    for ClassRegistration {
+        fqn,
+        java_name,
+        fields,
+        descriptors,
+        type_params,
+    } in &class_registry
+    {
         let field_list: Vec<String> = fields.iter().map(|f| format!("{f:?}")).collect();
         // Field descriptors are BamlType builder expressions (or the literal
-        // `null` for a wire-driven field) — emitted raw.
+        // `null` for a wire-driven field) — emitted raw. A generic class also
+        // names its type parameters, so the encoder can substitute an
+        // instance's bound arguments into the descriptors that mention them.
+        let type_param_list = if type_params.is_empty() {
+            String::new()
+        } else {
+            format!(
+                ", new java.lang.String[] {{{}}}",
+                type_params
+                    .iter()
+                    .map(|p| format!("{p:?}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
         registrations.push_str(&format!(
-            "        baml_bridge.TypeRegistry.registerClass({fqn:?}, {java_name:?}, new java.lang.String[] {{{}}}, new baml_bridge.BamlType[] {{{}}});\n",
+            "        baml_bridge.TypeRegistry.registerClass({fqn:?}, {java_name:?}, new java.lang.String[] {{{}}}, new baml_bridge.BamlType[] {{{}}}{type_param_list});\n",
             field_list.join(", "),
             descriptors.join(", ")
         ));
@@ -1662,6 +1715,12 @@ mod tests {
         assert!(anchor.contains(
             "baml_bridge.TypeRegistry.registerUnionAlias(\"user.aliases.RecList\", \"baml_sdk.aliases.RecList\", new baml_bridge.BamlType[] {baml_bridge.BamlType.INT, baml_bridge.BamlType.list(baml_bridge.BamlType.classByFqn(\"user.aliases.RecList\"))},"
         ), "{anchor}");
+        // The alias's body as the exact type it names, its self-reference kept
+        // as the alias token: what the bridge reads to state an empty
+        // `RecList[]` member.
+        assert!(anchor.contains(
+            "baml_bridge.TypeRegistry.registerAliasBody(\"user.aliases.RecList\", baml_bridge.BamlType.union(baml_bridge.BamlType.INT, baml_bridge.BamlType.list(baml_bridge.BamlType.typeAlias(\"user.aliases.RecList\"))));"
+        ), "{anchor}");
     }
 
     #[test]
@@ -1775,15 +1834,23 @@ mod tests {
         );
 
         // The `types` overload (no ctx) threads the bag through the 6-arg
-        // runtime call with a `null` ctx; the return descriptor is the TypeVar
-        // token `tv:T`.
+        // runtime call with a `null` ctx, and binds the argument's declared
+        // type `T` by the bag, so a value under it states the bound type.
         assert!(
             file.contains("public static <T> T identity(T x, baml_bridge.BamlTypes types) {"),
             "{file}"
         );
         assert!(
             file.contains(
-                "return (T) baml_bridge.BamlFfi.callSync(\"user.generic_tests.identity\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {x}, $RET0, null, types);"
+                "return (T) baml_bridge.BamlFfi.callSync(\"user.generic_tests.identity\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {new baml_bridge.BamlTypedValue(x, $RET0)}, $RET0, null, types);"
+            ),
+            "{file}"
+        );
+        // Without the bag the value carries the open slot type `T`: its own
+        // type binds `T`, and one with none (an empty list) is refused.
+        assert!(
+            file.contains(
+                "return (T) baml_bridge.BamlFfi.callSync(\"user.generic_tests.identity\", new java.lang.String[] {\"x\"}, new java.lang.Object[] {new baml_bridge.BamlTypedValue(x, $RET0)}, $RET0);"
             ),
             "{file}"
         );
@@ -1796,7 +1863,7 @@ mod tests {
             "{file}"
         );
         assert!(
-            file.contains("new java.lang.Object[] {x}, $RET0, baml, types);"),
+            file.contains("{new baml_bridge.BamlTypedValue(x, $RET0)}, $RET0, baml, types);"),
             "{file}"
         );
 
@@ -1877,7 +1944,7 @@ mod tests {
         // bag through the runtime call.
         assert!(
             file.contains(
-                "baml_bridge.BamlFfi.callSync(\"user.probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {x}), $RET0, baml, types);"
+                "baml_bridge.BamlFfi.callSync(\"user.probe\", $opts.$names(new java.lang.String[] {\"x\"}), $opts.$args(new java.lang.Object[] {new baml_bridge.BamlTypedValue(x, $RET0)}), $RET0, baml, types);"
             ),
             "{file}"
         );

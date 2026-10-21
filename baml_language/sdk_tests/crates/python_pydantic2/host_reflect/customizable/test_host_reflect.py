@@ -56,9 +56,10 @@ def test_compiled_package_returns_class_graph():
 
 
 # SDK_PARITY_LINT(skip): BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go
-def test_wire_occurrences_are_fresh_and_handles_reject_serialization():
+def test_a_runtime_type_is_one_declaration_and_rejects_serialization():
     runtime_type = reflect.Class.new("Fresh", {"value": reflect.Type.of(int)})
-    assert HostTypeEqual(_types={"A": runtime_type, "B": runtime_type}) is False
+    # A runtime declaration crosses by reference, so both arguments name it.
+    assert HostTypeEqual(_types={"A": runtime_type, "B": runtime_type}) is True
     with pytest.raises(TypeError, match="cannot be serialized"):
         pickle.dumps(runtime_type)
 

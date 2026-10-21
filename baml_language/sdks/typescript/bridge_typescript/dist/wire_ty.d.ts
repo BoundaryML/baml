@@ -5,6 +5,7 @@
  * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
+import { type HandleKey } from './native.js';
 import { baml_bridge } from './proto/baml_cffi.js';
 /** The bottom type (BAML `never`). */
 export declare const Never: unique symbol;
@@ -47,19 +48,26 @@ export declare class BamlTypeMetadataRow {
     readonly other: Record<string, string>;
     constructor(ty: BamlType, alias: string | null, description: string | null, docstring: string | null, other?: Record<string, string>);
 }
+type Ty = baml_bridge.cffi.v1.IBamlTy;
 /**
- * Opaque, process-local handle for a reflected BAML definition. Only the
- * composing operations required by H-11 are public. Each wire occurrence
- * carries a copied definition graph; JavaScript identity is never type
+ * Every `live` head under a wire type, once per occurrence: each is a row of
+ * the engine's handle table naming a runtime declaration.
+ */
+export declare function liveKeys(ty: Ty | null | undefined): HandleKey[];
+/**
+ * Opaque, process-local handle for a reflected BAML type. Only the composing
+ * operations required by H-11 are public. A runtime declaration the type
+ * names is held by the engine row it arrived under; a type sent back states
+ * it with a reference of the call's own. JavaScript identity is never type
  * identity.
  */
 export declare class BamlType {
     #private;
     private constructor();
-    /** @internal Bridge/codegen hook; not a host inspection surface. */
-    static _fromWire(definition: baml_bridge.cffi.v1.IBamlTyDef): BamlType;
-    /** @internal Bridge hook returning a fresh protobuf graph. */
-    _wireCopy(): baml_bridge.cffi.v1.BamlTyDef;
+    /** @internal A type the engine handed over: its `live` heads are rows this value now holds. */
+    static _fromWire(ty: Ty): BamlType;
+    /** @internal Bridge hook returning a fresh protobuf tree. */
+    _wireCopy(): baml_bridge.cffi.v1.BamlTy;
     static from(token: BamlType | BamlTypeToken): BamlType;
     meta(options?: BamlTypeMetadata): BamlTypeMetadataRow;
     array(): BamlType;
@@ -75,4 +83,5 @@ export declare const reflectType: Readonly<{
 export declare function lowerTypeToWireTy(token: BamlTypeToken): baml_bridge.cffi.v1.IBamlTy;
 /** Decode the sparse value-level type channel on generated class instances. */
 export declare function outboundTyToBamlTypeToken(ty: baml_bridge.cffi.v1.IBamlTy | null | undefined): BamlTypeToken | undefined;
+export {};
 //# sourceMappingURL=wire_ty.d.ts.map

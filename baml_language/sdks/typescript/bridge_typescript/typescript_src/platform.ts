@@ -96,6 +96,18 @@ export function runHostCallback(
 
 export const supportsSyncStreamPulls = true;
 
+/**
+ * How the bridge binds a user function as a host callable on this platform.
+ * On Node the bridge builds the threadsafe function itself, so it is handed
+ * the dispatch wrapper and the host marker handle.
+ */
+export function registerCallableDispatch(
+    dispatch: (callId: number, argsBytes: Buffer, execution?: object) => void,
+    marker: object | undefined,
+): [typeof dispatch, object | null] {
+    return [dispatch, marker ?? null];
+}
+
 export function handleExitPanic(code: number, _fallbackPanic: BamlPanic): never {
     process.exit(code);
 }

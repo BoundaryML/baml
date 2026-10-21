@@ -23,7 +23,7 @@ func nativeShutdown() error                       { return unsupportedNativeOper
 func nativeNewFunctionCall() uint64               { return 0 }
 func nativeCall([]byte, uint32)                   {}
 func nativeCancel(uint64) int32                   { return 1 }
-func nativeCompleteHostCall(uint32, bool, []byte) {}
+func nativeCompleteHostCall(uint32, []byte) {}
 func nativeHandleClone(uint64) (uint64, error) {
 	return 0, unsupportedNativeOperation()
 }

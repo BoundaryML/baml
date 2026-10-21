@@ -7,7 +7,7 @@ using System.Text;
 internal static unsafe partial class Program
 {
     private const string NativeLibraryName = "bridge_cffi";
-    private const uint BamlApiV1AbiVersion = 4;
+    private const uint BamlApiV1AbiVersion = 5;
     private const uint BamlBridgeLanguageCSharp = 5;
     private const uint BamlBridgeLanguageRust = 4;
     private const uint StatusOk = 0;
@@ -181,7 +181,7 @@ internal static unsafe partial class Program
         VerifyCancellation(api);
         VerifyMediaAndHandleOwnership(api);
 
-        api->CompleteHostCall(uint.MaxValue, 0, null, 0);
+        api->CompleteHostCall(uint.MaxValue, null, 0);
         VerifySyntheticCallbackContainment(helloResult);
         _callbackFailure?.Throw();
         Require(PendingCalls.IsEmpty, "pending result registry was not drained");
@@ -1089,7 +1089,6 @@ internal static unsafe partial class Program
             void> RegisterHostReleaseCallback;
         public readonly delegate* unmanaged[Cdecl]<
             uint,
-            int,
             byte*,
             nuint,
             void> CompleteHostCall;

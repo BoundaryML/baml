@@ -4,6 +4,8 @@ using Baml;
 using Baml.Cffi;
 using CsharpHostCallables;
 
+using Wire = BamlBridge.Cffi.V1;
+
 RequireRegistryIdle("startup");
 
 var addTen = Functions.MakeAdder(10L);
@@ -79,6 +81,9 @@ Require(
     "void callback or returned void closure arguments changed");
 await RequireDispatchIdleAfterCompletion("multi-argument void callbacks and returned void closures");
 Console.WriteLine("host_callable_void_signatures=ok");
+
+RequireEngineTypedContainersRoundTrip();
+Console.WriteLine("engine_typed_containers_round_trip=ok");
 
 int synchronousOptionalCalls = 0;
 IReadOnlyList<string> synchronousOptionals = Functions.InvokeOptionals(
@@ -333,6 +338,109 @@ Console.WriteLine("csharp_host_callables=ok");
 return 0;
 
 static long DoubleValue(long value) => value * 2L;
+
+// The engine states a returned container's item type exactly, including types
+// no CLR value has a canonical projection for: an interface (`Shape[]` holding
+// classes that implement it), a function (a list of closures) and `never` (an
+// empty list stated `never[]`). A dynamic value must hold such a container and
+// send it back under the type it arrived with.
+static void RequireEngineTypedContainersRoundTrip()
+{
+    var interfaceType = new Wire.BamlTy
+    {
+        Interface = new Wire.BamlTyInterface
+        {
+            Name = "user.Shape",
+            Bindings =
+            {
+                new Wire.BamlTyAssociatedBinding { Name = "Unit", Ty = Primitive(Wire.BamlTyPrimitiveKind.BamlTyPrimitiveString) },
+            },
+        },
+    };
+    Wire.BamlTy FunctionType(Wire.BamlTy throws) => new()
+    {
+        Function = new Wire.BamlTyFunction
+        {
+            Params =
+            {
+                new Wire.BamlTyFunctionParam
+                {
+                    Ty = Primitive(Wire.BamlTyPrimitiveKind.BamlTyPrimitiveInt),
+                    Mode = Wire.BamlTyFunctionParamMode.Required,
+                },
+                new Wire.BamlTyFunctionParam
+                {
+                    Name = "label",
+                    Ty = Primitive(Wire.BamlTyPrimitiveKind.BamlTyPrimitiveString),
+                    Mode = Wire.BamlTyFunctionParamMode.Optional,
+                },
+            },
+            Ret = Primitive(Wire.BamlTyPrimitiveKind.BamlTyPrimitiveInt),
+            Throws = throws,
+        },
+    };
+    var functionType = FunctionType(new Wire.BamlTy { Never = new Wire.BamlTyNever() });
+    var neverType = new Wire.BamlTy { Never = new Wire.BamlTyNever() };
+
+    BamlTypeDescriptor shape = RequireListRoundTrip("interface", interfaceType, BamlTypeDescriptorKind.Opaque);
+    BamlTypeDescriptor function = RequireListRoundTrip("function", functionType, BamlTypeDescriptorKind.Opaque);
+    BamlTypeDescriptor throwingFunction = new BamlValue(
+        Baml.Proto.PrimitiveProtocol.Decode(new Wire.BamlOutboundValue
+        {
+            ListValue = new Wire.BamlValueList
+            {
+                ItemType = FunctionType(Primitive(Wire.BamlTyPrimitiveKind.BamlTyPrimitiveString)),
+            },
+        })).Type.Arguments[0];
+    // An opaque type keeps its identity: the same type compares equal, any
+    // other (a function type differing only in its throws) does not.
+    Require(
+        function.Equals(RequireListRoundTrip("function", functionType, BamlTypeDescriptorKind.Opaque))
+            && !function.Equals(throwingFunction)
+            && !function.Equals(shape),
+        "opaque item types lost their identity");
+
+    RequireListRoundTrip("never", neverType, BamlTypeDescriptorKind.Never);
+
+    var map = new BamlValue(Baml.Proto.PrimitiveProtocol.Decode(new Wire.BamlOutboundValue
+    {
+        MapValue = new Wire.BamlValueMap
+        {
+            KeyType = Primitive(Wire.BamlTyPrimitiveKind.BamlTyPrimitiveString),
+            ValueType = interfaceType,
+        },
+    }));
+    Require(
+        map.Type.Kind == BamlTypeDescriptorKind.Map
+            && map.Type.Arguments[1].Kind == BamlTypeDescriptorKind.Opaque,
+        "interface map value type changed");
+    Require(
+        Baml.Proto.PrimitiveProtocol.Encode(map.GeneratedValue).ValueType.Map.Value.Equals(interfaceType),
+        "interface map was not sent back under the type it arrived with");
+
+    static BamlTypeDescriptor RequireListRoundTrip(
+        string label,
+        Wire.BamlTy itemType,
+        BamlTypeDescriptorKind expected)
+    {
+        var value = new BamlValue(Baml.Proto.PrimitiveProtocol.Decode(new Wire.BamlOutboundValue
+        {
+            ListValue = new Wire.BamlValueList { ItemType = itemType },
+        }));
+        Require(
+            value.Type.Kind == BamlTypeDescriptorKind.List
+                && value.Type.Arguments[0].Kind == expected,
+            $"{label} list item type changed");
+        Wire.InboundValue resent = Baml.Proto.PrimitiveProtocol.Encode(value.GeneratedValue);
+        Require(
+            resent.ValueType.Equals(new Wire.BamlTy { List = new Wire.BamlTyList { Item = itemType } }),
+            $"{label} list was not sent back under the type it arrived with");
+        return value.Type.Arguments[0];
+    }
+
+    static Wire.BamlTy Primitive(Wire.BamlTyPrimitiveKind kind) =>
+        new() { Primitive = new Wire.BamlTyPrimitive { Kind = kind } };
+}
 
 static OperationCanceledException CaptureUnrelatedCancellation(
     CancellationToken cancellationToken)

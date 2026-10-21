@@ -1,5 +1,3 @@
-import type { InboundValue } from './generated/baml_bridge/cffi/v1/baml_inbound';
-
 export type BamlJsValue<T = unknown> =
   | string
   | number
@@ -58,8 +56,3 @@ export type PlainHandleDescriptor = {
   handle_type: number;
   type_name: string;
 };
-
-/** Implemented by objects that need custom BAML serialization. */
-export interface BamlSerializable {
-  toBaml(): InboundValue;
-}

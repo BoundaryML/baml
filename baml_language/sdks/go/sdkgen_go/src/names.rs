@@ -15,7 +15,10 @@ use baml_sdkgen_types::{Name, Symbol, SymbolPool};
 use crate::{
     packages::GoPackages,
     rendering::is_protected_go_identifier,
-    types::{GoFunctionKey, GoFunctionParamMode, GoLiteral, GoTy, GoTypeProjection, GoUnionKey},
+    types::{
+        GoCallbackThrows, GoFunctionKey, GoFunctionParamMode, GoLiteral, GoTy, GoTypeProjection,
+        GoUnionKey,
+    },
 };
 
 const AI_PROMPT_FQN: &str = "ai.Prompt";
@@ -1136,7 +1139,11 @@ fn hash_go_ty(hash: &mut StableFnv, ty: &GoTy) {
             if let Some(ret) = key.ret() {
                 hash_go_ty(hash, ret);
             }
-            hash.byte(u8::from(key.throws()));
+            hash.byte(match key.throws() {
+                GoCallbackThrows::Never => 0,
+                GoCallbackThrows::HostCallable => 1,
+                GoCallbackThrows::Open => 2,
+            });
         }
     }
 }

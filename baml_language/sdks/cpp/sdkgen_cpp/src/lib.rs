@@ -32,6 +32,7 @@ use std::{
 
 use baml_sdkgen_types::{
     CallableParam, Class, CodegenFunctionParamMode, Enum, Function, Name, Symbol, SymbolPool, Ty,
+    is_synthetic_effect_param,
 };
 
 use crate::naming::{BamlFqn, CppName, CppNameKind, CppNames, GeneratorIdent, NameRequest};
@@ -1152,6 +1153,10 @@ struct EmittedParam {
     /// the binding to `encode_callable` (host-callable registration) and
     /// keys supplied optional args on dispatch.
     callable_names: Option<Vec<String>>,
+    /// The C++ expression of the callable's throws type, stated beside its
+    /// handle: `unknown` for a throws clause the declaration left open (an
+    /// implicit effect parameter; a host callable may throw anything).
+    callable_throws: Option<String>,
 }
 
 /// An optional parameter, rendered as an `Arg<type>` field on the opts
@@ -1199,10 +1204,11 @@ fn emit_callable(
         // (std::function); callables nested in other types stay
         // unsupported (translate_ty rejects them).
         let mut callable_names = None;
+        let mut callable_throws = None;
         let ty = if let Ty::Function {
             params: callable_params,
             ret,
-            ..
+            throws,
         } = &arg.ty
         {
             if arg.default.is_some() {
@@ -1211,6 +1217,21 @@ fn emit_callable(
                     arg.name
                 ));
             }
+            callable_throws = Some(match throws.as_ref() {
+                Ty::TypeVar(param) if is_synthetic_effect_param(param.name()) => {
+                    "::baml::detail::unknown_baml_ty()".to_string()
+                }
+                Ty::Never => "::baml::detail::never_baml_ty()".to_string(),
+                other => match translate_ty(pool, names, other, emitted_types, &BTreeSet::new()) {
+                    Translated::Cpp(ty) => format!("::baml::codec<{ty}>::baml_ty()"),
+                    Translated::NotYet | Translated::Unsupported(_) => {
+                        return Err(format!(
+                            "argument `{}` has unsupported throws type {other}",
+                            arg.name
+                        ));
+                    }
+                },
+            });
             match translate_callable_ty(pool, names, callable_params, ret, emitted_types) {
                 Ok((ty, wire_names)) => {
                     callable_names = Some(wire_names);
@@ -1251,6 +1272,7 @@ fn emit_callable(
                 name: param_name,
                 ty,
                 callable_names,
+                callable_throws,
             });
         }
     }
@@ -1959,11 +1981,15 @@ fn render_body(
                 .map(|n| format!("std::string(\"{n}\")"))
                 .collect::<Vec<_>>()
                 .join(", ");
+            let throws = p
+                .callable_throws
+                .as_deref()
+                .expect("a callable parameter carries its throws type");
             let _ = writeln!(
                 buf,
                 "{indent}{args}.add_arg(\"{wire}\", [&](::baml::detail::pb::InboundValue& {w}) {{ \
                  ::baml::detail::encode_callable({w}, {value}, \
-                 std::array<std::string, {n}>{{{{{names_array}}}}}); }});",
+                 std::array<std::string, {n}>{{{{{names_array}}}}}, {throws}); }});",
                 wire = p.name.wire(),
                 value = p.name.identifier(),
                 n = callable_names.len(),

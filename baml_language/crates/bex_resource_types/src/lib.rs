@@ -7,7 +7,7 @@ pub mod host_value;
 pub mod retained;
 use std::sync::Arc;
 
-pub use host_value::{HostReleaseFn, HostValueArc, HostValueKind, host_release_dispatch};
+pub use host_value::{HostKey, HostReleaseFn, HostValueArc, HostValueKind, host_release_dispatch};
 pub use retained::RetainedBytes;
 
 /// Type of resource for identification and cleanup.

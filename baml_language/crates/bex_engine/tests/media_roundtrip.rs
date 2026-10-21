@@ -32,17 +32,10 @@ fn pdf_media() -> Arc<MediaValue> {
     ))
 }
 
+/// A media value crosses the boundary as itself: the portable payload, not a
+/// shell of the standard library's wrapper class.
 fn pdf_instance(arc: Arc<MediaValue>) -> BexExternalValue {
-    let mut fields: IndexMap<String, BexExternalValue> = IndexMap::new();
-    fields.insert(
-        "_data".to_string(),
-        BexExternalValue::Adt(BexExternalAdt::Media(arc)),
-    );
-    BexExternalValue::Instance {
-        class_name: "baml.media.Pdf".to_string(),
-        type_args: vec![],
-        fields,
-    }
+    BexExternalValue::Adt(BexExternalAdt::Media(arc))
 }
 
 /// Identity round-trip — the simplest assertion that the engine

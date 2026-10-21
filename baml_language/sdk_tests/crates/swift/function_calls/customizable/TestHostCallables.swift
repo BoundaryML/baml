@@ -233,6 +233,51 @@ final class TestHostCallables: XCTestCase {
         XCTAssertEqual(counter.snapshot, ["a": 1, "b": 1])
     }
 
+    func test_host_callables_literal_union_callback_states_its_literal_types() throws {
+        // `("first" | "second" | int) -> "first" | "second" | int`: Swift
+        // spells the literals as `String`, but the callable is stated with
+        // the literal union. The return is covariant, so `-> string | int`
+        // would not fit the declared callback type.
+        let result = try Baml.host_callable_tests.call_literal_union_roundtrip_callback(
+            callback: { value in value },
+            value: .t0("second")
+        )
+        XCTAssertEqual(result, .t0("second"))
+    }
+
+    func test_host_callables_overlapping_container_union_callback_states_the_selected_list() throws {
+        // `int[] | string[]`: the case names the arm, so even an empty list
+        // states the arm's exact type.
+        let strings = try Baml.host_callable_tests.call_overlapping_container_union_callback(
+            callback: { value in value },
+            value: .t1(["a", "b"])
+        )
+        XCTAssertEqual(strings, .t1(["a", "b"]))
+        let empty = try Baml.host_callable_tests.call_overlapping_container_union_callback(
+            callback: { _ in .t0([]) },
+            value: .t1([])
+        )
+        XCTAssertEqual(empty, .t0([]))
+    }
+
+    func test_host_callables_media_callback_states_the_media_type() throws {
+        // `(image) -> image`: media is the type `image`, never the stdlib
+        // class wrapping it, in the stated function type and on the wire.
+        let image = Baml.baml.media.Image(
+            _data: try BamlMedia.fromUrl(.image, "https://example.com/a.png", mimeType: "image/png")
+        )
+        let seen = LockedBox<Int>(0)
+        let result = try Baml.host_callable_tests.call_media_roundtrip_callback(
+            callback: { value in
+                seen.with { $0 += 1 }
+                return value
+            },
+            value: image
+        )
+        XCTAssertEqual(seen.snapshot, 1)
+        XCTAssertEqual(try result.url(), "https://example.com/a.png")
+    }
+
     func test_host_callables_class_callback_round_trips_class_value() throws {
         let result = try Baml.host_callable_tests.call_with_class_callback(
             callback: { p in "\(p.name) is \(p.age)" },

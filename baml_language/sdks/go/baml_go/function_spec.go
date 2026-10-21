@@ -27,6 +27,16 @@ func EventCallbackInput(callback EventCallback) Input {
 	if callback == nil {
 		return NullInput(Null{})
 	}
+	// The callback takes any event (a parameter may be stated wider than the
+	// slot declares) and returns nothing. Its declared throws is an open
+	// effect parameter, stated `unknown`: a panicking callback or an arity
+	// mismatch still fails, and that failure must stay a catchable BAML error
+	// rather than a violation of a `never` contract.
+	eventCallbackType := FunctionBAMLType(
+		[]FunctionParamBAMLType{{Type: UnknownBAMLType()}},
+		PrimitiveBAMLType(NullType),
+		UnknownBAMLType(),
+	)
 	return HostCallable(func(arguments HostCallArguments) (Input, error) {
 		if arguments.RequiredCount() != 1 {
 			return InvalidInput("invalid stream event callback arity"), HostCallableArityError(1, arguments.RequiredCount())
@@ -36,7 +46,7 @@ func EventCallbackInput(callback EventCallback) Input {
 		}
 		callback(arguments.Context(), arguments.Required(0))
 		return NullInput(Null{}), nil
-	})
+	}, eventCallbackType)
 }
 
 // DecodeFunctionSpec is the generated-code decoder for a Spec operation.

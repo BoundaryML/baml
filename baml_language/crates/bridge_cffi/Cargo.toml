@@ -63,8 +63,14 @@ tempfile = { workspace = true }
 [dev-dependencies]
 baml_artifact = { workspace = true, features = [ "test-support" ] }
 baml_test_support = { workspace = true }
+baml_type = { workspace = true }
 cc = { workspace = true }
+divan = { workspace = true }
 wiremock = { workspace = true }
+
+[[bench]]
+name = "boundary"
+harness = false
 
 [package.metadata.ci]
 wasm_support = true

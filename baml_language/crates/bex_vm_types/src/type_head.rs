@@ -293,6 +293,39 @@ impl TypeHead {
         self.overlay_name().ok_or(crate::UnnameableHead(self.tag))
     }
 
+    /// This head as an annotation beside a value crossing the host boundary:
+    /// a compiled declaration by name, any other by its display label. A
+    /// label is never a reference, so this is the spelling for a type the
+    /// host only reads; a type the host may state again names its runtime
+    /// declarations by handle instead.
+    ///
+    /// # Errors
+    ///
+    /// [`UnnameableHead`](crate::UnnameableHead) when the head is unresolved
+    /// or does not point at a declaration.
+    pub fn to_annotation_head<L>(&self) -> Result<baml_type::WireHead<L>, crate::UnnameableHead> {
+        if !self.is_resolved() {
+            return Err(crate::UnnameableHead(self.tag));
+        }
+        // SAFETY: as in `declared_name`.
+        #[expect(
+            unsafe_code,
+            reason = "recovering a head's name requires reading its declaration"
+        )]
+        let object = unsafe { self.ptr.get() };
+        let name = match object {
+            crate::Object::Class(class) => class.name(),
+            crate::Object::Enum(enm) => enm.name(),
+            crate::Object::Interface(iface) => iface.name(),
+            crate::Object::TypeAlias(alias) => alias.name(),
+            _ => return Err(crate::UnnameableHead(self.tag)),
+        };
+        Ok(match name.declared() {
+            Some(declared) => baml_type::WireHead::Static(declared.clone()),
+            None => baml_type::WireHead::Anonymous(name.display_name()),
+        })
+    }
+
     /// Whether the pointer cache has been filled — false for a head straight out
     /// of emit or a decoder, true once the loader has bound it.
     #[must_use]

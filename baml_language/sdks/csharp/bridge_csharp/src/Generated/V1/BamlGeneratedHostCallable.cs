@@ -53,6 +53,26 @@ public sealed class BamlGeneratedHostResult
         : encode(value);
 }
 
+/// <summary>
+/// The throws type of a generated host callable, as the canonical serialized
+/// <c>BamlTy</c> the bridge states on the wire beside the callable's handle.
+/// </summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
+public sealed class BamlGeneratedHostThrows
+{
+    internal BamlGeneratedHostThrows(byte[] metadata)
+    {
+        if (metadata.Length == 0)
+        {
+            throw new ArgumentException("A host callable's throws type must be stated.", nameof(metadata));
+        }
+
+        Metadata = metadata;
+    }
+
+    internal byte[] Metadata { get; }
+}
+
 [EditorBrowsable(EditorBrowsableState.Never)]
 public delegate Task<object?> BamlGeneratedHostInvoker(
     Delegate callback,
@@ -64,6 +84,7 @@ internal sealed class BamlGeneratedHostCallableDescriptor
     internal BamlGeneratedHostCallableDescriptor(
         IReadOnlyList<BamlGeneratedHostParameter> parameters,
         BamlGeneratedHostResult result,
+        BamlGeneratedHostThrows throws,
         BamlGeneratedHostInvoker invoke)
     {
         if (parameters.Count > 15)
@@ -105,12 +126,15 @@ internal sealed class BamlGeneratedHostCallableDescriptor
 
         Parameters = Array.AsReadOnly(snapshot);
         Result = result;
+        Throws = throws;
         Invoke = invoke;
     }
 
     internal IReadOnlyList<BamlGeneratedHostParameter> Parameters { get; }
 
     internal BamlGeneratedHostResult Result { get; }
+
+    internal BamlGeneratedHostThrows Throws { get; }
 
     internal BamlGeneratedHostInvoker Invoke { get; }
 }

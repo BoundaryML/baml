@@ -9,6 +9,7 @@ use quote::{format_ident, quote};
 use crate::{
     SkipWarning, idents,
     translate_ty::{self, TyCtx},
+    wire_ty,
 };
 
 /// How a binding receives its subject: free functions and static methods
@@ -151,6 +152,10 @@ fn emit_binding(
             .map_err(|u| skip(format!("throws contract: {}", u.reason)))?,
     };
 
+    // Every argument is stated under the type its parameter declares, each
+    // type variable spelled as the Rust type the call binds it to.
+    let own_type_var = wire_ty::own_type_var(&translation_scope);
+    let declared = |ty: &baml_sdkgen_types::Ty| wire_ty::wire_ty(ty, &gctx, &own_type_var);
     let mut params = Vec::new();
     let mut converts = Vec::new();
     let mut kwarg_entries = Vec::new();
@@ -191,6 +196,8 @@ fn emit_binding(
                 host_params,
             } = translate_callable(&arg.ty, &gctx)
                 .map_err(|u| skip(format!("callback `{arg_name}`: {}", u.reason)))?;
+            let function_type = declared(&arg.ty)
+                .map_err(|u| skip(format!("callback `{arg_name}`: {}", u.reason)))?;
             let cb_ident = format_ident!("__BamlCb{callable_index}");
             let marker_ident = format_ident!("__BamlCbMarker{callable_index}");
             callable_index += 1;
@@ -210,6 +217,7 @@ fn emit_binding(
                 let #param = ::baml_bridge::host_value::callable_handle(
                     #param,
                     &[#(#host_params),*],
+                    #function_type,
                 );
             });
             kwarg_entries.push(quote! {
@@ -219,6 +227,8 @@ fn emit_binding(
         }
         let ty = translate_ty::translate(&arg.ty, &gctx)
             .map_err(|u| skip(format!("argument `{arg_name}`: {}", u.reason)))?;
+        let slot =
+            declared(&arg.ty).map_err(|u| skip(format!("argument `{arg_name}`: {}", u.reason)))?;
         if arg.default.is_some() {
             // A defaulted BAML parameter: the wrapper accepts anything
             // convertible into `OptionalArg` so call sites pass a plain
@@ -230,7 +240,7 @@ fn emit_binding(
             converts.push(quote! {
                 let #param = ::std::convert::Into::<::baml_bridge::OptionalArg<#ty>>::into(#param);
             });
-            kwarg_entries.push(quote! { (#arg_name, #param.to_baml_opt()) });
+            kwarg_entries.push(quote! { (#arg_name, #param.to_baml_opt_in(&#slot)) });
         } else {
             // Union-typed parameters accept anything convertible into the
             // synthesized enum, so call sites pass bare arm values
@@ -247,7 +257,10 @@ fn emit_binding(
                 (
                     #arg_name,
                     ::std::option::Option::Some(
-                        ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(&#param),
+                        ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml_in(
+                            &#param,
+                            &#slot,
+                        ),
                     ),
                 )
             });

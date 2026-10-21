@@ -63,6 +63,18 @@ inline pb::BamlTy primitive_baml_ty(pb::BamlTyPrimitiveKind kind) {
   return ty;
 }
 
+inline pb::BamlTy unknown_baml_ty() {
+  pb::BamlTy ty;
+  ty.mutable_unknown();
+  return ty;
+}
+
+inline pb::BamlTy never_baml_ty() {
+  pb::BamlTy ty;
+  ty.mutable_never();
+  return ty;
+}
+
 inline void annotate_selected_type(pb::InboundValue& value,
                                    const pb::BamlTy& selected_type) {
   if (value.has_value_type()) return;
@@ -73,6 +85,8 @@ inline void annotate_selected_type(pb::InboundValue& value,
   value.mutable_value_type()->CopyFrom(selected_type);
 }
 
+// Byte equality: a `live` head matches another only when their keys are
+// equal (a selected type is an annotation, which never carries one).
 inline bool selected_type_matches(const pb::BamlTy& expected,
                                   const pb::BamlTy& selected) {
   if (expected.SerializeAsString() == selected.SerializeAsString()) return true;
@@ -949,12 +963,13 @@ struct codec<std::variant<Ts...>> {
     return ty;
   }
 
+  // A union has no wire shape of its own: the member leaves as the value it
+  // is, which implies or states its own type.
   static void encode(detail::pb::InboundValue& value_msg, const V& v) {
     std::visit(
         [&value_msg](const auto& alt) {
           using T = std::decay_t<decltype(alt)>;
           codec<T>::encode(value_msg, alt);
-          detail::annotate_selected_type(value_msg, codec<T>::baml_ty());
         },
         v);
   }
@@ -1088,6 +1103,9 @@ inline std::vector<uint8_t> raw_payload(const pb::BamlOutboundValue& v) {
   return std::vector<uint8_t>(bytes.begin(), bytes.end());
 }
 
+// BUG: the engine references a thrown value carries (handles, a type value's
+// live rows) stay in the copyable error's payload bytes and are never
+// released; errors need shared ownership of them, as Swift releases on arrival.
 [[noreturn]] inline void throw_from_result(
     const pb::BamlOutboundResult& result) {
   const bool is_panic = result.result_case() == pb::BamlOutboundResult::kPanic;
@@ -1186,6 +1204,10 @@ T decode_result(const std::vector<uint8_t>& envelope) {
       throw_from_result_typed<ThrownU>(result);
     }
   }
+  struct release_borrowed_types {
+    pb::BamlOutboundValue& ok;
+    ~release_borrowed_types() { release_type_values(ok); }
+  } borrowed{*result.mutable_ok()};
   if constexpr (!std::is_void<T>::value) {
     return codec<T>::decode(result.ok());
   }

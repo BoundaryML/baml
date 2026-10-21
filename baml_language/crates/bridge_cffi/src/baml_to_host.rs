@@ -24,12 +24,12 @@ use bex_project::{
     UnhandledSpawnError,
 };
 use bridge_ctypes::{
-    CffiHandleTableEntry, CffiHandleTableOptions, HANDLE_TABLE,
+    CffiHandleTableEntry, CffiHandleTableOptions, HANDLE_TABLE, InboundOwners, TableKey,
     baml_bridge::cffi::{
         BamlOutboundError, BamlOutboundPanic, BamlOutboundResult, CallFunctionArgs,
         baml_outbound_result, call_function_args::CallTarget,
     },
-    external_to_outbound, kwargs_to_bex_values,
+    external_to_outbound,
 };
 use futures::future::FutureExt;
 use indexmap::IndexMap;
@@ -363,8 +363,8 @@ impl InvocationRequest {
                     .chain(&self.args.optional)
                     .map(|(key, value)| (key.clone(), value.clone()))
                     .collect(),
-                key_type: bex_project::RuntimeTy::String,
-                value_type: bex_project::RuntimeTy::Unknown,
+                key_type: bex_project::WireTy::String,
+                value_type: bex_project::WireTy::Unknown,
             })
         });
         let execution = Arc::clone(&self.runtime)
@@ -382,7 +382,7 @@ impl InvocationRequest {
                 state: execution.inherited_state(),
             },
         ));
-        Ok((execution, key))
+        Ok((execution, key.get()))
     }
 
     /// Identity of the SDK entry, used by adapters to route callbacks to that
@@ -397,27 +397,6 @@ enum InvocationTarget {
     Callable(bex_project::Handle),
 }
 
-/// Input values transfer their wire owners at submission, even if controls or
-/// preparation fail before value decoding. Borrowed control/target keys do not.
-struct UnconsumedRequestValues(CallFunctionArgs);
-impl Drop for UnconsumedRequestValues {
-    fn drop(&mut self) {
-        for entry in std::mem::take(&mut self.0.kwargs) {
-            if let Some(value) = entry.value {
-                drop(bridge_ctypes::inbound_to_external(value, &HANDLE_TABLE));
-            }
-        }
-        if let Some(cancel) = self
-            .0
-            .invocation
-            .as_mut()
-            .and_then(|options| options.cancel.take())
-        {
-            drop(bridge_ctypes::inbound_to_external(cancel, &HANDLE_TABLE));
-        }
-    }
-}
-
 /// Decode and retain an SDK request without starting runtime execution.
 ///
 /// The engine resolves named targets and finishes argument/type preparation
@@ -425,41 +404,52 @@ impl Drop for UnconsumedRequestValues {
 pub fn decode_invocation_request(bytes: &[u8]) -> Result<InvocationRequest, BridgeError> {
     // Identify and consume the allocation before control validation. Every
     // preparation failure then retires its original runtime through this lease.
-    let mut identity = CallFunctionArgs::default();
+    let mut request = CallFunctionArgs::default();
     // Keep the parsed prefix on failure so a malformed trailing field cannot
-    // strand an identified allocation or already-decoded argument owners.
-    let decoded = identity
+    // strand an identified allocation or already-parsed argument owners.
+    let decoded = request
         .merge(bytes)
         .map_err(bridge_ctypes::CtypesError::from);
-    let mut unconsumed = UnconsumedRequestValues(identity);
-    if unconsumed.0.call_id == 0 {
+    // Input values transfer their wire owners at submission, even if controls
+    // or preparation fail before value decoding: one journal for the request
+    // records every transfer first and releases whatever a refusal leaves.
+    // Borrowed control/target keys are not transfers and are not journaled.
+    let mut owners = InboundOwners::new(&HANDLE_TABLE);
+    let collected = owners
+        .collect_entries(&request.kwargs)
+        .and_then(|()| owners.collect_type_args(&request.type_args))
+        .and_then(
+            |()| match request.invocation.as_ref().and_then(|o| o.cancel.as_ref()) {
+                Some(cancel) => owners.collect(cancel),
+                None => Ok(()),
+            },
+        );
+    if request.call_id == 0 {
         decoded?;
         return Err(BridgeError::InvalidCallId);
     }
-    let allocation = crate::CALL_ALLOCATIONS.submit(unconsumed.0.call_id)?;
+    let allocation = crate::CALL_ALLOCATIONS.submit(request.call_id)?;
     decoded?;
+    collected?;
     let runtime = allocation.owner().clone();
     let call = crate::invocation_protocol::decode_call(bytes)?;
     let target = call.call_target.ok_or(BridgeError::MissingCallTarget)?;
     if matches!(target, CallTarget::FunctionHandle(_)) && !call.type_args.is_empty() {
         return Err(BridgeError::FunctionHandleTypeArgs);
     }
-    let type_args = bridge_ctypes::proto_ty_args_to_named(&call.type_args)?;
-    let mut builder = allocation
-        .context_builder()
-        .with_type_args(type_args.type_args)
-        .with_type_defs(type_args.type_defs);
+    // A runtime declaration a type argument names arrives by the host's row
+    // to it, drained here like any transfer the request carries.
+    let type_args = owners.decode_type_args(&call.type_args)?;
+    let mut builder = allocation.context_builder().with_type_args(type_args);
     let controls = call.invocation.expect("validated controls");
     builder = builder.with_host_environment(controls.host_environment);
     if let Some(deadline) = controls.deadline_ns {
         builder = builder.with_deadline_ns(deadline);
     }
-    if controls.inherited_state != 0 {
-        let entry = HANDLE_TABLE
-            .resolve(controls.inherited_state)
-            .ok_or_else(|| {
-                BridgeError::InvocationProtocol("inherited state is no longer live".into())
-            })?;
+    if let Some(inherited_state) = TableKey::new(controls.inherited_state) {
+        let entry = HANDLE_TABLE.resolve(inherited_state).ok_or_else(|| {
+            BridgeError::InvocationProtocol("inherited state is no longer live".into())
+        })?;
         let CffiHandleTableEntry::InvocationState(state) = &*entry else {
             return Err(BridgeError::InvocationProtocol(
                 "inherited state needs an invocation-state handle".into(),
@@ -472,13 +462,12 @@ pub fn decode_invocation_request(bytes: &[u8]) -> Result<InvocationRequest, Brid
         }
         builder = builder.with_inherited_state(state.state.clone());
     }
-    if let Some(cancel) = unconsumed
-        .0
+    if let Some(cancel) = request
         .invocation
         .as_mut()
         .and_then(|options| options.cancel.take())
     {
-        let value = bridge_ctypes::inbound_to_external(cancel, &HANDLE_TABLE)?;
+        let value = owners.decode(cancel)?;
         builder = builder.with_cancel_values(vec![value]);
     }
     if let Some(trace) = controls.trace {
@@ -487,9 +476,13 @@ pub fn decode_invocation_request(bytes: &[u8]) -> Result<InvocationRequest, Brid
         };
         match trace.selection.expect("validated trace selection") {
             Selection::Reservation(key) => {
-                let entry = HANDLE_TABLE.resolve(key).ok_or_else(|| {
-                    BridgeError::InvocationProtocol("trace reservation is no longer live".into())
-                })?;
+                let entry = TableKey::new(key)
+                    .and_then(|key| HANDLE_TABLE.resolve(key))
+                    .ok_or_else(|| {
+                        BridgeError::InvocationProtocol(
+                            "trace reservation is no longer live".into(),
+                        )
+                    })?;
                 let CffiHandleTableEntry::TraceReservation(reservation) = &*entry else {
                     return Err(BridgeError::InvocationProtocol(
                         "trace reservation needs a reservation handle".into(),
@@ -541,17 +534,19 @@ pub fn decode_invocation_request(bytes: &[u8]) -> Result<InvocationRequest, Brid
         }
     }
     let context = runtime.bind_invocation_context(builder.build())?;
-    let kwargs = kwargs_to_bex_values(std::mem::take(&mut unconsumed.0.kwargs), &HANDLE_TABLE)?;
+    let kwargs = owners.decode_entries(std::mem::take(&mut request.kwargs))?;
 
     let (target, args) = match target {
         CallTarget::FunctionName(name) => (InvocationTarget::Named(name), kwargs.into()),
         CallTarget::FunctionHandle(key) => {
-            let entry = HANDLE_TABLE.resolve(key).ok_or_else(|| {
-                BridgeError::Internal("callable handle is no longer live".to_string())
-            })?;
+            let entry = TableKey::new(key)
+                .and_then(|key| HANDLE_TABLE.resolve(key))
+                .ok_or_else(|| {
+                    BridgeError::Internal("callable handle is no longer live".to_string())
+                })?;
             let CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::TaggedHeapHandle {
                 kind: bex_project::TaggedHeapHandleKind::Callable,
-                ty: bex_project::RuntimeTy::Function { params, .. },
+                ty: bex_project::AnnotationTy::Function { params, .. },
                 heap_handle,
             }) = &*entry
             else {

@@ -596,7 +596,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { _HostExecution, HostExecution, BamlAudio, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, _beginHostInvocation, _defineHostMarker, _discardHostCallArgs, _finishHostCallExecution, _getHostCallOrigin, _handleRefcount, _hostCaptureRequested, _hostInvocationFrame, _invocationContext, _isInvocationCancelled, _liveHandleCount, _recordHostCallResult, _releaseWireHandle, _seedFunctionRefHandle, _seedGenericMediaHandle, _seedHeapHandle, _startHostCallExecution, _traceSelection, _validateHostOptions, _watchInvocationCancellation, cancelFunctionCall, completeHostCall, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, invocationClockNs, mintHostValueKey, newFunctionCall, registerHostCallable, registerHostValueReleaseCallback, registerUnhandledSpawnErrorCallback, releaseFunctionCall, releaseHostCallable, shutdownRuntime } = nativeBinding
+const { _HostExecution, HostExecution, BamlAudio, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, _beginHostInvocation, _defineHostMarker, _discardHostCallArgs, _encodeInbound, _finishHostCallExecution, _getHostCallOrigin, _handleRefcount, _hostCaptureRequested, _hostInvocationFrame, _invocationContext, _isInvocationCancelled, _liveHandleCount, _recordHostCallResult, _releaseWireHandle, _seedFunctionRefHandle, _seedGenericMediaHandle, _seedHeapHandle, _startHostCallExecution, _traceSelection, _validateHostOptions, _watchInvocationCancellation, cancelFunctionCall, completeHostCallBridgeFailure, completeHostCallRaised, completeHostCallThrow, completeHostCallValue, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, invocationClockNs, mintHostValueKey, newFunctionCall, registerHostAdapter, registerHostValueReleaseCallback, registerProgramDescriptor, registerUnhandledSpawnErrorCallback, releaseFunctionCall, shutdownRuntime } = nativeBinding
 export { _HostExecution }
 export { HostExecution }
 export { BamlAudio }
@@ -608,6 +608,7 @@ export { BamlVideo }
 export { _beginHostInvocation }
 export { _defineHostMarker }
 export { _discardHostCallArgs }
+export { _encodeInbound }
 export { _finishHostCallExecution }
 export { _getHostCallOrigin }
 export { _handleRefcount }
@@ -626,7 +627,10 @@ export { _traceSelection }
 export { _validateHostOptions }
 export { _watchInvocationCancellation }
 export { cancelFunctionCall }
-export { completeHostCall }
+export { completeHostCallBridgeFailure }
+export { completeHostCallRaised }
+export { completeHostCallThrow }
+export { completeHostCallValue }
 export { getBridgeRuntimeVersion }
 export { getRuntime }
 export { getToolchainVersion }
@@ -634,9 +638,9 @@ export { getVersion }
 export { invocationClockNs }
 export { mintHostValueKey }
 export { newFunctionCall }
-export { registerHostCallable }
+export { registerHostAdapter }
 export { registerHostValueReleaseCallback }
+export { registerProgramDescriptor }
 export { registerUnhandledSpawnErrorCallback }
 export { releaseFunctionCall }
-export { releaseHostCallable }
 export { shutdownRuntime }

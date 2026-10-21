@@ -595,17 +595,14 @@ internal static class PrimitiveProtocol
             PrimitiveCarrierKind.Class => EncodeClass(value, api, ownership, functionCallId),
             PrimitiveCarrierKind.Enum => EncodeEnum(value),
             PrimitiveCarrierKind.Union => EncodeUnion(value, api, ownership, functionCallId),
-            PrimitiveCarrierKind.Media => MediaProtocol.Encode(
-                RequireNativeApi(api, value.Kind),
-                RequireOwnership(ownership, value.Kind),
-                value.ReadMedia()),
+            PrimitiveCarrierKind.Media => MediaProtocol.Encode(value.ReadMedia()),
             PrimitiveCarrierKind.Prompt => new InboundValue
             {
                 PromptAstValue = value.ReadPromptAst(),
             },
             PrimitiveCarrierKind.Type => new InboundValue
             {
-                TyDefValue = value.ReadType().WireCopy(),
+                TyValue = value.ReadType().Restate(ownership),
             },
             PrimitiveCarrierKind.Handle => EncodeHandle(
                 value.ReadHandle(),
@@ -681,11 +678,7 @@ internal static class PrimitiveProtocol
                 BamlGeneratedValue.CreatePromptAst(value.PromptAstValue, path),
             BamlOutboundValue.ValueOneofCase.TyValue =>
                 BamlGeneratedValue.CreateType(
-                    new global::Baml.BamlType(value.TyValue),
-                    path),
-            BamlOutboundValue.ValueOneofCase.TyDefValue =>
-                BamlGeneratedValue.CreateType(
-                    new global::Baml.BamlType(value.TyDefValue),
+                    new global::Baml.BamlType(value.TyValue, ownership.ClaimRows(value.TyValue)),
                     path),
             BamlOutboundValue.ValueOneofCase.HandleValue =>
                 DecodeHandle(value.HandleValue, path, ownership, api, budget, depth),
@@ -707,19 +700,19 @@ internal static class PrimitiveProtocol
             list.Values.Add(Encode(item, api, ownership, functionCallId));
         }
 
-        var inbound = new InboundValue { ListValue = list };
-        if (value.ItemTypeMetadata is { Length: > 0 } itemTypeMetadata)
+        // Every list leaves with its type: the codec that built it stated the
+        // declared element type.
+        return new InboundValue
         {
-            inbound.ValueType = new BamlTy
+            ListValue = list,
+            ValueType = new BamlTy
             {
                 List = new BamlTyList
                 {
-                    Item = ParseTypeMetadata(itemTypeMetadata, "list item"),
+                    Item = ParseTypeMetadata(value.ItemTypeMetadata, "list item"),
                 },
-            };
-        }
-
-        return inbound;
+            },
+        };
     }
 
     private static InboundValue EncodeMap(
@@ -738,21 +731,20 @@ internal static class PrimitiveProtocol
             });
         }
 
-        var inbound = new InboundValue { MapValue = map };
-        if (value.KeyTypeMetadata is { Length: > 0 } keyTypeMetadata
-            && value.ValueTypeMetadata is { Length: > 0 } valueTypeMetadata)
+        // Every map leaves with its type: the codec that built it stated the
+        // declared key and value types.
+        return new InboundValue
         {
-            inbound.ValueType = new BamlTy
+            MapValue = map,
+            ValueType = new BamlTy
             {
                 Map = new BamlTyMap
                 {
-                    Key = ParseTypeMetadata(keyTypeMetadata, "map key"),
-                    Value = ParseTypeMetadata(valueTypeMetadata, "map value"),
+                    Key = ParseTypeMetadata(value.KeyTypeMetadata, "map key"),
+                    Value = ParseTypeMetadata(value.ValueTypeMetadata, "map value"),
                 },
-            };
-        }
-
-        return inbound;
+            },
+        };
     }
 
     private static InboundValue EncodeClass(
@@ -793,32 +785,16 @@ internal static class PrimitiveProtocol
             },
         };
 
+    /// <summary>
+    /// A union has no wire shape of its own: its payload leaves as the value
+    /// it is, which implies or states its own type.
+    /// </summary>
     private static InboundValue EncodeUnion(
         BamlGeneratedValue value,
         NativeApi? api,
         EncodedCallArguments? ownership,
-        ulong functionCallId)
-    {
-        InboundValue encoded =
-            Encode(value.ReadUnionPayload(), api, ownership, functionCallId);
-        if (encoded.ValueType is null
-            && value.UnionSelectedTypeMetadata is { Length: > 0 } selectedTypeMetadata)
-        {
-            BamlTy selectedType =
-                ParseTypeMetadata(selectedTypeMetadata, "selected union option");
-            if (selectedType.TyCase is BamlTy.TyOneofCase.Union
-                or BamlTy.TyOneofCase.Optional)
-            {
-                throw new BamlProtocolException(
-                    "A generated union codec selected a non-concrete inbound type.",
-                    "InboundValue.value_type must identify the selected value node, not a union or optional shell.");
-            }
-
-            encoded.ValueType = selectedType;
-        }
-
-        return encoded;
-    }
+        ulong functionCallId) =>
+        Encode(value.ReadUnionPayload(), api, ownership, functionCallId);
 
     private static InboundValue EncodeHandle(
         global::Baml.BamlHandle value,
@@ -1036,6 +1012,22 @@ internal static class PrimitiveProtocol
                 wire.HandleType,
                 mediaContract,
                 path);
+        }
+
+        if (wire.HandleType == BamlHandleType.AdtTaggedHeapHandle
+            && wire.Ty?.TyCase == BamlTy.TyOneofCase.ClassTy
+            && wire.Ty.ClassTy.HeadCase == BamlTyClass.HeadOneofCase.AnonymousLabel)
+        {
+            // An instance of a runtime declaration: its class has no name, so
+            // the handle is held by its label and never matches a named type.
+            byte[] annotation = wire.Ty.ToByteArray();
+            return BamlGeneratedValue.CreateHandle(
+                new global::Baml.BamlHandle(
+                    ownership.Claim(wire),
+                    global::Baml.BamlTypeDescriptor.CreateUnnamedHandle(annotation),
+                    wire.HandleType,
+                    annotation),
+                sourcePath: path);
         }
 
         string fqn = wire.HandleType switch
@@ -1336,7 +1328,7 @@ internal static class PrimitiveProtocol
         return type.ToByteArray();
     }
 
-    private static BamlTy ParseTypeMetadata(byte[]? metadata, string description)
+    internal static BamlTy ParseTypeMetadata(byte[]? metadata, string description)
     {
         if (metadata is null || metadata.Length == 0)
         {

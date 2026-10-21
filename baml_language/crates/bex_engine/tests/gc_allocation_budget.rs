@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use bex_engine::{BexEngine, BexExternalValue as Ext, FunctionCallContextBuilder, RuntimeTy};
+use bex_engine::{BexEngine, BexExternalValue as Ext, FunctionCallContextBuilder};
 use bex_heap::CollectionLevel;
 use sys_native::SysOpsExt;
 
@@ -112,7 +112,7 @@ async fn spawn_services_pressure_after_rooting_child_and_future() {
         / std::mem::size_of::<bex_vm_types::Object>()
         + 1;
     let texts = Ext::Array {
-        element_type: RuntimeTy::string(),
+        element_type: bex_engine::WireTy::String,
         items: vec![Ext::String("x".into()); count],
     };
     let job = call(&engine, "SpawnTexts", vec![texts], false).await;

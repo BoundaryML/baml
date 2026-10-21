@@ -452,6 +452,36 @@ func Test_host_callable_panic_does_not_cross_cgo_boundary(t *testing.T) {
 	}
 }
 
+// A callback slot without `throws` leaves its effect open, so a Go failure
+// (panic, runtime.Goexit) crosses as an ordinary thrown
+// baml.errors.HostCallable: BAML catches it, and when rethrown it reaches Go
+// as a BAML error rather than a host-contract violation.
+func Test_host_callable_failure_under_open_throws_is_catchable(t *testing.T) {
+	ctx := context.Background()
+	for _, test := range []struct {
+		name     string
+		callback func(context.Context) int64
+	}{
+		{"panic", func(context.Context) int64 { panic("callback exploded") }},
+		{"goexit", func(context.Context) int64 {
+			runtime.Goexit()
+			return 1
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := baml_sdk.HostCallableTestsCallbackErrorCaught(ctx, test.callback)
+			if err != nil || got != 0 {
+				t.Fatalf("caught callback failure = %d, %v; want 0, nil", got, err)
+			}
+			_, err = baml_sdk.HostCallableTestsCallbackErrorRethrown(ctx, test.callback)
+			var failure *baml_go.BamlError
+			if !errors.As(err, &failure) || failure.Kind != "error" || failure.ClassName != "baml.errors.HostCallable" {
+				t.Fatalf("rethrown callback failure = %#v; want a thrown baml.errors.HostCallable", err)
+			}
+		})
+	}
+}
+
 func Test_host_callable_cancellation_while_dispatched(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	started := make(chan struct{})

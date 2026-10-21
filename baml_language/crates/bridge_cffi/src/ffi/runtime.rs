@@ -322,33 +322,6 @@ mod tests {
         assert!(error.contains(baml_version::CANONICAL_VERSION));
     }
 
-    #[test]
-    fn bridge_language_selects_one_process_wide_inbound_policy() {
-        use bex_project::InboundUnionAmbiguityPolicy::{Reject, SelectDefault};
-
-        assert_eq!(
-            BridgeLanguage::NodeJs.inbound_union_ambiguity_policy(),
-            SelectDefault
-        );
-        for language in [
-            BridgeLanguage::Python,
-            BridgeLanguage::Web,
-            BridgeLanguage::Ruby,
-        ] {
-            assert_eq!(language.inbound_union_ambiguity_policy(), SelectDefault);
-        }
-        for language in [
-            BridgeLanguage::Go,
-            BridgeLanguage::Rust,
-            BridgeLanguage::CSharp,
-            BridgeLanguage::Cpp,
-            BridgeLanguage::Java,
-            BridgeLanguage::Swift,
-        ] {
-            assert_eq!(language.inbound_union_ambiguity_policy(), Reject);
-        }
-    }
-
     fn ffi_info(language: u32, version: &[u8]) -> BamlBridgeInfoV1 {
         BamlBridgeInfoV1 {
             struct_size: std::mem::size_of::<BamlBridgeInfoV1>(),

@@ -16,7 +16,7 @@ async fn call_named(
     source: &str,
     function: &str,
     args: Vec<BexExternalValue>,
-    type_args: Vec<(String, baml_type::RuntimeTy)>,
+    type_args: Vec<(String, bex_external_types::WireTy)>,
 ) -> Result<BexExternalValue, EngineError> {
     let snapshot = compile_for_engine(source);
     let engine = Arc::new(
@@ -52,7 +52,7 @@ async fn inbound_named_binding_threads_to_reflect() {
         source,
         "one_type_arg",
         vec![],
-        vec![("T".to_string(), baml_type::RuntimeTy::int())],
+        vec![("T".to_string(), bex_external_types::WireTy::int())],
     )
     .await
     .unwrap();
@@ -94,14 +94,14 @@ async fn inbound_instance_arg_lands_class_type_args() {
     "#;
     let arg = BexExternalValue::instance_generic(
         "Box",
-        vec![baml_type::RuntimeTy::int()],
+        vec![bex_external_types::WireTy::int()],
         indexmap::IndexMap::from_iter([("v", BexExternalValue::Int(5))]),
     );
     let out = call_named(
         source,
         "takes_box",
         vec![arg],
-        vec![("T".to_string(), baml_type::RuntimeTy::int())],
+        vec![("T".to_string(), bex_external_types::WireTy::int())],
     )
     .await
     .unwrap();
@@ -119,7 +119,7 @@ async fn inbound_instance_arg_wrong_type_args_rejected() {
     "#;
     let arg = BexExternalValue::instance_generic(
         "Box",
-        vec![baml_type::RuntimeTy::string()],
+        vec![bex_external_types::WireTy::string()],
         indexmap::IndexMap::from_iter([("v", BexExternalValue::String("hi".into()))]),
     );
     let err = call_named(
@@ -127,7 +127,7 @@ async fn inbound_instance_arg_wrong_type_args_rejected() {
         "takes_box",
         vec![arg],
         // bind T = int, but the instance carries Box<string>
-        vec![("T".to_string(), baml_type::RuntimeTy::int())],
+        vec![("T".to_string(), bex_external_types::WireTy::int())],
     )
     .await
     .expect_err("Box<string> arg against Box<int> param must be rejected");
@@ -137,11 +137,10 @@ async fn inbound_instance_arg_wrong_type_args_rejected() {
     );
 }
 
-/// A shape-only generic instance inherits its concrete arguments from the
-/// contextual class slot. Sparse inbound annotations are only required when
-/// that context and the payload do not determine the arguments.
+/// A generic instance states its type arguments; the slot supplies none. An
+/// instance that omits them is refused even where the slot is concrete.
 #[tokio::test]
-async fn inbound_instance_arg_missing_type_args_uses_context() {
+async fn inbound_instance_arg_missing_type_args_is_refused() {
     let source = r#"
         class Box<T> { v T }
         function takes_box<T>(b: Box<T>) -> int { 1 }
@@ -152,15 +151,18 @@ async fn inbound_instance_arg_missing_type_args_uses_context() {
         "Box",
         indexmap::IndexMap::from_iter([("v", BexExternalValue::Int(5))]),
     );
-    let out = call_named(
+    let err = call_named(
         source,
         "takes_box",
         vec![arg],
-        vec![("T".to_string(), baml_type::RuntimeTy::int())],
+        vec![("T".to_string(), bex_external_types::WireTy::int())],
     )
     .await
-    .expect("the concrete Box<int> context supplies the omitted type arg");
-    assert_eq!(out, BexExternalValue::Int(1));
+    .expect_err("an instance of a generic class states its type arguments");
+    assert!(
+        matches!(&err, EngineError::TypeMismatch { message } if message.contains("takes 1 type argument(s), 0 were stated")),
+        "{err:?}"
+    );
 }
 
 /// A generic instance whose wire arity disagrees with the declared class is
@@ -175,14 +177,17 @@ async fn inbound_instance_arg_wrong_arity_rejected() {
     "#;
     let arg = BexExternalValue::instance_generic(
         "Box",
-        vec![baml_type::RuntimeTy::int(), baml_type::RuntimeTy::int()],
+        vec![
+            bex_external_types::WireTy::int(),
+            bex_external_types::WireTy::int(),
+        ],
         indexmap::IndexMap::from_iter([("v", BexExternalValue::Int(5))]),
     );
     let err = call_named(
         source,
         "takes_box",
         vec![arg],
-        vec![("T".to_string(), baml_type::RuntimeTy::int())],
+        vec![("T".to_string(), bex_external_types::WireTy::int())],
     )
     .await
     .expect_err("a two-arg Box against Box<int> must be rejected");
@@ -192,27 +197,31 @@ async fn inbound_instance_arg_wrong_arity_rejected() {
     );
 }
 
-/// A bare host map can be promoted into a generic class when the contextual
-/// class slot already supplies the concrete arguments.
+/// A bare map names no class, and the engine makes it none: a `map<string,
+/// int>` is not a `Box<int>` however its entries line up with the fields.
 #[tokio::test]
-async fn inbound_bare_map_against_generic_class_uses_context() {
+async fn inbound_map_is_not_an_instance_of_a_class() {
     let source = r#"
         class Box<T> { v T }
         function takes_box<T>(b: Box<T>) -> int { 1 }
         function main() -> int { 0 }
     "#;
-    let arg = BexExternalValue::Map {
-        key_type: baml_type::RuntimeTy::string(),
-        value_type: baml_type::RuntimeTy::int(),
-        entries: indexmap::IndexMap::from_iter([("v".to_string(), BexExternalValue::Int(5))]),
+    let fields = indexmap::IndexMap::from_iter([("v".to_string(), BexExternalValue::Int(5))]);
+    let map = BexExternalValue::Map {
+        key_type: bex_external_types::WireTy::string(),
+        value_type: bex_external_types::WireTy::int(),
+        entries: fields,
     };
-    let out = call_named(
+    let err = call_named(
         source,
         "takes_box",
-        vec![arg],
-        vec![("T".to_string(), baml_type::RuntimeTy::int())],
+        vec![map],
+        vec![("T".to_string(), bex_external_types::WireTy::int())],
     )
     .await
-    .expect("the contextual Box<int> type supplies the map's nominal identity");
-    assert_eq!(out, BexExternalValue::Int(1));
+    .expect_err("a map is not an instance of a class");
+    assert!(
+        matches!(err, EngineError::TypeMismatch { .. }),
+        "expected TypeMismatch, got {err:?}"
+    );
 }

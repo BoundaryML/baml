@@ -550,6 +550,63 @@ mod tests {
         assert_eq!(rejected, Err(3));
     }
 
+    /// The child walkers reach every nested type position once, including the
+    /// ones inside satellites, and `map_children` is the identity when `f` is.
+    /// A pass over a whole tree is `f` recursing: the structural match lives
+    /// in the macro, so no consumer re-lists the variants.
+    #[test]
+    fn child_walkers_reach_every_nested_type() {
+        let t: Interned = Ty::AssociatedTypeProjection {
+            base: Box::new(Ty::Function {
+                params: Box::new([FunctionParamTy::required(
+                    Some(Name::new("x")),
+                    Ty::Class(1, Box::new([Ty::Enum(2)])),
+                )]),
+                ret: Box::new(Ty::Null),
+                throws: Box::new(Ty::Never),
+            }),
+            interface: Box::new(crate::Interface::new(
+                3,
+                Box::new([Ty::TypeAlias(4)]),
+                Box::new([(Name::new("Item"), Ty::EnumVariant(5, Name::new("V")))]),
+            )),
+            member: Name::new("Out"),
+        };
+
+        // Direct children only: the projection's base, then the interface's
+        // generics and bindings; the function's own children are one level down.
+        let mut direct = Vec::new();
+        t.visit_children(&mut |child| direct.push(child.clone()));
+        assert_eq!(direct.len(), 3);
+        assert!(matches!(direct[0], Ty::Function { .. }));
+        assert_eq!(direct[1], Ty::TypeAlias(4));
+        assert_eq!(direct[2], Ty::EnumVariant(5, Name::new("V")));
+
+        assert_eq!(t.map_children(&mut Clone::clone), t);
+
+        // A whole-tree rewrite recurses through `f`.
+        fn never_to_unknown(ty: &Interned) -> Interned {
+            match ty {
+                Ty::Never => Ty::Unknown,
+                other => other.map_children(&mut never_to_unknown),
+            }
+        }
+        let rewritten = never_to_unknown(&t);
+        let Ty::AssociatedTypeProjection { base, .. } = &rewritten else {
+            panic!("shape changed");
+        };
+        let Ty::Function { params, throws, .. } = &**base else {
+            panic!("shape changed");
+        };
+        assert_eq!(**throws, Ty::Unknown);
+        assert_eq!(params[0].name, Some(Name::new("x")));
+
+        let mut none = Vec::new();
+        Ty::<u32>::Literal(crate::Literal::Int(1), crate::Freshness::Regular)
+            .visit_children(&mut |child| none.push(child.clone()));
+        assert!(none.is_empty());
+    }
+
     /// A type variable nested inside a concrete container: representable in
     /// `RuntimeTy<TypeName>` but not `RealizedTy<TypeName>`.
     fn with_typevar() -> Ty<TypeName> {

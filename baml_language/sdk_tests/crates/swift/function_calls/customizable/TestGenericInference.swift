@@ -3,15 +3,16 @@
 //
 // Swift's static generics collapse Python's three binding surfaces
 // (bare inference, `fn[T](...)` subscript, `_types=` kwarg) into one:
-// the compiler binds T at the call site, and NOTHING rides the wire —
-// the engine re-infers from values (inbound inference). Consequences:
+// the compiler binds T at the call site, and every generated generic call
+// sends that T as the call's type argument. Consequences:
 // - explicit-subscript tests port as ordinary typed calls;
-// - `_types=`-guard and subscript-arity TypeError tests are compile
-//   errors here (unrepresentable, noted per case);
+// - a T no argument's Swift type mentions (`parse_as`, `one_type_arg`) is
+//   named with a metatype argument (`T: Int.self`);
+// - a call that leaves T unbound, and the `_types=`-guard and
+//   subscript-arity TypeError tests, are compile errors here
+//   (unrepresentable, noted per case);
 // - divergent-TypeVar cases (`choose(5, "asdf")`) are compile errors
 //   (Python unifies dynamically; Swift's T is one type);
-// - return-only TypeVars (`parse_as`, `one_type_arg`) are not emitted
-//   (need a wire type hint — Python requires `_types=` for them too);
 // - reified-metadata assertions (`__pydantic_generic_metadata__`) are
 //   static types in Swift: the call compiling IS the assertion.
 import XCTest
@@ -44,7 +45,7 @@ final class TestGenericInference: XCTestCase {
         XCTAssertEqual(r, 7)
     }
 
-    func test_generic_inference_identity_null_round_trips() throws {
+    func test_generic_inference_identity_null_binds_null() throws {
         let r: Int? = try G.identity(x: Int?.none)
         XCTAssertNil(r)
     }
@@ -111,20 +112,21 @@ final class TestGenericInference: XCTestCase {
         XCTAssertEqual(try G.tag_or_value(x: .t0(5)), "int")
     }
 
-    func test_generic_inference_union_concrete_sibling_absorbs_value_binds_rust_type() throws {
-        // The string value binds the CONCRETE union sibling; T (Int at
-        // the Swift level, but never sent) defaults engine-side to the
-        // host-only sentinel — identical to Python's bare call.
+    func test_generic_inference_union_concrete_sibling_keeps_the_static_type_arg() throws {
+        // The string value fills the CONCRETE union sibling and pins nothing,
+        // so the engine alone would break the tie to `T = never`. Swift's `T`
+        // is `Int`, and it rides the wire.
         XCTAssertEqual(
             try G.tag_or_value(x: BamlUnion2<Int, Swift.String>.t1("hi")),
-            "$rust_type"
+            "int"
         )
     }
 
-    func test_generic_inference_union_null_actual_binds_rust_type() throws {
+    func test_generic_inference_union_null_actual_keeps_the_static_type_arg() throws {
+        // A `null` pins nothing either: `T` is still Swift's `Int`.
         XCTAssertEqual(
             try G.tag_or_value(x: BamlUnion2<Int, Swift.String>?.none),
-            "$rust_type"
+            "int"
         )
     }
 
@@ -153,6 +155,64 @@ final class TestGenericInference: XCTestCase {
     func test_generic_inference_elem_type_heterogeneous_array_unifies() throws {
         let xs: [BamlUnion2<Int, Swift.String>] = [.t0(1), .t1("x")]
         XCTAssertEqual(try G.elem_type(xs: xs), "int | string")
+    }
+
+    func test_generic_inference_first_or_empty_list_requires_binding() throws {
+        // An empty list gives no evidence for `T`, so the binding must come
+        // from the caller. In Swift it is static: `G.first_or(xs: [])` with
+        // nothing that names `T` does not compile, and the `T` the result's
+        // type names rides the wire.
+        let r: G.StringIntPair? = try G.first_or(xs: [])
+        XCTAssertNil(r)
+        XCTAssertEqual(try G.elem_type(xs: [Int]()), "int")
+    }
+
+    func test_generic_calls_generic_free_fn_requires_binding() throws {
+        // `one_type_arg<T>()` takes no argument that could carry `T`. The
+        // generated function makes the caller name it; through the runtime
+        // directly, a call without the type argument is refused.
+        _ = try G.identity(x: 0) // loads the program
+        XCTAssertThrowsError(
+            try BamlRuntime.shared.callSync("user.generic_tests.one_type_arg", args: []) as String
+        ) { error in
+            XCTAssertTrue(
+                String(describing: error).contains("could not infer a type"),
+                String(describing: error)
+            )
+        }
+        let named: String = try BamlRuntime.shared.callSync(
+            "user.generic_tests.one_type_arg",
+            args: [],
+            typeArgs: [BamlTypeArgument("T", .int)]
+        )
+        XCTAssertEqual(named, "int")
+    }
+
+    func test_generic_calls_one_type_arg_explicit() throws {
+        XCTAssertEqual(try G.one_type_arg(T: Int.self), "int")
+        XCTAssertEqual(try G.one_type_arg(T: Swift.String.self), "string")
+        // A nested generic binding states the class with its argument.
+        let nested = try G.one_type_arg(T: G.GenericBox<Int>.self)
+        XCTAssertTrue(nested.contains("GenericBox") && nested.contains("int"), nested)
+    }
+
+    func test_generic_calls_two_type_args_explicit() throws {
+        XCTAssertEqual(try G.two_type_args(A: Int.self, B: Swift.String.self), "int | string")
+    }
+
+    func test_generic_calls_parse_as_explicit() throws {
+        XCTAssertEqual(
+            try G.parse_as(source: "{\"my_string\": \"x\", \"my_int\": 3}", T: G.StringIntPair.self),
+            G.StringIntPair(my_string: "x", my_int: 3)
+        )
+        XCTAssertEqual(try G.parse_as(source: "42", T: Int.self), 42)
+    }
+
+    func test_generic_calls_optional_only_unset_names_its_type_arg() throws {
+        // `optional_only<T>(x: T? = null)`: an omitted argument carries no `T`.
+        let r = try G.optional_only(T: Int.self)
+        XCTAssertNil(r)
+        XCTAssertEqual(try G.optional_only(x: .value(5), T: Int.self), 5)
     }
 
     func test_generic_inference_first_or_empty_list_round_trips_none() throws {

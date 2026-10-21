@@ -54,19 +54,25 @@ extension BamlHandle: Equatable {
     }
 }
 
-extension BamlHandle: BamlEncodable {
-    public func _bamlEncode() -> BamlInboundValue {
+/// A handle states nothing: its type is the engine's, checked live. It has
+/// no Swift-side type of its own, so it is not `BamlTyped`; a `$rust_type`
+/// field's slot is the field's declared type.
+extension BamlHandle: BamlLeafEncodable {
+    public func _bamlEncode(as _: BamlSlot<BamlHandle>) -> BamlInboundValue {
         if let portableMedia {
             return BamlMedia.encodePortable(portableMedia)
         }
-        // Clone a fresh key for the wire; the engine drains it while
-        // this instance keeps its own.
-        var wireKey: UInt64 = 0
-        let status = BamlApi.handleClone(key, &wireKey)
-        precondition(
-            status == BAML_CFFI_STATUS_OK.rawValue,
-            "handle_clone failed with status \(status)"
-        )
+        // A host value is the engine's reference to this host's own object:
+        // its key goes as it is. An engine handle clones a fresh key for the
+        // wire; the engine drains it while this instance keeps its own.
+        var wireKey: UInt64 = key
+        if handleType != .hostValueCallable && handleType != .hostValueOpaque {
+            let status = BamlApi.handleClone(key, &wireKey)
+            precondition(
+                status == BAML_CFFI_STATUS_OK.rawValue,
+                "handle_clone failed with status \(status)"
+            )
+        }
         var handle = BamlBridge_Cffi_V1_BamlHandle()
         handle.key = wireKey
         handle.handleType = handleType
@@ -88,9 +94,12 @@ extension BamlHandle: BamlDecodable {
         guard handle.handleType != .handleUnspecified else {
             throw BamlDecodeError.typeMismatch(expected: "tagged handle", got: "HANDLE_UNSPECIFIED")
         }
+        // An anonymous label is display text, never an identity.
         let classFQN: String?
-        if handle.hasTy, case .classTy(let classType)? = handle.ty.ty {
-            classFQN = classType.name.isEmpty ? nil : classType.name
+        if handle.hasTy, case .classTy(let classType)? = handle.ty.ty,
+           case .name(let fqn)? = classType.head, !fqn.isEmpty
+        {
+            classFQN = fqn
         } else {
             classFQN = nil
         }
@@ -155,12 +164,12 @@ public final class BamlFunctionHandle: @unchecked Sendable {
     }
 
     public func callRaw(
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
         baml: BamlInvocationOptions = .init()
     ) async throws -> BamlOutboundValue {
         try await BamlRuntime.shared.callHandleRaw(handle.key, args: args, baml: baml)
     }
-    public func callRawSync(args: [(String, (any BamlEncodable)?)], baml: BamlInvocationOptions = .init()) throws -> BamlOutboundValue {
+    public func callRawSync(args: [BamlArgument], baml: BamlInvocationOptions = .init()) throws -> BamlOutboundValue {
         try BamlRuntime.shared.callHandleRawSync(handle.key, args: args, baml: baml)
     }
 

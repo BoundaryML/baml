@@ -49,6 +49,24 @@ impl<N: Clone> RealizedTy<N> {
         RealizedTy::List(Box::new(inner))
     }
 
+    /// `T | null`, flattened into an existing union and idempotent, as
+    /// [`crate::RuntimeTy::optional`].
+    pub fn optional(inner: RealizedTy<N>) -> Self {
+        match inner {
+            RealizedTy::Union(members) => {
+                if members.iter().any(RealizedTy::is_null) {
+                    RealizedTy::Union(members)
+                } else {
+                    let mut members = members.into_vec();
+                    members.push(RealizedTy::null());
+                    RealizedTy::Union(members.into())
+                }
+            }
+            n @ RealizedTy::Null => n,
+            other => RealizedTy::Union(Box::new([other, RealizedTy::null()])),
+        }
+    }
+
     /// True if this is exactly the `null` type.
     pub fn is_null(&self) -> bool {
         matches!(self, RealizedTy::Null)

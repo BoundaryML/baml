@@ -5,12 +5,14 @@ from __future__ import annotations
 import asyncio
 import enum
 
-import pydantic
 import pytest
 
+import pydantic
+
 import baml_bridge
+from baml_bridge.baml_py import _encode_inbound
 from baml_bridge.cffi.v1 import baml_inbound_pb2
-from baml_bridge.proto import _set_inbound_value
+from baml_bridge.proto import _EncodedCall
 from baml_bridge.typemap import BamlTypeMap, get_type_map, set_type_map
 
 
@@ -40,13 +42,16 @@ def test_renamed_enum_member_encodes_raw_value_for_scalar_and_map_key():
     saved = get_type_map()
     set_type_map(_identifier_typemap())
     try:
-        scalar = baml_inbound_pb2.InboundValue()
-        _set_inbound_value(scalar, KeywordChoice.None_, kwarg_name="choice")
+        scalar = baml_inbound_pb2.InboundValue.FromString(
+            _encode_inbound(KeywordChoice.None_, "choice")
+        )
+        assert scalar.enum_value.name == "user.KeywordChoice"
         assert scalar.enum_value.value == "None"
 
-        mapping = baml_inbound_pb2.InboundValue()
-        _set_inbound_value(mapping, {KeywordChoice.None_: 1}, kwarg_name="choices")
-        assert mapping.map_value.entries[0].enum_key.value == "None"
+        # Map keys cross the boundary as strings only; an enum member is not
+        # one, whatever its value, so a dict keyed by one is refused.
+        with pytest.raises(TypeError, match="map keys must be string"):
+            _encode_inbound({KeywordChoice.None_: 1}, "choices")
     finally:
         set_type_map(saved)
 
@@ -60,8 +65,8 @@ def test_renamed_pydantic_field_populates_both_ways_and_encodes_raw_name():
     saved = get_type_map()
     set_type_map(_identifier_typemap())
     try:
-        inbound = baml_inbound_pb2.InboundValue()
-        _set_inbound_value(inbound, by_host, kwarg_name="model")
+        inbound = baml_inbound_pb2.InboundValue.FromString(_encode_inbound(by_host, "model"))
+        assert inbound.value_type.class_ty.name == "user.KeywordModel"
         assert inbound.class_value.fields[0].string_key == "None"
         assert inbound.class_value.fields[0].value.int_value == 1
     finally:
@@ -111,17 +116,17 @@ def test_stream_companion_calls_its_exact_fqn(monkeypatch):
     encoded_calls = []
 
     class FakeRuntime:
-        def call_function_sync(self, args):
+        def call_function_sync(self, args, kwargs=None, cancel=None, *, stream=False):
             assert args == b"encoded"
             return b"stream"
 
-        async def call_function(self, args):
+        async def call_function(self, args, kwargs=None, cancel=None, *, stream=False):
             assert args == b"encoded"
             return b"stream"
 
-    def fake_encode(kwargs, call_id, type_args, *, function_name):
-        encoded_calls.append((kwargs, call_id, type_args, function_name))
-        return b"encoded"
+    def fake_encode(kwargs, call_id, type_args, *, function_name, _baml):
+        encoded_calls.append((kwargs, call_id, type_args, function_name, _baml))
+        return _EncodedCall(b"encoded", None, kwargs, None)
 
     monkeypatch.setattr(baml_bridge, "new_function_call", lambda: 42)
     monkeypatch.setattr(baml_bridge, "get_runtime", lambda: FakeRuntime())
@@ -129,6 +134,13 @@ def test_stream_companion_calls_its_exact_fqn(monkeypatch):
     monkeypatch.setattr(baml_bridge, "decode_call_result", lambda _value: "stream")
     monkeypatch.setattr(
         baml_bridge, "_decode_call_result_async", lambda _value: "stream"
+    )
+    # A stream companion's result is decoded into a `BamlStream`; this test
+    # pins the call's spelling, not the stream.
+    monkeypatch.setattr(
+        baml_bridge._stream,
+        "_decode_stream_result",
+        lambda result, *, asynchronous=False: "stream",
     )
 
     listener = object()
@@ -145,11 +157,12 @@ def test_stream_companion_calls_its_exact_fqn(monkeypatch):
         ["on_event"],
     )
 
+    options = object()
     assert sync_stream("hello", on_event=listener) == "stream"
-    assert asyncio.run(async_stream("world", on_event=listener)) == "stream"
+    assert asyncio.run(async_stream("world", on_event=listener, _baml=options)) == "stream"
     assert encoded_calls == [
-        ({"prompt": "hello", "on_event": listener}, 42, None, "user.plan@stream"),
-        ({"prompt": "world", "on_event": listener}, 42, None, "user.plan@stream"),
+        ({"prompt": "hello", "on_event": listener}, 42, None, "user.plan@stream", None),
+        ({"prompt": "world", "on_event": listener}, 42, None, "user.plan@stream", options),
     ]
 
 

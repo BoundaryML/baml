@@ -1,8 +1,11 @@
 package baml_go
 
 import (
+	"fmt"
 	"math/big"
 	"testing"
+
+	"github.com/boundaryml/baml-go/internal/cffi"
 )
 
 type nilTestMarshaler struct{}
@@ -116,13 +119,69 @@ func TestAnyPreservesStaticTypesForEmptyContainers(t *testing.T) {
 	}
 }
 
-func TestOrdinaryTypedContainerEncodersRemainMetadataOptional(t *testing.T) {
-	list := List([]string{}, String)
-	if list.value.GetValueType() != nil {
-		t.Fatalf("schema-driven list unexpectedly added dynamic type metadata")
+func TestAnyStatesUnknownElementsForInterfaceContainers(t *testing.T) {
+	list := Any([]any{int64(1), "two"})
+	if list.err != nil || list.value.GetValueType() == nil {
+		t.Fatalf("any-element list lost its type: %#v, %v", list.value, list.err)
 	}
-	mapValue := Map(map[string]string{}, String)
-	if mapValue.value.GetValueType() != nil {
-		t.Fatalf("schema-driven map unexpectedly added dynamic type metadata")
+	if !(BAMLType{value: list.value.GetValueType()}).Equal(ListBAMLType(UnknownBAMLType())) {
+		t.Fatalf("any-element list got wrong value type: %#v", list.value.GetValueType())
+	}
+
+	mapValue := Any(map[string]any{})
+	if mapValue.err != nil || mapValue.value.GetValueType() == nil {
+		t.Fatalf("any-element map lost its type: %#v, %v", mapValue.value, mapValue.err)
+	}
+	wantMapType := MapBAMLType(PrimitiveBAMLType(StringType), UnknownBAMLType())
+	if !(BAMLType{value: mapValue.value.GetValueType()}).Equal(wantMapType) {
+		t.Fatalf("any-element map got wrong value type: %#v", mapValue.value.GetValueType())
+	}
+}
+
+func TestAnyStatesNestedInterfaceContainersAtEveryDepth(t *testing.T) {
+	unknownList := ListBAMLType(UnknownBAMLType())
+	unknownMap := MapBAMLType(PrimitiveBAMLType(StringType), UnknownBAMLType())
+	for _, tc := range []struct {
+		name  string
+		value any
+		want  BAMLType
+	}{
+		{"list of lists", [][]any{{int64(1), "a"}, {}}, ListBAMLType(unknownList)},
+		{"list of maps", []map[string]any{{"k": int64(1)}, {}}, ListBAMLType(unknownMap)},
+		{"map of lists", map[string][]any{"k": {int64(1), "a"}, "empty": {}}, MapBAMLType(PrimitiveBAMLType(StringType), unknownList)},
+		{"empty list of lists", [][]any{}, ListBAMLType(unknownList)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := Any(tc.value)
+			if input.err != nil {
+				t.Fatal(input.err)
+			}
+			if stated := input.value.GetValueType(); stated == nil || !(BAMLType{value: stated}).Equal(tc.want) {
+				t.Fatalf("stated %#v; want %#v", stated, tc.want.value)
+			}
+			assertContainersStated(t, "value", input.value)
+		})
+	}
+}
+
+// assertContainersStated fails when any list or map node beneath value
+// leaves its type unstated; the engine refuses such a node.
+func assertContainersStated(t *testing.T, path string, value *cffi.InboundValue) {
+	t.Helper()
+	switch payload := value.GetValue().(type) {
+	case *cffi.InboundValue_ListValue:
+		if value.GetValueType() == nil {
+			t.Fatalf("%s: list states no type", path)
+		}
+		for index, item := range payload.ListValue.GetValues() {
+			assertContainersStated(t, fmt.Sprintf("%s[%d]", path, index), item)
+		}
+	case *cffi.InboundValue_MapValue:
+		if value.GetValueType() == nil {
+			t.Fatalf("%s: map states no type", path)
+		}
+		for _, entry := range payload.MapValue.GetEntries() {
+			assertContainersStated(t, fmt.Sprintf("%s[%q]", path, entry.GetStringKey()), entry.GetValue())
+		}
 	}
 }

@@ -102,7 +102,12 @@ async fn host_reentry_inherits_suppression_and_context_then_restores_selection()
             for phase in ["hook", "body"] {
                 let frame = rx.recv().await.unwrap();
                 assert_eq!(frame.0.host_environment, 41);
-                let entry = HANDLE_TABLE.resolve(frame.0.effective_state).unwrap();
+                let entry = HANDLE_TABLE
+                    .resolve(
+                        bridge_ctypes::TableKey::new(frame.0.effective_state)
+                            .expect("a live frame names its state"),
+                    )
+                    .unwrap();
                 let CffiHandleTableEntry::InvocationState(inherited) = &*entry else {
                     panic!("typed effective state")
                 };
@@ -133,7 +138,18 @@ async fn host_reentry_inherits_suppression_and_context_then_restores_selection()
         engine.call_function(
             "target",
             vec![
-                BexExternalValue::HostValue(HostValueArc::new(1, HostValueKind::Callable)),
+                BexExternalValue::HostCallable {
+                    handle: HostValueArc::new(
+                        bex_resource_types::HostKey::new(1).expect("nonzero"),
+                        HostValueKind::Callable,
+                    ),
+                    params: Box::new([bex_external_types::WireFunctionParamTy::required(
+                        None,
+                        bex_external_types::WireTy::static_class("State"),
+                    )]),
+                    ret: Box::new(bex_external_types::WireTy::int()),
+                    throws: Box::new(bex_external_types::WireTy::Never),
+                },
                 state.clone(),
             ],
             FunctionCallContextBuilder::new(CallId::next())

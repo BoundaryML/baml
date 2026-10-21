@@ -42,6 +42,7 @@ mod idents;
 mod routing;
 mod translate_ty;
 mod unions;
+mod wire_ty;
 
 /// Caller-provided knobs for the generated crate.
 pub struct RustGenOptions {
@@ -1158,14 +1159,156 @@ mod tests {
             ),
             "{lib}"
         );
-        // The instance carries its concrete type arg on the wire, in both
-        // the value encoding and the type descriptor.
+        // The type descriptor carries the concrete type arg; an instance is
+        // stated with the type args of the slot it fills (which defaults to
+        // that descriptor), and its `T` field fills the slot of the first.
         let type_args = concat!(
             "::std::vec![<Tas::baml_bridge::baml_value::internal::__BamlValuePrivate>",
             "::baml_ty()]"
         );
-        // once in encode::class (to_baml) and once in class_ty (baml_ty).
-        assert_eq!(flat.matches(type_args).count(), 2, "{lib}");
+        assert_eq!(flat.matches(type_args).count(), 1, "{lib}");
+        assert!(
+            flat.contains(concat!(
+                "let__baml_type_args=::baml_bridge::baml_value::internal::class_slot_args::",
+                "<Self,>(slot,\"user.GenericBox\",1usize);"
+            )),
+            "{lib}"
+        );
+        assert!(flat.contains("&__baml_type_args[0usize].clone(),"), "{lib}");
+    }
+
+    /// A literal or enum-variant type translates to its base Rust type, but
+    /// a value is stated under the type its slot declares: `"a"[]` is a
+    /// `Vec<String>` stated `"a"[]`, never `string[]`, which a value of the
+    /// slot's type does not inhabit.
+    #[test]
+    fn literal_and_variant_slots_are_stated_as_declared() {
+        let color = name("user", &[], "Color");
+        let generic_box = name("user", &[], "Box");
+        let tagged = name("user", &[], "Tagged");
+        let f = name("user", &[], "f");
+        let lit_a = || {
+            Ty::Literal(
+                baml_base::Literal::String("a".into()),
+                baml_sdkgen_types::Freshness::Regular,
+            )
+        };
+        let lit_a_list = || Ty::List(Box::new(lit_a()));
+        let red = Ty::EnumVariant(color.clone(), baml_base::Name::new("Red"));
+        let variant = |variant: &str| baml_sdkgen_types::EnumVariant {
+            name: baml_base::Name::new(variant),
+            docstring: None,
+            value: variant.to_string(),
+        };
+        let mut function = nullary_string_fn(&f);
+        function.arguments = vec![
+            arg("tags", lit_a_list()),
+            arg("reds", Ty::List(Box::new(red.clone()))),
+            arg("boxed", Ty::Class(generic_box.clone(), Box::new([lit_a()]))),
+            arg(
+                "choice",
+                Ty::Union(Box::new([Ty::List(Box::new(red)), Ty::Int])),
+            ),
+            arg(
+                "cb",
+                Ty::Function {
+                    params: Box::new([]),
+                    ret: Box::new(lit_a_list()),
+                    throws: Box::new(Ty::Never),
+                },
+            ),
+        ];
+        let pool = SymbolPool::from([
+            (
+                color.clone(),
+                Symbol::Enum(baml_sdkgen_types::Enum {
+                    name: color,
+                    docstring: None,
+                    variants: vec![variant("Red"), variant("Green")],
+                    origin: Origin {
+                        source_file_path: "main.baml".to_string(),
+                        span_start: 0,
+                    },
+                }),
+            ),
+            (
+                generic_box.clone(),
+                generic_class(&generic_box, &["T"], vec![("value", typevar(0, "T"))]),
+            ),
+            (
+                tagged.clone(),
+                generic_class(&tagged, &[], vec![("tags", lit_a_list())]),
+            ),
+            (f, Symbol::Function(function)),
+        ]);
+
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(
+            generated.warnings.is_empty(),
+            "{:?}",
+            generated.warnings.first().map(|w| &w.reason)
+        );
+        let lib = text(&generated, "src/lib.rs");
+        // The pretty-printer adds a trailing comma wherever it wraps a list.
+        let canonical = |src: &str| flat(src).replace(",)", ")").replace(",]", "]");
+        let flat = canonical(lib);
+        let internal = "::baml_bridge::baml_value::internal::";
+        let literal_a = format!(
+            "{internal}literal_ty(::baml_bridge::wire::baml_ty_literal::Literal::StringValue(\"a\".to_string()))"
+        );
+        let literal_a_list = format!("{internal}list_ty({literal_a})");
+        let red_list =
+            format!("{internal}list_ty({internal}enum_variant_ty(\"user.Color\",\"Red\"))");
+        // The Rust types are the base types.
+        assert!(
+            flat.contains("tags:::std::vec::Vec<::std::string::String>"),
+            "{lib}"
+        );
+        assert!(flat.contains("reds:::std::vec::Vec<crate::Color>"), "{lib}");
+        assert!(
+            flat.contains("boxed:crate::Box<::std::string::String>"),
+            "{lib}"
+        );
+        // Each argument is stated as declared.
+        for (param, slot) in [
+            ("tags", literal_a_list.clone()),
+            ("reds", red_list.clone()),
+            (
+                "boxed",
+                format!("{internal}class_ty(\"user.Box\",::std::vec![{literal_a}])"),
+            ),
+            (
+                "choice",
+                format!("{internal}union_ty(::std::vec![{red_list},{internal}primitive_ty("),
+            ),
+        ] {
+            assert!(
+                flat.contains(&canonical(&format!(
+                    "{internal}__BamlValuePrivate::to_baml_in(&{param},&{slot}"
+                ))),
+                "`{param}` is not stated as declared:\n{lib}"
+            );
+        }
+        // The callback states its declared return type, which its results fill.
+        assert!(
+            flat.contains(&canonical(&format!(
+                "::baml_bridge::host_value::callable_handle(cb,&[],{internal}function_ty(::std::vec![],{literal_a_list},"
+            ))),
+            "{lib}"
+        );
+        // A field is stated as declared, and a union arm is its declared type.
+        assert!(
+            flat.contains(&canonical(&format!(
+                "(\"tags\",{internal}__BamlValuePrivate::to_baml_in(&self.tags,&{literal_a_list},),)"
+            ))),
+            "{lib}"
+        );
+        assert!(
+            flat.contains(&canonical(&format!(
+                "::baml_bridge::decode::selected_type_matches(&{red_list},&selected_type)"
+            ))),
+            "{lib}"
+        );
     }
 
     #[test]

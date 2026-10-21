@@ -181,8 +181,8 @@ impl LeafBody {
     }
 
     /// The optional-argument `Ty::Function`s reachable from this leaf's
-    /// function/method/field signatures, in deterministic first-seen order,
-    /// each paired with the `_<owner>__<param>` prefix for its Protocol name
+    /// function/method/field signatures whose values the host may have made,
+    /// in deterministic first-seen order, each paired with the `_<owner>__<param>` prefix for its Protocol name
     /// (`render_leaf_body_pyi` appends a per-prefix counter, giving e.g.
     /// `_call_optional_int_callback_supplied__callback1`). Each is rendered as a
     /// named `typing.Protocol` in the `.pyi` (see `render_callback_protocol`),
@@ -194,69 +194,16 @@ impl LeafBody {
     /// falls back to `typing.Callable[..., R]` rather than referencing a
     /// Protocol — collecting one here would emit an unused class.
     pub(crate) fn callback_protocols(&self) -> Vec<(Ty, String)> {
-        let mut seen: std::collections::HashSet<Ty> = std::collections::HashSet::new();
-        let mut out: Vec<(Ty, String)> = Vec::new();
-        for (sym, _) in &self.symbols {
-            match sym {
-                EmittedSymbol::Class(c) => {
-                    for prop in &c.properties {
-                        let base = format!("_{}__{}", c.py_name, prop.name);
-                        collect_optional_callables(&prop.ty, &base, &mut seen, &mut out);
-                    }
-                    for m in c.static_methods.iter().chain(&c.instance_methods) {
-                        // The projected method binding is already a valid,
-                        // collision-free Python identifier.
-                        let owner = &m.py_name;
-                        for arg in &m.required_args {
-                            let base = format!("_{owner}__{}", arg.name);
-                            collect_optional_callables(&arg.ty, &base, &mut seen, &mut out);
-                        }
-                        for arg in &m.optional_args {
-                            let base = format!("_{owner}__{}", arg.name);
-                            collect_optional_callables(&arg.ty, &base, &mut seen, &mut out);
-                        }
-                        let base = format!("_{owner}__ret");
-                        collect_optional_callables(&m.return_ty, &base, &mut seen, &mut out);
-                    }
-                }
-                EmittedSymbol::Function(f) => {
-                    // See the method case: reuse the projected public binding.
-                    let owner = &f.py_name;
-                    for (name, ty) in f.param_names.iter().zip(f.arg_tys.iter()) {
-                        let base = format!("_{owner}__{name}");
-                        collect_optional_callables(ty, &base, &mut seen, &mut out);
-                    }
-                    let base = format!("_{owner}__ret");
-                    collect_optional_callables(&f.return_ty, &base, &mut seen, &mut out);
-                }
-                EmittedSymbol::TypeAlias(_) | EmittedSymbol::Enum(_) => {}
-            }
-        }
-        out
+        self.protocol_callables()
+            .host_optional
+            .into_iter()
+            .collect()
     }
 
+    /// The `Ty::Function`s of this leaf whose values BAML makes, each with the
+    /// name of its Protocol: a function a call returns, and an argument BAML
+    /// passes to a host callback.
     fn returned_protocols(&self) -> IndexMap<Ty, String> {
-        let mut seen = std::collections::HashSet::new();
-        let mut found = vec![];
-        for (symbol, _) in &self.symbols {
-            match symbol {
-                EmittedSymbol::Function(f) => {
-                    collect_callables(&f.return_ty, "_BamlReturned", &mut seen, &mut found, false);
-                }
-                EmittedSymbol::Class(c) => {
-                    for method in c.static_methods.iter().chain(&c.instance_methods) {
-                        collect_callables(
-                            &method.return_ty,
-                            "_BamlReturned",
-                            &mut seen,
-                            &mut found,
-                            false,
-                        );
-                    }
-                }
-                _ => {}
-            }
-        }
         let mut used: std::collections::HashSet<String> = self
             .symbols
             .iter()
@@ -268,16 +215,63 @@ impl LeafBody {
             })
             .chain(self.generic_typevars())
             .collect();
-        found
+        self.protocol_callables()
+            .baml_made
             .into_iter()
             .enumerate()
-            .map(|(i, (ty, _))| {
+            .map(|(i, ty)| {
                 (
                     ty,
                     crate::names::allocate_one(&format!("_BamlReturned{}", i + 1), &mut used),
                 )
             })
             .collect()
+    }
+
+    /// One walk of the leaf's signatures for the callables that need a
+    /// Protocol. A field and an argument are values the host may have made, a
+    /// return value is one that BAML made, and the walk carries that side
+    /// into each type.
+    fn protocol_callables(&self) -> ProtocolCallables {
+        use crate::translate_ty::CallableSide::{Baml, Host};
+        let mut found = ProtocolCallables::default();
+        for (sym, _) in &self.symbols {
+            match sym {
+                EmittedSymbol::Class(c) => {
+                    for prop in &c.properties {
+                        let base = format!("_{}__{}", c.py_name, prop.name);
+                        found.collect(&prop.ty, Host, &base);
+                    }
+                    for m in c.static_methods.iter().chain(&c.instance_methods) {
+                        // The projected method binding is already a valid,
+                        // collision-free Python identifier.
+                        let owner = &m.py_name;
+                        for arg in &m.required_args {
+                            let base = format!("_{owner}__{}", arg.name);
+                            found.collect(&arg.ty, Host, &base);
+                        }
+                        for arg in &m.optional_args {
+                            let base = format!("_{owner}__{}", arg.name);
+                            found.collect(&arg.ty, Host, &base);
+                        }
+                        let base = format!("_{owner}__ret");
+                        found.collect(&m.return_ty, Baml, &base);
+                    }
+                }
+                EmittedSymbol::Function(f) => {
+                    // See the method case: reuse the projected public binding.
+                    let owner = &f.py_name;
+                    for (name, ty) in f.param_names.iter().zip(f.arg_tys.iter()) {
+                        let base = format!("_{owner}__{name}");
+                        found.collect(ty, Host, &base);
+                    }
+                    let base = format!("_{owner}__ret");
+                    found.collect(&f.return_ty, Baml, &base);
+                }
+                EmittedSymbol::TypeAlias(_) | EmittedSymbol::Enum(_) => {}
+            }
+        }
+        found
     }
 
     /// Root imports referenced by this leaf, in two buckets. Every
@@ -588,57 +582,108 @@ impl RootImportSets {
     }
 }
 
-/// Recursively collect every optional-argument `Ty::Function` reachable from
-/// `ty`, in first-seen order, skipping duplicates (`seen`). Each is paired with
-/// `base` — the `_<owner>__<param>` prefix for its Protocol name (the final
-/// name appends a per-base counter in `LeafBody::callback_protocols`). Children
-/// are visited before the enclosing callable so nested callbacks get earlier
-/// names.
-fn collect_optional_callables(
-    ty: &Ty,
-    base: &str,
-    seen: &mut std::collections::HashSet<Ty>,
-    out: &mut Vec<(Ty, String)>,
-) {
-    collect_callables(ty, base, seen, out, true);
+/// The `Ty::Function`s of a leaf that are emitted as a named Protocol, in
+/// first-seen order.
+#[derive(Default)]
+struct ProtocolCallables {
+    /// Callables the host may have made that have an optional parameter, each
+    /// with the `_<owner>__<param>` prefix for its Protocol name (the final
+    /// name appends a per-prefix counter in `render_leaf_body_pyi`).
+    host_optional: IndexMap<Ty, String>,
+    /// Callables that BAML makes. One whose signature has a type variable is
+    /// not here: its Protocol would be one class for every binding of the
+    /// variable, so it stays a `typing.Callable` written where it is used,
+    /// in the scope that binds the variable.
+    baml_made: indexmap::IndexSet<Ty>,
 }
 
-fn collect_callables(
-    ty: &Ty,
-    base: &str,
-    seen: &mut std::collections::HashSet<Ty>,
-    out: &mut Vec<(Ty, String)>,
-    only_optional: bool,
-) {
+impl ProtocolCallables {
+    /// Collect from `ty`, where `side` makes its values. The parameters of a
+    /// callable are made by the other side. Children are visited before the
+    /// enclosing callable so nested callables get earlier names.
+    fn collect(&mut self, ty: &Ty, side: crate::translate_ty::CallableSide, base: &str) {
+        use crate::translate_ty::CallableSide;
+        match ty {
+            Ty::List(inner) => self.collect(inner, side, base),
+            Ty::Map { key, value, .. } => {
+                self.collect(key, side, base);
+                self.collect(value, side, base);
+            }
+            Ty::Union(items) => {
+                for item in items {
+                    self.collect(item, side, base);
+                }
+            }
+            Ty::Class(_, args) => {
+                for a in args {
+                    self.collect(a, side, base);
+                }
+            }
+            Ty::Function { params, ret, .. } => {
+                for p in params {
+                    self.collect(&p.ty, side.of_params(), base);
+                }
+                self.collect(ret, side, base);
+                match side {
+                    CallableSide::Host => {
+                        let has_optional = params.iter().any(|p| {
+                            p.mode == baml_sdkgen_types::CodegenFunctionParamMode::Optional
+                        });
+                        if has_optional {
+                            self.host_optional
+                                .entry(ty.clone())
+                                .or_insert_with(|| base.to_string());
+                        }
+                    }
+                    CallableSide::Baml => {
+                        let generic = params.iter().any(|p| mentions_type_var(&p.ty))
+                            || mentions_type_var(ret);
+                        if !generic {
+                            self.baml_made.insert(ty.clone());
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// Whether the Python type of `ty` names a type variable. The `throws` of a
+/// function type is not part of that type.
+fn mentions_type_var(ty: &Ty) -> bool {
     match ty {
-        Ty::List(inner) => collect_callables(inner, base, seen, out, only_optional),
-        Ty::Map { key, value, .. } => {
-            collect_callables(key, base, seen, out, only_optional);
-            collect_callables(value, base, seen, out, only_optional);
-        }
-        Ty::Union(items) => {
-            for item in items {
-                collect_callables(item, base, seen, out, only_optional);
-            }
-        }
-        Ty::Class(_, args) => {
-            for a in args {
-                collect_callables(a, base, seen, out, only_optional);
-            }
+        Ty::TypeVar(_) => true,
+        Ty::List(inner) => mentions_type_var(inner),
+        Ty::Map { key, value, .. } => mentions_type_var(key) || mentions_type_var(value),
+        Ty::Union(items) => items.iter().any(mentions_type_var),
+        Ty::Class(_, args) => args.iter().any(mentions_type_var),
+        Ty::Interface(_, generics, associated_types) => {
+            generics.iter().any(mentions_type_var)
+                || associated_types.iter().any(|(_, ty)| mentions_type_var(ty))
         }
         Ty::Function { params, ret, .. } => {
-            for p in params {
-                collect_callables(&p.ty, base, seen, out, only_optional);
-            }
-            collect_callables(ret, base, seen, out, only_optional);
-            let has_optional = params
-                .iter()
-                .any(|p| p.mode == baml_sdkgen_types::CodegenFunctionParamMode::Optional);
-            if (!only_optional || has_optional) && seen.insert(ty.clone()) {
-                out.push((ty.clone(), base.to_string()));
-            }
+            params.iter().any(|param| mentions_type_var(&param.ty)) || mentions_type_var(ret)
         }
-        _ => {}
+        Ty::Future(value, error) => mentions_type_var(value) || mentions_type_var(error),
+        Ty::Int
+        | Ty::Bigint
+        | Ty::Float
+        | Ty::String
+        | Ty::Bool
+        | Ty::Null
+        | Ty::Never
+        | Ty::Unknown
+        | Ty::Uint8Array
+        | Ty::Literal(..)
+        | Ty::Media(_)
+        | Ty::Enum(_)
+        | Ty::EnumVariant(..)
+        | Ty::TypeAlias(_)
+        | Ty::Type
+        | Ty::Resource
+        | Ty::PromptAst
+        | Ty::RustType => false,
     }
 }
 
@@ -2040,7 +2085,8 @@ fn generic_inference_positions<'a>(
 ///
 /// This mirrors the host engine's `classify_param_var_positions` rules over all
 /// declared parameter types: a non-closure, non-ambiguous value occurrence is
-/// inferable (Rule 4 supplies `RustType` when a defaulted value is omitted),
+/// inferable from the values a call passes (an omitted defaulted value binds
+/// nothing, and the runtime refuses the call until `_types=` names it),
 /// while any closure occurrence poisons the var globally. A direct
 /// multi-TypeVar union is ambiguous only at that occurrence; another value
 /// argument can still bind the same var. Class `TypeVars` are excluded by the
@@ -2098,7 +2144,7 @@ fn render_method_block_pyi(m: &PyMethodBinding, ctx: &TranslateCtx) -> String {
     // makes `_types=` optional only when every own TypeVar has a value position.
     // Return/body-only, closure-poisoned, and ambiguous-union-only TypeVars keep
     // `_types=` required. Defaulted parameters still count because the engine's
-    // Rule 4 supplies `RustType` when their value is omitted. The class's
+    // an omitted value binds nothing and the runtime asks for `_types=`. The class's
     // TypeVars ride the receiver and are not part of this decision.
     if !m.generic_params.is_empty() {
         let inferable = own_generic_params_inferable(
@@ -2327,7 +2373,7 @@ fn render_function_params_pyi(f: &PyFunction, ctx: &TranslateCtx) -> String {
     }
     let mut typed_params = render_typed_params(&f.param_names, &f.arg_tys, &f.arg_defaults, ctx);
     // `_types=` is optional only when every own TypeVar has an engine-inferable
-    // value position. Defaulted parameters count via Rule 4. Methods use the
+    // value position. Defaulted parameters count when a value is passed. Methods use the
     // same predicate above.
     if !f.generic_params.is_empty() {
         let has_kwonly_marker = f.arg_defaults.iter().any(Option::is_some);
@@ -2476,7 +2522,9 @@ fn render_typed_params(
 /// `__call__` carries the callable's precise signature. Required params are
 /// positional; optional params (the `?` marker on a BAML callable type) get an
 /// Ellipsis default (`= ...`) so a host callback that either supplies or omits
-/// them type-checks. Unlike an optional *function* argument there is no
+/// them type-checks. The return type also admits the coroutine of an
+/// `async def` callback, as every host callback type does
+/// (`host_callback_return_ty`). Unlike an optional *function* argument there is no
 /// `UNSET` sentinel: BAML invokes the callback positionally, and the
 /// callback's own language-level default fills any omitted trailing arg.
 fn render_callback_protocol(
@@ -2492,14 +2540,14 @@ fn render_callback_protocol(
             .as_ref()
             .map(|n| n.as_str().to_string())
             .unwrap_or_else(|| format!("arg{idx}"));
-        let pty = translate_ty(&p.ty, ctx);
+        let pty = crate::translate_ty::translate_callback_param_ty(&p.ty, ctx);
         if p.mode == baml_sdkgen_types::CodegenFunctionParamMode::Optional {
             write!(sig, ", {pname}: {pty} = ...").unwrap();
         } else {
             write!(sig, ", {pname}: {pty}").unwrap();
         }
     }
-    let ret_py = translate_ty(ret, ctx);
+    let ret_py = crate::translate_ty::host_callback_return_ty(&translate_ty(ret, ctx));
     format!("class {name}(typing.Protocol):\n    def __call__({sig}) -> {ret_py}: ...\n")
 }
 
@@ -2681,6 +2729,7 @@ pub(crate) fn render_leaf_body_pyi(
     // before the symbols that use them; the shared map lets nested callbacks
     // resolve to each other's Protocol names.
     let protocol_tys = body.callback_protocols();
+    let returned_protocols = std::rc::Rc::new(body.returned_protocols());
     let callback_protocols: Option<std::rc::Rc<IndexMap<Ty, String>>> = if protocol_tys.is_empty() {
         None
     } else {
@@ -2704,7 +2753,7 @@ pub(crate) fn render_leaf_body_pyi(
             self_ref: None,
             defer_name_refs: false,
             callback_protocols: Some(map.clone()),
-            returned_protocols: None,
+            returned_protocols: Some(returned_protocols.clone()),
             type_stream_accessors: true,
             include_stream_done: true,
             names: body.names.clone(),
@@ -2718,7 +2767,6 @@ pub(crate) fn render_leaf_body_pyi(
         }
     }
 
-    let returned_protocols = std::rc::Rc::new(body.returned_protocols());
     let return_ctx = TranslateCtx {
         current_leaf: body.leaf.clone(),
         self_ref: None,
@@ -2895,4 +2943,134 @@ pub(crate) fn render_runtime_reexports_pyi(body: &LeafBody) -> String {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod protocol_callables_tests {
+    use baml_sdkgen_types::{CallableParam, CodegenFunctionParamMode, Ty};
+
+    use super::ProtocolCallables;
+    use crate::translate_ty::CallableSide;
+
+    fn param(ty: Ty, mode: CodegenFunctionParamMode) -> CallableParam {
+        CallableParam {
+            name: None,
+            ty,
+            mode,
+        }
+    }
+
+    fn callable(params: Vec<CallableParam>, ret: Ty) -> Ty {
+        Ty::Function {
+            params: params.into(),
+            ret: Box::new(ret),
+            throws: Box::new(Ty::Never),
+        }
+    }
+
+    /// `(int, int?) -> string`
+    fn with_optional() -> Ty {
+        callable(
+            vec![
+                param(Ty::Int, CodegenFunctionParamMode::Required),
+                param(Ty::Int, CodegenFunctionParamMode::Optional),
+            ],
+            Ty::String,
+        )
+    }
+
+    fn collected(ty: &Ty, side: CallableSide) -> (Vec<(Ty, String)>, Vec<Ty>) {
+        let mut found = ProtocolCallables::default();
+        found.collect(ty, side, "_owner__arg");
+        (
+            found.host_optional.into_iter().collect(),
+            found.baml_made.into_iter().collect(),
+        )
+    }
+
+    #[test]
+    fn host_callback_with_an_optional_parameter_is_a_host_protocol() {
+        let callback = with_optional();
+        assert_eq!(
+            collected(&callback, CallableSide::Host),
+            (vec![(callback, "_owner__arg".to_string())], vec![]),
+        );
+    }
+
+    #[test]
+    fn host_callback_without_an_optional_parameter_needs_no_protocol() {
+        let callback = callable(
+            vec![param(Ty::Int, CodegenFunctionParamMode::Required)],
+            Ty::String,
+        );
+        assert_eq!(collected(&callback, CallableSide::Host), (vec![], vec![]));
+    }
+
+    /// BAML makes the callable that it passes to a host callback, also one
+    /// with an optional parameter: it is a BAML closure, not a host callback.
+    #[test]
+    fn argument_of_a_host_callback_is_baml_made() {
+        let inner = with_optional();
+        let callback = callable(
+            vec![param(inner.clone(), CodegenFunctionParamMode::Required)],
+            Ty::String,
+        );
+        assert_eq!(
+            collected(&callback, CallableSide::Host),
+            (vec![], vec![inner]),
+        );
+    }
+
+    /// The host makes the callback that it passes to a function BAML
+    /// returned, and the callable that a host callback returns.
+    #[test]
+    fn returned_callable_is_baml_made_and_its_callback_is_the_hosts() {
+        let callback = with_optional();
+        let returned = callable(
+            vec![param(callback.clone(), CodegenFunctionParamMode::Required)],
+            Ty::Bool,
+        );
+        assert_eq!(
+            collected(&returned, CallableSide::Baml),
+            (
+                vec![(callback.clone(), "_owner__arg".to_string())],
+                vec![returned],
+            ),
+        );
+
+        let factory = callable(vec![], callback.clone());
+        assert_eq!(
+            collected(&factory, CallableSide::Host),
+            (vec![(callback, "_owner__arg".to_string())], vec![]),
+        );
+    }
+
+    /// A Protocol is one class, so it cannot name the type variable of the
+    /// scope that uses it: `(inner: () -> T) -> Output` keeps `() -> T`
+    /// written out.
+    #[test]
+    fn baml_made_callable_with_a_type_variable_has_no_protocol() {
+        let inner = callable(
+            vec![],
+            Ty::TypeVar(baml_sdkgen_types::ParamTy::new(
+                0,
+                baml_base::Name::new("T"),
+            )),
+        );
+        let wrapper = callable(
+            vec![param(inner, CodegenFunctionParamMode::Required)],
+            Ty::Int,
+        );
+        assert_eq!(collected(&wrapper, CallableSide::Host), (vec![], vec![]));
+    }
+
+    #[test]
+    fn container_keeps_the_side_of_the_value_that_holds_it() {
+        let callback = with_optional();
+        let listed = Ty::List(Box::new(callback.clone()));
+        assert_eq!(
+            collected(&listed, CallableSide::Baml),
+            (vec![], vec![callback]),
+        );
+    }
 }

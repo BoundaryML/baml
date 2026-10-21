@@ -196,15 +196,13 @@ class BamlTypeTest {
 
     @Test
     void decode_only_hints_never_encode() {
-        // TypeVar and UNKNOWN are host-side decode descriptors, not values — they
-        // must never ride the encode wire.
+        // A TypeVar is a host-side decode descriptor, not a type a value can
+        // state — it must never ride the encode wire. UNKNOWN is also the wire
+        // type `unknown` (see function_and_unknown_round_trip).
         IllegalStateException tv = assertThrows(
                 IllegalStateException.class, () -> BamlType.typeVar("T").toWireTy());
         assertTrue(tv.getMessage().contains("decode-only"), tv.getMessage());
-        IllegalStateException uk = assertThrows(
-                IllegalStateException.class, BamlType.UNKNOWN::toWireTy);
-        assertTrue(uk.getMessage().contains("decode-only"), uk.getMessage());
-        // They are wildcards in structural matching (match any wire token).
+        // Both are wildcards in structural matching (match any wire token).
         assertTrue(BamlType.UNKNOWN.matchesStructural(BamlType.INT));
         assertTrue(BamlType.typeVar("T").matchesStructural(BamlType.list(BamlType.STRING)));
     }
@@ -241,5 +239,24 @@ class BamlTypeTest {
         b = b.stream().distinct().sorted().toList();
         assertEquals(a, b);
         assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    /** A function type round-trips with its parameters' names and modes, and `unknown` is a wire type. */
+    @Test
+    void function_and_unknown_round_trip() {
+        BamlType fn = BamlType.function(
+                java.util.List.of(
+                        new BamlType.Param(null, BamlType.INT, false),
+                        new BamlType.Param("limit", BamlType.optional(BamlType.INT), true)),
+                BamlType.STRING,
+                BamlType.UNKNOWN);
+        BamlType back = BamlType.fromWireTy(fn.toWireTy());
+        assertEquals(fn, back);
+        assertEquals(BamlType.Kind.FUNCTION, back.kind());
+        assertEquals("limit", back.functionParams().get(1).name());
+        assertEquals(BamlType.UNKNOWN, back.functionThrows());
+        assertEquals("(int, limit: int? = ...) -> string throws unknown", fn.toString());
+        // BamlTy.unknown = 10, an empty message.
+        assertArrayEquals(new byte[] {0x52, 0x00}, BamlType.UNKNOWN.toWireTy());
     }
 }

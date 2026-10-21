@@ -177,10 +177,11 @@ public final class BamlRuntime: @unchecked Sendable {
 
     public func callSync<R: BamlDecodable>(
         _ fqn: String,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
+        typeArgs: [BamlTypeArgument] = [],
         baml: BamlInvocationOptions = .init()
     ) throws -> R {
-        try R._bamlDecode(unwrapEnvelope(invokeSync(fqn, args: args, baml: baml)))
+        try R._bamlDecode(unwrapEnvelope(invokeSync(fqn, args: args, typeArgs: typeArgs, baml: baml)))
     }
 
     /// Undecoded ok-value variants — for callers that interpret the
@@ -188,19 +189,21 @@ public final class BamlRuntime: @unchecked Sendable {
     /// distinguish the `ai.stream.Done` sentinel from a partial).
     public func callRawSync(
         _ fqn: String,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
+        typeArgs: [BamlTypeArgument] = [],
         baml: BamlInvocationOptions = .init()
     ) throws -> BamlOutboundValue {
-        try unwrapEnvelope(invokeSync(fqn, args: args, baml: baml))
+        try unwrapEnvelope(invokeSync(fqn, args: args, typeArgs: typeArgs, baml: baml))
     }
 
     public func callRaw(
         _ fqn: String,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
+        typeArgs: [BamlTypeArgument] = [],
         baml: BamlInvocationOptions = .init()
     ) async throws -> BamlOutboundValue {
         do {
-            return try unwrapEnvelope(await invokeAsync(fqn, args: args, baml: baml))
+            return try unwrapEnvelope(await invokeAsync(fqn, args: args, typeArgs: typeArgs, baml: baml))
         } catch let panic as BamlPanic where panic.className == "baml.panics.Cancelled" {
             throw CancellationError()
         }
@@ -208,7 +211,7 @@ public final class BamlRuntime: @unchecked Sendable {
 
     public func callHandleRaw(
         _ handleKey: UInt64,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
         baml: BamlInvocationOptions = .init()
     ) async throws -> BamlOutboundValue {
         do {
@@ -218,7 +221,7 @@ public final class BamlRuntime: @unchecked Sendable {
         }
     }
 
-    public func callHandleRawSync(_ handleKey: UInt64, args: [(String, (any BamlEncodable)?)], baml: BamlInvocationOptions = .init()) throws -> BamlOutboundValue {
+    public func callHandleRawSync(_ handleKey: UInt64, args: [BamlArgument], baml: BamlInvocationOptions = .init()) throws -> BamlOutboundValue {
         let callId = BamlApi.newFunctionCall()
         let payload = try encodeCallArgs(args, callId: callId, callTarget: .functionHandle(handleKey), baml: baml)
         let box = ResultBox(); let semaphore = DispatchSemaphore(value: 0)
@@ -229,19 +232,21 @@ public final class BamlRuntime: @unchecked Sendable {
 
     public func callSyncVoid(
         _ fqn: String,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
+        typeArgs: [BamlTypeArgument] = [],
         baml: BamlInvocationOptions = .init()
     ) throws {
-        _ = try unwrapEnvelope(invokeSync(fqn, args: args, baml: baml))
+        _ = try unwrapEnvelope(invokeSync(fqn, args: args, typeArgs: typeArgs, baml: baml))
     }
 
     public func call<R: BamlDecodable>(
         _ fqn: String,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
+        typeArgs: [BamlTypeArgument] = [],
         baml: BamlInvocationOptions = .init()
     ) async throws -> R {
         do {
-            return try R._bamlDecode(unwrapEnvelope(await invokeAsync(fqn, args: args, baml: baml)))
+            return try R._bamlDecode(unwrapEnvelope(await invokeAsync(fqn, args: args, typeArgs: typeArgs, baml: baml)))
         } catch let panic as BamlPanic where panic.className == "baml.panics.Cancelled" {
             // Engine-confirmed cancellation surfaces as Swift's native
             // cancellation error (Python maps it to asyncio.CancelledError
@@ -252,11 +257,12 @@ public final class BamlRuntime: @unchecked Sendable {
 
     public func callVoid(
         _ fqn: String,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
+        typeArgs: [BamlTypeArgument] = [],
         baml: BamlInvocationOptions = .init()
     ) async throws {
         do {
-            _ = try unwrapEnvelope(await invokeAsync(fqn, args: args, baml: baml))
+            _ = try unwrapEnvelope(await invokeAsync(fqn, args: args, typeArgs: typeArgs, baml: baml))
         } catch let panic as BamlPanic where panic.className == "baml.panics.Cancelled" {
             throw CancellationError()
         }
@@ -266,13 +272,15 @@ public final class BamlRuntime: @unchecked Sendable {
 
     private func invokeSync(
         _ fqn: String,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
+        typeArgs: [BamlTypeArgument] = [],
         baml: BamlInvocationOptions = .init()
     ) throws -> Data {
         assertNotBlockingMainThreadInDebug(fqn)
         let protoCallId = BamlApi.newFunctionCall()
         let payload = try encodeCallArgs(
             args,
+            typeArgs: typeArgs,
             callId: protoCallId,
             callTarget: .functionName(fqn), baml: baml
         )
@@ -290,12 +298,14 @@ public final class BamlRuntime: @unchecked Sendable {
 
     private func invokeAsync(
         _ fqn: String,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
+        typeArgs: [BamlTypeArgument] = [],
         baml: BamlInvocationOptions = .init()
     ) async throws -> Data {
         let protoCallId = BamlApi.newFunctionCall()
         let payload = try encodeCallArgs(
             args,
+            typeArgs: typeArgs,
             callId: protoCallId,
             callTarget: .functionName(fqn), baml: baml
         )
@@ -318,7 +328,7 @@ public final class BamlRuntime: @unchecked Sendable {
 
     private func invokeHandleAsync(
         _ handleKey: UInt64,
-        args: [(String, (any BamlEncodable)?)],
+        args: [BamlArgument],
         baml: BamlInvocationOptions = .init()
     ) async throws -> Data {
         precondition(handleKey != 0, "cannot invoke a zero BAML function handle")

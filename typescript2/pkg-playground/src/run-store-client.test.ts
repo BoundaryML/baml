@@ -43,7 +43,7 @@ describe('run-store-client', () => {
     const client = createRunStoreClient(port);
 
     const pending = client.startPreviewRun({
-      argsBytes: new Uint8Array([1, 2, 3]),
+      args: '{"x": 1}',
       functionName: 'Extract$render_prompt',
       helper: 'render_prompt',
       parentFunctionName: 'Extract',
@@ -52,7 +52,7 @@ describe('run-store-client', () => {
 
     expect(port.sent).toEqual([
       {
-        argsBytes: new Uint8Array([1, 2, 3]),
+        args: '{"x": 1}',
         functionName: 'Extract$render_prompt',
         helper: 'render_prompt',
         parentFunctionName: 'Extract',
@@ -356,7 +356,7 @@ describe('run-store-client', () => {
     const client = createRunStoreClient(port);
 
     const pending = client.startRun({
-      argsBytes: new Uint8Array([1]),
+      args: '{}',
       functionName: 'Extract',
       project: 'project',
     });

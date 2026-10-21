@@ -2,7 +2,7 @@
 use std::sync::Arc;
 
 use bex_project::{HostDefinition, HostInvocation, RustDataArc as _, TraceOptionsData};
-use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE, InvocationStateHandle};
+use bridge_ctypes::{CffiHandleTableEntry, HANDLE_TABLE, InvocationStateHandle, TableKey};
 
 use crate::BridgeError;
 
@@ -12,14 +12,14 @@ fn invalid(message: &str) -> BridgeError {
 
 /// Validate marker configuration without capturing a runtime or ambient parent.
 pub fn options(key: u64) -> Result<TraceOptionsData, BridgeError> {
-    if key == 0 {
+    let Some(key) = TableKey::new(key) else {
         // Bare Python/Node instrumentation uses the same capture defaults as span().
         return Ok(TraceOptionsData {
             output: Some(true),
             error: Some(true),
             ..Default::default()
         });
-    }
+    };
     let entry = HANDLE_TABLE
         .resolve(key)
         .ok_or_else(|| invalid("host trace options are no longer live"))?;
@@ -41,19 +41,20 @@ pub fn begin(
     inputs: Option<&bex_project::HostCapture>,
 ) -> Result<(HostInvocation, u64), BridgeError> {
     let owner = crate::get_runtime()?;
-    let inherited = if inherited_key == 0 {
-        None
-    } else {
-        let entry = HANDLE_TABLE
-            .resolve(inherited_key)
-            .ok_or_else(|| invalid("host context is no longer live"))?;
-        let CffiHandleTableEntry::InvocationState(state) = &*entry else {
-            return Err(invalid("expected an invocation-state handle"));
-        };
-        if !Arc::ptr_eq(&owner, &state.owner) {
-            return Err(invalid("host context belongs to a different runtime"));
+    let inherited = match TableKey::new(inherited_key) {
+        None => None,
+        Some(inherited_key) => {
+            let entry = HANDLE_TABLE
+                .resolve(inherited_key)
+                .ok_or_else(|| invalid("host context is no longer live"))?;
+            let CffiHandleTableEntry::InvocationState(state) = &*entry else {
+                return Err(invalid("expected an invocation-state handle"));
+            };
+            if !Arc::ptr_eq(&owner, &state.owner) {
+                return Err(invalid("host context belongs to a different runtime"));
+            }
+            Some(state.state.clone())
         }
-        Some(state.state.clone())
     };
     let execution = Arc::clone(&owner).begin_host_invocation(
         definition,
@@ -68,7 +69,7 @@ pub fn begin(
             state: execution.inherited_state(),
         },
     ));
-    Ok((execution, key))
+    Ok((execution, key.get()))
 }
 
 /// A marker retains immutable declaration data only, not a runtime or parent.
@@ -77,17 +78,21 @@ pub fn define_marker(definition: HostDefinition, options_key: u64) -> Result<u64
         definition,
         options: options(options_key)?,
     };
-    Ok(HANDLE_TABLE.insert(
-        CffiHandleTableEntry::try_from(bex_project::BexExternalValue::RustData(Arc::new(marker)))
+    Ok(HANDLE_TABLE
+        .insert(
+            CffiHandleTableEntry::try_from(bex_project::BexExternalValue::RustData(Arc::new(
+                marker,
+            )))
             .expect("RustData is a handle-table value"),
-    ))
+        )
+        .get())
 }
 
 pub fn registration_marker(
     key: u64,
     language: &str,
 ) -> Result<Arc<bex_project::HostMarker>, BridgeError> {
-    if key == 0 {
+    let Some(key) = TableKey::new(key) else {
         return Ok(Arc::new(bex_project::HostMarker {
             definition: HostDefinition {
                 language: language.into(),
@@ -100,7 +105,7 @@ pub fn registration_marker(
             },
             options: TraceOptionsData::default(),
         }));
-    }
+    };
     let entry = HANDLE_TABLE
         .resolve(key)
         .ok_or_else(|| invalid("host marker is no longer live"))?;
@@ -141,7 +146,7 @@ mod tests {
             error: Some(false),
             ..Default::default()
         })));
-        let resolved = options(key).unwrap();
+        let resolved = options(key.get()).unwrap();
         assert_eq!(resolved.inputs, Some(false));
         assert_eq!(resolved.output, Some(false));
         assert_eq!(resolved.error, Some(false));

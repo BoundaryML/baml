@@ -3,7 +3,10 @@ import initWasm, {
   callFunctionSync as callWasmFunctionSync,
   cancelFunctionCall as cancelWasmFunctionCall,
   cloneHandle as cloneWasmHandle,
-  completeWebHostCall,
+  completeWebHostCallBridgeFailure,
+  completeWebHostCallRaised,
+  completeWebHostCallThrow,
+  completeWebHostCallValue,
   configureWebSysops,
   getBridgeRuntimeVersion as getWasmBridgeRuntimeVersion,
   getToolchainVersion as getWasmToolchainVersion,
@@ -26,10 +29,11 @@ import initWasm, {
   cloneOutboundValue as wasmCloneOutboundValue,
   watchInvocationCancellation as wasmWatchInvocationCancellation,
   isInvocationCancelled as wasmIsInvocationCancelled,
+  registerHostAdapter as registerWasmHostAdapter,
+  registerProgramDescriptor as registerWasmProgramDescriptor,
   registerWebHostCallable,
   registerWebHostValueReleaseCallback,
   releaseHandle as releaseWasmHandle,
-  releaseWebHostCallable,
   seedFunctionRefHandle as seedWasmFunctionRefHandle,
   seedGenericMediaHandle as seedWasmGenericMediaHandle,
   stageRuntimeBytecode,
@@ -410,20 +414,39 @@ export class BamlRuntime {
     runtime = new BamlRuntime();
     return runtime;
   }
-  callFunctionSync(encodedArgs: Uint8Array): Uint8Array {
+  /**
+   * `encodedArgs` is the call's control part; `kwargs` (by declared parameter
+   * name) and the `$baml.cancel` token are JavaScript values the bridge
+   * encodes against the target's declared types before the call goes out.
+   */
+  callFunctionSync(encodedArgs: Uint8Array, kwargs: Record<string, unknown> | null = null, cancel: unknown = null): Uint8Array {
     try {
-      return callWasmFunctionSync(encodedArgs);
+      return callWasmFunctionSync(encodedArgs, kwargs, cancel);
     } catch (error) {
       throw wrapNativeError(error);
     }
   }
-  async callFunction(encodedArgs: Uint8Array): Promise<Uint8Array> {
+  async callFunction(encodedArgs: Uint8Array, kwargs: Record<string, unknown> | null = null, cancel: unknown = null): Promise<Uint8Array> {
     try {
-      return await callWasmFunction(encodedArgs);
+      return await callWasmFunction(encodedArgs, kwargs, cancel);
     } catch (error) {
       throw wrapNativeError(error);
     }
   }
+}
+
+/** Install the declared types a generated SDK's typemap carries, or clear them with `null`. */
+export function registerProgramDescriptor(descriptor: string | null): void {
+  try {
+    registerWasmProgramDescriptor(descriptor ?? undefined);
+  } catch (error) {
+    throw wrapNativeError(error);
+  }
+}
+
+/** Install the runtime's answers to the bridge's walker (see `hostAdapter`). */
+export function registerHostAdapter(adapter: object): void {
+  registerWasmHostAdapter(adapter);
 }
 
 let runtime: BamlRuntime | undefined;
@@ -489,19 +512,41 @@ export function registerHostCallable(callback: (callId: number, args: Uint8Array
     }));
 }
 const hostControls = new Map<number, baml_bridge.cffi.v1.IBamlOutboundValue | undefined>();
-export function releaseHostCallable(key: HandleKey): void {
-  const value = BigInt.asUintN(64, BigInt(key.high) << 32n | BigInt.asUintN(32, BigInt(key.low)));
-  releaseWebHostCallable(value);
-  hostRelease?.(key);
+function finishHostCall(callId: number): void {
+    const controls = hostControls.get(callId);
+    hostControls.delete(callId);
+    if (controls) releaseControlValue(controls);
+    hostExecutions.delete(callId);
 }
-export function completeHostCall(callId: number, isError: number, content: Uint8Array): void {
-    try { completeWebHostCall(callId, isError, content); }
-    finally {
-        const controls = hostControls.get(callId);
-        hostControls.delete(callId);
-        if (controls) releaseControlValue(controls);
-        hostExecutions.delete(callId);
-    }
+/** Complete a host call as the host's own exception; the engine builds the `baml.errors.HostCallable`. */
+export function completeHostCallRaised(callId: number, className: string, message: string, stack: string | undefined, handle: HandleKey): void {
+  try { completeWebHostCallRaised(callId, className, message, stack, keyToBigint(handle).toString()); }
+  finally { finishHostCall(callId); }
+}
+/** Complete a host call as a failure of the bridge's own (`baml.panics.SdkPanic`). */
+export function completeHostCallBridgeFailure(callId: number, message: string): void {
+  try { completeWebHostCallBridgeFailure(callId, message); }
+  finally { finishHostCall(callId); }
+}
+/**
+ * Complete a host call with its result, encoded by the bridge against the
+ * return type the callable was bound to. A result that does not fit completes
+ * the call as a `HostContractViolation` panic; an error raised while the value
+ * was read throws and leaves the call open for the caller to complete as an
+ * error. Returns the outcome the engine sees, `'ok'` or `'error'`.
+ */
+export function completeHostCallValue(callId: number, value: unknown): string {
+    let completed = false;
+    try { const outcome = completeWebHostCallValue(callId, value); completed = true; return outcome; }
+    catch (error) { throw wrapNativeError(error); }
+    finally { if (completed) finishHostCall(callId); }
+}
+/** Complete a host call with a thrown BAML value, encoded by the bridge as the type it has. */
+export function completeHostCallThrow(callId: number, value: unknown): void {
+    let completed = false;
+    try { completeWebHostCallThrow(callId, value); completed = true; }
+    catch (error) { throw wrapNativeError(error); }
+    finally { if (completed) finishHostCall(callId); }
 }
 export function _seedFunctionRefHandle(globalIndex: number): [HandleKey, number] {
   return [keyFromBigint(seedWasmFunctionRefHandle(globalIndex)), HANDLE_FUNCTION_REF];

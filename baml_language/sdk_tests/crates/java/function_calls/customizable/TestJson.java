@@ -24,6 +24,7 @@ import baml_bridge.BamlError;
 import baml_sdk.baml.json.PathError;
 import baml_sdk.baml.json.json;
 import baml_sdk.go_json_tests.Fns;
+import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -74,5 +75,43 @@ class TestJson {
         Function<json, json> cb = v -> new json.jsonMapValue(Map.of("wrapped", v));
 
         assertEquals("object", Fns.json_callback_kind(cb, new json.StringValue("payload")));
+    }
+
+    @Test
+    void test_empty_json_containers_round_trip() {
+        // An empty container has no elements to type it: under `json` it is
+        // the alias's own list (`json[]`) or map (`map<string, json>`) member,
+        // at any depth, so BAML narrows it like a parsed `[]` / `{}`.
+        json emptyArray = new json.jsonListValue(List.of());
+        json emptyObject = new json.jsonMapValue(Map.of());
+        assertEquals(emptyArray, Fns.round_trip_json(emptyArray));
+        assertEquals(emptyObject, Fns.round_trip_json(emptyObject));
+        assertEquals("array", Fns.json_kind(emptyArray));
+        assertEquals("object", Fns.json_kind(emptyObject));
+        assertEquals(emptyArray, Fns.round_trip_json_alias(emptyArray));
+
+        // [[]] and an empty container inside a non-empty one.
+        json nested = new json.jsonListValue(List.of(emptyArray));
+        assertEquals(nested, Fns.round_trip_json(nested));
+        json mixed = new json.jsonMapValue(
+                Map.of("items", emptyArray, "meta", emptyObject, "n", new json.IntValue(1L)));
+        assertEquals(mixed, Fns.round_trip_json(mixed));
+
+        // Under an exact `json[]` / `map<string, json>` slot, the elements'
+        // slot is the alias.
+        assertEquals(List.of(), Fns.round_trip_json_list(List.of()));
+        assertEquals(List.of(emptyArray, emptyObject), Fns.round_trip_json_list(List.of(emptyArray, emptyObject)));
+        assertEquals(Map.of("k", emptyArray), Fns.round_trip_json_map(Map.of("k", emptyArray)));
+
+        // A host callback's empty json return is typed the same way.
+        assertEquals("array", Fns.json_callback_kind(v -> new json.jsonListValue(List.of()), emptyObject));
+    }
+
+    @Test
+    void test_json_bigint_round_trips_as_bigint() {
+        // `json` has both `int` and `bigint` members; a BigInteger is a
+        // `bigint` whatever its magnitude, so it comes back as one.
+        json small = new json.BigintValue(BigInteger.valueOf(5));
+        assertEquals(small, Fns.round_trip_json(small));
     }
 }

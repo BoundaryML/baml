@@ -107,6 +107,12 @@ describe('host error capture', () => {
         expect(recorded(Object(false))).toBe(false);
         expect(recorded(Object('text'))).toBe('text');
         expect(recorded(Object(7n))).toEqual({ $bigint: '7' });
+        // BUG: on Node 24 a `DOMException` is a native error
+        // (`util.types.isNativeError` is true), and `capture` tests for a native
+        // error before it tests for `DOMException`, so the generic error branch
+        // takes it and reads its prototype getters as unavailable. The capture
+        // module is canary's, unchanged on this branch; testing for
+        // `DOMException` first fixes it.
         expect(recorded(new DOMException('aborted', 'AbortError')))
             .toEqual({ type: 'DOMException', name: 'AbortError', message: 'aborted', code: 20 });
     });

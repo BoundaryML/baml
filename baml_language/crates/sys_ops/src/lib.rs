@@ -216,9 +216,9 @@ mod schema {
     /// `BexExternalValue` tags its containers with a declared type rather than
     /// a lane type; `baml.json.json` is compiled, so it has a real qualified
     /// name and this conversion is total.
-    fn json_alias_ty() -> baml_type::RuntimeTy {
-        baml_type::RuntimeTy::TypeAlias(baml_type::TypeName::from_dotted_path(
-            baml_base::qualified_name::BAML_JSON_JSON,
+    fn json_alias_ty<L: Clone>() -> baml_type::WireTy<L> {
+        baml_type::RealizedTy::TypeAlias(baml_type::WireHead::Static(
+            baml_type::TypeName::from_dotted_path(baml_base::qualified_name::BAML_JSON_JSON),
         ))
     }
 
@@ -236,7 +236,7 @@ mod schema {
                 items: items.into_iter().map(json_to_bex).collect(),
             },
             Value::Object(entries) => BexExternalValue::Map {
-                key_type: baml_type::RuntimeTy::string(),
+                key_type: baml_type::RealizedTy::string(),
                 value_type: json_alias_ty(),
                 entries: entries
                     .into_iter()

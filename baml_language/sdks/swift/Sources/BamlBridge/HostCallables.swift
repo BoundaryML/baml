@@ -71,31 +71,40 @@ public struct BamlHostArgs: Sendable {
 public struct BamlThrownValue: Error {
     // `Error` implies `Sendable`, so the stored payload must be too
     // (strict-concurrency checking on newer compilers rejects a bare
-    // `any BamlEncodable` here). Every realistic conformer already is:
-    // generated models are Sendable value types.
-    public let value: any BamlEncodable & Sendable
+    // `any BamlTyped` here). Every realistic conformer already is:
+    // generated models are Sendable value types. The value states its own
+    // type: the engine checks it against the declared `throws` type.
+    public let value: any BamlTyped & Sendable
 
-    public init(_ value: any BamlEncodable & Sendable) {
+    public init(_ value: any BamlTyped & Sendable) {
         self.value = value
     }
 }
 
 /// Type-erased host callable, built by generated code (which knows the
-/// parameter types). Encoding it registers the body and ships a
-/// HOST_VALUE_CALLABLE handle.
-public struct BamlHostCallable: BamlEncodable, Sendable {
+/// declared function type). Encoding it registers the body and ships a
+/// HOST_VALUE_CALLABLE handle with that type stated beside it: a host
+/// callable has no type of its own, so the one its slot declares is what the
+/// engine binds it to. It crosses only as a call argument (`BamlArgument`).
+public struct BamlHostCallable: Sendable {
+    let functionType: BamlTypeDescriptor
     let body: @Sendable (BamlHostArgs) async throws -> BamlInboundValue
 
-    public init(_ body: @escaping @Sendable (BamlHostArgs) async throws -> BamlInboundValue) {
+    public init(
+        functionType: BamlTypeDescriptor,
+        _ body: @escaping @Sendable (BamlHostArgs) async throws -> BamlInboundValue
+    ) {
+        self.functionType = functionType
         self.body = body
     }
 
-    public func _bamlEncode() -> BamlInboundValue {
+    func _bamlEncode() -> BamlInboundValue {
         let key = HostCallableRegistry.shared.register(.callable(body))
         var handle = BamlBridge_Cffi_V1_BamlHandle()
         handle.key = key
         handle.handleType = .hostValueCallable
         var v = BamlBridge_Cffi_V1_InboundValue()
+        v.valueType = functionType.raw
         v.handle = handle
         return BamlInboundValue(v)
     }
@@ -142,67 +151,52 @@ final class HostCallableRegistry: @unchecked Sendable {
     /// Resolves the call_id exactly once on every path.
     func dispatch(key: UInt64, callId: UInt32, argsData: Data) async {
         guard case .callable(let body) = lookup(key) else {
-            // Missing callable = bridge fault. An empty error payload
-            // is itself a BridgeFailure engine-side, which is the
-            // correct surfacing (SdkPanic).
-            completeHostCall(callId: callId, isError: 1, payload: Data())
+            // Missing callable = bridge fault, surfaced engine-side as SdkPanic.
+            completeHostCall(
+                callId: callId,
+                outcome: .bridgeFailure("no Swift host callable is registered for the dispatched key")
+            )
             return
         }
         do {
             let call = try BamlBridge_Cffi_V1_BamlToHostCall(serializedBytes: argsData)
+            for arg in call.args { releaseTypeValues(arg.value) }
             try Task.checkCancellation()
             let result = try await body(BamlHostArgs(call))
-            completeHostCall(callId: callId, isError: 0, payload: try result.raw.serializedData())
+            completeHostCall(callId: callId, outcome: .returned(result.raw))
         } catch let thrown as BamlThrownValue {
-            // Typed BAML throw: rides as the real class value so the
-            // engine can match it against the declared contract.
-            let payload = (try? thrown.value._bamlEncode().raw.serializedData()) ?? Data()
-            completeHostCall(callId: callId, isError: 1, payload: payload)
+            // Typed BAML throw: the real class value, which the engine holds
+            // to the declared throws type (a panic value is a panic).
+            completeHostCall(callId: callId, outcome: .thrown(thrown.value._bamlEncode().raw))
         } catch {
-            // Any other Swift error → opaque baml.errors.HostCallable
-            // envelope; the original object stays in the registry for
-            // same-process rehydration on the way back out.
-            let payload = (try? opaqueHostCallableEnvelope(error).raw.serializedData()) ?? Data()
-            completeHostCall(callId: callId, isError: 1, payload: payload)
+            // Any other Swift error is the host's own exception; the engine
+            // builds the baml.errors.HostCallable, and the original object
+            // stays in the registry for same-process rehydration.
+            completeHostCall(callId: callId, outcome: .raised(hostException(error)))
         }
     }
 
-    private func opaqueHostCallableEnvelope(_ error: any Error) -> BamlInboundValue {
-        let key = register(.opaqueError(error))
-        var handle = BamlBridge_Cffi_V1_BamlHandle()
-        handle.key = key
-        handle.handleType = .hostValueOpaque
-        var rawHandleValue = BamlBridge_Cffi_V1_InboundValue()
-        rawHandleValue.handle = handle
-        let handleValue = BamlInboundValue(rawHandleValue)
-        return .baml_class(
-            "baml.errors.HostCallable",
-            [
-                ("message", String(describing: error)),
-                ("class_name", String(describing: type(of: error))),
-                ("language", "swift"),
-                // Declared `string?` on the BAML class — the engine
-                // requires the field present, so send explicit null.
-                ("traceback", Swift.String?.none),
-                ("_handle", RawInbound(handleValue)),
-            ]
-        )
+    private func hostException(_ error: any Error) -> BamlBridge_Cffi_V1_HostException {
+        var exception = BamlBridge_Cffi_V1_HostException()
+        exception.message = String(describing: error)
+        exception.className = String(describing: type(of: error))
+        exception.language = "swift"
+        exception.handle = register(.opaqueError(error))
+        return exception
     }
 }
 
-/// Tiny adapter so a prebuilt raw inbound value can ride through the
-/// `baml_class` field builder.
-private struct RawInbound: BamlEncodable {
-    let value: BamlInboundValue
-    init(_ value: BamlInboundValue) { self.value = value }
-    func _bamlEncode() -> BamlInboundValue { value }
-}
-
-private func completeHostCall(callId: UInt32, isError: Int32, payload: Data) {
+private func completeHostCall(
+    callId: UInt32,
+    outcome: BamlBridge_Cffi_V1_HostCallCompletion.OneOf_Outcome
+) {
+    var completion = BamlBridge_Cffi_V1_HostCallCompletion()
+    completion.outcome = outcome
+    // A payload that fails to serialize carries no outcome: a bridge failure.
+    let payload = (try? completion.serializedData()) ?? Data()
     payload.withUnsafeBytes { buf in
         BamlApi.completeHostCall(
             callId,
-            isError,
             buf.baseAddress?.assumingMemoryBound(to: Int8.self),
             buf.count
         )
@@ -227,6 +221,7 @@ func releaseControlValue(_ value: BamlBridge_Cffi_V1_BamlOutboundValue) {
     case .mapValue(let map): for item in map.entries { releaseControlValue(item.value) }
     case .classValue(let cls): for item in cls.fields { releaseControlValue(item.value) }
     case .unionVariantValue(let variant): releaseControlValue(variant.value)
+    case .tyValue(let ty): for key in liveKeys(ty) { _ = BamlApi.handleRelease(key) }
     default: break
     }
 }

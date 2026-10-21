@@ -1,11 +1,14 @@
 // host_callable.test.ts — mirrors sdks/python/tests/test_host_callable.py.
 //
-// Exercises the JS host-callable bridge: encoder auto-registration in
-// proto.ts's `setInboundValue`, the C ABI round-trip via
-// `bridge_cffi::complete_host_call`, the ThreadsafeFunction dispatch, and
-// the JS-side decode/invoke/encode wrapper. No generated SDK — the tests
+// Exercises the JS host-callable bridge: the bridge's registration of a
+// user function while it encodes the call's arguments, the C ABI round-trip
+// via `bridge_cffi::complete_host_call`, the ThreadsafeFunction dispatch,
+// and the JS-side decode/invoke wrapper. No generated SDK — the tests
 // build an in-memory BAML runtime with a function that takes a callable
-// of the relevant signature.
+// of the relevant signature. A callable takes its type from the program
+// descriptor alone, so the suite installs the descriptor of that program
+// (`crates/bridge_encode/fixtures/host_callable_program.descriptor`, kept
+// current by a `bridge_encode` test) as the typemap's for its duration.
 //
 // Why we never call `callFunctionSync` here: that path blocks the Node
 // main thread on a tokio `block_on`, while the host-value dispatch tries
@@ -25,12 +28,16 @@
 // runner from exiting on its own. Vitest terminates once the tests
 // themselves have completed.
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { vi } from 'vitest';
 
 import { BamlRuntime, newFunctionCall, releaseFunctionCall } from '../dist/native.js';
 import { callFunction, callFunctionSync } from '../dist/index.js';
 import { encodeCallArgs } from '../dist/proto.js';
 import * as hostValueRegistry from '../dist/host_value_registry.js';
+import { BamlTypeMap, getTypeMap, setTypeMap } from '../dist/typemap.js';
 
 const CALLBACK_BAML = `
 function CallCb(callback: (int) -> string, x: int) -> string {
@@ -45,6 +52,22 @@ function CallFloatCb(callback: () -> float) -> float {
     callback()
 }
 `;
+
+const DESCRIPTOR = readFileSync(
+    fileURLToPath(
+        new URL('../../../../crates/bridge_encode/fixtures/host_callable_program.descriptor', import.meta.url),
+    ),
+    'utf8',
+).trim();
+
+let previousTypeMap: BamlTypeMap;
+beforeAll(() => {
+    previousTypeMap = getTypeMap();
+    setTypeMap(BamlTypeMap.fromLazyEntries({ classes: {}, enums: {}, typeAliases: {}, descriptor: DESCRIPTOR }));
+});
+afterAll(() => {
+    setTypeMap(previousTypeMap);
+});
 
 function makeRuntime(): BamlRuntime {
     return BamlRuntime.initializeRuntime('.', { 'main.baml': CALLBACK_BAML });
@@ -76,10 +99,14 @@ describe('host-callable round-trip', () => {
         expect(result.result()).toBe(42);
     });
 
-    test('integral Number returned for float stays a float contract value', async () => {
+    test('an integral Number returned for a declared float is a float', async () => {
+        // The callback is bound to `() -> float`, so its result is encoded
+        // against `float` and an integral Number is the float it denotes.
         const rt = makeRuntime();
-        const result = await callFunction(rt, 'CallFloatCb', { callback: () => 1 });
-        expect(result.result()).toBe(1);
+        const whole = await callFunction(rt, 'CallFloatCb', { callback: () => 1 });
+        expect(whole.result()).toBe(1);
+        const result = await callFunction(rt, 'CallFloatCb', { callback: () => 1.5 });
+        expect(result.result()).toBe(1.5);
     });
 
     test('arrow function (lambda) callback', async () => {
@@ -286,22 +313,24 @@ describe('host-callable sync-call guard', () => {
     });
 
     test('the sync guard only fires for function args, not scalars', () => {
-        // Encoding scalar-only kwargs in sync mode must succeed; the guard
-        // only trips on a JS `function`. (We avoid encoding a function on
-        // the async path here: that would register a `weak::<false>` tsfn
-        // which pins the libuv loop and could keep the runner from exiting.)
-        expect(() => encodeCallArgs({ x: 1, s: 'ok' }, { syncMode: true, callId: 1n })).not.toThrow();
+        // Scalar kwargs on the sync path must go through; the guard only
+        // trips on a JS `function`. (We avoid encoding a function on the
+        // async path here: that would register a `weak::<false>` tsfn which
+        // pins the libuv loop and could keep the runner from exiting.)
+        const rt = makeRuntime();
+        // A string is refused by the encoder as no function, without tripping the guard.
+        expect(() => callFunctionSync(rt, 'CallCb', { callback: 'not a function', x: 1 })).toThrow(/argument `callback`: expected .*-> string/);
         // A function in sync mode trips the guard before any registration.
-        expect(() => encodeCallArgs({ cb: () => 0 }, { syncMode: true, callId: 1n })).toThrow(/host callable/i);
+        expect(() => callFunctionSync(rt, 'CallCb', { callback: () => 0, x: 1 })).toThrow(/host callable/i);
     });
 });
 
 describe('host-callable always completes on abnormal paths', () => {
     test('a callback returning an unencodable value surfaces as an error, not a hang', async () => {
         const rt = makeRuntime();
-        // A BigInt is not encodable by setInboundValue → the result-encode
-        // path throws → must be reported as an error (and the call must
-        // complete), not hang.
+        // A BigInt does not fit the callback's declared `string` return →
+        // the bridge's result encode throws → must be reported as an error
+        // (and the call must complete), not hang.
         const cb = (_x: number): unknown => 10n;
         await expect(
             callFunction(rt, 'CallCb', { callback: cb, x: 1 })

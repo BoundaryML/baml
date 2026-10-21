@@ -1378,8 +1378,8 @@ async fn playground_ws_session(socket: WebSocket, state: WsState) {
 
     if let Some(hello) = to_ws_text(&WsOutMessage::Hello {
         toolchain_version: baml_version::CANONICAL_VERSION.to_string(),
-        playground_protocol: 2,
-        min_client_playground_protocol: 2,
+        playground_protocol: baml_lsp::PLAYGROUND_PROTOCOL,
+        min_client_playground_protocol: baml_lsp::MIN_SUPPORTED_CLIENT_PLAYGROUND_PROTOCOL,
         capabilities: vec![
             "playgroundWebSocket.v2".to_string(),
             "callFunction.v1".to_string(),
@@ -1479,41 +1479,11 @@ async fn handle_function_run(
     client: FunctionRunClient,
     project: String,
     target: FunctionRunTarget,
-    args_bytes: String,
+    args: String,
     call_id: sys_types::CallId,
     state: &WsState,
     sink: &mut futures::stream::SplitSink<WebSocket, AxumWsMsg>,
 ) {
-    let decoded = match base64::engine::general_purpose::STANDARD.decode(&args_bytes) {
-        Ok(d) => d,
-        Err(e) => {
-            send_ws(
-                sink,
-                &client.error("invalidBase64", format!("Invalid base64: {e}")),
-            )
-            .await;
-            return;
-        }
-    };
-
-    let kwargs = match bridge_ctypes::playground_run_args_to_bex_values(
-        decoded.as_slice(),
-        &bridge_ctypes::HANDLE_TABLE,
-    ) {
-        Ok(k) => k,
-        Err(e) => {
-            send_ws(
-                sink,
-                &client.error(
-                    "invalidArguments",
-                    format!("Failed to convert arguments: {e}"),
-                ),
-            )
-            .await;
-            return;
-        }
-    };
-
     let broadcast_tx = state.broadcast_tx.clone();
     // One coherent launch snapshot: engine + generation captured
     // in a single transaction, with the overlay control-flow graph pinned
@@ -1539,6 +1509,31 @@ async fn handle_function_run(
     };
     let project_generation = prepared.generation;
     let bex = prepared.engine;
+
+    // The arguments arrive as one JSON object; the engine hydrates each
+    // against the parameter type the function declares.
+    // Boxed: the hydration awaits engine calls, whose futures are large, and
+    // this handler is itself awaited inside the WebSocket loop's future.
+    let kwargs =
+        match Box::pin(
+            bex.json_arguments(&target.call_function_name, &args, |type_args| {
+                bex_project::FunctionCallContextBuilder::new(sys_types::CallId::next())
+                    .with_type_args(type_args)
+                    .build()
+            }),
+        )
+        .await
+        {
+            Ok(kwargs) => kwargs,
+            Err(e) => {
+                send_ws(
+                    sink,
+                    &client.error("invalidArguments", format!("Invalid arguments: {e}")),
+                )
+                .await;
+                return;
+            }
+        };
 
     let fs_path = bex_project::FsPath::from_str(project);
     let boundary_id = BoundaryId::new_random();
@@ -1742,13 +1737,13 @@ async fn handle_ws_in_message(
             request_id,
             project,
             function_name,
-            args_bytes,
+            args,
         } => {
             handle_function_run(
                 FunctionRunClient { request_id },
                 project,
                 FunctionRunTarget::function(function_name),
-                args_bytes,
+                args,
                 sys_types::CallId::next(),
                 state,
                 sink,
@@ -1762,13 +1757,13 @@ async fn handle_ws_in_message(
             parent_function_name,
             helper,
             function_name,
-            args_bytes,
+            args,
         } => {
             handle_function_run(
                 FunctionRunClient { request_id },
                 project,
                 FunctionRunTarget::preview(parent_function_name, helper, function_name),
-                args_bytes,
+                args,
                 sys_types::CallId::next(),
                 state,
                 sink,

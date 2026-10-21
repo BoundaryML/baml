@@ -1,4 +1,4 @@
-import { _discardHostCallArgs, _hostInvocationFrame, _startHostCallExecution, completeHostCall } from './native.js';
+import { _discardHostCallArgs, _hostInvocationFrame, _startHostCallExecution, completeHostCallBridgeFailure, registerHostCallable, type BamlHandle } from './native.js';
 import type { BamlPanic } from './shared/errors.js';
 
 import { ExecutionContext } from './shared/execution_context.js';
@@ -26,7 +26,7 @@ export function runHostCallback(callId: number, args: Uint8Array, callback: () =
   if (!execution) return callback();
   if (_startHostCallExecution(execution) === null) {
     _discardHostCallArgs(args);
-    completeHostCall(callId, 1, new Uint8Array());
+    completeHostCallBridgeFailure(callId, 'the host call execution environment is no longer available');
     return;
   }
   const previous = currentFrame;
@@ -34,6 +34,19 @@ export function runHostCallback(callId: number, args: Uint8Array, callback: () =
   currentFrame = new ExecutionContext(state, cancel);
   try { return callback(); }
   finally { currentFrame = previous; }
+}
+
+/**
+ * How the bridge binds a user function as a host callable on this platform.
+ * On the Web the runtime registers the frame-decoding wrapper itself and
+ * answers the bridge with the callable's key as a decimal string.
+ */
+export function registerCallableDispatch(
+    dispatch: (callId: number, argsBytes: Uint8Array, execution?: object) => void,
+    marker: object | undefined,
+): string {
+    const key = registerHostCallable(dispatch, marker as BamlHandle | undefined);
+    return (BigInt.asUintN(32, BigInt(key.high)) << 32n | BigInt.asUintN(32, BigInt(key.low))).toString();
 }
 
 export function handleExitPanic(_code: number, fallbackPanic: BamlPanic): never {

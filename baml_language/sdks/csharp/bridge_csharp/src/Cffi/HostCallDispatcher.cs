@@ -2,6 +2,7 @@ using System.Runtime.ExceptionServices;
 
 using Baml.Generated.V1;
 using Baml.Proto;
+using BamlBridge.Cffi.V1;
 using Google.Protobuf;
 
 namespace Baml.Cffi;
@@ -19,12 +20,31 @@ internal static class HostCallDispatcher
                 invocation.Arguments);
             Task<object?> completion = StartInCapturedContext(invocation, arguments);
             object? result = await completion.ConfigureAwait(false);
-            BamlGeneratedValue generated = invocation.Callable.Descriptor.Result.Encode(result);
+            BamlGeneratedValue generated;
+            try
+            {
+                generated = invocation.Callable.Descriptor.Result.Encode(result);
+            }
+            catch (BamlTypeMappingException doesNotFit)
+            {
+                // The callable returned a value that does not fit the return
+                // type it was bound to: its broken contract, a panic the
+                // engine builds.
+                Complete(api, invocation.HostCallId, new HostCallCompletion
+                {
+                    ContractViolation =
+                        $"the callable's return value does not inhabit its declared type: {doesNotFit.Message}",
+                });
+                return;
+            }
             using EncodedCallArguments encoded = PrimitiveProtocol.EncodeOwnedValue(
                 generated,
                 api,
                 invocation.FunctionCallId);
-            Complete(api, invocation.HostCallId, isError: false, encoded.Bytes);
+            Complete(api, invocation.HostCallId, new HostCallCompletion
+            {
+                Returned = InboundValue.Parser.ParseFrom(encoded.Bytes),
+            });
             encoded.Commit();
         }
         catch (Exception error)
@@ -119,26 +139,27 @@ internal static class HostCallDispatcher
             return;
         }
 
+        // The host's own exception: the engine builds the
+        // `baml.errors.HostCallable` whose `_handle` is this registration, so
+        // the same process restores the exception by identity on round trip.
         using HostValueRegistration registration =
             HostValueRegistry.Shared.RegisterException(error, functionCallId);
-        byte[] bytes = HostCallableProtocol.EncodeException(error.SourceException, registration.Key);
-        Complete(api, hostCallId, isError: true, bytes);
+        Complete(api, hostCallId, new HostCallCompletion
+        {
+            Raised = HostCallableProtocol.Raised(error.SourceException, registration.Key),
+        });
         registration.Commit();
     }
 
     private static unsafe void Complete(
         NativeApi api,
         uint hostCallId,
-        bool isError,
-        byte[] bytes)
+        HostCallCompletion completion)
     {
+        byte[] bytes = completion.ToByteArray();
         fixed (byte* pointer = bytes)
         {
-            api.Table->CompleteHostCall(
-                hostCallId,
-                isError ? 1 : 0,
-                pointer,
-                (nuint)bytes.Length);
+            api.Table->CompleteHostCall(hostCallId, pointer, (nuint)bytes.Length);
         }
     }
 

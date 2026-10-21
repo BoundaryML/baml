@@ -30,7 +30,9 @@ public readonly partial struct BamlGeneratedCodecContext
             {
                 new("name", String(value.Name)),
                 new("client_type", ClientType(value.ClientType)),
-                new("sub_clients", List(subClients)),
+                new(
+                    "sub_clients",
+                    List(subClients, BamlGeneratedTypeMetadata.Class(ClientIdentity, Array.Empty<byte[]>()))),
                 new(
                     "retry",
                     value.RetryPolicy is null ? Null() : RetryPolicy(value.RetryPolicy)),

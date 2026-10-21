@@ -437,7 +437,7 @@ async fn callback_options_resolve_once_and_reserved_id_reaches_recording() {
         .unwrap(),
     );
     HostValueArc::register_annotation(
-        7000,
+        bex_resource_types::HostKey::new(7000).expect("nonzero"),
         Arc::new(HostMarker {
             definition: definition(),
             options: TraceOptionsData {
@@ -456,7 +456,11 @@ async fn callback_options_resolve_once_and_reserved_id_reaches_recording() {
             },
         }),
     );
-    let callback = HostValueArc::intern(7000, HostValueKind::Callable);
+    let callback = HostValueArc::try_intern(
+        bex_resource_types::HostKey::new(7000).expect("nonzero"),
+        HostValueKind::Callable,
+    )
+    .unwrap_or_else(|existing| existing);
     let mut reserved_id = None;
     for name in [
         "explicit_span",
@@ -468,7 +472,15 @@ async fn callback_options_resolve_once_and_reserved_id_reaches_recording() {
         let value = engine
             .call_function(
                 name,
-                vec![BexExternalValue::HostValue(callback.clone())],
+                vec![BexExternalValue::HostCallable {
+                    handle: callback.clone(),
+                    params: Box::new([baml_type::RealizedFunctionParamTy::required(
+                        None,
+                        bex_engine::WireTy::Int,
+                    )]),
+                    ret: Box::new(bex_engine::WireTy::Int),
+                    throws: Box::new(bex_engine::WireTy::Unknown),
+                }],
                 FunctionCallContextBuilder::new(CallId::next())
                     .with_trace_options(TraceOptionsData {
                         mode: Some(InvocationMode::Hidden),

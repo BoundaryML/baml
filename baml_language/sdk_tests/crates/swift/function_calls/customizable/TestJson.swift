@@ -2,12 +2,12 @@
 // (`Test_host_supplied_json_supports_typed_narrowing`) and
 // python_pydantic2 `test_json.py`.
 //
-// Inbound dictionaries/arrays from the Swift bridge carry no
-// element-type annotation on the wire; the engine must re-annotate
-// them with the `baml.json.json` alias so typed narrowing inside BAML
-// — `match (j) { let m: map<string, json> => ... }`, and therefore
-// `baml.json.path` / `path_or` — treats them exactly like BAML-born
-// `baml.json.parse` values.
+// The engine converts nothing and refines no statement from context, so
+// every list and map the Swift bridge sends inside a json value states its
+// own type by the alias: an array node is `json[]` and an object node
+// `map<string, json>`. Typed narrowing inside BAML — `match (j) { let m:
+// map<string, json> => ... }`, and therefore `baml.json.path` / `path_or`
+// — then treats them exactly like BAML-born `baml.json.parse` values.
 //
 // Adaptation from Go/Python: Swift's json values are the nominal
 // `Baml.baml.json.json` enum rather than untyped `any`/dicts, so the
@@ -72,12 +72,23 @@ final class TestJson: XCTestCase {
     }
 
     func test_json_returned_from_host_callback_supports_typed_narrowing() throws {
-        // json returned from a host callback converts on the host-return
-        // path (no argument coercion pass); it must narrow identically.
+        // json returned from a host callback is checked against the
+        // callback's declared return, its containers stated the same way;
+        // it must narrow identically.
         let result = try Baml.go_json_tests.json_callback_kind(
             callback: { value in Json(["wrapped": value]) },
             value: Json("payload")
         )
         XCTAssertEqual(result, "object")
+    }
+
+    func test_host_supplied_empty_and_null_bearing_json_containers_state_the_alias() throws {
+        // An empty container has no element to read a type from, and a
+        // `nil` element is the alias's own null: both still state `json[]`
+        // / `map<string, json>`, never `(json | null)[]` or nothing.
+        XCTAssertEqual(try Baml.go_json_tests.json_kind(value: Json([Json?]())), "array")
+        XCTAssertEqual(try Baml.go_json_tests.json_kind(value: Json([String: Json?]())), "object")
+        XCTAssertEqual(try Baml.go_json_tests.json_kind(value: Json([nil, Json(1)])), "array")
+        XCTAssertEqual(try Baml.go_json_tests.json_kind(value: Json(["absent": nil])), "object")
     }
 }

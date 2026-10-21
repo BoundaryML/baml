@@ -19,12 +19,16 @@ option optimize_for = LITE_RUNTIME;
 // Inbound values — host language to engine
 // -----------------------------------------------------------------------------
 
-// Core value type. `value_type` is a sparse exact-type annotation for this
-// node, never a copy of the enclosing union. Most values omit it and are
-// decoded from the declared contextual type plus payload shape. Hosts set it
-// only when shape/context cannot preserve their choice (for example an empty
-// container, an overlapping union arm, or a literal-vs-primitive selection).
+// Core value type. `value_type` is this node's own exact type, and whether a
+// node carries one is fixed by its arm: a list, map, class or callable node
+// must state it, every other node must not. A statement is a realized type
+// (no type variables), never a root union or optional. The engine builds the
+// stated value as it is, converts nothing, and checks it against its slot.
 message InboundValue {
+  // Formerly `ty_def_value`: a definition graph beside a type. A runtime
+  // declaration is referenced, never redeclared.
+  reserved 14;
+  reserved "ty_def_value";
   BamlTy value_type = 1;
   oneof value {
     string string_value = 2;
@@ -39,22 +43,18 @@ message InboundValue {
     bytes uint8array_value = 11;
     string bigint_value = 12;
     // A reflected BAML type passed as a value (mirrors a `reflect.Type` BAML
-    // value, e.g. the result of `reflect.Type.of<T>()`). Accepted as an
-    // argument value so the host can pass types as data.
+    // value, e.g. the result of `reflect.Type.of<T>()`). The one spelling of
+    // a type value: compiled declarations by name, runtime declarations by
+    // the host's row to each (`BamlTyClass.live` and its siblings).
     BamlTy ty_value = 13;
-    // Definition-carrying reflected type. New hosts use this for values that
-    // must retain runtime-created class/enum schemas; tag 13 remains for
-    // rollout compatibility with structural/static type senders.
-    BamlTyDef ty_def_value = 14;
     // Rust-backed values cross as portable data, never as capability handles.
     // These message shapes are shared with the outbound side so host-created
     // and engine-created values have one canonical representation.
     BamlValueMedia media_value = 15;
     BamlValuePromptAst prompt_ast_value = 16;
-    // A JavaScript `number`. Unlike `int_value` and `float_value`, this does
-    // not choose a BAML numeric representation: an integral value may inhabit
-    // either `int` or `float`, and the declared contextual type selects one.
-    // Non-integral values can inhabit only `float`.
+    // Retired: a host states `int_value` or `float_value`. The decoder refuses
+    // this arm; the field stays so an old host's value is refused rather than
+    // decoded as an unknown field, which would read as null.
     double js_number_value = 17;
   }
   // Absent oneof = null value.
@@ -97,10 +97,10 @@ message InboundEnumValue {
 message BamlTyArg {
   string type_var = 1; // TypeVar name, e.g. "T", "A"
   BamlTy type_value = 2; // the concrete binding
-  // Preferred for a runtime reflected type. Mutually exclusive with
-  // `type_value` by convention; retained as separate fields for backwards
-  // compatibility with already generated SDKs.
-  BamlTyDef type_definition = 3;
+  // Formerly `type_definition`: a request to declare types for the call. A
+  // runtime declaration is made by `reflect` and referenced by its row.
+  reserved 3;
+  reserved "type_definition";
 }
 
 message CallFunctionArgs {
@@ -172,4 +172,43 @@ message CallAck {
   oneof response {
     string error = 1;
   }
+}
+
+// -----------------------------------------------------------------------------
+// Host callback completion — host language to engine
+// -----------------------------------------------------------------------------
+
+// What a host completes a BAML→host callback with (`complete_host_call`). The
+// host encodes a result against the callable's declared return type and a
+// thrown BAML value against its declared throws type; the engine checks both
+// and builds every panic itself. An exception of the host's own becomes a
+// `baml.errors.HostCallable` the engine builds from `raised`. A payload with no
+// outcome is a bridge failure.
+message HostCallCompletion {
+  oneof outcome {
+    // The callable returned this value.
+    InboundValue returned = 1;
+    // The callable threw this BAML value (a `baml.panics.*` instance is a
+    // panic whatever the callable declares).
+    InboundValue thrown = 2;
+    // The callable raised an exception of the host's own.
+    HostException raised = 3;
+    // The host could not encode the result or thrown value against the
+    // declared type: the callable broke its contract. The text says how.
+    string contract_violation = 4;
+    // The bridge could not carry a value the callable produced in good faith,
+    // or failed in its own machinery. The text says how.
+    string bridge_failure = 5;
+  }
+}
+
+// An exception of the host's own that a callback raised.
+message HostException {
+  string message = 1;
+  string class_name = 2;
+  string language = 3;
+  optional string traceback = 4;
+  // The host's registration of the exception object (a `HOST_VALUE_OPAQUE`
+  // key), so the same host can recover it by identity when it comes back.
+  uint64 handle = 5;
 }

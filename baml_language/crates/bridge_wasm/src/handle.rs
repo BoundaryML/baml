@@ -1,6 +1,6 @@
 //! WASM handle lifecycle — auto-released via `FinalizationRegistry`.
 
-use bridge_ctypes::{HANDLE_TABLE, baml_bridge::cffi::BamlHandleType};
+use bridge_ctypes::{HANDLE_TABLE, TableKey, WireHandle, baml_bridge::cffi::BamlHandleType};
 use js_sys::{Object, Reflect};
 use wasm_bindgen::prelude::*;
 
@@ -64,11 +64,11 @@ impl BamlHandle {
     /// handle.
     #[wasm_bindgen(js_name = "cloneHandle")]
     pub fn clone_handle(&self) -> Result<BamlHandle, JsError> {
-        let new_key = HANDLE_TABLE
-            .clone_handle(self.key)
+        let new_key = TableKey::new(self.key)
+            .and_then(|key| HANDLE_TABLE.clone_handle(key))
             .ok_or_else(|| JsError::new("Handle is no longer valid"))?;
         Ok(BamlHandle {
-            key: new_key,
+            key: new_key.get(),
             handle_type: self.handle_type,
         })
     }
@@ -114,19 +114,13 @@ impl BamlHandle {
 
 impl Drop for BamlHandle {
     fn drop(&mut self) {
-        // Host-owned handles (`HostValueCallable`, `HostValueOpaque`) are
-        // *not* tracked in HANDLE_TABLE — their lifetime is managed
-        // per-bridge via the `HostReleaseFn` dispatch. Releasing them here
-        // would call into the global HANDLE_TABLE with a key that may
-        // collide with an unrelated engine-side entry (the two keyspaces
-        // are disjoint by design but share the `u64` value space), evicting
-        // it. Skip the table release for those variants; their owners drop
-        // them through their own release path.
-        match self.handle_type {
-            BamlHandleType::HostValueCallable | BamlHandleType::HostValueOpaque => {}
-            _ => {
-                let _ = HANDLE_TABLE.release(self.key);
-            }
+        // A host value is the engine's reference to a host object, released
+        // through the `HostReleaseFn` dispatch; only an engine reference is
+        // this wrapper's to release. Key 0 names nothing.
+        if let Ok(WireHandle::Engine(key)) =
+            WireHandle::from_parts(self.key, self.handle_type as i32)
+        {
+            let _ = HANDLE_TABLE.release(key);
         }
     }
 }

@@ -55,6 +55,9 @@ message BamlOutboundPanic {
 }
 
 message BamlOutboundValue {
+  // Formerly `ty_def_value`: a definition graph beside a type.
+  reserved 22;
+  reserved "ty_def_value";
   // we must include this because we might be a "string"
   // but in a container type like (string | int) and some languages
   // require we decode this.
@@ -80,10 +83,9 @@ message BamlOutboundValue {
     bytes uint8array_value = 19;
     string bigint_value = 20;
     // A reflected BAML type returned as a value (e.g. `reflect.Type.of<T>()`).
-    // Shares the `BamlTy` representation with the inbound side.
+    // Shares the `BamlTy` representation with the inbound side; a runtime
+    // declaration it names is a row the host now holds.
     BamlTy ty_value = 21;
-    // Definition-carrying type handle. Identity is intentionally not encoded.
-    BamlTyDef ty_def_value = 22;
   }
 }
 

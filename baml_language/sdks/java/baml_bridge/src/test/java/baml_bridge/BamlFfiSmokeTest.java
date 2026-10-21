@@ -53,6 +53,10 @@ class BamlFfiSmokeTest {
         System.setProperty(BamlFfi.LIB_PROPERTY, lib.getAbsolutePath());
     }
 
+    // BUG: the three tests below predate the runtime-bound call allocation:
+    // with no runtime initialized, `nativeNewCallId` now returns 0 (the ABI's
+    // failure value) and a call cannot be allocated at all, so they fail
+    // before the paths they meant to exercise.
     @Test
     void nativeNewCallId_is_nonzero_and_monotonic() {
         long a = BamlFfi.nativeNewCallId();
@@ -127,13 +131,14 @@ class BamlFfiSmokeTest {
         Image img = Image.from_url("https://example.com/asset", "image/png");
         long originalKey = img.bamlHandle().key();
 
-        assertPortableMedia(img, 1, 3, "https://example.com/asset", "image/png");
+        assertPortableMedia(img, 1, 3, "https://example.com/asset", null, "image/png");
         assertPortableMedia(Audio.from_base64("YXVkaW8=", "audio/mpeg"),
-                2, 4, "YXVkaW8=", "audio/mpeg");
+                2, 4, "YXVkaW8=", null, "audio/mpeg");
+        // File content keeps the file's name beside its payload.
         assertPortableMedia(Pdf.from_file_content("/reports/document.pdf", "JVBERi0xLjc="),
-                3, 4, "JVBERi0xLjc=", "application/pdf");
+                3, 6, "JVBERi0xLjc=", "document.pdf", "application/pdf");
         assertPortableMedia(Video.from_url("https://example.com/video", "video/mp4"),
-                4, 3, "https://example.com/video", "video/mp4");
+                4, 3, "https://example.com/video", null, "video/mp4");
 
         // Portable serialization neither clones nor drains the source handle.
         assertEquals(originalKey, img.bamlHandle().key());
@@ -142,7 +147,7 @@ class BamlFfiSmokeTest {
 
     private static void assertPortableMedia(
             BamlMedia value, int expectedKind, int expectedSource, String expectedValue,
-            String expectedMimeType) {
+            String expectedName, String expectedMimeType) {
         byte[] encoded = ProtoWriter.encodeInboundValue(value);
         assertNull(subMessage(new WireReader(encoded), 1), "media needs no value_type");
         assertNull(subMessage(new WireReader(encoded), 8), "media is not a class_value");
@@ -154,6 +159,7 @@ class BamlFfiSmokeTest {
         String mimeType = null;
         int source = 0;
         String payload = null;
+        String name = null;
         while (media.hasRemaining()) {
             int tag = media.readTag();
             int field = WireReader.fieldOf(tag);
@@ -165,6 +171,19 @@ class BamlFfiSmokeTest {
                     source = field;
                     payload = media.readString();
                 }
+                case 6 -> {
+                    // BamlValueMediaFileContent: name = 1, base64 = 2.
+                    source = field;
+                    WireReader content = media.readMessage();
+                    while (content.hasRemaining()) {
+                        int contentTag = content.readTag();
+                        switch (WireReader.fieldOf(contentTag)) {
+                            case 1 -> name = content.readString();
+                            case 2 -> payload = content.readString();
+                            default -> content.skipField(WireReader.wireOf(contentTag));
+                        }
+                    }
+                }
                 default -> media.skipField(wire);
             }
         }
@@ -172,6 +191,7 @@ class BamlFfiSmokeTest {
         assertEquals(expectedMimeType, mimeType);
         assertEquals(expectedSource, source);
         assertEquals(expectedValue, payload);
+        assertEquals(expectedName, name);
     }
 
     /** Portable outbound media reifies all four Java wrappers and all three source arms. */

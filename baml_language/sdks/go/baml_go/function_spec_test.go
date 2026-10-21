@@ -20,6 +20,17 @@ func TestEventCallbackInputUsesTheHostCallableABI(t *testing.T) {
 	if handle == nil || handle.GetHandleType() != cffi.BamlHandleType_HOST_VALUE_CALLABLE {
 		t.Fatalf("event callback encoded as %#v", encoded.GetValue())
 	}
+	// `on_event` declares no throws, so its throws is an open effect: a
+	// panicking listener must surface as a catchable error, not a violation of
+	// a `never` contract.
+	wantType := FunctionBAMLType(
+		[]FunctionParamBAMLType{{Type: UnknownBAMLType()}},
+		PrimitiveBAMLType(NullType),
+		UnknownBAMLType(),
+	)
+	if stated := encoded.GetValueType(); stated == nil || !(BAMLType{value: stated}).Equal(wantType) {
+		t.Fatalf("event callback stated %#v; want %#v", stated, wantType.value)
+	}
 	callable, ok := lookupHostCallable(handle.GetKey())
 	if !ok {
 		t.Fatal("event callback was not registered")

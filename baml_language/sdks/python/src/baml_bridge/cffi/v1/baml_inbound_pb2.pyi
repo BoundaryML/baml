@@ -22,7 +22,7 @@ TRACE_MODE_TIMING: TraceMode
 TRACE_MODE_SPAN: TraceMode
 
 class InboundValue(_message.Message):
-    __slots__ = ("value_type", "string_value", "int_value", "float_value", "bool_value", "list_value", "map_value", "class_value", "enum_value", "handle", "uint8array_value", "bigint_value", "ty_value", "ty_def_value", "media_value", "prompt_ast_value", "js_number_value")
+    __slots__ = ("value_type", "string_value", "int_value", "float_value", "bool_value", "list_value", "map_value", "class_value", "enum_value", "handle", "uint8array_value", "bigint_value", "ty_value", "media_value", "prompt_ast_value", "js_number_value")
     VALUE_TYPE_FIELD_NUMBER: _ClassVar[int]
     STRING_VALUE_FIELD_NUMBER: _ClassVar[int]
     INT_VALUE_FIELD_NUMBER: _ClassVar[int]
@@ -36,7 +36,6 @@ class InboundValue(_message.Message):
     UINT8ARRAY_VALUE_FIELD_NUMBER: _ClassVar[int]
     BIGINT_VALUE_FIELD_NUMBER: _ClassVar[int]
     TY_VALUE_FIELD_NUMBER: _ClassVar[int]
-    TY_DEF_VALUE_FIELD_NUMBER: _ClassVar[int]
     MEDIA_VALUE_FIELD_NUMBER: _ClassVar[int]
     PROMPT_AST_VALUE_FIELD_NUMBER: _ClassVar[int]
     JS_NUMBER_VALUE_FIELD_NUMBER: _ClassVar[int]
@@ -53,11 +52,10 @@ class InboundValue(_message.Message):
     uint8array_value: bytes
     bigint_value: str
     ty_value: _baml_type_pb2.BamlTy
-    ty_def_value: _baml_type_pb2.BamlTyDef
     media_value: _baml_outbound_pb2.BamlValueMedia
     prompt_ast_value: _baml_outbound_pb2.BamlValuePromptAst
     js_number_value: float
-    def __init__(self, value_type: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., string_value: _Optional[str] = ..., int_value: _Optional[int] = ..., float_value: _Optional[float] = ..., bool_value: bool = ..., list_value: _Optional[_Union[InboundListValue, _Mapping]] = ..., map_value: _Optional[_Union[InboundMapValue, _Mapping]] = ..., class_value: _Optional[_Union[InboundClassValue, _Mapping]] = ..., enum_value: _Optional[_Union[InboundEnumValue, _Mapping]] = ..., handle: _Optional[_Union[_baml_handle_pb2.BamlHandle, _Mapping]] = ..., uint8array_value: _Optional[bytes] = ..., bigint_value: _Optional[str] = ..., ty_value: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., ty_def_value: _Optional[_Union[_baml_type_pb2.BamlTyDef, _Mapping]] = ..., media_value: _Optional[_Union[_baml_outbound_pb2.BamlValueMedia, _Mapping]] = ..., prompt_ast_value: _Optional[_Union[_baml_outbound_pb2.BamlValuePromptAst, _Mapping]] = ..., js_number_value: _Optional[float] = ...) -> None: ...
+    def __init__(self, value_type: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., string_value: _Optional[str] = ..., int_value: _Optional[int] = ..., float_value: _Optional[float] = ..., bool_value: bool = ..., list_value: _Optional[_Union[InboundListValue, _Mapping]] = ..., map_value: _Optional[_Union[InboundMapValue, _Mapping]] = ..., class_value: _Optional[_Union[InboundClassValue, _Mapping]] = ..., enum_value: _Optional[_Union[InboundEnumValue, _Mapping]] = ..., handle: _Optional[_Union[_baml_handle_pb2.BamlHandle, _Mapping]] = ..., uint8array_value: _Optional[bytes] = ..., bigint_value: _Optional[str] = ..., ty_value: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., media_value: _Optional[_Union[_baml_outbound_pb2.BamlValueMedia, _Mapping]] = ..., prompt_ast_value: _Optional[_Union[_baml_outbound_pb2.BamlValuePromptAst, _Mapping]] = ..., js_number_value: _Optional[float] = ...) -> None: ...
 
 class InboundListValue(_message.Message):
     __slots__ = ("values",)
@@ -100,14 +98,12 @@ class InboundEnumValue(_message.Message):
     def __init__(self, name: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
 
 class BamlTyArg(_message.Message):
-    __slots__ = ("type_var", "type_value", "type_definition")
+    __slots__ = ("type_var", "type_value")
     TYPE_VAR_FIELD_NUMBER: _ClassVar[int]
     TYPE_VALUE_FIELD_NUMBER: _ClassVar[int]
-    TYPE_DEFINITION_FIELD_NUMBER: _ClassVar[int]
     type_var: str
     type_value: _baml_type_pb2.BamlTy
-    type_definition: _baml_type_pb2.BamlTyDef
-    def __init__(self, type_var: _Optional[str] = ..., type_value: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ..., type_definition: _Optional[_Union[_baml_type_pb2.BamlTyDef, _Mapping]] = ...) -> None: ...
+    def __init__(self, type_var: _Optional[str] = ..., type_value: _Optional[_Union[_baml_type_pb2.BamlTy, _Mapping]] = ...) -> None: ...
 
 class CallFunctionArgs(_message.Message):
     __slots__ = ("kwargs", "call_id", "type_args", "function_name", "function_handle", "invocation")
@@ -189,3 +185,31 @@ class CallAck(_message.Message):
     ERROR_FIELD_NUMBER: _ClassVar[int]
     error: str
     def __init__(self, error: _Optional[str] = ...) -> None: ...
+
+class HostCallCompletion(_message.Message):
+    __slots__ = ("returned", "thrown", "raised", "contract_violation", "bridge_failure")
+    RETURNED_FIELD_NUMBER: _ClassVar[int]
+    THROWN_FIELD_NUMBER: _ClassVar[int]
+    RAISED_FIELD_NUMBER: _ClassVar[int]
+    CONTRACT_VIOLATION_FIELD_NUMBER: _ClassVar[int]
+    BRIDGE_FAILURE_FIELD_NUMBER: _ClassVar[int]
+    returned: InboundValue
+    thrown: InboundValue
+    raised: HostException
+    contract_violation: str
+    bridge_failure: str
+    def __init__(self, returned: _Optional[_Union[InboundValue, _Mapping]] = ..., thrown: _Optional[_Union[InboundValue, _Mapping]] = ..., raised: _Optional[_Union[HostException, _Mapping]] = ..., contract_violation: _Optional[str] = ..., bridge_failure: _Optional[str] = ...) -> None: ...
+
+class HostException(_message.Message):
+    __slots__ = ("message", "class_name", "language", "traceback", "handle")
+    MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    CLASS_NAME_FIELD_NUMBER: _ClassVar[int]
+    LANGUAGE_FIELD_NUMBER: _ClassVar[int]
+    TRACEBACK_FIELD_NUMBER: _ClassVar[int]
+    HANDLE_FIELD_NUMBER: _ClassVar[int]
+    message: str
+    class_name: str
+    language: str
+    traceback: str
+    handle: int
+    def __init__(self, message: _Optional[str] = ..., class_name: _Optional[str] = ..., language: _Optional[str] = ..., traceback: _Optional[str] = ..., handle: _Optional[int] = ...) -> None: ...

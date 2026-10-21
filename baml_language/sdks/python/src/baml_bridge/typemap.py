@@ -2,15 +2,23 @@
 
 The typemap is codegen-emitted: each SDK ships a `baml_sdk/_typemap.py`
 that constructs a `BamlTypeMap` from three literal dicts of
-`FQN → (module_path, attr_name)` lazy entries, and the SDK's root
-`__init__.py` installs it via `set_type_map(_TYPE_MAP)`. Resolution
-happens on first `get_class(fqn)` call via `importlib.import_module +
-getattr`, then memoizes.
+`FQN → (module_path, attr_name)` lazy entries plus the program descriptor,
+and the SDK's root `__init__.py` installs it via `set_type_map(_TYPE_MAP)`.
+Resolution happens on first `get_class(fqn)` call via
+`importlib.import_module + getattr`, then memoizes.
+
+The descriptor is the program's declared surface (every callable's
+signature and the declarations those reach) as the generator encoded it.
+Python never reads it: the bridge decodes it natively and encodes
+arguments against the types it declares. A typemap built without one
+(bridge tests, call-by-name without a generated SDK) declares no types,
+and the bridge then takes each argument as the type its Python value has.
 """
 
 from __future__ import annotations
 import importlib
-from typing import Dict, Tuple, Type
+from dataclasses import dataclass
+from typing import Any, Dict, Optional, Protocol, Tuple, Type
 
 from .errors import BamlError
 
@@ -34,6 +42,37 @@ _STDLIB_REVERSE_OVERRIDES: Dict[Tuple[str, str], str] = {
 }
 
 
+@dataclass(frozen=True)
+class BamlClassInstance:
+    """An instance of a BAML class that has no Python class.
+
+    A thrown value has no declared Python type, and its class may be one that
+    no generated SDK covers: a process that uses `baml_bridge` alone has no
+    generated classes at all, and a program can make a class at run time. The
+    instance then reaches the caller as this, with the name of its BAML class
+    and its fields under their BAML names.
+    """
+
+    class_name: str
+    fields: Dict[str, Any]
+
+    def __repr__(self) -> str:
+        fields = ", ".join(f"{name}={value!r}" for name, value in self.fields.items())
+        return f"{self.class_name}({fields})"
+
+
+class TypeLookup(Protocol):
+    """How a decode finds the Python type of a BAML name. `None` says that the
+    name has no Python type, and the decoder then stands in a value that needs
+    none (`BamlClassInstance` for an instance)."""
+
+    def get_class(self, fqn: str) -> Optional[Type]: ...
+
+    def get_enum(self, fqn: str) -> Optional[Type]: ...
+
+    def get_type_alias(self, fqn: str) -> Optional[object]: ...
+
+
 class BamlTypeMap:
     __slots__ = (
         # Lazy entries — codegen-emitted, resolved on first lookup.
@@ -49,6 +88,9 @@ class BamlTypeMap:
         # PyO3-identity overrides. `py_type_to_baml_type` walks
         # `cls.__mro__` against this dict.
         "_reverse",
+        # The embedded program descriptor, or `None` for a typemap that
+        # declares no types.
+        "_descriptor",
     )
 
     def __init__(self) -> None:
@@ -63,6 +105,7 @@ class BamlTypeMap:
         # Forward entries added by `from_lazy_entries` populate more
         # keys on top.
         self._reverse: Dict[Tuple[str, str], str] = dict(_STDLIB_REVERSE_OVERRIDES)
+        self._descriptor: Optional[bytes] = None
 
     @classmethod
     def from_lazy_entries(
@@ -70,11 +113,13 @@ class BamlTypeMap:
         classes: Dict[str, _LazyEntry],
         enums: Dict[str, _LazyEntry],
         type_aliases: Dict[str, _LazyEntry],
+        descriptor: Optional[bytes] = None,
     ) -> "BamlTypeMap":
         m = cls()
         m._class_lazy = dict(classes)
         m._enum_lazy = dict(enums)
         m._alias_lazy = dict(type_aliases)
+        m._descriptor = descriptor
         # Derive (module, attr) → FQN from forward entries.
         # `setdefault` lets stdlib seeds (populated in __init__) win
         # on collision — for stdlib classes both the user-facing
@@ -86,6 +131,12 @@ class BamlTypeMap:
             m._reverse.setdefault((mp, attr), fqn)
         # Type aliases generally don't appear as `type(value)`; skip.
         return m
+
+    @property
+    def descriptor(self) -> Optional[bytes]:
+        """The embedded program descriptor, or `None` when this typemap
+        declares no types."""
+        return self._descriptor
 
     # — lookup (lazy fallback) —
 
@@ -146,6 +197,12 @@ class BamlTypeMap:
         self._alias_cache[fqn] = alias
         return alias
 
+    def where_generated(self) -> "_GeneratedTypes":
+        """This map for a value with no declared Python type: a name that
+        codegen emitted no entry for has no Python type, where the lookups of
+        the map itself raise."""
+        return _GeneratedTypes(self)
+
     # — reverse lookup (replaces _baml_type_name ClassVar pathway) —
 
     def py_type_to_baml_type(self, cls: type) -> str:
@@ -185,12 +242,44 @@ class BamlTypeMap:
         return None
 
 
+class _GeneratedTypes:
+    """`BamlTypeMap.where_generated`."""
+
+    __slots__ = ("_type_map",)
+
+    def __init__(self, type_map: BamlTypeMap) -> None:
+        self._type_map = type_map
+
+    def get_class(self, fqn: str) -> Optional[Type]:
+        type_map = self._type_map
+        if fqn not in type_map._class_cache and fqn not in type_map._class_lazy:
+            return None
+        return type_map.get_class(fqn)
+
+    def get_enum(self, fqn: str) -> Optional[Type]:
+        type_map = self._type_map
+        if fqn not in type_map._enum_cache and fqn not in type_map._enum_lazy:
+            return None
+        return type_map.get_enum(fqn)
+
+    def get_type_alias(self, fqn: str) -> Optional[object]:
+        type_map = self._type_map
+        if fqn not in type_map._alias_cache and fqn not in type_map._alias_lazy:
+            return None
+        return type_map.get_type_alias(fqn)
+
+
 _TYPE_MAP = BamlTypeMap()
 
 
 def set_type_map(m: BamlTypeMap) -> None:
+    """Install `m` as the process typemap and hand its program descriptor to
+    the bridge, which encodes every argument against the types it declares."""
+    from .baml_py import register_program_descriptor
+
     global _TYPE_MAP
     _TYPE_MAP = m
+    register_program_descriptor(m.descriptor)
 
 
 def get_type_map() -> BamlTypeMap:

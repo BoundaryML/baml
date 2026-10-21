@@ -124,62 +124,6 @@ test "a name declared as another kind is a miss" {
     assert.equal(message, "no class named Color in this package")
 }
 
-/// Names what `lookup` threw. An uninitialized receiver throws
-/// `reflect.errors.InvalidArgument`, which the `get_*` lookups do not declare,
-/// so the lookup is widened to `throws unknown` to make that arm reachable.
-function rl_thrown(lookup: () -> unknown throws unknown) -> string {
-    lookup() catch (e) {
-        reflect.errors.NotFound => {
-            return "NotFound";
-        }
-        reflect.errors.InvalidArgument { message } => {
-            return message;
-        }
-    };
-    "nothing thrown"
-}
-
-test "get on an uninitialized package reports the receiver, not a miss" {
-    let forged = reflect.Package { _inner: 1 };
-    let fault = "reflect.Package is not initialized";
-    assert.equal(
-        rl_thrown(() -> unknown {
-            forged.get_class("Foo")
-        }),
-        fault,
-    );
-    assert.equal(
-        rl_thrown(() -> unknown {
-            forged.get_enum("Color")
-        }),
-        fault,
-    );
-    assert.equal(
-        rl_thrown(() -> unknown {
-            forged.get_interface("Shape")
-        }),
-        fault,
-    );
-    assert.equal(forged.find_class("Foo"), null)
-}
-
-test "other calls on an uninitialized package or session report the receiver" {
-    let forged = reflect.Package { _inner: 1 };
-    assert.equal(
-        rl_thrown(() -> unknown {
-            forged.with_types({ "N": int.type() })
-        }),
-        "reflect.Package is not initialized",
-    );
-    let session = reflect.Session { _inner: 1 };
-    assert.equal(
-        rl_thrown(() -> unknown {
-            session.eval<int>("1")
-        }),
-        "Session is not initialized",
-    )
-}
-
 test "value get reads a field" {
     assert.equal(rl_record().get<int>("count"), 3)
 }

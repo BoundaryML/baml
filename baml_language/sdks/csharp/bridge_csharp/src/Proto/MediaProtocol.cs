@@ -115,10 +115,13 @@ internal static class MediaProtocol
         return BamlGeneratedValue.CreateMedia(CreateManaged(contract, payload), path);
     }
 
-    internal static InboundValue Encode(
-        NativeApi api,
-        EncodedCallArguments ownership,
-        object media)
+    /// <summary>
+    /// Encode a media value as the portable <c>BamlValueMedia</c> the engine
+    /// reads for every host: its kind, its MIME type and the one source it has
+    /// (a URL, bytes, or bytes with the name of the file they came from). The
+    /// kind implies the type, so the node states none.
+    /// </summary>
+    internal static InboundValue Encode(object media)
     {
         if (!TryContract(media, out MediaContract contract, out MediaPayload payload))
         {
@@ -127,30 +130,30 @@ internal static class MediaProtocol
                 $"Managed media type {media.GetType()} is not canonical.");
         }
 
-        using BamlSafeHandle original = api.CreateMediaOwner(contract.MediaType, payload);
-        BamlSafeHandle transferred = original.CloneOwned();
-        ownership.AddTransfer(transferred);
-        var @class = new InboundClassValue();
-        @class.Fields.Add(new InboundMapEntry
+        var wire = new BamlValueMedia { Media = contract.MediaType };
+        if (payload.MediaType is { } mimeType)
         {
-            StringKey = "_data",
-            Value = new InboundValue
-            {
-                Handle = new global::BamlBridge.Cffi.V1.BamlHandle
-                {
-                    Key = transferred.Key,
-                    HandleType = contract.HandleType,
-                },
-            },
-        });
-        return new InboundValue
+            wire.MimeType = mimeType;
+        }
+
+        if (payload.IsUrl)
         {
-            ValueType = new BamlTy
+            wire.Url = payload.Url;
+        }
+        else if (payload.Name is { } name)
+        {
+            wire.FileContent = new BamlValueMediaFileContent
             {
-                Media = new BamlTyMedia { Kind = MediaKind(contract.MediaType) },
-            },
-            ClassValue = @class,
-        };
+                Name = name,
+                Base64 = Convert.ToBase64String(payload.Bytes.Span),
+            };
+        }
+        else
+        {
+            wire.Base64 = Convert.ToBase64String(payload.Bytes.Span);
+        }
+
+        return new InboundValue { MediaValue = wire };
     }
 
     private static BamlTyMediaKind MediaKind(MediaTypeEnum mediaType) => mediaType switch

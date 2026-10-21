@@ -115,11 +115,9 @@ static void probe_register_host_release(BamlHostReleaseCallback callback) {
 
 static void probe_complete_host_call(
     uint32_t call_id,
-    int32_t is_error,
     const int8_t *content,
     size_t length) {
   (void)call_id;
-  (void)is_error;
   (void)content;
   (void)length;
 }

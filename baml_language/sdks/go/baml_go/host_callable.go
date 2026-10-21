@@ -138,17 +138,29 @@ func lookupHostCallable(key uint64) (HostCallableFunc, bool) {
 // host-release callback and is idempotent. Prompt removal after an otherwise
 // normal call is not guaranteed because the engine may retain its HostClosure
 // until a later garbage-collection cycle.
-func HostCallable(callable HostCallableFunc) Input {
+// HostCallable registers callable for the engine to invoke and sends its
+// handle, stating functionType beside it: a host callable has no type of its
+// own, so the one its slot declares is what the engine binds it to.
+func HostCallable(callable HostCallableFunc, functionType BAMLType) Input {
 	if callable == nil {
 		return InvalidInput("BAML host callable is nil")
+	}
+	if functionType.value == nil || functionType.value.GetFunction() == nil {
+		return InvalidInput("BAML host callable requires its function type")
 	}
 	return Input{deferred: &inputEncoder{encode: func(transaction *inputTransaction) (*cffi.InboundValue, error) {
 		if transaction == nil {
 			return nil, errors.New("BAML host callable requires an input transaction")
 		}
+		stated, err := functionType.stated(transaction)
+		if err != nil {
+			return nil, fmt.Errorf("BAML host callable function type: %w", err)
+		}
 		key := registerHostValue(hostValue{callable: callable})
 		transaction.ownHostValue(key)
-		return hostValueInput(key, cffi.BamlHandleType_HOST_VALUE_CALLABLE), nil
+		value := hostValueInput(key, cffi.BamlHandleType_HOST_VALUE_CALLABLE)
+		value.ValueType = stated
+		return value, nil
 	}}}
 }
 
@@ -172,7 +184,7 @@ func dispatchHostCall(key uint64, callID uint32, payload []byte, frames ...*host
 	var call cffi.BamlToHostCall
 	if err := proto.Unmarshal(payload, &call); err != nil {
 		releaseResultOwner(ownHostCallOutboundHandles(&call))
-		completeHostCallFailure(callID, fmt.Errorf("decode BAML host-call arguments: %w", err), "")
+		completeHostCallBridgeFailure(callID, fmt.Sprintf("decode BAML host-call arguments: %v", err))
 		return
 	}
 	// Take ownership of every decoded native handle before looking up the
@@ -187,7 +199,7 @@ func dispatchHostCall(key uint64, callID uint32, payload []byte, frames ...*host
 
 	callable, ok := lookupHostCallable(key)
 	if !ok {
-		completeHostCallFailure(callID, fmt.Errorf("no Go host callable registered for key %d", key), "")
+		completeHostCallBridgeFailure(callID, fmt.Sprintf("no Go host callable registered for key %d", key))
 		return
 	}
 
@@ -196,29 +208,29 @@ func dispatchHostCall(key uint64, callID uint32, payload []byte, frames ...*host
 	seenOptional := false
 	for index, argument := range call.Args {
 		if argument == nil || argument.Value == nil {
-			completeHostCallFailure(callID, fmt.Errorf("BAML host-call argument %d is empty", index), "")
+			completeHostCallBridgeFailure(callID, fmt.Sprintf("BAML host-call argument %d is empty", index))
 			return
 		}
 		value := Value{value: argument.Value, owner: owner}
 		if argument.IsOptionalArg {
 			seenOptional = true
 			if argument.ArgName == "" {
-				completeHostCallFailure(callID, fmt.Errorf("BAML host-call optional argument %d has no name", index), "")
+				completeHostCallBridgeFailure(callID, fmt.Sprintf("BAML host-call optional argument %d has no name", index))
 				return
 			}
 			if _, duplicate := optional[argument.ArgName]; duplicate {
-				completeHostCallFailure(callID, fmt.Errorf("BAML host-call optional argument %q is duplicated", argument.ArgName), "")
+				completeHostCallBridgeFailure(callID, fmt.Sprintf("BAML host-call optional argument %q is duplicated", argument.ArgName))
 				return
 			}
 			optional[argument.ArgName] = value
 			continue
 		}
 		if argument.ArgName != "" {
-			completeHostCallFailure(callID, fmt.Errorf("BAML host-call required argument %d unexpectedly has name %q", index, argument.ArgName), "")
+			completeHostCallBridgeFailure(callID, fmt.Sprintf("BAML host-call required argument %d unexpectedly has name %q", index, argument.ArgName))
 			return
 		}
 		if seenOptional {
-			completeHostCallFailure(callID, fmt.Errorf("BAML host-call required argument %d follows optional arguments", index), "")
+			completeHostCallBridgeFailure(callID, fmt.Sprintf("BAML host-call required argument %d follows optional arguments", index))
 			return
 		}
 		required = append(required, value)
@@ -229,15 +241,15 @@ func dispatchHostCall(key uint64, callID uint32, payload []byte, frames ...*host
 }
 
 func ownHostCallOutboundHandles(call *cffi.BamlToHostCall) *resultOwner {
-	allHandles := make(map[uint64]struct{})
+	var keys []uint64
 	if call != nil {
 		for _, argument := range call.Args {
 			if argument != nil {
-				collectOutboundHandles(argument.Value, allHandles)
+				keys = appendOutboundHandles(keys, argument.Value)
 			}
 		}
 	}
-	return ownOutboundHandleKeys(allHandles)
+	return ownOutboundHandleKeys(keys)
 }
 
 func runHostCall(callID uint32, callable HostCallableFunc, arguments HostCallArguments, owner *resultOwner) {
@@ -278,32 +290,28 @@ func runHostCall(callID uint32, callable HostCallableFunc, arguments HostCallArg
 		finished = true
 		return
 	}
-	completeHostCallInput(callID, false, result)
+	completeHostCallReturned(callID, result)
 	finished = true
 }
 
+// completeHostCallFailure completes the call as an exception of the host's
+// own: the engine builds the baml.errors.HostCallable whose _handle is the
+// registry key of err, so the same process recovers err by identity.
 func completeHostCallFailure(callID uint32, err error, traceback string) {
 	if err == nil {
 		err = errors.New("Go host callable failed")
 	}
 	key := registerHostValue(hostValue{opaque: err})
-	// Class is static except for the pre-registered opaque handle. Associate
-	// that key with the completion transaction so failed encoding rolls it back.
-	input := Input{deferred: &inputEncoder{encode: func(transaction *inputTransaction) (*cffi.InboundValue, error) {
-		if transaction == nil {
-			unregisterHostValue(key)
-			return nil, errors.New("BAML host error requires an input transaction")
-		}
-		transaction.ownHostValue(key)
-		return Class("baml.errors.HostCallable", map[string]Input{
-			"message":    String(err.Error()),
-			"class_name": String(hostErrorClassName(err)),
-			"language":   String("go"),
-			"traceback":  Optional(tracebackOrNil(traceback), String),
-			"_handle":    {value: hostValueInput(key, cffi.BamlHandleType_HOST_VALUE_OPAQUE)},
-		}).encodeValue(transaction)
-	}}}
-	completeHostCallInput(callID, true, input)
+	raised := &cffi.HostException{
+		Message:   err.Error(),
+		ClassName: hostErrorClassName(err),
+		Language:  "go",
+		Traceback: tracebackOrNil(traceback),
+		Handle:    key,
+	}
+	if !completeHostCall(callID, &cffi.HostCallCompletion{Outcome: &cffi.HostCallCompletion_Raised{Raised: raised}}) {
+		unregisterHostValue(key)
+	}
 }
 
 func tracebackOrNil(traceback string) *string {
@@ -328,33 +336,42 @@ func hostErrorClassName(err error) string {
 	return name
 }
 
-func completeHostCallInput(callID uint32, isError bool, input Input) {
+// completeHostCallReturned completes the call with the callable's result. A
+// result the adapter cannot encode is a fault of the bridge's own: the
+// generated adapter already typed it.
+func completeHostCallReturned(callID uint32, input Input) {
 	transaction := &inputTransaction{}
 	encoded, err := input.encodeValue(transaction)
 	if err != nil {
 		transaction.rollback()
-		if !isError {
-			completeHostCallFailure(callID, fmt.Errorf("encode Go host-call result: %w", err), "")
-			return
-		}
-		// The failure encoder itself failed. Complete with an empty error payload;
-		// the runtime deterministically promotes this bridge fault to SdkPanic.
-		completeNativeHostCall(callID, true, nil)
+		completeHostCallBridgeFailure(callID, fmt.Sprintf("encode Go host-call result: %v", err))
 		return
 	}
-	payload, err := proto.Marshal(encoded)
-	if err != nil {
+	if !completeHostCall(callID, &cffi.HostCallCompletion{Outcome: &cffi.HostCallCompletion_Returned{Returned: encoded}}) {
 		transaction.rollback()
-		if !isError {
-			completeHostCallFailure(callID, fmt.Errorf("marshal Go host-call result: %w", err), "")
-			return
-		}
-		completeNativeHostCall(callID, true, nil)
 		return
 	}
-	completeNativeHostCall(callID, isError, payload)
-	transaction.commitHostValues()
-	transaction.rollback()
+	transaction.commit()
+}
+
+// completeHostCallBridgeFailure completes the call as a failure of the
+// bridge's own, which the engine surfaces as baml.panics.SdkPanic.
+func completeHostCallBridgeFailure(callID uint32, message string) {
+	completeHostCall(callID, &cffi.HostCallCompletion{Outcome: &cffi.HostCallCompletion_BridgeFailure{BridgeFailure: message}})
+}
+
+// completeHostCall delivers a completion. It reports false when the payload
+// could not be marshalled; the call is then completed as a bridge failure
+// (an empty payload carries no outcome) and the caller rolls back whatever
+// the completion transferred.
+func completeHostCall(callID uint32, completion *cffi.HostCallCompletion) bool {
+	payload, err := proto.Marshal(completion)
+	if err != nil {
+		completeNativeHostCall(callID, nil)
+		return false
+	}
+	completeNativeHostCall(callID, payload)
+	return true
 }
 
 type invocationStateContextKey struct{}
@@ -379,12 +396,12 @@ func dispatchHostInvocation(payload []byte) {
 			releaseOutboundHandle(envelope.EffectiveState)
 		}
 		if envelope.CallbackId != 0 {
-			completeNativeHostCall(envelope.CallbackId, true, nil)
+			completeHostCallBridgeFailure(envelope.CallbackId, fmt.Sprintf("decode host invocation: %v", err))
 		}
 		return
 	}
 	carrier := &invocationStateCarrier{state: envelope.EffectiveState,
-		owner: ownOutboundHandleKeys(map[uint64]struct{}{envelope.EffectiveState: {}})}
+		owner: ownOutboundHandleKeys([]uint64{envelope.EffectiveState})}
 	carrier.cancel = envelope.Cancel
 	carrier.cancelOwner = ownOutboundHandles(envelope.Cancel)
 	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), invocationStateContextKey{}, carrier))

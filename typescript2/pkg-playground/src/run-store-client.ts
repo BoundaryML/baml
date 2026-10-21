@@ -19,7 +19,7 @@ import type {
 export interface StartRunRequest {
   project: string;
   functionName: string;
-  argsBytes: Uint8Array;
+  args: string;
 }
 
 export interface StartPreviewRunRequest {
@@ -27,7 +27,7 @@ export interface StartPreviewRunRequest {
   parentFunctionName: string;
   helper: string;
   functionName: string;
-  argsBytes: Uint8Array;
+  args: string;
 }
 
 export interface StartTestRunRequest {
@@ -512,7 +512,7 @@ export function createRunStoreClient(port: RuntimePort): RunStoreClient {
       return new Promise((resolve, reject) => {
         pending.set(id, { kind: 'startRun', reject, resolve });
         port.postMessage({
-          argsBytes: request.argsBytes,
+          args: request.args,
           functionName: request.functionName,
           helper: request.helper,
           parentFunctionName: request.parentFunctionName,
@@ -527,7 +527,7 @@ export function createRunStoreClient(port: RuntimePort): RunStoreClient {
       return new Promise((resolve, reject) => {
         pending.set(id, { kind: 'startRun', reject, resolve });
         port.postMessage({
-          argsBytes: request.argsBytes,
+          args: request.args,
           functionName: request.functionName,
           project: request.project,
           requestId: id,

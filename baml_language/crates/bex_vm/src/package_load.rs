@@ -764,6 +764,15 @@ impl StdlibHeads {
             .map(|(class, _)| *class)
     }
 
+    /// The wrapper class of media of `kind`, if the standard library declares
+    /// one (it declares none for the generic `media`).
+    pub fn media_wrapper(&self, kind: MediaKind) -> Option<TypeHead> {
+        self.media
+            .iter()
+            .find(|(k, _)| *k == kind)
+            .map(|(_, head)| *head)
+    }
+
     /// Which media wrapper class `head` is, if any.
     pub fn media_kind(&self, head: TypeHead) -> Option<MediaKind> {
         self.media

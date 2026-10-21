@@ -27,10 +27,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *       values).</li>
  * </ul>
  *
- * <p>Host-owned handles ({@code HOST_VALUE_CALLABLE} / {@code HOST_VALUE_OPAQUE})
- * are <em>not</em> tracked in {@code HANDLE_TABLE}; releasing them by key could
- * evict an unrelated engine row (the two keyspaces share the {@code u64} value
- * space), so the release path skips them — same guard as {@code BamlPyHandle}.
+ * <p>Host-value handles ({@code HOST_VALUE_CALLABLE} / {@code HOST_VALUE_OPAQUE})
+ * are the engine's references to objects this host registered, numbered by the
+ * host registry and never present in the engine's handle table. They are neither
+ * cloned nor released through the handle API ({@link #isHostValue()}); the
+ * engine's release callback retires the registration instead.
  */
 public final class BamlHandle implements AutoCloseable {
     /** Shared cleaner; daemon-threaded, so it never keeps the JVM alive. */
@@ -137,6 +138,9 @@ public final class BamlHandle implements AutoCloseable {
      */
     public long cloneKeyForWire() {
         if (state.released.get()) throw new IllegalStateException("handle is closed");
+        // A host value is the engine's reference to the host's own object: its
+        // key goes as it is, nothing is cloned and nothing is owed.
+        if (isHostValue()) return key;
         long cloned = BamlFfi.nativeHandleClone(key);
         baml_bridge.internal.EncodingScope.own(cloned, handleType);
         return cloned;
@@ -145,7 +149,18 @@ public final class BamlHandle implements AutoCloseable {
     /** Keep an independently owned reference to this row. */
     public BamlHandle cloneOwned() {
         if (state.released.get()) throw new IllegalStateException("handle is closed");
+        if (isHostValue()) return new BamlHandle(key, handleType, classFqn);
         return new BamlHandle(BamlFfi.nativeHandleClone(key), handleType, classFqn);
+    }
+
+    /**
+     * Whether this handle is the engine's reference to a host object (a
+     * registered callable or opaque value), as opposed to this host's reference
+     * to an engine object. The two are numbered independently and never meet
+     * in the engine's handle table.
+     */
+    public boolean isHostValue() {
+        return handleType == HOST_VALUE_CALLABLE || handleType == HOST_VALUE_OPAQUE;
     }
 
     /** Release the owned row eagerly (idempotent). */

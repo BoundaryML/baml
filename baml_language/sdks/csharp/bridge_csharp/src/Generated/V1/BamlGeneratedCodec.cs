@@ -211,32 +211,49 @@ public readonly partial struct BamlGeneratedCodecContext
 
     public BamlGeneratedHostResult VoidResult() => new(type: null, encode: null);
 
+    /// <summary>
+    /// The declared throws type of a host callable, as its canonical serialized
+    /// <c>BamlTy</c>.
+    /// </summary>
+    public BamlGeneratedHostThrows Throws(ReadOnlySpan<byte> metadata) => new(metadata.ToArray());
+
+    /// <summary>
+    /// The declared throws type of a host callable that names the callee's type
+    /// parameters, as the type the call binds them to.
+    /// </summary>
+    public BamlGeneratedHostThrows Throws<T>(BamlGeneratedType<T> type) =>
+        new(registry.RequireType(type).Metadata);
+
+    /// <summary>
+    /// The throws type of a host callable whose declaration left it open: an
+    /// implicit effect parameter the caller never binds. A host callable may
+    /// throw anything, so it is <c>unknown</c>.
+    /// </summary>
+    public BamlGeneratedHostThrows UnknownThrows() =>
+        new(new BamlTy { Unknown = new BamlTyUnknown() }.ToByteArray());
+
     public BamlGeneratedValue HostCallable(
         Delegate callback,
         IReadOnlyList<BamlGeneratedHostParameter> parameters,
         BamlGeneratedHostResult result,
+        BamlGeneratedHostThrows throws,
         BamlGeneratedHostInvoker invoke)
     {
         ArgumentNullException.ThrowIfNull(callback);
         ArgumentNullException.ThrowIfNull(parameters);
         ArgumentNullException.ThrowIfNull(result);
+        ArgumentNullException.ThrowIfNull(throws);
         ArgumentNullException.ThrowIfNull(invoke);
         return BamlGeneratedValue.CreateHostCallable(
             new BamlGeneratedHostCallable(
                 callback,
-                new BamlGeneratedHostCallableDescriptor(parameters, result, invoke)));
+                new BamlGeneratedHostCallableDescriptor(parameters, result, throws, invoke)));
     }
 
     public BamlGeneratedValue Value(global::Baml.BamlValue value)
     {
         ArgumentNullException.ThrowIfNull(value);
         return value.GeneratedValue;
-    }
-
-    public BamlGeneratedValue List(IEnumerable<BamlGeneratedValue> values)
-    {
-        ArgumentNullException.ThrowIfNull(values);
-        return BamlGeneratedValue.CreateList(SnapshotValues(values, "list"));
     }
 
     public BamlGeneratedValue List(
@@ -254,13 +271,6 @@ public readonly partial struct BamlGeneratedCodecContext
         return BamlGeneratedValue.CreateList(
             SnapshotValues(values, "list"),
             itemTypeMetadata);
-    }
-
-    public BamlGeneratedValue Map(
-        IEnumerable<KeyValuePair<string, BamlGeneratedValue>> entries)
-    {
-        ArgumentNullException.ThrowIfNull(entries);
-        return BamlGeneratedValue.CreateMap(SnapshotEntries(entries, "map"));
     }
 
     public BamlGeneratedValue Map(

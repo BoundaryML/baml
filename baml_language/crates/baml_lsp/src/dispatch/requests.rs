@@ -31,14 +31,17 @@ use crate::{
 /// `capabilities.experimental.baml` so the extension's version-skew check
 /// has something to read (it silently skips servers that send nothing).
 ///
-/// The playground numbers mirror the `/api/ws` handshake's `hello` frame
-/// (protocol 2, min client 2) — the WS layer is the source of truth for
-/// what those versions MEAN; these exist so a client can learn them before
-/// opening a socket.
+/// The playground numbers are the ones the `/api/ws` handshake's `hello`
+/// frame sends, so a client can learn them before opening a socket.
+///
+/// Playground protocol 3: `startRun` and `startPreviewRun` carry the
+/// arguments form's JSON text in `args` (protocol 2 sent proto bytes in
+/// `argsBytes`). The two are not compatible, so a client of either refuses
+/// a server of the other instead of hanging on a run that never starts.
 pub(crate) const LSP_PROTOCOL: u32 = 1;
 pub(crate) const MIN_SUPPORTED_CLIENT_LSP_PROTOCOL: u32 = 1;
-pub(crate) const PLAYGROUND_PROTOCOL: u32 = 2;
-pub(crate) const MIN_SUPPORTED_CLIENT_PLAYGROUND_PROTOCOL: u32 = 2;
+pub const PLAYGROUND_PROTOCOL: u32 = 3;
+pub const MIN_SUPPORTED_CLIENT_PLAYGROUND_PROTOCOL: u32 = 3;
 
 /// The `BamlServerMetadata` the extension reads from
 /// `capabilities.experimental.baml` (camelCase is the wire contract).
@@ -930,8 +933,14 @@ mod tests {
         let baml = &experimental["baml"];
         assert_eq!(baml["lspProtocol"], 1);
         assert_eq!(baml["minSupportedClientLspProtocol"], 1);
-        assert_eq!(baml["playgroundProtocol"], 2, "mirrors the WS hello");
-        assert_eq!(baml["minSupportedClientPlaygroundProtocol"], 2);
+        assert_eq!(
+            baml["playgroundProtocol"], PLAYGROUND_PROTOCOL,
+            "mirrors the WS hello"
+        );
+        assert_eq!(
+            baml["minSupportedClientPlaygroundProtocol"],
+            MIN_SUPPORTED_CLIENT_PLAYGROUND_PROTOCOL
+        );
         assert!(baml["toolchainVersion"].is_string());
     }
 

@@ -26,6 +26,9 @@ pub(crate) struct Analysis {
     /// Emitted type names per (renamed) leaf — the namespace synthesized
     /// union enums must not collide with.
     type_names_by_leaf: HashMap<Vec<String>, HashSet<String>>,
+    /// The right-hand side of every emitted type alias. None is recursive,
+    /// so a statement spells each alias by its body.
+    alias_bodies: HashMap<Name, Ty>,
 }
 
 impl Analysis {
@@ -49,6 +52,11 @@ impl Analysis {
             Some(renamed) => renamed,
             None => path,
         }
+    }
+
+    /// The right-hand side of an emitted type alias.
+    pub(crate) fn alias_body(&self, name: &Name) -> Option<&Ty> {
+        self.alias_bodies.get(name)
     }
 
     /// Emitted type names in a (renamed) leaf.
@@ -257,12 +265,19 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         }
     }
 
+    let alias_bodies = aliases
+        .iter()
+        .filter(|(name, _)| emitted.contains(*name))
+        .map(|(name, alias)| ((*name).clone(), alias.resolves_to.clone()))
+        .collect();
+
     (
         Analysis {
             emitted,
             scc,
             renames,
             type_names_by_leaf,
+            alias_bodies,
         },
         warnings,
     )

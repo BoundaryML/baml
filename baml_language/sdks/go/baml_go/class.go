@@ -1,6 +1,7 @@
 package baml_go
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"sort"
@@ -12,6 +13,46 @@ import (
 // are exact BAML wire names, not their generated Go projections.
 func Class(name string, fields map[string]Input) Input {
 	return ClassWithTypeArgs(name, nil, fields)
+}
+
+// maxClassNesting bounds how deeply generated classes nest in one encoded
+// value. A generated Go type reaches itself only through a pointer, slice or
+// map, so a deeper value is a cycle; the engine refuses far shallower values.
+const maxClassNesting = 256
+
+// classNestingError reports a value nested past maxClassNesting. The path to
+// it is as long as the limit, so it is reported once rather than wrapped by
+// every enclosing class, list and map.
+type classNestingError struct{ name string }
+
+func (err *classNestingError) Error() string {
+	return fmt.Sprintf("class %q nests more than %d generated classes deep (possible cycle)", err.name, maxClassNesting)
+}
+
+// GeneratedClass is the input of one generated class value: the class's wire
+// name, its type arguments in declaration order, and its fields, each encoded
+// under its declared type. Generated BAMLInput methods call it.
+//
+// fields runs when the call is encoded rather than here, so the call's input
+// transaction can count the classes enclosing each value: a cyclic Go value
+// is refused instead of recursing until the goroutine's stack is exhausted.
+func GeneratedClass(name string, typeArgs []BAMLType, fields func() map[string]Input) Input {
+	return Input{deferred: &inputEncoder{encode: func(transaction *inputTransaction) (*cffi.InboundValue, error) {
+		if transaction == nil {
+			return nil, fmt.Errorf("class %q is encoded only within a call's input transaction", name)
+		}
+		if transaction.classDepth >= maxClassNesting {
+			return nil, &classNestingError{name: name}
+		}
+		transaction.classDepth++
+		defer func() { transaction.classDepth-- }()
+		encoded, err := ClassWithTypeArgs(name, typeArgs, fields()).encodeValue(transaction)
+		var nesting *classNestingError
+		if errors.As(err, &nesting) {
+			return nil, nesting
+		}
+		return encoded, err
+	}}}
 }
 
 // ClassWithTypeArgs constructs a parameterized BAML class value. Type
@@ -31,10 +72,11 @@ func ClassWithTypeArgs(name string, typeArgs []BAMLType, fields map[string]Input
 	prepare := func(transaction *inputTransaction) (*cffi.InboundValue, error) {
 		encodedTypeArgs := make([]*cffi.BamlTy, len(typeArgs))
 		for index, typeArg := range typeArgs {
-			if err := validateBAMLType(typeArg.value, 0); err != nil {
+			stated, err := typeArg.stated(transaction)
+			if err != nil {
 				return nil, fmt.Errorf("class %q type argument %d: %w", name, index, err)
 			}
-			encodedTypeArgs[index] = typeArg.value
+			encodedTypeArgs[index] = stated
 		}
 		entries := make([]*cffi.InboundMapEntry, 0, len(keys))
 		for index, key := range keys {
@@ -52,7 +94,7 @@ func ClassWithTypeArgs(name string, typeArgs []BAMLType, fields map[string]Input
 			ValueType: &cffi.BamlTy{
 				Ty: &cffi.BamlTy_ClassTy{
 					ClassTy: &cffi.BamlTyClass{
-						Name:     name,
+						Head:     &cffi.BamlTyClass_Name{Name: name},
 						TypeArgs: encodedTypeArgs,
 					},
 				},
@@ -64,7 +106,7 @@ func ClassWithTypeArgs(name string, typeArgs []BAMLType, fields map[string]Input
 			},
 		}, nil
 	}
-	if inputsAreStatic(inputs) {
+	if inputsAreStatic(inputs) && !typesTransfer(typeArgs) {
 		value, err := prepare(nil)
 		return Input{value: value, err: err}
 	}
@@ -109,7 +151,7 @@ func (value Value) ClassWithTypeArgs(name string, typeArgs []BAMLType) (ClassVal
 	decodedTypeArgs := make([]BAMLType, len(typeArgs))
 	for index, expected := range typeArgs {
 		actual := BAMLType{value: item.ClassValue.TypeArgs[index]}
-		if err := validateBAMLType(actual.value, 0); err != nil {
+		if err := validateBAMLType(actual.value, typeAnnotation); err != nil {
 			return ClassValue{}, fmt.Errorf("BAML class %q type argument %d: %w", name, index, err)
 		}
 		if !actual.Equal(expected) {

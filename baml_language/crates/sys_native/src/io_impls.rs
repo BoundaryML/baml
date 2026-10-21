@@ -3389,7 +3389,6 @@ fn arg_value_type(value: &BexExternalValue) -> Type {
         BexExternalValue::Null => Type::Object(ObjectType::Any),
         BexExternalValue::Int(_) => Type::Int,
         BexExternalValue::Float(_) => Type::Float,
-        BexExternalValue::JsNumber(_) => Type::Float,
         BexExternalValue::Bool(_) => Type::Bool,
         BexExternalValue::Bigint(_) => Type::Object(ObjectType::Bigint),
         BexExternalValue::String(_) => Type::Object(ObjectType::String),
@@ -3405,6 +3404,7 @@ fn arg_value_type(value: &BexExternalValue) -> Type {
         BexExternalValue::FunctionRef { .. }
         | BexExternalValue::Handle(_)
         | BexExternalValue::HostValue(_)
+        | BexExternalValue::HostCallable { .. }
         | BexExternalValue::Adt(_) => Type::Object(ObjectType::Any),
     }
 }

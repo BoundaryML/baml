@@ -49,7 +49,7 @@
  * `media_from_file` always fails and `media_file` is always absent;
  * `media_name` and `media_from_file_content` are required.
  */
-#define BAML_API_V1_ABI_VERSION 4
+#define BAML_API_V1_ABI_VERSION 5
 
 /**
  * Handle-type values returned by media constructors and carried on the wire.
@@ -237,10 +237,13 @@ typedef void (*BamlHostReleaseCallback)(uint64_t host_value_key);
 
 typedef void (*BamlRegisterHostReleaseCallbackFn)(BamlHostReleaseCallback callback);
 
-typedef void (*BamlCompleteHostCallFn)(uint32_t call_id,
-                                       int32_t is_error,
-                                       const int8_t *content,
-                                       size_t length);
+/**
+ * Completes a BAML→host callback with a protobuf-encoded `HostCallCompletion`:
+ * the callable's result or thrown value encoded against its declared types,
+ * an exception of the host's own, a broken contract, or a bridge failure.
+ * `content` is borrowed only for the call.
+ */
+typedef void (*BamlCompleteHostCallFn)(uint32_t call_id, const int8_t *content, size_t length);
 
 typedef BamlCffiStatus (*BamlHandleCloneFn)(uint64_t key, uint64_t *out_key);
 
@@ -359,12 +362,13 @@ typedef BamlCffiStatus (*BamlMediaFromFileContentFn)(int32_t media_kind,
  * An otherwise unexpected panic aborts the process rather than crossing into
  * foreign frames. Likewise, host callbacks must not unwind or throw into Rust.
  *
- * V1 is append-only: existing fields may never be reordered or removed, and
- * a field changes type or semantics only with a new ABI revision. New fields
- * may only be appended. Before reading a field, consumers must verify that
- * `struct_size` reaches the end of that field. `baml_api_v1_is_compatible`
- * performs the check for the fields this revision requires. A larger unknown
- * size is compatible; a truncated prefix is not.
+ * Fields are never reordered or removed, and a field changes type or
+ * semantics only with a new ABI revision, which every SDK in this repository
+ * requires exactly (`BAML_API_V1_ABI_VERSION`) and ships lockstep with. Within
+ * a revision new fields may only be appended. Before reading a field,
+ * consumers must verify that `struct_size` reaches the end of that field.
+ * `baml_api_v1_is_compatible` performs the check for the fields this revision
+ * requires. A larger unknown size is compatible; a truncated prefix is not.
  */
 typedef struct BamlApiV1 {
   /**

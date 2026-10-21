@@ -267,7 +267,7 @@ export class WebSocketRuntimePort implements RuntimePort {
   }
 
   // ---------------------------------------------------------------------------
-  // Convert WorkerInMessage → WsInMessage (base64-encode argsBytes)
+  // Convert WorkerInMessage → WsInMessage
   // ---------------------------------------------------------------------------
 
   private toServer(msg: WorkerInMessage): WebSocketInMessage | null {
@@ -275,7 +275,7 @@ export class WebSocketRuntimePort implements RuntimePort {
       case 'startRun':
         this.clearLogDecorations();
         return {
-          argsBytes: uint8ArrayToBase64(msg.argsBytes),
+          args: msg.args,
           functionName: msg.functionName,
           project: msg.project,
           requestId: msg.requestId,
@@ -284,7 +284,7 @@ export class WebSocketRuntimePort implements RuntimePort {
       case 'startPreviewRun':
         this.clearLogDecorations();
         return {
-          argsBytes: uint8ArrayToBase64(msg.argsBytes),
+          args: msg.args,
           functionName: msg.functionName,
           helper: msg.helper,
           parentFunctionName: msg.parentFunctionName,
@@ -665,16 +665,4 @@ export class WebSocketRuntimePort implements RuntimePort {
   private clearLogDecorations(): void {
     this.deliver({ type: 'clearLogDecorations' });
   }
-}
-
-// ---------------------------------------------------------------------------
-// Base64 helpers
-// ---------------------------------------------------------------------------
-
-function uint8ArrayToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]!);
-  }
-  return btoa(binary);
 }

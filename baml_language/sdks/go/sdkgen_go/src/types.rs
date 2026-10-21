@@ -15,7 +15,9 @@ use baml_base::{
     Literal, MediaKind, Name as BaseName,
     qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_STREAM, BAML_JSON_JSON},
 };
-use baml_sdkgen_types::{CodegenFunctionParamMode, Name, Symbol, SymbolPool, Ty};
+use baml_sdkgen_types::{
+    CodegenFunctionParamMode, Name, Symbol, SymbolPool, Ty, is_synthetic_effect_param,
+};
 
 /// A canonical, attribute-free Go type identity.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -93,7 +95,35 @@ impl GoUnionKey {
 pub(crate) struct GoFunctionKey {
     params: Box<[GoFunctionParamKey]>,
     ret: Option<Box<GoTy>>,
-    throws: bool,
+    throws: GoCallbackThrows,
+}
+
+/// What a callback's declared `throws` becomes on the Go side: the throws type
+/// its binding states and whether its Go surface returns an `error`.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub(crate) enum GoCallbackThrows {
+    /// Declared `throws never`. The callback must not fail, so any host failure
+    /// (panic, `runtime.Goexit`, cancellation, an undecodable argument) is a
+    /// contract violation, exactly as the declaration says.
+    Never,
+    /// The slot's throws is its open effect parameter. The Go surface returns
+    /// no `error`, but a host failure still crosses as a thrown
+    /// `baml.errors.HostCallable`; stating `unknown` keeps that failure an
+    /// ordinary catchable BAML error rather than a contract violation.
+    Open,
+    /// The declared throws admits `baml.errors.HostCallable`, which is how a
+    /// returned Go `error` crosses, so the Go surface returns an `error`.
+    HostCallable,
+}
+
+impl GoCallbackThrows {
+    /// Whether the Go surface of the callback returns an `error`.
+    pub(crate) fn returns_error(self) -> bool {
+        match self {
+            Self::HostCallable => true,
+            Self::Never | Self::Open => false,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -153,7 +183,7 @@ impl GoFunctionKey {
         self.ret.as_deref()
     }
 
-    pub(crate) fn throws(&self) -> bool {
+    pub(crate) fn throws(&self) -> GoCallbackThrows {
         self.throws
     }
 }
@@ -324,14 +354,15 @@ impl<'a> GoTypeProjection<'a> {
                 throws,
                 ..
             } => {
-                let throws = if matches!(throws.as_ref(), Ty::Never)
-                    || matches!(
-                        throws.as_ref(),
-                        Ty::TypeVar(name) if name.as_str().starts_with("__effect_param_")
-                    ) {
-                    false
+                let throws = if matches!(throws.as_ref(), Ty::Never) {
+                    GoCallbackThrows::Never
+                } else if matches!(
+                    throws.as_ref(),
+                    Ty::TypeVar(param) if is_synthetic_effect_param(param.name())
+                ) {
+                    GoCallbackThrows::Open
                 } else if self.throws_accepts_host_callable(throws, aliases) {
-                    true
+                    GoCallbackThrows::HostCallable
                 } else {
                     // A Go `error` is encoded as baml.errors.HostCallable. Do
                     // not generate a signature that falsely promises it can
@@ -984,7 +1015,7 @@ mod tests {
         assert_eq!(key.params()[0].ty(), &GoTy::Int);
         assert_eq!(key.params()[1].ty(), &GoTy::List(Box::new(GoTy::String)));
         assert_eq!(key.ret(), Some(&GoTy::Bool));
-        assert!(key.throws());
+        assert_eq!(key.throws(), GoCallbackThrows::HostCallable);
     }
 
     #[test]
@@ -1110,17 +1141,32 @@ mod tests {
                 Ty::String,
                 union(vec![validation_error, host_callable_error()]),
             )),
-            GoTy::Function(key) if key.throws()
+            GoTy::Function(key) if key.throws() == GoCallbackThrows::HostCallable
         ));
+    }
 
-        assert!(matches!(
-            projection.project(&callable(
-                vec![],
-                Ty::String,
-                Ty::TypeVar(
-                    baml_sdkgen_types::ParamTy::new(0, BaseName::new("__effect_param_0")))
-            )),
-            GoTy::Function(key) if !key.throws()
-        ));
+    #[test]
+    fn callback_projection_keeps_open_effects_open_and_never_closed() {
+        let pool = SymbolPool::default();
+        let projection = GoTypeProjection::new(&pool, 3);
+        let throws_of = |throws: Ty| match projection.project(&callable(vec![], Ty::String, throws))
+        {
+            GoTy::Function(key) => key.throws(),
+            other => panic!("callback should project to a Go function, got {other:?}"),
+        };
+
+        // An omitted `throws` is an open effect parameter: a Go failure must stay
+        // catchable, so the binding states `unknown`, not `never`.
+        assert_eq!(
+            throws_of(Ty::TypeVar(baml_sdkgen_types::ParamTy::new(
+                0,
+                BaseName::new("__effect_param_0")
+            ))),
+            GoCallbackThrows::Open
+        );
+        assert_eq!(throws_of(Ty::Never), GoCallbackThrows::Never);
+        assert!(!GoCallbackThrows::Open.returns_error());
+        assert!(!GoCallbackThrows::Never.returns_error());
+        assert!(GoCallbackThrows::HostCallable.returns_error());
     }
 }

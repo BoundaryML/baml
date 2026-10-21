@@ -106,7 +106,7 @@ func encodeJSON(value reflect.Value, active map[visit]bool, path string, depth i
 			}
 			entries[entryKey] = encoded
 		}
-		return anyMap(entries, nil)
+		return anyMap(entries, jsonElementType())
 	default:
 		return InvalidInput(fmt.Sprintf("encode baml.json.json at %s: unsupported Go value of type %s", path, value.Type()))
 	}
@@ -128,7 +128,15 @@ func encodeJSONList(value reflect.Value, active map[visit]bool, path string, dep
 			return items[index]
 		}
 	}
-	return anyList(items, nil)
+	return anyList(items, jsonElementType())
+}
+
+// jsonElementType is the type a JSON container's elements have: the canonical
+// `baml.json.json` alias, stated on every list and map so the engine takes the
+// container as JSON rather than guessing its element type from the contents.
+func jsonElementType() *BAMLType {
+	element := TypeAliasBAMLType("baml.json.json")
+	return &element
 }
 
 // JSON decodes the exact recursive value algebra represented by
@@ -264,7 +272,7 @@ func validateJSONSelectedPayload(selected *cffi.BamlTy, payload *cffi.BamlOutbou
 	// The canonical recursive alias admits every JSON wire shape. The normal
 	// decoder below still validates the complete payload recursively.
 	if alias, ok := selected.Ty.(*cffi.BamlTy_TypeAlias); ok {
-		if alias.TypeAlias != nil && alias.TypeAlias.Name == "baml.json.json" {
+		if alias.TypeAlias.GetName() == "baml.json.json" {
 			return nil
 		}
 	}
@@ -343,7 +351,7 @@ func isJSONBAMLType(value *cffi.BamlTy, depth int) bool {
 	}
 	switch typed := value.Ty.(type) {
 	case *cffi.BamlTy_TypeAlias:
-		return typed.TypeAlias != nil && typed.TypeAlias.Name == "baml.json.json"
+		return typed.TypeAlias.GetName() == "baml.json.json"
 	case *cffi.BamlTy_Primitive:
 		if typed.Primitive == nil {
 			return false

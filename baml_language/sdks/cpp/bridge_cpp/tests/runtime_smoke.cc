@@ -255,6 +255,8 @@ static void TestTypedSpecStreamAndPortableValueCodecs() {
   Require(encoded_prompt.has_prompt_ast_value() &&
               encoded_prompt.prompt_ast_value().simple().string() == "portable",
           "Prompt codec did not preserve portable data");
+  Require(!encoded_prompt.has_value_type(),
+          "a prompt implies its own type; the engine refuses a stated one");
 
   const baml::image image = baml::image::from_url(
       "https://example.test/cat.png", std::string("image/png"));
@@ -277,34 +279,127 @@ static void TestUnhandledSpawnErrorUsesHostDefault() {
   Require(threw, "default unhandled-spawn handler did not rethrow");
 }
 
-static void TestTyDefReportsUnsupportedReflection() {
-  baml::detail::pb::BamlOutboundValue value;
-  value.mutable_ty_def_value();
+static void TestTypeValuesCrossAsTheirOneSpelling() {
+  namespace pb = baml::detail::pb;
+  pb::BamlOutboundValue value;
+  pb::BamlTyClass* box = value.mutable_ty_value()->mutable_class_ty();
+  box->set_name("user.Box");
+  box->add_type_args()
+      ->mutable_list()
+      ->mutable_item()
+      ->mutable_enum_()
+      ->set_name("user.Color");
 
   bool decode_threw = false;
   try {
     (void)baml::codec<int64_t>::decode(value);
   } catch (const baml::error& exception) {
     decode_threw =
-        std::string(exception.what())
-            .find("requires BEP-066 reflection support") != std::string::npos;
+        std::string(exception.what()).find("got type") != std::string::npos;
   }
-  Require(decode_threw,
-          "runtime type definition decode did not report unsupported "
-          "BEP-066 reflection");
+  Require(decode_threw, "a type value decoded as an int");
 
-  bool transcode_threw = false;
+  pb::InboundValue named;
+  baml::detail::transcode_outbound_to_inbound(named, value);
+  Require(named.has_ty_value() && named.ty_value().SerializeAsString() ==
+                                      value.ty_value().SerializeAsString(),
+          "a type of compiled declarations was not restated as it came");
+
+  // A live head is a reference: restating one clones it, and a key the
+  // engine does not hold cannot be cloned.
+  box->add_type_args()->mutable_enum_()->set_live(~uint64_t{0});
+  bool restate_threw = false;
   try {
-    baml::detail::pb::InboundValue inbound;
-    baml::detail::transcode_outbound_to_inbound(inbound, value);
+    pb::InboundValue live;
+    baml::detail::transcode_outbound_to_inbound(live, value);
   } catch (const baml::error& exception) {
-    transcode_threw =
-        std::string(exception.what())
-            .find("requires BEP-066 reflection support") != std::string::npos;
+    restate_threw =
+        std::string(exception.what()) == "type reference clone failed";
   }
-  Require(transcode_threw,
-          "runtime type definition transcode did not report unsupported "
-          "BEP-066 reflection");
+  Require(restate_threw, "a live head was restated without a clone");
+}
+
+static void TestEveryLiveHeadIsVisitedOncePerOccurrence() {
+  namespace pb = baml::detail::pb;
+  pb::BamlTy ty;
+  pb::BamlTyFunction* function = ty.mutable_function();
+  function->add_params()->mutable_ty()->mutable_class_ty()->set_live(1);
+  pb::BamlTyInterface* interface_ty =
+      function->mutable_ret()->mutable_interface();
+  interface_ty->set_live(2);
+  interface_ty->add_bindings()->mutable_ty()->mutable_enum_variant()->set_live(
+      3);
+  pb::BamlTyFuture* future = function->mutable_throws()->mutable_future();
+  future->mutable_value()->mutable_type_alias()->set_name("user.Alias");
+  future->mutable_error()
+      ->mutable_list()
+      ->mutable_item()
+      ->mutable_enum_()
+      ->set_live(1);
+  const std::string before = ty.SerializeAsString();
+
+  std::vector<uint64_t> keys;
+  baml::detail::for_each_nominal(ty, [&](const auto& nominal) {
+    if (nominal.has_live()) keys.push_back(nominal.live());
+  });
+  Require((keys == std::vector<uint64_t>{1, 2, 3, 1}),
+          "live heads were not visited once per occurrence");
+  Require(ty.SerializeAsString() == before, "visiting heads changed the type");
+}
+
+static void TestTranscodeKeepsTheTypesTheEngineGave() {
+  namespace pb = baml::detail::pb;
+  pb::BamlOutboundValue list;
+  list.mutable_list_value()->mutable_item_type()->mutable_primitive()->set_kind(
+      pb::BamlTyPrimitiveKind::BAML_TY_PRIMITIVE_INT);
+  list.mutable_list_value()->add_items()->set_int_value(1);
+  pb::InboundValue inbound_list;
+  baml::detail::transcode_outbound_to_inbound(inbound_list, list);
+  Require(inbound_list.has_value_type() && inbound_list.value_type().has_list(),
+          "list lost its element type");
+  Require(inbound_list.value_type().list().item().primitive().kind() ==
+              pb::BamlTyPrimitiveKind::BAML_TY_PRIMITIVE_INT,
+          "list stated the wrong element type");
+
+  pb::BamlOutboundValue map;
+  map.mutable_map_value()->mutable_key_type()->mutable_primitive()->set_kind(
+      pb::BamlTyPrimitiveKind::BAML_TY_PRIMITIVE_STRING);
+  map.mutable_map_value()->mutable_value_type()->mutable_primitive()->set_kind(
+      pb::BamlTyPrimitiveKind::BAML_TY_PRIMITIVE_BOOL);
+  pb::InboundValue inbound_map;
+  baml::detail::transcode_outbound_to_inbound(inbound_map, map);
+  Require(inbound_map.has_value_type() && inbound_map.value_type().has_map(),
+          "map lost its key and value types");
+
+  // A scalar inside a union envelope goes back as the member the engine
+  // selected; a container keeps its own type instead.
+  pb::BamlOutboundValue variant;
+  pb::BamlValueUnionVariant* envelope = variant.mutable_union_variant_value();
+  envelope->mutable_self_type()
+      ->mutable_union_()
+      ->add_options()
+      ->mutable_primitive()
+      ->set_kind(pb::BamlTyPrimitiveKind::BAML_TY_PRIMITIVE_INT);
+  envelope->mutable_self_type()
+      ->mutable_union_()
+      ->add_options()
+      ->mutable_primitive()
+      ->set_kind(pb::BamlTyPrimitiveKind::BAML_TY_PRIMITIVE_STRING);
+  envelope->set_selected_option_index(1);
+  envelope->mutable_value()->set_string_value("x");
+  pb::InboundValue inbound_variant;
+  baml::detail::transcode_outbound_to_inbound(inbound_variant, variant);
+  Require(inbound_variant.string_value() == "x", "union payload changed");
+  Require(!inbound_variant.has_value_type(),
+          "a scalar implies its type; the union envelope states nothing");
+
+  pb::BamlOutboundValue literal;
+  literal.mutable_literal_value()->set_int_value(7);
+  pb::InboundValue inbound_literal;
+  baml::detail::transcode_outbound_to_inbound(inbound_literal, literal);
+  Require(inbound_literal.int_value() == 7, "literal payload changed");
+  Require(!inbound_literal.has_value_type(),
+          "a literal is implied by its scalar; nothing is stated");
 }
 
 // A media value holds content, never a path. Content that was read from a
@@ -341,6 +436,8 @@ int main() {
   RunTest("argument states", TestArgTwoState);
   RunTest("owned buffer move", TestOwnedBufferMove);
   RunTest("bigint codec", TestBigintCodec);
+  RunTest("transcode keeps engine types",
+          TestTranscodeKeepsTheTypesTheEngineGave);
   RunTest("portable prompt and media",
           TestPortableValuesTranscodeWithoutHandles);
   RunTest("typed spec, stream, prompt, and media codecs",
@@ -349,8 +446,10 @@ int main() {
           TestMediaContentReadFromAFileKeepsItsName);
   RunTest("unhandled_spawn_error_uses_host_default",
           TestUnhandledSpawnErrorUsesHostDefault);
-  RunTest("ty_def_reports_unsupported_reflection",
-          TestTyDefReportsUnsupportedReflection);
+  RunTest("type values cross as their one spelling",
+          TestTypeValuesCrossAsTheirOneSpelling);
+  RunTest("every live head is visited once per occurrence",
+          TestEveryLiveHeadIsVisitedOncePerOccurrence);
   std::printf("bridge core smoke: all ok\n");
   return 0;
 }

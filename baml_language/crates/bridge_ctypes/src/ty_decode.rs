@@ -1,376 +1,328 @@
-//! Decode the wire `BamlTy` (`baml_type.proto`) into a `baml_type::RuntimeTy`.
+//! Decode the wire `BamlTy` (`baml_type.proto`) into a wire type.
+//!
+//! The parse is pure: a compiled declaration's head is its name, a runtime
+//! declaration's head is the host's table key, carried as it arrived. Nothing
+//! here touches the handle table; the engine's decoder ([`crate::InboundOwners`])
+//! journals and drains the keys a statement carries, and the engine resolves
+//! names and follows handles when it anchors the type.
 //!
 //! Two host-provided "type as a value" paths share this:
 //!   - `CallFunctionArgs.type_args` — explicit, named `TypeVar` bindings for a
-//!     generic function/method call (`BamlTyArg { type_var, type_value }`). The
-//!     host sends them in De Bruijn order (enclosing class params first, then
-//!     the callee's own params); the engine maps each named binding onto the
-//!     entry frame's `type_args` slot by `TypeVar` name in
-//!     `set_entry_point_with_type_args`.
-//!   - `InboundValue.ty_value` — a reflected type passed as an argument value
-//!     (decoded into a `type`-valued `BexExternalAdt::Type`).
+//!     generic function/method call (`BamlTyArg { type_var, type_value }`).
+//!   - `InboundValue.ty_value` — a reflected type passed as an argument value.
 
 use baml_type::{
-    Freshness, FunctionParamMode, Literal, MediaKind, Name, ParamTy, RuntimeFunctionParamTy,
-    RuntimeInterface, RuntimeTy, TypeName,
+    Freshness, FunctionParamMode, Literal, MediaKind, Name, RealizedFunctionParamTy,
+    RealizedInterface, RealizedTy, TypeName, WireHead, WireTy,
 };
-use bex_project::{BexExternalAdt, BexExternalValue, TypeDefRef};
 use indexmap::IndexMap;
 
 use crate::{
     baml_bridge::cffi::{
-        BamlTy, BamlTyArg, BamlTyDef, BamlTyFunctionParam, BamlTyFunctionParamMode,
-        BamlTyMediaKind, BamlTyMetadata, BamlTyPrimitiveKind, baml_ty::Ty as TyVariant,
+        BamlTy, BamlTyArg, BamlTyFunctionParam, BamlTyFunctionParamMode, BamlTyMediaKind,
+        BamlTyPrimitiveKind, baml_ty::Ty as TyVariant,
         baml_ty_literal::Literal as TyLiteralVariant,
     },
     error::CtypesError,
+    handle_table::TableKey,
 };
+
+/// A type as a host stated it, parsed: runtime declarations by the table key
+/// the host holds for each, not yet resolved. A wire type is realized: a type
+/// variable or an associated-type projection determines no value, so the
+/// parse refuses one.
+pub type ParsedTy = WireTy<TableKey>;
+
+/// A wire `BamlTy` as a host in the engine's process holds it: parsed, and
+/// each runtime declaration resolved to the engine object, read without
+/// draining the host's rows.
+pub fn proto_ty_to_stated(
+    ty: &BamlTy,
+    table: &crate::CffiHandleTable,
+) -> Result<bex_project::WireTy, CtypesError> {
+    resolve_parsed(&proto_ty_to_wire_ty(ty)?, table)
+}
+
+/// A call's explicit type arguments as [`proto_ty_to_stated`] reads each.
+pub fn proto_ty_args_to_stated(
+    type_args: &[BamlTyArg],
+    table: &crate::CffiHandleTable,
+) -> Result<IndexMap<String, bex_project::WireTy>, CtypesError> {
+    proto_ty_args_to_named(type_args)?
+        .type_args
+        .into_iter()
+        .map(|(name, ty)| Ok((name, resolve_parsed(&ty, table)?)))
+        .collect()
+}
+
+/// `ty` over the engine objects its keys name, read without draining: a host
+/// in the engine's process holds the declarations by handle for as long as it
+/// needs them, independent of the rows it was handed.
+pub fn resolve_parsed(
+    ty: &ParsedTy,
+    table: &crate::CffiHandleTable,
+) -> Result<bex_project::WireTy, CtypesError> {
+    ty.try_map_live(&mut |key: &TableKey| {
+        let row = table
+            .resolve(*key)
+            .ok_or(CtypesError::InvalidHandleKey(key.get()))?;
+        match &*row {
+            crate::CffiHandleTableEntry::BexHeapHandle(handle) => Ok(handle.clone()),
+            _ => Err(CtypesError::LiveHeadNotADeclaration(key.get())),
+        }
+    })
+}
 
 #[derive(Debug, Default)]
 pub struct DecodedTypeArgs {
-    pub type_args: IndexMap<String, RuntimeTy>,
-    pub type_defs: IndexMap<String, bex_project::PortableTypeDef>,
+    pub type_args: IndexMap<String, ParsedTy>,
 }
 
 /// Decode `CallFunctionArgs.type_args` (a list of named `BamlTyArg`s) into a
-/// `TypeVar name -> concrete RuntimeTy` map, preserving wire order (the map's
-/// insertion order is the host's De Bruijn order). A `BamlTyArg` with an absent
-/// `type_value` decodes to the unknown/top type, mirroring
-/// [`proto_ty_to_runtime_ty`]'s rollout-safe default. A repeated `type_var`
-/// keeps the last binding. The engine resolves the names against the callee's
-/// generic params when seeding the entry frame.
+/// `TypeVar name -> stated type` map, preserving wire order (the map's
+/// insertion order is the host's De Bruijn order). A `BamlTyArg` must carry a
+/// type; a host that means `unknown` says so. A repeated `type_var` keeps the
+/// last binding. The engine resolves the names against the callee's generic
+/// params when seeding the entry frame.
 pub fn proto_ty_args_to_named(type_args: &[BamlTyArg]) -> Result<DecodedTypeArgs, CtypesError> {
     let mut decoded = DecodedTypeArgs::default();
     for arg in type_args {
-        if let Some(definition) = arg.type_definition.as_ref() {
-            let definition = proto_ty_def_to_portable(definition)?;
-            decoded
-                .type_args
-                .insert(arg.type_var.clone(), definition.root.clone());
-            decoded.type_defs.insert(arg.type_var.clone(), definition);
-        } else {
-            let ty = match arg.type_value.as_ref() {
-                Some(ty) => proto_ty_to_runtime_ty(ty)?,
-                None => RuntimeTy::unknown(),
-            };
-            decoded.type_args.insert(arg.type_var.clone(), ty);
-        }
+        let ty = opt_to_wire_ty(arg.type_value.as_ref(), "type argument's type")?;
+        decoded.type_args.insert(arg.type_var.clone(), ty);
     }
     Ok(decoded)
 }
 
-pub fn proto_ty_def_to_portable(
-    definition: &BamlTyDef,
-) -> Result<bex_project::PortableTypeDef, CtypesError> {
-    use bex_project::{
-        DynWitnessDef, PortableClassDef, PortableClassFieldDef, PortableEnumDef,
-        PortableEnumVariantDef, PortableMetadata, PortableTypeDef,
-    };
-    let metadata = |value: Option<&BamlTyMetadata>| {
-        let value = value.cloned().unwrap_or_default();
-        PortableMetadata {
-            description: value.description,
-            alias: value.alias,
-            docstring: value.docstring,
-            other: value.other.into_iter().collect(),
-        }
-    };
-    Ok(PortableTypeDef {
-        root: match definition.root.as_ref() {
-            Some(root) => proto_ty_to_runtime_ty(root)?,
-            None => RuntimeTy::unknown(),
-        },
-        classes: definition
-            .classes
-            .iter()
-            .map(|class| {
-                Ok(PortableClassDef {
-                    name: TypeName::from_dotted_path(&class.name),
-                    fields: class
-                        .fields
-                        .iter()
-                        .map(|field| {
-                            Ok(PortableClassFieldDef {
-                                name: field.name.clone(),
-                                ty: match field.ty.as_ref() {
-                                    Some(ty) => proto_ty_to_runtime_ty(ty)?,
-                                    None => RuntimeTy::unknown(),
-                                },
-                                metadata: metadata(field.metadata.as_ref()),
-                                skip: field.skip,
-                            })
-                        })
-                        .collect::<Result<Vec<_>, CtypesError>>()?,
-                    metadata: metadata(class.metadata.as_ref()),
-                    generic_param_count: usize::try_from(class.generic_param_count)
-                        .unwrap_or(usize::MAX),
-                })
-            })
-            .collect::<Result<Vec<_>, CtypesError>>()?,
-        enums: definition
-            .enums
-            .iter()
-            .map(|enm| PortableEnumDef {
-                name: TypeName::from_dotted_path(&enm.name),
-                variants: enm
-                    .variants
-                    .iter()
-                    .map(|variant| PortableEnumVariantDef {
-                        name: variant.name.clone(),
-                        metadata: metadata(variant.metadata.as_ref()),
-                        skip: variant.skip,
-                    })
-                    .collect(),
-                metadata: metadata(enm.metadata.as_ref()),
-            })
-            .collect(),
-        witnesses: definition
-            .witnesses
-            .iter()
-            .map(|witness| {
-                let realized = |ty: &BamlTy, position: &str| {
-                    let runtime = proto_ty_to_runtime_ty(ty)?;
-                    baml_type::RealizedTy::try_from(runtime).map_err(|error| {
-                        CtypesError::InternalError(format!(
-                            "host type definition witness {position} is not realized: {error}"
-                        ))
-                    })
-                };
-                Ok(DynWitnessDef {
-                    interface: TypeName::from_dotted_path(&witness.interface),
-                    interface_args: witness
-                        .interface_args
-                        .iter()
-                        .map(|ty| realized(ty, "interface argument"))
-                        .collect::<Result<Vec<_>, _>>()?,
-                    associated_types: witness
-                        .associated_types
-                        .iter()
-                        .map(|binding| {
-                            Ok((
-                                Name::new(&binding.name),
-                                realized(
-                                    binding.ty.as_ref().ok_or_else(|| {
-                                        CtypesError::InternalError(
-                                            "host type definition witness associated type is missing its type"
-                                                .to_string(),
-                                        )
-                                    })?,
-                                    "associated type",
-                                )?,
-                            ))
-                        })
-                        .collect::<Result<Vec<_>, CtypesError>>()?,
-                    field_links: witness
-                        .field_links
-                        .iter()
-                        .map(|link| {
-                            (
-                                Name::new(&link.interface_field),
-                                Name::new(&link.class_field),
-                            )
-                        })
-                        .collect(),
-                })
-            })
-            .collect::<Result<Vec<_>, CtypesError>>()?,
-    })
+/// A wire type spelled by name alone, for a reader with no handle table: a
+/// program's own declarations. A runtime declaration in it is refused.
+pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RealizedTy, CtypesError> {
+    proto_ty_to_wire_ty(ty)?
+        .try_into_named()
+        .map_err(|head| match head {
+            WireHead::Static(_) => unreachable!("a static head is named"),
+            WireHead::Live(key) => CtypesError::LiveHeadNotADeclaration(key.get()),
+            WireHead::Anonymous(label) => CtypesError::AnonymousHeadStated {
+                label: label.to_string(),
+            },
+        })
 }
 
-/// Convert a wire `BamlTy` into a `RuntimeTy`. A `BamlTy` with no variant set decodes
-/// to the unknown/top type — the rollout-safe default (an absent binding
-/// constrains nothing).
-pub fn proto_ty_to_runtime_ty(ty: &BamlTy) -> Result<RuntimeTy, CtypesError> {
+/// A nominal wire type's head, as the host stated it.
+trait NominalHead {
+    fn head_of(&self) -> Result<WireHead<TableKey>, CtypesError>;
+}
+
+/// Each nominal message carries the same `head` oneof under its own Rust
+/// type; the reading is one.
+macro_rules! nominal_head {
+    ($($message:ident => $module:ident),* $(,)?) => {$(
+        impl NominalHead for crate::baml_bridge::cffi::$message {
+            fn head_of(&self) -> Result<WireHead<TableKey>, CtypesError> {
+                use crate::baml_bridge::cffi::$module::Head;
+                match &self.head {
+                    Some(Head::Name(name)) => Ok(WireHead::Static(TypeName::from_dotted_path(name))),
+                    Some(Head::Live(key)) => TableKey::new(*key)
+                        .map(WireHead::Live)
+                        .ok_or(CtypesError::InvalidHandleKey(*key)),
+                    Some(Head::AnonymousLabel(label)) => Err(CtypesError::AnonymousHeadStated {
+                        label: label.clone(),
+                    }),
+                    None => Err(CtypesError::IncompleteType { position: "head" }),
+                }
+            }
+        }
+    )*};
+}
+
+nominal_head! {
+    BamlTyClass => baml_ty_class,
+    BamlTyEnum => baml_ty_enum,
+    BamlTyTypeAlias => baml_ty_type_alias,
+    BamlTyInterface => baml_ty_interface,
+    BamlTyEnumVariant => baml_ty_enum_variant,
+}
+
+pub fn proto_ty_to_wire_ty(ty: &BamlTy) -> Result<ParsedTy, CtypesError> {
     let Some(variant) = ty.ty.as_ref() else {
-        return Ok(RuntimeTy::unknown());
+        return Err(CtypesError::IncompleteType {
+            position: "variant",
+        });
     };
     Ok(match variant {
-        TyVariant::Primitive(p) => primitive_to_runtime_ty(p.kind),
-        TyVariant::ClassTy(c) => {
-            let type_name = TypeName::from_dotted_path(&c.name);
-            let args = decode_type_args(&c.type_args)?;
-            RuntimeTy::class_with_args(type_name, args)
+        TyVariant::Primitive(p) => primitive_to_runtime_ty(p.kind)?,
+        TyVariant::ClassTy(c) => RealizedTy::Class(c.head_of()?, decode_type_args(&c.type_args)?),
+        TyVariant::Enum(e) => RealizedTy::Enum(e.head_of()?),
+        TyVariant::List(l) => {
+            RealizedTy::list(opt_to_wire_ty(l.item.as_deref(), "list's item type")?)
         }
-        TyVariant::Enum(e) => RuntimeTy::Enum(TypeName::from_dotted_path(&e.name)),
-        TyVariant::List(l) => RuntimeTy::list(opt_to_runtime_ty(l.item.as_deref())?),
-        TyVariant::Map(m) => RuntimeTy::Map {
-            key: Box::new(opt_to_runtime_ty(m.key.as_deref())?),
-            value: Box::new(opt_to_runtime_ty(m.value.as_deref())?),
+        TyVariant::Map(m) => RealizedTy::Map {
+            key: Box::new(opt_to_wire_ty(m.key.as_deref(), "map's key type")?),
+            value: Box::new(opt_to_wire_ty(m.value.as_deref(), "map's value type")?),
         },
-        TyVariant::Optional(o) => RuntimeTy::optional(opt_to_runtime_ty(o.inner.as_deref())?),
-        TyVariant::Union(u) => RuntimeTy::union(
+        TyVariant::Optional(o) => {
+            RealizedTy::optional(opt_to_wire_ty(o.inner.as_deref(), "optional's inner type")?)
+        }
+        TyVariant::Union(u) => RealizedTy::Union(
             u.options
                 .iter()
-                .map(proto_ty_to_runtime_ty)
-                .collect::<Result<Vec<_>, _>>()?,
+                .map(proto_ty_to_wire_ty)
+                .collect::<Result<_, _>>()?,
         ),
         TyVariant::Literal(lit) => literal_to_runtime_ty(lit.literal.as_ref())?,
-        TyVariant::TypeAlias(n) => RuntimeTy::TypeAlias(TypeName::from_dotted_path(&n.name)),
-        TyVariant::Unknown(_) => RuntimeTy::unknown(),
-        TyVariant::Media(m) => RuntimeTy::Media(media_kind_to_runtime(m.kind)),
+        // A type alias is not generic at run time, and a function type
+        // carries no type parameters of its own: a value in either field
+        // would be dropped, so it is refused rather than ignored.
+        TyVariant::TypeAlias(n) => {
+            if !n.type_args.is_empty() {
+                return Err(CtypesError::UnsupportedTypeField {
+                    field: "BamlTyTypeAlias.type_args",
+                });
+            }
+            RealizedTy::TypeAlias(n.head_of()?)
+        }
+        TyVariant::Unknown(_) => RealizedTy::Unknown,
+        TyVariant::Media(m) => RealizedTy::Media(media_kind_to_runtime(m.kind)?),
         TyVariant::Interface(i) => {
             let bindings = i
                 .bindings
                 .iter()
-                .map(|b| Ok((Name::new(&b.name), opt_to_runtime_ty(b.ty.as_ref())?)))
+                .map(|b| {
+                    Ok((
+                        Name::new(&b.name),
+                        opt_to_wire_ty(b.ty.as_ref(), "associated type binding's type")?,
+                    ))
+                })
                 .collect::<Result<Vec<_>, CtypesError>>()?;
             // The wire order is untrusted (a non-BAML or future producer may send
             // bindings in any order) and `RuntimeInterface`'s derived `Eq`/`Hash`
             // are order-sensitive, so route through `RuntimeInterface::new` to sort
             // them, then lift the constraint to its existential type.
-            let constraint = RuntimeInterface::new(
-                TypeName::from_dotted_path(&i.name),
+            let constraint = RealizedInterface::new(
+                i.head_of()?,
                 decode_type_args(&i.type_args)?,
                 bindings.into(),
             );
-            RuntimeTy::Interface(
+            RealizedTy::Interface(
                 constraint.name,
                 constraint.generics,
                 constraint.associated_types,
             )
         }
-        TyVariant::EnumVariant(e) => {
-            RuntimeTy::EnumVariant(TypeName::from_dotted_path(&e.name), Name::new(&e.variant))
+        TyVariant::EnumVariant(e) => RealizedTy::EnumVariant(e.head_of()?, Name::new(&e.variant)),
+        TyVariant::Function(f) if !f.generic_params.is_empty() => {
+            return Err(CtypesError::UnsupportedTypeField {
+                field: "BamlTyFunction.generic_params",
+            });
         }
-        TyVariant::Function(f) => RuntimeTy::Function {
+        TyVariant::Function(f) => RealizedTy::Function {
             params: f
                 .params
                 .iter()
                 .map(function_param_to_runtime)
                 .collect::<Result<Box<[_]>, _>>()?,
-            ret: Box::new(opt_to_runtime_ty(f.ret.as_deref())?),
-            throws: Box::new(opt_to_runtime_ty(f.throws.as_deref())?),
+            ret: Box::new(opt_to_wire_ty(f.ret.as_deref(), "function's return type")?),
+            throws: Box::new(opt_to_wire_ty(
+                f.throws.as_deref(),
+                "function's throws type",
+            )?),
         },
-        TyVariant::Future(fut) => RuntimeTy::Future(
-            Box::new(opt_to_runtime_ty(fut.value.as_deref())?),
-            Box::new(opt_to_runtime_ty(fut.error.as_deref())?),
+        TyVariant::Future(fut) => RealizedTy::Future(
+            Box::new(opt_to_wire_ty(fut.value.as_deref(), "future's value type")?),
+            Box::new(opt_to_wire_ty(fut.error.as_deref(), "future's error type")?),
         ),
-        TyVariant::RustType(_) => RuntimeTy::RustType,
-        TyVariant::MetaType(_) => RuntimeTy::Type,
-        TyVariant::Resource(_) => RuntimeTy::Resource,
-        TyVariant::PromptAst(_) => RuntimeTy::PromptAst,
-        TyVariant::TypeVar(v) => RuntimeTy::TypeVar(ParamTy::new(v.index, Name::new(&v.name))),
-        TyVariant::AssociatedTypeProjection(p) => RuntimeTy::AssociatedTypeProjection {
-            base: Box::new(opt_to_runtime_ty(p.base.as_deref())?),
-            // The projection's interface constraint is wired as a `Ty` and must
-            // decode to an interface existential, from which the constraint
-            // (`RuntimeInterface`) is recovered. A projection always carries its
-            // declaring interface, so an absent wire field is a malformed message —
-            // reject it rather than fabricate an unqualified projection.
-            interface: {
-                let ty = p.interface.as_deref().ok_or_else(|| {
-                    CtypesError::InternalError(
-                        "AssociatedTypeProjection.interface is required".to_string(),
-                    )
-                })?;
-                match proto_ty_to_runtime_ty(ty)? {
-                    RuntimeTy::Interface(name, generics, associated_types) => {
-                        Box::new(RuntimeInterface::new(name, generics, associated_types))
-                    }
-                    _ => {
-                        return Err(CtypesError::InternalError(
-                            "AssociatedTypeProjection.interface did not decode to an interface type"
-                                .to_string(),
-                        ));
-                    }
-                }
-            },
-            member: Name::new(&p.member),
-        },
-        TyVariant::Never(_) => RuntimeTy::Never,
+        TyVariant::RustType(_) => RealizedTy::RustType,
+        TyVariant::MetaType(_) => RealizedTy::Type,
+        TyVariant::Resource(_) => RealizedTy::Resource,
+        TyVariant::PromptAst(_) => RealizedTy::PromptAst,
+        TyVariant::TypeVar(_) => {
+            return Err(CtypesError::UnrealizedType {
+                variant: "type variable",
+            });
+        }
+        TyVariant::AssociatedTypeProjection(_) => {
+            return Err(CtypesError::UnrealizedType {
+                variant: "associated-type projection",
+            });
+        }
+        TyVariant::Never(_) => RealizedTy::Never,
     })
 }
 
-/// Decode a wire `BamlTy` into a `type`-valued external value (for
-/// `InboundValue.ty_value`).
-///
-/// The wire carries names, and the engine's lane carries identities. A host
-/// cannot know a declaration's tag (the linker or the runtime assigns it),
-/// so each head crosses as a spelling with no identity
-/// ([`TaggedTypeName::spelled`](baml_type::TaggedTypeName::spelled)) and the
-/// engine resolves it against its loaded declarations on landing. A name no
-/// declaration bears fails there instead of binding to the wrong one.
-///
-/// A runtime-created declaration cannot arrive this way at all: it has no
-/// name a host could spell. It has to cross as a handle, and that is the gap
-/// `BamlTypeHead` closes.
-pub fn proto_ty_to_external(ty: &BamlTy) -> Result<BexExternalValue, CtypesError> {
-    let named = proto_ty_to_runtime_ty(ty)?;
-    let lane = named
-        .try_map_heads(&mut |name: &baml_type::TypeName| {
-            Ok::<_, std::convert::Infallible>(baml_type::TaggedTypeName::spelled(name.clone()))
-        })
-        .unwrap_or_else(|never| match never {});
-    Ok(BexExternalValue::Adt(BexExternalAdt::Type(lane)))
-}
-
-pub fn proto_ty_def_to_external(ty: &BamlTyDef) -> Result<BexExternalValue, CtypesError> {
-    Ok(BexExternalValue::Adt(BexExternalAdt::TypeDef(
-        TypeDefRef::Portable(proto_ty_def_to_portable(ty)?),
-    )))
-}
-
-fn decode_type_args(type_args: &[BamlTy]) -> Result<Box<[RuntimeTy]>, CtypesError> {
+fn decode_type_args(type_args: &[BamlTy]) -> Result<Box<[ParsedTy]>, CtypesError> {
     type_args
         .iter()
-        .map(proto_ty_to_runtime_ty)
+        .map(proto_ty_to_wire_ty)
         .collect::<Result<Box<[_]>, _>>()
 }
 
-fn opt_to_runtime_ty(opt: Option<&BamlTy>) -> Result<RuntimeTy, CtypesError> {
+/// The type at a position every type must fill; `position` names it in the
+/// refusal of a wire type that left it empty.
+fn opt_to_wire_ty(opt: Option<&BamlTy>, position: &'static str) -> Result<ParsedTy, CtypesError> {
     match opt {
-        Some(t) => proto_ty_to_runtime_ty(t),
-        None => Ok(RuntimeTy::unknown()),
+        Some(t) => proto_ty_to_wire_ty(t),
+        None => Err(CtypesError::IncompleteType { position }),
     }
 }
 
-fn primitive_to_runtime_ty(kind: i32) -> RuntimeTy {
-    match BamlTyPrimitiveKind::try_from(kind)
-        .unwrap_or(BamlTyPrimitiveKind::BamlTyPrimitiveUnspecified)
-    {
-        BamlTyPrimitiveKind::BamlTyPrimitiveString => RuntimeTy::string(),
-        BamlTyPrimitiveKind::BamlTyPrimitiveInt => RuntimeTy::int(),
-        BamlTyPrimitiveKind::BamlTyPrimitiveFloat => RuntimeTy::float(),
-        BamlTyPrimitiveKind::BamlTyPrimitiveBool => RuntimeTy::bool(),
-        BamlTyPrimitiveKind::BamlTyPrimitiveNull => RuntimeTy::null(),
-        BamlTyPrimitiveKind::BamlTyPrimitiveBytes => RuntimeTy::Uint8Array,
-        BamlTyPrimitiveKind::BamlTyPrimitiveBigint => RuntimeTy::Bigint,
-        BamlTyPrimitiveKind::BamlTyPrimitiveUnspecified => RuntimeTy::unknown(),
-    }
+fn primitive_to_runtime_ty(kind: i32) -> Result<ParsedTy, CtypesError> {
+    Ok(
+        match BamlTyPrimitiveKind::try_from(kind)
+            .unwrap_or(BamlTyPrimitiveKind::BamlTyPrimitiveUnspecified)
+        {
+            BamlTyPrimitiveKind::BamlTyPrimitiveString => RealizedTy::String,
+            BamlTyPrimitiveKind::BamlTyPrimitiveInt => RealizedTy::Int,
+            BamlTyPrimitiveKind::BamlTyPrimitiveFloat => RealizedTy::Float,
+            BamlTyPrimitiveKind::BamlTyPrimitiveBool => RealizedTy::Bool,
+            BamlTyPrimitiveKind::BamlTyPrimitiveNull => RealizedTy::Null,
+            BamlTyPrimitiveKind::BamlTyPrimitiveBytes => RealizedTy::Uint8Array,
+            BamlTyPrimitiveKind::BamlTyPrimitiveBigint => RealizedTy::Bigint,
+            BamlTyPrimitiveKind::BamlTyPrimitiveUnspecified => {
+                return Err(CtypesError::IncompleteType {
+                    position: "primitive kind",
+                });
+            }
+        },
+    )
 }
 
-fn media_kind_to_runtime(kind: i32) -> MediaKind {
-    match BamlTyMediaKind::try_from(kind).unwrap_or(BamlTyMediaKind::Unspecified) {
-        BamlTyMediaKind::Image => MediaKind::Image,
-        BamlTyMediaKind::Audio => MediaKind::Audio,
-        BamlTyMediaKind::Video => MediaKind::Video,
-        BamlTyMediaKind::Pdf => MediaKind::Pdf,
-        // An unspecified kind is the permissive "any media" type.
-        BamlTyMediaKind::Generic | BamlTyMediaKind::Unspecified => MediaKind::Generic,
-    }
+fn media_kind_to_runtime(kind: i32) -> Result<MediaKind, CtypesError> {
+    Ok(
+        match BamlTyMediaKind::try_from(kind).unwrap_or(BamlTyMediaKind::Unspecified) {
+            BamlTyMediaKind::Image => MediaKind::Image,
+            BamlTyMediaKind::Audio => MediaKind::Audio,
+            BamlTyMediaKind::Video => MediaKind::Video,
+            BamlTyMediaKind::Pdf => MediaKind::Pdf,
+            BamlTyMediaKind::Generic => MediaKind::Generic,
+            BamlTyMediaKind::Unspecified => {
+                return Err(CtypesError::IncompleteType {
+                    position: "media kind",
+                });
+            }
+        },
+    )
 }
 
 fn function_param_to_runtime(
     p: &BamlTyFunctionParam,
-) -> Result<RuntimeFunctionParamTy, CtypesError> {
-    Ok(RuntimeFunctionParamTy {
+) -> Result<RealizedFunctionParamTy<WireHead<TableKey>>, CtypesError> {
+    Ok(RealizedFunctionParamTy {
         name: p.name.as_ref().map(Name::new),
-        ty: opt_to_runtime_ty(p.ty.as_ref())?,
-        mode: function_param_mode(p.mode),
+        ty: opt_to_wire_ty(p.ty.as_ref(), "function parameter's type")?,
+        mode: function_param_mode(p.mode)?,
     })
 }
 
-fn function_param_mode(mode: i32) -> FunctionParamMode {
+fn function_param_mode(mode: i32) -> Result<FunctionParamMode, CtypesError> {
     match BamlTyFunctionParamMode::try_from(mode).unwrap_or(BamlTyFunctionParamMode::Unspecified) {
-        BamlTyFunctionParamMode::Optional => FunctionParamMode::Optional,
-        // Required is the conservative default for an unspecified mode.
-        BamlTyFunctionParamMode::Required | BamlTyFunctionParamMode::Unspecified => {
-            FunctionParamMode::Required
-        }
+        BamlTyFunctionParamMode::Optional => Ok(FunctionParamMode::Optional),
+        BamlTyFunctionParamMode::Required => Ok(FunctionParamMode::Required),
+        BamlTyFunctionParamMode::Unspecified => Err(CtypesError::IncompleteType {
+            position: "function parameter's mode",
+        }),
     }
 }
 
-fn literal_to_runtime_ty(lit: Option<&TyLiteralVariant>) -> Result<RuntimeTy, CtypesError> {
+fn literal_to_runtime_ty(lit: Option<&TyLiteralVariant>) -> Result<ParsedTy, CtypesError> {
     let literal = match lit {
         Some(TyLiteralVariant::StringValue(value)) => Literal::String(value.clone()),
         Some(TyLiteralVariant::IntValue(value)) => Literal::Int(*value),
@@ -379,9 +331,13 @@ fn literal_to_runtime_ty(lit: Option<&TyLiteralVariant>) -> Result<RuntimeTy, Ct
             Literal::Bigint(parse_decimal_bigint_literal(value)?)
         }
         Some(TyLiteralVariant::FloatValue(value)) => Literal::Float(value.clone()),
-        None => return Ok(RuntimeTy::unknown()),
+        None => {
+            return Err(CtypesError::IncompleteType {
+                position: "literal's value",
+            });
+        }
     };
-    Ok(RuntimeTy::Literal(literal, Freshness::Regular))
+    Ok(RealizedTy::Literal(literal, Freshness::Regular))
 }
 
 fn parse_decimal_bigint_literal(value: &str) -> Result<num_bigint::BigInt, CtypesError> {
@@ -420,44 +376,6 @@ fn parse_decimal_bigint_literal_with_limits(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn portable_type_definition_round_trips_without_identity() {
-        use bex_project::{
-            PortableClassDef, PortableClassFieldDef, PortableMetadata, PortableTypeDef,
-        };
-        let name = TypeName::local(Name::new("Row"));
-        let metadata = PortableMetadata {
-            description: Some("row description".into()),
-            alias: None,
-            docstring: Some("docs".into()),
-            other: IndexMap::from([("x".into(), "y".into())]),
-        };
-        let definition = PortableTypeDef {
-            root: RuntimeTy::Class(name.clone(), Box::new([])),
-            classes: vec![PortableClassDef {
-                name,
-                fields: vec![PortableClassFieldDef {
-                    name: "value".into(),
-                    ty: RuntimeTy::int(),
-                    metadata: metadata.clone(),
-                    skip: false,
-                }],
-                metadata,
-                generic_param_count: 0,
-            }],
-            enums: Vec::new(),
-            witnesses: vec![bex_project::DynWitnessDef {
-                interface: TypeName::from_dotted_path("user.RowLike"),
-                interface_args: vec![baml_type::RealizedTy::string()],
-                associated_types: vec![(Name::new("Item"), baml_type::RealizedTy::int())],
-                field_links: vec![(Name::new("item"), Name::new("value"))],
-            }],
-        };
-        let wire = crate::ty_encode::portable_type_def_to_proto(&definition);
-        let decoded = proto_ty_def_to_portable(&wire).expect("portable definition decodes");
-        assert_eq!(decoded, definition);
-    }
 
     #[test]
     fn oversized_bigint_literal_is_rejected_before_parse_without_echoing_input() {

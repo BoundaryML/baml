@@ -842,26 +842,36 @@ fn render_callable_pair(
         arg_exprs.push("this".to_string());
     }
     param_names_java.extend(required.iter().map(|a| format!("{:?}", a.name.as_str())));
+    // Java identifiers already claimed by BAML arguments — the synthetic
+    // trailing params (`types`, `ctx`) must yield to them (go_codegen fixtures
+    // name an argument `ctx`).
+    let taken: Vec<String> = required
+        .iter()
+        .map(|a| java_identifier(a.name.as_str()))
+        .collect();
     for a in &required {
         let value = java_identifier(a.name.as_str());
         let mut type_vars = Vec::new();
         crate::translate_ty::collect_type_vars(&a.ty, &mut type_vars);
-        let encoded = if !type_vars.is_empty() {
-            value
-        } else if let Some(expr) = typed_callable_expr(&a.ty, &value, pool, ctx) {
-            // A callable argument carries its declared param/return descriptors
-            // so the dispatch path can honor the generated signature.
+        // A callable argument carries its declared function type, which the
+        // bridge states on the wire and dispatches against. A value under a
+        // slot that mentions the call's type parameters carries the slot's
+        // type too: the bridge binds the explicit type bag into it, states
+        // what the value binds, and refuses one that binds nothing (an empty
+        // `List<T>`, a callable) until the caller names the parameter, as the
+        // dynamic hosts do.
+        let encoded = if let Some(expr) = typed_callable_expr(&a.ty, &value, pool, ctx) {
             expr
-        } else if needs_inbound_descriptor(&a.ty, ctx) {
+        } else if !type_vars.is_empty() || needs_inbound_descriptor(&a.ty, ctx) {
             match crate::translate_ty::descriptor_expr_opt(&a.ty, ctx.aliases) {
                 Some(expr) => format!(
                     "new baml_bridge.BamlTypedValue({value}, {})",
                     pool.intern(expr)
                 ),
-                None => value,
+                None => value.clone(),
             }
         } else {
-            value
+            value.clone()
         };
         arg_exprs.push(encoded);
     }
@@ -988,13 +998,6 @@ fn render_callable_pair(
 
     let async_ret = format!("java.util.concurrent.CompletableFuture<{ret_boxed}>");
     let params = param_decls.join(", ");
-    // Java identifiers already claimed by BAML arguments — the synthetic
-    // trailing params (`types`, `ctx`) must yield to them (go_codegen fixtures
-    // name an argument `ctx`).
-    let taken: Vec<String> = required
-        .iter()
-        .map(|a| java_identifier(a.name.as_str()))
-        .collect();
 
     // Required-only base: the {types?}×{ctx?} overload family (fixed trailing
     // order `f(required…, types?, ctx?)`; the `types` overloads exist only for a
@@ -1411,13 +1414,12 @@ fn render_optional_configurator(
         let setter = java_identifier(wire);
         let mut type_vars = Vec::new();
         crate::translate_ty::collect_type_vars(&a.ty, &mut type_vars);
-        let stored = if !type_vars.is_empty() {
-            "v".to_string()
-        } else if let Some(expr) = typed_callable_expr(&a.ty, "v", pool, ctx) {
+        let stored = if let Some(expr) = typed_callable_expr(&a.ty, "v", pool, ctx) {
             // An optional callable argument carries its declared param/return
             // descriptors, same as the required-arg path.
             expr
-        } else if needs_inbound_descriptor(&a.ty, ctx) {
+        } else if !type_vars.is_empty() || needs_inbound_descriptor(&a.ty, ctx) {
+            // The bridge binds the call's type bag into the slot's type.
             match crate::translate_ty::descriptor_expr_opt(&a.ty, ctx.aliases) {
                 Some(expr) => format!("new baml_bridge.BamlTypedValue(v, {})", pool.intern(expr)),
                 None => "v".to_string(),
@@ -1436,15 +1438,16 @@ fn render_optional_configurator(
     out
 }
 
-/// When `ty` (through non-recursive aliases) is a callable type, render the
-/// `baml_bridge.BamlTypedCallable` carrier wrapping `value` with the callable's
-/// declared parameter / return decode descriptors, so the bridge honors the
-/// generated signature on the dispatch path: each argument BAML passes back
-/// decodes against its declared parameter descriptor (a `baml.json.json`
-/// parameter materializes as the generated sealed union, not the raw wire
-/// value) and the returned value encodes against the declared return
-/// descriptor. Returns `None` when `ty` is not a callable or when every slot is
-/// wire-driven (the raw callable is then registered exactly as before).
+/// When `ty` (through non-recursive aliases and `T?`) is a callable type,
+/// render the `baml_bridge.BamlTypedCallable` carrier wrapping `value` with the
+/// callable's declared function type. The bridge states that type on the wire
+/// beside the callable's handle (a host callable has no type of its own),
+/// decodes each argument BAML passes back against its declared parameter (a
+/// `baml.json.json` parameter materializes as the generated sealed union, not
+/// the raw wire value) and encodes the returned value against the declared
+/// return type. A function type that mentions the call's type parameters is
+/// bound by the bridge from the call's explicit type-argument bag. Returns
+/// `None` when `ty` is not a callable.
 fn typed_callable_expr(
     ty: &Ty,
     value: &str,
@@ -1470,58 +1473,23 @@ fn typed_callable_expr(
             _ => return None,
         }
     }
-    let Ty::Function { params, ret, .. } = resolved else {
+    let Ty::Function {
+        params,
+        ret,
+        throws,
+    } = resolved
+    else {
         return None;
     };
-    let mut any = false;
-    let desc_of = |ty: &Ty, pool: &mut DescriptorPool, any: &mut bool| {
-        match crate::translate_ty::descriptor_expr_opt(ty, ctx.aliases) {
-            Some(expr) => {
-                *any = true;
-                pool.intern(expr)
-            }
-            None => "null".to_string(),
-        }
-    };
-    let mut positional: Vec<String> = Vec::new();
-    let mut optional_names: Vec<String> = Vec::new();
-    let mut optional_descs: Vec<String> = Vec::new();
-    for (i, p) in params.iter().enumerate() {
-        let desc = desc_of(&p.ty, pool, &mut any);
-        match p.mode {
-            CodegenFunctionParamMode::Optional => {
-                // The wire key mirrors `translate_callable`'s optional-bag
-                // naming (`opt{i}` fallback indexes over ALL params).
-                let wire = p
-                    .name
-                    .as_ref()
-                    .map_or_else(|| format!("opt{i}"), |n| n.as_str().to_string());
-                optional_names.push(format!("{wire:?}"));
-                optional_descs.push(desc);
-            }
-            CodegenFunctionParamMode::Required => positional.push(desc),
-        }
-    }
-    let ret_desc = desc_of(ret, pool, &mut any);
-    if !any {
-        return None;
-    }
-    let positional_lit = if positional.iter().all(|d| d == "null") {
-        "null".to_string()
-    } else {
-        format!("new baml_bridge.BamlType[] {{{}}}", positional.join(", "))
-    };
-    if optional_names.is_empty() {
-        Some(format!(
-            "new baml_bridge.BamlTypedCallable({value}, {positional_lit}, {ret_desc})"
-        ))
-    } else {
-        Some(format!(
-            "new baml_bridge.BamlTypedCallable({value}, {positional_lit}, new java.lang.String[] {{{}}}, new baml_bridge.BamlType[] {{{}}}, {ret_desc})",
-            optional_names.join(", "),
-            optional_descs.join(", ")
-        ))
-    }
+    let function_type = pool.intern(crate::translate_ty::function_expr(
+        params,
+        ret,
+        throws,
+        ctx.aliases,
+    ));
+    Some(format!(
+        "new baml_bridge.BamlTypedCallable({value}, {function_type})"
+    ))
 }
 
 fn needs_inbound_descriptor(ty: &Ty, ctx: &TranslateCtx<'_>) -> bool {

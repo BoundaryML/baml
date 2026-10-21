@@ -2,11 +2,11 @@
 
 use bex_project::RustDataArc as _;
 use bridge_ctypes::{
-    CffiHandleTableEntry, HANDLE_TABLE, TraceReservationHandle,
+    CffiHandleTableEntry, HANDLE_TABLE, TableKey, TraceReservationHandle, WireHandle,
     baml_bridge::cffi::{
-        BamlHandleType, BamlOutboundMapEntry, BamlOutboundValue, BamlValueClass, BamlValueMap,
-        TraceMetadataValue, TraceMode, TraceOptions, TraceSelection, baml_outbound_value::Value,
-        trace_metadata_value, trace_selection,
+        BamlOutboundMapEntry, BamlOutboundValue, BamlValueClass, BamlValueMap, TraceMetadataValue,
+        TraceMode, TraceOptions, TraceSelection, baml_outbound_value::Value, trace_metadata_value,
+        trace_selection,
     },
 };
 use btel_types::{InvocationMode, context::ContextValue};
@@ -19,8 +19,8 @@ fn invalid(message: &str) -> BridgeError {
 }
 
 pub fn trace_selection(call_id: u64, key: u64) -> Result<(Vec<u8>, Option<u64>), BridgeError> {
-    let entry = HANDLE_TABLE
-        .resolve(key)
+    let entry = TableKey::new(key)
+        .and_then(|key| HANDLE_TABLE.resolve(key))
         .ok_or_else(|| invalid("trace value is no longer live"))?;
     let CffiHandleTableEntry::RustData(data) = &*entry else {
         return Err(invalid("expected generated trace options or reservation"));
@@ -67,9 +67,11 @@ pub fn trace_selection(call_id: u64, key: u64) -> Result<(Vec<u8>, Option<u64>),
     // The typed capability pins the owner during preparation. The engine also
     // validates the reservation's original recording scope before admission.
     let owner = crate::CALL_ALLOCATIONS.owner(call_id)?;
-    let key = HANDLE_TABLE.insert(CffiHandleTableEntry::TraceReservation(
-        TraceReservationHandle { owner, reservation },
-    ));
+    let key = HANDLE_TABLE
+        .insert(CffiHandleTableEntry::TraceReservation(
+            TraceReservationHandle { owner, reservation },
+        ))
+        .get();
     Ok((
         TraceSelection {
             selection: Some(trace_selection::Selection::Reservation(key)),
@@ -80,14 +82,13 @@ pub fn trace_selection(call_id: u64, key: u64) -> Result<(Vec<u8>, Option<u64>),
 }
 
 pub fn invocation_context(key: u64) -> Result<Vec<u8>, BridgeError> {
-    let entry = if key == 0 {
-        None
-    } else {
-        Some(
+    let entry = match TableKey::new(key) {
+        None => None,
+        Some(key) => Some(
             HANDLE_TABLE
                 .resolve(key)
                 .ok_or_else(|| invalid("invocation is no longer live"))?,
-        )
+        ),
     };
     let context = match entry.as_deref() {
         Some(CffiHandleTableEntry::InvocationState(state)) => state.state.trace_context().clone(),
@@ -133,17 +134,23 @@ pub fn invocation_context(key: u64) -> Result<Vec<u8>, BridgeError> {
 
 /// Clone each owned occurrence before a generated token escapes its dispatch.
 pub fn clone_outbound(value: &BamlOutboundValue) -> Result<BamlOutboundValue, BridgeError> {
-    fn clone_refs(value: &mut BamlOutboundValue, owned: &mut Vec<u64>) -> Result<(), BridgeError> {
+    fn clone_refs(
+        value: &mut BamlOutboundValue,
+        owned: &mut Vec<TableKey>,
+    ) -> Result<(), BridgeError> {
         match value.value.as_mut() {
-            Some(Value::HandleValue(handle))
-                if handle.handle_type != BamlHandleType::HostValueCallable as i32
-                    && handle.handle_type != BamlHandleType::HostValueOpaque as i32 =>
-            {
-                handle.key = HANDLE_TABLE
-                    .clone_handle(handle.key)
-                    .ok_or_else(|| invalid("invocation token handle is no longer live"))?;
-                owned.push(handle.key);
-            }
+            // A host value is the engine's reference; the token borrows nothing of it.
+            Some(Value::HandleValue(handle)) => match WireHandle::try_from(&*handle) {
+                Ok(WireHandle::Engine(key)) => {
+                    let cloned = HANDLE_TABLE
+                        .clone_handle(key)
+                        .ok_or_else(|| invalid("invocation token handle is no longer live"))?;
+                    handle.key = cloned.get();
+                    owned.push(cloned);
+                }
+                Ok(WireHandle::Host(..)) => {}
+                Err(_) => return Err(invalid("invocation token handle names nothing")),
+            },
             Some(Value::ClassValue(class)) => {
                 for field in &mut class.fields {
                     if let Some(value) = &mut field.value {

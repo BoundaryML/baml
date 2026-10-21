@@ -7,45 +7,16 @@
 pub use baml_type::{
     CodegenFunctionParamTy as CallableParam, CodegenTy as Ty, Freshness,
     FunctionParamMode as CodegenFunctionParamMode, ParamTy, QualifiedTypeName as Name,
+    is_synthetic_effect_param,
 };
 
 /// Test each immediate structural child in declaration order, stopping on true.
 /// Alias definitions are not expanded: callers own symbol lookup and cycle policy.
 /// The exhaustive match makes new type variants require a traversal decision.
 pub fn any_type_child(ty: &Ty, mut predicate: impl FnMut(&Ty) -> bool) -> bool {
-    match ty {
-        Ty::Class(_, args) | Ty::Union(args) => args.iter().any(predicate),
-        Ty::Interface(_, args, associated) => {
-            args.iter().any(&mut predicate) || associated.iter().any(|(_, ty)| predicate(ty))
-        }
-        Ty::List(inner) => predicate(inner),
-        Ty::Map { key, value } => predicate(key) || predicate(value),
-        Ty::Function {
-            params,
-            ret,
-            throws,
-        } => params.iter().any(|p| predicate(&p.ty)) || predicate(ret) || predicate(throws),
-        Ty::Future(value, error) => predicate(value) || predicate(error),
-        Ty::Int
-        | Ty::Bigint
-        | Ty::Float
-        | Ty::String
-        | Ty::Bool
-        | Ty::Null
-        | Ty::Uint8Array
-        | Ty::Media(..)
-        | Ty::Literal(..)
-        | Ty::Enum(..)
-        | Ty::EnumVariant(..)
-        | Ty::TypeAlias(..)
-        | Ty::TypeVar(..)
-        | Ty::RustType
-        | Ty::Type
-        | Ty::Resource
-        | Ty::PromptAst
-        | Ty::Unknown
-        | Ty::Never => false,
-    }
+    let mut found = false;
+    ty.visit_children(&mut |child| found = found || predicate(child));
+    found
 }
 
 /// Visit every node in pre-order without expanding named aliases.

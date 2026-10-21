@@ -183,32 +183,19 @@ pub fn project_source_content_hash(db: &dyn crate::Db, root: baml_base::SourceRo
     )
 }
 
-/// Compute the inferred throws type for a function by querying TIR throw inference.
-///
-/// Returns `Some(ty)` if the function (or its callees) may throw, `None` otherwise.
-fn compute_throws_type(
-    db: &dyn baml_compiler2_mir::Db,
-    file: baml_base::SourceFile,
-    func_name: &baml_base::Name,
+/// The function's throws type at the runtime boundary: the types its
+/// declared or inferred `throws` clause names, in the runtime's shape. A
+/// method's is read off the method itself, like a free function's.
+fn compute_throws_type<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    func_loc: baml_compiler2_hir::loc::FunctionLoc<'db>,
     cache: &RuntimeLowering<'_>,
     frame_params: &[baml_type::ParamTy],
 ) -> baml_compiler2_mir::TyTemplate {
+    let facts = baml_compiler2_hir_ty::package_interface::runtime_throw_facts(db, func_loc);
     // An empty throw set is `never` — the empty error set — not an absent one.
-    let never = || baml_compiler2_mir::TyTemplate::Never;
-    let pkg_info = file_package(db, file);
-    let pkg_id = pkg_info.root;
-    let throw_sets = baml_compiler2_hir_ty::package_interface::function_throw_sets(db, pkg_id);
-
-    let key = baml_compiler2_hir_ty::package_interface::throw_set_key(
-        &pkg_info.namespace_path,
-        func_name,
-    );
-
-    let Some(facts) = throw_sets.transitive_for(&key) else {
-        return never();
-    };
     if facts.is_empty() {
-        return never();
+        return baml_compiler2_mir::TyTemplate::Never;
     }
 
     let converted: Vec<baml_compiler2_mir::TyTemplate> = facts
@@ -694,7 +681,7 @@ fn compute_function_metadata<'db>(
         return_type,
         // TIR's inferred transitive throw set — richer than the declared
         // clause (a declared clause is a firewall the inference respects).
-        throws_type: compute_throws_type(db, file, &func.name, cache, &frame_params),
+        throws_type: compute_throws_type(db, func_loc, cache, &frame_params),
         docstring: func.docstring.clone(),
         display_type_params,
         type_param_names: baml_type::RuntimeGenericLayout::new(&frame_params)

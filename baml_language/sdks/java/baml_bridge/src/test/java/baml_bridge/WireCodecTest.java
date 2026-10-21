@@ -346,12 +346,25 @@ class WireCodecTest {
         assertArrayEquals(expected.toByteArray(), got);
     }
 
+    /**
+     * A BigInteger is a `bigint` whatever its magnitude: `int` and `bigint` are
+     * distinct concrete types, so an in-range value rides the bigint channel
+     * too (as a `long` stays an `int`), and a container of them is a `bigint[]`.
+     */
     @Test
-    void inbound_bigint_in_range_uses_int_channel() {
-        // A BigInteger within i64 range must ride int_value, not bigint_value.
-        byte[] small = ProtoWriter.encodeInboundValue(BigInteger.valueOf(5));
-        byte[] asLong = ProtoWriter.encodeInboundValue(5L);
-        assertArrayEquals(asLong, small);
+    void inbound_bigint_in_range_uses_bigint_channel() {
+        WireWriter five = new WireWriter();
+        five.writeString(12, "5"); // InboundValue.bigint_value = 12, hex
+        assertArrayEquals(five.toByteArray(), ProtoWriter.encodeInboundValue(BigInteger.valueOf(5)));
+        WireWriter minusTen = new WireWriter();
+        minusTen.writeString(12, "-a");
+        assertArrayEquals(minusTen.toByteArray(), ProtoWriter.encodeInboundValue(BigInteger.valueOf(-10)));
+        assertNotEquals(
+                java.util.Arrays.toString(ProtoWriter.encodeInboundValue(5L)),
+                java.util.Arrays.toString(ProtoWriter.encodeInboundValue(BigInteger.valueOf(5))));
+        assertArrayEquals(
+                BamlType.list(BamlType.BIGINT).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(List.of(BigInteger.ONE))));
     }
 
     @Test
@@ -445,6 +458,16 @@ class WireCodecTest {
         record StringValue(String value) implements IntOrString {}
     }
 
+    // A generated-shape recursive alias `Tree = int | Tree[] | map<string, Tree>`
+    // (null-able, like `json`): the sealed interface the generator mints for it.
+    public sealed interface Tree permits Tree.IntValue, Tree.TreeListValue, Tree.TreeMapValue {
+        record IntValue(long value) implements Tree {}
+
+        record TreeListValue(List<Tree> value) implements Tree {}
+
+        record TreeMapValue(Map<String, Tree> value) implements Tree {}
+    }
+
     // A generated-shape union over two differently-typed LIST arms
     // (`int[] | string[]`). Exercises the wire-driven `pickArm` path's typed-
     // container matching: the arm is chosen from the wire `item_type`, not by
@@ -473,6 +496,13 @@ class WireCodecTest {
     private static final String RESUME_FQN = "user.lorem.Resume";
     private static final String SENTIMENT_FQN = "user.ipsum.Sentiment";
     private static final String BOX_FQN = "user.test.Box";
+    private static final String SHAPES_FQN = "user.test.Shapes";
+    private static final BamlType TREE = BamlType.typeAlias("user.test.Tree");
+    /** `Lists = int[] | Lists[]`: two list members, so an empty list fits both. */
+    private static final BamlType LISTS = BamlType.typeAlias("user.test.Lists");
+
+    /** A generic class `Shapes<T> { items T[] }` as the generator would emit it. */
+    record Shapes(List<?> items) {}
 
     @BeforeAll
     static void registerFixtures() {
@@ -486,6 +516,12 @@ class WireCodecTest {
                 Box.class.getName(),
                 new String[] {"payload"},
                 new BamlType[] {BamlType.union(BamlType.INT, BamlType.STRING)});
+        TypeRegistry.registerClass(
+                SHAPES_FQN,
+                Shapes.class.getName(),
+                new String[] {"items"},
+                new BamlType[] {BamlType.list(BamlType.typeVar("T"))},
+                new String[] {"T"});
         TypeRegistry.registerEnum(
                 SENTIMENT_FQN,
                 Sentiment.class.getName(),
@@ -499,6 +535,26 @@ class WireCodecTest {
                 new String[] {
                     IntOrString.IntValue.class.getName(), IntOrString.StringValue.class.getName()
                 });
+        // A recursive alias registers its records (by arm set and by FQN) and
+        // its body, in which it names itself.
+        BamlType[] treeArms = {
+            BamlType.INT,
+            BamlType.list(BamlType.classByFqn(TREE.fqn())),
+            BamlType.map(BamlType.STRING, BamlType.classByFqn(TREE.fqn()))
+        };
+        String[] treeRecords = {
+            Tree.IntValue.class.getName(),
+            Tree.TreeListValue.class.getName(),
+            Tree.TreeMapValue.class.getName()
+        };
+        TypeRegistry.registerUnion(Tree.class.getName(), treeArms, treeRecords);
+        TypeRegistry.registerUnionAlias(TREE.fqn(), Tree.class.getName(), treeArms, treeRecords);
+        TypeRegistry.registerAliasBody(
+                TREE.fqn(),
+                BamlType.optional(BamlType.union(
+                        BamlType.INT, BamlType.list(TREE), BamlType.map(BamlType.STRING, TREE))));
+        TypeRegistry.registerAliasBody(
+                LISTS.fqn(), BamlType.union(BamlType.list(BamlType.INT), BamlType.list(LISTS)));
         // Arm set {list<int>, list<string>}; arm tokens + records in declaration
         // order (int[] = arm0, string[] = arm1).
         TypeRegistry.registerUnion(
@@ -825,6 +881,315 @@ class WireCodecTest {
         expected.writeMessage(1, BamlType.list(BamlType.INT).toWireTy());
         expected.writeMessage(6, new byte[0]);
         assertArrayEquals(expected.toByteArray(), got);
+    }
+
+    /** The {@code InboundValue.value_type} (=1) bytes of an encoded value, or null. */
+    private static byte[] valueTypeOf(byte[] inbound) {
+        baml_bridge.internal.WireReader r = new baml_bridge.internal.WireReader(inbound);
+        while (r.hasRemaining()) {
+            int tag = r.readTag();
+            if (baml_bridge.internal.WireReader.fieldOf(tag) == 1) {
+                return r.readBytes();
+            }
+            r.skipField(baml_bridge.internal.WireReader.wireOf(tag));
+        }
+        return null;
+    }
+
+    /**
+     * A container under a slot that fixes nothing (no type, {@code unknown}, a
+     * type variable) states the type it has: its elements' type. An empty
+     * container has none: it is {@code unknown[]} where nothing is declared,
+     * and refused under an open type variable, which it cannot bind.
+     */
+    @Test
+    void encode_container_under_open_slot_states_its_natural_type() {
+        assertArrayEquals(
+                BamlType.list(BamlType.INT).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(List.of(1L, 2L))));
+        // An empty container has no element type of its own: with no slot it is
+        // `unknown[]`, and under a slot that leaves a type variable open the
+        // call is refused until the caller names the variable.
+        assertArrayEquals(
+                BamlType.list(BamlType.UNKNOWN).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(List.of())));
+        assertArrayEquals(
+                BamlType.list(BamlType.UNKNOWN).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(List.of(), BamlType.UNKNOWN))));
+        IllegalArgumentException openList = assertThrows(
+                IllegalArgumentException.class,
+                () -> ProtoWriter.encodeInboundValue(new BamlTypedValue(
+                        List.of(), BamlType.list(BamlType.typeVar("T")))));
+        assertTrue(openList.getMessage().contains("could not infer a type for `T`"), openList.getMessage());
+        IllegalArgumentException openMap = assertThrows(
+                IllegalArgumentException.class,
+                () -> ProtoWriter.encodeInboundValue(new BamlTypedValue(
+                        Map.of(), BamlType.map(BamlType.STRING, BamlType.typeVar("T")))));
+        assertTrue(openMap.getMessage().contains("could not infer a type for `T`"), openMap.getMessage());
+        assertArrayEquals(
+                BamlType.list(BamlType.union(BamlType.INT, BamlType.STRING)).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(List.of(1L, "a", 2L))));
+        assertArrayEquals(
+                BamlType.list(BamlType.optional(BamlType.STRING)).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(java.util.Arrays.asList("a", null))));
+        assertArrayEquals(
+                BamlType.map(BamlType.STRING, BamlType.INT).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(Map.of("a", 1L))));
+        assertArrayEquals(
+                BamlType.list(BamlType.list(BamlType.FLOAT)).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(List.of(List.of(1.5)))));
+
+        // A type variable fixes nothing either: the stated type is what binds it.
+        assertArrayEquals(
+                BamlType.list(BamlType.INT).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(
+                        List.of(1L), BamlType.list(BamlType.typeVar("T"))))));
+        assertArrayEquals(
+                BamlType.list(BamlType.INT).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(
+                        List.of(1L), BamlType.UNKNOWN))));
+    }
+
+    /**
+     * A slot that fixes the container down to its elements is the type the node
+     * states, whatever its elements are: the host builds the value the slot
+     * declares, and an empty container has the slot's element type.
+     */
+    @Test
+    void encode_container_under_exact_slot_states_the_slot() {
+        BamlType ints = BamlType.list(BamlType.INT);
+        assertArrayEquals(
+                ints.toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(List.of(1L), ints))));
+        assertArrayEquals(
+                ints.toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(List.of(), ints))));
+        BamlType intsOrStrings = BamlType.list(BamlType.union(BamlType.INT, BamlType.STRING));
+        assertArrayEquals(
+                intsOrStrings.toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(
+                        List.of(1L), intsOrStrings))));
+        BamlType stringToInt = BamlType.map(BamlType.STRING, BamlType.INT);
+        assertArrayEquals(
+                stringToInt.toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(
+                        Map.of("a", 1L), stringToInt))));
+    }
+
+    /** The bytes of the first occurrence of length-delimited {@code field} in {@code message}. */
+    private static byte[] fieldOf(byte[] message, int field) {
+        baml_bridge.internal.WireReader r = new baml_bridge.internal.WireReader(message);
+        while (r.hasRemaining()) {
+            int tag = r.readTag();
+            if (baml_bridge.internal.WireReader.fieldOf(tag) == field) {
+                return r.readBytes();
+            }
+            r.skipField(baml_bridge.internal.WireReader.wireOf(tag));
+        }
+        throw new AssertionError("no field " + field);
+    }
+
+    /** The first item of an encoded list value (list_value = 6, values = 1). */
+    private static byte[] firstListItemOf(byte[] inbound) {
+        return fieldOf(fieldOf(inbound, 6), 1);
+    }
+
+    /** The value of the first entry of an encoded map value (map_value = 7, entries = 1, value = 6). */
+    private static byte[] firstMapValueOf(byte[] inbound) {
+        return fieldOf(fieldOf(fieldOf(inbound, 7), 1), 6);
+    }
+
+    /**
+     * An alias is transparent: a container under a recursive alias is the
+     * alias's member of its shape, read from the registered body. An empty
+     * one has no elements to say anything else (`[]` under `Tree` is a
+     * `Tree[]`, `{}` a `map<string, Tree>`), at any depth, through the
+     * generated records and as a raw value alike.
+     */
+    @Test
+    void encode_empty_container_under_recursive_alias_states_the_alias_member() {
+        BamlType treeList = BamlType.list(TREE);
+        BamlType treeMap = BamlType.map(BamlType.STRING, TREE);
+        Tree emptyList = new Tree.TreeListValue(List.of());
+
+        assertArrayEquals(
+                treeList.toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(emptyList, TREE))));
+        assertArrayEquals(
+                treeMap.toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(
+                        new BamlTypedValue(new Tree.TreeMapValue(Map.of()), TREE))));
+        assertArrayEquals(
+                treeList.toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(List.of(), TREE))));
+
+        // `[[]]`: each level is the alias's list member.
+        byte[] nested = ProtoWriter.encodeInboundValue(
+                new BamlTypedValue(new Tree.TreeListValue(List.of(emptyList)), TREE));
+        assertArrayEquals(treeList.toWireTy(), valueTypeOf(nested));
+        assertArrayEquals(treeList.toWireTy(), valueTypeOf(firstListItemOf(nested)));
+
+        // An empty container beside a non-empty sibling, inside a map.
+        byte[] inMap = ProtoWriter.encodeInboundValue(new BamlTypedValue(
+                new Tree.TreeMapValue(Map.of("a", emptyList)), TREE));
+        assertArrayEquals(treeMap.toWireTy(), valueTypeOf(inMap));
+        assertArrayEquals(treeList.toWireTy(), valueTypeOf(firstMapValueOf(inMap)));
+
+        // Under an exact `Tree[]` slot, its element slot is the alias.
+        byte[] inExact = ProtoWriter.encodeInboundValue(new BamlTypedValue(List.of(emptyList), treeList));
+        assertArrayEquals(treeList.toWireTy(), valueTypeOf(inExact));
+        assertArrayEquals(treeList.toWireTy(), valueTypeOf(firstListItemOf(inExact)));
+
+        // The alias as one member of a union, and under an optional.
+        assertArrayEquals(
+                treeList.toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(
+                        new BamlTypedValue(List.of(), BamlType.union(TREE, BamlType.STRING)))));
+        assertArrayEquals(
+                treeMap.toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(
+                        new BamlTypedValue(Map.of(), BamlType.optional(TREE)))));
+    }
+
+    /** A non-empty container under a recursive alias is the alias's member too. */
+    @Test
+    void encode_container_under_recursive_alias_states_the_alias_member() {
+        BamlType treeList = BamlType.list(TREE);
+        byte[] got = ProtoWriter.encodeInboundValue(new BamlTypedValue(
+                new Tree.TreeListValue(List.of(new Tree.IntValue(1L), new Tree.TreeListValue(List.of()))),
+                TREE));
+        assertArrayEquals(treeList.toWireTy(), valueTypeOf(got));
+        assertArrayEquals(ProtoWriter.encodeInboundValue(1L), firstListItemOf(got));
+        assertArrayEquals(
+                treeList.toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(List.of(1L), TREE))));
+        assertArrayEquals(
+                BamlType.map(BamlType.STRING, TREE).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(
+                        new Tree.TreeMapValue(Map.of("a", new Tree.IntValue(1L))), TREE))));
+    }
+
+    /**
+     * Where the slot does not single out one member of the container's shape,
+     * the writer does not guess: an empty container that fits several is
+     * refused as ambiguous, a non-empty one states its own type, and an open
+     * member (which could take the value as its own type) leaves a non-empty
+     * container to its own type while an empty one still takes the shaped member.
+     */
+    @Test
+    void encode_container_under_union_without_a_single_shaped_member() {
+        IllegalArgumentException ambiguous = assertThrows(
+                IllegalArgumentException.class,
+                () -> ProtoWriter.encodeInboundValue(new BamlTypedValue(List.of(), LISTS)));
+        assertTrue(ambiguous.getMessage().contains("ambiguous"), ambiguous.getMessage());
+        assertArrayEquals(
+                BamlType.list(BamlType.INT).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(List.of(1L), LISTS))));
+
+        BamlType intsOrT = BamlType.union(BamlType.list(BamlType.INT), BamlType.typeVar("T"));
+        assertArrayEquals(
+                BamlType.list(BamlType.STRING).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(List.of("a"), intsOrT))));
+        assertArrayEquals(
+                BamlType.list(BamlType.INT).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(new BamlTypedValue(List.of(), intsOrT))));
+
+        // No member of its shape at all: the value states `unknown[]` and the
+        // engine judges it against the slot (there is no type variable to name).
+        assertArrayEquals(
+                BamlType.list(BamlType.UNKNOWN).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(
+                        new BamlTypedValue(List.of(), BamlType.union(BamlType.INT, BamlType.STRING)))));
+    }
+
+    /** A descriptor naming an alias the registry has no body for is a broken invariant. */
+    @Test
+    void encode_container_under_unregistered_alias_is_a_bridge_fault() {
+        IllegalStateException ex = assertThrows(
+                IllegalStateException.class,
+                () -> ProtoWriter.encodeInboundValue(
+                        new BamlTypedValue(List.of(), BamlType.typeAlias("user.test.Unregistered"))));
+        assertTrue(ex.getMessage().contains("user.test.Unregistered"), ex.getMessage());
+    }
+
+    /** A scalar under a union arm implies its own type and states nothing. */
+    @Test
+    void encode_scalar_under_union_arm_states_nothing() {
+        BamlType unionType = BamlType.union(BamlType.INT, BamlType.STRING);
+        byte[] got = ProtoWriter.encodeInboundValue(
+                new BamlTypedValue(new Union2.Arm0<Long, String>(5L), unionType));
+        assertArrayEquals(ProtoWriter.encodeInboundValue(5L), got);
+    }
+
+    /** A callable has no type of its own: without a function type it is refused. */
+    @Test
+    void encode_callable_without_a_function_type_is_refused() {
+        java.util.function.Function<Long, Long> cb = x -> x + 1;
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> ProtoWriter.encodeCallFunctionArgs(
+                        new String[] {"callback"}, new Object[] {cb}, 7L));
+        assertEquals(
+                "cannot encode argument 'callback': a callable has no type of its own; "
+                        + "declare the slot as a function type",
+                ex.getMessage());
+    }
+
+    /** The {@code value_type} of the first field of an encoded class value, or null. */
+    private static byte[] firstFieldValueTypeOf(byte[] inbound) {
+        baml_bridge.internal.WireReader r = new baml_bridge.internal.WireReader(inbound);
+        while (r.hasRemaining()) {
+            int tag = r.readTag();
+            if (baml_bridge.internal.WireReader.fieldOf(tag) != 8) {
+                r.skipField(baml_bridge.internal.WireReader.wireOf(tag));
+                continue;
+            }
+            baml_bridge.internal.WireReader cls = r.readMessage();
+            while (cls.hasRemaining()) {
+                int fieldTag = cls.readTag();
+                if (baml_bridge.internal.WireReader.fieldOf(fieldTag) != 2) {
+                    cls.skipField(baml_bridge.internal.WireReader.wireOf(fieldTag));
+                    continue;
+                }
+                baml_bridge.internal.WireReader entry = cls.readMessage();
+                while (entry.hasRemaining()) {
+                    int entryTag = entry.readTag();
+                    if (baml_bridge.internal.WireReader.fieldOf(entryTag) == 6) {
+                        return valueTypeOf(entry.readBytes());
+                    }
+                    entry.skipField(baml_bridge.internal.WireReader.wireOf(entryTag));
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * A generic class's bound type arguments are substituted into its field
+     * descriptors: `T[]` is `int[]` for a `Shapes<int>`, which is what an empty
+     * list there states. Unbound, an empty list determines nothing about `T`
+     * and the instance is refused until the caller names it.
+     */
+    @Test
+    void encode_generic_class_fields_are_typed_by_the_bound_arguments() {
+        Shapes bound = new Shapes(List.of());
+        TypeRegistry.bindTypeArgs(bound, List.of(BamlType.INT));
+        assertArrayEquals(
+                BamlType.list(BamlType.INT).toWireTy(),
+                firstFieldValueTypeOf(ProtoWriter.encodeInboundValue(bound)));
+
+        Shapes unbound = new Shapes(List.of());
+        IllegalArgumentException open = assertThrows(
+                IllegalArgumentException.class, () -> ProtoWriter.encodeInboundValue(unbound));
+        assertTrue(open.getMessage().contains("do not determine its type argument `T`"), open.getMessage());
+    }
+
+    /** A registered class instance names its class; a mixed-value map states the union. */
+    @Test
+    void encode_natural_type_names_registered_classes() {
+        assertArrayEquals(
+                BamlType.list(BamlType.classByFqn(RESUME_FQN)).toWireTy(),
+                valueTypeOf(ProtoWriter.encodeInboundValue(List.of(new Resume("Alice", 30L)))));
     }
 
     /** (e) A null inner value decodes to null (no wrapper record). */
@@ -1462,6 +1827,40 @@ class WireCodecTest {
         expected.writeMessage(3, tyArg.toByteArray()); // type_args = 3
 
         assertArrayEquals(expected.toByteArray(), got);
+    }
+
+    /**
+     * A class instance states its own class. A bag that names another class for
+     * the slot is refused host-side, rather than stated over the instance and
+     * built by the engine out of the instance's fields.
+     */
+    @Test
+    void encode_call_args_explicit_class_refuses_an_instance_of_another_class() {
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> ProtoWriter.encodeCallFunctionArgs(
+                        new String[] {"x"},
+                        new Object[] {new BamlTypedValue(new Resume("Alice", 30L), BamlType.typeVar("T"))},
+                        5L,
+                        BamlTypes.of("T", BamlType.classByFqn(BOX_FQN))));
+        assertEquals(
+                "cannot encode argument 'x': a " + RESUME_FQN + " instance is not a " + BOX_FQN,
+                ex.getMessage());
+    }
+
+    /**
+     * An instance bound to its type arguments states them under a slot of its
+     * class, even where the bag names others: they are the instance's own, and
+     * the engine judges them against the slot.
+     */
+    @Test
+    void encode_bound_instance_states_its_own_type_args_under_an_explicit_class() {
+        Shapes shapes = new Shapes(List.of(1L));
+        TypeRegistry.bindTypeArgs(shapes, List.of(BamlType.INT));
+        byte[] got = ProtoWriter.encodeInboundValue(
+                new BamlTypedValue(shapes, BamlType.classByFqn(SHAPES_FQN, BamlType.STRING)));
+        assertArrayEquals(
+                BamlType.classByFqn(SHAPES_FQN, BamlType.INT).toWireTy(), valueTypeOf(got));
     }
 
     /** Regression pin: no bag → byte-identical to the pre-generics 3-arg encoding. */

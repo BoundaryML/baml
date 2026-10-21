@@ -2,6 +2,7 @@
 //! Mirrors bridge_python/src/handle.rs.
 
 use bridge_cffi::{BamlCffiStatus, handle_cffi};
+use bridge_ctypes::WireHandle;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
@@ -75,17 +76,28 @@ impl BamlHandle {
 
     #[napi(js_name = "clone")]
     pub fn clone_handle(&self) -> napi::Result<BamlHandle> {
-        let new_key = handle_clone(self.key, "BamlHandle.clone")?;
+        let new_key = self.key_for_wire("BamlHandle.clone")?;
         Ok(BamlHandle {
             key: new_key,
             handle_type: self.handle_type,
         })
     }
 
+    /// Clone this handle for inbound wire ownership. A host value is the
+    /// engine's reference to the host's own object: its key goes as it is,
+    /// nothing is cloned.
     #[napi(js_name = "_cloneKeyForWire")]
     pub fn clone_key_for_wire(&self) -> napi::Result<HandleKey> {
-        let new_key = handle_clone(self.key, "BamlHandle._cloneKeyForWire")?;
-        Ok(HandleKey::from_u64(new_key))
+        Ok(HandleKey::from_u64(
+            self.key_for_wire("BamlHandle._cloneKeyForWire")?,
+        ))
+    }
+
+    /// Whether this handle is the engine's reference to a host object, as
+    /// opposed to the host's reference to an engine object.
+    #[napi(getter, js_name = "isHostValue")]
+    pub fn is_host_value(&self) -> bool {
+        matches!(self.wire_handle(), Ok(WireHandle::Host(..)))
     }
 }
 
@@ -101,11 +113,31 @@ impl BamlHandle {
     pub(crate) fn key_u64(&self) -> u64 {
         self.key
     }
+
+    /// Which reference this handle is: the host's reference to an engine
+    /// object, or the engine's reference to a host object.
+    fn wire_handle(&self) -> napi::Result<WireHandle> {
+        WireHandle::from_parts(self.key, self.handle_type)
+            .map_err(|error| napi::Error::new(napi::Status::InvalidArg, error.to_string()))
+    }
+
+    /// The key one more wire occurrence of this handle carries: a fresh
+    /// engine reference for an engine object, the key itself for a host value.
+    fn key_for_wire(&self, context: &str) -> napi::Result<u64> {
+        match self.wire_handle()? {
+            WireHandle::Host(key, _) => Ok(key.get()),
+            WireHandle::Engine(_) => handle_clone(self.key, context),
+        }
+    }
 }
 
 impl ObjectFinalize for BamlHandle {
     fn finalize(self, _env: Env) -> napi::Result<()> {
-        let _ = handle_cffi::release_handle(self.key);
+        // A host value is released through the host-value registry; only an
+        // engine reference is this wrapper's to release.
+        if let Ok(WireHandle::Engine(key)) = self.wire_handle() {
+            let _ = handle_cffi::release_handle(key.get());
+        }
         Ok(())
     }
 }

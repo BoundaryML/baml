@@ -117,11 +117,20 @@ fn outbound_to_inbound(value: wire::BamlOutboundValue) -> wire::InboundValue {
         Some(Out::Uint8arrayValue(value)) => Some(In::Uint8arrayValue(value)),
         Some(Out::BigintValue(value)) => Some(In::BigintValue(value)),
         Some(Out::TyValue(value)) => Some(In::TyValue(value)),
-        Some(Out::TyDefValue(value)) => Some(In::TyDefValue(value)),
         Some(Out::MediaValue(value)) => Some(In::MediaValue(value)),
         Some(Out::PromptAstValue(value)) => Some(In::PromptAstValue(value)),
         Some(Out::HandleValue(handle)) => {
-            value_type = handle.ty;
+            // Every handle the engine creates is live and typed on its heap,
+            // a BAML function reference included: the type the engine sent
+            // beside it describes it, and stating it back is refused. Only a
+            // host callable has no type of its own; it goes back under the
+            // function type this process registered it with.
+            value_type = match wire::BamlHandleType::try_from(handle.handle_type) {
+                Ok(wire::BamlHandleType::HostValueCallable) => {
+                    crate::host_value::registered_function_type(handle.key)
+                }
+                _ => None,
+            };
             Some(In::Handle(wire::BamlHandle {
                 key: handle.key,
                 handle_type: handle.handle_type,
@@ -147,10 +156,13 @@ fn outbound_to_inbound(value: wire::BamlOutboundValue) -> wire::InboundValue {
                     .collect(),
             }))
         }
+        // A container states the type the engine gave it. The engine always
+        // sends one; a value that arrived without is sent back unannotated
+        // rather than under a type with a hole in it.
         Some(Out::ListValue(list)) => {
-            value_type = Some(wire::BamlTy {
+            value_type = list.item_type.map(|item| wire::BamlTy {
                 ty: Some(wire::baml_ty::Ty::List(Box::new(wire::BamlTyList {
-                    item: list.item_type.map(Box::new),
+                    item: Some(Box::new(item)),
                 }))),
             });
             Some(In::ListValue(wire::InboundListValue {
@@ -159,12 +171,15 @@ fn outbound_to_inbound(value: wire::BamlOutboundValue) -> wire::InboundValue {
         }
         Some(Out::MapValue(map)) => {
             let key_type = map.key_type.clone();
-            value_type = Some(wire::BamlTy {
-                ty: Some(wire::baml_ty::Ty::Map(Box::new(wire::BamlTyMap {
-                    key: map.key_type.map(Box::new),
-                    value: map.value_type.map(Box::new),
-                }))),
-            });
+            value_type = map
+                .key_type
+                .zip(map.value_type)
+                .map(|(key, value)| wire::BamlTy {
+                    ty: Some(wire::baml_ty::Ty::Map(Box::new(wire::BamlTyMap {
+                        key: Some(Box::new(key)),
+                        value: Some(Box::new(value)),
+                    }))),
+                });
             Some(In::MapValue(wire::InboundMapValue {
                 entries: map
                     .entries
@@ -176,47 +191,17 @@ fn outbound_to_inbound(value: wire::BamlOutboundValue) -> wire::InboundValue {
                     .collect(),
             }))
         }
+        // A union envelope says which member a value came out of; the value
+        // itself implies or states its type, so the envelope adds nothing.
         Some(Out::UnionVariantValue(union)) => {
-            let selected = union.selected_option_index.and_then(|index| {
-                match union.self_type.as_ref()?.ty.as_ref()? {
-                    wire::baml_ty::Ty::Union(union) => union.options.get(index as usize).cloned(),
-                    _ => None,
-                }
-            });
-            let mut encoded =
-                outbound_to_inbound(union.value.map(|value| *value).unwrap_or_default());
-            if encoded.value_type.is_none() {
-                encoded.value_type = selected;
-            }
-            return encoded;
+            return outbound_to_inbound(union.value.map(|value| *value).unwrap_or_default());
         }
+        // A literal is the one value of its base type's it is; the base scalar
+        // implies it.
         Some(Out::LiteralValue(literal)) => {
-            let literal_type = wire::BamlTy {
-                ty: Some(wire::baml_ty::Ty::Literal(wire::BamlTyLiteral {
-                    literal: literal.literal.clone().map(|value| match value {
-                        wire::baml_literal_value::Literal::StringValue(value) => {
-                            wire::baml_ty_literal::Literal::StringValue(value)
-                        }
-                        wire::baml_literal_value::Literal::IntValue(value) => {
-                            wire::baml_ty_literal::Literal::IntValue(value)
-                        }
-                        wire::baml_literal_value::Literal::BoolValue(value) => {
-                            wire::baml_ty_literal::Literal::BoolValue(value)
-                        }
-                        wire::baml_literal_value::Literal::BigintValue(value) => {
-                            wire::baml_ty_literal::Literal::BigintValue(value)
-                        }
-                        wire::baml_literal_value::Literal::FloatValue(value) => {
-                            wire::baml_ty_literal::Literal::FloatValue(value)
-                        }
-                    }),
-                })),
-            };
-            let mut encoded = outbound_to_inbound(crate::decode::unwrap(wire::BamlOutboundValue {
+            return outbound_to_inbound(crate::decode::unwrap(wire::BamlOutboundValue {
                 value: Some(Out::LiteralValue(literal)),
             }));
-            encoded.value_type = Some(literal_type);
-            return encoded;
         }
     };
     wire::InboundValue { value_type, value }
@@ -234,8 +219,10 @@ fn map_key(key: String, ty: Option<&wire::BamlTy>) -> wire::inbound_map_entry::K
         {
             Key::BoolKey(key.parse().expect("runtime boolean map key"))
         }
-        Some(Ty::Enum(value)) => Key::EnumKey(wire::InboundEnumValue {
-            name: value.name.clone(),
+        Some(Ty::Enum(wire::BamlTyEnum {
+            head: Some(wire::baml_ty_enum::Head::Name(name)),
+        })) => Key::EnumKey(wire::InboundEnumValue {
+            name: name.clone(),
             value: key,
         }),
         _ => Key::StringKey(key),
@@ -275,7 +262,6 @@ fn dispatch(
                     .map(|(name, ty)| wire::BamlTyArg {
                         type_var: name,
                         type_value: Some(ty.0),
-                        type_definition: None,
                     })
                     .collect(),
             ))
@@ -307,4 +293,171 @@ pub async fn invoke_async(
     let result = crate::decode::decode_result(&receiver.wait().await);
     drop(target);
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use wire::{baml_outbound_value::Value as Out, baml_ty::Ty, inbound_value::Value as In};
+
+    use super::*;
+
+    fn int_ty() -> wire::BamlTy {
+        wire::BamlTy {
+            ty: Some(Ty::Primitive(wire::BamlTyPrimitive {
+                kind: wire::BamlTyPrimitiveKind::BamlTyPrimitiveInt as i32,
+            })),
+        }
+    }
+
+    fn string_ty() -> wire::BamlTy {
+        wire::BamlTy {
+            ty: Some(Ty::Primitive(wire::BamlTyPrimitive {
+                kind: wire::BamlTyPrimitiveKind::BamlTyPrimitiveString as i32,
+            })),
+        }
+    }
+
+    fn out(value: Out) -> wire::BamlOutboundValue {
+        wire::BamlOutboundValue { value: Some(value) }
+    }
+
+    /// A list or map goes back under the type the engine gave it.
+    #[test]
+    fn containers_state_the_type_they_arrived_with() {
+        let list = outbound_to_inbound(out(Out::ListValue(wire::BamlValueList {
+            item_type: Some(int_ty()),
+            items: vec![out(Out::IntValue(1))],
+        })));
+        assert!(matches!(
+            list.value_type.as_ref().and_then(|ty| ty.ty.as_ref()),
+            Some(Ty::List(inner)) if inner.item.as_deref() == Some(&int_ty())
+        ));
+        assert!(matches!(list.value, Some(In::ListValue(_))));
+
+        let map = outbound_to_inbound(out(Out::MapValue(wire::BamlValueMap {
+            key_type: Some(string_ty()),
+            value_type: Some(int_ty()),
+            entries: vec![wire::BamlOutboundMapEntry {
+                key: "a".into(),
+                value: Some(out(Out::IntValue(1))),
+            }],
+        })));
+        assert!(matches!(
+            map.value_type.as_ref().and_then(|ty| ty.ty.as_ref()),
+            Some(Ty::Map(inner))
+                if inner.key.as_deref() == Some(&string_ty()) && inner.value.as_deref() == Some(&int_ty())
+        ));
+    }
+
+    /// A container the engine did not type is sent back without a statement,
+    /// never under a type with a hole in it.
+    #[test]
+    fn untyped_containers_state_nothing() {
+        let list = outbound_to_inbound(out(Out::ListValue(wire::BamlValueList {
+            item_type: None,
+            items: vec![],
+        })));
+        assert!(list.value_type.is_none());
+        assert!(matches!(list.value, Some(In::ListValue(_))));
+
+        let map = outbound_to_inbound(out(Out::MapValue(wire::BamlValueMap {
+            key_type: Some(string_ty()),
+            value_type: None,
+            entries: vec![],
+        })));
+        assert!(map.value_type.is_none());
+    }
+
+    /// A BAML function the engine returned implies its own type: it goes
+    /// back as a bare handle, whatever type the engine sent beside it.
+    #[test]
+    fn function_references_state_nothing() {
+        let function_type = crate::baml_value::internal::function_ty(
+            vec![crate::baml_value::internal::function_param(None, int_ty())],
+            int_ty(),
+            crate::baml_value::internal::leaf_ty(Ty::Never(wire::BamlTyNever {})),
+        );
+        let resent = outbound_to_inbound(out(Out::HandleValue(wire::BamlOutboundHandle {
+            key: 7,
+            handle_type: wire::BamlHandleType::FunctionRef as i32,
+            ty: Some(function_type),
+        })));
+        assert_eq!(resent.value_type, None);
+        assert!(matches!(
+            resent.value,
+            Some(In::Handle(wire::BamlHandle { key: 7, handle_type }))
+                if handle_type == wire::BamlHandleType::FunctionRef as i32
+        ));
+    }
+
+    /// A host callable has no type of its own: it goes back under the
+    /// function type it was registered with.
+    #[test]
+    fn host_callables_state_their_registered_type() {
+        let function_type = crate::baml_value::internal::function_ty(
+            vec![crate::baml_value::internal::function_param(None, int_ty())],
+            int_ty(),
+            crate::baml_value::internal::leaf_ty(Ty::Never(wire::BamlTyNever {})),
+        );
+        let sent = crate::host_value::callable_handle(
+            |x: i64| x + 1,
+            &[crate::HostParam {
+                name: "x",
+                optional: false,
+            }],
+            function_type.clone(),
+        );
+        let Some(In::Handle(handle)) = sent.value else {
+            panic!("a host callable is sent as a handle: {sent:?}");
+        };
+        let resent = outbound_to_inbound(out(Out::HandleValue(wire::BamlOutboundHandle {
+            key: handle.key,
+            handle_type: handle.handle_type,
+            ty: None,
+        })));
+        assert_eq!(resent.value_type, Some(function_type));
+    }
+
+    /// A union envelope says which member a value came out of; the value
+    /// itself implies or states its type, so re-encoding adds nothing to a
+    /// scalar and keeps a container's own statement.
+    #[test]
+    fn union_envelopes_add_nothing() {
+        let scalar = outbound_to_inbound(out(Out::UnionVariantValue(Box::new(
+            wire::BamlValueUnionVariant {
+                self_type: Some(wire::BamlTy {
+                    ty: Some(Ty::Union(wire::BamlTyUnion {
+                        options: vec![int_ty(), string_ty()],
+                    })),
+                }),
+                selected_option_index: Some(1),
+                value: Some(Box::new(out(Out::StringValue("x".into())))),
+                ..Default::default()
+            },
+        ))));
+        assert!(scalar.value_type.is_none());
+        assert!(matches!(scalar.value, Some(In::StringValue(ref s)) if s == "x"));
+
+        let list_ty = wire::BamlTy {
+            ty: Some(Ty::List(Box::new(wire::BamlTyList {
+                item: Some(Box::new(int_ty())),
+            }))),
+        };
+        let list = outbound_to_inbound(out(Out::UnionVariantValue(Box::new(
+            wire::BamlValueUnionVariant {
+                self_type: Some(wire::BamlTy {
+                    ty: Some(Ty::Union(wire::BamlTyUnion {
+                        options: vec![list_ty.clone(), string_ty()],
+                    })),
+                }),
+                selected_option_index: Some(0),
+                value: Some(Box::new(out(Out::ListValue(wire::BamlValueList {
+                    item_type: Some(int_ty()),
+                    items: vec![],
+                })))),
+                ..Default::default()
+            },
+        ))));
+        assert_eq!(list.value_type, Some(list_ty));
+    }
 }
