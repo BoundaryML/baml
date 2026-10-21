@@ -494,6 +494,17 @@ A package's interface exports its globals with their types
 interface — a mounted package, a `Session.new(packages = …)` alias — reads
 `dep.NAME` as an import of the slot the defining package's `$init` filled.
 
+### Reflection
+
+`reflect.Package.globals()` lists a package's top-level bindings — global
+variables and `client` declarations alike — by package-local name with their
+current values, read from the package's own slot table (`Package::globals`'
+`DeclPath::Let` entries). `get_global<T>` / `find_global<T>` look one up by
+name and check the value against `T` as `reflect.Class.get<T>` checks a field.
+A lookup reads a global as `LoadGlobal` does: during `$init`, one whose
+initializer has not run is `GlobalReadBeforeInit` (`BexVm::global_is_pending`),
+and `globals()` leaves it out.
+
 ---
 
 ## The Type System: Key Concepts

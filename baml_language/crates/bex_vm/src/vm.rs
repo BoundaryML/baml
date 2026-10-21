@@ -6316,6 +6316,14 @@ impl BexVm {
         Some(func.name())
     }
 
+    /// Whether program global `slot` still waits for its initializer: true
+    /// only while `$init` runs ([`Self::pending_globals`]).
+    pub(crate) fn global_is_pending(&self, slot: bex_vm_types::GlobalIndex) -> bool {
+        self.pending_globals
+            .as_ref()
+            .is_some_and(|pending| pending.get(slot.raw()) == Some(&true))
+    }
+
     /// The VM's current call stack as a traceback, outermost frame first:
     /// where execution stands when the VM yields to its embedder.
     pub fn stack_trace(&self) -> Vec<StackFrame> {
@@ -9124,12 +9132,7 @@ impl BexVm {
                         // During `$init`, a global whose initializer has not run
                         // yet holds a placeholder: reading it is an
                         // initialization-order failure, reported as one.
-                        if runtime_package.is_null()
-                            && self
-                                .pending_globals
-                                .as_ref()
-                                .is_some_and(|pending| pending.get(raw as usize) == Some(&true))
-                        {
+                        if runtime_package.is_null() && self.global_is_pending(global_idx) {
                             return Err(
                                 VmInternalError::GlobalReadBeforeInit { slot: global_idx }.into()
                             );

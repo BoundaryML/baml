@@ -605,6 +605,42 @@ class Package {
         $rust_function
     }
 
+    //baml:mut_vm
+    /// Global variables and `client` declarations, keyed by package-local
+    /// name, with their current values. Each value is the global itself,
+    /// shared with every reader: changing its contents is visible everywhere.
+    function globals(self) -> map<string, unknown> throws never {
+        $rust_function
+    }
+
+    //baml:mut_vm
+    /// The value of the global variable or `client` declaration called
+    /// `name`, as `T`. `find_global` returns `null` for a missing name instead
+    /// of throwing.
+    ///
+    /// # Throws
+    ///
+    /// - `reflect.errors.NotFound` if the package has no global called `name`.
+    /// - `reflect.errors.TypeMismatch` if the global's value is not a `T`.
+    function get_global<T>(
+        self,
+        name: string,
+    ) -> T throws root.errors.NotFound | root.errors.TypeMismatch {
+        $rust_function
+    }
+
+    //baml:mut_vm
+    /// The value of the global called `name` as `T`, or `null` if the package
+    /// has none. With a nullable `T`, a global holding `null` also reads as
+    /// `null`; use `get_global` to tell the two apart.
+    ///
+    /// # Throws
+    ///
+    /// - `reflect.errors.TypeMismatch` if the global's value is not a `T`.
+    function find_global<T>(self, name: string) -> T? throws root.errors.TypeMismatch {
+        $rust_function
+    }
+
     /// Bundled tests as directly invocable zero-argument callables.
     //baml:mut_vm
     //baml:may_yield
