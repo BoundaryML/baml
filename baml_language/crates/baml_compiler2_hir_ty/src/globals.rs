@@ -24,7 +24,7 @@
 //! - References are taken from inference's resolution tables
 //!   ([`InferenceResult::global_roots`] and the member resolutions), never from
 //!   spellings, so a local that shadows a global is not an edge, and a
-//!   qualified `ns.x` is.
+//!   qualified `root.ns.x` is.
 //! - The walk stays inside the package. A dependency's bodies cannot name this
 //!   package's globals, and its own globals are initialized first, by its own
 //!   `$init` (the linker orders packages).

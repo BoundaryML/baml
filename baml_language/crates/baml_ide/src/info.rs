@@ -687,19 +687,6 @@ fn local_target_type_info(
                     });
                 }
             };
-            if binding.scope != owner_scope {
-                let bindings = &index.scope_bindings[binding.scope.index() as usize];
-                let (name, _) = bindings
-                    .params
-                    .iter()
-                    .find(|(_, param_idx)| *param_idx == idx)?;
-                return Some(TypeInfo::LocalVar {
-                    name: name.as_str().to_string(),
-                    ty: render::PENDING_INFERENCE.to_string(),
-                    is_let: false,
-                    owner: None,
-                });
-            }
             let data = item_data::function_data(db, func);
             let param = data.params.get(idx)?;
             let ty = param

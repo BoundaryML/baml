@@ -445,11 +445,13 @@ instead of cascading errors. The same item (`ast::LetDef` /
   (`baml_compiler2_hir_ty::globals::global_value_type`).
 - **Scoping.** Globals live in the value namespace of their file's namespace,
   alongside functions and clients (E0011 on a duplicate). A bare name reaches
-  the file's own namespace; elsewhere a global is written `ns.NAME`,
-  `root.ns.NAME`, or `dep.ns.NAME`. Locals, parameters, and lambda parameters
-  shadow globals. Package, static, and enum-variant paths win over a global
-  root (`float.nan` stays the static even beside a global named `float`), and
-  `baml` is reserved (E0176).
+  the file's own namespace; elsewhere it is written in full, like any item:
+  `root.ns.NAME`, or `dep.ns.NAME` from another package. Locals, parameters,
+  and lambda parameters shadow globals. A type's statics and enum variants win
+  over a global root (`float.nan` stays the static even beside a global named
+  `float`). A global named like a package is an item of its namespace, so it
+  shadows that package there, as any item does (#4543). `root` cannot name a
+  global (E0176).
 - **Immutable binding, shared contents.** `$init` writes each global once; the
   binding cannot be reassigned (E0179), but what it holds is an ordinary heap
   value shared by every call in the engine — `G.field = v` and `G.push(x)`
@@ -470,11 +472,13 @@ instead of cascading errors. The same item (`ast::LetDef` /
    included — or refers to a function (or method, or parameter default) whose
    body does, transitively. References come from inference's resolution
    tables (`InferenceResult::global_roots`, member resolutions), never from
-   spellings, so a shadowing local is not an edge and a qualified `ns.x` is.
+   spellings, so a shadowing local is not an edge and a qualified `root.ns.x`
+   is.
    Independent globals run in source order (file path, then position). A
    cycle is E0181, reported once at its first global. See
    `baml_compiler2_hir_ty::globals`.
-3. **`$init`:** one helper per global, named `$init_let.<package>.<name>`, then
+3. **`$init`:** one helper per global, named
+   `$init_let.<package>.<namespace…>.<name>`, then
    a `StoreGlobal` into its slot; after every package's `$init` the engine
    freezes the slots into `SharedGlobals`.
 

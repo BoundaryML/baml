@@ -64,7 +64,8 @@ const RECOVERED = fails() catch (e) {
     string => -1
 };
 
-// A global named like the synthetic test collector stays reachable from tests.
+// A global named `registry`, the name the synthetic test collector once took,
+// stays reachable from tests.
 const registry = "user registry";
 
 // A global named like a type does not capture that type's statics.
@@ -177,6 +178,27 @@ function compiled_package_initializer_throw_reaches_the_caller() -> string {
     "compiled"
 }
 
+// A tag whose body takes a parameter `name`, read back from the template's
+// first interpolation.
+//baml:tagged_string
+function first_value(body: (name: string) -> baml.TaggedString) -> string {
+    let t = body("tag parameter");
+    match (t.values[0]) {
+        let s: string => s,
+        _ => "?",
+    }
+}
+
+// A qualified global whose last segment is spelled like the body parameter
+// still reads the global: only a bare `${name}` is the parameter.
+function tagged_template_reads_qualified_global() -> string {
+    first_value`${root.global_variables.settings.name}`
+}
+
+function tagged_template_reads_its_parameter() -> string {
+    first_value`${name}`
+}
+
 testset "global_variables" {
     test "scalar and annotated globals" {
         assert.equal(MAX_RETRIES, 3);
@@ -254,6 +276,11 @@ testset "global_variables" {
 
     test "a spawned task reads a global" {
         assert.equal(spawned_task_reads_global(), 30)
+    }
+
+    test "a qualified global in a tagged template is not its parameter" {
+        assert.equal(tagged_template_reads_qualified_global(), "settings name");
+        assert.equal(tagged_template_reads_its_parameter(), "tag parameter")
     }
 
     test "qualified globals" {

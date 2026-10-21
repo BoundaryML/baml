@@ -475,21 +475,16 @@ impl<'db, T> MemberResolution<'db, T> {
 /// `MemberResolution`; this table is for paths whose ROOT is a value.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResolvedPath<'db, T = baml_type::Ty> {
-    /// How many WRITTEN segments name the root value: `1` for a local,
-    /// parameter, template param, or bare global; more for a
-    /// namespace-qualified global (`ns.x` is 2), whose leading segments
-    /// are namespace qualifiers, not member accesses.
-    pub root_len: usize,
     /// The ladder: entry 0 is the root value (no member resolution), entry
     /// `i > 0` the `i`-th member access after it. For a qualified global the
-    /// written qualifiers have no entry, so written segment `w` is entry
-    /// `w - (root_len - 1)` — see [`Self::segment_at_written`].
+    /// written qualifiers have no entry — see
+    /// [`InferenceResult::path_segment_at_written`].
     pub segments: Vec<ResolvedPathSegment<'db, T>>,
 }
 
 /// A path expression whose leading written segments name a top-level `let`
 /// (a global variable, a client, or a Session's persisted binding): bare
-/// `x` in the binding's own namespace, `ns.x` / `root.x` / `dep.x`
+/// `x` in the binding's own namespace, `root.ns.x` / `dep.ns.x`
 /// elsewhere. Recorded by the checker so MIR loads the global without
 /// re-resolving the spelling, and so the initialization-order analysis reads
 /// its edges from resolved references rather than names.
@@ -535,13 +530,6 @@ impl<'db, T> ResolvedPath<'db, T> {
     /// unresolved.
     pub fn final_member_resolution(&self) -> Option<&MemberResolution<'db, T>> {
         self.resolved_members()?.last()?.resolution.as_ref()
-    }
-
-    /// The ladder entry for WRITTEN segment `written`: `None` for the
-    /// namespace qualifiers of a qualified global, which name no value.
-    pub fn segment_at_written(&self, written: usize) -> Option<&ResolvedPathSegment<'db, T>> {
-        self.segments
-            .get(written.checked_sub(self.root_len.saturating_sub(1))?)
     }
 }
 
@@ -1356,7 +1344,29 @@ impl<T> InferenceResult<'_, T> {
     }
 }
 
-impl<T> InferenceResult<'_, T> {
+impl<'db, T> InferenceResult<'db, T> {
+    /// How many written segments of path `expr` qualify its root value: the
+    /// package and namespace segments of a qualified global
+    /// ([`GlobalRoot::segments`]), else `0`.
+    pub fn path_root_qualifiers(&self, expr: ExprId) -> usize {
+        self.global_roots
+            .get(&expr)
+            .map_or(0, |root| root.segments.saturating_sub(1))
+    }
+
+    /// The ladder entry of path `expr` for WRITTEN segment `written`: `None`
+    /// for the qualifiers of a qualified global, which name no value.
+    pub fn path_segment_at_written(
+        &self,
+        expr: ExprId,
+        written: usize,
+    ) -> Option<&ResolvedPathSegment<'db, T>> {
+        self.path_resolutions
+            .get(&expr)?
+            .segments
+            .get(written.checked_sub(self.path_root_qualifiers(expr))?)
+    }
+
     /// Whether `expr` holds a condition the checker marked for truthiness
     /// coercion ([`Adjust::Truthy`]).
     pub fn is_truthy_condition(&self, expr: ExprId) -> bool {
@@ -4198,7 +4208,7 @@ impl<'db> InferenceContext<'db> {
         };
         // A top-level binding is written once, by `$init`, and then shared by
         // every call: the binding itself never changes. Only a target that
-        // IS the global (`x = v`, `ns.x += v`) is refused — `x.f = v` and
+        // IS the global (`x = v`, `root.ns.x += v`) is refused — `x.f = v` and
         // `x[i] = v` change what the global holds, not the binding.
         if binding.is_none()
             && let Expr::Path(segments) = &body.exprs[target]
@@ -6637,7 +6647,7 @@ impl<'db> InferenceContext<'db> {
                 self.write_resolved_path(callee, steps);
                 return (ty, bound);
             }
-            // A method called on a global (`G.m(..)`, `ns.G.field.m(..)`):
+            // A method called on a global (`G.m(..)`, `root.ns.G.field.m(..)`):
             // the same road as a local receiver, so the call site's turbofish
             // and arguments instantiate the method. Typing the callee as a
             // bound-method VALUE instead would demand a generic method be
@@ -6666,7 +6676,7 @@ impl<'db> InferenceContext<'db> {
                         ty: ty.clone(),
                         resolution,
                     });
-                    self.write_rooted_path(callee, root_len, steps);
+                    self.write_resolved_path(callee, steps);
                     return (ty, bound);
                 }
             }
@@ -7414,10 +7424,12 @@ impl<'db> InferenceContext<'db> {
         // persisted binding — named by the path's leading segments: bare
         // (`x`) in its own namespace, qualified from a package head
         // (`root.ns.x`, `dep.x`) anywhere else; the remaining segments are
-        // member accesses on its value. Every package-path tier runs first
+        // member accesses on its value. Every other value tier runs first
         // (functions, exported values, statics, `default.m`, enum variants),
-        // so a global named like a package or type (`reflect`, `float`)
-        // never captures a path into it: `float.nan` stays the static.
+        // so a global named like a type never captures its statics:
+        // `float.nan` stays the static. A global named like a package is an
+        // item of its namespace, and `head` already reads `reflect.x` as that
+        // item there, as for any item (#4543).
         if let Some((binding, root_len)) = self.global_root(head, segments) {
             // Recorded before typing: a reference whose type is cyclic is
             // still an edge the initialization-order analysis must see.
@@ -7432,7 +7444,7 @@ impl<'db> InferenceContext<'db> {
                 return Ty::error();
             };
             let (ty, steps) = self.walk_path_members(expr, root_ty, &segments[root_len..]);
-            self.write_rooted_path(expr, root_len, steps);
+            self.write_resolved_path(expr, steps);
             return ty;
         }
         // A name that RESOLVES to a definition kind this road doesn't
@@ -10584,34 +10596,29 @@ impl<'db> InferenceContext<'db> {
     /// The top-level `let` a path's leading segments name, read from `head`,
     /// with how many segments name it: a plain path's first segment, an item
     /// of the current namespace (`x`), or the SHORTEST `<namespace*>.<item>`
-    /// after a package head (`root.ns.x`, `dep.x`).
+    /// after a package head (`root.ns.x`, `dep.ns.x`).
     fn global_root(
         &self,
         head: PathHead,
         segments: &[baml_type::Name],
     ) -> Option<(crate::extern_loc::GlobalRef<'db>, usize)> {
-        let source_let = |len: usize| match self.lower.resolve_value(head, &segments[..len]) {
-            Some(ResolvedValue::Source(Definition::Let(binding))) => {
-                Some((DeclRef::Source(binding), len))
-            }
-            _ => None,
+        // A plain head names an item of this namespace in one segment; a
+        // package head is followed by `<namespace*>.<item>`.
+        let lengths = match head {
+            PathHead::Plain => 1..=1,
+            PathHead::Package(_) | PathHead::Lang(_) => 2..=segments.len(),
         };
-        match head {
-            PathHead::Plain => source_let(1),
-            PathHead::Package(package) | PathHead::Lang(package) => {
-                (2..=segments.len()).find_map(|len| {
-                    if !baml_compiler2_hir::package::is_served_from_interface(self.db, package) {
-                        return source_let(len);
-                    }
-                    // A package served from its interface: the exported row
-                    // stands in for the declaration, exactly as for its
-                    // functions.
-                    let (name, namespace) = segments[1..len].split_last()?;
-                    crate::extern_loc::mounted_let_named(self.db, package, namespace, name)
-                        .map(|binding| (DeclRef::External(binding), len))
-                })
+        lengths.into_iter().find_map(|len| {
+            match self.lower.resolve_value(head, &segments[..len])? {
+                ResolvedValue::Source(Definition::Let(binding)) => {
+                    Some((DeclRef::Source(binding), len))
+                }
+                // A package served from its interface: the exported row
+                // stands in for the declaration, as for its functions.
+                ResolvedValue::ExternalLet(binding) => Some((DeclRef::External(binding), len)),
+                ResolvedValue::Source(_) | ResolvedValue::External(_) => None,
             }
-        }
+        })
     }
 
     /// The type a read of global `binding` has: its annotation when it has
@@ -11739,29 +11746,9 @@ impl<'db> InferenceContext<'db> {
         if let Some(last) = steps.last().and_then(|step| step.resolution.clone()) {
             self.write_member_resolution(expr, last);
         }
-        self.result.path_resolutions.insert(
-            expr,
-            ResolvedPath {
-                root_len: 1,
-                segments: steps,
-            },
-        );
-    }
-
-    /// [`Self::write_resolved_path`] for a path whose root value spans
-    /// `root_len` written segments (a namespace-qualified global). The ladder
-    /// is recorded root-first, exactly as for a bare root: MIR lowers such a
-    /// path as the bare global it names.
-    fn write_rooted_path(
-        &mut self,
-        expr: ExprId,
-        root_len: usize,
-        steps: Vec<ResolvedPathSegment<'db, Ty>>,
-    ) {
-        self.write_resolved_path(expr, steps);
-        if let Some(path) = self.result.path_resolutions.get_mut(&expr) {
-            path.root_len = root_len;
-        }
+        self.result
+            .path_resolutions
+            .insert(expr, ResolvedPath { segments: steps });
     }
 
     fn untyped_empty_container_ty(
@@ -14781,7 +14768,6 @@ impl<'db> InferenceContext<'db> {
                     (
                         expr,
                         ResolvedPath {
-                            root_len: path.root_len,
                             segments: path
                                 .segments
                                 .into_iter()

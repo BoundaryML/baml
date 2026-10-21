@@ -150,7 +150,7 @@ pub enum LoweringDiagnostic {
 
     /// A `let type` binding at file scope. It binds a runtime type for the
     /// rest of a block, and a file has no block for it to bind in.
-    TopLevelLetNotSupported { span: TextRange },
+    TopLevelLetType { span: TextRange },
 
     /// `const` currently parses as a non-immutable alias for `let`.
     ConstBindingIntroducer { span: TextRange },
@@ -563,10 +563,11 @@ impl LoweringDiagnostic {
                 *span,
                 "a global variable binds one name: `const NAME = value;` or `const NAME: Type = value;`",
             ),
-            LoweringDiagnostic::TopLevelLetNotSupported { span } => (
+            LoweringDiagnostic::TopLevelLetType { span } => (
                 DiagnosticId::InvalidSyntax,
                 Severity::Error,
-                "top-level `let` bindings are not supported".to_string(),
+                "`let type` binds a type for the rest of a block, so it is only allowed inside a body"
+                    .to_string(),
                 *span,
                 "move this binding into a function body",
             ),

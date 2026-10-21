@@ -452,9 +452,9 @@ fn find_member_usages(
 
             // Non-root segments of multi-segment `Path`s.
             for (expr_id, resolved_path) in &inference.path_resolutions {
-                // Ladder entry `i` is written segment `i + root_len - 1`: a
-                // namespace-qualified global root has no entry of its own.
-                let written_offset = resolved_path.root_len.saturating_sub(1);
+                // Ladder entry `i` is written segment `i + qualifiers`: a
+                // qualified global's qualifiers have no entry of their own.
+                let written_offset = inference.path_root_qualifiers(*expr_id);
                 for (seg_idx, step) in resolved_path.segments.iter().enumerate().skip(1) {
                     let Some(resolution) = step.resolution.as_ref() else {
                         continue;

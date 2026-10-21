@@ -75,6 +75,33 @@ function main() -> int {
     assert!(message.contains("in user.load"), "{message}");
 }
 
+/// A global in a child namespace is named in full (`user.config.CONFIG`): its
+/// initializer helper's identity carries the namespace, not just the name.
+#[test]
+fn an_uncaught_initializer_throw_names_a_namespaced_global_in_full() {
+    let mut db = ProjectDatabase::new();
+    let root = db.workspace(Path::new("/globals/namespaced"));
+    db.file(
+        "/globals/namespaced/ns_config/config.baml",
+        r#"function load() -> int throws string {
+    throw "config is missing"
+}
+
+const CONFIG = load();
+"#,
+    );
+    db.file(
+        "/globals/namespaced/main.baml",
+        "function main() -> int {\n    root.config.CONFIG\n}\n",
+    );
+    let program = compile_program(&db, root, OptLevel::One).expect("the package compiles");
+    let message = init_failure(program);
+    assert!(
+        message.contains("while initializing global `user.config.CONFIG`"),
+        "{message}"
+    );
+}
+
 /// The static order follows calls the checker can resolve. A read through a
 /// virtual interface method is invisible to it, so `EARLY` (first in source
 /// order, with no edge to `LATE`) runs first and reads `LATE` before its

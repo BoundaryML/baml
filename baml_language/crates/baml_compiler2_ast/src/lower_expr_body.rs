@@ -220,20 +220,18 @@ pub(crate) fn lower_top_level_let(
     let type_annotation = match (surface, subpat) {
         (_, None) => None,
         (TopLevelLetSurface::Session, Some(_)) => {
-            reject(
-                diags,
-                "session bindings do not support patterns or `else`",
-                "",
-            );
+            diags.push(LoweringDiagnostic::InvalidPatternAscription {
+                reason: "session bindings do not support patterns or `else`",
+                span: node.span_range(),
+            });
             return None;
         }
         (TopLevelLetSurface::Source, Some(sub)) => {
             let Some(mut annotation) = ascription_type_expr(&patterns, sub) else {
-                reject(
-                    diags,
-                    "",
-                    "only a type annotation may follow a global variable's name",
-                );
+                diags.push(LoweringDiagnostic::InvalidTopLevelLet {
+                    reason: "only a type annotation may follow a global variable's name",
+                    span: node.span_range(),
+                });
                 return None;
             };
             let span = annotation.span;

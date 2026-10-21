@@ -372,9 +372,7 @@ fn member_position_at(
             }
             let resolution = match segment_idx {
                 Some(idx) => inference
-                    .path_resolutions
-                    .get(&expr_id)
-                    .and_then(|path| path.segment_at_written(idx))
+                    .path_segment_at_written(expr_id, idx)
                     .and_then(|step| step.resolution.as_ref())
                     .or_else(|| inference.member_resolutions.get(&expr_id)),
                 None => inference.member_resolutions.get(&expr_id),
@@ -497,8 +495,7 @@ pub fn receiver_at_dot<'db>(
                     if !reaches(span.end()) {
                         return None;
                     }
-                    let resolved = inference.path_resolutions.get(&expr_id)?;
-                    let step = resolved.segment_at_written(segment_idx)?;
+                    let step = inference.path_segment_at_written(expr_id, segment_idx)?;
                     Some((step.ty.clone(), span))
                 }),
                 _ => None,
@@ -1427,9 +1424,7 @@ fn member_access_at<'db>(
     // uses the expression-level resolution.
     let resolution = if let Some(seg_idx) = path_seg_idx {
         inference
-            .path_resolutions
-            .get(&expr_id)
-            .and_then(|path| path.segment_at_written(seg_idx))
+            .path_segment_at_written(expr_id, seg_idx)
             .and_then(|step| step.resolution.as_ref())
             .or_else(|| inference.member_resolutions.get(&expr_id))
     } else {

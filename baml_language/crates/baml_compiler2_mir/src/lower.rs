@@ -2715,6 +2715,13 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn binding_id_for_path(&self, expr_id: AstExprId, name: &Name) -> Option<BindingId> {
+        // A path the checker resolved to a global names no local: TIR records
+        // a global root only where nothing shadows it. Its bare form can still
+        // spell one — `root.ns.name` lowers as `name` (`with_bare_global_paths`)
+        // — so the name lookups below must not see it.
+        if self.tir_global_root(expr_id).is_some() {
+            return None;
+        }
         let hir_binding = self.hir_binding_id_for_path(expr_id);
         let Some(&tagged_binding) = self.tagged_body_param_bindings.get(name) else {
             return hir_binding;
@@ -4411,42 +4418,23 @@ impl<'db> LoweringContext<'db> {
             .map(|ty| self.convert_tir_ty_for_runtime(ty))
     }
 
-    /// The **top-level `let`** `name` denotes at this expression's position, if
-    /// any: a global variable, a `client` declaration, or a Session
-    /// submission's persisted root binding — all the same item.
+    /// The **top-level `let`** this path expression's root names, if any: a
+    /// global variable, a `client` declaration, or a Session submission's
+    /// persisted root binding — all the same item. The checker records every
+    /// such root (`InferenceResult::global_roots`), qualified (`root.ns.x`,
+    /// lowered here as the bare `x` it names — see `with_bare_global_paths`)
+    /// or bare.
     fn top_level_let_at(
         &self,
         expr_id: AstExprId,
-        name: &Name,
     ) -> Option<baml_compiler2_hir_ty::extern_loc::GlobalRef<'db>> {
-        // The checker's resolution comes first: it covers a qualified global
-        // (`ns.x`, lowered here as the bare `x` it names — see
-        // `with_bare_global_paths`) that no position-based lookup of `x`
-        // could find from this file's namespace.
-        if let Some(root) = self.tir_global_root(expr_id) {
-            return Some(root.binding);
-        }
-        let span_start = self
-            .source_map
-            .as_ref()
-            .map(|source_map| source_map.expr_span(expr_id).start())
-            .unwrap_or_default();
-        match resolve_name_at_in_scope(
-            self.db,
-            self.file,
-            span_start,
-            name,
-            self.scope_func_name.as_ref(),
-        ) {
-            ResolvedName::Item(Definition::Let(binding)) => Some(DeclRef::Source(binding)),
-            _ => None,
-        }
+        self.tir_global_root(expr_id).map(|root| root.binding)
     }
 
     /// Whether a path expression's root names a top-level `let` — i.e. whether
     /// it denotes a runtime **value** even though it is not a lexical binding.
-    fn path_root_is_top_level_let(&self, expr_id: AstExprId, name: &Name) -> bool {
-        self.top_level_let_at(expr_id, name).is_some()
+    fn path_root_is_top_level_let(&self, expr_id: AstExprId) -> bool {
+        self.top_level_let_at(expr_id).is_some()
     }
 
     /// Materialize a **top-level `let`**'s current value into a temp, when
@@ -4464,8 +4452,8 @@ impl<'db> LoweringContext<'db> {
     /// call's callee path is typed by the callee road, which does not record a
     /// root, so `unknown` is the honest fallback there — the receiver is passed
     /// as an ordinary argument and the callee's own signature governs it.
-    fn load_top_level_let_root(&mut self, expr_id: AstExprId, name: &Name) -> Option<Local> {
-        let global = self.top_level_let_at(expr_id, name)?;
+    fn load_top_level_let_root(&mut self, expr_id: AstExprId) -> Option<Local> {
+        let global = self.top_level_let_at(expr_id)?;
         let root_ty = self.path_root_ty(expr_id).unwrap_or(RuntimeTy::Unknown);
         let root_local = self.builder.temp(root_ty.clone());
         self.builder.assign(
@@ -6743,7 +6731,7 @@ impl<'db> LoweringContext<'db> {
                 }
             };
             (place, ty)
-        } else if let Some(root_local) = self.load_top_level_let_root(expr_id, &segments[0]) {
+        } else if let Some(root_local) = self.load_top_level_let_root(expr_id) {
             let ty = self.builder.local_ty(root_local);
             (Place::Local(root_local), ty)
         } else if self.is_default_receiver_root(expr_id, segments)
@@ -8497,7 +8485,7 @@ impl<'db> LoweringContext<'db> {
                     // was dropped from the call entirely.
                     AstExpr::Path(segments) if !segments.is_empty() => {
                         self.binding_id_for_path(*base, &segments[0]).is_some()
-                            || self.path_root_is_top_level_let(*base, &segments[0])
+                            || self.path_root_is_top_level_let(*base)
                     }
                     _ => self.tir_expr_type(*base).is_some(),
                 };
@@ -11244,9 +11232,7 @@ impl<'db> LoweringContext<'db> {
     fn path_receiver_root(&mut self, expr_id: AstExprId, name: &Name) -> Option<Place> {
         match self.place_for_path(expr_id, name) {
             Some(place) => Some(place),
-            None => self
-                .load_top_level_let_root(expr_id, name)
-                .map(Place::local),
+            None => self.load_top_level_let_root(expr_id).map(Place::local),
         }
     }
 
@@ -12378,43 +12364,41 @@ impl LoweringContext<'_> {
             AstExpr::Path(segments) if segments.len() >= 2 => {
                 // Multi-segment path lvalue: `a.b` or `a.b.c`.
                 // Chain field projections from the root local or capture.
-                let (mut current_place, mut current_ty) = if let Some(place) =
-                    self.place_for_path(expr_id, &segments[0])
-                {
-                    let ty = match place {
-                        Place::Local(local) => self
-                            .path_root_ty(expr_id)
-                            .unwrap_or_else(|| self.builder.local_ty(local)),
-                        Place::Deref(CellId::Local(local)) => self
-                            .path_root_ty(expr_id)
-                            .unwrap_or_else(|| self.builder.local_ty(local)),
-                        Place::Deref(CellId::Capture(_)) => {
-                            self.path_root_ty(expr_id).unwrap_or(RuntimeTy::Unknown)
-                        }
-                        Place::Capture(_) | Place::Field { .. } | Place::Index { .. } => {
-                            unreachable!("path roots are locals or the values in cells")
-                        }
-                    };
-                    (place, ty)
-                } else if let Some(root_local) = self.load_top_level_let_root(expr_id, &segments[0])
-                {
-                    // `g.f = v` on a global: the binding is immutable
-                    // (the checker refuses `g = v`), but what it holds is
-                    // an ordinary heap object. Load the global's value and
-                    // store through it, so the write lands in the shared
-                    // object every reader sees.
-                    let ty = self.builder.local_ty(root_local);
-                    (Place::Local(root_local), ty)
-                } else {
-                    return Err(self.internal_error(
-                        &format!(
-                            "MIR failed to resolve the root `{}` of an assignment target \
+                let (mut current_place, mut current_ty) =
+                    if let Some(place) = self.place_for_path(expr_id, &segments[0]) {
+                        let ty = match place {
+                            Place::Local(local) => self
+                                .path_root_ty(expr_id)
+                                .unwrap_or_else(|| self.builder.local_ty(local)),
+                            Place::Deref(CellId::Local(local)) => self
+                                .path_root_ty(expr_id)
+                                .unwrap_or_else(|| self.builder.local_ty(local)),
+                            Place::Deref(CellId::Capture(_)) => {
+                                self.path_root_ty(expr_id).unwrap_or(RuntimeTy::Unknown)
+                            }
+                            Place::Capture(_) | Place::Field { .. } | Place::Index { .. } => {
+                                unreachable!("path roots are locals or the values in cells")
+                            }
+                        };
+                        (place, ty)
+                    } else if let Some(root_local) = self.load_top_level_let_root(expr_id) {
+                        // `g.f = v` on a global: the binding is immutable
+                        // (the checker refuses `g = v`), but what it holds is
+                        // an ordinary heap object. Load the global's value and
+                        // store through it, so the write lands in the shared
+                        // object every reader sees.
+                        let ty = self.builder.local_ty(root_local);
+                        (Place::Local(root_local), ty)
+                    } else {
+                        return Err(self.internal_error(
+                            &format!(
+                                "MIR failed to resolve the root `{}` of an assignment target \
                                  (TIR should have rejected this program)",
-                            segments[0]
-                        ),
-                        expr_id,
-                    ));
-                };
+                                segments[0]
+                            ),
+                            expr_id,
+                        ));
+                    };
 
                 for (offset, seg) in segments[1..].iter().enumerate() {
                     let seg_idx = offset + 1;
@@ -15039,8 +15023,8 @@ pub fn lower_let_body<'db>(
 /// A `let` initializer's body with the lambdas lowered inside it.
 pub type LoweredLetBody<'db> = (MirFunctionBody<'db>, Vec<MirFunction<'db>>);
 
-/// `body` with every namespace-qualified global path (`ns.x.rest`) rewritten
-/// to the bare form `[x, rest…]`.
+/// `body` with every qualified global path (`root.ns.x.rest`) rewritten to
+/// the bare form `[x, rest…]`.
 ///
 /// The checker resolved those paths (`InferenceResult::global_roots`) and
 /// recorded their ladders root-first, exactly as for a bare global; with the

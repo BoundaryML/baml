@@ -9,9 +9,14 @@ class State {
     n: int,
 }
 
-// Reached from the parent as `settings.SCALE(..)` and `settings.STATE.n`.
+// Reached from the parent as `root.global_variables.settings.SCALE(..)` and
+// `root.global_variables.settings.STATE.n`.
 const SCALE = (x: int) -> int {
     x * 2
 };
 const STATE = State { n: 0 };
 const MAYBE_STATE: State? = State { n: 7 };
+
+// Spelled like the body parameter a tagged template gives `${name}` in the
+// parent namespace's `tagged_template_reads_qualified_global`.
+const name = "settings name";

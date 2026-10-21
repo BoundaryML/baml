@@ -1560,10 +1560,8 @@ impl<'db> LowerCtx<'db> {
     /// in the current namespace, or a fully qualified path read from `head`.
     /// TIR's value-path ladder, mirrored, with ONE answer per lane: a
     /// source-served package's definition, or a served package's exported
-    /// function by its identity. A served dependency answers from its
-    /// interface ONLY — it has no files (`definition_of`) — which is also
-    /// why a served package's non-function value resolves to nothing: the
-    /// interface exports functions and types.
+    /// function or top-level binding by its identity. A served dependency
+    /// answers from its interface ONLY — it has no files (`definition_of`).
     pub fn resolve_value(
         &self,
         head: PathHead,
@@ -1578,6 +1576,11 @@ impl<'db> LowerCtx<'db> {
                     crate::extern_loc::mounted_function_named(self.db, package, namespace, item)
                 {
                     return Some(ResolvedValue::External(function));
+                }
+                if let Some(binding) =
+                    crate::extern_loc::mounted_let_named(self.db, package, namespace, item)
+                {
+                    return Some(ResolvedValue::ExternalLet(binding));
                 }
             } else if let Some(def) = self.source_items(package).lookup_value(namespace, item) {
                 return Some(ResolvedValue::Source(def));

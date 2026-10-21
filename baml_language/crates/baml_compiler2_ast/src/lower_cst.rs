@@ -219,7 +219,7 @@ fn lower_file_with_path_and_test_owner_impl(
             // `let type` binds a runtime type for the rest of a block, and a
             // file has no block for it to bind in.
             baml_compiler_syntax::SyntaxKind::TYPE_BINDING_STMT => {
-                diags.push(LoweringDiagnostic::TopLevelLetNotSupported {
+                diags.push(LoweringDiagnostic::TopLevelLetType {
                     span: child.span_range(),
                 });
             }

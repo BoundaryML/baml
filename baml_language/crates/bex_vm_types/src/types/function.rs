@@ -245,9 +245,10 @@ impl FunctionIdentity {
     /// package and namespace segments: `f` for a free function, `Class.m` for
     /// a method, `Interface.m` for a default body, `<(target as iface)>.m`
     /// for a provided one, `<lambda(parent, i)>` for a closure body (its
-    /// parent by ITS tail), the role name of an initializer or entry, and
-    /// for a `let` initializer's helper, the role and its global
-    /// (`$init_let.user.ns.X`).
+    /// parent by ITS tail). An initializer or entry has no package or
+    /// namespace segments, so its tail is its whole name: its role, which for
+    /// a `let` initializer's helper includes the global it initializes, in
+    /// full (`$init_let.user.ns.X`).
     /// The ONE spelling of a function's tail: [`Function::name`] prefixes it,
     /// and a nested synthetic names its parent by it, so the two cannot drift.
     /// `label` is the owning package's display label; an impl-provided body
@@ -279,12 +280,7 @@ impl FunctionIdentity {
                 format!("<{kind}({parent}, {ordinal})>")
             }
             Self::Init => "$init".to_string(),
-            Self::InitLet(path) => {
-                let mut segments: Vec<&str> = label.map(Name::as_str).into_iter().collect();
-                segments.extend(path.namespace.iter().map(Name::as_str));
-                segments.push(path.name.as_str());
-                format!("{}{}", crate::INIT_LET_HELPER_PREFIX, segments.join("."))
-            }
+            Self::InitLet(path) => crate::init_let_helper_name(&path.render_under(label)),
             Self::InitTest => "$init_test".to_string(),
             Self::Entry(callee) => format!("$entry::{callee}"),
         }

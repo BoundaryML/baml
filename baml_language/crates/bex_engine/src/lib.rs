@@ -882,14 +882,13 @@ fn describe_init_failure(
 
 /// The global whose initializer the stack `trace` is running: each
 /// initializer runs in a helper named after its global
-/// (`$init_let.<package>.<name>`), and the innermost one on the stack is the
-/// one that stopped.
+/// (`$init_let.<package>.<namespace…>.<name>`), and the innermost one on the
+/// stack is the one that stopped.
 fn init_global_on_stack(trace: &[bex_vm::StackFrame]) -> Option<&str> {
-    trace.iter().rev().find_map(|frame| {
-        frame
-            .function_name
-            .strip_prefix(bex_vm_types::INIT_LET_HELPER_PREFIX)
-    })
+    trace
+        .iter()
+        .rev()
+        .find_map(|frame| bex_vm_types::init_let_helper_global(&frame.function_name))
 }
 
 /// Why a package's `$init` stopped at a suspension point. The checker refuses
@@ -2031,7 +2030,7 @@ impl BexEngine {
                 package.globals.keys().filter_map(move |path| match path {
                     bex_vm_types::DeclPath::Let(local) => package
                         .global_slot(path)
-                        .map(|slot| (slot.raw(), format!("{}.{local}", package.name))),
+                        .map(|slot| (slot.raw(), local.render_under(Some(&package.name)))),
                     _ => None,
                 })
             })

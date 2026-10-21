@@ -1107,12 +1107,6 @@ pub(crate) fn compile_let_helper<'db>(
     Ok(helper)
 }
 
-/// The name of the helper that initializes the global `global` (its rendered,
-/// package-qualified name).
-pub(crate) fn init_let_helper_name(global: &str) -> String {
-    format!("{}{global}", bex_vm_types::INIT_LET_HELPER_PREFIX)
-}
-
 /// One `let` of a package's `$init`: the helper that evaluates its
 /// initializer and the binding's slot the result is stored into.
 pub(crate) struct InitStep {
@@ -1136,7 +1130,7 @@ pub(crate) fn build_init_function(steps: &[InitStep]) -> Function {
             ntypeargs: 0,
         });
         meta.push(InstructionMeta {
-            operand: Some(OperandMeta::Callable(init_let_helper_name(
+            operand: Some(OperandMeta::Callable(bex_vm_types::init_let_helper_name(
                 &step.target_name,
             ))),
         });

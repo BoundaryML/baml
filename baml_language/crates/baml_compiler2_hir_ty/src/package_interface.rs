@@ -30,7 +30,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     callable::{ExternalCallTarget, ExternalLinkability},
-    extern_loc::{ExternFunctionLoc, extern_function_named},
+    extern_loc::{ExternFunctionLoc, ExternLetLoc, extern_function_named, mounted_let_named},
     lower::qualify_def,
     render::{Spell, Viewpoint},
 };
@@ -545,10 +545,12 @@ pub enum ResolvedSource {
 /// A value lookup never lies about source ownership: a source-backed result
 /// is its real definition; a served package's result is the identity of its
 /// exported row, whose facts every consumer reads through
-/// [`crate::extern_loc::extern_function_row`].
+/// [`crate::extern_loc::extern_function_row`] for a function and
+/// [`crate::extern_loc::extern_let_row`] for a top-level binding.
 pub enum ResolvedValue<'db> {
     Source(Definition<'db>),
     External(ExternFunctionLoc<'db>),
+    ExternalLet(ExternLetLoc<'db>),
 }
 
 /// Whether an exported function declares a `self` receiver, and is therefore
@@ -2510,9 +2512,12 @@ impl<'db> PackageResolutionContext<'db> {
                     return None;
                 }
                 if is_served_from_interface(db, package) {
-                    return Some(ResolvedValue::External(extern_function_named(
-                        db, package, namespace, item,
-                    )?));
+                    return extern_function_named(db, package, namespace, item)
+                        .map(ResolvedValue::External)
+                        .or_else(|| {
+                            mounted_let_named(db, package, namespace, item)
+                                .map(ResolvedValue::ExternalLet)
+                        });
                 }
                 baml_compiler2_hir::package::package_items(db, package)
                     .lookup_value(namespace, item)

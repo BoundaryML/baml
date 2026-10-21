@@ -2269,33 +2269,31 @@ pub(crate) fn owned_external_value(
     permit: PermitProof<'_>,
     value: Value,
 ) -> BexExternalValue {
-    {
-        match value.kind() {
-            ValueKind::OmittedArg => {
-                panic!("Cannot convert omitted argument sentinel to BexExternalValue")
+    match value.kind() {
+        ValueKind::OmittedArg => {
+            panic!("Cannot convert omitted argument sentinel to BexExternalValue")
+        }
+        ValueKind::Null => BexExternalValue::Null,
+        ValueKind::Int(i) => BexExternalValue::Int(i),
+        ValueKind::Bool(b) => BexExternalValue::Bool(b),
+        ValueKind::Object(ptr) => {
+            // SAFETY: `permit` witnesses GC liveness for the deref.
+            if let Some(v) = unsafe { unbox_float_object(ptr) } {
+                return v;
             }
-            ValueKind::Null => BexExternalValue::Null,
-            ValueKind::Int(i) => BexExternalValue::Int(i),
-            ValueKind::Bool(b) => BexExternalValue::Bool(b),
-            ValueKind::Object(ptr) => {
-                // SAFETY: `permit` witnesses GC liveness for the deref.
-                if let Some(v) = unsafe { unbox_float_object(ptr) } {
-                    return v;
-                }
-                BexValue::HeapPtr(&ptr)
-                    .as_owned_for_trace(heap, permit)
-                    .unwrap_or_else(|e| {
-                        // Remaining errors here (InvalidHandle, TypeMismatch,
-                        // FieldNotFound) indicate engine-level invariant
-                        // violations — they shouldn't happen in normal operation.
-                        // Surface via structured tracing rather than stderr so
-                        // they're visible in logs without polluting CLI output,
-                        // and embed the error in the trace payload so it shows
-                        // up wherever traces are consumed.
-                        tracing::error!(error = %e, "trace payload deep-copy failed");
-                        BexExternalValue::String(format!("<trace-error: {e}>").into())
-                    })
-            }
+            BexValue::HeapPtr(&ptr)
+                .as_owned_for_trace(heap, permit)
+                .unwrap_or_else(|e| {
+                    // Remaining errors here (InvalidHandle, TypeMismatch,
+                    // FieldNotFound) indicate engine-level invariant
+                    // violations — they shouldn't happen in normal operation.
+                    // Surface via structured tracing rather than stderr so
+                    // they're visible in logs without polluting CLI output,
+                    // and embed the error in the trace payload so it shows
+                    // up wherever traces are consumed.
+                    tracing::error!(error = %e, "trace payload deep-copy failed");
+                    BexExternalValue::String(format!("<trace-error: {e}>").into())
+                })
         }
     }
 }

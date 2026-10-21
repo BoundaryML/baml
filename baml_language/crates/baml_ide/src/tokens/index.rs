@@ -163,10 +163,10 @@ fn index_function(
         };
         let expr = &expr_body.exprs[expr_id];
         match expr {
-            // A namespace-qualified global (`settings.TIMEOUT`): the checker
-            // resolved it, so its qualifiers are namespaces and its last root
-            // segment the readonly binding, whether or not a bare-name or
-            // package-path lookup could spell it from here.
+            // A qualified global (`root.settings.TIMEOUT`): the checker
+            // resolved it, so its qualifiers are the package and namespaces
+            // and its last root segment the readonly binding, whether or not
+            // a bare-name or package-path lookup could spell it from here.
             Expr::Path(segments)
                 if inference
                     .global_roots
@@ -271,16 +271,13 @@ fn index_path_tail(
     let members = inference.path_resolutions.get(&expr_id);
     let leaf = segments.len() - 1;
     // A qualified global's root segments were classified by the caller.
-    let first_member = inference
-        .global_roots
-        .get(&expr_id)
-        .map_or(1, |root| root.segments.max(1));
+    let first_member = inference.path_root_qualifiers(expr_id) + 1;
 
     for k in first_member..segments.len() {
         let span = source_map.path_segment_span(expr_id, k);
         // 1. A recorded field/variant/method resolution wins.
-        if let Some(res) = members
-            .and_then(|m| m.segment_at_written(k))
+        if let Some(res) = inference
+            .path_segment_at_written(expr_id, k)
             .and_then(|s| s.resolution.as_ref())
         {
             record(index, span, classify::classify_member(res));
