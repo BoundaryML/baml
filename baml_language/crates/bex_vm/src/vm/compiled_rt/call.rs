@@ -22,6 +22,8 @@ use crate::{
 thread_local! {
     /// Force calls through the VM call path to test telemetry equivalence.
     pub(crate) static FORCE_CALL_FUNNEL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Run direct compiled calls with VM frames, as `BAML_COMPILED_FRAMES=1` does.
+    pub(crate) static FORCE_VM_FRAMES: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 impl BexVm {

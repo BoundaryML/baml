@@ -714,6 +714,19 @@ impl TelemetryState {
         }
     }
 
+    /// Whether an untraced call of `function` may record an invocation at
+    /// this level: what [`Self::enter_bytecode_with_trace`] decides before it
+    /// reads any caller fact. A frame record checks this before it boxes the
+    /// call's arguments and reads its caller's identity and pc.
+    #[inline]
+    pub(crate) fn may_record(&self, function: &Function) -> bool {
+        function.telemetry_function_id.is_some()
+            && matches!(function.kind, FunctionKind::Bytecode)
+            && !function.trace_passthrough
+            && (self.auto_level != AutoTelemetryLevel::Low
+                || function.telemetry_policy_id.load() != btel_types::TelemetryPolicyId::NONE)
+    }
+
     #[inline(always)]
     #[allow(
         clippy::too_many_arguments,

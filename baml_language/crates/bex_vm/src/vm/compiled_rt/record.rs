@@ -292,18 +292,20 @@ impl BexVm {
     }
 
     /// Whether compiled callees run with frame records instead of VM frames;
-    /// off with `BAML_COMPILED_FRAMES=1`, and while telemetry observes calls.
+    /// off with `BAML_COMPILED_FRAMES=1`.
     #[allow(clippy::inline_always, reason = "checked at every compiled call site")]
     #[inline(always)]
     #[must_use]
     pub fn direct_calls(&self) -> bool {
         #[cfg(test)]
-        if super::call::FORCE_CALL_FUNNEL.with(std::cell::Cell::get) {
+        if super::call::FORCE_CALL_FUNNEL.with(std::cell::Cell::get)
+            || super::call::FORCE_VM_FRAMES.with(std::cell::Cell::get)
+        {
             return false;
         }
         // Both are set only for the call the VM makes next.
         debug_assert!(self.pending_call_trace.is_none() && !self.pending_call_passes_type_args);
-        self.compiled.direct_calls && self.telemetry.is_none()
+        self.compiled.direct_calls
     }
 
     /// [`Self::direct_calls`] for a generic callee: a type argument naming a
@@ -319,33 +321,52 @@ impl BexVm {
 
     /// Run a compiled callee with a frame record, after `caller` notes the
     /// call site `pc`. The record is popped when the body returns; an error
-    /// leaves it for the unwinder.
+    /// leaves it for the unwinder. `args` boxes the arguments for telemetry,
+    /// which needs them only for an invocation it records.
     #[allow(clippy::inline_always, reason = "measured: the call fast path")]
     #[inline(always)]
-    pub fn call_record<T>(
+    pub fn call_record<T: RecordResult, A: AsRef<[Value]>>(
         &mut self,
         caller: &FrameRecord,
         callee: HeapPtr,
         pc: u32,
+        args: impl FnOnce(&mut BexVm) -> A,
         body: impl FnOnce(&mut BexVm, &FrameRecord) -> Result<T, Box<VmError>>,
     ) -> Result<T, Box<VmError>> {
         caller.note_pc(pc);
-        self.call_record_in(callee, caller.package.get(), Vec::new(), body)
+        let observe = |vm: &mut BexVm, _: &[RealizedTy]| {
+            let function = vm.observed_callee(callee)?;
+            let args = args(vm);
+            vm.enter_record_receipt(caller, function, callee, &[], &[], args.as_ref())
+        };
+        self.call_record_in(callee, caller.package.get(), Vec::new(), observe, body)
     }
 
     /// [`Self::call_record`] for a generic callee, whose frame starts with
     /// the call's type arguments.
     #[inline]
-    pub fn call_record_typed<T>(
+    pub fn call_record_typed<T: RecordResult, A: AsRef<[Value]>>(
         &mut self,
         caller: &FrameRecord,
         callee: HeapPtr,
         type_args: &[RealizedTy],
         pc: u32,
+        args: impl FnOnce(&mut BexVm) -> A,
         body: impl FnOnce(&mut BexVm, &FrameRecord) -> Result<T, Box<VmError>>,
     ) -> Result<T, Box<VmError>> {
         caller.note_pc(pc);
-        self.call_record_in(callee, caller.package.get(), type_args.to_vec(), body)
+        let observe = |vm: &mut BexVm, type_args: &[RealizedTy]| {
+            let function = vm.observed_callee(callee)?;
+            let args = args(vm);
+            vm.enter_record_receipt(caller, function, callee, &[], type_args, args.as_ref())
+        };
+        self.call_record_in(
+            callee,
+            caller.package.get(),
+            type_args.to_vec(),
+            observe,
+            body,
+        )
     }
 
     /// Run a callee from a runtime-dispatched call (a closure or an
@@ -363,7 +384,11 @@ impl BexVm {
     ) -> Result<Value, Box<VmError>> {
         caller.note_pc(pc);
         let package = self.frame_package(callee);
-        self.call_record_in(callee, package, type_args, |vm, frame| {
+        let observe = |vm: &mut BexVm, carried: &[RealizedTy]| {
+            let function = vm.observed_callee(callee)?;
+            vm.enter_record_receipt(caller, function, callee, carried, &[], args)
+        };
+        self.call_record_in(callee, package, type_args, observe, |vm, frame| {
             body(vm, frame, args)
         })
     }
@@ -375,11 +400,12 @@ impl BexVm {
                   offsets fit u32"
     )]
     #[inline(always)]
-    fn call_record_in<T>(
+    fn call_record_in<T: RecordResult>(
         &mut self,
         callee: HeapPtr,
         package: HeapPtr,
         type_args: Vec<RealizedTy>,
+        observe: impl FnOnce(&mut BexVm, &[RealizedTy]) -> Option<FrameTelemetry>,
         body: impl FnOnce(&mut BexVm, &FrameRecord) -> Result<T, Box<VmError>>,
     ) -> Result<T, Box<VmError>> {
         let chain: *const RecordChain = &raw const *self.compiled.records;
@@ -392,6 +418,13 @@ impl BexVm {
             return Err(Box::new(self.record_overflow()));
         }
         self.stack_room()?;
+        // The invocation is entered with the caller still innermost, as the
+        // call path enters it before pushing the callee's frame.
+        let receipt = if self.telemetry.is_some() {
+            observe(self, &type_args)
+        } else {
+            None
+        };
         let base = self.stack.len();
         let record = FrameRecord {
             prev: Cell::new(links.top.get()),
@@ -402,7 +435,7 @@ impl BexVm {
             base: base as u32,
             level: level as u32,
             entry: false,
-            receipt: Cell::new(None),
+            receipt: Cell::new(receipt),
             type_args: UnsafeCell::new(type_args),
         };
         links.top.set(&raw const record);
@@ -413,15 +446,90 @@ impl BexVm {
             counted: true,
         };
         let result = body(self, &record);
-        if result.is_ok() {
-            self.stack.truncate(base);
-            drop(pop);
-        } else {
-            std::mem::forget(pop);
-            let linked: *const FrameRecord = &raw const record;
-            self.zombify(linked, record);
+        match &result {
+            Ok(value) => {
+                self.stack.truncate(base);
+                drop(pop);
+                if let Some(receipt) = record.receipt.take() {
+                    self.complete_record(receipt, record.function(), value);
+                }
+            }
+            Err(_) => {
+                std::mem::forget(pop);
+                let linked: *const FrameRecord = &raw const record;
+                self.zombify(linked, record);
+            }
         }
         result
+    }
+
+    /// The callee's function when telemetry may record its invocation.
+    #[inline]
+    fn observed_callee(&self, callee: HeapPtr) -> Option<&'static Function> {
+        // SAFETY: a callee is rooted by its caller for the call.
+        #[allow(unsafe_code)]
+        let function = unsafe { self.load_callable(callee) }.ok()?;
+        self.telemetry
+            .as_ref()?
+            .may_record(function)
+            .then_some(function)
+    }
+
+    /// Enter a directly called callee's invocation, with the caller facts the
+    /// call path reads from `caller`'s frame.
+    #[cold]
+    #[inline(never)]
+    #[allow(unsafe_code)]
+    fn enter_record_receipt(
+        &mut self,
+        caller: &FrameRecord,
+        function: &'static Function,
+        callee: HeapPtr,
+        carried: &[RealizedTy],
+        passed: &[RealizedTy],
+        args: &[Value],
+    ) -> Option<FrameTelemetry> {
+        let (visible_caller, caller_pc, caller_is_observed) =
+            self.record_caller_facts(Self::record_frame(caller));
+        let context = self.current_context().clone();
+        let callee_fn = self.callable_function_identity(callee).unwrap_or(callee);
+        let telemetry = self.telemetry.as_mut()?;
+        if !telemetry.has_context(&context) {
+            telemetry.set_context(context);
+        }
+        // SAFETY: the heap permit is held, and the caller keeps the
+        // arguments and callee live.
+        unsafe {
+            telemetry.enter_bytecode_with_trace(
+                function,
+                callee_fn,
+                visible_caller,
+                caller_pc,
+                caller_is_observed,
+                args,
+                None,
+                CallTypeArgs { carried, passed },
+                |caller, callee| Self::register_call_path_functions(&self.heap, caller, callee),
+            )
+        }
+    }
+
+    /// Complete a directly called callee's invocation with its result.
+    #[cold]
+    #[inline(never)]
+    fn complete_record<T: RecordResult>(
+        &mut self,
+        receipt: FrameTelemetry,
+        callee: HeapPtr,
+        value: &T,
+    ) {
+        let value = value.to_value(self);
+        // SAFETY: the callee is rooted by its caller for the call.
+        #[allow(unsafe_code)]
+        let Ok(function) = (unsafe { self.load_callable(callee) }) else {
+            return;
+        };
+        self.complete_record_telemetry(receipt, function, value);
     }
 
     /// Keep the record of a body that returned an error on the stack, boxed,
@@ -919,6 +1027,35 @@ impl BexVm {
         unsafe {
             telemetry.complete_invocation(receipt, function, InvocationOutcome::Ok, Some(value));
         }
+    }
+}
+
+/// What a compiled body returns, boxed for telemetry's output capture.
+pub trait RecordResult {
+    fn to_value(&self, vm: &mut BexVm) -> Value;
+}
+
+impl RecordResult for Value {
+    fn to_value(&self, _: &mut BexVm) -> Value {
+        *self
+    }
+}
+
+impl RecordResult for i64 {
+    fn to_value(&self, _: &mut BexVm) -> Value {
+        Value::int(*self)
+    }
+}
+
+impl RecordResult for bool {
+    fn to_value(&self, _: &mut BexVm) -> Value {
+        Value::bool(*self)
+    }
+}
+
+impl RecordResult for f64 {
+    fn to_value(&self, vm: &mut BexVm) -> Value {
+        vm.float_value(*self)
     }
 }
 

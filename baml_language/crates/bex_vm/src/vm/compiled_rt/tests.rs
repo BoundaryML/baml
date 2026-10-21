@@ -1043,14 +1043,36 @@ fn inline_observed_compiled_calls_record_as_the_call_path_does() {
 
     use btel_settings::mode::AutoTelemetryLevel;
 
-    use crate::compiled_rt::FORCE_CALL_FUNNEL;
+    use crate::compiled_rt::{CompiledFn, FORCE_CALL_FUNNEL, FORCE_VM_FRAMES};
 
     static LEAF: AtomicU32 = AtomicU32::new(0);
     static MID: AtomicU32 = AtomicU32::new(0);
     static REC: AtomicU32 = AtomicU32::new(0);
+    static DEEP: AtomicU32 = AtomicU32::new(0);
     static PANIC: AtomicU32 = AtomicU32::new(0);
     fn object(vm: &BexVm, index: &AtomicU32) -> HeapPtr {
         vm.idx_to_ptr(ObjectIndex::from_raw(index.load(Ordering::Relaxed) as usize))
+    }
+    // As generated code calls a compiled callee: with a frame record when
+    // the VM allows, else with a VM frame.
+    fn call(
+        vm: &mut BexVm,
+        fr: &FrameRecord,
+        callee: HeapPtr,
+        body: CompiledFn,
+        arg: Value,
+    ) -> Result<Value, Box<VmError>> {
+        if vm.direct_calls() {
+            vm.call_record(
+                fr,
+                callee,
+                0,
+                |_: &mut BexVm| [arg],
+                |vm, fr| body(vm, fr, &[arg]),
+            )
+        } else {
+            vm.call_compiled(fr, callee, body, &[], &[arg], 0)
+        }
     }
     fn leaf(vm: &mut BexVm, _fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         let n = test_int(args[0]);
@@ -1061,8 +1083,8 @@ fn inline_observed_compiled_calls_record_as_the_call_path_does() {
     }
     fn mid(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         let leaf_ptr = object(vm, &LEAF);
-        let a = vm.call_compiled(fr, leaf_ptr, leaf, &[], &[args[0]], 0)?;
-        let b = vm.call_compiled(fr, leaf_ptr, leaf, &[], &[args[0]], 0)?;
+        let a = call(vm, fr, leaf_ptr, leaf, args[0])?;
+        let b = call(vm, fr, leaf_ptr, leaf, args[0])?;
         Ok(Value::int(test_int(a) + test_int(b)))
     }
     fn rec(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
@@ -1071,59 +1093,98 @@ fn inline_observed_compiled_calls_record_as_the_call_path_does() {
             return Ok(Value::int(0));
         }
         let rec_ptr = object(vm, &REC);
-        let below = vm.call_compiled(fr, rec_ptr, rec, &[], &[Value::int(n - 1)], 0)?;
+        let below = call(vm, fr, rec_ptr, rec, Value::int(n - 1))?;
         Ok(Value::int(test_int(below) + 1))
     }
-    fn safe(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
-        let mid_ptr = object(vm, &MID);
-        match vm.call_compiled(fr, mid_ptr, mid, &[], &[args[0]], 0) {
+    fn deep(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+        let n = test_int(args[0]);
+        if n == 0 {
+            return Ok(Value::int(vm.div_i64(1, 0)?));
+        }
+        let deep_ptr = object(vm, &DEEP);
+        let below = call(vm, fr, deep_ptr, deep, Value::int(n - 1))?;
+        Ok(Value::int(test_int(below) + 1))
+    }
+    fn guarded(
+        vm: &mut BexVm,
+        fr: &FrameRecord,
+        callee: &AtomicU32,
+        body: CompiledFn,
+        arg: Value,
+        fallback: i64,
+    ) -> Result<Value, Box<VmError>> {
+        let ptr = object(vm, callee);
+        match call(vm, fr, ptr, body, arg) {
             Ok(v) => Ok(v),
             Err(e) => {
                 let (thrown, ctx) = vm.catch(e, fr)?;
                 let class = object(vm, &PANIC);
                 if vm.is_instance_of(thrown, class) {
-                    Ok(Value::int(-1))
+                    Ok(Value::int(fallback))
                 } else {
                     Err(crate::compiled_rt::rethrow(thrown, ctx))
                 }
             }
         }
     }
+    fn safe(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+        guarded(vm, fr, &MID, mid, args[0], -1)
+    }
+    fn guard(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+        guarded(vm, fr, &DEEP, deep, args[0], -2)
+    }
     const SOURCE: &str = r#"
         function Leaf(n: int) -> int { if (n < 0) { n / 0 } else { n + 1 } }
         function Mid(n: int) -> int { Leaf(n) + Leaf(n) }
         function Rec(n: int) -> int { if (n == 0) { 0 } else { 1 + Rec(n - 1) } }
+        function Deep(n: int) -> int { if (n == 0) { 1 / 0 } else { 1 + Deep(n - 1) } }
         function Safe(n: int) -> int { Mid(n) catch (e) { baml.panics.DivisionByZero => -1 } }
-        function Main() -> string { `${Safe(1)}|${Safe(-1)}|${Rec(3)}` }
+        function Guard(n: int) -> int { Deep(n) catch (e) { baml.panics.DivisionByZero => -2 } }
+        function Main() -> string { `${Safe(1)}|${Safe(-1)}|${Rec(3)}|${Guard(2)}` }
     "#;
 
+    // The VM's call path is the reference; compiled callees entered inline
+    // with a VM frame and with a frame record must record the same.
+    let modes = [
+        ("call path", true, false),
+        ("vm frames", false, true),
+        ("records", false, false),
+    ];
     for level in [AutoTelemetryLevel::Medium, AutoTelemetryLevel::High] {
         let mut runs = Vec::new();
-        for funnel in [true, false] {
+        for (mode, funnel, frames) in modes {
             FORCE_CALL_FUNNEL.with(|force| force.set(funnel));
+            FORCE_VM_FRAMES.with(|force| force.set(frames));
             let (out, vm) = exec_with_compiled_bodies(
                 SOURCE,
                 &[
                     ("user.Leaf", leaf),
                     ("user.Mid", mid),
                     ("user.Rec", rec),
+                    ("user.Deep", deep),
                     ("user.Safe", safe),
+                    ("user.Guard", guard),
                 ],
                 &[
                     ("user.Leaf", &LEAF),
                     ("user.Mid", &MID),
                     ("user.Rec", &REC),
+                    ("user.Deep", &DEEP),
                     ("baml.panics.DivisionByZero", &PANIC),
                 ],
                 Some(level),
             );
             FORCE_CALL_FUNNEL.with(|force| force.set(false));
-            assert_eq!(out, "4|-1|3", "level {level:?}, funnel {funnel}");
+            FORCE_VM_FRAMES.with(|force| force.set(false));
+            assert_eq!(out, "4|-1|3|-2", "level {level:?}, {mode}");
             runs.push(telemetry_records(&vm));
         }
-        let (funnel, inline) = (&runs[0], &runs[1]);
-        assert_eq!(inline.0, funnel.0, "timing records at {level:?}");
-        assert_eq!(inline.1, funnel.1, "span records at {level:?}");
+        let funnel = &runs[0];
+        for ((mode, _, _), run) in modes.iter().zip(&runs).skip(1) {
+            assert_eq!(run.0, funnel.0, "timing records at {level:?}, {mode}");
+            assert_eq!(run.1, funnel.1, "span records at {level:?}, {mode}");
+        }
+        let inline = &runs[2];
 
         let named: Vec<_> = inline
             .0
@@ -1151,6 +1212,10 @@ fn inline_observed_compiled_calls_record_as_the_call_path_does() {
             ("user.Main", "user.Rec", ok, true),
             ("user.Main", "user.Rec", ok, true),
             ("user.Main", "user.Rec", ok, false),
+            ("user.Guard", "user.Deep", errored, true),
+            ("user.Guard", "user.Deep", errored, true),
+            ("user.Guard", "user.Deep", errored, false),
+            ("user.Main", "user.Guard", ok, false),
             ("", "user.Main", ok, false),
         ];
         let user: Vec<_> = named
@@ -1174,8 +1239,8 @@ fn inline_observed_compiled_calls_record_as_the_call_path_does() {
             AutoTelemetryLevel::High => {
                 assert!(user.is_empty());
                 assert_eq!(completions("->user."), expected.len());
-                assert_eq!(completions("Panicked"), 2);
-                assert_eq!(completions("Reentry"), 3);
+                assert_eq!(completions("Panicked"), 5);
+                assert_eq!(completions("Reentry"), 5);
             }
             AutoTelemetryLevel::Low => unreachable!(),
         }

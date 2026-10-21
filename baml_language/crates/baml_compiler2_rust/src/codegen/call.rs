@@ -123,6 +123,11 @@ impl<'db> Generator<'_, 'db> {
                     None => "Value::OMITTED_ARG".to_string(),
                 })
                 .collect();
+            let observed = format!(
+                "|_: &mut BexVm| -> [Value; {}] {{ [{}] }}",
+                values.len(),
+                values.join(", ")
+            );
             let values = format!("&[{}]", values.join(", "));
             let framed =
                 format!("vm.call_compiled(fr, {callee}, {symbol}, {type_args}, {values}, {site})");
@@ -132,11 +137,11 @@ impl<'db> Generator<'_, 'db> {
                 framed
             } else if types.is_empty() {
                 format!(
-                    "(if vm.direct_calls() {{ vm.call_record(fr, {callee}, {site}, |vm, fr| {symbol}(vm, fr, {values})) }} else {{ {framed} }})"
+                    "(if vm.direct_calls() {{ vm.call_record(fr, {callee}, {site}, {observed}, |vm, fr| {symbol}(vm, fr, {values})) }} else {{ {framed} }})"
                 )
             } else {
                 format!(
-                    "(if vm.direct_calls_typed({type_args}) {{ vm.call_record_typed(fr, {callee}, {type_args}, {site}, |vm, fr| {symbol}(vm, fr, {values})) }} else {{ {framed} }})"
+                    "(if vm.direct_calls_typed({type_args}) {{ vm.call_record_typed(fr, {callee}, {type_args}, {site}, {observed}, |vm, fr| {symbol}(vm, fr, {values})) }} else {{ {framed} }})"
                 )
             };
             let code = self.call_code(block, object, &call)?;
@@ -159,13 +164,24 @@ impl<'db> Generator<'_, 'db> {
             let _ = write!(out, ", {arg}");
             out
         });
+        // Telemetry boxes the arguments only for an invocation it records.
+        let observed: Vec<String> = typed_args
+            .iter()
+            .zip(&signature.params)
+            .map(|(arg, repr)| coerce(arg, *repr, Repr::Value))
+            .collect();
+        let observed = format!(
+            "|vm: &mut BexVm| -> [Value; {}] {{ [{}] }}",
+            observed.len(),
+            observed.join(", ")
+        );
         let direct = if types.is_empty() {
             format!(
-                "vm.call_record(fr, {callee}, {site}, |vm, fr| {symbol}_d(vm, fr{direct_args}))"
+                "vm.call_record(fr, {callee}, {site}, {observed}, |vm, fr| {symbol}_d(vm, fr{direct_args}))"
             )
         } else {
             format!(
-                "vm.call_record_typed(fr, {callee}, {type_args}, {site}, |vm, fr| {symbol}_d(vm, fr{direct_args}))"
+                "vm.call_record_typed(fr, {callee}, {type_args}, {site}, {observed}, |vm, fr| {symbol}_d(vm, fr{direct_args}))"
             )
         };
         let mut boxed = String::from("{ ");

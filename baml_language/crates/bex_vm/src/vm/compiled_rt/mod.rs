@@ -3,7 +3,7 @@
 mod arith;
 mod call;
 #[cfg(test)]
-pub(crate) use call::FORCE_CALL_FUNNEL;
+pub(crate) use call::{FORCE_CALL_FUNNEL, FORCE_VM_FRAMES};
 mod cell;
 mod fiber;
 mod frame;
@@ -14,8 +14,8 @@ pub(crate) use state::CompiledState;
 mod heap;
 mod program;
 mod record;
-pub use record::FrameRecord;
 pub(crate) use record::{FrameAt, RecordChain, record_ref};
+pub use record::{FrameRecord, RecordResult};
 mod state;
 mod trace;
 mod types;
