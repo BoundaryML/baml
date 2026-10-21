@@ -301,10 +301,16 @@ impl Waiter {
             }
         }
         let withdraw = Withdraw(&self);
-        // `notify_one` stores a permit when nobody is polling yet, so a grant
-        // between the check and the await is not lost.
-        while self.state.load(Ordering::Acquire) != GRANTED {
+        // The notify, not the flag, is what says the lock is ours: `release`
+        // flags the grant before it records this task as the holder, and
+        // notifies after. Returning on the flag alone would let the task act
+        // on the old holder's state. `notify_one` stores a permit when nobody
+        // is polling yet, so a grant before the first await is not lost.
+        loop {
             self.notify.notified().await;
+            if self.state.load(Ordering::Acquire) == GRANTED {
+                break;
+            }
         }
         std::mem::forget(withdraw);
     }
@@ -433,6 +439,37 @@ mod tests {
         drop(waiter.granted()); // cancelled: never observed the grant
         lock.exit(task(2));
         assert_eq!(lock.state.load(Ordering::Acquire), 0);
+    }
+
+    /// `granted` returns only once the release that granted the lock has
+    /// recorded the new holder. `release` flags the grant before it stores the
+    /// lock's state, so a waiter returning on the flag alone could act on the
+    /// old holder's state: a nested `with` would queue behind itself.
+    #[test]
+    fn granted_waits_for_the_release_to_finish() {
+        use std::{
+            future::Future,
+            pin::pin,
+            task::{Context, Waker},
+        };
+        let lock = LockInner::new();
+        assert!(lock.enter(task(1)).is_none());
+        let waiter = lock.enter(task(2)).unwrap();
+        let mut granted = pin!(Arc::clone(&waiter).granted());
+        let mut cx = Context::from_waker(Waker::noop());
+
+        // A release preempted between flagging the grant and recording task 2.
+        waiter.state.store(GRANTED, Ordering::Release);
+        assert!(
+            granted.as_mut().poll(&mut cx).is_pending(),
+            "the lock still names task 1"
+        );
+
+        // The release finishes.
+        lock.state.store(2, Ordering::Release);
+        waiter.notify.notify_one();
+        assert!(granted.as_mut().poll(&mut cx).is_ready());
+        assert_eq!(lock.holder(), 2);
     }
 
     #[test]
