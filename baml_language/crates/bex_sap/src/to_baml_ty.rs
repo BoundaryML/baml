@@ -8,7 +8,7 @@
 
 use crate::sap_model::{
     ArrayTy, ClassTy, EnumTy, EnumVariantTy, MapTy, MediaTy, NamedTy, ParseTy, ShapedTy,
-    StreamStateTy, Ty, TyResolvedRef, UnionTy,
+    StreamStateTy, TupleTy, Ty, TyResolvedRef, UnionTy,
 };
 
 // ============================================================================
@@ -51,6 +51,7 @@ impl ToBamlTy for TyResolvedRef<'_, NamedTy> {
                 ParseTy::Literal(baml_type::Literal::Bool(v.0), baml_type::Freshness::Regular)
             }
             TyResolvedRef::Array(a) => a.to_baml_ty(),
+            TyResolvedRef::Tuple(t) => t.to_baml_ty(),
             TyResolvedRef::Map(m) => m.to_baml_ty(),
             TyResolvedRef::Class(c) => c.to_baml_ty(),
             TyResolvedRef::Enum(e) => e.to_baml_ty(),
@@ -78,6 +79,12 @@ impl ToBamlTy for Ty<'_, NamedTy> {
 impl ToBamlTy for ArrayTy<'_, NamedTy> {
     fn to_baml_ty(&self) -> ParseTy {
         ParseTy::List(Box::new(self.ty.to_baml_ty()))
+    }
+}
+
+impl ToBamlTy for TupleTy<'_, NamedTy> {
+    fn to_baml_ty(&self) -> ParseTy {
+        ParseTy::Tuple(self.items.iter().map(ToBamlTy::to_baml_ty).collect())
     }
 }
 

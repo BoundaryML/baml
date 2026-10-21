@@ -172,6 +172,10 @@ pub enum DecodedObject {
         items: Vec<DecodedValue>,
         original_len: u64,
     },
+    Tuple {
+        items: Vec<DecodedValue>,
+        original_len: u64,
+    },
     Map {
         key_type: TypeDescription,
         value_type: TypeDescription,
@@ -540,7 +544,9 @@ fn depth<N: Clone>(ty: &TyTemplate<N>) -> usize {
     let deepest =
         |types: &mut dyn Iterator<Item = &TyTemplate<N>>| types.map(depth).max().unwrap_or(0);
     1 + match ty {
-        TyTemplate::Class(_, args) | TyTemplate::Union(args) => deepest(&mut args.iter()),
+        TyTemplate::Class(_, args) | TyTemplate::Union(args) | TyTemplate::Tuple(args) => {
+            deepest(&mut args.iter())
+        }
         TyTemplate::Interface(_, args, associated) => {
             deepest(&mut args.iter().chain(associated.iter().map(|(_, ty)| ty)))
         }
@@ -1176,6 +1182,15 @@ impl<'a> Reader<'a, '_> {
                 DecodedObject::Truncated(limit)
             }
             9 => DecodedObject::Media(self.media(h)?),
+            10 => {
+                let original_len = self.u64()?;
+                h.number(original_len);
+                let items = self.values(h)?;
+                DecodedObject::Tuple {
+                    items,
+                    original_len,
+                }
+            }
             other => return Err(invalid(format!("object tag {other}"))),
         })
     }
@@ -1478,7 +1493,9 @@ fn validate_references(snapshot: &DecodedSnapshot) -> Result<(), BlobError> {
     }
     for object in &snapshot.objects {
         match object {
-            DecodedObject::List { items, .. } => items.iter().try_for_each(check_value)?,
+            DecodedObject::List { items, .. } | DecodedObject::Tuple { items, .. } => {
+                items.iter().try_for_each(check_value)?;
+            }
             DecodedObject::Map { entries, .. } => {
                 entries.iter().try_for_each(|(k, v)| {
                     check_value(k)?;

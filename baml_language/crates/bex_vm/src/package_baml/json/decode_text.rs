@@ -82,6 +82,7 @@ impl TextDecoder<'_, '_> {
                 Ok(Value::object(vm.alloc_string(text)))
             }
             RealizedTy::List(element) => self.list(vm, element),
+            RealizedTy::Tuple(slots) => self.tuple(vm, slots),
             RealizedTy::Map { key, value } => self.map(vm, key, value),
             RealizedTy::TypeAlias(head) if vm.stdlib_heads().is_json_alias(*head) => {
                 self.parser.value(vm)
@@ -141,6 +142,23 @@ impl TextDecoder<'_, '_> {
         Ok(Value::object(
             vm.alloc(Object::Array(Array::new(element.clone(), items))),
         ))
+    }
+
+    /// A tuple: an array of exactly one element per slot. Any other length
+    /// stops, for the full decoder to report.
+    fn tuple(&mut self, vm: &mut BexVm, slots: &[RealizedTy]) -> Result<Value, Stop> {
+        self.parser.reader.open_array()?;
+        let mut items = Vec::with_capacity(slots.len());
+        for slot in slots {
+            if !self.parser.reader.next_element(items.is_empty())? {
+                return Err(Stop);
+            }
+            items.push(self.value(vm, slot)?);
+        }
+        if self.parser.reader.next_element(items.is_empty())? {
+            return Err(Stop);
+        }
+        Ok(Value::object(vm.tlab.alloc_tuple(items)))
     }
 
     /// A recursive alias decodes as its definition.

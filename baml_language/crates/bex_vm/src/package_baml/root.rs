@@ -285,6 +285,7 @@ pub(super) fn collect_to_string_overrides(
     // the renderer so the two stay index-aligned.
     let children: Vec<Value> = match vm.get_object(ptr) {
         Object::Array(values) => values.to_vec(),
+        Object::Tuple(elements) => elements.to_vec(),
         Object::Map(map) => map
             .snapshot_entries()
             .into_iter()
@@ -545,6 +546,8 @@ enum DisplaySnap {
     /// An array — elements rendered as `[a, b, c]`, with at most one trailing
     /// ellipsis when diagnostic limits omit further siblings.
     Seq(Vec<Value>, bool),
+    /// A tuple — elements rendered as `(a, b)`, a 1-tuple as `(a,)`.
+    Tuple(Vec<Value>, bool),
     /// A map whose keys and values are rendered recursively.
     Entries(Vec<(Value, Value)>, bool),
     /// A class instance — `ClassName { field: value, ... }`.
@@ -734,6 +737,13 @@ pub(super) fn render_to_sink(
                 values.len() > limit,
             )
         }
+        Object::Tuple(elements) => {
+            let limit = state.snapshot_child_limit(elements.len());
+            DisplaySnap::Tuple(
+                elements.iter().take(limit).copied().collect(),
+                elements.len() > limit,
+            )
+        }
         Object::Uint8Array(bytes) => {
             let bytes = bytes.lock();
             let limit = state.snapshot_child_limit(bytes.len());
@@ -813,6 +823,31 @@ pub(super) fn render_to_sink(
             } else {
                 sink.push_text(&s);
             }
+        }
+        DisplaySnap::Tuple(values, mut truncated) => {
+            sink.push_text("(");
+            let mut rendered_count = 0;
+            for value in &values {
+                if !state.can_render_node(depth + 1) {
+                    truncated = true;
+                    break;
+                }
+                if rendered_count != 0 {
+                    sink.push_text(", ");
+                }
+                render_to_sink(vm, *value, true, depth + 1, state, sink);
+                rendered_count += 1;
+            }
+            if truncated {
+                if rendered_count != 0 {
+                    sink.push_text(", ");
+                }
+                sink.push_text(TRUNCATED_RENDER);
+            } else if rendered_count == 1 {
+                // `(a,)`: without the comma a 1-tuple would read as grouping.
+                sink.push_text(",");
+            }
+            sink.push_text(")");
         }
         DisplaySnap::Seq(values, mut truncated) => {
             sink.push_text("[");
@@ -962,6 +997,29 @@ fn deep_copy_value_recursive(
                         unreachable!("the placeholder was allocated as an array")
                     };
                     array.lock_mut(vm.tlab.alloc_debt()).extend(new_values);
+                    placeholder_ptr
+                }
+
+                Object::Tuple(elements) => {
+                    // Elements may be mutable containers that lead back to
+                    // this tuple (`t = ([],)` then `t.0.push(t)`), so register
+                    // a placeholder before recursing, like arrays do. The
+                    // placeholder is gen0 and filled before anything else can
+                    // observe it, so the tuple is still built whole.
+                    let placeholder_ptr = vm.tlab.alloc_tuple(vec![Value::NULL; elements.len()]);
+                    copied_objects.insert(ptr, placeholder_ptr);
+                    let mut new_elements = Vec::with_capacity(elements.len());
+                    for element in &elements {
+                        new_elements.push(deep_copy_value_recursive(vm, *element, copied_objects)?);
+                    }
+                    // No GC write barrier: it is all in gen0.
+                    // SAFETY: the placeholder was allocated by this copy and is
+                    // reachable only from the copy's own new objects, none of
+                    // which has been returned or published to another VM, and
+                    // no other guard on it is held.
+                    #[expect(unsafe_code, reason = "fill a tuple this copy still owns")]
+                    let mut placeholder = unsafe { vm.get_object_mut(placeholder_ptr) };
+                    *placeholder = Object::Tuple(new_elements.into_boxed_slice());
                     placeholder_ptr
                 }
 

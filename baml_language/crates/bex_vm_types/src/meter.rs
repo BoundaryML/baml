@@ -173,6 +173,7 @@ impl Object {
                 meter.bytes(size_of_val(&*closure.captures));
                 meter.bytes(size_of_val(&*closure.captured_type_args));
             }
+            Object::Tuple(elements) => meter.bytes(size_of_val(&**elements)),
             Object::BoundMethod(method) => meter.bytes(size_of_val(&*method.type_args)),
             Object::GenericFunction(function) => meter.bytes(size_of_val(&*function.type_args)),
             Object::HostClosure(closure) => {

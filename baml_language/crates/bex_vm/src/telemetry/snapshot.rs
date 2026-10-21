@@ -157,6 +157,9 @@ impl Scratch {
                         self.add(leaves, *value, depth + 1)
                     })
                 }
+                Object::Tuple(data) => b.tuple(data.iter(), |leaves, value| {
+                    self.add(leaves, *value, depth + 1)
+                }),
                 Object::Map(data) => {
                     let key_type = described(&mut b.leaves(), &mut self.carried, &data.key_ty);
                     let value_type = described(&mut b.leaves(), &mut self.carried, &data.value_ty);

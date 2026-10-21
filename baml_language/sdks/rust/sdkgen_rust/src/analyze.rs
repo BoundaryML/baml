@@ -497,6 +497,14 @@ fn field_deps(ty: &Ty, generic_params: &[&str], deps: &mut Vec<Name>) -> Result<
                 }
             }
         }
+        // A tuple is representable iff every element is; its elements are
+        // stored inline, so their nominal deps are the tuple's deps.
+        Ty::Tuple(items) => {
+            for item in items {
+                field_deps(item, generic_params, deps)?;
+            }
+            Ok(())
+        }
         // A class reference depends on the class item; its concrete type
         // arguments are themselves types that must be representable (a
         // generic argument referencing a skipped type poisons this field).
@@ -563,7 +571,8 @@ fn has_serde(ty: &Ty, serde: &HashSet<Name>) -> bool {
         Ty::Bigint | Ty::Uint8Array => false,
         Ty::List(inner) => has_serde(inner, serde),
         Ty::Map { value, .. } => has_serde(value, serde),
-        Ty::Union(items) => items.iter().all(|item| has_serde(item, serde)),
+        // A Rust tuple's serde form is a JSON array, as is a BAML tuple's.
+        Ty::Union(items) | Ty::Tuple(items) => items.iter().all(|item| has_serde(item, serde)),
         Ty::Class(name, args) => {
             serde.contains(name) && args.iter().all(|arg| has_serde(arg, serde))
         }
@@ -600,7 +609,7 @@ fn collect_non_recursive_type_vars<'a>(ty: &'a Ty, self_name: &Name, used: &mut 
             collect_non_recursive_type_vars(key, self_name, used);
             collect_non_recursive_type_vars(value, self_name, used);
         }
-        Ty::Union(items) => items
+        Ty::Union(items) | Ty::Tuple(items) => items
             .iter()
             .for_each(|item| collect_non_recursive_type_vars(item, self_name, used)),
         // A recursive self-reference does not constrain its args' variance,
@@ -636,7 +645,9 @@ fn non_heap_class_refs<'a>(
                 non_heap_class_refs(arg, emitted, enums, out);
             }
         }
-        Ty::Union(items) => {
+        // Rust tuples store their elements inline (like class fields), so a
+        // same-SCC class inside a tuple is a containment edge too.
+        Ty::Union(items) | Ty::Tuple(items) => {
             for item in items {
                 non_heap_class_refs(item, emitted, enums, out);
             }

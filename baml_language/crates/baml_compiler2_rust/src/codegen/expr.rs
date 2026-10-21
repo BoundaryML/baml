@@ -68,6 +68,14 @@ impl<'db> Generator<'_, 'db> {
                 let values = self.arg_values(block, elements)?;
                 format!("vm.new_array({element_ty}, vec![{}])", values.join(", "))
             }
+            // A tuple carries no type metadata: its type is its elements'.
+            Rvalue::Aggregate {
+                kind: AggregateKind::Tuple,
+                fields,
+            } => {
+                let values = self.arg_values(block, fields)?;
+                format!("vm.new_tuple(vec![{}])", values.join(", "))
+            }
             Rvalue::Aggregate {
                 kind:
                     AggregateKind::Class {

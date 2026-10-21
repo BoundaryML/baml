@@ -133,6 +133,17 @@ impl BexVm {
     }
 
     pub fn load_field(&mut self, instance: Value, idx: usize) -> Result<Value, Box<VmError>> {
+        // A tuple element read (`t.0`) shares `LoadField`, as in the
+        // interpreter: MIR lowers both to `Place::Field`.
+        if let Some(ptr) = instance.as_object_ptr()
+            && let Object::Tuple(elements) = self.get_object(ptr)
+        {
+            let length = elements.len();
+            return match elements.get(idx).copied() {
+                Some(value) => Ok(value),
+                None => Err(Box::new(self.invalid_field_access_error(idx, length))),
+            };
+        }
         let load_result = {
             let instance = self.as_instance(&instance)?;
             instance
@@ -234,6 +245,11 @@ impl BexVm {
     #[inline]
     pub fn new_array(&mut self, element_ty: RealizedTy, values: Vec<Value>) -> Value {
         Value::object(self.alloc_array(element_ty, values))
+    }
+
+    #[inline]
+    pub fn new_tuple(&mut self, values: Vec<Value>) -> Value {
+        Value::object(self.tlab.alloc_tuple(values))
     }
 
     #[inline]

@@ -340,6 +340,9 @@ mod schema {
                 SapTy::List(inner) | SapTy::Map { value: inner, .. } => {
                     walk(inner, ctx, analysis, seen)
                 }
+                SapTy::Tuple(elements) => elements
+                    .iter()
+                    .any(|element| walk(element, ctx, analysis, seen)),
                 SapTy::Class(head, _) => {
                     if !seen.insert(DefId::Class(head.clone())) {
                         return false;
@@ -481,6 +484,21 @@ mod schema {
                     JsonStatus::Empty => json!({ "type": "array", "maxItems": 0 }),
                     JsonStatus::NoJson => unreachable!("a list of `NoJson` is `NoJson`"),
                 }),
+                // A fixed-length array: one schema per position, nothing after.
+                // A `Json` tuple has only `Json` elements.
+                SapTy::Tuple(elements) => {
+                    let prefix_items = elements
+                        .iter()
+                        .map(|element| self.emit(element))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    Ok(json!({
+                        "type": "array",
+                        "prefixItems": prefix_items,
+                        "items": false,
+                        "minItems": elements.len(),
+                        "maxItems": elements.len(),
+                    }))
+                }
                 SapTy::Map { key, value } => {
                     let keys = map_keys(key)?;
                     let mut schema = match self.analysis.status(value) {
@@ -922,6 +940,68 @@ mod schema {
             )
             .expect("schema should lower");
             assert_eq!(schema, json!({ "type": ["string", "null"] }));
+        }
+
+        #[test]
+        fn tuple_is_a_fixed_length_array() {
+            let schema = json_schema(
+                &RuntimeTy::Tuple(Box::new([RuntimeTy::int(), RuntimeTy::string()])),
+                &SysOpContext::empty(),
+                JsonNaming::Aliased,
+            )
+            .expect("schema should lower");
+            assert_eq!(
+                schema,
+                json!({
+                    "type": "array",
+                    "prefixItems": [
+                        {
+                            "type": "integer",
+                            "minimum": baml_type::Int63::MIN.get(),
+                            "maximum": baml_type::Int63::MAX.get(),
+                        },
+                        { "type": "string" },
+                    ],
+                    "items": false,
+                    "minItems": 2,
+                    "maxItems": 2,
+                })
+            );
+        }
+
+        #[test]
+        fn tuple_elements_reference_classes_and_nest() {
+            let point = type_name("pkg.Point");
+            let mut classes = indexmap::IndexMap::new();
+            classes.insert(
+                key(&point),
+                class_definition(&point, vec![field("x", RuntimeTy::int())]),
+            );
+            let mut ctx = SysOpContext::empty();
+            ctx.class_definitions = Arc::new(classes);
+
+            let target = RuntimeTy::list(RuntimeTy::Tuple(Box::new([
+                class_ty(&point),
+                RuntimeTy::optional(RuntimeTy::Tuple(Box::new([RuntimeTy::bool()]))),
+            ])));
+            let schema =
+                json_schema(&target, &ctx, JsonNaming::Aliased).expect("schema should lower");
+            let tuple = &schema["items"];
+            assert_eq!(tuple["minItems"], 2);
+            assert_eq!(tuple["maxItems"], 2);
+            assert_eq!(tuple["items"], false);
+            assert_eq!(tuple["prefixItems"][0]["$ref"], "#/$defs/pkg.Point");
+            assert_eq!(
+                tuple["prefixItems"][1],
+                json!({
+                    "type": ["array", "null"],
+                    "prefixItems": [{ "type": "boolean" }],
+                    "items": false,
+                    "minItems": 1,
+                    "maxItems": 1,
+                })
+            );
+            assert_eq!(schema["$defs"]["pkg.Point"]["type"], "object");
         }
 
         #[test]

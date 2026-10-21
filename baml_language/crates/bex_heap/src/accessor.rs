@@ -533,6 +533,12 @@ fn owned_inner(
                     .map(|item| owned_inner(BexValue::ExternalValue(item), heap, lossy))
                     .collect::<Result<_, _>>()?,
             }),
+            BexExternalValue::Tuple { items } => Ok(BexExternalValue::Tuple {
+                items: items
+                    .iter()
+                    .map(|item| owned_inner(BexValue::ExternalValue(item), heap, lossy))
+                    .collect::<Result<_, _>>()?,
+            }),
             BexExternalValue::Map {
                 key_type,
                 value_type,
@@ -658,6 +664,12 @@ fn convert_object(
                 .to_vec()
                 .into_iter()
                 .map(|item| owned_inner(BexValue::OwnedValue(item), heap, lossy))
+                .collect::<Result<_, _>>()?,
+        }),
+        Object::Tuple(elements) => Ok(BexExternalValue::Tuple {
+            items: elements
+                .iter()
+                .map(|item| owned_inner(BexValue::OwnedValue(*item), heap, lossy))
                 .collect::<Result<_, _>>()?,
         }),
         Object::Map(map) => {

@@ -1762,3 +1762,49 @@ fn an_endless_container_is_refused_at_the_node_budget() {
         "the budget, not the host's length, bounds the read: {message}"
     );
 }
+
+// ── Tuples ──────────────────────────────────────────────────────────────────
+
+fn tuple_ty(elements: Vec<StatedTy>) -> StatedTy {
+    StatedTy::Tuple(elements.into_boxed_slice())
+}
+
+#[test]
+fn a_tuple_slot_takes_a_sequence_of_its_arity_as_a_list_stating_the_tuple() {
+    let f = Fixture::new();
+    let pair = tuple_ty(vec![StatedTy::Int, StatedTy::String]);
+    let encoded = f
+        .encode_in(Mock::List(vec![Mock::Int(1), Mock::Str("a")]), &pair)
+        .unwrap();
+    assert_eq!(stated(&encoded), Some(pair));
+    let Some(Value::ListValue(list)) = encoded.value else {
+        panic!("a tuple crosses as a list node")
+    };
+    assert_eq!(list.values.len(), 2);
+    // Each element is planned against its own slot.
+    assert!(matches!(list.values[0].value, Some(Value::IntValue(1))));
+}
+
+#[test]
+fn a_sequence_of_another_arity_does_not_fit_a_tuple() {
+    let f = Fixture::new();
+    let pair = tuple_ty(vec![StatedTy::Int, StatedTy::String]);
+    assert!(f.encode_in(Mock::List(vec![Mock::Int(1)]), &pair).is_err());
+    assert!(
+        f.encode_in(Mock::List(vec![Mock::Int(1), Mock::Int(2)]), &pair)
+            .is_err(),
+        "the second element must fit `string`"
+    );
+}
+
+#[test]
+fn a_union_of_tuples_takes_the_arm_of_the_sequences_arity() {
+    let f = Fixture::new();
+    let one = tuple_ty(vec![StatedTy::Int]);
+    let two = tuple_ty(vec![StatedTy::Int, StatedTy::Int]);
+    let slot = StatedTy::Union(Box::new([one, two.clone()]));
+    let encoded = f
+        .encode_in(Mock::List(vec![Mock::Int(1), Mock::Int(2)]), &slot)
+        .unwrap();
+    assert_eq!(stated(&encoded), Some(two));
+}

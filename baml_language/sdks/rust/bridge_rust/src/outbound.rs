@@ -35,6 +35,7 @@ pub(crate) fn release(value: wire::BamlOutboundValue) {
             });
         }
         Out::ListValue(list) => list.items.into_iter().for_each(release),
+        Out::TupleValue(tuple) => tuple.items.into_iter().for_each(release),
         Out::MapValue(map) => map
             .entries
             .into_iter()
@@ -90,6 +91,13 @@ pub(crate) fn clone(
         Out::ListValue(list) => Out::ListValue(wire::BamlValueList {
             item_type: list.item_type.clone(),
             items: list
+                .items
+                .iter()
+                .map(|item| clone(item, encoder))
+                .collect::<Result<_, _>>()?,
+        }),
+        Out::TupleValue(tuple) => Out::TupleValue(wire::BamlValueTuple {
+            items: tuple
                 .items
                 .iter()
                 .map(|item| clone(item, encoder))
@@ -244,6 +252,29 @@ pub(crate) fn to_inbound(
                     type_args,
                 )),
                 Some(In::ClassValue(wire::InboundClassValue { fields })),
+            )
+        }
+        // Inbound has no tuple payload: a tuple goes back as a list stating a
+        // tuple type. A tuple carries no type metadata, so its slots are
+        // `unknown`: the engine builds it from its elements, whose own types
+        // make the tuple's, and checks that against the slot.
+        Out::TupleValue(tuple) => {
+            let unknown = || wire::BamlTy {
+                ty: Some(wire::baml_ty::Ty::Unknown(wire::BamlTyUnknown {})),
+            };
+            let value_type = crate::baml_value::internal::tuple_ty(
+                tuple.items.iter().map(|_| unknown()).collect(),
+            );
+            let values = encoder.nested(|encoder| {
+                tuple
+                    .items
+                    .iter()
+                    .map(|item| to_inbound(item, encoder))
+                    .collect::<Result<_, _>>()
+            })?;
+            (
+                Some(value_type),
+                Some(In::ListValue(wire::InboundListValue { values })),
             )
         }
         Out::ListValue(list) => {
@@ -447,6 +478,13 @@ fn map_heads<E>(
         Ty::List(list) => Ty::List(Box::new(wire::BamlTyList {
             item: boxed(list.item.as_deref(), head)?,
         })),
+        Ty::Tuple(tuple) => Ty::Tuple(wire::BamlTyTuple {
+            items: tuple
+                .items
+                .iter()
+                .map(|item| map_heads(item, head))
+                .collect::<Result<_, E>>()?,
+        }),
         Ty::Map(map) => Ty::Map(Box::new(wire::BamlTyMap {
             key: boxed(map.key.as_deref(), head)?,
             value: boxed(map.value.as_deref(), head)?,

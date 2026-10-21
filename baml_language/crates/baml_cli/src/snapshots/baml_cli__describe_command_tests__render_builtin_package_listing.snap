@@ -162,7 +162,7 @@ function         baml.json.field                  <builtin>/baml/ns_json/json.ba
 class            baml.json.PathError              <builtin>/baml/ns_json/json.baml:347
 function         baml.json.path                   <builtin>/baml/ns_json/json.baml:389
 function         baml.json.path_or                <builtin>/baml/ns_json/json.baml:406
-function         baml.json.schema                 <builtin>/baml/ns_json/json.baml:489
+function         baml.json.schema                 <builtin>/baml/ns_json/json.baml:491
 class            baml.media.Pdf                   <builtin>/baml/ns_media/media.baml:5
 class            baml.media.Audio                 <builtin>/baml/ns_media/media.baml:85
 class            baml.media.Video                 <builtin>/baml/ns_media/media.baml:165

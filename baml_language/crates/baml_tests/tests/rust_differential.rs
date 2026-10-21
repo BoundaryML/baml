@@ -21,6 +21,7 @@ const PROBES: &[&str] = &[
     "Scalars",
     "Overflow",
     "Containers",
+    "Tuples",
     "Shapes",
     "Closures",
     "Interfaces",

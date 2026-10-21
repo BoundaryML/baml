@@ -562,6 +562,12 @@ impl ReachWalk<'_> {
                 Ok(())
             }
             RealizedTy::List(element) => self.visit(element, &origins.list_element()),
+            RealizedTy::Tuple(elements) => {
+                for (index, element) in elements.iter().enumerate() {
+                    self.visit(element, &origins.tuple_element(index))?;
+                }
+                Ok(())
+            }
             RealizedTy::Map { key, value } => {
                 self.visit(key, &origins.map_key())?;
                 self.visit(value, &origins.map_value())
@@ -893,6 +899,9 @@ enum Parsed<'s> {
         element: ParseTy,
         items: Vec<Parsed<'s>>,
     },
+    /// A tuple's elements, in position order: a tuple carries no type of
+    /// its own.
+    Tuple(Vec<Parsed<'s>>),
     Map {
         key: ParseTy,
         value: ParseTy,
@@ -949,6 +958,13 @@ impl<'s> Parsed<'s> {
                         .collect::<Result<_, _>>()?,
                 }
             }
+            BamlValue::Tuple(tuple) => Parsed::Tuple(
+                tuple
+                    .value
+                    .iter()
+                    .map(Parsed::of)
+                    .collect::<Result<_, _>>()?,
+            ),
             BamlValue::Map(map) => {
                 let TyResolvedRef::Map(map_ty) = value.meta.ty else {
                     return Err(invariant(format!(
@@ -1008,6 +1024,9 @@ impl<'s> Parsed<'s> {
                 element,
                 items: items.into_iter().map(Parsed::into_owned).collect(),
             },
+            Parsed::Tuple(items) => {
+                Parsed::Tuple(items.into_iter().map(Parsed::into_owned).collect())
+            }
             Parsed::Map {
                 key,
                 value,
@@ -1040,7 +1059,7 @@ impl<'s> Parsed<'s> {
     /// The children of this node, in order.
     fn children(&self) -> Vec<&Parsed<'s>> {
         match self {
-            Parsed::List { items, .. } => items.iter().collect(),
+            Parsed::List { items, .. } | Parsed::Tuple(items) => items.iter().collect(),
             Parsed::Map { entries, .. } => entries.iter().map(|(_, value)| value).collect(),
             Parsed::Class { fields, .. } => fields.values().collect(),
             Parsed::Shaped { shape, .. } => vec![shape],
@@ -1051,7 +1070,7 @@ impl<'s> Parsed<'s> {
     /// The `index`-th child of this node, in the order of [`Self::children`].
     fn child_mut(&mut self, index: usize) -> Option<&mut Parsed<'s>> {
         match self {
-            Parsed::List { items, .. } => items.get_mut(index),
+            Parsed::List { items, .. } | Parsed::Tuple(items) => items.get_mut(index),
             Parsed::Map { entries, .. } => entries.get_mut(index).map(|(_, value)| value),
             Parsed::Class { fields, .. } => fields.get_index_mut(index).map(|(_, value)| value),
             Parsed::Shaped { shape, .. } if index == 0 => Some(shape),
@@ -1133,6 +1152,15 @@ fn to_heap(
                 .collect::<Result<Vec<_>, _>>()?;
             Value::object(vm.alloc_array(element, items))
         }
+        // A tuple carries no type metadata: its type is its elements'.
+        BamlValue::Tuple(tuple) => {
+            let items = tuple
+                .value
+                .iter()
+                .map(|item| to_heap(vm, item, declarations, mode))
+                .collect::<Result<Vec<_>, _>>()?;
+            Value::object(vm.tlab.alloc_tuple(items))
+        }
         BamlValue::Map(map) => {
             let TyResolvedRef::Map(map_ty) = value.meta.ty else {
                 return Err(invariant(format!(
@@ -1199,6 +1227,13 @@ fn parsed_to_heap(
                 .map(|item| parsed_to_heap(vm, item, declarations, mode))
                 .collect::<Result<Vec<_>, _>>()?;
             Value::object(vm.alloc_array(element, items))
+        }
+        Parsed::Tuple(items) => {
+            let items = items
+                .iter()
+                .map(|item| parsed_to_heap(vm, item, declarations, mode))
+                .collect::<Result<Vec<_>, _>>()?;
+            Value::object(vm.tlab.alloc_tuple(items))
         }
         Parsed::Map {
             key,
@@ -1576,6 +1611,17 @@ pub(super) fn empty_value(
         RealizedTy::List(element) => Value::object(vm.alloc_array((**element).clone(), Vec::new())),
         RealizedTy::Map { key, value } => {
             Value::object(vm.alloc_map((**key).clone(), (**value).clone(), IndexMap::new()))
+        }
+        // Every element's empty value, or none when an element has none.
+        RealizedTy::Tuple(elements) => {
+            let mut items = Vec::with_capacity(elements.len());
+            for element in elements {
+                let Some(item) = empty_value(vm, element, within)? else {
+                    return Ok(None);
+                };
+                items.push(item);
+            }
+            Value::object(vm.tlab.alloc_tuple(items))
         }
         RealizedTy::Enum(head) => {
             let Object::Enum(enm) = vm.get_object(head.ptr()) else {

@@ -781,3 +781,33 @@ async fn a_type_value_naming_an_undeclared_variant_is_refused() {
         Ok(BexExternalValue::Variant { variant_name, .. }) if variant_name == "Red"
     ),);
 }
+
+#[tokio::test]
+async fn a_tuple_is_built_from_its_elements_and_is_covariant() {
+    let source = r#"
+        function second(t: (int, string)) -> string { t.1 }
+        function first_of_wide(t: (int | string, string?)) -> int | string { t.0 }
+    "#;
+    let pair = || BexExternalValue::Tuple {
+        items: vec![BexExternalValue::Int(1), s("a")],
+    };
+    assert_eq!(call(source, "second", vec![pair()]).await.unwrap(), s("a"));
+    // A tuple carries no type metadata: its type is its elements', so
+    // `(int, string)` is a member of the wider `(int | string, string?)`.
+    let wide = call(source, "first_of_wide", vec![pair()]).await.unwrap();
+    assert!(
+        matches!(&wide, BexExternalValue::Int(1))
+            || matches!(&wide, BexExternalValue::Union { value, .. }
+                if **value == BexExternalValue::Int(1)),
+        "{wide:?}"
+    );
+    // The wrong element type, or the wrong arity, is not a member.
+    let swapped = BexExternalValue::Tuple {
+        items: vec![s("a"), BexExternalValue::Int(1)],
+    };
+    assert!(refusal(call(source, "second", vec![swapped]).await).contains("`(int, string)`"));
+    let short = BexExternalValue::Tuple {
+        items: vec![BexExternalValue::Int(1)],
+    };
+    assert!(refusal(call(source, "second", vec![short]).await).contains("`(int, string)`"));
+}

@@ -229,6 +229,7 @@ impl Restricted {
                 | Ty::Enum(_)
                 | Ty::EnumVariant(..)
                 | Ty::List(_)
+                | Ty::Tuple(_)
                 | Ty::Map { .. }
                 | Ty::Union(_)
                 | Ty::Function { .. }
@@ -301,6 +302,7 @@ fn mentions_literal(vm: &BexVm, ty: &Ty, seen: &mut Vec<HeapPtr>) -> bool {
         | Ty::Interface(..)
         | Ty::Enum(_)
         | Ty::List(_)
+        | Ty::Tuple(_)
         | Ty::Map { .. }
         | Ty::Union(_)
         | Ty::Function { .. }
@@ -470,6 +472,15 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                         .tlab_mut()
                         .alloc_array(element, values),
                 )
+            }
+            // A tuple carries no type metadata: it is built from its
+            // elements, whose own types make its type.
+            BexExternalValue::Tuple { items } => {
+                let mut values = Vec::with_capacity(items.len());
+                for (index, item) in items.iter().enumerate() {
+                    values.push(self.within(Segment::Item(index), |this| this.value(item))?);
+                }
+                Value::object(self.holder.holder_mut().tlab_mut().alloc_tuple(values))
             }
             BexExternalValue::Map {
                 key_type,

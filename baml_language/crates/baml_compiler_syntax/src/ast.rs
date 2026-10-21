@@ -215,6 +215,14 @@ impl GenericParam {
     }
 }
 
+/// The element types of a `TUPLE_TYPE` node, in position order.
+fn tuple_type_node_elements(node: &SyntaxNode) -> Vec<TypeExpr> {
+    node.children()
+        .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+        .map(|syntax| TypeExpr { syntax })
+        .collect()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypePostFixModifier {
     Optional,
@@ -300,6 +308,16 @@ impl TypeExpr {
                 .filter(|t| !t.kind().is_trivia())
                 .map(|t| t.kind()),
         )
+    }
+
+    /// Element types if this type's base is a tuple type `(A, B)` / `(A,)`.
+    /// Postfix modifiers (`(A, B)[]`) sit beside the `TUPLE_TYPE` node and are
+    /// read by [`Self::postfix_modifiers`] as for any other base.
+    pub fn tuple_type_elements(&self) -> Option<Vec<TypeExpr>> {
+        self.syntax
+            .children()
+            .find(|n| n.kind() == SyntaxKind::TUPLE_TYPE)
+            .map(|n| tuple_type_node_elements(&n))
     }
 
     /// Check if this type is wrapped in parentheses (e.g., `(int | string)`).
@@ -2376,6 +2394,7 @@ impl BlockExpr {
                         | SyntaxKind::OPTIONAL_CALL_EXPR
                         | SyntaxKind::PAREN_EXPR
                         | SyntaxKind::ARRAY_LITERAL
+                        | SyntaxKind::TUPLE_EXPR
                         | SyntaxKind::OBJECT_LITERAL
                         | SyntaxKind::MAP_LITERAL
                         | SyntaxKind::STRING_LITERAL

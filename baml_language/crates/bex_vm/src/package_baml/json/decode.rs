@@ -103,6 +103,14 @@ enum Container {
         element: RealizedTy,
         decoded: Vec<Value>,
     },
+    /// A tuple, opened over a JSON array of exactly its arity: one slot type
+    /// per element.
+    Tuple {
+        source: HeapPtr,
+        elements: Vec<Value>,
+        slots: Vec<RealizedTy>,
+        decoded: Vec<Value>,
+    },
     Map {
         source: HeapPtr,
         entries: Vec<(BexStr, Value)>,
@@ -133,9 +141,10 @@ impl Container {
     /// The JSON object or array this container was opened over.
     fn source(&self) -> HeapPtr {
         match self {
-            Self::Class { source, .. } | Self::List { source, .. } | Self::Map { source, .. } => {
-                *source
-            }
+            Self::Class { source, .. }
+            | Self::List { source, .. }
+            | Self::Tuple { source, .. }
+            | Self::Map { source, .. } => *source,
         }
     }
 
@@ -160,6 +169,14 @@ impl Container {
             } => elements
                 .get(decoded.len())
                 .map(|json| Child::Read(*json, element)),
+            Self::Tuple {
+                elements,
+                slots,
+                decoded,
+                ..
+            } => elements
+                .get(decoded.len())
+                .map(|json| Child::Read(*json, &slots[decoded.len()])),
             Self::Map {
                 entries,
                 value,
@@ -184,6 +201,9 @@ impl Container {
             }
             Self::List {
                 elements, decoded, ..
+            }
+            | Self::Tuple {
+                elements, decoded, ..
             } => {
                 if decoded.len() < elements.len() {
                     let _ = write!(path, "[{}]", decoded.len());
@@ -202,7 +222,9 @@ impl Container {
     /// Record the next child's decoded value.
     fn push(&mut self, child: Value) {
         match self {
-            Self::Class { decoded, .. } | Self::List { decoded, .. } => decoded.push(child),
+            Self::Class { decoded, .. }
+            | Self::List { decoded, .. }
+            | Self::Tuple { decoded, .. } => decoded.push(child),
             Self::Map {
                 entries, decoded, ..
             } => {
@@ -226,6 +248,8 @@ impl Container {
             Self::List {
                 element, decoded, ..
             } => vm.alloc(Object::Array(Array::new(element, decoded))),
+            // A tuple carries no type metadata: its type is its elements'.
+            Self::Tuple { decoded, .. } => vm.tlab.alloc_tuple(decoded),
             // Type-directed: the declared key type (string-keyed, checked at
             // opening) and the value type it decoded.
             Self::Map {
@@ -337,6 +361,7 @@ impl Lookups {
             RealizedTy::List(element) | RealizedTy::Map { value: element, .. } => {
                 Self::can_reach(element)
             }
+            RealizedTy::Tuple(elements) => elements.iter().any(Self::can_reach),
             RealizedTy::Class(..) | RealizedTy::Interface(..) | RealizedTy::Enum(_) => true,
             _ => false,
         }
@@ -373,6 +398,14 @@ impl Lookups {
                 } else {
                     Vec::new()
                 },
+            ),
+            RealizedTy::Tuple(elements) => (
+                false,
+                elements
+                    .iter()
+                    .filter(|element| Self::can_reach(element))
+                    .cloned()
+                    .collect(),
             ),
             RealizedTy::Class(head, _) | RealizedTy::Interface(head, _, _)
                 if vm.stdlib_heads().media_kind(*head).is_some() =>
@@ -677,6 +710,19 @@ impl RootHaver for Container {
                 element.visit_roots(visitor);
                 decoded.visit_roots(visitor);
             }
+            Self::Tuple {
+                source,
+                elements,
+                slots,
+                decoded,
+            } => {
+                source.visit_roots(visitor);
+                elements.visit_roots(visitor);
+                for slot in slots.iter_mut() {
+                    slot.visit_roots(visitor);
+                }
+                decoded.visit_roots(visitor);
+            }
             Self::Map {
                 source,
                 entries,
@@ -770,6 +816,7 @@ fn decode_one(
             }
         }
         RealizedTy::List(element) => open_list(vm, json, element, path).map(Decoded::Open),
+        RealizedTy::Tuple(slots) => open_tuple(vm, json, slots, path).map(Decoded::Open),
         RealizedTy::Map { key, value } => open_map(vm, json, key, value, path).map(Decoded::Open),
         RealizedTy::Class(head, _) | RealizedTy::Interface(head, _, _)
             if vm.stdlib_heads().media_kind(*head).is_some() =>
@@ -948,6 +995,37 @@ fn open_list(
         }
         Some(_) | None => Err(raise_decode(vm, "expected JSON array", &path())),
     }
+}
+
+/// A tuple of `slots`, opened over the JSON array `json`, which must have
+/// exactly one element per slot.
+fn open_tuple(
+    vm: &mut BexVm,
+    json: Value,
+    slots: &[RealizedTy],
+    path: &dyn Fn() -> String,
+) -> Result<Container, VmRustFnError> {
+    match json.as_object_ptr().map(|ptr| (ptr, vm.get_object(ptr))) {
+        Some((source, Object::Array(array))) if array.len() == slots.len() => {
+            let elements = array.to_vec();
+            Ok(Container::Tuple {
+                source,
+                decoded: Vec::with_capacity(elements.len()),
+                elements,
+                slots: slots.to_vec(),
+            })
+        }
+        Some((_, Object::Array(array))) => {
+            let message = tuple_arity_message(slots.len(), array.len());
+            Err(raise_decode(vm, message, &path()))
+        }
+        Some(_) | None => Err(raise_decode(vm, "expected JSON array", &path())),
+    }
+}
+
+/// Why a JSON array of `found` elements is not a tuple of `arity`.
+pub(super) fn tuple_arity_message(arity: usize, found: usize) -> String {
+    format!("expected an array of {arity} elements, got {found}")
 }
 
 /// A map from `key` to `value`, opened over the JSON object `json`. JSON
@@ -1394,6 +1472,7 @@ impl<'p> Structural<'p> {
                 _ => Err(self.fail(vm, || "expected string".into())),
             },
             RealizedTy::List(element) => self.list(vm, &node, element),
+            RealizedTy::Tuple(slots) => self.tuple(vm, &node, slots),
             RealizedTy::Map { key, value } => self.map(vm, &node, key, value),
             RealizedTy::TypeAlias(head) if vm.stdlib_heads().is_json_alias(*head) => {
                 self.copy(vm, json)
@@ -1479,6 +1558,36 @@ impl<'p> Structural<'p> {
         Ok(Value::object(
             vm.alloc(Object::Array(Array::new(element.clone(), items))),
         ))
+    }
+
+    fn tuple(
+        &mut self,
+        vm: &mut BexVm,
+        node: &Node,
+        slots: &[RealizedTy],
+    ) -> Result<Value, Failed> {
+        let Node::Array(ptr) = *node else {
+            return Err(self.fail(vm, || "expected array".into()));
+        };
+        let elements = match vm.get_object(ptr) {
+            Object::Array(array) => array.to_vec(),
+            _ => unreachable!("an array node is an array"),
+        };
+        if elements.len() != slots.len() {
+            return Err(self.fail(vm, || tuple_arity_message(slots.len(), elements.len())));
+        }
+        let mut items = Vec::with_capacity(elements.len());
+        for (i, (item, slot)) in elements.into_iter().zip(slots).enumerate() {
+            let item = self.within(
+                |path| {
+                    use std::fmt::Write;
+                    let _ = write!(path, "[{i}]");
+                },
+                |this| this.decode(vm, item, slot),
+            )?;
+            items.push(item);
+        }
+        Ok(Value::object(vm.tlab.alloc_tuple(items)))
     }
 
     fn map(

@@ -125,6 +125,10 @@ impl BamlClassType for PackageReflectImpl {
         as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Function)
     }
 
+    fn as_tuple(vm: &mut BexVm, self_value: &Value) -> Option<Value> {
+        as_kind(vm, *self_value, baml_type::type_kind::TypeKind::Tuple)
+    }
+
     fn _validate_renderable(vm: &mut BexVm, self_value: &Value) -> Result<(), VmRustFnError> {
         let type_value = cloned_type_value(vm, *self_value);
         let root = match &type_value.ty {

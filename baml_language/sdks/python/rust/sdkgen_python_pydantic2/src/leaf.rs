@@ -143,7 +143,7 @@ impl LeafBody {
                 Ty::RustType => true,
                 Ty::List(inner) => ty_uses_rust_type(inner),
                 Ty::Map { key, value, .. } => ty_uses_rust_type(key) || ty_uses_rust_type(value),
-                Ty::Union(items) => items.iter().any(ty_uses_rust_type),
+                Ty::Union(items) | Ty::Tuple(items) => items.iter().any(ty_uses_rust_type),
                 Ty::Class(_, args) => args.iter().any(ty_uses_rust_type),
                 Ty::Interface(_, generics, associated_types) => {
                     generics.iter().any(ty_uses_rust_type)
@@ -665,7 +665,7 @@ fn mentions_type_var(ty: &Ty) -> bool {
         Ty::TypeVar(_) => true,
         Ty::List(inner) => mentions_type_var(inner),
         Ty::Map { key, value, .. } => mentions_type_var(key) || mentions_type_var(value),
-        Ty::Union(items) => items.iter().any(mentions_type_var),
+        Ty::Union(items) | Ty::Tuple(items) => items.iter().any(mentions_type_var),
         Ty::Class(_, args) => args.iter().any(mentions_type_var),
         Ty::Interface(_, generics, associated_types) => {
             generics.iter().any(mentions_type_var)
@@ -717,7 +717,7 @@ fn collect_root_imports(
             collect_root_imports(key, current, out, names);
             collect_root_imports(value, current, out, names);
         }
-        Ty::Union(items) => {
+        Ty::Union(items) | Ty::Tuple(items) => {
             for item in items {
                 collect_root_imports(item, current, out, names);
             }
@@ -1071,7 +1071,7 @@ fn collect_alias_dependencies(
             collect_alias_dependencies(key, alias_indices, out);
             collect_alias_dependencies(value, alias_indices, out);
         }
-        Ty::Union(members) => {
+        Ty::Union(members) | Ty::Tuple(members) => {
             for member in members {
                 collect_alias_dependencies(member, alias_indices, out);
             }
@@ -2064,7 +2064,7 @@ fn walk_generic_inference_positions(
                 walk_generic_inference_positions(member, in_closure, out);
             }
         }
-        Ty::Class(_, args) => {
+        Ty::Class(_, args) | Ty::Tuple(args) => {
             for arg in args {
                 walk_generic_inference_positions(arg, in_closure, out);
             }

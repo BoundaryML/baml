@@ -98,6 +98,11 @@ fn lower_base(type_expr: &CstTypeExpr, diags: &mut Vec<LoweringDiagnostic>) -> T
         .at(span);
     }
 
+    // Tuple types `(A, B)`; postfix modifiers are applied by the caller.
+    if let Some(elements) = type_expr.tuple_type_elements() {
+        return lower_tuple_type(&elements, span, diags);
+    }
+
     // Handle function types like `(x: int, y: int) -> bool`. A function type
     // cannot declare its own generic parameters (rejected by the parser); any
     // leading `<...>` is left in the CST for recovery and ignored here.
@@ -159,6 +164,20 @@ fn lower_function_type(
         params,
         ret: Box::new(ret),
         throws,
+    }
+    .at(span)
+}
+
+fn lower_tuple_type(
+    elements: &[CstTypeExpr],
+    span: TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> TypeExpr {
+    TypeExprKind::Tuple {
+        elements: elements
+            .iter()
+            .map(|e| lower_type_expr_node(e, diags))
+            .collect(),
     }
     .at(span)
 }
@@ -442,7 +461,26 @@ pub(crate) fn check_wildcard_type(
                 check_wildcard_type(iface, context, span, diags);
             }
         }
-        // Primitives and other leaves cannot contain a wildcard.
-        _ => {}
+        TypeExprKind::Tuple { elements } => {
+            for e in elements {
+                check_wildcard_type(e, context, span, diags);
+            }
+        }
+        // Leaves cannot contain a wildcard.
+        TypeExprKind::Int
+        | TypeExprKind::Bigint
+        | TypeExprKind::Float
+        | TypeExprKind::String
+        | TypeExprKind::Bool
+        | TypeExprKind::Null
+        | TypeExprKind::Never
+        | TypeExprKind::Uint8Array
+        | TypeExprKind::Media { .. }
+        | TypeExprKind::Literal { .. }
+        | TypeExprKind::Unknown
+        | TypeExprKind::Type
+        | TypeExprKind::Rust
+        | TypeExprKind::Error
+        | TypeExprKind::Missing => {}
     }
 }

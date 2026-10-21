@@ -227,6 +227,7 @@ fn heads_match_their_kind(vm: &BexVm, ty: &bex_vm_types::RealizedTy) -> Result<(
         | Anchored::Media(_)
         | Anchored::Literal(..)
         | Anchored::List(_)
+        | Anchored::Tuple(_)
         | Anchored::Map { .. }
         | Anchored::Union(_)
         | Anchored::Function { .. }
@@ -465,6 +466,27 @@ impl BexEngine {
                     element_type: to_annotation(element_type)?,
                     items: items?,
                 })
+            }
+
+            Object::Tuple(elements) => {
+                // Each element converts at its declared slot type, so a union
+                // slot selects and wraps its arm; without a same-arity tuple
+                // declaration (`unknown`, `json`, …) elements convert at
+                // `unknown`.
+                let slots: Vec<bex_vm_types::RealizedTy> = match effective_type {
+                    bex_vm_types::RealizedTy::Tuple(slots) if slots.len() == elements.len() => {
+                        slots.to_vec()
+                    }
+                    _ => vec![bex_vm_types::RealizedTy::Unknown; elements.len()],
+                };
+                let items = elements
+                    .iter()
+                    .zip(slots.iter())
+                    .map(|(v, slot)| {
+                        self.convert_vm_value_to_external_with_type(*v, slot, vm, permit)
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(BexExternalValue::Tuple { items })
             }
 
             Object::Map(map) => {
@@ -1076,6 +1098,13 @@ pub(crate) fn collect_live_type_var_bindings<DeclaredHead: Clone, ConcreteHead: 
         (RuntimeTy::List(declared), RuntimeTy::List(concrete)) => {
             collect_live_type_var_bindings(declared, concrete, out);
         }
+        (RuntimeTy::Tuple(declared), RuntimeTy::Tuple(concrete))
+            if declared.len() == concrete.len() =>
+        {
+            for (declared, concrete) in declared.iter().zip(concrete.iter()) {
+                collect_live_type_var_bindings(declared, concrete, out);
+            }
+        }
         (
             RuntimeTy::Map {
                 key: declared_key,
@@ -1121,6 +1150,7 @@ pub(crate) fn collect_live_type_var_bindings<DeclaredHead: Clone, ConcreteHead: 
             RuntimeTy::Class(..)
             | RuntimeTy::Interface(..)
             | RuntimeTy::List(_)
+            | RuntimeTy::Tuple(_)
             | RuntimeTy::Map { .. }
             | RuntimeTy::Union(_)
             | RuntimeTy::Future(..)
@@ -1633,6 +1663,12 @@ fn runtime_ty_compatible(wire: &WireTy, expected: &WireTy) -> bool {
             T::Int | T::String | T::Bool | T::Float | T::Null | T::Bigint | T::Uint8Array,
         ) => false,
         (T::List(w), T::List(e)) => runtime_ty_compatible(w, e),
+        (T::Tuple(w), T::Tuple(e)) => {
+            w.len() == e.len()
+                && w.iter()
+                    .zip(e.iter())
+                    .all(|(w, e)| runtime_ty_compatible(w, e))
+        }
         (
             T::Map {
                 key: wk, value: wv, ..
@@ -1860,6 +1896,18 @@ fn find_matching_union_member(
                                 && runtime_ty_structurally_equal(actual_value, value))
                     })
                 }
+                // A tuple carries no descriptor: the first same-arity tuple
+                // member whose every slot admits the matching element.
+                // Covariant, so a member may be broader than the elements.
+                Object::Tuple(elements) => members.iter().find(|member| {
+                    matches!(member, bex_vm_types::RealizedTy::Tuple(slots)
+                        if slots.len() == elements.len()
+                            && elements.iter().zip(slots.iter()).all(|(element, slot)| {
+                                matches!(slot, bex_vm_types::RealizedTy::Unknown)
+                                    || find_matching_union_member(*element, std::slice::from_ref(slot))
+                                        .is_some()
+                            }))
+                }),
                 Object::Uint8Array(_) => members
                     .iter()
                     .find(|m| matches!(m, bex_vm_types::RealizedTy::Uint8Array)),

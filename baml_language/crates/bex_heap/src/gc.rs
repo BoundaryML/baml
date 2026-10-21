@@ -623,6 +623,13 @@ impl BexHeap {
                     }
                 }
             }
+            Object::Tuple(elements) => {
+                for value in elements.iter() {
+                    if let Some(ptr) = value.as_object_ptr() {
+                        worklist.push(ptr);
+                    }
+                }
+            }
             Object::Map(map) => {
                 let data = unsafe { map.data_unchecked() };
                 for value in data.keys().chain(data.values()) {
@@ -853,6 +860,11 @@ impl BexHeap {
             Object::Map(map) => {
                 let data = unsafe { map.data_unchecked_mut() };
                 for value in data.trace_values_mut() {
+                    self.fixup_value(value, forwarding);
+                }
+            }
+            Object::Tuple(elements) => {
+                for value in elements.iter_mut() {
                     self.fixup_value(value, forwarding);
                 }
             }

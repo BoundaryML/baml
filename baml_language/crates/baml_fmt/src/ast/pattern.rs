@@ -11,6 +11,7 @@
 //!                | ARRAY_PATTERN
 //!                | TYPE_PATTERN
 //!                | PAREN_PATTERN
+//!                | TUPLE_PATTERN
 //!                | WILDCARD_PATTERN
 //! ```
 //!
@@ -105,6 +106,8 @@ pub enum MatchPattern {
     Array(ArrayPattern),
     Type(TypePattern),
     Paren(ParenPattern),
+    /// `(p, q)` / `(p,)`.
+    Tuple(TuplePattern),
     Union(UnionPattern),
     Chain(ChainPattern),
 }
@@ -136,6 +139,7 @@ impl MatchPattern {
             SyntaxKind::TYPE_PATTERN => TypePattern::from_node(&node).map(MatchPattern::Type),
             SyntaxKind::ARRAY_PATTERN => ArrayPattern::from_node(&node).map(MatchPattern::Array),
             SyntaxKind::PAREN_PATTERN => ParenPattern::from_node(&node).map(MatchPattern::Paren),
+            SyntaxKind::TUPLE_PATTERN => TuplePattern::from_node(&node).map(MatchPattern::Tuple),
             SyntaxKind::UNION_PATTERN => UnionPattern::from_node(&node).map(MatchPattern::Union),
             SyntaxKind::CHAIN_PATTERN => ChainPattern::from_node(&node).map(MatchPattern::Chain),
             SyntaxKind::DESTRUCTURE_PATTERN => {
@@ -165,6 +169,7 @@ impl Printable for MatchPattern {
             MatchPattern::Array(p) => p.print(shape, printer),
             MatchPattern::Type(p) => p.print(shape, printer),
             MatchPattern::Paren(p) => p.print(shape, printer),
+            MatchPattern::Tuple(p) => p.print(shape, printer),
             MatchPattern::Union(p) => p.print(shape, printer),
             MatchPattern::Chain(p) => p.print(shape, printer),
         }
@@ -177,6 +182,7 @@ impl Printable for MatchPattern {
             MatchPattern::Array(p) => p.leftmost_token(),
             MatchPattern::Type(p) => p.leftmost_token(),
             MatchPattern::Paren(p) => p.leftmost_token(),
+            MatchPattern::Tuple(p) => p.leftmost_token(),
             MatchPattern::Union(p) => p.leftmost_token(),
             MatchPattern::Chain(p) => p.leftmost_token(),
         }
@@ -189,6 +195,7 @@ impl Printable for MatchPattern {
             MatchPattern::Array(p) => p.rightmost_token(),
             MatchPattern::Type(p) => p.rightmost_token(),
             MatchPattern::Paren(p) => p.rightmost_token(),
+            MatchPattern::Tuple(p) => p.rightmost_token(),
             MatchPattern::Union(p) => p.rightmost_token(),
             MatchPattern::Chain(p) => p.rightmost_token(),
         }
@@ -902,6 +909,143 @@ impl Printable for ParenPattern {
     fn leftmost_token(&self) -> TextRange {
         self.open_paren.span()
     }
+    fn rightmost_token(&self) -> TextRange {
+        self.close_paren.span()
+    }
+}
+
+/// `(p, q)` / `(p,)` — a [`SyntaxKind::TUPLE_PATTERN`]. Laid out like
+/// [`ArrayPattern`]; a 1-tuple always keeps its trailing comma, since `(p)`
+/// is a [`ParenPattern`].
+#[derive(Debug)]
+pub struct TuplePattern {
+    pub open_paren: t::LParen,
+    pub elements: Vec<(MatchPattern, Option<t::Comma>)>,
+    pub close_paren: t::RParen,
+}
+
+impl TuplePattern {
+    fn from_node(node: &baml_db::baml_compiler_syntax::SyntaxNode) -> Result<Self, StrongAstError> {
+        let mut it = SyntaxNodeIter::new(node);
+        let open_paren = it.expect_parse()?;
+        let mut elements = Vec::new();
+        let close_paren = loop {
+            let Some(elem) = it.next() else {
+                return Err(StrongAstError::missing(SyntaxKind::R_PAREN, it.parent));
+            };
+            if elem.kind() == SyntaxKind::R_PAREN {
+                break t::RParen::from_cst(elem)?;
+            }
+            let pattern = MatchPattern::from_cst(elem)?;
+            let comma = it
+                .next_if_kind(SyntaxKind::COMMA)
+                .map(t::Comma::from_cst)
+                .transpose()?;
+            elements.push((pattern, comma));
+        };
+        it.expect_end()?;
+        Ok(Self {
+            open_paren,
+            elements,
+            close_paren,
+        })
+    }
+
+    fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
+        printer.print_raw_token(&self.open_paren);
+        let (_, open_trailing) = printer.trivia.get_for_range_split(self.open_paren.span());
+        try_print_trivia_single_line_spaced(printer, open_trailing, false, true)?;
+
+        let single = self.elements.len() == 1;
+        for (idx, (element, comma)) in self.elements.iter().enumerate() {
+            let (element_leading, element_trailing) = printer.trivia.get_for_element(element);
+            try_print_trivia_single_line_spaced(printer, element_leading, false, true)?;
+            if printer
+                .print(element, Shape::unlimited_single_line())
+                .multi_lined
+            {
+                return None;
+            }
+            try_print_trivia_single_line_spaced(printer, element_trailing, true, false)?;
+
+            let is_last = idx + 1 >= self.elements.len();
+            if let Some(comma) = comma {
+                let (comma_leading, comma_trailing) =
+                    printer.trivia.get_for_range_split(comma.span());
+                try_print_trivia_single_line_spaced(printer, comma_leading, true, false)?;
+                // A trailing comma is dropped on a single line, except in a
+                // 1-tuple where it is what makes the tuple.
+                if !is_last || single {
+                    printer.print_raw_token(comma);
+                }
+                try_print_trivia_single_line_spaced(printer, comma_trailing, true, false)?;
+            } else if !is_last || single {
+                printer.print_str(",");
+            }
+            if !is_last {
+                printer.print_str(" ");
+            }
+        }
+
+        let (close_leading, _) = printer.trivia.get_for_range_split(self.close_paren.span());
+        try_print_trivia_single_line_spaced(printer, close_leading, true, false)?;
+        printer.print_raw_token(&self.close_paren);
+
+        (printer.output.len() <= shape.width).then(PrintInfo::default_single_line)
+    }
+}
+
+impl PrintMultiLine for TuplePattern {
+    fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer.print_raw_token(&self.open_paren);
+        printer.print_trivia_all_trailing_for(self.open_paren.span());
+        printer.print_newline();
+
+        let inner_shape = Shape {
+            width: shape.width.saturating_sub(printer.config.indent_width),
+            indent: shape.indent + printer.config.indent_width,
+            first_line_offset: 0,
+        };
+
+        for (element, comma) in &self.elements {
+            printer.print_trivia_all_leading_with_newline_for(
+                element.leftmost_token(),
+                inner_shape.indent,
+            );
+            printer.print_spaces(inner_shape.indent);
+            printer.print(element, inner_shape.clone());
+            let element_trailing = printer.trivia.get_trailing_for_element(element);
+            print_trivia_squished_spaced(printer, element_trailing, true, false);
+            if let Some(comma) = comma {
+                let (comma_leading, comma_trailing) =
+                    printer.trivia.get_for_range_split(comma.span());
+                print_trivia_squished_spaced(printer, comma_leading, true, false);
+                printer.print_raw_token(comma);
+                printer.print_trivia_trailing(comma_trailing);
+            } else {
+                printer.print_str(",");
+            }
+            printer.print_newline();
+        }
+
+        printer.print_trivia_all_leading_with_newline_for(self.close_paren.span(), shape.indent);
+        printer.print_spaces(shape.indent);
+        printer.print_raw_token(&self.close_paren);
+        PrintInfo::default_multi_lined()
+    }
+}
+
+impl Printable for TuplePattern {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        printer
+            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+            .unwrap_or_else(|| self.print_multi_line(shape, printer))
+    }
+
+    fn leftmost_token(&self) -> TextRange {
+        self.open_paren.span()
+    }
+
     fn rightmost_token(&self) -> TextRange {
         self.close_paren.span()
     }

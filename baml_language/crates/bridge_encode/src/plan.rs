@@ -456,6 +456,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                 self.enumeration(tree, slot, name, Some(variant.as_str()))
             }
             SlotTy::List(inner) => self.list(tree, slot, inner),
+            SlotTy::Tuple(elements) => self.tuple(tree, slot, elements),
             SlotTy::Map { key, value } => self.map(tree, slot, key, value),
             SlotTy::Class(WireHead::Static(name), args) => self.class(tree, slot, name, args),
             // A declaration the engine created at run time: the facts know
@@ -823,6 +824,9 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
             ) if enumeration == name => Some(Rank::Identity),
             (Shape::EnumMember { .. }, _) => None,
             (Shape::List(_), SlotTy::List(_)) => Some(Rank::Natural),
+            (Shape::List(items), SlotTy::Tuple(elements)) if items.len() == elements.len() => {
+                Some(Rank::Natural)
+            }
             (Shape::List(_), _) => None,
             (Shape::Map(_), SlotTy::Map { .. }) => Some(Rank::Natural),
             (Shape::Map(_), SlotTy::Class(..)) => Some(Rank::Conversion),
@@ -1014,6 +1018,32 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
             ty: SlotTy::List(Box::new(inner)),
             items: nodes,
         }))
+    }
+
+    /// A tuple: a host sequence of exactly its arity, each element planned
+    /// against its own slot. It crosses as a list node stating the tuple
+    /// type: the declared one where it is realized, and otherwise the
+    /// elements' own types, which a tuple's type is made of.
+    fn tuple(&mut self, tree: &'t Tree<V>, slot: &SlotTy, elements: &[SlotTy]) -> Planned<'t, V> {
+        let Shape::List(items) = &tree.shape else {
+            return Err(mismatch(tree, slot));
+        };
+        if items.len() != elements.len() {
+            return Err(mismatch(tree, slot));
+        }
+        let mut nodes = Vec::with_capacity(items.len());
+        for (index, (item, element)) in items.iter().zip(elements).enumerate() {
+            nodes.push(
+                self.plan(item, element)
+                    .map_err(|failure| failure.at(Step::Index(index)))?,
+            );
+        }
+        let ty = if mentions_type_var(slot) {
+            SlotTy::Tuple(nodes.iter().map(|node| node.ty()).collect())
+        } else {
+            slot.clone()
+        };
+        Ok(Rc::new(Node::List { ty, items: nodes }))
     }
 
     fn map(
@@ -1360,6 +1390,15 @@ impl Solution {
             SlotTy::List(inner) => {
                 if let SlotTy::List(found) = found {
                     self.learn(inner, found);
+                }
+            }
+            SlotTy::Tuple(elements) => {
+                if let SlotTy::Tuple(found) = found
+                    && found.len() == elements.len()
+                {
+                    for (element, found) in elements.iter().zip(found.iter()) {
+                        self.learn(element, found);
+                    }
                 }
             }
             SlotTy::Map { key, value } => {

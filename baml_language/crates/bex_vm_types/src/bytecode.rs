@@ -1105,6 +1105,14 @@ pub enum Instruction {
         /// to pop into `type_args`.
         ntypeargs: u16,
     },
+
+    /// Builds a tuple and allocates it on the heap.
+    ///
+    /// Format: `ALLOC_TUPLE n` where `n` (at least 1) is the number of
+    /// elements. All elements must be on the stack, first element deepest.
+    /// A tuple is immutable and carries no type metadata. Declared last so
+    /// serialized instruction discriminants stay stable.
+    AllocTuple(usize),
 }
 
 /// Compact bytecode opcodes.
@@ -1329,6 +1337,8 @@ pub enum OpCode {
 
     /// Resume a compiled body through a stub appended at load time, never serialized.
     ResumeCompiled,
+    /// Appended last to keep every earlier opcode byte stable.
+    AllocTuple,
 }
 
 impl OpCode {
@@ -1431,6 +1441,7 @@ impl OpCode {
             | Self::Pop
             | Self::Copy
             | Self::AllocArray
+            | Self::AllocTuple
             | Self::AllocMap
             | Self::InitInstance
             | Self::AllocVariant
@@ -1644,6 +1655,7 @@ impl TryFrom<u8> for OpCode {
 
             x if x == Self::CallExactArgs as u8 => Ok(Self::CallExactArgs),
             x if x == Self::SetCallTrace as u8 => Ok(Self::SetCallTrace),
+            x if x == Self::AllocTuple as u8 => Ok(Self::AllocTuple),
             _ => Err(byte),
         }
     }
@@ -1761,6 +1773,7 @@ impl std::fmt::Display for OpCode {
             Self::Pop => "POP",
             Self::Copy => "COPY",
             Self::AllocArray => "ALLOC_ARRAY",
+            Self::AllocTuple => "ALLOC_TUPLE",
             Self::AllocMap => "ALLOC_MAP",
             Self::AllocInstance => "ALLOC_INSTANCE",
             Self::InitInstance => "INIT_INSTANCE",
@@ -1956,6 +1969,7 @@ impl std::fmt::Display for Instruction {
             Instruction::CmpBigintOp(op) => write!(f, "CMP_BIGINT_OP {op}"),
             Instruction::UnaryOp(op) => write!(f, "UNARY_OP {op}"),
             Instruction::AllocArray(n) => write!(f, "ALLOC_ARRAY {n}"),
+            Instruction::AllocTuple(n) => write!(f, "ALLOC_TUPLE {n}"),
             Instruction::LoadArrayElement => f.write_str("LOAD_ARRAY_ELEMENT"),
             Instruction::LoadMapElement => f.write_str("LOAD_MAP_ELEMENT"),
             Instruction::StoreArrayElement => f.write_str("STORE_ARRAY_ELEMENT"),
@@ -2651,6 +2665,7 @@ impl Bytecode {
                 | Instruction::Pop(v)
                 | Instruction::Copy(v)
                 | Instruction::AllocArray(v)
+                | Instruction::AllocTuple(v)
                 | Instruction::AllocMap(v)
                 | Instruction::IsType(v)
                 | Instruction::DenseTag(v)
@@ -3059,6 +3074,7 @@ impl Bytecode {
             Instruction::Pop(_) => OpCode::Pop,
             Instruction::Copy(_) => OpCode::Copy,
             Instruction::AllocArray(_) => OpCode::AllocArray,
+            Instruction::AllocTuple(_) => OpCode::AllocTuple,
             Instruction::AllocMap(_) => OpCode::AllocMap,
             Instruction::AllocInstance { .. } => OpCode::AllocInstance,
             Instruction::InitInstance(_) => OpCode::InitInstance,
