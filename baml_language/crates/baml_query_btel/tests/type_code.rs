@@ -67,6 +67,10 @@ function main(n: int) -> int {
     let type OtherRow = reflect.Class.new("Row", { "other": int.type() });
     Pick<map<string, Row | OtherRow>>(null);
 
+    let type Extended = reflect.Class.new("Resume", { "base": Resume.type(), "mood": Mood.type() });
+    let type RuntimeMood = reflect.Enum.new("Mood", ["Calm"]);
+    Pick<map<string, Extended | Resume | RuntimeMood>>(null);
+
     let type Small = reflect.Class.new("Small", { "v": int.type() });
     let small = Echo<Small>(baml.json.from_string<Small>(`{"v": 1}`));
     n
@@ -112,7 +116,14 @@ async fn recorded_runtime_types_rebuild_from_their_code() {
         "SELECT type_args, baml_code(type_args['T']) FROM spans WHERE span_name = 'user.Pick' \
          ORDER BY start_time",
     );
-    assert_eq!(recorded.rows.len(), 6);
+    assert_eq!(recorded.rows.len(), 7);
+    // A runtime class or enum named like a declared one doesn't shadow it.
+    assert!(
+        text(&recorded.rows[6][1])
+            .ends_with("reflect.Type.of<map<string, Resume_2 | Resume | Mood_2>>()\n}"),
+        "{}",
+        text(&recorded.rows[6][1])
+    );
 
     // The simplest case, spelled out.
     assert_eq!(

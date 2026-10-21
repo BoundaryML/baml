@@ -83,13 +83,20 @@ pub(super) fn render(span: &Span, start: &Start<'_>) -> Option<String> {
         seen: HashSet::new(),
         names: HashMap::new(),
         taken: HashSet::new(),
+        unnamed: Vec::new(),
     };
     let mut heads = Vec::new();
     root.visit_heads(&mut |head| heads.push(head.clone()));
     for head in heads {
-        if let Ref::Definition(definition) = head {
-            code.visit(definition.group)?;
+        match head {
+            Ref::Definition(definition) => code.visit(definition.group)?,
+            Ref::Name(name) => code.reserve(&name),
         }
+    }
+    // Bindings come last, so that none takes a name the code spells.
+    for (definition, name) in std::mem::take(&mut code.unnamed) {
+        let binding = code.binding(&name);
+        code.names.insert(definition, binding);
     }
     let mut out = String::from("{\n");
     for group in code.order.clone() {
@@ -108,7 +115,11 @@ struct Code<'s> {
     /// How the code names each definition: its binding for a runtime one,
     /// its source name for a declared one.
     names: HashMap<DefinitionRef, String>,
+    /// Names the code uses: the first segment of each name spelled as in
+    /// source, and each binding given.
     taken: HashSet<String>,
+    /// Runtime definitions waiting for a binding, and their names.
+    unnamed: Vec<(DefinitionRef, String)>,
 }
 
 impl Code<'_> {
@@ -119,8 +130,9 @@ impl Code<'_> {
         }
     }
 
-    /// Names every member of `group`, and orders its runtime groups after
-    /// the groups they name.
+    /// Names every declared member of `group`, queues its runtime members
+    /// for bindings, and orders its runtime groups after the groups they
+    /// name.
     fn visit(&mut self, group: CasId) -> Option<()> {
         if !self.seen.insert(group) {
             return Some(());
@@ -134,12 +146,13 @@ impl Code<'_> {
                 group,
                 member: u32::try_from(position).ok()?,
             };
-            let name = if runtime {
-                self.binding(&member.name().to_string())
+            if runtime {
+                self.unnamed.push((definition, member.name().to_string()));
             } else {
-                source_name(member.name())
-            };
-            self.names.insert(definition, name);
+                let name = source_name(member.name());
+                self.reserve(&name);
+                self.names.insert(definition, name);
+            }
         }
         // A declared class names only declared types, which need no code.
         if !runtime {
@@ -151,11 +164,19 @@ impl Code<'_> {
             };
             for field in &class.fields {
                 let mut named = Vec::new();
-                field.ty.decoded.as_ref()?.visit_heads(&mut |head| {
-                    if let DefinitionHead::Defined(head) = head {
-                        named.push(head.definition.group);
-                    }
-                });
+                let mut spelled = Vec::new();
+                field
+                    .ty
+                    .decoded
+                    .as_ref()?
+                    .visit_heads(&mut |head| match head {
+                        DefinitionHead::Defined(head) => named.push(head.definition.group),
+                        DefinitionHead::Named(name) => spelled.push(source_name(name)),
+                        DefinitionHead::Member(_) => {}
+                    });
+                for name in spelled {
+                    self.reserve(&name);
+                }
                 for other in named {
                     self.visit(other)?;
                 }
@@ -163,6 +184,13 @@ impl Code<'_> {
         }
         self.order.push(group);
         Some(())
+    }
+
+    /// Keep bindings off a name spelled as in source: a binding called
+    /// `Resume` would shadow a declared `Resume` the code names after it.
+    fn reserve(&mut self, name: &str) {
+        let first = name.split('.').next().unwrap_or(name);
+        self.taken.insert(first.to_owned());
     }
 
     /// A binding for a runtime class or enum called `name`: the name itself
