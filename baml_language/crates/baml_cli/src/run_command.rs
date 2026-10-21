@@ -143,45 +143,6 @@ fn parse_script_body(tokens: &[String]) -> Result<ScriptExpansion> {
 // CLI Args
 // ============================================================================
 
-fn load_launch_context(source: &str) -> Result<btel_types::context::Context> {
-    use btel_types::context::{Context, ContextPatch, ContextValue};
-    use serde_json::Value;
-
-    let value = baml_exec::load_json_source(source).context("invalid --context source")?;
-    let object = value
-        .as_object()
-        .ok_or_else(|| anyhow!("--context must be a JSON object"))?;
-    let mut patch = ContextPatch::default();
-    for (key, value) in object {
-        match (key.as_str(), value) {
-            ("distinct_id", Value::Null) => {}
-            ("distinct_id", Value::String(id)) => patch.distinct_id = Some(id.clone()),
-            ("distinct_id", _) => anyhow::bail!("--context distinct_id must be a string or null"),
-            ("metadata", Value::Object(metadata)) => {
-                for (key, value) in metadata {
-                    let scalar = match value {
-                        Value::String(value) => ContextValue::String(value.clone()),
-                        Value::Bool(value) => ContextValue::Bool(*value),
-                        Value::Number(value) if value.is_i64() => {
-                            ContextValue::Int(value.as_i64().expect("checked integer"))
-                        }
-                        Value::Number(value) if value.is_f64() => {
-                            ContextValue::Float(value.as_f64().expect("checked float"))
-                        }
-                        _ => anyhow::bail!(
-                            "--context metadata[{key:?}] must be a string, int64, float64, or bool"
-                        ),
-                    };
-                    patch.metadata.insert(key.clone(), Some(scalar));
-                }
-            }
-            ("metadata", _) => anyhow::bail!("--context metadata must be an object"),
-            _ => anyhow::bail!("unknown --context field {key:?}; expected distinct_id or metadata"),
-        }
-    }
-    Ok(Context::default().with_patch(&patch))
-}
-
 /// Run a BAML function, script, or expression.
 ///
 /// Choose one execution mode: a positional function or script, one or more
@@ -244,14 +205,20 @@ pub struct RunArgs {
     )]
     pub expression: Option<String>,
 
-    /// Set process launch context from JSON.
+    /// Set process launch context from JSON; overrides BAML_CONTEXT.
     ///
     /// Accepts `distinct_id` (string or null) and `metadata` (a map whose values
     /// are strings, integers, floats, or booleans).
     ///
     /// Use `--context @file` to read JSON from a file or `--context -` for
     /// standard input.
-    #[arg(long, value_name = "SOURCE", help_heading = "Target options")]
+    #[arg(
+        long,
+        env = baml_exec::CONTEXT_ENV,
+        hide_env = true,
+        value_name = "SOURCE",
+        help_heading = "Target options"
+    )]
     pub context: Option<String>,
 
     /// Load one standalone source file instead of discovering a project.
@@ -442,17 +409,18 @@ impl RunArgs {
     fn launch_context(&self) -> Result<btel_types::context::Context> {
         self.context
             .as_deref()
-            .map(load_launch_context)
+            .map(|source| baml_exec::load_launch_context(source).context("invalid --context"))
             .transpose()
             .map(Option::unwrap_or_default)
     }
 
     fn validate_stdin_consumer(&self, input_source: Option<&str>, input_flag: &str) -> Result<()> {
-        anyhow::ensure!(
-            self.context.as_deref() != Some("-") || input_source != Some("-"),
-            "--context - and {input_flag} - both read stdin; only one stdin consumer is allowed"
-        );
-        Ok(())
+        baml_exec::ensure_single_stdin_consumer(
+            self.context.as_deref(),
+            "--context",
+            input_source,
+            input_flag,
+        )
     }
 
     pub fn run(&self) -> Result<crate::ExitCode> {
@@ -2332,46 +2300,6 @@ mod tests {
             from: None,
             target_args: Vec::new(),
         }
-    }
-
-    #[test]
-    fn launch_context_validates_shape_and_preserves_scalar_types() {
-        use btel_types::context::ContextValue;
-
-        for source in ["{}", r#"{"distinct_id":null,"metadata":{}}"#] {
-            assert!(load_launch_context(source).unwrap().is_empty());
-        }
-        let context = load_launch_context(
-            r#"{"distinct_id":"user","metadata":{"s":"","i":-9223372036854775808,"f":1.0,"b":false}}"#,
-        )
-        .unwrap();
-        assert_eq!(context.distinct_id(), Some("user"));
-        assert_eq!(context.metadata()["s"], ContextValue::String(String::new()));
-        assert_eq!(context.metadata()["i"], ContextValue::Int(i64::MIN));
-        assert_eq!(context.metadata()["f"], ContextValue::Float(1.0));
-        assert_eq!(context.metadata()["b"], ContextValue::Bool(false));
-        for invalid in [
-            "not JSON",
-            "[]",
-            "null",
-            r#"{"unknown":1}"#,
-            r#"{"distinct_id":42}"#,
-            r#"{"metadata":null}"#,
-            r#"{"metadata":{"x":null}}"#,
-            r#"{"metadata":{"x":[]}}"#,
-            r#"{"metadata":{"x":{}}}"#,
-            r#"{"metadata":{"x":9223372036854775808}}"#,
-            r#"{"metadata":{"x":18446744073709551616}}"#,
-            r#"{"metadata":{"x":-9223372036854775809}}"#,
-            r#"{"metadata":{"x":1e400}}"#,
-        ] {
-            assert!(load_launch_context(invalid).is_err(), "{invalid}");
-        }
-        let file = tempfile::NamedTempFile::new().unwrap();
-        std::fs::write(file.path(), r#"{"metadata":{"x":null}}"#).unwrap();
-        assert!(load_launch_context(&format!("@{}", file.path().display())).is_err());
-        std::fs::write(file.path(), "{").unwrap();
-        assert!(load_launch_context(&format!("@{}", file.path().display())).is_err());
     }
 
     // ── Dispatch-mode mutex ───────────────────────────────────────────

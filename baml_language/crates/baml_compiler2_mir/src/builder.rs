@@ -671,22 +671,6 @@ impl<'db> MirBuilder<'db> {
         });
     }
 
-    /// Emit a throw-if-panic terminator: if the value is a panic instance,
-    /// rethrow it with its landing's `context`; otherwise continue to
-    /// `otherwise`.
-    pub(crate) fn throw_if_panic(
-        &mut self,
-        value: Operand<'db>,
-        context: Local,
-        otherwise: BlockId,
-    ) {
-        self.set_terminator(Terminator::ThrowIfPanic {
-            value,
-            context: Operand::Copy(Place::Local(context)),
-            otherwise,
-        });
-    }
-
     pub(crate) fn sys_op(
         &mut self,
         callee: Operand<'db>,

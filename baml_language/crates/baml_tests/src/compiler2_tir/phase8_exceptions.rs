@@ -5,6 +5,43 @@
 use super::support::{make_db, render_tir};
 use crate::engine::TestDbExt;
 
+#[test]
+fn chained_catches_render_each_handlers_typed_body() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+function fail() -> int throws string {
+    throw "original"
+}
+
+function recover() -> int throws never {
+    fail() catch (first) {
+        string => {
+            let original = first;
+            throw 42
+        },
+    } catch_all (second) {
+        int => {
+            let replacement = second;
+            replacement
+        },
+    }
+}
+"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("let original = first : string"),
+        "inner handler's typed block is missing:\n{output}"
+    );
+    assert!(
+        output.contains("let replacement = second : 42"),
+        "outer handler's typed block is missing:\n{output}"
+    );
+}
+
 fn assert_declared_throws_violation(output: &str, declared: &str, thrown: &str, message: &str) {
     let expected =
         format!("declared throws is `{declared}`, but this function may also throw `{thrown}`");

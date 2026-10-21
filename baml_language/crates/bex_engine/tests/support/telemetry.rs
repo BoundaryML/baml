@@ -16,9 +16,7 @@ pub(crate) fn recording_engine(
                 .iter()
                 .any(|name| function.name().rsplit('.').next() == Some(name))
             {
-                function.body_meta = Some(bex_vm_types::FunctionMeta::Llm {
-                    client: "test".into(),
-                });
+                function.body_meta = Some(bex_vm_types::FunctionMeta::Llm);
             }
         }
     }

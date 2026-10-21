@@ -364,21 +364,6 @@ impl<'db> Generator<'_, 'db> {
             | Terminator::Spawn { .. }
             | Terminator::Await { .. }
             | Terminator::AwaitAny { .. } => self.suspension(id)?,
-            // A wildcard catch must propagate panics with their context.
-            Terminator::ThrowIfPanic { value, context, .. } => {
-                let value = self.value_operand(id, value)?;
-                let context = self.value_operand(id, context)?;
-                let error = format!("bex_vm::compiled_rt::rethrow({value}, {context})");
-                let raise = if block.unwind.is_some() {
-                    self.unwind_jump(id, &error)?
-                } else {
-                    format!("return Err({error});")
-                };
-                self.emit_statement(&format!("if vm.is_panic({value}) {{"));
-                self.out.push_str(&raise);
-                self.out.push('\n');
-                self.emit_line("}");
-            }
         }
         Ok(())
     }

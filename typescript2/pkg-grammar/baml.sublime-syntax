@@ -479,6 +479,7 @@ contexts:
     - include: testset
     - include: test
     - include: watch-statement
+    - include: let-type-statement
     - include: let-statement
     - include: return-statement
     - include: break-statement
@@ -1509,6 +1510,37 @@ contexts:
   let-statement-pattern:
     - match: '\G\s*'
       push: let-statement-pattern--body
+  let-type-bound-intersection:
+    - match: '&'
+      scope: keyword.operator.type.baml
+  let-type-bounds--body:
+    - meta_scope: meta.type-parameter.bounds.baml
+    - match: '(?=\s*=)'
+      pop: true
+    - include: comments
+    - include: let-type-bound-intersection
+    - include: type-expression
+  let-type-bounds:
+    - match: '\b(extends)\b'
+      captures:
+        1: keyword.operator.extends.baml
+      push: let-type-bounds--body
+  let-type-statement--body:
+    - meta_scope: meta.statement.let-type.baml
+    - match: '(?=[;}]|$)'
+      pop: true
+    - include: comments
+    - include: let-type-bounds
+    - include: assignment-operator
+    - include: let-else-clause
+    - include: expression
+  let-type-statement:
+    - match: '(?:^\s*|\G\s*|(?<=[{;}])\s*)(let)\s+(type)\s+(\$?[A-Za-z_][A-Za-z0-9_-]*(?:\$[A-Za-z_][A-Za-z0-9_-]*)*)\b'
+      captures:
+        1: keyword.declaration.binding.baml
+        2: keyword.declaration.type-binding.baml
+        3: entity.name.type.parameter.baml
+      push: let-type-statement--body
   line-comment:
     - match: '//.*$'
       scope: comment.line.double-slash.baml

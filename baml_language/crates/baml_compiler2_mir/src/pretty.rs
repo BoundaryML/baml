@@ -535,17 +535,6 @@ fn write_terminator(f: &mut impl Write, db: &dyn crate::Db, term: &Terminator<'_
             write_operand(f, db, context)?;
             write!(f, ";")
         }
-        Terminator::ThrowIfPanic {
-            value,
-            context,
-            otherwise,
-        } => {
-            write!(f, "throw_if_panic ")?;
-            write_operand(f, db, value)?;
-            write!(f, " with ")?;
-            write_operand(f, db, context)?;
-            write!(f, " -> {otherwise};")
-        }
         Terminator::ShortCircuit {
             operand,
             kind,
@@ -785,6 +774,7 @@ fn type_tag_name(tag: i64) -> std::borrow::Cow<'static, str> {
         t::TYPE => "TYPE",
         t::UINT8ARRAY => "UINT8ARRAY",
         t::BIGINT => "BIGINT",
+        t::PANIC => "PANIC",
         other => return std::borrow::Cow::Owned(other.to_string()),
     })
 }

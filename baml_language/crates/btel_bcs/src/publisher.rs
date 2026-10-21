@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashSet, VecDeque},
     sync::Arc,
     time::Instant,
 };
@@ -107,10 +107,6 @@ pub struct CloudPublisher {
     retained_bytes: usize,
     staged_recording_bytes: usize,
     preflight_size: Option<(CasId, usize)>,
-    /// Open owned spans, which BCS cannot read yet: each is left out, and
-    /// what hangs under it is delivered under its nearest ancestor that is
-    /// not owned.
-    owned_spans: HashMap<TelemetryId, TelemetryId>,
     failure: Option<DeliveryError>,
     delivery: BcsDeliveryHandle,
 }
@@ -208,7 +204,6 @@ impl CloudPublisher {
             retained_bytes: 0,
             staged_recording_bytes: 0,
             preflight_size: None,
-            owned_spans: HashMap::new(),
             failure: None,
             delivery,
         })
@@ -640,25 +635,11 @@ impl CloudPublisher {
     }
 }
 
-impl CloudPublisher {
-    /// The node delivered in place of `node`: itself, unless it is an open
-    /// owned span.
-    fn delivered_parent(&self, node: TelemetryId) -> TelemetryId {
-        self.owned_spans.get(&node).copied().unwrap_or(node)
-    }
-}
-
 impl Publisher<Snapshot, Snapshot> for CloudPublisher {
     const DETACH_RECORDS: bool = true;
     const ERROR_EVIDENCE: bool = true;
 
     fn before_detached_span(&mut self, record: &SpanRecord<Snapshot, Snapshot>) {
-        if matches!(
-            record,
-            SpanRecord::ManualSpanAnnouncement(_) | SpanRecord::ManualSpanCompletion(_)
-        ) {
-            return;
-        }
         self.progress();
         self.preflight_size = None;
         if self.failure.is_some() {
@@ -718,27 +699,6 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
     }
 
     fn span(&mut self, thread: TelemetryId, record: &mut SpanRecord<Snapshot, Snapshot>) {
-        // Owned spans stay local until BCS reads them; neither is encoded nor
-        // retains its captures.
-        match record {
-            SpanRecord::ManualSpanAnnouncement(announcement) => {
-                let parent = self.delivered_parent(announcement.parent_id);
-                self.owned_spans.insert(announcement.id, parent);
-                return;
-            }
-            SpanRecord::ManualSpanCompletion(completion) => {
-                self.owned_spans.remove(&completion.id);
-                return;
-            }
-            // It rides the owned span's completion, which stays local too.
-            SpanRecord::SpanUsage(usage) if self.owned_spans.contains_key(&usage.node) => return,
-            _ => {}
-        }
-        if !self.owned_spans.is_empty()
-            && let Some(parent) = record.parent_id_mut()
-        {
-            *parent = self.delivered_parent(*parent);
-        }
         self.progress();
         if self.failure.is_none() {
             self.start_window();
@@ -882,64 +842,103 @@ mod tests {
     }
 
     #[test]
-    fn owned_spans_stay_local_and_what_they_hold_is_delivered_under_their_parent() {
+    fn owned_spans_are_delivered_with_what_they_hold_and_their_usage() {
+        use btel_recorder::proto::{self, span_event::Event};
+        use prost::Message as _;
         for detached in [false, true] {
             let (_delivery, mut publisher) = publisher(CloudPublisherConfig::default());
             let thread = allocate_telemetry_id();
-            let deliver = |publisher: &mut CloudPublisher, record: &mut SpanRecord<_, _>| {
+            let deliver = |publisher: &mut CloudPublisher, mut record: SpanRecord<_, _>| {
                 if detached {
-                    publisher.before_detached_span(record);
+                    publisher.before_detached_span(&record);
                 }
-                publisher.span(thread, record);
+                publisher.span(thread, &mut record);
             };
-            let owned = |id, parent_id| {
-                SpanRecord::ManualSpanAnnouncement(Box::new(btel_records::ManualSpanAnnouncement {
-                    id,
-                    parent_id,
-                    call_path: CallPathId::ROOT,
-                    entered_at: ClockInstant::from_ticks(1),
-                    captured_inputs: None,
-                    captured_type_args: None,
-                }))
-            };
-            let child = |parent_id| SpanRecord::FunctionSpanAnnouncement {
-                id: allocate_telemetry_id(),
-                parent_id,
-                call_path: CallPathId::ROOT,
-                entered_at: ClockInstant::from_ticks(2),
-                captured_inputs: None,
-                captured_type_args: None,
-            };
-            // An owned span inside another: what the inner one holds hangs
-            // under the thread both are in.
-            let (outer, inner) = (allocate_telemetry_id(), allocate_telemetry_id());
-            deliver(&mut publisher, &mut owned(outer, thread));
-            deliver(&mut publisher, &mut owned(inner, outer));
-            let mut held = child(inner);
-            deliver(&mut publisher, &mut held);
-            assert_eq!(held.parent_id_mut().copied(), Some(thread));
+            let (owned, child) = (allocate_telemetry_id(), allocate_telemetry_id());
             deliver(
                 &mut publisher,
-                &mut SpanRecord::ManualSpanCompletion(Box::new(
-                    btel_records::ManualSpanCompletion {
-                        await_time: btel_types::AwaitDuration::ZERO,
-                        id: inner,
-                        parent_id: outer,
+                SpanRecord::ManualSpanAnnouncement(Box::new(
+                    btel_records::ManualSpanAnnouncement {
+                        id: owned,
+                        parent_id: thread,
                         call_path: CallPathId::ROOT,
                         entered_at: ClockInstant::from_ticks(1),
-                        exited_at: ClockInstant::from_ticks(3),
-                        outcome: None,
-                        requires_announcement: false,
-                        captured_value: None,
+                        captured_inputs: None,
+                        captured_type_args: None,
                     },
                 )),
             );
-            // The rest of the recording is still delivered.
-            let mut later = child(outer);
-            deliver(&mut publisher, &mut later);
-            assert_eq!(later.parent_id_mut().copied(), Some(thread));
+            deliver(
+                &mut publisher,
+                SpanRecord::FunctionSpanAnnouncement {
+                    id: child,
+                    parent_id: owned,
+                    call_path: CallPathId::ROOT,
+                    entered_at: ClockInstant::from_ticks(2),
+                    captured_inputs: None,
+                    captured_type_args: None,
+                },
+            );
+            deliver(
+                &mut publisher,
+                SpanRecord::SpanUsage(Box::new(btel_records::SpanUsage {
+                    node: owned,
+                    entries: vec![btel_records::ModelUsage {
+                        provider: "openai".into(),
+                        model: Some("gpt-6-sol".into()),
+                        calls: 1,
+                        input_tokens: Some(100),
+                        output_tokens: Some(10),
+                        cache_read_tokens: None,
+                        cache_write_tokens: None,
+                        reasoning_tokens: None,
+                    }],
+                })),
+            );
+            deliver(
+                &mut publisher,
+                SpanRecord::ManualSpanCompletion(Box::new(btel_records::ManualSpanCompletion {
+                    await_time: btel_types::AwaitDuration::ZERO,
+                    id: owned,
+                    parent_id: thread,
+                    call_path: CallPathId::ROOT,
+                    entered_at: ClockInstant::from_ticks(1),
+                    exited_at: ClockInstant::from_ticks(3),
+                    outcome: None,
+                    requires_announcement: false,
+                    captured_value: None,
+                })),
+            );
             assert_eq!(publisher.failure, None);
-            assert_eq!(publisher.owned_spans.len(), 1);
+            let sealed = publisher.recording.end_recording().unwrap().unwrap();
+            let file = proto::RecordingFile::decode(sealed.bytes()).unwrap();
+            let events: Vec<Event> = file
+                .spans
+                .iter()
+                .flat_map(|batch| &batch.sections)
+                .flat_map(|section| &section.events)
+                .filter_map(|event| event.event.clone())
+                .collect();
+            // The owned span is announced under its thread, what it holds hangs under it, and
+            // it closes without an outcome, carrying the usage charged to it.
+            assert!(events.iter().any(|event| matches!(
+                event,
+                Event::FunctionAnnouncement(entry)
+                    if entry.id == owned.get() && entry.parent_id == thread.get()
+            )));
+            assert!(events.iter().any(|event| matches!(
+                event,
+                Event::FunctionAnnouncement(entry)
+                    if entry.id == child.get() && entry.parent_id == owned.get()
+            )));
+            let completion = events.iter().find_map(|event| match event {
+                Event::FunctionCompletion(done) if done.id == owned.get() => Some(done),
+                _ => None,
+            });
+            let completion = completion.expect("the owned span's completion is delivered");
+            assert_eq!(completion.completion_flags, 16);
+            assert_eq!(completion.usage.len(), 1);
+            assert_eq!(completion.usage[0].input_tokens, Some(100));
         }
     }
 

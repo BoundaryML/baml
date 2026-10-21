@@ -4088,6 +4088,9 @@ impl BexVm {
                         None => false,
                     })
                 } else if let Some(tag) = resolved_const.as_int() {
+                    if tag == baml_type::typetag::PANIC {
+                        return Ok(self.is_panic(value));
+                    }
                     Ok(value_type_tag(value) == tag)
                 } else {
                     Ok(false)
@@ -5036,6 +5039,7 @@ impl BexVm {
         // stack so a nested entry over live frames cannot wipe in-flight
         // throw state.
         if self.frames.is_empty() {
+            self.name_root_thread(function);
             if let Some(telemetry) = &mut self.telemetry {
                 telemetry.set_context(self.root_context.clone());
                 telemetry.start_thread();
@@ -6551,8 +6555,8 @@ impl BexVm {
         let telemetry_outcome = self.telemetry_outcome_for_exception(exception_value);
 
         // BEP-042: the context this error lands with. A caught error raised
-        // again — `throw` of its binding, a catch's no-match fall-through or
-        // `throw_if_panic`, a `defer` pad re-raising the in-flight error — and
+        // again — `throw` of its binding, a catch's no-match fall-through, a
+        // `defer` pad re-raising the in-flight error — and
         // one awaited from another task carry the context of their original
         // throw, trace and cause intact. The context travels with the error,
         // so two errors that happen to be equal values never share one. It is
@@ -8289,6 +8293,23 @@ impl BexVm {
         // SAFETY: the engine calls this under the heap permit; neither the
         // context allocation above nor capture collects.
         unsafe { state.close_network_span(span, at, outcome, error, raw_urls) };
+    }
+
+    /// Name a root future after its entry function, which may record no call
+    /// of its own (a pass-through LLM function, or one hidden by its policy).
+    fn name_root_thread(&mut self, callable: HeapPtr) {
+        let metadata = self
+            .callable_function_identity(callable)
+            .and_then(|function| {
+                // SAFETY: the entry callable roots its function under the heap permit.
+                match unsafe { function.get() } {
+                    Object::Function(function) => function.runtime_metadata(),
+                    _ => None,
+                }
+            });
+        if let (Some(state), Some(metadata)) = (&mut self.telemetry, metadata) {
+            state.name_root_thread(&metadata.fqn);
+        }
     }
 
     /// Name this thread's future for telemetry; call before its entry point.
@@ -10658,36 +10679,6 @@ impl BexVm {
                         };
                         let arm = function.bytecode.switch_tables[table_idx].arm_of(value);
                         self.stack.push(Value::int(arm.map_or(-1, i64::from)));
-                    }
-
-                    // ── ThrowIfPanic ──────────────────────────────────────────────
-                    OpCode::ThrowIfPanic => {
-                        let context = self.stack.ensure_pop();
-                        let value = self.stack.ensure_pop();
-                        if self.is_panic(value) {
-                            // Save pc before unwinding (handler lookup needs it).
-                            if let Some(Frame::Bytecode(bf)) = self.frames.get_mut(*frame_idx) {
-                                bf.instruction_ptr = *pc;
-                            }
-                            self.try_unwind_exception(
-                                frame_idx,
-                                function,
-                                VmThrown::rethrow(value, context),
-                            )?;
-                            // Sync the local `pc` to the handler entry (see
-                            // OpCode::Throw): a same-frame rethrow — an inner
-                            // wildcard catch rethrowing a panic to an outer catch in
-                            // the same function — must jump to the handler instead of
-                            // falling through to the not-a-panic continuation.
-                            if let Some(Frame::Bytecode(bf)) = self.frames.get(*frame_idx) {
-                                *pc = bf.instruction_ptr;
-                            }
-                        }
-                        if self.should_early_yield() {
-                            return Ok(Some(VmExecState::EarlyYield));
-                        }
-                        // Return before fetching from potentially changed frame code.
-                        return Ok(None);
                     }
 
                     // ── Unreachable ───────────────────────────────────────────────

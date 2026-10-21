@@ -21,6 +21,13 @@ function single_required_arg(value: string) -> string {
   value
 }
 
+// Integer arithmetic on an `int` parameter. The VM runs specialized integer
+// opcodes on `value`, so a host argument that is not an `int` must be
+// rejected at the call boundary (BoundaryML/baml#5332).
+function int_plus_one(value: int) -> int {
+  value + 1
+}
+
 function unhandled_spawn_error() -> int throws string {
   throw "boom"
 }

@@ -201,8 +201,9 @@ fn .<lambda(QuotedPrompt@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai
     let _16: baml.TaggedString
     let _17: unknown[]
     let _18: baml.TaggedString
-    let _19: ai.errors.PromptRenderError
-    let _20: never
+    let _19: bool
+    let _20: ai.errors.PromptRenderError
+    let _21: never
 
     bb0 [unwind bb3]: {
         _5 = []: string[];
@@ -232,13 +233,18 @@ fn .<lambda(QuotedPrompt@spec, 0)>( __spec_output_format: ai.OutputFormat) -> ai
     }
 
     bb3 [landing _2, _3] [handling bb3]: {
-        throw_if_panic copy _2 with copy _3 -> bb4;
+        _19 = is_type_tag(copy _2, PANIC);
+        branch copy _19 -> [bb5, bb4];
     }
 
     bb4 [handling bb3]: {
-        _20 = copy _2;
-        _19 = ai.errors.PromptRenderError { const "prompt template rendering threw", copy _20 };
-        throw copy _19;
+        _21 = copy _2;
+        _20 = ai.errors.PromptRenderError { const "prompt template rendering threw", copy _21 };
+        throw copy _20;
+    }
+
+    bb5 [handling bb3]: {
+        rethrow copy _2 with copy _3;
     }
 }
 
@@ -661,8 +667,9 @@ fn .<lambda(BacktickPrompt@spec, 0)>( __spec_output_format: ai.OutputFormat) -> 
     let _33: baml.TaggedString
     let _34: unknown[]
     let _35: baml.TaggedString
-    let _36: ai.errors.PromptRenderError
-    let _37: never
+    let _36: bool
+    let _37: ai.errors.PromptRenderError
+    let _38: never
 
     bb0 [unwind bb8]: {
         _4 = ai.internal.SpecCtx { copy _1 };
@@ -726,13 +733,18 @@ fn .<lambda(BacktickPrompt@spec, 0)>( __spec_output_format: ai.OutputFormat) -> 
     }
 
     bb8 [landing _2, _3] [handling bb8]: {
-        throw_if_panic copy _2 with copy _3 -> bb9;
+        _36 = is_type_tag(copy _2, PANIC);
+        branch copy _36 -> [bb10, bb9];
     }
 
     bb9 [handling bb8]: {
-        _37 = copy _2;
-        _36 = ai.errors.PromptRenderError { const "prompt template rendering threw", copy _37 };
-        throw copy _36;
+        _38 = copy _2;
+        _37 = ai.errors.PromptRenderError { const "prompt template rendering threw", copy _38 };
+        throw copy _37;
+    }
+
+    bb10 [handling bb8]: {
+        rethrow copy _2 with copy _3;
     }
 }
 

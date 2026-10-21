@@ -664,12 +664,12 @@ pub(crate) fn synthesize_llm_spec_body(
     let lambda_body = ctx.alloc_expr(
         Expr::Catch {
             base: block_body,
-            clauses: vec![CatchClause {
+            clause: CatchClause {
                 kind: CatchClauseKind::CatchAll,
                 binding: err_binding,
                 stack_trace_binding: None,
                 arms: vec![wrap_arm],
-            }],
+            },
         },
         prompt_lambda_span,
     );
@@ -3100,20 +3100,33 @@ impl LoweringContext {
         use baml_compiler_syntax::SyntaxKind;
 
         let mut base = None;
-        let mut clauses = Vec::new();
-
-        for child in node.children() {
-            match child.kind() {
-                SyntaxKind::CATCH_CLAUSE => clauses.push(self.lower_catch_clause(&child)),
-                _ if base.is_none() => {
+        // Each clause wraps everything before it, including preceding arms.
+        // Preserve token-only operands as well as expression nodes.
+        for elem in node.children_with_tokens() {
+            match elem {
+                rowan::NodeOrToken::Node(child) if child.kind() == SyntaxKind::CATCH_CLAUSE => {
+                    let protected =
+                        base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
+                    let clause = self.lower_catch_clause(&child);
+                    let span = TextRange::new(node.span_range().start(), child.span_range().end());
+                    base = Some(self.alloc_expr(
+                        Expr::Catch {
+                            base: protected,
+                            clause,
+                        },
+                        span,
+                    ));
+                }
+                rowan::NodeOrToken::Node(child) if base.is_none() => {
                     base = Some(self.lower_expr(&child));
+                }
+                rowan::NodeOrToken::Token(token) if base.is_none() => {
+                    base = self.try_lower_bare_token(&token);
                 }
                 _ => {}
             }
         }
-
-        let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
-        self.alloc_expr(Expr::Catch { base, clauses }, node.span_range())
+        base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()))
     }
 
     fn lower_catch_clause(&mut self, node: &SyntaxNode) -> CatchClause {

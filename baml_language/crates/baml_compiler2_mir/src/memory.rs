@@ -286,7 +286,6 @@ pub fn walk_terminator_type_slots(terminator: &Terminator<'_>, f: &mut impl FnMu
         | Terminator::Spawn { .. }
         | Terminator::Throw { .. }
         | Terminator::Rethrow { .. }
-        | Terminator::ThrowIfPanic { .. }
         | Terminator::ShortCircuit { .. } => {}
     }
 }
@@ -636,7 +635,7 @@ pub fn terminator_clobbers(model: ClobberModel, terminator: &Terminator<'_>) -> 
             out.heap = true;
             out.order = true;
         }
-        Terminator::Throw { .. } | Terminator::Rethrow { .. } | Terminator::ThrowIfPanic { .. } => {
+        Terminator::Throw { .. } | Terminator::Rethrow { .. } => {
             out.order = true;
         }
     }

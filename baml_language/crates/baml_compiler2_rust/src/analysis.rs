@@ -459,8 +459,7 @@ fn terminator_mentions(terminator: &Terminator<'_>, local: usize) -> bool {
             ..
         } => operand_mentions(futures, local) || place_mentions(destination, local),
         Terminator::Throw { value } => operand_mentions(value, local),
-        Terminator::Rethrow { value, context }
-        | Terminator::ThrowIfPanic { value, context, .. } => {
+        Terminator::Rethrow { value, context } => {
             operand_mentions(value, local) || operand_mentions(context, local)
         }
         Terminator::ShortCircuit {
@@ -714,9 +713,6 @@ fn flow_of(terminator: &Terminator<'_>) -> Flow {
         | Terminator::Await { target, .. }
         | Terminator::AwaitAny { target, .. } => Flow::Goto(target.0),
         Terminator::Spawn { resume, .. } => Flow::Goto(resume.0),
-        // The panic case leaves through the block's unwind edge or the
-        // function; the edge here is the not-a-panic continuation.
-        Terminator::ThrowIfPanic { otherwise, .. } => Flow::Goto(otherwise.0),
     }
 }
 

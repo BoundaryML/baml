@@ -2581,19 +2581,6 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 self.terminator_pc = Some(self.emit(Instruction::Rethrow));
             }
 
-            Terminator::ThrowIfPanic {
-                value,
-                context,
-                otherwise,
-            } => {
-                let throw_span = self.current_debug_span;
-                self.emit_operand_pull(value);
-                self.emit_operand_pull(context);
-                self.restore_debug_span(throw_span);
-                self.terminator_pc = Some(self.emit(Instruction::ThrowIfPanic));
-                self.emit_jump_unless_fallthrough(*otherwise);
-            }
-
             Terminator::ShortCircuit {
                 operand,
                 kind,
@@ -3481,12 +3468,13 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
         // to the tag checks `is_type` emits for realized leaves. The operand
         // meta reproduces the strings the wildcarded container templates used
         // to render (`_[]` / `map<_, _>`) so bytecode display stays stable
-        // across the `IsTypeTag` re-home; other tags have no MIR producer.
+        // across the `IsTypeTag` re-home; `PANIC` is a catch's panic test.
         let c = self.add_constant(ConstValue::Int(tag));
         let inst = self.emit(Instruction::IsType(c));
         let meta = match tag {
             baml_type::typetag::LIST => "_[]".to_string(),
             baml_type::typetag::MAP => "map<_, _>".to_string(),
+            baml_type::typetag::PANIC => "baml.panics.Panic".to_string(),
             other => format!("type tag {other}"),
         };
         self.set_operand(inst, OperandMeta::Const(meta));

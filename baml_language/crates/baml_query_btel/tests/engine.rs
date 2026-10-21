@@ -2060,6 +2060,79 @@ async fn concurrent_spec_executions_keep_separate_claims_and_bind_defaults_once(
     assert!(result.outcome.diagnostics.is_empty());
 }
 
+/// BAMLGH-112: with no `$trace` hook and the default telemetry level, an LLM
+/// function whose client is an expression still owns a span named after it,
+/// and as an entry point it names its root future.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn expression_client_llm_function_owns_its_span_and_names_its_entry_future() {
+    let project = tempfile::tempdir().unwrap();
+    let source = format!(
+        "{}\n{}",
+        include_str!("support/owned_spans.baml"),
+        r#"
+        function scripted() -> ai.Client {
+            Scripted { chunks: ["{\"value\":42}"] }
+        }
+        function Plain(n: int) -> Answer {
+            client: scripted()
+            prompt: `Extract ${n}. ${ctx.output_format()}`
+        }
+        function nested(n: int) -> int {
+            Plain(n).value
+        }
+        "#
+    );
+    let int = |n| bex_engine::BexCallArg::Provided(Box::new(bex_engine::BexExternalValue::Int(n)));
+    let omitted = || bex_engine::BexCallArg::OmittedDefault;
+    let results = record_program_calls(
+        project.path(),
+        &source,
+        &[],
+        vec![
+            // `client` and `on_event` are the compiler-injected overrides.
+            ("Plain", vec![int(1), omitted(), omitted()]),
+            ("nested", vec![int(2)]),
+        ],
+        RecordingConfig::default(),
+    )
+    .await;
+    assert!(results.iter().all(Result::is_ok), "{results:?}");
+    let mut index = index(project.path());
+    assert_eq!(
+        sql(
+            &mut index,
+            "SELECT span_name FROM spans WHERE span_type = 'future' AND parent_span_id IS NULL
+             AND span_name != 'baml.gc' ORDER BY start_time"
+        )
+        .rows,
+        vec![vec![json!("user.Plain")], vec![json!("user.nested")]]
+    );
+    assert_eq!(
+        sql(
+            &mut index,
+            "SELECT parent.span_type, parent.span_name FROM spans child
+             JOIN spans parent ON parent.span_id = child.parent_span_id
+             WHERE child.span_type = 'function' AND child.span_name = 'user.Plain'
+             ORDER BY child.start_time"
+        )
+        .rows,
+        vec![
+            vec![json!("future"), json!("user.Plain")],
+            vec![json!("future"), json!("user.nested")],
+        ]
+    );
+    assert_eq!(
+        sql(
+            &mut index,
+            "SELECT parent.span_name FROM spans child
+             JOIN spans parent ON parent.span_id = child.parent_span_id
+             WHERE child.span_name LIKE '%.invoke' ORDER BY child.start_time"
+        )
+        .rows,
+        vec![vec![json!("user.Plain")], vec![json!("user.Plain")]]
+    );
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn owned_spans_preserve_callable_type_arguments_and_exact_input_maps() {
     let project = tempfile::tempdir().unwrap();

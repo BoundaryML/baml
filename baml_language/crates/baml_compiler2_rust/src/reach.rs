@@ -96,7 +96,6 @@ impl<'db> Collector<'_, 'db> {
                     | Terminator::AwaitAny { futures: x, .. }
                     | Terminator::Throw { value: x, .. }
                     | Terminator::Rethrow { value: x, .. }
-                    | Terminator::ThrowIfPanic { value: x, .. }
                     | Terminator::ShortCircuit { operand: x, .. },
                 ) => self.operand(x),
                 Some(

@@ -248,7 +248,7 @@ impl TelemetryState {
         config: TraceConfig,
     ) -> manual::OperationOptions {
         let policy = self.policy_by_id(function.telemetry_policy_id.load());
-        let is_ai = matches!(function.body_meta.as_ref(), Some(FunctionMeta::Llm { .. }));
+        let is_ai = matches!(function.body_meta.as_ref(), Some(FunctionMeta::Llm));
         manual::OperationOptions {
             mode: config
                 .reserved_id
@@ -445,6 +445,13 @@ impl TelemetryState {
     pub fn set_thread_name(&mut self, name: &str) {
         assert!(!self.thread.started, "telemetry thread already started");
         self.thread.name = Some(Arc::new(Box::from(name)));
+    }
+
+    /// Name a root future after its entry unless something already named it.
+    pub fn name_root_thread(&mut self, name: &str) {
+        if self.is_root_thread() && !self.thread.started && self.thread.name.is_none() {
+            self.set_thread_name(name);
+        }
     }
 
     /// A spawned future's body starts running now, after waiting to be
@@ -771,7 +778,7 @@ impl TelemetryState {
             return None;
         }
 
-        let is_ai = matches!(function.body_meta.as_ref(), Some(FunctionMeta::Llm { .. }));
+        let is_ai = matches!(function.body_meta.as_ref(), Some(FunctionMeta::Llm));
         let saved_call_path = self.thread.active_call_path;
         let reentry = caller_is_observed
             && visible_caller == Some(callee)
@@ -1613,7 +1620,7 @@ pub(crate) fn ordinary_settings(
     function: &Function,
     config: TraceConfig,
 ) -> bex_vm_types::trace::TraceOptionsData {
-    let ai = matches!(function.body_meta.as_ref(), Some(FunctionMeta::Llm { .. }));
+    let ai = matches!(function.body_meta.as_ref(), Some(FunctionMeta::Llm));
     bex_vm_types::trace::TraceOptionsData {
         mode: Some(if config.reserved_id.is_some() {
             InvocationMode::Span
@@ -2135,12 +2142,7 @@ mod tests {
     #[test]
     fn owned_captures_survive_collection_without_being_gc_roots() {
         let mut vm = crate::vm::tests::test_vm(Vec::new());
-        let function = function(
-            FunctionKind::Bytecode,
-            Some(FunctionMeta::Llm {
-                client: "test".into(),
-            }),
-        );
+        let function = function(FunctionKind::Bytecode, Some(FunctionMeta::Llm));
         let input = vm.tlab.alloc_string("input");
         let output = vm.tlab.alloc_string("output");
         let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
@@ -2526,12 +2528,7 @@ mod tests {
         }
         // An LLM function captures its inputs by default, so its type
         // arguments too.
-        let mut llm = function(
-            FunctionKind::Bytecode,
-            Some(FunctionMeta::Llm {
-                client: "test".into(),
-            }),
-        );
+        let mut llm = function(FunctionKind::Bytecode, Some(FunctionMeta::Llm));
         llm.type_param_names = vec!["T".into(), "U".into()];
         assert_eq!(type_args_of(&llm, false, None, both), recorded);
         // Without type arguments nothing is recorded, and the completion
@@ -2671,12 +2668,7 @@ mod tests {
             AutoTelemetryLevel::High,
         ] {
             for ai in [false, true] {
-                let function = function(
-                    FunctionKind::Bytecode,
-                    ai.then(|| FunctionMeta::Llm {
-                        client: "test".into(),
-                    }),
-                );
+                let function = function(FunctionKind::Bytecode, ai.then_some(FunctionMeta::Llm));
                 let mut state = test_state(
                     Arc::new(TelemetryPolicies::with_auto_level(mode)),
                     test_clock(),
@@ -2793,12 +2785,8 @@ mod tests {
         ] {
             for ai in [false, true] {
                 for span_from_entry in [false, true] {
-                    let function = function(
-                        FunctionKind::Bytecode,
-                        ai.then(|| FunctionMeta::Llm {
-                            client: "test".into(),
-                        }),
-                    );
+                    let function =
+                        function(FunctionKind::Bytecode, ai.then_some(FunctionMeta::Llm));
                     let mut state = test_state(
                         Arc::new(TelemetryPolicies::with_auto_level(auto_level)),
                         test_clock(),
@@ -2877,12 +2865,7 @@ mod tests {
 
     #[test]
     fn ai_function_is_a_span_from_entry() {
-        let function = function(
-            FunctionKind::Bytecode,
-            Some(FunctionMeta::Llm {
-                client: "test".to_string(),
-            }),
-        );
+        let function = function(FunctionKind::Bytecode, Some(FunctionMeta::Llm));
         let mut state = test_state(Arc::new(TelemetryPolicies::new()), test_clock());
         state.start_thread();
         let parent_id = state.active_id();

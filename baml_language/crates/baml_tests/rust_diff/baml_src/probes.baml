@@ -147,7 +147,7 @@ function Recurse(n: int) -> int {
 }
 
 function Recursion() -> void {
-    let result = Recurse(0) catch_all_panics (e) {
+    let result = Recurse(0) catch (e) {
         let e: baml.panics.StackOverflow => -1,
     };
     baml.io.println(`${result}`);

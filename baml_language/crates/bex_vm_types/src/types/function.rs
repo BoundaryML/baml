@@ -141,9 +141,8 @@ impl BorshDeserialize for FunctionKind {
 /// What kind of model-facing function this is, when it is one.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub enum FunctionMeta {
-    Llm {
-        client: String,
-    },
+    /// A `client` + `prompt` function, whatever form its client takes.
+    Llm,
     /// An `ai.Client.invoke` implementation, or the step that settles a
     /// stream's turn: it returns an `ai.ModelTurn` whose own calls telemetry
     /// charges as model usage.

@@ -43,59 +43,6 @@ impl LogLevel {
 }
 
 impl<I, V> SpanRecord<I, V> {
-    /// The node this record's span hangs under, for a record that names one.
-    pub fn parent_id_mut(&mut self) -> Option<&mut TelemetryId> {
-        match self {
-            Self::Log { parent_id, .. }
-            | Self::FunctionSpanAnnouncement { parent_id, .. }
-            | Self::FunctionSpanCompletionOk { parent_id, .. }
-            | Self::FunctionSpanCompletionOkNeedsAnnouncement { parent_id, .. }
-            | Self::FunctionSpanCompletionOkReentry { parent_id, .. }
-            | Self::FunctionSpanCompletionOkReentryNeedsAnnouncement { parent_id, .. }
-            | Self::FunctionSpanCompletionErrored { parent_id, .. }
-            | Self::FunctionSpanCompletionErroredNeedsAnnouncement { parent_id, .. }
-            | Self::FunctionSpanCompletionErroredReentry { parent_id, .. }
-            | Self::FunctionSpanCompletionErroredReentryNeedsAnnouncement { parent_id, .. }
-            | Self::FunctionSpanCompletionCancelled { parent_id, .. }
-            | Self::FunctionSpanCompletionPanicked { parent_id, .. }
-            | Self::FunctionSpanCompletionCancelledNeedsAnnouncement { parent_id, .. }
-            | Self::FunctionSpanCompletionPanickedNeedsAnnouncement { parent_id, .. }
-            | Self::FunctionSpanCompletionCancelledReentry { parent_id, .. }
-            | Self::FunctionSpanCompletionPanickedReentry { parent_id, .. }
-            | Self::FunctionSpanCompletionCancelledReentryNeedsAnnouncement { parent_id, .. }
-            | Self::FunctionSpanCompletionPanickedReentryNeedsAnnouncement { parent_id, .. }
-            | Self::LateFunctionSpanCompletionOk { parent_id, .. }
-            | Self::LateFunctionSpanCompletionOkReentry { parent_id, .. }
-            | Self::LateFunctionSpanCompletionErrored { parent_id, .. }
-            | Self::LateFunctionSpanCompletionErroredReentry { parent_id, .. }
-            | Self::LateFunctionSpanCompletionCancelled { parent_id, .. }
-            | Self::LateFunctionSpanCompletionPanicked { parent_id, .. }
-            | Self::LateFunctionSpanCompletionCancelledReentry { parent_id, .. }
-            | Self::LateFunctionSpanCompletionPanickedReentry { parent_id, .. } => Some(parent_id),
-            Self::ThreadSpanAnnouncement { parent_id, .. }
-            | Self::ThreadSpanCompletion { parent_id, .. } => parent_id.as_mut(),
-            Self::ManualSpanAnnouncement(announcement) => Some(&mut announcement.parent_id),
-            Self::ManualSpanCompletion(completion) => Some(&mut completion.parent_id),
-            Self::NetworkSpanAnnouncement(announcement) => Some(&mut announcement.parent_id),
-            Self::HostFunctionDefined(_)
-            | Self::ThreadSelected { .. }
-            | Self::ContextSelected { .. }
-            | Self::ContextReferenced { .. }
-            | Self::SpanUsage(_)
-            | Self::ContextCleared
-            | Self::ThreadSpanRunning { .. }
-            | Self::NetworkEvent(_)
-            | Self::NetworkSpanCompletion(_)
-            | Self::CallPathDefined { .. }
-            | Self::ErrorRaiseOrigin { .. }
-            | Self::ErrorRaiseStack(_)
-            | Self::ErrorRaised { .. }
-            | Self::ErrorRaisedAndEnded { .. }
-            | Self::ErrorRaiseFrameCompleted { .. }
-            | Self::ErrorUnwindEnded { .. } => None,
-        }
-    }
-
     pub fn is_context_observation(&self) -> bool {
         matches!(
             self,
@@ -680,6 +627,9 @@ pub const MAX_INHERITED_TEXT_BYTES: usize = 256;
 pub enum RaiseKind {
     Throw,
     Rethrow,
+    /// Retired: a wildcard catch passing a panic on. A panic no catch arm
+    /// takes is now a [`RaiseKind::Rethrow`] (no-match); kept so older
+    /// recordings decode.
     PanicRethrow,
     Await,
     AwaitCancelled,

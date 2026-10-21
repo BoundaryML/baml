@@ -1205,7 +1205,8 @@ fn attach_function_metadata<'db>(
     compiled_fn.trace_passthrough = func.metadata.trace_passthrough;
     compiled_fn.origin = emitted_function_origin(is_builtin_file, func.metadata.origin);
 
-    // Set LLM-specific body_meta if this is an LLM function with a client.
+    // Set LLM-specific body_meta for every LLM function, whether its client is
+    // a model string or an expression.
     //
     // NOTE (canary merge): canary removed the runtime `Function.stream_return_type`
     // field and its plumbing (the pre-existing streaming infra from PRs #3362/#3755).
@@ -1213,12 +1214,8 @@ fn attach_function_metadata<'db>(
     // `return_type` (see `baml_compiler2_ast`'s `companions::llm_stream`), so the
     // old emit-side pre-computation block was dropped. BEP-049 M5e stream-path rendering
     // of `ctx.output_format()` should be re-verified against canary's streaming.
-    if let Some(llm_meta) = function_llm_meta(db, func_loc)
-        && let Some(client) = &llm_meta.client_name
-    {
-        compiled_fn.body_meta = Some(FunctionMeta::Llm {
-            client: client.to_string(),
-        });
+    if function_llm_meta(db, func_loc).is_some() {
+        compiled_fn.body_meta = Some(FunctionMeta::Llm);
     } else if is_model_invoke(db, func_loc) {
         compiled_fn.body_meta = Some(FunctionMeta::ModelInvoke);
     }

@@ -105,7 +105,16 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// throws.
 ///
 /// Version 21 adds pass-through tracing strategy to serialized function metadata.
-pub const FORMAT_VERSION: u32 = 21;
+///
+/// Version 22: the `ThrowIfPanic` instruction is gone. A catch's wildcard
+/// arm that does not trap panics is now entered after an `IsType` test
+/// against the `PANIC` pseudo-tag (`baml_type::typetag::PANIC`), so the
+/// discriminants of every opcode declared after `TypeTag` shifted down by
+/// one.
+///
+/// Version 23: `FunctionMeta::Llm` lost its `client` string and marks every
+/// LLM function, including one whose client is an expression.
+pub const FORMAT_VERSION: u32 = 23;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.
