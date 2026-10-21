@@ -112,7 +112,7 @@ pub(crate) mod stub {
     use bex_vm_types::bytecode::OpCode;
 
     /// Resume stubs appended to compiled functions for calls, yields, awaits, and spawns.
-    pub(crate) const CODE: [OpCode; 9] = [
+    pub(crate) const CODE: [OpCode; 10] = [
         OpCode::ResumeCompiled, // START
         OpCode::ResumeCompiled, // AFTER_CALL
         OpCode::ResumeCompiled, // AFTER_YIELD
@@ -122,16 +122,19 @@ pub(crate) mod stub {
         OpCode::ResumeCompiled,
         OpCode::Spawn, // SPAWN
         OpCode::ResumeCompiled,
+        OpCode::ResumeCompiled, // AFTER_LOG
     ];
     /// Entry point for a body that has not started.
     pub(crate) const START: usize = 0;
     /// Call resume point, where the stack holds the result or an error is delivered.
     pub(crate) const AFTER_CALL: usize = 1;
-    /// Suspended on a yield.
+    /// Suspended on a yield; the engine pushes nothing.
     pub(crate) const AFTER_YIELD: usize = 2;
     pub(crate) const AWAIT: usize = 3;
     pub(crate) const AWAIT_ANY: usize = 5;
     pub(crate) const SPAWN: usize = 7;
+    /// Suspended on a log; the engine pushes a null to discard on resume.
+    pub(crate) const AFTER_LOG: usize = 9;
 
     const _: () = {
         assert!(matches!(CODE[START], OpCode::ResumeCompiled));
@@ -143,6 +146,7 @@ pub(crate) mod stub {
         assert!(matches!(CODE[AWAIT + 1], OpCode::ResumeCompiled));
         assert!(matches!(CODE[AWAIT_ANY + 1], OpCode::ResumeCompiled));
         assert!(matches!(CODE[SPAWN + 1], OpCode::ResumeCompiled));
+        assert!(matches!(CODE[AFTER_LOG], OpCode::ResumeCompiled));
     };
 }
 

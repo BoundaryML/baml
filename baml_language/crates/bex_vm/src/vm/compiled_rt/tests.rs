@@ -305,7 +305,9 @@ fn exec_with_compiled_bodies(
     vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
     let out = loop {
         match vm.exec() {
-            Ok(VmExecState::EarlyYield | VmExecState::Log { .. }) => {}
+            Ok(VmExecState::EarlyYield) => {}
+            // The engine answers a log with a null.
+            Ok(VmExecState::Log { .. }) => vm.stack.push(Value::NULL),
             Ok(VmExecState::Complete(value)) => {
                 break vm.as_string(&value).unwrap().to_string();
             }
@@ -451,6 +453,37 @@ fn compiled_recursion_checks_fiber_stack_space() {
         .unwrap()
         .join()
         .unwrap();
+}
+
+// The engine pushes a null after every log; a compiled body must discard it.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn compiled_logs_leave_the_stack_as_they_found_it() {
+    use std::sync::Mutex;
+
+    static LENGTHS: Mutex<Vec<usize>> = Mutex::new(Vec::new());
+    fn body(vm: &mut BexVm, _: &[Value]) -> Result<Value, Box<VmError>> {
+        for _ in 0..4 {
+            vm.log_event(
+                crate::compiled_rt::LogLevel::Info,
+                Value::int(1),
+                Value::NULL,
+                0,
+            )?;
+            LENGTHS.lock().unwrap().push(vm.stack.len());
+        }
+        Ok(vm.string_value("done"))
+    }
+    let out = run_with_compiled_bodies(
+        r#"function Main() -> string { "" }"#,
+        &[("user.Main", body)],
+        &[],
+        false,
+    );
+    assert_eq!(out, "done");
+    let lengths = LENGTHS.lock().unwrap();
+    assert_eq!(lengths.len(), 4);
+    assert!(lengths.iter().all(|&len| len == lengths[0]), "{lengths:?}");
 }
 
 // Type arguments must be bound before a body runs in place, including when it throws.

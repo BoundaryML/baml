@@ -166,6 +166,11 @@ impl BexVm {
                 self.enter_compiled(body, args)
             }
             stub::AFTER_YIELD => self.resume_body(Ok(Value::NULL)),
+            stub::AFTER_LOG => {
+                // The engine answers a log with a null, as it does for `SendEvent`.
+                self.stack.ensure_pop();
+                self.resume_body(Ok(Value::NULL))
+            }
             // Results arrive on the stack; errors arrive through `delivery`.
             _ => match self.compiled.delivery.take() {
                 Some(error) => self.resume_body(Err(error)),
@@ -254,7 +259,7 @@ impl BexVm {
                 data,
                 source_location,
             } => {
-                park(self, *frame_idx, stub::AFTER_YIELD);
+                park(self, *frame_idx, stub::AFTER_LOG);
                 Ok(Some(VmExecState::Log {
                     level,
                     event_name,
