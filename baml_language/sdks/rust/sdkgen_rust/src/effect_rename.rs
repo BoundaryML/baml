@@ -17,6 +17,8 @@ use std::collections::{HashMap, HashSet};
 
 use baml_sdkgen_types::{CallableParam, Class, Function, ParamTy, Symbol, SymbolPool, Ty};
 
+use crate::idents;
+
 /// Rewrite every function / method signature in `pool` with its synthetic
 /// effect params renamed, returning the rewritten pool.
 pub(crate) fn rename_effect_params(pool: &SymbolPool) -> SymbolPool {
@@ -119,7 +121,7 @@ fn effect_renames(function: &Function, class_params: &[String]) -> HashMap<Strin
         if declared.contains(effect) || renames.contains_key(effect) {
             continue;
         }
-        let mut nice = format!("{}Error", pascal_case(arg.name.as_str()));
+        let mut nice = format!("{}Error", idents::pascal_case(arg.name.as_str()));
         while taken.contains(&nice) {
             nice.push('_');
         }
@@ -127,21 +129,6 @@ fn effect_renames(function: &Function, class_params: &[String]) -> HashMap<Strin
         renames.insert(effect.to_string(), nice);
     }
     renames
-}
-
-/// `snake_case` (or a bare ident) to `PascalCase`: `cb` → `Cb`,
-/// `my_callback` → `MyCallback`.
-fn pascal_case(s: &str) -> String {
-    s.split('_')
-        .filter(|seg| !seg.is_empty())
-        .map(|seg| {
-            let mut chars = seg.chars();
-            match chars.next() {
-                Some(first) => first.to_ascii_uppercase().to_string() + chars.as_str(),
-                None => String::new(),
-            }
-        })
-        .collect()
 }
 
 /// Structurally rewrite `ty`, renaming any `TypeVar` whose name is in

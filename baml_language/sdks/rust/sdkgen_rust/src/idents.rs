@@ -47,6 +47,21 @@ pub(crate) fn dir_segment(name: &str) -> String {
     }
 }
 
+/// `snake_case` (or a bare ident) to `PascalCase`: `cb` → `Cb`,
+/// `my_callback` → `MyCallback`.
+pub(crate) fn pascal_case(s: &str) -> String {
+    s.split('_')
+        .filter(|seg| !seg.is_empty())
+        .map(|seg| {
+            let mut chars = seg.chars();
+            match chars.next() {
+                Some(first) => first.to_ascii_uppercase().to_string() + chars.as_str(),
+                None => String::new(),
+            }
+        })
+        .collect()
+}
+
 /// Keywords that cannot be raw identifiers, mapped to their trailing
 /// underscore rename.
 fn non_raw_able(name: &str) -> Option<&'static str> {

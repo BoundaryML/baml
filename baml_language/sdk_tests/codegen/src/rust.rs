@@ -87,6 +87,9 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
     // Rust-only: typed error surfaces from callback-throws inference (python/TS
     // erase `throws`, so there is no cross-language counterpart).
     ("function_calls", "test_callback_throws.rs", Gate::Now),
+    // Rust-only: a throws contract with two same-named errors (python/TS
+    // erase `throws`).
+    ("function_calls", "test_same_named_throws.rs", Gate::Now),
     ("function_calls", "test_methods_on_classes.rs", Gate::Now),
     (
         "function_calls",
