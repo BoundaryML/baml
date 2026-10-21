@@ -38,9 +38,10 @@ pub const BAML_REGEX_ERROR_KIND: LangItem = lang_item!(Baml: regex.ErrorKind);
 pub const BAML_SAP_NO_YIELD: LangItem = lang_item!(Baml: sap._NoYield);
 pub const BAML_SAP_PARSE_CACHE: LangItem = lang_item!(Baml: sap._ParseCache);
 pub const BAML_SPAWN_CANCEL_TOKEN: LangItem = lang_item!(Baml: spawn.CancelToken);
-pub const BAML_SPAWN_LIMIT: LangItem = lang_item!(Baml: spawn.Limit);
 pub const BAML_SYNC_GUARD: LangItem = lang_item!(Baml: sync.Guard);
 pub const BAML_SYNC_LOCK: LangItem = lang_item!(Baml: sync.Lock);
+pub const BAML_SYNC_PERMIT: LangItem = lang_item!(Baml: sync.Permit);
+pub const BAML_SYNC_SEMAPHORE: LangItem = lang_item!(Baml: sync.Semaphore);
 pub const BAML_TIME_DURATION: LangItem = lang_item!(Baml: time.Duration);
 pub const BAML_TIME_INSTANT: LangItem = lang_item!(Baml: time.Instant);
 pub const BAML_TIME_PLAIN_DATE: LangItem = lang_item!(Baml: time.PlainDate);
@@ -97,9 +98,10 @@ pub const ALL: &[LangItem] = &[
     BAML_SAP_NO_YIELD,
     BAML_SAP_PARSE_CACHE,
     BAML_SPAWN_CANCEL_TOKEN,
-    BAML_SPAWN_LIMIT,
     BAML_SYNC_GUARD,
     BAML_SYNC_LOCK,
+    BAML_SYNC_PERMIT,
+    BAML_SYNC_SEMAPHORE,
     BAML_TIME_DURATION,
     BAML_TIME_INSTANT,
     BAML_TIME_PLAIN_DATE,

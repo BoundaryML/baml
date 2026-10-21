@@ -11,7 +11,7 @@ function swc_work() -> int throws never {
 }
 
 function chained() -> int throws never {
-    let g = baml.spawn.Limit.new(2) catch (e) {
+    let g = baml.sync.Semaphore.new(2) catch (e) {
         baml.errors.InvalidArgument => baml.sys.panic("two is positive"),
     };
     let t = spawn with g { swc_work() };

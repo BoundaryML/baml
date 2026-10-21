@@ -204,7 +204,7 @@ impl<T> io::IoNamespaceJson for T {
 }
 
 // ============================================================================
-// `baml.sync` — waiting for a contended `Lock`
+// `baml.sync` — waiting for a contended `Lock` or `Semaphore`
 // ============================================================================
 
 /// Blanket impl: the wait is the same on every host. Dropping the future
@@ -227,6 +227,27 @@ impl<T> io::IoNamespaceSync for T {
             }),
             Err(_) => SysOpOutput::err(VmInternalError::RustTypeError {
                 expected: std::any::TypeId::of::<bex_vm_types::Waiter>(),
+                got,
+            }),
+        }
+    }
+
+    fn _wait_permit(
+        &self,
+        _heap: &std::sync::Arc<BexHeap>,
+        _call_id: CallId,
+        held: std::sync::Arc<dyn bex_vm_types::BexRustData>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        use bex_vm_types::RustDataArc as _;
+        let got = held.payload_type_id();
+        match held.downcast_payload::<bex_vm_types::PermitState>() {
+            Ok(held) => SysOpOutput::async_op(async move {
+                held.wait().await;
+                Ok(())
+            }),
+            Err(_) => SysOpOutput::err(VmInternalError::RustTypeError {
+                expected: std::any::TypeId::of::<bex_vm_types::PermitState>(),
                 got,
             }),
         }
