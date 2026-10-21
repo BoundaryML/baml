@@ -455,6 +455,53 @@ fn compiled_recursion_checks_fiber_stack_space() {
         .unwrap();
 }
 
+// A body entered from bytecode nests on the fiber below the body that called
+// that bytecode, so it must check for stack room as a direct call does.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn compiled_bytecode_recursion_checks_fiber_stack_space() {
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    use crate::compiled_rt::Step;
+    static PONG: AtomicU32 = AtomicU32::new(0);
+    fn ping(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+        let n = test_int(args[0]);
+        if n == 0 {
+            return Ok(Value::int(0));
+        }
+        let mut pad = [0u64; 8192];
+        let slot = usize::try_from(n).unwrap() % pad.len();
+        pad[slot] = 1;
+        std::hint::black_box(&mut pad);
+        let pong = vm.idx_to_ptr(ObjectIndex::from_raw(PONG.load(Ordering::Relaxed) as usize));
+        vm.push_arg(Value::int(n - 1));
+        let below = vm.suspend(Step::Call {
+            callee: pong,
+            argc: 1,
+        })?;
+        let one = std::hint::black_box(&pad)[slot];
+        Ok(Value::int(test_int(below) + i64::try_from(one).unwrap()))
+    }
+    const SOURCE: &str = r#"
+        function Ping(n: int) -> int { if (n == 0) { 0 } else { 1 + Pong(n - 1) } }
+        function Pong(n: int) -> int { Ping(n) }
+        function Main() -> string {
+            let shallow = Ping(10);
+            let huge = Ping(1000000) catch (e) { baml.panics.StackOverflow => -8 };
+            `${shallow}|${huge}`
+        }
+    "#;
+    for telemetry in [false, true] {
+        let out = run_with_compiled_bodies(
+            SOURCE,
+            &[("user.Ping", ping)],
+            &[("user.Pong", &PONG)],
+            telemetry,
+        );
+        assert_eq!(out, "10|-8", "telemetry: {telemetry}");
+    }
+}
+
 // The engine pushes a null after every log; a compiled body must discard it.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
@@ -1600,7 +1647,7 @@ fn fiber_stacks_are_pooled_once_their_bodies_complete() {
     let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
 
     // A body that returned leaves the fiber idle; dropping it pools the stack.
-    vm.compiled.fiber = Some(Fiber::with_pool(&POOL));
+    vm.compiled.fiber = Some(Fiber::with_pool(&POOL).unwrap());
     let floor = vm.compiled.fiber.as_ref().unwrap().floor();
     assert!(matches!(
         vm.enter_compiled(done, smallvec![]),
@@ -1611,7 +1658,7 @@ fn fiber_stacks_are_pooled_once_their_bodies_complete() {
     assert_eq!(POOL.len(), 1);
 
     // The next fiber takes the pooled stack, and its floor is computed from it.
-    let fiber = Fiber::with_pool(&POOL);
+    let fiber = Fiber::with_pool(&POOL).unwrap();
     assert_eq!(POOL.len(), 0);
     assert_eq!(fiber.floor(), floor);
     // A fiber never entered pools its stack too.
@@ -1620,7 +1667,7 @@ fn fiber_stacks_are_pooled_once_their_bodies_complete() {
 
     // A waiting body keeps frames on the stack, so the stack is unwound and
     // unmapped rather than pooled.
-    vm.compiled.fiber = Some(Fiber::with_pool(&POOL));
+    vm.compiled.fiber = Some(Fiber::with_pool(&POOL).unwrap());
     assert_eq!(POOL.len(), 0);
     assert!(matches!(
         vm.enter_compiled(parked, smallvec![]),
@@ -1631,7 +1678,7 @@ fn fiber_stacks_are_pooled_once_their_bodies_complete() {
     assert_eq!(POOL.len(), 0);
 
     // A nested body that returns leaves the outer one counted.
-    vm.compiled.fiber = Some(Fiber::with_pool(&POOL));
+    vm.compiled.fiber = Some(Fiber::with_pool(&POOL).unwrap());
     assert!(matches!(
         vm.enter_compiled(parked, smallvec![]),
         Request::Step(Step::Yield)
@@ -1650,7 +1697,9 @@ fn fiber_stacks_are_pooled_once_their_bodies_complete() {
     assert_eq!(POOL.len(), 1);
 
     // The pool is bounded; stacks beyond the limit are unmapped.
-    let fibers: Vec<_> = (0..=POOL_LIMIT).map(|_| Fiber::with_pool(&POOL)).collect();
+    let fibers: Vec<_> = (0..=POOL_LIMIT)
+        .map(|_| Fiber::with_pool(&POOL).unwrap())
+        .collect();
     assert_eq!(POOL.len(), 0);
     drop(fibers);
     assert_eq!(POOL.len(), POOL_LIMIT);

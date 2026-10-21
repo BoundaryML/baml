@@ -8,6 +8,9 @@ use crate::errors::VmError;
 pub struct CompiledState {
     /// The stack compiled bodies run on, mapped on first use.
     pub(crate) fiber: Option<Fiber>,
+    /// The fiber's [`Fiber::floor`], kept here so `stack_room` reads it while
+    /// the fiber is out of `self` running a body.
+    pub(crate) fiber_floor: usize,
     /// How a body on the fiber switches back to the VM.
     #[cfg_attr(
         any(target_arch = "wasm32", all(windows, target_arch = "aarch64")),
