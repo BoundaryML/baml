@@ -1,4 +1,11 @@
 //! Calls, frame slots, and control-flow checks for compiled bodies.
+//!
+//! The entry points here are safe although they store and later dereference
+//! caller-supplied [`HeapPtr`]s: they rely on the contract of
+//! [`BexVm::get_object`], which every safe VM API shares. A `HeapPtr` can only
+//! be built unsafely from a live heap object, and generated code passes only
+//! pointers from `idx_to_ptr` or from values it has just loaded or reloaded
+//! from its frame slots after a suspension.
 
 use bex_vm_types::{HeapPtr, Object, RealizedTy, StackIndex, Value, types::Function};
 
