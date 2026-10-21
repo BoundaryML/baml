@@ -7,16 +7,23 @@
 //! pointers from `idx_to_ptr` or from values it has just loaded or reloaded
 //! from its frame slots after a suspension.
 
-use bex_vm_types::{HeapPtr, Object, RealizedTy, StackIndex, Value};
+use bex_vm_types::{HeapPtr, Object, RealizedTy, StackIndex, Value, types::Function};
 
 use super::{CompiledFn, Step};
 use crate::{
     errors::{VmError, VmInternalError, VmPanic},
     indexable::EvalStackTrait,
     package_baml::{NativeCallResult, NativeFunction},
+    telemetry::{CallTypeArgs, InvocationOutcome},
     types::ObjectTrait as _,
     vm::{BexVm, BytecodeFrame, Frame, VmExecState},
 };
+
+#[cfg(test)]
+thread_local! {
+    /// Force calls through the VM call path to test telemetry equivalence.
+    pub(crate) static FORCE_CALL_FUNNEL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
 
 impl BexVm {
     #[inline]
@@ -205,7 +212,8 @@ impl BexVm {
 
     /// Call a compiled body with a VM frame whose type arguments are
     /// `type_args`, in the callee's De Bruijn order. The frame stays on error
-    /// for the unwinder. With telemetry on, the call takes the VM's call path.
+    /// for the unwinder. With telemetry on, a call without type arguments
+    /// records inline; any other takes the VM's call path.
     #[inline]
     pub fn call_compiled(
         &mut self,
@@ -217,6 +225,9 @@ impl BexVm {
     ) -> Result<Value, Box<VmError>> {
         self.check_compiled_call(pc)?;
         if self.telemetry.is_some() {
+            if type_args.is_empty() {
+                return self.call_compiled_cold(callee, body, args);
+            }
             return self.call_compiled_funnelled(callee, type_args, args);
         }
         // Runtime declarations need exact type values in addition to realized types.
@@ -280,6 +291,129 @@ impl BexVm {
         if result.is_ok() {
             self.frames.pop();
             self.stack.truncate(locals_offset.raw());
+        }
+        result
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn call_compiled_cold(
+        &mut self,
+        callee: HeapPtr,
+        body: CompiledFn,
+        args: &[Value],
+    ) -> Result<Value, Box<VmError>> {
+        self.call_compiled_observed(callee, body, args)
+    }
+
+    /// Enter a plain compiled callee with telemetry, falling back to the VM call path when needed.
+    ///
+    /// For a plain callee everything the call path looks up is known: the call
+    /// site is the caller's recorded pc, the visible caller is the running
+    /// compiled frame's function, and the context is inherited. So this enters
+    /// the invocation with those facts, pushes the frame with its telemetry,
+    /// runs the body, and completes the invocation as the call path does. An
+    /// error leaves the frame for the unwinder, which completes it.
+    #[inline(never)]
+    #[allow(unsafe_code)]
+    fn call_compiled_observed(
+        &mut self,
+        callee: HeapPtr,
+        body: CompiledFn,
+        args: &[Value],
+    ) -> Result<Value, Box<VmError>> {
+        // SAFETY: the callee lives in the compile-time heap, which is never
+        // collected; see `load_function`.
+        let function: &'static Function = match unsafe { callee.get() } {
+            Object::Function(function) => function,
+            _ => return self.call_compiled_funnelled(callee, &[], args),
+        };
+        let hooked = function
+            .bytecode
+            .compact
+            .as_ref()
+            .is_some_and(|code| code.trace_hook_finish_pc.is_some());
+        #[cfg(test)]
+        let forced = FORCE_CALL_FUNNEL.with(std::cell::Cell::get);
+        #[cfg(not(test))]
+        let forced = false;
+        if hooked
+            || forced
+            || self.pending_call_trace.is_some()
+            || self.pending_call_passes_type_args
+        {
+            return self.call_compiled_funnelled(callee, &[], args);
+        }
+        debug_assert_eq!(args.len(), function.arity);
+
+        let top = self.frames.len() - 1;
+        let caller_frame_idx = self.bytecode_caller_index(top);
+        let visible_caller = self
+            .visible_bytecode_caller_index(top)
+            .and_then(|index| self.frame_function_identity(index));
+        let caller_is_observed = matches!(
+            self.frames.get(caller_frame_idx),
+            Some(Frame::Bytecode(BytecodeFrame {
+                telemetry: Some(_),
+                ..
+            }))
+        );
+        let caller_pc = self.caller_pc(caller_frame_idx, top, 0);
+        let context = self.current_context().clone();
+        let telemetry = self
+            .telemetry
+            .as_mut()
+            .expect("observed compiled call has telemetry");
+        if !telemetry.has_context(&context) {
+            telemetry.set_context(context.clone());
+        }
+        // SAFETY: the heap permit is held, and the caller's locals keep the
+        // arguments and callee live.
+        let frame_telemetry = unsafe {
+            telemetry.enter_bytecode_with_trace(
+                function,
+                callee,
+                visible_caller,
+                caller_pc,
+                caller_is_observed,
+                args,
+                None,
+                CallTypeArgs::default(),
+                |caller, callee| Self::register_call_path_functions(&self.heap, caller, callee),
+            )
+        };
+        let locals_offset = StackIndex::from_raw(self.stack.len());
+        self.frames.push(Frame::Bytecode(BytecodeFrame::compiled(
+            callee,
+            locals_offset,
+            Vec::new(),
+            context,
+            frame_telemetry,
+        )));
+        let result = body(self, args);
+        if let Ok(value) = result {
+            let Some(Frame::Bytecode(frame)) = self.frames.pop() else {
+                unreachable!("a compiled callee has a bytecode frame");
+            };
+            self.stack.truncate(locals_offset.raw());
+            if let Some(frame_telemetry) = frame.telemetry {
+                let telemetry = self
+                    .telemetry
+                    .as_mut()
+                    .expect("observed compiled call has telemetry");
+                if !telemetry.has_context(&frame.context) {
+                    telemetry.set_context(frame.context);
+                }
+                // SAFETY: the heap permit is held and the result is live.
+                unsafe {
+                    telemetry.complete_invocation(
+                        frame_telemetry,
+                        function,
+                        InvocationOutcome::Ok,
+                        Some(value),
+                    );
+                }
+            }
         }
         result
     }

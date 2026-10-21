@@ -844,6 +844,153 @@ fn telemetry_records(vm: &BexVm) -> (Vec<(NamedPath, InvocationOutcome, bool)>, 
 
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
+fn inline_observed_compiled_calls_record_as_the_call_path_does() {
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    use btel_settings::mode::AutoTelemetryLevel;
+
+    use crate::compiled_rt::FORCE_CALL_FUNNEL;
+
+    static LEAF: AtomicU32 = AtomicU32::new(0);
+    static MID: AtomicU32 = AtomicU32::new(0);
+    static REC: AtomicU32 = AtomicU32::new(0);
+    static PANIC: AtomicU32 = AtomicU32::new(0);
+    fn object(vm: &BexVm, index: &AtomicU32) -> HeapPtr {
+        vm.idx_to_ptr(ObjectIndex::from_raw(index.load(Ordering::Relaxed) as usize))
+    }
+    fn leaf(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+        let n = test_int(args[0]);
+        if n < 0 {
+            return Ok(Value::int(vm.div_i64(n, 0)?));
+        }
+        Ok(Value::int(n + 1))
+    }
+    fn mid(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+        let leaf_ptr = object(vm, &LEAF);
+        let a = vm.call_compiled(leaf_ptr, leaf, &[], &[args[0]], 0)?;
+        let b = vm.call_compiled(leaf_ptr, leaf, &[], &[args[0]], 0)?;
+        Ok(Value::int(test_int(a) + test_int(b)))
+    }
+    fn rec(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+        let n = test_int(args[0]);
+        if n == 0 {
+            return Ok(Value::int(0));
+        }
+        let rec_ptr = object(vm, &REC);
+        let below = vm.call_compiled(rec_ptr, rec, &[], &[Value::int(n - 1)], 0)?;
+        Ok(Value::int(test_int(below) + 1))
+    }
+    fn safe(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+        let depth = vm.frame_depth();
+        let mid_ptr = object(vm, &MID);
+        match vm.call_compiled(mid_ptr, mid, &[], &[args[0]], 0) {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                let (thrown, ctx) = vm.catch(e, depth)?;
+                let class = object(vm, &PANIC);
+                if vm.is_instance_of(thrown, class) {
+                    Ok(Value::int(-1))
+                } else {
+                    Err(crate::compiled_rt::rethrow(thrown, ctx))
+                }
+            }
+        }
+    }
+    const SOURCE: &str = r#"
+        function Leaf(n: int) -> int { if (n < 0) { n / 0 } else { n + 1 } }
+        function Mid(n: int) -> int { Leaf(n) + Leaf(n) }
+        function Rec(n: int) -> int { if (n == 0) { 0 } else { 1 + Rec(n - 1) } }
+        function Safe(n: int) -> int { Mid(n) catch (e) { baml.panics.DivisionByZero => -1 } }
+        function Main() -> string { `${Safe(1)}|${Safe(-1)}|${Rec(3)}` }
+    "#;
+
+    for level in [AutoTelemetryLevel::Medium, AutoTelemetryLevel::High] {
+        let mut runs = Vec::new();
+        for funnel in [true, false] {
+            FORCE_CALL_FUNNEL.with(|force| force.set(funnel));
+            let (out, vm) = exec_with_compiled_bodies(
+                SOURCE,
+                &[
+                    ("user.Leaf", leaf),
+                    ("user.Mid", mid),
+                    ("user.Rec", rec),
+                    ("user.Safe", safe),
+                ],
+                &[
+                    ("user.Leaf", &LEAF),
+                    ("user.Mid", &MID),
+                    ("user.Rec", &REC),
+                    ("baml.panics.DivisionByZero", &PANIC),
+                ],
+                Some(level),
+            );
+            FORCE_CALL_FUNNEL.with(|force| force.set(false));
+            assert_eq!(out, "4|-1|3", "level {level:?}, funnel {funnel}");
+            runs.push(telemetry_records(&vm));
+        }
+        let (funnel, inline) = (&runs[0], &runs[1]);
+        assert_eq!(inline.0, funnel.0, "timing records at {level:?}");
+        assert_eq!(inline.1, funnel.1, "span records at {level:?}");
+
+        let named: Vec<_> = inline
+            .0
+            .iter()
+            .map(|((caller, callee), outcome, reentry)| {
+                (
+                    caller.as_deref().unwrap_or(""),
+                    callee.as_str(),
+                    *outcome,
+                    *reentry,
+                )
+            })
+            .collect();
+        let ok = InvocationOutcome::Ok;
+        let errored = InvocationOutcome::Panicked;
+        let expected = [
+            ("user.Mid", "user.Leaf", ok, false),
+            ("user.Mid", "user.Leaf", ok, false),
+            ("user.Safe", "user.Mid", ok, false),
+            ("user.Main", "user.Safe", ok, false),
+            ("user.Mid", "user.Leaf", errored, false),
+            ("user.Safe", "user.Mid", errored, false),
+            ("user.Main", "user.Safe", ok, false),
+            ("user.Main", "user.Rec", ok, true),
+            ("user.Main", "user.Rec", ok, true),
+            ("user.Main", "user.Rec", ok, true),
+            ("user.Main", "user.Rec", ok, false),
+            ("", "user.Main", ok, false),
+        ];
+        let user: Vec<_> = named
+            .iter()
+            .filter(|(_, callee, _, _)| callee.starts_with("user."))
+            .copied()
+            .collect();
+        assert!(
+            inline.1.iter().any(|span| span.contains("CallPathDefined")),
+            "call paths are defined at {level:?}"
+        );
+        let completions = |pattern: &str| {
+            inline
+                .1
+                .iter()
+                .filter(|span| span.starts_with("FunctionSpanCompletion") && span.contains(pattern))
+                .count()
+        };
+        match level {
+            AutoTelemetryLevel::Medium => assert_eq!(user, expected),
+            AutoTelemetryLevel::High => {
+                assert!(user.is_empty());
+                assert_eq!(completions("->user."), expected.len());
+                assert_eq!(completions("Panicked"), 2);
+                assert_eq!(completions("Reentry"), 3);
+            }
+            AutoTelemetryLevel::Low => unreachable!(),
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
 fn compiled_bodies_require_the_original_program() {
     use crate::compiled_rt::CompiledEntry;
 

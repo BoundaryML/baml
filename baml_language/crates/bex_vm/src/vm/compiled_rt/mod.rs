@@ -2,13 +2,14 @@
 
 mod arith;
 mod call;
+#[cfg(test)]
+pub(crate) use call::FORCE_CALL_FUNNEL;
 mod cell;
 mod fiber;
 mod frame;
 pub(crate) use frame::attach_compiled_bodies;
 pub use frame::{CompiledBodies, CompiledBodyTable};
-pub(crate) use state::CompiledState;
-pub(crate) use state::SavedCallTypes;
+pub(crate) use state::{CompiledState, SavedCallTypes};
 mod heap;
 mod program;
 mod state;
