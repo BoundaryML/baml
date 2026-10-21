@@ -332,7 +332,6 @@ async fn telemetry_disabled_inside_an_owned_span_does_not_stop_execution() {
     // Once the body is awaiting inside the owned span, the recording's
     // directory becomes a file: the next write fails and disables it.
     let recordings = root.path().join(".baml/btel/recordings");
-    let moved = root.path().join("moved-recording");
     let breaker = tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(200)).await;
         let dir = std::fs::read_dir(&recordings)
@@ -341,9 +340,15 @@ async fn telemetry_disabled_inside_an_owned_span_does_not_stop_execution() {
             .unwrap()
             .unwrap()
             .path();
-        // Moved, not removed: the recorder keeps writing into it, and a
-        // file it adds mid-removal fails the removal (DirectoryNotEmpty).
-        std::fs::rename(&dir, &moved).unwrap();
+        // The recorder keeps writing into it, so a file it adds mid-removal
+        // can fail the removal (DirectoryNotEmpty): try again. A rename
+        // can't stand in, since Windows refuses one while files are open.
+        let mut attempts = 0;
+        while let Err(error) = std::fs::remove_dir_all(&dir) {
+            attempts += 1;
+            assert!(attempts < 100, "removing {}: {error}", dir.display());
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
         std::fs::write(&dir, b"not a directory").unwrap();
     });
     assert_eq!(
