@@ -18,6 +18,7 @@ use std::{collections::HashMap, num::NonZeroU64, sync::Arc};
 
 use baml_type::{Int63, IntShiftError, Name, normalize::TypeContext};
 use btel_types::context::{Context, ContextPatch};
+use rustc_hash::FxHashMap;
 use smallvec::SmallVec;
 
 use crate::{
@@ -438,6 +439,7 @@ pub(crate) mod tests {
         bytecode::Bytecode,
         types::{BoundMethod, Closure, Function, FunctionOrigin, TypeValue, type_tags},
     };
+    use rustc_hash::FxHashMap;
 
     use super::{
         BexVm, Frame, FrameTypeMetadata, TakenTypeArgs, VmExecState,
@@ -493,7 +495,7 @@ pub(crate) mod tests {
             pending_call_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
             pending_call_passes_type_args: false,
-            static_load_type_cache: HashMap::new(),
+            static_load_type_cache: FxHashMap::default(),
             static_virtual_call_cache: HashMap::new(),
             telemetry: Some(TelemetryState::new_root(
                 Arc::new(TelemetryPolicies::new()),
@@ -1748,7 +1750,7 @@ pub struct BexVm {
     /// constants in static functions. The compact numeric key keeps the
     /// per-iteration lookup cheaper than re-hashing the full realized type.
     /// Entries are explicit VM GC roots.
-    static_load_type_cache: HashMap<(usize, usize), HeapPtr>,
+    static_load_type_cache: FxHashMap<(usize, usize), HeapPtr>,
     /// Monomorphic static virtual-call results keyed by caller site and the
     /// receiver/interface instantiation observed there. Only immutable
     /// program-image rules enter this cache, so runtime package loading and
@@ -2440,7 +2442,7 @@ impl BexVm {
             pending_call_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
             pending_call_passes_type_args: false,
-            static_load_type_cache: HashMap::new(),
+            static_load_type_cache: FxHashMap::default(),
             static_virtual_call_cache: HashMap::new(),
             telemetry,
             trace_scope,
@@ -3152,6 +3154,39 @@ impl BexVm {
             .checked_sub(input_count)
             .ok_or(VmInternalError::NotEnoughItemsOnStack(input_count))?;
         self.take_type_args(start, type_arg_count)
+    }
+
+    /// Take the `count` type operands below the top `value_count` values when
+    /// every one is an `Object::Type` built only from compiled declarations:
+    /// the case [`Self::take_type_args`] serves without a per-frame carrier.
+    /// Anything else (a kind view, a type naming a runtime declaration)
+    /// returns `None` and leaves the stack untouched, so the caller can take
+    /// the general path. Kept out of line so the non-generic exact call stays
+    /// as small as it was.
+    #[inline(never)]
+    fn take_plain_static_type_args(
+        &mut self,
+        count: usize,
+        value_count: usize,
+    ) -> Option<Vec<bex_vm_types::RealizedTy>> {
+        let start = self.stack.len().checked_sub(count + value_count)?;
+        let end = start + count;
+        let mut tys = Vec::with_capacity(count);
+        for slot in start..end {
+            let ptr = self.stack[StackIndex::from_raw(slot)].as_object_ptr()?;
+            let Object::Type(type_value) = self.get_object(ptr) else {
+                return None;
+            };
+            if !crate::reachable::is_statically_declared(&type_value.ty) {
+                return None;
+            }
+            tys.push(type_value.ty.clone());
+        }
+        drop(
+            self.stack
+                .drain(StackIndex::from_raw(start)..StackIndex::from_raw(end)),
+        );
+        Some(tys)
     }
 
     fn pop_type_args(&mut self, count: usize) -> Result<TakenTypeArgs, VmError> {
@@ -9581,10 +9616,18 @@ impl BexVm {
                             // during frame/stack growth, just as in general call
                             // setup. Reload from rooted frames after any yield.
                             let callee_object: &'static Object = callee_ptr.get();
+                            // A generic callee's type operands sit below its
+                            // values. Plain static ones go straight into the
+                            // new frame; any other operand takes the general
+                            // path, which carries runtime declarations along.
                             if let Object::Function(callee) = callee_object
                                 && matches!(callee.kind, FunctionKind::Bytecode)
+                                && let Some(type_args) = if ntypeargs == 0 {
+                                    Some(Vec::new())
+                                } else {
+                                    self.take_plain_static_type_args(ntypeargs, callee.arity)
+                                }
                             {
-                                debug_assert_eq!(ntypeargs, 0);
                                 // Eager ok_or constructs/drops VmInternalError
                                 // even on success; release assembly retains a
                                 // destructor call for that large enum.
@@ -9617,13 +9660,18 @@ impl BexVm {
                                         ..locals_offset.raw().saturating_add(callee.arity)];
                                     // SAFETY: arguments and callable remain live under the heap permit.
                                     self.telemetry.as_mut().and_then(|telemetry| unsafe {
-                                        telemetry.enter_bytecode(
+                                        telemetry.enter_bytecode_with_trace(
                                             callee,
                                             callee_ptr,
                                             actual_caller,
                                             caller_pc,
                                             caller_is_observed,
                                             args,
+                                            None,
+                                            CallTypeArgs {
+                                                carried: &[],
+                                                passed: &type_args,
+                                            },
                                             |caller, callee| {
                                                 Self::register_call_path_functions(
                                                     &self.heap, caller, callee,
@@ -9651,6 +9699,13 @@ impl BexVm {
                                         context,
                                     })
                                 }));
+                                // Attached after the push so the frame of a
+                                // non-generic call is built exactly as before.
+                                if !type_args.is_empty()
+                                    && let Some(Frame::Bytecode(frame)) = self.frames.last_mut()
+                                {
+                                    frame.type_args = type_args;
+                                }
                                 if callee.real_local_count != 0 {
                                     let new_len = self.stack.len() + callee.real_local_count;
                                     self.stack.resize(new_len, Value::NULL);

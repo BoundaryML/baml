@@ -150,13 +150,15 @@ fn writable_callee_globals_are_not_specialized() {
 
 #[test]
 fn generic_calls_keep_type_arguments() {
-    let source =
-        "function identity<T>(n: T) -> T { n } function main() -> int { identity<int>(42) }";
+    // `parse<int>` returns 42 only if `T` reaches the callee's frame.
+    let source = r#"
+        function parse<T>(s: string) -> T { baml.json.from_string<T>(s) }
+        function main() -> int { parse<int>("42") }
+    "#;
     let program = convert_program(compile_source(source)).unwrap();
     let instructions = ops(function(&program, "main"));
-    assert!(instructions.iter().any(|(_, op)| *op == OpCode::Call));
     assert!(
-        !instructions
+        instructions
             .iter()
             .any(|(_, op)| *op == OpCode::CallExactArgs)
     );
