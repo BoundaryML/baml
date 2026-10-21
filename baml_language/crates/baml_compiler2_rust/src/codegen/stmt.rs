@@ -334,7 +334,7 @@ impl<'db> Generator<'_, 'db> {
                 ..
             } => {
                 let call = self.call(id, callee, args, *ntypeargs, argument_layout.as_ref())?;
-                let code = self.store(id, destination, &Expr::new(call, Repr::Value))?;
+                let code = self.store(id, destination, &call)?;
                 self.emit_statement(&code);
             }
             Terminator::ShortCircuit {

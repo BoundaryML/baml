@@ -354,3 +354,53 @@ function Spawns() -> void {
     }
     baml.io.println(`${total}`);
 }
+
+class Tree {
+    left: Tree?,
+    right: Tree?,
+}
+
+class Coin {
+    value: int,
+    label: string,
+    implements baml.ops.Equals {
+        function eq(self, other: Self) -> bool throws never {
+            self.value == other.value
+        }
+    }
+}
+
+function Leaves(t: Tree?) -> int {
+    if (t == null) {
+        return 0;
+    }
+    let l = t.left;
+    let r = t.right;
+    if (l == null && r == null) {
+        return 1;
+    }
+    Leaves(l) + Leaves(r)
+}
+
+// `==` with a `null` or primitive side runs in place; a pair that may reach
+// a user `Equals.eq` (here `Coin`'s, which ignores `label`) still calls it.
+function Equality() -> void {
+    let t = Tree { left: Tree { left: null, right: null }, right: Tree { left: null, right: null } };
+    let n: int? = 3;
+    let s: string? = null;
+    let a = Coin { value: 5, label: "a" };
+    let b = Coin { value: 5, label: "b" };
+    let c = Coin { value: 6, label: "a" };
+    let maybe: Coin? = b;
+    let none: Coin? = null;
+    let u: unknown = a;
+    baml.io.println(
+        `${Leaves(t)}:${t.right == null}:${t.left != null}:${null == none}:${null != maybe}`,
+    );
+    baml.io.println(
+        `${n == 3}:${n != null}:${s == null}:${s == "x"}:${u == 5}:${[1, 2] == [1, 2]}:${{"k": 1.5} == {"k": 1.5}}`,
+    );
+    baml.io.println(
+        `${a == b}:${a == c}:${a != b}:${maybe == a}:${none == a}:${u == b}:${[a] == [b]}:${[a] == [c]}`,
+    );
+}

@@ -245,6 +245,7 @@ impl<'db> Generator<'_, 'db> {
         let shape = CallShape {
             type_args_primitive: false,
             map_key_primitive: false,
+            equality_primitive: false,
         };
         if !builtin_is_callable(key, shape) {
             return Err(Rejection::Invalid(format!(

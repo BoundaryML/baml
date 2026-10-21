@@ -24,6 +24,7 @@ const PROBES: &[&str] = &[
     "Hidden",
     "Hooked",
     "Spawns",
+    "Equality",
 ];
 
 #[test]

@@ -737,6 +737,8 @@ pub(crate) struct CallShape {
     pub(crate) type_args_primitive: bool,
     /// Map keys hash and compare without user code.
     pub(crate) map_key_primitive: bool,
+    /// Some value argument holds nothing a user `Equals.eq` could compare.
+    pub(crate) equality_primitive: bool,
 }
 
 pub(crate) fn call_shape(
@@ -762,9 +764,54 @@ pub(crate) fn call_shape(
                 RuntimeTy::Map { key, .. } => is_primitive_key(&key),
                 _ => false,
             });
+    let equality_primitive = args[ntypeargs..]
+        .iter()
+        .any(|arg| operand_ty(body, arg).is_some_and(|ty| equality_is_primitive(&ty)));
     CallShape {
         type_args_primitive,
         map_key_primitive,
+        equality_primitive,
+    }
+}
+
+/// The static type of a local or scalar constant operand.
+pub(crate) fn operand_ty(body: &MirFunctionBody<'_>, operand: &Operand<'_>) -> Option<RuntimeTy> {
+    match operand {
+        Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
+            Some(body.locals[local.0].ty.clone())
+        }
+        Operand::Constant(Constant::Int(_)) => Some(RuntimeTy::Int),
+        Operand::Constant(Constant::Bigint(_)) => Some(RuntimeTy::Bigint),
+        Operand::Constant(Constant::Float(_)) => Some(RuntimeTy::Float),
+        Operand::Constant(Constant::String(_)) => Some(RuntimeTy::String),
+        Operand::Constant(Constant::Bool(_)) => Some(RuntimeTy::Bool),
+        Operand::Constant(Constant::Null) => Some(RuntimeTy::Null),
+        _ => None,
+    }
+}
+
+/// Whether `==` against a value of `ty` can never reach a user `Equals.eq`.
+///
+/// The `==` driver calls user code only for a pair of distinct instances of
+/// one class, or variants of one enum, with an explicit `eq`. It compares
+/// pairs drawn one from each operand at the same position (array elements,
+/// map keys and values, class fields), so an operand whose type admits no
+/// class or enum value rules out every such pair.
+pub(crate) fn equality_is_primitive(ty: &RuntimeTy) -> bool {
+    match ty {
+        RuntimeTy::Int
+        | RuntimeTy::Bigint
+        | RuntimeTy::Float
+        | RuntimeTy::String
+        | RuntimeTy::Bool
+        | RuntimeTy::Null
+        | RuntimeTy::Uint8Array
+        | RuntimeTy::Literal(..)
+        | RuntimeTy::Never => true,
+        RuntimeTy::List(element) => equality_is_primitive(element),
+        RuntimeTy::Map { key, value } => equality_is_primitive(key) && equality_is_primitive(value),
+        RuntimeTy::Union(members) => members.iter().all(equality_is_primitive),
+        _ => false,
     }
 }
 
@@ -811,6 +858,9 @@ fn builtin_may_yield(key: &str) -> Option<bool> {
 // Primitive values cannot override `to_string`.
 const PRIMITIVE_TYPE_BUILTINS: &[&str] = &["baml._to_string_default"];
 
+/// `==`, which yields only to a user `Equals.eq`.
+pub(crate) const EQUALS_EQUALS: &str = "baml.ops.equals_equals";
+
 // These map methods yield only to hash or compare keys.
 const MAP_KEY_METHODS: &[&str] = &["has", "set", "get", "index", "delete", "get_or_insert"];
 
@@ -820,6 +870,7 @@ pub(crate) fn builtin_is_callable(key: &str, shape: CallShape) -> bool {
         None => false,
         Some(false) => true,
         Some(true) if PRIMITIVE_TYPE_BUILTINS.contains(&key) => shape.type_args_primitive,
+        Some(true) if key == EQUALS_EQUALS => shape.equality_primitive,
         Some(true) => key
             .strip_prefix("baml.Map.")
             .is_some_and(|method| MAP_KEY_METHODS.contains(&method) && shape.map_key_primitive),
@@ -1001,6 +1052,7 @@ mod tests {
     const DIRECT: CallShape = CallShape {
         type_args_primitive: false,
         map_key_primitive: false,
+        equality_primitive: false,
     };
 
     #[test]
@@ -1031,6 +1083,7 @@ mod tests {
                     CallShape {
                         type_args_primitive: true,
                         map_key_primitive: true,
+                        equality_primitive: true,
                     }
                 ),
                 "{key} runs a callback whatever the types"
@@ -1050,6 +1103,7 @@ mod tests {
         let primitive_types = CallShape {
             type_args_primitive: true,
             map_key_primitive: false,
+            equality_primitive: false,
         };
         assert!(builtin_is_callable(
             "baml._to_string_default",
@@ -1059,12 +1113,52 @@ mod tests {
         let primitive_keys = CallShape {
             type_args_primitive: false,
             map_key_primitive: true,
+            equality_primitive: false,
         };
         for method in MAP_KEY_METHODS {
             let key = format!("baml.Map.{method}");
             assert_eq!(builtin_may_yield(&key), Some(true), "{key}");
             assert!(builtin_is_callable(&key, primitive_keys), "{key}");
             assert!(!builtin_is_callable(&key, DIRECT), "{key}");
+        }
+    }
+
+    #[test]
+    fn equality_is_callable_when_an_operand_admits_no_class_or_enum() {
+        assert_eq!(builtin_may_yield(EQUALS_EQUALS), Some(true));
+        assert!(!builtin_is_callable(EQUALS_EQUALS, DIRECT));
+        assert!(builtin_is_callable(
+            EQUALS_EQUALS,
+            CallShape {
+                equality_primitive: true,
+                ..DIRECT
+            }
+        ));
+        // `unknown` stands for any type that admits an instance.
+        let class = RuntimeTy::Unknown;
+        for ty in [
+            RuntimeTy::Null,
+            RuntimeTy::Int,
+            RuntimeTy::Union(Box::new([RuntimeTy::String, RuntimeTy::Null])),
+            RuntimeTy::List(Box::new(RuntimeTy::Float)),
+            RuntimeTy::Map {
+                key: Box::new(RuntimeTy::String),
+                value: Box::new(RuntimeTy::List(Box::new(RuntimeTy::Bool))),
+            },
+        ] {
+            assert!(equality_is_primitive(&ty), "{ty:?}");
+        }
+        for ty in [
+            class.clone(),
+            RuntimeTy::Union(Box::new([class.clone(), RuntimeTy::Null])),
+            RuntimeTy::List(Box::new(class.clone())),
+            RuntimeTy::Map {
+                key: Box::new(RuntimeTy::String),
+                value: Box::new(class),
+            },
+            RuntimeTy::Type,
+        ] {
+            assert!(!equality_is_primitive(&ty), "{ty:?}");
         }
     }
 

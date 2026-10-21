@@ -5,10 +5,10 @@ use baml_compiler2_mir::{
 };
 use bex_vm_types::FunctionKind;
 
-use super::{Gen, Generator, unsupported};
+use super::{Expr, Gen, Generator, unsupported};
 use crate::{
     admit::{FunctionInfo, Rejection},
-    analysis::{builtin_is_callable, call_shape, static_realized},
+    analysis::{EQUALS_EQUALS, Repr, builtin_is_callable, call_shape, operand_ty, static_realized},
 };
 
 impl<'db> Generator<'_, 'db> {
@@ -19,7 +19,7 @@ impl<'db> Generator<'_, 'db> {
         args: &[Operand<'db>],
         ntypeargs: usize,
         layout: Option<&baml_type::CallLayout>,
-    ) -> Gen<String> {
+    ) -> Gen<Expr> {
         let Operand::Constant(Constant::Function(func)) = callee else {
             return Err(Rejection::Invalid(
                 "call through a function value emitted inline".into(),
@@ -29,6 +29,9 @@ impl<'db> Generator<'_, 'db> {
         let Some((object, info)) = self.index.function(self.db, *func) else {
             return unsupported(format!("callee `{name}` not found in the program"));
         };
+        if let Some(test) = self.null_test(block, info, ntypeargs, args)? {
+            return Ok(test);
+        }
         let shape = call_shape(self.body, args, ntypeargs, &self.analysis.static_types);
         let (type_args, args) = args.split_at(ntypeargs.min(args.len()));
         let (types, _) = self.type_operands("call", type_args)?;
@@ -48,11 +51,12 @@ impl<'db> Generator<'_, 'db> {
                     "vm.call_compiled(vm.idx_to_ptr(ObjectIndex::from_raw({object})), {symbol}, &[{}], {args}, {site})",
                     types.join(", ")
                 );
-                if self.pausing.contains(&object) {
-                    self.rooted_call(block, &call)
+                let code = if self.pausing.contains(&object) {
+                    self.rooted_call(block, &call)?
                 } else {
-                    self.fallible(block, &call)
-                }
+                    self.fallible(block, &call)?
+                };
+                Ok(Expr::new(code, Repr::Value))
             }
             FunctionKind::NativeUnresolved | FunctionKind::Native(_) => {
                 let Some(key) = info.native_key.as_deref() else {
@@ -64,25 +68,50 @@ impl<'db> Generator<'_, 'db> {
                     )));
                 }
                 let ordinal = self.builtin_ordinal(key);
-                if types.is_empty() {
-                    self.fallible(
-                        block,
-                        &format!("vm.call_builtin(builtin_{ordinal}()?, {args})"),
-                    )
+                let call = if types.is_empty() {
+                    format!("vm.call_builtin(builtin_{ordinal}()?, {args})")
                 } else {
-                    self.fallible(
-                        block,
-                        &format!(
-                            "vm.call_builtin_typed(builtin_{ordinal}()?, &[{}], {args})",
-                            types.join(", ")
-                        ),
+                    format!(
+                        "vm.call_builtin_typed(builtin_{ordinal}()?, &[{}], {args})",
+                        types.join(", ")
                     )
-                }
+                };
+                self.fallible_expr(block, &call, Repr::Value)
             }
             FunctionKind::SysOp(_) => Err(Rejection::Invalid(format!(
                 "sys op `{name}` emitted inline"
             ))),
         }
+    }
+
+    /// `x == null` as a bit test. The `==` driver answers a pair with a
+    /// `null` side by kind alone: `null` equals only `null`, and no user
+    /// `Equals.eq` can run.
+    fn null_test(
+        &mut self,
+        block: BlockId,
+        info: &FunctionInfo,
+        ntypeargs: usize,
+        args: &[Operand<'db>],
+    ) -> Gen<Option<Expr>> {
+        if info.native_key.as_deref() != Some(EQUALS_EQUALS) || ntypeargs != 0 {
+            return Ok(None);
+        }
+        let [lhs, rhs] = args else {
+            return Ok(None);
+        };
+        let is_null =
+            |arg: &Operand<'db>| operand_ty(self.body, arg).is_some_and(|ty| ty.is_null());
+        let other = if is_null(rhs) {
+            lhs
+        } else if is_null(lhs) {
+            rhs
+        } else {
+            return Ok(None);
+        };
+        let other = self.operand(block, other)?;
+        let value = self.value_arg(&other);
+        Ok(Some(Expr::new(format!("{value}.is_null()"), Repr::Bool)))
     }
 
     pub(super) fn callee_ptr(&mut self, block: BlockId, callee: &Operand<'db>) -> Gen<()> {
