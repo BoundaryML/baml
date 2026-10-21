@@ -428,12 +428,12 @@ Require(
 _ = writer.Flush();
 _ = writer.Close();
 
-using Baml.Spawn.Limit limit = Baml.Spawn.Limit.New(2);
-Require(limit.Capacity() == 2, "Limit construction changed");
-_ = Expect<Baml.BamlErrorException>(() => Baml.Spawn.Limit.New(0));
+using Baml.Sync.Semaphore semaphore = Baml.Sync.Semaphore.New(2);
+Require(semaphore.Capacity() == 2, "Semaphore construction changed");
+_ = Expect<Baml.BamlErrorException>(() => Baml.Sync.Semaphore.New(0));
 Require(
-    limit.ActiveCount() == 0 && limit.QueuedCount() == 0,
-    "Limit state methods changed");
+    semaphore.ActiveCount() == 0 && semaphore.QueuedCount() == 0,
+    "Semaphore state methods changed");
 
 _ = csvReader.Close();
 
