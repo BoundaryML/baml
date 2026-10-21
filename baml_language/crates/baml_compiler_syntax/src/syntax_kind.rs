@@ -438,8 +438,9 @@ pub enum SyntaxKind {
 
     // String components (assembled by parser)
     STRING_LITERAL,
-    RAW_STRING_LITERAL,
-    BYTE_STRING_LITERAL,
+    DEPRECATED_HASH_STRING_LITERAL, // removed `#"..."#` strings, kept for diagnostics
+    RAW_STRING_LITERAL,             // r"..."
+    BYTE_STRING_LITERAL,            // b"..."
     UNQUOTED_STRING,
 
     // Backtick interpolated string (BEP-049)

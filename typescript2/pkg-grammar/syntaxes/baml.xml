@@ -15,13 +15,13 @@
   Pandoc via skylighting.
 
   Notes on approximations vs. the TextMate grammar:
-    - Raw strings (#"..."#, ##"..."##, ...) and backtick strings (`...`,
-      ``...``, ...) use dynamic rules (%1 backreference), so any delimiter
-      run length is supported exactly - unlike the TextMate grammar, which
-      enumerates 1..8.
+    - Deprecated hash strings (#"..."#, ##"..."##, ...) and backtick
+      strings (`...`, ``...``, ...) use dynamic rules (%1 backreference), so
+      any delimiter run length is supported exactly - unlike the TextMate
+      grammar, which enumerates 1..8.
     - Jinja spans ({{ ... }}, {% ... %}, {# ... #}) are highlighted inside
-      every raw string, not only inside `prompt` / `template_string` bodies.
-      In practice raw strings in BAML are prompt/template bodies, so this is
+      every hash string, not only inside `prompt` / `template_string` bodies.
+      In practice hash strings in BAML are prompt/template bodies, so this is
       a faithful approximation without full parser context.
     - `class` / `enum` / `interface` / `function` switch into a one-shot
       context that colours the declared name; other declaration names
@@ -174,8 +174,12 @@
              to the quote (`b "..."` is an identifier plus a string). -->
         <RegExpr attribute="Byte String" context="ByteString" String="\bb&quot;"/>
 
-        <!-- Raw string: #"..."#, ##"..."##, ... - any run of hashes. The
-             captured run is matched again by the dynamic close rule. -->
+        <!-- Raw string: `r"..."`. Same adjacency rule as byte strings. -->
+        <RegExpr attribute="Raw String" context="RawQuotedString" String="\br&quot;"/>
+
+        <!-- Deprecated hash string: #"..."#, ##"..."##, ... - any run of
+             hashes. The captured run is matched again by the dynamic close
+             rule. -->
         <RegExpr attribute="Raw String" context="RawString" String="(#+)&quot;"/>
 
         <!-- Backtick string: `...`, ``...``, ... - any run of backticks. -->
@@ -224,27 +228,43 @@
         <Detect2Chars attribute="Comment" context="#pop" char="*" char1="/" endRegion="Comment"/>
       </context>
 
-      <!-- `"..."`: decodes \n \t \r \0 \b \v \f plus \\ and \"; unknown
-           escapes are preserved by the lowerer, so they are not errors. -->
+      <!-- `"..."`: decodes \n \t \r \0 \b \f, \\ \" \' \/ \` \$, ASCII
+           \xHH, \uHHHH and \u{H...}. Any other escape is a compile error, as
+           is a backslash at the end of a line (no line continuations). -->
       <context name="StringDQ" attribute="String" lineEndContext="#stay">
-        <RegExpr attribute="Escape" context="#stay" String="\\[ntr0bvf&quot;\\]"/>
-        <RegExpr attribute="Escape" context="#stay" String="\\."/>
+        <IncludeRules context="StringEscapes"/>
         <DetectChar attribute="String" context="#pop" char="&quot;"/>
       </context>
 
-      <!-- `b"..."`: decodes \n \t \r \0, \\ \" and \xHH; anything else is a
-           lowering error, so it is flagged. -->
+      <!-- Escapes shared by `"..."` and backtick strings. -->
+      <context name="StringEscapes" attribute="String" lineEndContext="#stay">
+        <RegExpr attribute="Escape" context="#stay" String="\\[ntr0bf&quot;\\'/`$]"/>
+        <RegExpr attribute="Escape" context="#stay" String="\\x[0-7][0-9A-Fa-f]"/>
+        <RegExpr attribute="Escape" context="#stay" String="\\u(?:[0-9A-Fa-f]{4}|\{[0-9A-Fa-f](?:_?[0-9A-Fa-f])*\})"/>
+        <RegExpr attribute="Invalid Escape" context="#stay" String="\\(?:x[0-9A-Fa-f]{0,2}|u(?:\{[^}&quot;\\]*\}?|[0-9A-Fa-f]{0,3})|.|$)"/>
+      </context>
+
+      <!-- `b"..."`: the string escapes, except that \xHH takes any byte and
+           \u is an error. Non-ASCII text is an error too. -->
       <context name="ByteString" attribute="Byte String" lineEndContext="#stay">
         <RegExpr attribute="Escape" context="#stay" String="\\x[0-9A-Fa-f]{2}"/>
-        <RegExpr attribute="Escape" context="#stay" String="\\[ntr0&quot;\\]"/>
-        <RegExpr attribute="Invalid Escape" context="#stay" String="\\x[0-9A-Fa-f]?"/>
-        <RegExpr attribute="Invalid Escape" context="#stay" String="\\."/>
+        <RegExpr attribute="Escape" context="#stay" String="\\[ntr0bf&quot;\\'/`$]"/>
+        <RegExpr attribute="Invalid Escape" context="#stay" String="\\(?:x[0-9A-Fa-f]?|u(?:\{[^}&quot;\\]*\}?|[0-9A-Fa-f]{0,4})|.|$)"/>
+        <RegExpr attribute="Invalid Escape" context="#stay" String="[^\x00-\x7F]+"/>
         <DetectChar attribute="Byte String" context="#pop" char="&quot;"/>
       </context>
 
-      <!-- Raw string body. No escapes; closes on `"` followed by the same
-           hash run that opened it (%1). Jinja spans are highlighted here
-           because raw strings are BAML's prompt / template bodies. -->
+      <!-- `r"..."` body: verbatim, but a backslash keeps the next character
+           (including `"`) from closing the literal. -->
+      <context name="RawQuotedString" attribute="Raw String" lineEndContext="#stay">
+        <RegExpr attribute="Raw String" context="#stay" String="\\."/>
+        <DetectChar attribute="Raw String" context="#pop" char="&quot;"/>
+      </context>
+
+      <!-- Deprecated hash string body. No escapes; closes on `"` followed
+           by the same hash run that opened it (%1). Jinja spans are
+           highlighted here because hash strings were BAML's prompt /
+           template bodies. -->
       <context name="RawString" attribute="Raw String" lineEndContext="#stay" dynamic="true">
         <RegExpr attribute="Raw String" context="#pop" String="&quot;%1" dynamic="true"/>
         <Detect2Chars attribute="Template" context="JinjaComment" char="{" char1="#"/>
@@ -271,12 +291,11 @@
         <Detect2Chars attribute="Template" context="#pop" char="#" char1="}"/>
       </context>
 
-      <!-- Backtick string body. Escapes add \` and \$ to the standard set;
-           `${ ... }` interpolations re-enter expression highlighting. Closes
+      <!-- Backtick string body. Same escapes as `"..."`; `${ ... }`
+           interpolations re-enter expression highlighting. Closes
            on the same backtick run that opened it, not a longer one. -->
       <context name="BacktickString" attribute="Backtick String" lineEndContext="#stay" dynamic="true">
-        <RegExpr attribute="Escape" context="#stay" String="\\[ntr0bvf&quot;\\`$]"/>
-        <RegExpr attribute="Escape" context="#stay" String="\\."/>
+        <IncludeRules context="StringEscapes"/>
         <Detect2Chars attribute="Template" context="BacktickInterp" char="$" char1="{"/>
         <RegExpr attribute="Backtick String" context="#pop" String="%1(?!`)" dynamic="true"/>
       </context>

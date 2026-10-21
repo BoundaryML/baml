@@ -97,9 +97,7 @@ pub fn program() -> bex_vm_types::Program {
                 .next()
                 .is_some_and(|n| CAPTURED.contains(&n))
         {
-            f.body_meta = Some(bex_vm_types::FunctionMeta::Llm {
-                client: "fixture".into(),
-            });
+            f.body_meta = Some(bex_vm_types::FunctionMeta::Llm);
         }
     }
     program
@@ -210,6 +208,29 @@ pub async fn record_program_with(
     calls: &[(&str, i64)],
     config: RecordingConfig,
 ) -> Vec<Result<BexExternalValue, String>> {
+    let calls: Vec<_> = calls
+        .iter()
+        .map(|(name, arg)| {
+            (
+                *name,
+                vec![bex_engine::BexCallArg::Provided(Box::new(
+                    BexExternalValue::Int(*arg),
+                ))],
+            )
+        })
+        .collect();
+    record_program_calls(project, source, captured, calls, config).await
+}
+
+/// `record_program_with` for calls that bind their own arguments, e.g. to
+/// leave a defaulted parameter omitted.
+pub async fn record_program_calls(
+    project: &Path,
+    source: &str,
+    captured: &[&str],
+    calls: Vec<(&str, Vec<bex_engine::BexCallArg>)>,
+    config: RecordingConfig,
+) -> Vec<Result<BexExternalValue, String>> {
     let mut program = baml_test_support::compile_source(source);
     for object in &mut program.objects.0 {
         if let bex_vm_types::Object::Function(f) = object
@@ -218,9 +239,7 @@ pub async fn record_program_with(
                 .next()
                 .is_some_and(|n| captured.contains(&n))
         {
-            f.body_meta = Some(bex_vm_types::FunctionMeta::Llm {
-                client: "fixture".into(),
-            });
+            f.body_meta = Some(bex_vm_types::FunctionMeta::Llm);
         }
     }
     let engine = Arc::new(
@@ -235,11 +254,11 @@ pub async fn record_program_with(
         .expect("engine"),
     );
     let mut results = Vec::new();
-    for (name, arg) in calls {
+    for (name, args) in calls {
         let result = engine
-            .call_function(
+            .call_function_bound_args(
                 name,
-                vec![BexExternalValue::Int(*arg)],
+                args,
                 FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
                 true,
             )

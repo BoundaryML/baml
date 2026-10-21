@@ -1856,6 +1856,7 @@ impl LoweringContext {
             SyntaxKind::STRING_LITERAL => self.lower_string_literal(node),
             SyntaxKind::BACKTICK_STRING_LITERAL => self.lower_backtick_string_literal(node),
             SyntaxKind::BYTE_STRING_LITERAL => self.lower_byte_string_literal(node),
+            SyntaxKind::RAW_STRING_LITERAL => self.lower_raw_string_literal(node),
             SyntaxKind::ARRAY_LITERAL => self.lower_array_literal(node),
             SyntaxKind::OBJECT_LITERAL => self.lower_object_literal(node),
             SyntaxKind::MAP_LITERAL => self.lower_map_literal(node),
@@ -5160,6 +5161,8 @@ impl LoweringContext {
         }
     }
 
+    /// Invalid escapes and non-ASCII characters are reported once per file by
+    /// `check_string_escapes`; here they decode leniently.
     fn lower_byte_string_literal(&mut self, node: &SyntaxNode) -> ExprId {
         let text = node.text().to_string();
         // Strip the b"..." delimiters: remove leading `b"` and trailing `"`
@@ -5167,17 +5170,17 @@ impl LoweringContext {
             .strip_prefix("b\"")
             .and_then(|s| s.strip_suffix('"'))
             .unwrap_or("");
-        match parse_byte_string_escapes(content) {
-            Ok(bytes) => self.alloc_expr(Expr::ByteStringLiteral(bytes), node.span_range()),
-            Err(message) => {
-                self.diags
-                    .push(LoweringDiagnostic::InvalidByteStringEscape {
-                        message,
-                        span: node.span_range(),
-                    });
-                self.alloc_expr(Expr::Missing, node.span_range())
-            }
-        }
+        let bytes = baml_base::escape::unescape_byte_string_literal(content);
+        self.alloc_expr(Expr::ByteStringLiteral(bytes), node.span_range())
+    }
+
+    fn lower_raw_string_literal(&mut self, node: &SyntaxNode) -> ExprId {
+        let text = node.text().to_string();
+        let content = strip_raw_string_delimiters(&text).unwrap_or_default();
+        self.alloc_expr(
+            Expr::Literal(Literal::String(content.to_string())),
+            node.span_range(),
+        )
     }
 
     fn lower_array_literal(&mut self, node: &SyntaxNode) -> ExprId {
@@ -6275,48 +6278,8 @@ fn strip_string_delimiters(text: &str) -> String {
     }
 }
 
-/// Parse escape sequences in a byte string literal body (content between the `b"` and `"`).
-///
-/// Supported escapes: `\n`, `\t`, `\r`, `\0`, `\\`, `\"`, `\xHH` (2 hex digits).
-/// Unescaped characters must be ASCII (0-127).
-fn parse_byte_string_escapes(input: &str) -> Result<Vec<u8>, String> {
-    let mut result = Vec::with_capacity(input.len());
-    let mut chars = input.chars();
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            match chars.next() {
-                Some('n') => result.push(b'\n'),
-                Some('t') => result.push(b'\t'),
-                Some('r') => result.push(b'\r'),
-                Some('0') => result.push(0),
-                Some('\\') => result.push(b'\\'),
-                Some('"') => result.push(b'"'),
-                Some('x') => {
-                    let hi = chars
-                        .next()
-                        .ok_or_else(|| "incomplete \\x escape".to_string())?;
-                    let lo = chars
-                        .next()
-                        .ok_or_else(|| "incomplete \\x escape".to_string())?;
-                    let hex_str: String = [hi, lo].iter().collect();
-                    let byte = u8::from_str_radix(&hex_str, 16)
-                        .map_err(|_| format!("invalid hex escape: \\x{hex_str}"))?;
-                    result.push(byte);
-                }
-                Some(other) => {
-                    return Err(format!("unknown escape sequence: \\{other}"));
-                }
-                None => {
-                    return Err("trailing backslash in byte string".to_string());
-                }
-            }
-        } else if !c.is_ascii() {
-            return Err(format!(
-                "non-ASCII character in byte string: '{c}' (use \\xHH for bytes > 127)"
-            ));
-        } else {
-            result.push(c as u8);
-        }
-    }
-    Ok(result)
+/// The verbatim body of a raw `r"..."` string literal's text, or `None` if
+/// the literal is unclosed (which is already a parse error).
+fn strip_raw_string_delimiters(text: &str) -> Option<&str> {
+    text.trim().strip_prefix("r\"")?.strip_suffix('"')
 }

@@ -162,7 +162,7 @@ ast_node!(PromptField, PROMPT_FIELD);
 ast_node!(ToolsField, TOOLS_FIELD);
 ast_node!(SpecExpr, SPEC_EXPR);
 ast_node!(ClientValueDef, CLIENT_VALUE_DEF);
-ast_node!(RawStringLiteral, RAW_STRING_LITERAL);
+ast_node!(HashStringLiteral, DEPRECATED_HASH_STRING_LITERAL);
 ast_node!(StringLiteral, STRING_LITERAL);
 ast_node!(BacktickStringLiteral, BACKTICK_STRING_LITERAL);
 ast_node!(BacktickText, BACKTICK_TEXT);
@@ -976,8 +976,8 @@ impl TemplateStringDef {
     }
 
     /// Get the raw string literal containing the template body.
-    pub fn raw_string(&self) -> Option<RawStringLiteral> {
-        self.syntax.children().find_map(RawStringLiteral::cast)
+    pub fn hash_string(&self) -> Option<HashStringLiteral> {
+        self.syntax.children().find_map(HashStringLiteral::cast)
     }
 }
 
@@ -1155,8 +1155,8 @@ impl ClientField {
 
 impl PromptField {
     /// Get a legacy raw-string prompt for migration diagnostics.
-    pub fn raw_string(&self) -> Option<RawStringLiteral> {
-        self.syntax.children().find_map(RawStringLiteral::cast)
+    pub fn hash_string(&self) -> Option<HashStringLiteral> {
+        self.syntax.children().find_map(HashStringLiteral::cast)
     }
 
     /// Get the backtick string literal node containing the prompt.
@@ -2352,7 +2352,7 @@ impl ConfigItem {
                     let has_string_literal = element.descendants().any(|node| {
                         matches!(
                             node.kind(),
-                            SyntaxKind::STRING_LITERAL | SyntaxKind::RAW_STRING_LITERAL
+                            SyntaxKind::STRING_LITERAL | SyntaxKind::DEPRECATED_HASH_STRING_LITERAL
                         )
                     });
 
@@ -2618,7 +2618,9 @@ impl BlockExpr {
                         // (BEP-034). Without this it was silently dropped and
                         // the block had no value ("missing value").
                         | SyntaxKind::LAMBDA_EXPR
+                        | SyntaxKind::DEPRECATED_HASH_STRING_LITERAL
                         | SyntaxKind::RAW_STRING_LITERAL
+                        | SyntaxKind::BYTE_STRING_LITERAL
                         | SyntaxKind::BACKTICK_STRING_LITERAL
                         | SyntaxKind::TAGGED_TEMPLATE_EXPR => Some(BlockElement::ExprNode(n)),
                         _ => None,
@@ -2632,7 +2634,7 @@ impl BlockExpr {
                         | SyntaxKind::INTEGER_LITERAL
                         | SyntaxKind::FLOAT_LITERAL
                         | SyntaxKind::STRING_LITERAL
-                        | SyntaxKind::RAW_STRING_LITERAL
+                        | SyntaxKind::DEPRECATED_HASH_STRING_LITERAL
                         // Boolean / null literals are re-lexed contextual keywords.
                         | SyntaxKind::KW_TRUE
                         | SyntaxKind::KW_FALSE

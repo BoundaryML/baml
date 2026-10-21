@@ -240,6 +240,17 @@ def test_stream_recording_parent_chain(tmp_path):
     cli = Path(os.environ.get("BAML_AUDIT_CLI", workspace / "target/debug/baml-cli"))
     if not cli.is_file():
         pytest.skip("Build baml_cli to run the native stream recording audit")
+    # A CLI older than this checkout's blob format can't read what the SDK
+    # records here: one left over from another checkout skips, not fails.
+    blob_format = workspace / "crates/btel_settings/src/snapshot.rs"
+    if (
+        "BAML_AUDIT_CLI" not in os.environ
+        and cli.stat().st_mtime < blob_format.stat().st_mtime
+    ):
+        pytest.skip(
+            "target/debug/baml-cli predates this checkout's blob format; "
+            "rebuild baml_cli or set BAML_AUDIT_CLI"
+        )
     import baml_sdk
 
     marker = "stream-audit-" + uuid.uuid4().hex

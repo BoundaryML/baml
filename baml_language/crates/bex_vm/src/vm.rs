@@ -4921,6 +4921,7 @@ impl BexVm {
         // stack so a nested entry over live frames cannot wipe in-flight
         // throw state.
         if self.frames.is_empty() {
+            self.name_root_thread(function);
             if let Some(telemetry) = &mut self.telemetry {
                 telemetry.set_context(self.root_context.clone());
                 telemetry.start_thread();
@@ -8049,6 +8050,23 @@ impl BexVm {
         // SAFETY: the engine calls this under the heap permit; neither the
         // context allocation above nor capture collects.
         unsafe { state.close_network_span(span, at, outcome, error, raw_urls) };
+    }
+
+    /// Name a root future after its entry function, which may record no call
+    /// of its own (a pass-through LLM function, or one hidden by its policy).
+    fn name_root_thread(&mut self, callable: HeapPtr) {
+        let metadata = self
+            .callable_function_identity(callable)
+            .and_then(|function| {
+                // SAFETY: the entry callable roots its function under the heap permit.
+                match unsafe { function.get() } {
+                    Object::Function(function) => function.runtime_metadata(),
+                    _ => None,
+                }
+            });
+        if let (Some(state), Some(metadata)) = (&mut self.telemetry, metadata) {
+            state.name_root_thread(&metadata.fqn);
+        }
     }
 
     /// Name this thread's future for telemetry; call before its entry point.
