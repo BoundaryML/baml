@@ -26,7 +26,7 @@ pub(crate) fn render_module(
     builtins: &BTreeMap<String, usize>,
     artifact_path: &str,
     fingerprint: [u8; 32],
-) -> Result<String, String> {
+) -> String {
     let mut out = String::from(PRELUDE);
     write_module(
         &mut out,
@@ -37,9 +37,7 @@ pub(crate) fn render_module(
         fingerprint,
     )
     .expect("formatting into a String cannot fail");
-    syn::parse_file(&out)
-        .map(|file| prettyplease::unparse(&file))
-        .map_err(|error| format!("Rust backend generated invalid Rust: {error}"))
+    out
 }
 
 fn write_module(
@@ -50,13 +48,17 @@ fn write_module(
     artifact_path: &str,
     fingerprint: [u8; 32],
 ) -> fmt::Result {
+    // A builtin the VM does not bind is an internal error, not a panic.
     for (key, ordinal) in builtins {
         writeln!(
             out,
-            "fn builtin_{ordinal}() -> NativeFunction {{
-                static F: std::sync::OnceLock<NativeFunction> = std::sync::OnceLock::new();
-                *F.get_or_init(|| bex_vm::package_baml::resolve_native({key:?})
-                    .expect(\"builtin bound at compile time\"))
+            "fn builtin_{ordinal}() -> R<NativeFunction> {{
+                static F: std::sync::OnceLock<Option<NativeFunction>> = std::sync::OnceLock::new();
+                F.get_or_init(|| bex_vm::package_baml::resolve_native({key:?})).ok_or_else(|| {{
+                    Box::new(VmError::from(bex_vm::errors::VmInternalError::CompiledBody {{
+                        message: String::from(\"the VM binds no builtin {key}\"),
+                    }}))
+                }})
             }}"
         )?;
     }
@@ -85,16 +87,6 @@ fn write_module(
         out,
         "pub static PROGRAM_ARTIFACT: &[u8] = include_bytes!({artifact_path:?});"
     )
-}
-
-/// Whether generated code `code` is a local, a numeric literal, or a path.
-/// Anything else is bound to a temporary before it is used as an argument.
-pub(crate) fn is_atom(code: &str) -> bool {
-    let token = code.strip_prefix('-').unwrap_or(code);
-    !token.is_empty()
-        && token
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | ':' | '.'))
 }
 
 pub(crate) fn coerce(code: &str, from: Repr, to: Repr) -> String {
@@ -159,13 +151,6 @@ pub(crate) fn binop_name(op: BinOp) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn malformed_generated_rust_is_an_error() {
-        let error = render_module("fn broken(", &[], &BTreeMap::new(), "program.bexa", [0; 32])
-            .unwrap_err();
-        assert!(error.starts_with("Rust backend generated invalid Rust"));
-    }
 
     #[test]
     fn float_literals_round_trip() {

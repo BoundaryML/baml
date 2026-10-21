@@ -851,8 +851,6 @@ dependencies = [
  "baml_compiler2_mir",
  "baml_type",
  "bex_vm_types",
- "prettyplease",
- "syn 2.0.117",
 ]
 
 [[package]]

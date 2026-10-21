@@ -12,17 +12,17 @@ use std::{
 };
 
 use baml_compiler2_mir::{
-    BlockId, Constant, Local, MirFunction, MirFunctionBody, Operand, Place, StatementKind,
-    Terminator, function_display_name,
+    BlockId, Constant, Local, MirFunction, MirFunctionBody, Operand, Place, Terminator,
+    function_display_name,
 };
 
 use crate::{
     admit::{Positions, ProgramIndex, Rejection},
     analysis::{
-        Analysis, Repr, array_iter_walk, array_next_call, loops, reads_frame, realized_expr,
+        Analysis, Repr, array_iter_walk, array_next_call, reads_frame, realized_expr,
         suspends_directly, template_blocker, user_callee,
     },
-    render::{coerce, is_atom},
+    render::coerce,
     structure::{Structured, structurize},
 };
 
@@ -30,6 +30,8 @@ use crate::{
 struct Expr {
     code: String,
     repr: Repr,
+    /// A local, literal or path: used as a call argument as it is.
+    atom: bool,
 }
 
 impl Expr {
@@ -37,6 +39,15 @@ impl Expr {
         Self {
             code: code.into(),
             repr,
+            atom: false,
+        }
+    }
+
+    fn atom(code: impl Into<String>, repr: Repr) -> Self {
+        Self {
+            code: code.into(),
+            repr,
+            atom: true,
         }
     }
 }
@@ -82,14 +93,10 @@ pub(crate) struct Generator<'a, 'db> {
     /// Active handler context used by the VM cause chain.
     pub(crate) cause_slot: Option<usize>,
     pub(crate) preds: Vec<Vec<usize>>,
-    pub(crate) loop_headers: BTreeSet<usize>,
     pub(crate) call_types: Vec<String>,
     pub(crate) structured: Option<Structured>,
-    /// Frame-derived types hoisted into `ty{k}` locals.
-    pub(crate) frame_templates: Vec<baml_compiler2_mir::TyTemplate>,
-    /// Type bindings and collections require rebuilding derived types at each use.
-    pub(crate) hoist_types: bool,
-    /// Static type values cached by their generated expression.
+    /// Static type value sites, by their generated expression; each site is
+    /// one type object, as bytecode's `LoadType` site is.
     pub(crate) static_value_sites: Vec<String>,
 }
 
@@ -124,11 +131,8 @@ impl<'a, 'db> Generator<'a, 'db> {
             slots: 0,
             cause_slot: None,
             preds: Vec::new(),
-            loop_headers: BTreeSet::new(),
             call_types: Vec::new(),
             structured: None,
-            frame_templates: Vec::new(),
-            hoist_types: true,
             static_value_sites: Vec::new(),
         }
     }
@@ -157,6 +161,9 @@ impl<'db> Generator<'_, 'db> {
     }
 
     pub(crate) fn function(&mut self, symbol: &str) -> Gen<String> {
+        if self.positions.is_empty() {
+            return unsupported("bytecode without MIR positions (a deserialized program)");
+        }
         if !self.positions.fit(self.body) {
             return Err(Rejection::Invalid(
                 "the function's bytecode was emitted from other MIR".into(),
@@ -168,10 +175,14 @@ impl<'db> Generator<'_, 'db> {
         let stmts = structured.stmts.clone();
         self.structured = Some(structured);
         self.out.clear();
-        self.header(&format!(
-            "#[inline]\npub fn {symbol}(vm: &mut BexVm, args: &[Value]) -> R<Value>"
+        // Every closure exit records the current PC before returning an error.
+        self.emit_line(&format!(
+            "#[inline]\npub fn {symbol}(vm: &mut BexVm, args: &[Value]) -> R<Value> {{"
         ));
-        self.declare_locals(!self.loop_headers.is_empty());
+        self.emit_line("let depth = vm.frame_depth();");
+        self.emit_line("let mut pc: u32 = 0;");
+        self.emit_line("let result = (|| -> R<Value> {");
+        self.declare_locals(!self.analysis.loop_headers.is_empty());
         // The call path leaves the arguments in a hooked body's leading slots.
         if self.slots > self.slot_base() {
             self.emit_line(&format!("vm.reserve_slots(depth, {});", self.slots));
@@ -179,13 +190,17 @@ impl<'db> Generator<'_, 'db> {
         if let Some(slot) = self.cause_slot {
             self.emit_line(&format!("vm.set_slot(depth, {slot}, Value::NULL);"));
         }
-        let prologue = std::mem::take(&mut self.out);
         self.stmts(&stmts)?;
         // Every path ends in an `Exit`; this keeps the closure well-typed.
         self.emit_line("#[allow(unreachable_code)]");
         self.emit_line("Ok(Value::NULL)");
-        self.footer();
-        Ok(self.assemble(prologue))
+        self.emit_line("})();");
+        self.emit_line("if result.is_err() {");
+        self.emit_line("vm.note_pc(depth, pc);");
+        self.emit_line("}");
+        self.emit_line("result");
+        self.emit_line("}");
+        Ok(std::mem::take(&mut self.out))
     }
 
     /// The first slot the body may write. A hook prologue reads the
@@ -193,44 +208,15 @@ impl<'db> Generator<'_, 'db> {
     /// spilled across its suspension, so a hooked body keeps them in their
     /// leading slots.
     fn slot_base(&self) -> usize {
-        let hooked = self.body.blocks.iter().any(|block| {
-            block.statements.iter().any(|statement| {
-                matches!(
-                    statement.kind,
-                    StatementKind::Intrinsic {
-                        op: baml_compiler2_mir::IntrinsicOp::ApplyTraceHook
-                            | baml_compiler2_mir::IntrinsicOp::BuiltinTraceHook(_),
-                        ..
-                    }
-                )
-            })
-        });
-        if hooked { self.arity() } else { 0 }
+        if self.analysis.hooked {
+            self.arity()
+        } else {
+            0
+        }
     }
 
     fn arity_locals(&self) -> usize {
         self.body.locals.len().min(self.arity())
-    }
-
-    /// Every closure exit records the current PC before returning an error.
-    fn header(&mut self, signature: &str) {
-        let result = signature
-            .rsplit("-> ")
-            .next()
-            .expect("signature has a result");
-        self.emit_line(&format!("{signature} {{"));
-        self.emit_line("let depth = vm.frame_depth();");
-        self.emit_line("let mut pc: u32 = 0;");
-        self.emit_line(&format!("let result = (|| -> {result} {{"));
-    }
-
-    fn footer(&mut self) {
-        self.emit_line("})();");
-        self.emit_line("if result.is_err() {");
-        self.emit_line("vm.note_pc(depth, pc);");
-        self.emit_line("}");
-        self.emit_line("result");
-        self.emit_line("}");
     }
 
     fn declare_locals(&mut self, iterations: bool) {
@@ -270,46 +256,26 @@ impl<'db> Generator<'_, 'db> {
         }
     }
 
-    /// Insert hoisted types between the prologue and body.
-    fn assemble(&mut self, prologue: String) -> String {
-        let body = std::mem::take(&mut self.out);
-        for k in 0..self.frame_templates.len() {
-            let code = realized_expr(self.index, &self.frame_templates[k], true)
-                .expect("a hoisted template was rendered when it was hoisted");
-            self.emit_line(&format!("let ty{k}: RealizedTy = {code};"));
-        }
-        let mut out = prologue;
-        out.push_str(&std::mem::take(&mut self.out));
-        out.push_str(&body);
-        out
-    }
-
-    /// Reuse hoisted frame types unless bindings or collections can invalidate them.
+    /// A realized type: built in place when static, bound to a temporary
+    /// when it reads the frame, else read from the function's pooled template.
     pub(super) fn realized(&mut self, template: &baml_compiler2_mir::TyTemplate) -> Gen<String> {
-        if !reads_frame(template) {
-            return match realized_expr(self.index, template, false) {
-                Some(code) => Ok(code),
-                None => self.pooled_type(template),
-            };
-        }
-        let Some(code) = realized_expr(self.index, template, true) else {
+        let frame = reads_frame(template);
+        let Some(code) = realized_expr(self.index, template, frame) else {
             return self.pooled_type(template);
         };
-        if !self.hoist_types {
-            let name = format!("t{}", self.temps);
-            self.temps += 1;
-            self.pending
-                .push(format!("let {name}: RealizedTy = {code};"));
-            return Ok(name);
+        if !frame {
+            return Ok(code);
         }
-        let k = match self.frame_templates.iter().position(|t| t == template) {
-            Some(k) => k,
-            None => {
-                self.frame_templates.push(template.clone());
-                self.frame_templates.len() - 1
-            }
-        };
-        Ok(format!("ty{k}.clone()"))
+        Ok(self.bind_type(&code))
+    }
+
+    /// Bind type expression `code` to a temporary, emitted before the next statement.
+    fn bind_type(&mut self, code: &str) -> String {
+        let name = format!("t{}", self.temps);
+        self.temps += 1;
+        self.pending
+            .push(format!("let {name}: RealizedTy = {code};"));
+        name
     }
 
     /// Read a type from its pooled template with frame arguments substituted.
@@ -320,7 +286,7 @@ impl<'db> Generator<'_, 'db> {
                 template_blocker(self.index, template)
             ))
         };
-        let Some(anchored) = self.index.anchor(template)? else {
+        let Some(anchored) = self.index.anchor(template) else {
             return blocked();
         };
         let Some(index) = self.index.pooled_constant(
@@ -329,13 +295,10 @@ impl<'db> Generator<'_, 'db> {
         ) else {
             return blocked();
         };
-        let name = format!("t{}", self.temps);
-        self.temps += 1;
-        self.pending.push(format!(
-            "let {name}: RealizedTy = vm.frame_type_constant(depth, vm.idx_to_ptr(ObjectIndex::from_raw({})), {index})?;",
+        Ok(self.bind_type(&format!(
+            "vm.frame_type_constant(depth, vm.idx_to_ptr(ObjectIndex::from_raw({})), {index})?",
             self.object
-        ));
-        Ok(name)
+        )))
     }
 
     pub(super) fn realized_all(
@@ -348,45 +311,19 @@ impl<'db> Generator<'_, 'db> {
             .collect()
     }
 
-    /// Borrow a realized type, binding a temporary when needed.
+    /// Borrow a realized type.
     pub(super) fn realized_ref(
         &mut self,
         template: &baml_compiler2_mir::TyTemplate,
     ) -> Gen<String> {
         let owned = self.realized(template)?;
-        if let Some(local) = owned.strip_suffix(".clone()") {
-            return Ok(format!("&{local}"));
-        }
-        let name = format!("t{}", self.temps);
-        self.temps += 1;
-        self.pending
-            .push(format!("let {name}: RealizedTy = {owned};"));
-        Ok(format!("&{name}"))
+        Ok(format!("&{}", self.bind_type(&owned)))
     }
 
-    /// Return realized call types and whether all are static primitives.
-    pub(super) fn call_type_args(
-        &mut self,
-        type_args: &[Operand<'db>],
-    ) -> Gen<(Vec<String>, bool)> {
-        let mut types = Vec::with_capacity(type_args.len());
-        let mut primitive = true;
-        for arg in type_args {
-            let (code, static_primitive) = self.type_operand("call", arg)?;
-            primitive &= static_primitive.unwrap_or(false);
-            types.push(code);
-        }
-        Ok((types, primitive))
-    }
-
-    /// Realize one type operand of `what`; for a static type, whether it is
-    /// primitive. A type local is built from its template where the operand
-    /// is used; any other local holds a `reflect.Type` value, read there.
-    pub(super) fn type_operand(
-        &mut self,
-        what: &str,
-        operand: &Operand<'db>,
-    ) -> Gen<(String, Option<bool>)> {
+    /// Realize one type operand of `what`, and whether it is static. A type
+    /// local is built from its template where the operand is used; any other
+    /// local holds a `reflect.Type` value, read there.
+    fn type_operand(&mut self, what: &str, operand: &Operand<'db>) -> Gen<(String, bool)> {
         let local = match operand {
             Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => *local,
             Operand::Constant(_) | Operand::Copy(_) | Operand::Move(_) => {
@@ -394,21 +331,16 @@ impl<'db> Generator<'_, 'db> {
             }
         };
         if let Some(ty) = self.analysis.static_types.get(&local.0) {
-            return Ok((ty.code.clone(), Some(ty.primitive)));
+            return Ok((ty.code.clone(), true));
         }
-        if let Some(template) = self.analysis.deferred_type(local.0).cloned() {
-            return Ok((self.realized(&template)?, None));
+        if let Some(template) = self.analysis.deferred_types.get(&local.0).cloned() {
+            return Ok((self.realized(&template)?, false));
         }
         if self.analysis.array_iters.contains_key(&local.0) {
             return unsupported(format!("{what} with an array iterator as a type argument"));
         }
         let value = coerce(&format!("l{}", local.0), self.repr(local), Repr::Value);
-        let name = format!("t{}", self.temps);
-        self.temps += 1;
-        self.pending.push(format!(
-            "let {name}: RealizedTy = vm.type_operand({value})?;"
-        ));
-        Ok((name, None))
+        Ok((self.bind_type(&format!("vm.type_operand({value})?")), false))
     }
 
     fn prepare(&mut self) {
@@ -420,21 +352,6 @@ impl<'db> Generator<'_, 'db> {
             }
         }
         let catches = blocks.iter().any(|block| block.handling.is_some());
-        let binds_types = blocks.iter().any(|block| {
-            block.statements.iter().any(|statement| {
-                matches!(
-                    statement.kind,
-                    StatementKind::Intrinsic {
-                        op: baml_compiler2_mir::IntrinsicOp::BindType(_),
-                        ..
-                    }
-                )
-            })
-        });
-        // A collection while this body is suspended moves the runtime
-        // declarations a hoisted type names, so a pausing body builds each
-        // type where it is used.
-        self.hoist_types = !binds_types && !self.pauses;
         let base = self.slot_base();
         self.cause_slot = catches.then_some(base);
         self.slots = base + usize::from(catches);
@@ -443,7 +360,6 @@ impl<'db> Generator<'_, 'db> {
             return;
         }
         self.live_in = baml_compiler2_mir::live_in_precise(self.body);
-        self.loop_headers = loops(self.body).0;
         // Spill slots for the values live across a suspension: as many as the
         // widest site keeps.
         let at_sites = (0..blocks.len())
@@ -451,6 +367,7 @@ impl<'db> Generator<'_, 'db> {
             .filter_map(|block| self.rooted_locals(BlockId(block)).ok())
             .map(|live| live.len());
         let at_headers = self
+            .analysis
             .loop_headers
             .iter()
             .map(|&header| self.header_locals(header).len());
@@ -593,19 +510,7 @@ impl<'db> Generator<'_, 'db> {
                 has_trace,
                 ..
             } => {
-                let args = if *has_trace {
-                    let Some((trace, args)) = args.split_last() else {
-                        return Err(Rejection::Invalid(
-                            "a traced call without its attachment".into(),
-                        ));
-                    };
-                    let trace = self.value_operand(block, trace)?;
-                    let code = self.fallible(block, &format!("vm.set_call_trace({trace})"))?;
-                    self.emit_statement(&format!("{code};"));
-                    args
-                } else {
-                    args
-                };
+                let args = self.trace_attachment(block, args, *has_trace)?;
                 self.virtual_request(
                     block,
                     iface,
@@ -619,7 +524,7 @@ impl<'db> Generator<'_, 'db> {
             }
             Terminator::Await { future, .. } => {
                 let future = self.load(block, future)?;
-                let future = self.value_arg(&future.code, future.repr);
+                let future = self.value_arg(&future);
                 self.emit_statement(&format!("let operand = {future};"));
                 let suspend = self.suspend_expr(block, "Step::Await(operand)", &[]);
                 format!("match vm.ready(operand) {{ Some(v) => Ok(v), None => {suspend} }}")
@@ -655,21 +560,8 @@ impl<'db> Generator<'_, 'db> {
             unreachable!("call request requires a call terminator");
         };
         let (type_args, args) = args.split_at((*ntypeargs).min(args.len()));
-        // The final operand of a traced call is its attachment.
-        let args = if *has_trace {
-            let Some((trace, args)) = args.split_last() else {
-                return Err(Rejection::Invalid(
-                    "a traced call without its attachment".into(),
-                ));
-            };
-            let trace = self.value_operand(block, trace)?;
-            let code = self.fallible(block, &format!("vm.set_call_trace({trace})"))?;
-            self.emit_statement(&format!("{code};"));
-            args
-        } else {
-            args
-        };
-        let (types, _) = self.call_type_args(type_args)?;
+        let args = self.trace_attachment(block, args, *has_trace)?;
+        let (types, _) = self.type_operands("call", type_args)?;
         let plain = types.is_empty() && !*has_trace;
         self.call_types = types;
         self.callee_ptr(block, callee)?;
@@ -678,7 +570,7 @@ impl<'db> Generator<'_, 'db> {
             .is_some_and(|layout| layout.0.iter().any(Option::is_some));
         if let Operand::Constant(Constant::Function(func)) = callee {
             let name = function_display_name(self.db, *func);
-            let Some((_, info)) = self.index.function(self.db, *func)? else {
+            let Some((_, info)) = self.index.function(self.db, *func) else {
                 return unsupported(format!("callee `{name}` not found in the program"));
             };
             let values = self.laid_out_args(block, &name, info, argument_layout.as_ref(), args)?;
@@ -718,6 +610,28 @@ impl<'db> Generator<'_, 'db> {
              None => {suspend} }}",
             args.len()
         ))
+    }
+
+    /// Attach a traced call's final operand, its attachment, and return the
+    /// other arguments.
+    fn trace_attachment<'b>(
+        &mut self,
+        block: BlockId,
+        args: &'b [Operand<'db>],
+        traced: bool,
+    ) -> Gen<&'b [Operand<'db>]> {
+        if !traced {
+            return Ok(args);
+        }
+        let Some((trace, args)) = args.split_last() else {
+            return Err(Rejection::Invalid(
+                "a traced call without its attachment".into(),
+            ));
+        };
+        let trace = self.value_operand(block, trace)?;
+        let code = self.fallible(block, &format!("vm.set_call_trace({trace})"))?;
+        self.emit_statement(&format!("{code};"));
+        Ok(args)
     }
 
     /// Where a suspending terminator stores its result and continues.
@@ -788,7 +702,7 @@ impl<'db> Generator<'_, 'db> {
 
     /// VM call arguments must be atoms to avoid overlapping mutable borrows.
     fn hoist(&mut self, expr: Expr) -> Expr {
-        if is_atom(&expr.code) {
+        if expr.atom {
             return expr;
         }
         let name = format!("t{}", self.temps);
@@ -798,16 +712,20 @@ impl<'db> Generator<'_, 'db> {
             expr.repr.rust_type(),
             expr.code
         ));
-        Expr::new(name, expr.repr)
+        Expr::atom(name, expr.repr)
     }
 
     fn value_operand(&mut self, block: BlockId, operand: &Operand<'db>) -> Gen<String> {
         let operand = self.operand(block, operand)?;
-        Ok(self.value_arg(&operand.code, operand.repr))
+        Ok(self.value_arg(&operand))
     }
 
-    fn value_arg(&mut self, code: &str, repr: Repr) -> String {
-        let coerced = coerce(code, repr, Repr::Value);
+    /// `expr` as an atomic `Value` argument.
+    fn value_arg(&mut self, expr: &Expr) -> String {
+        if expr.atom && expr.repr == Repr::Value {
+            return expr.code.clone();
+        }
+        let coerced = coerce(&expr.code, expr.repr, Repr::Value);
         self.hoist(Expr::new(coerced, Repr::Value)).code
     }
 
@@ -852,6 +770,7 @@ impl<'db> Generator<'_, 'db> {
             self.body,
             terminator,
             &self.analysis.static_types,
+            &self.analysis.hook_results,
         ) {
             return true;
         }

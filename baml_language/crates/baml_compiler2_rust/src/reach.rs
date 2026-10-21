@@ -34,7 +34,7 @@ struct Collector<'a, 'db> {
 
 impl<'db> Collector<'_, 'db> {
     fn function(&mut self, func: baml_compiler2_hir_ty::extern_loc::FunctionRef<'db>) {
-        if let Ok(Some((object, _))) = self.index.function(self.db, func) {
+        if let Some((object, _)) = self.index.function(self.db, func) {
             self.out.insert(object);
         }
     }
@@ -139,7 +139,7 @@ impl<'db> Collector<'_, 'db> {
             } => {
                 self.operands(captures);
                 if let Some(lambda) = lambdas.get(*lambda_idx) {
-                    if let Ok(Some(object)) = self.index.lambda(self.db, &lambda.identity) {
+                    if let Some(object) = self.index.lambda(self.db, &lambda.identity) {
                         self.out.insert(object);
                     }
                     if let MirFunctionKind::Bytecode(body) = &lambda.kind {

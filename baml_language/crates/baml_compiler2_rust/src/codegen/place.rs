@@ -19,7 +19,7 @@ impl<'db> Generator<'_, 'db> {
         match place {
             Place::Local(local) => {
                 // Frame-derived types are rebuilt per read; static types are cached per site.
-                if let Some(template) = self.analysis.deferred_type(local.0).cloned() {
+                if let Some(template) = self.analysis.deferred_types.get(&local.0).cloned() {
                     let slot = match template {
                         baml_type::TyTemplate::TypeArgRef(slot) => format!("Some({slot})"),
                         _ => "None".to_string(),
@@ -48,11 +48,11 @@ impl<'db> Generator<'_, 'db> {
                 if self.analysis.array_iters.contains_key(&local.0) {
                     return Err(Rejection::Invalid("array iterator used as a value".into()));
                 }
-                Ok(Expr::new(format!("l{}", local.0), self.repr(*local)))
+                Ok(Expr::atom(format!("l{}", local.0), self.repr(*local)))
             }
             Place::Field { base, field } => {
                 let base = self.load(block, base)?;
-                let base = self.value_arg(&base.code, base.repr);
+                let base = self.value_arg(&base);
                 let code = self.fallible(block, &format!("vm.load_field({base}, {field})"))?;
                 Ok(Expr::new(code, Repr::Value))
             }
@@ -61,8 +61,8 @@ impl<'db> Generator<'_, 'db> {
                     return unsupported("map index");
                 }
                 let base = self.load(block, base)?;
-                let base = self.value_arg(&base.code, base.repr);
-                let index = self.value_arg(&format!("l{}", index.0), self.repr(*index));
+                let base = self.value_arg(&base);
+                let index = self.value_arg(&Expr::atom(format!("l{}", index.0), self.repr(*index)));
                 let code =
                     self.fallible(block, &format!("vm.load_array_element({base}, {index})"))?;
                 Ok(Expr::new(code, Repr::Value))
@@ -105,9 +105,9 @@ impl<'db> Generator<'_, 'db> {
                 Ok(format!("l{} = {code};", local.0))
             }
             Place::Field { base, field } => {
-                let value = self.value_arg(&value.code, value.repr);
+                let value = self.value_arg(value);
                 let base = self.load(block, base)?;
-                let base = self.value_arg(&base.code, base.repr);
+                let base = self.value_arg(&base);
                 let code =
                     self.fallible(block, &format!("vm.store_field({base}, {field}, {value})"))?;
                 Ok(format!("{code};"))
@@ -116,10 +116,10 @@ impl<'db> Generator<'_, 'db> {
                 if !matches!(kind, baml_compiler2_mir::IndexKind::Array) {
                     return unsupported("map index");
                 }
-                let value = self.value_arg(&value.code, value.repr);
+                let value = self.value_arg(value);
                 let base = self.load(block, base)?;
-                let base = self.value_arg(&base.code, base.repr);
-                let index = self.value_arg(&format!("l{}", index.0), self.repr(*index));
+                let base = self.value_arg(&base);
+                let index = self.value_arg(&Expr::atom(format!("l{}", index.0), self.repr(*index)));
                 let code = self.fallible(
                     block,
                     &format!("vm.store_array_element({base}, {index}, {value})"),
@@ -127,7 +127,7 @@ impl<'db> Generator<'_, 'db> {
                 Ok(format!("{code};"))
             }
             Place::Deref(cell) => {
-                let value = self.value_arg(&value.code, value.repr);
+                let value = self.value_arg(value);
                 let (cell, _) = self.cell(cell);
                 Ok(format!("vm.cell_store({cell}, {value})?;"))
             }

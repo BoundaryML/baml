@@ -7,8 +7,11 @@ use std::{
 };
 
 use baml_compiler2_mir::{
-    CellId, Constant, IntrinsicOp, MirFunction, MirFunctionBody, Operand, Place, RuntimeTy, Rvalue,
-    StatementKind, Terminator, UnaryOp,
+    CellId, Constant, IntrinsicOp, Local, MirFunction, MirFunctionBody, Operand, Place, RuntimeTy,
+    Rvalue, StatementKind, Terminator, UnaryOp,
+    memory::{
+        Resources, place_reads, walk_operand_places, walk_rvalue_places, walk_terminator_places,
+    },
 };
 use baml_type::{Literal, TyTemplate};
 use bex_vm_types::FunctionKind;
@@ -69,18 +72,20 @@ pub(crate) struct Analysis {
     pub(crate) user_callees: BTreeSet<usize>,
     /// Type locals that need no frame type arguments.
     pub(crate) static_types: HashMap<usize, StaticTy>,
-    /// Deferred type locals; empty when the body can rebind frame types.
-    pub(crate) frame_types: HashMap<usize, baml_compiler2_mir::TyTemplate>,
-    /// Type locals of a body that binds frame types: read from the frame
-    /// where they are used, which their load's own block reaches with no
-    /// binding in between. Empty unless the body binds types.
-    pub(crate) runtime_types: HashMap<usize, baml_compiler2_mir::TyTemplate>,
+    /// Type locals built from the frame where they are used. In a body that
+    /// binds frame types, only those whose every use follows their load in
+    /// its block with no binding in between.
+    pub(crate) deferred_types: HashMap<usize, baml_compiler2_mir::TyTemplate>,
     /// Direct suspension; admission propagates it through user calls.
     pub(crate) suspends: bool,
     /// Iterator local to array local for iteration compiled as an index walk.
     pub(crate) array_iters: BTreeMap<usize, usize>,
-    /// The body has a loop, which polls for a yield at its back edge.
-    pub(crate) loops: bool,
+    /// Loop headers, which poll for a yield at their back edge.
+    pub(crate) loop_headers: BTreeSet<usize>,
+    /// The body runs a declaration trace hook prologue.
+    pub(crate) hooked: bool,
+    /// Locals holding a declaration hook's result (`ApplyTraceHook` operands).
+    pub(crate) hook_results: BTreeSet<usize>,
 }
 
 impl Analysis {
@@ -96,18 +101,22 @@ impl Analysis {
         }
         let values = value_reprs(body);
         let reprs = slot_reprs(body, &values);
-        let TypeLocals {
-            static_types,
-            frame_types,
-            runtime_types,
-        } = type_locals(index, body);
+        let intrinsics = Intrinsics::of(body);
+        let (static_types, deferred_types) = type_locals(index, body, intrinsics.binds_types);
         let array_iters = array_iterators(body, mir.arity);
         let BodyFlow {
             cfg,
             user_callees,
             suspends,
-        } = body_flow(db, index, body, mir.arity, &static_types, &array_iters)?;
-        let loops = !loops(body).0.is_empty();
+        } = body_flow(
+            db,
+            index,
+            body,
+            mir.arity,
+            &static_types,
+            &array_iters,
+            &intrinsics.hook_results,
+        )?;
         Ok(Self {
             arity: mir.arity,
             reprs,
@@ -116,31 +125,60 @@ impl Analysis {
             cfg,
             user_callees,
             static_types,
-            frame_types,
-            runtime_types,
+            deferred_types,
             suspends,
             array_iters,
-            loops,
+            loop_headers: loop_headers(body),
+            hooked: intrinsics.hooked,
+            hook_results: intrinsics.hook_results,
         })
     }
 
     /// Whether the body may suspend on its own, before its callees are known.
     pub(crate) fn pauses(&self) -> bool {
-        self.suspends || self.loops
+        self.suspends || !self.loop_headers.is_empty()
     }
 
     /// Type locals have no runtime `Value` binding.
     pub(crate) fn is_type_local(&self, i: usize) -> bool {
-        self.static_types.contains_key(&i)
-            || self.frame_types.contains_key(&i)
-            || self.runtime_types.contains_key(&i)
+        self.static_types.contains_key(&i) || self.deferred_types.contains_key(&i)
     }
+}
 
-    /// The template of a type local read from the frame at its use.
-    pub(crate) fn deferred_type(&self, i: usize) -> Option<&baml_compiler2_mir::TyTemplate> {
-        self.frame_types
-            .get(&i)
-            .or_else(|| self.runtime_types.get(&i))
+/// What the body's intrinsics ask of its frame, from one scan.
+struct Intrinsics {
+    binds_types: bool,
+    hooked: bool,
+    hook_results: BTreeSet<usize>,
+}
+
+impl Intrinsics {
+    fn of(body: &MirFunctionBody<'_>) -> Self {
+        let mut out = Self {
+            binds_types: false,
+            hooked: false,
+            hook_results: BTreeSet::new(),
+        };
+        for statement in body.blocks.iter().flat_map(|block| &block.statements) {
+            let StatementKind::Intrinsic { op, args } = &statement.kind else {
+                continue;
+            };
+            match op {
+                IntrinsicOp::BindType(_) => out.binds_types = true,
+                IntrinsicOp::BuiltinTraceHook(_) => out.hooked = true,
+                IntrinsicOp::ApplyTraceHook => {
+                    out.hooked = true;
+                    out.hook_results
+                        .extend(args.iter().filter_map(|arg| match arg {
+                            Operand::Copy(Place::Local(local))
+                            | Operand::Move(Place::Local(local)) => Some(local.0),
+                            _ => None,
+                        }));
+                }
+                IntrinsicOp::Log(_) => {}
+            }
+        }
+        out
     }
 }
 
@@ -158,95 +196,115 @@ fn slot_reprs(body: &MirFunctionBody<'_>, values: &[Repr]) -> Vec<Repr> {
         .collect()
 }
 
-#[allow(clippy::struct_field_names)]
-struct TypeLocals {
-    static_types: HashMap<usize, StaticTy>,
-    frame_types: HashMap<usize, baml_compiler2_mir::TyTemplate>,
-    runtime_types: HashMap<usize, baml_compiler2_mir::TyTemplate>,
-}
-
-fn type_locals(index: &ProgramIndex, body: &MirFunctionBody<'_>) -> TypeLocals {
+/// The static and deferred type locals of `body`.
+fn type_locals(
+    index: &ProgramIndex,
+    body: &MirFunctionBody<'_>,
+    binds_types: bool,
+) -> (
+    HashMap<usize, StaticTy>,
+    HashMap<usize, baml_compiler2_mir::TyTemplate>,
+) {
     let mut static_types = HashMap::new();
-    let mut frame_types = HashMap::new();
+    let mut deferred_types = HashMap::new();
     // Where each frame-derived type is loaded, as (block, statement).
     let mut loads: HashMap<usize, Vec<(usize, usize)>> = HashMap::new();
-    for (b, block) in body.blocks.iter().enumerate() {
-        for (s, statement) in block.statements.iter().enumerate() {
-            let StatementKind::Assign { destination, value } = &statement.kind else {
-                continue;
-            };
-            if let Rvalue::LoadType(template) = value {
-                let Place::Local(local) = destination else {
-                    continue;
-                };
-                if let Some(code) = static_realized(index, template) {
-                    let primitive = is_primitive(template);
-                    static_types.insert(local.0, StaticTy { code, primitive });
-                } else {
-                    frame_types.insert(local.0, template.clone());
-                    loads.entry(local.0).or_default().push((b, s));
-                }
-            }
-        }
-    }
     // Reused type temporaries need ordinary value bindings.
     let mut written = HashSet::new();
-    for block in &body.blocks {
-        for statement in &block.statements {
-            if let StatementKind::Assign {
+    for (b, block) in body.blocks.iter().enumerate() {
+        for (s, statement) in block.statements.iter().enumerate() {
+            let StatementKind::Assign {
                 destination: Place::Local(local),
                 value,
             } = &statement.kind
-                && !matches!(value, Rvalue::LoadType(_))
-            {
+            else {
+                continue;
+            };
+            let Rvalue::LoadType(template) = value else {
                 written.insert(local.0);
+                continue;
+            };
+            if let Some(code) = static_realized(index, template) {
+                let primitive = is_primitive(template);
+                static_types.insert(local.0, StaticTy { code, primitive });
+            } else {
+                deferred_types.insert(local.0, template.clone());
+                loads.entry(local.0).or_default().push((b, s));
             }
         }
-        if let Some(
-            Terminator::Call { destination, .. }
-            | Terminator::VirtualCall { destination, .. }
-            | Terminator::SysOp { destination, .. }
-            | Terminator::Await { destination, .. }
-            | Terminator::AwaitAny { destination, .. }
-            | Terminator::ShortCircuit { destination, .. },
-        ) = &block.terminator
-            && let Place::Local(local) = destination
-        {
+        if let Some(Place::Local(local)) = block.terminator.as_ref().and_then(destination) {
             written.insert(local.0);
         }
     }
     static_types.retain(|local, _| !written.contains(local));
-    frame_types.retain(|local, _| !written.contains(local));
+    deferred_types.retain(|local, _| !written.contains(local));
     // Frame types can change between a LoadType and its use. A type the
     // body binds is read from the frame at the use instead, which is the
     // load's own reading only while no binding comes between the two.
-    let binds_types = body.blocks.iter().any(|block| {
-        block.statements.iter().any(|statement| {
-            matches!(
-                statement.kind,
-                StatementKind::Intrinsic {
-                    op: IntrinsicOp::BindType(_),
-                    ..
-                }
-            )
-        })
-    });
-    let mut runtime_types = HashMap::new();
     if binds_types {
-        for (local, template) in std::mem::take(&mut frame_types) {
-            if let [(block, statement)] = loads[&local].as_slice()
-                && read_only_after_load(body, local, *block, *statement)
-            {
-                runtime_types.insert(local, template);
+        deferred_types.retain(|&local, _| {
+            matches!(loads[&local].as_slice(), [(block, statement)]
+                if read_only_after_load(body, local, *block, *statement))
+        });
+    }
+    (static_types, deferred_types)
+}
+
+/// The place a terminator writes, if any.
+fn destination<'a>(terminator: &'a Terminator<'_>) -> Option<&'a Place> {
+    match terminator {
+        Terminator::Call { destination, .. }
+        | Terminator::VirtualCall { destination, .. }
+        | Terminator::SysOp { destination, .. }
+        | Terminator::Await { destination, .. }
+        | Terminator::AwaitAny { destination, .. }
+        | Terminator::ShortCircuit { destination, .. }
+        | Terminator::Spawn {
+            future: destination,
+            ..
+        } => Some(destination),
+        _ => None,
+    }
+}
+
+/// Every place a statement reads.
+fn walk_statement_places<'a>(statement: &'a StatementKind<'_>, f: &mut impl FnMut(&'a Place)) {
+    match statement {
+        StatementKind::Assign { value, .. } => walk_rvalue_places(value, f),
+        StatementKind::Intrinsic { args, .. } => {
+            for arg in args {
+                walk_operand_places(arg, f);
             }
         }
+        StatementKind::VirtualFieldStore {
+            receiver, value, ..
+        } => {
+            walk_operand_places(receiver, f);
+            walk_operand_places(value, f);
+        }
+        StatementKind::Drop(_) | StatementKind::FreshCell { .. } | StatementKind::Nop => {}
     }
+}
 
-    TypeLocals {
-        static_types,
-        frame_types,
-        runtime_types,
-    }
+/// Whether `place` names `local`, as its root, a cell's local, or an index.
+fn mentions(place: &Place, local: usize) -> bool {
+    let mut reads = Resources::default();
+    place_reads(place, &mut reads);
+    reads.locals.contains(&Local(local))
+}
+
+fn statement_reads(statement: &StatementKind<'_>, local: usize) -> bool {
+    let mut reads = false;
+    walk_statement_places(statement, &mut |place| reads |= mentions(place, local));
+    reads
+}
+
+/// Whether `terminator` reads or writes `local`.
+fn terminator_mentions(terminator: &Terminator<'_>, local: usize) -> bool {
+    let mut found = destination(terminator).is_some_and(|place| mentions(place, local))
+        || matches!(terminator, Terminator::NarrowBind { destination, .. } if destination.0 == local);
+    walk_terminator_places(terminator, &mut |place| found |= mentions(place, local));
+    found
 }
 
 /// Whether every read of `local` follows its load at (`block`, `statement`)
@@ -261,32 +319,15 @@ fn read_only_after_load(
         let mut bound = false;
         for (s, kind) in candidate.statements.iter().enumerate() {
             let after_load = b == block && s > statement;
-            let reads = match &kind.kind {
-                StatementKind::Assign { value, .. } => {
-                    let mut reads = false;
-                    baml_compiler2_mir::memory::walk_rvalue_places(value, &mut |place| {
-                        reads |= place_mentions(place, local);
-                    });
-                    reads
-                }
-                StatementKind::Intrinsic { op, args } => {
-                    if matches!(op, IntrinsicOp::BindType(_)) && after_load {
-                        bound = true;
-                    }
-                    args.iter().any(|arg| operand_mentions(arg, local))
-                }
-                StatementKind::VirtualFieldStore {
-                    receiver, value, ..
-                } => operand_mentions(receiver, local) || operand_mentions(value, local),
-                StatementKind::FreshCell { local: cell, .. } => {
-                    if cell.0 == local {
-                        return false;
-                    }
-                    false
-                }
-                StatementKind::Drop(_) | StatementKind::Nop => false,
-            };
-            if reads && (!after_load || bound) {
+            match &kind.kind {
+                StatementKind::Intrinsic {
+                    op: IntrinsicOp::BindType(_),
+                    ..
+                } if after_load => bound = true,
+                StatementKind::FreshCell { local: cell, .. } if cell.0 == local => return false,
+                _ => {}
+            }
+            if statement_reads(&kind.kind, local) && (!after_load || bound) {
                 return false;
             }
         }
@@ -326,148 +367,19 @@ fn array_iterators(body: &MirFunctionBody<'_>, arity: usize) -> BTreeMap<usize, 
 /// `xs.iter()` call or the receiver of a `next` call.
 fn iter_escapes(body: &MirFunctionBody<'_>, arity: usize, iter: usize) -> bool {
     body.blocks.iter().any(|block| {
-        block
-            .statements
-            .iter()
-            .any(|statement| statement_mentions(&statement.kind, iter))
-            || block.terminator.as_ref().is_some_and(|terminator| {
-                array_iter_call(body, arity, terminator).is_none_or(|(dest, _)| dest != iter)
-                    && array_next_shape(terminator) != Some(iter)
-                    && terminator_mentions(terminator, iter)
-            })
-    })
-}
-
-fn place_mentions(place: &Place, local: usize) -> bool {
-    match place {
-        Place::Local(l) => l.0 == local,
-        Place::Field { base, .. } => place_mentions(base, local),
-        Place::Index { base, index, .. } => index.0 == local || place_mentions(base, local),
-        Place::Capture(_) => false,
-        Place::Deref(cell) => cell.local().is_some_and(|l| l.0 == local),
-    }
-}
-
-fn operand_mentions(operand: &Operand<'_>, local: usize) -> bool {
-    match operand {
-        Operand::Copy(place) | Operand::Move(place) => place_mentions(place, local),
-        Operand::Constant(_) => false,
-    }
-}
-
-fn statement_mentions(statement: &StatementKind<'_>, local: usize) -> bool {
-    let operands = |operands: &[Operand<'_>]| operands.iter().any(|o| operand_mentions(o, local));
-    match statement {
-        StatementKind::Assign { destination, value } => {
-            place_mentions(destination, local)
-                || match value {
-                    Rvalue::Use(operand)
-                    | Rvalue::UnaryOp { operand, .. }
-                    | Rvalue::IsType { operand, .. }
-                    | Rvalue::IsTypeTag { operand, .. }
-                    | Rvalue::SatisfiesBound { ty: operand, .. }
-                    | Rvalue::MakeBoundMethod {
-                        receiver: operand, ..
-                    }
-                    | Rvalue::MakeVirtualBoundMethod {
-                        receiver: operand, ..
-                    }
-                    | Rvalue::VirtualFieldAccess {
-                        receiver: operand, ..
-                    }
-                    | Rvalue::MakeGenericFunctionFromValue { value: operand, .. } => {
-                        operand_mentions(operand, local)
-                    }
-                    Rvalue::BinaryOp { left, right, .. } => {
-                        operand_mentions(left, local) || operand_mentions(right, local)
-                    }
-                    Rvalue::Array(_, elements)
-                    | Rvalue::Aggregate {
-                        fields: elements, ..
-                    }
-                    | Rvalue::MakeClosure {
-                        captures: elements, ..
-                    }
-                    | Rvalue::MakeVirtualFunction {
-                        type_args: elements,
-                        ..
-                    } => operands(elements),
-                    Rvalue::Map(_, _, entries) => entries
-                        .iter()
-                        .any(|(k, v)| operand_mentions(k, local) || operand_mentions(v, local)),
-                    Rvalue::Discriminant(place) | Rvalue::TypeTag(place) | Rvalue::Len(place) => {
-                        place_mentions(place, local)
-                    }
-                    Rvalue::TraceHookSettings { .. }
-                    | Rvalue::Uint8Array(_)
-                    | Rvalue::MakeGenericFunction { .. }
-                    | Rvalue::LoadType(_)
-                    | Rvalue::CurrentPackage => false,
+        block.statements.iter().any(|statement| {
+            statement_reads(&statement.kind, iter)
+                || match &statement.kind {
+                    StatementKind::Assign { destination, .. } => mentions(destination, iter),
+                    StatementKind::FreshCell { local, .. } => local.0 == iter,
+                    _ => false,
                 }
-        }
-        // A drop ends the local without using its value.
-        StatementKind::Drop(_) | StatementKind::Nop => false,
-        StatementKind::FreshCell { local: l, .. } => l.0 == local,
-        StatementKind::Intrinsic { args, .. } => operands(args),
-        StatementKind::VirtualFieldStore {
-            receiver, value, ..
-        } => operand_mentions(receiver, local) || operand_mentions(value, local),
-    }
-}
-
-fn terminator_mentions(terminator: &Terminator<'_>, local: usize) -> bool {
-    let operands = |operands: &[Operand<'_>]| operands.iter().any(|o| operand_mentions(o, local));
-    match terminator {
-        Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => false,
-        Terminator::Branch { condition, .. } => operand_mentions(condition, local),
-        Terminator::NarrowBind {
-            source,
-            destination,
-            ..
-        } => operand_mentions(source, local) || destination.0 == local,
-        Terminator::Switch { discriminant, .. } => operand_mentions(discriminant, local),
-        Terminator::Call {
-            callee,
-            args,
-            destination,
-            ..
-        } => {
-            operand_mentions(callee, local) || operands(args) || place_mentions(destination, local)
-        }
-        Terminator::VirtualCall {
-            args, destination, ..
-        } => operands(args) || place_mentions(destination, local),
-        Terminator::SysOp {
-            callee,
-            args,
-            destination,
-            ..
-        } => {
-            operand_mentions(callee, local) || operands(args) || place_mentions(destination, local)
-        }
-        Terminator::Spawn { plan, future, .. } => {
-            operand_mentions(plan, local) || place_mentions(future, local)
-        }
-        Terminator::Await {
-            future,
-            destination,
-            ..
-        } => place_mentions(future, local) || place_mentions(destination, local),
-        Terminator::AwaitAny {
-            futures,
-            destination,
-            ..
-        } => operand_mentions(futures, local) || place_mentions(destination, local),
-        Terminator::Throw { value } => operand_mentions(value, local),
-        Terminator::Rethrow { value, context } => {
-            operand_mentions(value, local) || operand_mentions(context, local)
-        }
-        Terminator::ShortCircuit {
-            operand,
-            destination,
-            ..
-        } => operand_mentions(operand, local) || place_mentions(destination, local),
-    }
+        }) || block.terminator.as_ref().is_some_and(|terminator| {
+            array_iter_call(body, arity, terminator).is_none_or(|(dest, _)| dest != iter)
+                && array_next_shape(terminator) != Some(iter)
+                && terminator_mentions(terminator, iter)
+        })
+    })
 }
 
 struct BodyFlow {
@@ -483,6 +395,7 @@ fn body_flow<'db>(
     arity: usize,
     static_types: &HashMap<usize, StaticTy>,
     array_iters: &BTreeMap<usize, usize>,
+    hook_results: &BTreeSet<usize>,
 ) -> Result<BodyFlow, Rejection> {
     let mut flows = Vec::with_capacity(body.blocks.len());
     let mut unwinds = Vec::with_capacity(body.blocks.len());
@@ -505,7 +418,7 @@ fn body_flow<'db>(
             user_callees.insert(object);
         }
         // Virtual calls need VM dispatch except for array iteration.
-        suspends |= suspends_directly(db, index, body, terminator, static_types)
+        suspends |= suspends_directly(db, index, body, terminator, static_types, hook_results)
             || (matches!(terminator, Terminator::VirtualCall { .. }) && !array_iteration);
     }
     let cfg = Cfg {
@@ -723,6 +636,7 @@ pub(crate) fn suspends_directly<'db>(
     body: &MirFunctionBody<'db>,
     terminator: &Terminator<'db>,
     static_types: &HashMap<usize, StaticTy>,
+    hook_results: &BTreeSet<usize>,
 ) -> bool {
     match terminator {
         Terminator::SysOp { .. }
@@ -735,7 +649,10 @@ pub(crate) fn suspends_directly<'db>(
         } => true,
         // The VM's call path runs a declaration hook: it suppresses hooks
         // under it and attributes it to the target's caller.
-        terminator if hook_call(body, terminator) => true,
+        Terminator::Call {
+            destination: Place::Local(result),
+            ..
+        } if hook_results.contains(&result.0) => true,
         Terminator::Call {
             callee,
             args,
@@ -745,8 +662,8 @@ pub(crate) fn suspends_directly<'db>(
             let Operand::Constant(Constant::Function(func)) = callee else {
                 return true;
             };
-            // Generation rejects missing or ambiguous callees.
-            let Ok(Some((_, info))) = index.function(db, *func) else {
+            // Generation rejects missing callees.
+            let Some((_, info)) = index.function(db, *func) else {
                 return false;
             };
             match info.kind {
@@ -766,34 +683,6 @@ pub(crate) fn suspends_directly<'db>(
     }
 }
 
-/// Whether `terminator` calls the body's declaration hook: its result is
-/// what `ApplyTraceHook` applies.
-pub(crate) fn hook_call(body: &MirFunctionBody<'_>, terminator: &Terminator<'_>) -> bool {
-    let Terminator::Call {
-        destination: Place::Local(result),
-        ..
-    } = terminator
-    else {
-        return false;
-    };
-    body.blocks
-        .iter()
-        .flat_map(|block| &block.statements)
-        .any(|statement| {
-            matches!(
-                &statement.kind,
-                StatementKind::Intrinsic {
-                    op: IntrinsicOp::ApplyTraceHook,
-                    args,
-                } if args.iter().any(|arg| matches!(
-                    arg,
-                    Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local))
-                        if local == result
-                ))
-            )
-        })
-}
-
 pub(crate) fn user_callee<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     index: &ProgramIndex,
@@ -802,12 +691,12 @@ pub(crate) fn user_callee<'db>(
     let Operand::Constant(Constant::Function(func)) = callee else {
         return None;
     };
-    let (object, info) = index.function(db, *func).ok().flatten()?;
+    let (object, info) = index.function(db, *func)?;
     matches!(info.kind, FunctionKind::Bytecode).then_some(object)
 }
 
-/// Return back-edge targets and loop membership for each block.
-pub(crate) fn loops(body: &MirFunctionBody<'_>) -> (BTreeSet<usize>, Vec<bool>) {
+/// The targets of the body's back edges.
+fn loop_headers(body: &MirFunctionBody<'_>) -> BTreeSet<usize> {
     let successors = |block: usize| {
         body.blocks[block]
             .terminator
@@ -817,14 +706,7 @@ pub(crate) fn loops(body: &MirFunctionBody<'_>) -> (BTreeSet<usize>, Vec<bool>) 
             .collect::<Vec<_>>()
     };
     let n = body.blocks.len();
-    let mut preds = vec![Vec::new(); n];
-    for block in 0..n {
-        for succ in successors(block) {
-            preds[succ].push(block);
-        }
-    }
     let mut headers = BTreeSet::new();
-    let mut back_edges = Vec::new();
     let mut on_path = vec![false; n];
     let mut seen = vec![false; n];
     let mut stack = vec![(body.entry.0, successors(body.entry.0), 0)];
@@ -839,28 +721,13 @@ pub(crate) fn loops(body: &MirFunctionBody<'_>) -> (BTreeSet<usize>, Vec<bool>) 
         *next += 1;
         if on_path[succ] {
             headers.insert(succ);
-            back_edges.push((*block, succ));
         } else if !seen[succ] {
             seen[succ] = true;
             on_path[succ] = true;
             stack.push((succ, successors(succ), 0));
         }
     }
-    let mut in_loop = vec![false; n];
-    for (source, header) in back_edges {
-        let mut members = vec![false; n];
-        members[header] = true;
-        let mut work = vec![source];
-        while let Some(block) = work.pop() {
-            if !std::mem::replace(&mut members[block], true) {
-                work.extend(preds[block].iter().copied());
-            }
-        }
-        for (member, in_loop) in members.iter().zip(in_loop.iter_mut()) {
-            *in_loop |= *member;
-        }
-    }
-    (headers, in_loop)
+    headers
 }
 
 /// Static constraints that can rule out builtin callbacks.
@@ -1029,7 +896,7 @@ pub(crate) fn realized_expr(
         ),
         TyTemplate::Union(members) => format!("RealizedTy::Union(Box::new([{}]))", parts(members)?),
         TyTemplate::Class(name, args) => {
-            let (object, _) = index.class_at(name).ok().flatten()?;
+            let (object, _) = index.class_at(name)?;
             if args.is_empty() {
                 format!("vm.class_type(vm.idx_to_ptr(ObjectIndex::from_raw({object})))")
             } else {
@@ -1040,11 +907,11 @@ pub(crate) fn realized_expr(
             }
         }
         TyTemplate::Enum(name) => {
-            let object = index.enum_at(name).ok().flatten()?;
+            let object = index.enum_at(name)?;
             format!("vm.enum_type(vm.idx_to_ptr(ObjectIndex::from_raw({object})))")
         }
         TyTemplate::Interface(name, args, assoc) => {
-            let object = index.interface_at(name).ok().flatten()?;
+            let object = index.interface_at(name)?;
             let assoc = assoc
                 .iter()
                 .map(|(member, ty)| Some(format!("({:?}, {})", member.as_str(), part(ty)?)))
@@ -1090,19 +957,19 @@ pub(crate) fn template_blocker(
             }
             TyTemplate::Union(members) => return parts(members),
             TyTemplate::Class(name, args) => {
-                if index.class_at(name).ok().flatten().is_none() {
+                if index.class_at(name).is_none() {
                     return Some("a class not in the program");
                 }
                 return parts(args);
             }
             TyTemplate::Enum(name) => {
-                if index.enum_at(name).ok().flatten().is_none() {
+                if index.enum_at(name).is_none() {
                     return Some("an enum not in the program");
                 }
                 return None;
             }
             TyTemplate::Interface(name, args, assoc) => {
-                if index.interface_at(name).ok().flatten().is_none() {
+                if index.interface_at(name).is_none() {
                     return Some("an interface not in the program");
                 }
                 return parts(args)
