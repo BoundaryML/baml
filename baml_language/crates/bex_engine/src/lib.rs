@@ -100,6 +100,7 @@ pub mod trace_heap;
 mod trace_value_encode;
 use std::{
     collections::{HashMap, VecDeque},
+    num::NonZeroU64,
     panic::{AssertUnwindSafe, catch_unwind},
     sync::{
         Arc, Mutex,
@@ -912,6 +913,11 @@ type ExtractedEnumDefinitions = (
     indexmap::IndexMap<::sys_types::DefKey, Vec<String>>,
 );
 
+/// The task id every `$init` VM runs under. `$init` VMs run one after another,
+/// before any other task exists, so they can share one id. Reserved outside the
+/// counter that numbers every other task, which starts at 1.
+const INIT_TASK: NonZeroU64 = NonZeroU64::MAX;
+
 /// The async runtime that drives VM execution.
 ///
 /// `BexEngine` is the main entry point for executing BAML programs.
@@ -977,7 +983,7 @@ type ExtractedEnumDefinitions = (
 pub struct BexEngine {
     // Test-only observation of boundary calls, including duplicates. No production sink.
     #[cfg(test)]
-    completed_threads: std::sync::Mutex<Vec<(u64, bex_vm::telemetry::InvocationOutcome)>>,
+    completed_threads: std::sync::Mutex<Vec<(NonZeroU64, bex_vm::telemetry::InvocationOutcome)>>,
     process_euid: ProcessEuid,
     launch_context: btel_types::context::Context,
     /// A panic escaped some root call: how a host that fails because of it
@@ -1993,6 +1999,7 @@ impl BexEngine {
                     Arc::clone(&error_class_ptrs),
                     Arc::clone(&panic_class_ptrs),
                     Arc::clone(&stdlib_heads),
+                    INIT_TASK,
                     EngineTelemetry::new_root(telemetry.as_ref()),
                     trace_scope,
                 );
@@ -2280,8 +2287,9 @@ impl BexEngine {
         self.heap.function_metadata(active.proof(), id)
     }
 
-    fn next_bex_thread_id(&self) -> BexThreadId {
-        BexThreadId(self.next_thread_id.fetch_add(1, Ordering::Relaxed))
+    fn next_bex_thread_id(&self) -> NonZeroU64 {
+        NonZeroU64::new(self.next_thread_id.fetch_add(1, Ordering::Relaxed))
+            .expect("thread ids start at 1 and do not wrap")
     }
 
     /// Pre-extract LLM function metadata from heap objects.
@@ -3653,6 +3661,7 @@ impl BexEngine {
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
             Arc::clone(&self.stdlib_heads),
+            self.next_bex_thread_id(),
             match inherited.and_then(|state| state.ancestry.as_ref()) {
                 Some(ancestry) => {
                     EngineTelemetry::new_child(self.telemetry.as_ref(), Some(ancestry))
@@ -3666,7 +3675,6 @@ impl BexEngine {
         // Spawned children build their own `BexThread`s in `spawn_thread`.
         let mut vm = vm;
         vm.set_root_context(self.launch_context.clone());
-        vm.thread_id = self.next_bex_thread_id().0;
         let root_thread = BexThread::new_root(vm, TaskCancel::root(cancel));
         let inactive = self.heap_permit_manager.new_permit(root_thread).await;
         inactive.acquire().await
@@ -4923,7 +4931,7 @@ impl BexEngine {
         let call = bex_events::run::ThreadRef {
             process_euid: self.process_euid,
             engine_id: self.engine_id,
-            thread_id: BexThreadId(thread.vm.thread_id),
+            thread_id: BexThreadId(thread.vm.thread_id.get()),
         };
         capture
             .logger
@@ -5335,7 +5343,7 @@ impl BexEngine {
         } else {
             cancel.child(linked)
         };
-        let child_thread_id = self.next_bex_thread_id().0;
+        let child_thread_id = self.next_bex_thread_id();
         // Provenance for shutdown leak reports: the written spawn
         // name when there is one, else the function this spawn
         // expression appears in.
@@ -5436,7 +5444,7 @@ impl BexEngine {
         name: Option<String>,
         call_id: CallId,
         future_id: FutureId,
-        thread_id: u64,
+        thread_id: NonZeroU64,
         telemetry: Option<bex_vm::telemetry::ThreadSpawnContext>,
         context: btel_types::context::Context,
         hook_suppression: bool,
@@ -5477,7 +5485,7 @@ impl BexEngine {
         name: Option<String>,
         call_id: CallId,
         future_id: FutureId,
-        thread_id: u64,
+        thread_id: NonZeroU64,
         telemetry: Option<bex_vm::telemetry::ThreadSpawnContext>,
         context: btel_types::context::Context,
         hook_suppression: bool,
@@ -5511,10 +5519,10 @@ impl BexEngine {
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
             Arc::clone(&self.stdlib_heads),
+            thread_id,
             EngineTelemetry::new_child(self.telemetry.as_ref(), telemetry.as_ref()),
             self.trace_scope,
         );
-        child_vm.thread_id = thread_id;
         if let Some(name) = &name {
             child_vm.set_telemetry_thread_name(name);
         }
