@@ -1,5 +1,7 @@
 //! Packs the probe programs once with compiled bodies, then runs each as
-//! bytecode, compiled, and compiled under GC stress. All three must agree.
+//! bytecode, compiled, compiled under GC stress, and compiled with a VM frame
+//! for every call (`BAML_COMPILED_FRAMES=1`, as before frame records), at the
+//! default telemetry level and with telemetry off. All must agree.
 //! Run with `cargo test -p baml_tests --test rust_differential -- --ignored`.
 use std::{
     io::{self, Read},
@@ -33,6 +35,35 @@ const PROBES: &[&str] = &[
     "Hooked",
     "Spawns",
     "Equality",
+    "DeepErrors",
+    "DeepUncaught",
+    "FrameLimit",
+    "AwaitChain",
+    "CancelDeep",
+    "Shielded",
+    "GenericClosures",
+];
+
+/// Name, `BAML_COMPILED_BODIES`, `BAML_GC_STRESS`, `BAML_COMPILED_FRAMES`,
+/// and `BAML_TELEMETRY` (`None` for the default level). The first is the
+/// reference.
+type Mode = (
+    &'static str,
+    &'static str,
+    &'static str,
+    &'static str,
+    Option<&'static str>,
+);
+const MODES: &[Mode] = &[
+    ("bytecode", "0", "0", "0", None),
+    ("compiled", "1", "0", "0", None),
+    ("gc-stress", "1", "1", "0", None),
+    ("vm-frames", "1", "0", "1", None),
+    ("vm-frames-gc-stress", "1", "1", "1", None),
+    ("bytecode-telemetry-off", "0", "0", "0", Some("off")),
+    ("compiled-telemetry-off", "1", "0", "0", Some("off")),
+    ("gc-stress-telemetry-off", "1", "1", "0", Some("off")),
+    ("vm-frames-telemetry-off", "1", "0", "1", Some("off")),
 ];
 
 const OUTPUT_LIMIT: usize = 1024 * 1024;
@@ -165,20 +196,20 @@ fn rust_differential() {
     let mut failures = Vec::new();
     for probe in PROBES {
         let mut outputs = Vec::new();
-        for (mode, bodies, stress) in [
-            ("bytecode", "0", "0"),
-            ("compiled", "1", "0"),
-            ("gc-stress", "1", "1"),
-        ] {
+        for (mode, bodies, stress, frames, telemetry) in MODES {
             let start = Instant::now();
-            let output = run_probe(
-                Command::new(&executable)
-                    .arg(probe)
-                    .env("BAML_COMPILED_BODIES", bodies)
-                    .env("BAML_GC_STRESS", stress)
-                    .env("NO_COLOR", "1"),
-                timeout,
-            );
+            let mut command = Command::new(&executable);
+            command
+                .arg(probe)
+                .env("BAML_COMPILED_BODIES", bodies)
+                .env("BAML_GC_STRESS", stress)
+                .env("BAML_COMPILED_FRAMES", frames)
+                .env("NO_COLOR", "1");
+            match telemetry {
+                Some(level) => command.env("BAML_TELEMETRY", level),
+                None => command.env_remove("BAML_TELEMETRY"),
+            };
+            let output = run_probe(&mut command, timeout);
             match &output {
                 Ok(output) => {
                     eprintln!("{probe}/{mode}: {} ({:?})", output.status, start.elapsed())
@@ -191,7 +222,7 @@ fn rust_differential() {
             }
             outputs.push(output.ok());
         }
-        for (mode, actual) in ["compiled", "gc-stress"].into_iter().zip(&outputs[1..]) {
+        for ((mode, ..), actual) in MODES.iter().zip(&outputs).skip(1) {
             let (Some(expected), Some(actual)) = (&outputs[0], actual) else {
                 continue;
             };

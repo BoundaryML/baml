@@ -84,6 +84,8 @@ pub(crate) struct Analysis {
     pub(crate) loop_headers: BTreeSet<usize>,
     /// The body runs a declaration trace hook prologue.
     pub(crate) hooked: bool,
+    /// The body binds type values into its frame's type arguments.
+    pub(crate) binds_types: bool,
     /// Locals holding a declaration hook's result (`ApplyTraceHook` operands).
     pub(crate) hook_results: BTreeSet<usize>,
 }
@@ -137,6 +139,7 @@ impl Analysis {
             array_iters,
             loop_headers,
             hooked: intrinsics.hooked,
+            binds_types: intrinsics.binds_types,
             hook_results: intrinsics.hook_results,
         })
     }

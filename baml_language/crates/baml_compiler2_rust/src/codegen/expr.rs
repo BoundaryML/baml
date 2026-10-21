@@ -127,7 +127,7 @@ impl<'db> Generator<'_, 'db> {
                 };
                 let ty = self.realized(template)?;
                 Ok(Expr::new(
-                    format!("vm.type_value(depth, {slot}, {ty})"),
+                    format!("vm.type_value(fr, {slot}, {ty})"),
                     Repr::Value,
                 ))
             }
@@ -144,7 +144,7 @@ impl<'db> Generator<'_, 'db> {
             // VM's call path.
             Rvalue::TraceHookSettings { with_settings } => self.fallible_expr(
                 block,
-                &format!("vm.compiled_begin_trace_hook(depth, {with_settings})"),
+                &format!("vm.compiled_begin_trace_hook(fr, {with_settings})"),
                 Repr::Value,
             ),
             Rvalue::SatisfiesBound { ty, bound } => {
@@ -152,7 +152,7 @@ impl<'db> Generator<'_, 'db> {
                 let template = bound.to_template();
                 let realized = self.realized(&template)?;
                 let bound = self.hoist(Expr::new(
-                    format!("vm.type_value(depth, None, {realized})"),
+                    format!("vm.type_value(fr, None, {realized})"),
                     Repr::Value,
                 ));
                 self.fallible_expr(
@@ -204,7 +204,7 @@ impl<'db> Generator<'_, 'db> {
             let field = self.operand(block, field)?;
             values.push(self.value_arg(&field));
         }
-        let class = format!("vm.idx_to_ptr(ObjectIndex::from_raw({object}))");
+        let class = format!("vm.record_object(fr, ObjectIndex::from_raw({object}))");
         if type_arg_templates.is_empty() {
             return Ok(Expr::new(
                 format!("vm.new_instance({class}, vec![{}])", values.join(", ")),
@@ -254,7 +254,7 @@ impl<'db> Generator<'_, 'db> {
         }
         let ordinal = self.builtin_ordinal(key);
         let template = self.hoist(Expr::new(
-            format!("Value::object(vm.idx_to_ptr(ObjectIndex::from_raw({object})))"),
+            format!("Value::object(vm.record_object(fr, ObjectIndex::from_raw({object})))"),
             Repr::Value,
         ));
         let code = self.fallible(
@@ -292,7 +292,7 @@ impl<'db> Generator<'_, 'db> {
         }
         Ok(Expr::new(
             format!(
-                "vm.make_closure(vm.idx_to_ptr(ObjectIndex::from_raw({object})), \
+                "vm.make_closure(vm.record_object(fr, ObjectIndex::from_raw({object})), \
                  vec![{}], vec![{}].into_boxed_slice())",
                 cells.join(", "),
                 types.join(", ")
@@ -314,7 +314,7 @@ impl<'db> Generator<'_, 'db> {
         let receiver = self.value_operand(block, receiver)?;
         Ok(Expr::new(
             format!(
-                "vm.make_bound_method(vm.idx_to_ptr(ObjectIndex::from_raw({object})), {receiver})"
+                "vm.make_bound_method(vm.record_object(fr, ObjectIndex::from_raw({object})), {receiver})"
             ),
             Repr::Value,
         ))
@@ -335,7 +335,7 @@ impl<'db> Generator<'_, 'db> {
         let type_args = self.realized_all(type_arg_templates)?;
         Ok(Expr::new(
             format!(
-                "vm.make_generic_function(depth, GlobalIndex::from_raw({global}), Box::new([{}]))",
+                "vm.make_generic_function(fr, GlobalIndex::from_raw({global}), Box::new([{}]))",
                 type_args.join(", ")
             ),
             Repr::Value,
@@ -427,13 +427,13 @@ impl<'db> Generator<'_, 'db> {
                 };
                 if args.is_empty() {
                     return Ok(format!(
-                        "vm.is_instance_of({value}, vm.idx_to_ptr(ObjectIndex::from_raw({object})))"
+                        "vm.is_instance_of({value}, vm.record_object(fr, ObjectIndex::from_raw({object})))"
                     ));
                 }
                 // Class type arguments are invariant.
                 let type_args = self.realized_all(args)?;
                 Ok(format!(
-                    "vm.is_instance_of_at({value}, vm.idx_to_ptr(ObjectIndex::from_raw({object})), &[{}])",
+                    "vm.is_instance_of_at({value}, vm.record_object(fr, ObjectIndex::from_raw({object})), &[{}])",
                     type_args.join(", ")
                 ))
             }
@@ -443,7 +443,7 @@ impl<'db> Generator<'_, 'db> {
                     return unsupported(format!("enum `{name}` not found in the program"));
                 };
                 Ok(format!(
-                    "vm.is_variant_of({value}, vm.idx_to_ptr(ObjectIndex::from_raw({object})))"
+                    "vm.is_variant_of({value}, vm.record_object(fr, ObjectIndex::from_raw({object})))"
                 ))
             }
             TypeTest::Template(template)
@@ -491,7 +491,7 @@ impl<'db> Generator<'_, 'db> {
             ));
         };
         Ok(format!(
-            "vm.is_type_constant(vm.idx_to_ptr(ObjectIndex::from_raw({})), {index}, {value})?",
+            "vm.is_type_constant(vm.record_object(fr, ObjectIndex::from_raw({})), {index}, {value})?",
             self.object
         ))
     }
@@ -518,7 +518,7 @@ impl<'db> Generator<'_, 'db> {
         let name = format!("ty{}", self.temps);
         self.temps += 1;
         self.pending.push(format!(
-            "let {name}: RealizedTy = vm.type_constant(vm.idx_to_ptr(ObjectIndex::from_raw({})), {index})?;",
+            "let {name}: RealizedTy = vm.type_constant(vm.record_object(fr, ObjectIndex::from_raw({})), {index})?;",
             self.object
         ));
         Ok(name)

@@ -76,11 +76,11 @@ impl BexVm {
         iface_args: &[RealizedTy],
         site: u32,
     ) -> Option<StaticVirtualCallKey> {
-        let top = self.frames.len().checked_sub(1)?;
+        let top = self.top_frame()?;
         // SAFETY: a compiled frame's function lives in the compile-time heap;
         // see `load_function`.
         #[allow(unsafe_code)]
-        let function = unsafe { self.load_function(top) }.ok()?;
+        let function = unsafe { self.frame_function(top) }.ok()?;
         let call_pc = function
             .bytecode
             .compact
@@ -99,6 +99,7 @@ impl BexVm {
     #[inline]
     pub fn call_inline(
         &mut self,
+        caller: &super::FrameRecord,
         callee: HeapPtr,
         args: &[Value],
         pc: u32,
@@ -112,10 +113,20 @@ impl BexVm {
         if function.arity != args.len() || function.trace_passthrough {
             return Ok(None);
         }
-        match super::compiled_fn(function) {
-            Some(body) => self.call_compiled(callee, body, &[], args, pc).map(Some),
-            None => Ok(None),
+        let Some(body) = super::compiled_fn(function) else {
+            return Ok(None);
+        };
+        if self.direct_calls()
+            && !function
+                .compiled_body
+                .is_some_and(bex_vm_types::types::CompiledBody::framed)
+        {
+            return self
+                .call_record_dispatched(caller, callee, body, Vec::new(), args, pc)
+                .map(Some);
         }
+        self.call_compiled(caller, callee, body, &[], args, pc)
+            .map(Some)
     }
 
     /// Map interface arguments to callee slots and return the argument count.
@@ -365,7 +376,7 @@ mod tests {
     #[test]
     fn explicit_implementations_dispatch_and_cache() {
         static SHAPE: AtomicU32 = AtomicU32::new(0);
-        fn total(vm: &mut BexVm, args: &[Value]) -> Out {
+        fn total(vm: &mut BexVm, _fr: &crate::compiled_rt::FrameRecord, args: &[Value]) -> Out {
             dispatch(vm, args, &SHAPE, &[], "area")
         }
         const SOURCE: &str = r#"
@@ -405,16 +416,20 @@ mod tests {
     fn inline_implementations_run_in_place() {
         static SHAPE: AtomicU32 = AtomicU32::new(0);
         static IN_PLACE: AtomicU32 = AtomicU32::new(0);
-        fn square_area(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+        fn square_area(
+            vm: &mut BexVm,
+            _fr: &crate::compiled_rt::FrameRecord,
+            args: &[Value],
+        ) -> Result<Value, Box<VmError>> {
             IN_PLACE.fetch_add(1, Ordering::Relaxed);
             let side = test_int(vm.load_field(args[0], 0)?);
             Ok(Value::int(side * side))
         }
-        fn total(vm: &mut BexVm, args: &[Value]) -> Out {
+        fn total(vm: &mut BexVm, fr: &crate::compiled_rt::FrameRecord, args: &[Value]) -> Out {
             let receiver = args[0];
             let iface = vm.idx_to_ptr(object(&SHAPE));
             let callee = vm.virtual_target(receiver, iface, &[], "area", &[], Some(0))?;
-            if let Some(value) = vm.call_inline(callee, &[receiver], 0)? {
+            if let Some(value) = vm.call_inline(fr, callee, &[receiver], 0)? {
                 return Ok(value);
             }
             let argc = vm.push_virtual_args(callee, None, &[receiver])?;
@@ -455,7 +470,7 @@ mod tests {
     #[test]
     fn adopted_defaults_carry_their_frame_through_the_cache() {
         static GREETER: AtomicU32 = AtomicU32::new(0);
-        fn greet(vm: &mut BexVm, args: &[Value]) -> Out {
+        fn greet(vm: &mut BexVm, _fr: &crate::compiled_rt::FrameRecord, args: &[Value]) -> Out {
             dispatch(vm, args, &GREETER, &[], "greet")
         }
         const SOURCE: &str = r#"
@@ -478,7 +493,7 @@ mod tests {
     #[test]
     fn structural_defaults_resolve_without_caching() {
         static TO_STRING: AtomicU32 = AtomicU32::new(0);
-        fn show(vm: &mut BexVm, args: &[Value]) -> Out {
+        fn show(vm: &mut BexVm, _fr: &crate::compiled_rt::FrameRecord, args: &[Value]) -> Out {
             dispatch(vm, args, &TO_STRING, &[], "to_string")
         }
         const SOURCE: &str = r#"
@@ -500,7 +515,7 @@ mod tests {
     #[test]
     fn generic_interfaces_dispatch_on_their_instantiation() {
         static CONV: AtomicU32 = AtomicU32::new(0);
-        fn describe(vm: &mut BexVm, args: &[Value]) -> Out {
+        fn describe(vm: &mut BexVm, _fr: &crate::compiled_rt::FrameRecord, args: &[Value]) -> Out {
             dispatch(vm, args, &CONV, &[RealizedTy::Int], "describe")
         }
         const SOURCE: &str = r#"
@@ -524,7 +539,11 @@ mod tests {
     #[test]
     fn bound_method_values_resolve_at_bind_time() {
         static SHAPE: AtomicU32 = AtomicU32::new(0);
-        fn area_fn(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+        fn area_fn(
+            vm: &mut BexVm,
+            _fr: &crate::compiled_rt::FrameRecord,
+            args: &[Value],
+        ) -> Result<Value, Box<VmError>> {
             let iface = vm.idx_to_ptr(object(&SHAPE));
             vm.make_virtual_bound_method(args[0], iface, &[], "area", &[])
         }
@@ -553,7 +572,11 @@ mod tests {
     #[test]
     fn interface_fields_follow_the_implementation_links() {
         static NAMED: AtomicU32 = AtomicU32::new(0);
-        fn rename(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+        fn rename(
+            vm: &mut BexVm,
+            _fr: &crate::compiled_rt::FrameRecord,
+            args: &[Value],
+        ) -> Result<Value, Box<VmError>> {
             let iface = vm.idx_to_ptr(object(&NAMED));
             vm.virtual_store_field(args[0], iface, &[], 0, args[1])?;
             vm.virtual_load_field(args[0], iface, &[], 0)

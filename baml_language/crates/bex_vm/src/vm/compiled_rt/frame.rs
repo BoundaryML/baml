@@ -1,6 +1,7 @@
 use btel_records::RaiseKind;
 
 use crate::{
+    compiled_rt::FrameAt,
     errors::ThrowKind,
     vm::{error_evidence::UnwindEvidence, *},
 };
@@ -85,13 +86,14 @@ impl BytecodeFrame {
 }
 
 impl BexVm {
-    /// Return the caught value and context after unwinding to `depth`.
+    /// Return the caught value and context after unwinding every frame above
+    /// the catching frame at `level`.
     ///
     /// Internal errors propagate without unwinding.
     pub(crate) fn land_compiled_catch(
         &mut self,
         error: Box<VmError>,
-        depth: usize,
+        level: usize,
     ) -> Result<(Value, Value), Box<VmError>> {
         let VmError::Thrown(thrown) = *error else {
             return Err(error);
@@ -102,11 +104,11 @@ impl BexVm {
         let (mut context, _) = self
             .in_flight_context(thrown.context, value)
             .map_err(Box::new)?;
-        while self.frames.len() > depth {
-            let top = self.frames.len() - 1;
+        while self.level_count() > level + 1 {
+            let top = self.top_frame().expect("frames above the handler");
             // SAFETY: compiled frames hold functions from the compile-time heap;
             // see `load_function`.
-            let function = unsafe { self.load_function(top) }
+            let function = unsafe { self.frame_function(top) }
                 .map_err(|error| Box::new(VmError::InternalError(error)))?;
             let recorded = if self.frame_wants_error_capture(top, function) {
                 self.recorded_context(&mut context, value)
@@ -114,8 +116,16 @@ impl BexVm {
                 value
             };
             self.complete_unwound_frame(top, function, outcome, recorded, None);
-            if let Some(Frame::Bytecode(frame)) = self.frames.pop() {
-                self.stack.truncate(frame.locals_offset.raw());
+            match top {
+                FrameAt::Vm(_) => {
+                    if let Some(Frame::Bytecode(frame)) = self.frames.pop() {
+                        self.stack.truncate(frame.locals_offset.raw());
+                    }
+                }
+                FrameAt::Record(record) => {
+                    debug_assert!(self.is_zombie(record), "only zombies stand above a handler");
+                    self.pop_zombie(record);
+                }
             }
         }
         let ctx = match context {
@@ -298,10 +308,9 @@ impl BexVm {
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
         let caller = *frame_idx;
-        let pc = match &self.frames[caller] {
-            Frame::Bytecode(frame) => frame.faulting_pc,
-            Frame::Native(_) => unreachable!("a compiled caller has a bytecode frame"),
-        };
+        // The calling body is the innermost record above the frame, or the
+        // frame's own body.
+        let pc = self.compiled_instruction(self.innermost_at(caller));
         // `cur_pc` belongs to the last bytecode execution. The call path needs
         // the compiled caller's recorded instruction index instead.
         let saved_pc = std::mem::replace(&mut self.cur_pc, pc);
@@ -339,7 +348,7 @@ impl BexVm {
             .bytecode
             .compact
             .as_ref()?
-            .offset_of(frame.faulting_pc)
+            .offset_of(self.compiled_instruction(FrameAt::Vm(idx)))
     }
 
     /// Identify compiled frames before interpreting their position fields as bytecode offsets.
@@ -352,11 +361,6 @@ impl BexVm {
         }
         let function = self.get_object(frame.function).as_callable().ok()?;
         crate::compiled_rt::compiled_at(frame.instruction_ptr, function)
-    }
-
-    /// Return whether the frame at `idx` runs a compiled body.
-    pub(crate) fn frame_is_compiled(&self, idx: usize) -> bool {
-        self.compiled_at(idx).is_some()
     }
 
     /// The innermost bytecode frame when it is executing bytecode: the one
@@ -403,16 +407,14 @@ impl BexVm {
     }
 
     /// Resolve a caller's call site across compiled frames and native continuations.
-    pub(crate) fn caller_pc(
-        &self,
-        caller_frame_idx: usize,
-        frame_idx: usize,
-        call_site: usize,
-    ) -> u32 {
-        if self.compiled_at(caller_frame_idx).is_some() {
-            let pc = self.compiled_pc(caller_frame_idx).unwrap_or(0);
+    pub(crate) fn caller_pc(&self, caller: FrameAt, frame_idx: usize, call_site: usize) -> u32 {
+        if self.frame_runs_compiled(caller) {
+            let pc = self.frame_at_pc(caller, None).unwrap_or(0);
             return u32::try_from(pc).unwrap_or(u32::MAX);
         }
+        let FrameAt::Vm(caller_frame_idx) = caller else {
+            unreachable!("a frame record runs compiled code");
+        };
         let Frame::Bytecode(caller) = &self.frames[caller_frame_idx] else {
             unreachable!("a native continuation retains its bytecode caller");
         };
@@ -567,11 +569,12 @@ impl BexVm {
     ) -> Result<&'static Function, VmError> {
         // SAFETY: see `load_function`.
         let frame_function = unsafe { self.load_function(depth)? };
-        let (slots, stub) = frame_function
-            .compiled_body
-            .zip(crate::compiled_rt::stub_start(frame_function))
-            .map(|(body, stub)| (body.slots() as usize, stub))
+        let stub = crate::compiled_rt::stub_start(frame_function)
             .expect("a suspended compiled frame has a compiled body");
+        // The body the error is delivered to is the innermost one parked at
+        // this frame: a frame record above it, if any. Its slots, and those of
+        // every record below it, stay.
+        let kept = self.suspended_slots_end(depth, frame_locals_offset.raw())?;
         // A recoverable hook failure answers the hook call with null,
         // so the body lands at its decision boundary as bytecode does
         // below. Task cancellation keeps unwinding normally.
@@ -583,7 +586,7 @@ impl BexVm {
                 instance.class == self.panic_class_ptrs[PanicClass::Cancelled as usize]
             })
         {
-            self.stack.truncate(frame_locals_offset.raw() + slots);
+            self.stack.truncate(kept);
             self.stack.push(Value::NULL);
             if let Some(evidence) = evidence.take() {
                 self.error_hook_fallback(evidence);
@@ -604,7 +607,7 @@ impl BexVm {
         if let Frame::Bytecode(frame) = &mut self.frames[depth] {
             frame.instruction_ptr = stub + crate::compiled_rt::stub::AFTER_CALL;
         }
-        self.stack.truncate(frame_locals_offset.raw() + slots);
+        self.stack.truncate(kept);
         let _ = evidence.take();
         // SAFETY: see `load_function`.
         unsafe { self.load_function(depth) }.map_err(Into::into)

@@ -63,6 +63,8 @@ pub(crate) struct ProgramContext<'a, 'db> {
     pub(crate) symbols: &'a HashMap<usize, String>,
     /// Functions that may suspend, so a call to one roots the caller's live values.
     pub(crate) pausing: &'a BTreeSet<usize>,
+    /// Functions whose bodies run with a VM frame, never a frame record.
+    pub(crate) framed: &'a BTreeSet<usize>,
 }
 
 pub(crate) struct Generator<'a, 'db> {
@@ -73,6 +75,8 @@ pub(crate) struct Generator<'a, 'db> {
     pub(crate) package: Option<u32>,
     pub(crate) symbols: &'a HashMap<usize, String>,
     pub(crate) pausing: &'a BTreeSet<usize>,
+    /// Functions whose bodies run with a VM frame, never a frame record.
+    pub(crate) framed: &'a BTreeSet<usize>,
     /// First spill slot used to root values across a suspension.
     pub(crate) spill_base: usize,
     /// Whether this body may suspend: it then polls at loop back edges and
@@ -122,6 +126,7 @@ impl<'a, 'db> Generator<'a, 'db> {
             package: unit.package,
             symbols: program.symbols,
             pausing: program.pausing,
+            framed: program.framed,
             spill_base: 0,
             pauses: program.pausing.contains(&object),
             recursive: unit.recursive,
@@ -181,18 +186,17 @@ impl<'db> Generator<'_, 'db> {
         self.out.clear();
         // Every closure exit records the current PC before returning an error.
         self.emit_line(&format!(
-            "#[inline]\npub fn {symbol}(vm: &mut BexVm, args: &[Value]) -> R<Value> {{"
+            "#[inline]\npub fn {symbol}(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> R<Value> {{"
         ));
-        self.emit_line("let depth = vm.frame_depth();");
         self.emit_line("let mut pc: u32 = 0;");
         self.emit_line("let result = (|| -> R<Value> {");
         self.declare_locals(!self.analysis.loop_headers.is_empty());
         // The call path leaves the arguments in a hooked body's leading slots.
         if self.slots > self.slot_base() {
-            self.emit_line(&format!("vm.reserve_slots(depth, {});", self.slots));
+            self.emit_line(&format!("vm.reserve_slots(fr, {});", self.slots));
         }
         if let Some(slot) = self.cause_slot {
-            self.emit_line(&format!("vm.set_slot(depth, {slot}, Value::NULL);"));
+            self.emit_line(&format!("vm.set_slot(fr, {slot}, Value::NULL);"));
         }
         if self.recursive {
             self.recursion_check();
@@ -203,7 +207,7 @@ impl<'db> Generator<'_, 'db> {
         self.emit_line("Ok(Value::NULL)");
         self.emit_line("})();");
         self.emit_line("if result.is_err() {");
-        self.emit_line("vm.note_pc(depth, pc);");
+        self.emit_line("fr.note_pc(pc);");
         self.emit_line("}");
         self.emit_line("result");
         self.emit_line("}");
@@ -303,7 +307,7 @@ impl<'db> Generator<'_, 'db> {
             return blocked();
         };
         Ok(self.bind_type(&format!(
-            "vm.frame_type_constant(depth, vm.idx_to_ptr(ObjectIndex::from_raw({})), {index})?",
+            "vm.frame_type_constant(fr, vm.record_object(fr, ObjectIndex::from_raw({})), {index})?",
             self.object
         )))
     }
@@ -428,11 +432,11 @@ impl<'db> Generator<'_, 'db> {
         }
         let mut out = String::from("{ ");
         for (j, i) in live.iter().enumerate() {
-            let _ = write!(out, "vm.set_slot(depth, {}, l{i}); ", self.spill_base + j);
+            let _ = write!(out, "vm.set_slot(fr, {}, l{i}); ", self.spill_base + j);
         }
         let _ = write!(out, "let r = {call}; ");
         for (j, i) in live.iter().enumerate() {
-            let _ = write!(out, "l{i} = vm.slot(depth, {}); ", self.spill_base + j);
+            let _ = write!(out, "l{i} = vm.slot(fr, {}); ", self.spill_base + j);
         }
         out.push_str("r }");
         out
@@ -497,7 +501,7 @@ impl<'db> Generator<'_, 'db> {
             let _ = write!(out, "vm.push_type_arg({ty}); ");
         }
         let site = self.site_pc(block);
-        let _ = write!(out, "vm.note_pc(depth, {site}); vm.suspend({step}) }}");
+        let _ = write!(out, "fr.note_pc({site}); vm.suspend({step}) }}");
         self.attach_trace(&out)
     }
 
@@ -609,7 +613,7 @@ impl<'db> Generator<'_, 'db> {
         let values = values.join(", ");
         Ok(format!(
             "match vm.closure_compiled_body(callee, {}) {{ \
-             Some(body) => vm.call_closure_compiled(callee, body, &[{values}], {site}), \
+             Some(body) => vm.call_closure_compiled(fr, callee, body, &[{values}], {site}), \
              None => {suspend} }}",
             args.len()
         ))
@@ -640,7 +644,7 @@ impl<'db> Generator<'_, 'db> {
         self.call_trace.take().map_or_else(
             || call.to_string(),
             |trace| format!(
-                "match vm.set_call_trace({trace}) {{ Ok(()) => {call}, Err(e) => {{ vm.reserve_slots(depth, {}); Err(e) }} }}",
+                "match vm.set_call_trace({trace}) {{ Ok(()) => {call}, Err(e) => {{ vm.reserve_slots(fr, {}); Err(e) }} }}",
                 self.slots
             ),
         )

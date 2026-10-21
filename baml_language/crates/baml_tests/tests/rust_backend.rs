@@ -223,13 +223,14 @@ fn generated_module_is_well_formed_rust() {
         // (`<(ai.Prompt as baml.ToString)>.to_string`).
         let entry: String = format!(
             "CompiledEntry{{object:{},name:{:?},arity:{},body:{},\
-             slots:{},cause_slot:{:?}}}",
+             slots:{},cause_slot:{:?},framed:{}}}",
             function.object,
             function.name,
             function.arity,
             function.symbol,
             function.slots,
             function.cause_slot,
+            function.framed,
         )
         .split_whitespace()
         .collect();
@@ -1166,8 +1167,8 @@ function plain(n: int) -> int { n + 1 }
     }
     for name in ["user.left", "user.right", "user.caller"] {
         let body = body_of(&module, name);
-        assert!(body.contains("vm.set_slot(depth,"), "{body}");
-        assert!(body.contains("vm.slot(depth,"), "{body}");
+        assert!(body.contains("vm.set_slot(fr,"), "{body}");
+        assert!(body.contains("vm.slot(fr,"), "{body}");
     }
     for name in ["user.caller", "user.plain"] {
         let body = body_of(&module, name);

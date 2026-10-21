@@ -33,13 +33,22 @@ impl BexVm {
         function: HeapPtr,
         index: usize,
     ) -> Result<RealizedTy, Box<VmError>> {
-        self.frame_type_constant(0, function, index)
+        self.substitute_type_constant(&[], function, index)
     }
 
-    /// Resolve a type constant using the frame's type arguments at `depth`.
+    /// Resolve a type constant using the type arguments of `frame`.
     pub fn frame_type_constant(
         &self,
-        depth: usize,
+        frame: &super::FrameRecord,
+        function: HeapPtr,
+        index: usize,
+    ) -> Result<RealizedTy, Box<VmError>> {
+        self.substitute_type_constant(self.frame_type_args(frame), function, index)
+    }
+
+    fn substitute_type_constant(
+        &self,
+        type_args: &[RealizedTy],
         function: HeapPtr,
         index: usize,
     ) -> Result<RealizedTy, Box<VmError>> {
@@ -49,11 +58,6 @@ impl BexVm {
         let ConstValue::Type(template) = &function.bytecode.constants[index] else {
             return Err(Box::new(VmInternalError::UnexpectedConstantKind.into()));
         };
-        let type_args: &[RealizedTy] =
-            match depth.checked_sub(1).and_then(|top| self.frames.get(top)) {
-                Some(crate::vm::Frame::Bytecode(frame)) => &frame.type_args,
-                _ => &[],
-            };
         template.substitute(type_args, self).map_err(|error| {
             Box::new(
                 VmInternalError::TypeSubstitution {

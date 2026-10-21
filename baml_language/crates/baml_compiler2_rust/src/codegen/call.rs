@@ -34,29 +34,16 @@ impl<'db> Generator<'_, 'db> {
         let shape = call_shape(self.body, args, ntypeargs, &self.analysis.static_types);
         let (type_args, args) = args.split_at(ntypeargs.min(args.len()));
         let types = self.type_operands("call", type_args)?;
+        if let (FunctionKind::Bytecode, Some(symbol)) = (info.kind, self.symbols.get(&object)) {
+            let symbol = symbol.clone();
+            return self.compiled_call(block, object, &symbol, &name, info, layout, args, &types);
+        }
         let values = self.laid_out_args(block, &name, info, layout, args)?;
         let args = format!("&[{}]", values.join(", "));
         match info.kind {
-            FunctionKind::Bytecode => {
-                let Some(symbol) = self.symbols.get(&object) else {
-                    return Err(Rejection::Invalid(format!(
-                        "call to uncompiled `{name}` emitted directly"
-                    )));
-                };
-                // A generic callee's frame starts with the call's type
-                // arguments (a plain function carries none of its own).
-                let site = self.site_pc(block);
-                let call = format!(
-                    "vm.call_compiled(vm.idx_to_ptr(ObjectIndex::from_raw({object})), {symbol}, &[{}], {args}, {site})",
-                    types.join(", ")
-                );
-                let code = if self.pausing.contains(&object) {
-                    self.rooted_call(block, &call)?
-                } else {
-                    self.fallible(block, &call)?
-                };
-                Ok(Expr::new(code, Repr::Value))
-            }
+            FunctionKind::Bytecode => Err(Rejection::Invalid(format!(
+                "call to uncompiled `{name}` emitted directly"
+            ))),
             FunctionKind::NativeUnresolved | FunctionKind::Native(_) => {
                 let Some(key) = info.native_key.as_deref() else {
                     return unsupported(format!("builtin `{name}` has no native key"));
@@ -81,6 +68,109 @@ impl<'db> Generator<'_, 'db> {
                 "sys op `{name}` emitted inline"
             ))),
         }
+    }
+
+    /// A call to a compiled body. A callee without VM-frame state runs with
+    /// a frame record when the VM allows ([`bex_vm::BexVm::direct_calls`]);
+    /// otherwise, and for a callee that needs one, it runs with a VM frame.
+    #[allow(clippy::too_many_arguments)]
+    fn compiled_call(
+        &mut self,
+        block: BlockId,
+        object: usize,
+        symbol: &str,
+        name: &str,
+        info: &FunctionInfo,
+        layout: Option<&baml_type::CallLayout>,
+        args: &[Operand<'db>],
+        types: &[String],
+    ) -> Gen<Expr> {
+        let site = self.site_pc(block);
+        let callee = format!("vm.record_object(fr, ObjectIndex::from_raw({object}))");
+        // A generic callee's frame starts with the call's type arguments (a
+        // plain function carries none of its own).
+        let type_args = if types.is_empty() {
+            "&[]".to_string()
+        } else {
+            let name = format!("ty{}", self.temps);
+            self.temps += 1;
+            self.pending.push(format!(
+                "let {name}: [RealizedTy; {}] = [{}];",
+                types.len(),
+                types.join(", ")
+            ));
+            format!("&{name}")
+        };
+        let slots = self.laid_out_operands(block, name, info, layout, args)?;
+        let values: Vec<String> = slots
+            .iter()
+            .map(|slot| match slot {
+                Some(expr) => self.value_arg(expr),
+                None => "Value::OMITTED_ARG".to_string(),
+            })
+            .collect();
+        let values = format!("&[{}]", values.join(", "));
+        let framed =
+            format!("vm.call_compiled(fr, {callee}, {symbol}, {type_args}, {values}, {site})");
+        // A callee without VM-frame state runs with a frame record.
+        let call = if self.framed.contains(&object) {
+            framed
+        } else if types.is_empty() {
+            format!(
+                "(if vm.direct_calls() {{ vm.call_record(fr, {callee}, {site}, |vm, fr| {symbol}(vm, fr, {values})) }} else {{ {framed} }})"
+            )
+        } else {
+            format!(
+                "(if vm.direct_calls_typed({type_args}) {{ vm.call_record_typed(fr, {callee}, {type_args}, {site}, |vm, fr| {symbol}(vm, fr, {values})) }} else {{ {framed} }})"
+            )
+        };
+        let code = self.call_code(block, object, &call)?;
+        Ok(Expr::new(code, Repr::Value))
+    }
+
+    /// Route a compiled call's error, rooting the caller's live values when
+    /// the callee may suspend.
+    fn call_code(&mut self, block: BlockId, object: usize, call: &str) -> Gen<String> {
+        if self.pausing.contains(&object) {
+            self.rooted_call(block, call)
+        } else {
+            self.fallible(block, call)
+        }
+    }
+
+    /// The operands of a call in callee slot order; `None` for a slot left to
+    /// its default.
+    fn laid_out_operands(
+        &mut self,
+        block: BlockId,
+        name: &str,
+        info: &FunctionInfo,
+        layout: Option<&baml_type::CallLayout>,
+        args: &[Operand<'db>],
+    ) -> Gen<Vec<Option<Expr>>> {
+        let mut exprs = Vec::with_capacity(args.len());
+        for arg in args {
+            exprs.push(Some(self.operand(block, arg)?));
+        }
+        let slots: Vec<Option<Expr>> = match layout {
+            Some(layout) if layout.0.iter().any(Option::is_some) => layout
+                .map_to(&info.layout)
+                .map_err(|mismatch| {
+                    Rejection::Invalid(format!("call to `{name}` does not fit it: {mismatch:?}"))
+                })?
+                .into_iter()
+                .map(|slot| slot.and_then(|i| exprs[i].take()))
+                .collect(),
+            _ => exprs,
+        };
+        if slots.len() != info.arity {
+            return Err(Rejection::Invalid(format!(
+                "`{name}` called with {} of {} arguments",
+                slots.len(),
+                info.arity
+            )));
+        }
+        Ok(slots)
     }
 
     /// `x == null` as a bit test. The `==` driver answers a pair with a
@@ -120,7 +210,7 @@ impl<'db> Generator<'_, 'db> {
                     let name = function_display_name(self.db, *func);
                     return unsupported(format!("callee `{name}` not found in the program"));
                 };
-                format!("vm.idx_to_ptr(ObjectIndex::from_raw({object}))")
+                format!("vm.record_object(fr, ObjectIndex::from_raw({object}))")
             }
             Operand::Constant(_) => {
                 return unsupported("call of a constant that is not a function");
@@ -202,7 +292,7 @@ impl<'db> Generator<'_, 'db> {
             args.push(self.realized(template)?);
         }
         Ok((
-            format!("vm.idx_to_ptr(ObjectIndex::from_raw({object}))"),
+            format!("vm.record_object(fr, ObjectIndex::from_raw({object}))"),
             format!("&[{}]", args.join(", ")),
         ))
     }
@@ -259,12 +349,12 @@ impl<'db> Generator<'_, 'db> {
             let call = self.attach_trace("vm.suspend(Step::Call { callee, argc })");
             format!(
                 "match vm.push_virtual_args(callee, {layout}, &[{values}]) {{ \
-                 Ok(argc) => {{ vm.note_pc(depth, {site}); {call} }}, Err(e) => Err(e) }}"
+                 Ok(argc) => {{ fr.note_pc({site}); {call} }}, Err(e) => Err(e) }}"
             )
         } else {
             format!(
                 "{{ let argc = vm.push_virtual_args(callee, {layout}, &[{values}])?; \
-                 vm.note_pc(depth, {site}); vm.suspend(Step::Call {{ callee, argc }}) }}"
+                 fr.note_pc({site}); vm.suspend(Step::Call {{ callee, argc }}) }}"
             )
         };
         // The VM must apply trace attachments, so traced calls cannot run inline.
@@ -272,7 +362,7 @@ impl<'db> Generator<'_, 'db> {
             return Ok(suspend);
         }
         Ok(format!(
-            "match vm.call_inline(callee, &[{values}], {site}) {{ \
+            "match vm.call_inline(fr, callee, &[{values}], {site}) {{ \
              Ok(Some(v)) => Ok(v), Ok(None) => {suspend}, Err(e) => Err(e) }}"
         ))
     }

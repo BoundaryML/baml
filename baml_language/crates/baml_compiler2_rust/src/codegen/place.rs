@@ -26,7 +26,7 @@ impl<'db> Generator<'_, 'db> {
                     };
                     let ty = self.realized(&template)?;
                     return Ok(Expr::new(
-                        format!("vm.type_value(depth, {slot}, {ty})"),
+                        format!("vm.type_value(fr, {slot}, {ty})"),
                         Repr::Value,
                     ));
                 }
@@ -40,7 +40,7 @@ impl<'db> Generator<'_, 'db> {
                         }
                     };
                     return Ok(Expr::new(
-                        format!("vm.static_type_value(depth, {site}, {code})"),
+                        format!("vm.static_type_value(fr, {site}, {code})"),
                         Repr::Value,
                     ));
                 }
@@ -68,7 +68,7 @@ impl<'db> Generator<'_, 'db> {
                 Ok(Expr::new(code, Repr::Value))
             }
             Place::Capture(index) => Ok(Expr::new(
-                format!("vm.capture_cell(depth, {index})?"),
+                format!("vm.capture_cell(fr, {index})?"),
                 Repr::Value,
             )),
             Place::Deref(cell) => {
@@ -84,7 +84,7 @@ impl<'db> Generator<'_, 'db> {
             CellId::Local(local) => (format!("l{}", local.0), self.analysis.values[local.0]),
             CellId::Capture(index) => {
                 let cell = self.hoist(Expr::new(
-                    format!("vm.capture_cell(depth, {index})?"),
+                    format!("vm.capture_cell(fr, {index})?"),
                     Repr::Value,
                 ));
                 let repr = self

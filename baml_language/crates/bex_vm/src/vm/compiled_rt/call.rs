@@ -9,14 +9,13 @@
 
 use bex_vm_types::{HeapPtr, Object, RealizedTy, StackIndex, Value, types::Function};
 
-use super::{CompiledFn, Step};
+use super::{CompiledFn, FrameRecord, Step};
 use crate::{
     errors::{VmError, VmInternalError, VmPanic},
     indexable::EvalStackTrait,
     package_baml::{NativeCallResult, NativeFunction},
-    telemetry::{CallTypeArgs, InvocationOutcome},
     types::ObjectTrait as _,
-    vm::{BexVm, BytecodeFrame, Frame, VmExecState},
+    vm::{BexVm, Frame, VmExecState},
 };
 
 #[cfg(test)]
@@ -26,24 +25,6 @@ thread_local! {
 }
 
 impl BexVm {
-    #[inline]
-    pub(super) fn compiled_frame(&self, depth: usize) -> &BytecodeFrame {
-        debug_assert!(self.frame_is_compiled(depth - 1));
-        let Frame::Bytecode(frame) = &self.frames[depth - 1] else {
-            unreachable!("a compiled body accesses its own frame");
-        };
-        frame
-    }
-
-    #[inline]
-    pub(super) fn compiled_frame_mut(&mut self, depth: usize) -> &mut BytecodeFrame {
-        debug_assert!(self.frame_is_compiled(depth - 1));
-        let Frame::Bytecode(frame) = &mut self.frames[depth - 1] else {
-            unreachable!("a compiled body accesses its own frame");
-        };
-        frame
-    }
-
     /// Call a builtin that the compiler guarantees will not yield.
     pub fn call_builtin(
         &mut self,
@@ -83,27 +64,23 @@ impl BexVm {
     }
 
     /// Reserve slots on entry, keeping the arguments in the leading slots.
-    pub fn reserve_slots(&mut self, depth: usize, slots: usize) {
-        let frame = self.compiled_frame(depth);
-        let end = frame.locals_offset.raw() + slots;
+    pub fn reserve_slots(&mut self, frame: &FrameRecord, slots: usize) {
+        let end = frame.base() + slots;
         self.stack.resize(end, Value::NULL);
     }
 
-    /// Slot `index` of the compiled function whose frame count is `depth`.
+    /// Slot `index` of the compiled body with record `frame`.
     #[inline]
     #[must_use]
-    pub fn slot(&self, depth: usize, index: usize) -> Value {
-        let frame = self.compiled_frame(depth);
+    pub fn slot(&self, frame: &FrameRecord, index: usize) -> Value {
         self.stack
-            .get_at(StackIndex::from_raw(frame.locals_offset.raw() + index))
+            .get_at(StackIndex::from_raw(frame.base() + index))
     }
 
-    /// Write slot `index` in the compiled frame at `depth`.
+    /// Write slot `index` of the compiled body with record `frame`.
     #[inline]
-    pub fn set_slot(&mut self, depth: usize, index: usize, value: Value) {
-        let frame = self.compiled_frame(depth);
-        let at = frame.locals_offset.raw() + index;
-        self.stack.0[at] = value;
+    pub fn set_slot(&mut self, frame: &FrameRecord, index: usize, value: Value) {
+        self.stack.0[frame.base() + index] = value;
     }
 
     /// Root an argument above the body's slots for the next [`super::Step::Call`].
@@ -133,39 +110,15 @@ impl BexVm {
         self.early_yield.tick() && (super::gc_stress() || self.poll_for_yield())
     }
 
-    /// Return the frame depth to pass to [`Self::catch`].
-    #[inline]
-    #[must_use]
-    pub fn frame_depth(&self) -> usize {
-        self.frames.len()
-    }
-
-    /// Record the call instruction index before pushing the callee's frame.
-    #[inline]
-    pub(crate) fn note_call_pc(&mut self, pc: u32) {
-        if let Some(crate::vm::Frame::Bytecode(frame)) = self.frames.last_mut() {
-            frame.faulting_pc = pc as usize;
-        }
-    }
-
-    /// Record a bytecode instruction index for stack traces at frame depth `depth`.
-    pub fn note_pc(&mut self, depth: usize, pc: u32) {
-        if let Some(crate::vm::Frame::Bytecode(frame)) = depth
-            .checked_sub(1)
-            .and_then(|top| self.frames.get_mut(top))
-        {
-            frame.faulting_pc = pc as usize;
-        }
-    }
-
     /// Return the caught value and its `baml.errors.Context`, propagating internal errors.
     #[inline]
     pub fn catch(
         &mut self,
         error: Box<VmError>,
-        depth: usize,
+        frame: &FrameRecord,
     ) -> Result<(Value, Value), Box<VmError>> {
-        self.land_compiled_catch(error, depth)
+        let level = self.level_of(Self::record_frame(frame));
+        self.land_compiled_catch(error, level)
     }
 
     /// Create a catchable `baml.panics.Unreachable` error.
@@ -195,6 +148,7 @@ impl BexVm {
     /// Record a log event and suspend until the engine has delivered it.
     pub fn log_event(
         &mut self,
+        frame: &FrameRecord,
         level: super::LogLevel,
         data: Value,
         event_name: Value,
@@ -206,17 +160,15 @@ impl BexVm {
             let name = self.as_string(&event_name)?;
             Some(std::sync::Arc::<str>::from(name.as_str()))
         };
-        let top = self.frames.len().saturating_sub(1);
-        self.record_log(top, level, name.clone(), data);
-        let source_location = match self.frames.get(top) {
-            Some(Frame::Bytecode(frame)) => self
-                .get_object(frame.function)
-                .as_callable()
-                .ok()
-                .and_then(|function| function.bytecode.line_entry_for_pc(pc as usize))
-                .map(Self::event_source_location_for_line_entry),
-            _ => None,
-        };
+        let at = Self::record_frame(frame);
+        self.record_log_at(at, level, name.clone(), data);
+        let source_location = self
+            .get_object(frame.function())
+            .as_callable()
+            .ok()
+            .and_then(|function| function.bytecode.line_entry_for_pc(pc as usize))
+            .map(Self::event_source_location_for_line_entry);
+        frame.note_pc(pc);
         self.suspend(Step::Log {
             level,
             event_name: name,
@@ -227,22 +179,25 @@ impl BexVm {
     }
 
     /// Call a compiled body with a VM frame whose type arguments are
-    /// `type_args`, in the callee's De Bruijn order. The frame stays on error
-    /// for the unwinder. With telemetry on, a call without type arguments
-    /// records inline; any other takes the VM's call path.
+    /// `type_args`, in the callee's De Bruijn order, after `caller` notes the
+    /// call site `pc`. The frame stays on error for the unwinder. With
+    /// telemetry on, a call without type arguments records inline; any other
+    /// takes the VM's call path. [`Self::call_record`] is the frameless call.
     #[inline]
     pub fn call_compiled(
         &mut self,
+        caller: &FrameRecord,
         callee: HeapPtr,
         body: CompiledFn,
         type_args: &[RealizedTy],
         args: &[Value],
         pc: u32,
     ) -> Result<Value, Box<VmError>> {
-        self.check_compiled_call(pc)?;
+        caller.note_pc(pc);
+        self.check_compiled_call()?;
         if self.telemetry.is_some() {
             if type_args.is_empty() {
-                return self.call_compiled_cold(callee, body, args);
+                return self.call_compiled_cold(caller, callee, body, args);
             }
             return self.call_compiled_funnelled(callee, type_args, args);
         }
@@ -256,17 +211,36 @@ impl BexVm {
         self.run_compiled_frame(callee, body, type_args.to_vec(), metadata, args)
     }
 
-    /// [`Self::call_compiled`] for a closure, whose frame carries its captured
-    /// type arguments.
+    /// Call a compiled closure, whose frame carries its captured type
+    /// arguments: with a frame record when [`Self::direct_calls`] allows,
+    /// else as [`Self::call_compiled`] does.
     #[inline]
     pub fn call_closure_compiled(
         &mut self,
+        caller: &FrameRecord,
         callee: HeapPtr,
         body: CompiledFn,
         args: &[Value],
         pc: u32,
     ) -> Result<Value, Box<VmError>> {
-        self.check_compiled_call(pc)?;
+        if self.direct_calls() {
+            let (function, type_args): (HeapPtr, &[RealizedTy]) = match self.get_object(callee) {
+                Object::Closure(closure) => (closure.function, &closure.captured_type_args),
+                Object::Function(_) => (callee, &[]),
+                _ => (HeapPtr::null(), &[]),
+            };
+            if !function.as_ptr().is_null()
+                && type_args
+                    .iter()
+                    .all(crate::reachable::is_statically_declared)
+                && !Self::body_is_framed(function)
+            {
+                let type_args = type_args.to_vec();
+                return self.call_record_dispatched(caller, callee, body, type_args, args, pc);
+            }
+        }
+        caller.note_pc(pc);
+        self.check_compiled_call()?;
         if self.telemetry.is_some() {
             return self.call_compiled_funnelled(callee, &[], args);
         }
@@ -277,11 +251,26 @@ impl BexVm {
         self.run_compiled_frame(callee, body, type_args, None, args)
     }
 
-    /// Record the call site and check the frame and fiber-stack limits.
+    /// Whether the compiled body of the function at `function` needs a VM
+    /// frame; see [`bex_vm_types::types::CompiledBody::framed`].
+    pub(crate) fn body_is_framed(function: HeapPtr) -> bool {
+        // SAFETY: a closure roots its function.
+        #[allow(unsafe_code)]
+        match unsafe { function.get() } {
+            Object::Function(function) => {
+                function.trace_passthrough
+                    || function
+                        .compiled_body
+                        .is_some_and(bex_vm_types::types::CompiledBody::framed)
+            }
+            _ => true,
+        }
+    }
+
+    /// Check the frame and fiber-stack limits.
     #[inline]
-    fn check_compiled_call(&mut self, pc: u32) -> Result<(), Box<VmError>> {
-        self.note_call_pc(pc);
-        if self.frames.len() >= crate::vm::MAX_FRAMES {
+    fn check_compiled_call(&mut self) -> Result<(), Box<VmError>> {
+        if self.level_count() >= crate::vm::MAX_FRAMES {
             return Err(Box::new(VmError::thrown_fresh(
                 self.panic_to_exception_value(VmPanic::StackOverflow),
             )));
@@ -298,12 +287,8 @@ impl BexVm {
         type_metadata: Option<Box<crate::vm::FrameTypeMetadata>>,
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
-        let context = self.current_context().clone();
-        let locals_offset = StackIndex::from_raw(self.stack.len());
-        let mut frame = BytecodeFrame::compiled(callee, locals_offset, type_args, context, None);
-        frame.type_metadata = type_metadata;
-        self.frames.push(Frame::Bytecode(frame));
-        let result = body(self, args);
+        let locals_offset = self.push_compiled_frame(callee, type_args, type_metadata, None);
+        let result = self.run_entry(body, args);
         if result.is_ok() {
             self.frames.pop();
             self.stack.truncate(locals_offset.raw());
@@ -315,17 +300,18 @@ impl BexVm {
     #[inline(never)]
     fn call_compiled_cold(
         &mut self,
+        caller: &FrameRecord,
         callee: HeapPtr,
         body: CompiledFn,
         args: &[Value],
     ) -> Result<Value, Box<VmError>> {
-        self.call_compiled_observed(callee, body, args)
+        self.call_compiled_observed(caller, callee, body, args)
     }
 
     /// Enter a plain compiled callee with telemetry, falling back to the VM call path when needed.
     ///
     /// For a plain callee everything the call path looks up is known: the call
-    /// site is the caller's recorded pc, the visible caller is the running
+    /// site is the caller's recorded pc, the visible caller is the calling
     /// compiled frame's function, and the context is inherited. So this enters
     /// the invocation with those facts, pushes the frame with its telemetry,
     /// runs the body, and completes the invocation as the call path does. An
@@ -334,6 +320,7 @@ impl BexVm {
     #[allow(unsafe_code)]
     fn call_compiled_observed(
         &mut self,
+        caller: &FrameRecord,
         callee: HeapPtr,
         body: CompiledFn,
         args: &[Value],
@@ -344,69 +331,14 @@ impl BexVm {
             Object::Function(function) => function,
             _ => return self.call_compiled_funnelled(callee, &[], args),
         };
-        let hooked = function
-            .bytecode
-            .compact
-            .as_ref()
-            .is_some_and(|code| code.trace_hook_finish_pc.is_some());
-        #[cfg(test)]
-        let forced = FORCE_CALL_FUNNEL.with(std::cell::Cell::get);
-        #[cfg(not(test))]
-        let forced = false;
-        if hooked
-            || forced
-            || self.pending_call_trace.is_some()
-            || self.pending_call_passes_type_args
-        {
+        if self.must_funnel(function) {
             return self.call_compiled_funnelled(callee, &[], args);
         }
         debug_assert_eq!(args.len(), function.arity);
-
-        let top = self.frames.len() - 1;
-        let caller_frame_idx = self.bytecode_caller_index(top);
-        let visible_caller = self
-            .visible_bytecode_caller_index(top)
-            .and_then(|index| self.frame_function_identity(index));
-        let caller_is_observed = matches!(
-            self.frames.get(caller_frame_idx),
-            Some(Frame::Bytecode(BytecodeFrame {
-                telemetry: Some(_),
-                ..
-            }))
-        );
-        let caller_pc = self.caller_pc(caller_frame_idx, top, 0);
-        let context = self.current_context().clone();
-        let telemetry = self
-            .telemetry
-            .as_mut()
-            .expect("observed compiled call has telemetry");
-        if !telemetry.has_context(&context) {
-            telemetry.set_context(context.clone());
-        }
-        // SAFETY: the heap permit is held, and the caller's locals keep the
-        // arguments and callee live.
-        let frame_telemetry = unsafe {
-            telemetry.enter_bytecode_with_trace(
-                function,
-                callee,
-                visible_caller,
-                caller_pc,
-                caller_is_observed,
-                args,
-                None,
-                CallTypeArgs::default(),
-                |caller, callee| Self::register_call_path_functions(&self.heap, caller, callee),
-            )
-        };
-        let locals_offset = StackIndex::from_raw(self.stack.len());
-        self.frames.push(Frame::Bytecode(BytecodeFrame::compiled(
-            callee,
-            locals_offset,
-            Vec::new(),
-            context,
-            frame_telemetry,
-        )));
-        let result = body(self, args);
+        let frame_telemetry =
+            self.enter_record_telemetry(Self::record_frame(caller), function, callee, args);
+        let locals_offset = self.push_compiled_frame(callee, Vec::new(), None, frame_telemetry);
+        let result = self.run_entry(body, args);
         if let Ok(value) = result {
             if matches!(
                 function.body_meta,
@@ -419,25 +351,27 @@ impl BexVm {
             };
             self.stack.truncate(locals_offset.raw());
             if let Some(frame_telemetry) = frame.telemetry {
-                let telemetry = self
-                    .telemetry
-                    .as_mut()
-                    .expect("observed compiled call has telemetry");
-                if !telemetry.has_context(&frame.context) {
-                    telemetry.set_context(frame.context);
-                }
-                // SAFETY: the heap permit is held and the result is live.
-                unsafe {
-                    telemetry.complete_invocation(
-                        frame_telemetry,
-                        function,
-                        InvocationOutcome::Ok,
-                        Some(value),
-                    );
-                }
+                self.complete_record_telemetry(frame_telemetry, function, value);
             }
         }
         result
+    }
+
+    /// Whether a plain compiled callee must take the VM's call path with
+    /// telemetry on: a trace hook, a pending trace attachment, or passed type
+    /// arguments need it.
+    #[inline]
+    pub(crate) fn must_funnel(&self, function: &Function) -> bool {
+        let hooked = function
+            .bytecode
+            .compact
+            .as_ref()
+            .is_some_and(|code| code.trace_hook_finish_pc.is_some());
+        #[cfg(test)]
+        let forced = FORCE_CALL_FUNNEL.with(std::cell::Cell::get);
+        #[cfg(not(test))]
+        let forced = false;
+        hooked || forced || self.pending_call_trace.is_some() || self.pending_call_passes_type_args
     }
 
     /// Call through the VM for generic callees, trace hooks, trace attachments, or indirect callees.

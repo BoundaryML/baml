@@ -13,6 +13,9 @@ pub(in crate::vm) use frame::{append_passed_type_args, validate_compiled_program
 pub(crate) use state::CompiledState;
 mod heap;
 mod program;
+mod record;
+pub use record::FrameRecord;
+pub(crate) use record::{FrameAt, RecordChain, record_ref};
 mod state;
 mod trace;
 mod types;
@@ -55,9 +58,19 @@ use crate::{
     vm::{BexVm, value_as_float},
 };
 
-/// A compiled BAML function body. It runs on its VM's fiber, so it may pause through
+/// A compiled BAML function body, entered with its frame record and its
+/// arguments. It runs on its VM's fiber, so it may pause through
 /// [`BexVm::suspend`] anywhere in its call chain.
-pub type CompiledFn = fn(&mut BexVm, &[Value]) -> Result<Value, Box<VmError>>;
+pub type CompiledFn = fn(&mut BexVm, &FrameRecord, &[Value]) -> Result<Value, Box<VmError>>;
+
+/// Whether `BAML_COMPILED_FRAMES=1` makes every compiled call push a VM frame,
+/// as before frame records.
+#[must_use]
+pub fn frames_forced() -> bool {
+    static FORCED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *FORCED
+        .get_or_init(|| baml_env::os_var("BAML_COMPILED_FRAMES").is_some_and(|value| value == "1"))
+}
 
 #[cfg(target_pointer_width = "64")]
 const _: () =
@@ -98,6 +111,9 @@ pub struct CompiledEntry {
     pub slots: u32,
     /// Catch context slot; see [`bex_vm_types::types::CompiledBody::cause_slot`].
     pub cause_slot: Option<u32>,
+    /// Whether the body needs a VM frame; see
+    /// [`bex_vm_types::types::CompiledBody::framed`].
+    pub framed: bool,
 }
 
 impl CompiledEntry {
@@ -109,6 +125,7 @@ impl CompiledEntry {
                 self.body as *const (),
                 self.slots,
                 self.cause_slot,
+                self.framed,
             )
         }
     }

@@ -269,7 +269,7 @@ mod stackful {
         vm.compiled.yielder = Some(YielderPtr(yielder.into()));
         vm.compiled.on_fiber = true;
         vm.stack_room()?;
-        body(vm, args)
+        vm.run_entry(body, args)
     }
 
     /// The running fiber's yielder, reachable from the VM so [`BexVm::suspend`]

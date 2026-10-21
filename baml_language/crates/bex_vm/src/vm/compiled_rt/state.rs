@@ -6,7 +6,6 @@ use super::{Fiber, fiber::YielderPtr};
 use crate::{errors::VmError, vm::BexVm};
 
 /// VM state that only compiled code uses.
-#[derive(Default)]
 pub(crate) struct CompiledState {
     pub(crate) static_type_cache: HashMap<(usize, usize), HeapPtr>,
     /// The stack compiled bodies run on, mapped on first use.
@@ -31,6 +30,30 @@ pub(crate) struct CompiledState {
     pub(crate) saved_call_types: Vec<SavedCallTypes>,
     /// An error the unwinder delivered to a suspended compiled body.
     pub(crate) delivery: Option<Box<VmError>>,
+    /// Frame records of compiled bodies on the fiber. Declared after `fiber`
+    /// so a parked fiber unwinds into it before it is dropped.
+    pub(crate) records: Box<super::RecordChain>,
+    /// Whether compiled callees may run with frame records; see
+    /// [`crate::BexVm::direct_calls`].
+    pub(crate) direct_calls: bool,
+}
+
+impl Default for CompiledState {
+    fn default() -> Self {
+        Self {
+            fiber: None,
+            fiber_floor: 0,
+            yielder: None,
+            on_fiber: false,
+            builtin_type_args: Vec::new(),
+            call_type_args: Vec::new(),
+            saved_call_types: Vec::new(),
+            delivery: None,
+            records: Box::default(),
+            static_type_cache: HashMap::new(),
+            direct_calls: !super::frames_forced(),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -66,6 +89,7 @@ impl CompiledState {
 impl RootHaver for CompiledState {
     fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
         roots.extend(self.static_type_cache.values().copied());
+        self.records.collect_roots(roots);
         for ty in self.types() {
             ty.visit_heads(&mut |head| {
                 if head.is_resolved() {
@@ -83,6 +107,7 @@ impl RootHaver for CompiledState {
         for ptr in self.static_type_cache.values_mut() {
             *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
         }
+        self.records.forward_roots(roots);
         let forward_ty = |ty: &mut RealizedTy| {
             ty.visit_heads_mut(&mut |head| {
                 if head.is_resolved()

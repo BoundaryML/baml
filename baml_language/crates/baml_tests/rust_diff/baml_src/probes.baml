@@ -454,3 +454,212 @@ function Equality() -> void {
         `${a == b}:${a == c}:${a != b}:${maybe == a}:${none == a}:${u == b}:${[a] == [b]}:${[a] == [c]}`,
     );
 }
+
+// Frame records: compiled callees called directly run without VM frames.
+// Each probe below exercises a reader of the merged stack.
+
+function DeepThrow(n: int) -> int {
+    if (n > 3) {
+        throw `deep:${n}`;
+    }
+    DeepThrow(n + 1) + 1
+}
+
+function DeepMid(n: int) -> int {
+    let doubled = DeepThrow(n) * 2;
+    doubled + 1
+}
+
+function DeepPanic(xs: int[], i: int) -> int {
+    xs[i] + 1
+}
+
+function DeepIndex(xs: int[]) -> int {
+    DeepPanic(xs, 10) + DeepPanic(xs, 0)
+}
+
+function Frames(ctx: baml.errors.Context) -> string {
+    let out = "";
+    for (let frame in ctx.stack_trace.frames) {
+        out = out + `${frame.function_name}@${frame.line};`;
+    }
+    out
+}
+
+// Errors raised deep in chains of directly called bodies: the trace and the
+// context a handler binds, and the cause of a throw inside a handler.
+function DeepErrors() -> void {
+    let first = DeepMid(0) catch (e, ctx) {
+        _ => `${ctx.error}|${Frames(ctx)}`,
+    };
+    baml.io.println(`${first}`);
+    let second = DeepIndex([1, 2]) catch_all_panics (e, ctx) {
+        _ => `${Frames(ctx)}`,
+    };
+    baml.io.println(`${second}`);
+    let third = DeepMid(0) catch (e, ctx) {
+        _ => {
+            DeepMid(1) catch (inner, context) {
+                _ => match (context.root_cause().error) {
+                    let s: string => `${s}|${Frames(context)}`,
+                    _ => "missing cause",
+                },
+            }
+        },
+    };
+    baml.io.println(`${third}`);
+}
+
+// An error from deep in a chain that nothing catches.
+function DeepUncaught() -> void {
+    let _ = DeepMid(0);
+}
+
+class Depths {
+    deepest: int,
+}
+
+function Descend(d: Depths, n: int) -> int {
+    d.deepest = n;
+    1 + Descend(d, n + 1)
+}
+
+function Bounce(d: Depths, n: int) -> int {
+    d.deepest = n;
+    let r = Descend(d, n + 1) catch (e) {
+        let e: baml.panics.StackOverflow => -n,
+    };
+    r
+}
+
+// Recursion to the frame limit is a catchable `StackOverflow` at the depth
+// bytecode reaches, wherever the handler is.
+function FrameLimit() -> void {
+    let d = Depths { deepest: 0 };
+    let a = Descend(d, 0) catch (e) {
+        let e: baml.panics.StackOverflow => -1,
+    };
+    let first = d.deepest;
+    let b = Bounce(d, 0);
+    baml.io.println(`${a}:${first}:${b}:${d.deepest}`);
+}
+
+function AwaitLeaf(f: baml.future.Future<int, never>) -> int {
+    let v = await f;
+    let g = spawn { v + 1 };
+    await g
+}
+
+function AwaitMid(f: baml.future.Future<int, never>, n: int) -> int {
+    if (n == 0) {
+        return AwaitLeaf(f);
+    }
+    AwaitMid(f, n - 1) + 1
+}
+
+// Awaits and spawns paused below a chain of directly called bodies.
+function AwaitChain() -> void {
+    let f = spawn { Work(10) };
+    let total = AwaitMid(f, 20);
+    let sleeper = spawn { Sized(4) };
+    baml.io.println(`${total}:${AwaitMid(sleeper, 3)}`);
+}
+
+function SleepLeaf(state: string[]) -> int {
+    defer { state.push("leaf-cleanup"); }
+    state.push("leaf");
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(60000));
+    1
+}
+
+function SleepMid(state: string[]) -> int {
+    defer { state.push("mid-cleanup"); }
+    SleepLeaf(state) + 1
+}
+
+// Cancellation of a task paused below a chain of directly called bodies
+// runs every `defer` on the way out.
+function CancelDeep() -> void {
+    let state: string[] = [];
+    let child = spawn { SleepMid(state) };
+    while (state.length() == 0) {
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(1));
+    }
+    child.cancel();
+    let _ = (await child) catch_all_panics (e) {
+        _ => null,
+    };
+    baml.io.println(state.join(","));
+}
+
+function ShieldLeaf(state: string[]) -> int {
+    defer {
+        state.push("defer-start");
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(200));
+        state.push("defer-end");
+    }
+    1
+}
+
+function ShieldMid(state: string[]) -> int {
+    ShieldLeaf(state) + 1
+}
+
+// A cancellation that arrives while a `defer` body runs in a directly
+// called body waits for that body to finish.
+function Shielded() -> void {
+    let state: string[] = [];
+    let child = spawn {
+        ShieldMid(state);
+        state.push("after");
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(60000));
+    };
+    while (state.length() == 0) {
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(1));
+    }
+    child.cancel();
+    let _ = (await child) catch_all_panics (e) {
+        _ => null,
+    };
+    baml.io.println(state.join(","));
+}
+
+function Twice<T>(x: T) -> T[] {
+    [x, x]
+}
+
+function Nested<T>(x: T) -> int {
+    let pair = Twice<T>(x);
+    if (TypeName<T>() == "int") {
+        return pair.length() * 10;
+    }
+    pair.length()
+}
+
+function Apply(f: (int) -> int, n: int) -> int {
+    f(n)
+}
+
+function ApplyDeep(f: (int) -> int, n: int) -> int {
+    Apply(f, n) + Apply(f, n + 1)
+}
+
+// Generic and closure callees run with frame records that carry their type
+// arguments and captures; an error inside a closure lands with its trace.
+function GenericClosures() -> void {
+    let k = 3;
+    let add = (n: int) -> int { n + k };
+    let failing = (n: int) -> int {
+        if (n > 1) {
+            throw `closure:${n}`;
+        }
+        n
+    };
+    let caught = ApplyDeep(failing, 1) catch (e, ctx) {
+        _ => `${ctx.error}|${Frames(ctx)}`,
+    };
+    baml.io.println(
+        `${Nested<int>(4)}:${Nested<string>("s")}:${Twice<bool>(true)[1]}:${ApplyDeep(add, 4)}`,
+    );
+    baml.io.println(`${caught}`);
+}

@@ -5,6 +5,7 @@ use bex_vm_types::{
     types::{FunctionType, GenericFunction, TypeValue},
 };
 
+use super::FrameRecord;
 use crate::{
     errors::{VmError, VmInternalError},
     vm::{BexVm, Frame},
@@ -13,15 +14,32 @@ use crate::{
 impl BexVm {
     /// Return frame type arguments in De Bruijn order, with owner arguments first.
     #[inline]
-    pub(crate) fn frame_type_args(&self, depth: usize) -> &[RealizedTy] {
-        let frame = self.compiled_frame(depth);
-        &frame.type_args
+    pub(crate) fn frame_type_args<'a>(&'a self, frame: &'a FrameRecord) -> &'a [RealizedTy] {
+        match Self::record_vm_frame(frame) {
+            Some(idx) => match &self.frames[idx] {
+                Frame::Bytecode(frame) => &frame.type_args,
+                Frame::Native(_) => &[],
+            },
+            None => frame.own_type_args(),
+        }
+    }
+
+    /// The VM frame of a body entered by the VM.
+    fn entry_frame(&self, frame: &FrameRecord) -> Option<&crate::vm::BytecodeFrame> {
+        match &self.frames[Self::record_vm_frame(frame)?] {
+            Frame::Bytecode(frame) => Some(frame),
+            Frame::Native(_) => None,
+        }
     }
 
     /// Read a frame type argument, reporting a missing slot as a substitution error.
     #[inline]
-    pub fn frame_type_arg(&self, depth: usize, slot: u32) -> Result<RealizedTy, Box<VmError>> {
-        let type_args = self.frame_type_args(depth);
+    pub fn frame_type_arg(
+        &self,
+        frame: &FrameRecord,
+        slot: u32,
+    ) -> Result<RealizedTy, Box<VmError>> {
+        let type_args = self.frame_type_args(frame);
         match type_args.get(slot as usize) {
             Some(ty) => Ok(ty.clone()),
             None => Err(Box::new(substitution_error(
@@ -34,27 +52,31 @@ impl BexVm {
     }
 
     /// Create a type value, preserving the identity of an explicitly bound `slot`.
-    pub fn type_value(&mut self, depth: usize, slot: Option<u32>, ty: RealizedTy) -> Value {
-        let exact = slot.and_then(|slot| match &self.frames[depth - 1] {
-            Frame::Bytecode(frame) => frame
+    pub fn type_value(&mut self, frame: &FrameRecord, slot: Option<u32>, ty: RealizedTy) -> Value {
+        // Only a VM frame carries exact type values; see `direct_calls_typed`.
+        let exact = slot.and_then(|slot| {
+            self.entry_frame(frame)?
                 .type_metadata
                 .as_ref()
                 .and_then(|metadata| metadata.values.get(slot as usize))
-                .and_then(Clone::clone),
-            Frame::Native(_) => None,
+                .and_then(Clone::clone)
         });
         let type_value = exact.unwrap_or_else(|| TypeValue::new(ty));
         Value::object(self.tlab.alloc_type(type_value))
     }
 
     /// Cache a static type value by site ordinal unless the frame binds a runtime declaration.
-    pub fn static_type_value(&mut self, depth: usize, ordinal: usize, ty: RealizedTy) -> Value {
-        let frame = self.compiled_frame(depth);
-        let cacheable = frame
-            .type_metadata
-            .as_ref()
+    pub fn static_type_value(
+        &mut self,
+        frame: &FrameRecord,
+        ordinal: usize,
+        ty: RealizedTy,
+    ) -> Value {
+        let cacheable = self
+            .entry_frame(frame)
+            .and_then(|frame| frame.type_metadata.as_ref())
             .is_none_or(|metadata| !metadata.binds_runtime_declaration(&self.heap));
-        let key = match self.get_object(frame.function) {
+        let key = match self.get_object(frame.function()) {
             Object::Function(function)
                 if cacheable && self.runtime_package_of(function).is_null() =>
             {
@@ -85,9 +107,24 @@ impl BexVm {
     }
 
     /// Bind a type value to a frame slot for subsequent template substitution.
-    pub fn bind_type(&mut self, depth: usize, slot: u32, value: Value) -> Result<(), Box<VmError>> {
+    pub fn bind_type(
+        &mut self,
+        frame: &FrameRecord,
+        slot: u32,
+        value: Value,
+    ) -> Result<(), Box<VmError>> {
         let type_value = self.type_operand_value(value).map_err(Box::new)?;
-        let frame = self.compiled_frame_mut(depth);
+        // A body that binds types runs with a VM frame; see `CompiledEntry::framed`.
+        let Some(Frame::Bytecode(frame)) =
+            Self::record_vm_frame(frame).map(|idx| &mut self.frames[idx])
+        else {
+            return Err(Box::new(
+                VmInternalError::CompiledBody {
+                    message: "a body that binds types ran without a VM frame".to_string(),
+                }
+                .into(),
+            ));
+        };
         let slot = slot as usize;
         frame.type_args.resize(slot + 1, RealizedTy::unknown());
         frame.type_args[slot] = type_value.ty.clone();
@@ -187,11 +224,11 @@ impl BexVm {
     /// Create a generic function value in the running frame's package.
     pub fn make_generic_function(
         &mut self,
-        depth: usize,
+        frame: &FrameRecord,
         function: GlobalIndex,
         type_args: Box<[RealizedTy]>,
     ) -> Value {
-        let runtime_package = match self.get_object(self.frames[depth - 1].function()) {
+        let runtime_package = match self.get_object(frame.function()) {
             Object::Function(running) => self.runtime_package_of(running),
             _ => HeapPtr::null(),
         };
@@ -265,49 +302,61 @@ mod tests {
 
     #[test]
     fn templates_substitute_against_the_frame() {
-        let vm = vm_with_frame(&[RealizedTy::Int, RealizedTy::String]);
-        let depth = vm.frame_depth();
-        assert_eq!(vm.frame_type_arg(depth, 1).unwrap(), RealizedTy::String);
-        let out_of_range = vm.frame_type_arg(depth, 2).unwrap_err();
-        assert!(
-            matches!(
-                *out_of_range,
-                crate::errors::VmError::InternalError(
-                    crate::errors::VmInternalError::TypeSubstitution { .. }
-                )
-            ),
-            "{out_of_range:?}"
-        );
+        let mut vm = vm_with_frame(&[RealizedTy::Int, RealizedTy::String]);
+        vm.run_entry_with(|vm, fr| -> Result<(), Box<crate::errors::VmError>> {
+            assert_eq!(vm.frame_type_arg(fr, 1).unwrap(), RealizedTy::String);
+            let out_of_range = vm.frame_type_arg(fr, 2).unwrap_err();
+            assert!(
+                matches!(
+                    *out_of_range,
+                    crate::errors::VmError::InternalError(
+                        crate::errors::VmInternalError::TypeSubstitution { .. }
+                    )
+                ),
+                "{out_of_range:?}"
+            );
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
     fn values_are_tested_against_substituted_types() {
-        let vm = vm_with_frame(&[RealizedTy::Int]);
-        let depth = vm.frame_depth();
-        let t = vm.frame_type_arg(depth, 0).unwrap();
-        assert!(vm.value_is_member_of(Value::int(3), &t));
-        assert!(!vm.value_is_member_of(Value::bool(true), &t));
-        assert!(!vm.value_is_member_of(Value::NULL, &t));
+        let mut vm = vm_with_frame(&[RealizedTy::Int]);
+        vm.run_entry_with(|vm, fr| -> Result<(), Box<crate::errors::VmError>> {
+            let t = vm.frame_type_arg(fr, 0).unwrap();
+            assert!(vm.value_is_member_of(Value::int(3), &t));
+            assert!(!vm.value_is_member_of(Value::bool(true), &t));
+            assert!(!vm.value_is_member_of(Value::NULL, &t));
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
     fn static_type_values_are_one_object_per_site() {
         let mut vm = vm_with_frame(&[]);
-        let depth = vm.frame_depth();
-        let first = vm.static_type_value(depth, 0, RealizedTy::Int);
-        let again = vm.static_type_value(depth, 0, RealizedTy::Int);
-        let other = vm.static_type_value(depth, 1, RealizedTy::Int);
-        assert_eq!(first.as_object_ptr(), again.as_object_ptr());
-        assert_ne!(first.as_object_ptr(), other.as_object_ptr());
+        vm.run_entry_with(|vm, fr| -> Result<(), Box<crate::errors::VmError>> {
+            let first = vm.static_type_value(fr, 0, RealizedTy::Int);
+            let again = vm.static_type_value(fr, 0, RealizedTy::Int);
+            let other = vm.static_type_value(fr, 1, RealizedTy::Int);
+            assert_eq!(first.as_object_ptr(), again.as_object_ptr());
+            assert_ne!(first.as_object_ptr(), other.as_object_ptr());
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
     fn type_operands_realize_type_values_only() {
         let mut vm = vm_with_frame(&[]);
-        let depth = vm.frame_depth();
-        let value = vm.type_value(depth, None, RealizedTy::String);
-        assert_eq!(vm.type_operand(value).unwrap(), RealizedTy::String);
-        assert!(vm.type_operand(Value::int(1)).is_err());
+        vm.run_entry_with(|vm, fr| -> Result<(), Box<crate::errors::VmError>> {
+            let value = vm.type_value(fr, None, RealizedTy::String);
+            assert_eq!(vm.type_operand(value).unwrap(), RealizedTy::String);
+            assert!(vm.type_operand(Value::int(1)).is_err());
+            Ok(())
+        })
+        .unwrap();
     }
 
     #[test]
@@ -342,23 +391,26 @@ mod tests {
     #[test]
     fn bound_types_widen_the_frame() {
         let mut vm = vm_with_frame(&[RealizedTy::Int]);
-        let depth = vm.frame_depth();
-        let bound = vm.type_value(depth, None, RealizedTy::String);
-        vm.bind_type(depth, 2, bound).unwrap();
-        assert_eq!(vm.frame_type_args(depth).len(), 3);
-        assert_eq!(vm.frame_type_arg(depth, 1).unwrap(), RealizedTy::unknown());
-        assert_eq!(vm.frame_type_arg(depth, 2).unwrap(), RealizedTy::String);
-        let read = vm.type_value(depth, Some(2), RealizedTy::Int);
-        let read = vm
-            .as_object_ptr(read, bex_vm_types::ObjectType::Type)
-            .unwrap();
-        let bex_vm_types::Object::Type(type_value) = vm.get_object(read) else {
-            unreachable!()
-        };
-        assert_eq!(
-            type_value.ty,
-            RealizedTy::String,
-            "the exact bound value wins"
-        );
+        vm.run_entry_with(|vm, fr| -> Result<(), Box<crate::errors::VmError>> {
+            let bound = vm.type_value(fr, None, RealizedTy::String);
+            vm.bind_type(fr, 2, bound).unwrap();
+            assert_eq!(vm.frame_type_args(fr).len(), 3);
+            assert_eq!(vm.frame_type_arg(fr, 1).unwrap(), RealizedTy::unknown());
+            assert_eq!(vm.frame_type_arg(fr, 2).unwrap(), RealizedTy::String);
+            let read = vm.type_value(fr, Some(2), RealizedTy::Int);
+            let read = vm
+                .as_object_ptr(read, bex_vm_types::ObjectType::Type)
+                .unwrap();
+            let bex_vm_types::Object::Type(type_value) = vm.get_object(read) else {
+                unreachable!()
+            };
+            assert_eq!(
+                type_value.ty,
+                RealizedTy::String,
+                "the exact bound value wins"
+            );
+            Ok(())
+        })
+        .unwrap();
     }
 }

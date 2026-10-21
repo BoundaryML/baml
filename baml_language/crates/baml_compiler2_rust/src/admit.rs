@@ -69,6 +69,8 @@ pub struct CompiledFunction {
     pub slots: u32,
     /// Frame slot holding the active catch cause.
     pub cause_slot: Option<u32>,
+    /// Whether the body must run with a VM frame rather than a frame record.
+    pub framed: bool,
 }
 
 /// The generated Rust module for one program.
@@ -246,6 +248,17 @@ fn admission_fixpoint(
             .map(|(&object, _)| object)
             .collect();
         propagate_pausing(units, &mut pausing);
+        // Bodies that keep VM-frame state: a trace hook prologue, type
+        // bindings, or a pass-through span scope.
+        let framed: BTreeSet<usize> = units
+            .iter()
+            .filter(|&(&object, unit)| {
+                unit.analysis.hooked
+                    || unit.analysis.binds_types
+                    || index.info(object).trace_passthrough
+            })
+            .map(|(&object, _)| object)
+            .collect();
         let symbols: HashMap<usize, String> = units
             .keys()
             .map(|&object| (object, symbol_for(index.display(object), object)))
@@ -260,6 +273,7 @@ fn admission_fixpoint(
                 index,
                 symbols: &symbols,
                 pausing: &pausing,
+                framed: &framed,
             };
             let mut generator = Generator::new(&program, &mut builtins, object, unit);
             match generator.function(&symbols[&object]) {
@@ -282,6 +296,7 @@ fn admission_fixpoint(
                         cause_slot: generator
                             .cause_slot
                             .map(|slot| u32::try_from(slot).expect("bounded MIR slots")),
+                        framed: framed.contains(&object),
                     });
                 }
                 Err(rejection) => failed.push((object, rejection)),

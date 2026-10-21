@@ -67,6 +67,7 @@ pub struct CompiledBody {
     ptr: *const (),
     slots: u32,
     cause_slot: Option<u32>,
+    framed: bool,
 }
 
 impl CompiledBody {
@@ -75,11 +76,17 @@ impl CompiledBody {
     /// `ptr` must be a `bex_vm::compiled_rt::CompiledFn` function pointer.
     #[must_use]
     #[allow(unsafe_code)]
-    pub const unsafe fn new(ptr: *const (), slots: u32, cause_slot: Option<u32>) -> Self {
+    pub const unsafe fn new(
+        ptr: *const (),
+        slots: u32,
+        cause_slot: Option<u32>,
+        framed: bool,
+    ) -> Self {
         Self {
             ptr,
             slots,
             cause_slot,
+            framed,
         }
     }
 
@@ -99,6 +106,13 @@ impl CompiledBody {
     #[must_use]
     pub const fn cause_slot(self) -> Option<u32> {
         self.cause_slot
+    }
+
+    /// Whether the body must run with a VM frame: it binds types into its
+    /// frame, resolves a trace hook, or activates a span scope.
+    #[must_use]
+    pub const fn framed(self) -> bool {
+        self.framed
     }
 }
 

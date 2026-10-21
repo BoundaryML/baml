@@ -6,6 +6,7 @@ use std::{
 use bex_heap::CollectionLevel;
 use bex_vm_types::{FunctionKind, HeapPtr, Object, ObjectIndex, RootHaver, Value};
 
+use super::FrameRecord;
 use crate::{
     errors::VmError,
     telemetry::{InvocationOutcome, SpanRecord, TelemetryPolicies, TelemetryState, TimingRecord},
@@ -20,17 +21,25 @@ fn compiled_body_is_indistinguishable_from_bytecode() {
 
     static CALLS: AtomicUsize = AtomicUsize::new(0);
     static SAME: AtomicU32 = AtomicU32::new(0);
-    fn add_compiled(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn add_compiled(
+        vm: &mut BexVm,
+        _fr: &FrameRecord,
+        args: &[Value],
+    ) -> Result<Value, Box<VmError>> {
         CALLS.fetch_add(1, Ordering::Relaxed);
         let sum = vm.add_i64(test_int(args[0]), test_int(args[1]))?;
         Ok(Value::int(sum))
     }
     // `Same<T>` forwards its type argument to the compiled `Add` body.
-    fn same_compiled(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
-        let depth = vm.frame_depth();
-        let t = vm.frame_type_arg(depth, 0)?;
+    fn same_compiled(
+        vm: &mut BexVm,
+        fr: &FrameRecord,
+        args: &[Value],
+    ) -> Result<Value, Box<VmError>> {
+        let t = vm.frame_type_arg(fr, 0)?;
         let callee = vm.idx_to_ptr(ObjectIndex::from_raw(SAME.load(Ordering::Relaxed) as usize));
         let _ = vm.call_compiled(
+            fr,
             callee,
             add_compiled,
             std::slice::from_ref(&t),
@@ -214,6 +223,7 @@ fn test_body(
         body,
         slots,
         cause_slot: None,
+        framed: false,
     }
     .erase()
 }
@@ -325,24 +335,23 @@ fn exec_with_compiled_bodies(
 fn a_body_paused_at_a_yield_survives_a_moving_collection() {
     use crate::compiled_rt::Step;
 
-    fn body(vm: &mut BexVm, _: &[Value]) -> Result<Value, Box<VmError>> {
-        let depth = vm.frame_depth();
-        vm.reserve_slots(depth, 1);
+    fn body(vm: &mut BexVm, fr: &FrameRecord, _: &[Value]) -> Result<Value, Box<VmError>> {
+        vm.reserve_slots(fr, 1);
         let mut live = vm.string_value("still live");
-        let mut cached = vm.static_type_value(depth, 0, bex_vm_types::RealizedTy::unknown());
+        let mut cached = vm.static_type_value(fr, 0, bex_vm_types::RealizedTy::unknown());
         for _ in 0..3 {
             let before = live;
-            vm.set_slot(depth, 0, live);
+            vm.set_slot(fr, 0, live);
             vm.suspend(Step::Yield)?;
-            live = vm.slot(depth, 0);
-            let forwarded = vm.static_type_value(depth, 0, bex_vm_types::RealizedTy::unknown());
+            live = vm.slot(fr, 0);
+            let forwarded = vm.static_type_value(fr, 0, bex_vm_types::RealizedTy::unknown());
             assert_ne!(
                 forwarded, cached,
                 "the collection forwards the compiled cache"
             );
             assert_eq!(
                 forwarded,
-                vm.static_type_value(depth, 0, bex_vm_types::RealizedTy::unknown()),
+                vm.static_type_value(fr, 0, bex_vm_types::RealizedTy::unknown()),
                 "the forwarded value remains cached"
             );
             cached = forwarded;
@@ -381,7 +390,7 @@ fn a_body_paused_at_a_yield_survives_a_moving_collection() {
 #[cfg(not(any(target_arch = "wasm32", all(windows, target_arch = "aarch64"))))]
 #[test]
 fn a_panicking_compiled_body_clears_fiber_state() {
-    fn body(_: &mut BexVm, _: &[Value]) -> Result<Value, Box<VmError>> {
+    fn body(_: &mut BexVm, _: &FrameRecord, _: &[Value]) -> Result<Value, Box<VmError>> {
         panic!("compiled body panic");
     }
     let mut program = baml_test_support::compile_source("function Main() -> int { 0 }");
@@ -404,13 +413,13 @@ fn a_panicking_compiled_body_clears_fiber_state() {
 fn compiled_recursion_hits_the_frame_limit() {
     use std::sync::atomic::{AtomicU32, Ordering};
     static DEEP: AtomicU32 = AtomicU32::new(0);
-    fn deep(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn deep(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         let n = test_int(args[0]);
         if n == 0 {
             return Ok(Value::int(0));
         }
         let me = vm.idx_to_ptr(ObjectIndex::from_raw(DEEP.load(Ordering::Relaxed) as usize));
-        let below = vm.call_compiled(me, deep, &[], &[Value::int(n - 1)], 0)?;
+        let below = vm.call_compiled(fr, me, deep, &[], &[Value::int(n - 1)], 0)?;
         Ok(Value::int(test_int(below) + 1))
     }
     const SOURCE: &str = r#"
@@ -440,9 +449,9 @@ fn compiled_recursion_checks_fiber_stack_space() {
     use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
     static DEEP: AtomicU32 = AtomicU32::new(0);
     static DEEPEST: AtomicUsize = AtomicUsize::new(0);
-    fn deep(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn deep(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         let n = test_int(args[0]);
-        DEEPEST.fetch_max(vm.frame_depth(), Ordering::Relaxed);
+        DEEPEST.fetch_max(vm.level_count(), Ordering::Relaxed);
         if n == 0 {
             return Ok(Value::int(0));
         }
@@ -451,7 +460,7 @@ fn compiled_recursion_checks_fiber_stack_space() {
         pad[slot] = 1;
         std::hint::black_box(&mut pad);
         let me = vm.idx_to_ptr(ObjectIndex::from_raw(DEEP.load(Ordering::Relaxed) as usize));
-        let below = vm.call_compiled(me, deep, &[], &[Value::int(n - 1)], 0)?;
+        let below = vm.call_compiled(fr, me, deep, &[], &[Value::int(n - 1)], 0)?;
         let one = std::hint::black_box(&pad)[slot];
         Ok(Value::int(test_int(below) + i64::try_from(one).unwrap()))
     }
@@ -498,7 +507,7 @@ fn compiled_bytecode_recursion_checks_fiber_stack_space() {
 
     use crate::compiled_rt::Step;
     static PONG: AtomicU32 = AtomicU32::new(0);
-    fn ping(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn ping(vm: &mut BexVm, _fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         let n = test_int(args[0]);
         if n == 0 {
             return Ok(Value::int(0));
@@ -543,9 +552,10 @@ fn compiled_logs_leave_the_stack_as_they_found_it() {
     use std::sync::Mutex;
 
     static LENGTHS: Mutex<Vec<usize>> = Mutex::new(Vec::new());
-    fn body(vm: &mut BexVm, _: &[Value]) -> Result<Value, Box<VmError>> {
+    fn body(vm: &mut BexVm, fr: &FrameRecord, _: &[Value]) -> Result<Value, Box<VmError>> {
         for _ in 0..4 {
             vm.log_event(
+                fr,
                 crate::compiled_rt::LogLevel::Info,
                 Value::int(1),
                 Value::NULL,
@@ -571,7 +581,7 @@ fn compiled_logs_leave_the_stack_as_they_found_it() {
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn inline_body_of_a_generic_function_sees_the_type_arguments() {
-    fn name_of(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn name_of(vm: &mut BexVm, _fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         let Some(Frame::Bytecode(frame)) = vm.frames.last() else {
             unreachable!("the body runs in its own frame")
         };
@@ -620,7 +630,7 @@ fn compiled_caller_passes_type_arguments_to_a_compiled_callee() {
         frame.type_args[0].clone()
     }
     #[allow(clippy::unnecessary_wraps)]
-    fn name_of(vm: &mut BexVm, _args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn name_of(vm: &mut BexVm, _fr: &FrameRecord, _args: &[Value]) -> Result<Value, Box<VmError>> {
         let text = match frame_type_arg(vm) {
             bex_vm_types::RealizedTy::Int => "int",
             bex_vm_types::RealizedTy::String => "string",
@@ -628,12 +638,12 @@ fn compiled_caller_passes_type_arguments_to_a_compiled_callee() {
         };
         Ok(vm.string_value(text))
     }
-    fn forward(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn forward(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         let ty = frame_type_arg(vm);
         let callee = vm.idx_to_ptr(ObjectIndex::from_raw(
             NAME_OF.load(Ordering::Relaxed) as usize
         ));
-        vm.call_compiled(callee, name_of, &[ty], &[args[0]], 0)
+        vm.call_compiled(fr, callee, name_of, &[ty], &[args[0]], 0)
     }
     const SOURCE: &str = r#"
         function NameOf<T>(x: T) -> string { "bytecode" }
@@ -657,17 +667,16 @@ fn compiled_catch_pops_the_frames_of_compiled_callees() {
     use std::sync::atomic::{AtomicU32, Ordering};
     static WORK: AtomicU32 = AtomicU32::new(0);
     static PANIC: AtomicU32 = AtomicU32::new(0);
-    fn work(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn work(vm: &mut BexVm, _fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         let n = test_int(args[0]);
         Ok(Value::int(vm.div_i64(n, 0)?))
     }
-    fn safe(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
-        let depth = vm.frame_depth();
+    fn safe(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         let work_ptr = vm.idx_to_ptr(ObjectIndex::from_raw(WORK.load(Ordering::Relaxed) as usize));
-        match vm.call_compiled(work_ptr, work, &[], &[args[0]], 0) {
+        match vm.call_compiled(fr, work_ptr, work, &[], &[args[0]], 0) {
             Ok(v) => Ok(v),
             Err(e) => {
-                let (thrown, ctx) = vm.catch(e, depth)?;
+                let (thrown, ctx) = vm.catch(e, fr)?;
                 let class =
                     vm.idx_to_ptr(ObjectIndex::from_raw(PANIC.load(Ordering::Relaxed) as usize));
                 if vm.is_instance_of(thrown, class) {
@@ -710,7 +719,7 @@ fn a_compiled_caller_stands_at_its_call_instruction_while_the_callee_runs() {
     static OUTER_CALL: AtomicU32 = AtomicU32::new(0);
     static SEEN: Mutex<Vec<(usize, usize)>> = Mutex::new(Vec::new());
     #[allow(clippy::unnecessary_wraps)] // the compiled-body signature
-    fn inner(vm: &mut BexVm, _args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn inner(vm: &mut BexVm, _fr: &FrameRecord, _args: &[Value]) -> Result<Value, Box<VmError>> {
         let trace = vm.capture_stack_trace();
         let mut seen = SEEN.lock().unwrap();
         seen.clear();
@@ -735,15 +744,29 @@ fn a_compiled_caller_stands_at_its_call_instruction_while_the_callee_runs() {
         }
         Ok(Value::int(1))
     }
-    fn middle(vm: &mut BexVm, _args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn middle(vm: &mut BexVm, fr: &FrameRecord, _args: &[Value]) -> Result<Value, Box<VmError>> {
         let callee = vm.idx_to_ptr(ObjectIndex::from_raw(INNER.load(Ordering::Relaxed) as usize));
-        vm.call_compiled(callee, inner, &[], &[], MIDDLE_CALL.load(Ordering::Relaxed))
+        vm.call_compiled(
+            fr,
+            callee,
+            inner,
+            &[],
+            &[],
+            MIDDLE_CALL.load(Ordering::Relaxed),
+        )
     }
-    fn outer(vm: &mut BexVm, _args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn outer(vm: &mut BexVm, fr: &FrameRecord, _args: &[Value]) -> Result<Value, Box<VmError>> {
         let callee = vm.idx_to_ptr(ObjectIndex::from_raw(
             MIDDLE.load(Ordering::Relaxed) as usize
         ));
-        vm.call_compiled(callee, middle, &[], &[], OUTER_CALL.load(Ordering::Relaxed))
+        vm.call_compiled(
+            fr,
+            callee,
+            middle,
+            &[],
+            &[],
+            OUTER_CALL.load(Ordering::Relaxed),
+        )
     }
     const SOURCE: &str = r#"
         function Inner() -> int { 1 }
@@ -903,14 +926,14 @@ fn inline_observed_model_invokes_charge_usage_before_completion() {
 
     static INVOKE: AtomicU32 = AtomicU32::new(0);
     #[allow(clippy::unnecessary_wraps)]
-    fn invoke(_: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn invoke(_: &mut BexVm, _: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         Ok(args[0])
     }
-    fn caller(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn caller(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         let callee = vm.idx_to_ptr(ObjectIndex::from_raw(
             INVOKE.load(Ordering::Relaxed) as usize
         ));
-        vm.call_compiled(callee, invoke, &[], args, 0)
+        vm.call_compiled(fr, callee, invoke, &[], args, 0)
     }
 
     const SOURCE: &str = r#"
@@ -1029,35 +1052,34 @@ fn inline_observed_compiled_calls_record_as_the_call_path_does() {
     fn object(vm: &BexVm, index: &AtomicU32) -> HeapPtr {
         vm.idx_to_ptr(ObjectIndex::from_raw(index.load(Ordering::Relaxed) as usize))
     }
-    fn leaf(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn leaf(vm: &mut BexVm, _fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         let n = test_int(args[0]);
         if n < 0 {
             return Ok(Value::int(vm.div_i64(n, 0)?));
         }
         Ok(Value::int(n + 1))
     }
-    fn mid(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn mid(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         let leaf_ptr = object(vm, &LEAF);
-        let a = vm.call_compiled(leaf_ptr, leaf, &[], &[args[0]], 0)?;
-        let b = vm.call_compiled(leaf_ptr, leaf, &[], &[args[0]], 0)?;
+        let a = vm.call_compiled(fr, leaf_ptr, leaf, &[], &[args[0]], 0)?;
+        let b = vm.call_compiled(fr, leaf_ptr, leaf, &[], &[args[0]], 0)?;
         Ok(Value::int(test_int(a) + test_int(b)))
     }
-    fn rec(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn rec(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         let n = test_int(args[0]);
         if n == 0 {
             return Ok(Value::int(0));
         }
         let rec_ptr = object(vm, &REC);
-        let below = vm.call_compiled(rec_ptr, rec, &[], &[Value::int(n - 1)], 0)?;
+        let below = vm.call_compiled(fr, rec_ptr, rec, &[], &[Value::int(n - 1)], 0)?;
         Ok(Value::int(test_int(below) + 1))
     }
-    fn safe(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
-        let depth = vm.frame_depth();
+    fn safe(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         let mid_ptr = object(vm, &MID);
-        match vm.call_compiled(mid_ptr, mid, &[], &[args[0]], 0) {
+        match vm.call_compiled(fr, mid_ptr, mid, &[], &[args[0]], 0) {
             Ok(v) => Ok(v),
             Err(e) => {
-                let (thrown, ctx) = vm.catch(e, depth)?;
+                let (thrown, ctx) = vm.catch(e, fr)?;
                 let class = object(vm, &PANIC);
                 if vm.is_instance_of(thrown, class) {
                     Ok(Value::int(-1))
@@ -1165,7 +1187,7 @@ fn inline_observed_compiled_calls_record_as_the_call_path_does() {
 fn compiled_bodies_require_the_original_program() {
     use crate::compiled_rt::CompiledEntry;
 
-    fn body(_vm: &mut BexVm, _args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn body(_vm: &mut BexVm, _fr: &FrameRecord, _args: &[Value]) -> Result<Value, Box<VmError>> {
         unreachable!("load validation does not execute compiled bodies")
     }
 
@@ -1178,6 +1200,7 @@ fn compiled_bodies_require_the_original_program() {
         body,
         slots: 0,
         cause_slot: None,
+        framed: false,
     }]));
     let artifact = baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program).unwrap();
     let (decoded, digest) =
@@ -1216,11 +1239,15 @@ fn compiled_entry_points_run_their_bodies() {
     use std::sync::atomic::{AtomicUsize, Ordering};
     static RUNS: AtomicUsize = AtomicUsize::new(0);
     #[allow(clippy::unnecessary_wraps)] // the compiled-body signature
-    fn main(vm: &mut BexVm, _args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn main(vm: &mut BexVm, _fr: &FrameRecord, _args: &[Value]) -> Result<Value, Box<VmError>> {
         RUNS.fetch_add(1, Ordering::Relaxed);
         Ok(vm.string_value("compiled"))
     }
-    fn failing_main(vm: &mut BexVm, _args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn failing_main(
+        vm: &mut BexVm,
+        _fr: &FrameRecord,
+        _args: &[Value],
+    ) -> Result<Value, Box<VmError>> {
         Ok(Value::int(vm.div_i64(1, 0)?))
     }
     const SOURCE: &str = r#"function Main() -> string { "bytecode" }"#;
@@ -1246,8 +1273,7 @@ fn compiled_bodies_call_bytecode_and_resume() {
     use crate::compiled_rt::Step;
     static HELPER: AtomicU32 = AtomicU32::new(0);
 
-    fn twice(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
-        let depth = vm.frame_depth();
+    fn twice(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         let n = test_int(args[0]);
         let helper = vm.idx_to_ptr(ObjectIndex::from_raw(
             HELPER.load(Ordering::Relaxed) as usize
@@ -1259,7 +1285,7 @@ fn compiled_bodies_call_bytecode_and_resume() {
         }) {
             Ok(h) => Ok(Value::int(n * 10 + test_int(h))),
             Err(error) if n == 0 => {
-                vm.catch(error, depth)?;
+                vm.catch(error, fr)?;
                 Ok(Value::int(-1))
             }
             Err(error) => Err(error),
@@ -1289,11 +1315,11 @@ fn compiled_bodies_call_bytecode_and_resume() {
 fn compiled_delivery_survives_collection_before_resume() {
     use crate::compiled_rt::Step;
 
-    fn body(vm: &mut BexVm, _args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn body(vm: &mut BexVm, fr: &FrameRecord, _args: &[Value]) -> Result<Value, Box<VmError>> {
         let error = vm
             .suspend(Step::Yield)
             .expect_err("expected a delivered exception");
-        let (value, context) = vm.catch(error, vm.frame_depth())?;
+        let (value, context) = vm.catch(error, fr)?;
         let Object::Instance(context) = vm.get_object(context.as_object_ptr().unwrap()) else {
             panic!("expected error context");
         };
@@ -1353,7 +1379,7 @@ fn compiled_delivery_survives_collection_before_resume() {
 fn compiled_bodies_call_bound_method_values() {
     use crate::compiled_rt::Step;
 
-    fn apply(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn apply(vm: &mut BexVm, _fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         let callee = crate::compiled_rt::callee_ptr(args[0])?;
         vm.push_arg(args[1]);
         vm.suspend(Step::Call { callee, argc: 1 })
@@ -1381,14 +1407,14 @@ fn compiled_bodies_call_bound_method_values() {
 fn errors_leave_compiled_frames_past_their_bytecode_handlers() {
     use std::sync::atomic::{AtomicU32, Ordering};
     static WORK: AtomicU32 = AtomicU32::new(0);
-    fn work(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn work(vm: &mut BexVm, _fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         let n = test_int(args[0]);
         Ok(Value::int(vm.div_i64(n, 0)?))
     }
     // Safe's bytecode catches this error; its compiled body lets it escape.
-    fn safe(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn safe(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         let work_ptr = vm.idx_to_ptr(ObjectIndex::from_raw(WORK.load(Ordering::Relaxed) as usize));
-        vm.call_compiled(work_ptr, work, &[], &[args[0]], 0)
+        vm.call_compiled(fr, work_ptr, work, &[], &[args[0]], 0)
     }
     const SOURCE: &str = r#"
         function Work(n: int) -> int { n / 0 }
@@ -1415,17 +1441,16 @@ fn errors_leave_compiled_frames_past_their_bytecode_handlers() {
 fn compiled_rethrow_keeps_the_original_context() {
     use std::sync::atomic::{AtomicU32, Ordering};
     static WORK: AtomicU32 = AtomicU32::new(0);
-    fn work(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn work(vm: &mut BexVm, _fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         let n = test_int(args[0]);
         Ok(Value::int(vm.div_i64(n, 0)?))
     }
-    fn relay(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
-        let depth = vm.frame_depth();
+    fn relay(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         let work_ptr = vm.idx_to_ptr(ObjectIndex::from_raw(WORK.load(Ordering::Relaxed) as usize));
-        match vm.call_compiled(work_ptr, work, &[], &[args[0]], 0) {
+        match vm.call_compiled(fr, work_ptr, work, &[], &[args[0]], 0) {
             Ok(v) => Ok(v),
             Err(e) => {
-                let (thrown, ctx) = vm.catch(e, depth)?;
+                let (thrown, ctx) = vm.catch(e, fr)?;
                 assert!(!ctx.is_null(), "a compiled catch lands a real context");
                 Err(crate::compiled_rt::rethrow(thrown, ctx))
             }
@@ -1567,53 +1592,53 @@ fn compiled_trace_hooks_record_as_bytecode_does() {
     }
     fn mode(
         vm: &mut BexVm,
+        fr: &FrameRecord,
         n: Value,
         mode: TraceHookMode,
         add: i64,
     ) -> Result<Value, Box<VmError>> {
-        let depth = vm.frame_depth();
-        vm.builtin_trace_hook(depth, mode)?;
+        vm.builtin_trace_hook(fr, mode)?;
         Ok(Value::int(test_int(n) + add))
     }
-    fn hidden(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
-        mode(vm, args[0], TraceHookMode::Hidden, 1)
+    fn hidden(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+        mode(vm, fr, args[0], TraceHookMode::Hidden, 1)
     }
-    fn timing(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
-        mode(vm, args[0], TraceHookMode::Timing, 2)
+    fn timing(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+        mode(vm, fr, args[0], TraceHookMode::Timing, 2)
     }
-    fn span(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
-        mode(vm, args[0], TraceHookMode::Span, 3)
+    fn span(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+        mode(vm, fr, args[0], TraceHookMode::Span, 3)
     }
-    fn empty(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
-        mode(vm, args[0], TraceHookMode::EmptySpan, 4)
+    fn empty(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+        mode(vm, fr, args[0], TraceHookMode::EmptySpan, 4)
     }
     // The prologue MIR lowers a declaration hook to: settings =
     // TraceHookSettings; if settings != null { result = hook(n, settings);
     // ApplyTraceHook(result) }.
     fn with_hook(
         vm: &mut BexVm,
+        fr: &FrameRecord,
         n: Value,
         hook: &AtomicU32,
         add: i64,
     ) -> Result<Value, Box<VmError>> {
-        let depth = vm.frame_depth();
-        let settings = vm.compiled_begin_trace_hook(depth, true)?;
+        let settings = vm.compiled_begin_trace_hook(fr, true)?;
         if !settings.is_null() {
             let callee = object(vm, hook);
             vm.push_arg(n);
             vm.push_arg(settings);
             let result = vm.suspend(Step::Call { callee, argc: 2 })?;
-            vm.compiled_finish_trace_hook(depth, result)?;
+            vm.compiled_finish_trace_hook(fr, result)?;
         }
         Ok(Value::int(test_int(n) + add))
     }
-    fn hooked(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
-        with_hook(vm, args[0], &DECIDE, 5)
+    fn hooked(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+        with_hook(vm, fr, args[0], &DECIDE, 5)
     }
-    fn fallback(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
-        with_hook(vm, args[0], &BOOM, 6)
+    fn fallback(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+        with_hook(vm, fr, args[0], &BOOM, 6)
     }
-    fn mid(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn mid(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         let n = args[0];
         let mut total = 0;
         for (index, body) in [
@@ -1625,7 +1650,7 @@ fn compiled_trace_hooks_record_as_bytecode_does() {
             (&FALLBACK, fallback),
         ] {
             let callee = object(vm, index);
-            total += test_int(vm.call_compiled(callee, body, &[], &[n], 0)?);
+            total += test_int(vm.call_compiled(fr, callee, body, &[], &[n], 0)?);
         }
         Ok(Value::int(total))
     }

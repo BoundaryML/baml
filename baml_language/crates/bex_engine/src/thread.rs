@@ -202,7 +202,7 @@ impl BexThread {
     }
 
     /// Whether the VM is inside a `defer` body, at any depth of the call
-    /// stack. Each bytecode frame's function carries the PC ranges of its
+    /// stack. Each frame's function carries the PC ranges of its
     /// `defer` bodies (`Bytecode::shield_table`); the innermost frame is
     /// at `cur_pc`, and an outer frame is at its call instruction (see
     /// `BexVm::frame_pc`): the block the call continues to may already lie
@@ -211,25 +211,13 @@ impl BexThread {
     /// A callee is shielded through its caller, so unwinding needs no
     /// bookkeeping.
     pub fn vm_thread_is_shielded(&self) -> bool {
-        let live = self.vm.live_bytecode_frame();
-        self.vm
-            .frames
-            .iter()
-            .enumerate()
-            .rev()
-            .any(|(index, frame)| {
-                let bex_vm::Frame::Bytecode(frame) = frame else {
-                    return false;
-                };
-                let Some(pc) = self.vm.frame_pc(index, live) else {
-                    return false;
-                };
-                let function = self.frame_function(frame.function);
-                match &function.bytecode.compact {
-                    Some(compact) => compact.pc_is_shielded(pc),
-                    None => function.bytecode.pc_is_shielded(pc),
-                }
-            })
+        self.vm.frame_positions().into_iter().any(|(function, pc)| {
+            let function = self.frame_function(function);
+            match &function.bytecode.compact {
+                Some(compact) => compact.pc_is_shielded(pc),
+                None => function.bytecode.pc_is_shielded(pc),
+            }
+        })
     }
 
     /// The function a bytecode frame runs, resolved as the VM resolves it: a

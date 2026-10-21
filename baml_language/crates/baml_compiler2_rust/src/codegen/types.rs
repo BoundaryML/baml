@@ -29,7 +29,7 @@ pub(crate) fn realized_expr(
             if !frame {
                 return None;
             }
-            format!("vm.frame_type_arg(depth, {slot})?")
+            format!("vm.frame_type_arg(fr, {slot})?")
         }
         TyTemplate::List(element) => format!("RealizedTy::List(Box::new({}))", part(element)?),
         TyTemplate::Map { key, value } => format!(
@@ -41,17 +41,17 @@ pub(crate) fn realized_expr(
         TyTemplate::Class(name, args) => {
             let (object, _) = index.class_at(name)?;
             if args.is_empty() {
-                format!("vm.class_type(vm.idx_to_ptr(ObjectIndex::from_raw({object})))")
+                format!("vm.class_type(vm.record_object(fr, ObjectIndex::from_raw({object})))")
             } else {
                 format!(
-                    "vm.class_type_at(vm.idx_to_ptr(ObjectIndex::from_raw({object})), Box::new([{}]))",
+                    "vm.class_type_at(vm.record_object(fr, ObjectIndex::from_raw({object})), Box::new([{}]))",
                     parts(args)?
                 )
             }
         }
         TyTemplate::Enum(name) => {
             let object = index.enum_at(name)?;
-            format!("vm.enum_type(vm.idx_to_ptr(ObjectIndex::from_raw({object})))")
+            format!("vm.enum_type(vm.record_object(fr, ObjectIndex::from_raw({object})))")
         }
         TyTemplate::Interface(name, args, assoc) => {
             let object = index.interface_at(name)?;
@@ -61,7 +61,7 @@ pub(crate) fn realized_expr(
                 .collect::<Option<Vec<_>>>()?
                 .join(", ");
             format!(
-                "vm.interface_type_at(vm.idx_to_ptr(ObjectIndex::from_raw({object})), Box::new([{}]), &[{assoc}])",
+                "vm.interface_type_at(vm.record_object(fr, ObjectIndex::from_raw({object})), Box::new([{}]), &[{assoc}])",
                 parts(args)?
             )
         }

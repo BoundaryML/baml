@@ -2,7 +2,7 @@
 
 use bex_vm_types::{HeapPtr, Object, ObjectType, Value, types::Cell};
 
-use super::CompiledFn;
+use super::{CompiledFn, FrameRecord};
 use crate::{
     errors::{VmError, VmInternalError},
     vm::BexVm,
@@ -34,9 +34,8 @@ impl BexVm {
 
     /// Read a capture from the closure stored as the frame's function.
     #[inline]
-    pub fn capture_cell(&self, depth: usize, index: usize) -> Result<Value, Box<VmError>> {
-        let frame = self.compiled_frame(depth);
-        match self.get_object(frame.function) {
+    pub fn capture_cell(&self, frame: &FrameRecord, index: usize) -> Result<Value, Box<VmError>> {
+        match self.get_object(frame.function()) {
             Object::Closure(closure) => closure.captures.get(index).copied().ok_or_else(|| {
                 Box::new(
                     VmInternalError::CompiledBody {
@@ -174,16 +173,18 @@ mod tests {
             None,
         );
         vm.frames.push(Frame::Bytecode(frame));
-        let depth = vm.frame_depth();
-        assert_eq!(vm.capture_cell(depth, 0).unwrap(), a);
-        assert_eq!(vm.capture_cell(depth, 1).unwrap(), b);
-        let second = vm.capture_cell(depth, 1).unwrap();
-        assert_eq!(vm.cell_load(second).unwrap(), Value::int(20));
-        assert!(matches!(
-            *vm.capture_cell(depth, 2).unwrap_err(),
-            VmError::InternalError(_)
-        ));
-        let depth = depth - 1;
+        vm.run_entry_with(|vm, fr| -> Result<(), Box<VmError>> {
+            assert_eq!(vm.capture_cell(fr, 0).unwrap(), a);
+            assert_eq!(vm.capture_cell(fr, 1).unwrap(), b);
+            let second = vm.capture_cell(fr, 1).unwrap();
+            assert_eq!(vm.cell_load(second).unwrap(), Value::int(20));
+            assert!(matches!(
+                *vm.capture_cell(fr, 2).unwrap_err(),
+                VmError::InternalError(_)
+            ));
+            Ok(())
+        })
+        .unwrap();
         vm.frames.pop();
         let frame = BytecodeFrame::compiled(
             function,
@@ -193,10 +194,14 @@ mod tests {
             None,
         );
         vm.frames.push(Frame::Bytecode(frame));
-        assert!(matches!(
-            *vm.capture_cell(depth + 1, 0).unwrap_err(),
-            VmError::InternalError(_)
-        ));
+        vm.run_entry_with(|vm, fr| -> Result<(), Box<VmError>> {
+            assert!(matches!(
+                *vm.capture_cell(fr, 0).unwrap_err(),
+                VmError::InternalError(_)
+            ));
+            Ok(())
+        })
+        .unwrap();
         vm.frames.pop();
     }
 

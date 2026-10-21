@@ -128,7 +128,7 @@ impl<'db> Generator<'_, 'db> {
         }
         let live = self.header_locals(id.0);
         let at = pc_arg(pc);
-        let request = format!("{{ vm.note_pc(depth, {at}); vm.suspend(Step::Yield) }}");
+        let request = format!("{{ fr.note_pc({at}); vm.suspend(Step::Yield) }}");
         let call = self.rooted(&live, &request);
         let code = self.fallible(id, &call)?;
         self.emit_line("iterations = iterations.wrapping_add(1);");
@@ -154,7 +154,7 @@ impl<'db> Generator<'_, 'db> {
                 }
                 None => "Value::NULL".to_string(),
             };
-            self.emit_statement(&format!("vm.set_slot(depth, {slot}, {cause});"));
+            self.emit_statement(&format!("vm.set_slot(fr, {slot}, {cause});"));
         }
     }
 
@@ -199,7 +199,7 @@ impl<'db> Generator<'_, 'db> {
                     return Err(Rejection::Invalid("`BindType` takes one operand".into()));
                 };
                 let value = self.value_operand(id, value)?;
-                let code = self.fallible(id, &format!("vm.bind_type(depth, {slot}, {value})"))?;
+                let code = self.fallible(id, &format!("vm.bind_type(fr, {slot}, {value})"))?;
                 self.emit_statement(&format!("{code};"));
             }
             StatementKind::Intrinsic {
@@ -227,7 +227,7 @@ impl<'db> Generator<'_, 'db> {
                 let code = self.fallible(
                     id,
                     &format!(
-                        "vm.log_event(bex_vm::compiled_rt::LogLevel::{level}, {data}, {name}, {at})"
+                        "vm.log_event(fr, bex_vm::compiled_rt::LogLevel::{level}, {data}, {name}, {at})"
                     ),
                 )?;
                 self.emit_statement(&format!("{code};"));
@@ -246,7 +246,7 @@ impl<'db> Generator<'_, 'db> {
                     let code = self.fallible(
                         id,
                         &format!(
-                            "vm.builtin_trace_hook(depth, bex_vm::compiled_rt::TraceHookMode::{mode})"
+                            "vm.builtin_trace_hook(fr, bex_vm::compiled_rt::TraceHookMode::{mode})"
                         ),
                     )?;
                     self.emit_statement(&format!("{code};"));
@@ -258,10 +258,8 @@ impl<'db> Generator<'_, 'db> {
                         ));
                     };
                     let result = self.value_operand(id, result)?;
-                    let code = self.fallible(
-                        id,
-                        &format!("vm.compiled_finish_trace_hook(depth, {result})"),
-                    )?;
+                    let code =
+                        self.fallible(id, &format!("vm.compiled_finish_trace_hook(fr, {result})"))?;
                     self.emit_statement(&format!("{code};"));
                 }
                 IntrinsicOp::BindType(_) | IntrinsicOp::Log(_) => {
@@ -402,7 +400,7 @@ impl<'db> Generator<'_, 'db> {
             let step = format!(
                 "if i{iter} < bex_vm::compiled_rt::expect_int(vm.container_len(l{iter})?)? {{ \
                  let v = vm.load_array_element(l{iter}, Value::int(i{iter}))?; i{iter} += 1; v }} \
-                 else {{ vm.new_instance(vm.idx_to_ptr(ObjectIndex::from_raw({done})), Vec::new()) }}"
+                 else {{ vm.new_instance(vm.record_object(fr, ObjectIndex::from_raw({done})), Vec::new()) }}"
             );
             let code = self.store(id, destination, &Expr::new(step, Repr::Value))?;
             self.emit_statement(&code);
@@ -493,10 +491,8 @@ impl<'db> Generator<'_, 'db> {
             &Expr::atom("context", Repr::Value),
         )?;
         let saved = std::mem::take(&mut self.out);
-        self.emit_line("vm.note_pc(depth, pc);");
-        self.emit_line(&format!(
-            "let (thrown, context) = vm.catch({error}, depth)?;"
-        ));
+        self.emit_line("fr.note_pc(pc);");
+        self.emit_line(&format!("let (thrown, context) = vm.catch({error}, fr)?;"));
         self.emit_line(&value);
         self.emit_line(&context);
         let structured = self

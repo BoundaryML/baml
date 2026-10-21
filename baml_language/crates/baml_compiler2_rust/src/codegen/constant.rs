@@ -15,14 +15,14 @@ impl<'db> Generator<'_, 'db> {
             Constant::OmittedArg => Expr::atom("Value::OMITTED_ARG", Repr::Value),
             Constant::String(s) => match self.index.strings.get(s.as_str()) {
                 Some(object) => Expr::new(
-                    format!("Value::object(vm.idx_to_ptr(ObjectIndex::from_raw({object})))"),
+                    format!("Value::object(vm.record_object(fr, ObjectIndex::from_raw({object})))"),
                     Repr::Value,
                 ),
                 None => Expr::new(format!("vm.string_value({s:?})"), Repr::Value),
             },
             Constant::Bigint(value) => match self.index.bigints.get(&value.to_string()) {
                 Some(object) => Expr::new(
-                    format!("Value::object(vm.idx_to_ptr(ObjectIndex::from_raw({object})))"),
+                    format!("Value::object(vm.record_object(fr, ObjectIndex::from_raw({object})))"),
                     Repr::Value,
                 ),
                 None => {
@@ -42,7 +42,7 @@ impl<'db> Generator<'_, 'db> {
                     .pooled_generic_function(object, &[])
                     .unwrap_or(object);
                 Expr::new(
-                    format!("Value::object(vm.idx_to_ptr(ObjectIndex::from_raw({object})))"),
+                    format!("Value::object(vm.record_object(fr, ObjectIndex::from_raw({object})))"),
                     Repr::Value,
                 )
             }
@@ -57,7 +57,7 @@ impl<'db> Generator<'_, 'db> {
                     ));
                 };
                 Expr::new(
-                    format!("Value::object(vm.idx_to_ptr(ObjectIndex::from_raw({object})))"),
+                    format!("Value::object(vm.record_object(fr, ObjectIndex::from_raw({object})))"),
                     Repr::Value,
                 )
             }
@@ -67,7 +67,7 @@ impl<'db> Generator<'_, 'db> {
                 };
                 Expr::new(
                     format!(
-                        "vm.load_global(vm.idx_to_ptr(ObjectIndex::from_raw({})), {slot})",
+                        "vm.load_global(vm.record_object(fr, ObjectIndex::from_raw({})), {slot})",
                         self.object
                     ),
                     Repr::Value,
@@ -86,7 +86,7 @@ impl<'db> Generator<'_, 'db> {
                 }
                 Expr::new(
                     format!(
-                        "vm.new_variant(vm.idx_to_ptr(ObjectIndex::from_raw({object})), {index})"
+                        "vm.new_variant(vm.record_object(fr, ObjectIndex::from_raw({object})), {index})"
                     ),
                     Repr::Value,
                 )
