@@ -1,3 +1,5 @@
+#![allow(clippy::disallowed_methods)]
+
 fn main() {
     napi_build::setup();
 

@@ -8,6 +8,8 @@
 # Force LF line endings for .baml files so include_str! embeds consistent
 # content on all platforms (avoids CRLF line-number shifts on Windows CI).
 *.baml text eol=lf
+# Force LF for agent skills embedded with include_str!.
+skills/**/SKILL.md text eol=lf
 # Same for the args-form wire-shape golden fixture, byte-compared against
 # serde_json output by baml_project's wire_shape_matches_the_ts_golden_fixture.
 typescript2/pkg-playground/src/__fixtures__/*.json text eol=lf

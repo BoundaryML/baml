@@ -1,0 +1,5 @@
+---
+source: crates/baml_tests/src/type_spec/pattern_corpus.rs
+expression: "corpus_verdicts(\"projects/compiles/generic_match_typevar_arm/generic_match_typevar_arm.baml\")"
+---
+unwrap_or: hir_ty=0

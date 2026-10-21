@@ -10,9 +10,7 @@
 //! So the HIR stores `TypeRef` instead: the same tree, flattened into a
 //! per-owner arena, with no spans anywhere. Spans live in a parallel
 //! [`TypeRefSourceMap`] keyed by [`TypeRefId`], and are only reachable through
-//! it. Attributes are the span-free [`Attribute`], not `ast::RawAttribute`
-//! (whose span *is* part of its `PartialEq`, and which therefore leaks position
-//! into type identity).
+//! it.
 //!
 //! The arena is scoped to **one item**. A file-wide arena would renumber every
 //! later item's ids whenever an item was added, which would defeat the per-item
@@ -20,11 +18,9 @@
 
 use std::ops::Index;
 
-use baml_base::{Literal, MediaKind, Name};
+use baml_base::{Literal, MediaKind, Name, Path};
 use la_arena::{Arena, Idx};
 use text_size::TextRange;
-
-use crate::item_tree::Attribute;
 
 /// Identity of a type-reference node within its owning item's [`TypeRefStore`].
 pub type TypeRefId = Idx<TypeRef>;
@@ -35,17 +31,15 @@ pub type TypeRefId = Idx<TypeRef>;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeRef {
     pub kind: TypeRefKind,
-    /// Type-level attributes. Uniform across every kind, so — unlike
-    /// `ast::TypeExprKind` — it is stored once here rather than repeated in
-    /// all 24 variants.
-    pub attrs: Box<[Attribute]>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeRefKind {
-    /// Named type path: `User`, `baml.http.Request`, `Stream<T>`.
+    /// Named type path: `User`, `baml.http.Request`, `Stream<T>`. The path
+    /// carries who wrote it, which decides how its first segment is read
+    /// (`hir::package::path_head_for`).
     Path {
-        segments: Vec<Name>,
+        path: Path,
         /// Generic type arguments (`<T>` in `Stream<T>`). Empty for non-generic paths.
         generic_args: Box<[TypeRefId]>,
         /// Named associated type bindings, e.g. `Iterator<Item = int>`.
@@ -64,8 +58,6 @@ pub enum TypeRefKind {
     Bool,
     Null,
     Never,
-    /// The `void` type — valid only as a function return type.
-    Void,
     /// `Uint8Array` (binary data).
     Uint8Array,
     Media {
@@ -99,15 +91,16 @@ pub enum TypeRefKind {
         throws: Option<TypeRefId>,
     },
     /// The `unknown` keyword type.
-    BuiltinUnknown,
+    Unknown,
     /// The `type` meta-type keyword.
     Type,
     /// `$rust_type` — opaque Rust-managed state field type.
     Rust,
     /// Error-recovery sentinel.
     Error,
-    /// Missing/omitted type.
-    Unknown,
+    /// No type was written at this slot (an omitted annotation), as distinct
+    /// from the written `unknown` keyword above.
+    Missing,
     /// The wildcard `_` — an inference hole.
     Infer,
 }
@@ -195,15 +188,10 @@ impl std::fmt::Display for TypeRefDisplay<'_> {
         let store = self.store;
         match &store[self.id].kind {
             TypeRefKind::Path {
-                segments,
+                path,
                 generic_args,
                 associated_type_bindings,
             } => {
-                let path = segments
-                    .iter()
-                    .map(Name::as_str)
-                    .collect::<Vec<_>>()
-                    .join(".");
                 write!(f, "{path}")?;
                 if !generic_args.is_empty() || !associated_type_bindings.is_empty() {
                     write!(f, "<")?;
@@ -250,7 +238,6 @@ impl std::fmt::Display for TypeRefDisplay<'_> {
             TypeRefKind::Bool => write!(f, "bool"),
             TypeRefKind::Null => write!(f, "null"),
             TypeRefKind::Never => write!(f, "never"),
-            TypeRefKind::Void => write!(f, "void"),
             TypeRefKind::Uint8Array => write!(f, "uint8array"),
             TypeRefKind::Media { kind } => write!(f, "{}", format!("{kind:?}").to_lowercase()),
             TypeRefKind::Optional { inner } => {
@@ -306,11 +293,11 @@ impl std::fmt::Display for TypeRefDisplay<'_> {
                 }
                 Ok(())
             }
-            TypeRefKind::BuiltinUnknown => write!(f, "unknown"),
-            TypeRefKind::Type => write!(f, "type"),
+            TypeRefKind::Unknown => write!(f, "unknown"),
+            TypeRefKind::Type => write!(f, "reflect.Type"),
             TypeRefKind::Rust => write!(f, "$rust_type"),
             TypeRefKind::Error => write!(f, "error"),
-            TypeRefKind::Unknown => write!(f, "?"),
+            TypeRefKind::Missing => write!(f, "?"),
             TypeRefKind::Infer => write!(f, "_"),
         }
     }
@@ -380,18 +367,15 @@ impl TypeRefBuilder {
     /// before their parent (post-order), so ids are a pure function of tree
     /// shape — stable under whitespace edits.
     pub fn lower(&mut self, te: &baml_compiler2_ast::ast::TypeExpr) -> TypeRefId {
-        use baml_compiler2_ast::ast::TypeExprKind as K;
-
-        let attrs: Box<[Attribute]> = te.kind.attrs().iter().map(Attribute::from).collect();
+        use baml_compiler2_ast::ast::TypeExprKind;
 
         let kind = match &te.kind {
-            K::Path {
-                segments,
+            TypeExprKind::Path {
+                path,
                 generic_args,
                 associated_type_bindings,
-                ..
             } => TypeRefKind::Path {
-                segments: segments.clone(),
+                path: path.clone(),
                 generic_args: generic_args.iter().map(|arg| self.lower(arg)).collect(),
                 associated_type_bindings: associated_type_bindings
                     .iter()
@@ -401,7 +385,7 @@ impl TypeRefBuilder {
                     })
                     .collect(),
             },
-            K::AssociatedTypeProjection {
+            TypeExprKind::AssociatedTypeProjection {
                 base,
                 interface,
                 member,
@@ -411,33 +395,32 @@ impl TypeRefBuilder {
                 interface: interface.as_ref().map(|iface| self.lower(iface)),
                 member: member.clone(),
             },
-            K::Int { .. } => TypeRefKind::Int,
-            K::Bigint { .. } => TypeRefKind::Bigint,
-            K::Float { .. } => TypeRefKind::Float,
-            K::String { .. } => TypeRefKind::String,
-            K::Bool { .. } => TypeRefKind::Bool,
-            K::Null { .. } => TypeRefKind::Null,
-            K::Never { .. } => TypeRefKind::Never,
-            K::Void { .. } => TypeRefKind::Void,
-            K::Uint8Array { .. } => TypeRefKind::Uint8Array,
-            K::Media { kind, .. } => TypeRefKind::Media { kind: *kind },
-            K::Optional { inner, .. } => TypeRefKind::Optional {
+            TypeExprKind::Int => TypeRefKind::Int,
+            TypeExprKind::Bigint => TypeRefKind::Bigint,
+            TypeExprKind::Float => TypeRefKind::Float,
+            TypeExprKind::String => TypeRefKind::String,
+            TypeExprKind::Bool => TypeRefKind::Bool,
+            TypeExprKind::Null => TypeRefKind::Null,
+            TypeExprKind::Never => TypeRefKind::Never,
+            TypeExprKind::Uint8Array => TypeRefKind::Uint8Array,
+            TypeExprKind::Media { kind, .. } => TypeRefKind::Media { kind: *kind },
+            TypeExprKind::Optional { inner, .. } => TypeRefKind::Optional {
                 inner: self.lower(inner),
             },
-            K::List { inner, .. } => TypeRefKind::List {
+            TypeExprKind::List { inner, .. } => TypeRefKind::List {
                 inner: self.lower(inner),
             },
-            K::Map { key, value, .. } => TypeRefKind::Map {
+            TypeExprKind::Map { key, value, .. } => TypeRefKind::Map {
                 key: self.lower(key),
                 value: self.lower(value),
             },
-            K::Union { variants, .. } => TypeRefKind::Union {
+            TypeExprKind::Union { variants, .. } => TypeRefKind::Union {
                 variants: variants.iter().map(|v| self.lower(v)).collect(),
             },
-            K::Literal { value, .. } => TypeRefKind::Literal {
+            TypeExprKind::Literal { value, .. } => TypeRefKind::Literal {
                 value: value.clone(),
             },
-            K::Function {
+            TypeExprKind::Function {
                 params,
                 ret,
                 throws,
@@ -454,27 +437,21 @@ impl TypeRefBuilder {
                 ret: self.lower(ret),
                 throws: throws.as_ref().map(|t| self.lower(t)),
             },
-            K::BuiltinUnknown { .. } => TypeRefKind::BuiltinUnknown,
-            K::Type { .. } => TypeRefKind::Type,
-            K::Rust { .. } => TypeRefKind::Rust,
-            K::Error { .. } => TypeRefKind::Error,
-            K::Unknown { .. } => TypeRefKind::Unknown,
-            K::Infer { .. } => TypeRefKind::Infer,
+            TypeExprKind::Unknown => TypeRefKind::Unknown,
+            TypeExprKind::Type => TypeRefKind::Type,
+            TypeExprKind::Rust => TypeRefKind::Rust,
+            TypeExprKind::Error => TypeRefKind::Error,
+            TypeExprKind::Missing => TypeRefKind::Missing,
+            TypeExprKind::Infer => TypeRefKind::Infer,
         };
 
-        self.alloc(TypeRef { kind, attrs }, te.span)
+        self.alloc(TypeRef { kind }, te.span)
     }
 
     /// Allocate a node that has no source text (a compiler-synthesized type).
     /// Its span is empty; diagnostics should anchor to the owning item instead.
     pub fn alloc_synthetic(&mut self, kind: TypeRefKind) -> TypeRefId {
-        self.alloc(
-            TypeRef {
-                kind,
-                attrs: Box::new([]),
-            },
-            TextRange::default(),
-        )
+        self.alloc(TypeRef { kind }, TextRange::default())
     }
 
     pub fn finish(self) -> (TypeRefStore, TypeRefSourceMap) {
@@ -484,7 +461,7 @@ impl TypeRefBuilder {
 
 #[cfg(test)]
 mod tests {
-    use baml_compiler2_ast::ast::{RawAttribute, RawAttributeArg, TypeExpr, TypeExprKind};
+    use baml_compiler2_ast::ast::{TypeExpr, TypeExprKind};
     use text_size::TextSize;
 
     use super::*;
@@ -493,31 +470,17 @@ mod tests {
         TextRange::new(TextSize::from(start), TextSize::from(end))
     }
 
-    fn attr(name: &str, value: &str, at: TextRange) -> RawAttribute {
-        RawAttribute {
-            name: Name::new(name),
-            args: vec![RawAttributeArg {
-                key: None,
-                value: value.to_string(),
-                span: at,
-            }],
-            span: at,
-        }
-    }
-
     /// `map<string, int[]>`, with every node's span offset by `shift`.
-    fn map_of_string_to_int_list(shift: u32, attrs: Vec<RawAttribute>) -> TypeExpr {
+    fn map_of_string_to_int_list(shift: u32) -> TypeExpr {
         let s = |a: u32, b: u32| span(a + shift, b + shift);
         TypeExprKind::Map {
-            key: Box::new(TypeExprKind::String { attrs: vec![] }.at(s(4, 10))),
+            key: Box::new(TypeExprKind::String.at(s(4, 10))),
             value: Box::new(
                 TypeExprKind::List {
-                    inner: Box::new(TypeExprKind::Int { attrs: vec![] }.at(s(12, 15))),
-                    attrs: vec![],
+                    inner: Box::new(TypeExprKind::Int.at(s(12, 15))),
                 }
                 .at(s(12, 17)),
             ),
-            attrs,
         }
         .at(s(0, 18))
     }
@@ -531,7 +494,7 @@ mod tests {
 
     #[test]
     fn children_are_allocated_before_parents() {
-        let (store, _, root) = lower(&map_of_string_to_int_list(0, vec![]));
+        let (store, _, root) = lower(&map_of_string_to_int_list(0));
 
         // Post-order: the root is allocated last.
         assert_eq!(root, store.iter().last().expect("non-empty store").0);
@@ -550,8 +513,8 @@ mod tests {
     /// so Salsa cuts off — while the source map still reports the *new* spans.
     #[test]
     fn shifting_spans_does_not_change_the_store() {
-        let (unshifted, map_a, root_a) = lower(&map_of_string_to_int_list(0, vec![]));
-        let (shifted, map_b, root_b) = lower(&map_of_string_to_int_list(100, vec![]));
+        let (unshifted, map_a, root_a) = lower(&map_of_string_to_int_list(0));
+        let (shifted, map_b, root_b) = lower(&map_of_string_to_int_list(100));
 
         assert_eq!(
             unshifted, shifted,
@@ -566,43 +529,20 @@ mod tests {
         );
     }
 
-    /// `ast::RawAttribute` puts its span in its own `PartialEq`, so attribute
-    /// spans leak into `TypeExpr` equality and silently destroy cutoff near any
-    /// `@description`. `TypeRef` carries the span-free `Attribute` instead.
-    #[test]
-    fn shifting_attribute_spans_does_not_change_the_store() {
-        let a = map_of_string_to_int_list(0, vec![attr("description", "hi", span(19, 40))]);
-        let b = map_of_string_to_int_list(0, vec![attr("description", "hi", span(219, 240))]);
-
-        assert_ne!(
-            a, b,
-            "precondition: the AST does compare attribute spans (this is the leak)"
-        );
-
-        let (store_a, _, _) = lower(&a);
-        let (store_b, _, _) = lower(&b);
-        assert_eq!(
-            store_a, store_b,
-            "moving an attribute must not change the semantic type refs"
-        );
-    }
-
     /// A real structural change must still compare unequal, or we would cut off
     /// edits that actually matter.
     #[test]
     fn structural_changes_do_change_the_store() {
-        let (int_keyed, _, _) = lower(&map_of_string_to_int_list(0, vec![]));
+        let (int_keyed, _, _) = lower(&map_of_string_to_int_list(0));
         let (bool_keyed, _, _) = lower(
             &TypeExprKind::Map {
-                key: Box::new(TypeExprKind::Bool { attrs: vec![] }.at(span(4, 10))),
+                key: Box::new(TypeExprKind::Bool.at(span(4, 10))),
                 value: Box::new(
                     TypeExprKind::List {
-                        inner: Box::new(TypeExprKind::Int { attrs: vec![] }.at(span(12, 15))),
-                        attrs: vec![],
+                        inner: Box::new(TypeExprKind::Int.at(span(12, 15))),
                     }
                     .at(span(12, 17)),
                 ),
-                attrs: vec![],
             }
             .at(span(0, 18)),
         );
@@ -624,10 +564,9 @@ mod tests {
         let prim = |k: TypeExprKind| k.at(sp);
         let path = |name: &str| {
             TypeExprKind::Path {
-                segments: name.split('.').map(Name::new).collect(),
+                path: baml_base::Path::new(name.split('.').map(Name::new).collect()),
                 generic_args: vec![],
                 associated_type_bindings: vec![],
-                attrs: vec![],
             }
             .at(sp)
         };
@@ -636,54 +575,45 @@ mod tests {
                 params,
                 ret: Box::new(ret),
                 throws,
-                attrs: vec![],
             }
             .at(sp)
         };
 
         let cases: Vec<TypeExpr> = vec![
-            prim(TypeExprKind::Int { attrs: vec![] }),
-            prim(TypeExprKind::String { attrs: vec![] }),
+            prim(TypeExprKind::Int),
+            prim(TypeExprKind::String),
             path("User"),
             path("baml.http.Request"),
             // `Stream<int, Item = string>` — generic args plus an assoc binding.
             TypeExprKind::Path {
-                segments: vec![Name::new("Stream")],
-                generic_args: vec![prim(TypeExprKind::Int { attrs: vec![] })],
+                path: baml_base::Path::new(vec![Name::new("Stream")]),
+                generic_args: vec![prim(TypeExprKind::Int)],
                 associated_type_bindings: vec![AssociatedTypeBinding {
                     name: Name::new("Item"),
-                    ty: Box::new(prim(TypeExprKind::String { attrs: vec![] })),
+                    ty: Box::new(prim(TypeExprKind::String)),
                 }],
-                attrs: vec![],
             }
             .at(sp),
             // `int?`, `int[]`, `map<string, int[]>`.
             TypeExprKind::Optional {
-                inner: Box::new(prim(TypeExprKind::Int { attrs: vec![] })),
-                attrs: vec![],
+                inner: Box::new(prim(TypeExprKind::Int)),
             }
             .at(sp),
             TypeExprKind::List {
-                inner: Box::new(prim(TypeExprKind::Int { attrs: vec![] })),
-                attrs: vec![],
+                inner: Box::new(prim(TypeExprKind::Int)),
             }
             .at(sp),
-            map_of_string_to_int_list(0, vec![]),
-            // `int | string`, and `int | (() -> void)` (union parenthesizes fns).
+            map_of_string_to_int_list(0),
+            // `int | string`, and `int | (() -> null)` (union parenthesizes fns).
             TypeExprKind::Union {
-                variants: vec![
-                    prim(TypeExprKind::Int { attrs: vec![] }),
-                    prim(TypeExprKind::String { attrs: vec![] }),
-                ],
-                attrs: vec![],
+                variants: vec![prim(TypeExprKind::Int), prim(TypeExprKind::String)],
             }
             .at(sp),
             TypeExprKind::Union {
                 variants: vec![
-                    prim(TypeExprKind::Int { attrs: vec![] }),
-                    func(vec![], prim(TypeExprKind::Void { attrs: vec![] }), None),
+                    prim(TypeExprKind::Int),
+                    func(vec![], prim(TypeExprKind::Null), None),
                 ],
-                attrs: vec![],
             }
             .at(sp),
             // `(a: int, b?: string) -> bool throws MyError`.
@@ -692,36 +622,30 @@ mod tests {
                     FunctionTypeParam {
                         name: Some(Name::new("a")),
                         optional: false,
-                        ty: prim(TypeExprKind::Int { attrs: vec![] }),
+                        ty: prim(TypeExprKind::Int),
                     },
                     FunctionTypeParam {
                         name: Some(Name::new("b")),
                         optional: true,
-                        ty: prim(TypeExprKind::String { attrs: vec![] }),
+                        ty: prim(TypeExprKind::String),
                     },
                 ],
-                prim(TypeExprKind::Bool { attrs: vec![] }),
+                prim(TypeExprKind::Bool),
                 Some(Box::new(path("MyError"))),
             ),
-            // `() -> (() -> void)` — a function return parenthesizes a function.
-            func(
-                vec![],
-                func(vec![], prim(TypeExprKind::Void { attrs: vec![] }), None),
-                None,
-            ),
+            // `() -> (() -> null)` — a function return parenthesizes a function.
+            func(vec![], func(vec![], prim(TypeExprKind::Null), None), None),
             // `T.Item` and `(T as Iterator).Item`.
             TypeExprKind::AssociatedTypeProjection {
                 base: Box::new(path("T")),
                 interface: None,
                 member: Name::new("Item"),
-                attrs: vec![],
             }
             .at(sp),
             TypeExprKind::AssociatedTypeProjection {
                 base: Box::new(path("T")),
                 interface: Some(Box::new(path("Iterator"))),
                 member: Name::new("Item"),
-                attrs: vec![],
             }
             .at(sp),
         ];

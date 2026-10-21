@@ -1,0 +1,48 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+    ╭─[contradictory_call_bounds.baml:28:18]
+ 28 │     let n: int = id("s");
+    ·                  ───┬───
+    ·                     ╰── expected `int`, found `"s"`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[contradictory_call_bounds.baml:36:31]
+ 36 │     let n: map<string, int> = m;
+    ·                               ┬
+    ·                               ╰── expected `int`, found `"s"`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[contradictory_call_bounds.baml:41:21]
+ 41 │     let xs = [1, id("s")];
+    ·                     ─┬─
+    ·                      ╰── expected `int`, found `"s"`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[contradictory_call_bounds.baml:46:47]
+ 46 │     let b = if (flag) { make(1) } else { make(id("s")) };
+    ·                                               ───┬───
+    ·                                                  ╰── expected `int`, found `"s"`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[contradictory_call_bounds.baml:51:10]
+ 51 │     take(id(b))
+    ·          ──┬──
+    ·            ╰── expected `Box<int>`, found `Box<int | string>`
+    ╰────

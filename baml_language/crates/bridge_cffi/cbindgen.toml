@@ -43,14 +43,13 @@ header = """#ifndef BAML_CFFI_H
 #  endif
 #endif"""
 
-trailer = """/* Size of the original required V1 prefix. Future V1 fields may only follow it. */
+trailer = """/* ABI revision 4 requires every operation through media_from_file_content. */
 #define BAML_API_V1_MIN_SIZE \\
-  (offsetof(BamlApiV1, register_bridge) + sizeof(((BamlApiV1 *)0)->register_bridge))
+  (offsetof(BamlApiV1, media_from_file_content) + \\
+   sizeof(((BamlApiV1 *)0)->media_from_file_content))
 
 /*
- * Validate the original V1 prefix without rejecting a runtime that appended
- * fields. Consumers must perform an equivalent end-of-field check before
- * reading any future appended field.
+ * Validate the complete revision-4 table while permitting appended fields.
  */
 static inline bool baml_api_v1_is_compatible(const BamlApiV1 *api) {
   return api != NULL && api->abi_version == BAML_API_V1_ABI_VERSION &&
@@ -70,10 +69,19 @@ include = [
   "BamlBridgeInfoV1",
   "BamlResultCallback",
   "BamlHostDispatchCallback",
+  "BamlHostDispatchV2",
+  "BamlHostCancel",
+  "BamlInvocationProtocolVersionFn",
+  "BamlInvocationClockNsFn",
+  "BamlReleaseFunctionCallFn",
+  "BamlRegisterHostDispatchV2Fn",
+  "BamlRegisterHostCancelCallbackFn",
+  "BamlTraceSelectionFn",
+  "BamlInvocationContextFn",
   "BamlHostReleaseCallback",
   "BamlUnhandledSpawnErrorCallback",
   "BamlVersionFn",
-  "BamlInitializeRuntimeFromBytecodeFn",
+  "BamlInitializeRuntimeFromBlobFn",
   "BamlFreeBufferFn",
   "BamlRegisterCallbackFn",
   "BamlCallFunctionFn",
@@ -87,6 +95,7 @@ include = [
   "BamlHandleCloneFn",
   "BamlHandleReleaseFn",
   "BamlMediaConstructorFn",
+  "BamlMediaFromFileContentFn",
   "BamlMediaAccessorFn",
   "BamlRegisterBridgeFn",
   "BamlGetApiV1Fn",
@@ -94,6 +103,13 @@ include = [
   "baml_get_api_v1",
 ]
 exclude = [
+  "trace_selection_ffi",
+  "invocation_context_ffi",
+  "invocation_protocol_version",
+  "invocation_clock_ns",
+  "release_function_call",
+  "register_host_dispatch_v2",
+  "register_host_cancel_callback",
   "call_function",
   "new_function_call",
   "cancel_function_call",
@@ -109,16 +125,17 @@ exclude = [
   "baml_media_file",
   "baml_media_base64",
   "baml_media_mime_type",
+  "baml_media_name",
+  "baml_media_from_file_content",
   "register_host_dispatch_callback",
   "register_host_release_callback",
   "register_unhandled_spawn_error_callback",
   "shutdown_runtime",
   "complete_host_call",
   "free_buffer",
-  "flush_events",
   "version",
   "create_baml_runtime",
-  "initialize_runtime_from_bytecode",
+  "initialize_runtime_from_blob",
   "destroy_baml_runtime",
   "invoke_runtime_cli",
 ]

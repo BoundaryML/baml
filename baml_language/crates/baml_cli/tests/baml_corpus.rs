@@ -1,0 +1,73 @@
+//! Execute the shared BAML runtime corpus with Cargo's prebuilt CLI.
+//!
+//! This test belongs to `baml_cli` so `CARGO_BIN_EXE_baml-cli` selects the exact
+//! binary built by the outer invocation, including its profile and features.
+//! Compiler snapshots remain in `baml_tests::corpus`.
+
+/// Execute `baml test`
+#[test]
+fn baml_test() {
+    run_baml_tests(
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../baml_tests/baml_src"),
+        "medium",
+    );
+}
+
+#[test]
+fn tracing_disabled() {
+    run_baml_tests(
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/trace_disabled"),
+        "off",
+    );
+}
+
+fn run_baml_tests(project: &str, telemetry: &str) {
+    // Isolate the CLI's home per run. Without this, the CLI would write its
+    // build cache straight into the source tree that the
+    // `corpus_snapshots`/`emit_determinism` tests scan concurrently, and
+    // successive runs would share (and could corrupt) that cache.
+    let tmp = tempfile::tempdir().expect("tempdir for corpus cache");
+    // The build cache lives under the cargo target dir -- outside the source
+    // tree the `corpus_snapshots`/`emit_determinism` tests
+    // scan -- and stays warm across runs, so an unchanged corpus recompiles
+    // nothing. It is content-addressed with the compiler fingerprint in the
+    // key, so staleness is a miss, never a wrong hit.
+    let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .expect("crates/baml_cli sits two levels under the workspace root")
+        .to_path_buf();
+    let cache_dir = std::env::var_os("CARGO_TARGET_DIR")
+        .map(std::path::PathBuf::from)
+        .map(|dir| {
+            if dir.is_absolute() {
+                dir
+            } else {
+                workspace_root.join(dir)
+            }
+        })
+        .unwrap_or_else(|| workspace_root.join("target"))
+        .join("baml-corpus-cache");
+    let home = tmp.path().join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    std::fs::write(home.join("config.toml"), "[update]\nauto_check = false\n").unwrap();
+    // Keep the build cache warm across runs: point `$BAML_HOME/build/cache`
+    // at the persistent directory (the symlink is skipped where unavailable,
+    // leaving a cold per-run cache).
+    #[cfg(unix)]
+    {
+        std::fs::create_dir_all(&cache_dir).unwrap();
+        std::fs::create_dir_all(home.join("build")).unwrap();
+        std::os::unix::fs::symlink(&cache_dir, home.join("build").join("cache")).unwrap();
+    }
+    #[cfg(not(unix))]
+    let _ = &cache_dir;
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_baml-cli"))
+        .args(["test", "--from", project])
+        .env("BAML_CLI_ALLOW_DIRECT", "1")
+        .env("BAML_TELEMETRY", telemetry)
+        .env("BAML_HOME", &home)
+        .status()
+        .expect("baml_cli test should not fail");
+    assert!(status.success());
+}

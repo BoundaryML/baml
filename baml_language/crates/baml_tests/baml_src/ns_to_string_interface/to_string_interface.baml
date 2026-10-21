@@ -5,8 +5,8 @@
 // ─── default (structural) rendering ─────────────────────────────────────────
 
 test "default_renders_primitives" {
-    assert.equal(string.from(42), "42")
-    assert.equal(string.from(true), "true")
+    assert.equal(string.from(42), "42");
+    assert.equal(string.from(true), "true");
     assert.equal(string.from(3.5), "3.5")
 }
 
@@ -17,11 +17,14 @@ test "default_top_level_string_is_bare" {
 }
 
 test "default_renders_array_with_quoted_nested_strings" {
-    assert.equal(string.from([1, 2, 3]), "[1, 2, 3]")
+    assert.equal(string.from([1, 2, 3]), "[1, 2, 3]");
     assert.equal(string.from(["a", "b"]), "[\"a\", \"b\"]")
 }
 
-class DrcPoint { x int  y int }
+class DrcPoint {
+    x: int,
+    y: int,
+}
 
 function drc_render() -> string {
     string.from(DrcPoint { x: 1, y: 2 })
@@ -36,8 +39,8 @@ test "default_renders_class_instance_structurally" {
 // ─── override dispatch ───────────────────────────────────────────────────────
 
 class IouPoint {
-    x int
-    y int
+    x: int,
+    y: int,
     implements baml.ToString {
         function to_string(self) -> string throws never {
             "(" + string.from(self.x) + ", " + string.from(self.y) + ")"
@@ -54,12 +57,15 @@ test "implementor_override_is_used" {
 }
 
 class IwdPoint {
-    x int
-    y int
+    x: int,
+    y: int,
     implements baml.ToString {}
 }
 
-class IwdPlain { x int  y int }
+class IwdPlain {
+    x: int,
+    y: int,
+}
 
 function iwd_with_default() -> string {
     string.from(IwdPoint { x: 1, y: 2 })
@@ -72,7 +78,7 @@ function iwd_without() -> string {
 test "implementor_with_default_body_matches_nonimplementor" {
     // `implements baml.ToString {}` with no override uses the interface's
     // default body — the same structural rendering as the `_` arm.
-    assert.equal(iwd_with_default(), "IwdPoint { x: 1, y: 2 }")
+    assert.equal(iwd_with_default(), "IwdPoint { x: 1, y: 2 }");
     assert.equal(iwd_without(), "IwdPlain { x: 1, y: 2 }")
 }
 
@@ -80,15 +86,15 @@ test "builtin_instant_dispatches_through_interface" {
     // `Instant` implements baml.ToString; both a direct call and `string.from`
     // must dispatch to it (and the formatter is infallible for an in-range
     // value).
-    assert.equal(baml.time.Instant.epoch().to_string(), "1970-01-01T00:00:00Z")
+    assert.equal(baml.time.Instant.epoch().to_string(), "1970-01-01T00:00:00Z");
     assert.equal(string.from(baml.time.Instant.epoch()), "1970-01-01T00:00:00Z")
 }
 
 // ─── overrides honored at depth (shared OvrPoint, from POINT_OVERRIDE) ──────
 
 class OvrPoint {
-    x int
-    y int
+    x: int,
+    y: int,
     implements baml.ToString {
         function to_string(self) -> string throws never {
             "(" + string.from(self.x) + ", " + string.from(self.y) + ")"
@@ -106,7 +112,10 @@ test "nested_override_in_array_is_honored" {
     assert.equal(nov_array_render(), "[(1, 2), (3, 4)]")
 }
 
-class OvrLine { start OvrPoint  end OvrPoint }
+class OvrLine {
+    start: OvrPoint,
+    end: OvrPoint,
+}
 
 function nov_field_render() -> string {
     string.from(OvrLine { start: OvrPoint { x: 1, y: 2 }, end: OvrPoint { x: 3, y: 4 } })
@@ -118,7 +127,11 @@ test "nested_override_in_class_field_is_honored" {
     assert.equal(nov_field_render(), "OvrLine { start: (1, 2), end: (3, 4) }")
 }
 
-class OvrMixed { p OvrPoint  n int  q OvrPoint }
+class OvrMixed {
+    p: OvrPoint,
+    n: int,
+    q: OvrPoint,
+}
 
 function nov_mixed_render() -> string {
     string.from(OvrMixed { p: OvrPoint { x: 1, y: 2 }, n: 99, q: OvrPoint { x: 3, y: 4 } })
@@ -131,7 +144,7 @@ test "override_and_structural_siblings_stay_aligned" {
 }
 
 function nov_map_render() -> string {
-    let m: map<string, OvrPoint> = { "a": OvrPoint { x: 1, y: 2 } }
+    let m: map<string, OvrPoint> = { "a": OvrPoint { x: 1, y: 2 } };
     string.from(m)
 }
 
@@ -139,7 +152,9 @@ test "nested_override_in_map_is_honored" {
     assert.equal(nov_map_render(), "{\"a\": (1, 2)}")
 }
 
-class OvrPath { points OvrPoint[] }
+class OvrPath {
+    points: OvrPoint[],
+}
 
 function nov_deep_render() -> string {
     string.from(OvrPath { points: [OvrPoint { x: 1, y: 2 }, OvrPoint { x: 3, y: 4 }] })
@@ -152,7 +167,7 @@ test "nested_override_inside_array_inside_class" {
 }
 
 class DmcGreeter {
-    name string
+    name: string,
     implements baml.ToString {
         function to_string(self) -> string throws never {
             "Hello, " + self.name
@@ -161,7 +176,7 @@ class DmcGreeter {
 }
 
 function dmc_render() -> string {
-    let g = DmcGreeter { name: "world" }
+    let g = DmcGreeter { name: "world" };
     g.to_string()
 }
 
@@ -169,4 +184,19 @@ test "direct_method_call_on_implementor" {
     // The interface method is also directly callable on a concrete
     // implementor.
     assert.equal(dmc_render(), "Hello, world")
+}
+
+test "direct_to_string_method_is_banned" {
+    root.interface_diagnostics.AssertHasDiagnostic(
+        {
+            "direct_to_string_method_is_banned.baml": `
+                class Point {
+                    x int
+                    function to_string(self) -> string throws never { "p" }
+                }
+            `,
+        },
+        "",
+        ["to_string", "baml.ToString"],
+    )
 }

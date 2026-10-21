@@ -30,7 +30,7 @@ final class TestPrimitives: XCTestCase {
     }
 
     func test_primitives_return_null() throws {
-        XCTAssertEqual(try Baml.primitives.return_null(), BamlNull())
+        try Baml.primitives.return_null()
     }
 
     func test_primitives_round_trip_int() throws {
@@ -50,7 +50,7 @@ final class TestPrimitives: XCTestCase {
     }
 
     func test_primitives_round_trip_null() throws {
-        XCTAssertEqual(try Baml.primitives.round_trip_null(x: BamlNull()), BamlNull())
+        try Baml.primitives.round_trip_null(x: BamlNull())
     }
 
     func test_primitives_round_trip_uint8_array() throws {

@@ -81,11 +81,14 @@ enum BamlHandleType : int {
   ADT_MEDIA_PDF = 9,
   ADT_MEDIA_GENERIC = 10,
   ADT_PROMPT_AST = 11,
-  ADT_COLLECTOR = 12,
   ADT_TYPE = 13,
   ADT_TAGGED_HEAP_HANDLE = 14,
   HOST_VALUE_CALLABLE = 15,
   HOST_VALUE_OPAQUE = 16,
+  ADT_FUNCTION_SPEC = 17,
+  ADT_RUNTIME_VALUE = 18,
+  INVOCATION_STATE = 19,
+  TRACE_RESERVATION = 20,
   BamlHandleType_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   BamlHandleType_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -96,11 +99,11 @@ extern const uint32_t BamlHandleType_internal_data_[];
 inline constexpr BamlHandleType BamlHandleType_MIN =
     static_cast<BamlHandleType>(0);
 inline constexpr BamlHandleType BamlHandleType_MAX =
-    static_cast<BamlHandleType>(16);
+    static_cast<BamlHandleType>(20);
 inline bool BamlHandleType_IsValid(int value) {
-  return 0 <= value && value <= 16 && ((131047u >> value) & 1) != 0;
+  return 0 <= value && value <= 20 && ((2093031u >> value) & 1) != 0;
 }
-inline constexpr int BamlHandleType_ARRAYSIZE = 16 + 1;
+inline constexpr int BamlHandleType_ARRAYSIZE = 20 + 1;
 const ::std::string& BamlHandleType_Name(BamlHandleType value);
 template <typename T>
 const ::std::string& BamlHandleType_Name(T value) {

@@ -95,7 +95,7 @@ const mediaKinds = [
 
 type MediaValue = {
   url(): string | null;
-  file(): string | null;
+  name(): string | null;
   base64(): string;
   mimeType(): string | null;
   _toHandle(): BamlHandle;
@@ -103,7 +103,7 @@ type MediaValue = {
 
 type MediaConstructor = {
   fromUrl(url: string, mimeType?: string | null): MediaValue;
-  fromFile(file: string, mimeType?: string | null): MediaValue;
+  fromFileContent(file: string, base64: string, mimeType?: string | null): MediaValue;
   fromBase64(base64: string, mimeType?: string | null): MediaValue;
   _fromHandle(handle: BamlHandle): MediaValue;
 };
@@ -119,14 +119,16 @@ describe.each(mediaKinds)(
   it("bridge_handles_media_constructs_url_file_and_base64_descriptors", () => {
     const url = Media.fromUrl("https://example.com/asset", "application/test");
     expect(url.url()).toBe("https://example.com/asset");
-    expect(url.file()).toBeNull();
+    expect(url.name()).toBeNull();
     expect(url.base64()).toBe("");
     expect(url.mimeType()).toBe("application/test");
 
-    const file = Media.fromFile("/tmp/asset");
+    // Content read from a file keeps the file's base name, never its path.
+    const file = Media.fromFileContent("/tmp/asset.bin", "aGVsbG8=", "application/test");
     expect(file.url()).toBeNull();
-    expect(file.file()).toBe("/tmp/asset");
-    expect(file.mimeType()).toBeNull();
+    expect(file.name()).toBe("asset.bin");
+    expect(file.base64()).toBe("aGVsbG8=");
+    expect(file.mimeType()).toBe("application/test");
 
     const base64 = Media.fromBase64("aGVsbG8=", "application/octet-stream");
     expect(base64.base64()).toBe("aGVsbG8=");

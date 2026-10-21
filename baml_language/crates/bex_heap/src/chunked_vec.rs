@@ -268,6 +268,30 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
         }
     }
 
+    /// Check backing-storage membership, including unused capacity, without
+    /// dereferencing `ptr`.
+    ///
+    /// Hold the outer-vector lock once for the scan. Taking it separately for
+    /// every chunk makes generation checks expensive as the old heap grows.
+    pub fn contains_ptr(&self, ptr: *const T) -> bool {
+        let _read = self.chunks_lock.read();
+        // SAFETY: the read lock keeps the outer Vec and its chunk descriptors
+        // stable. Each chunk has CHUNK_SIZE initialized cells; we only compare
+        // addresses, never read elements or dereference the supplied pointer.
+        unsafe {
+            let chunks = self.chunks.get();
+            let data = (*chunks).as_ptr();
+            for index in 0..(*chunks).len() {
+                let start = (*data.add(index)).as_ptr().cast::<T>();
+                let end = start.add(CHUNK_SIZE);
+                if ptr >= start && ptr < end {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     /// Calculate chunk index and offset within chunk for a given index.
     ///
     /// Because CHUNK_SIZE is a compile-time constant power of 2, the compiler
@@ -630,6 +654,33 @@ unsafe impl<T: Sync, const CHUNK_SIZE: usize> Sync for ChunkedVec<T, CHUNK_SIZE>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn membership_covers_chunk_boundaries_and_survives_growth() {
+        let mut values = ChunkedVec::<u64, 4>::new();
+        assert!(!values.contains_ptr(std::ptr::null()));
+        values.resize_with(5, || 0);
+        let first = values.get_ptr(0);
+        for index in [0, 3, 4] {
+            assert!(values.contains_ptr(values.get_ptr(index)));
+        }
+        // Membership intentionally includes the unoccupied tail of a chunk.
+        let second_chunk = unsafe { values.chunk_start_ptr(1) };
+        assert!(values.contains_ptr(unsafe { second_chunk.add(3) }));
+        // Use an isolated one-chunk allocation for its exclusive upper bound.
+        let boundary = ChunkedVec::<u64, 4>::new();
+        boundary.resize_with(1, || 0);
+        let end = unsafe { boundary.chunk_start_ptr(0).add(4) };
+        assert!(!boundary.contains_ptr(end));
+        let other = Box::new(0_u64);
+        assert!(!values.contains_ptr(&*other));
+        values.resize_with(100, || 0);
+        assert!(values.contains_ptr(first));
+        assert!(values.contains_ptr(values.get_ptr(99)));
+        values.clear();
+        // Membership compares addresses only, including a now stale pointer.
+        assert!(!values.contains_ptr(first));
+    }
 
     #[test]
     fn test_new_chunked_vec() {

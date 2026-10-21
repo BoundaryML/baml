@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0170
+
+  × interface method `m` on `Omitted` must declare an explicit `throws` clause
+    ╭─[interface_signature_throws.baml:21:14]
+ 21 │     function m(self) -> int {
+    ·              ─
+    ╰────
+
+  [type] E0170
+
+  × interface method `m` on `Partial` must declare an explicit `throws` clause
+    ╭─[interface_signature_throws.baml:28:47]
+ 28 │     function m(self) -> int throws AppError | _ {
+    ·                                               ─
+    ╰────

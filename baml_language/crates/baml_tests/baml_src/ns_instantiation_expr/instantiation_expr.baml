@@ -2,7 +2,7 @@
 //
 // `foo<int>` (concrete type args) is a pooled, interned value: identical
 // instantiations share one object (pointer-stable identity), and calling the
-// value seeds frame.type_args so type-reifying bodies (reflect.type_of<T>,
+// value seeds frame.type_args so type-reifying bodies (reflect.Type.of<T>,
 // json natives) resolve T at runtime — i.e. it behaves exactly like the
 // equivalent direct call `foo<int>(...)`.
 
@@ -62,10 +62,10 @@ test "pair_two_type_args_value_runs" {
 class User { name string }
 
 function describe<T>() -> string {
-    reflect.type_of<T>().to_string()
+    reflect.Type.of<T>().to_string()
 }
 
-// reflect.type_of<T> through an UNCALLED value now resolves T correctly (the
+// reflect.Type.of<T> through an UNCALLED value now resolves T correctly (the
 // value carries its type args and seeds frame.type_args when called).
 function describe_user_value_fn() -> string {
     let f = describe<User>;
@@ -100,7 +100,7 @@ test "param_dependent_instantiation_runs" {
 }
 
 // Param-dependent value whose body REFLECTS on T: the runtime path seeds T from
-// the enclosing frame, so reflect.type_of<T> resolves correctly (previously
+// the enclosing frame, so reflect.Type.of<T> resolves correctly (previously
 // erased to "unknown").
 function forward_reflect<T>() -> string {
     let g = describe<T>;
@@ -114,11 +114,11 @@ test "param_dependent_reflect_resolves_T" {
 // Multi-segment qualified instantiation value: a generic function in a nested
 // namespace, referenced by its fully-qualified name (`name.space.fun<string>`).
 function qualified_value_fn() -> string {
-    let f = user.instantiation_expr.qualified.q_describe<string>;
+    let f = root.instantiation_expr.qualified.q_describe<string>;
     f()
 }
 function qualified_value_id_fn() -> int {
-    let g = user.instantiation_expr.qualified.q_id<int>;
+    let g = root.instantiation_expr.qualified.q_id<int>;
     g(7)
 }
 
@@ -152,7 +152,7 @@ test "bound_method_value_runs" {
 // Companion: a (non-generic) lambda inside a generic function still reifies the
 // enclosing function's `U` (no regression from threading lambda params).
 function lambda_reflects_enclosing_U<U>() -> string {
-    let g = () -> string { reflect.type_of<U>().to_string() };
+    let g = () -> string { reflect.Type.of<U>().to_string() };
     g()
 }
 

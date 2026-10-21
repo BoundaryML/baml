@@ -20,6 +20,12 @@ WORKSPACE_ROOT="$(cd ../../.. && pwd)"
 REPO_ROOT="$(cd "$WORKSPACE_ROOT/.." && pwd)"
 BRIDGE_TYPESCRIPT="$WORKSPACE_ROOT/sdks/typescript/bridge_typescript"
 
+# Generate each fixture's baml_sdk/, package.json and tsconfig first: nothing
+# else produces them, and the per-fixture `pnpm install` loop below silently
+# skips any fixture whose generated/ is missing.
+echo "==> sdk_test_codegen typescript (generate fixture SDKs)"
+(cd "$WORKSPACE_ROOT" && cargo run --quiet -p sdk_test_codegen -- typescript)
+
 # Shared pnpm store under target/ so per-fixture installs hardlink from
 # one location rather than fetching N copies.
 export npm_config_store_dir="$WORKSPACE_ROOT/target/pnpm-store"
@@ -68,7 +74,7 @@ done
 # Per-run breadcrumb for the `setup_guard::ran` test. See the
 # "setup.sh guard" section of ../../README.md for the format and
 # rationale. Keep the var name in sync with SETUP_ENV_VAR in
-# harness_setup/src/typescript.rs.
+# codegen/src/typescript.rs.
 if [[ -n "${NEXTEST_ENV:-}" ]]; then
     echo "SDK_TEST_TYPESCRIPT_SETUP=1" >> "$NEXTEST_ENV"
 fi

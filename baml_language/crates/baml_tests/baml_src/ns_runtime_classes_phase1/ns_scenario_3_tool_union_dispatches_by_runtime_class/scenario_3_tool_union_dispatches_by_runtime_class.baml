@@ -1,0 +1,81 @@
+client TestClient = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
+
+function PickAction<T>(context: string) -> T {
+    client: TestClient
+    prompt: `Pick one action for ${context}.\n${ctx.output_format()}`
+}
+
+class ScenarioResult {
+    text: string,
+    action: baml.json.json,
+}
+
+function main() -> ScenarioResult {
+    let read_args_t = reflect.Class.new("Tool0Args", { "path": string.type().meta(alias = "file_path") });
+    let read_t = reflect.Class.new(
+        "Tool0Action",
+        {
+            "tool": reflect.Literal.new("filesystem/read_file"),
+            "args": read_args_t,
+        },
+    );
+    let search_args_t = reflect.Class.new(
+        "Tool1Args",
+        { "query": string.type(), "limit": int.type().optional() },
+    );
+    let search_t = reflect.Class.new(
+        "Tool1Action",
+        { "tool": reflect.Literal.new("web/search"), "args": search_args_t },
+    );
+    let action_t = reflect.Union.new([read_t, search_t]);
+    let type Action = action_t;
+    let type Read = read_t;
+    let type Search = search_t;
+    let prompt = PickAction@render_prompt<Action>("read the file").text();
+    let action = PickAction@parse<Action>(`{"tool": "filesystem/read_file", "args": {"file_path": "/tmp/a.txt"}`);
+
+    let branch = "none";
+    if (action is Read) {
+        branch = "read"
+    } else if (action is Search) {
+        branch = "search"
+    }
+    let matched = match (action) {
+        Read => "read",
+        Search => "search",
+        _ => "none",
+    };
+    let args = reflect.Class.get_field<unknown>(action, "args");
+    let path = reflect.Class.get_field<string>(args, "path");
+    let tool = reflect.Class.get_field<string>(action, "tool");
+    return ScenarioResult {
+        text: prompt
+            + "\n<RESULT>"
+            + branch
+            + "|"
+            + matched
+            + "|"
+            + (reflect.Type.of_value(action) == read_t.as_type()).to_string()
+            + "|"
+            + tool
+            + "|"
+            + path,
+        action: baml.json.from(action),
+    };
+}
+
+test "scenario_3_tool_union_dispatches_by_runtime_class" {
+    let scenario = main();
+    let result = scenario.text;
+    assert.contains(result, "filesystem/read_file");
+    assert.contains(result, "web/search");
+    assert.is_true(result.ends_with("<RESULT>read|read|true|filesystem/read_file|/tmp/a.txt"));
+    assert.equal(
+        scenario.action,
+        { "tool": "filesystem/read_file", "args": { "path": "/tmp/a.txt" } },
+    )
+}

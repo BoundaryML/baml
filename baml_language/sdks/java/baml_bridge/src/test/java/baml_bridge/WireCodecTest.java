@@ -61,6 +61,12 @@ class WireCodecTest {
         return w.toByteArray();
     }
 
+    private static byte[] ovBigint(BigInteger v) {
+        WireWriter w = new WireWriter();
+        w.writeString(OV_BIGINT, v.toString(16));
+        return w.toByteArray();
+    }
+
     @Test
     void decode_ok_int() {
         assertEquals(42L, ProtoReader.decodeOutboundResult(okEnvelope(ovInt(42))));
@@ -69,6 +75,12 @@ class WireCodecTest {
     @Test
     void decode_ok_negative_int() {
         assertEquals(-7L, ProtoReader.decodeOutboundResult(okEnvelope(ovInt(-7))));
+    }
+
+    @Test
+    void bigint_type_token_matches_only_bigint_values() {
+        assertTrue(ProtoReader.armMatchesValue(BamlType.BIGINT, ovBigint(BigInteger.TEN)));
+        assertFalse(ProtoReader.armMatchesValue(BamlType.BIGINT, ovString("10")));
     }
 
     @Test
@@ -328,6 +340,9 @@ class WireCodecTest {
         expected.writeMessage(1, entry.toByteArray()); // CallFunctionArgs.kwargs = 1
         expected.writeInt64(2, 1L); // call_id = 2
 
+        WireWriter invocation = new WireWriter();
+        invocation.writeInt64(4, 0L); invocation.writeInt64(5, 1L);
+        expected.writeMessage(6, invocation.toByteArray());
         assertArrayEquals(expected.toByteArray(), got);
     }
 
@@ -337,6 +352,16 @@ class WireCodecTest {
         byte[] small = ProtoWriter.encodeInboundValue(BigInteger.valueOf(5));
         byte[] asLong = ProtoWriter.encodeInboundValue(5L);
         assertArrayEquals(asLong, small);
+    }
+
+    @Test
+    void inbound_prompt_reuses_portable_prompt_ast_payload() {
+        byte[] promptAst = {0x0a, 0x01, 0x78};
+        byte[] got = ProtoWriter.encodeInboundValue(BamlPrompt.fromWire(promptAst));
+
+        WireWriter expected = new WireWriter();
+        expected.writeMessage(16, promptAst); // InboundValue.prompt_ast_value
+        assertArrayEquals(expected.toByteArray(), got);
     }
 
     @Test
@@ -1222,7 +1247,7 @@ class WireCodecTest {
                 101L,
                 ADT_TAGGED_HEAP_HANDLE,
                 tyClass("ai.stream.Stream", tyPrimitive(PRIM_STRING), tyPrimitive(PRIM_STRING)))));
-        BamlStream<?, ?> stream = assertInstanceOf(BamlStream.class, decoded);
+        BamlStream<?> stream = assertInstanceOf(BamlStream.class, decoded);
         assertEquals("ai.stream.Stream", stream.bamlClassFqn());
         assertEquals("ai.stream.Stream.next", stream.methodFqn("next"));
         assertEquals("ai.stream.Stream.final", stream.methodFqn("final"));
@@ -1398,6 +1423,9 @@ class WireCodecTest {
         WireWriter expected = new WireWriter();
         expected.writeMessage(1, xEntry.toByteArray()); // CallFunctionArgs.kwargs = 1
         expected.writeInt64(2, 5L); // call_id = 2
+        WireWriter invocation = new WireWriter();
+        invocation.writeInt64(4, 0L); invocation.writeInt64(5, 5L);
+        expected.writeMessage(6, invocation.toByteArray());
         expected.writeMessage(3, tyArg.toByteArray()); // type_args = 3
 
         assertArrayEquals(expected.toByteArray(), got);
@@ -1428,6 +1456,9 @@ class WireCodecTest {
 
         WireWriter expected = new WireWriter();
         expected.writeInt64(2, 9L); // call_id = 2 (no kwargs)
+        WireWriter invocation = new WireWriter();
+        invocation.writeInt64(4, 0L); invocation.writeInt64(5, 9L);
+        expected.writeMessage(6, invocation.toByteArray());
         expected.writeMessage(3, tyArg.toByteArray()); // type_args = 3
 
         assertArrayEquals(expected.toByteArray(), got);

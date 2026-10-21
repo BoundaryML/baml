@@ -7,6 +7,8 @@
 //! details live in `lib_native.rs`, while Wasm implementation details live
 //! in `lib_wasm.rs`.
 
+#![warn(clippy::disallowed_methods)]
+
 #[cfg(not(target_arch = "wasm32"))]
 #[path = "lib_native.rs"]
 mod platform;
@@ -16,7 +18,7 @@ mod platform;
 
 use std::{
     collections::HashMap,
-    sync::{Arc, LazyLock, Mutex, MutexGuard, PoisonError, Weak},
+    sync::{Arc, LazyLock},
 };
 
 use bex_project::Bex;
@@ -90,56 +92,21 @@ fn source_vfs_root() -> vfs::VfsPath {
     vfs::VfsPath::new(vfs::MemoryFS::new())
 }
 
-struct ActiveCallRoute {
-    runtime: Weak<dyn Bex>,
-}
-
-static ACTIVE_CALL_RUNTIMES: LazyLock<Mutex<HashMap<u64, Arc<ActiveCallRoute>>>> =
-    LazyLock::new(|| Mutex::new(HashMap::new()));
-
-fn active_call_runtimes() -> MutexGuard<'static, HashMap<u64, Arc<ActiveCallRoute>>> {
-    ACTIVE_CALL_RUNTIMES
-        .lock()
-        .unwrap_or_else(PoisonError::into_inner)
-}
-
-pub(crate) struct ActiveCallRouteGuard {
-    call_id: u64,
-    route: Arc<ActiveCallRoute>,
-}
-
-impl Drop for ActiveCallRouteGuard {
-    fn drop(&mut self) {
-        let mut routes = active_call_runtimes();
-        if routes
-            .get(&self.call_id)
-            .is_some_and(|current| Arc::ptr_eq(current, &self.route))
-        {
-            routes.remove(&self.call_id);
-        }
-    }
-}
-
-pub(crate) fn register_active_call_runtime(
-    call_id: u64,
-    runtime: &Arc<dyn Bex>,
-) -> ActiveCallRouteGuard {
-    let route = Arc::new(ActiveCallRoute {
-        runtime: Arc::downgrade(runtime),
-    });
-    active_call_runtimes().insert(call_id, Arc::clone(&route));
-    ActiveCallRouteGuard { call_id, route }
-}
+pub(crate) static CALL_ALLOCATIONS: LazyLock<Arc<call_allocation::CallAllocationTable>> =
+    LazyLock::new(|| Arc::new(call_allocation::CallAllocationTable::default()));
 
 pub mod baml_to_host;
 pub mod buffer;
+pub mod call_allocation;
+pub mod control_projection;
 pub mod error;
-pub mod handle;
+pub mod handle_cffi;
 mod identity;
+pub mod invocation_protocol;
 
 pub use baml_to_host::{
-    call_and_encode, call_handle_and_encode, error_to_outbound, result_to_outbound,
-    unhandled_spawn_error_to_outbound,
+    InvocationRequest, decode_invocation_request, error_to_outbound, execute_invocation,
+    result_to_outbound, unhandled_spawn_error_to_outbound,
 };
 pub use bridge_ctypes::baml_bridge;
 pub use buffer::{Buffer, free_buffer};
@@ -154,35 +121,105 @@ pub fn get_runtime() -> Result<Arc<dyn Bex>, BridgeError> {
     platform::get_runtime()
 }
 
+struct PreparedRuntime {
+    runtime: bex_project::PreparedRuntime,
+    error_context: Option<String>,
+}
+
+impl PreparedRuntime {
+    fn build(self) -> Result<Arc<dyn Bex>, BridgeError> {
+        let runtime: Arc<dyn Bex> =
+            self.runtime
+                .build()
+                .map_err(|error| match self.error_context {
+                    Some(context) => BridgeError::Startup(format!("{context}{error}")),
+                    None => error.into(),
+                })?;
+        install_unhandled_spawn_error_handler(&runtime);
+        Ok(runtime)
+    }
+}
+
 /// Initialize the global runtime from serialized BAML bytecode.
 ///
-/// The payload is the same borsh-encoded `bex_vm_types::Program` that
-/// `baml pack` embeds in its pack envelope. Decoding and engine construction
-/// live behind `bex_project::new_from_bytecode` so the bridge stays on the
-/// `bex_project` surface rather than reaching into bex internals.
-pub fn initialize_runtime_from_bytecode_with_sys_ops(
+/// The payload is a versioned artifact containing `bex_vm_types::Program`,
+/// either raw or in the embedded encoding generated SDKs carry
+/// (`baml_artifact::encode_embedded`), which is decoded here so host languages
+/// pass it through untouched. Validation, decoding, and engine construction
+/// live behind
+/// `bex_project::prepare_from_bytecode` so the bridge stays on the `bex_project`
+/// surface rather than reaching into bex internals. Artifact validation runs
+/// even when the optional generated `baml.toml` metadata is absent.
+pub fn initialize_runtime_from_blob_with_sys_ops(
     bytecode: &[u8],
     embedded_baml_toml: Option<&str>,
     sys_ops: sys_ops::SysOps,
 ) -> Result<Arc<dyn Bex>, BridgeError> {
+    let runtime = prepare_runtime_from_blob(bytecode, embedded_baml_toml, sys_ops)?.build()?;
+    platform::replace_runtime(runtime.clone())?;
+    Ok(runtime)
+}
+
+fn prepare_runtime_from_blob(
+    bytecode: &[u8],
+    embedded_baml_toml: Option<&str>,
+    sys_ops: sys_ops::SysOps,
+) -> Result<PreparedRuntime, BridgeError> {
     let bridge = validate_bytecode_startup_preconditions(bytecode.is_empty())?;
 
     let generated_toolchain_version = embedded_baml_toml
         .map(|manifest| validate_generated_metadata(manifest, bridge))
         .transpose()?;
-    let runtime: Arc<dyn Bex> = bex_project::new_from_bytecode(bytecode, sys_ops).map_err(|error| {
-        let generated = generated_toolchain_version
-            .as_deref()
-            .map(|version| format!(" generated using BAML toolchain {version},"))
-            .unwrap_or_default();
-        BridgeError::Startup(format!(
-            "BAML startup failed: generated SDK bytecode could not be loaded.\n\n`baml_sdk`{generated} could not be loaded by {} {}: {error}",
-            bridge.bridge_runtime_name, bridge.bridge_runtime_version,
-        ))
-    })?;
-    install_unhandled_spawn_error_handler(&runtime);
-    platform::replace_runtime(runtime.clone())?;
-    Ok(runtime)
+    let generated = generated_toolchain_version
+        .as_deref()
+        .map(|version| format!(" generated using BAML toolchain {version},"))
+        .unwrap_or_default();
+    let context = format!(
+        "BAML startup failed: generated SDK bytecode could not be loaded.\n\n`baml_sdk`{generated} could not be loaded by {} {}: ",
+        bridge.bridge_runtime_name, bridge.bridge_runtime_version,
+    );
+    let bytecode: std::borrow::Cow<'_, [u8]> = if bytecode.starts_with(baml_artifact::MAGIC) {
+        bytecode.into()
+    } else {
+        baml_artifact::decode_embedded(baml_artifact::ArtifactKind::Program, bytecode)
+            .map_err(|error| BridgeError::Startup(format!("{context}{error}")))?
+            .into()
+    };
+    let runtime = bex_project::prepare_from_bytecode(&bytecode, sys_ops)
+        .map_err(|error| BridgeError::Startup(format!("{context}{error}")))?;
+    let runtime = match embedded_baml_toml {
+        Some(manifest) => {
+            let manifest: toml::Value = toml::from_str(manifest)
+                .map_err(|error| BridgeError::Startup(format!("{context}{error}")))?;
+            let policy = manifest
+                .get("__baml_codegen")
+                .and_then(|metadata| metadata.get("telemetry"))
+                .map(|value| {
+                    value
+                        .clone()
+                        .try_into::<btel_settings::artifact::ArtifactTelemetry>()
+                })
+                .transpose()
+                .map_err(|error| {
+                    BridgeError::Startup(format!(
+                        "{context}invalid artifact telemetry policy: {error}"
+                    ))
+                })?;
+            if let Some(policy) = policy {
+                policy
+                    .verify_build(&bytecode)
+                    .map_err(|error| BridgeError::Startup(format!("{context}{error}")))?;
+                runtime.with_artifact_telemetry(policy)
+            } else {
+                runtime
+            }
+        }
+        None => runtime,
+    };
+    Ok(PreparedRuntime {
+        runtime,
+        error_context: Some(context),
+    })
 }
 
 pub(crate) fn validate_bytecode_startup_preconditions(
@@ -302,16 +339,26 @@ pub fn initialize_runtime_from_files_with_sys_ops(
     src_files: HashMap<String, String>,
     sys_ops: sys_ops::SysOps,
 ) -> Result<Arc<dyn Bex>, BridgeError> {
+    let runtime = prepare_runtime_from_files(root_path, src_files, sys_ops)?.build()?;
+    platform::replace_runtime(runtime.clone())?;
+    Ok(runtime)
+}
+
+fn prepare_runtime_from_files(
+    root_path: &str,
+    src_files: HashMap<String, String>,
+    sys_ops: sys_ops::SysOps,
+) -> Result<PreparedRuntime, BridgeError> {
     // `vfs::MemoryFS` timestamps its root with `SystemTime::now()`, which is
     // unavailable on wasm32-unknown-unknown. WASM therefore uses an equivalent
     // timestamp-free root marker; source contents are supplied separately.
     let vfs_root = source_vfs_root();
-    let project_root =
-        vfs_root
-            .join(root_path)
-            .map_err(|error| bex_project::RuntimeError::InvalidArgument {
-                name: format!("root_path: {error}"),
-            })?;
+    // VFS rejects trailing slashes even though they name the same project directory.
+    let project_root = vfs_root
+        .join(root_path.trim_end_matches('/'))
+        .map_err(|error| bex_project::RuntimeError::InvalidArgument {
+            name: format!("root_path: {error}"),
+        })?;
 
     let mut files = HashMap::with_capacity(src_files.len());
     for (name, contents) in src_files {
@@ -344,10 +391,10 @@ pub fn initialize_runtime_from_files_with_sys_ops(
         files.insert(bex_project::FsPath::from_str(name), contents);
     }
 
-    let runtime: Arc<dyn Bex> = bex_project::new(project_root, sys_ops, files)?;
-    install_unhandled_spawn_error_handler(&runtime);
-    platform::replace_runtime(runtime.clone())?;
-    Ok(runtime)
+    Ok(PreparedRuntime {
+        runtime: bex_project::prepare(project_root, sys_ops, files)?,
+        error_context: None,
+    })
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -364,31 +411,60 @@ fn install_unhandled_spawn_error_handler(runtime: &Arc<dyn Bex>) {
 #[cfg(target_arch = "wasm32")]
 fn install_unhandled_spawn_error_handler(_: &Arc<dyn Bex>) {}
 
-pub async fn shutdown_runtime() -> Result<(), BridgeError> {
+/// Finalize the host's BAML lifetime and shut down the process-wide runtime,
+/// if one is installed. The OS process's exit outcome remains unknown. `grace` bounds
+/// the wait for its in-flight calls and spawned work (`None` waits for as long
+/// as they take).
+pub async fn shutdown_runtime(grace: Option<std::time::Duration>) -> Result<(), BridgeError> {
     if let Some(runtime) = platform::take_runtime()? {
-        runtime.shutdown().await;
+        #[cfg(not(target_arch = "wasm32"))]
+        runtime.record_process_exit(btel_types::ProcessStatus::Unknown);
+        runtime.shutdown(grace).await;
     }
     Ok(())
 }
 
 /// Initialize the native process-global runtime from serialized BAML bytecode.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn initialize_runtime_from_bytecode(
+pub fn initialize_runtime_from_blob(
     bytecode: &[u8],
     embedded_baml_toml: Option<&str>,
 ) -> Result<Arc<dyn Bex>, BridgeError> {
     use sys_native::SysOpsExt as _;
 
-    initialize_runtime_from_bytecode_with_sys_ops(
+    initialize_runtime_from_blob_with_sys_ops(
         bytecode,
         embedded_baml_toml,
         sys_ops::SysOps::native(),
     )
 }
 
-/// Allocate a new process-unique function-call ID.
+/// Allocate and retain a call against the installed runtime. Zero is failure.
 pub fn new_function_call_id() -> u64 {
-    bex_project::CallId::next().0
+    allocate_function_call().unwrap_or(0)
+}
+
+/// Allocate a runtime-bound call while preserving the startup error for
+/// exception-capable bindings. The native ABI represents failure as zero.
+pub fn allocate_function_call() -> Result<u64, BridgeError> {
+    CALL_ALLOCATIONS.allocate(get_runtime()?)
+}
+
+pub fn invocation_clock_by_id(id: u64) -> Result<u64, BridgeError> {
+    CALL_ALLOCATIONS.clock_ns(id)
+}
+
+pub fn release_function_call_by_id(id: u64) -> bool {
+    CALL_ALLOCATIONS.release(id)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn release_function_call(id: u64) -> i32 {
+    if release_function_call_by_id(id) {
+        0
+    } else {
+        1
+    }
 }
 
 /// Build a function-call context builder for a CFFI-owned call id.
@@ -402,21 +478,7 @@ pub fn function_call_context_builder(
 ///
 /// Returns true on success, false if the runtime is not initialized.
 pub fn cancel_function_call_by_id(id: u64) -> bool {
-    if id == 0 {
-        return false;
-    }
-    let originating_runtime = active_call_runtimes()
-        .get(&id)
-        .and_then(|route| route.runtime.upgrade());
-    originating_runtime
-        .map(Ok)
-        .unwrap_or_else(get_runtime)
-        .and_then(|runtime| {
-            runtime
-                .cancel_function_call(bex_project::CallId(id))
-                .map_err(BridgeError::from)
-        })
-        .is_ok()
+    CALL_ALLOCATIONS.cancel(id)
 }
 
 /// Allocate a new process-unique function-call ID.
@@ -532,3 +594,8 @@ mod generated_metadata_tests {
         assert!(wrong_toolchain_type.contains("123"));
     }
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod host_capture;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod host_instrumentation;

@@ -1,0 +1,208 @@
+//! A program is emitted for one root's world — the root and its dependency
+//! closure — never for the whole database.
+//!
+//! One database may hold several workspace roots (the LSP serves every open
+//! project from one process). Each is its own program: same-named
+//! declarations in two roots never meet, one root's errors do not block
+//! another's build, and each program's stdlib prefix is the same
+//! user-independent slice. Every scenario needs two workspace roots in one
+//! database, which only the harness can build, so they live here rather than
+//! in the BAML corpus.
+
+use std::sync::Arc;
+
+use baml_base::SourceRoot;
+use baml_compiler_diagnostics::Severity;
+use baml_compiler2_emit::{LoweringError, emit_package};
+use baml_compiler2_hir::package::world_roots;
+use baml_compiler2_hir_ty::render::Viewpoint;
+use baml_db::{
+    CompileProgramError, OptLevel, ProjectDatabase, SourceRootKind, SourceRootSpec, compile_program,
+};
+use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
+use bex_vm_types::Program;
+use sys_native::SysOpsExt;
+
+/// A database with the stdlib and two unnamed workspace roots, each with
+/// one file.
+fn two_workspaces(first: &str, second: &str) -> (ProjectDatabase, SourceRoot, SourceRoot) {
+    let mut db = ProjectDatabase::new();
+    db.ensure_stdlib_sources();
+    let mut add = |path: &str, source: &str| {
+        let root = db
+            .add_source_root(SourceRootSpec::new(path, SourceRootKind::Workspace))
+            .expect("a second workspace root is a valid root");
+        db.add_or_update_file_in(
+            root,
+            std::path::Path::new(&format!("{path}/main.baml")),
+            source,
+        );
+        root
+    };
+    let a = add("/multi-root/a", first);
+    let b = add("/multi-root/b", second);
+    (db, a, b)
+}
+
+/// Every object of `program`, serialized — objects carry no equality of
+/// their own, so byte identity is the comparison.
+fn object_bytes(program: &Program) -> Vec<Vec<u8>> {
+    program
+        .objects
+        .iter()
+        .map(|object| borsh::to_vec(object).expect("objects serialize"))
+        .collect()
+}
+
+/// The user-defined function names in `program`, rendered under the label of
+/// the package holding each.
+fn function_names(program: &Program) -> Vec<String> {
+    (0..program.objects.len())
+        .filter_map(|index| program.function_name(bex_vm_types::ObjectIndex::from_raw(index)))
+        .filter(|name| name.starts_with("user."))
+        .collect()
+}
+
+async fn run_main(program: Program) -> BexExternalValue {
+    let engine = Arc::new(
+        BexEngine::new_with_runtime_compiler(
+            program,
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+            bex_project::runtime_compiler(),
+        )
+        .expect("engine constructs"),
+    );
+    engine
+        .call_function(
+            "user.main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("main runs")
+}
+
+#[test]
+fn each_workspace_root_is_its_own_world() {
+    let (db, a, b) = two_workspaces("class Point { x int }\n", "class Point { y string }\n");
+    // Both roots are labelled by the stand-in — a label is not an identity
+    // — and neither program holds the other root.
+    let viewpoint = Viewpoint::canonical(&db);
+    assert_eq!(viewpoint.display_package(a), viewpoint.display_package(b));
+    assert!(world_roots(&db, a).contains(&a) && !world_roots(&db, a).contains(&b));
+    assert!(world_roots(&db, b).contains(&b) && !world_roots(&db, b).contains(&a));
+    // Each world is the stdlib plus the one root, in table order.
+    let stdlib: Vec<SourceRoot> = db
+        .source_roots()
+        .into_iter()
+        .filter(|root| root.kind(&db) == SourceRootKind::Stdlib)
+        .collect();
+    assert_eq!(world_roots(&db, a)[..stdlib.len()], stdlib[..]);
+    assert_eq!(world_roots(&db, a).last(), Some(&a));
+}
+
+#[test]
+fn same_named_declarations_in_two_roots_emit_as_two_programs() {
+    let (db, a, b) = two_workspaces("class Point { x int }\n", "class Point { y string }\n");
+    let program_a = compile_program(&db, a, OptLevel::Two).expect("root a emits alone");
+    let program_b = compile_program(&db, b, OptLevel::Two).expect("root b emits alone");
+    // Exactly one `Point` per program, the workspace's own.
+    let points_a = baml_tests::engine::classes_named(&program_a, "Point");
+    let points_b = baml_tests::engine::classes_named(&program_b, "Point");
+    let [(name_a, tag_a)] = points_a.as_slice() else {
+        panic!("program a holds one Point: {points_a:?}");
+    };
+    let [(name_b, tag_b)] = points_b.as_slice() else {
+        panic!("program b holds one Point: {points_b:?}");
+    };
+    assert_eq!(name_a, name_b, "each is its program's workspace package");
+    // Tags are per program: the linker assigns each declaration the tag of its
+    // object index, and these two programs lay out identically, so the two
+    // `Point`s agree — they never share a VM.
+    assert_eq!(tag_a, tag_b);
+}
+
+#[tokio::test]
+async fn each_program_runs_its_own_root() {
+    let (db, a, b) = two_workspaces(
+        "function main() -> int throws never { 1 }\nfunction only_a() -> int throws never { 10 }\n",
+        "function main() -> int throws never { 2 }\nfunction only_b() -> int throws never { 20 }\n",
+    );
+    let program_a = compile_program(&db, a, OptLevel::Two).expect("root a emits");
+    let program_b = compile_program(&db, b, OptLevel::Two).expect("root b emits");
+    assert_eq!(
+        function_names(&program_a),
+        vec!["user.main".to_string(), "user.only_a".to_string()]
+    );
+    assert_eq!(
+        function_names(&program_b),
+        vec!["user.main".to_string(), "user.only_b".to_string()]
+    );
+    assert_eq!(run_main(program_a).await, BexExternalValue::Int(1));
+    assert_eq!(run_main(program_b).await, BexExternalValue::Int(2));
+}
+
+#[test]
+fn one_roots_errors_do_not_block_another() {
+    let (db, a, b) = two_workspaces(
+        "function main() -> int throws never { 1 }\n",
+        "function main() -> int throws never { \"not an int\" }\n",
+    );
+    assert!(db.get_bytecode(a).is_ok(), "root a is clean and builds");
+    let Err(CompileProgramError::Emit(LoweringError::ProjectHasErrors { error_count })) =
+        db.get_bytecode(b)
+    else {
+        panic!("root b has a type error and must not build");
+    };
+    assert_eq!(error_count, 1);
+    // The error is reported against b's file only.
+    let errors: Vec<_> = baml_db::collect_compiler2_diagnostics(&db)
+        .into_iter()
+        .filter(|diagnostic| diagnostic.severity == Severity::Error)
+        .collect();
+    assert_eq!(errors.len(), 1);
+    let file = errors[0]
+        .primary_span()
+        .expect("the error has a span")
+        .file_id;
+    assert!(
+        b.files(&db).iter().any(|f| f.file_id(&db) == file),
+        "the error belongs to root b"
+    );
+}
+
+#[test]
+fn every_world_shares_the_stdlib_prefix() {
+    let (db, a, b) = two_workspaces(
+        "function main() -> int throws never { 1 }\n",
+        "class Other { z bool }\n",
+    );
+    // The linker lays the stdlib group out first, so the stdlib packages'
+    // objects are a prefix of every program: as many objects as their
+    // outputs hold, whichever root the program is for.
+    let stdlib_objects: usize = db
+        .source_roots()
+        .into_iter()
+        .filter(|root| root.kind(&db) == SourceRootKind::Stdlib)
+        .map(|root| {
+            let emitted = emit_package(&db, root, OptLevel::Two).expect("the stdlib emits");
+            let unit = &emitted.unit;
+            unit.classes.len()
+                + unit.enums.len()
+                + unit.interfaces.len()
+                + unit.type_alias_objects.len()
+                + unit.code.len()
+                + emitted.tail.as_ref().map_or(0, |tail| tail.objects.len())
+        })
+        .sum();
+    assert!(stdlib_objects > 0);
+    let program_a = compile_program(&db, a, OptLevel::Two).expect("root a emits");
+    let program_b = compile_program(&db, b, OptLevel::Two).expect("root b emits");
+    assert_eq!(
+        object_bytes(&program_a)[..stdlib_objects],
+        object_bytes(&program_b)[..stdlib_objects],
+        "the stdlib is a user-independent prefix of every program"
+    );
+}

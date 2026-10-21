@@ -1,5 +1,5 @@
 use super::*;
-use crate::{baml_db, baml_tyannotated};
+use crate::{baml_db, baml_ty};
 
 // --- Task classes ---
 // class ServerActionTask { type "server_action", name string, description string, signature string @alias("function_signature") }
@@ -43,7 +43,7 @@ test_deserializer!(
       route: /
 }
   "#,
-    baml_tyannotated!(PageTask),
+    baml_ty!(PageTask),
     make_task_db(),
     {
         "type": "page",
@@ -65,7 +65,7 @@ test_deserializer!(
       function_signature: async function fetchPosts(page: number, sort: string, filters: object): Promise<PostList>
     }
   ]"#,
-    baml_tyannotated!([(ServerActionTask | PageTask | ComponentTask)]),
+    baml_ty!([(ServerActionTask | PageTask | ComponentTask)]),
     make_task_db(),
     [
         {
@@ -93,7 +93,7 @@ test_deserializer!(
       props: {title: string, excerpt: string, author: Author, date: string, onClick: () => void}
     }
   ]"#,
-    baml_tyannotated!([(ServerActionTask | PageTask | ComponentTask)]),
+    baml_ty!([(ServerActionTask | PageTask | ComponentTask)]),
     make_task_db(),
     [
         {
@@ -135,7 +135,7 @@ test_deserializer!(
       route: /
     }
   ]"#,
-    baml_tyannotated!([(ServerActionTask | PageTask | ComponentTask)]),
+    baml_ty!([(ServerActionTask | PageTask | ComponentTask)]),
     make_task_db(),
     [
         {
@@ -191,7 +191,7 @@ test_deserializer!(
       function_signature: async function fetchPostById(id: string): Promise<Post>
     }
   ]"#,
-    baml_tyannotated!([(ServerActionTask | PageTask | ComponentTask)]),
+    baml_ty!([(ServerActionTask | PageTask | ComponentTask)]),
     make_task_db(),
     [
         {
@@ -396,7 +396,7 @@ Actions:
   }
 ]
   "###,
-    baml_tyannotated!([(ServerActionTask | PageTask | ComponentTask)]),
+    baml_ty!([(ServerActionTask | PageTask | ComponentTask)]),
     make_task_db(),
     [
         {

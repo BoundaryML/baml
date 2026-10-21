@@ -26,6 +26,7 @@ pub enum Statement {
     /// so the caller should check for one and attach it to the expression if present.
     Expr(ExpressionStmt),
     Let(LetStmt),
+    TypeBinding(TypeBindingStmt),
     While(WhileStmt),
     WhileLet(WhileLetStmt),
     Return(ReturnStmt),
@@ -46,6 +47,9 @@ impl FromCST for Statement {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         match elem.kind() {
             SyntaxKind::LET_STMT => LetStmt::from_cst(elem).map(Statement::Let),
+            SyntaxKind::TYPE_BINDING_STMT => {
+                TypeBindingStmt::from_cst(elem).map(Statement::TypeBinding)
+            }
             SyntaxKind::RETURN_STMT => ReturnStmt::from_cst(elem).map(Statement::Return),
             SyntaxKind::WHILE_STMT => WhileStmt::from_cst(elem).map(Statement::While),
             SyntaxKind::WHILE_LET_STMT => WhileLetStmt::from_cst(elem).map(Statement::WhileLet),
@@ -68,6 +72,7 @@ impl Printable for Statement {
         match self {
             Statement::Expr(expression_stmt) => expression_stmt.print(shape, printer),
             Statement::Let(let_stmt) => let_stmt.print(shape, printer),
+            Statement::TypeBinding(binding) => binding.print(shape, printer),
             Statement::While(while_stmt) => while_stmt.print(shape, printer),
             Statement::WhileLet(while_let_stmt) => while_let_stmt.print(shape, printer),
             Statement::Return(return_stmt) => return_stmt.print(shape, printer),
@@ -94,6 +99,7 @@ impl Printable for Statement {
         match self {
             Statement::Expr(expr) => expr.leftmost_token(),
             Statement::Let(let_stmt) => let_stmt.leftmost_token(),
+            Statement::TypeBinding(binding) => binding.leftmost_token(),
             Statement::While(while_stmt) => while_stmt.leftmost_token(),
             Statement::WhileLet(while_let_stmt) => while_let_stmt.leftmost_token(),
             Statement::Return(return_stmt) => return_stmt.leftmost_token(),
@@ -111,6 +117,7 @@ impl Printable for Statement {
         match self {
             Statement::Expr(expr) => expr.rightmost_token(),
             Statement::Let(let_stmt) => let_stmt.rightmost_token(),
+            Statement::TypeBinding(binding) => binding.rightmost_token(),
             Statement::While(while_stmt) => while_stmt.rightmost_token(),
             Statement::WhileLet(while_let_stmt) => while_let_stmt.rightmost_token(),
             Statement::Return(return_stmt) => return_stmt.rightmost_token(),
@@ -322,6 +329,122 @@ impl Printable for LetStmt {
             return expr.rightmost_token();
         }
         self.pattern.rightmost_token()
+    }
+}
+
+/// Corresponds to a [`SyntaxKind::TYPE_BINDING_STMT`] node:
+/// `let type T [extends A & B] = operand [else { … }];`.
+///
+/// The removed `type T = …;` body statement shares the node kind but is a
+/// parse error, so the formatter never sees it.
+#[derive(Debug)]
+pub struct TypeBindingStmt {
+    pub let_keyword: t::Let,
+    pub type_keyword: t::TypeKw,
+    pub name: t::Word,
+    pub bounds: Option<super::expressions::GenericParamBounds>,
+    pub equals: t::Equals,
+    pub operand: Expression,
+    /// Boxed for the same reason as [`LetStmt::else_branch`].
+    pub else_branch: Option<Box<(t::Else, BlockExpr)>>,
+    pub semicolon: Option<t::Semicolon>,
+}
+
+impl FromCST for TypeBindingStmt {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::TYPE_BINDING_STMT)?;
+        let mut it = SyntaxNodeIter::new(&node);
+
+        let let_keyword = it.expect_parse()?;
+        let type_keyword = it.expect_parse()?;
+        let name = it.expect_parse()?;
+        let bounds = it
+            .next_if_kind(SyntaxKind::GENERIC_PARAM_BOUNDS)
+            .map(super::expressions::GenericParamBounds::from_cst)
+            .transpose()?;
+        let equals = it.expect_parse()?;
+        let operand = Expression::from_cst(it.expect_next("the runtime type")?)?;
+        let else_branch = if let Some(else_kw) = it.next_if_kind(SyntaxKind::KW_ELSE) {
+            let block_elem = it.expect_next("block after `else`")?;
+            Some(Box::new((
+                t::Else::from_cst(else_kw)?,
+                BlockExpr::from_cst(block_elem)?,
+            )))
+        } else {
+            None
+        };
+        let semicolon = it.next().map(t::Semicolon::from_cst).transpose()?;
+        it.expect_end()?;
+
+        Ok(TypeBindingStmt {
+            let_keyword,
+            type_keyword,
+            name,
+            bounds,
+            equals,
+            operand,
+            else_branch,
+            semicolon,
+        })
+    }
+}
+
+impl Printable for TypeBindingStmt {
+    fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let mut multi_lined = false;
+        printer.print_raw_token(&self.let_keyword);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.type_keyword);
+        printer.print_str(" ");
+        printer.print_raw_token(&self.name);
+        if let Some(bounds) = &self.bounds {
+            printer.print_str(" ");
+            printer.print(bounds, Shape::unlimited_single_line());
+        }
+        let (_, equals_trailing) = printer.trivia.get_for_range_split(self.equals.span());
+        printer.print_str(" ");
+        printer.print_raw_token(&self.equals);
+        printer.print_str(" ");
+        printer.print_trivia_squished(equals_trailing);
+        let operand_leading = printer.trivia.get_leading_for_element(&self.operand);
+        printer.print_trivia_squished(operand_leading);
+        multi_lined |= printer.print(&self.operand, shape.clone()).multi_lined;
+        // Keep a comment between the operand and what follows (`;` or `else`).
+        if self.semicolon.is_some() || self.else_branch.is_some() {
+            let operand_trailing = printer.trivia.get_trailing_for_element(&self.operand);
+            printer.print_trivia_squished(operand_trailing);
+        }
+        if let Some(else_branch) = self.else_branch.as_deref() {
+            let (else_kw, block) = else_branch;
+            let (else_leading, else_trailing) = printer.trivia.get_for_range_split(else_kw.span());
+            printer.print_str(" ");
+            printer.print_trivia_squished(else_leading);
+            printer.print_raw_token(else_kw);
+            printer.print_str(" ");
+            printer.print_trivia_squished(else_trailing);
+            multi_lined |= printer.print(block, shape).multi_lined;
+        }
+        if let Some(semicolon) = &self.semicolon {
+            let (semicolon_leading, _) = printer.trivia.get_for_range_split(semicolon.span());
+            printer.print_trivia_squished(semicolon_leading);
+            printer.print_raw_token(semicolon);
+        } else {
+            printer.print_str(";");
+        }
+        PrintInfo { multi_lined }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        self.let_keyword.span()
+    }
+    fn rightmost_token(&self) -> TextRange {
+        if let Some(semicolon) = &self.semicolon {
+            return semicolon.span();
+        }
+        if let Some(else_branch) = self.else_branch.as_deref() {
+            return else_branch.1.rightmost_token();
+        }
+        self.operand.rightmost_token()
     }
 }
 
@@ -577,6 +700,9 @@ impl FromCST for ForStmt {
 
             let semicolon = it.expect_parse()?;
 
+            // BUG: the parser accepts an empty step, `for (let i = 0; i < n;)`,
+            // and the AST lowers it as a loop with no step, but this AST has
+            // no representation for it and the formatter rejects the file.
             let update = it.expect_next("an expression")?;
             let update = Expression::from_cst(update)?;
 

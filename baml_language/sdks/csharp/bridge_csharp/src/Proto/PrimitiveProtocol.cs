@@ -275,15 +275,13 @@ internal static class PrimitiveProtocol
 
     internal static BamlStreamNativeHandle DecodeStreamHandle(
         ReadOnlySpan<byte> bytes,
-        ReadOnlySpan<byte> expectedPartialType,
-        ReadOnlySpan<byte> expectedFinalType,
+        ReadOnlySpan<byte> expectedStreamType,
         string bamlFunction,
         NativeApi api)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(bamlFunction);
         ArgumentNullException.ThrowIfNull(api);
-        RequireExpectedStreamType(expectedPartialType, "partial");
-        RequireExpectedStreamType(expectedFinalType, "final");
+        RequireExpectedStreamType(expectedStreamType, "value");
         BamlOutboundResult envelope = ParseCallResult(bytes, "BAML stream handle result");
         using OutboundOwnershipScope ownership = OutboundOwnershipScope.Create(envelope, api);
         var budget = new BamlDecodeBudget();
@@ -313,21 +311,17 @@ internal static class PrimitiveProtocol
         if (wire.HandleType != BamlHandleType.AdtTaggedHeapHandle
             || wire.Ty?.TyCase != BamlTy.TyOneofCase.ClassTy
             || !StringComparer.Ordinal.Equals(wire.Ty.ClassTy.Name, StreamClassIdentity)
-            || wire.Ty.ClassTy.TypeArgs.Count != 2)
+            || wire.Ty.ClassTy.TypeArgs.Count != 1)
         {
             throw new BamlProtocolException(
                 "The native bridge returned an invalid BAML stream handle descriptor.",
-                $"Expected {StreamClassIdentity}<partial, final> as ADT_TAGGED_HEAP_HANDLE; received {wire.HandleType} / {wire.Ty?.TyCase}.");
+                $"Expected {StreamClassIdentity}<T> as ADT_TAGGED_HEAP_HANDLE; received {wire.HandleType} / {wire.Ty?.TyCase}.");
         }
 
         RequireStreamTypeMetadata(
-            expectedPartialType,
+            expectedStreamType,
             wire.Ty.ClassTy.TypeArgs[0],
-            "stream partial");
-        RequireStreamTypeMetadata(
-            expectedFinalType,
-            wire.Ty.ClassTy.TypeArgs[1],
-            "stream final");
+            "stream value");
         return new BamlStreamNativeHandle(
             ownership.Claim(wire),
             wire.Ty.ClassTy.Name);
@@ -412,7 +406,7 @@ internal static class PrimitiveProtocol
             return BamlStreamPull<BamlGeneratedValue>.FromPartial(
                 Decode(
                     union.Value,
-                    $"$stream<{expectedPartialOption}>",
+                    $"stream partial<{expectedPartialOption}>",
                     ownership,
                     api,
                     budget,
@@ -571,7 +565,7 @@ internal static class PrimitiveProtocol
     internal static InboundValue Encode(BamlGeneratedValue value) =>
         Encode(value, api: null, ownership: null, functionCallId: 0);
 
-    private static InboundValue Encode(
+    internal static InboundValue Encode(
         BamlGeneratedValue value,
         NativeApi? api,
         EncodedCallArguments? ownership,
@@ -605,6 +599,14 @@ internal static class PrimitiveProtocol
                 RequireNativeApi(api, value.Kind),
                 RequireOwnership(ownership, value.Kind),
                 value.ReadMedia()),
+            PrimitiveCarrierKind.Prompt => new InboundValue
+            {
+                PromptAstValue = value.ReadPromptAst(),
+            },
+            PrimitiveCarrierKind.Type => new InboundValue
+            {
+                TyDefValue = value.ReadType().WireCopy(),
+            },
             PrimitiveCarrierKind.Handle => EncodeHandle(
                 value.ReadHandle(),
                 RequireOwnership(ownership, value.Kind)),
@@ -675,6 +677,16 @@ internal static class PrimitiveProtocol
                 DecodeUnion(value.UnionVariantValue, path, ownership, api, budget, depth),
             BamlOutboundValue.ValueOneofCase.MediaValue =>
                 MediaProtocol.DecodeInline(value.MediaValue, path),
+            BamlOutboundValue.ValueOneofCase.PromptAstValue =>
+                BamlGeneratedValue.CreatePromptAst(value.PromptAstValue, path),
+            BamlOutboundValue.ValueOneofCase.TyValue =>
+                BamlGeneratedValue.CreateType(
+                    new global::Baml.BamlType(value.TyValue),
+                    path),
+            BamlOutboundValue.ValueOneofCase.TyDefValue =>
+                BamlGeneratedValue.CreateType(
+                    new global::Baml.BamlType(value.TyDefValue),
+                    path),
             BamlOutboundValue.ValueOneofCase.HandleValue =>
                 DecodeHandle(value.HandleValue, path, ownership, api, budget, depth),
             _ => throw new BamlProtocolException(
@@ -1032,6 +1044,7 @@ internal static class PrimitiveProtocol
             BamlHandleType.UntaggedRustData => "baml.internal.RustData",
             BamlHandleType.UntaggedBexHeap => "baml.internal.HeapValue",
             BamlHandleType.AdtPromptAst => "baml.llm.PromptAst",
+            BamlHandleType.AdtFunctionSpec => "ai.FunctionSpec",
             BamlHandleType.AdtTaggedHeapHandle => TaggedHandleIdentity(wire, path),
             _ => throw new BamlProtocolException(
                 "The native bridge returned an unsupported BAML handle.",
@@ -1042,7 +1055,8 @@ internal static class PrimitiveProtocol
             : wire.Ty.ToByteArray();
         global::Baml.BamlTypeDescriptor descriptor =
             global::Baml.BamlTypeDescriptor.CreateHandle(fqn);
-        if (wire.HandleType == BamlHandleType.AdtTaggedHeapHandle)
+        if (wire.HandleType is BamlHandleType.AdtTaggedHeapHandle
+            or BamlHandleType.AdtFunctionSpec)
         {
             global::Baml.BamlTypeDescriptor encodedType =
                 global::Baml.BamlTypeDescriptor.FromMetadata(metadata);
@@ -1050,8 +1064,8 @@ internal static class PrimitiveProtocol
                 || !StringComparer.Ordinal.Equals(encodedType.Fqn, fqn))
             {
                 throw new BamlProtocolException(
-                    "The native bridge returned contradictory tagged-handle metadata.",
-                    $"Tagged handle {wire.Key} at {path} identified {fqn}, but its descriptor was {encodedType}.");
+                    "The native bridge returned contradictory opaque-handle metadata.",
+                    $"Opaque handle {wire.Key} at {path} identified {fqn}, but its descriptor was {encodedType}.");
             }
 
             descriptor = global::Baml.BamlTypeDescriptor.CreateHandle(

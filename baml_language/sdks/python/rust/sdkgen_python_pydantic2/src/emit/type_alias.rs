@@ -1,6 +1,6 @@
 //! `PyTypeAlias` — Python type alias.
 
-use baml_codegen_types::{Name, Ty};
+use baml_sdkgen_types::{Name, Ty};
 
 /// Python type alias.
 ///

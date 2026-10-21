@@ -50,7 +50,11 @@ BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_PYTHON == 2, "language discriminant drif
 BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_GO == 3, "language discriminant drifted");
 BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_RUST == 4, "language discriminant drifted");
 BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_C_SHARP == 5, "language discriminant drifted");
+BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_CPP == 6, "language discriminant drifted");
+BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_JAVA == 7, "language discriminant drifted");
+BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_SWIFT == 8, "language discriminant drifted");
 BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_WEB == 9, "language discriminant drifted");
+BAML_STATIC_ASSERT(BAML_BRIDGE_LANGUAGE_RUBY == 10, "language discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_MEDIA_KIND_UNSPECIFIED == 0, "media discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_MEDIA_KIND_IMAGE == 1, "media discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_MEDIA_KIND_AUDIO == 2, "media discriminant drifted");
@@ -67,7 +71,6 @@ BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_MEDIA_VIDEO == 8, "handle discriminant 
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_MEDIA_PDF == 9, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_MEDIA_GENERIC == 10, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_PROMPT_AST == 11, "handle discriminant drifted");
-BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_COLLECTOR == 12, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_TYPE == 13, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_TAGGED_HEAP_HANDLE == 14, "handle discriminant drifted");
 BAML_STATIC_ASSERT(BAML_CFFI_HANDLE_TYPE_HOST_VALUE_CALLABLE == 15, "handle discriminant drifted");
@@ -109,8 +112,8 @@ BAML_STATIC_ASSERT(
 BAML_STATIC_ASSERT(offsetof(BamlApiV1, abi_version) == 0, "ABI version must be first");
 BAML_ASSERT_AFTER(abi_version, struct_size);
 BAML_ASSERT_AFTER(struct_size, version);
-BAML_ASSERT_AFTER(version, initialize_runtime_from_bytecode);
-BAML_ASSERT_AFTER(initialize_runtime_from_bytecode, free_buffer);
+BAML_ASSERT_AFTER(version, initialize_runtime_from_blob);
+BAML_ASSERT_AFTER(initialize_runtime_from_blob, free_buffer);
 BAML_ASSERT_AFTER(free_buffer, register_callback);
 BAML_ASSERT_AFTER(register_callback, call_function);
 BAML_ASSERT_AFTER(call_function, new_function_call);
@@ -130,13 +133,31 @@ BAML_ASSERT_AFTER(media_base64, media_mime_type);
 BAML_ASSERT_AFTER(media_mime_type, register_bridge);
 BAML_ASSERT_AFTER(register_bridge, register_unhandled_spawn_error_callback);
 BAML_ASSERT_AFTER(register_unhandled_spawn_error_callback, shutdown_runtime);
-BAML_ASSERT_AFTER(shutdown_runtime, initialize_runtime_from_bytecode_with_metadata);
+BAML_ASSERT_AFTER(shutdown_runtime, initialize_runtime_from_blob_with_metadata);
+BAML_ASSERT_AFTER(initialize_runtime_from_blob_with_metadata, invocation_protocol_version);
+BAML_ASSERT_AFTER(invocation_protocol_version, invocation_clock_ns);
+BAML_ASSERT_AFTER(invocation_clock_ns, release_function_call);
+BAML_ASSERT_AFTER(release_function_call, register_host_dispatch_v2);
+BAML_ASSERT_AFTER(register_host_dispatch_v2, register_host_cancel_callback);
+BAML_ASSERT_AFTER(register_host_cancel_callback, trace_selection);
+BAML_ASSERT_AFTER(trace_selection, invocation_context);
+BAML_ASSERT_AFTER(invocation_context, media_name);
+BAML_ASSERT_AFTER(media_name, media_from_file_content);
+BAML_ASSERT_FIELD_TYPE(invocation_protocol_version, BamlInvocationProtocolVersionFn)
+BAML_ASSERT_FIELD_TYPE(invocation_clock_ns, BamlInvocationClockNsFn)
+BAML_ASSERT_FIELD_TYPE(release_function_call, BamlReleaseFunctionCallFn)
+BAML_ASSERT_FIELD_TYPE(register_host_dispatch_v2, BamlRegisterHostDispatchV2Fn)
+BAML_ASSERT_FIELD_TYPE(register_host_cancel_callback, BamlRegisterHostCancelCallbackFn)
+BAML_ASSERT_FIELD_TYPE(trace_selection, BamlTraceSelectionFn)
+BAML_ASSERT_FIELD_TYPE(invocation_context, BamlInvocationContextFn)
+BAML_ASSERT_FIELD_TYPE(media_name, BamlMediaAccessorFn)
+BAML_ASSERT_FIELD_TYPE(media_from_file_content, BamlMediaFromFileContentFn)
 BAML_STATIC_ASSERT(
-    BAML_API_V1_MIN_SIZE == offsetof(BamlApiV1, register_unhandled_spawn_error_callback),
-    "the appended lifecycle fields must follow the original V1 prefix");
+    BAML_API_V1_MIN_SIZE == sizeof(BamlApiV1),
+    "revision 4 requires the complete table through media_from_file_content");
 
 BAML_ASSERT_FIELD_TYPE(version, BamlVersionFn)
-BAML_ASSERT_FIELD_TYPE(initialize_runtime_from_bytecode, BamlInitializeRuntimeFromBytecodeFn)
+BAML_ASSERT_FIELD_TYPE(initialize_runtime_from_blob, BamlInitializeRuntimeFromBlobFn)
 BAML_ASSERT_FIELD_TYPE(free_buffer, BamlFreeBufferFn)
 BAML_ASSERT_FIELD_TYPE(register_callback, BamlRegisterCallbackFn)
 BAML_ASSERT_FIELD_TYPE(call_function, BamlCallFunctionFn)
@@ -158,7 +179,7 @@ BAML_ASSERT_FIELD_TYPE(register_bridge, BamlRegisterBridgeFn)
 BAML_ASSERT_FIELD_TYPE(register_unhandled_spawn_error_callback,
                        BamlRegisterUnhandledSpawnErrorCallbackFn)
 BAML_ASSERT_FIELD_TYPE(shutdown_runtime, BamlShutdownRuntimeFn)
-BAML_ASSERT_FIELD_TYPE(initialize_runtime_from_bytecode_with_metadata,
-                       BamlInitializeRuntimeFromBytecodeWithMetadataFn)
+BAML_ASSERT_FIELD_TYPE(initialize_runtime_from_blob_with_metadata,
+                       BamlInitializeRuntimeFromBlobWithMetadataFn)
 
 #endif /* BAML_CFFI_TEST_ABI_ASSERTIONS_H */

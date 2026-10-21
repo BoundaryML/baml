@@ -1,0 +1,5 @@
+name = "spawn fan out 100"
+description = "spawn 100 tasks, then await them all"
+expect = "9900"
+jobs = 500
+warmup = 31

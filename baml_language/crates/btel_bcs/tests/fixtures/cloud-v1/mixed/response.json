@@ -1,0 +1,43 @@
+{
+  "plan_id": "cloud-v1-mixed",
+  "expires_at_unix_ms": 4102444800000,
+  "uploads": [
+    {
+      "upload_id": "recording",
+      "client_target_id": 0,
+      "object_key": "org-fixture/cloud-v1-mixed/recording",
+      "presigned_put_url": "https://uploads.invalid/cloud-v1/mixed/recording?capability=fixed-v1",
+      "expires_at_unix_ms": 4102444800000,
+      "required_headers": {"x-bcs-fixture": "cloud-v1", "x-amz-meta-upload-id": "recording"},
+      "kind": "recording",
+      "candidate_indices": [0]
+    },
+    {
+      "upload_id": "batch",
+      "client_target_id": 1,
+      "object_key": "org-fixture/cloud-v1-mixed/batch",
+      "presigned_put_url": "https://uploads.invalid/cloud-v1/mixed/batch?capability=fixed-v1",
+      "expires_at_unix_ms": 4102444800000,
+      "required_headers": {"x-bcs-fixture": "cloud-v1", "x-amz-meta-upload-id": "batch"},
+      "kind": "cas_batch",
+      "candidate_indices": [1]
+    },
+    {
+      "upload_id": "object",
+      "client_target_id": 2,
+      "object_key": "org-fixture/cloud-v1-mixed/object",
+      "presigned_put_url": "https://uploads.invalid/cloud-v1/mixed/object?capability=fixed-v1",
+      "expires_at_unix_ms": 4102444800000,
+      "required_headers": {"x-bcs-fixture": "cloud-v1", "x-amz-meta-upload-id": "object"},
+      "kind": "cas_object",
+      "candidate_indices": [3]
+    }
+  ],
+  "cas": [
+    {"candidate_index": 0, "disposition": {"kind": "inline_with_recording", "upload_id": "recording"}},
+    {"candidate_index": 1, "disposition": {"kind": "member_of_batch", "upload_id": "batch"}},
+    {"candidate_index": 2, "disposition": {"kind": "already_available"}},
+    {"candidate_index": 3, "disposition": {"kind": "separate_object", "upload_id": "object"}},
+    {"candidate_index": 4, "disposition": {"kind": "already_available"}}
+  ]
+}

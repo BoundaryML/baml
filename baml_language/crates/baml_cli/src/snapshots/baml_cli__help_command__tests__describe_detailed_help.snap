@@ -72,7 +72,7 @@ Output options:
 
       --export
           Export a whole package's surface as one versioned JSON document (NAME must be a package:
-          `baml`, `user`, …). Cross-package references are self-describing ids like
+          `root`, `baml`, …). Cross-package references are self-describing ids like
           `T:baml.time.Duration` — the prefix is the kind (`T:` type, `V:` value, `M:` method, `F:`
           field, `E:` variant, `A:` associated type; BAML's type and value namespaces are distinct,
           so bare paths would be ambiguous). Export the referenced package for a foreign id's full
@@ -105,6 +105,10 @@ Global options:
 
       --diagnostic-format <FORMAT>
           Select the diagnostic format [possible values: human, agent, concise]
+
+      --agent-skill-check <MODE>
+          Control BAML agent skill validation [default: auto] [possible values: auto, require, warn,
+          off]
 
   -h, --help
           Display concise help for this command

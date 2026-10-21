@@ -1,0 +1,7 @@
+[package]
+name = "csharp-generics"
+
+[generator.csharp]
+output_type = "csharp"
+output_dir = "."
+naming_convention = "language"

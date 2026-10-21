@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -35,9 +35,9 @@ jobs:
           workspaces: engine
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
-          go-version: '1.22'
+          go-version: '1.24'
           cache: false  # Disable cache to avoid path issues
 
       - name: Setup Protoc (Windows)
@@ -95,7 +95,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -108,9 +108,9 @@ jobs:
           workspaces: engine
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
-          go-version: '1.22'
+          go-version: '1.24'
           cache: false  # Disable cache to avoid path issues
 
       - name: Setup Protoc (Unix)
@@ -170,12 +170,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
-          go-version: '1.22'
+          go-version: '1.24'
           cache: false  # Disable cache to avoid path issues
 
       - name: Test Cross-Compilation to Windows (CGO disabled)

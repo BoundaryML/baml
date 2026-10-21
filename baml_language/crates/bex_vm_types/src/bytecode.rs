@@ -1,5 +1,7 @@
 //! Instruction set and bytecode representation.
 
+use std::collections::BTreeMap;
+
 use baml_base::Span;
 use borsh::{BorshDeserialize, BorshSerialize};
 
@@ -65,52 +67,233 @@ impl JumpTableData {
 }
 
 // ============================================================================
-// Perfect Hash Table Data Structure
+// Switch Table
 // ============================================================================
 
-/// Compile-time minimal perfect hash table for O(1) type dispatch.
+/// A sparse switch's dispatch table: what `Instruction::DenseTag` remaps a
+/// value through, to the dense `[0, K-1]` index of the arm it selects — the
+/// index the jump table that follows dispatches on.
 ///
-/// Used by `Instruction::DenseTag` to remap a sparse type tag to a dense
-/// `[0, K-1]` index for jump table dispatch. The hash function is:
-///
-///   `h(tag) = ((tag as u64).wrapping_mul(multiply) >> shift) & mask`
-///
-/// Each entry stores the expected tag for verification — if the runtime tag
-/// doesn't match, the value is not in the match and dispatch falls to default.
-///
-/// The hash constants are found by brute-force search at compile time.
-/// For K ≤ 20 arms, the search completes in microseconds.
-///
-/// References:
-/// - Neumann & Göbbert, "Improving Switch Statement Performance with Hashing
-///   Optimized at Compile Time"
-/// - Dietz 1992, "Coding Multiway Branches Using Customized Hash Functions"
-/// - Proposed for LLVM (issue #96971), Roslyn (#66604), Go (#34381)
+/// A unit states the switch by its keys. Whoever lays the unit into an image
+/// assigns the keys' tags and solves the table for them
+/// ([`SwitchDispatch::solved`]), and solving cannot fail: the answer is a
+/// perfect hash when the bounded search finds one, and the keys in order
+/// otherwise.
 #[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
-pub struct MatchHashTable {
-    /// Multiplicative hash constant, found at compile time.
-    pub multiply: u64,
-    /// Right-shift amount applied after multiplication.
-    pub shift: u8,
-    /// Bitmask applied after shift. Always `table_size - 1` (power of 2).
-    pub mask: u8,
-    /// Verification + dispatch entries. `entries[h(tag)]` contains:
-    /// - `expected_tag`: the type tag that should hash to this slot
-    /// - `dense_index`: the dense arm index `[0, K-1]` for jump table dispatch
-    ///   Unused slots have `expected_tag = i64::MIN` (sentinel).
-    pub entries: Vec<MatchHashEntry>,
-    /// Human-readable names for keys in arm order (display only).
+pub struct SwitchTable {
+    /// How a value reaches its arm.
+    pub dispatch: SwitchDispatch,
+    /// Human-readable names for the keys in arm order (display only).
     /// `key_names[i]` is the name for the i-th arm (e.g. "int", "`MyClass`").
     pub key_names: Vec<String>,
 }
 
-/// Single entry in a [`MatchHashTable`].
+/// How a [`SwitchTable`] dispatches.
 #[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
-pub struct MatchHashEntry {
-    /// The type tag expected at this slot (for verification).
-    pub expected_tag: i64,
-    /// Dense arm index `[0, K-1]` — fed into the subsequent jump table.
-    pub dense_index: u8,
+pub enum SwitchDispatch {
+    /// The switch's keys in arm order, as the compiler states them: `keys[i]`
+    /// selects arm `i`. A unit's form and only a unit's — a key that names a
+    /// declaration has no value until the declaration is laid into an image,
+    /// so no image holds such a table.
+    Keys(Vec<SwitchKey>),
+    /// A perfect hash over the keys' values: `slots[h(value)]` is the one key
+    /// that hashes there, if any, where
+    ///
+    ///   `h(value) = ((value as u64).wrapping_mul(multiply) >> shift) & (slots.len() - 1)`
+    ///
+    /// `slots.len()` is a power of two and `shift` is below 64. The
+    /// multiply-shift family of Neumann & Göbbert, "Improving Switch
+    /// Statement Performance with Hashing Optimized at Compile Time", and
+    /// Dietz 1992, "Coding Multiway Branches Using Customized Hash
+    /// Functions"; proposed for LLVM (#96971), Roslyn (#66604), and Go
+    /// (#34381).
+    Hash {
+        multiply: u64,
+        shift: u8,
+        slots: Vec<Option<SwitchEntry>>,
+    },
+    /// The keys by strictly ascending value, searched by bisection.
+    Sorted(Vec<SwitchEntry>),
+}
+
+/// One key of a solved [`SwitchTable`]: the value that selects an arm.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub struct SwitchEntry {
+    /// The key's value: a type tag, or the integer an arm matches.
+    pub value: i64,
+    /// The dense index of the arm the key selects.
+    pub arm: u32,
+}
+
+/// One key of a switch, as the compiler states it.
+///
+/// The compiler never knows a declared head's tag: a declaration arm is "the
+/// tag of *this* declaration", by the same object operand every other
+/// reference to the declaration carries, relocated like every other operand
+/// and materialized by whoever assigns the declaration's tag. A primitive
+/// kind's tag is a fixed constant nothing declares, so it is stated directly,
+/// as is the integer an integer arm matches.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
+pub enum SwitchKey {
+    /// A fixed value: a kind tag (`typetag::INT`, `ENUM`, ...) or an
+    /// integer.
+    Kind(i64),
+    /// The tag assigned to the declaration at this object operand — any
+    /// declared head. What a switch can dispatch on is what the `TypeTag`
+    /// instruction reports for a value: an instance reports its class's tag,
+    /// while an enum value reports the shared `ENUM` kind tag, so today's
+    /// compiler keys class arms this way and enum arms by kind.
+    Declaration(ObjectIndex),
+}
+
+impl SwitchTable {
+    /// A table stating its keys: the form a unit carries.
+    #[must_use]
+    pub fn of_keys(keys: Vec<SwitchKey>, key_names: Vec<String>) -> Self {
+        Self {
+            dispatch: SwitchDispatch::Keys(keys),
+            key_names,
+        }
+    }
+
+    /// The arm `value` selects, `None` when no key is `value`.
+    ///
+    /// # Panics
+    ///
+    /// On a table that states only its keys, or a solved one that is not
+    /// [dispatchable](SwitchDispatch::is_dispatchable): the loader refuses an
+    /// image holding either.
+    #[inline]
+    #[must_use]
+    pub fn arm_of(&self, value: i64) -> Option<u32> {
+        match &self.dispatch {
+            SwitchDispatch::Hash {
+                multiply,
+                shift,
+                slots,
+            } => {
+                let hashed = value.cast_unsigned().wrapping_mul(*multiply) >> shift;
+                #[expect(
+                    clippy::cast_possible_truncation,
+                    reason = "masked to the slot count on the next line"
+                )]
+                let slot = hashed as usize & (slots.len() - 1);
+                slots[slot]
+                    .filter(|entry| entry.value == value)
+                    .map(|entry| entry.arm)
+            }
+            SwitchDispatch::Sorted(entries) => entries
+                .binary_search_by_key(&value, |entry| entry.value)
+                .ok()
+                .map(|found| entries[found].arm),
+            SwitchDispatch::Keys(_) => {
+                unreachable!("an image holds no switch table that states only its keys")
+            }
+        }
+    }
+}
+
+impl SwitchDispatch {
+    /// The most keys the hash search is run for. With 256 slots the chance
+    /// that one `(multiply, shift)` pair separates `K` arbitrary values is
+    /// about `exp(-K² / 512)`: over the search's 640 000 pairs that is an
+    /// expected hundred-odd solutions at 64 keys, and fewer than three at 80.
+    /// A wider switch is sorted without searching.
+    pub const HASHED_KEYS: usize = 64;
+
+    /// The most slots a hash is searched over.
+    pub const HASH_SLOTS: usize = 256;
+
+    /// The dispatch for `keys`, in arm order: `tag_of` answers each
+    /// [`SwitchKey::Declaration`] with the tag its declaration was assigned.
+    ///
+    /// Total. Searches for constants `(multiply, shift)` that send every
+    /// value to a slot of its own, over each power-of-two slot count from the
+    /// tightest one up to [`Self::HASH_SLOTS`] and smallest first, and sorts
+    /// the keys when there are more than [`Self::HASHED_KEYS`] of them or the
+    /// search finds no constants. Which of the two a switch gets depends on
+    /// the values alone, so a build is reproducible; a program never fails to
+    /// link over where its declarations landed.
+    ///
+    /// Arms match in order, so of two keys with one value the later selects
+    /// nothing and is left out.
+    #[must_use]
+    pub fn solved(
+        keys: &[SwitchKey],
+        tag_of: impl Fn(ObjectIndex) -> baml_type::typetag::TypeTag,
+    ) -> Self {
+        let mut entries: Vec<SwitchEntry> = Vec::with_capacity(keys.len());
+        for (arm, key) in keys.iter().enumerate() {
+            let value = match *key {
+                SwitchKey::Kind(value) => value,
+                SwitchKey::Declaration(declaration) => tag_of(declaration).as_i64(),
+            };
+            if entries.iter().all(|entry| entry.value != value) {
+                entries.push(SwitchEntry {
+                    value,
+                    arm: u32::try_from(arm)
+                        .unwrap_or_else(|_| unreachable!("a switch has fewer than 2^32 arms")),
+                });
+            }
+        }
+        if let Some(hash) = Self::hashed(&entries) {
+            return hash;
+        }
+        entries.sort_unstable_by_key(|entry| entry.value);
+        Self::Sorted(entries)
+    }
+
+    /// The multiply-shift search behind [`Self::solved`], over distinct
+    /// values: `None` when the keys are too many to search for or no
+    /// constants within the search bounds separate them.
+    fn hashed(entries: &[SwitchEntry]) -> Option<Self> {
+        if entries.is_empty() || entries.len() > Self::HASHED_KEYS {
+            return None;
+        }
+        let mut slot_count = entries.len().next_power_of_two();
+        while slot_count <= Self::HASH_SLOTS {
+            let mask = slot_count - 1;
+            let mut taken = vec![false; slot_count];
+            for multiply in 1u64..10_000 {
+                for shift in 0u8..64 {
+                    #[expect(clippy::cast_possible_truncation, reason = "masked to the slot count")]
+                    let slot_of = |entry: &SwitchEntry| {
+                        (entry.value.cast_unsigned().wrapping_mul(multiply) >> shift) as usize
+                            & mask
+                    };
+                    taken.fill(false);
+                    let separated = entries
+                        .iter()
+                        .all(|entry| !std::mem::replace(&mut taken[slot_of(entry)], true));
+                    if !separated {
+                        continue;
+                    }
+                    let mut slots = vec![None; slot_count];
+                    for entry in entries {
+                        slots[slot_of(entry)] = Some(*entry);
+                    }
+                    return Some(Self::Hash {
+                        multiply,
+                        shift,
+                        slots,
+                    });
+                }
+            }
+            slot_count *= 2;
+        }
+        None
+    }
+
+    /// Whether [`SwitchTable::arm_of`] can answer through this dispatch: it
+    /// is solved, and holds the shape its variant states.
+    #[must_use]
+    pub fn is_dispatchable(&self) -> bool {
+        match self {
+            Self::Keys(_) => false,
+            Self::Hash { shift, slots, .. } => slots.len().is_power_of_two() && *shift < 64,
+            Self::Sorted(entries) => entries.windows(2).all(|pair| pair[0].value < pair[1].value),
+        }
+    }
 }
 
 /// One field copy performed by `Instruction::InitSpread`.
@@ -342,7 +525,8 @@ pub enum Instruction {
     SubFloat,
     /// `[left: Float, right: Float] → [Float]`
     MulFloat,
-    /// `[left: Float, right: Float] → [Float]` — throws `DivisionByZero` if right == 0.0
+    /// `[left: Float, right: Float] → [Float]` — IEEE-754; a zero divisor
+    /// yields `±inf`, or `NaN` for `0.0 / 0.0`. Never panics.
     DivFloat,
 
     /// `[left: Object::Bigint, right: Object::Bigint] → [Object::Bigint]`
@@ -487,20 +671,6 @@ pub enum Instruction {
     /// created — sys-ops are not user-observable futures in BAML, so
     /// the schedule + await pair is pure overhead.
     SysOp(GlobalIndex),
-    SysOpWithRuntimeId(GlobalIndex),
-
-    /// BEP-034 `spawn { body }`. Pops `[closure, name, config, returns,
-    /// throws]` from the stack (in reverse push order), allocates an
-    /// `UnscheduledFuture` into the TLAB, and yields
-    /// `VmExecState::Spawn(ptr)` so the engine routes the closure to a fresh
-    /// `BexThread`.
-    ///
-    /// `returns` / `throws` are the `Object::Type` values a preceding pair of
-    /// `LoadType`s pushed — the `Future<T, E>` this spawn is typed at, already
-    /// resolved against the frame's type args. They travel with the request so
-    /// the engine can type the heap `Future` it allocates, which is what makes
-    /// a future's generic parameters visible to reflection and `is`/`match`.
-    Spawn,
 
     /// Awaits the future on top of the stack.
     ///
@@ -534,7 +704,9 @@ pub enum Instruction {
     ///
     /// The VM pops `ntypeargs` `Object::Type` values into the new frame's
     /// `type_args` vector, then pops `nargs` regular value arguments.
-    /// `nargs` is inferred from the function's arity metadata.
+    /// `nargs` is the callee's arity, after the value lane has been mapped
+    /// from the site's recorded layout (`Bytecode::call_layouts`) when the
+    /// callee declares different optional slots.
     ///
     /// When no type arguments are threaded, set `ntypeargs = 0`.
     Call {
@@ -545,27 +717,16 @@ pub enum Instruction {
         ntypeargs: u16,
     },
 
-    /// `Call` plus a caller-provided `boundary.LocalId` operand on top of the
-    /// stack. Ordinary call arity is unchanged; the VM pops the id first,
-    /// consumes it, installs the callee runtime-id/capture policy, then enters
-    /// the callee.
-    CallWithRuntimeId {
-        callee: GlobalIndex,
-        ntypeargs: u16,
-    },
-
     /// Call a function value from the eval stack.
     ///
     /// Format: `CALL_INDIRECT`.
     ///
     /// Stack layout: `[arg1, ..., argN, callee]`.
     ///
-    /// Arity is read from the runtime callee function object.
+    /// N is the site's recorded layout (`Bytecode::call_layouts`), which the
+    /// VM maps onto the runtime callee's parameters; a site without one pushed
+    /// the callee's own slots and N is the callee's arity.
     CallIndirect,
-
-    /// `CallIndirect` plus a caller-provided `boundary.LocalId` operand above
-    /// the callee value.
-    CallIndirectWithRuntimeId,
 
     /// Virtual interface-method call: resolve the callee at runtime from the
     /// receiver's concrete `Self` type, then call it. The callee is *not* a
@@ -578,31 +739,32 @@ pub enum Instruction {
     /// type-args-below-value-args order:
     ///
     /// ```text
-    /// [m_targ_0, ..., m_targ_{ntypeargs-1}, val_arg_0 (receiver), ..., val_arg_{nargs-1}, iface_type, method_name]
+    /// [m_targ_0, ..., m_targ_{ntypeargs-1}, val_arg_0, ..., val_arg_{nargs-1}, iface_type, method_name]
     /// ```
     ///
     /// The VM pops `method_name` (a `String`) and `iface_type` (an `Object::Type`
     /// holding the — possibly parameterized — interface), then the `ntypeargs`
     /// method-level type args (sitting below the value args, as in `Call`),
-    /// leaving the `nargs` value args (receiver first). It reads `Self` from the
-    /// receiver's runtime concrete type, resolves `<Self as iface_type>::method_name`,
+    /// leaving the `nargs` value args in the method's declared parameter order.
+    /// It reads `Self` from the runtime concrete type of `val_arg_{self_arg}` —
+    /// the method's one `Self`-typed parameter, the `self` receiver being the
+    /// common case at `self_arg = 0` — resolves `<Self as iface_type>::method_name`,
     /// and calls it like `Call`, seeding `frame.type_args` with the resolved impl's
-    /// type args (its own generics, or the interface's args + associated types for
-    /// an inherited default) followed by these method-level type args. `nargs` is
+    /// type args (its own generics for a provided
+    /// method, `[Self, interface args..]` for an adopted default — associated
+    /// types are not frame slots) followed by these method-level type args. `nargs` is
     /// the resolved method's arity.
     VirtualCall {
-        /// Number of value arguments (including the receiver as the first).
+        /// Number of value arguments, in the method's declared parameter order.
         nargs: u16,
         /// Number of leading method-level type arguments (`Object::Type` values),
         /// below the value args. Zero for a non-generic method.
         ntypeargs: u16,
-    },
-
-    /// `VirtualCall` plus a caller-provided `boundary.LocalId` operand above
-    /// the method-name value.
-    VirtualCallWithRuntimeId {
-        nargs: u16,
-        ntypeargs: u16,
+        /// Index (in `0..nargs`) of the value argument whose runtime concrete
+        /// type is `Self`. The checker admits an erased `Self` only for a
+        /// method with exactly one required `Self`-typed parameter, and this
+        /// is that parameter's declared position.
+        self_arg: u16,
     },
 
     /// Throw the value on top of the stack.
@@ -610,9 +772,10 @@ pub enum Instruction {
     /// Stack: `[error_value]` -> `[]` (control transfers to unwind handler or caller)
     Throw,
 
-    /// Re-throw a caught value on top of the stack.
+    /// Re-throw a caught value with the `baml.errors.Context` it was caught
+    /// with, so it keeps its original trace and cause.
     ///
-    /// Stack: `[error_value]` -> `[]` (control transfers to unwind handler or caller)
+    /// Stack: `[error_value, context]` -> `[]` (control transfers to unwind handler or caller)
     Rethrow,
 
     /// Return from a function.
@@ -678,28 +841,20 @@ pub enum Instruction {
     /// which must hold a `ConstValue::Type(TyTemplate)` at that slot.
     LoadType(usize),
 
-    /// Remap a sparse type tag to a dense index via perfect hash lookup.
-    ///
-    /// Pops the type tag (from a preceding `TypeTag` instruction), computes
-    /// `h(tag) = ((tag as u64).wrapping_mul(M) >> S) & mask`, verifies the
-    /// entry's expected tag, and pushes the dense arm index. On verification
-    /// failure (tag not in the match), pushes `-1` as a sentinel — the
-    /// subsequent `JumpTable`'s default arm handles this.
-    ///
-    /// Design rationale: perfect hashing replaces O(log K) `BinarySearch` with
-    /// O(1) dispatch for sparse ≥4-arm `TypeTag` switches. Memory per match
-    /// site scales with K (arms) not N (total classes). See [`MatchHashTable`]
-    /// for algorithm references.
-    DenseTag(usize),
+    /// Pop an exact `Object::Type` and bind it to a frame type-argument slot.
+    /// Later `LoadType(TypeArgRef(slot))` reproduces the same type and defs.
+    BindType(usize),
 
-    /// If the top-of-stack value is a panic instance (`baml.panics.*`), throw it.
-    /// Otherwise pop the value and continue to the next instruction.
+    /// Remap a sparse value to the dense index of its arm.
     ///
-    /// Stack: `[value]` -> `[]` (continues) or unwinds (throws)
+    /// Pops the switched value (a type tag from a preceding `TypeTag`
+    /// instruction, or an integer) and pushes the dense index of the arm it
+    /// selects in the [`SwitchTable`] at this operand
+    /// ([`SwitchTable::arm_of`]). A value no key matches pushes `-1`, which
+    /// the subsequent `JumpTable`'s default arm handles.
     ///
-    /// Used in catch handlers before wildcard arms to prevent them from
-    /// swallowing panics the programmer didn't explicitly name.
-    ThrowIfPanic,
+    /// Memory per switch scales with K (arms), not N (total classes).
+    DenseTag(usize),
 
     /// Halt execution with an unreachable code error.
     ///
@@ -763,6 +918,24 @@ pub enum Instruction {
     ///
     /// Stack: `[receiver, type_args…, iface_type, method_name]` -> `[bound_method]`
     MakeVirtualBoundMethod {
+        /// Number of method-level `Object::Type` args on the stack (below the
+        /// interface type), appended to the resolved impl frame.
+        ntypeargs: u16,
+    },
+
+    /// Resolve an *interface* method to a callable value from a written `Self`
+    /// TYPE — the type-keyed analogue of `MakeVirtualBoundMethod`, and the only
+    /// dispatch form for a method with no `self` receiver (there is no value to
+    /// derive `Self` from). Pops the method name, the interface type
+    /// (`Object::Type`), `ntypeargs` method-level type args, and the `Self`
+    /// type (`Object::Type`, in the receiver's stack slot); resolves `Self`'s
+    /// `implements` rule (coherence guarantees at most one) and pushes a
+    /// capture-less `Object::Closure` over the resolved method, whose
+    /// `captured_type_args` carry the callee's complete frame — the impl's
+    /// realized frame followed by the method-level args.
+    ///
+    /// Stack: `[self_type, type_args…, iface_type, method_name]` -> `[closure]`
+    MakeVirtualFunction {
         /// Number of method-level `Object::Type` args on the stack (below the
         /// interface type), appended to the resolved impl frame.
         ntypeargs: u16,
@@ -847,7 +1020,8 @@ pub enum Instruction {
     ///
     /// The VM yields `VmExecState::Event { event_name, data }` so the engine
     /// can emit a `CustomEvent` with full span context. Execution resumes
-    /// after the engine processes the event.
+    /// after the engine processes the event. Names starting with `$baml_`
+    /// are reserved for the compiler ([`LOG_EVENT`]).
     SendEvent,
 
     // ── Operand-movement superinstructions (CPython-style) ────────────────
@@ -860,6 +1034,56 @@ pub enum Instruction {
     /// Fused `StoreVar(a); StoreVar(b)` — pop into `local[a]`, then `local[b]`.
     /// (`CPython` `STORE_FAST_STORE_FAST`.)
     StoreVar2(usize, usize),
+
+    /// Reify the package lexically enclosing the call site. In a unit the
+    /// operand is a placeholder — the package is the unit's own; the linker
+    /// writes the package's ordinal in the executable, which the static VM
+    /// reads. A dynamic function's runtime owner takes precedence.
+    LoadCurrentPackage(usize),
+
+    /// Pop the condition on both edges and branch when true.
+    PopJumpIfTrue(isize),
+    /// Keep a false value on the taken edge; pop on fallthrough.
+    JumpIfFalseOrPop(isize),
+    /// Keep a true value on the taken edge; pop on fallthrough.
+    JumpIfTrueOrPop(isize),
+    /// Keep a non-null value on the taken edge; pop on fallthrough.
+    JumpIfNotNullOrPop(isize),
+
+    /// Pop tracing configuration for the immediately following call.
+    SetCallTrace,
+
+    /// `baml.spawn.__spawn(plan)`, what a `spawn` expression compiles to.
+    /// Pops a `baml.spawn.Plan` and yields `VmExecState::Spawn` so the engine
+    /// starts it as a task on a fresh `BexThread`; the engine pushes the
+    /// task's `Future<T, E>`. The plan carries the body, its limits and
+    /// cancel tokens, its cancellation parent, and the future's types, so
+    /// nothing else travels with the request.
+    Spawn,
+    /// Direct call to a declaration with a trace hook; same operands as Call.
+    CallHooked {
+        callee: GlobalIndex,
+        ntypeargs: u16,
+    },
+    /// Enter hook evaluation; false avoids allocating a Settings snapshot.
+    BeginTraceHook(bool),
+    /// Apply the returned options and start target recording.
+    EndTraceHook,
+    TraceHookHidden,
+    TraceHookTiming,
+    TraceHookSpan,
+    /// Legacy opcode retained so existing serialized bytecode keeps its meaning.
+    TraceHookRich,
+    TraceHookEmptySpan,
+
+    /// Whether a type satisfies an interface bound, the check a
+    /// `let type T extends I = …` statement makes. Pops the bound (an
+    /// `Object::Type` of the interface constraint: its head, its type
+    /// arguments, and only the associated types the bound pins), then the
+    /// type, and pushes a bool. Pinned associated types must match; the
+    /// others are free. As for a generic parameter's bound, only a concrete
+    /// type can satisfy it.
+    SatisfiesBound,
 }
 
 /// Compact bytecode opcodes.
@@ -881,7 +1105,6 @@ pub enum OpCode {
     CallIndirect,
     Discriminant,
     TypeTag,
-    ThrowIfPanic,
     Unreachable,
     MakeCell,
     SendEvent,
@@ -979,11 +1202,11 @@ pub enum OpCode {
     InitInstance,
     AllocVariant,
     SysOp,
-    Spawn,
     Call,
     IsType,
     DenseTag,
     LoadType,
+    BindType,
     MakeBoundMethod,
     LoadDeref,
     StoreDeref,
@@ -1015,19 +1238,13 @@ pub enum OpCode {
     AwaitAny,
 
     // ── Appended out of group order to preserve discriminants ──
-    // Virtual interface-method call: u16 nargs + u16 ntypeargs (5 bytes). The
-    // interface type (`Object::Type`) and method-name string are pushed above the
-    // args and popped first; the callee is resolved at runtime from the receiver's
-    // `Self`.
+    // Virtual interface-method call: u16 nargs + u16 ntypeargs + u16 self_arg
+    // (7 bytes). The interface type (`Object::Type`) and method-name string are
+    // pushed above the args and popped first; the callee is resolved at runtime
+    // from the `Self` of value argument `self_arg`.
     VirtualCall,
 
-    // ── Phase 6 ID-aware call forms, appended to preserve discriminants ──
-    CallWithRuntimeId,
-    CallIndirectWithRuntimeId,
-    VirtualCallWithRuntimeId,
-    SysOpWithRuntimeId,
-
-    // ── Phase 5 trace-origin marker, appended to preserve discriminants ──
+    // Re-raise an existing exception without replacing its cause or stack trace.
     Rethrow,
 
     // ── Appended to preserve discriminants ──
@@ -1043,6 +1260,48 @@ pub enum OpCode {
     // u32 interface-field index; receiver and interface type come off the stack.
     VirtualLoadField,
     VirtualStoreField,
+
+    // Lexical Package.current(): u32 constant-pool string index.
+    LoadCurrentPackage,
+
+    // Truthiness coercion (B-1563), appended to preserve discriminants:
+    // pop a value, push its truthiness (`false`, `null`, zero, and empty
+    // string/list/map/bytes are falsy; everything else is truthy).
+    Truthy,
+
+    // Virtual interface-method value resolved from a written `Self` TYPE (the
+    // type-keyed analogue of `MakeVirtualBoundMethod`): u16 method-level type
+    // arg count; `Self` type, interface type, and method name come off the
+    // stack and the resolved capture-less closure is pushed.
+    MakeVirtualFunction,
+
+    // Conditional branches, appended to preserve serialized discriminants.
+    PopJumpIfTrue,
+    JumpIfFalseOrPop,
+    JumpIfTrueOrPop,
+    JumpIfNotNullOrPop,
+
+    /// Load-time specialization of `Call` for a plain bytecode function whose
+    /// arguments already match its parameters, with no type arguments. Uses
+    /// the same u32 global + u16 zero operands as `Call`, preserving every PC.
+    /// This opcode is never emitted into serialized `Instruction` streams.
+    CallExactArgs,
+    SetCallTrace,
+
+    // The plan-taking spawn, appended to preserve serialized discriminants.
+    Spawn,
+    CallHooked,
+    BeginTraceHook,
+    EndTraceHook,
+    TraceHookHidden,
+    TraceHookTiming,
+    TraceHookSpan,
+    // Preserve the legacy discriminant; new compilers select Span or EmptySpan.
+    TraceHookRich,
+    TraceHookEmptySpan,
+    // The `let type` bound check, appended to preserve serialized
+    // discriminants.
+    SatisfiesBound,
 }
 
 impl OpCode {
@@ -1059,14 +1318,14 @@ impl OpCode {
             | Self::StoreArrayElement
             | Self::StoreMapElement
             | Self::CallIndirect
-            | Self::CallIndirectWithRuntimeId
+            | Self::SetCallTrace
             | Self::Discriminant
             | Self::TypeTag
-            | Self::ThrowIfPanic
             | Self::Unreachable
             | Self::MakeCell
             | Self::SendEvent
             | Self::ContainerLen
+            | Self::Truthy
             | Self::Spawn
             | Self::AwaitAny
             | Self::Add
@@ -1149,10 +1408,10 @@ impl OpCode {
             | Self::InitInstance
             | Self::AllocVariant
             | Self::SysOp
-            | Self::SysOpWithRuntimeId
             | Self::IsType
             | Self::DenseTag
             | Self::LoadType
+            | Self::BindType
             | Self::MakeBoundMethod
             | Self::LoadDeref
             | Self::StoreDeref
@@ -1162,19 +1421,34 @@ impl OpCode {
             | Self::Jump
             | Self::PopJumpIfFalse
             | Self::JumpIfFalse
-            | Self::VirtualCall
+            | Self::PopJumpIfTrue
+            | Self::JumpIfFalseOrPop
+            | Self::JumpIfTrueOrPop
+            | Self::JumpIfNotNullOrPop
             | Self::VirtualLoadField
-            | Self::VirtualStoreField
-            | Self::VirtualCallWithRuntimeId => 5,
+            | Self::VirtualStoreField => 5,
+
+            // 7-byte: opcode + u16 nargs + u16 ntypeargs + u16 self_arg
+            Self::VirtualCall => 7,
+
+            Self::LoadCurrentPackage => 5,
 
             // 3-byte: opcode + u16
-            Self::MakeGenericFunctionFromValue | Self::MakeVirtualBoundMethod => 3,
+            Self::MakeGenericFunctionFromValue
+            | Self::MakeVirtualBoundMethod
+            | Self::MakeVirtualFunction => 3,
 
             // 7-byte: opcode + u32 + u16 (type-arg threading)
-            Self::AllocInstance
-            | Self::Call
-            | Self::CallWithRuntimeId
-            | Self::MakeGenericFunction => 7,
+            Self::CallHooked => 7,
+            Self::BeginTraceHook => 2,
+            Self::EndTraceHook
+            | Self::TraceHookHidden
+            | Self::TraceHookTiming
+            | Self::TraceHookSpan
+            | Self::TraceHookRich
+            | Self::TraceHookEmptySpan
+            | Self::SatisfiesBound => 1,
+            Self::AllocInstance | Self::Call | Self::CallExactArgs | Self::MakeGenericFunction => 7,
 
             // 9-byte: opcode + u32 + u16 + u16 (closure with capture+typearg counts)
             Self::MakeClosure => 9,
@@ -1199,15 +1473,16 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::Throw as u8 => Ok(Self::Throw),
             x if x == Self::Rethrow as u8 => Ok(Self::Rethrow),
             x if x == Self::MakeVirtualBoundMethod as u8 => Ok(Self::MakeVirtualBoundMethod),
+            x if x == Self::MakeVirtualFunction as u8 => Ok(Self::MakeVirtualFunction),
             x if x == Self::LoadArrayElement as u8 => Ok(Self::LoadArrayElement),
             x if x == Self::LoadMapElement as u8 => Ok(Self::LoadMapElement),
             x if x == Self::StoreArrayElement as u8 => Ok(Self::StoreArrayElement),
             x if x == Self::StoreMapElement as u8 => Ok(Self::StoreMapElement),
             x if x == Self::CallIndirect as u8 => Ok(Self::CallIndirect),
-            x if x == Self::CallIndirectWithRuntimeId as u8 => Ok(Self::CallIndirectWithRuntimeId),
+
             x if x == Self::Discriminant as u8 => Ok(Self::Discriminant),
             x if x == Self::TypeTag as u8 => Ok(Self::TypeTag),
-            x if x == Self::ThrowIfPanic as u8 => Ok(Self::ThrowIfPanic),
+            x if x == Self::LoadCurrentPackage as u8 => Ok(Self::LoadCurrentPackage),
             x if x == Self::Unreachable as u8 => Ok(Self::Unreachable),
             x if x == Self::MakeCell as u8 => Ok(Self::MakeCell),
             x if x == Self::SendEvent as u8 => Ok(Self::SendEvent),
@@ -1289,12 +1564,13 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::InitInstance as u8 => Ok(Self::InitInstance),
             x if x == Self::AllocVariant as u8 => Ok(Self::AllocVariant),
             x if x == Self::SysOp as u8 => Ok(Self::SysOp),
-            x if x == Self::SysOpWithRuntimeId as u8 => Ok(Self::SysOpWithRuntimeId),
+
             x if x == Self::Spawn as u8 => Ok(Self::Spawn),
             x if x == Self::Call as u8 => Ok(Self::Call),
             x if x == Self::IsType as u8 => Ok(Self::IsType),
             x if x == Self::DenseTag as u8 => Ok(Self::DenseTag),
             x if x == Self::LoadType as u8 => Ok(Self::LoadType),
+            x if x == Self::BindType as u8 => Ok(Self::BindType),
             x if x == Self::MakeBoundMethod as u8 => Ok(Self::MakeBoundMethod),
             x if x == Self::LoadDeref as u8 => Ok(Self::LoadDeref),
             x if x == Self::StoreDeref as u8 => Ok(Self::StoreDeref),
@@ -1304,6 +1580,10 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::Jump as u8 => Ok(Self::Jump),
             x if x == Self::PopJumpIfFalse as u8 => Ok(Self::PopJumpIfFalse),
             x if x == Self::JumpIfFalse as u8 => Ok(Self::JumpIfFalse),
+            x if x == Self::PopJumpIfTrue as u8 => Ok(Self::PopJumpIfTrue),
+            x if x == Self::JumpIfFalseOrPop as u8 => Ok(Self::JumpIfFalseOrPop),
+            x if x == Self::JumpIfTrueOrPop as u8 => Ok(Self::JumpIfTrueOrPop),
+            x if x == Self::JumpIfNotNullOrPop as u8 => Ok(Self::JumpIfNotNullOrPop),
             x if x == Self::JumpTable as u8 => Ok(Self::JumpTable),
             x if x == Self::MakeClosure as u8 => Ok(Self::MakeClosure),
             x if x == Self::MakeGenericFunction as u8 => Ok(Self::MakeGenericFunction),
@@ -1315,9 +1595,21 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::VirtualLoadField as u8 => Ok(Self::VirtualLoadField),
             x if x == Self::VirtualStoreField as u8 => Ok(Self::VirtualStoreField),
             x if x == Self::VirtualCall as u8 => Ok(Self::VirtualCall),
-            x if x == Self::CallWithRuntimeId as u8 => Ok(Self::CallWithRuntimeId),
-            x if x == Self::VirtualCallWithRuntimeId as u8 => Ok(Self::VirtualCallWithRuntimeId),
+
             x if x == Self::NarrowBind as u8 => Ok(Self::NarrowBind),
+            x if x == Self::Truthy as u8 => Ok(Self::Truthy),
+            x if x == Self::CallHooked as u8 => Ok(Self::CallHooked),
+            x if x == Self::BeginTraceHook as u8 => Ok(Self::BeginTraceHook),
+            x if x == Self::EndTraceHook as u8 => Ok(Self::EndTraceHook),
+            x if x == Self::TraceHookHidden as u8 => Ok(Self::TraceHookHidden),
+            x if x == Self::TraceHookTiming as u8 => Ok(Self::TraceHookTiming),
+            x if x == Self::TraceHookSpan as u8 => Ok(Self::TraceHookSpan),
+            x if x == Self::TraceHookRich as u8 => Ok(Self::TraceHookRich),
+            x if x == Self::TraceHookEmptySpan as u8 => Ok(Self::TraceHookEmptySpan),
+            x if x == Self::SatisfiesBound as u8 => Ok(Self::SatisfiesBound),
+
+            x if x == Self::CallExactArgs as u8 => Ok(Self::CallExactArgs),
+            x if x == Self::SetCallTrace as u8 => Ok(Self::SetCallTrace),
             _ => Err(byte),
         }
     }
@@ -1326,25 +1618,38 @@ impl TryFrom<u8> for OpCode {
 impl std::fmt::Display for OpCode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let name = match self {
+            Self::CallHooked => "CALL_HOOKED",
+            Self::BeginTraceHook => "BEGIN_TRACE_HOOK",
+            Self::EndTraceHook => "END_TRACE_HOOK",
+            Self::TraceHookHidden => "TRACE_HOOK_HIDDEN",
+            Self::TraceHookTiming => "TRACE_HOOK_TIMING",
+            Self::TraceHookSpan => "TRACE_HOOK_SPAN",
+            Self::TraceHookRich => "TRACE_HOOK_RICH",
+            Self::TraceHookEmptySpan => "TRACE_HOOK_EMPTY_SPAN",
+            Self::SatisfiesBound => "SATISFIES_BOUND",
+
             Self::Return => "RETURN",
             Self::Await => "AWAIT",
             Self::AwaitAny => "AWAIT_ANY",
             Self::VirtualLoadField => "VIRTUAL_LOAD_FIELD",
             Self::VirtualStoreField => "VIRTUAL_STORE_FIELD",
             Self::VirtualCall => "VIRTUAL_CALL",
-            Self::VirtualCallWithRuntimeId => "VIRTUAL_CALL_WITH_RUNTIME_ID",
+
             Self::Throw => "THROW",
             Self::Rethrow => "RETHROW",
             Self::MakeVirtualBoundMethod => "MAKE_VIRTUAL_BOUND_METHOD",
+            Self::MakeVirtualFunction => "MAKE_VIRTUAL_FUNCTION",
             Self::LoadArrayElement => "LOAD_ARRAY_ELEMENT",
             Self::LoadMapElement => "LOAD_MAP_ELEMENT",
             Self::StoreArrayElement => "STORE_ARRAY_ELEMENT",
             Self::StoreMapElement => "STORE_MAP_ELEMENT",
             Self::CallIndirect => "CALL_INDIRECT",
-            Self::CallIndirectWithRuntimeId => "CALL_INDIRECT_WITH_RUNTIME_ID",
+            Self::SetCallTrace => "SET_CALL_TRACE",
+
             Self::Discriminant => "DISCRIMINANT",
             Self::TypeTag => "TYPE_TAG",
-            Self::ThrowIfPanic => "THROW_IF_PANIC",
+            Self::LoadCurrentPackage => "LOAD_CURRENT_PACKAGE",
+            Self::Truthy => "TRUTHY",
             Self::Unreachable => "UNREACHABLE",
             Self::MakeCell => "MAKE_CELL",
             Self::SendEvent => "SEND_EVENT",
@@ -1426,13 +1731,15 @@ impl std::fmt::Display for OpCode {
             Self::InitInstance => "INIT_INSTANCE",
             Self::AllocVariant => "ALLOC_VARIANT",
             Self::SysOp => "SYS_OP",
-            Self::SysOpWithRuntimeId => "SYS_OP_WITH_RUNTIME_ID",
+
             Self::Spawn => "SPAWN",
             Self::Call => "CALL",
-            Self::CallWithRuntimeId => "CALL_WITH_RUNTIME_ID",
+            Self::CallExactArgs => "CALL_EXACT_ARGS",
+
             Self::IsType => "IS_TYPE",
             Self::DenseTag => "DENSE_TAG",
             Self::LoadType => "LOAD_TYPE",
+            Self::BindType => "BIND_TYPE",
             Self::MakeBoundMethod => "MAKE_BOUND_METHOD",
             Self::LoadDeref => "LOAD_DEREF",
             Self::StoreDeref => "STORE_DEREF",
@@ -1442,6 +1749,10 @@ impl std::fmt::Display for OpCode {
             Self::Jump => "JUMP",
             Self::PopJumpIfFalse => "POP_JUMP_IF_FALSE",
             Self::JumpIfFalse => "JUMP_IF_FALSE",
+            Self::PopJumpIfTrue => "POP_JUMP_IF_TRUE",
+            Self::JumpIfFalseOrPop => "JUMP_IF_FALSE_OR_POP",
+            Self::JumpIfTrueOrPop => "JUMP_IF_TRUE_OR_POP",
+            Self::JumpIfNotNullOrPop => "JUMP_IF_NOT_NULL_OR_POP",
             Self::JumpTable => "JUMP_TABLE",
             Self::MakeClosure => "MAKE_CLOSURE",
             Self::MakeGenericFunction => "MAKE_GENERIC_FUNCTION",
@@ -1515,6 +1826,8 @@ pub enum CmpOp {
 pub enum UnaryOp {
     Not,
     Neg,
+    /// Truthiness coercion (B-1563). Appended to preserve Borsh indices.
+    Truthy,
 }
 
 impl std::fmt::Display for BinOp {
@@ -1552,6 +1865,7 @@ impl std::fmt::Display for UnaryOp {
         f.write_str(match self {
             UnaryOp::Not => "!",
             UnaryOp::Neg => "-",
+            UnaryOp::Truthy => "truthy",
         })
     }
 }
@@ -1576,6 +1890,10 @@ impl std::fmt::Display for Instruction {
             Instruction::Jump(o) => write!(f, "JUMP {o:+}"),
             Instruction::PopJumpIfFalse(o) => write!(f, "POP_JUMP_IF_FALSE {o:+}"),
             Instruction::JumpIfFalse(o) => write!(f, "JUMP_IF_FALSE {o:+}"),
+            Instruction::PopJumpIfTrue(o) => write!(f, "POP_JUMP_IF_TRUE {o:+}"),
+            Instruction::JumpIfFalseOrPop(o) => write!(f, "JUMP_IF_FALSE_OR_POP {o:+}"),
+            Instruction::JumpIfTrueOrPop(o) => write!(f, "JUMP_IF_TRUE_OR_POP {o:+}"),
+            Instruction::JumpIfNotNullOrPop(o) => write!(f, "JUMP_IF_NOT_NULL_OR_POP {o:+}"),
             Instruction::BinOp(op) => write!(f, "BIN_OP {op}"),
             Instruction::CmpOp(op) => write!(f, "CMP_OP {op}"),
             Instruction::AddInt => f.write_str("ADD_INT"),
@@ -1615,18 +1933,26 @@ impl std::fmt::Display for Instruction {
             Instruction::InitInstance(i) => write!(f, "INIT_INSTANCE {i}"),
             Instruction::AllocVariant(i) => write!(f, "ALLOC_VARIANT {i}"),
             Instruction::SysOp(callee) => write!(f, "SYS_OP {callee}"),
-            Instruction::SysOpWithRuntimeId(callee) => {
-                write!(f, "SYS_OP_WITH_RUNTIME_ID {callee}")
-            }
+
             Instruction::Spawn => write!(f, "SPAWN"),
             Instruction::Await => f.write_str("AWAIT"),
             Instruction::AwaitAny => f.write_str("AWAIT_ANY"),
+            Instruction::BeginTraceHook(settings) => write!(f, "BEGIN_TRACE_HOOK {settings}"),
+            Instruction::EndTraceHook => f.write_str("END_TRACE_HOOK"),
+            Instruction::TraceHookHidden => f.write_str("TRACE_HOOK_HIDDEN"),
+            Instruction::TraceHookTiming => f.write_str("TRACE_HOOK_TIMING"),
+            Instruction::TraceHookSpan => f.write_str("TRACE_HOOK_SPAN"),
+            Instruction::TraceHookRich => f.write_str("TRACE_HOOK_RICH"),
+            Instruction::TraceHookEmptySpan => f.write_str("TRACE_HOOK_EMPTY_SPAN"),
+            Instruction::SatisfiesBound => f.write_str("SATISFIES_BOUND"),
+
+            Instruction::CallHooked { callee, ntypeargs } => {
+                write!(f, "CALL_HOOKED {callee} {ntypeargs}")
+            }
             Instruction::Call { callee, ntypeargs } => {
                 write!(f, "CALL {callee} ntypeargs={ntypeargs}")
             }
-            Instruction::CallWithRuntimeId { callee, ntypeargs } => {
-                write!(f, "CALL_WITH_RUNTIME_ID {callee} ntypeargs={ntypeargs}")
-            }
+
             Instruction::MakeGenericFunction {
                 function,
                 ntypeargs,
@@ -1637,20 +1963,26 @@ impl std::fmt::Display for Instruction {
                 write!(f, "MAKE_GENERIC_FUNCTION_FROM_VALUE ntypeargs={ntypeargs}")
             }
             Instruction::CallIndirect => f.write_str("CALL_INDIRECT"),
-            Instruction::CallIndirectWithRuntimeId => f.write_str("CALL_INDIRECT_WITH_RUNTIME_ID"),
-            Instruction::VirtualCall { nargs, ntypeargs } => {
-                write!(f, "VIRTUAL_CALL nargs={nargs} ntypeargs={ntypeargs}")
-            }
-            Instruction::VirtualCallWithRuntimeId { nargs, ntypeargs } => {
+            Instruction::SetCallTrace => f.write_str("SET_CALL_TRACE"),
+
+            Instruction::VirtualCall {
+                nargs,
+                ntypeargs,
+                self_arg,
+            } => {
                 write!(
                     f,
-                    "VIRTUAL_CALL_WITH_RUNTIME_ID nargs={nargs} ntypeargs={ntypeargs}"
+                    "VIRTUAL_CALL nargs={nargs} ntypeargs={ntypeargs} self_arg={self_arg}"
                 )
             }
+
             Instruction::Throw => f.write_str("THROW"),
             Instruction::Rethrow => f.write_str("RETHROW"),
             Instruction::MakeVirtualBoundMethod { ntypeargs } => {
                 write!(f, "MAKE_VIRTUAL_BOUND_METHOD {ntypeargs}")
+            }
+            Instruction::MakeVirtualFunction { ntypeargs } => {
+                write!(f, "MAKE_VIRTUAL_FUNCTION {ntypeargs}")
             }
 
             Instruction::Return => f.write_str("RETURN"),
@@ -1660,13 +1992,14 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::Discriminant => f.write_str("DISCRIMINANT"),
             Instruction::TypeTag => f.write_str("TYPE_TAG"),
+            Instruction::LoadCurrentPackage(i) => write!(f, "LOAD_CURRENT_PACKAGE {i}"),
             Instruction::IsType(i) => write!(f, "IS_TYPE {i}"),
             Instruction::NarrowBind { ty, destination } => {
                 write!(f, "NARROW_BIND {ty} {destination}")
             }
             Instruction::LoadType(i) => write!(f, "LOAD_TYPE {i}"),
+            Instruction::BindType(i) => write!(f, "BIND_TYPE {i}"),
             Instruction::DenseTag(i) => write!(f, "DENSE_TAG {i}"),
-            Instruction::ThrowIfPanic => f.write_str("THROW_IF_PANIC"),
             Instruction::Unreachable => f.write_str("UNREACHABLE"),
             Instruction::MakeClosure {
                 obj_idx,
@@ -1780,13 +2113,22 @@ pub struct DebugLocalScope {
 /// transfers control to `handler_pc`, with the exception value stored
 /// in the frame-local slot `error_slot`.
 ///
-/// Entries are sorted by `start_pc`. For nested catch blocks the innermost
-/// (narrowest range) entry appears first.
+/// Each catch clause has its own handler PC, including clauses written in a
+/// chain. The first clause's handler body is protected by the next clause's
+/// handler, just as for explicitly nested catches. A function's table stores
+/// the distinct clauses' entries together; they are never flattened into one
+/// dispatch handler.
+///
+/// One catch region contributes one entry per coalesced run of its protected
+/// blocks (block layout can fragment a region across non-contiguous PCs), so
+/// several entries may share a `handler_pc`. Each emitted block records its
+/// innermost unwind target, giving disjoint ranges sorted by `start_pc`.
+/// Adjacent ranges coalesce only when they name the same handler.
 ///
 /// All exceptions (user-thrown values and VM panics) are routed to the
-/// handler. The handler bytecode is responsible for filtering: a
-/// `ThrowIfPanic` instruction before wildcard arms rethrows panics the
-/// programmer didn't explicitly name.
+/// handler. The handler bytecode is responsible for filtering: a wildcard arm
+/// that does not trap panics is entered only after an `IsType` test against
+/// the `PANIC` pseudo-tag, and a value no arm takes is `Rethrow`n.
 #[derive(Clone, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct ExceptionTableEntry {
     /// First protected instruction (inclusive).
@@ -1797,25 +2139,38 @@ pub struct ExceptionTableEntry {
     pub handler_pc: usize,
     /// Frame-local slot index for the caught error value.
     pub error_slot: usize,
-    /// Frame-local slot for the stack trace value.
-    /// `u32::MAX` means no stack trace binding (catch (e) without second param).
-    pub stack_trace_slot: usize,
+    /// Frame-local slot for the caught error's `baml.errors.Context`.
+    pub context_slot: usize,
 }
 
-impl ExceptionTableEntry {
-    pub const NO_STACK_TRACE: usize = u32::MAX as usize;
+/// The event a `log.*` call sends: `{ level, data }`.
+pub const LOG_EVENT: &str = "$baml_log";
 
-    pub fn has_stack_trace_slot(&self) -> bool {
-        self.stack_trace_slot != Self::NO_STACK_TRACE
-    }
+/// One PC range of code that runs shielded from cancellation: the body of a
+/// `defer`. A thread whose execution is inside such a range — in the frame
+/// itself, or in a callee whose caller's frame sits at a call inside it — is
+/// not delivered `Cancelled` at its yield points, so cleanup may suspend.
+/// Derived by the emitter from the blocks lowered shielded, like the
+/// exception table; sorted by `start_pc`, non-overlapping.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub struct ShieldRange {
+    pub start_pc: usize,
+    /// Exclusive.
+    pub end_pc: usize,
+}
+
+/// Whether `pc` lies in one of `ranges` (sorted, non-overlapping).
+fn pc_in_ranges(ranges: &[ShieldRange], pc: usize) -> bool {
+    let next = ranges.partition_point(|range| range.start_pc <= pc);
+    next > 0 && pc < ranges[next - 1].end_pc
 }
 
 /// One handler-body PC range, for the BEP-042 cause-chain pre-walk.
 ///
 /// A throw whose PC lies in `[start_pc, end_pc)` happened *during handling of*
 /// the error caught by the owning catch (or while unwinding through a defer
-/// pad). That caught error's materialized `ErrorContext` lives in
-/// `stack_trace_slot` and becomes the new error's `cause`.
+/// pad). That caught error's `baml.errors.Context` lives in `context_slot` and
+/// becomes the new error's `cause`.
 ///
 /// One catch contributes one entry *per handler-body block*. A handler body is
 /// the union of blocks captured at lowering; layout can fragment it across
@@ -1834,16 +2189,8 @@ pub struct HandlerContextEntry {
     pub end_pc: usize,
     /// Handler block PC of the owning catch — the nesting key.
     pub handler_pc: usize,
-    /// Frame-local slot holding the owning catch's `ErrorContext`.
-    /// `ExceptionTableEntry::NO_STACK_TRACE` means the catch bound no `ctx`, so
-    /// there is no context object to chain — the pre-walk stops with `null`.
-    pub stack_trace_slot: usize,
-}
-
-impl HandlerContextEntry {
-    pub fn has_stack_trace_slot(&self) -> bool {
-        self.stack_trace_slot != ExceptionTableEntry::NO_STACK_TRACE
-    }
+    /// Frame-local slot holding the owning catch's `baml.errors.Context`.
+    pub context_slot: usize,
 }
 
 /// Compact jump table: maps discriminant values to i32 byte offsets
@@ -1878,8 +2225,12 @@ impl CompactJumpTable {
 /// load time. The line table and exception table are translated to byte-offset PCs.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct CompactCode {
+    /// Hook decision boundary (fallback continuation for callable hooks), loaded once.
+    pub trace_hook_finish_pc: Option<usize>,
     /// The encoded instruction stream.
     pub code: Vec<u8>,
+    /// `Bytecode::call_layouts` keyed by byte-offset PC.
+    pub call_layouts: BTreeMap<usize, baml_type::CallLayout>,
     /// Line table with PCs translated to byte offsets.
     pub line_table: Vec<LineTableEntry>,
     /// Exception table with PCs translated to byte offsets.
@@ -1887,6 +2238,9 @@ pub struct CompactCode {
     /// Handler-body ranges (BEP-042 cause chain) with PCs translated to byte
     /// offsets. Parallel to `Bytecode::handler_context_table`.
     pub handler_context_table: Vec<HandlerContextEntry>,
+    /// Cancellation-shielded ranges with PCs translated to byte offsets.
+    /// Parallel to `Bytecode::shield_table`.
+    pub shield_table: Vec<ShieldRange>,
     /// Jump tables with offsets translated to byte offsets.
     /// Parallel to `Bytecode::jump_tables`.
     pub jump_tables: Vec<CompactJumpTable>,
@@ -1919,13 +2273,24 @@ impl CompactCode {
 
     /// The innermost handler-body range (byte-offset) covering `pc`, or `None`.
     /// BEP-042 cause-chain pre-walk: a throw here is "during handling of" the
-    /// error whose `ErrorContext` lives in the entry's `stack_trace_slot`.
+    /// error whose `baml.errors.Context` lives in the entry's `context_slot`.
     /// Innermost = largest `handler_pc` among covering ranges.
     pub fn handler_context_for_pc(&self, pc: usize) -> Option<&HandlerContextEntry> {
+        self.handler_contexts_for_pc(pc)
+            .max_by_key(|e| e.handler_pc)
+    }
+
+    /// Every handler whose body covers `pc`: the handlers active there,
+    /// innermost and enclosing alike.
+    pub fn handler_contexts_for_pc(&self, pc: usize) -> impl Iterator<Item = &HandlerContextEntry> {
         self.handler_context_table
             .iter()
-            .filter(|e| pc >= e.start_pc && pc < e.end_pc)
-            .max_by_key(|e| e.handler_pc)
+            .filter(move |e| pc >= e.start_pc && pc < e.end_pc)
+    }
+
+    /// Whether the code at byte-offset `pc` runs shielded from cancellation.
+    pub fn pc_is_shielded(&self, pc: usize) -> bool {
+        pc_in_ranges(&self.shield_table, pc)
     }
 }
 
@@ -1936,6 +2301,13 @@ impl CompactCode {
 pub struct Bytecode {
     /// Sequence of instructions.
     pub instructions: Vec<Instruction>,
+
+    /// The value slots each checked call site pushes, keyed by the index of
+    /// its `Call`/`VirtualCall`/`CallIndirect` instruction. The VM maps that
+    /// layout onto the parameter list of whichever callee the call reaches.
+    /// A call site without an entry already pushes the callee's own layout
+    /// (compiler-synthesized calls and runtime trampolines).
+    pub call_layouts: BTreeMap<usize, baml_type::CallLayout>,
 
     /// Constant pool (compile-time, serializable).
     /// Contains `ObjectIndex` for object references.
@@ -1956,9 +2328,9 @@ pub struct Bytecode {
     /// Class initialization programs used by `InitInstance`.
     pub class_init_plans: Vec<ClassInitPlan>,
 
-    /// Perfect hash tables for sparse `TypeTag` switch dispatch.
-    /// Indexed by `DenseTag` instruction operand.
-    pub match_hash_tables: Vec<MatchHashTable>,
+    /// Dispatch tables for sparse switches, indexed by the `DenseTag`
+    /// instruction's operand.
+    pub switch_tables: Vec<SwitchTable>,
 
     /// Line table mapping bytecode PCs to source spans.
     ///
@@ -1982,6 +2354,10 @@ pub struct Bytecode {
     /// whether a throw happened "during handling of" another error.
     pub handler_context_table: Vec<HandlerContextEntry>,
 
+    /// PC ranges that run shielded from cancellation: the bodies of `defer`s.
+    /// Sorted by `start_pc`, non-overlapping. See [`ShieldRange`].
+    pub shield_table: Vec<ShieldRange>,
+
     /// Compact bytecode encoding. Populated at engine load time by
     /// `lower_to_compact()`. `None` until lowering runs.
     #[borsh(skip)]
@@ -1998,15 +2374,17 @@ impl Bytecode {
     pub fn new() -> Self {
         Self {
             instructions: Vec::new(),
+            call_layouts: BTreeMap::new(),
             constants: Vec::new(),
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
             field_copy_sets: Vec::new(),
             class_init_plans: Vec::new(),
-            match_hash_tables: Vec::new(),
+            switch_tables: Vec::new(),
             line_table: Vec::new(),
             meta: Vec::new(),
             exception_table: Vec::new(),
+            shield_table: Vec::new(),
             handler_context_table: Vec::new(),
             compact: None,
         }
@@ -2042,13 +2420,24 @@ impl Bytecode {
 
     /// The innermost handler-body range covering `pc`, or `None`.
     /// BEP-042 cause-chain pre-walk: a throw here is "during handling of" the
-    /// error whose `ErrorContext` lives in the entry's `stack_trace_slot`.
+    /// error whose `baml.errors.Context` lives in the entry's `context_slot`.
     /// Innermost = largest `handler_pc` among covering ranges.
     pub fn handler_context_for_pc(&self, pc: usize) -> Option<&HandlerContextEntry> {
+        self.handler_contexts_for_pc(pc)
+            .max_by_key(|e| e.handler_pc)
+    }
+
+    /// Every handler whose body covers `pc`: the handlers active there,
+    /// innermost and enclosing alike.
+    pub fn handler_contexts_for_pc(&self, pc: usize) -> impl Iterator<Item = &HandlerContextEntry> {
         self.handler_context_table
             .iter()
-            .filter(|e| pc >= e.start_pc && pc < e.end_pc)
-            .max_by_key(|e| e.handler_pc)
+            .filter(move |e| pc >= e.start_pc && pc < e.end_pc)
+    }
+
+    /// Whether the instruction at index `pc` runs shielded from cancellation.
+    pub fn pc_is_shielded(&self, pc: usize) -> bool {
+        pc_in_ranges(&self.shield_table, pc)
     }
 
     /// Encode `self.instructions` into a compact `Vec<u8>` byte stream.
@@ -2093,7 +2482,14 @@ impl Bytecode {
 
             match instr {
                 // ── Unit ops: no operands ────────────────────────────
-                Instruction::Return
+                Instruction::SatisfiesBound
+                | Instruction::EndTraceHook
+                | Instruction::TraceHookHidden
+                | Instruction::TraceHookTiming
+                | Instruction::TraceHookSpan
+                | Instruction::TraceHookRich
+                | Instruction::TraceHookEmptySpan
+                | Instruction::Return
                 | Instruction::Await
                 | Instruction::Throw
                 | Instruction::Rethrow
@@ -2102,10 +2498,9 @@ impl Bytecode {
                 | Instruction::StoreArrayElement
                 | Instruction::StoreMapElement
                 | Instruction::CallIndirect
-                | Instruction::CallIndirectWithRuntimeId
+                | Instruction::SetCallTrace
                 | Instruction::Discriminant
                 | Instruction::TypeTag
-                | Instruction::ThrowIfPanic
                 | Instruction::Unreachable
                 | Instruction::MakeCell
                 | Instruction::SendEvent
@@ -2183,6 +2578,8 @@ impl Bytecode {
                 | Instruction::IsType(v)
                 | Instruction::DenseTag(v)
                 | Instruction::LoadType(v)
+                | Instruction::BindType(v)
+                | Instruction::LoadCurrentPackage(v)
                 | Instruction::LoadDeref(v)
                 | Instruction::StoreDeref(v)
                 | Instruction::LoadCapture(v)
@@ -2197,7 +2594,6 @@ impl Bytecode {
                 Instruction::LoadGlobal(g)
                 | Instruction::StoreGlobal(g)
                 | Instruction::SysOp(g)
-                | Instruction::SysOpWithRuntimeId(g)
                 | Instruction::MakeBoundMethod(g) => {
                     code.extend_from_slice(
                         &u32::try_from(g.into_raw())
@@ -2207,8 +2603,9 @@ impl Bytecode {
                 }
 
                 // ── Call: u32 callee + u16 ntypeargs ─────────────────
-                Instruction::Call { callee, ntypeargs }
-                | Instruction::CallWithRuntimeId { callee, ntypeargs } => {
+                Instruction::BeginTraceHook(settings) => code.push(u8::from(*settings)),
+                Instruction::CallHooked { callee, ntypeargs }
+                | Instruction::Call { callee, ntypeargs } => {
                     code.extend_from_slice(
                         &u32::try_from(callee.into_raw())
                             .expect("global index fits u32")
@@ -2232,15 +2629,24 @@ impl Bytecode {
 
                 // ── MakeGenericFunctionFromValue: u16 ntypeargs ──────
                 Instruction::MakeGenericFunctionFromValue { ntypeargs }
-                | Instruction::MakeVirtualBoundMethod { ntypeargs } => {
+                | Instruction::MakeVirtualBoundMethod { ntypeargs }
+                | Instruction::MakeVirtualFunction { ntypeargs } => {
                     code.extend_from_slice(&ntypeargs.to_le_bytes());
                 }
 
-                // ── VirtualCall: u16 nargs, u16 ntypeargs ────────────
-                Instruction::VirtualCall { nargs, ntypeargs }
-                | Instruction::VirtualCallWithRuntimeId { nargs, ntypeargs } => {
+                // ── VirtualCall: u16 nargs, u16 ntypeargs, u16 self_arg ──
+                Instruction::VirtualCall {
+                    nargs,
+                    ntypeargs,
+                    self_arg,
+                } => {
+                    debug_assert!(
+                        self_arg < nargs,
+                        "virtual call dispatches on value argument {self_arg} of {nargs}"
+                    );
                     code.extend_from_slice(&nargs.to_le_bytes());
                     code.extend_from_slice(&ntypeargs.to_le_bytes());
+                    code.extend_from_slice(&self_arg.to_le_bytes());
                 }
 
                 // ── ObjectIndex operand → u32 ───────────────────────
@@ -2268,7 +2674,11 @@ impl Bytecode {
                 // ── Jump operands: translate to byte offsets ────────
                 Instruction::Jump(offset)
                 | Instruction::PopJumpIfFalse(offset)
-                | Instruction::JumpIfFalse(offset) => {
+                | Instruction::JumpIfFalse(offset)
+                | Instruction::PopJumpIfTrue(offset)
+                | Instruction::JumpIfFalseOrPop(offset)
+                | Instruction::JumpIfTrueOrPop(offset)
+                | Instruction::JumpIfNotNullOrPop(offset) => {
                     // In the old VM, offset is relative to the instruction
                     // itself (IP was pre-incremented before step() ran, and
                     // the jump uses instruction_ptr.checked_add_signed(offset)
@@ -2369,7 +2779,7 @@ impl Bytecode {
                 end_pc: index_to_offset[entry.end_pc],
                 handler_pc: index_to_offset[entry.handler_pc],
                 error_slot: entry.error_slot,
-                stack_trace_slot: entry.stack_trace_slot,
+                context_slot: entry.context_slot,
             })
             .collect();
 
@@ -2386,7 +2796,7 @@ impl Bytecode {
                     .copied()
                     .unwrap_or(code.len()),
                 handler_pc: index_to_offset[entry.handler_pc],
-                stack_trace_slot: entry.stack_trace_slot,
+                context_slot: entry.context_slot,
             })
             .collect();
 
@@ -2437,11 +2847,46 @@ impl Bytecode {
             })
             .collect();
 
+        let shield_table = self
+            .shield_table
+            .iter()
+            .map(|range| ShieldRange {
+                start_pc: index_to_offset[range.start_pc],
+                // `end_pc` may equal `instructions.len()` when a shielded block
+                // runs to the end of the function.
+                end_pc: index_to_offset
+                    .get(range.end_pc)
+                    .copied()
+                    .unwrap_or(code.len()),
+            })
+            .collect();
+
         CompactCode {
+            trace_hook_finish_pc: self
+                .instructions
+                .iter()
+                .position(|instruction| {
+                    matches!(
+                        instruction,
+                        Instruction::EndTraceHook
+                            | Instruction::TraceHookHidden
+                            | Instruction::TraceHookTiming
+                            | Instruction::TraceHookSpan
+                            | Instruction::TraceHookRich
+                            | Instruction::TraceHookEmptySpan
+                    )
+                })
+                .map(|index| index_to_offset[index]),
             code,
+            call_layouts: self
+                .call_layouts
+                .iter()
+                .map(|(index, layout)| (index_to_offset[*index], layout.clone()))
+                .collect(),
             line_table,
             exception_table,
             handler_context_table,
+            shield_table,
             jump_tables,
         }
     }
@@ -2459,15 +2904,16 @@ impl Bytecode {
             Instruction::Throw => OpCode::Throw,
             Instruction::Rethrow => OpCode::Rethrow,
             Instruction::MakeVirtualBoundMethod { .. } => OpCode::MakeVirtualBoundMethod,
+            Instruction::MakeVirtualFunction { .. } => OpCode::MakeVirtualFunction,
             Instruction::LoadArrayElement => OpCode::LoadArrayElement,
             Instruction::LoadMapElement => OpCode::LoadMapElement,
             Instruction::StoreArrayElement => OpCode::StoreArrayElement,
             Instruction::StoreMapElement => OpCode::StoreMapElement,
             Instruction::CallIndirect => OpCode::CallIndirect,
-            Instruction::CallIndirectWithRuntimeId => OpCode::CallIndirectWithRuntimeId,
+            Instruction::SetCallTrace => OpCode::SetCallTrace,
+
             Instruction::Discriminant => OpCode::Discriminant,
             Instruction::TypeTag => OpCode::TypeTag,
-            Instruction::ThrowIfPanic => OpCode::ThrowIfPanic,
             Instruction::Unreachable => OpCode::Unreachable,
             Instruction::MakeCell => OpCode::MakeCell,
             Instruction::SendEvent => OpCode::SendEvent,
@@ -2499,6 +2945,7 @@ impl Bytecode {
             Instruction::UnaryOp(op) => match op {
                 UnaryOp::Not => OpCode::Not,
                 UnaryOp::Neg => OpCode::Neg,
+                UnaryOp::Truthy => OpCode::Truthy,
             },
 
             // Constant specialization
@@ -2530,14 +2977,26 @@ impl Bytecode {
             Instruction::InitInstance(_) => OpCode::InitInstance,
             Instruction::AllocVariant(_) => OpCode::AllocVariant,
             Instruction::SysOp(_) => OpCode::SysOp,
-            Instruction::SysOpWithRuntimeId(_) => OpCode::SysOpWithRuntimeId,
+
             Instruction::Spawn => OpCode::Spawn,
+            Instruction::CallHooked { .. } => OpCode::CallHooked,
+            Instruction::BeginTraceHook(_) => OpCode::BeginTraceHook,
+            Instruction::EndTraceHook => OpCode::EndTraceHook,
+            Instruction::TraceHookHidden => OpCode::TraceHookHidden,
+            Instruction::TraceHookTiming => OpCode::TraceHookTiming,
+            Instruction::TraceHookSpan => OpCode::TraceHookSpan,
+            Instruction::TraceHookRich => OpCode::TraceHookRich,
+            Instruction::TraceHookEmptySpan => OpCode::TraceHookEmptySpan,
+            Instruction::SatisfiesBound => OpCode::SatisfiesBound,
+
             Instruction::Call { .. } => OpCode::Call,
-            Instruction::CallWithRuntimeId { .. } => OpCode::CallWithRuntimeId,
+
             Instruction::IsType(_) => OpCode::IsType,
             Instruction::NarrowBind { .. } => OpCode::NarrowBind,
             Instruction::DenseTag(_) => OpCode::DenseTag,
             Instruction::LoadType(_) => OpCode::LoadType,
+            Instruction::BindType(_) => OpCode::BindType,
+            Instruction::LoadCurrentPackage(_) => OpCode::LoadCurrentPackage,
             Instruction::MakeBoundMethod(_) => OpCode::MakeBoundMethod,
             Instruction::LoadDeref(_) => OpCode::LoadDeref,
             Instruction::StoreDeref(_) => OpCode::StoreDeref,
@@ -2594,6 +3053,10 @@ impl Bytecode {
             Instruction::Jump(_) => OpCode::Jump,
             Instruction::PopJumpIfFalse(_) => OpCode::PopJumpIfFalse,
             Instruction::JumpIfFalse(_) => OpCode::JumpIfFalse,
+            Instruction::PopJumpIfTrue(_) => OpCode::PopJumpIfTrue,
+            Instruction::JumpIfFalseOrPop(_) => OpCode::JumpIfFalseOrPop,
+            Instruction::JumpIfTrueOrPop(_) => OpCode::JumpIfTrueOrPop,
+            Instruction::JumpIfNotNullOrPop(_) => OpCode::JumpIfNotNullOrPop,
 
             // Two-operand variants
             Instruction::JumpTable(_) => OpCode::JumpTable,
@@ -2603,7 +3066,6 @@ impl Bytecode {
                 OpCode::MakeGenericFunctionFromValue
             }
             Instruction::VirtualCall { .. } => OpCode::VirtualCall,
-            Instruction::VirtualCallWithRuntimeId { .. } => OpCode::VirtualCallWithRuntimeId,
         }
     }
 }
@@ -2629,17 +3091,273 @@ mod compact_tests {
         Bytecode {
             instructions,
             constants,
+            call_layouts: BTreeMap::new(),
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
             field_copy_sets: Vec::new(),
             class_init_plans: Vec::new(),
-            match_hash_tables: Vec::new(),
+            switch_tables: Vec::new(),
             line_table: Vec::new(),
             meta,
             exception_table: Vec::new(),
+            shield_table: Vec::new(),
             handler_context_table: Vec::new(),
             compact: None,
         }
+    }
+
+    fn kinds(values: &[i64]) -> Vec<SwitchKey> {
+        values.iter().copied().map(SwitchKey::Kind).collect()
+    }
+
+    fn solved_kinds(values: &[i64]) -> SwitchTable {
+        SwitchTable {
+            dispatch: SwitchDispatch::solved(&kinds(values), |_| {
+                unreachable!("a switch of kind keys names no declaration")
+            }),
+            key_names: Vec::new(),
+        }
+    }
+
+    /// Every key selects its arm, in arm order, and nothing else selects any.
+    fn assert_dispatches(table: &SwitchTable, values: &[i64], strangers: &[i64]) {
+        assert!(table.dispatch.is_dispatchable());
+        for (arm, &value) in values.iter().enumerate() {
+            assert_eq!(
+                table.arm_of(value),
+                Some(u32::try_from(arm).unwrap()),
+                "key {value} selects arm {arm}"
+            );
+        }
+        for &stranger in strangers {
+            assert_eq!(table.arm_of(stranger), None, "{stranger} is no key");
+        }
+    }
+
+    #[test]
+    fn a_few_sparse_keys_are_hashed() {
+        let values = [1, 100, 5_000, 70_000, 900_000];
+        let table = solved_kinds(&values);
+        assert!(matches!(table.dispatch, SwitchDispatch::Hash { .. }));
+        assert_dispatches(&table, &values, &[0, 2, -1, 99, i64::MAX]);
+    }
+
+    /// A vacant slot holds no key. The lowest integer is a value like any
+    /// other: it selects an arm only when an arm matches it.
+    #[test]
+    fn a_vacant_slot_matches_no_value() {
+        let values = [1, 100, 5_000, 70_000, 900_000];
+        let table = solved_kinds(&values);
+        let SwitchDispatch::Hash { slots, .. } = &table.dispatch else {
+            panic!("five sparse keys are hashed");
+        };
+        assert!(
+            slots.iter().any(Option::is_none),
+            "five keys leave a power-of-two table with vacant slots"
+        );
+        assert_eq!(table.arm_of(i64::MIN), None);
+
+        let with_lowest = [1, 100, i64::MIN, 70_000, 900_000];
+        assert_dispatches(&solved_kinds(&with_lowest), &with_lowest, &[0, 5_000]);
+    }
+
+    /// `count` distinct indices below `range` with no structure to them, drawn
+    /// in order from a fixed sequence (`SplitMix64` from state zero).
+    fn scattered(count: usize, range: u64) -> Vec<usize> {
+        let mut state = 0u64;
+        let mut indices = Vec::with_capacity(count);
+        while indices.len() < count {
+            state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut mixed = state;
+            mixed = (mixed ^ (mixed >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            mixed = (mixed ^ (mixed >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            mixed ^= mixed >> 31;
+            let index = usize::try_from(mixed % range).expect("the range fits usize");
+            if !indices.contains(&index) {
+                indices.push(index);
+            }
+        }
+        indices
+    }
+
+    /// Sixty-four keys with no structure, the tags a switch over classes
+    /// scattered through an image has. No constants separate them within 128
+    /// slots; the search goes on to 256 and finds some.
+    #[test]
+    fn sixty_four_scattered_keys_are_hashed_over_more_slots() {
+        let base = baml_type::typetag::TypeTag::of_static_index(0).as_i64();
+        let values: Vec<i64> = scattered(64, 3_000)
+            .into_iter()
+            .map(|index| base + i64::try_from(index).unwrap())
+            .collect();
+        let table = solved_kinds(&values);
+        let SwitchDispatch::Hash { slots, .. } = &table.dispatch else {
+            panic!("sixty-four keys are within the search's reach");
+        };
+        assert_eq!(slots.len(), 256);
+        let strangers: Vec<i64> = (0..3_000)
+            .map(|index| base + index)
+            .filter(|value| !values.contains(value))
+            .collect();
+        assert_dispatches(&table, &values, &strangers);
+    }
+
+    /// Past [`SwitchDispatch::HASHED_KEYS`] no search is run.
+    #[test]
+    fn a_wide_switch_is_sorted() {
+        let values: Vec<i64> = (0..300i64).map(|arm| (arm * 7_919 + 3) % 100_003).collect();
+        assert!(values.len() > SwitchDispatch::HASHED_KEYS);
+        let table = solved_kinds(&values);
+        assert!(matches!(table.dispatch, SwitchDispatch::Sorted(_)));
+        assert_dispatches(&table, &values, &[-1, 100_003, 1]);
+    }
+
+    /// A key set no constants within the search bounds separate. Four keys
+    /// differ in their top two bits alone, so a window that tells them apart
+    /// sits at the top of the product; there, `0` and `1` both read as zero,
+    /// because a multiplier below ten thousand cannot carry `1` that high.
+    /// Every other window reads the four as one value. The switch is sorted,
+    /// and dispatches all the same.
+    #[test]
+    fn keys_the_search_cannot_separate_are_sorted() {
+        let values = [0, 1 << 62, i64::MIN, (3u64 << 62).cast_signed(), 1];
+        let table = solved_kinds(&values);
+        assert!(matches!(table.dispatch, SwitchDispatch::Sorted(_)));
+        assert_dispatches(&table, &values, &[2, -1, i64::MAX]);
+    }
+
+    #[test]
+    fn arms_match_in_order_so_a_repeated_key_selects_the_first() {
+        let table = solved_kinds(&[10, 2_000, 10, 300_000, 2_000]);
+        assert_eq!(table.arm_of(10), Some(0));
+        assert_eq!(table.arm_of(2_000), Some(1));
+        assert_eq!(table.arm_of(300_000), Some(3));
+    }
+
+    #[test]
+    fn a_switch_without_keys_selects_nothing() {
+        let table = solved_kinds(&[]);
+        assert!(table.dispatch.is_dispatchable());
+        assert_eq!(table.arm_of(0), None);
+    }
+
+    #[test]
+    fn a_declaration_key_is_solved_over_its_assigned_tag() {
+        let keys = [
+            SwitchKey::Kind(baml_type::typetag::INT),
+            SwitchKey::Declaration(ObjectIndex::from_raw(41)),
+            SwitchKey::Declaration(ObjectIndex::from_raw(7)),
+        ];
+        let tag_of = |declaration: ObjectIndex| {
+            baml_type::typetag::TypeTag::of_static_index(declaration.raw())
+        };
+        let table = SwitchTable {
+            dispatch: SwitchDispatch::solved(&keys, tag_of),
+            key_names: Vec::new(),
+        };
+        assert_eq!(table.arm_of(baml_type::typetag::INT), Some(0));
+        assert_eq!(
+            table.arm_of(tag_of(ObjectIndex::from_raw(41)).as_i64()),
+            Some(1)
+        );
+        assert_eq!(
+            table.arm_of(tag_of(ObjectIndex::from_raw(7)).as_i64()),
+            Some(2)
+        );
+        assert_eq!(
+            table.arm_of(tag_of(ObjectIndex::from_raw(8)).as_i64()),
+            None
+        );
+    }
+
+    #[test]
+    fn only_a_solved_table_of_its_stated_shape_dispatches() {
+        let entry = |value| Some(SwitchEntry { value, arm: 0 });
+        assert!(!SwitchDispatch::Keys(kinds(&[1, 2])).is_dispatchable());
+        assert!(
+            !SwitchDispatch::Hash {
+                multiply: 1,
+                shift: 0,
+                slots: vec![entry(1), None, entry(2)],
+            }
+            .is_dispatchable(),
+            "three slots are no power of two"
+        );
+        assert!(
+            !SwitchDispatch::Hash {
+                multiply: 1,
+                shift: 64,
+                slots: vec![entry(1), None],
+            }
+            .is_dispatchable(),
+            "a shift of the whole width reads nothing"
+        );
+        assert!(
+            !SwitchDispatch::Hash {
+                multiply: 1,
+                shift: 0,
+                slots: Vec::new(),
+            }
+            .is_dispatchable()
+        );
+        assert!(
+            !SwitchDispatch::Sorted(vec![
+                SwitchEntry { value: 2, arm: 0 },
+                SwitchEntry { value: 1, arm: 1 },
+            ])
+            .is_dispatchable(),
+            "bisection needs ascending keys"
+        );
+    }
+
+    #[test]
+    fn trace_call_prefix_survives_serialization() {
+        let bytecode = make_bytecode(
+            vec![
+                Instruction::SetCallTrace,
+                Instruction::CallIndirect,
+                Instruction::Return,
+            ],
+            vec![],
+        );
+        let serialized = borsh::to_vec(&bytecode).unwrap();
+        let restored: Bytecode = borsh::from_slice(&serialized).unwrap();
+        let compact = restored.lower_to_compact();
+        assert_eq!(
+            compact.code,
+            vec![
+                OpCode::SetCallTrace as u8,
+                OpCode::CallIndirect as u8,
+                OpCode::Return as u8,
+            ]
+        );
+        assert_eq!(
+            OpCode::try_from(OpCode::SetCallTrace as u8).unwrap(),
+            OpCode::SetCallTrace
+        );
+    }
+
+    #[test]
+    fn call_layouts_survive_serialization_and_compact_pc_translation() {
+        let mut bytecode = make_bytecode(
+            vec![
+                Instruction::LoadConst(0), // LoadIntSmall: 2 bytes
+                Instruction::CallIndirect,
+                Instruction::Return,
+            ],
+            vec![ConstValue::Int(1)],
+        );
+        let layout = baml_type::CallLayout(vec![None, Some(baml_base::Name::new("prefix"))]);
+        bytecode.call_layouts.insert(1, layout.clone());
+        let serialized = borsh::to_vec(&bytecode).unwrap();
+        let restored: Bytecode = borsh::from_slice(&serialized).unwrap();
+        assert_eq!(restored.call_layouts.get(&1), Some(&layout));
+        let compact = restored.lower_to_compact();
+        assert_eq!(compact.code[2], OpCode::CallIndirect as u8);
+        assert_eq!(
+            compact.call_layouts.into_iter().collect::<Vec<_>>(),
+            vec![(2, layout)]
+        );
     }
 
     #[test]
@@ -2654,6 +3372,41 @@ mod compact_tests {
         assert_eq!(compact.code[0], OpCode::LoadIntSmall as u8);
         assert_eq!(compact.code[1], 42u8);
         assert_eq!(compact.code[2], OpCode::Return as u8);
+    }
+
+    #[test]
+    fn conditional_branches_encode_both_directions_and_round_trip() {
+        let branches = [
+            (
+                Instruction::PopJumpIfTrue as fn(isize) -> Instruction,
+                OpCode::PopJumpIfTrue,
+            ),
+            (Instruction::JumpIfFalseOrPop, OpCode::JumpIfFalseOrPop),
+            (Instruction::JumpIfTrueOrPop, OpCode::JumpIfTrueOrPop),
+            (Instruction::JumpIfNotNullOrPop, OpCode::JumpIfNotNullOrPop),
+        ];
+        for (branch, opcode) in branches {
+            assert_eq!(opcode.encoded_size(), 5);
+            assert_eq!(OpCode::try_from(opcode as u8).unwrap(), opcode);
+            let bc = make_bytecode(
+                vec![
+                    branch(2),
+                    Instruction::LoadConst(0),
+                    branch(-2),
+                    Instruction::Return,
+                ],
+                vec![ConstValue::Int(42)],
+            );
+            let code = bc.lower_to_compact().code;
+            assert_eq!(code.len(), 13);
+            assert_eq!(code[0], opcode as u8);
+            assert_eq!(i32::from_le_bytes(code[1..5].try_into().unwrap()), 2);
+            assert_eq!(code[7], opcode as u8);
+            assert_eq!(i32::from_le_bytes(code[8..12].try_into().unwrap()), -12);
+            let encoded = borsh::to_vec(&bc.instructions).unwrap();
+            let decoded: Vec<Instruction> = borsh::from_slice(&encoded).unwrap();
+            assert_eq!(format!("{decoded:?}"), format!("{:?}", bc.instructions));
+        }
     }
 
     #[test]
@@ -2689,6 +3442,7 @@ mod compact_tests {
     #[test]
     fn encoded_size_matches_emitted_bytes_for_every_opcode() {
         for (instruction, expected) in [
+            (Instruction::UnaryOp(UnaryOp::Truthy), OpCode::Truthy),
             (Instruction::VirtualLoadField(1), OpCode::VirtualLoadField),
             (Instruction::VirtualStoreField(1), OpCode::VirtualStoreField),
             (Instruction::LoadField(1), OpCode::LoadField),
@@ -2756,6 +3510,26 @@ mod compact_tests {
         let compact = bc.lower_to_compact();
         assert_eq!(compact.code.len(), 1);
         assert_eq!(compact.code[0], OpCode::Add as u8);
+    }
+
+    #[test]
+    fn encode_virtual_call_operands() {
+        let instruction = Instruction::VirtualCall {
+            nargs: 3,
+            ntypeargs: 1,
+            self_arg: 2,
+        };
+        let bc = make_bytecode(vec![instruction], vec![]);
+        let compact = bc.lower_to_compact();
+        assert_eq!(compact.code.len(), OpCode::VirtualCall.encoded_size());
+        assert_eq!(compact.code[0], OpCode::VirtualCall as u8);
+        assert_eq!(u16::from_le_bytes([compact.code[1], compact.code[2]]), 3);
+        assert_eq!(u16::from_le_bytes([compact.code[3], compact.code[4]]), 1);
+        assert_eq!(u16::from_le_bytes([compact.code[5], compact.code[6]]), 2);
+        assert_eq!(
+            instruction.to_string(),
+            "VIRTUAL_CALL nargs=3 ntypeargs=1 self_arg=2"
+        );
     }
 
     #[test]
@@ -2837,11 +3611,12 @@ mod compact_tests {
                 Instruction::Return,       // i=1: 1 byte
             ],
             constants: vec![ConstValue::Int(1)],
+            call_layouts: BTreeMap::new(),
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
             field_copy_sets: Vec::new(),
             class_init_plans: Vec::new(),
-            match_hash_tables: Vec::new(),
+            switch_tables: Vec::new(),
             line_table: vec![
                 LineTableEntry {
                     pc: 0,
@@ -2860,6 +3635,7 @@ mod compact_tests {
             ],
             meta: vec![InstructionMeta { operand: None }; 2],
             exception_table: Vec::new(),
+            shield_table: Vec::new(),
             handler_context_table: Vec::new(),
             compact: None,
         };
@@ -2877,11 +3653,12 @@ mod compact_tests {
                 Instruction::Return,       // i=2: 1 byte (handler)
             ],
             constants: vec![ConstValue::Int(0)],
+            call_layouts: BTreeMap::new(),
             resolved_constants: Vec::new(),
             jump_tables: Vec::new(),
             field_copy_sets: Vec::new(),
             class_init_plans: Vec::new(),
-            match_hash_tables: Vec::new(),
+            switch_tables: Vec::new(),
             line_table: Vec::new(),
             meta: vec![InstructionMeta { operand: None }; 3],
             exception_table: vec![ExceptionTableEntry {
@@ -2889,13 +3666,14 @@ mod compact_tests {
                 end_pc: 2,
                 handler_pc: 2,
                 error_slot: 0,
-                stack_trace_slot: ExceptionTableEntry::NO_STACK_TRACE,
+                context_slot: 1,
             }],
+            shield_table: Vec::new(),
             handler_context_table: vec![HandlerContextEntry {
                 start_pc: 2,
                 end_pc: 3, // one past the last instruction → mapped to total byte length
                 handler_pc: 2,
-                stack_trace_slot: 0,
+                context_slot: 0,
             }],
             compact: None,
         };

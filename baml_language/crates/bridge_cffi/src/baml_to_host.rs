@@ -3,8 +3,8 @@
 //! `BamlOutboundResult` envelope.
 //!
 //! The whole classify-and-encode lives here, in the bridge — not in bex.
-//! Both the C-ABI entry point (`call_function` in `lib.rs`) and the PyO3 path
-//! (`bridge_python`'s `runtime.rs`) call [`call_and_encode`], so the
+//! Every adapter (the C ABI, Wasm, PyO3, napi, JNI) calls [`decode_invocation_request`] and
+//! then [`execute_invocation`], so argument decoding, target pinning, the
 //! `catch_unwind` → `SdkPanic` boundary and the error/panic routing are
 //! defined exactly once. Every result — ok value, thrown error, panic, and
 //! pre-call host-boundary failure — leaves the bridge as one envelope; there is
@@ -26,9 +26,10 @@ use bex_project::{
 use bridge_ctypes::{
     CffiHandleTableEntry, CffiHandleTableOptions, HANDLE_TABLE,
     baml_bridge::cffi::{
-        BamlOutboundError, BamlOutboundPanic, BamlOutboundResult, baml_outbound_result,
+        BamlOutboundError, BamlOutboundPanic, BamlOutboundResult, CallFunctionArgs,
+        baml_outbound_result, call_function_args::CallTarget,
     },
-    external_to_outbound,
+    external_to_outbound, kwargs_to_bex_values,
 };
 use futures::future::FutureExt;
 use indexmap::IndexMap;
@@ -226,7 +227,7 @@ pub fn result_to_outbound(
 }
 
 pub fn unhandled_spawn_error_to_outbound(error: UnhandledSpawnError) -> Vec<u8> {
-    let options = CffiHandleTableOptions::for_in_process();
+    let options = CffiHandleTableOptions::for_wire();
     let trace = bridge_ctypes::format_traceback_lines(error.trace.iter().map(|frame| {
         (
             frame.file_path.as_str(),
@@ -252,7 +253,7 @@ pub fn unhandled_spawn_error_to_outbound(error: UnhandledSpawnError) -> Vec<u8> 
 /// `GenericSdkError` (setup / internal), reusing the same synthesis helpers —
 /// no new construction logic.
 pub fn error_to_outbound(err: BridgeError) -> Vec<u8> {
-    let options = CffiHandleTableOptions::for_in_process();
+    let options = CffiHandleTableOptions::for_wire();
     let inner = match err {
         // Reuse the engine-error mapping verbatim for the wrapped RuntimeError.
         BridgeError::Runtime(rt) => result_to_outbound(Err(rt), &options)
@@ -265,7 +266,9 @@ pub fn error_to_outbound(err: BridgeError) -> Vec<u8> {
         | BridgeError::FunctionHandleTypeArgs
         | BridgeError::FunctionNotFound { .. }
         | BridgeError::MissingArgument { .. }
-        | BridgeError::InvalidCallId) => infra_error_arm(
+        | BridgeError::InvalidCallId
+        | BridgeError::UnknownCallAllocation(_)
+        | BridgeError::InvocationProtocol(_)) => infra_error_arm(
             message_instance(INVALID_ARGUMENT_CLASS, err.to_string()),
             &options,
         ),
@@ -303,14 +306,282 @@ fn panic_message(panic_info: &(dyn std::any::Any + Send)) -> String {
 /// `BamlOutboundPanic` envelope as a call-time panic — uniform with every other
 /// result.
 pub fn panic_to_outbound(panic_info: &(dyn std::any::Any + Send)) -> Vec<u8> {
-    let options = CffiHandleTableOptions::for_in_process();
+    let options = CffiHandleTableOptions::for_wire();
     BamlOutboundResult {
         result: Some(sdk_panic_arm(panic_message(panic_info), &options)),
     }
     .encode_to_vec()
 }
 
-/// Call a BAML function and encode the result as `BamlOutboundResult` bytes.
+/// Adapter input with an owning runtime and a pinned callable target.
+///
+/// This is a request, not the engine's fully bound `PreparedInvocation`.
+///
+/// Every adapter yields to an executor between decoding a call and running
+/// it. The SDK may release the callable's handle-table key in that gap, so a
+/// handle target is resolved to its heap [`Handle`](bex_project::Handle) here,
+/// while the key is known to be live, and the request keeps that pin
+/// until the engine has run it.
+pub struct InvocationRequest {
+    runtime: Arc<dyn Bex>,
+    _allocation: crate::call_allocation::SubmittedCall,
+    target: InvocationTarget,
+    args: BexArgs,
+    context: FunctionCallContext,
+}
+
+impl InvocationRequest {
+    /// Python's generated streaming entry retains the originating function
+    /// invocation instead of recording its short-lived handle constructor.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub async fn retain_stream(
+        &mut self,
+    ) -> Result<(bex_project::HostInvocation, u64), BridgeError> {
+        let InvocationTarget::Named(name) = &self.target else {
+            return Err(BridgeError::InvocationProtocol(
+                "stream entry must be named".into(),
+            ));
+        };
+        if !name.ends_with("@stream") {
+            return Err(BridgeError::InvocationProtocol(
+                "expected an LLM stream companion".into(),
+            ));
+        }
+        let capture_inputs = self
+            .context
+            .trace_reservation
+            .as_ref()
+            .map(|reservation| &reservation.options)
+            .or(self.context.trace_options.as_ref())
+            .is_some_and(|options| options.inputs == Some(true));
+        let inputs = capture_inputs.then(|| {
+            bex_project::capture_callback_inputs(&BexExternalValue::Map {
+                entries: self
+                    .args
+                    .required
+                    .iter()
+                    .chain(&self.args.optional)
+                    .map(|(key, value)| (key.clone(), value.clone()))
+                    .collect(),
+                key_type: bex_project::RuntimeTy::String,
+                value_type: bex_project::RuntimeTy::Unknown,
+            })
+        });
+        let execution = Arc::clone(&self.runtime)
+            .begin_stream_invocation(name, &self.context, inputs.as_ref())
+            .await?;
+        self.context.inherited_state = Some(execution.inherited_state());
+        self.context.trace_options = Some(bex_project::TraceOptionsData {
+            mode: Some(btel_types::InvocationMode::Hidden),
+            ..Default::default()
+        });
+        self.context.trace_reservation = None;
+        let key = HANDLE_TABLE.insert(CffiHandleTableEntry::InvocationState(
+            bridge_ctypes::InvocationStateHandle {
+                owner: Arc::clone(&self.runtime),
+                state: execution.inherited_state(),
+            },
+        ));
+        Ok((execution, key))
+    }
+
+    /// Identity of the SDK entry, used by adapters to route callbacks to that
+    /// entry's execution environment. The target remains pinned and private.
+    pub fn host_call_id(&self) -> u64 {
+        self.context.host_call_id.0
+    }
+}
+
+enum InvocationTarget {
+    Named(String),
+    Callable(bex_project::Handle),
+}
+
+/// Input values transfer their wire owners at submission, even if controls or
+/// preparation fail before value decoding. Borrowed control/target keys do not.
+struct UnconsumedRequestValues(CallFunctionArgs);
+impl Drop for UnconsumedRequestValues {
+    fn drop(&mut self) {
+        for entry in std::mem::take(&mut self.0.kwargs) {
+            if let Some(value) = entry.value {
+                drop(bridge_ctypes::inbound_to_external(value, &HANDLE_TABLE));
+            }
+        }
+        if let Some(cancel) = self
+            .0
+            .invocation
+            .as_mut()
+            .and_then(|options| options.cancel.take())
+        {
+            drop(bridge_ctypes::inbound_to_external(cancel, &HANDLE_TABLE));
+        }
+    }
+}
+
+/// Decode and retain an SDK request without starting runtime execution.
+///
+/// The engine resolves named targets and finishes argument/type preparation
+/// before constructing its own `PreparedInvocation` and attempting admission.
+pub fn decode_invocation_request(bytes: &[u8]) -> Result<InvocationRequest, BridgeError> {
+    // Identify and consume the allocation before control validation. Every
+    // preparation failure then retires its original runtime through this lease.
+    let mut identity = CallFunctionArgs::default();
+    // Keep the parsed prefix on failure so a malformed trailing field cannot
+    // strand an identified allocation or already-decoded argument owners.
+    let decoded = identity
+        .merge(bytes)
+        .map_err(bridge_ctypes::CtypesError::from);
+    let mut unconsumed = UnconsumedRequestValues(identity);
+    if unconsumed.0.call_id == 0 {
+        decoded?;
+        return Err(BridgeError::InvalidCallId);
+    }
+    let allocation = crate::CALL_ALLOCATIONS.submit(unconsumed.0.call_id)?;
+    decoded?;
+    let runtime = allocation.owner().clone();
+    let call = crate::invocation_protocol::decode_call(bytes)?;
+    let target = call.call_target.ok_or(BridgeError::MissingCallTarget)?;
+    if matches!(target, CallTarget::FunctionHandle(_)) && !call.type_args.is_empty() {
+        return Err(BridgeError::FunctionHandleTypeArgs);
+    }
+    let type_args = bridge_ctypes::proto_ty_args_to_named(&call.type_args)?;
+    let mut builder = allocation
+        .context_builder()
+        .with_type_args(type_args.type_args)
+        .with_type_defs(type_args.type_defs);
+    let controls = call.invocation.expect("validated controls");
+    builder = builder.with_host_environment(controls.host_environment);
+    if let Some(deadline) = controls.deadline_ns {
+        builder = builder.with_deadline_ns(deadline);
+    }
+    if controls.inherited_state != 0 {
+        let entry = HANDLE_TABLE
+            .resolve(controls.inherited_state)
+            .ok_or_else(|| {
+                BridgeError::InvocationProtocol("inherited state is no longer live".into())
+            })?;
+        let CffiHandleTableEntry::InvocationState(state) = &*entry else {
+            return Err(BridgeError::InvocationProtocol(
+                "inherited state needs an invocation-state handle".into(),
+            ));
+        };
+        if !Arc::ptr_eq(&runtime, &state.owner) {
+            return Err(BridgeError::InvocationProtocol(
+                "inherited state belongs to a different runtime".into(),
+            ));
+        }
+        builder = builder.with_inherited_state(state.state.clone());
+    }
+    if let Some(cancel) = unconsumed
+        .0
+        .invocation
+        .as_mut()
+        .and_then(|options| options.cancel.take())
+    {
+        let value = bridge_ctypes::inbound_to_external(cancel, &HANDLE_TABLE)?;
+        builder = builder.with_cancel_values(vec![value]);
+    }
+    if let Some(trace) = controls.trace {
+        use bridge_ctypes::baml_bridge::cffi::{
+            TraceMode, trace_metadata_value::Value, trace_selection::Selection,
+        };
+        match trace.selection.expect("validated trace selection") {
+            Selection::Reservation(key) => {
+                let entry = HANDLE_TABLE.resolve(key).ok_or_else(|| {
+                    BridgeError::InvocationProtocol("trace reservation is no longer live".into())
+                })?;
+                let CffiHandleTableEntry::TraceReservation(reservation) = &*entry else {
+                    return Err(BridgeError::InvocationProtocol(
+                        "trace reservation needs a reservation handle".into(),
+                    ));
+                };
+                if !Arc::ptr_eq(&runtime, &reservation.owner) {
+                    return Err(BridgeError::InvocationProtocol(
+                        "trace reservation belongs to a different runtime".into(),
+                    ));
+                }
+                builder = builder.with_trace_reservation(reservation.reservation.clone());
+            }
+            Selection::Options(options) => {
+                use btel_types::context::{ContextPatch, ContextValue};
+                let patch = ContextPatch {
+                    distinct_id: options.distinct_id,
+                    metadata: options
+                        .metadata
+                        .into_iter()
+                        .map(|(key, value)| {
+                            (
+                                key,
+                                match value.value.expect("validated metadata") {
+                                    Value::StringValue(value) => Some(ContextValue::String(value)),
+                                    Value::IntValue(value) => Some(ContextValue::Int(value)),
+                                    Value::FloatValue(value) => Some(ContextValue::Float(value)),
+                                    Value::BoolValue(value) => Some(ContextValue::Bool(value)),
+                                    Value::Remove(_) => None,
+                                },
+                            )
+                        })
+                        .collect(),
+                };
+                builder = builder.with_trace_options(bex_project::TraceOptionsData {
+                    mode: options.mode.map(|mode| {
+                        match TraceMode::try_from(mode).expect("validated trace mode") {
+                            TraceMode::Hidden => btel_types::InvocationMode::Hidden,
+                            TraceMode::Timing => btel_types::InvocationMode::Timing,
+                            TraceMode::Span => btel_types::InvocationMode::Span,
+                            TraceMode::Unspecified => unreachable!("validated trace mode"),
+                        }
+                    }),
+                    inputs: options.inputs,
+                    output: options.output,
+                    error: options.error,
+                    context: (!patch.is_empty()).then(|| Arc::new(patch)),
+                });
+            }
+        }
+    }
+    let context = runtime.bind_invocation_context(builder.build())?;
+    let kwargs = kwargs_to_bex_values(std::mem::take(&mut unconsumed.0.kwargs), &HANDLE_TABLE)?;
+
+    let (target, args) = match target {
+        CallTarget::FunctionName(name) => (InvocationTarget::Named(name), kwargs.into()),
+        CallTarget::FunctionHandle(key) => {
+            let entry = HANDLE_TABLE.resolve(key).ok_or_else(|| {
+                BridgeError::Internal("callable handle is no longer live".to_string())
+            })?;
+            let CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::TaggedHeapHandle {
+                kind: bex_project::TaggedHeapHandleKind::Callable,
+                ty: bex_project::RuntimeTy::Function { params, .. },
+                heap_handle,
+            }) = &*entry
+            else {
+                return Err(BridgeError::Internal(
+                    "handle does not reference a BAML callable".to_string(),
+                ));
+            };
+            let params = params.iter().enumerate().map(|(index, parameter)| {
+                (
+                    parameter
+                        .name
+                        .as_ref()
+                        .map_or_else(|| format!("arg{index}"), ToString::to_string),
+                    parameter.is_required(),
+                )
+            });
+            let args = partition_callable_args(key, params, kwargs.into_iter().collect())?;
+            (InvocationTarget::Callable(heap_handle.clone()), args)
+        }
+    };
+    Ok(InvocationRequest {
+        runtime,
+        _allocation: allocation,
+        target,
+        args,
+        context,
+    })
+}
+
+/// Run an [`InvocationRequest`] and encode the result as `BamlOutboundResult` bytes.
 ///
 /// The `catch_unwind` boundary wraps the engine call so a Rust panic surfaces
 /// as a `baml.panics.SdkPanic` ⇒ `BamlOutboundPanic` (a catchable `BamlPanic`
@@ -319,18 +590,26 @@ pub fn panic_to_outbound(panic_info: &(dyn std::any::Any + Send)) -> Vec<u8> {
 /// point keeps its own outer `catch_unwind` for that (encoding via
 /// [`panic_to_outbound`]), and the PyO3 glue lets it become pyo3's
 /// `PanicException`.
-pub async fn call_and_encode(
-    runtime: Arc<dyn Bex>,
-    function_name: String,
-    args: BexArgs,
-    call_ctx: FunctionCallContext,
-) -> Vec<u8> {
-    let options = CffiHandleTableOptions::for_in_process();
-    let _route = crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime);
+pub async fn execute_invocation(call: InvocationRequest) -> Vec<u8> {
+    let options = CffiHandleTableOptions::for_wire();
+    let InvocationRequest {
+        runtime,
+        _allocation,
+        target,
+        args,
+        context,
+    } = call;
 
-    let caught = AssertUnwindSafe(runtime.call_function(&function_name, args, call_ctx))
-        .catch_unwind()
-        .await;
+    let caught = AssertUnwindSafe(async move {
+        match target {
+            InvocationTarget::Named(name) => runtime.call_function(&name, args, context).await,
+            InvocationTarget::Callable(handle) => {
+                runtime.call_callable(handle, args, context).await
+            }
+        }
+    })
+    .catch_unwind()
+    .await;
 
     let result = match caught {
         Ok(call_result) => result_to_outbound(call_result, &options),
@@ -367,64 +646,6 @@ fn partition_callable_args(
     }
     optional.extend(supplied);
     Ok(BexArgs { required, optional })
-}
-
-/// Invoke an engine-owned callable referenced by an ordinary handle-table key
-/// and encode the result through the same envelope path as a named call.
-pub async fn call_handle_and_encode(
-    runtime: Arc<dyn Bex>,
-    handle_key: u64,
-    BexArgs { required, optional }: BexArgs,
-    call_ctx: FunctionCallContext,
-) -> Vec<u8> {
-    let mut supplied = required;
-    supplied.extend(optional);
-    let (handle, args) = match HANDLE_TABLE.resolve(handle_key) {
-        Some(entry) => match &*entry {
-            CffiHandleTableEntry::Adt(bex_project::BexExternalAdt::TaggedHeapHandle {
-                ty: bex_project::RuntimeTy::Function { params, .. },
-                heap_handle,
-            }) => {
-                let params = params.iter().enumerate().map(|(index, parameter)| {
-                    (
-                        parameter
-                            .name
-                            .as_ref()
-                            .map_or_else(|| format!("arg{index}"), ToString::to_string),
-                        parameter.is_required(),
-                    )
-                });
-                let args = match partition_callable_args(handle_key, params, supplied) {
-                    Ok(args) => args,
-                    Err(err) => return error_to_outbound(err),
-                };
-                (heap_handle.clone(), args)
-            }
-            _ => {
-                return error_to_outbound(BridgeError::Internal(
-                    "handle does not reference a BAML callable".to_string(),
-                ));
-            }
-        },
-        None => {
-            return error_to_outbound(BridgeError::Internal(
-                "callable handle is no longer live".to_string(),
-            ));
-        }
-    };
-
-    let options = CffiHandleTableOptions::for_in_process();
-    let _route = crate::register_active_call_runtime(call_ctx.host_call_id.0, &runtime);
-    let caught = AssertUnwindSafe(runtime.call_callable(handle, args, call_ctx))
-        .catch_unwind()
-        .await;
-    let result = match caught {
-        Ok(call_result) => result_to_outbound(call_result, &options),
-        Err(panic_info) => BamlOutboundResult {
-            result: Some(sdk_panic_arm(panic_message(panic_info.as_ref()), &options)),
-        },
-    };
-    result.encode_to_vec()
 }
 
 #[cfg(test)]

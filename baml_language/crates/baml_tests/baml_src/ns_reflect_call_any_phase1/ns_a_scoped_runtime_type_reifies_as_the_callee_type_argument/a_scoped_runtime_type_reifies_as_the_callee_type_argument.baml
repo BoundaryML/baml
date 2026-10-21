@@ -1,0 +1,13 @@
+function inspect<T>() -> string throws never {
+    return reflect.Type.of<T>().to_string();
+}
+
+function main() -> string throws reflect.errors.CompilationError {
+    let t = reflect.Enum.new("Category", ["RED", "BLUE"]);
+    let type T = t;
+    return inspect<T>();
+}
+
+test "a_scoped_runtime_type_reifies_as_the_callee_type_argument" {
+    assert.equal(main(), "Category")
+}

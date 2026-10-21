@@ -2,38 +2,55 @@
 /// bounds (themselves `ast::TypeExpr`s, as everywhere else in the `ItemTree`),
 /// so there is nothing for a mirror struct to strip.
 pub use ast::GenericParam;
-use baml_base::Name;
 use baml_compiler2_ast::ast;
 
-/// A span-free attribute for position-independent storage in the `ItemTree`.
-/// Derived from `ast::RawAttribute` with all `TextRange`s stripped.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Attribute {
-    pub args: Vec<AttributeArg>,
-    pub name: Name,
+/// The schema metadata every data declaration can carry: what the LLM is
+/// told about it and the key it serializes under.
+///
+/// Lowered from the declaration's attributes by `crate::attrs` — the one
+/// place raw attributes are read — so a value here has already been
+/// validated; consumers never re-parse an attribute.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct SchemaAttrs {
+    /// `@description("…")`.
+    pub description: Option<String>,
+    /// `@alias("…")`: the serialized key, used instead of the declared name.
+    pub alias: Option<String>,
 }
 
-/// A span-free attribute argument.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct AttributeArg {
-    pub key: Option<Name>,
-    pub value: String,
+/// The attributes a class field can carry.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct ClassFieldAttrs {
+    pub schema: SchemaAttrs,
+    /// `@skip`: left out of the schema and never parsed.
+    pub skip: bool,
+    /// `@stream.done`: while streaming, the field holds its default until its
+    /// value is complete — an incomplete value is never surfaced.
+    pub stream_done: bool,
+    /// `@stream.must_exist`: the field has no default, so its class has no
+    /// partial parse until the field is present.
+    pub must_exist: bool,
 }
 
-impl From<&ast::RawAttribute> for Attribute {
-    fn from(raw: &ast::RawAttribute) -> Self {
-        Self {
-            name: raw.name.clone(),
-            args: raw.args.iter().map(AttributeArg::from).collect(),
-        }
-    }
+/// The attributes an enum variant can carry.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct EnumVariantAttrs {
+    pub schema: SchemaAttrs,
+    /// `@skip`: left out of the schema and never parsed.
+    pub skip: bool,
 }
 
-impl From<&ast::RawAttributeArg> for AttributeArg {
-    fn from(raw: &ast::RawAttributeArg) -> Self {
-        Self {
-            key: raw.key.clone(),
-            value: raw.value.clone(),
-        }
-    }
+/// The `@@` attributes a class can carry.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct ClassAttrs {
+    pub schema: SchemaAttrs,
+    /// `@@stream.done`: while streaming, an instance is never surfaced until
+    /// the whole object is complete.
+    pub stream_done: bool,
+}
+
+/// The `@@` attributes an enum can carry.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct EnumAttrs {
+    pub schema: SchemaAttrs,
 }

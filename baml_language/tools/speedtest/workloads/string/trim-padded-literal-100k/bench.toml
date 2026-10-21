@@ -1,0 +1,5 @@
+name = "trim padded literal 100k"
+description = "100,000 trims of a padded string"
+expect = "9300000"
+jobs = 20
+warmup = 1

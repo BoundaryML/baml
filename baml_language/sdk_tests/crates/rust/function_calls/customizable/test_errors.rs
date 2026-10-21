@@ -24,7 +24,7 @@ use baml_bridge::Map;
 // (`get_runtime`, `call_function`, `BamlCallContext`); provisional until the
 // Rust bridge pins it.
 use baml_bridge::runtime::{BamlCallContext, call_function, get_runtime};
-use baml_sdk::baml::json::JsonParseError;
+use baml_sdk::baml::json;
 // SPECULATIVE: `LoadDocError`, the generated error type for the union
 // `throws ParseError | TimeoutError` contract, is a provisional name — the
 // generator's naming for throws-union enums is not pinned yet.
@@ -38,14 +38,14 @@ use baml_sdk::throws_test::{DoPanic, MyError, ParseJson, ThrowMyError};
 const _BAD_JSON: &str = "{not valid json";
 
 // `baml.json.parse` on bad input → `Error::Thrown` whose `value` is a
-// `JsonParseError` (a plain generated struct). Proves stdlib error classes
+// `json::ParseError` (a plain generated struct). Proves stdlib error classes
 // surface structured, independent of any `throws` clause.
 #[test]
 fn test_errors_stdlib_error_surfaces_as_baml_error() {
     match ParseJson(_BAD_JSON.to_string()) {
         Err(baml_bridge::Error::Thrown { value, .. }) => {
-            // `isinstance(..., JsonParseError)` is the static type of `value`.
-            let _: JsonParseError = value;
+            // `isinstance(..., json::ParseError)` is the static type of `value`.
+            let _: json::ParseError = value;
         }
         Err(other) => panic!("expected Error::Thrown, got {other:?}"),
         Ok(_) => panic!("expected Error::Thrown, got Ok"),

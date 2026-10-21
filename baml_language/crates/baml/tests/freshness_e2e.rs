@@ -79,7 +79,7 @@ impl TestHome {
             .current_dir(cwd)
             .env("BAML_HOME", &self.root)
             .env("HOME", cwd.parent().unwrap_or(cwd))
-            .env_remove("BAML_VERSION");
+            .env_remove("BAML_TOOLCHAIN");
         for (key, value) in extra_env {
             command.env(key, value);
         }

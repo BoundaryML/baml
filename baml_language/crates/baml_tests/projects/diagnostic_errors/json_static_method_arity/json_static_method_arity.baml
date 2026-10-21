@@ -20,17 +20,17 @@
 class Box<T> {
     value T
 
-    function from_json(j: baml.json.json) -> Box<T> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+    function from_json(j: baml.json.json) -> Box<T> throws baml.json.ParseError | baml.json.DecodeError {
         Box<T> { value: baml.json.from_json<T>(baml.json.field(j, "value")) }
     }
 }
 
 // Missing type argument: receiver `Box` has 0 args but 1 expected.
-function bad_missing(j: baml.json.json) -> Box<int> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function bad_missing(j: baml.json.json) -> Box<int> throws baml.json.ParseError | baml.json.DecodeError {
     Box.from_json(j)
 }
 
 // Too many type arguments: receiver `Box<int, string>` has 2 args but 1 expected.
-function bad_extra(j: baml.json.json) -> Box<int> throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function bad_extra(j: baml.json.json) -> Box<int> throws baml.json.ParseError | baml.json.DecodeError {
     Box<int, string>.from_json(j)
 }

@@ -53,7 +53,7 @@ static void baml_close_library(BamlLibrary library) {
 #endif
 
 static int baml_required_functions_exist(const BamlApiV1 *api) {
-  return api->version != NULL && api->initialize_runtime_from_bytecode != NULL &&
+  return api->version != NULL && api->initialize_runtime_from_blob != NULL &&
          api->free_buffer != NULL && api->register_callback != NULL &&
          api->call_function != NULL && api->new_function_call != NULL &&
          api->cancel_function_call != NULL && api->register_host_dispatch_callback != NULL &&
@@ -61,7 +61,11 @@ static int baml_required_functions_exist(const BamlApiV1 *api) {
          api->handle_clone != NULL && api->handle_release != NULL && api->media_from_url != NULL &&
          api->media_from_file != NULL && api->media_from_base64 != NULL && api->media_url != NULL &&
          api->media_file != NULL && api->media_base64 != NULL && api->media_mime_type != NULL &&
-         api->register_bridge != NULL;
+         api->register_bridge != NULL && api->invocation_protocol_version != NULL &&
+         api->invocation_clock_ns != NULL && api->release_function_call != NULL &&
+         api->register_host_dispatch_v2 != NULL && api->register_host_cancel_callback != NULL &&
+         api->trace_selection != NULL && api->invocation_context != NULL &&
+         api->media_name != NULL && api->media_from_file_content != NULL;
 }
 
 static int baml_test_evolution_checks(const BamlApiV1 *api) {

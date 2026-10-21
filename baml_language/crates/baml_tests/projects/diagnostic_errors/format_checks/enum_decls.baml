@@ -56,10 +56,10 @@ enum LongVariantPlusAttrs {
 }
 
 // ===== Block attribute on enum =====
-enum DynamicEnum {
+enum BlockAttributedEnum {
     X
     Y
-    @@dynamic
+    @@streaming
 }
 
 // ===== Trivia on enum declaration (line comments) =====

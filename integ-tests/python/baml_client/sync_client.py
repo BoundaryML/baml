@@ -3020,6 +3020,34 @@ class BamlSyncClient:
                 "input": input,
             })
             return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    def TestOpenAITranscription(self, audio: baml_py.Audio,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            __stream__ = self.stream.TestOpenAITranscription(audio=audio,
+                baml_options=baml_options)
+            return __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAITranscription", args={
+                "audio": audio,
+            })
+            return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
+    def TestOpenAITranscriptionMultipartChat(self, audio: baml_py.Audio,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            __stream__ = self.stream.TestOpenAITranscriptionMultipartChat(audio=audio,
+                baml_options=baml_options)
+            return __stream__.get_final_response()
+        else:
+            # Original non-streaming code
+            __result__ = self.__options.merge_options(baml_options).call_function_sync(function_name="TestOpenAITranscriptionMultipartChat", args={
+                "audio": audio,
+            })
+            return typing.cast(str, __result__.cast_to(types, types, stream_types, False, __runtime__))
     def TestOpenAIWithFinishReasonError(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
@@ -6727,6 +6755,30 @@ class BamlStreamClient:
           lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
           __ctx__,
         )
+    def TestOpenAITranscription(self, audio: baml_py.Audio,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestOpenAITranscription", args={
+            "audio": audio,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          __result__,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
+    def TestOpenAITranscriptionMultipartChat(self, audio: baml_py.Audio,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[str, str]:
+        __ctx__, __result__ = self.__options.merge_options(baml_options).create_sync_stream(function_name="TestOpenAITranscriptionMultipartChat", args={
+            "audio": audio,
+        })
+        return baml_py.BamlSyncStream[str, str](
+          __result__,
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(str, x.cast_to(types, types, stream_types, False, __runtime__)),
+          __ctx__,
+        )
     def TestOpenAIWithFinishReasonError(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[str, str]:
@@ -9218,6 +9270,20 @@ class BamlHttpRequestClient:
             "input": input,
         }, mode="request")
         return __result__
+    def TestOpenAITranscription(self, audio: baml_py.Audio,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAITranscription", args={
+            "audio": audio,
+        }, mode="request")
+        return __result__
+    def TestOpenAITranscriptionMultipartChat(self, audio: baml_py.Audio,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAITranscriptionMultipartChat", args={
+            "audio": audio,
+        }, mode="request")
+        return __result__
     def TestOpenAIWithFinishReasonError(self, input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -11282,6 +11348,20 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAIShorthand", args={
             "input": input,
+        }, mode="stream")
+        return __result__
+    def TestOpenAITranscription(self, audio: baml_py.Audio,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAITranscription", args={
+            "audio": audio,
+        }, mode="stream")
+        return __result__
+    def TestOpenAITranscriptionMultipartChat(self, audio: baml_py.Audio,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        __result__ = self.__options.merge_options(baml_options).create_http_request_sync(function_name="TestOpenAITranscriptionMultipartChat", args={
+            "audio": audio,
         }, mode="stream")
         return __result__
     def TestOpenAIWithFinishReasonError(self, input: str,

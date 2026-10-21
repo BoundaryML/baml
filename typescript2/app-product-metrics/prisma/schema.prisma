@@ -1,0 +1,37 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model PlgWeeklyMetric {
+  weekStartDate                   DateTime @id @map("week_start_date") @db.Timestamptz(6)
+  recordedAt                      DateTime @map("recorded_at") @db.Timestamptz(6)
+  totalDiscordUserCount           Int?     @map("total_discord_user_count")
+  sheepCouncilDiscordUserCount    Int?     @map("sheep_council_discord_user_count")
+  sheepCouncilZoomAttendanceCount Int?     @map("sheep_council_zoom_attendance_count")
+  sheepCouncilActiveCount         Int?     @map("sheep_council_active_count")
+  lumaEapSignupCount              Int      @map("luma_eap_signup_count")
+  lumaEapZoomAttendanceCount      Int      @map("luma_eap_zoom_attendance_count")
+  githubIssuesDistinctUserCount   Int      @map("github_issues_distinct_user_count")
+
+  @@map("plg_weekly_metrics")
+}
+
+enum PlgWeeklyMetricRawType {
+  SHEEP_COUNCIL_MEETINGS
+  EAP_MEETINGS
+}
+
+model PlgWeeklyMetricRaw {
+  weekStartDate DateTime               @map("week_start_date") @db.Timestamptz(6)
+  recordedAt    DateTime               @map("recorded_at") @db.Timestamptz(6)
+  rawMetricType PlgWeeklyMetricRawType
+  rawMetricData Json
+
+  @@id([weekStartDate, recordedAt, rawMetricType])
+  @@map("plg_weekly_metrics_raw")
+}

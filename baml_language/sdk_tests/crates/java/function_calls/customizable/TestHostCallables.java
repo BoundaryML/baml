@@ -33,9 +33,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import baml_bridge.BamlError;
 import baml_sdk.host_callable_tests.Fns;
 import baml_sdk.host_callable_tests.IntOptCallback;
+import baml_sdk.host_callable_tests.IntStringBooleanCallback;
 import baml_sdk.host_callable_tests.Person;
 import baml_sdk.host_callable_tests.ValidationError;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.concurrent.CompletableFuture;
@@ -43,7 +45,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -88,23 +92,58 @@ class TestHostCallables {
 
     @Test
     void test_baml_closure_is_a_native_callable_with_host_language_arguments() {
-        Function<Long, Long> addTen = Fns.make_adder(10L);
+        var addTen = Fns.make_adder(10L);
         assertEquals(15L, addTen.apply(5L));
         assertEquals(17L, addTen.apply(7L));
     }
 
     @Test
     void test_baml_closure_decodes_multiple_args_and_structured_return_values() {
-        BiFunction<Long, String, Person> build = Fns.make_pair_builder(30L);
+        var build = Fns.make_pair_builder(30L);
         assertEquals(new Person("Ada", 42L), build.apply(12L, "Ada"));
         assertEquals(new Person("Grace", 35L), build.apply(5L, "Grace"));
     }
 
     @Test
     void test_baml_closure_is_reusable_and_retains_mutable_captures() {
-        java.util.function.Supplier<Long> nextValue = Fns.make_counter(40L);
-        assertEquals(41L, nextValue.get());
-        assertEquals(42L, nextValue.get());
+        var nextValue = Fns.make_counter(40L);
+        assertEquals(41L, nextValue.call());
+        assertEquals(42L, nextValue.call());
+    }
+
+    @Test
+    void test_host_callable_void_signatures() {
+        // A unit callable has no result to carry in either direction: a host
+        // callback is a `void` method whatever its arity, and so is a BAML
+        // closure returned to the host.
+        List<String> seen = Collections.synchronizedList(new ArrayList<>());
+        Consumer<Long> one = value -> seen.add(String.valueOf(value));
+        BiConsumer<Long, String> two = (value, label) -> seen.add(value + ":" + label);
+        IntStringBooleanCallback three =
+                (value, label, flag) -> seen.add(value + ":" + label + ":" + flag);
+
+        assertEquals(1L, Fns.call_void_callback(one, 1L));
+        assertEquals(2L, Fns.call_void_callback_two_args(two, 2L, "two"));
+        assertEquals(3L, Fns.call_void_callback_three_args(three, 3L, "three", true));
+
+        Fns.call_throwing_void_callback(one, 4L);
+        RuntimeException raised = new RuntimeException("void failed");
+        Consumer<Long> failing = value -> {
+            throw raised;
+        };
+        RuntimeException caught =
+                assertThrows(
+                        RuntimeException.class,
+                        () -> Fns.call_throwing_void_callback(failing, 4L));
+        assertSame(raised, caught);
+
+        Fns.make_void_callback().apply();
+
+        var forward = Fns.make_void_forwarder(two);
+        forward.apply(5L, "five");
+        forward.apply(6L, "six");
+
+        assertEquals(List.of("1", "2:two", "3:three:true", "4", "5:five", "6:six"), seen);
     }
 
     @Test

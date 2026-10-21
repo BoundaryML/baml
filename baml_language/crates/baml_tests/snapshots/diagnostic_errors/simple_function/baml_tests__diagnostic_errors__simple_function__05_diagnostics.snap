@@ -5,7 +5,7 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0003
 
   × unresolved name: `GPT4`
-   ╭─[main.baml:2:10]
- 2 │   client GPT4
-   ·          ────
+   ╭─[main.baml:2:11]
+ 2 │   client: GPT4
+   ·           ────
    ╰────

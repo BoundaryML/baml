@@ -12,7 +12,7 @@ license = { workspace = true }
 
 [dependencies]
 baml_base = { workspace = true }
-baml_codegen_types = { workspace = true }
+baml_sdkgen_types = { workspace = true }
 baml_version = { workspace = true }
 flate2 = { workspace = true }
 

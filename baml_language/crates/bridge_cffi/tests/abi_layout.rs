@@ -30,16 +30,20 @@ fn scratch_dir() -> PathBuf {
     path
 }
 
-fn compiler(cpp: bool) -> Command {
-    let variable = if cpp { "CXX" } else { "CC" };
-    let fallback = if cfg!(windows) {
-        "cl.exe"
-    } else if cpp {
-        "c++"
-    } else {
-        "cc"
-    };
-    Command::new(std::env::var_os(variable).unwrap_or_else(|| fallback.into()))
+fn compiler(cpp: bool, directory: &Path) -> cc::Tool {
+    // Native tests run on their target; cc discovers MSVC and its SDK environment
+    // without requiring a developer shell, and honors CC/CXX overrides.
+    let target = env!("BAML_CFFI_TARGET");
+    cc::Build::new()
+        .host(target)
+        .target(target)
+        .cpp(cpp)
+        .opt_level(0)
+        .no_default_flags(true)
+        .cargo_metadata(false)
+        .out_dir(directory)
+        .try_get_compiler()
+        .expect("discover ABI test compiler")
 }
 
 fn run_checked(command: &mut Command, context: &str) {
@@ -54,9 +58,53 @@ fn run_checked(command: &mut Command, context: &str) {
     );
 }
 
+#[cfg(all(windows, target_env = "msvc"))]
+#[test]
+fn abi_probe_discovers_msvc_without_a_developer_shell() {
+    let system_root = std::env::var_os("SystemRoot").expect("Windows system root");
+    let mut command = Command::new(std::env::current_exe().expect("ABI test binary"));
+    command
+        .args([
+            "--exact",
+            "rust_c_and_cpp_agree_on_the_complete_v1_abi",
+            "--nocapture",
+        ])
+        .env("PATH", PathBuf::from(system_root).join("System32"));
+    for variable in [
+        "CC",
+        "CXX",
+        "HOST_CC",
+        "HOST_CXX",
+        "TARGET_CC",
+        "TARGET_CXX",
+        "VCINSTALLDIR",
+        "VSINSTALLDIR",
+        "VCToolsInstallDir",
+        "VSCMD_ARG_TGT_ARCH",
+        "VSCMD_VER",
+        "INCLUDE",
+        "LIB",
+        "LIBPATH",
+    ] {
+        command.env_remove(variable);
+    }
+    let target = env!("BAML_CFFI_TARGET");
+    for variable in ["CC", "CXX"] {
+        command.env_remove(format!("{variable}_{target}"));
+        command.env_remove(format!("{variable}_{}", target.replace('-', "_")));
+    }
+    run_checked(
+        &mut command,
+        "ABI probe without an MSVC developer environment",
+    );
+}
+
 fn compile_c_layout(source: &Path, executable: &Path) {
-    let mut command = compiler(false);
-    if cfg!(windows) {
+    let directory = executable.parent().expect("ABI test output directory");
+    let compiler = compiler(false, directory);
+    let mut command = compiler.to_command();
+    command.current_dir(directory);
+    if compiler.is_like_msvc() {
         command
             .arg("/nologo")
             .arg("/std:c11")
@@ -65,7 +113,7 @@ fn compile_c_layout(source: &Path, executable: &Path) {
             .arg(format!("/I{}", include_dir().display()))
             .arg(format!("/I{}", test_dir().display()))
             .arg(source)
-            .arg(format!("/Fe:{}", executable.display()));
+            .arg(format!("/Fe{}", executable.display()));
     } else {
         command
             .arg("-std=c11")
@@ -85,8 +133,11 @@ fn compile_c_layout(source: &Path, executable: &Path) {
 }
 
 fn compile_cpp_assertions(source: &Path, object: &Path) {
-    let mut command = compiler(true);
-    if cfg!(windows) {
+    let directory = object.parent().expect("ABI test output directory");
+    let compiler = compiler(true, directory);
+    let mut command = compiler.to_command();
+    command.current_dir(directory);
+    if compiler.is_like_msvc() {
         command
             .arg("/nologo")
             .arg("/std:c++17")
@@ -97,7 +148,7 @@ fn compile_cpp_assertions(source: &Path, object: &Path) {
             .arg(format!("/I{}", test_dir().display()))
             .arg("/c")
             .arg(source)
-            .arg(format!("/Fo:{}", object.display()));
+            .arg(format!("/Fo{}", object.display()));
     } else {
         command
             .arg("-std=c++17")
@@ -199,7 +250,7 @@ fn rust_c_and_cpp_agree_on_the_complete_v1_abi() {
     field!("BamlApiV1", BamlApiV1, abi_version);
     field!("BamlApiV1", BamlApiV1, struct_size);
     field!("BamlApiV1", BamlApiV1, version);
-    field!("BamlApiV1", BamlApiV1, initialize_runtime_from_bytecode);
+    field!("BamlApiV1", BamlApiV1, initialize_runtime_from_blob);
     field!("BamlApiV1", BamlApiV1, free_buffer);
     field!("BamlApiV1", BamlApiV1, register_callback);
     field!("BamlApiV1", BamlApiV1, call_function);
@@ -227,9 +278,18 @@ fn rust_c_and_cpp_agree_on_the_complete_v1_abi() {
     field!(
         "BamlApiV1",
         BamlApiV1,
-        initialize_runtime_from_bytecode_with_metadata
+        initialize_runtime_from_blob_with_metadata
     );
 
+    field!("BamlApiV1", BamlApiV1, invocation_protocol_version);
+    field!("BamlApiV1", BamlApiV1, invocation_clock_ns);
+    field!("BamlApiV1", BamlApiV1, release_function_call);
+    field!("BamlApiV1", BamlApiV1, register_host_dispatch_v2);
+    field!("BamlApiV1", BamlApiV1, register_host_cancel_callback);
+    field!("BamlApiV1", BamlApiV1, trace_selection);
+    field!("BamlApiV1", BamlApiV1, invocation_context);
+    field!("BamlApiV1", BamlApiV1, media_name);
+    field!("BamlApiV1", BamlApiV1, media_from_file_content);
     assert_eq!(actual, expected, "C and Rust ABI layouts differ");
     assert_eq!(BamlCffiStatus::Ok as u32, 0);
     assert_eq!(BamlCffiStatus::InvalidHandle as u32, 1);
@@ -245,6 +305,7 @@ fn rust_c_and_cpp_agree_on_the_complete_v1_abi() {
     assert_eq!(BridgeLanguage::Java as u32, 7);
     assert_eq!(BridgeLanguage::Swift as u32, 8);
     assert_eq!(BridgeLanguage::Web as u32, 9);
+    assert_eq!(BridgeLanguage::Ruby as u32, 10);
 
     let _ = fs::remove_dir_all(scratch);
 }

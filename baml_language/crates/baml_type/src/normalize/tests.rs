@@ -1,35 +1,38 @@
 //! Unit tests for the canonical type algebra, driven by a hand-built
 //! [`TypeContext`] stub that records nominal facts directly.
 
-use std::collections::HashMap;
+use std::{cell::Cell, collections::HashMap};
 
 use super::*;
-use crate::{Freshness, FunctionParamTy, Literal, Name, QualifiedTypeName, Ty, TyAttr};
+use crate::{DeclName, Freshness, FunctionParamTy, Literal, Name, Ty};
 
 // ── stub context ───────────────────────────────────────────────────────────
 
 #[derive(Default)]
 struct Ctx {
-    aliases: HashMap<QualifiedTypeName, Ty>,
+    aliases: HashMap<DeclName, Ty>,
     /// `(concrete nominal head, interface head)` membership facts.
-    impls: Vec<(QualifiedTypeName, QualifiedTypeName)>,
+    impls: Vec<(DeclName, DeclName)>,
     /// `(primitive name, interface head)` membership facts (e.g. `int: Compare`).
-    prim_impls: Vec<(&'static str, QualifiedTypeName)>,
+    prim_impls: Vec<(&'static str, DeclName)>,
     /// `(interface head, required interface head)` direct requirements.
-    requires: Vec<(QualifiedTypeName, QualifiedTypeName)>,
+    requires: Vec<(DeclName, DeclName)>,
     /// Conjunction (`T: A + B`) bounds per type variable.
     var_bounds: HashMap<ParamTy, Vec<Ty>>,
-    enums: HashMap<QualifiedTypeName, Vec<Name>>,
+    enums: HashMap<DeclName, Vec<Name>>,
     /// Declared `extends` bounds per `(interface head, associated-type name)`.
-    assoc_bounds: HashMap<(QualifiedTypeName, Name), Vec<Ty>>,
+    assoc_bounds: HashMap<(DeclName, Name), Vec<Ty>>,
     /// `(base, interface head, member) → reduced type` projection facts, for the
     /// `project` oracle. A `Vec` (not a map) because `Ty` is not `Hash`.
-    projections: Vec<(Ty, QualifiedTypeName, Name, Ty)>,
+    projections: Vec<(Ty, DeclName, Name, Ty)>,
+    /// How many times the algebra asked for an alias definition: a refutation
+    /// that skips canonicalization never asks.
+    alias_lookups: Cell<usize>,
 }
 
-fn nominal_head(ty: &Ty) -> Option<QualifiedTypeName> {
+fn nominal_head(ty: &Ty) -> Option<DeclName> {
     match ty {
-        Ty::Class(q, ..) | Ty::Interface(q, ..) | Ty::Enum(q, _) | Ty::EnumVariant(q, ..) => {
+        Ty::Class(q, ..) | Ty::Interface(q, ..) | Ty::Enum(q) | Ty::EnumVariant(q, ..) => {
             Some(q.clone())
         }
         _ => None,
@@ -38,17 +41,24 @@ fn nominal_head(ty: &Ty) -> Option<QualifiedTypeName> {
 
 fn primitive_name(ty: &Ty) -> Option<&'static str> {
     match ty {
-        Ty::Int { .. } => Some("int"),
-        Ty::Bigint { .. } => Some("bigint"),
-        Ty::Float { .. } => Some("float"),
-        Ty::String { .. } => Some("string"),
-        Ty::Bool { .. } => Some("bool"),
+        Ty::Int => Some("int"),
+        Ty::Bigint => Some("bigint"),
+        Ty::Float => Some("float"),
+        Ty::String => Some("string"),
+        Ty::Bool => Some("bool"),
         _ => None,
     }
 }
 
 impl TypeContext for Ctx {
-    fn alias_def(&self, name: &QualifiedTypeName) -> Option<Ty> {
+    /// A name-based context represents a declaration by its own name, so this
+    /// is the identity — no resolution step, and never `None`.
+    fn well_known(&self, head: WellKnownHead) -> Option<DeclName> {
+        well_known_decl(crate::test_roots::lang(), head)
+    }
+
+    fn alias_def(&self, name: &DeclName) -> Option<Ty> {
+        self.alias_lookups.set(self.alias_lookups.get() + 1);
         self.aliases.get(name).cloned()
     }
 
@@ -80,7 +90,7 @@ impl TypeContext for Ctx {
         a == b || self.requires.iter().any(|(x, y)| x == a && y == b)
     }
 
-    fn enum_variants(&self, name: &QualifiedTypeName) -> Option<Vec<Name>> {
+    fn enum_variants(&self, name: &DeclName) -> Option<Vec<Name>> {
         self.enums.get(name).cloned()
     }
 
@@ -111,48 +121,47 @@ impl TypeContext for Ctx {
 
 // ── constructors ─────────────────────────────────────────────────────────--
 
-fn qtn(s: &str) -> QualifiedTypeName {
-    QualifiedTypeName::local(Name::new(s))
+fn qtn(s: &str) -> DeclName {
+    crate::test_roots::local(Name::new(s))
 }
 fn class(s: &str) -> Ty {
-    Ty::Class(qtn(s), vec![], TyAttr::default())
+    Ty::Class(qtn(s), Box::new([]))
 }
 fn class1(s: &str, arg: Ty) -> Ty {
-    Ty::Class(qtn(s), vec![arg], TyAttr::default())
+    Ty::Class(qtn(s), Box::new([arg]))
 }
 fn iface(s: &str) -> Ty {
-    Ty::Interface(qtn(s), vec![], vec![], TyAttr::default())
+    Ty::Interface(qtn(s), Box::new([]), Box::new([]))
 }
 fn enum_ty(s: &str) -> Ty {
-    Ty::Enum(qtn(s), TyAttr::default())
+    Ty::Enum(qtn(s))
 }
 fn variant(e: &str, v: &str) -> Ty {
-    Ty::EnumVariant(qtn(e), Name::new(v), TyAttr::default())
+    Ty::EnumVariant(qtn(e), Name::new(v))
 }
 fn lit_int(n: i64) -> Ty {
-    Ty::Literal(Literal::Int(n), Freshness::Regular, TyAttr::default())
+    Ty::Literal(Literal::Int(n), Freshness::Regular)
 }
 fn union(v: Vec<Ty>) -> Ty {
-    Ty::Union(v, TyAttr::default())
+    Ty::Union(v.into())
 }
 fn list(t: Ty) -> Ty {
-    Ty::List(Box::new(t), TyAttr::default())
+    Ty::List(Box::new(t))
 }
 fn alias(s: &str) -> Ty {
-    Ty::TypeAlias(qtn(s), TyAttr::default())
+    Ty::TypeAlias(qtn(s))
 }
 fn param(index: u32, name: &str) -> ParamTy {
     ParamTy::new(index, Name::new(name))
 }
 fn typevar(index: u32, name: &str) -> Ty {
-    Ty::TypeVar(param(index, name), TyAttr::default())
+    Ty::TypeVar(param(index, name))
 }
 fn projection(base: Ty, iface_name: &str, member: &str) -> Ty {
     Ty::AssociatedTypeProjection {
         base: Box::new(base),
-        interface: Box::new(Interface::new(qtn(iface_name), vec![], vec![])),
+        interface: Box::new(Interface::new(qtn(iface_name), Box::new([]), Box::new([]))),
         member: Name::new(member),
-        attr: TyAttr::default(),
     }
 }
 
@@ -171,6 +180,46 @@ fn projection_reduces_to_its_binding() {
         &Ty::string(),
         &ctx,
     ));
+}
+
+// ── BEP-066 shared runtime-type algebra ──────────────────────────────────
+
+#[test]
+fn reflection_kind_classes_are_ordinary_classes_disjoint_from_the_carrier() {
+    // The nine kind views are wrapper classes holding `_ty: reflect.Type` —
+    // no subtyping edge relates them to the `type` carrier in either
+    // direction, and as nominal classes they are head-disjoint from it.
+    let ctx = Ctx::default();
+    let carrier = Ty::Type;
+
+    for kind in crate::type_kind::TypeKind::ALL {
+        let view = Ty::Class(
+            kind.class_decl(crate::test_roots::root("reflect")),
+            Box::new([]),
+        );
+        assert!(
+            !is_subtype(&view, &carrier, &ctx),
+            "plain subtype entry admitted {kind:?} beneath the carrier"
+        );
+        assert!(
+            !is_subtype_interned(
+                &interned::ClosedTy::try_from(interned::Ty::from_plain(&view))
+                    .expect("closed fixture"),
+                &interned::ClosedTy::try_from(interned::Ty::from_plain(&carrier))
+                    .expect("closed fixture"),
+                &ctx,
+            ),
+            "interned subtype entry admitted {kind:?} beneath the carrier"
+        );
+        assert!(
+            !is_subtype(&carrier, &view, &ctx),
+            "the carrier is not a subtype of {kind:?}"
+        );
+        assert!(
+            definitely_disjoint(&view, &carrier, &ctx),
+            "a kind view is an ordinary class, head-disjoint from the carrier"
+        );
+    }
 }
 
 #[test]
@@ -231,25 +280,13 @@ fn union_aci() {
 fn never_is_removed_unknown_absorbs() {
     let ctx = Ctx::default();
     assert!(equivalent(
-        &union(vec![
-            Ty::int(),
-            Ty::Never {
-                attr: TyAttr::default()
-            }
-        ]),
+        &union(vec![Ty::int(), Ty::Never]),
         &Ty::int(),
         &ctx,
     ));
     assert!(equivalent(
-        &union(vec![
-            Ty::int(),
-            Ty::BuiltinUnknown {
-                attr: TyAttr::default()
-            }
-        ]),
-        &Ty::BuiltinUnknown {
-            attr: TyAttr::default()
-        },
+        &union(vec![Ty::int(), Ty::Unknown]),
+        &Ty::Unknown,
         &ctx,
     ));
 }
@@ -265,16 +302,12 @@ fn literal_types_are_subtypes_of_their_base_only() {
     assert!(is_subtype(&lit_int(42), &Ty::int(), &ctx));
     assert!(is_subtype(&lit_float("3.14"), &Ty::float(), &ctx));
     assert!(is_subtype(
-        &Ty::Literal(
-            Literal::String("hello".to_string()),
-            Freshness::Regular,
-            TyAttr::default(),
-        ),
+        &Ty::Literal(Literal::String("hello".to_string()), Freshness::Regular),
         &Ty::string(),
         &ctx
     ));
     assert!(is_subtype(
-        &Ty::Literal(Literal::Bool(true), Freshness::Regular, TyAttr::default()),
+        &Ty::Literal(Literal::Bool(true), Freshness::Regular),
         &Ty::bool(),
         &ctx
     ));
@@ -325,9 +358,7 @@ fn literal_into_base_absorption() {
 #[test]
 fn optional_is_union_with_null() {
     let ctx = Ctx::default();
-    let null = Ty::Null {
-        attr: TyAttr::default(),
-    };
+    let null = Ty::Null;
     assert!(equivalent(
         &Ty::optional(Ty::int()),
         &union(vec![Ty::int(), null]),
@@ -495,12 +526,8 @@ fn generics_are_invariant_up_to_equivalence() {
 #[test]
 fn subtype_basics() {
     let ctx = Ctx::default();
-    let never = Ty::Never {
-        attr: TyAttr::default(),
-    };
-    let unknown = Ty::BuiltinUnknown {
-        attr: TyAttr::default(),
-    };
+    let never = Ty::Never;
+    let unknown = Ty::Unknown;
 
     assert!(is_subtype(&lit_int(1), &Ty::int(), &ctx));
     assert!(is_subtype(&variant("Side", "Left"), &enum_ty("Side"), &ctx));
@@ -509,13 +536,7 @@ fn subtype_basics() {
     assert!(!is_subtype(&unknown, &Ty::int(), &ctx));
 
     // No numeric coercion across representations.
-    assert!(!is_subtype(
-        &Ty::int(),
-        &Ty::Bigint {
-            attr: TyAttr::default()
-        },
-        &ctx
-    ));
+    assert!(!is_subtype(&Ty::int(), &Ty::Bigint, &ctx));
 
     // Union decomposition.
     assert!(is_subtype(
@@ -538,21 +559,17 @@ fn subtype_basics() {
 // ── subtyping: variance, holes, unions (flip de-risk) ─────────────────────--
 
 #[test]
-fn invariant_arg_distinguishes_top_from_recovery_hole() {
+fn invariant_arg_distinguishes_top_from_recovery_sentinel() {
     // The exact divergence the subtyping migration relies on. Generics are
     // invariant (TYPE_SYSTEM.md §Variance), so the genuine top type `unknown`
-    // (`BuiltinUnknown`) is invariant-distinct: `Box<unknown>` is NOT `Box<int>`.
-    // The error-recovery sentinel (`Unknown`) is different — it stays
-    // bidirectionally compatible, so a recovered `Box<Unknown>` never cascades a
+    // (`Unknown`) is invariant-distinct: `Box<unknown>` is NOT `Box<int>`.
+    // The error-recovery sentinel (`Error`) is different — it stays
+    // bidirectionally compatible, so a recovered `Box<Error>` never cascades a
     // subtype error. Keeping the two apart is what lets error recovery use the
-    // recovery sentinel while `unknown` keeps its sound invariant identity.
+    // sentinel while `unknown` keeps its sound invariant identity.
     let ctx = Ctx::default();
-    let top = Ty::BuiltinUnknown {
-        attr: TyAttr::default(),
-    };
-    let hole = Ty::Unknown {
-        attr: TyAttr::default(),
-    };
+    let top = Ty::Unknown;
+    let sentinel = Ty::Error;
 
     assert!(!is_subtype(
         &class1("Box", top.clone()),
@@ -566,13 +583,13 @@ fn invariant_arg_distinguishes_top_from_recovery_hole() {
     ));
 
     assert!(is_subtype(
-        &class1("Box", hole.clone()),
+        &class1("Box", sentinel.clone()),
         &class1("Box", Ty::int()),
         &ctx
     ));
     assert!(is_subtype(
         &class1("Box", Ty::int()),
-        &class1("Box", hole),
+        &class1("Box", sentinel),
         &ctx
     ));
 }
@@ -584,26 +601,20 @@ fn function_subtyping_is_contravariant_in_params_covariant_in_return() {
     // contravariant (`int <: int | string`) and the return covariant
     // (`bool <: bool | float`).
     let ctx = Ctx::default();
-    let never = Ty::Never {
-        attr: TyAttr::default(),
-    };
-    let float = Ty::Float {
-        attr: TyAttr::default(),
-    };
+    let never = Ty::Never;
+    let float = Ty::Float;
     let foo = Ty::Function {
-        params: vec![FunctionParamTy::required(
+        params: Box::new([FunctionParamTy::required(
             None,
             union(vec![Ty::int(), Ty::string()]),
-        )],
+        )]),
         ret: Box::new(Ty::bool()),
         throws: Box::new(never.clone()),
-        attr: TyAttr::default(),
     };
     let expected = Ty::Function {
-        params: vec![FunctionParamTy::required(None, Ty::int())],
+        params: Box::new([FunctionParamTy::required(None, Ty::int())]),
         ret: Box::new(union(vec![Ty::bool(), float])),
         throws: Box::new(never),
-        attr: TyAttr::default(),
     };
     assert!(is_subtype(&foo, &expected, &ctx));
     // The reverse fails: `int | string` (foo's param) is not <: `int`, so the
@@ -618,14 +629,11 @@ fn function_throws_is_covariant() {
     // the reverse.
     let ctx = Ctx::default();
     let mk = |throws: Ty| Ty::Function {
-        params: vec![],
+        params: Box::new([]),
         ret: Box::new(Ty::string()),
         throws: Box::new(throws),
-        attr: TyAttr::default(),
     };
-    let never = Ty::Never {
-        attr: TyAttr::default(),
-    };
+    let never = Ty::Never;
     assert!(is_subtype(&mk(never.clone()), &mk(Ty::int()), &ctx));
     assert!(!is_subtype(&mk(Ty::int()), &mk(never), &ctx));
 }
@@ -637,12 +645,9 @@ fn function_required_param_names_are_insignificant() {
     // required param's name are equivalent (a named vs unnamed one too).
     let ctx = Ctx::default();
     let mk = |name: Option<&str>| Ty::Function {
-        params: vec![FunctionParamTy::required(name.map(Name::new), Ty::int())],
+        params: Box::new([FunctionParamTy::required(name.map(Name::new), Ty::int())]),
         ret: Box::new(Ty::string()),
-        throws: Box::new(Ty::Never {
-            attr: TyAttr::default(),
-        }),
-        attr: TyAttr::default(),
+        throws: Box::new(Ty::Never),
     };
     assert!(equivalent(&mk(Some("a")), &mk(Some("b")), &ctx));
     assert!(equivalent(&mk(Some("a")), &mk(None), &ctx));
@@ -655,12 +660,9 @@ fn function_optional_params_follow_the_superset_rule() {
     // (TYPE_SYSTEM.md, Subtyping Rules). Their order is insignificant.
     let ctx = Ctx::default();
     let func = |params: Vec<FunctionParamTy>| Ty::Function {
-        params,
+        params: params.into(),
         ret: Box::new(Ty::string()),
-        throws: Box::new(Ty::Never {
-            attr: TyAttr::default(),
-        }),
-        attr: TyAttr::default(),
+        throws: Box::new(Ty::Never),
     };
     let req = FunctionParamTy::required(None, Ty::string());
     let opt_max = FunctionParamTy::optional(Some(Name::new("max")), Ty::int());
@@ -685,16 +687,13 @@ fn function_optional_and_required_params_are_incomparable() {
     // unrelated: the required-arity check (equal counts) already fails both ways.
     let ctx = Ctx::default();
     let mk = |optional: bool| Ty::Function {
-        params: vec![if optional {
+        params: Box::new([if optional {
             FunctionParamTy::optional(Some(Name::new("value")), Ty::int())
         } else {
             FunctionParamTy::required(Some(Name::new("value")), Ty::int())
-        }],
+        }]),
         ret: Box::new(Ty::string()),
-        throws: Box::new(Ty::Never {
-            attr: TyAttr::default(),
-        }),
-        attr: TyAttr::default(),
+        throws: Box::new(Ty::Never),
     };
     assert!(!is_subtype(&mk(true), &mk(false), &ctx));
     assert!(!is_subtype(&mk(false), &mk(true), &ctx));
@@ -766,7 +765,6 @@ fn symbolic_associated_type_projection_subtypes_via_its_bound() {
         base: Box::new(typevar(0, "T")),
         interface: Box::new(interface),
         member: Name::new("Item"),
-        attr: TyAttr::default(),
     };
     let iter_proj = proj(
         iface("Iter")
@@ -789,17 +787,13 @@ fn symbolic_associated_type_projection_subtypes_via_its_bound() {
 fn non_recursive_alias_expands() {
     let mut ctx = Ctx::default();
     ctx.aliases.insert(qtn("MyInt"), Ty::int());
-    assert!(equivalent(
-        &Ty::TypeAlias(qtn("MyInt"), TyAttr::default()),
-        &Ty::int(),
-        &ctx
-    ));
+    assert!(equivalent(&Ty::TypeAlias(qtn("MyInt")), &Ty::int(), &ctx));
 }
 
 #[test]
 fn unresolved_alias_is_opaque() {
     let ctx = Ctx::default();
-    let a = Ty::TypeAlias(qtn("Missing"), TyAttr::default());
+    let a = Ty::TypeAlias(qtn("Missing"));
     // Equal only to itself; never equated to a concrete type (fail-safe).
     assert!(equivalent(&a, &a, &ctx));
     assert!(!equivalent(&a, &Ty::int(), &ctx));
@@ -812,12 +806,9 @@ fn recursive_alias_terminates() {
     let tree = qtn("Tree");
     ctx.aliases.insert(
         tree.clone(),
-        union(vec![
-            Ty::int(),
-            class1("Box", Ty::TypeAlias(tree.clone(), TyAttr::default())),
-        ]),
+        union(vec![Ty::int(), class1("Box", Ty::TypeAlias(tree.clone()))]),
     );
-    let alias = Ty::TypeAlias(tree.clone(), TyAttr::default());
+    let alias = Ty::TypeAlias(tree.clone());
 
     assert!(equivalent(&alias, &alias, &ctx));
     assert!(is_subtype(&alias, &alias, &ctx));
@@ -928,13 +919,7 @@ fn unguarded_members_are_vacuous() {
     ctx.aliases.insert(qtn("B"), list(alias("B")));
     ctx.aliases.insert(qtn("C"), alias("C"));
     assert!(equivalent(&alias("A"), &alias("B"), &ctx));
-    assert!(equivalent(
-        &alias("C"),
-        &Ty::Never {
-            attr: TyAttr::default()
-        },
-        &ctx
-    ));
+    assert!(equivalent(&alias("C"), &Ty::Never, &ctx));
     // The soundness regression: before ε-closure, the assumption-set probe
     // fired on `string ≤ A` through the unguarded member without crossing a
     // constructor, wrongly answering `true`.
@@ -1044,9 +1029,7 @@ fn catch_result_union_equals_base() {
 // ── concrete-type disjointness (`==` always-false fold) ──────────────────--
 
 fn bigint() -> Ty {
-    Ty::Bigint {
-        attr: TyAttr::default(),
-    }
+    Ty::Bigint
 }
 
 #[test]
@@ -1090,9 +1073,7 @@ fn disjoint_invariant_generic_classes() {
     ));
     // `unknown` is the determined top type, so `Box<unknown>` is a distinct
     // invariant instantiation from `Box<int>` → disjoint.
-    let unknown = Ty::BuiltinUnknown {
-        attr: TyAttr::default(),
-    };
+    let unknown = Ty::Unknown;
     assert!(definitely_disjoint(
         &class1("Box", unknown),
         &class1("Box", Ty::int()),
@@ -1110,7 +1091,6 @@ fn map_ty(key: Ty, value: Ty) -> Ty {
     Ty::Map {
         key: Box::new(key),
         value: Box::new(value),
-        attr: TyAttr::default(),
     }
 }
 
@@ -1184,9 +1164,7 @@ fn disjoint_containers_are_invariant() {
         &ctx
     ));
     // `unknown` element is determined → `list<unknown>` is disjoint from `list<int>`.
-    let list_unknown = Ty::list(Ty::BuiltinUnknown {
-        attr: TyAttr::default(),
-    });
+    let list_unknown = Ty::list(Ty::Unknown);
     assert!(definitely_disjoint(
         &list_unknown,
         &Ty::list(Ty::int()),
@@ -1237,9 +1215,7 @@ fn same_enum_variants_are_not_disjoint() {
 #[test]
 fn non_ground_types_are_never_disjoint() {
     let ctx = Ctx::default();
-    let unknown = Ty::BuiltinUnknown {
-        attr: TyAttr::default(),
-    };
+    let unknown = Ty::Unknown;
     assert!(!definitely_disjoint(&Ty::int(), &unknown, &ctx));
     assert!(!definitely_disjoint(&Ty::int(), &typevar(0, "T"), &ctx));
     assert!(!definitely_disjoint(&Ty::int(), &iface("Animal"), &ctx));
@@ -1268,9 +1244,7 @@ fn disjoint_unions_require_all_cross_pairs() {
 #[test]
 fn disjoint_null() {
     let ctx = Ctx::default();
-    let null = Ty::Null {
-        attr: TyAttr::default(),
-    };
+    let null = Ty::Null;
     assert!(definitely_disjoint(&null, &Ty::int(), &ctx));
     assert!(!definitely_disjoint(&null, &null, &ctx));
 }
@@ -1278,29 +1252,19 @@ fn disjoint_null() {
 // ── always-equal fold (`==` provably true) ───────────────────────────────--
 
 fn lit_str(s: &str) -> Ty {
-    Ty::Literal(
-        Literal::String(s.to_string()),
-        Freshness::Regular,
-        TyAttr::default(),
-    )
+    Ty::Literal(Literal::String(s.to_string()), Freshness::Regular)
 }
 fn lit_bool(b: bool) -> Ty {
-    Ty::Literal(Literal::Bool(b), Freshness::Regular, TyAttr::default())
+    Ty::Literal(Literal::Bool(b), Freshness::Regular)
 }
 fn lit_float(s: &str) -> Ty {
-    Ty::Literal(
-        Literal::Float(s.to_string()),
-        Freshness::Regular,
-        TyAttr::default(),
-    )
+    Ty::Literal(Literal::Float(s.to_string()), Freshness::Regular)
 }
 
 #[test]
 fn equal_same_primitive_literals_and_null() {
     let ctx = Ctx::default();
-    let null = Ty::Null {
-        attr: TyAttr::default(),
-    };
+    let null = Ty::Null;
     assert!(definitely_equal(&lit_int(1), &lit_int(1), &ctx));
     assert!(definitely_equal(&lit_str("a"), &lit_str("a"), &ctx));
     assert!(definitely_equal(&lit_bool(true), &lit_bool(true), &ctx));
@@ -1334,26 +1298,70 @@ fn equal_requires_singleton_with_unoverridable_eq() {
     assert!(!definitely_equal(&class("Dog"), &class("Dog"), &ctx));
 }
 
-// ── BEP-062: baml.AnyFunction ──────────────────────────────────────────────
+// ── reflect.AnyClass ──────────────────────────────────────────────────────────
 
-/// `baml.AnyFunction<...pins>` with the given associated-type pins. An empty
+fn any_class() -> Ty {
+    Ty::Interface(
+        crate::test_roots::new(Name::new("reflect"), vec![], Name::new("AnyClass")),
+        Box::new([]),
+        Box::new([]),
+    )
+}
+
+#[test]
+fn any_class_membership_is_derived_for_classes_only() {
+    let ctx = Ctx::default();
+    let target = any_class();
+    assert!(is_subtype(&class("Record"), &target, &ctx));
+    assert!(!is_subtype(&Ty::int(), &target, &ctx));
+    assert!(!is_subtype(&Ty::string(), &target, &ctx));
+    assert!(!is_subtype(&Ty::List(Box::new(Ty::int())), &target, &ctx));
+    assert!(!is_subtype(
+        &Ty::Map {
+            key: Box::new(Ty::string()),
+            value: Box::new(Ty::int()),
+        },
+        &target,
+        &ctx
+    ));
+}
+
+#[test]
+fn any_class_admits_every_reflection_kind_view() {
+    // The kind views are ordinary classes with an ordinary field, so they
+    // inhabit `AnyClass` like any other class — no carve-out.
+    let ctx = Ctx::default();
+    let target = any_class();
+    for kind in crate::type_kind::TypeKind::ALL {
+        let view = Ty::Class(
+            kind.class_decl(crate::test_roots::root("reflect")),
+            Box::new([]),
+        );
+        assert!(
+            is_subtype(&view, &target, &ctx),
+            "AnyClass rejected {kind:?}"
+        );
+    }
+}
+
+// ── BEP-062: reflect.AnyFunction ──────────────────────────────────────────────
+
+/// `reflect.AnyFunction<...pins>` with the given associated-type pins. An empty
 /// list models a pre-default-fill existential (lowering normally fills
 /// `Returns`/`Throws` with `unknown`).
 fn any_function(pins: Vec<(&str, Ty)>) -> Ty {
     Ty::Interface(
-        QualifiedTypeName::new(Name::new("baml"), vec![], Name::new("AnyFunction")),
-        vec![],
+        crate::test_roots::new(Name::new("reflect"), vec![], Name::new("AnyFunction")),
+        Box::new([]),
         pins.into_iter().map(|(n, t)| (Name::new(n), t)).collect(),
-        TyAttr::default(),
     )
 }
 
 fn simple_fn(ret: Ty, throws: Ty) -> Ty {
     Ty::Function {
-        params: vec![FunctionParamTy::required(None, Ty::int())],
+        params: Box::new([FunctionParamTy::required(None, Ty::int())]),
         ret: Box::new(ret),
         throws: Box::new(throws),
-        attr: TyAttr::default(),
     }
 }
 
@@ -1363,9 +1371,7 @@ fn every_function_implements_bare_any_function() {
     // Both the default-filled existential (`Returns`/`Throws` pinned to
     // `unknown`) and a pin-free one accept any function shape.
     let ctx = Ctx::default();
-    let never = Ty::Never {
-        attr: TyAttr::default(),
-    };
+    let never = Ty::Never;
     let filled = any_function(vec![("Returns", Ty::unknown()), ("Throws", Ty::unknown())]);
     assert!(is_subtype(
         &simple_fn(Ty::string(), never.clone()),
@@ -1391,9 +1397,7 @@ fn every_function_implements_bare_any_function() {
 #[test]
 fn any_function_pins_check_the_functions_channels_covariantly() {
     let ctx = Ctx::default();
-    let never = Ty::Never {
-        attr: TyAttr::default(),
-    };
+    let never = Ty::Never;
     let ret_pin = any_function(vec![
         ("Returns", union(vec![Ty::int(), Ty::string()])),
         ("Throws", Ty::unknown()),
@@ -1435,15 +1439,7 @@ fn any_function_existentials_are_covariant_in_their_pins() {
     // themselves relate covariantly: `AnyFunction<Returns = int>` fits where
     // `AnyFunction<Returns = int | string>` is expected.
     let ctx = Ctx::default();
-    let narrow = any_function(vec![
-        ("Returns", Ty::int()),
-        (
-            "Throws",
-            Ty::Never {
-                attr: TyAttr::default(),
-            },
-        ),
-    ]);
+    let narrow = any_function(vec![("Returns", Ty::int()), ("Throws", Ty::Never)]);
     let wide = any_function(vec![
         ("Returns", union(vec![Ty::int(), Ty::string()])),
         ("Throws", class("ToolError")),
@@ -1459,11 +1455,406 @@ fn any_function_existentials_are_covariant_in_their_pins() {
     // context does not claim.
     let other = Ty::Interface(
         qtn("Callable"),
-        vec![],
-        vec![(Name::new("Returns"), Ty::int())],
-        TyAttr::default(),
+        Box::new([]),
+        Box::new([(Name::new("Returns"), Ty::int())]),
     );
     assert!(!is_subtype(&other, &any_function(vec![]), &ctx));
+}
+
+// ── head-category refutation ─────────────────────────────────────────────--
+
+/// `type Json = null | bool | int | float | string | Json[] | map<string, Json>`
+/// registered under the given name: the recursive alias whose canonical form
+/// is expensive to build.
+fn json_alias(ctx: &mut Ctx, name: &str) {
+    ctx.aliases.insert(
+        qtn(name),
+        union(vec![
+            Ty::null(),
+            Ty::bool(),
+            Ty::int(),
+            Ty::float(),
+            Ty::string(),
+            list(alias(name)),
+            map_ty(Ty::string(), alias(name)),
+        ]),
+    );
+}
+
+/// One type of every `Ty` variant, plus the facts that make the context-driven
+/// rules fire: `Box` and `int` implement `Displayable`, `T: Displayable`,
+/// `(Box as Displayable).Item` reduces to `int`, and `Json` is recursive.
+fn kind_corpus() -> (Ctx, Vec<Ty>) {
+    let mut ctx = Ctx::default();
+    json_alias(&mut ctx, "Json");
+    ctx.enums
+        .insert(qtn("Side"), vec![Name::new("L"), Name::new("R")]);
+    ctx.impls.push((qtn("Box"), qtn("Displayable")));
+    ctx.prim_impls.push(("int", qtn("Displayable")));
+    ctx.var_bounds
+        .insert(param(0, "T"), vec![iface("Displayable")]);
+    ctx.projections.push((
+        class("Box"),
+        qtn("Displayable"),
+        Name::new("Item"),
+        Ty::int(),
+    ));
+    let corpus = vec![
+        Ty::int(),
+        bigint(),
+        Ty::float(),
+        Ty::string(),
+        Ty::bool(),
+        Ty::null(),
+        Ty::Uint8Array,
+        Ty::Media(MediaKind::Image),
+        Ty::Media(MediaKind::Generic),
+        Ty::RustType,
+        Ty::Type,
+        Ty::Resource,
+        Ty::PromptAst,
+        lit_int(1),
+        lit_float("1.5"),
+        lit_str("user"),
+        lit_bool(true),
+        class("Box"),
+        class1("Gen", Ty::int()),
+        enum_ty("Side"),
+        variant("Side", "L"),
+        list(Ty::int()),
+        list(alias("Json")),
+        map_ty(Ty::string(), alias("Json")),
+        map_ty(Ty::string(), Ty::int()),
+        Ty::Function {
+            params: Box::new([FunctionParamTy::required(None, Ty::int())]),
+            ret: Box::new(Ty::bool()),
+            throws: Box::new(Ty::Never),
+        },
+        Ty::Future(Box::new(Ty::int()), Box::new(Ty::Never)),
+        union(vec![Ty::int(), Ty::string()]),
+        Ty::optional(Ty::string()),
+        alias("Json"),
+        iface("Displayable"),
+        typevar(0, "T"),
+        projection(class("Box"), "Displayable", "Item"),
+        Ty::Unknown,
+        Ty::Never,
+        Ty::Error,
+    ];
+    (ctx, corpus)
+}
+
+/// The head-category refutation is only a shortcut: over every pair of
+/// variants, `is_subtype` and `equivalent` give the verdict the canonical
+/// relation gives.
+#[test]
+fn subtype_and_equivalence_agree_with_the_canonical_relation_for_every_kind_pair() {
+    let (ctx, corpus) = kind_corpus();
+    for sub in &corpus {
+        for sup in &corpus {
+            let canonical_sub = NormalTy::canonical(sub, &ctx);
+            let canonical_sup = NormalTy::canonical(sup, &ctx);
+            assert_eq!(
+                ctx.is_subtype(sub, sup),
+                canonical_sub.is_subtype_of(&canonical_sup, &ctx, &mut HashSet::new()),
+                "subtype verdict diverged for {sub:?} <: {sup:?}"
+            );
+            assert_eq!(
+                ctx.equivalent(sub, sup),
+                canonical_sub == canonical_sup,
+                "equivalence verdict diverged for {sub:?} == {sup:?}"
+            );
+        }
+    }
+}
+
+/// Pairs whose top-level kinds no rule relates, the ones a runtime `match` on
+/// a `json` value asks about for every node: none of them may canonicalize
+/// (and so expand) the recursive alias.
+fn cross_category_pairs() -> Vec<(Ty, Ty)> {
+    let json_map = map_ty(Ty::string(), alias("Json"));
+    let json_list = list(alias("Json"));
+    vec![
+        (lit_str("user"), json_map.clone()),
+        (lit_str("user"), json_list.clone()),
+        (json_list.clone(), json_map.clone()),
+        (json_map.clone(), json_list.clone()),
+        (Ty::int(), json_map.clone()),
+        (lit_int(1), Ty::float()),
+        (Ty::null(), json_list),
+        (class("Box"), json_map.clone()),
+        (enum_ty("Side"), json_map),
+    ]
+}
+
+#[test]
+fn cross_category_pairs_are_refuted_without_canonicalizing() {
+    let mut ctx = Ctx::default();
+    json_alias(&mut ctx, "Json");
+    for (sub, sup) in cross_category_pairs() {
+        assert!(!ctx.is_subtype(&sub, &sup), "{sub:?} <: {sup:?}");
+        assert!(!ctx.equivalent(&sub, &sup), "{sub:?} == {sup:?}");
+        assert_eq!(
+            ctx.alias_lookups.get(),
+            0,
+            "{sub:?} vs {sup:?} canonicalized an alias"
+        );
+    }
+}
+
+/// Kinds a canonical form can rewrite, or that a context-driven rule relates
+/// across kinds, are never refuted by their head alone.
+#[test]
+fn rewritable_and_context_driven_kinds_are_not_refuted() {
+    let (ctx, _) = kind_corpus();
+    let json_map = map_ty(Ty::string(), alias("Json"));
+    assert!(ctx.is_subtype(&lit_str("user"), &alias("Json")));
+    assert!(ctx.is_subtype(&json_map, &alias("Json")));
+    assert!(ctx.is_subtype(&Ty::int(), &iface("Displayable")));
+    assert!(ctx.is_subtype(&class("Box"), &iface("Displayable")));
+    assert!(ctx.is_subtype(&typevar(0, "T"), &iface("Displayable")));
+    assert!(ctx.is_subtype(&projection(class("Box"), "Displayable", "Item"), &Ty::int()));
+    assert!(ctx.is_subtype(&Ty::Never, &json_map));
+    assert!(ctx.is_subtype(&json_map, &Ty::Unknown));
+    assert!(ctx.is_subtype(&Ty::Error, &json_map));
+    assert!(ctx.is_subtype(&lit_str("user"), &Ty::optional(Ty::string())));
+}
+
+// ── interned entry (S4b) ───────────────────────────────────────────────────
+
+mod interned_entry {
+    use super::*;
+    use crate::interned;
+
+    fn it(ty: &Ty) -> interned::ClosedTy {
+        interned::ClosedTy::try_from(interned::Ty::from_plain(ty))
+            .expect("plain input carries no variables")
+    }
+
+    /// Every verdict must agree between the plain entry and the interned
+    /// entry - `from_interned` is an ingestion path, not a second algebra.
+    #[test]
+    fn subtype_and_equivalence_verdicts_match_the_plain_entry() {
+        let mut ctx = Ctx::default();
+        ctx.enums
+            .insert(qtn("Side"), vec![Name::new("L"), Name::new("R")]);
+        ctx.aliases
+            .insert(qtn("Loop"), Ty::List(Box::new(Ty::TypeAlias(qtn("Loop")))));
+
+        let pairs = [
+            (lit_int(1), Ty::int()),
+            (Ty::int(), lit_int(1)),
+            (Ty::int(), union(vec![Ty::int(), Ty::string()])),
+            (union(vec![Ty::int(), Ty::string()]), Ty::int()),
+            (
+                Ty::List(Box::new(lit_int(1))),
+                Ty::List(Box::new(Ty::int())),
+            ),
+            (Ty::Never, class("Box")),
+            (class("Box"), Ty::Unknown),
+            (variant("Side", "L"), enum_ty("Side")),
+            (enum_ty("Side"), variant("Side", "L")),
+            (
+                union(vec![variant("Side", "L"), variant("Side", "R")]),
+                enum_ty("Side"),
+            ),
+            (
+                Ty::TypeAlias(qtn("Loop")),
+                Ty::List(Box::new(Ty::TypeAlias(qtn("Loop")))),
+            ),
+            (
+                class1("Box", Ty::int()),
+                class1("Box", union(vec![Ty::int(), Ty::string()])),
+            ),
+        ];
+        for (sub, sup) in &pairs {
+            assert_eq!(
+                is_subtype_interned(&it(sub), &it(sup), &ctx),
+                ctx.is_subtype(sub, sup),
+                "subtype verdict diverged for {sub:?} <: {sup:?}"
+            );
+            assert_eq!(
+                equivalent_interned(&it(sub), &it(sup), &ctx),
+                ctx.equivalent(sub, sup),
+                "equivalence verdict diverged for {sub:?} == {sup:?}"
+            );
+        }
+        // ACI equivalence through the interned entry.
+        assert!(equivalent_interned(
+            &it(&union(vec![Ty::int(), Ty::string()])),
+            &it(&union(vec![Ty::string(), Ty::int()])),
+            &ctx,
+        ));
+    }
+
+    /// The interned entries give the canonical verdict for every kind pair too.
+    #[test]
+    fn interned_verdicts_agree_with_the_canonical_relation_for_every_kind_pair() {
+        let (ctx, corpus) = kind_corpus();
+        let corpus: Vec<_> = corpus.iter().map(it).collect();
+        let cache = InternedCanonicalCache::default();
+        for sub in &corpus {
+            for sup in &corpus {
+                let canonical_sub = NormalTy::canonical_interned(sub, &ctx);
+                let canonical_sup = NormalTy::canonical_interned(sup, &ctx);
+                let subtype =
+                    canonical_sub.is_subtype_of(&canonical_sup, &ctx, &mut HashSet::new());
+                let equivalent = canonical_sub == canonical_sup;
+                assert_eq!(
+                    is_subtype_interned(sub, sup, &ctx),
+                    subtype,
+                    "{sub:?} <: {sup:?}"
+                );
+                assert_eq!(
+                    cache.is_subtype(sub, sup, &ctx),
+                    subtype,
+                    "{sub:?} <: {sup:?}"
+                );
+                assert_eq!(
+                    equivalent_interned(sub, sup, &ctx),
+                    equivalent,
+                    "{sub:?} == {sup:?}"
+                );
+                assert_eq!(
+                    cache.equivalent(sub, sup, &ctx),
+                    equivalent,
+                    "{sub:?} == {sup:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn interned_cross_category_pairs_are_refuted_without_canonicalizing() {
+        let mut ctx = Ctx::default();
+        json_alias(&mut ctx, "Json");
+        let cache = InternedCanonicalCache::default();
+        for (sub, sup) in cross_category_pairs() {
+            let (sub, sup) = (it(&sub), it(&sup));
+            assert!(!is_subtype_interned(&sub, &sup, &ctx), "{sub:?} <: {sup:?}");
+            assert!(!equivalent_interned(&sub, &sup, &ctx), "{sub:?} == {sup:?}");
+            assert!(!cache.is_subtype(&sub, &sup, &ctx), "{sub:?} <: {sup:?}");
+            assert!(!cache.equivalent(&sub, &sup, &ctx), "{sub:?} == {sup:?}");
+            assert_eq!(
+                ctx.alias_lookups.get(),
+                0,
+                "{sub:?} vs {sup:?} canonicalized an alias"
+            );
+        }
+    }
+
+    #[test]
+    fn canonical_cache_matches_reject_free_canonical_relations() {
+        let mut ctx = Ctx::default();
+        ctx.enums
+            .insert(qtn("Side"), vec![Name::new("L"), Name::new("R")]);
+        ctx.requires.push((qtn("Readable"), qtn("Displayable")));
+        int_list_alias(&mut ctx, "JsonA");
+        int_list_alias(&mut ctx, "JsonB");
+
+        let pairs = [
+            (alias("JsonA"), alias("JsonB")),
+            (alias("JsonA"), Ty::int()),
+            (lit_int(1), Ty::int()),
+            (Ty::int(), union(vec![Ty::int(), Ty::string()])),
+            (
+                union(vec![variant("Side", "L"), variant("Side", "R")]),
+                enum_ty("Side"),
+            ),
+            (class("Left"), class("Right")),
+            // Distinct interface heads cannot be rejected: the context makes
+            // this pair a valid subtype through `requires`.
+            (iface("Readable"), iface("Displayable")),
+            (iface("Displayable"), iface("Readable")),
+        ];
+        let pairs = pairs.map(|(a, b)| (it(&a), it(&b)));
+        let cache = InternedCanonicalCache::default();
+
+        // Run twice: the first pass populates canonical forms and the second
+        // proves that the warm path returns the same relation verdicts. The
+        // oracle deliberately bypasses the interned-entry fast rejection.
+        for _ in 0..2 {
+            for (a, b) in &pairs {
+                let canonical_a = NormalTy::canonical_interned(a, &ctx);
+                let canonical_b = NormalTy::canonical_interned(b, &ctx);
+                assert_eq!(
+                    cache.equivalent(a, b, &ctx),
+                    canonical_a == canonical_b,
+                    "cached equivalence diverged for {a:?} == {b:?}"
+                );
+                assert_eq!(
+                    cache.is_subtype(a, b, &ctx),
+                    canonical_a.is_subtype_of(&canonical_b, &ctx, &mut HashSet::new()),
+                    "cached subtyping diverged for {a:?} <: {b:?}"
+                );
+            }
+        }
+    }
+
+    /// The plain entry gets the same spec rule (TYPE_SYSTEM.md:
+    /// `(true | false) == bool`); the collapse lives in the shared algebra,
+    /// not in an engine.
+    #[test]
+    fn complete_bool_literal_set_is_bool_in_the_plain_entry_too() {
+        let ctx = Ctx::default();
+        let lit_bool = |b: bool| Ty::Literal(Literal::Bool(b), Freshness::Regular);
+        assert!(ctx.equivalent(&union(vec![lit_bool(true), lit_bool(false)]), &Ty::bool()));
+        assert!(!ctx.equivalent(&lit_bool(true), &Ty::bool()));
+    }
+
+    #[test]
+    fn canonical_union_joins_and_collapses() {
+        let ctx = Ctx::default();
+        let t = |b: bool| it(&Ty::Literal(Literal::Bool(b), Freshness::Regular));
+        // The bool-join fixture's core: true | false collapses to bool.
+        let joined = canonical_union_interned(&[t(true), t(false)], &ctx);
+        assert!(joined == it(&Ty::bool()));
+        // Absorption: 1 | int collapses to int.
+        let absorbed = canonical_union_interned(&[it(&lit_int(1)), it(&Ty::int())], &ctx);
+        assert!(absorbed == it(&Ty::int()));
+        // Join identity: the empty union is never.
+        let empty = canonical_union_interned(&[], &ctx);
+        assert!(empty == it(&Ty::Never));
+        // Reordered spellings canonicalize identically.
+        let ab = canonical_union_interned(&[it(&Ty::int()), it(&Ty::string())], &ctx);
+        let ba = canonical_union_interned(&[it(&Ty::string()), it(&Ty::int())], &ctx);
+        assert!(ab == ba);
+    }
+
+    #[test]
+    fn normalize_interned_produces_canonical_interned_types() {
+        let ctx = Ctx::default();
+        let messy = it(&union(vec![lit_int(1), Ty::int(), Ty::int()]));
+        assert!(normalize_interned(&messy, &ctx) == it(&Ty::int()));
+    }
+}
+
+#[test]
+fn self_referential_bound_subtyping_terminates() {
+    // B-1091 regression: `T extends Foo<T | int>` - the bound mentions its
+    // own variable, so the TypeVar subtype arm re-canonicalizes the bound
+    // while proving through it. Before `canonical_with` (assumption
+    // threading), that re-entry restarted the co-inductive set and the
+    // chain `canonical -> absorb_subtypes -> is_subtype(T, int) ->
+    // canonical(bound) -> ...` recursed to a stack overflow. These three
+    // calls TERMINATING is the test; the verdicts pin the co-inductive
+    // semantics.
+    let mut ctx = Ctx::default();
+    let foo = crate::test_roots::local(Name::new("Foo"));
+    let bound = Ty::Interface(
+        foo,
+        Box::new([Ty::union(vec![Ty::type_var("T"), Ty::int()])]),
+        Box::new([]),
+    );
+    ctx.var_bounds
+        .insert(ParamTy::new(0, Name::new("T")), vec![bound.clone()]);
+
+    // Proves through the carried bound (reflexive at the bound itself).
+    assert!(is_subtype(&Ty::type_var("T"), &bound, &ctx));
+    // The bound does not place `T` inside `int`.
+    assert!(!is_subtype(&Ty::type_var("T"), &Ty::int(), &ctx));
+    // Canonicalizing the bound itself terminates.
+    let _ = normalize(&bound, &ctx);
 }
 
 // ── review regressions: renderer totality, unguarded members, qualifiers ──--
@@ -1504,16 +1895,19 @@ fn projection_qualifier_on_cycle_terminates() {
     // are bisimilar, so minimization merges them; materializing the interface
     // member then places the recursion cut at the qualifier position.
     let mut ctx = Ctx::default();
-    let i_of_a = Ty::Interface(qtn("I"), vec![alias("A")], vec![], TyAttr::default());
+    let i_of_a = Ty::Interface(qtn("I"), Box::new([alias("A")]), Box::new([]));
     ctx.aliases.insert(
         qtn("A"),
         union(vec![
             i_of_a,
             Ty::AssociatedTypeProjection {
                 base: Box::new(Ty::int()),
-                interface: Box::new(Interface::new(qtn("I"), vec![alias("A")], vec![])),
+                interface: Box::new(Interface::new(
+                    qtn("I"),
+                    Box::new([alias("A")]),
+                    Box::new([]),
+                )),
                 member: Name::new("M"),
-                attr: TyAttr::default(),
             },
             iface("J"),
         ]),
@@ -1580,12 +1974,10 @@ fn unguarded_mu_disjointness_terminates_conservatively() {
     // The read-back bail keeps the pre-automaton spelling, whose μ spine can be
     // unguarded (`type A = A | A[]`); unfolding it re-injects the μ into its
     // own union spine forever, so the guard must answer first.
-    let unguarded = NormalTy::Mu {
+    let unguarded: NormalTy = NormalTy::Mu {
         binder: MuDisplay {
             name: None,
-            rendered: Box::new(Ty::Never {
-                attr: TyAttr::default(),
-            }),
+            rendered: Box::new(Ty::Never),
         },
         body: Box::new(NormalTy::Union(vec![
             NormalTy::RecVar(0),
@@ -1603,9 +1995,7 @@ fn union_nested_recursion_renders_via_subset_cover() {
     // and the surviving cycle is nameless. The renderer must cut it with the
     // subset cover (`A | null`), not panic or loop.
     let mut ctx = Ctx::default();
-    let null = || Ty::Null {
-        attr: TyAttr::default(),
-    };
+    let null = || Ty::Null;
     ctx.aliases.insert(
         qtn("A"),
         union(vec![Ty::int(), list(union(vec![alias("A"), null()]))]),

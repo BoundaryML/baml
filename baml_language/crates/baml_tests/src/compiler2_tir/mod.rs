@@ -1,4 +1,5 @@
-//! Snapshot tests for `baml_compiler2_tir`.
+//! Snapshot tests for the type-provider surface (typed renders over
+//! `baml_compiler2_hir_ty`'s tables; historically TIR's).
 //!
 //! Each test creates a minimal DB, adds a `.baml` file, runs type inference,
 //! and snapshots the fully-typed output using the same format as the onion skin
@@ -11,6 +12,13 @@ mod explicit_type_args;
 #[cfg(test)]
 mod inference;
 #[cfg(test)]
+// Archived tests for the superseded TIR PackageInterface API. Re-enabling
+// requires porting the fixtures and assertions to hir_ty; keeping the module
+// disconnected makes that separate repair explicit instead of compiling a
+// misleading stale contract.
+#[cfg(any())]
+mod package_interface;
+#[cfg(test)]
 mod phase3a;
 mod phase3a_recursion;
 #[cfg(test)]
@@ -21,28 +29,21 @@ mod phase6;
 mod phase7;
 #[cfg(test)]
 mod phase8_exceptions;
-#[cfg(test)]
-mod stream_expansion;
 
 #[cfg(test)]
 pub(crate) mod support {
     use std::fmt::Write;
 
     use baml_compiler2_ast::{
-        CatchClauseKind, DefaultExprId, Expr, ExprBody, ExprId, FunctionDefaults, Literal, PatId,
-        Stmt, StmtId,
+        DefaultExprId, Expr, ExprBody, ExprId, FunctionDefaults, Literal, PatId, Stmt, StmtId,
     };
     use baml_compiler2_hir::{
         body::FunctionBody, contributions::Definition, item_tree::DefaultExprRef, scope::ScopeKind,
     };
-    use baml_compiler2_tir::{
-        inference::{
-            ScopeInference, infer_scope_types, render_scope_diagnostics, resolve_class_fields,
-            resolve_type_alias,
-        },
-        lower_type_expr::{ScopeCtx, TypeVarBoundsMap, lower_type_expr},
-    };
-    use baml_project::ProjectDatabase;
+    use baml_compiler2_hir_ty::infer::InferenceResult;
+    use baml_db::ProjectDatabase;
+
+    use crate::engine::TestDbExt;
 
     // ── Rendering helpers ────────────────────────────────────────────────────
 
@@ -131,6 +132,18 @@ pub(crate) mod support {
         }
     }
 
+    /// ` extends A & B` for a `let type` binding's bounds; empty when none.
+    fn type_binding_bounds_desc(
+        bounds: &[baml_compiler2_ast::TypeExpr],
+        render: impl Fn(&baml_compiler2_ast::TypeExpr) -> String,
+    ) -> String {
+        if bounds.is_empty() {
+            return String::new();
+        }
+        let bounds: Vec<String> = bounds.iter().map(render).collect();
+        format!(" extends {}", bounds.join(" & "))
+    }
+
     fn expr_desc(expr_id: ExprId, body: &ExprBody) -> String {
         let expr = &body.exprs[expr_id];
         match expr {
@@ -204,34 +217,25 @@ pub(crate) mod support {
                     pat_desc(*pattern, body)
                 )
             }
-            Expr::Catch { base, clauses } => {
+            Expr::Catch { base, clause } => {
                 let base_desc = expr_desc(*base, body);
-                let clause_descs: Vec<String> = clauses
+
+                let kind = clause.kind.keyword();
+                let binding = pat_desc(clause.binding, body);
+                let arms_desc = clause
+                    .arms
                     .iter()
-                    .map(|clause| {
-                        let kind = match clause.kind {
-                            CatchClauseKind::Catch => "catch",
-                            CatchClauseKind::CatchAll => "catch_all",
-                            CatchClauseKind::CatchAllPanics => "catch_all_panics",
-                        };
-                        let binding = pat_desc(clause.binding, body);
-                        let arms_desc = clause
-                            .arms
-                            .iter()
-                            .map(|arm_id| {
-                                let arm = &body.catch_arms[*arm_id];
-                                format!(
-                                    "{} => {}",
-                                    pat_desc(arm.pattern, body),
-                                    expr_desc(arm.body, body)
-                                )
-                            })
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        format!("{kind} ({binding}) {{ {arms_desc} }}")
+                    .map(|arm_id| {
+                        let arm = &body.catch_arms[*arm_id];
+                        format!(
+                            "{} => {}",
+                            pat_desc(arm.pattern, body),
+                            expr_desc(arm.body, body)
+                        )
                     })
-                    .collect();
-                format!("{base_desc} {}", clause_descs.join(" "))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("{base_desc} {kind} ({binding}) {{ {arms_desc} }}")
             }
             Expr::Throw { value } => format!("throw {}", expr_desc(*value, body)),
             Expr::Return { value } => match value {
@@ -246,12 +250,13 @@ pub(crate) mod support {
                 callee,
                 type_args,
                 args,
+                ..
             } => {
                 let callee_str = expr_desc(*callee, body);
                 let ty_args_str = if type_args.is_empty() {
                     String::new()
                 } else {
-                    let tys: Vec<_> = type_args.iter().map(|t| t.to_string()).collect();
+                    let tys: Vec<_> = type_args.iter().map(ToString::to_string).collect();
                     format!("<{}>", tys.join(", "))
                 };
                 let arg_strs: Vec<String> = args
@@ -269,7 +274,7 @@ pub(crate) mod support {
                 let tn = type_name.to_string();
                 let field_strs: Vec<String> = fields
                     .iter()
-                    .map(|(name, val)| format!("{name}: {}", expr_desc(*val, body)))
+                    .map(|field| format!("{}: {}", field.name, expr_desc(field.value, body)))
                     .collect();
                 format!("{tn} {{ {} }}", field_strs.join(", "))
             }
@@ -280,7 +285,13 @@ pub(crate) mod support {
             Expr::Map { entries } => {
                 let entry_strs: Vec<String> = entries
                     .iter()
-                    .map(|(k, v)| format!("{}: {}", expr_desc(*k, body), expr_desc(*v, body)))
+                    .map(|entry| {
+                        format!(
+                            "{}: {}",
+                            expr_desc(entry.key, body),
+                            expr_desc(entry.value, body)
+                        )
+                    })
                     .collect();
                 format!("map {{ {} }}", entry_strs.join(", "))
             }
@@ -317,11 +328,6 @@ pub(crate) mod support {
                 format!("{}?.({})", callee_str, args_str.join(", "))
             }
             Expr::OptionalChain { expr } => expr_desc(*expr, body),
-            Expr::Spawn {
-                body: spawn_body, ..
-            } => {
-                format!("spawn {{ {} }}", expr_desc(*spawn_body, body))
-            }
             Expr::Await { future } => format!("await {}", expr_desc(*future, body)),
             Expr::Template { tag, .. } => match tag {
                 baml_compiler2_ast::TemplateTag::Custom { tag, .. } => {
@@ -330,6 +336,11 @@ pub(crate) mod support {
                 baml_compiler2_ast::TemplateTag::Default { .. } => "`...`".into(),
             },
             Expr::GenericApply { base, .. } => format!("{}<...>", expr_desc(*base, body)),
+            Expr::QualifiedPath {
+                qself,
+                interface,
+                member,
+            } => format!("({qself} as {interface}).{member}"),
             Expr::Missing => "<missing>".into(),
         }
     }
@@ -402,7 +413,7 @@ pub(crate) mod support {
     }
 
     /// Like `expr_desc` but enriches Call expressions with type params from inference.
-    fn expr_desc_rich(expr_id: ExprId, body: &ExprBody, inference: &ScopeInference) -> String {
+    fn expr_desc_rich(expr_id: ExprId, body: &ExprBody, inference: &InferenceResult) -> String {
         let expr = &body.exprs[expr_id];
         if let Expr::Call { callee, args, .. } = expr {
             let callee_str = expr_desc(*callee, body);
@@ -413,7 +424,7 @@ pub(crate) mod support {
                     None => expr_desc(a.expr, body),
                 })
                 .collect();
-            let type_params = if let Some(callee_ty) = inference.expression_type(*callee) {
+            let type_params = if let Some(callee_ty) = inference.type_of_expr.get(callee) {
                 collect_typevars(callee_ty)
             } else {
                 Vec::new()
@@ -444,35 +455,41 @@ pub(crate) mod support {
 
     /// Format an expression's inferred type as a string.
     ///
-    /// Uses `render_canonical()` (fully-qualified leaf names, including the
-    /// implicit `user` package) so the TIR dump keeps `user.X` rather than the
-    /// user-facing `Display`, which elides `user`.
-    fn expr_ty(inference: &ScopeInference, expr_id: ExprId) -> String {
+    /// Renders through the canonical viewpoint (fully-qualified leaf names,
+    /// every package spelled) so the TIR dump keeps `user.X` rather than a
+    /// user-facing rendering, which elides the viewer's own package.
+    fn expr_ty(
+        vp: &baml_compiler2_hir_ty::render::Viewpoint<'_>,
+        inference: &InferenceResult,
+        expr_id: ExprId,
+    ) -> String {
         inference
-            .expression_type(expr_id)
-            .map(|t| t.render_canonical())
+            .type_of_expr
+            .get(&expr_id)
+            .map(|t| t.render_with(vp))
             .unwrap_or_else(|| "unknown".into())
     }
 
     fn render_expr(
+        vp: &baml_compiler2_hir_ty::render::Viewpoint<'_>,
         expr_id: ExprId,
         body: &ExprBody,
-        inference: &ScopeInference,
+        inference: &InferenceResult,
         indent: usize,
         output: &mut String,
     ) {
         let pad = " ".repeat(indent);
-        let ty = expr_ty(inference, expr_id);
+        let ty = expr_ty(vp, inference, expr_id);
         let expr = &body.exprs[expr_id];
 
         match expr {
             Expr::Block { stmts, tail_expr } => {
                 writeln!(output, "{pad}{{ : {ty}").ok();
                 for stmt_id in stmts {
-                    render_stmt(*stmt_id, body, inference, indent + 2, output);
+                    render_stmt(vp, *stmt_id, body, inference, indent + 2, output);
                 }
                 if let Some(tail) = tail_expr {
-                    render_expr(*tail, body, inference, indent + 2, output);
+                    render_expr(vp, *tail, body, inference, indent + 2, output);
                 }
                 writeln!(output, "{pad}}}").ok();
             }
@@ -482,19 +499,19 @@ pub(crate) mod support {
                 else_branch,
             } => {
                 let cond_desc = expr_desc(*condition, body);
-                let cond_ty = expr_ty(inference, *condition);
+                let cond_ty = expr_ty(vp, inference, *condition);
                 writeln!(output, "{pad}if ({cond_desc} : {cond_ty}) : {ty}").ok();
-                render_expr(*then_branch, body, inference, indent + 2, output);
+                render_expr(vp, *then_branch, body, inference, indent + 2, output);
                 if let Some(else_expr) = else_branch {
                     writeln!(output, "{pad}else").ok();
-                    render_expr(*else_expr, body, inference, indent + 2, output);
+                    render_expr(vp, *else_expr, body, inference, indent + 2, output);
                 }
             }
             Expr::Match {
                 scrutinee, arms, ..
             } => {
                 let scrut_desc = expr_desc(*scrutinee, body);
-                let scrut_ty = expr_ty(inference, *scrutinee);
+                let scrut_ty = expr_ty(vp, inference, *scrutinee);
                 writeln!(output, "{pad}match ({scrut_desc} : {scrut_ty}) : {ty}").ok();
                 for arm_id in arms {
                     let arm = &body.match_arms[*arm_id];
@@ -504,27 +521,24 @@ pub(crate) mod support {
                         .map(|g| format!(" if {}", expr_desc(g, body)))
                         .unwrap_or_default();
                     writeln!(output, "{pad}  {pat}{guard} =>").ok();
-                    render_expr(arm.body, body, inference, indent + 4, output);
+                    render_expr(vp, arm.body, body, inference, indent + 4, output);
                 }
             }
-            Expr::Catch { base, clauses } => {
+            Expr::Catch { base, clause } => {
                 let base_desc = expr_desc_rich(*base, body, inference);
-                let base_ty = expr_ty(inference, *base);
+                let base_ty = expr_ty(vp, inference, *base);
                 writeln!(output, "{pad}catch ({base_desc} : {base_ty}) : {ty}").ok();
-                for clause in clauses {
-                    let kind = match clause.kind {
-                        CatchClauseKind::Catch => "catch",
-                        CatchClauseKind::CatchAll => "catch_all",
-                        CatchClauseKind::CatchAllPanics => "catch_all_panics",
-                    };
-                    let binding = pat_desc(clause.binding, body);
-                    writeln!(output, "{pad}  {kind} ({binding})").ok();
-                    for arm_id in &clause.arms {
-                        let arm = &body.catch_arms[*arm_id];
-                        let pat = pat_desc(arm.pattern, body);
-                        writeln!(output, "{pad}    {pat} =>").ok();
-                        render_expr(arm.body, body, inference, indent + 6, output);
-                    }
+                if matches!(body.exprs[*base], Expr::Catch { .. }) {
+                    render_expr(vp, *base, body, inference, indent + 2, output);
+                }
+                let kind = clause.kind.keyword();
+                let binding = pat_desc(clause.binding, body);
+                writeln!(output, "{pad}  {kind} ({binding})").ok();
+                for arm_id in &clause.arms {
+                    let arm = &body.catch_arms[*arm_id];
+                    let pat = pat_desc(arm.pattern, body);
+                    writeln!(output, "{pad}    {pat} =>").ok();
+                    render_expr(vp, arm.body, body, inference, indent + 6, output);
                 }
             }
             Expr::Lambda(func_def) => {
@@ -545,7 +559,7 @@ pub(crate) mod support {
                         None => expr_desc(a.expr, body),
                     })
                     .collect();
-                let type_params = if let Some(callee_ty) = inference.expression_type(*callee) {
+                let type_params = if let Some(callee_ty) = inference.type_of_expr.get(callee) {
                     collect_typevars(callee_ty)
                 } else {
                     Vec::new()
@@ -564,7 +578,7 @@ pub(crate) mod support {
                 // Expand compound arguments (e.g. lambdas) below the call
                 for arg in args {
                     if is_compound(&body.exprs[arg.expr]) {
-                        render_expr(arg.expr, body, inference, indent + 2, output);
+                        render_expr(vp, arg.expr, body, inference, indent + 2, output);
                     }
                 }
             }
@@ -578,7 +592,7 @@ pub(crate) mod support {
     /// Render a lambda's body without type information.
     ///
     /// The body shares the enclosing function's arena, but its types live in
-    /// the lambda's own `ScopeInference`, which this renderer does not hold.
+    /// the lambda's own tables, which this renderer does not hold.
     fn render_expr_body_untyped(
         body: &ExprBody,
         expr_id: ExprId,
@@ -639,6 +653,23 @@ pub(crate) mod support {
         let pad = " ".repeat(indent);
         let stmt = &body.stmts[stmt_id];
         match stmt {
+            Stmt::TypeBinding {
+                name,
+                operand,
+                bounds,
+                else_branch,
+            } => {
+                let bounds = type_binding_bounds_desc(bounds, ToString::to_string);
+                let operand = expr_desc(*operand, body);
+                let else_desc = else_branch
+                    .map(|else_expr| format!(" else {}", expr_desc(else_expr, body)))
+                    .unwrap_or_default();
+                writeln!(
+                    output,
+                    "{pad}let type {name}{bounds} = {operand}{else_desc}"
+                )
+                .ok();
+            }
             Stmt::Let {
                 pattern,
                 initializer,
@@ -730,29 +761,29 @@ pub(crate) mod support {
     }
 
     /// Collect unique TypeVar names from a Ty (in order of appearance).
-    fn collect_typevars(ty: &baml_compiler2_tir::ty::Ty) -> Vec<String> {
+    fn collect_typevars(ty: &baml_type::Ty) -> Vec<String> {
         let mut result = Vec::new();
         collect_typevars_inner(ty, &mut result);
         result
     }
 
-    fn collect_typevars_inner(ty: &baml_compiler2_tir::ty::Ty, out: &mut Vec<String>) {
-        use baml_compiler2_tir::ty::Ty;
+    fn collect_typevars_inner(ty: &baml_type::Ty, out: &mut Vec<String>) {
+        use baml_type::Ty;
         match ty {
-            Ty::TypeVar(name, _) => {
+            Ty::TypeVar(name) => {
                 let s = name.to_string();
                 if !out.contains(&s) {
                     out.push(s);
                 }
             }
-            Ty::List(inner, _) => collect_typevars_inner(inner, out),
+            Ty::List(inner) => collect_typevars_inner(inner, out),
             Ty::Map {
                 key: k, value: v, ..
             } => {
                 collect_typevars_inner(k, out);
                 collect_typevars_inner(v, out);
             }
-            Ty::Union(members, _) => {
+            Ty::Union(members) => {
                 for m in members {
                     collect_typevars_inner(m, out);
                 }
@@ -774,15 +805,35 @@ pub(crate) mod support {
     }
 
     fn render_stmt(
+        vp: &baml_compiler2_hir_ty::render::Viewpoint<'_>,
         stmt_id: StmtId,
         body: &ExprBody,
-        inference: &ScopeInference,
+        inference: &InferenceResult,
         indent: usize,
         output: &mut String,
     ) {
         let pad = " ".repeat(indent);
         let stmt = &body.stmts[stmt_id];
         match stmt {
+            Stmt::TypeBinding {
+                name,
+                operand,
+                bounds,
+                else_branch,
+            } => {
+                let bounds = type_binding_bounds_desc(bounds, ToString::to_string);
+                let operand_desc = expr_desc_rich(*operand, body, inference);
+                let operand_ty = expr_ty(vp, inference, *operand);
+                writeln!(
+                    output,
+                    "{pad}let type {name}{bounds} = {operand_desc} : {operand_ty}"
+                )
+                .ok();
+                if let Some(else_expr) = else_branch {
+                    writeln!(output, "{pad}  else:").ok();
+                    render_expr(vp, *else_expr, body, inference, indent + 4, output);
+                }
+            }
             Stmt::Let {
                 pattern,
                 initializer,
@@ -790,17 +841,18 @@ pub(crate) mod support {
             } => {
                 let pat_name = pat_desc(*pattern, body);
                 if let Some(init) = initializer {
-                    let init_ty = expr_ty(inference, *init);
+                    let init_ty = expr_ty(vp, inference, *init);
                     let binding_ty = inference
-                        .binding_type(*pattern)
-                        .map(|t| t.render_canonical());
+                        .type_of_pat
+                        .get(pattern)
+                        .map(|t| t.render_with(vp));
                     let ty_display = match &binding_ty {
                         Some(bt) if *bt != init_ty => format!("{init_ty} -> {bt}"),
                         _ => init_ty,
                     };
                     if is_compound(&body.exprs[*init]) {
                         writeln!(output, "{pad}let {pat_name} = : {ty_display}").ok();
-                        render_expr(*init, body, inference, indent + 2, output);
+                        render_expr(vp, *init, body, inference, indent + 2, output);
                     } else {
                         let init_desc = expr_desc_rich(*init, body, inference);
                         writeln!(output, "{pad}let {pat_name} = {init_desc} : {ty_display}").ok();
@@ -810,10 +862,10 @@ pub(crate) mod support {
                 }
             }
             Stmt::Return(Some(expr_id)) => {
-                let ty = expr_ty(inference, *expr_id);
+                let ty = expr_ty(vp, inference, *expr_id);
                 if is_compound(&body.exprs[*expr_id]) {
                     writeln!(output, "{pad}return : {ty}").ok();
-                    render_expr(*expr_id, body, inference, indent + 2, output);
+                    render_expr(vp, *expr_id, body, inference, indent + 2, output);
                 } else {
                     let desc = expr_desc_rich(*expr_id, body, inference);
                     writeln!(output, "{pad}return {desc} : {ty}").ok();
@@ -823,17 +875,17 @@ pub(crate) mod support {
                 writeln!(output, "{pad}return").ok();
             }
             Stmt::Throw { value } => {
-                let ty = expr_ty(inference, *value);
+                let ty = expr_ty(vp, inference, *value);
                 if is_compound(&body.exprs[*value]) {
                     writeln!(output, "{pad}throw : {ty}").ok();
-                    render_expr(*value, body, inference, indent + 2, output);
+                    render_expr(vp, *value, body, inference, indent + 2, output);
                 } else {
                     let desc = expr_desc_rich(*value, body, inference);
                     writeln!(output, "{pad}throw {desc} : {ty}").ok();
                 }
             }
             Stmt::Expr(expr_id) => {
-                render_expr(*expr_id, body, inference, indent, output);
+                render_expr(vp, *expr_id, body, inference, indent, output);
             }
             Stmt::While {
                 condition,
@@ -842,7 +894,7 @@ pub(crate) mod support {
             } => {
                 let cond_desc = expr_desc(*condition, body);
                 writeln!(output, "{pad}while {cond_desc}").ok();
-                render_expr(*body_expr, body, inference, indent + 2, output);
+                render_expr(vp, *body_expr, body, inference, indent + 2, output);
             }
             Stmt::WhileLet {
                 pattern,
@@ -852,7 +904,7 @@ pub(crate) mod support {
                 let pat = pat_desc(*pattern, body);
                 let scrut_desc = expr_desc(*scrutinee, body);
                 writeln!(output, "{pad}while let {pat} = {scrut_desc}").ok();
-                render_expr(*body_expr, body, inference, indent + 2, output);
+                render_expr(vp, *body_expr, body, inference, indent + 2, output);
             }
             Stmt::For {
                 binding,
@@ -862,23 +914,23 @@ pub(crate) mod support {
                 let bind_name = pat_desc(*binding, body);
                 let coll_desc = expr_desc(*collection, body);
                 writeln!(output, "{pad}for {bind_name} in {coll_desc}").ok();
-                render_expr(*for_body, body, inference, indent + 2, output);
+                render_expr(vp, *for_body, body, inference, indent + 2, output);
             }
             Stmt::Assign { target, value } => {
                 let target_desc = expr_desc(*target, body);
                 let val_desc = expr_desc(*value, body);
-                let val_ty = expr_ty(inference, *value);
+                let val_ty = expr_ty(vp, inference, *value);
                 writeln!(output, "{pad}{target_desc} = {val_desc} : {val_ty}").ok();
             }
             Stmt::AssignOp { target, op, value } => {
                 let target_desc = expr_desc(*target, body);
                 let val_desc = expr_desc(*value, body);
-                let val_ty = expr_ty(inference, *value);
+                let val_ty = expr_ty(vp, inference, *value);
                 writeln!(output, "{pad}{target_desc} {op:?}= {val_desc} : {val_ty}").ok();
             }
             Stmt::Defer { body: defer_body } => {
                 writeln!(output, "{pad}defer").ok();
-                render_expr(*defer_body, body, inference, indent + 2, output);
+                render_expr(vp, *defer_body, body, inference, indent + 2, output);
             }
             Stmt::Break => {
                 writeln!(output, "{pad}break").ok();
@@ -895,7 +947,14 @@ pub(crate) mod support {
         }
     }
 
-    fn qualified_name(scopes: &[baml_compiler2_hir::scope::Scope], scope_idx: usize) -> String {
+    /// The dump's fully qualified item name: `package` (the file's package as
+    /// the program spells it — a package scope carries only a declared name,
+    /// which an unnamed workspace lacks) followed by the enclosing scopes.
+    fn qualified_name(
+        scopes: &[baml_compiler2_hir::scope::Scope],
+        scope_idx: usize,
+        package: &str,
+    ) -> String {
         let mut parts = Vec::new();
         let mut cur = scope_idx;
         loop {
@@ -903,6 +962,7 @@ pub(crate) mod support {
             match s.kind {
                 ScopeKind::Project => break,
                 ScopeKind::File => {}
+                ScopeKind::Package => parts.push(package.to_string()),
                 _ => {
                     if let Some(ref name) = s.name {
                         parts.push(name.to_string());
@@ -920,33 +980,53 @@ pub(crate) mod support {
     }
 
     /// Render a file's TIR output in the same format as the onion skin tool.
-    /// Uses the PPIR semantic index which includes synthetic stream_* types.
     pub fn render_tir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
-        use baml_compiler2_hir::package::PackageId;
-        use baml_compiler2_tir::inference::{
-            detect_invalid_alias_cycles, detect_invalid_class_cycles,
-        };
-
+        let vp = baml_compiler2_hir_ty::render::Viewpoint::canonical(db);
         let mut output = String::new();
-        let index = baml_compiler2_ppir::file_semantic_index(db, file);
+        let index = baml_compiler2_hir::file_semantic_index(db, file);
 
         // Get package items for resolving TypeExpr -> Ty in signatures
         let pkg_info = baml_compiler2_hir::file_package::file_package(db, file);
-        let pkg_id = PackageId::new(db, pkg_info.package.clone());
-        let pkg_items = baml_compiler2_ppir::package_items(db, pkg_id);
+        let pkg_id = pkg_info.root;
+        let pkg_items = baml_compiler2_hir::package::package_items(db, pkg_id);
 
         // Pre-compute throw sets for the package
-        let throw_sets = baml_compiler2_tir::throw_inference::function_throw_sets(db, pkg_id);
+        let throw_sets = baml_compiler2_hir_ty::package_interface::function_throw_sets(db, pkg_id);
 
-        // Pre-compute invalid alias cycles for the package
-        let invalid_cycles = detect_invalid_alias_cycles(db, pkg_id);
-
-        // Pre-compute invalid class cycles — build a map from class QN → cycle_path
-        let class_cycles_info = detect_invalid_class_cycles(db, pkg_id);
+        // Pre-compute invalid alias/class cycles for the package (the
+        // declaration cycle analysis over hir-lowered values).
+        let mut aliases = std::collections::HashMap::new();
+        let mut class_fields = std::collections::HashMap::new();
+        for ns in pkg_items.namespaces.values() {
+            for (name, def) in &ns.types {
+                match def {
+                    Definition::TypeAlias(loc) => {
+                        aliases.insert(
+                            baml_compiler2_hir_ty::lower::qualify_def(db, *def, name),
+                            baml_compiler2_hir_ty::lower::type_alias_value(db, *loc),
+                        );
+                    }
+                    Definition::Class(loc) => {
+                        let fields = baml_compiler2_hir_ty::lower::resolve_class_fields(db, *loc)
+                            .iter()
+                            .map(|(n, ty, _)| (n.clone(), ty.clone()))
+                            .collect::<Vec<_>>();
+                        class_fields.insert(
+                            baml_compiler2_hir_ty::lower::qualify_def(db, *def, name),
+                            fields,
+                        );
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let invalid_cycles = baml_type::decl_cycles::find_invalid_alias_cycles(&aliases);
+        let class_cycles_info =
+            baml_type::decl_cycles::find_invalid_class_cycles(&class_fields, &aliases);
         let mut class_cycle_map = std::collections::HashMap::new();
         for cycle in &class_cycles_info {
             for member in &cycle.members {
-                class_cycle_map.insert(member.clone(), cycle.cycle_path.clone());
+                class_cycle_map.insert(member.clone(), cycle.cycle_path(|decl| vp.path(decl)));
             }
         }
         for (i, scope) in index.scopes.iter().enumerate() {
@@ -960,7 +1040,12 @@ pub(crate) mod support {
                 ScopeKind::TypeAlias => "type",
                 _ => continue,
             };
-            let fqn = qualified_name(&index.scopes, i);
+            let fqn = qualified_name(
+                &index.scopes,
+                i,
+                &baml_compiler2_hir_ty::render::Viewpoint::canonical(db)
+                    .display_label(pkg_info.root),
+            );
 
             // ── Structural scopes (class/enum/type alias) ───────────
             if matches!(
@@ -974,40 +1059,32 @@ pub(crate) mod support {
                             if scope.name.as_ref() == Some(name)
                                 && let Definition::Class(class_loc) = c.definition
                             {
-                                let resolved = resolve_class_fields(db, class_loc);
+                                let resolved = baml_compiler2_hir_ty::lower::resolve_class_fields(
+                                    db, class_loc,
+                                );
                                 writeln!(output, "{kind_str} {fqn} {{").ok();
-                                for (fname, fty, fattrs) in &resolved.fields {
-                                    let ty_attr_names = fty.attr().attr_names();
-                                    let field_attr_strs: Vec<String> = fattrs
-                                        .iter()
-                                        .map(|a| {
-                                            if a.args.is_empty() {
-                                                format!("@{}", a.name)
-                                            } else {
-                                                let args_str = a
-                                                    .args
-                                                    .iter()
-                                                    .map(|arg| match &arg.key {
-                                                        Some(k) => format!("{}={}", k, arg.value),
-                                                        None => arg.value.clone(),
-                                                    })
-                                                    .collect::<Vec<_>>()
-                                                    .join(", ");
-                                                format!("@{}({})", a.name, args_str)
-                                            }
-                                        })
-                                        .collect();
-                                    // Format: field: (Ty @ty_attr) @field_attr
-                                    let ty_str = if ty_attr_names.is_empty() {
-                                        fty.render_canonical()
-                                    } else {
-                                        let ta = ty_attr_names
-                                            .iter()
-                                            .map(|a| format!("@{a}"))
-                                            .collect::<Vec<_>>()
-                                            .join(" ");
-                                        format!("({} {ta})", fty.render_canonical())
-                                    };
+                                for (fname, fty, fattrs) in resolved {
+                                    // The lowered attributes as they would be
+                                    // written, in the table's order.
+                                    let mut field_attr_strs: Vec<String> = Vec::new();
+                                    if let Some(description) = &fattrs.schema.description {
+                                        field_attr_strs
+                                            .push(format!("@description({description:?})"));
+                                    }
+                                    if let Some(alias) = &fattrs.schema.alias {
+                                        field_attr_strs.push(format!("@alias({alias:?})"));
+                                    }
+                                    if fattrs.skip {
+                                        field_attr_strs.push("@skip".to_string());
+                                    }
+                                    if fattrs.stream_done {
+                                        field_attr_strs.push("@stream.done".to_string());
+                                    }
+                                    if fattrs.must_exist {
+                                        field_attr_strs.push("@stream.must_exist".to_string());
+                                    }
+                                    // Format: field: Ty @field_attr
+                                    let ty_str = fty.render_with(&vp);
                                     if field_attr_strs.is_empty() {
                                         writeln!(output, "  {fname}: {ty_str}").ok();
                                     } else {
@@ -1017,8 +1094,8 @@ pub(crate) mod support {
                                 }
                                 writeln!(output, "}}").ok();
                                 // Render class cycle diagnostic if applicable
-                                let qn = baml_compiler2_tir::ty::QualifiedTypeName::new(
-                                    pkg_info.package.clone(),
+                                let qn = baml_type::DeclName::in_root(
+                                    pkg_info.root,
                                     pkg_info.namespace_path.clone(),
                                     name.clone(),
                                 );
@@ -1040,22 +1117,28 @@ pub(crate) mod support {
                             if scope.name.as_ref() == Some(name)
                                 && let Definition::TypeAlias(alias_loc) = c.definition
                             {
-                                let resolved = resolve_type_alias(db, alias_loc);
+                                let resolved =
+                                    baml_compiler2_hir_ty::lower::type_alias_value(db, alias_loc);
                                 writeln!(
                                     output,
                                     "{kind_str} {fqn} = {}",
-                                    resolved.ty.render_canonical()
+                                    resolved.render_with(&vp)
                                 )
                                 .ok();
                                 // Render type-lowering diagnostics
-                                for (diag, span) in &resolved.diagnostics {
+                                for (span, diag) in
+                                    baml_compiler2_hir_ty::lower::type_alias_lowering_diagnostics(
+                                        db, alias_loc,
+                                    )
+                                {
                                     let start = u32::from(span.start());
                                     let end = u32::from(span.end());
-                                    writeln!(output, "  !! {start}..{end}: {diag}").ok();
+                                    writeln!(output, "  !! {start}..{end}: {}", diag.render(&vp))
+                                        .ok();
                                 }
                                 // Render cycle diagnostic if this alias is in an invalid cycle
-                                let qn = baml_compiler2_tir::ty::QualifiedTypeName::new(
-                                    pkg_info.package.clone(),
+                                let qn = baml_type::DeclName::in_root(
+                                    pkg_info.root,
                                     pkg_info.namespace_path.clone(),
                                     name.clone(),
                                 );
@@ -1081,77 +1164,23 @@ pub(crate) mod support {
             }
 
             // ── Function/Lambda/Block scopes ────────────────────────
-            let inference = infer_scope_types(db, scope_id);
+            let Some(inference) = baml_compiler2_hir_ty::ide::infer_for_scope(db, scope_id) else {
+                continue;
+            };
 
             let mut func_body_opt: Option<std::sync::Arc<FunctionBody>> = None;
             let mut sig_display = String::new();
             if matches!(scope.kind, ScopeKind::Function) {
                 // The authoritative scope→item link (replaces the fragile
                 // `func.span == scope.range` join, which collided on companion spans).
-                if let Some(baml_compiler2_ppir::item_data::ScopeOwner::Function(func_loc)) =
-                    baml_compiler2_ppir::item_data::scope_owner(db, scope_id)
+                if let Some(baml_compiler2_hir::item_data::ScopeOwner::Function(func_loc)) =
+                    baml_compiler2_hir::item_data::scope_owner(db, scope_id)
                 {
-                    let func_data = baml_compiler2_ppir::item_data::function_data(db, func_loc);
-                    func_body_opt = Some(baml_compiler2_ppir::function_body(db, func_loc));
-                    let sig = baml_compiler2_ppir::function_signature(db, func_loc);
-                    let ns = &pkg_info.namespace_path;
-
-                    // The enclosing class/interface and its declared generic
-                    // params, if this function is a method. A method signature
-                    // can reference an enclosing generic (e.g. a synthesized
-                    // `from_json` returning `Box<T>` on `class Box<T>`), so
-                    // those params must be in scope when lowering the signature
-                    // — otherwise `T` erases to `unknown`. (Interfaces share the
-                    // `Class` scope kind; both must be handled, or an interface
-                    // method's unannotated `self` would erase to `unknown`.)
-                    let enclosing_class_ty = scope.parent.and_then(|parent_idx| {
-                        let parent = &index.scopes[parent_idx.index() as usize];
-                        if !matches!(parent.kind, ScopeKind::Class) {
-                            return None;
-                        }
-                        let cn = parent.name.as_ref()?;
-                        let def = pkg_items.lookup_type(ns, cn)?;
-                        let generic_params = match def {
-                            Definition::Class(class_loc) => {
-                                baml_compiler2_tir::class_generic_params(db, class_loc)
-                            }
-                            Definition::Interface(iface_loc) => {
-                                baml_compiler2_tir::interface_declared_generic_params(db, iface_loc)
-                            }
-                            _ => return None,
-                        };
-                        let class_ty = baml_compiler2_tir::ty::Ty::Class(
-                            baml_compiler2_tir::lower_type_expr::qualify_def(db, def, cn),
-                            generic_params
-                                .iter()
-                                .map(|param| {
-                                    baml_compiler2_tir::ty::Ty::TypeVar(
-                                        param.clone(),
-                                        Default::default(),
-                                    )
-                                })
-                                .collect(),
-                            Default::default(),
-                        );
-                        Some(class_ty)
-                    });
+                    let func_data = baml_compiler2_hir::item_data::function_data(db, func_loc);
+                    func_body_opt = Some(baml_compiler2_hir::body::function_body(db, func_loc));
+                    let sig = baml_compiler2_hir_ty::lower::function_signature(db, func_loc);
 
                     let gp = &func_data.generic_params;
-                    // Type-lowering scope for the signature: the enclosing
-                    // class's generics plus the function's own. (The displayed
-                    // `<...>` below still shows only the function's own.)
-                    let sig_generics = baml_compiler2_tir::function_generic_params(db, func_loc);
-                    // One lowering scope shared by the param/return/throws sites
-                    // below (a display helper — no type-var bounds threaded).
-                    let sig_bounds = TypeVarBoundsMap::default();
-                    let sig_scope = ScopeCtx {
-                        db,
-                        package_items: pkg_items,
-                        ns_context: ns,
-                        generic_params: &sig_generics,
-                        bounds: &sig_bounds,
-                        self_ty: None,
-                    };
                     let generics_display = if gp.is_empty() {
                         String::new()
                     } else {
@@ -1161,26 +1190,12 @@ pub(crate) mod support {
                     };
 
                     let parameter_defaults =
-                        baml_compiler2_ppir::function_parameter_defaults(db, func_loc);
+                        baml_compiler2_hir::signature::function_parameter_defaults(db, func_loc);
                     let params: Vec<String> = sig
                         .params
                         .iter()
                         .enumerate()
                         .map(|(index, param)| {
-                            let ty = if param.name.as_str() == "self"
-                                && matches!(
-                                    param.ty.kind,
-                                    baml_compiler2_ast::TypeExprKind::Unknown { .. }
-                                ) {
-                                enclosing_class_ty.clone().unwrap_or(
-                                    baml_compiler2_tir::ty::Ty::Unknown {
-                                        attr: Default::default(),
-                                    },
-                                )
-                            } else {
-                                let mut diags = Vec::new();
-                                lower_type_expr(&param.ty, &sig_scope, &mut diags)
-                            };
                             let default_suffix = default_ref_suffix(
                                 parameter_defaults.param_default(index),
                                 &parameter_defaults.defaults,
@@ -1188,20 +1203,13 @@ pub(crate) mod support {
                             format!(
                                 "{}: {}{}",
                                 param.name,
-                                ty.render_canonical(),
+                                param.ty.render_with(&vp),
                                 default_suffix
                             )
                         })
                         .collect();
-                    let ret = sig
-                        .return_type
-                        .as_ref()
-                        .map(|t| {
-                            let mut diags = Vec::new();
-                            lower_type_expr(t, &sig_scope, &mut diags).render_canonical()
-                        })
-                        .unwrap_or_else(|| "?".into());
-                    // Compute inferred throws from transitive throw set
+                    let ret = sig.ret.render_with(&vp);
+                    // Inferred throws from the package transitive throw set.
                     let inferred_throws: Option<String> = {
                         let key = baml_base::Name::new(&*fqn);
                         throw_sets
@@ -1209,26 +1217,24 @@ pub(crate) mod support {
                             .filter(|facts| !facts.is_empty())
                             .map(|facts| {
                                 let types: Vec<String> =
-                                    facts.iter().map(|f| f.render_canonical()).collect();
+                                    facts.iter().map(|f| f.render_with(&vp)).collect();
                                 types.join(" | ")
                             })
                     };
-
-                    let throws = if let Some(t) = &sig.throws {
-                        let mut diags = Vec::new();
-                        let declared =
-                            lower_type_expr(t, &sig_scope, &mut diags).render_canonical();
-                        match &inferred_throws {
-                            Some(inferred) => {
-                                format!(" throws {declared} infers {inferred}")
-                            }
-                            None => format!(" throws {declared}"),
+                    // "Written a clause?" is a source-level question, so the
+                    // display reads the syntax side; the signature itself
+                    // carries only the effective type.
+                    let clause_written =
+                        baml_compiler2_hir::item_data::elaborated_function_data(db, func_loc)
+                            .throws
+                            .is_some();
+                    let throws = match (clause_written, &inferred_throws) {
+                        (true, Some(inferred)) => {
+                            format!(" throws {} infers {inferred}", sig.throws.render_with(&vp))
                         }
-                    } else {
-                        match &inferred_throws {
-                            Some(inferred) => format!(" throws {inferred}"),
-                            None => " throws never".to_string(),
-                        }
+                        (true, None) => format!(" throws {}", sig.throws.render_with(&vp)),
+                        (false, Some(inferred)) => format!(" throws {inferred}"),
+                        (false, None) => " throws never".to_string(),
                     };
                     sig_display =
                         format!("{generics_display}({}) -> {ret}{throws}", params.join(", "));
@@ -1236,7 +1242,7 @@ pub(crate) mod support {
             }
 
             // Collect expression types for this scope — skip if none
-            if inference.iter_expressions().next().is_none() {
+            if inference.type_of_expr.is_empty() {
                 continue;
             }
 
@@ -1253,17 +1259,70 @@ pub(crate) mod support {
             if let Some(body) = expr_body
                 && let Some(root) = body.root_expr
             {
-                render_expr(root, body, inference, 2, &mut output);
+                render_expr(&vp, root, body, inference, 2, &mut output);
             }
 
-            // Per-scope diagnostics
-            let rendered = render_scope_diagnostics(db, scope_id);
-            for rd in &rendered {
-                let marker = match rd.severity {
-                    baml_compiler2_tir::infer_context::DiagnosticSeverity::Error => "!!",
-                    baml_compiler2_tir::infer_context::DiagnosticSeverity::Warning => "??",
-                };
-                writeln!(output, "  {marker} {rd}").ok();
+            // Owner diagnostics (rendered once, on the owner's own scope):
+            // the body run's, the PARAMETER-DEFAULTS run's, the structural
+            // default rules, and the signature walk - the same union the
+            // check layer assembles.
+            if matches!(scope.kind, ScopeKind::Function)
+                && let Some(owner) = baml_compiler2_hir_ty::ide::owner_for_scope(db, scope_id)
+            {
+                let source_map = baml_compiler2_hir::body::body_source_map(db, owner);
+                let type_ref_spans =
+                    baml_compiler2_hir::body_type_refs::body_type_ref_spans(db, owner);
+                let mut rendered = Vec::new();
+                for diagnostic in &inference.diagnostics {
+                    rendered.push(diagnostic.render_with_body_type_refs(
+                        db,
+                        file,
+                        source_map.as_ref(),
+                        type_ref_spans.as_ref(),
+                    ));
+                }
+                if let baml_compiler2_hir::body::BodyOwnerId::Function(func_loc) = owner {
+                    let defaults_owner =
+                        baml_compiler2_hir::body::BodyOwnerId::ParameterDefaults(func_loc);
+                    let defaults = baml_compiler2_hir_ty::infer::infer_body(db, defaults_owner);
+                    let defaults_map =
+                        baml_compiler2_hir::body::body_source_map(db, defaults_owner);
+                    let defaults_spans =
+                        baml_compiler2_hir::body_type_refs::body_type_ref_spans(db, defaults_owner);
+                    for diagnostic in &defaults.diagnostics {
+                        rendered.push(diagnostic.render_with_body_type_refs(
+                            db,
+                            file,
+                            defaults_map.as_ref(),
+                            defaults_spans.as_ref(),
+                        ));
+                    }
+                    for (range, error) in
+                        baml_compiler2_hir_ty::defaults::parameter_default_diagnostics(db, func_loc)
+                            .into_iter()
+                            .chain(
+                                baml_compiler2_hir_ty::lower::signature_lowering_diagnostics(
+                                    db, func_loc,
+                                ),
+                            )
+                    {
+                        rendered.push(baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
+                            message: error.render(&vp),
+                            error,
+                            range,
+                            severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Error,
+                            related: Vec::new(),
+                        });
+                    }
+                }
+                rendered.sort_by_key(|rd| (rd.range.start(), rd.range.end()));
+                for rd in &rendered {
+                    let marker = match rd.severity {
+                        baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Error => "!!",
+                        baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Warning => "??",
+                    };
+                    writeln!(output, "  {marker} {rd}").ok();
+                }
             }
 
             writeln!(output, "}}").ok();
@@ -1272,14 +1331,13 @@ pub(crate) mod support {
         output
     }
 
-    /// Render a file's PPIR (canonical, post-expansion item tree) as readable
-    /// text — includes the synthesized `*$stream` companions.
-    pub fn render_ppir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
-        use baml_compiler2_ast::{CatchClauseKind, Expr, ExprBody, Literal};
+    /// Render a file's canonical item tree as readable text.
+    pub fn render_hir(db: &ProjectDatabase, file: baml_base::SourceFile) -> String {
+        use baml_compiler2_ast::{Expr, ExprBody, Literal};
         use baml_compiler2_hir::{file_package::file_package, file_semantic_index};
 
         fn qualify_type_name(
-            path: &baml_base::TypePath,
+            path: &baml_base::Path,
             pkg_prefix: &str,
             local_type_names: &std::collections::HashSet<&str>,
         ) -> String {
@@ -1300,33 +1358,23 @@ pub(crate) mod support {
             pkg_prefix: &str,
             local_type_names: &std::collections::HashSet<&str>,
         ) -> String {
-            fn is_local_type_path(
-                first: &str,
-                local_type_names: &std::collections::HashSet<&str>,
-            ) -> bool {
-                local_type_names.contains(first)
-                    || first
-                        .strip_suffix("$stream")
-                        .is_some_and(|base| local_type_names.contains(base))
-            }
-
             match &ty.kind {
                 baml_compiler2_ast::TypeExprKind::Path {
-                    segments,
+                    path,
                     generic_args,
                     associated_type_bindings,
                     ..
                 } => {
-                    let path = segments
+                    let dotted = path
                         .iter()
                         .map(|n| n.as_str())
                         .collect::<Vec<_>>()
                         .join(".");
-                    let first = segments.first().map(|n| n.as_str()).unwrap_or("");
-                    let mut rendered = if is_local_type_path(first, local_type_names) {
-                        format!("{pkg_prefix}{path}")
+                    let first = path.first().map(|n| n.as_str()).unwrap_or("");
+                    let mut rendered = if local_type_names.contains(first) {
+                        format!("{pkg_prefix}{dotted}")
                     } else {
-                        path
+                        dotted
                     };
                     if !generic_args.is_empty() || !associated_type_bindings.is_empty() {
                         let mut args = generic_args
@@ -1346,15 +1394,14 @@ pub(crate) mod support {
                     }
                     rendered
                 }
-                baml_compiler2_ast::TypeExprKind::Int { .. } => "int".into(),
-                baml_compiler2_ast::TypeExprKind::Bigint { .. } => "bigint".into(),
-                baml_compiler2_ast::TypeExprKind::Float { .. } => "float".into(),
-                baml_compiler2_ast::TypeExprKind::String { .. } => "string".into(),
-                baml_compiler2_ast::TypeExprKind::Bool { .. } => "bool".into(),
-                baml_compiler2_ast::TypeExprKind::Null { .. } => "null".into(),
-                baml_compiler2_ast::TypeExprKind::Never { .. } => "never".into(),
-                baml_compiler2_ast::TypeExprKind::Void { .. } => "void".into(),
-                baml_compiler2_ast::TypeExprKind::Uint8Array { .. } => "uint8array".into(),
+                baml_compiler2_ast::TypeExprKind::Int => "int".into(),
+                baml_compiler2_ast::TypeExprKind::Bigint => "bigint".into(),
+                baml_compiler2_ast::TypeExprKind::Float => "float".into(),
+                baml_compiler2_ast::TypeExprKind::String => "string".into(),
+                baml_compiler2_ast::TypeExprKind::Bool => "bool".into(),
+                baml_compiler2_ast::TypeExprKind::Null => "null".into(),
+                baml_compiler2_ast::TypeExprKind::Never => "never".into(),
+                baml_compiler2_ast::TypeExprKind::Uint8Array => "uint8array".into(),
                 baml_compiler2_ast::TypeExprKind::Media { kind: k, .. } => {
                     format!("{:?}", k).to_lowercase()
                 }
@@ -1424,7 +1471,7 @@ pub(crate) mod support {
                         throws
                     )
                 }
-                baml_compiler2_ast::TypeExprKind::BuiltinUnknown { .. } => "unknown".into(),
+                baml_compiler2_ast::TypeExprKind::Unknown => "unknown".into(),
                 baml_compiler2_ast::TypeExprKind::AssociatedTypeProjection {
                     base,
                     interface,
@@ -1440,11 +1487,11 @@ pub(crate) mod support {
                         format!("{base}.{member}")
                     }
                 }
-                baml_compiler2_ast::TypeExprKind::Type { .. } => "type".into(),
-                baml_compiler2_ast::TypeExprKind::Rust { .. } => "$rust_type".into(),
-                baml_compiler2_ast::TypeExprKind::Error { .. } => "error".into(),
-                baml_compiler2_ast::TypeExprKind::Unknown { .. } => "?".into(),
-                baml_compiler2_ast::TypeExprKind::Infer { .. } => "_".into(),
+                baml_compiler2_ast::TypeExprKind::Type => "reflect.Type".into(),
+                baml_compiler2_ast::TypeExprKind::Rust => "$rust_type".into(),
+                baml_compiler2_ast::TypeExprKind::Error => "error".into(),
+                baml_compiler2_ast::TypeExprKind::Missing => "?".into(),
+                baml_compiler2_ast::TypeExprKind::Infer => "_".into(),
             }
         }
 
@@ -1458,32 +1505,22 @@ pub(crate) mod support {
             local_type_names: &std::collections::HashSet<&str>,
         ) -> String {
             use baml_compiler2_hir::type_ref::TypeRefKind as K;
-            fn is_local_type_path(
-                first: &str,
-                local_type_names: &std::collections::HashSet<&str>,
-            ) -> bool {
-                local_type_names.contains(first)
-                    || first
-                        .strip_suffix("$stream")
-                        .is_some_and(|base| local_type_names.contains(base))
-            }
-
             match &store[id].kind {
                 K::Path {
-                    segments,
+                    path,
                     generic_args,
                     associated_type_bindings,
                 } => {
-                    let path = segments
+                    let dotted = path
                         .iter()
                         .map(|n| n.as_str())
                         .collect::<Vec<_>>()
                         .join(".");
-                    let first = segments.first().map(|n| n.as_str()).unwrap_or("");
-                    let mut rendered = if is_local_type_path(first, local_type_names) {
-                        format!("{pkg_prefix}{path}")
+                    let first = path.first().map(|n| n.as_str()).unwrap_or("");
+                    let mut rendered = if local_type_names.contains(first) {
+                        format!("{pkg_prefix}{dotted}")
                     } else {
-                        path
+                        dotted
                     };
                     if !generic_args.is_empty() || !associated_type_bindings.is_empty() {
                         let mut args = generic_args
@@ -1512,7 +1549,6 @@ pub(crate) mod support {
                 K::Bool => "bool".into(),
                 K::Null => "null".into(),
                 K::Never => "never".into(),
-                K::Void => "void".into(),
                 K::Uint8Array => "uint8array".into(),
                 K::Media { kind: k } => format!("{:?}", k).to_lowercase(),
                 K::Optional { inner } => {
@@ -1580,7 +1616,7 @@ pub(crate) mod support {
                         throws
                     )
                 }
-                K::BuiltinUnknown => "unknown".into(),
+                K::Unknown => "unknown".into(),
                 K::AssociatedTypeProjection {
                     base,
                     interface,
@@ -1595,10 +1631,10 @@ pub(crate) mod support {
                         format!("{base}.{member}")
                     }
                 }
-                K::Type => "type".into(),
+                K::Type => "reflect.Type".into(),
                 K::Rust => "$rust_type".into(),
                 K::Error => "error".into(),
-                K::Unknown => "?".into(),
+                K::Missing => "?".into(),
                 K::Infer => "_".into(),
             }
         }
@@ -1777,35 +1813,25 @@ pub(crate) mod support {
                     expr_desc_hir(*scrutinee, body, prefix, local_type_names),
                     pat_desc_hir(*pattern, body, prefix, local_type_names),
                 ),
-                Expr::Catch { base, clauses } => {
+                Expr::Catch { base, clause } => {
                     let base_desc = expr_desc_hir(*base, body, prefix, local_type_names);
-                    let clause_descs: Vec<String> = clauses
+
+                    let kind = clause.kind.keyword();
+                    let binding = pat_desc_hir(clause.binding, body, prefix, local_type_names);
+                    let arms_desc = clause
+                        .arms
                         .iter()
-                        .map(|clause| {
-                            let kind = match clause.kind {
-                                CatchClauseKind::Catch => "catch",
-                                CatchClauseKind::CatchAll => "catch_all",
-                                CatchClauseKind::CatchAllPanics => "catch_all_panics",
-                            };
-                            let binding =
-                                pat_desc_hir(clause.binding, body, prefix, local_type_names);
-                            let arms_desc = clause
-                                .arms
-                                .iter()
-                                .map(|arm_id| {
-                                    let arm = &body.catch_arms[*arm_id];
-                                    format!(
-                                        "{} => {}",
-                                        pat_desc_hir(arm.pattern, body, prefix, local_type_names),
-                                        expr_desc_hir(arm.body, body, prefix, local_type_names)
-                                    )
-                                })
-                                .collect::<Vec<_>>()
-                                .join(", ");
-                            format!("{kind} ({binding}) {{ {arms_desc} }}")
+                        .map(|arm_id| {
+                            let arm = &body.catch_arms[*arm_id];
+                            format!(
+                                "{} => {}",
+                                pat_desc_hir(arm.pattern, body, prefix, local_type_names),
+                                expr_desc_hir(arm.body, body, prefix, local_type_names)
+                            )
                         })
-                        .collect();
-                    format!("{base_desc} {}", clause_descs.join(" "))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!("{base_desc} {kind} ({binding}) {{ {arms_desc} }}")
                 }
                 Expr::Throw { value } => {
                     format!(
@@ -1853,10 +1879,11 @@ pub(crate) mod support {
                     let tn = qualify_type_name(type_name, prefix, local_type_names);
                     let field_strs: Vec<String> = fields
                         .iter()
-                        .map(|(name, val)| {
+                        .map(|field| {
                             format!(
-                                "{name}: {}",
-                                expr_desc_hir(*val, body, prefix, local_type_names)
+                                "{}: {}",
+                                field.name,
+                                expr_desc_hir(field.value, body, prefix, local_type_names)
                             )
                         })
                         .collect();
@@ -1872,11 +1899,11 @@ pub(crate) mod support {
                 Expr::Map { entries } => {
                     let entry_strs: Vec<String> = entries
                         .iter()
-                        .map(|(k, v)| {
+                        .map(|entry| {
                             format!(
                                 "{}: {}",
-                                expr_desc_hir(*k, body, prefix, local_type_names),
-                                expr_desc_hir(*v, body, prefix, local_type_names)
+                                expr_desc_hir(entry.key, body, prefix, local_type_names),
+                                expr_desc_hir(entry.value, body, prefix, local_type_names)
                             )
                         })
                         .collect();
@@ -1950,14 +1977,6 @@ pub(crate) mod support {
                     expr_desc_hir(*expr, body, prefix, local_type_names)
                 }
                 Expr::ByteStringLiteral(bytes) => format!("b\"<{} bytes>\"", bytes.len()),
-                Expr::Spawn {
-                    body: spawn_body, ..
-                } => {
-                    format!(
-                        "spawn {{ {} }}",
-                        expr_desc_hir(*spawn_body, body, prefix, local_type_names)
-                    )
-                }
                 Expr::Await { future } => format!(
                     "await {}",
                     expr_desc_hir(*future, body, prefix, local_type_names)
@@ -1975,6 +1994,15 @@ pub(crate) mod support {
                         expr_desc_hir(*base, body, prefix, local_type_names)
                     )
                 }
+                Expr::QualifiedPath {
+                    qself,
+                    interface,
+                    member,
+                } => format!(
+                    "({} as {}).{member}",
+                    type_expr_to_string_hir(qself, prefix, local_type_names),
+                    type_expr_to_string_hir(interface, prefix, local_type_names)
+                ),
                 Expr::Missing => "<missing>".into(),
             }
         }
@@ -1988,6 +2016,24 @@ pub(crate) mod support {
             use baml_compiler2_ast::Stmt;
             let stmt = &body.stmts[stmt_id];
             match stmt {
+                Stmt::TypeBinding {
+                    name,
+                    operand,
+                    bounds,
+                    else_branch,
+                } => format!(
+                    "let type {name}{} = {}{}",
+                    type_binding_bounds_desc(bounds, |bound| {
+                        type_expr_to_string_hir(bound, prefix, local_type_names)
+                    }),
+                    expr_desc_hir(*operand, body, prefix, local_type_names),
+                    else_branch
+                        .map(|else_expr| format!(
+                            " else {}",
+                            expr_desc_hir(else_expr, body, prefix, local_type_names)
+                        ))
+                        .unwrap_or_default()
+                ),
                 Stmt::Let {
                     pattern,
                     initializer,
@@ -2069,12 +2115,14 @@ pub(crate) mod support {
 
         let mut output = String::new();
         let pkg_info = file_package(db, file);
+        let package =
+            baml_compiler2_hir_ty::render::Viewpoint::canonical(db).display_label(pkg_info.root);
         let prefix = if pkg_info.namespace_path.is_empty() {
-            format!("{}.", pkg_info.package)
+            format!("{package}.")
         } else {
             format!(
                 "{}.{}.",
-                pkg_info.package,
+                package,
                 pkg_info
                     .namespace_path
                     .iter()
@@ -2084,7 +2132,7 @@ pub(crate) mod support {
             )
         };
 
-        use baml_compiler2_ppir::item_data::{
+        use baml_compiler2_hir::item_data::{
             class_data, enum_data, file_classes, file_enums, file_functions, file_type_aliases,
             function_data, function_llm_meta, type_alias_data,
         };
@@ -2146,7 +2194,7 @@ pub(crate) mod support {
         functions.sort_by_key(|&loc| function_data(db, loc).name.as_str().to_string());
         for loc in functions {
             let func = function_data(db, loc);
-            let defaults = baml_compiler2_ppir::function_parameter_defaults(db, loc);
+            let defaults = baml_compiler2_hir::signature::function_parameter_defaults(db, loc);
             let params: Vec<String> = func
                 .params
                 .iter()
@@ -2167,7 +2215,7 @@ pub(crate) mod support {
                 .return_type
                 .map(|id| type_ref_to_string(&func.type_refs, id, &prefix, &local_type_names))
                 .unwrap_or_else(|| "?".into());
-            let func_body = baml_compiler2_ppir::function_body(db, loc);
+            let func_body = baml_compiler2_hir::body::function_body(db, loc);
             let body_kind = if function_llm_meta(db, loc).is_some() {
                 "llm"
             } else {
@@ -2249,16 +2297,17 @@ pub(crate) mod support {
         function_name: &str,
         expr_text: &str,
     ) -> String {
-        let func_loc = *baml_compiler2_ppir::item_data::file_functions(db, file)
+        let vp = baml_compiler2_hir_ty::render::Viewpoint::canonical(db);
+        let func_loc = *baml_compiler2_hir::item_data::file_functions(db, file)
             .iter()
             .find(|&&loc| {
-                baml_compiler2_ppir::item_data::function_data(db, loc)
+                baml_compiler2_hir::item_data::function_data(db, loc)
                     .name
                     .as_str()
                     == function_name
             })
             .unwrap_or_else(|| panic!("function `{function_name}` not found"));
-        let func_body = baml_compiler2_ppir::function_body(db, func_loc);
+        let func_body = baml_compiler2_hir::body::function_body(db, func_loc);
         let body = match func_body.as_ref() {
             FunctionBody::Expr(body) => body,
             _ => panic!("function `{function_name}` has no expression body"),
@@ -2266,9 +2315,10 @@ pub(crate) mod support {
 
         // The authoritative function→scope link, replacing a `scope.range ==
         // func.span` join.
-        let scope_id = baml_compiler2_ppir::item_data::function_scope(db, func_loc)
-            .unwrap_or_else(|| panic!("scope for function `{function_name}` not found"));
-        let inference = infer_scope_types(db, scope_id);
+        let inference = baml_compiler2_hir_ty::infer::infer_body(
+            db,
+            baml_compiler2_hir::body::BodyOwnerId::Function(func_loc),
+        );
 
         let matches: Vec<_> = body
             .exprs
@@ -2284,8 +2334,9 @@ pub(crate) mod support {
         };
 
         inference
-            .expression_type(expr_id)
-            .map(|ty| ty.render_canonical())
+            .type_of_expr
+            .get(&expr_id)
+            .map(|ty| ty.render_with(&vp))
             .unwrap_or_else(|| {
                 panic!(
                     "expression `{expr_text}` in function `{function_name}` has no inferred type"
@@ -2295,7 +2346,7 @@ pub(crate) mod support {
 
     pub fn make_db() -> ProjectDatabase {
         let mut db = ProjectDatabase::new();
-        db.set_project_root(std::path::Path::new("."));
+        db.workspace(std::path::Path::new("."));
         db
     }
 }

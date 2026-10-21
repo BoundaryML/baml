@@ -3,20 +3,88 @@
 //! Converts `InboundValue` (from the C bridge) to the engine's `BexExternalValue` representation
 //! so the BEX engine can use them as function arguments.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
-use bex_project::{BexExternalValue, RuntimeTy};
+use bex_project::{
+    BexExternalAdt, BexExternalValue, MediaKind, MediaValue, PromptAst, PromptAstSimple, RuntimeTy,
+};
 use indexmap::IndexMap;
 use prost::Message;
 
 use crate::{
     baml_bridge::cffi::{
-        BamlHandleType, InboundClassValue, InboundEnumValue, InboundListValue, InboundMapEntry,
-        InboundMapValue, InboundValue, inbound_value::Value as InboundValueVariant,
+        BamlHandleType, BamlValueMedia, BamlValuePromptAst, BamlValuePromptAstSimple,
+        InboundClassValue, InboundEnumValue, InboundListValue, InboundMapEntry, InboundMapValue,
+        InboundValue, MediaTypeEnum, baml_value_media,
+        baml_value_prompt_ast::Value as PromptAstVariant,
+        baml_value_prompt_ast_simple::Value as PromptAstSimpleVariant,
+        inbound_value::Value as InboundValueVariant,
     },
     error::CtypesError,
     handle_table::CffiHandleTable,
 };
+
+/// Owns every remaining wire occurrence, including values after a malformed
+/// sibling. Recursive decoding shares this inventory, so drained references
+/// are never released a second time on an error.
+struct InboundOwners<'a> {
+    table: &'a CffiHandleTable,
+    handles: Vec<crate::baml_bridge::cffi::BamlHandle>,
+}
+impl<'a> InboundOwners<'a> {
+    fn new(table: &'a CffiHandleTable) -> Self {
+        Self {
+            table,
+            handles: Vec::new(),
+        }
+    }
+    fn collect(&mut self, value: &InboundValue) {
+        match &value.value {
+            Some(InboundValueVariant::Handle(handle)) => self.handles.push(*handle),
+            Some(InboundValueVariant::ListValue(list)) => {
+                for value in &list.values {
+                    self.collect(value);
+                }
+            }
+            Some(InboundValueVariant::MapValue(map)) => {
+                for entry in &map.entries {
+                    if let Some(value) = &entry.value {
+                        self.collect(value);
+                    }
+                }
+            }
+            Some(InboundValueVariant::ClassValue(class)) => {
+                for entry in &class.fields {
+                    if let Some(value) = &entry.value {
+                        self.collect(value);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    fn take(&mut self, handle: &crate::baml_bridge::cffi::BamlHandle) {
+        if let Some(index) = self.handles.iter().position(|owned| owned == handle) {
+            self.handles.swap_remove(index);
+        }
+    }
+}
+impl Drop for InboundOwners<'_> {
+    fn drop(&mut self) {
+        for handle in self.handles.drain(..) {
+            let kind = match BamlHandleType::try_from(handle.handle_type) {
+                Ok(BamlHandleType::HostValueCallable) => Some(bex_project::HostValueKind::Callable),
+                Ok(BamlHandleType::HostValueOpaque) => Some(bex_project::HostValueKind::Opaque),
+                _ => None,
+            };
+            if let Some(kind) = kind {
+                drop(bex_project::HostValueArc::intern(handle.key, kind));
+            } else {
+                self.table.release(handle.key);
+            }
+        }
+    }
+}
 
 /// Decode a protobuf `InboundValue` into a `BexExternalValue` for use by the BEX engine.
 ///
@@ -24,6 +92,16 @@ use crate::{
 pub fn inbound_to_external(
     value: InboundValue,
     handle_table: &CffiHandleTable,
+) -> Result<BexExternalValue, CtypesError> {
+    let mut owners = InboundOwners::new(handle_table);
+    owners.collect(&value);
+    decode_inbound(value, handle_table, &mut owners)
+}
+
+fn decode_inbound(
+    value: InboundValue,
+    handle_table: &CffiHandleTable,
+    owners: &mut InboundOwners<'_>,
 ) -> Result<BexExternalValue, CtypesError> {
     let value_type = value
         .value_type
@@ -61,14 +139,22 @@ pub fn inbound_to_external(
                 Ok(BexExternalValue::Bigint(bi))
             }
             InboundValueVariant::FloatValue(f) => Ok(BexExternalValue::Float(f)),
+            InboundValueVariant::JsNumberValue(f) => Ok(BexExternalValue::JsNumber(f)),
             InboundValueVariant::BoolValue(b) => Ok(BexExternalValue::Bool(b)),
-            InboundValueVariant::ListValue(list) => convert_list(list, handle_table),
-            InboundValueVariant::MapValue(map) => convert_map(map, handle_table),
-            InboundValueVariant::ClassValue(class) => convert_class(class, handle_table),
+            InboundValueVariant::ListValue(list) => convert_list(list, handle_table, owners),
+            InboundValueVariant::MapValue(map) => convert_map(map, handle_table, owners),
+            InboundValueVariant::ClassValue(class) => convert_class(class, handle_table, owners),
             InboundValueVariant::EnumValue(e) => Ok(convert_enum(e)),
             InboundValueVariant::Uint8arrayValue(bytes) => Ok(BexExternalValue::Uint8Array(bytes)),
             // A reflected BAML type passed as an argument value.
             InboundValueVariant::TyValue(ty) => crate::ty_decode::proto_ty_to_external(&ty),
+            InboundValueVariant::TyDefValue(ty) => crate::ty_decode::proto_ty_def_to_external(&ty),
+            InboundValueVariant::MediaValue(media) => Ok(BexExternalValue::Adt(
+                BexExternalAdt::Media(proto_media_to_bex_media(media)?),
+            )),
+            InboundValueVariant::PromptAstValue(prompt) => Ok(BexExternalValue::Adt(
+                BexExternalAdt::PromptAst(Arc::new(proto_prompt_ast_to_bex_prompt_ast(prompt)?)),
+            )),
             InboundValueVariant::Handle(handle) => {
                 // HOST_VALUE_* keys do NOT live in HANDLE_TABLE. The host
                 // bridge owns the lookup; we construct the Arc stub here so
@@ -89,11 +175,27 @@ pub fn inbound_to_external(
                     // the first last-drop would fire HostReleaseFn, tearing the
                     // registry entry out from under the still-live other Arc.
                     let arc = bex_project::HostValueArc::intern(handle.key, kind);
+                    owners.take(&handle);
                     return Ok(BexExternalValue::HostValue(arc));
+                }
+                // Internal invocation capabilities are control-channel data,
+                // not application values, even if the host forges their tag.
+                let pinned = handle_table
+                    .resolve(handle.key)
+                    .ok_or(CtypesError::InvalidHandleKey(handle.key))?;
+                if matches!(
+                    &*pinned,
+                    crate::CffiHandleTableEntry::InvocationState(_)
+                        | crate::CffiHandleTableEntry::TraceReservation(_)
+                ) {
+                    return Err(CtypesError::InternalError(
+                        "invocation capabilities cannot be supplied as application values".into(),
+                    ));
                 }
                 let value = handle_table
                     .drain(handle.key)
                     .ok_or(CtypesError::InvalidHandleKey(handle.key))?;
+                owners.take(&handle);
                 Ok(BexExternalValue::from((*value).clone()))
             }
         },
@@ -104,30 +206,116 @@ pub fn inbound_to_external(
     })
 }
 
+fn proto_media_to_bex_media(media: BamlValueMedia) -> Result<Arc<MediaValue>, CtypesError> {
+    let kind = match MediaTypeEnum::try_from(media.media) {
+        Ok(MediaTypeEnum::Image) => MediaKind::Image,
+        Ok(MediaTypeEnum::Audio) => MediaKind::Audio,
+        Ok(MediaTypeEnum::Video) => MediaKind::Video,
+        Ok(MediaTypeEnum::Pdf) => MediaKind::Pdf,
+        Ok(MediaTypeEnum::Other) => MediaKind::Generic,
+        Ok(MediaTypeEnum::MediaTypeUnspecified) | Err(_) => {
+            return Err(CtypesError::InternalError(
+                "portable media payload has no valid media kind".to_string(),
+            ));
+        }
+    };
+    let mime_type = media.mime_type.as_deref();
+    match media.value {
+        Some(baml_value_media::Value::Url(url)) => Ok(MediaValue::from_url(kind, &url, mime_type)),
+        Some(baml_value_media::Value::Base64(base64)) => {
+            Ok(MediaValue::from_base64(kind, base64.into(), mime_type))
+        }
+        Some(baml_value_media::Value::FileContent(content)) => Ok(MediaValue::from_file_content(
+            kind,
+            &content.name,
+            content.base64.into(),
+            mime_type,
+        )),
+        None => Err(CtypesError::InternalError(
+            "portable media payload has no content".to_string(),
+        )),
+    }
+}
+
+fn proto_prompt_ast_to_bex_prompt_ast(
+    prompt: BamlValuePromptAst,
+) -> Result<PromptAst, CtypesError> {
+    match prompt.value {
+        Some(PromptAstVariant::Simple(simple)) => Ok(PromptAst::Simple(Arc::new(
+            proto_prompt_ast_simple_to_bex_prompt_ast_simple(simple)?,
+        ))),
+        Some(PromptAstVariant::Message(message)) => {
+            let content = message.content.ok_or_else(|| {
+                CtypesError::InternalError("portable prompt message has no content".to_string())
+            })?;
+            let metadata = serde_json::from_str(&message.metadata_as_json).map_err(|error| {
+                CtypesError::InternalError(format!(
+                    "portable prompt message has invalid metadata JSON: {error}"
+                ))
+            })?;
+            Ok(PromptAst::Message {
+                role: message.role,
+                content: Arc::new(proto_prompt_ast_simple_to_bex_prompt_ast_simple(content)?),
+                metadata,
+            })
+        }
+        Some(PromptAstVariant::Multiple(multiple)) => Ok(PromptAst::Vec(
+            multiple
+                .items
+                .into_iter()
+                .map(proto_prompt_ast_to_bex_prompt_ast)
+                .map(|item| item.map(Arc::new))
+                .collect::<Result<_, _>>()?,
+        )),
+        None => Err(CtypesError::InternalError(
+            "portable prompt payload has no value".to_string(),
+        )),
+    }
+}
+
+fn proto_prompt_ast_simple_to_bex_prompt_ast_simple(
+    simple: BamlValuePromptAstSimple,
+) -> Result<PromptAstSimple, CtypesError> {
+    match simple.value {
+        Some(PromptAstSimpleVariant::String(string)) => Ok(PromptAstSimple::String(string)),
+        Some(PromptAstSimpleVariant::Media(media)) => {
+            Ok(PromptAstSimple::Media(proto_media_to_bex_media(media)?))
+        }
+        Some(PromptAstSimpleVariant::Multiple(multiple)) => Ok(PromptAstSimple::Multiple(
+            multiple
+                .items
+                .into_iter()
+                .map(proto_prompt_ast_simple_to_bex_prompt_ast_simple)
+                .map(|item| item.map(Arc::new))
+                .collect::<Result<_, _>>()?,
+        )),
+        None => Err(CtypesError::InternalError(
+            "portable prompt content has no value".to_string(),
+        )),
+    }
+}
+
 /// Build the default "any scalar" union type for untyped inbound values.
 fn default_scalar_union_ty() -> RuntimeTy {
-    let d = baml_type::TyAttr::default();
-    RuntimeTy::Union(
-        vec![
-            RuntimeTy::Int { attr: d.clone() },
-            RuntimeTy::Float { attr: d.clone() },
-            RuntimeTy::String { attr: d.clone() },
-            RuntimeTy::Bool { attr: d.clone() },
-            RuntimeTy::Uint8Array { attr: d.clone() },
-            RuntimeTy::Null { attr: d.clone() },
-        ],
-        d,
-    )
+    RuntimeTy::Union(Box::new([
+        RuntimeTy::Int,
+        RuntimeTy::Float,
+        RuntimeTy::String,
+        RuntimeTy::Bool,
+        RuntimeTy::Uint8Array,
+        RuntimeTy::Null,
+    ]))
 }
 
 fn convert_list(
     list: InboundListValue,
     handle_table: &CffiHandleTable,
+    owners: &mut InboundOwners<'_>,
 ) -> Result<BexExternalValue, CtypesError> {
     let items: Result<Vec<BexExternalValue>, CtypesError> = list
         .values
         .into_iter()
-        .map(|v| inbound_to_external(v, handle_table))
+        .map(|v| decode_inbound(v, handle_table, owners))
         .collect();
     Ok(BexExternalValue::Array {
         element_type: default_scalar_union_ty(),
@@ -138,13 +326,14 @@ fn convert_list(
 fn convert_map(
     map: InboundMapValue,
     handle_table: &CffiHandleTable,
+    owners: &mut InboundOwners<'_>,
 ) -> Result<BexExternalValue, CtypesError> {
     let mut entries = IndexMap::new();
     for entry in map.entries {
         let key = extract_string_key(&entry)?;
         let value = entry
             .value
-            .map(|v| inbound_to_external(v, handle_table))
+            .map(|v| decode_inbound(v, handle_table, owners))
             .transpose()?
             .unwrap_or(BexExternalValue::Null);
         entries.insert(key, value);
@@ -159,13 +348,14 @@ fn convert_map(
 fn convert_class(
     class: InboundClassValue,
     handle_table: &CffiHandleTable,
+    owners: &mut InboundOwners<'_>,
 ) -> Result<BexExternalValue, CtypesError> {
     let mut fields = IndexMap::new();
     for entry in class.fields {
         let key = extract_string_key(&entry)?;
         let value = entry
             .value
-            .map(|v| inbound_to_external(v, handle_table))
+            .map(|v| decode_inbound(v, handle_table, owners))
             .transpose()?
             .unwrap_or(BexExternalValue::Null);
         fields.insert(key, value);
@@ -200,12 +390,18 @@ pub fn kwargs_to_bex_values(
     kwargs: Vec<InboundMapEntry>,
     handle_table: &CffiHandleTable,
 ) -> Result<HashMap<String, BexExternalValue>, CtypesError> {
+    let mut owners = InboundOwners::new(handle_table);
+    for entry in &kwargs {
+        if let Some(value) = &entry.value {
+            owners.collect(value);
+        }
+    }
     let mut result = HashMap::new();
     for entry in kwargs {
         let key = extract_string_key(&entry)?;
         let value = entry
             .value
-            .map(|v| inbound_to_external(v, handle_table))
+            .map(|v| decode_inbound(v, handle_table, &mut owners))
             .transpose()?
             .unwrap_or(BexExternalValue::Null);
         result.insert(key, value);
@@ -242,6 +438,72 @@ mod tests {
         }
     }
 
+    fn owned_input(key: u64) -> InboundValue {
+        InboundValue {
+            value: Some(InboundValueVariant::Handle(BamlHandle {
+                key,
+                handle_type: BamlHandleType::FunctionRef as i32,
+            })),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn malformed_list_releases_owners_before_and_after_bad_sibling() {
+        let table = CffiHandleTable::new();
+        let first = table.insert(CffiHandleTableEntry::FunctionRef { global_index: 1 });
+        let last = table.insert(CffiHandleTableEntry::FunctionRef { global_index: 2 });
+        let input = InboundValue {
+            value: Some(InboundValueVariant::ListValue(InboundListValue {
+                values: vec![
+                    owned_input(first),
+                    InboundValue {
+                        value: Some(InboundValueVariant::BigintValue("invalid".into())),
+                        ..Default::default()
+                    },
+                    owned_input(last),
+                ],
+            })),
+            ..Default::default()
+        };
+        assert!(inbound_to_external(input, &table).is_err());
+        assert_eq!(table.len(), 0);
+    }
+
+    #[test]
+    fn invalid_annotation_releases_nested_wire_owners() {
+        let table = CffiHandleTable::new();
+        let key = table.insert(CffiHandleTableEntry::FunctionRef { global_index: 1 });
+        let input = typed_input(
+            &RuntimeTy::Union(vec![RuntimeTy::int(), RuntimeTy::Null].into()),
+            InboundValueVariant::ListValue(InboundListValue {
+                values: vec![owned_input(key)],
+            }),
+        );
+        assert!(inbound_to_external(input, &table).is_err());
+        assert_eq!(table.len(), 0);
+    }
+
+    #[test]
+    fn invalid_kwarg_releases_later_argument_owners() {
+        let table = CffiHandleTable::new();
+        let key = table.insert(CffiHandleTableEntry::FunctionRef { global_index: 1 });
+        let inputs = vec![
+            InboundMapEntry {
+                key: None,
+                value: Some(InboundValue::default()),
+            },
+            InboundMapEntry {
+                key: Some(crate::baml_bridge::cffi::inbound_map_entry::Key::StringKey(
+                    "later".into(),
+                )),
+                value: Some(owned_input(key)),
+            },
+        ];
+        assert!(kwargs_to_bex_values(inputs, &table).is_err());
+        assert_eq!(table.len(), 0);
+    }
+
     #[test]
     fn sparse_value_type_preserves_authoritative_type() {
         let decoded = inbound_to_external(
@@ -271,11 +533,127 @@ mod tests {
     }
 
     #[test]
+    fn javascript_number_has_a_distinct_inbound_wire_variant() {
+        let decoded = inbound_to_external(
+            InboundValue {
+                value_type: None,
+                value: Some(InboundValueVariant::JsNumberValue(-0.0)),
+            },
+            &CffiHandleTable::new(),
+        )
+        .unwrap();
+        let BexExternalValue::JsNumber(value) = decoded else {
+            panic!("expected a JavaScript number")
+        };
+        assert_eq!(value.to_bits(), (-0.0_f64).to_bits());
+    }
+
+    #[test]
+    fn portable_media_keeps_its_name_and_never_names_a_file() {
+        let named = BamlValueMedia {
+            media: MediaTypeEnum::Pdf as i32,
+            mime_type: None,
+            value: Some(baml_value_media::Value::FileContent(
+                crate::baml_bridge::cffi::BamlValueMediaFileContent {
+                    name: "q3.pdf".to_string(),
+                    base64: "JVBERi0xLjc=".to_string(),
+                },
+            )),
+        };
+        let media = proto_media_to_bex_media(named).unwrap();
+        assert_eq!(media.name().as_deref(), Some("q3.pdf"));
+        assert_eq!(media.base64().as_str(), "JVBERi0xLjc=");
+        // Content read from a file infers its MIME type from the name.
+        assert_eq!(media.mime_type().as_deref(), Some("application/pdf"));
+        assert_eq!(media.url(), None);
+
+        let plain = BamlValueMedia {
+            media: MediaTypeEnum::Image as i32,
+            mime_type: None,
+            value: Some(baml_value_media::Value::Base64("aW1hZ2U=".to_string())),
+        };
+        let media = proto_media_to_bex_media(plain).unwrap();
+        assert_eq!((media.name(), media.mime_type()), (None, None));
+
+        // Field 5 once carried a path. It is reserved: a payload that sets
+        // only that has no content.
+        let mut old_wire = Vec::new();
+        prost::encoding::int32::encode(1, &(MediaTypeEnum::Image as i32), &mut old_wire);
+        prost::encoding::string::encode(5, &"/etc/hosts".to_string(), &mut old_wire);
+        let decoded = <BamlValueMedia as prost::Message>::decode(old_wire.as_slice()).unwrap();
+        assert!(proto_media_to_bex_media(decoded).is_err());
+    }
+
+    #[test]
+    fn portable_prompt_with_media_decodes_as_owned_adts() {
+        use crate::baml_bridge::cffi::{
+            BamlValuePromptAstMessage, BamlValuePromptAstMultiple, BamlValuePromptAstSimpleMultiple,
+        };
+
+        let image = BamlValueMedia {
+            media: MediaTypeEnum::Image as i32,
+            mime_type: Some("image/png".to_string()),
+            value: Some(baml_value_media::Value::Base64("aW1hZ2U=".to_string())),
+        };
+        let content = BamlValuePromptAstSimple {
+            value: Some(PromptAstSimpleVariant::Multiple(
+                BamlValuePromptAstSimpleMultiple {
+                    items: vec![
+                        BamlValuePromptAstSimple {
+                            value: Some(PromptAstSimpleVariant::String("look: ".to_string())),
+                        },
+                        BamlValuePromptAstSimple {
+                            value: Some(PromptAstSimpleVariant::Media(image)),
+                        },
+                    ],
+                },
+            )),
+        };
+        let prompt = BamlValuePromptAst {
+            value: Some(PromptAstVariant::Multiple(BamlValuePromptAstMultiple {
+                items: vec![BamlValuePromptAst {
+                    value: Some(PromptAstVariant::Message(BamlValuePromptAstMessage {
+                        role: "user".to_string(),
+                        content: Some(content),
+                        metadata_as_json: "{\"cache\":true}".to_string(),
+                    })),
+                }],
+            })),
+        };
+
+        for _ in 0..2 {
+            let decoded = inbound_to_external(
+                InboundValue {
+                    value_type: None,
+                    value: Some(InboundValueVariant::PromptAstValue(prompt.clone())),
+                },
+                &CffiHandleTable::new(),
+            )
+            .unwrap();
+            let BexExternalValue::Adt(BexExternalAdt::PromptAst(ast)) = decoded else {
+                panic!("expected a prompt AST payload")
+            };
+            let messages = ast.to_structured_messages();
+            assert_eq!(messages.len(), 1);
+            assert_eq!(messages[0].0, "user");
+            assert_eq!(messages[0].2["cache"], true);
+            let PromptAstSimple::Multiple(parts) = messages[0].1.as_ref() else {
+                panic!("expected ordered text and media parts")
+            };
+            let PromptAstSimple::Media(media) = parts[1].as_ref() else {
+                panic!("expected media in the second prompt part")
+            };
+            assert_eq!(media.kind, MediaKind::Image);
+            assert_eq!(media.mime_type().as_deref(), Some("image/png"));
+            assert_eq!(media.base64().as_str(), "aW1hZ2U=");
+        }
+    }
+
+    #[test]
     fn typed_literal_preserves_identity_beyond_payload_shape() {
         let literal = RuntimeTy::Literal(
             baml_type::Literal::String("draft".to_string()),
             baml_type::Freshness::Regular,
-            baml_type::TyAttr::default(),
         );
         let decoded = inbound_to_external(
             typed_input(
@@ -574,8 +952,7 @@ mod tests {
         use crate::baml_bridge::cffi::InboundClassValue;
         let class_type = RuntimeTy::Class(
             baml_type::TypeName::local(baml_type::Name::new("GenericBox")),
-            vec![RuntimeTy::int()],
-            baml_type::TyAttr::default(),
+            Box::new([RuntimeTy::int()]),
         );
         let decoded = inbound_to_external(
             typed_input(

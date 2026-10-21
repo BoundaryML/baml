@@ -142,13 +142,13 @@ test "float_min_basic" {
     assert.is_true(((3.0).min(5.0) - 3.0).abs() < 0.000000000001)
 }
 
-// f.min(NaN) suppresses NaN and returns f.
-test "float_min_with_nan_suppresses_nan" {
+// NaN is the largest float in BAML's total order, so it loses every `min` it
+// does not tie. Both receiver forms agree, and both agree with `Compare.min`.
+test "float_min_with_nan_keeps_the_number" {
     assert.equal((3.0).min(float.nan()), 3.0)
 }
 
-// NaN.min(f) suppresses NaN and returns f.
-test "float_min_nan_receiver_suppresses_nan" {
+test "float_min_nan_receiver_keeps_the_number" {
     assert.equal(float.nan().min(3.0), 3.0)
 }
 
@@ -160,12 +160,23 @@ test "float_max_basic" {
     assert.is_true(((3.0).max(5.0) - 5.0).abs() < 0.000000000001)
 }
 
-test "float_max_with_nan_suppresses_nan" {
-    assert.equal((3.0).max(float.nan()), 3.0)
+// The mirror of `min`: NaN is the largest float, so it wins every `max`.
+test "float_max_with_nan_is_nan" {
+    assert.is_true((3.0).max(float.nan()).is_nan())
 }
 
-test "float_max_nan_receiver_suppresses_nan" {
-    assert.equal(float.nan().max(3.0), 3.0)
+test "float_max_nan_receiver_is_nan" {
+    assert.is_true(float.nan().max(3.0).is_nan())
+}
+
+// A literal receiver and a `float`-typed one must resolve to the same `max`.
+function float_max_via_local() -> float throws never {
+    let a: float = 3.0
+    a.max(float.nan())
+}
+
+test "float_max_receiver_form_does_not_change_the_answer" {
+    assert.is_true(float_max_via_local().is_nan())
 }
 
 // ─── clamp ────────────────────────────────────────────────────────────────────
@@ -180,6 +191,12 @@ test "float_clamp_below" {
 
 test "float_clamp_above" {
     assert.is_true(((15.0).clamp(0.0, 10.0) - 10.0).abs() < 0.000000000001)
+}
+
+// NaN clamps down to `max` rather than propagating: it is the largest float, so
+// the upper clamp catches it.
+test "float_clamp_nan_clamps_to_max" {
+    assert.is_true(((float.nan()).clamp(0.0, 10.0) - 10.0).abs() < 0.000000000001)
 }
 
 // ─── floor / ceil / round / trunc / fract ─────────────────────────────────────
@@ -722,8 +739,16 @@ function float_random_in_unit_interval_and_covers_both_halves() -> bool {
     let i = 0;
     while (i < 1000) {
         let r = float.random();
-        if (r < 0.0 || r >= 1.0) { ok = false } else { null }
-        if (r < 0.5) { below = below + 1 } else { above = above + 1 }
+        if (r < 0.0 || r >= 1.0) {
+            ok = false
+        } else {
+            null
+        }
+        if (r < 0.5) {
+            below = below + 1
+        } else {
+            above = above + 1
+        }
         i = i + 1
     }
     ok && below >= 350 && above >= 350
@@ -743,8 +768,16 @@ function float_random_distinct_values() -> bool {
     let i = 0;
     while (i < 100) {
         let r = float.random();
-        if (r < min_seen) { min_seen = r } else { null }
-        if (r > max_seen) { max_seen = r } else { null }
+        if (r < min_seen) {
+            min_seen = r
+        } else {
+            null
+        }
+        if (r > max_seen) {
+            max_seen = r
+        } else {
+            null
+        }
         i = i + 1
     }
     (max_seen - min_seen) > 0.5
@@ -754,12 +787,35 @@ test "float_random_distinct_values" {
     assert.is_true(float_random_distinct_values())
 }
 
+class FixedFloatRng {
+    draw: int,
+
+    implements baml.random.Rng {
+        function random(self, bytes: int) -> uint8array {
+            let empty = b"";
+            empty
+        }
+
+        function random_int(self) -> int {
+            self.draw
+        }
+    }
+}
+
+test "float_random_uses_rng" {
+    assert.equal(float.random(rng = FixedFloatRng { draw: 0 }), 0.0);
+    assert.equal(float.random(rng = FixedFloatRng { draw: int.min_value() }), 0.5);
+    let high = float.random(rng = FixedFloatRng { draw: -1 });
+    assert.is_true(high > 0.99 && high < 1.0)
+}
+
 // ─── Equality (== / !=) ───────────────────────────────────────────────────────
 //
-// Float `==`/`!=` follow JS/TS (IEEE 754) semantics: NaN != NaN, NaN == NaN is
-// false, +0.0 == -0.0, +inf == +inf, +inf != -inf. int/float mix is allowed
-// (int widened to f64); float-vs-bigint is the one rejected pairing (compile
-// error E0004 — bigint past 2^53 can't round-trip f64).
+// Float `==`/`!=` follow IEEE 754 except for NaN, where BAML's reflexive
+// `Equals` wins: NaN == NaN is true (and every NaN equals every other), while
+// +0.0 == -0.0, +inf == +inf, +inf != -inf are unchanged. int/float mix is
+// allowed (int widened to f64); float-vs-bigint is the one rejected pairing
+// (compile error E0004 — bigint past 2^53 can't round-trip f64).
 //
 // Two distinct code paths are exercised: the compiler constant-folds `==` on two
 // float literals (try_fold_binary), while a non-literal operand forces the VM
@@ -839,8 +895,11 @@ test "float_eq_half_underflow_to_zero" {
     assert.is_true((float.parse("5e-324") / 2.0) == 0.0)
 }
 
-test "float_eq_inf_minus_inf_is_nan_ne_self" {
-    assert.is_true((float.inf() - float.inf()) != (float.inf() - float.inf()))
+// A NaN produced by arithmetic still equals itself — `Equals` is reflexive, and
+// the NaN's sign and payload (which differ by CPU architecture) are not
+// observable through comparison.
+test "float_eq_inf_minus_inf_is_nan_eq_self" {
+    assert.is_true((float.inf() - float.inf()) == (float.inf() - float.inf()))
 }
 
 test "float_eq_inf_plus_one_equals_inf" {
@@ -863,8 +922,8 @@ test "float_eq_mul_imprecision_ne_point3" {
     assert.is_true(0.1 * 3.0 != 0.3)
 }
 
-test "float_eq_nan_arith_propagates_ne_self" {
-    assert.is_true((float.nan() + 1.0) != (float.nan() + 1.0))
+test "float_eq_nan_arith_propagates_eq_self" {
+    assert.is_true((float.nan() + 1.0) == (float.nan() + 1.0))
 }
 
 test "float_eq_nan_const_not_equal_number" {
@@ -879,16 +938,16 @@ test "float_eq_nan_ne_number_is_true" {
     assert.is_true(float.nan() != 0.0)
 }
 
-test "float_eq_nan_ne_self_is_true" {
-    assert.is_true(float.parse("nan") != float.parse("nan"))
+test "float_eq_nan_ne_self_is_false" {
+    assert.is_true(!(float.parse("nan") != float.parse("nan")))
 }
 
 test "float_eq_nan_not_equal_infinity" {
     assert.is_true((float.nan() == float.inf()) == false)
 }
 
-test "float_eq_nan_not_equal_to_self" {
-    assert.is_true((float.parse("nan") == float.parse("nan")) == false)
+test "float_eq_nan_equal_to_self" {
+    assert.is_true(float.parse("nan") == float.parse("nan"))
 }
 
 test "float_eq_neg_inf_equals_neg_inf" {
@@ -987,28 +1046,43 @@ test "float_eq_sum_equals_exact_rounded" {
     assert.is_true(0.1 + 0.2 == 0.30000000000000004)
 }
 
-// ─── NaN ordering (IEEE: every comparison involving NaN is false) ─────────────
-// `float` implements `baml.ops.Compare`, and its ordering must be IEEE — so NaN
-// is unordered: `<` `<=` `>` `>=` are all `false`, even `nan <= nan` / `nan >= nan`
-// (NaN is not even equal to itself). Regression guard for the float `Compare`
-// override (the boolean-derived defaults `gt = !le` would otherwise return `true`).
+// ─── NaN ordering (BAML: a total order, with NaN above every number) ──────────
+// `float` implements `baml.ops.Compare`, which is a *total* order, so NaN cannot
+// be left unordered the way IEEE leaves it. NaN sits above every number and is
+// equal to itself, which is what makes `nan <= nan` / `nan >= nan` true.
 test "nan_comparison" {
     assert.is_true(!(float.nan() < 1.0))
-    assert.is_true(!(1.0 < float.nan()))
-    assert.is_true(!(float.nan() > 1.0))
+    assert.is_true(1.0 < float.nan())
+    assert.is_true(float.nan() > 1.0)
     assert.is_true(!(float.nan() < float.nan()))
-    assert.is_true(!(float.nan() <= float.nan()))
-    assert.is_true(!(float.nan() >= float.nan()))
+    assert.is_true(float.nan() <= float.nan())
+    assert.is_true(float.nan() >= float.nan())
+    assert.is_true(float.nan() > float.inf())
+    assert.is_true(float.nan() == float.nan())
 }
 
-// The same via the `Compare` *method* surface (`lt`/`le`/`gt`/`ge`), which is the
-// override that makes the operator correct.
+// `Equals` is reflexive, so — unlike IEEE — no float is unequal to itself, and
+// `x != x` is never a NaN test. Use `is_nan()`.
+test "float_eq_is_reflexive_for_nan" {
+    assert.is_true(!(float.nan() != float.nan()))
+    assert.is_true(float.nan().eq(float.nan()))
+}
+
+// Signed zeros stay one value, as under IEEE.
+test "float_signed_zeros_are_equal" {
+    assert.is_true(-0.0 == 0.0)
+    assert.is_true(!(-0.0 < 0.0))
+    assert.is_true(-0.0 <= 0.0)
+}
+
+// The same via the `Compare` *method* surface (`lt`/`le`/`gt`/`ge`), which the
+// interface derives from `cmp`.
 test "float_nan_lt_method_is_false" {
     assert.is_true(!float.nan().lt(1.0))
 }
 
-test "float_nan_ge_method_is_false" {
-    assert.is_true(!float.nan().ge(float.nan()))
+test "float_nan_ge_method_is_true" {
+    assert.is_true(float.nan().ge(float.nan()))
 }
 
 // ─── regression: bare-literal method receiver (B-614) ─────────────────────────
@@ -1050,4 +1124,316 @@ test "float_abs_negative_zero" {
     assert.equal((-0.0).to_string(), "-0.0");
     assert.equal((-0.0).abs(), 0.0);
     assert.equal((-0.0).abs().to_string(), "0.0")
+}
+
+// ─── signum ───────────────────────────────────────────────────────────────────
+// Sign test, not a comparison against zero: never returns 0.0 or NaN, and the
+// sign of ±0.0 counts. Native, because no BAML-level operator can see a zero's
+// sign — the total order treats `-0.0` and `0.0` as one value, and `1.0 / 0.0`
+// throws. `to_string()` is used as the negative-zero baseline guard, matching
+// `float_abs_negative_zero` above.
+
+test "float_signum_positive" {
+    assert.equal((3.5).signum(), 1.0)
+}
+
+test "float_signum_negative" {
+    assert.equal((-3.5).signum(), -1.0)
+}
+
+// The two zero-sign cases are kept in separate test bodies for the same
+// reason as the cbrt pair below: a `0.0` and a `-0.0` literal in one body
+// currently alias to whichever is written first (#4750).
+test "float_signum_positive_zero" {
+    assert.equal((0.0).to_string(), "0.0");
+    assert.equal((0.0).signum(), 1.0)
+}
+
+test "float_signum_negative_zero" {
+    assert.equal((-0.0).to_string(), "-0.0");
+    assert.equal((-0.0).signum(), -1.0)
+}
+
+// Same case, but with the -0.0 produced at runtime rather than written as a
+// literal, so the assertion cannot pass by a constant-folding accident.
+test "float_signum_negative_zero_runtime" {
+    assert.equal((-0.5).trunc().to_string(), "-0.0");
+    assert.equal((-0.5).trunc().signum(), -1.0)
+}
+
+test "float_signum_positive_nan" {
+    assert.equal(float.nan().signum(), 1.0)
+}
+
+// `f64::signum` returns NaN for NaN; the binding overrides that to +1.0 so
+// signum is total. This is the guard for that override.
+test "float_signum_negative_nan" {
+    assert.equal((-float.nan()).signum(), 1.0)
+}
+
+test "float_signum_positive_infinity" {
+    assert.equal(float.inf().signum(), 1.0)
+}
+
+test "float_signum_negative_infinity" {
+    assert.equal((-float.inf()).signum(), -1.0)
+}
+
+test "float_signum_subnormal" {
+    assert.equal((5e-324).signum(), 1.0);
+    assert.equal((-5e-324).signum(), -1.0)
+}
+
+test "float_signum_is_total" {
+    assert.is_true((0.0).signum().abs() == 1.0);
+    assert.is_true(float.nan().signum().abs() == 1.0)
+}
+
+// ─── exp ──────────────────────────────────────────────────────────────────────
+// Pure BAML: `float.e().pow(self)`. Not correctly rounded and carrying no
+// accuracy bound — the error grows with the exponent (29 ulps at 100.0), so
+// every case here is small and epsilon-checked.
+
+test "float_exp_zero_is_one" {
+    assert.equal((0.0).exp(), 1.0)
+}
+
+test "float_exp_one_is_e" {
+    assert.is_true(((1.0).exp() - float.e()).abs() < 0.000000000001)
+}
+
+test "float_exp_two" {
+    assert.is_true(((2.0).exp() - 7.38905609893065).abs() < 0.000000000001)
+}
+
+test "float_exp_negative" {
+    assert.is_true(((-1.0).exp() - 0.36787944117144233).abs() < 0.000000000001)
+}
+
+test "float_exp_negative_infinity_is_zero" {
+    assert.equal((-float.inf()).exp(), 0.0)
+}
+
+test "float_exp_positive_infinity" {
+    assert.is_true(float.inf().exp().is_infinite())
+}
+
+test "float_exp_nan" {
+    assert.is_true(float.nan().exp().is_nan())
+}
+
+test "float_exp_ln_roundtrip" {
+    assert.is_true(((5.0).ln().exp() - 5.0).abs() < 0.000000000001)
+}
+
+// ─── ln ───────────────────────────────────────────────────────────────────────
+// Pure BAML: `self.log(float.e())`. Dividing by `ln(e) == 1.0` adds no error,
+// so this is exactly as accurate as `log` — which Rust does not bound.
+
+test "float_ln_one_is_zero" {
+    assert.equal((1.0).ln(), 0.0)
+}
+
+test "float_ln_e_is_one" {
+    assert.equal(float.e().ln(), 1.0)
+}
+
+test "float_ln_ten" {
+    assert.is_true(((10.0).ln() - 2.302585092994046).abs() < 0.000000000001)
+}
+
+test "float_ln_half" {
+    assert.is_true(((0.5).ln() - (-0.6931471805599453)).abs() < 0.000000000001)
+}
+
+test "float_ln_zero_is_negative_infinity" {
+    assert.is_true((0.0).ln().is_infinite());
+    assert.is_true((0.0).ln() < 0.0)
+}
+
+test "float_ln_negative_is_nan" {
+    assert.is_true((-1.0).ln().is_nan())
+}
+
+test "float_ln_positive_infinity" {
+    assert.is_true(float.inf().ln().is_infinite())
+}
+
+test "float_ln_nan" {
+    assert.is_true(float.nan().ln().is_nan())
+}
+
+// ─── log2 ─────────────────────────────────────────────────────────────────────
+// Pure BAML: `self.log(2.0)`. Measured exact for powers of two and within one
+// ulp elsewhere; Rust guarantees neither.
+
+test "float_log2_powers_of_two" {
+    assert.equal((8.0).log2(), 3.0);
+    assert.equal((1024.0).log2(), 10.0);
+    assert.equal((1.0).log2(), 0.0)
+}
+
+test "float_log2_fraction" {
+    assert.equal((0.5).log2(), -1.0)
+}
+
+test "float_log2_non_power" {
+    assert.is_true(((10.0).log2() - 3.321928094887362).abs() < 0.000000000001)
+}
+
+test "float_log2_zero_is_negative_infinity" {
+    assert.is_true((0.0).log2().is_infinite());
+    assert.is_true((0.0).log2() < 0.0)
+}
+
+test "float_log2_negative_is_nan" {
+    assert.is_true((-1.0).log2().is_nan())
+}
+
+// ─── log10 ────────────────────────────────────────────────────────────────────
+// Native ($rust_function), unlike log2/ln: the .baml-level `self.log(10.0)` is
+// a ratio of logarithms and loses the last bits at clean inputs, which is the
+// reason log10 exists. Measured, not guaranteed — Rust bounds the precision of
+// neither form.
+
+test "float_log10_powers_of_ten" {
+    assert.equal((1000.0).log10(), 3.0);
+    assert.equal((100.0).log10(), 2.0);
+    assert.equal((1.0).log10(), 0.0)
+}
+
+// `log10` must hit the exact power of ten. The ratio form `log(10.0)` is not
+// asserted here: Rust bounds the precision of neither, so pinning the ratio's
+// current inaccuracy would fail on any platform that happens to be better.
+test "float_log10_beats_log_base_10" {
+    assert.equal((1000.0).log10(), 3.0)
+}
+
+test "float_log10_fraction" {
+    assert.equal((0.1).log10(), -1.0)
+}
+
+test "float_log10_non_power" {
+    assert.is_true(((2.0).log10() - 0.3010299956639812).abs() < 0.000000000001)
+}
+
+test "float_log10_zero_is_negative_infinity" {
+    assert.is_true((0.0).log10().is_infinite());
+    assert.is_true((0.0).log10() < 0.0)
+}
+
+test "float_log10_negative_is_nan" {
+    assert.is_true((-1.0).log10().is_nan())
+}
+
+test "float_log10_nan" {
+    assert.is_true(float.nan().log10().is_nan())
+}
+
+// ─── cbrt ─────────────────────────────────────────────────────────────────────
+// Native ($rust_function): `pow(1.0 / 3.0)` returns NaN for a negative base and
+// misses perfect cubes, so there is no correct pure-BAML formulation.
+
+test "float_cbrt_perfect_cubes" {
+    assert.equal((8.0).cbrt(), 2.0);
+    assert.equal((27.0).cbrt(), 3.0);
+    assert.equal((1000.0).cbrt(), 10.0);
+    assert.equal((216.0).cbrt(), 6.0)
+}
+
+test "float_cbrt_negative" {
+    assert.equal((-8.0).cbrt(), -2.0);
+    assert.equal((-1000.0).cbrt(), -10.0)
+}
+
+// Guard for the reason cbrt is native rather than a `pow(1.0 / 3.0)` alias.
+// Only the NaN half is asserted against `pow`: a negative base with a
+// non-integer exponent is NaN by definition, so that holds on every platform.
+// The accuracy half is asserted positively, on cbrt alone.
+test "float_cbrt_beats_pow_one_third" {
+    assert.is_true((-8.0).pow(1.0 / 3.0).is_nan());
+    assert.equal((-8.0).cbrt(), -2.0);
+    assert.equal((1000.0).cbrt(), 10.0)
+}
+
+test "float_cbrt_positive_zero" {
+    assert.equal((0.0).cbrt(), 0.0);
+    assert.equal((0.0).cbrt().to_string(), "0.0")
+}
+
+// Split from the positive case deliberately: a `0.0` and a `-0.0` literal in
+// the same function body currently collapse to whichever is written first
+// (#4750), so mixing them here would make the assertion pass or fail on
+// literal order rather than on cbrt's behaviour. Merge these two tests once
+// that is fixed.
+test "float_cbrt_negative_zero" {
+    assert.equal((-0.0).cbrt().to_string(), "-0.0")
+}
+
+test "float_cbrt_non_cube" {
+    assert.is_true(((2.0).cbrt() - 1.2599210498948732).abs() < 0.000000000001)
+}
+
+test "float_cbrt_one" {
+    assert.equal((1.0).cbrt(), 1.0);
+    assert.equal((-1.0).cbrt(), -1.0)
+}
+
+test "float_cbrt_infinity" {
+    assert.is_true(float.inf().cbrt().is_infinite());
+    assert.is_true((-float.inf()).cbrt().is_infinite())
+}
+
+test "float_cbrt_nan" {
+    assert.is_true(float.nan().cbrt().is_nan())
+}
+
+test "float_cbrt_cube_roundtrip" {
+    assert.is_true(((7.0).cbrt().pow(3.0) - 7.0).abs() < 0.000000000001)
+}
+
+// ─── max_finite / min_finite / epsilon ────────────────────────────────────────
+
+test "float_max_finite_is_finite" {
+    assert.is_true(float.max_finite().is_finite());
+    assert.is_true(float.max_finite() > 0.0)
+}
+
+test "float_max_finite_overflows_to_infinity" {
+    assert.is_true((float.max_finite() * 2.0).is_infinite())
+}
+
+test "float_max_finite_below_infinity" {
+    assert.is_true(float.max_finite() < float.inf())
+}
+
+test "float_min_finite_is_negated_max" {
+    assert.is_true(float.min_finite().is_finite());
+    assert.equal(float.min_finite(), -float.max_finite())
+}
+
+test "float_min_finite_is_most_negative_not_smallest_positive" {
+    assert.is_true(float.min_finite() < 0.0);
+    assert.is_true(float.min_finite() < float.max_finite())
+}
+
+test "float_min_finite_overflows_to_negative_infinity" {
+    assert.is_true((float.min_finite() * 2.0).is_infinite());
+    assert.is_true(float.min_finite() * 2.0 < 0.0)
+}
+
+test "float_epsilon_value" {
+    assert.is_true(float.epsilon() > 0.0);
+    assert.is_true((float.epsilon() - 2.220446049250313e-16).abs() < 1e-30)
+}
+
+// The defining property: epsilon is the gap between 1.0 and the next float, so
+// adding it is visible and adding half of it is not.
+test "float_epsilon_is_the_gap_above_one" {
+    assert.is_true(1.0 + float.epsilon() != 1.0);
+    assert.equal(1.0 + float.epsilon() / 2.0, 1.0)
+}
+
+test "float_epsilon_is_not_smallest_positive" {
+    assert.is_true(5e-324 < float.epsilon())
 }

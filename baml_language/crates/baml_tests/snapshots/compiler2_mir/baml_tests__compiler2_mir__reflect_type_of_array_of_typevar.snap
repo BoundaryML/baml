@@ -1,9 +1,9 @@
 ---
 source: crates/baml_tests/src/compiler2_mir/mod.rs
 ---
-fn user.f() -> type {
+fn user.f() -> reflect.Type {
     // Locals:
-    let _0: type // _0 // return
+    let _0: reflect.Type // _0 // return
 
     bb0: {
         _0 = load_type(#0[]);

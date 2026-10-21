@@ -6,11 +6,26 @@ function hello_world() -> "hello world" {
   "hello world"
 }
 
+// A real provider call records its start time before opening the HTTP request.
+// Keep that Web capability in the configured Worker regression without making
+// the test depend on network access or provider credentials.
+function worker_runtime_smoke() -> "hello world" {
+  let _started = baml.time.Instant.now();
+  "hello world"
+}
+
 // One required positional argument: the host passes a single value and it
 // round-trips through the engine unchanged. The one-arg step up from the
 // nullary `hello_world`.
 function single_required_arg(value: string) -> string {
   value
+}
+
+// Integer arithmetic on an `int` parameter. The VM runs specialized integer
+// opcodes on `value`, so a host argument that is not an `int` must be
+// rejected at the call boundary (BoundaryML/baml#5332).
+function int_plus_one(value: int) -> int {
+  value + 1
 }
 
 function unhandled_spawn_error() -> int throws string {

@@ -9,7 +9,7 @@ use super::{
 };
 use crate::{
     baml_value::{BamlValue, BamlValueWithMeta, ValueWithMeta},
-    sap_model::{TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent, TypeName},
+    sap_model::{TyResolvedRef, TypeIdent, TypeName},
 };
 
 /// Metadata on values produced by the deserializer.
@@ -22,15 +22,13 @@ where
     /// The type that was deserialized to produce this value.
     ///
     /// May also be a subtype of the expected type.
-    pub ty: TyWithMeta<TyResolvedRef<'t, N>, &'t TypeAnnotations<'t, N>>,
+    pub ty: TyResolvedRef<'t, N>,
 }
 impl<'t, N: TypeIdent> DeserializerMeta<'_, '_, 't, N> {
-    pub fn new(
-        ty: TyWithMeta<impl Into<TyResolvedRef<'t, N>>, &'t TypeAnnotations<'t, N>>,
-    ) -> Self {
+    pub fn new(ty: impl Into<TyResolvedRef<'t, N>>) -> Self {
         Self {
             flags: DeserializerConditions::new(),
-            ty: ty.map_ty(Into::into),
+            ty: ty.into(),
         }
     }
 }

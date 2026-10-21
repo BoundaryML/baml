@@ -8,7 +8,8 @@ package pkg
 // `baml_callback` is defined (via //export) in callbacks.go. `bamlHostDispatch`
 // and `bamlHostRelease` are defined (via //export) in host_value.go.
 extern void baml_callback(uint32_t id, const int8_t *content, size_t length);
-extern void bamlHostDispatch(uint64_t host_value_key, uint32_t call_id, const uint8_t *args, size_t length);
+extern void bamlHostDispatchV2(const uint8_t *args, size_t length);
+extern void bamlHostCancel(uint32_t call_id);
 extern void bamlHostRelease(uint64_t host_value_key);
 */
 import "C"
@@ -27,6 +28,7 @@ import (
 //   - bamlHostRelease: last Rust clone of a host-value `Arc` dropped.
 func InitCallbacks() {
 	cffi.RegisterCallback(unsafe.Pointer(C.baml_callback))
-	cffi.RegisterHostDispatchCallback(unsafe.Pointer(C.bamlHostDispatch))
+	cffi.RegisterHostDispatchV2(unsafe.Pointer(C.bamlHostDispatchV2))
+	cffi.RegisterHostCancelCallback(unsafe.Pointer(C.bamlHostCancel))
 	cffi.RegisterHostReleaseCallback(unsafe.Pointer(C.bamlHostRelease))
 }

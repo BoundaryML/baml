@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0004
+
+  × operator `+` cannot be applied to `unknown` and `"!"`
+   ╭─[unknown_operand.baml:9:5]
+ 9 │     x + "!"
+   ·     ───────
+   ╰────
+
+  [type] E0004
+
+  × operator `+` cannot be applied to `"!"` and `unknown`
+    ╭─[unknown_operand.baml:13:5]
+ 13 │     "!" + x
+    ·     ───────
+    ╰────

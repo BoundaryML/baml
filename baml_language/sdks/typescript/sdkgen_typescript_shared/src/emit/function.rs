@@ -4,7 +4,7 @@
 //! sibling. The fields (`param_names`, `arg_tys`, …) carry the data the
 //! renderer needs to emit the typed cast.
 
-use baml_codegen_types::{FunctionArgumentDefault, Ty};
+use baml_sdkgen_types::{FunctionArgumentDefault, Ty};
 
 /// Async/sync marker carried by factory bindings. Each BAML `Function`
 /// (and each of its companions) fans out into one sync and one async
@@ -17,11 +17,11 @@ pub(crate) enum SyncAsync {
 
 pub(crate) struct TypeScriptFunction {
     /// TS identifier. Sync form = BAML name verbatim; async form =
-    /// `<name>_async`. Companion forms keep their `$` suffix verbatim
-    /// (`foo$stream`, `foo$build_request`) and are also `TypeScriptFunction` stubs.
+    /// `<name>_async`. Companion forms (`foo$stream`, `foo_spec`) are also
+    /// `TypeScriptFunction` stubs.
     pub(crate) name: String,
     /// FQN passed as the first arg to `defineFunction`. Carries the
-    /// `$<suffix>` tail for companions.
+    /// `@<suffix>` tail for companions.
     pub(crate) baml_fqn: String,
     /// `Sync` or `Async`.
     pub(crate) mode: SyncAsync,

@@ -23,7 +23,7 @@
 //! ```
 
 // Re-export RuntimeTy and TypeName from baml_type for convenience
-pub use baml_type::{RuntimeTy, TyAttr, TypeName};
+pub use baml_type::{RuntimeTy, TypeName};
 use indexmap::IndexMap;
 
 /// Metadata about a union type, embedded with values from union-typed contexts.
@@ -60,13 +60,10 @@ impl UnionMetadata {
     /// Create metadata for a union type.
     pub fn new(union_type: RuntimeTy, selected_option: RuntimeTy) -> Self {
         let (is_optional, is_single_pattern) = match &union_type {
-            RuntimeTy::Union(members, _) => {
-                let has_null = members.iter().any(|m| matches!(m, RuntimeTy::Null { .. }));
-                let non_null_count = members
-                    .iter()
-                    .filter(|m| !matches!(m, RuntimeTy::Null { .. }))
-                    .count();
-                (has_null, non_null_count == 1)
+            RuntimeTy::Union(members) => {
+                let is_optional = members.iter().any(RuntimeTy::is_null);
+                let non_null_count = members.iter().filter(|member| !member.is_null()).count();
+                (is_optional, non_null_count == 1)
             }
             _ => (false, false),
         };
@@ -84,27 +81,97 @@ impl UnionMetadata {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum BexExternalAdt {
-    Collector(bex_vm_types::CollectorRef),
-    Type(baml_type::RuntimeTy),
+    /// A reflected type, carried at the sys-op lane's head so a definition
+    /// table can be keyed by declaration identity rather than by name.
+    ///
+    /// Deliberately pointer-free: the collector can run while a sys-op is
+    /// awaiting, so anything a sys-op holds across that boundary must survive
+    /// objects moving. A tag does; an address does not.
+    Type(baml_type::RuntimeTy<baml_type::TaggedTypeName>),
+    /// A reflected type carrying runtime definitions.
+    ///
+    /// The two arms are the two things a `type` value can be at a boundary,
+    /// made explicit rather than inferred:
+    ///
+    /// * [`Live`](TypeDefRef::Live) — a rooted reference back to the very
+    ///   `Object::Type` that produced it. Valid only in the engine that issued
+    ///   the handle, which is why it also carries the portable definitions:
+    ///   anywhere else (another engine, another process) it degrades to them.
+    /// * [`Portable`](TypeDefRef::Portable) — definitions alone, reconstructed
+    ///   into fresh heap objects on arrival.
+    ///
+    /// Wire encoders serialize the portable form in both cases: a handle is a
+    /// live capability, not data, so it cannot cross a process (BEP-066 H-4).
+    TypeDef(TypeDefRef),
     /// The Rust-backed payload inside a rendered `ai.Prompt`.
-    PromptAst(std::sync::Arc<baml_builtins2::PromptAst>),
+    PromptAst(std::sync::Arc<bex_vm_types::PromptAst>),
     /// A media value (image, audio, etc.) passed as a function argument.
-    Media(std::sync::Arc<baml_builtins2::MediaValue>),
-    /// GC-rooted reference to a heap instance, paired with the full
-    /// type identity of the instance (class FQN + concrete generic args).
+    Media(std::sync::Arc<bex_vm_types::MediaValue>),
+    /// GC-rooted reference to an engine-owned heap value with a trusted
+    /// boundary kind and optional host-facing type decoration.
     ///
-    /// `ty` is canonically a `RuntimeTy::Class { name, args }` — the same shape
-    /// the wire encoder projects to `BamlTyName`. The `heap_handle` keeps
-    /// the instance alive on the heap so the engine can re-enter it for
-    /// instance-method calls (`Stream.next`, `Stream.final`, …).
-    ///
-    /// Currently used by `ai.stream.Stream`; any future stdlib generic
-    /// class that wants typed-handle round-trip treatment uses this same
-    /// variant.
+    /// `kind` is the only boundary discriminator. `ty` is diagnostic metadata
+    /// for host annotations and must never select a wrapper or drive generic
+    /// substitution: live nominal identity and type arguments come from the
+    /// resolved heap object. `heap_handle` keeps that object alive so the
+    /// engine can re-enter it for method calls.
     TaggedHeapHandle {
+        kind: TaggedHeapHandleKind,
         ty: baml_type::RuntimeTy,
         heap_handle: crate::Handle,
     },
+}
+
+/// Trusted role of a rooted heap capability crossing a host boundary.
+///
+/// This is deliberately independent of [`RuntimeTy`]. A runtime-created type
+/// may share a display name with a compiled type, so a name-shaped wire type
+/// can describe a value but cannot establish its identity or behavior.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TaggedHeapHandleKind {
+    Callable,
+    Stream,
+    FunctionSpec,
+    RuntimeValue,
+}
+
+/// How a `type` value crosses a boundary: as a live reference into the issuing
+/// engine, or as portable definitions.
+///
+/// Both arms carry `def`, so every consumer can read the type's shape without
+/// caring which arm it got; only identity differs.
+#[derive(Clone, Debug, PartialEq)]
+pub enum TypeDefRef {
+    /// Same-engine: `handle` resolves to the originating `Object::Type`, so a
+    /// value that leaves and returns is the *same* object — its identity,
+    /// definitions and provenance are untouched. The handle also keeps that
+    /// object rooted for as long as this value lives.
+    Live {
+        handle: crate::Handle,
+        def: bex_vm_types::types::PortableTypeDef,
+    },
+    /// Definitions only: the receiving engine reconstructs heap objects and
+    /// assigns fresh identity. The form every cross-process payload takes.
+    Portable(bex_vm_types::types::PortableTypeDef),
+}
+
+impl TypeDefRef {
+    /// The portable definitions, whichever arm this is.
+    #[must_use]
+    pub fn def(&self) -> &bex_vm_types::types::PortableTypeDef {
+        match self {
+            Self::Live { def, .. } | Self::Portable(def) => def,
+        }
+    }
+
+    /// Consume into the portable definitions, dropping any live reference.
+    /// This is what a wire encoder does.
+    #[must_use]
+    pub fn into_def(self) -> bex_vm_types::types::PortableTypeDef {
+        match self {
+            Self::Live { def, .. } | Self::Portable(def) => def,
+        }
+    }
 }
 
 /// A deep-copied value tree with no heap references.
@@ -134,6 +201,14 @@ pub enum BexExternalValue {
 
     /// 64-bit floating point.
     Float(f64),
+
+    /// A JavaScript `number` whose BAML representation has not yet been
+    /// selected from contextual type information. Integral values can become
+    /// `Int` or `Float`; non-integral values can become only `Float`.
+    ///
+    /// This is an inbound bridge carrier and must be resolved before VM heap
+    /// materialization or outbound encoding.
+    JsNumber(f64),
 
     /// Boolean value.
     Bool(bool),
@@ -195,7 +270,7 @@ pub enum BexExternalValue {
 
     /// Opaque Rust data for `$rust_type` fields.
     /// Engine converts to `Object::RustData` on the VM heap.
-    RustData(std::sync::Arc<dyn std::any::Any + Send + Sync>),
+    RustData(std::sync::Arc<dyn bex_vm_types::BexRustData>),
 
     /// Reference to a function by its global index.
     ///
@@ -221,6 +296,22 @@ pub enum BexExternalValue {
     HostValue(std::sync::Arc<bex_resource_types::HostValueArc>),
 }
 
+/// Return the exact `i64` represented by an integral JavaScript number.
+///
+/// The upper bound is exclusive because `i64::MAX as f64` rounds to `2^63`.
+/// Checking it explicitly avoids Rust's saturating float-to-int cast turning
+/// that out-of-range value into `i64::MAX`.
+#[must_use]
+pub fn js_number_to_i64(value: f64) -> Option<i64> {
+    const I64_MIN_F64: f64 = -9_223_372_036_854_775_808.0;
+    const I64_MAX_PLUS_ONE_F64: f64 = 9_223_372_036_854_775_808.0;
+
+    (value.is_finite()
+        && value.fract() == 0.0
+        && (I64_MIN_F64..I64_MAX_PLUS_ONE_F64).contains(&value))
+    .then_some(value as i64)
+}
+
 impl std::fmt::Debug for BexExternalValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -228,6 +319,7 @@ impl std::fmt::Debug for BexExternalValue {
             Self::Int(v) => f.debug_tuple("Int").field(v).finish(),
             Self::Bigint(v) => f.debug_tuple("Bigint").field(v).finish(),
             Self::Float(v) => f.debug_tuple("Float").field(v).finish(),
+            Self::JsNumber(v) => f.debug_tuple("JsNumber").field(v).finish(),
             Self::Bool(v) => f.debug_tuple("Bool").field(v).finish(),
             Self::String(v) => f.debug_tuple("String").field(v).finish(),
             Self::Array {
@@ -295,6 +387,7 @@ impl PartialEq for BexExternalValue {
             (Self::Int(a), Self::Int(b)) => a == b,
             (Self::Bigint(a), Self::Bigint(b)) => a == b,
             (Self::Float(a), Self::Float(b)) => a == b,
+            (Self::JsNumber(a), Self::JsNumber(b)) => a == b,
             (Self::Bool(a), Self::Bool(b)) => a == b,
             (Self::String(a), Self::String(b)) => a == b,
             (
@@ -367,8 +460,7 @@ impl PartialEq for BexExternalValue {
 impl BexExternalAdt {
     pub fn type_name(&self) -> &'static str {
         match self {
-            BexExternalAdt::Collector(_) => "collector",
-            BexExternalAdt::Type(_) => "type",
+            BexExternalAdt::Type(_) | BexExternalAdt::TypeDef(_) => "type",
             BexExternalAdt::PromptAst(_) => "prompt_ast",
             BexExternalAdt::Media(_) => "media",
             BexExternalAdt::TaggedHeapHandle { .. } => "tagged_heap_handle",
@@ -411,10 +503,8 @@ impl BexExternalValue {
     /// existing type-directed VM materialization can honor `value_type`, while
     /// explicitly distinguishing it from an actual declared union.
     pub fn typed(value: BexExternalValue, value_type: RuntimeTy) -> Self {
-        let mut metadata = UnionMetadata::new(
-            RuntimeTy::Union(vec![value_type.clone()], TyAttr::default()),
-            value_type,
-        );
+        let mut metadata =
+            UnionMetadata::new(RuntimeTy::Union(Box::new([value_type.clone()])), value_type);
         metadata.is_inbound_type_annotation = true;
         BexExternalValue::Union {
             value: Box::new(value),
@@ -432,7 +522,7 @@ impl BexExternalValue {
         members: impl IntoIterator<Item = RuntimeTy>,
         selected: RuntimeTy,
     ) -> Self {
-        let union_type = RuntimeTy::Union(members.into_iter().collect(), TyAttr::default());
+        let union_type = RuntimeTy::Union(members.into_iter().collect());
         BexExternalValue::Union {
             value: Box::new(value),
             metadata: UnionMetadata::new(union_type, selected),
@@ -480,6 +570,7 @@ impl BexExternalValue {
             BexExternalValue::Int(_) => "int",
             BexExternalValue::Bigint(_) => "bigint",
             BexExternalValue::Float(_) => "float",
+            BexExternalValue::JsNumber(_) => "js_number",
             BexExternalValue::Bool(_) => "bool",
             BexExternalValue::String(_) => "string",
             BexExternalValue::Array { .. } => "array",
@@ -532,7 +623,7 @@ impl BexExternalValue {
     /// `baml.errors.Io { message: "boom" }` rather than
     /// `Instance { class_name: "baml.errors.Io", type_args: [], fields: {..} }`,
     /// and a generic instance's `type_args` are omitted entirely instead of
-    /// dumping `Class(QualifiedTypeName { .. }, [], TyAttr { .. })`.
+    /// dumping `Class(QualifiedTypeName { .. }, [])`.
     ///
     /// It is a pure structural pretty-printer, not the VM's `baml.ToString`
     /// dispatch: it runs without a live VM (e.g. after the VM has unwound on an
@@ -550,6 +641,7 @@ impl BexExternalValue {
                     format!("{s}.0")
                 }
             }
+            BexExternalValue::JsNumber(f) => f.to_string(),
             BexExternalValue::Bool(b) => b.to_string(),
             BexExternalValue::String(s) => format!("{s:?}"),
             BexExternalValue::Array { items, .. } => {
@@ -678,7 +770,7 @@ impl AsBexExternalValue for std::sync::Arc<num_bigint::BigInt> {
     }
 }
 
-impl AsBexExternalValue for baml_type::RuntimeTy {
+impl AsBexExternalValue for baml_type::RuntimeTy<baml_type::TaggedTypeName> {
     fn into_bex_external_value(self) -> BexExternalValue {
         BexExternalValue::Adt(BexExternalAdt::Type(self))
     }
@@ -743,7 +835,7 @@ impl AsBexExternalValue for Vec<u8> {
 /// Implement this for any type that is stored as `RustData` on the VM heap and
 /// needs to survive the VM-to-external conversion boundary (e.g. `PromptAst`,
 /// `MediaValue`).
-pub trait ToBexExternalValue: std::any::Any + Send + Sync {
+pub trait ToBexExternalValue: bex_vm_types::BexRustData {
     fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue;
 }
 
@@ -760,6 +852,79 @@ pub trait ToBexExternalValue: std::any::Any + Send + Sync {
 /// bound `GenericBox[int]`). See `03c-impl-guide` "Host-only roundtripping".
 pub struct OpaqueExternalValue(pub BexExternalValue);
 
+impl bex_vm_types::BexRustData for OpaqueExternalValue {
+    fn measure(&self, meter: &mut bex_vm_types::Meter) {
+        measure_external_value(&self.0, meter);
+    }
+}
+
+/// Report what a host value keeps alive. Strings and payloads shared with
+/// the heap are reported through the meter's own rules; anything the heap or
+/// the host owns (a handle, a function reference, a host object) is not
+/// counted here.
+pub fn measure_external_value(value: &BexExternalValue, meter: &mut bex_vm_types::Meter) {
+    use bex_vm_types::BexRustData;
+    match value {
+        BexExternalValue::Null
+        | BexExternalValue::Int(_)
+        | BexExternalValue::Float(_)
+        | BexExternalValue::JsNumber(_)
+        | BexExternalValue::Bool(_)
+        | BexExternalValue::FunctionRef { .. }
+        | BexExternalValue::Handle(_) => {}
+        BexExternalValue::Bigint(bigint) => {
+            meter.bytes(usize::try_from(bigint.bits().div_ceil(8)).unwrap_or(usize::MAX));
+        }
+        BexExternalValue::String(text) => meter.string(text),
+        BexExternalValue::Array { items, .. } => {
+            meter.bytes(items.capacity() * size_of::<BexExternalValue>());
+            for item in items {
+                measure_external_value(item, meter);
+            }
+        }
+        BexExternalValue::Map { entries, .. } => {
+            meter.bytes(entries.capacity() * size_of::<(String, BexExternalValue)>());
+            for (key, entry) in entries {
+                meter.bytes(key.capacity());
+                measure_external_value(entry, meter);
+            }
+        }
+        BexExternalValue::Instance {
+            class_name,
+            type_args,
+            fields,
+        } => {
+            meter.bytes(class_name.capacity());
+            meter.bytes(type_args.capacity() * size_of::<RuntimeTy>());
+            meter.bytes(fields.capacity() * size_of::<(String, BexExternalValue)>());
+            for (key, field) in fields {
+                meter.bytes(key.capacity());
+                measure_external_value(field, meter);
+            }
+        }
+        BexExternalValue::Variant {
+            enum_name,
+            variant_name,
+        } => meter.bytes(enum_name.capacity() + variant_name.capacity()),
+        BexExternalValue::Union { value, .. } => {
+            meter.bytes(size_of::<BexExternalValue>());
+            measure_external_value(value, meter);
+        }
+        BexExternalValue::Uint8Array(bytes) => meter.bytes(bytes.capacity()),
+        BexExternalValue::RustData(data) => meter.shared(data, |meter| data.measure(meter)),
+        BexExternalValue::Adt(adt) => match adt {
+            BexExternalAdt::PromptAst(prompt) => {
+                meter.shared(prompt, |meter| prompt.measure(meter));
+            }
+            BexExternalAdt::Media(media) => meter.shared(media, |meter| media.measure(meter)),
+            BexExternalAdt::Type(_)
+            | BexExternalAdt::TypeDef(_)
+            | BexExternalAdt::TaggedHeapHandle { .. } => {}
+        },
+        BexExternalValue::HostValue(host) => meter.shared(host, |meter| host.measure(meter)),
+    }
+}
+
 impl ToBexExternalValue for OpaqueExternalValue {
     fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue {
         // Re-emit the stashed value verbatim. Take ownership when this is the
@@ -771,37 +936,38 @@ impl ToBexExternalValue for OpaqueExternalValue {
     }
 }
 
-impl ToBexExternalValue for baml_builtins2::PromptAst {
+impl ToBexExternalValue for bex_vm_types::PromptAst {
     fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue {
         BexExternalValue::Adt(BexExternalAdt::PromptAst(self))
     }
 }
 
-impl ToBexExternalValue for baml_builtins2::MediaValue {
+impl ToBexExternalValue for bex_vm_types::MediaValue {
     fn to_bex_external_value(self: std::sync::Arc<Self>) -> BexExternalValue {
         BexExternalValue::Adt(BexExternalAdt::Media(self))
     }
 }
 
-/// Try to convert an `Arc<dyn Any + Send + Sync>` from `Object::RustData` to a
+/// Try to convert the payload of an `Object::RustData` to a
 /// [`BexExternalValue`] by attempting downcast to known [`ToBexExternalValue`]
 /// implementors.
 ///
 /// Returns `None` if the concrete type is not recognised.
 pub fn try_convert_rust_data(
-    arc: &std::sync::Arc<dyn std::any::Any + Send + Sync>,
+    arc: &std::sync::Arc<dyn bex_vm_types::BexRustData>,
 ) -> Option<BexExternalValue> {
-    if let Ok(typed) = arc.clone().downcast::<baml_builtins2::PromptAst>() {
+    use bex_vm_types::RustDataArc;
+    if let Ok(typed) = arc.clone().downcast_payload::<bex_vm_types::PromptAst>() {
         return Some(typed.to_bex_external_value());
     }
-    if let Ok(typed) = arc.clone().downcast::<baml_builtins2::MediaValue>() {
+    if let Ok(typed) = arc.clone().downcast_payload::<bex_vm_types::MediaValue>() {
         return Some(typed.to_bex_external_value());
     }
     // A structural host-only value stashed verbatim on the way in (an unbound
     // generic instance, a host-only map/array): re-emit it exactly as it
     // arrived so the host decoder reconstructs the same value. See
     // [`OpaqueExternalValue`].
-    if let Ok(typed) = arc.clone().downcast::<OpaqueExternalValue>() {
+    if let Ok(typed) = arc.clone().downcast_payload::<OpaqueExternalValue>() {
         return Some(typed.to_bex_external_value());
     }
     // A `HostValueArc` wrapped into `Object::RustData` (e.g. the `_handle`
@@ -810,7 +976,10 @@ pub fn try_convert_rust_data(
     // encoder emits a `Handle(HOST_VALUE_{CALLABLE,ERROR})` carrying the
     // same `(key, kind)` — letting the originating bridge resolve the
     // handle back to the original native object on round-trip.
-    if let Ok(typed) = arc.clone().downcast::<bex_resource_types::HostValueArc>() {
+    if let Ok(typed) = arc
+        .clone()
+        .downcast_payload::<bex_resource_types::HostValueArc>()
+    {
         return Some(BexExternalValue::HostValue(typed));
     }
     None
@@ -819,6 +988,21 @@ pub fn try_convert_rust_data(
 #[cfg(test)]
 mod render_readable_tests {
     use super::*;
+
+    #[test]
+    fn js_number_to_i64_checks_integrality_and_exact_i64_bounds() {
+        assert_eq!(js_number_to_i64(0.0), Some(0));
+        assert_eq!(js_number_to_i64(-0.0), Some(0));
+        assert_eq!(js_number_to_i64(42.0), Some(42));
+        assert_eq!(js_number_to_i64(42.5), None);
+        assert_eq!(js_number_to_i64(f64::NAN), None);
+        assert_eq!(js_number_to_i64(f64::INFINITY), None);
+        assert_eq!(
+            js_number_to_i64(-9_223_372_036_854_775_808.0),
+            Some(i64::MIN)
+        );
+        assert_eq!(js_number_to_i64(9_223_372_036_854_775_808.0), None);
+    }
 
     /// A thrown error instance renders as `Class { field: value }`, not the
     /// Rust `Debug` shape `Instance { class_name: .., type_args: [], fields: .. }`.
@@ -836,7 +1020,7 @@ mod render_readable_tests {
     }
 
     /// A generic error instance carrying a `Class(..)` in its `type_args` — the
-    /// shape that used to dump `Class(QualifiedTypeName { .. }, [], TyAttr { .. })`
+    /// shape that used to dump `Class(QualifiedTypeName { .. }, [])`
     /// under `Debug` — renders readably with the `type_args` omitted and no Rust
     /// internals leaked.
     #[test]
@@ -867,7 +1051,7 @@ mod render_readable_tests {
             "unexpected render: {rendered}"
         );
         // The bug: `Debug` leaks Rust-internal shapes. The readable form must not.
-        for leak in ["Instance {", "QualifiedTypeName", "TyAttr", "Class("] {
+        for leak in ["Instance {", "QualifiedTypeName", "Class("] {
             assert!(!rendered.contains(leak), "leaked `{leak}` in: {rendered}");
         }
     }
@@ -880,7 +1064,7 @@ mod render_readable_tests {
     fn prompt_ast_renders_readable_text_not_debug() {
         use std::sync::Arc;
 
-        use baml_builtins2::{PromptAst, PromptAstSimple};
+        use bex_vm_types::{PromptAst, PromptAstSimple};
 
         // `metadata` is `serde_json::Value` (not a direct dep of this crate); its
         // `Default` is `Value::Null`, so use `Default::default()` to avoid naming it.

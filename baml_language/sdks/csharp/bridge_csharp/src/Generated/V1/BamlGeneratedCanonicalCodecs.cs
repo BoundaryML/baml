@@ -137,7 +137,6 @@ internal static class BamlGeneratedTypeMetadata
         BamlTy.TyOneofCase.MetaType => "type",
         BamlTy.TyOneofCase.Resource => "baml.llm.Resource",
         BamlTy.TyOneofCase.PromptAst => "baml.llm.PromptAst",
-        BamlTy.TyOneofCase.Void => "void",
         BamlTy.TyOneofCase.TypeVar => RequireName(type.TypeVar.Name, type),
         BamlTy.TyOneofCase.Never => "never",
         _ => throw UnsupportedOption(type),
@@ -242,6 +241,26 @@ internal static class BamlGeneratedTypeMetadata
                 error);
         }
     }
+}
+
+internal sealed class BamlGeneratedFunctionSpecCodec<TFinal>(
+    BamlGeneratedType<TFinal> finalType,
+    byte[] metadata)
+    : IBamlGeneratedCodec<global::Baml.BamlFunctionSpec<TFinal>>
+{
+    public BamlGeneratedValue Encode(
+        BamlGeneratedCodecContext context,
+        global::Baml.BamlFunctionSpec<TFinal> value) =>
+        context.FunctionSpec(value, "ai.FunctionSpec", metadata);
+
+    public global::Baml.BamlFunctionSpec<TFinal> Decode(
+        BamlGeneratedCodecContext context,
+        BamlGeneratedValue value) =>
+        context.ReadFunctionSpec(
+            value,
+            "ai.FunctionSpec",
+            metadata,
+            finalType);
 }
 
 internal sealed class BamlGeneratedNullableValueCodec<T>(BamlGeneratedType<T> inner)

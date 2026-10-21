@@ -1,6 +1,6 @@
 // Minimum repro of the generic-method FFI plumbing bug.
 //
-// `ai.stream.Stream<T, S>.next() -> S | ai.stream.Done` is a generic
+// `ai.stream.Stream<T>.next() -> T | ai.stream.Done` is a generic
 // instance method whose return type mentions a class-level TypeVar. The
 // host-side lowering for that call doesn't substitute the instantiation's
 // `S` into the lifted return type, so the union still contains

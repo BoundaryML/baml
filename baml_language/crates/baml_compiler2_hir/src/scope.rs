@@ -10,8 +10,8 @@ use baml_base::{Name, SourceFile};
 use text_size::TextRange;
 
 use crate::ids::{
-    ClassMarker, ClientMarker, EnumMarker, FunctionMarker, ImplMarker, InterfaceMarker, LetMarker,
-    LocalItemId, RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker,
+    ClassMarker, EnumMarker, FunctionMarker, ImplMarker, InterfaceMarker, LetMarker, LocalItemId,
+    TypeAliasMarker,
 };
 
 /// Dense sequential index into the per-file scope arena.
@@ -43,7 +43,9 @@ impl FileScopeId {
 /// pairing File + FileScopeId.
 #[salsa::tracked]
 pub struct ScopeId<'db> {
+    #[returns(clone)]
     pub file: SourceFile,
+    #[returns(clone)]
     pub file_scope_id: FileScopeId,
 }
 
@@ -70,8 +72,6 @@ pub enum ScopeKind {
     Block,
     /// Lambda expression body — own scope for per-scope incremental inference.
     Lambda,
-    /// Client, test, template string, retry policy body.
-    Item,
     /// Match arm body — holds pattern bindings visible to the arm body and guard.
     MatchArm,
     /// Catch clause — wraps all arms of a catch clause, holds the clause-level binding.
@@ -96,10 +96,6 @@ pub enum ItemScopeOwner {
     Enum(LocalItemId<EnumMarker>),
     Interface(LocalItemId<InterfaceMarker>),
     TypeAlias(LocalItemId<TypeAliasMarker>),
-    TemplateString(LocalItemId<TemplateStringMarker>),
-    Client(LocalItemId<ClientMarker>),
-    Test(LocalItemId<TestMarker>),
-    RetryPolicy(LocalItemId<RetryPolicyMarker>),
     Let(LocalItemId<LetMarker>),
     /// An out-of-body `implement I for T { … }` block, which opens a scope for
     /// its own generic parameters.

@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0063
+
+  ⚠ unreachable arm
+   ╭─[e5_structured_diagnostics_have_null_spans.baml:6:14]
+ 6 │         _ => "wrong-zero-error",
+   ·              ──────────────────
+   ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+    ╭─[e5_structured_diagnostics_have_null_spans.baml:20:14]
+ 20 │         _ => "wrong-builder-error",
+    ·              ─────────────────────
+    ╰────

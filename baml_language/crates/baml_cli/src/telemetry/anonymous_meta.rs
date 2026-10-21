@@ -49,7 +49,7 @@ fn compute() -> AnonymousMeta {
         .map(std::num::NonZeroUsize::get)
         .unwrap_or(0);
 
-    let ci_name = std::env::var("CI").ok().filter(|v| !v.is_empty());
+    let ci_name = baml_env::raw_var("CI").filter(|v| !v.is_empty());
 
     AnonymousMeta {
         system_platform: std::env::consts::OS,

@@ -62,3 +62,8 @@ pub async fn test_web_missing_host_callable_error(key: u64) -> String {
 pub fn test_web_sync_pending_host_callable_error(key: u64) -> String {
     sys_wasm::test_sync_pending_host_callable_error(key)
 }
+
+#[wasm_bindgen(js_name = registerWebHostCancelCallback)]
+pub fn register_web_host_cancel_callback(callback: js_sys::Function) -> bool {
+    sys_wasm::register_host_cancel_callback(callback)
+}

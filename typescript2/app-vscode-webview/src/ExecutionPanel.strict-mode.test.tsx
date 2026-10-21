@@ -2,7 +2,6 @@
 import {
   type ControlFlowGraph,
   ExecutionPanel,
-  type ProjectUpdate,
   type Run,
   type RuntimePort,
   type WorkerInMessage,
@@ -29,7 +28,7 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
     act(() => {
       port.emit({
         notification: {
-          projects: ['project'],
+          projects: [{ path: 'project' }],
           type: 'listProjects',
         },
         type: 'playgroundNotification',
@@ -109,7 +108,7 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
     act(() => {
       port.emit({
         notification: {
-          projects: ['project'],
+          projects: [{ path: 'project' }],
           type: 'listProjects',
         },
         type: 'playgroundNotification',
@@ -188,7 +187,7 @@ describe('ExecutionPanel StrictMode lifecycle', () => {
 
     act(() => {
       port.emit({
-        notification: { projects: ['project'], type: 'listProjects' },
+        notification: { projects: [{ path: 'project' }], type: 'listProjects' },
         type: 'playgroundNotification',
       });
       port.emit({
@@ -298,7 +297,7 @@ describe('ExecutionPanel run history', () => {
 
     act(() => {
       port.emit({
-        notification: { projects: ['project'], type: 'listProjects' },
+        notification: { projects: [{ path: 'project' }], type: 'listProjects' },
         type: 'playgroundNotification',
       });
       port.emit({
@@ -418,109 +417,6 @@ describe('ExecutionPanel run history', () => {
   });
 });
 
-describe('ExecutionPanel test previews', () => {
-  it('hydrates legacy test args without running and releases selection on navigation', async () => {
-    const port = new FakeRuntimePort();
-    const projectUpdate: ProjectUpdate = {
-      diagnostics: [],
-      functions: [
-        {
-          capabilities: {
-            buildRequest: true,
-            clientName: 'Gpt5',
-            renderPrompt: true,
-          },
-          kind: 'llm',
-          name: 'ClassifySentiment',
-          origin: 'userDefined',
-          params: [
-            {
-              hasDefault: false,
-              name: 'text',
-              schema: { type: 'string' },
-            },
-          ],
-        },
-        { kind: 'expr', name: 'OtherFunction', origin: 'userDefined' },
-      ],
-      isBexCurrent: true,
-      tests: [
-        {
-          argsJson: '{"text":"I absolutely love this feature"}',
-          functionName: 'ClassifySentiment',
-          name: 'HappySentiment',
-        },
-      ],
-    };
-
-    render(<ExecutionPanel port={port} />);
-
-    act(() => {
-      port.emit({
-        notification: { projects: ['project'], type: 'listProjects' },
-        type: 'playgroundNotification',
-      });
-      port.emit({
-        notification: {
-          project: 'project',
-          type: 'updateProject',
-          update: projectUpdate,
-        },
-        type: 'playgroundNotification',
-      });
-    });
-
-    fireEvent.click(
-      await screen.findByTitle('Use HappySentiment args for ClassifySentiment'),
-    );
-    fireEvent.click(await screen.findByRole('button', { name: 'raw' }));
-
-    const rawInput = await screen.findByPlaceholderText('{"key": "value"}');
-    expect(JSON.parse((rawInput as HTMLInputElement).value)).toEqual({
-      text: 'I absolutely love this feature',
-    });
-    expect(screen.getByText('ClassifySentiment()')).toBeInTheDocument();
-    expect(port.sent.some((message) => message.type === 'startRun')).toBe(
-      false,
-    );
-    expect(port.sent.some((message) => message.type === 'startTestRun')).toBe(
-      false,
-    );
-
-    act(() => {
-      port.emit({
-        context: {
-          functionName: 'OtherFunction',
-          isWorkflow: false,
-          sourceExprId: null,
-          testName: null,
-          workflowMemberships: [],
-        },
-        type: 'cursorContext',
-      });
-    });
-    expect(await screen.findByText('OtherFunction()')).toBeInTheDocument();
-
-    act(() => {
-      port.emit({
-        notification: {
-          project: 'project',
-          type: 'updateProject',
-          update: {
-            ...projectUpdate,
-            tests: projectUpdate.tests?.map((test) => ({
-              ...test,
-              argsJson: '{"text":"source edit"}',
-            })),
-          },
-        },
-        type: 'playgroundNotification',
-      });
-    });
-    expect(await screen.findByText('OtherFunction()')).toBeInTheDocument();
-  });
-});
-
 describe('ExecutionPanel args form', () => {
   it('renders the args form from param schemas and serializes edits into argsJson', async () => {
     const port = new FakeRuntimePort();
@@ -529,7 +425,7 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
-        notification: { projects: ['project'], type: 'listProjects' },
+        notification: { projects: [{ path: 'project' }], type: 'listProjects' },
         type: 'playgroundNotification',
       });
       port.emit({
@@ -617,7 +513,7 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
-        notification: { projects: ['project'], type: 'listProjects' },
+        notification: { projects: [{ path: 'project' }], type: 'listProjects' },
         type: 'playgroundNotification',
       });
       port.emit({
@@ -684,7 +580,7 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
-        notification: { projects: ['project'], type: 'listProjects' },
+        notification: { projects: [{ path: 'project' }], type: 'listProjects' },
         type: 'playgroundNotification',
       });
       port.emit({
@@ -800,7 +696,7 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
-        notification: { projects: ['project'], type: 'listProjects' },
+        notification: { projects: [{ path: 'project' }], type: 'listProjects' },
         type: 'playgroundNotification',
       });
       port.emit({
@@ -877,7 +773,7 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
-        notification: { projects: ['project'], type: 'listProjects' },
+        notification: { projects: [{ path: 'project' }], type: 'listProjects' },
         type: 'playgroundNotification',
       });
       port.emit({
@@ -941,7 +837,7 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
-        notification: { projects: ['project'], type: 'listProjects' },
+        notification: { projects: [{ path: 'project' }], type: 'listProjects' },
         type: 'playgroundNotification',
       });
       port.emit({
@@ -1033,7 +929,7 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
-        notification: { projects: ['project'], type: 'listProjects' },
+        notification: { projects: [{ path: 'project' }], type: 'listProjects' },
         type: 'playgroundNotification',
       });
       port.emit({
@@ -1090,7 +986,7 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
-        notification: { projects: ['project'], type: 'listProjects' },
+        notification: { projects: [{ path: 'project' }], type: 'listProjects' },
         type: 'playgroundNotification',
       });
       port.emit({
@@ -1150,7 +1046,7 @@ describe('ExecutionPanel args form', () => {
 
     act(() => {
       port.emit({
-        notification: { projects: ['project'], type: 'listProjects' },
+        notification: { projects: [{ path: 'project' }], type: 'listProjects' },
         type: 'playgroundNotification',
       });
       port.emit({
@@ -1218,14 +1114,12 @@ class FakeRuntimePort implements RuntimePort {
 function runFixture(projectId: string, functionName: string): Run {
   return {
     boundaryId: 'baml_id_1_AAAAAAAAAAAAAAAAAAAAAQ',
-    calls: [],
     cancellation: null,
     completedAtMs: null,
     createdAtMs: 100,
     cursor: 0,
     diagnostics: [],
     error: null,
-    graphRuntimeOverlay: null,
     payloads: [],
     request: {
       argsSummary: '{}',
@@ -1235,11 +1129,9 @@ function runFixture(projectId: string, functionName: string): Run {
       target: { functionName, kind: 'function' },
     },
     result: null,
-    rootCallNodeId: null,
     startedAtMs: null,
     status: 'pending',
     target: { functionName, kind: 'function' },
-    threads: [],
     timeAnchor: {
       epochCreatedAtMs: 100,
       traceZeroNs: '0',

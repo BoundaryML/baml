@@ -249,3 +249,164 @@ function for_loops_has_empty_cell(grid: string[][]) -> bool {
 test "nested_for_loop_final_if_without_semicolon_can_return" {
     assert.is_true(for_loops_has_empty_cell([["x", "o"], ["", "x"]]))
 }
+
+// ── for_loop_joined_map_arm (B-1576) ─────────────────────────────────────────
+//
+// Regression: an `if`/`else` binding whose arms are a plain array and an
+// `Array.map` lambda joins while the map's element var is still unsolved,
+// so the binding records a syntactic union of lists. The for-loop's element
+// demand must judge the canonical spelling once forcing grounds it; 0.17.0
+// aborted here (an `Error` element with zero diagnostics reached runtime
+// lowering) while 0.16.0 compiled. Sum in the body so the element must be
+// `int`, not a leftover projection.
+
+function for_loops_joined_map_arm(xs: int[], b: bool) -> int {
+    let ys = if (b) {
+        [0]
+    } else {
+        xs.map((x: int) -> int {
+            x + 1
+        })
+    };
+    let n = 0;
+
+    for (let y in ys) {
+        n = n + y;
+    }
+
+    n
+}
+
+test "for_loop_joined_map_arm_plain_branch" {
+    assert.equal(for_loops_joined_map_arm([1, 2, 3], true), 0)
+}
+
+test "for_loop_joined_map_arm_map_branch" {
+    assert.equal(for_loops_joined_map_arm([1, 2, 3], false), 9)
+}
+
+// Arm order flipped: the map arm joins first, the ground arm second.
+
+function for_loops_joined_map_arm_first(xs: int[], b: bool) -> int {
+    let ys = if (b) {
+        xs.map((x: int) -> int {
+            x + 1
+        })
+    } else {
+        [0]
+    };
+    let n = 0;
+
+    for (let y in ys) {
+        n = n + y;
+    }
+
+    n
+}
+
+test "for_loop_joined_map_arm_first" {
+    assert.equal(for_loops_joined_map_arm_first([1, 2, 3], true), 9)
+}
+
+// Both arms are map lambdas: two element vars join, neither ground.
+
+function for_loops_joined_both_map_arms(xs: int[], b: bool) -> int {
+    let ys = if (b) {
+        xs.map((x: int) -> int {
+            x * 2
+        })
+    } else {
+        xs.map((x: int) -> int {
+            x + 1
+        })
+    };
+    let n = 0;
+
+    for (let y in ys) {
+        n = n + y;
+    }
+
+    n
+}
+
+test "for_loop_joined_both_map_arms" {
+    assert.equal(for_loops_joined_both_map_arms([1, 2, 3], true), 12)
+}
+
+// ── for_loop_generic_iterable_bound (B-1576) ─────────────────────────────────
+//
+// The same abort hit every `for` over a `T extends baml.iter.Iterable`
+// collection: the element is the rigid projection `(T as Iterable).Item`,
+// which the runtime carries for per-receiver dispatch - it must not be
+// erased to an error for being irreducible at compile time.
+
+function for_loops_count_bounded<T extends baml.iter.Iterable>(c: T) -> int {
+    let n = 0;
+
+    for (let y in c) {
+        n = n + 1;
+    }
+
+    n
+}
+
+test "for_loop_generic_iterable_bound_over_list" {
+    assert.equal(for_loops_count_bounded([5, 6, 7]), 3)
+}
+
+test "for_loop_generic_iterable_bound_over_string" {
+    assert.equal(for_loops_count_bounded("abc"), 3)
+}
+
+// ── C-style header bindings are per-iteration ─────────────────────────────────
+//
+// `for (let i = …; cond; step)` gives `i` a fresh cell at the top of the step,
+// carrying its value: a closure made in one iteration keeps that iteration's
+// `i` while the step advances the next one's (JS and Go semantics).
+
+function for_loops_c_style_header_capture() -> int[] {
+    let fs: (() -> int throws never)[] = [];
+    for (let i = 1; i <= 3; i += 1) {
+        fs.push(() -> int { i })
+    }
+    let out: int[] = [];
+    for (let f in fs) { out.push(f()) }
+    out
+}
+
+test "c_for_header_binding_per_iteration" {
+    assert.equal(for_loops_c_style_header_capture(), [1, 2, 3])
+}
+
+// `continue` targets the step, so a skipped tail still gets its own cell.
+function for_loops_c_style_header_capture_continue() -> int[] {
+    let fs: (() -> int throws never)[] = [];
+    for (let i = 1; i <= 4; i += 1) {
+        if (i == 2) { continue }
+        fs.push(() -> int { i })
+    }
+    let out: int[] = [];
+    for (let f in fs) { out.push(f()) }
+    out
+}
+
+test "c_for_header_binding_per_iteration_continue" {
+    assert.equal(for_loops_c_style_header_capture_continue(), [1, 3, 4])
+}
+
+// A write in the body lands in the current iteration's cell; the step then
+// advances the next iteration's copy. Closures see 1, 3, 5, as in JS.
+function for_loops_c_style_header_capture_body_writes() -> int[] {
+    let fs: (() -> int throws never)[] = [];
+    for (let i = 0; i < 6; i += 1) {
+        fs.push(() -> int { i });
+        i += 1
+    }
+    let out: int[] = [];
+    for (let f in fs) { out.push(f()) }
+    out
+}
+
+test "c_for_header_binding_per_iteration_body_writes" {
+    assert.equal(for_loops_c_style_header_capture_body_writes(), [1, 3, 5])
+}

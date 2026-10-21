@@ -1,0 +1,80 @@
+//! Item declarations and attributes: what opens a declaration where the
+//! cursor stands, and which `@attribute` names the compiler accepts there.
+//!
+//! Both lists are the compiler's own: the keyword sets mirror the item
+//! forms the grammar parses in each container, and the attribute names are
+//! the SAME table validation reads
+//! ([`SCHEMA_ATTRIBUTE_SPECS`](baml_base::SCHEMA_ATTRIBUTE_SPECS)), filtered
+//! to the position — what is offered is what checks.
+
+use baml_base::AttributePosition;
+
+use super::{completions::Completions, context::ItemContainer};
+
+/// Declarations the grammar accepts at the top of a file, each with the
+/// snippet that writes its skeleton (tab stops per the LSP snippet grammar;
+/// the accumulator's plain-text downgrade collapses them for clients
+/// without snippet support).
+const TOP_LEVEL: &[(&str, &str)] = &[
+    ("class", "class ${1:Name} {\n\t$0\n}"),
+    ("enum", "enum ${1:Name} {\n\t$0\n}"),
+    ("interface", "interface ${1:Name} {\n\t$0\n}"),
+    ("function", "function ${1:name}($2) -> $3 {\n\t$0\n}"),
+    (
+        "implement",
+        "implement ${1:Interface} for ${2:Type} {\n\t$0\n}",
+    ),
+    ("type", "type ${1:Name} = $0"),
+    ("let", "let ${1:name} = $0;"),
+    ("client", "client ${1:Name} = $0"),
+    ("generator", "generator ${1:name} {\n\t$0\n}"),
+    ("test", "test \"${1:name}\" {\n\t$0\n}"),
+    ("testset", "testset \"${1:name}\" {\n\t$0\n}"),
+];
+
+/// Declarations the grammar accepts inside a `class` body (fields are the
+/// reader's own names; nothing to offer for those). The `self` receiver is
+/// a deletable placeholder: statics simply remove it.
+const CLASS_BODY: &[(&str, &str)] = &[
+    ("function", "function ${1:name}(${2:self}) -> $3 {\n\t$0\n}"),
+    ("implements", "implements ${1:Interface} {\n\t$0\n}"),
+];
+
+/// Declarations the grammar accepts inside an `interface` body. The method
+/// skeleton is the REQUIRED (bodyless) form, and it spells the `throws`
+/// clause because interface signatures must declare one (E0170) — the
+/// snippet teaches the rule instead of leaving the reader to hit it.
+const INTERFACE_BODY: &[(&str, &str)] = &[
+    (
+        "function",
+        "function ${1:name}(${2:self}) -> $3 throws ${4:never}",
+    ),
+    ("type", "type ${1:Name}"),
+];
+
+/// Declarations the grammar accepts inside an `implement … for` body.
+const IMPL_BODY: &[(&str, &str)] = &[
+    ("function", "function ${1:name}(${2:self}) -> $3 {\n\t$0\n}"),
+    ("type", "type ${1:Name} = $0"),
+];
+
+pub(crate) fn complete_items(container: ItemContainer, out: &mut Completions<'_>) {
+    let declarations = match container {
+        ItemContainer::TopLevel => TOP_LEVEL,
+        ItemContainer::Class => CLASS_BODY,
+        ItemContainer::Interface => INTERFACE_BODY,
+        ItemContainer::Impl => IMPL_BODY,
+    };
+    for (keyword, snippet) in declarations {
+        out.add_declaration(keyword, snippet);
+    }
+}
+
+pub(crate) fn complete_attributes(position: AttributePosition, out: &mut Completions<'_>) {
+    // Unknown `@` names are legal user schema annotations (hoisted for
+    // reflection read-back), so this list is a menu of the names the compiler
+    // gives meaning to at this position, not a closed set.
+    for spec in baml_base::schema_attribute_specs_at(position) {
+        out.add_attribute(spec.name);
+    }
+}

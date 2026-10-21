@@ -4046,6 +4046,44 @@ export const TestOpenAIShorthand = async (
 };
 
 /**
+ * Executes the streaming variant of the "TestOpenAITranscription" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { Audio } audio - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestOpenAITranscription = async (
+  audio: Audio,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestOpenAITranscription(
+    audio,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestOpenAITranscriptionMultipartChat" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { Audio } audio - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestOpenAITranscriptionMultipartChat = async (
+  audio: Audio,
+): Promise<ReadableStream<Uint8Array>> => {
+  const __stream__ = b.stream.TestOpenAITranscriptionMultipartChat(
+    audio,
+  );
+  return Promise.resolve(__stream__.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "TestOpenAIWithFinishReasonError" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding

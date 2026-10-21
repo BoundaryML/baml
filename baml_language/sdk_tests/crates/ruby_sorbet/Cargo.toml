@@ -1,0 +1,11 @@
+[package]
+name = "sdk_test_ruby_sorbet"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dev-dependencies]
+sdk_test_harness_runner = { path = "../../harness_runner" }
+
+[package.metadata.ci]
+wasm_support = false

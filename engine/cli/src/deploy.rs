@@ -203,7 +203,7 @@ impl Deployer {
                         &project_resp
                             .projects
                             .iter()
-                            .map(|p| format!("Deploy to existing project {}", &p.project_fqn))
+                            .map(|p| format!("Deploy to existing project {}", p.project_fqn))
                             .collect::<Vec<_>>(),
                     )
                     .default(0)

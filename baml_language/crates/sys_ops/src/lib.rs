@@ -3,7 +3,7 @@
 // ============================================================================
 
 // SysOps struct, IO traits (IoClassFsFile, IoNamespaceFs, etc.),
-// view/owned types, from_impl, all_unsupported — all generated from
+// view/owned types, from_impl, all_host_unavailable — all generated from
 // `.baml` `$rust_io_function` definitions by `baml_builtins2_codegen`.
 #[allow(
     dead_code,
@@ -25,13 +25,13 @@ pub mod io {
     use std::sync::Arc;
 
     pub use bex_heap::{AccessError, BexClass, BexValue, BuiltinClass, PermitProof};
-    pub use bex_vm_types::SysOp;
+    pub use bex_vm_types::{ObjectType, SysOp, types::Type};
     // Owned structs are generated once in sys_types and re-exported here
-    // so that `io::owned::prompt::*` paths continue to work.
+    // so that `io::owned::ai::*` paths continue to work.
     pub use sys_types::generated::owned;
     pub use sys_types::{
         AsBexExternalValue, BexExternalValue, BexHeap, CallId, OpError, SysOpContext, SysOpFn,
-        SysOpOutput, SysOpResult, VmBamlError, VmPanic, VmRustFnError,
+        SysOpOutput, SysOpResult, VmBamlError, VmInternalError, VmPanic, VmRustFnError,
     };
 
     include!(concat!(env!("OUT_DIR"), "/io_generated.rs"));
@@ -44,7 +44,7 @@ pub mod io {
 // `baml_builtins2_codegen` to generate the `RuntimeIo` trait (in
 // `sys_types::runtime_io`). RuntimeIo is a flat, typed async interface to all
 // sys-ops -- no VM plumbing (BexHeap, SysOpContext, CallId) in its signatures.
-// Crates like `sys_llm` take `&dyn RuntimeIo` to call into the runtime IO
+// Crates like `sys_auth` take `&dyn RuntimeIo` to call into the runtime IO
 // layer (HTTP, env, filesystem, shell) without coupling to the VM.
 //
 // The generated `RuntimeIoAdapter` below bridges the trait to the underlying
@@ -86,7 +86,17 @@ mod io_adapter {
 pub use io_adapter::build_runtime_io;
 
 // ============================================================================
-// Blanket IO LLM implementation (delegates to sys_llm)
+// Prompt schema rendering + SAP parsing
+// ============================================================================
+// Relocated verbatim from the (now deleted) `sys_llm` crate, whose provider
+// stack was replaced by native BAML client implementations. `sys_ops` was the
+// only remaining caller of these two pieces.
+// ============================================================================
+
+pub mod output_format;
+
+// ============================================================================
+// Blanket IO LLM implementation
 // ============================================================================
 
 /// Look up an LLM function by name via the canonical
@@ -96,7 +106,7 @@ pub use io_adapter::build_runtime_io;
 /// so without it a namespaced LLM function fails to resolve. Returns the
 /// full `ResolveOutcome` (rather than collapsing to `Option`) so callers
 /// can distinguish ambiguity from a true not-found in their error
-/// messages: both still abort the sysop as a `DevOther`, but the
+/// messages: both still abort the sysop as an `InvalidArgument`, but the
 /// distinction matters for diagnosing synthesis / name-resolution bugs.
 fn lookup_llm_function<'a>(
     function_name: &str,
@@ -110,86 +120,57 @@ fn lookup_llm_function<'a>(
 fn llm_function_lookup_error(
     function_name: &str,
     outcome: &sys_types::ResolveOutcome<'_, LlmFunctionInfo>,
-) -> VmBamlError {
+) -> VmRustFnError {
     match outcome {
         sys_types::ResolveOutcome::Found(_, _) => {
             // Unreachable in practice — caller only invokes this on a miss.
-            // We still produce a coherent message rather than panicking so
+            // We still produce a coherent error rather than panicking so
             // a future refactor can't accidentally trip on this.
-            VmBamlError::DevOther {
+            VmInternalError::BridgeFailure {
                 message: format!(
-                    "internal: llm_function_lookup_error called with a Found \
+                    "llm_function_lookup_error called with a Found \
                      outcome for `{function_name}`"
                 ),
             }
+            .into()
         }
-        sys_types::ResolveOutcome::NotFound => VmBamlError::DevOther {
+        sys_types::ResolveOutcome::NotFound => VmBamlError::InvalidArgument {
             message: format!("LLM function not found: {function_name}"),
-        },
-        sys_types::ResolveOutcome::Ambiguous => VmBamlError::DevOther {
+        }
+        .into(),
+        sys_types::ResolveOutcome::Ambiguous => VmBamlError::InvalidArgument {
             message: format!(
                 "LLM function name `{function_name}` is ambiguous: two or more \
                  namespaced functions end with `.{function_name}`. Pass a fully \
                  qualified name (e.g. `<pkg>.<ns>.{function_name}`) to disambiguate."
             ),
-        },
+        }
+        .into(),
     }
 }
 
-/// Blanket impl — `ParseCache.new()` creates a SAP cache from a type descriptor.
-/// Parameter order follows the BAML decl (`new(streaming, target)` — stream
-/// type first, mirroring `ParseCache<TStream, TFinal>`).
-impl<T> io::IoClassSapParseCache for T {
-    fn new(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        stream_target: baml_type::RuntimeTy,
-        target: baml_type::RuntimeTy,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::sap::ParseCache> {
-        let compiled =
-            match ::bex_sap::CompiledSapModel::from_sys_op_context(ctx, target, stream_target) {
-                Ok(compiled) => compiled,
-                Err(e) => {
-                    return SysOpOutput::err(VmBamlError::InvalidArgument {
-                        message: e.to_string(),
-                    });
-                }
-            };
-        let sap = ::sys_llm::SapParseCache::new(compiled);
-        let data: std::sync::Arc<dyn std::any::Any + Send + Sync> = std::sync::Arc::new(sap);
-        SysOpOutput::ok(io::owned::sap::ParseCache { _data: data })
-    }
-}
-
-/// Blanket impl — `Context.output_format_with(...)` re-renders the return
-/// type's schema with caller options (BEP-049 §10 / M5b.2). `Context._output_format`
-/// carries the prebuilt schema as an opaque handle, so this only re-renders it.
-impl<T> io::IoClassPromptContext for T {
+/// Blanket impl — `ai.OutputFormat`: rendering the output-format schema with
+/// the caller's options.
+impl<T> io::IoClassAiOutputFormat for T {
     #[allow(clippy::too_many_arguments)]
-    fn output_format_with(
+    fn _render(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
-        context: io::owned::prompt::Context,
-        prefix: Option<String>,
-        or_splitter: Option<String>,
-        enum_value_prefix: Option<String>,
-        hoisted_class_prefix: Option<String>,
-        always_hoist_enums: Option<bool>,
-        quote_class_fields: Option<bool>,
-        hoist_classes: Option<Vec<String>>,
-        map_style: Option<String>,
-        render_null_as: Option<String>,
+        output_format: io::owned::ai::OutputFormat,
+        prefix: io::BexExternalValue,
+        or_splitter: io::BexExternalValue,
+        enum_value_prefix: io::BexExternalValue,
+        hoisted_class_prefix: io::BexExternalValue,
+        always_hoist_enums: io::BexExternalValue,
+        quote_class_fields: io::BexExternalValue,
+        hoist_classes: io::BexExternalValue,
+        map_style: io::BexExternalValue,
+        render_null_as: io::BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        // Render the prebuilt schema handle with the caller's options. The
-        // `Option → RenderOptions` mapping lives inside sys_llm (those option
-        // types are crate-internal there).
-        let content = unwrap_output_format(&context._output_format);
-        SysOpOutput::ok(sys_llm::render_output_format_content(
-            &content,
+        render_output_format_with_op(
+            &output_format,
             prefix,
             or_splitter,
             enum_value_prefix,
@@ -199,7 +180,7 @@ impl<T> io::IoClassPromptContext for T {
             hoist_classes,
             map_style,
             render_null_as,
-        ))
+        )
     }
 }
 
@@ -212,7 +193,7 @@ impl<T> io::IoNamespaceJson for T {
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
-        t: baml_type::RuntimeTy,
+        t: ::sys_types::SapTy,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         match schema::json_schema(&t, ctx) {
@@ -225,16 +206,20 @@ impl<T> io::IoNamespaceJson for T {
 mod schema {
     use std::collections::HashSet;
 
-    use baml_type::RuntimeTy;
+    use ::sys_types::SapTy;
     use bex_external_types::BexExternalValue;
     use serde_json::{Value, json};
     use sys_types::SysOpContext;
 
-    fn json_alias_ty() -> RuntimeTy {
-        RuntimeTy::TypeAlias(
-            baml_type::TypeName::from_dotted_path(baml_base::qualified_name::BAML_JSON_JSON),
-            baml_type::TyAttr::default(),
-        )
+    /// The stdlib `baml.json.json` alias as value metadata.
+    ///
+    /// `BexExternalValue` tags its containers with a declared type rather than
+    /// a lane type; `baml.json.json` is compiled, so it has a real qualified
+    /// name and this conversion is total.
+    fn json_alias_ty() -> baml_type::RuntimeTy {
+        baml_type::RuntimeTy::TypeAlias(baml_type::TypeName::from_dotted_path(
+            baml_base::qualified_name::BAML_JSON_JSON,
+        ))
     }
 
     pub(super) fn json_to_bex(value: Value) -> BexExternalValue {
@@ -251,7 +236,7 @@ mod schema {
                 items: items.into_iter().map(json_to_bex).collect(),
             },
             Value::Object(entries) => BexExternalValue::Map {
-                key_type: RuntimeTy::string(),
+                key_type: baml_type::RuntimeTy::string(),
                 value_type: json_alias_ty(),
                 entries: entries
                     .into_iter()
@@ -261,7 +246,7 @@ mod schema {
         }
     }
 
-    pub(super) fn json_schema(ty: &RuntimeTy, ctx: &SysOpContext) -> Result<Value, String> {
+    pub(super) fn json_schema(ty: &SapTy, ctx: &SysOpContext) -> Result<Value, String> {
         let mut builder = SchemaBuilder {
             ctx,
             definitions: serde_json::Map::new(),
@@ -270,7 +255,7 @@ mod schema {
         };
 
         let (mut root, root_class_key) = match ty {
-            RuntimeTy::Class(name, _, _) => {
+            SapTy::Class(name, _) => {
                 let key = definition_key(name);
                 builder.building.insert(key.clone());
                 let schema = builder.class_object(name)?;
@@ -303,30 +288,28 @@ mod schema {
     }
 
     impl SchemaBuilder<'_> {
-        fn ty_schema(&mut self, ty: &RuntimeTy) -> Result<Value, String> {
+        fn ty_schema(&mut self, ty: &SapTy) -> Result<Value, String> {
             match ty {
-                RuntimeTy::Int { .. } | RuntimeTy::Bigint { .. } => {
-                    Ok(json!({ "type": "integer" }))
-                }
-                RuntimeTy::Float { .. } => Ok(json!({ "type": "number" })),
-                RuntimeTy::String { .. } => Ok(json!({ "type": "string" })),
-                RuntimeTy::Bool { .. } => Ok(json!({ "type": "boolean" })),
-                RuntimeTy::Null { .. } => Ok(json!({ "type": "null" })),
-                RuntimeTy::Uint8Array { .. } => Ok(json!({ "type": "string" })),
-                RuntimeTy::Literal(lit, _, _) => Ok(Self::literal_schema(lit)),
-                RuntimeTy::List(inner, _) => Ok(json!({
+                SapTy::Int | SapTy::Bigint => Ok(json!({ "type": "integer" })),
+                SapTy::Float => Ok(json!({ "type": "number" })),
+                SapTy::String => Ok(json!({ "type": "string" })),
+                SapTy::Bool => Ok(json!({ "type": "boolean" })),
+                SapTy::Null => Ok(json!({ "type": "null" })),
+                SapTy::Uint8Array => Ok(json!({ "type": "string" })),
+                SapTy::Literal(lit, _) => Ok(Self::literal_schema(lit)),
+                SapTy::List(inner) => Ok(json!({
                     "type": "array",
                     "items": self.ty_schema(inner)?,
                 })),
-                RuntimeTy::Map { value, .. } => Ok(json!({
+                SapTy::Map { value, .. } => Ok(json!({
                     "type": "object",
                     "additionalProperties": self.ty_schema(value)?,
                 })),
-                RuntimeTy::Union(members, _) => self.union_schema(members),
-                RuntimeTy::Enum(name, _) => Self::enum_schema(name, self.ctx),
-                RuntimeTy::Class(name, _, _) => self.class_ref(name),
-                RuntimeTy::TypeAlias(name, _) => self.type_alias_ref(name),
-                RuntimeTy::BuiltinUnknown { .. } => Ok(json!({})),
+                SapTy::Union(members) => self.union_schema(members),
+                SapTy::Enum(name) => Self::enum_schema(name, self.ctx),
+                SapTy::Class(name, _) => self.class_ref(name),
+                SapTy::TypeAlias(name) => self.type_alias_ref(name),
+                SapTy::Unknown => Ok(json!({})),
                 other => Err(format!(
                     "json_schema: no JSON Schema representation for `{other}`"
                 )),
@@ -346,9 +329,9 @@ mod schema {
             }
         }
 
-        fn union_schema(&mut self, members: &[RuntimeTy]) -> Result<Value, String> {
-            let has_null = members.iter().any(RuntimeTy::is_null);
-            let non_null: Vec<&RuntimeTy> = members.iter().filter(|m| !m.is_null()).collect();
+        fn union_schema(&mut self, members: &[SapTy]) -> Result<Value, String> {
+            let has_null = members.iter().any(SapTy::is_null);
+            let non_null: Vec<&SapTy> = members.iter().filter(|m| !m.is_null()).collect();
             if non_null.is_empty() {
                 return Ok(json!({ "type": "null" }));
             }
@@ -370,11 +353,20 @@ mod schema {
             Ok(json!({ "anyOf": schemas }))
         }
 
+        /// Widens a schema to accept `null`. A plain `type` becomes a type
+        /// list. `enum` and `const` restrict the value whatever `type` says:
+        /// an `enum` also gains a `null` member, and a `const`, which has room
+        /// for one value only, becomes one side of an `anyOf`.
         fn with_null(base: Value) -> Value {
             if let Value::Object(mut object) = base {
-                if let Some(Value::String(kind)) = object.get("type") {
+                if !object.contains_key("const")
+                    && let Some(Value::String(kind)) = object.get("type")
+                {
                     let widened = json!([kind, "null"]);
                     object.insert("type".to_string(), widened);
+                    if let Some(Value::Array(values)) = object.get_mut("enum") {
+                        values.push(Value::Null);
+                    }
                     return Value::Object(object);
                 }
                 return json!({ "anyOf": [Value::Object(object), { "type": "null" }] });
@@ -382,31 +374,26 @@ mod schema {
             json!({ "anyOf": [base, { "type": "null" }] })
         }
 
-        fn enum_schema(name: &baml_type::TypeName, ctx: &SysOpContext) -> Result<Value, String> {
-            let enum_def = find_enum_definition(ctx, name)
-                .ok_or_else(|| format!("json_schema: unknown enum `{}`", name.display_name()))?;
+        fn enum_schema(head: &::sys_types::DefKey, ctx: &SysOpContext) -> Result<Value, String> {
+            let enum_def = find_enum_definition(ctx, head)
+                .ok_or_else(|| format!("json_schema: unknown enum `{}`", head.display_name()))?;
             let variants: Vec<Value> = enum_def
                 .variants
                 .iter()
-                .map(|variant| {
-                    json!(
-                        variant
-                            .alias
-                            .clone()
-                            .unwrap_or_else(|| variant.name.clone())
-                    )
-                })
+                .map(|variant| json!(variant_wire_name(variant)))
                 .collect();
-            Ok(json!({ "type": "string", "enum": variants }))
+            let mut schema = json!({ "type": "string", "enum": variants });
+            describe(&mut schema, enum_documentation(enum_def));
+            Ok(schema)
         }
 
-        fn class_ref(&mut self, name: &baml_type::TypeName) -> Result<Value, String> {
-            let key = definition_key(name);
+        fn class_ref(&mut self, head: &::sys_types::DefKey) -> Result<Value, String> {
+            let key = definition_key(head);
             self.referenced.insert(key.clone());
 
             if !self.definitions.contains_key(&key) && !self.building.contains(&key) {
                 self.building.insert(key.clone());
-                let definition = self.class_object(name)?;
+                let definition = self.class_object(head)?;
                 self.building.remove(&key);
                 self.definitions.insert(key.clone(), definition);
             }
@@ -414,15 +401,15 @@ mod schema {
             Ok(json!({ "$ref": format!("#/$defs/{}", json_pointer_escape(&key)) }))
         }
 
-        fn type_alias_ref(&mut self, name: &baml_type::TypeName) -> Result<Value, String> {
-            let key = definition_key(name);
+        fn type_alias_ref(&mut self, head: &::sys_types::DefKey) -> Result<Value, String> {
+            let key = definition_key(head);
             self.referenced.insert(key.clone());
 
             if !self.definitions.contains_key(&key) && !self.building.contains(&key) {
-                let target = find_type_alias_definition(self.ctx, name)
+                let target = find_type_alias_definition(self.ctx, head)
                     .cloned()
                     .ok_or_else(|| {
-                        format!("json_schema: unknown type alias `{}`", name.display_name())
+                        format!("json_schema: unknown type alias `{}`", head.display_name())
                     })?;
                 self.building.insert(key.clone());
                 let definition = self.ty_schema(&target)?;
@@ -433,9 +420,9 @@ mod schema {
             Ok(json!({ "$ref": format!("#/$defs/{}", json_pointer_escape(&key)) }))
         }
 
-        fn class_object(&mut self, name: &baml_type::TypeName) -> Result<Value, String> {
-            let class_def = find_class_definition(self.ctx, name)
-                .ok_or_else(|| format!("json_schema: unknown class `{}`", name.display_name()))?
+        fn class_object(&mut self, head: &::sys_types::DefKey) -> Result<Value, String> {
+            let class_def = find_class_definition(self.ctx, head)
+                .ok_or_else(|| format!("json_schema: unknown class `{}`", head.display_name()))?
                 .clone();
 
             let mut properties = serde_json::Map::new();
@@ -445,82 +432,150 @@ mod schema {
                     continue;
                 }
                 let prop_name = field.alias.clone().unwrap_or_else(|| field.name.clone());
-                properties.insert(prop_name.clone(), self.ty_schema(&field.field_type)?);
+                let mut property = self.ty_schema(&field.field_type)?;
+                describe(
+                    &mut property,
+                    documentation(field.description.as_deref(), field.docstring.as_deref()),
+                );
+                properties.insert(prop_name.clone(), property);
                 if !(field.field_type.is_nullable_union() || field.field_type.is_null()) {
                     required.push(json!(prop_name));
                 }
             }
 
-            Ok(json!({
+            let mut object = json!({
                 "type": "object",
                 "properties": properties,
                 "required": required,
-            }))
+            });
+            describe(
+                &mut object,
+                documentation(
+                    class_def.description.as_deref(),
+                    class_def.docstring.as_deref(),
+                ),
+            );
+            Ok(object)
         }
     }
 
-    fn definition_key(name: &baml_type::TypeName) -> String {
-        name.display_name().to_string()
+    /// A declaration's documentation as the output format shows it: its
+    /// `@description`, then its `///` docstring, each trimmed. `None` when both
+    /// are blank.
+    fn documentation(description: Option<&str>, docstring: Option<&str>) -> Option<String> {
+        let docs = [description, docstring]
+            .into_iter()
+            .flatten()
+            .map(str::trim)
+            .filter(|docs| !docs.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
+        (!docs.is_empty()).then_some(docs)
+    }
+
+    /// The name a variant has on the wire: its `@alias`, else its name.
+    fn variant_wire_name(variant: &sys_types::EnumVariantDefinition) -> String {
+        variant
+            .alias
+            .clone()
+            .unwrap_or_else(|| variant.name.clone())
+    }
+
+    /// What an enum's schema says about it: the enum's own documentation, then
+    /// one `- <variant>: <documentation>` line per documented variant, the form
+    /// the output format lists them in. JSON Schema has no description per
+    /// `enum` value, so the variants' documentation goes here.
+    fn enum_documentation(enum_def: &sys_types::EnumDefinition) -> Option<String> {
+        let variants = enum_def
+            .variants
+            .iter()
+            .filter_map(|variant| {
+                let docs = variant.rendered_description()?;
+                Some(format!("- {}: {docs}", variant_wire_name(variant)))
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let sections = [
+            documentation(
+                enum_def.description.as_deref(),
+                enum_def.docstring.as_deref(),
+            ),
+            (!variants.is_empty()).then_some(variants),
+        ];
+        let text = sections
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        (!text.is_empty()).then_some(text)
+    }
+
+    /// Sets `documentation` as the schema's `description`. A schema that
+    /// already has one (an enum that documents its variants) keeps it, after
+    /// `documentation`.
+    fn describe(schema: &mut Value, documentation: Option<String>) {
+        let (Some(documentation), Value::Object(object)) = (documentation, schema) else {
+            return;
+        };
+        let description = match object.get("description").and_then(Value::as_str) {
+            Some(existing) => format!("{documentation}\n\n{existing}"),
+            None => documentation,
+        };
+        object.insert("description".to_string(), Value::String(description));
+    }
+
+    /// The `$defs` key a type is published under in the emitted JSON schema.
+    ///
+    /// An output label, so it is the head's *name* — the schema is read by a
+    /// model, not by us. Identity lookups go through the definition tables,
+    /// which are keyed by the head itself.
+    fn definition_key(head: &::sys_types::DefKey) -> String {
+        head.display_name().to_string()
     }
 
     fn json_pointer_escape(value: &str) -> String {
         value.replace('~', "~0").replace('/', "~1")
     }
 
+    /// Look up a class definition by declaration identity.
+    ///
+    /// Exact, with nothing to fall back to: the key's equality is its tag, so
+    /// this finds the declaration the type actually names or nothing at all.
+    /// The old fallback scanned for a unique matching `display_name`, which
+    /// could return a *different* declaration that merely shared a spelling —
+    /// unrepresentable once the table is keyed by identity.
     fn find_class_definition<'a>(
         ctx: &'a SysOpContext,
-        type_name: &baml_type::TypeName,
+        head: &::sys_types::DefKey,
     ) -> Option<&'a sys_types::ClassDefinition> {
-        ctx.class_definitions.get(type_name).or_else(|| {
-            let mut matches = ctx
-                .class_definitions
-                .iter()
-                .filter(|(name, _)| name.display_name() == type_name.display_name())
-                .map(|(_, definition)| definition);
-            let first = matches.next()?;
-            matches.next().is_none().then_some(first)
-        })
+        ctx.class_definitions.get(head)
     }
 
+    /// See [`find_class_definition`] — same contract, for enums.
     fn find_enum_definition<'a>(
         ctx: &'a SysOpContext,
-        type_name: &baml_type::TypeName,
+        head: &::sys_types::DefKey,
     ) -> Option<&'a sys_types::EnumDefinition> {
-        ctx.enum_definitions.get(type_name).or_else(|| {
-            let mut matches = ctx
-                .enum_definitions
-                .iter()
-                .filter(|(name, _)| name.display_name() == type_name.display_name())
-                .map(|(_, definition)| definition);
-            let first = matches.next()?;
-            matches.next().is_none().then_some(first)
-        })
+        ctx.enum_definitions.get(head)
     }
 
+    /// See [`find_class_definition`] — same contract, for recursive aliases.
     fn find_type_alias_definition<'a>(
         ctx: &'a SysOpContext,
-        type_name: &baml_type::TypeName,
-    ) -> Option<&'a RuntimeTy> {
-        ctx.type_alias_definitions.get(type_name).or_else(|| {
-            let mut matches = ctx
-                .type_alias_definitions
-                .iter()
-                .filter(|(name, _)| name.display_name() == type_name.display_name())
-                .map(|(_, ty)| ty);
-            let first = matches.next()?;
-            matches.next().is_none().then_some(first)
-        })
+        head: &::sys_types::DefKey,
+    ) -> Option<&'a SapTy> {
+        ctx.type_alias_definitions.get(head)
     }
 
     #[cfg(test)]
     mod tests {
         use std::sync::Arc;
 
-        use baml_type::{RuntimeTy, TyAttr, TypeName};
+        use baml_type::TypeName;
         use serde_json::json;
         use sys_types::{
-            ClassDefinition, ClassFieldDefinition, EnumDefinition, EnumVariantDefinition,
-            SysOpContext,
+            ClassDefinition, ClassFieldDefinition, DefKey, EnumDefinition, EnumVariantDefinition,
+            SapTy as RuntimeTy, SysOpContext,
         };
 
         use super::json_schema;
@@ -530,20 +585,43 @@ mod schema {
         }
 
         fn class_ty(name: &TypeName) -> RuntimeTy {
-            RuntimeTy::Class(name.clone(), Vec::new(), TyAttr::default())
+            RuntimeTy::Class(key(name), Box::new([]))
+        }
+
+        /// A distinct static-image tag per test declaration name: the name's
+        /// hash as an image index, so the same name keys the same declaration.
+        fn tag_for(name: &TypeName) -> baml_type::typetag::TypeTag {
+            use std::hash::{Hash, Hasher};
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            name.render_dotted(false).hash(&mut hasher);
+            baml_type::typetag::TypeTag::of_static_index(
+                (hasher.finish() & ((1 << 40) - 1)) as usize,
+            )
+        }
+
+        /// A lane key for a compiled test declaration.
+        fn key(name: &TypeName) -> DefKey {
+            DefKey::new(
+                tag_for(name),
+                baml_type::DeclarationName::Declared(name.clone()),
+            )
         }
 
         fn alias_ty(name: &TypeName) -> RuntimeTy {
-            RuntimeTy::TypeAlias(name.clone(), TyAttr::default())
+            RuntimeTy::TypeAlias(key(name))
         }
 
         fn field(name: &str, field_type: RuntimeTy) -> ClassFieldDefinition {
             ClassFieldDefinition {
                 name: name.to_string(),
                 field_type,
+                field_template: None,
                 description: None,
+                docstring: None,
                 alias: None,
                 skip: false,
+                stream_done: false,
+                must_exist: false,
             }
         }
 
@@ -551,8 +629,10 @@ mod schema {
             ClassDefinition {
                 name: name.display_name().to_string(),
                 description: None,
+                docstring: None,
                 alias: None,
                 fields,
+                stream_done: false,
             }
         }
 
@@ -561,7 +641,7 @@ mod schema {
             let node = type_name("pkg.Node");
             let mut classes = indexmap::IndexMap::new();
             classes.insert(
-                node.clone(),
+                key(&node),
                 class_definition(
                     &node,
                     vec![field("next", RuntimeTy::optional(class_ty(&node)))],
@@ -585,11 +665,11 @@ mod schema {
             let b = type_name("pkg.B");
             let mut classes = indexmap::IndexMap::new();
             classes.insert(
-                a.clone(),
+                key(&a),
                 class_definition(&a, vec![field("b", class_ty(&b))]),
             );
             classes.insert(
-                b.clone(),
+                key(&b),
                 class_definition(&b, vec![field("a", RuntimeTy::optional(class_ty(&a)))]),
             );
             let mut ctx = SysOpContext::empty();
@@ -620,11 +700,11 @@ mod schema {
             let escaped = type_name("pkg.A/B~C");
             let mut classes = indexmap::IndexMap::new();
             classes.insert(
-                holder.clone(),
+                key(&holder),
                 class_definition(&holder, vec![field("value", class_ty(&escaped))]),
             );
             classes.insert(
-                escaped.clone(),
+                key(&escaped),
                 class_definition(&escaped, vec![field("value", RuntimeTy::int())]),
             );
             let mut ctx = SysOpContext::empty();
@@ -640,20 +720,23 @@ mod schema {
             let status = type_name("pkg.Status");
             let mut enums = indexmap::IndexMap::new();
             enums.insert(
-                status.clone(),
+                key(&status),
                 EnumDefinition {
                     name: "Status".to_string(),
                     description: None,
+                    docstring: None,
                     alias: None,
                     variants: vec![
                         EnumVariantDefinition {
                             name: "Ready".to_string(),
                             description: None,
+                            docstring: None,
                             alias: Some("ready-now".to_string()),
                         },
                         EnumVariantDefinition {
                             name: "Done".to_string(),
                             description: None,
+                            docstring: None,
                             alias: None,
                         },
                     ],
@@ -662,11 +745,215 @@ mod schema {
             let mut ctx = SysOpContext::empty();
             ctx.enum_definitions = Arc::new(enums);
 
-            let schema = json_schema(&RuntimeTy::Enum(status, TyAttr::default()), &ctx)
-                .expect("schema should lower");
+            let schema =
+                json_schema(&RuntimeTy::Enum(key(&status)), &ctx).expect("schema should lower");
             assert_eq!(
                 schema,
                 json!({ "type": "string", "enum": ["ready-now", "Done"] })
+            );
+        }
+
+        fn documented(mut field: ClassFieldDefinition, description: &str) -> ClassFieldDefinition {
+            field.description = Some(description.to_string());
+            field
+        }
+
+        fn variant(name: &str, description: Option<&str>) -> EnumVariantDefinition {
+            EnumVariantDefinition {
+                name: name.to_string(),
+                description: description.map(str::to_string),
+                docstring: None,
+                alias: None,
+            }
+        }
+
+        /// `GymType`, documented at the enum and on two of its three variants.
+        fn gym_type_enum() -> EnumDefinition {
+            EnumDefinition {
+                name: "GymType".to_string(),
+                description: Some("The kind of place the user trains in.".to_string()),
+                docstring: None,
+                alias: None,
+                variants: vec![
+                    variant("COMMERCIAL", Some("Commercial gym")),
+                    EnumVariantDefinition {
+                        docstring: Some("A gym at home.".to_string()),
+                        alias: Some("garage".to_string()),
+                        ..variant("GARAGE", Some("Garage gym"))
+                    },
+                    variant("CUSTOM", None),
+                ],
+            }
+        }
+
+        #[test]
+        fn class_and_field_descriptions_reach_the_schema() {
+            let gym = type_name("pkg.Gym");
+            let owner = type_name("pkg.Owner");
+            let mut classes = indexmap::IndexMap::new();
+            classes.insert(
+                key(&gym),
+                ClassDefinition {
+                    description: Some("A gym to save for the user.".to_string()),
+                    docstring: Some("Saved per user.".to_string()),
+                    ..class_definition(
+                        &gym,
+                        vec![
+                            ClassFieldDefinition {
+                                docstring: Some("Shown on the card.".to_string()),
+                                ..documented(field("name", RuntimeTy::string()), "Short gym name.")
+                            },
+                            documented(field("owner", class_ty(&owner)), "Who owns it."),
+                            field("capacity", RuntimeTy::int()),
+                        ],
+                    )
+                },
+            );
+            classes.insert(
+                key(&owner),
+                ClassDefinition {
+                    description: Some("A HYBRD user.".to_string()),
+                    ..class_definition(&owner, vec![field("id", RuntimeTy::string())])
+                },
+            );
+            let mut ctx = SysOpContext::empty();
+            ctx.class_definitions = Arc::new(classes);
+
+            let schema = json_schema(&class_ty(&gym), &ctx).expect("schema should lower");
+            assert_eq!(
+                schema["description"],
+                "A gym to save for the user.\nSaved per user."
+            );
+            assert_eq!(
+                schema["properties"]["name"],
+                json!({ "type": "string", "description": "Short gym name.\nShown on the card." })
+            );
+            assert_eq!(
+                schema["properties"]["owner"],
+                json!({ "$ref": "#/$defs/pkg.Owner", "description": "Who owns it." })
+            );
+            assert_eq!(
+                schema["properties"]["capacity"],
+                json!({ "type": "integer" })
+            );
+            assert_eq!(schema["$defs"]["pkg.Owner"]["description"], "A HYBRD user.");
+        }
+
+        #[test]
+        fn blank_descriptions_add_nothing() {
+            let gym = type_name("pkg.Gym");
+            let mut classes = indexmap::IndexMap::new();
+            classes.insert(
+                key(&gym),
+                ClassDefinition {
+                    description: Some("  ".to_string()),
+                    ..class_definition(
+                        &gym,
+                        vec![documented(field("name", RuntimeTy::string()), "\n")],
+                    )
+                },
+            );
+            let mut ctx = SysOpContext::empty();
+            ctx.class_definitions = Arc::new(classes);
+
+            let schema = json_schema(&class_ty(&gym), &ctx).expect("schema should lower");
+            assert_eq!(
+                schema,
+                json!({
+                    "type": "object",
+                    "properties": { "name": { "type": "string" } },
+                    "required": ["name"],
+                })
+            );
+        }
+
+        #[test]
+        fn enum_descriptions_document_the_variants() {
+            let gym_type = type_name("pkg.GymType");
+            let mut enums = indexmap::IndexMap::new();
+            enums.insert(key(&gym_type), gym_type_enum());
+            let mut ctx = SysOpContext::empty();
+            ctx.enum_definitions = Arc::new(enums);
+
+            let schema =
+                json_schema(&RuntimeTy::Enum(key(&gym_type)), &ctx).expect("schema should lower");
+            assert_eq!(
+                schema,
+                json!({
+                    "type": "string",
+                    "enum": ["COMMERCIAL", "garage", "CUSTOM"],
+                    "description": "The kind of place the user trains in.\n\n- COMMERCIAL: Commercial gym\n- garage: Garage gym A gym at home.",
+                })
+            );
+        }
+
+        #[test]
+        fn a_field_description_precedes_its_enum_documentation() {
+            let gym = type_name("pkg.Gym");
+            let gym_type = type_name("pkg.GymType");
+            let mut classes = indexmap::IndexMap::new();
+            classes.insert(
+                key(&gym),
+                class_definition(
+                    &gym,
+                    vec![documented(
+                        field(
+                            "gym_type",
+                            RuntimeTy::optional(RuntimeTy::Enum(key(&gym_type))),
+                        ),
+                        "Where the user trains.",
+                    )],
+                ),
+            );
+            let mut enums = indexmap::IndexMap::new();
+            enums.insert(
+                key(&gym_type),
+                EnumDefinition {
+                    description: None,
+                    ..gym_type_enum()
+                },
+            );
+            let mut ctx = SysOpContext::empty();
+            ctx.class_definitions = Arc::new(classes);
+            ctx.enum_definitions = Arc::new(enums);
+
+            let schema = json_schema(&class_ty(&gym), &ctx).expect("schema should lower");
+            assert_eq!(
+                schema["properties"]["gym_type"],
+                json!({
+                    "type": ["string", "null"],
+                    "enum": ["COMMERCIAL", "garage", "CUSTOM", null],
+                    "description": "Where the user trains.\n\n- COMMERCIAL: Commercial gym\n- garage: Garage gym A gym at home.",
+                })
+            );
+        }
+
+        #[test]
+        fn nullable_enum_and_literal_accept_null() {
+            let gym_type = type_name("pkg.GymType");
+            let mut enums = indexmap::IndexMap::new();
+            enums.insert(key(&gym_type), gym_type_enum());
+            let mut ctx = SysOpContext::empty();
+            ctx.enum_definitions = Arc::new(enums);
+
+            let nullable_enum =
+                json_schema(&RuntimeTy::optional(RuntimeTy::Enum(key(&gym_type))), &ctx)
+                    .expect("schema should lower");
+            assert_eq!(nullable_enum["type"], json!(["string", "null"]));
+            assert_eq!(
+                nullable_enum["enum"],
+                json!(["COMMERCIAL", "garage", "CUSTOM", null])
+            );
+
+            let literal = RuntimeTy::Literal(
+                baml_type::Literal::String("auto".to_string()),
+                baml_type::Freshness::Regular,
+            );
+            let nullable_literal =
+                json_schema(&RuntimeTy::optional(literal), &ctx).expect("schema should lower");
+            assert_eq!(
+                nullable_literal,
+                json!({ "anyOf": [{ "type": "string", "const": "auto" }, { "type": "null" }] })
             );
         }
 
@@ -684,7 +971,7 @@ mod schema {
                 RuntimeTy::map(RuntimeTy::string(), json_alias.clone()),
             ]);
             let mut aliases = indexmap::IndexMap::new();
-            aliases.insert(json_name, target);
+            aliases.insert(key(&json_name), target);
             let mut ctx = SysOpContext::empty();
             ctx.type_alias_definitions = Arc::new(aliases);
 
@@ -703,114 +990,218 @@ mod schema {
     }
 }
 
-impl<T> io::IoNamespacePrompt for T {
-    fn render_output_format(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        return_type: baml_type::RuntimeTy,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        // BEP-049 §10 (M5b): the `ctx.output_format` schema string.
-        SysOpOutput::ok(sys_llm::render_output_format(&return_type, ctx))
-    }
+/// The `ai` package root has no free IO functions — its IO surface is the
+/// `ai.Context` class methods (`IoClassAiContext`) — but the generated package
+/// trait still requires the (method-only) namespace trait.
+impl<T> io::IoNamespaceAi for T {}
 
-    fn build_output_format(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        return_type: baml_type::RuntimeTy,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::prompt::OutputFormat> {
-        // BEP-049 §10 (M5b.2): build the opaque schema handle `Context._output_format`
-        // carries; `output_format_with(...)` renders it with caller options.
-        let content = sys_llm::build_output_format_content(&return_type, ctx);
-        SysOpOutput::ok(wrap_output_format(std::sync::Arc::new(content)))
-    }
+// The `ai.internal` prompt-rendering sys-ops are pure (no platform IO), so
+// both `DefaultIoOps` and `NativeSysOps` delegate their `IoNamespaceAiInternal`
+// prompt methods to these shared implementations.
 
-    fn get_return_type(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        function_name: String,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<baml_type::RuntimeTy> {
-        let outcome = lookup_llm_function(&function_name, &ctx.llm_functions);
-        let sys_types::ResolveOutcome::Found(_, info) = outcome else {
-            return SysOpOutput::err(llm_function_lookup_error(&function_name, &outcome));
-        };
-        SysOpOutput::ok(info.return_type.clone())
+/// BEP-049 section 10 (M5b): the `ctx.output_format()` schema string.
+pub fn render_output_format_op(
+    return_type: &::sys_types::SapTy,
+    ctx: &SysOpContext,
+) -> SysOpOutput<String> {
+    SysOpOutput::ok(crate::output_format::render_output_format(return_type, ctx))
+}
+
+/// BEP-049 section 10 (M5b.2): build the opaque schema handle `Context._output_format`
+/// carries; `output_format(...)` renders it with caller options.
+pub fn build_output_format_op(
+    return_type: &::sys_types::SapTy,
+    ctx: &SysOpContext,
+) -> SysOpOutput<io::owned::ai::OutputFormat> {
+    let content = crate::output_format::build_output_format_content(return_type, ctx);
+    SysOpOutput::ok(wrap_output_format(std::sync::Arc::new(content)))
+}
+
+fn output_format_option_value(value: io::BexExternalValue) -> io::BexExternalValue {
+    match value {
+        io::BexExternalValue::Union { value, .. } => output_format_option_value(*value),
+        value => value,
     }
 }
 
-/// Schema-aligned parsing operations back both public `baml.sap.parse` and
-/// incremental `ai.stream.Stream` parsing.
-impl<T> io::IoNamespaceSap for T {
-    fn __parse_final(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        json: String,
-        cache: io::owned::sap::ParseCache,
-        _type_arg_0: baml_type::RuntimeTy,
-        _type_arg_1: baml_type::RuntimeTy,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<BexExternalValue> {
-        let Ok(sap) = cache._data.downcast::<::sys_llm::SapParseCache>() else {
-            return SysOpOutput::err(VmBamlError::DevOther {
-                message: "Invalid ParseCache: expected SapParseCache".into(),
-            });
-        };
-        SysOpOutput::Ready(
-            sys_llm::execute_sap_parse_final(&json, &sap, ctx).map_err(VmRustFnError::from),
-        )
+/// The `output_format` options are declared as literal unions in
+/// `ai/context.baml`, so the type checker already rejects every value this
+/// would report. Reaching it means the wire value disagrees with the declared
+/// parameter type — an engine inconsistency, not a caller error.
+fn invalid_output_format_option(name: &str, value: &io::BexExternalValue) -> VmRustFnError {
+    VmInternalError::BridgeFailure {
+        message: format!("invalid internal value for output_format option `{name}`: {value:?}"),
     }
+    .into()
+}
 
-    fn __parse_partial(
-        &self,
-        _heap: &std::sync::Arc<BexHeap>,
-        _call_id: CallId,
-        json: String,
-        cache: io::owned::sap::ParseCache,
-        _type_arg_0: baml_type::RuntimeTy,
-        _type_arg_1: baml_type::RuntimeTy,
-        ctx: &SysOpContext,
-    ) -> SysOpOutput<BexExternalValue> {
-        let Ok(sap) = cache._data.downcast::<::sys_llm::SapParseCache>() else {
-            return SysOpOutput::err(VmBamlError::DevOther {
-                message: "Invalid ParseCache: expected SapParseCache".into(),
-            });
-        };
-        let result = match sys_llm::execute_sap_parse_partial(&json, &sap, ctx) {
-            Ok(Some(value)) => Ok(value),
-            Ok(None) => Ok(BexExternalValue::instance(
-                "baml.sap.NoYield",
-                ::indexmap::IndexMap::new(),
-            )),
-            Err(e) => Err(VmRustFnError::from(e)),
-        };
-        SysOpOutput::Ready(result)
+fn is_output_format_default(value: &io::BexExternalValue) -> bool {
+    matches!(
+        value,
+        io::BexExternalValue::Variant {
+            variant_name,
+            ..
+        } if variant_name == "Auto"
+    )
+}
+
+fn output_format_string_setting(
+    name: &str,
+    value: io::BexExternalValue,
+    null_is_never: bool,
+) -> Result<crate::output_format::RenderSetting<String>, VmRustFnError> {
+    use crate::output_format::RenderSetting;
+
+    let value = output_format_option_value(value);
+    match value {
+        io::BexExternalValue::String(value) => Ok(RenderSetting::Always(value.to_string())),
+        io::BexExternalValue::Null if null_is_never => Ok(RenderSetting::Never),
+        io::BexExternalValue::Null => Ok(RenderSetting::Auto),
+        value if is_output_format_default(&value) => Ok(RenderSetting::Auto),
+        value => Err(invalid_output_format_option(name, &value)),
     }
 }
 
-/// Wrap an `OutputFormatContent` into the generated `owned::prompt::OutputFormat` handle.
+fn output_format_bool_setting(
+    name: &str,
+    value: io::BexExternalValue,
+) -> Result<crate::output_format::RenderSetting<bool>, VmRustFnError> {
+    use crate::output_format::RenderSetting;
+
+    let value = output_format_option_value(value);
+    match value {
+        io::BexExternalValue::Bool(value) => Ok(RenderSetting::Always(value)),
+        value if is_output_format_default(&value) => Ok(RenderSetting::Auto),
+        value => Err(invalid_output_format_option(name, &value)),
+    }
+}
+
+fn output_format_hoist_classes(
+    value: io::BexExternalValue,
+) -> Result<crate::output_format::HoistClasses, VmRustFnError> {
+    use crate::output_format::HoistClasses;
+
+    let value = output_format_option_value(value);
+    match value {
+        io::BexExternalValue::Bool(true) => Ok(HoistClasses::All),
+        io::BexExternalValue::Bool(false) => Ok(HoistClasses::Auto),
+        io::BexExternalValue::String(value) if value.as_str() == "auto" => Ok(HoistClasses::Auto),
+        io::BexExternalValue::Array { items, .. } => items
+            .into_iter()
+            .map(|item| match output_format_option_value(item) {
+                io::BexExternalValue::String(value) => Ok(value.to_string()),
+                value => Err(invalid_output_format_option("hoist_classes", &value)),
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map(HoistClasses::Subset),
+        value if is_output_format_default(&value) => Ok(HoistClasses::Auto),
+        value => Err(invalid_output_format_option("hoist_classes", &value)),
+    }
+}
+
+fn output_format_map_style(
+    value: io::BexExternalValue,
+) -> Result<crate::output_format::MapStyle, VmRustFnError> {
+    use crate::output_format::MapStyle;
+
+    let value = output_format_option_value(value);
+    match value {
+        io::BexExternalValue::String(value) if value.as_str() == "angle" => {
+            Ok(MapStyle::TypeParameters)
+        }
+        io::BexExternalValue::String(value) if value.as_str() == "object" => {
+            Ok(MapStyle::ObjectLiteral)
+        }
+        value if is_output_format_default(&value) => Ok(MapStyle::default()),
+        value => Err(invalid_output_format_option("map_style", &value)),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn render_output_format_with_op(
+    output_format: &io::owned::ai::OutputFormat,
+    prefix: io::BexExternalValue,
+    or_splitter: io::BexExternalValue,
+    enum_value_prefix: io::BexExternalValue,
+    hoisted_class_prefix: io::BexExternalValue,
+    always_hoist_enums: io::BexExternalValue,
+    quote_class_fields: io::BexExternalValue,
+    hoist_classes: io::BexExternalValue,
+    map_style: io::BexExternalValue,
+    render_null_as: io::BexExternalValue,
+) -> SysOpOutput<String> {
+    let options: Result<crate::output_format::RenderOptions, VmRustFnError> = (|| {
+        Ok(crate::output_format::RenderOptions {
+            prefix: output_format_string_setting("prefix", prefix, true)?,
+            or_splitter: output_format_string_setting("or_splitter", or_splitter, false)?,
+            enum_value_prefix: output_format_string_setting(
+                "enum_value_prefix",
+                enum_value_prefix,
+                true,
+            )?,
+            hoisted_class_prefix: output_format_string_setting(
+                "hoisted_class_prefix",
+                hoisted_class_prefix,
+                true,
+            )?,
+            hoist_classes: output_format_hoist_classes(hoist_classes)?,
+            always_hoist_enums: output_format_bool_setting(
+                "always_hoist_enums",
+                always_hoist_enums,
+            )?,
+            map_style: output_format_map_style(map_style)?,
+            quote_class_fields: output_format_bool_setting(
+                "quote_class_fields",
+                quote_class_fields,
+            )?,
+            render_null_as: output_format_string_setting("render_null_as", render_null_as, false)?,
+        })
+    })();
+
+    let options = match options {
+        Ok(options) => options,
+        Err(error) => return SysOpOutput::err(error),
+    };
+    let content = unwrap_output_format(output_format);
+    match crate::output_format::render_output_format_content(&content, &options) {
+        Ok(rendered) => SysOpOutput::ok(rendered),
+        Err(error) => SysOpOutput::err(VmBamlError::RenderPrompt {
+            message: error.to_string(),
+        }),
+    }
+}
+
+/// Look up an LLM function's declared return type by name.
+pub fn get_return_type_op(
+    function_name: &str,
+    ctx: &SysOpContext,
+) -> SysOpOutput<::sys_types::SapTy> {
+    let outcome = lookup_llm_function(function_name, &ctx.llm_functions);
+    let sys_types::ResolveOutcome::Found(_, info) = outcome else {
+        return SysOpOutput::err(llm_function_lookup_error(function_name, &outcome));
+    };
+    SysOpOutput::ok(info.return_type.clone())
+}
+
+/// Wrap an `OutputFormatContent` into the generated `owned::ai::OutputFormat` handle.
 fn wrap_output_format(
-    content: std::sync::Arc<sys_llm::OutputFormatContent>,
-) -> io::owned::prompt::OutputFormat {
-    io::owned::prompt::OutputFormat {
-        _data: content as std::sync::Arc<dyn std::any::Any + Send + Sync>,
+    content: std::sync::Arc<crate::output_format::OutputFormatContent>,
+) -> io::owned::ai::OutputFormat {
+    io::owned::ai::OutputFormat {
+        _data: content as std::sync::Arc<dyn bex_vm_types::BexRustData>,
     }
 }
 
-/// Unwrap a generated `owned::prompt::OutputFormat` handle back to its `OutputFormatContent`.
+/// Unwrap a generated `owned::ai::OutputFormat` handle back to its `OutputFormatContent`.
 #[allow(clippy::used_underscore_binding)]
 fn unwrap_output_format(
-    owned: &io::owned::prompt::OutputFormat,
-) -> std::sync::Arc<sys_llm::OutputFormatContent> {
+    owned: &io::owned::ai::OutputFormat,
+) -> std::sync::Arc<crate::output_format::OutputFormatContent> {
+    use bex_vm_types::RustDataArc as _;
     owned
         ._data
         .clone()
-        .downcast::<sys_llm::OutputFormatContent>()
+        .downcast_payload::<crate::output_format::OutputFormatContent>()
         .expect("OutputFormat._data downcast failed: expected Arc<OutputFormatContent>. This indicates a bug in wrap_output_format or a type mismatch.")
 }
 
@@ -823,15 +1214,56 @@ fn unwrap_output_format(
 /// retain the generated defaults.
 struct DefaultIoOps;
 
+impl io::IoClassReflectPackage for DefaultIoOps {
+    fn _compile(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _files: indexmap::IndexMap<String, String>,
+        _packages: indexmap::IndexMap<String, io::owned::reflect::Package>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::reflect::CompileArtifact> {
+        // BexEngine intercepts this operation and delegates to its injected
+        // RuntimeCompiler before the provider table is consulted.
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "runtime-compiler".to_string(),
+            message: "runtime compiler is not installed".to_string(),
+        })
+    }
+}
+
+impl io::IoClassReflectSession for DefaultIoOps {
+    fn _compile(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _session: io::owned::reflect::Session,
+        _source: String,
+        _type_arg_0: ::sys_types::SapTy,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::reflect::CompileArtifact> {
+        // BexEngine intercepts Session compilation for the same reason as
+        // Package.compile: the concrete compiler is injected above sys_ops.
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "runtime-compiler".to_string(),
+            message: "runtime compiler is not installed".to_string(),
+        })
+    }
+}
+
+impl io::IoNamespaceReflect for DefaultIoOps {}
+
 impl io::IoClassFsFile for DefaultIoOps {
-    fn text(
+    fn read(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _f: io::owned::fs::File,
+        _n: i64,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+    ) -> SysOpOutput<Option<Vec<u8>>> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -842,31 +1274,8 @@ impl io::IoClassFsFile for DefaultIoOps {
         _f: io::owned::fs::File,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn read(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _n: i64,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn read_bytes(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _n: i64,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -877,7 +1286,8 @@ impl io::IoClassFsFile for DefaultIoOps {
         _f: io::owned::fs::File,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -890,23 +1300,12 @@ impl io::IoClassFsFile for DefaultIoOps {
         _offset: i64,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
-    fn write(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _f: io::owned::fs::File,
-        _data: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-    fn write_bytes(
+    fn write_some(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
@@ -914,7 +1313,20 @@ impl io::IoClassFsFile for DefaultIoOps {
         _data: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn flush(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _f: io::owned::fs::File,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -929,7 +1341,8 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _mode: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::fs::File> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -941,7 +1354,8 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<bool> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -953,7 +1367,8 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -965,7 +1380,8 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -977,7 +1393,8 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -989,7 +1406,8 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1001,7 +1419,8 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1014,7 +1433,8 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _content: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1027,7 +1447,8 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _content: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1039,7 +1460,8 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<io::owned::fs::DirEntry>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1052,8 +1474,37 @@ impl io::IoNamespaceFs for DefaultIoOps {
         _options: io::owned::fs::MkdirOptions,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn chmod(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _path: String,
+        _mode: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
+            message: "File permissions are not supported on this platform".to_string(),
+        })
+    }
+
+    fn symlink(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _target: String,
+        _path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
+            message: "Symbolic links are not supported on this platform".to_string(),
         })
     }
 }
@@ -1066,7 +1517,8 @@ impl io::IoClassHttpResponse for DefaultIoOps {
         _r: io::owned::http::Response,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1077,7 +1529,8 @@ impl io::IoClassHttpResponse for DefaultIoOps {
         _r: io::owned::http::Response,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1090,7 +1543,8 @@ impl io::IoClassHttpResponse for DefaultIoOps {
         _body: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1102,7 +1556,8 @@ impl io::IoClassHttpResponse for DefaultIoOps {
         _headers: indexmap::IndexMap<String, String>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1114,7 +1569,8 @@ impl io::IoClassHttpResponse for DefaultIoOps {
         _data: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1125,7 +1581,8 @@ impl io::IoClassHttpResponse for DefaultIoOps {
         _r: io::owned::http::Response,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1142,7 +1599,8 @@ impl io::IoClassHttpTlsConfig for DefaultIoOps {
         _handshake_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::TlsConfig> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1156,7 +1614,8 @@ impl io::IoClassHttpServer for DefaultIoOps {
         _addr: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Server> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1167,6 +1626,7 @@ impl io::IoClassHttpServer for DefaultIoOps {
         _c: CallId,
         _server: io::owned::http::Server,
         _handler: bex_external_types::Handle,
+        _websocket: bex_external_types::Handle,
         _tls_config: Option<io::owned::http::TlsConfig>,
         _allow_http1: bool,
         _allow_http2: bool,
@@ -1175,7 +1635,8 @@ impl io::IoClassHttpServer for DefaultIoOps {
         _header_read_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1189,7 +1650,8 @@ impl io::IoClassHttpSseStream for DefaultIoOps {
         _s: io::owned::http::SseStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<String>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1200,7 +1662,8 @@ impl io::IoClassHttpSseStream for DefaultIoOps {
         _s: io::owned::http::SseStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1213,9 +1676,11 @@ impl io::IoNamespaceHttp for DefaultIoOps {
         _c: CallId,
         _url: String,
         _timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1225,35 +1690,41 @@ impl io::IoNamespaceHttp for DefaultIoOps {
         _c: CallId,
         _req: io::owned::http::Request,
         _timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::Response> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
-    fn fetch_sse(
+    fn _send_sse(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _req: io::owned::http::Request,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::http::SseStream> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "http".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
 }
 
-impl io::IoClassWsWsStream for DefaultIoOps {
+impl io::IoClassWsWebSocket for DefaultIoOps {
     fn send(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        _stream: io::owned::ws::WsStream,
-        _text: String,
+        _websocket: io::owned::ws::WebSocket,
+        _data: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "websocket".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1262,10 +1733,11 @@ impl io::IoClassWsWsStream for DefaultIoOps {
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        _stream: io::owned::ws::WsStream,
+        _websocket: io::owned::ws::WebSocket,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<String>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+    ) -> SysOpOutput<BexExternalValue> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "websocket".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1274,10 +1746,13 @@ impl io::IoClassWsWsStream for DefaultIoOps {
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        _stream: io::owned::ws::WsStream,
+        _websocket: io::owned::ws::WebSocket,
+        _code: i64,
+        _reason: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "websocket".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1292,8 +1767,9 @@ impl io::IoNamespaceWs for DefaultIoOps {
         _headers: indexmap::IndexMap<String, String>,
         _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<io::owned::ws::WsStream> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+    ) -> SysOpOutput<io::owned::ws::WebSocket> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "websocket".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1308,32 +1784,34 @@ impl io::IoClassNetTcpStream for DefaultIoOps {
         _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::net::TcpStream> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "network".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
-    fn _read(
+    fn read(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _s: io::owned::net::TcpStream,
-        _timeout_nanos: Arc<num_bigint::BigInt>,
+        _limit: i64,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+    ) -> SysOpOutput<Option<Vec<u8>>> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "network".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
-    fn _write(
+    fn write_some(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
         _s: io::owned::net::TcpStream,
         _data: Vec<u8>,
-        _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "network".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1344,7 +1822,8 @@ impl io::IoClassNetTcpStream for DefaultIoOps {
         _s: io::owned::net::TcpStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "network".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1358,7 +1837,8 @@ impl io::IoClassNetTcpListener for DefaultIoOps {
         _addr: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::net::TcpListener> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "network".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1369,7 +1849,8 @@ impl io::IoClassNetTcpListener for DefaultIoOps {
         _l: io::owned::net::TcpListener,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::net::TcpStream> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "network".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1380,7 +1861,8 @@ impl io::IoClassNetTcpListener for DefaultIoOps {
         _l: io::owned::net::TcpListener,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "network".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1394,7 +1876,8 @@ impl io::IoClassNetUdpSocket for DefaultIoOps {
         _addr: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::net::UdpSocket> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "network".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1408,7 +1891,8 @@ impl io::IoClassNetUdpSocket for DefaultIoOps {
         _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "network".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1420,7 +1904,8 @@ impl io::IoClassNetUdpSocket for DefaultIoOps {
         _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::net::Datagram> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "network".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1431,7 +1916,8 @@ impl io::IoClassNetUdpSocket for DefaultIoOps {
         _s: io::owned::net::UdpSocket,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "network".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1447,7 +1933,8 @@ impl io::IoNamespaceEnv for DefaultIoOps {
         _key: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<String>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "environment".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1461,7 +1948,8 @@ impl io::IoNamespaceIo for DefaultIoOps {
         _prompt: Option<String>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "stdio".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1472,7 +1960,8 @@ impl io::IoNamespaceIo for DefaultIoOps {
         _s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "stdio".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1483,7 +1972,8 @@ impl io::IoNamespaceIo for DefaultIoOps {
         _s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "stdio".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1494,7 +1984,8 @@ impl io::IoNamespaceIo for DefaultIoOps {
         _s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "stdio".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1505,38 +1996,14 @@ impl io::IoNamespaceIo for DefaultIoOps {
         _s: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "stdio".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
 }
 
 impl io::IoClassSysProcess for DefaultIoOps {
-    fn write_stdin(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _process: io::owned::sys::Process,
-        _data: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
-    fn close_stdin(
-        &self,
-        _h: &Arc<BexHeap>,
-        _c: CallId,
-        _process: io::owned::sys::Process,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Operation not supported on this platform".to_string(),
-        })
-    }
-
     fn wait(
         &self,
         _h: &Arc<BexHeap>,
@@ -1544,7 +2011,8 @@ impl io::IoClassSysProcess for DefaultIoOps {
         _process: io::owned::sys::Process,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ProcessExit> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1556,7 +2024,8 @@ impl io::IoClassSysProcess for DefaultIoOps {
         _process: io::owned::sys::Process,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1572,15 +2041,17 @@ impl io::IoClassSysProcess for DefaultIoOps {
     }
 }
 
-impl io::IoClassSysProcessLineStream for DefaultIoOps {
-    fn _next(
+impl io::IoClassSysReadPipe for DefaultIoOps {
+    fn read(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        _processlinestream: io::owned::sys::ProcessLineStream,
+        _readpipe: io::owned::sys::ReadPipe,
+        _limit: i64,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<String>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+    ) -> SysOpOutput<Option<Vec<u8>>> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1589,10 +2060,55 @@ impl io::IoClassSysProcessLineStream for DefaultIoOps {
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        _processlinestream: io::owned::sys::ProcessLineStream,
+        _readpipe: io::owned::sys::ReadPipe,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::ok(())
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+impl io::IoClassSysWritePipe for DefaultIoOps {
+    fn write_some(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _writepipe: io::owned::sys::WritePipe,
+        _data: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn flush(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _writepipe: io::owned::sys::WritePipe,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn close(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _writepipe: io::owned::sys::WritePipe,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
 
@@ -1617,7 +2133,8 @@ impl io::IoNamespaceSys for DefaultIoOps {
         _options: Option<io::owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ShellOutput> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1631,7 +2148,8 @@ impl io::IoNamespaceSys for DefaultIoOps {
         _options: Option<io::owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::Process> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1644,19 +2162,28 @@ impl io::IoNamespaceSys for DefaultIoOps {
         _options: Option<io::owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ShellOutput> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
 
-    fn sleep(
+    fn _sleep(
         &self,
         _h: &Arc<BexHeap>,
         _c: CallId,
-        _delay: BexExternalValue,
+        _delay_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "timer".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+
+    fn pid(&self, _h: &Arc<BexHeap>, _c: CallId, _ctx: &SysOpContext) -> SysOpOutput<i64> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process-id".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1671,7 +2198,8 @@ impl io::IoClassGlobGlob for DefaultIoOps {
         _root: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<String>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1684,7 +2212,8 @@ impl io::IoClassGlobGlob for DefaultIoOps {
         _path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<bool> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1698,7 +2227,8 @@ impl io::IoNamespaceGlob for DefaultIoOps {
         _pattern: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::glob::Glob> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "filesystem".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1711,11 +2241,12 @@ impl io::IoNamespaceHost for DefaultIoOps {
         _call_id: CallId,
         _handle: BexExternalValue,
         _args: Vec<BexExternalValue>,
-        _type_arg_0: baml_type::RuntimeTy,
-        _type_arg_1: baml_type::RuntimeTy,
+        _type_arg_0: ::sys_types::SapTy,
+        _type_arg_1: ::sys_types::SapTy,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "host-callable".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1728,7 +2259,8 @@ impl io::IoClassTimeInstant for DefaultIoOps {
         _c: CallId,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::time::Instant> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "clock".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1741,7 +2273,8 @@ impl io::IoNamespaceTime for DefaultIoOps {
         _c: CallId,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "timezone-database".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1754,7 +2287,8 @@ impl io::IoNamespaceTime for DefaultIoOps {
         _at_ns: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<i64>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "timezone-database".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1768,7 +2302,8 @@ impl io::IoNamespaceTime for DefaultIoOps {
         _disambiguation: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<Arc<num_bigint::BigInt>>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "timezone-database".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -1797,12 +2332,111 @@ impl io::IoClassRandomSystemRandom for DefaultIoOps {
 
 impl io::IoNamespaceRandom for DefaultIoOps {}
 
+impl io::IoNamespaceAiInternal for DefaultIoOps {
+    fn render_output_format(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        return_type: ::sys_types::SapTy,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        render_output_format_op(&return_type, ctx)
+    }
+    fn build_output_format(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        return_type: ::sys_types::SapTy,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::ai::OutputFormat> {
+        build_output_format_op(&return_type, ctx)
+    }
+    fn get_return_type(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        function_name: String,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<::sys_types::SapTy> {
+        get_return_type_op(&function_name, ctx)
+    }
+    fn _gcp_access_token(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _credentials_json: Option<String>,
+        _scope: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "gcp-credentials".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn _gcp_project_id(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _credentials_json: Option<String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "gcp-credentials".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn _gcp_quota_project_id(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _credentials_json: Option<String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "gcp-credentials".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn _aws_sign_request(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _request: BexExternalValue,
+        _service: String,
+        _region: Option<String>,
+        _profile: Option<String>,
+        _access_key_id: Option<String>,
+        _secret_access_key: Option<String>,
+        _session_token: Option<String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "aws-credentials".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+    fn _aws_resolve_region(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        _region: Option<String>,
+        _profile: Option<String>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "aws-credentials".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
 impl io::IoPackageBaml for DefaultIoOps {}
 
 /// Builder for composing an [`io::SysOps`] table by overriding namespaces.
 ///
-/// Starts with all operations returning `Unsupported` (except LLM, which uses
-/// the blanket implementation), and allows selectively overriding namespaces:
+/// Starts with every operation panicking with `baml.panics.HostUnavailable`
+/// (except LLM, which uses the blanket implementation), and allows selectively
+/// overriding namespaces:
 ///
 /// ```ignore
 /// let ops = IoSysOpsBuilder::new()
@@ -1815,12 +2449,32 @@ pub struct IoSysOpsBuilder {
 }
 
 impl IoSysOpsBuilder {
-    /// Create a new builder with all operations defaulting to `Unsupported`,
-    /// except LLM ops which use the real blanket implementation.
+    /// Create a new builder with all operations defaulting to a
+    /// `baml.panics.HostUnavailable` panic, except LLM ops which use the real
+    /// blanket implementation.
+    ///
+    /// Every operation not overridden afterwards panics — including ones a
+    /// host may never think about (`baml.time.Instant.now`, `random`, the
+    /// per-class `fs::File`/`http::Response` readers). A host that wants a
+    /// working platform with a few operations *intercepted* wants
+    /// [`IoSysOpsBuilder::from_ops`] instead.
     pub fn new() -> Self {
         Self {
             inner: io::SysOps::from_impl(DefaultIoOps),
         }
+    }
+
+    /// Start from an existing table — typically `SysOps::native()` — and
+    /// override individual namespaces on top of it.
+    ///
+    /// This is the right base for an *interposing* host (the playground
+    /// intercepts HTTP, env and IO to route them through its UI, and wants
+    /// the platform's real behavior for everything else): the set of
+    /// operations it must not break is open-ended and grows with the
+    /// standard library, so it cannot be enumerated at the call site.
+    #[must_use]
+    pub fn from_ops(ops: io::SysOps) -> Self {
+        Self { inner: ops }
     }
 
     /// Consume the builder and return the composed [`io::SysOps`] table.
@@ -1930,28 +2584,10 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_fs_write_bytes(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_fs_file_text = {
+        self.inner.baml_fs_baml_io_read_for_file_read = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_file_text(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_fs_file_bytes = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_file_bytes(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_fs_file_read = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_file_read(heap, permit, args, ctx, call_id)
-            })
-        };
-        self.inner.baml_fs_file_read_bytes = {
-            let t = instance.clone();
-            Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_file_read_bytes(heap, permit, args, ctx, call_id)
+                t.__glue_baml_fs_baml_io_read_for_file_read(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_file_close = {
@@ -1966,16 +2602,16 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_fs_file_seek_from(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_fs_file_write = {
+        self.inner.baml_fs_baml_io_write_for_file_write_some = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_file_write(heap, permit, args, ctx, call_id)
+                t.__glue_baml_fs_baml_io_write_for_file_write_some(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_fs_file_write_bytes = {
+        self.inner.baml_fs_baml_io_write_for_file_flush = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_fs_file_write_bytes(heap, permit, args, ctx, call_id)
+                t.__glue_baml_fs_baml_io_write_for_file_flush(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_fs_read_dir = {
@@ -1985,9 +2621,21 @@ impl IoSysOpsBuilder {
             })
         };
         self.inner.baml_fs_mkdir = {
-            let t = instance;
+            let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_fs_mkdir(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_chmod = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_chmod(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_fs_symlink = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_fs_symlink(heap, permit, args, ctx, call_id)
             })
         };
         self
@@ -2071,10 +2719,10 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_http_response_bytes(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_http_fetch_sse = {
+        self.inner.baml_http__send_sse = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_http_fetch_sse(heap, permit, args, ctx, call_id)
+                t.__glue_baml_http__send_sse(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_http_ssestream_next = {
@@ -2183,16 +2831,18 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_net_tcpstream__connect(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_tcpstream__read = {
+        self.inner.baml_net_baml_io_read_for_tcpstream_read = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_tcpstream__read(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_baml_io_read_for_tcpstream_read(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_net_tcpstream__write = {
+        self.inner.baml_net_baml_io_write_for_tcpstream_write_some = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_net_tcpstream__write(heap, permit, args, ctx, call_id)
+                t.__glue_baml_net_baml_io_write_for_tcpstream_write_some(
+                    heap, permit, args, ctx, call_id,
+                )
             })
         };
         self.inner.baml_net_tcpstream_close = {
@@ -2259,10 +2909,68 @@ impl IoSysOpsBuilder {
         mut self,
         instance: Arc<dyn io::IoNamespaceSys + Send + Sync + 'static>,
     ) -> Self {
+        self.inner.baml_sys_process_wait = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_process_wait(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_process_kill = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_process_kill(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_process_close = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_process_close(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_readpipe_close = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_readpipe_close(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_baml_io_read_for_readpipe_read = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_baml_io_read_for_readpipe_read(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_writepipe_close = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_writepipe_close(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_baml_io_write_for_writepipe_write_some = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_baml_io_write_for_writepipe_write_some(
+                    heap, permit, args, ctx, call_id,
+                )
+            })
+        };
+        self.inner.baml_sys_baml_io_write_for_writepipe_flush = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_baml_io_write_for_writepipe_flush(
+                    heap, permit, args, ctx, call_id,
+                )
+            })
+        };
         self.inner.baml_sys_exec = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
                 t.__glue_baml_sys_exec(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_start_process = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_start_process(heap, permit, args, ctx, call_id)
             })
         };
         self.inner.baml_sys_shell = {
@@ -2271,10 +2979,22 @@ impl IoSysOpsBuilder {
                 t.__glue_baml_sys_shell(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_sys_sleep = {
+        self.inner.baml_sys__sleep = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_sys_sleep(heap, permit, args, ctx, call_id)
+                t.__glue_baml_sys__sleep(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_collect_garbage = {
+            let t = instance.clone();
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_collect_garbage(heap, permit, args, ctx, call_id)
+            })
+        };
+        self.inner.baml_sys_pid = {
+            let t = instance;
+            Arc::new(move |heap, permit, args, ctx, call_id| {
+                t.__glue_baml_sys_pid(heap, permit, args, ctx, call_id)
             })
         };
         self
@@ -2331,16 +3051,18 @@ impl IoSysOpsBuilder {
         mut self,
         instance: Arc<dyn io::IoNamespaceRandom + Send + Sync + 'static>,
     ) -> Self {
-        self.inner.baml_random_systemrandom_rng_random = {
+        self.inner.baml_random_rng_for_systemrandom_random = {
             let t = instance.clone();
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_random_systemrandom_rng_random(heap, permit, args, ctx, call_id)
+                t.__glue_baml_random_rng_for_systemrandom_random(heap, permit, args, ctx, call_id)
             })
         };
-        self.inner.baml_random_systemrandom_rng_random_int = {
+        self.inner.baml_random_rng_for_systemrandom_random_int = {
             let t = instance;
             Arc::new(move |heap, permit, args, ctx, call_id| {
-                t.__glue_baml_random_systemrandom_rng_random_int(heap, permit, args, ctx, call_id)
+                t.__glue_baml_random_rng_for_systemrandom_random_int(
+                    heap, permit, args, ctx, call_id,
+                )
             })
         };
         self
@@ -2357,14 +3079,16 @@ use ::bex_heap::{BexExternalValue, BexHeap};
 use ::std::sync::Arc;
 // Re-export io::SysOps as the primary SysOps type.
 use ::sys_types::{
-    CallId, LlmFunctionInfo, SysOpContext, SysOpOutput, VmBamlError, VmPanic, VmRustFnError,
+    CallId, LlmFunctionInfo, SysOpContext, SysOpOutput, VmBamlError, VmInternalError, VmPanic,
+    VmRustFnError,
 };
 pub use io::SysOps;
 
 /// Builder for composing a [`SysOps`] table by overriding namespaces.
 ///
-/// Starts with the built-in prompt/SAP implementations and otherwise returns
-/// `Unsupported`, then allows selectively overriding namespaces.
+/// Starts with the built-in prompt/SAP implementations and otherwise panics
+/// with `baml.panics.HostUnavailable`, then allows selectively overriding
+/// namespaces.
 pub type SysOpsBuilder = IoSysOpsBuilder;
 
 #[cfg(test)]
@@ -2391,59 +3115,59 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_unsupported_returns_error() {
-        use bex_vm_types::errors::{VmBamlError, VmRustFnError};
+    async fn test_host_unavailable_returns_panic() {
+        use bex_vm_types::errors::{VmPanic, VmRustFnError};
         use sys_types::SysOpResult;
 
         let heap = test_heap();
         let ctx = test_ctx();
-        let op = SysOps::unsupported(SysOp::BamlSysShell);
+        let op = SysOps::host_unavailable(SysOp::BamlSysShell);
         let permit = test_permit().await;
         let result = op(&heap, permit.proof(), vec![], &ctx, CallId::next());
         match result {
             SysOpResult::Ready(Err(e)) => {
                 assert!(matches!(
                     e.payload,
-                    sys_types::OpErrorPayload::Vm(VmRustFnError::BamlError(
-                        VmBamlError::Unsupported { .. }
+                    sys_types::OpErrorPayload::Vm(VmRustFnError::Panic(
+                        VmPanic::HostUnavailable { .. }
                     ))
                 ));
                 assert_eq!(e.fn_name, SysOp::BamlSysShell);
             }
-            _ => panic!("Expected Unsupported error"),
+            _ => panic!("Expected HostUnavailable panic"),
         }
     }
 
     #[tokio::test]
-    async fn test_all_unsupported() {
-        use bex_vm_types::errors::{VmBamlError, VmRustFnError};
+    async fn test_all_host_unavailable() {
+        use bex_vm_types::errors::{VmPanic, VmRustFnError};
         use sys_types::{OpError, SysOpResult};
 
         let heap = test_heap();
         let ctx = test_ctx();
-        let ops = SysOps::all_unsupported();
+        let ops = SysOps::all_host_unavailable();
         let permit = test_permit().await;
 
-        // Test fs_open returns Unsupported
+        // Test fs_open panics with HostUnavailable
         let result = (ops.baml_fs_open)(&heap, permit.proof(), vec![], &ctx, CallId::next());
         assert!(matches!(
             result,
             SysOpResult::Ready(Err(OpError {
                 fn_name: SysOp::BamlFsOpen,
-                payload: sys_types::OpErrorPayload::Vm(VmRustFnError::BamlError(
-                    VmBamlError::Unsupported { .. }
+                payload: sys_types::OpErrorPayload::Vm(VmRustFnError::Panic(
+                    VmPanic::HostUnavailable { .. }
                 )),
             }))
         ));
 
-        // Test shell returns Unsupported
+        // Test shell panics with HostUnavailable
         let result = (ops.baml_sys_shell)(&heap, permit.proof(), vec![], &ctx, CallId::next());
         assert!(matches!(
             result,
             SysOpResult::Ready(Err(OpError {
                 fn_name: SysOp::BamlSysShell,
-                payload: sys_types::OpErrorPayload::Vm(VmRustFnError::BamlError(
-                    VmBamlError::Unsupported { .. }
+                payload: sys_types::OpErrorPayload::Vm(VmRustFnError::Panic(
+                    VmPanic::HostUnavailable { .. }
                 )),
             }))
         ));
@@ -2453,7 +3177,7 @@ mod tests {
     async fn test_sys_ops_get() {
         use sys_types::SysOpResult;
 
-        let ops = SysOps::all_unsupported();
+        let ops = SysOps::all_host_unavailable();
         let heap = test_heap();
         let ctx = test_ctx();
         let permit = test_permit().await;

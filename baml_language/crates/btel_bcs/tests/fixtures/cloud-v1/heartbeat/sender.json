@@ -1,0 +1,35 @@
+{
+  "fixture_version": 1,
+  "description": "Advisory heartbeat wire examples; credentials and origin are synthetic.",
+  "url": "https://bcs.example.invalid/v1/recordings/07070707070707070707070707070707/heartbeat",
+  "method": "POST",
+  "headers": {
+    "authorization": "Bearer fixture-token",
+    "content-type": "application/json"
+  },
+  "policy": {
+    "interval_ms": 1000,
+    "staleness_threshold_ms": 3000
+  },
+  "response": {
+    "status": 204,
+    "body": ""
+  },
+  "requests": [
+    {
+      "producer_session_id": "00000000-0000-4000-8000-000000000001",
+      "liveness_sequence": 1,
+      "state": "RUNNING"
+    },
+    {
+      "producer_session_id": "00000000-0000-4000-8000-000000000001",
+      "liveness_sequence": 2,
+      "state": "DRAINING"
+    },
+    {
+      "producer_session_id": "00000000-0000-4000-8000-000000000001",
+      "liveness_sequence": 3,
+      "state": "DISABLED"
+    }
+  ]
+}

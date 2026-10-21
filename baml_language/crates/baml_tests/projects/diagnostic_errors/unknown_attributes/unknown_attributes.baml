@@ -1,0 +1,30 @@
+// Attributes are a fixed vocabulary: a name the language does not define is
+// an error at the position it was written, never a pass-through annotation.
+
+class Person {
+  name string @custom("field-extra")
+  @@vendor.tag
+}
+
+enum Color {
+  Red @custom("variant-extra")
+  @@custom("enum-extra")
+}
+
+// Nothing applies to an interface, its fields, or a function.
+interface Shaped {
+  label: string @custom
+  @@custom
+}
+
+@@internal.uses(vm)
+function helper(value: string) -> string {
+  value
+}
+
+// A known attribute with the wrong argument shape stores nothing.
+class Malformed {
+  a string @description
+  b string @description(unquoted)
+  c string @skip("why")
+}

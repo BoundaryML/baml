@@ -1,32 +1,18 @@
 name: BAML Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      force_publish_vscode:
-        description: "Force publish to VSCode Marketplace and Open VSX"
-        type: boolean
-        required: false
-        default: false
-  # need to run this periodically on the default branch to populate the build cache
-  schedule:
-    # daily at 2am PST
-    - cron: 0 10 * * *
   push:
     tags:
-      - "test-release/*.*"
-      - "*.*"
-    branches:
-      - tool-update
-      - aaron/fixbuild
-      # - aaron/promptfiddle-fix
+      - "*.*.*-engine"
+
 concurrency:
   # No suffix specified - in reusable workflows we need a statically-defined suffix
   # to prevent workflow_call workflows from triggering a concurrency deadlock
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-release
+  cancel-in-progress: false
 
 permissions:
+  actions: read
   contents: read
   id-token: write
 
@@ -41,40 +27,118 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
       version_string: ${{ steps.set-version.outputs.version }}
-      is_release_tag: ${{ steps.set-version.outputs.is_release_tag }}
+      is_release: ${{ steps.set-version.outputs.is_release }}
     steps:
+      - uses: actions/checkout@v7
       - name: Set Version Info
         id: set-version
+        env:
+          REF: ${{ github.ref }}
         run: |
-          VERSION="0.1.0" # Default version
-          IS_RELEASE="false"
-          REF_NAME="${{ github.ref_name }}"
-          REF_TYPE="${{ github.ref_type }}"
+          set -euo pipefail
 
-          if [[ "$REF_TYPE" == "branch" ]]; then
-            # If it's a branch, keep the version as the default
-            : # No-op, version remains "canary"
-          elif [[ "$REF_TYPE" == "tag" ]];
-          then
-            # Use sanitized tag name for version initially
-            VERSION=$(echo "$REF_NAME" | sed 's|/|-|g')
-            # Check if it's a release tag matching vX.Y.Z
-            if [[ "$REF_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              IS_RELEASE="true"
-              # Use the exact tag name for releases
-              VERSION="$REF_NAME"
-            fi
+          VERSION="$(awk '/^current_version =/ { print $3; exit }' tools/versions/engine.cfg)"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "tools/versions/engine.cfg must contain an unprefixed semantic current_version such as 0.226.2" >&2
+            exit 1
           fi
 
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "is_release_tag=$IS_RELEASE" >> $GITHUB_OUTPUT
-          echo "Determined version: $VERSION"
-          echo "Is release tag: $IS_RELEASE"
+          EXPECTED_REF="refs/tags/$VERSION-engine"
+          if [[ "$REF" != "$EXPECTED_REF" ]]; then
+            echo "Engine release tag $REF does not match tools/versions/engine.cfg; expected $EXPECTED_REF" >&2
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "is_release=true" >> "$GITHUB_OUTPUT"
+          echo "Version: $VERSION"
+          echo "Trigger tag: $REF"
+          echo "Production release: true"
+          {
+            echo "### Engine release plan"
+            echo
+            echo "- Version: \`$VERSION\`"
+            echo "- Trigger tag: \`$REF\`"
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Production release: \`true\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify source is the current green canary commit
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const sourceSha = context.sha;
+            const canary = await github.rest.git.getRef({
+              owner,
+              repo,
+              ref: "heads/canary",
+            });
+            const canarySha = canary.data.object.sha;
+            if (sourceSha !== canarySha) {
+              throw new Error(`Trigger tag commit ${sourceSha} is not current canary ${canarySha}`);
+            }
+
+            const runs = await github.paginate(
+              github.rest.actions.listWorkflowRunsForRepo,
+              {
+                owner,
+                repo,
+                head_sha: sourceSha,
+                status: "success",
+                per_page: 100,
+              },
+            );
+            const sourceCi = runs.find((run) => {
+              if (run.name !== "BAML Runtime" || run.path !== ".github/workflows/primary.yml") {
+                return false;
+              }
+              if (run.event === "push" && run.head_branch === "canary") {
+                return true;
+              }
+              return run.event === "merge_group" && run.head_branch.startsWith("gh-readonly-queue/canary/");
+            });
+            if (sourceCi === undefined) {
+              throw new Error(`Current canary ${sourceSha} has no successful BAML Runtime push or merge-queue run`);
+            }
+
+            core.info(`Verified current canary ${sourceSha} with successful CI run ${sourceCi.html_url}`);
+      - name: Verify source versions
+        env:
+          VERSION: ${{ steps.set-version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          for config in tools/versions/*.cfg; do
+            configured_version="$(awk '/^current_version =/ { print $3; exit }' "$config")"
+            if [[ "$configured_version" != "$VERSION" ]]; then
+              echo "$config contains $configured_version, expected $VERSION" >&2
+              exit 1
+            fi
+          done
+
+          if ! grep -Fq "## [$VERSION]" CHANGELOG.md; then
+            echo "CHANGELOG.md does not contain a $VERSION release entry" >&2
+            exit 1
+          fi
+      - name: Verify release tags do not exist
+        env:
+          VERSION: ${{ steps.set-version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          refs="$(git ls-remote --tags origin "refs/tags/$VERSION" "refs/tags/v$VERSION")"
+          if [[ -n "$refs" ]]; then
+            echo "A release tag for $VERSION already exists. Re-run failed jobs in the original workflow run, or use a new patch version." >&2
+            echo "$refs" >&2
+            exit 1
+          fi
 
   build-python-release:
+    needs: determine-version
     uses: ./.github/workflows/build-python-release.reusable.yaml
 
   build-typescript-release:
+    needs: determine-version
     uses: ./.github/workflows/build-typescript-release.reusable.yaml
 
   build-cli:
@@ -89,12 +153,14 @@ jobs:
     uses: ./.github/workflows/build-vscode-release.reusable.yaml
     with:
       version: ${{ needs.determine-version.outputs.version_string }}
-      is_release_build: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
+      is_release_build: true
 
   build-jetbrains-release:
+    needs: determine-version
     uses: ./.github/workflows/build-jetbrains-release.reusable.yaml
 
   integ-tests:
+    needs: determine-version
     uses: ./.github/workflows/integ-tests.yml
 
   all-builds:
@@ -107,18 +173,148 @@ jobs:
       - build-cli
       - build-vscode-reusable
       - build-jetbrains-release
+      # We deliberately do not block on integ-tests, they're too flaky right now.
+      # - integ-tests
     steps:
       - run: echo "::do-nothing::" >/dev/null
 
+  create-release-tag:
+    name: Create annotated release tags
+    environment: release
+    permissions:
+      contents: write
+    # All release builds must succeed before either tag is created.
+    needs: [all-builds, determine-version]
+    if: ${{ needs.determine-version.outputs.is_release == 'true' }}
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.determine-version.outputs.version_string }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Create or verify annotated tags
+        uses: actions/github-script@v9
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const version = process.env.VERSION;
+            const runUrl = process.env.RUN_URL;
+            const sourceSha = context.sha;
+            const tags = [version, `v${version}`];
+            const message = `BAML v0 release: ${version}\n\nSource: ${sourceSha}\nWorkflow: ${runUrl}`;
+
+            async function getRef(tag) {
+              try {
+                return await github.rest.git.getRef({ owner, repo, ref: `tags/${tag}` });
+              } catch (error) {
+                if (error.status === 404) {
+                  return null;
+                }
+                throw error;
+              }
+            }
+
+            async function verifyTag(tag) {
+              const ref = await getRef(tag);
+              if (ref === null) {
+                return false;
+              }
+              if (ref.data.object.type !== "tag") {
+                throw new Error(`Remote tag ${tag} is lightweight; refusing to replace it`);
+              }
+
+              const tagObject = await github.rest.git.getTag({
+                owner,
+                repo,
+                tag_sha: ref.data.object.sha,
+              });
+              if (tagObject.data.tag !== tag) {
+                throw new Error(`Remote tag ${tag} points to an annotated tag object named ${tagObject.data.tag}`);
+              }
+              if (tagObject.data.object.type !== "commit" || tagObject.data.object.sha !== sourceSha) {
+                throw new Error(`Remote tag ${tag} does not target expected commit ${sourceSha}; refusing to move it`);
+              }
+              if (!tagObject.data.message.split(/\r?\n/).includes(`Workflow: ${runUrl}`)) {
+                throw new Error(`Remote tag ${tag} was not created by this workflow run; refusing to reuse it`);
+              }
+
+              core.info(`Verified existing annotated tag ${tag} at ${sourceSha}`);
+              return true;
+            }
+
+            async function verifyTagWithRetry(tag) {
+              const maxAttempts = 5;
+              for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+                if (await verifyTag(tag)) {
+                  return true;
+                }
+                if (attempt < maxAttempts) {
+                  const delayMs = 2000 * attempt;
+                  core.info(`Tag ${tag} is not visible yet; retrying verification in ${delayMs}ms`);
+                  await new Promise((resolve) => setTimeout(resolve, delayMs));
+                }
+              }
+              return false;
+            }
+
+            for (const tag of tags) {
+              if (await verifyTag(tag)) {
+                continue;
+              }
+
+              const tagObject = await github.rest.git.createTag({
+                owner,
+                repo,
+                tag,
+                message,
+                object: sourceSha,
+                type: "commit",
+                tagger: {
+                  name: "github-actions[bot]",
+                  email: "41898282+github-actions[bot]@users.noreply.github.com",
+                  date: new Date().toISOString(),
+                },
+              });
+
+              let createRefError = null;
+              try {
+                await github.rest.git.createRef({
+                  owner,
+                  repo,
+                  ref: `refs/tags/${tag}`,
+                  sha: tagObject.data.sha,
+                });
+              } catch (error) {
+                createRefError = error;
+                core.warning(`Creating ref for ${tag} failed; verifying remote state before failing`);
+              }
+
+              if (!(await verifyTagWithRetry(tag))) {
+                if (createRefError !== null) {
+                  throw createRefError;
+                }
+                throw new Error(`Remote tag ${tag} is still absent after verification retries`);
+              }
+            }
+
+            // This job is the publishing barrier: it succeeds only after both refs exist and are verified.
+            for (const tag of tags) {
+              if (!(await verifyTag(tag))) {
+                throw new Error(`Remote tag ${tag} is absent after tag creation`);
+              }
+            }
+            core.info(`Both annotated release tags exist at ${sourceSha}; publishing may proceed`);
+
   publish-to-pypi:
     environment: release
-    needs: [all-builds, determine-version]
-    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
+    # create-release-tag guarantees that both annotated refs exist before any publishing begins.
+    needs: [create-release-tag, determine-version]
+    if: ${{ needs.determine-version.outputs.is_release == 'true' }}
     # Must use GitHub-hosted runner due to permissions issues with GitHub/npm OIDC trusted publishing
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.8"
       - uses: actions/download-artifact@v8
@@ -144,23 +340,22 @@ jobs:
 
   publish-to-npm:
     environment: release
-    needs: [all-builds, determine-version]
-    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
+    needs: [create-release-tag, determine-version]
+    if: ${{ needs.determine-version.outputs.is_release == 'true' }}
     # Must use GitHub-hosted runner due to permissions issues with GitHub/npm OIDC trusted publishing
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
 
       - name: Setup Node.js
-        uses: ./.github/actions/setup-node
+        uses: ./.github/actions/engine-setup-node
         with:
-          node-action-version: "v6"
           node-version: latest
 
       - name: Ensure npm CLI supports trusted publishing
@@ -190,14 +385,14 @@ jobs:
   #   if: ${{ startsWith(github.ref, 'refs/tags/') }}
   #   runs-on: ubuntu-latest
   #   steps:
-  #     - uses: actions/checkout@v6
+  #     - uses: actions/checkout@v7
 
   #     - uses: rubygems/configure-rubygems-credentials@main
   #       with:
   #         # https://rubygems.org/profile/oidc/api_key_roles/rg_oidc_akr_p6x4xz53qtk948na3bgy
   #         role-to-assume: rg_oidc_akr_p6x4xz53qtk948na3bgy
 
-  #     - uses: jdx/mise-action@v2
+  #     - uses: jdx/mise-action@v4.2.4
 
   #     - uses: actions/download-artifact@v8
   #       with:
@@ -215,12 +410,12 @@ jobs:
 
   publish-to-crates-io:
     environment: release
-    needs: [all-builds, determine-version]
-    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
+    needs: [create-release-tag, determine-version]
+    if: ${{ needs.determine-version.outputs.is_release == 'true' }}
     # Must use GitHub-hosted runner due to permissions issues with GitHub/npm OIDC trusted publishing
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -237,29 +432,28 @@ jobs:
         run: |
           # Use cargo-release to publish all crates in dependency order
           # Version is explicitly set from the git tag (e.g., 0.216.0)
-          # --no-tag: Don't create git tags (release is triggered by existing tag)
+          # --no-tag: Don't create git tags (create-release-tag owns both release tags)
           # --no-push: Don't push to remote
           # --no-confirm: Non-interactive mode
           # --execute: Actually perform the release (not a dry run)
           # --no-verify: Skip build verification (already verified in CI)
-          cargo release ${{ needs.determine-version.outputs.version_string }} --no-tag --no-push --no-confirm --execute --no-verify
+          # --allow-branch HEAD: Tag checkouts are detached, so cargo-release reports the branch as HEAD
+          cargo release ${{ needs.determine-version.outputs.version_string }} --allow-branch HEAD --no-tag --no-push --no-confirm --execute --no-verify
 
   publish-to-open-vsx:
     environment: release
-    needs: [determine-version, all-builds]
+    needs: [create-release-tag, determine-version]
     # Must use GitHub-hosted runner due to permissions issues with GitHub/npm OIDC trusted publishing
     runs-on: ubuntu-latest
-    if: ${{ (needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
+    if: ${{ needs.determine-version.outputs.is_release == 'true' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
       - name: Setup Node.js
-        uses: ./.github/actions/setup-node
+        uses: ./.github/actions/engine-setup-node
         with:
-          node-action-version: "v6"
-          install_dependencies: false
-          npm-token: ${{ secrets.NPM_TOKEN }}
+          install-dependencies: false
       - name: Download VSIX artifacts
         uses: actions/download-artifact@v8
         with:
@@ -275,20 +469,18 @@ jobs:
 
   publish-to-vscode-marketplace:
     environment: release
-    needs: [determine-version, all-builds]
+    needs: [create-release-tag, determine-version]
     # Must use GitHub-hosted runner due to permissions issues with GitHub/npm OIDC trusted publishing
     runs-on: ubuntu-latest
-    if: ${{ (needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
+    if: ${{ needs.determine-version.outputs.is_release == 'true' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
       - name: Setup Node.js
-        uses: ./.github/actions/setup-node
+        uses: ./.github/actions/engine-setup-node
         with:
-          node-action-version: "v6"
-          install_dependencies: false
-          npm-token: ${{ secrets.NPM_TOKEN }}
+          install-dependencies: false
       - name: Download VSIX artifacts
         uses: actions/download-artifact@v8
         with:
@@ -304,12 +496,12 @@ jobs:
 
   publish-to-jetbrains-marketplace:
     environment: release
-    needs: [determine-version, all-builds]
+    needs: [create-release-tag, determine-version]
     # Must use GitHub-hosted runner due to permissions issues with GitHub/npm OIDC trusted publishing
     runs-on: ubuntu-latest
-    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
+    if: ${{ needs.determine-version.outputs.is_release == 'true' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Setup Tools
         uses: ./.github/actions/setup-tools
       - name: Setup Java
@@ -331,11 +523,12 @@ jobs:
     environment: release
     permissions:
       contents: write
-    needs: [all-builds, determine-version]
+    needs: [create-release-tag, determine-version]
+    if: ${{ needs.determine-version.outputs.is_release == 'true' }}
     # Must use GitHub-hosted runner due to permissions issues with GitHub/npm OIDC trusted publishing
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Download all baml-cli artifacts
         uses: actions/download-artifact@v8
         with:
@@ -365,17 +558,15 @@ jobs:
       - name: Prepare changelog
         run: |
           touch CHANGELOG.txt
-          if [[ "${{ needs.determine-version.outputs.is_release_tag }}" == "true" ]]; then
-            awk '/^## \[/{if (p) exit; if ($2 == "[${{ needs.determine-version.outputs.version_string }}]") p=1} p' CHANGELOG.md | sed '1d' > CHANGELOG.txt
-          fi
+          awk '/^## \[/{if (p) exit; if ($2 == "[${{ needs.determine-version.outputs.version_string }}]") p=1} p' CHANGELOG.md | sed '1d' > CHANGELOG.txt
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: BAML v0 ${{ needs.determine-version.outputs.version_string }}
           tag_name: ${{ needs.determine-version.outputs.version_string }}
           body_path: CHANGELOG.txt
-          draft: ${{ needs.determine-version.outputs.is_release_tag == 'false' }}
-          prerelease: ${{ needs.determine-version.outputs.is_release_tag == 'false' }}
+          draft: false
+          prerelease: false
           files: |
             cli-artifacts/**/*
             cffi-artifacts/**/*
@@ -386,8 +577,8 @@ jobs:
           generate_release_notes: false
 
   publish-to-zed-extensions:
-    needs: [all-builds, determine-version]
-    if: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
+    needs: [create-release-tag, determine-version]
+    if: ${{ needs.determine-version.outputs.is_release == 'true' }}
     uses: ./.github/workflows/publish-zed-release.reusable.yaml
     secrets:
       SAM_BAML_ZED_GITHUB_TOKEN: ${{ secrets.SAM_BAML_ZED_GITHUB_TOKEN }}

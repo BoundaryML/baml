@@ -14,9 +14,7 @@
 //!    ```
 //!
 //! That's it. Delivery, crash-safety, opt-out, retries, and rate concerns
-//! are all handled underneath. Validate with
-//! `BAML_TELEMETRY_DEBUG=1 cargo run -- <cmd>`, which prints the payload
-//! to stderr instead of sending it.
+//! are all handled underneath.
 //!
 //! ## Architecture (for the curious)
 //!
@@ -44,7 +42,7 @@
 //!
 //!   - No HTTP on any user-visible code path, ever.
 //!   - Never fail or interfere with a command: every error is swallowed.
-//!   - Respect opt-out: `DO_NOT_TRACK`, `BAML_TELEMETRY_DISABLED`, and the
+//!   - Respect opt-out: `DO_NOT_TRACK` and the
 //!     persistent `enabled = false` in `telemetry.toml` (a flush child
 //!     that finds opt-out deletes the backlog instead of sending it).
 

@@ -5,17 +5,17 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × mismatched types
-    ╭─[main.baml:16:9]
+    ╭─[main.baml:16:16]
  16 │         let t: T => "T",
-    ·         ────┬───
-    ·             ╰── expected `string | int`, found `T`
+    ·                ┬
+    ·                ╰── expected `int | string`, found `T`
     ╰────
 
   [type] E0001
 
   × mismatched types
-    ╭─[main.baml:30:9]
+    ╭─[main.baml:30:16]
  30 │         let p: DeadPair<T, T> => "pair",
-    ·         ──────────┬──────────
-    ·                   ╰── expected `DeadPair<int, string>`, found `DeadPair<T, T>`
+    ·                ───────┬──────
+    ·                       ╰── expected `DeadPair<int, string>`, found `DeadPair<T, T>`
     ╰────

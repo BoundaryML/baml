@@ -8,6 +8,7 @@ use baml_compiler_lexer::lex_file;
 use baml_compiler_syntax::SyntaxNode;
 use rowan::GreenNode;
 
+mod function_union;
 mod parser;
 pub use parser::parse_file;
 
@@ -15,9 +16,11 @@ pub use parser::parse_file;
 #[salsa::tracked]
 pub struct ParseResult<'db> {
     #[tracked]
+    #[returns(clone)]
     pub green: GreenNode,
 
     #[tracked]
+    #[returns(clone)]
     pub errors: Vec<ParseError>,
 }
 
@@ -26,7 +29,7 @@ pub struct ParseResult<'db> {
 /// Note: We can't make this take Vec<Token> directly because Salsa tracked
 /// functions can only take Salsa-tracked types as input. So we take `SourceFile`,
 /// call `lex_file` (tracked), then call `parse_file` (not tracked) with the tokens.
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn parse_result(db: &dyn salsa::Database, file: SourceFile) -> ParseResult<'_> {
     let tokens = lex_file(db, file);
     let (green, errors) = parse_file(&tokens);

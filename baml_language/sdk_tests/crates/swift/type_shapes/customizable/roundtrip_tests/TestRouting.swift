@@ -2,8 +2,8 @@
 // port of python_pydantic2 `roundtrip_tests/test_routing.py`: root
 // (`Baml`), `a`, `a.b`, `lorem`, and `ipsum` leaves.
 //
-// The `baml.http.Response`-typed round trips in `lorem` are covered by
-// the streams suite (Phase 5) — they need an engine-minted handle.
+// The `baml.http.Response` arms in `lorem` need an engine-minted handle;
+// the handle round trip is covered by TestHandles.swift.
 import XCTest
 import Baml
 
@@ -50,5 +50,10 @@ final class TestRouting: XCTestCase {
     func test_routing_round_trip_lorem_resume_from_ipsum() throws {
         let r = Baml.lorem.Resume(name: "grace", email: "g@x.com")
         XCTAssertEqual(try Baml.ipsum.round_trip_lorem_resume_from_ipsum(r: r), r)
+    }
+
+    func test_routing_round_trip_resume_or_http_response() throws {
+        let r = Baml.lorem.Resume(name: "lovelace", email: "a@x.com")
+        XCTAssertEqual(try Baml.lorem.round_trip_resume_or_http_response(u: .t0(r)), .t0(r))
     }
 }

@@ -11,8 +11,10 @@ bridge_ctypes = { workspace = true }
 indexmap = { workspace = true }
 prost = { workspace = true }
 
-[build-dependencies]
-sdk_test_harness_setup = { path = "../../harness_setup" }
+
+[dev-dependencies]
+baml_version = { workspace = true }
+sdk_test_harness_runner = { path = "../../harness_runner" }
 
 [package.metadata.ci]
 wasm_support = false

@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0007
+
+  × field `name` is an interface field on `Named`, not a concrete field on class `Linked`; use obj.as<Named>.name
+    ╭─[interface_field_requires_projection.baml:16:5]
+ 16 │     l.name
+    ·     ──────
+    ╰────
+
+  [type] E0007
+
+  × field `name` is an interface field on `Named`, not a concrete field on class `Linked`; use obj.as<Named>.name
+    ╭─[interface_field_requires_projection.baml:20:21]
+ 20 │     let s: string = l.name;
+    ·                     ──────
+    ╰────

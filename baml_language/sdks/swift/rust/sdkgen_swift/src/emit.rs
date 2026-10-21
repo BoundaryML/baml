@@ -5,7 +5,7 @@
 
 use std::fmt::Write as _;
 
-use baml_codegen_types::{Class, Enum, Function, Name, Symbol, Ty, TypeAlias};
+use baml_sdkgen_types::{Class, Enum, Function, Name, Symbol, Ty, TypeAlias};
 
 use crate::{
     escape_ident,
@@ -43,14 +43,12 @@ pub(crate) fn render_type_alias(
         return None;
     }
     let target = translate_ty(&alias.resolves_to, ctx)?;
-    // `$stream` companion aliases strip the suffix like companion
-    // classes do (they route under stream_types, so no collision).
-    let name = escape_ident(key.bare_name());
+    let name = escape_ident(key.name().as_str());
     Some(format!("public typealias {name} = {target}\n"))
 }
 
 pub(crate) fn render_enum(enum_: &Enum, key: &Name) -> String {
-    let name = escape_ident(key.bare_name());
+    let name = escape_ident(key.name().as_str());
     let fqn = key.to_string();
     let doc = enum_
         .docstring
@@ -106,9 +104,7 @@ pub(crate) fn render_class(
     fields: &[RenderedField],
     methods: &[String],
 ) -> String {
-    // `$stream` companion classes strip the suffix (they route under
-    // the stream_types namespace, so no collision with the base type).
-    let name = escape_ident(key.bare_name());
+    let name = escape_ident(key.name().as_str());
     let fqn = key.to_string();
     let doc = class
         .docstring
@@ -266,6 +262,7 @@ pub(crate) enum FnKind {
 /// method is `<class FQN>.<method name>`.
 pub(crate) fn render_callable(
     fqn: &str,
+    binding_name: &str,
     function: &Function,
     kind: FnKind,
     ctx: &TranslateCtx,
@@ -289,15 +286,10 @@ pub(crate) fn render_callable(
         },
     }
 
-    let raw_name = function.name.as_str();
-    // `$` is not a Swift identifier character. Companion names map it
-    // to `_`: `classify$stream` → `classify_stream`, `$build_request`
-    // → `_build_request`, `$parse$stream` → `_parse_stream`. The wire
-    // FQN keeps the `$` names verbatim. A `$stream` companion is an
-    // ordinary function whose return type is `ai.stream.Stream<P, F>`
-    // (→ BamlStream) — no special streaming emission exists.
-    let bare: String = raw_name.replace('$', "_");
-    let bare = bare.as_str();
+    // The caller allocates a collision-safe Swift name for this scope.
+    // The wire FQN keeps `@` verbatim; an `@stream` companion remains an
+    // ordinary function returning `ai.stream.Stream<T>` (→ BamlStream).
+    let bare = binding_name;
 
     // Generic functions/methods: emit a Swift generic signature when
     // every TypeVar appears in a required-parameter position — the
@@ -359,7 +351,17 @@ pub(crate) fn render_callable(
         ..
     } = &function.return_type
     {
-        Some(render_returned_callable(callable_params, ret, ctx)?)
+        Some(render_returned_callable(
+            callable_params,
+            ret,
+            ctx,
+            &format!("_BamlReturned_{:016x}", {
+                use std::hash::{Hash, Hasher};
+                let mut hash = std::collections::hash_map::DefaultHasher::new();
+                fqn.hash(&mut hash);
+                hash.finish()
+            }),
+        )?)
     } else {
         None
     };
@@ -367,12 +369,13 @@ pub(crate) fn render_callable(
         // `never` (diverging: panic/exit) spells as a void function —
         // the call only ever returns by throwing (Python maps both
         // void and never to `None` the same way).
-        Ty::Void { .. } | Ty::Never { .. } => None,
+        Ty::Never => None,
+        ret if ret.is_unit() => None,
         Ty::Function { .. } => Some(returned_callable.as_ref()?.0.clone()),
         other => Some(translate_ty(other, ctx)?),
     };
 
-    let param_list = params
+    let application_param_list = params
         .iter()
         .map(|p| match p {
             Param::Required { name, ty } => format!("{name}: {ty}"),
@@ -384,6 +387,19 @@ pub(crate) fn render_callable(
         .collect::<Vec<_>>()
         .join(", ");
 
+    let mut control_name = "baml".to_string();
+    while function
+        .arguments
+        .iter()
+        .any(|arg| arg.name.as_str() == control_name)
+    {
+        control_name.push('_');
+    }
+    let param_list = if application_param_list.is_empty() {
+        format!("{control_name}: Baml.BamlOptions = .init()")
+    } else {
+        format!("{application_param_list}, {control_name}: Baml.BamlOptions = .init()")
+    };
     // Required args inline into the array literal; optional slots
     // append conditionally (`.unset` omits the kwarg, Python-style).
     // Instance methods pass the receiver as required kwarg 0.
@@ -408,23 +424,32 @@ pub(crate) fn render_callable(
             args_setup.push_str(wrapper);
         }
     }
+    // The local that collects the wire arguments must not shadow a parameter.
+    let mut args_name = "args".to_string();
+    while function
+        .arguments
+        .iter()
+        .any(|arg| arg.name.as_str() == args_name)
+    {
+        args_name.push('_');
+    }
     if has_optionals {
         let _ = writeln!(
             args_setup,
-            "\tvar args: [(Swift.String, (any BamlEncodable)?)] = [{required_pairs}]"
+            "\tvar {args_name}: [(Swift.String, (any BamlEncodable)?)] = [{required_pairs}]"
         );
         for p in &params {
             if let Param::Optional { name, .. } = p {
                 let _ = writeln!(
                     args_setup,
-                    "\t{name}._appendIfSet(\"{}\", to: &args)",
+                    "\t{name}._appendIfSet(\"{}\", to: &{args_name})",
                     name.trim_matches('`')
                 );
             }
         }
     }
     let args_expr = if has_optionals {
-        "args".to_string()
+        args_name
     } else {
         format!("[{required_pairs}]")
     };
@@ -455,20 +480,26 @@ pub(crate) fn render_callable(
     } else {
         "static "
     };
+    if fqn == "trace.current_context" {
+        let ret_ty = ret.as_ref()?;
+        return Some(format!(
+            "{doc}public {static_kw}func {fn_name}({param_list}) throws -> {ret_ty} {{ _ = Baml._initialized; return try BamlRuntime.shared.currentTraceContext() }}\n\n{doc}public {static_kw}func {async_name}({param_list}) async throws -> {ret_ty} {{ _ = Baml._initialized; return try BamlRuntime.shared.currentTraceContext() }}\n"
+        ));
+    }
     match &ret {
         Some(ret_ty) => {
-            if let Some((_, closure)) = &returned_callable {
+            if let Some((_, closure, definition)) = &returned_callable {
                 let _ = write!(
                     out,
-                    "{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws -> {ret_ty} {{\n\
+                    "{definition}\n{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws -> {ret_ty} {{\n\
                      \t_ = Baml._initialized\n\
-                     {args_setup}\tlet _raw = try BamlRuntime.shared.callRawSync(\"{fqn}\", args: {args_expr})\n\
+                     {args_setup}\tlet _raw = try BamlRuntime.shared.callRawSync(\"{fqn}\", args: {args_expr}, baml: try {control_name}.lowered())\n\
                      \tlet _function = try BamlFunctionHandle.decode(_raw)\n\
                      {closure}\n\
                      }}\n\n\
                      {doc}public {static_kw}func {async_name}{generic_sig}({param_list}) async throws -> {ret_ty} {{\n\
                      \t_ = Baml._initialized\n\
-                     {args_setup}\tlet _raw = try await BamlRuntime.shared.callRaw(\"{fqn}\", args: {args_expr})\n\
+                     {args_setup}\tlet _raw = try await BamlRuntime.shared.callRaw(\"{fqn}\", args: {args_expr}, baml: try {control_name}.lowered())\n\
                      \tlet _function = try BamlFunctionHandle.decode(_raw)\n\
                      {closure}\n\
                      }}\n"
@@ -478,11 +509,11 @@ pub(crate) fn render_callable(
                     out,
                     "{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws -> {ret_ty} {{\n\
                      \t_ = Baml._initialized\n\
-                     {args_setup}\treturn try BamlRuntime.shared.callSync(\"{fqn}\", args: {args_expr})\n\
+                     {args_setup}\treturn try BamlRuntime.shared.callSync(\"{fqn}\", args: {args_expr}, baml: try {control_name}.lowered())\n\
                      }}\n\n\
                      {doc}public {static_kw}func {async_name}{generic_sig}({param_list}) async throws -> {ret_ty} {{\n\
                      \t_ = Baml._initialized\n\
-                     {args_setup}\treturn try await BamlRuntime.shared.call(\"{fqn}\", args: {args_expr})\n\
+                     {args_setup}\treturn try await BamlRuntime.shared.call(\"{fqn}\", args: {args_expr}, baml: try {control_name}.lowered())\n\
                      }}\n"
                 );
             }
@@ -492,11 +523,11 @@ pub(crate) fn render_callable(
                 out,
                 "{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws {{\n\
                  \t_ = Baml._initialized\n\
-                 {args_setup}\ttry BamlRuntime.shared.callSyncVoid(\"{fqn}\", args: {args_expr})\n\
+                 {args_setup}\ttry BamlRuntime.shared.callSyncVoid(\"{fqn}\", args: {args_expr}, baml: try {control_name}.lowered())\n\
                  }}\n\n\
                  {doc}public {static_kw}func {async_name}{generic_sig}({param_list}) async throws {{\n\
                  \t_ = Baml._initialized\n\
-                 {args_setup}\ttry await BamlRuntime.shared.callVoid(\"{fqn}\", args: {args_expr})\n\
+                 {args_setup}\ttry await BamlRuntime.shared.callVoid(\"{fqn}\", args: {args_expr}, baml: try {control_name}.lowered())\n\
                  }}\n"
             );
         }
@@ -511,14 +542,10 @@ pub(crate) fn render_callable(
 /// same reason).
 pub(crate) fn ty_contains_type_var(ty: &Ty, name: &str) -> bool {
     match ty {
-        Ty::TypeVar(v, _) => v.as_str() == name,
-        Ty::List(inner, _) => ty_contains_type_var(inner, name),
-        Ty::Map { key, value, .. } => {
-            ty_contains_type_var(key, name) || ty_contains_type_var(value, name)
-        }
-        Ty::Union(members, _) => members.iter().any(|m| ty_contains_type_var(m, name)),
-        Ty::Class(_, args, _) => args.iter().any(|a| ty_contains_type_var(a, name)),
-        _ => false,
+        Ty::TypeVar(v) => v.as_str() == name,
+        // These values are opaque or unsupported, so do not infer from their types.
+        Ty::Function { .. } | Ty::Interface(..) | Ty::Future(..) => false,
+        _ => baml_sdkgen_types::any_type_child(ty, |child| ty_contains_type_var(child, name)),
     }
 }
 
@@ -545,7 +572,7 @@ pub(crate) fn render_recursive_union_alias(
     arms: &[Ty],
     ctx: &TranslateCtx,
 ) -> Option<String> {
-    let name = escape_ident(key.bare_name());
+    let name = escape_ident(key.name().as_str());
     let arm_tys: Vec<String> = {
         let mut tys = Vec::new();
         for arm in arms {
@@ -637,7 +664,7 @@ pub(crate) fn render_recursive_union_alias(
     out.push_str("\t\t}\n");
     out.push_str("\t\tif let fqn = v.wireClassFQN() {\n");
     for (i, arm) in arms.iter().enumerate() {
-        if let Ty::Class(class_name, _, _) = arm {
+        if let Ty::Class(class_name, _) = arm {
             let _ = writeln!(
                 out,
                 "\t\t\tif fqn == \"{class_name}\" {{ return .t{i}(try {}._bamlDecode(v)) }}",
@@ -664,9 +691,10 @@ pub(crate) fn render_recursive_union_alias(
 /// Unqualified leaf names of a throws contract, for doc rendering.
 fn thrown_leaf_names(ty: &Ty) -> Vec<String> {
     match ty {
-        Ty::Class(name, _, _) => vec![format!("`{}`", name.bare_name())],
-        Ty::Enum(name, _) | Ty::TypeAlias(name, _) => vec![format!("`{}`", name.bare_name())],
-        Ty::Union(members, _) => members.iter().flat_map(thrown_leaf_names).collect(),
+        Ty::Class(name, _) | Ty::Enum(name) | Ty::TypeAlias(name) => {
+            vec![format!("`{}`", name.name())]
+        }
+        Ty::Union(members) => members.iter().flat_map(thrown_leaf_names).collect(),
         _ => Vec::new(),
     }
 }
@@ -677,7 +705,7 @@ fn thrown_leaf_names(ty: &Ty) -> Vec<String> {
 /// onto the closure's positional/optional parameters.
 fn render_callable_param(
     name: &str,
-    cparams: &[baml_codegen_types::CallableParam],
+    cparams: &[baml_sdkgen_types::CallableParam],
     ret: &Ty,
     ctx: &TranslateCtx,
 ) -> Option<(String, String)> {
@@ -687,12 +715,12 @@ fn render_callable_param(
     let mut positional = 0usize;
     for cp in cparams {
         match cp.mode {
-            baml_codegen_types::CodegenFunctionParamMode::Required => {
+            baml_sdkgen_types::CodegenFunctionParamMode::Required => {
                 sig_parts.push(translate_ty(&cp.ty, ctx)?);
                 invoke_args.push(format!("try _args.required({positional})"));
                 positional += 1;
             }
-            baml_codegen_types::CodegenFunctionParamMode::Optional => {
+            baml_sdkgen_types::CodegenFunctionParamMode::Optional => {
                 let inner = translate_optional_arg_inner(&cp.ty, ctx)?;
                 sig_parts.push(format!("BamlOptional<{inner}>"));
                 let arg_name = cp.name.as_ref()?.as_str();
@@ -702,7 +730,7 @@ fn render_callable_param(
     }
     let invoke = invoke_args.join(", ");
     let (ret_ty, wrapper_body) = match ret {
-        Ty::Void { .. } | Ty::Never { .. } => (
+        ret if ret.is_unit() || matches!(ret, Ty::Never) => (
             "Swift.Void".to_string(),
             format!("try await {name}({invoke})\n\t\treturn BamlNull()._bamlEncode()"),
         ),
@@ -721,72 +749,80 @@ fn render_callable_param(
 }
 
 fn render_returned_callable(
-    params: &[baml_codegen_types::CallableParam],
+    params: &[baml_sdkgen_types::CallableParam],
     ret: &Ty,
     ctx: &TranslateCtx,
-) -> Option<(String, String)> {
-    let mut signature = Vec::with_capacity(params.len());
-    let mut required_args = Vec::new();
-    let mut optional_args = Vec::new();
+    name: &str,
+) -> Option<(String, String, String)> {
+    let mut signature = Vec::new();
+    let mut required = Vec::new();
+    let mut optional = Vec::new();
     for (index, param) in params.iter().enumerate() {
         let local = format!("_arg{index}");
-        let name = param.name.as_ref()?.as_str();
+        let wire_name = param.name.as_ref()?.as_str();
         match param.mode {
-            baml_codegen_types::CodegenFunctionParamMode::Required => {
-                let ty = translate_ty(&param.ty, ctx)?;
-                signature.push(format!("{local}: {ty}"));
-                required_args.push(format!("(\"{name}\", {local})"));
+            baml_sdkgen_types::CodegenFunctionParamMode::Required => {
+                signature.push(format!("_ {local}: {}", translate_ty(&param.ty, ctx)?));
+                required.push(format!("(\"{wire_name}\", {local})"));
             }
-            baml_codegen_types::CodegenFunctionParamMode::Optional => {
-                let ty = translate_optional_arg_inner(&param.ty, ctx)?;
-                signature.push(format!("{local}: BamlOptional<{ty}>"));
-                optional_args.push((local, name.to_string()));
+            baml_sdkgen_types::CodegenFunctionParamMode::Optional => {
+                signature.push(format!(
+                    "_ {local}: BamlOptional<{}> = .unset",
+                    translate_optional_arg_inner(&param.ty, ctx)?
+                ));
+                optional.push(format!(
+                    "        {local}._appendIfSet(\"{wire_name}\", to: &args)\n"
+                ));
             }
         }
     }
-    let ret_ty = match ret {
-        Ty::Void { .. } | Ty::Never { .. } => "Swift.Void".to_string(),
-        other => translate_ty(other, ctx)?,
+    signature.push("baml: Baml.BamlOptions = .init()".into());
+    // A unit or `never` result carries nothing back to the host.
+    let returns_nothing = ret.is_unit() || matches!(ret, Ty::Never);
+    let ret_ty = if returns_nothing {
+        "Swift.Void".into()
+    } else {
+        translate_ty(ret, ctx)?
     };
-    let closure_ty = format!(
-        "@Sendable ({}) async throws -> {ret_ty}",
-        signature
-            .iter()
-            .map(|entry| entry
-                .split_once(':')
-                .map_or(entry.as_str(), |(_, ty)| ty.trim()))
-            .collect::<Vec<_>>()
-            .join(", ")
+    let declarations = signature.join(", ");
+    let setup = format!(
+        "        {} args: [(Swift.String, (any BamlEncodable)?)] = [{}]\n{}",
+        if optional.is_empty() { "let" } else { "var" },
+        required.join(", "),
+        optional.join("")
     );
-    let closure_signature = if signature.is_empty() {
-        format!("() async throws -> {ret_ty}")
+    let decode = if returns_nothing {
+        "        _ = result; return ()".into()
     } else {
-        format!("({}) async throws -> {ret_ty}", signature.join(", "))
+        format!("        return try {ret_ty}._bamlDecode(result)")
     };
-    let mut body = format!("\treturn {{ {closure_signature} in\n");
-    if optional_args.is_empty() {
-        let _ = writeln!(
-            body,
-            "\t\tlet _result = try await _function.callRaw(args: [{}])",
-            required_args.join(", ")
-        );
-    } else {
-        let _ = writeln!(
-            body,
-            "\t\tvar _args: [(Swift.String, (any BamlEncodable)?)] = [{}]",
-            required_args.join(", ")
-        );
-        for (local, name) in optional_args {
-            let _ = writeln!(body, "\t\t{local}._appendIfSet(\"{name}\", to: &_args)");
-        }
-        body.push_str("\t\tlet _result = try await _function.callRaw(args: _args)\n");
+    let definition = format!(
+        "public struct {name}: Sendable {{\n    private let function: BamlFunctionHandle\n    fileprivate init(_ function: BamlFunctionHandle) {{ self.function = function }}\n    public func callAsFunction({declarations}) async throws -> {ret_ty} {{\n{setup}        let result = try await function.callRaw(args: args, baml: try baml.lowered())\n{decode}\n    }}\n    public func callSync({declarations}) throws -> {ret_ty} {{\n{setup}        let result = try function.callRawSync(args: args, baml: try baml.lowered())\n{decode}\n    }}\n}}\n"
+    );
+    Some((
+        name.into(),
+        format!("\treturn {name}(_function)"),
+        definition,
+    ))
+}
+
+#[cfg(test)]
+mod shared_traversal_tests {
+    use super::*;
+
+    #[test]
+    fn value_inference_traverses_containers_but_not_opaque_signatures() {
+        let variable = || Ty::TypeVar(baml_sdkgen_types::ParamTy::new(0, "T".into()));
+        assert!(ty_contains_type_var(&Ty::List(Box::new(variable())), "T"));
+        let callable = Ty::Function {
+            params: Box::new([]),
+            ret: Box::new(variable()),
+            throws: Box::new(Ty::Never),
+        };
+        assert!(!ty_contains_type_var(&callable, "T"));
+        assert!(!ty_contains_type_var(
+            &Ty::Future(Box::new(variable()), Box::new(Ty::Never)),
+            "T"
+        ));
     }
-    match ret {
-        Ty::Void { .. } | Ty::Never { .. } => body.push_str("\t\t_ = _result\n\t\treturn ()\n"),
-        _ => {
-            let _ = writeln!(body, "\t\treturn try {ret_ty}._bamlDecode(_result)");
-        }
-    }
-    body.push_str("\t}");
-    Some((closure_ty, body))
 }

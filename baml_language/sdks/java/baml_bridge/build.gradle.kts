@@ -55,6 +55,11 @@ val bamlVersion = (project.findProperty("bamlVersion") as String?)?.takeIf { it.
 group = "com.boundaryml"
 version = bamlVersion
 
+// Keep the repository license in every published JAR, including classifiers.
+tasks.withType<Jar>().configureEach {
+    from(file("../../../../LICENSE")) { into("META-INF") }
+}
+
 // ---- Per-platform native jar --------------------------------------------
 // The cdylib is shipped in a classifier jar (`natives-<platform>`) at the
 // resource path NativeLibraryLoader reads: /native/<platform>/<mapped-lib-name>.
@@ -149,8 +154,8 @@ tasks.jar {
 tasks.withType<Test> {
     useJUnitPlatform()
     // Propagate the native-library path so the smoke test can System.load it.
-    // BAML_JAVA_BRIDGE_LIB (env) → -Dbaml.bridge.lib (system property).
-    System.getenv("BAML_JAVA_BRIDGE_LIB")?.let { systemProperty("baml.bridge.lib", it) }
+    // BAML_BRIDGE_PATH (env) → -Dbaml.bridge.lib (system property).
+    System.getenv("BAML_BRIDGE_PATH")?.let { systemProperty("baml.bridge.lib", it) }
     testLogging {
         events("failed", "skipped", "passed")
         showExceptions = true

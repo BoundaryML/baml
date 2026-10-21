@@ -1,0 +1,58 @@
+# The atb2 runner on Fly: one machine, one process (runner_loop) that serves
+# "@bammy babysit <PR>" requests from the store and runs the feedback
+# pipeline every five minutes, sharing the volume (cached clone, cargo
+# target, run dirs). One machine on purpose: a Fly volume attaches to one
+# machine, and the pipeline and the requests share the same build cache.
+#
+#   fly deploy tools/atb2 --config tools/atb2/deploy/fly.toml
+#   (from the repo root; the build context is tools/atb2; CI does this on
+#    every push to canary touching tools/atb2)
+#
+# Create the volume once:
+#   fly volumes create atb2_data --size 80 --region sjc -a atb2-runner
+# Secrets: the machine holds one, INFISICAL_TOKEN; the entrypoint pulls the
+# rest from Infisical (boundary-tools, prod) in the root launcher at start:
+#   fly secrets set -a atb2-runner INFISICAL_TOKEN=...   # once
+# Everything the pipeline reads is in that project already: FEEDBACK_SUPABASE_URL/_KEY,
+# ATB_SLACK_BOT_TOKEN, ATB_SLACK_FIX_CHANNEL, ATB_POSTHOG_*, ATB_GITHUB_TOKEN (used as
+# GH_TOKEN). The agent's Claude Code CLI uses its own login on the machine (HOME on the
+# volume; `fly ssh console -a atb2-runner` then
+# `runuser -u atb2 -- env HOME=/data/home claude` to log in once); no Claude
+# credential is stored in Infisical or passed by atb2. CI holds only a Fly deploy token.
+app = "atb2-runner"
+primary_region = "sjc"
+
+[build]
+  dockerfile = "deploy/Dockerfile"
+  # relative to the build context, tools/atb2
+
+[env]
+  ATB2_HOME = "/data"
+  # pin the canary revision the runner builds (a commit sha); unset = origin/canary head
+  # ATB2_CANARY_REV = ""
+  ATB2_DATASET = "live"
+  ATB2_POLL_S = "60"
+  INFISICAL_PROJECT_ID = "bdd280e2-259c-4750-9b16-a8597a67214c"
+  INFISICAL_ENV = "prod"
+
+[processes]
+  runner = "runner_loop(every_s = 300)"
+
+# a panic ends the process; Fly restarts it and the loops resume from the store
+[[restart]]
+  policy = "always"
+  processes = ["runner"]
+
+[[mounts]]
+  source = "atb2_data"
+  destination = "/data"
+  processes = ["runner"]
+
+# the gate runs cargo builds and nextest: give it room
+[[vm]]
+  size = "performance-8x"
+  memory = "32gb"
+  processes = ["runner"]
+
+[checks]
+  # no http surface; liveness is the process itself

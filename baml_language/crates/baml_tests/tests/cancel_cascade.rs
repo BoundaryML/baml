@@ -1,7 +1,9 @@
 //! BEP-034: cancellation race tests.
 //!
 //! Unobserved spawn errors are reported through the host default instead of
-//! being attached to an unrelated `await` or function result.
+//! being attached to an unrelated `await` or function result. This must stay a
+//! Rust test because the native test runner separately reports the unobserved
+//! child as `testing::unhandled_spawn_error`, even when the function returns 99.
 
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;

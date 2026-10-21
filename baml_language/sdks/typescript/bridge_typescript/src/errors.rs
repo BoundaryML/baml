@@ -58,6 +58,12 @@ pub fn bridge_error_to_napi(err: bridge_cffi::error::BridgeError) -> napi::Error
                 "BamlError: BamlInvalidArgumentError: call_id {id} is already in use by an active call"
             ),
         ),
+        err @ (BridgeError::UnknownCallAllocation(_) | BridgeError::InvocationProtocol(_)) => {
+            napi::Error::new(
+                Status::InvalidArg,
+                format!("BamlError: BamlInvalidArgumentError: {err}"),
+            )
+        }
         BridgeError::InvalidCallId => napi::Error::new(
             Status::InvalidArg,
             "BamlError: BamlInvalidArgumentError: call_id must be a nonzero uint64",

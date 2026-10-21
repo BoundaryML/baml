@@ -38,8 +38,10 @@ fn baml_eq(vm: &BexVm, a: Value, b: Value) -> bool {
             // Heap-boxed floats compare by content (the post-tagged-pointer
             // encoding allocates a fresh `Object::Float` per float, so two
             // semantically-equal floats land at distinct `HeapPtr`s and
-            // would otherwise miss the reference-equality fallback).
-            (Object::Float(lf), Object::Float(rf)) => lf == rf,
+            // would otherwise miss the reference-equality fallback), through
+            // the same reflexive equality `==` uses — so `[nan].includes(nan)`
+            // agrees with `nan == nan`.
+            (Object::Float(lf), Object::Float(rf)) => bex_vm_types::float_order::eq(*lf, *rf),
             _ => la == rb,
         }
     } else {
@@ -87,14 +89,14 @@ fn forward_ptr(ptr: &mut HeapPtr, forwarding: &HashMap<HeapPtr, HeapPtr>) {
 /// `.first()` — that is the receiver's `T` — it is the first of the method's two
 /// own generics, i.e. the second-to-last arg. Counting from the back makes it
 /// correct whether or not the prepend fired (e.g. an `unknown`-typed receiver).
-fn map_result_element_ty(vm: &BexVm) -> baml_type::RealizedTy {
+fn map_result_element_ty(vm: &BexVm) -> bex_vm_types::RealizedTy {
     let type_args = vm.current_call_type_args();
     type_args
         .len()
         .checked_sub(2)
         .and_then(|u_index| type_args.get(u_index))
         .cloned()
-        .unwrap_or_else(baml_type::RealizedTy::unknown)
+        .unwrap_or_else(bex_vm_types::RealizedTy::unknown)
 }
 
 /// Extract the callback `HeapPtr` from a `Value` carrying a heap
@@ -122,25 +124,15 @@ fn expect_bool(vm: &BexVm, value: Value) -> Result<bool, NativeCallResult> {
     }
 }
 
-fn expect_int(vm: &BexVm, value: Value) -> Result<i64, NativeCallResult> {
-    if let Some(i) = value.as_int() {
-        Ok(i)
-    } else {
-        Err(NativeCallResult::from(VmInternalError::TypeError {
-            expected: bex_vm_types::types::Type::Int,
-            got: vm.type_of(&value),
-        }))
-    }
-}
-
 // ── Natural-order sort machinery (`baml._rust_sort` fast path) ───────────────
 //
 // `Sortable.sort` routes homogeneous primitive arrays (int/bigint/string/
 // float) here via the `_is_primitive_array` guard; everything else goes
-// through `sort_by` + `_compare_shim`. The float domain orders by
-// `f64::total_cmp` — a total order over all doubles including NaN — kept
-// bit-exact with `_float_total_cmp` (which backs `Comparable for float`), so
-// the fast path and the comparator path can never disagree on an ordering.
+// through `sort_by` with an `a.cmp(b)` comparator. The float domain orders by
+// `float_order::cmp` — BAML's total float order, which gives NaN a defined
+// position — the same definition `baml.ops.Compare for float` and the
+// comparison opcodes use, so the fast path and the comparator path can never
+// disagree on an ordering.
 // The mixed-domain / null / non-primitive rejections below are defensive:
 // `_rust_sort` is only reached for arrays the type system already proved
 // homogeneous primitive.
@@ -180,8 +172,14 @@ fn value_type_name(vm: &BexVm, value: Value) -> String {
     "unknown".to_string()
 }
 
+/// A natural-order sort saw a value its domain cannot order.
+///
+/// `baml._rust_sort` declares `throws never`, and `Sortable.sort` only reaches
+/// it behind the `_is_primitive_array` guard on a homogeneous `T[]`, so every
+/// rejection here is a guard/element-type inconsistency rather than anything
+/// user code can provoke.
 fn invalid_sort(context: &str, message: impl Into<String>) -> VmRustFnError {
-    VmBamlError::InvalidArgument {
+    VmInternalError::BridgeFailure {
         message: format!("{context}: {}", message.into()),
     }
     .into()
@@ -207,8 +205,8 @@ fn natural_kind(vm: &BexVm, context: &str, value: Value) -> Result<NaturalKind, 
         ));
     };
     match vm.get_object(ptr) {
-        // NaN is *not* rejected: the float domain orders by `total_cmp`,
-        // which gives NaN a defined position.
+        // NaN is *not* rejected: the float domain orders by BAML's total
+        // float order, which gives NaN a defined position.
         Object::Float(_) => Ok(NaturalKind::Float),
         Object::Bigint(_) => Ok(NaturalKind::Bigint),
         Object::String(_) => Ok(NaturalKind::String),
@@ -317,9 +315,10 @@ pub(super) fn compare_natural_values(
                     .as_int()
                     .expect("validated int sort value should be int"),
             ),
-        NaturalDomain::Float => {
-            value_as_float_for_sort(vm, left).total_cmp(&value_as_float_for_sort(vm, right))
-        }
+        NaturalDomain::Float => bex_vm_types::float_order::cmp(
+            value_as_float_for_sort(vm, left),
+            value_as_float_for_sort(vm, right),
+        ),
         NaturalDomain::Bigint => {
             value_as_bigint_cow_for_sort(vm, left).cmp(&value_as_bigint_cow_for_sort(vm, right))
         }
@@ -413,7 +412,7 @@ struct MapContinuation {
     results: Vec<Value>,
     /// Result element type — the closure's return type `U` from
     /// `map<U, E>(self, f: (T) -> U) -> U[]`, captured at dispatch time.
-    element_ty: baml_type::RealizedTy,
+    element_ty: bex_vm_types::RealizedTy,
 }
 
 impl Continuation for MapContinuation {
@@ -447,7 +446,7 @@ struct FilterContinuation {
     results: Vec<Value>,
     /// The receiver array's element type `T`, captured at dispatch — `filter`
     /// preserves it (`T[] -> T[]`).
-    element_ty: baml_type::RealizedTy,
+    element_ty: bex_vm_types::RealizedTy,
 }
 
 impl Continuation for FilterContinuation {
@@ -663,7 +662,7 @@ struct FlatMapContinuation {
     results: Vec<Value>,
     /// Result element type — the closure's element return type `U` from
     /// `flat_map<U, E>(self, f: (T) -> U[]) -> U[]`, captured at dispatch time.
-    element_ty: baml_type::RealizedTy,
+    element_ty: bex_vm_types::RealizedTy,
 }
 
 impl Continuation for FlatMapContinuation {
@@ -771,16 +770,23 @@ impl SortByContinuation {
 
 impl Continuation for SortByContinuation {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
-        let cmp = match expect_int(vm, value) {
-            Ok(i) => i,
-            Err(e) => return e,
+        // The comparator is typed `-> baml.ops.Ordering throws never`, so a
+        // non-`Ordering` return is a compiler/VM invariant break rather than a
+        // possible runtime value.
+        let Some(cmp) = super::ops::ordering_from_value(vm, value) else {
+            return NativeCallResult::from(VmInternalError::TypeError {
+                expected: bex_vm_types::types::Type::Object(ObjectType::Variant),
+                got: vm.type_of(&value),
+            });
         };
-        if cmp <= 0 {
-            self.merged.push(self.source[self.left]);
-            self.left += 1;
-        } else {
+        // Stability: take the left run's element unless it strictly follows the
+        // right one, so `Equal` preserves the original relative order.
+        if cmp.is_gt() {
             self.merged.push(self.source[self.right]);
             self.right += 1;
+        } else {
+            self.merged.push(self.source[self.left]);
+            self.left += 1;
         }
         self.advance(vm)
     }
@@ -863,20 +869,6 @@ impl BamlClassArray for PackageBamlImpl {
         // An `end` resolving before `start` yields an empty slice.
         let end = resolve_slice_bound(end, array.len()).max(start);
         array[start..end].to_vec()
-    }
-
-    fn join(vm: &BexVm, array: ArrayView<'_>, separator: &bex_str::BexStr) -> bex_str::BexStr {
-        let sep = separator.as_str();
-        let joined = array
-            .iter()
-            .map(|v| {
-                vm.as_string(v)
-                    .map(|s| s.as_str().to_owned())
-                    .unwrap_or_default()
-            })
-            .collect::<Vec<_>>()
-            .join(sep);
-        bex_str::BexStr::from(joined)
     }
 
     #[allow(clippy::unused_unit)]

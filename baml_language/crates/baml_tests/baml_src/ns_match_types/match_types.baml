@@ -282,6 +282,17 @@ test "match_enum_variant_with_wildcard_matched" {
     assert.equal(classify_status_wildcard(Status.Active), "active")
 }
 
+function classify_nullable_status(s: Status?) -> string {
+    match (s) {
+        Status.Active => "active",
+        _ => "other"
+    }
+}
+
+test "match_nullable_enum_null_uses_wildcard" {
+    assert.equal(classify_nullable_status(null), "other")
+}
+
 // ============================================================================
 // Enum Variant Patterns with 4+ Arms (jump table)
 // ============================================================================

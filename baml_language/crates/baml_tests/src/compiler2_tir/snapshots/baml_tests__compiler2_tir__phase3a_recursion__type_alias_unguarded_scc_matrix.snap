@@ -1,0 +1,21 @@
+---
+source: crates/baml_tests/src/compiler2_tir/phase3a_recursion.rs
+expression: "render_labeled_cases(&[(\"type_alias_direct_self_reference\", \"type A = A\",),\n(\"type_alias_mutual_recursion\", \"type A = B\\ntype B = A\",),\n(\"type_alias_indirect_cycle_three\", \"type A = B\\ntype B = C\\ntype C = A\",),])"
+---
+=== type_alias_direct_self_reference ===
+type user.A = user.A
+  !! 0..10: recursive type alias cycle: A
+
+=== type_alias_mutual_recursion ===
+type user.A = user.B
+  !! 0..10: recursive type alias cycle: A
+type user.B = user.A
+  !! 11..21: recursive type alias cycle: B
+
+=== type_alias_indirect_cycle_three ===
+type user.A = user.B
+  !! 0..10: recursive type alias cycle: A
+type user.B = user.C
+  !! 11..21: recursive type alias cycle: B
+type user.C = user.A
+  !! 22..32: recursive type alias cycle: C

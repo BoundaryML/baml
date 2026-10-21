@@ -1,0 +1,83 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0177
+
+  × `log.info` can only be called directly, not used as a value; to pass it along, wrap the call in a lambda
+    ╭─[call_site_builtin_values.baml:11:13]
+ 11 │     let l = log.info;
+    ·             ────────
+    ╰────
+
+  [type] E0177
+
+  × `log.info` can only be called directly, not used as a value; to pass it along, wrap the call in a lambda
+    ╭─[call_site_builtin_values.baml:16:11]
+ 16 │     apply(log.info)
+    ·           ────────
+    ╰────
+
+  [type] E0177
+
+  × `log.info` can only be called directly, not used as a value; to pass it along, wrap the call in a lambda
+    ╭─[call_site_builtin_values.baml:20:5]
+ 20 │     log.info
+    ·     ────────
+    ╰────
+
+  [type] E0177
+
+  × `log.warn` can only be called directly, not used as a value; to pass it along, wrap the call in a lambda
+    ╭─[call_site_builtin_values.baml:23:69]
+ 23 │ function as_a_parameter_default(f: (unknown) -> void throws never = log.warn) -> void {
+    ·                                                                     ────────
+    ╰────
+
+  [type] E0177
+
+  × `log.debug` can only be called directly, not used as a value; to pass it along, wrap the call in a lambda
+    ╭─[call_site_builtin_values.baml:29:17]
+ 29 │         let l = log.debug;
+    ·                 ─────────
+    ╰────
+
+  [type] E0177
+
+  × `log.info` can only be called directly, not used as a value; to pass it along, wrap the call in a lambda
+    ╭─[call_site_builtin_values.baml:37:5]
+ 37 │     log.info?.("value");
+    ·     ────────
+    ╰────
+
+  [type] E0004
+
+  × did you mean `log.info("value")`? `log.info?.("value")` is unnecessary, because `log.info` cannot be null
+    ╭─[call_site_builtin_values.baml:37:5]
+ 37 │     log.info?.("value");
+    ·     ───────────────────
+    ╰────
+
+  [type] E0177
+
+  × `baml.spawn.__spawn` can only be called directly, not used as a value; to pass it along, wrap the call in a lambda
+    ╭─[call_site_builtin_values.baml:41:18]
+ 41 │     let launch = baml.spawn.__spawn<int, never>;
+    ·                  ──────────────────
+    ╰────
+
+  [type] E0177
+
+  × `baml.future.__await_any` can only be called directly, not used as a value; to pass it along, wrap the call in a lambda
+    ╭─[call_site_builtin_values.baml:46:17]
+ 46 │     let first = baml.future.__await_any<int, never>;
+    ·                 ───────────────────────
+    ╰────
+
+  [type] E0177
+
+  × `reflect.Package.current` can only be called directly, not used as a value; to pass it along, wrap the call in a lambda
+    ╭─[call_site_builtin_values.baml:51:19]
+ 51 │     let current = reflect.Package.current;
+    ·                   ───────────────────────
+    ╰────

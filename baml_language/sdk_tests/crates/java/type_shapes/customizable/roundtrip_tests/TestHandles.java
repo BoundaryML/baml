@@ -22,7 +22,6 @@
 package roundtrip_tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import baml_sdk.baml.fs.File;
@@ -96,7 +95,7 @@ class TestHandles {
             // the Java analog is the static type itself — `open`'s declared
             // return type is already `baml_sdk.baml.fs.File`, so the runtime
             // type is pinned at compile time and needs no separate check.
-            assertNull(f.close());
+            f.close();
         } finally {
             Files.deleteIfExists(path);
             Files.deleteIfExists(dir);
@@ -115,21 +114,18 @@ class TestHandles {
         try {
             f = Fns.open(path.toString(), "r");
 
-            // Two successive reads on the *same* handle must advance the
-            // cursor — the second read continues where the first stopped.
-            // This is the load-bearing assertion: engine-side file state
-            // survives across separate host->engine FFI calls.
-            assertEquals("012", f.read(3L));
-            assertEquals("345", f.read(3L));
+            // Relative seeks verify that separate calls share one engine-side handle.
+            assertEquals(3L, f.seek_from("current", 3L));
+            assertEquals(6L, f.seek_from("current", 3L));
 
             // Seek back to the start and confirm the cursor actually moved.
             assertEquals(0L, f.seek_from("start", 0L));
-            assertEquals("01", f.read(2L));
+            assertEquals(2L, f.seek_from("current", 2L));
 
             // text() reads from the current cursor (now at 2) to EOF.
             assertEquals("23456789", f.text());
 
-            assertNull(f.close());
+            f.close();
             f = null; // closed cleanly; skip the finally-close.
         } finally {
             if (f != null) {

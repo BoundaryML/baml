@@ -9,15 +9,10 @@
 /* ── Scan promptfiddle's own local components ──────────────────────── */
 @source "../playground/**/*.tsx";
 
-/* ── App chrome tokens (promptfiddle page shell only) ──────────────── */
+/* Page-load fallbacks before the VS Code theme initializes */
 @theme inline {
-  --color-app-bg: #0d1117;
-  --color-app-surface: #161b22;
-  --color-app-border: #30363d;
-  --color-app-text: #c9d1d9;
-  --color-app-text-bright: #e6edf3;
-  --color-app-text-muted: #8b949e;
-  --color-app-accent: #58a6ff;
+  --color-app-bg: #171f2b;
+  --color-app-text: #d9dfe7;
 }
 
 /* ── Page-level base styles ────────────────────────────────────────── */
@@ -27,22 +22,14 @@
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   height: 100%;
-  margin: 0;
   padding: 0;
+  margin: 0;
   overflow: hidden;
+  font-family: var(--font-vsc);
+  color: var(--color-app-text);
   color-scheme: dark;
   background: var(--color-app-bg);
-  color: var(--color-app-text);
-  font-family: var(--font-vsc);
 }
-
-a { color: var(--color-app-accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
-
-/* ── Scrollbar ────────────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--color-app-border); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #484f58; }

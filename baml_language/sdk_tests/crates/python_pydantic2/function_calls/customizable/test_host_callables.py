@@ -27,6 +27,10 @@ from baml_sdk.host_callable_tests import (
     call_callback_with_optional_args_partially_set,
     call_int_callback,
     call_repeatedly,
+    call_throwing_void_callback,
+    call_void_callback,
+    call_void_callback_three_args,
+    call_void_callback_two_args,
     call_with_callback,
     call_with_class_callback,
     call_with_throwing,
@@ -36,6 +40,8 @@ from baml_sdk.host_callable_tests import (
     make_adder,
     make_counter,
     make_pair_builder,
+    make_void_callback,
+    make_void_forwarder,
 )
 
 
@@ -83,6 +89,56 @@ def test_baml_closure_is_reusable_and_retains_mutable_captures():
     next_value = make_counter(start=40)
     assert next_value() == 41
     assert next_value() == 42
+
+
+def test_host_callable_void_signatures():
+    """A unit callable has no result to carry in either direction: a host
+    callback returns `None` whatever its arity, and calling a BAML closure
+    returned to the host yields `None`."""
+    seen: list[tuple[object, ...]] = []
+
+    def one(value: int) -> None:
+        seen.append((value,))
+
+    def two(value: int, label: str) -> None:
+        seen.append((value, label))
+
+    def three(value: int, label: str, flag: bool) -> None:
+        seen.append((value, label, flag))
+
+    assert call_void_callback(callback=one, value=1) == 1
+    assert call_void_callback_two_args(callback=two, value=2, label="two") == 2
+    assert (
+        call_void_callback_three_args(
+            callback=three, value=3, label="three", flag=True
+        )
+        == 3
+    )
+
+    assert call_throwing_void_callback(callback=one, value=4) is None
+    raised = ValueError("void failed")
+
+    def failing(_value: int) -> None:
+        raise raised
+
+    with pytest.raises(ValueError) as exc_info:
+        call_throwing_void_callback(callback=failing, value=4)
+    assert exc_info.value is raised
+
+    assert make_void_callback()() is None
+
+    forward = make_void_forwarder(callback=two)
+    assert forward(5, "five") is None
+    assert forward(value=6, label="six") is None
+
+    assert seen == [
+        (1,),
+        (2, "two"),
+        (3, "three", True),
+        (4,),
+        (5, "five"),
+        (6, "six"),
+    ]
 
 
 def test_host_callables_throwing_callable_round_trips_original_python_exception():
@@ -227,18 +283,20 @@ def test_host_callables_multiple_throws_in_flight_do_not_collide_in_registry():
 
 
 @pytest.mark.xfail(
-    reason="host-callable release fires only when the engine GCs the "
-    "Object::HostClosure on its heap; one BAML call rarely triggers "
-    "the GC heuristic, so for now the callable leaks until the engine "
-    "collects.",
+    reason="Python gc.collect() does not collect the BAML engine's heap. "
+    "The engine-owned Object::HostClosure retains the registered Python "
+    "callback until engine GC releases it; this test does not trigger "
+    "engine GC, so immediate callback release is not guaranteed.",
     strict=False,
 )
 def test_host_callables_release_fires_on_drop_of_callable():
-    """After BAML finishes invoking the callable and the engine GCs the
-    `Object::HostClosure` it allocated, the registered release callback
-    removes the Python callable from the bridge's host-value table.
-    Dropping the user's last reference then leaves the object
-    unreachable for the cycle collector.
+    """Probe immediate release after dropping the application's reference.
+
+    This is an expected failure because Python's collector does not trigger
+    engine GC. The bridge registry still owns the Python callback while the
+    engine retains its `Object::HostClosure`. Release follows engine GC, not
+    necessarily completion of this call. This test does not verify eventual
+    release after engine GC.
     """
 
     class CallableObj:

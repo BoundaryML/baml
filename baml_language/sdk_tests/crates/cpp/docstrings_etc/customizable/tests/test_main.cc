@@ -108,8 +108,8 @@ BAML_TEST(main_enum_summary_only_omits_members_section) {
 }
 
 BAML_TEST(main_no_inline_field_or_variant_doc_artifacts) {
-  // Field/variant /// docs live exclusively in the parent's rollup, never
-  // inline per field: each doc line appears exactly once, on the parent.
+  // Field/variant /// docs live exclusively in their parent's rollup, never
+  // inline per field.
   const std::string text = header_text();
   BAML_ASSERT_EQ(CountOccurrences(text, "Title shown in lists"), size_t{1});
   BAML_ASSERT_EQ(CountOccurrences(text, "Smiling face."), size_t{1});

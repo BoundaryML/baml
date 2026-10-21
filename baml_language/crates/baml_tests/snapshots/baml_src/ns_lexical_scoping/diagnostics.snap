@@ -1,0 +1,11 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0063
+
+  ⚠ unreachable arm
+     ╭─[ns_lexical_scoping/lexical_scoping.baml:289:19]
+ 289 │         string => 1
+     ·                   ─
+     ╰────

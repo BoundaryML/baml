@@ -1,4 +1,4 @@
-// Tests for baml.json.to_string<T> / from_string<T>.
+// Tests for baml.json.to_string / from_string<T>.
 //
 // Converted from crates/baml_tests/tests/json_to_from_string.rs.
 //
@@ -7,7 +7,7 @@
 // stored local throws `expected Instance, got Any`).
 //
 // decode_error_path_points_at_missing_field uses `assert.contains(err.path, ...)`
-// (the std `assert.contains` helper) to check the JsonDecodeError path.
+// (the std `assert.contains` helper) to check the baml.json.DecodeError path.
 
 // ─── Simple class round-trip ──────────────────────────────────────────────────
 
@@ -15,7 +15,7 @@ class User { name string  age int }
 
 test "to_string_simple_class" {
     assert.equal(
-        baml.json.to_string<User>(User { name: "Ada", age: 30 }),
+        baml.json.to_string(User { name: "Ada", age: 30 }),
         "{\"name\":\"Ada\",\"age\":30}",
     )
 }
@@ -48,7 +48,7 @@ test "to_string_infers_simple_class" {
 
 function roundtrip_simple_age() -> int {
     let u: User = User { name: "Ada", age: 30 };
-    let s: string = baml.json.to_string<User>(u);
+    let s: string = baml.json.to_string(u);
     let v: User = baml.json.from_string<User>(s);
     v.age
 }
@@ -57,13 +57,212 @@ test "roundtrip_simple" {
     assert.equal(roundtrip_simple_age(), 30)
 }
 
+class BigintRecord { id bigint  exact 42n }
+
+function bigint_record_json_roundtrip_is_exact() -> bool {
+    let expected = 123456789012345678901234567890n;
+    let record = baml.json.from_string<BigintRecord>(
+        "{\"id\":123456789012345678901234567890,\"exact\":42}",
+    );
+    record.id == expected && record.exact == 42n
+}
+
+function bigint_record_numeric_strings_decode_exactly() -> bool {
+    let expected = 123456789012345678901234567890n;
+    let record = baml.json.from_string<BigintRecord>(
+        "{\"id\":\"123456789012345678901234567890\",\"exact\":\"42\"}",
+    );
+    record.id == expected && record.exact == 42n
+}
+
+test "bigint_and_literal_bigint_json_roundtrip" {
+    let large = 123456789012345678901234567890n;
+    let encoded = baml.json.to_string(large);
+    assert.equal(encoded, "123456789012345678901234567890");
+    assert.equal(baml.json.from_string<bigint>(encoded), large);
+    assert.equal(baml.json.from_string<42n>("42"), 42n);
+    assert.is_true(bigint_record_json_roundtrip_is_exact());
+    assert.is_true(bigint_record_numeric_strings_decode_exactly())
+}
+
+test "literal_bigint_json_rejects_wrong_value" {
+    {
+        let wrong: 42n = baml.json.from_string<42n>("43");
+        baml.sys.panic("expected literal bigint mismatch")
+    } catch (e) {
+        baml.json.DecodeError => null
+    };
+    {
+        let wrong: 42n = baml.json.from_string<42n>("\"43\"");
+        baml.sys.panic("expected numeric-string literal bigint mismatch")
+    } catch (e) {
+        baml.json.DecodeError => null
+    }
+}
+
+test "bigint_json_accepts_numeric_strings" {
+    assert.equal(baml.json.from_string<bigint>("\"42\""), 42n);
+    assert.equal(baml.json.from_string<bigint>("\"-42\""), -42n);
+    assert.equal(baml.json.from_string<bigint>("\"+00042\""), 42n);
+    assert.equal(baml.json.from_string<bigint>("\"-0\""), 0n);
+    assert.equal(
+        baml.json.from_string<bigint>("\"123456789012345678901234567890\""),
+        123456789012345678901234567890n,
+    );
+    assert.equal(baml.json.from_string<42n>("\"42\""), 42n)
+}
+
+function bigint_numeric_string_collections_decode_exactly() -> bool {
+    let items = baml.json.from_string<bigint[]>("[\"1\",\"-2\"]");
+    let by_name = baml.json.from_string<map<string, bigint>>("{\"a\":\"9\"}");
+    items.at(0) == 1n && items.at(1) == -2n && by_name.get("a") == 9n
+}
+
+test "bigint_numeric_string_collections" {
+    assert.is_true(bigint_numeric_string_collections_decode_exactly())
+}
+
+function bigint_first_numeric_string_union_selects_bigint() -> bool {
+    let value: bigint | string = baml.json.from_string<bigint | string>("\"42\"");
+    match (value) {
+        let n: bigint => n == 42n
+        _ => false
+    }
+}
+
+function string_first_numeric_string_union_selects_string() -> bool {
+    let value: string | bigint = baml.json.from_string<string | bigint>("\"42\"");
+    match (value) {
+        let s: string => s == "42"
+        _ => false
+    }
+}
+
+test "bigint_numeric_string_union_order" {
+    assert.is_true(bigint_first_numeric_string_union_selects_bigint());
+    assert.is_true(string_first_numeric_string_union_selects_string())
+}
+
+test "bigint_json_rejects_fractions_exponents_and_non_numeric_strings" {
+    {
+        let wrong: bigint = baml.json.from_string<bigint>("12.5");
+        baml.sys.panic("expected fractional JSON number to fail")
+    } catch (e) {
+        baml.json.DecodeError => null
+    };
+    {
+        let wrong: bigint = baml.json.from_string<bigint>("1e3");
+        baml.sys.panic("expected exponential JSON number to fail")
+    } catch (e) {
+        baml.json.DecodeError => null
+    };
+    {
+        let wrong: bigint = baml.json.from_string<bigint>("\"12.5\"");
+        baml.sys.panic("expected fractional numeric string to fail")
+    } catch (e) {
+        baml.json.DecodeError => null
+    };
+    {
+        let wrong: bigint = baml.json.from_string<bigint>("\"1e3\"");
+        baml.sys.panic("expected exponential numeric string to fail")
+    } catch (e) {
+        baml.json.DecodeError => null
+    };
+    {
+        let wrong: bigint = baml.json.from_string<bigint>("\" 42\"");
+        baml.sys.panic("expected whitespace-padded numeric string to fail")
+    } catch (e) {
+        baml.json.DecodeError => null
+    }
+}
+
+test "all_bigint_decoders_accept_numeric_strings" {
+    let j: json = baml.json.parse("\"+00042\"");
+    assert.equal(baml.json.to<bigint>(j), 42n);
+    assert.equal(baml.json.from_json<bigint>(j), 42n);
+    assert.equal(baml.json.deserialize<bigint>("\"+00042\""), 42n);
+    assert.equal(baml.json.to<42n>(j), 42n);
+    assert.equal(baml.json.from_json<42n>(j), 42n);
+    assert.equal(baml.json.deserialize<42n>("\"+00042\""), 42n);
+    assert.equal(
+        baml.json.to<bigint>("-123456789012345678901234567890"),
+        -123456789012345678901234567890n,
+    );
+    assert.equal(baml.json.to<bigint>("-0"), 0n);
+    assert.equal(baml.json.to_string(j), "\"+00042\"");
+    assert.equal(baml.json.to<string>(j), "+00042")
+}
+
+function to_bigint_numeric_string_collections_decode_exactly() -> bool {
+    let records = baml.json.to<BigintRecord[]>(
+        baml.json.parse("[{\"id\":\"123456789012345678901234567890\",\"exact\":\"42\"}]"),
+    );
+    let record = records.at(0);
+    if (record == null) {
+        return false;
+    }
+    let items = baml.json.to<bigint[]>(baml.json.parse("[\"1\",\"-2\"]"));
+    let by_name = baml.json.to<map<string, 42n>>(baml.json.parse("{\"a\":\"42\"}"));
+    let optional = baml.json.to<bigint?>("42");
+    record.id == 123456789012345678901234567890n
+        && record.exact == 42n
+        && items.at(0) == 1n
+        && items.at(1) == -2n
+        && by_name.get("a") == 42n
+        && optional == 42n
+}
+
+test "to_bigint_numeric_string_collections" {
+    assert.is_true(to_bigint_numeric_string_collections_decode_exactly());
+    assert.equal(baml.json.to<bigint?>(null), null)
+}
+
+function to_bigint_first_numeric_string_union_selects_bigint() -> bool {
+    let value = baml.json.to<bigint | string>("42");
+    match (value) {
+        let n: bigint => n == 42n,
+        _ => false,
+    }
+}
+
+function to_string_first_numeric_string_union_selects_string() -> bool {
+    let value = baml.json.to<string | bigint>("42");
+    match (value) {
+        let s: string => s == "42",
+        _ => false,
+    }
+}
+
+test "to_bigint_numeric_string_union_order" {
+    assert.is_true(to_bigint_first_numeric_string_union_selects_bigint());
+    assert.is_true(to_string_first_numeric_string_union_selects_string())
+}
+
+test "to_bigint_rejects_invalid_strings_and_literal_mismatches" {
+    for (let text in ["", "12.5", "1e3", " 42", "0x2a", "hello"]) {
+        {
+            let wrong = baml.json.to<bigint>(text);
+            baml.sys.panic("expected invalid bigint string to fail")
+        } catch (e) {
+            baml.json.DecodeError => null
+        }
+    }
+    ;
+    {
+        let wrong = baml.json.to<42n>("43");
+        baml.sys.panic("expected numeric-string literal bigint mismatch")
+    } catch (e) {
+        baml.json.DecodeError => null
+    }
+}
+
 // ─── Composite generic ─────────────────────────────────────────────────────────
 
 class Container<T> { item T }
 
 function composite_generic_roundtrip_name() -> string {
     let c: Container<User> = Container<User> { item: User { name: "Ada", age: 30 } };
-    let s: string = baml.json.to_string<Container<User>>(c);
+    let s: string = baml.json.to_string(c);
     let d: Container<User> = baml.json.from_string<Container<User>>(s);
     d.item.name
 }
@@ -74,7 +273,7 @@ test "composite_generic_roundtrip" {
 
 // ─── Generic forwarding (mirrors reflect_type_of_generic.rs) ─────────────────
 
-function fetch_as<T>(s: string) -> T throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function fetch_as<T>(s: string) -> T throws baml.json.ParseError | baml.json.DecodeError {
     baml.json.from_string<T>(s)
 }
 
@@ -100,13 +299,13 @@ test "generic_forwarding_composite" {
 
 class UserSimple { name string }
 
-function level1<T>(s: string) -> T throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function level1<T>(s: string) -> T throws baml.json.ParseError | baml.json.DecodeError {
     baml.json.from_string<T>(s)
 }
-function level2<T>(s: string) -> T throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function level2<T>(s: string) -> T throws baml.json.ParseError | baml.json.DecodeError {
     level1<T>(s)
 }
-function level3<T>(s: string) -> T throws baml.json.JsonParseError | baml.json.JsonDecodeError {
+function level3<T>(s: string) -> T throws baml.json.ParseError | baml.json.DecodeError {
     level2<T>(s)
 }
 
@@ -121,8 +320,8 @@ test "three_level_forwarding" {
 
 // ─── Closure captures type-arg ────────────────────────────────────────────────
 
-function make_decoder<T>() -> (string) -> T throws baml.json.JsonParseError | baml.json.JsonDecodeError {
-    return (s: string) -> T throws baml.json.JsonParseError | baml.json.JsonDecodeError { baml.json.from_string<T>(s) }
+function make_decoder<T>() -> (string) -> T throws baml.json.ParseError | baml.json.DecodeError {
+    return (s: string) -> T throws baml.json.ParseError | baml.json.DecodeError { baml.json.from_string<T>(s) }
 }
 
 function closure_captures_type_arg_name() -> string {
@@ -140,7 +339,7 @@ test "closure_captures_type_arg" {
 enum Color { Red Blue }
 
 test "enum_variant_to_string" {
-    assert.equal(baml.json.to_string<Color>(Color.Red), "\"Red\"")
+    assert.equal(baml.json.to_string(Color.Red), "\"Red\"")
 }
 
 function enum_variant_from_string_name() -> string {
@@ -161,13 +360,13 @@ class Profile { nickname string? }
 
 test "optional_field_present" {
     assert.equal(
-        baml.json.to_string<Profile>(Profile { nickname: "ada" }),
+        baml.json.to_string(Profile { nickname: "ada" }),
         "{\"nickname\":\"ada\"}",
     )
 }
 
 test "optional_field_null" {
-    assert.equal(baml.json.to_string<Profile>(Profile { nickname: null }), "{\"nickname\":null}")
+    assert.equal(baml.json.to_string(Profile { nickname: null }), "{\"nickname\":null}")
 }
 
 function optional_field_decode_missing_is_null() -> bool {
@@ -191,7 +390,7 @@ function recursive_class_roundtrip_value() -> int {
             Tree { value: 3, children: [Tree { value: 4, children: [] }] },
         ]
     };
-    let s: string = baml.json.to_string<Tree>(t);
+    let s: string = baml.json.to_string(t);
     let d: Tree = baml.json.from_string<Tree>(s);
     d.children[1].children[0].value
 }
@@ -207,7 +406,7 @@ test "parse_throws_on_bad_json" {
         let u: User = baml.json.from_string<User>("{[");
         baml.sys.panic("expected from_string to throw")
     } catch (e) {
-        baml.json.JsonParseError => null
+        baml.json.ParseError => null
     }
 }
 
@@ -216,23 +415,23 @@ test "decode_throws_on_missing_field" {
         let u: User = baml.json.from_string<User>("{}");
         baml.sys.panic("expected from_string to throw")
     } catch (e) {
-        baml.json.JsonDecodeError => null
+        baml.json.DecodeError => null
     }
 }
 
 test "serialize_throws_uint8array" {
     {
         let b: Bad = Bad { x: baml.Uint8Array.from_hex("00ff") };
-        baml.json.to_string<Bad>(b);
+        baml.json.to_string(b);
         baml.sys.panic("expected to_string to throw")
     } catch (e) {
-        baml.json.JsonSerializationError => null
+        baml.json.SerializationError => null
     }
 }
 
 // Decode-error path includes the offending field's dotted path.  The check is
 // done inside a helper to avoid the test-block local-boxing bug when operating
-// on a caught error via a local.  JsonDecodeError carries a dedicated `path`
+// on a caught error via a local.  baml.json.DecodeError carries a dedicated `path`
 // field (separate from `message`) that holds the dotted field path.
 
 class Inner { value int }
@@ -243,7 +442,7 @@ function check_decode_error_path_contains_field() -> bool {
         let u: Outer = baml.json.from_string<Outer>("{\"inner\":{}}");
         false
     } catch (e) {
-        let err: baml.json.JsonDecodeError => {
+        let err: baml.json.DecodeError => {
             assert.contains(err.path, ".inner.value");
             true
         }
@@ -258,7 +457,7 @@ test "decode_error_path_points_at_missing_field" {
 
 function enum_variant_roundtrip_eq() -> bool {
     let c: Color = Color.Blue;
-    let s: string = baml.json.to_string<Color>(c);
+    let s: string = baml.json.to_string(c);
     let d: Color = baml.json.from_string<Color>(s);
     d == Color.Blue
 }
@@ -273,16 +472,16 @@ class ProfileMedia { avatar image }
 
 test "media_field_to_string" {
     assert.equal(
-        baml.json.to_string<ProfileMedia>(ProfileMedia { avatar: image.from_url("https://example.com/a.png", "image/png") }),
+        baml.json.to_string(ProfileMedia { avatar: image.from_url("https://example.com/a.png", "image/png") }),
         "{\"avatar\":{\"kind\":\"image\",\"source\":\"url\",\"value\":\"https://example.com/a.png\",\"mime\":\"image/png\"}}",
     )
 }
 
 function media_field_roundtrip_str() -> string {
     let p: ProfileMedia = ProfileMedia { avatar: image.from_url("https://example.com/a.png", "image/png") };
-    let s: string = baml.json.to_string<ProfileMedia>(p);
+    let s: string = baml.json.to_string(p);
     let d: ProfileMedia = baml.json.from_string<ProfileMedia>(s);
-    baml.json.to_string<ProfileMedia>(d)
+    baml.json.to_string(d)
 }
 
 test "media_field_roundtrip" {
@@ -298,7 +497,7 @@ class ProfileAlias { display_name string @alias("displayName") }
 
 test "alias_field_uses_raw_name_in_json" {
     assert.equal(
-        baml.json.to_string<ProfileAlias>(ProfileAlias { display_name: "Ada" }),
+        baml.json.to_string(ProfileAlias { display_name: "Ada" }),
         "{\"display_name\":\"Ada\"}",
     )
 }
@@ -321,7 +520,7 @@ class Bad { x uint8array }
 
 test "skip_field_still_emitted_in_json" {
     assert.equal(
-        baml.json.to_string<ProfileSkip>(ProfileSkip { name: "Ada", internal_id: "secret" }),
+        baml.json.to_string(ProfileSkip { name: "Ada", internal_id: "secret" }),
         "{\"name\":\"Ada\",\"internal_id\":\"secret\"}",
     )
 }
@@ -340,6 +539,18 @@ test "from_string_json_passthrough_int" {
     assert.is_true(from_string_json_passthrough_int_match())
 }
 
+function from_string_json_passthrough_numeric_string_match() -> bool {
+    let j: json = baml.json.from_string<json>("\"42\"");
+    match (j) {
+        let s: string => s == "42"
+        _ => false
+    }
+}
+
+test "from_string_json_passthrough_numeric_string" {
+    assert.is_true(from_string_json_passthrough_numeric_string_match())
+}
+
 function from_string_json_passthrough_object_len() -> int {
     let j: json = baml.json.from_string<json>("{\"x\":7}");
     match (j) {
@@ -354,7 +565,7 @@ test "from_string_json_passthrough_object" {
 
 function to_string_json_passthrough_str() -> string {
     let j: json = baml.json.parse("[1,2,3]");
-    baml.json.to_string<json>(j)
+    baml.json.to_string(j)
 }
 
 test "to_string_json_passthrough" {

@@ -4,12 +4,12 @@
 // ─── stdlib throws precision: baml.json.to_json is serialize-only ─────────────
 //
 // `baml.json.to_json` is a pure serializer: it declares
-// `throws JsonSerializationError` only (no spurious `JsonParseError`), so a
+// `throws baml.json.SerializationError` only (no spurious `baml.json.ParseError`), so a
 // caller can declare exactly that error without an exhaustiveness violation.
 // The point of the test is that `wildcard_json_dump` COMPILES with the exact
 // declared throws; the executed assertion mirrors the Rust `main() -> 0`.
 
-function wildcard_json_dump(x: int) -> baml.json.json throws baml.json.JsonSerializationError {
+function wildcard_json_dump(x: int) -> baml.json.json throws baml.json.SerializationError {
     baml.json.to_json(x)
 }
 

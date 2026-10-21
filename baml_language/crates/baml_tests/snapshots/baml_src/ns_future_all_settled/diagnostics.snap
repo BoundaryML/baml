@@ -1,0 +1,11 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+    ╭─[future_all_settled.baml:17:5]
+ 17 │     fas_value(2)
+    ·     ────────────
+    ╰────

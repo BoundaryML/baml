@@ -2,12 +2,9 @@
 
 use std::{ffi::CStr, ptr};
 
-use bex_project::MediaKind;
-use bridge_ctypes::baml_bridge::cffi::MediaTypeEnum;
-
 use crate::{
     Buffer,
-    handle::{self, HandleError, HandleParts},
+    handle_cffi::{self, HandleError, HandleParts, media_kind_from_proto},
 };
 
 /// Status returned by the handle C ABI.
@@ -28,6 +25,20 @@ pub enum BamlCffiStatus {
     UnexpectedNullptr = 5,
 }
 
+impl BamlCffiStatus {
+    /// Stable detail used by native language adapters' exception messages.
+    pub const fn description(self) -> &'static str {
+        match self {
+            Self::Ok => "ok",
+            Self::InvalidHandle => "invalid handle",
+            Self::TypeMismatch => "handle type mismatch",
+            Self::UnsupportedHandleType => "unsupported handle type",
+            Self::InternalError => "internal error",
+            Self::UnexpectedNullptr => "unexpected null pointer",
+        }
+    }
+}
+
 impl From<HandleError> for BamlCffiStatus {
     fn from(error: HandleError) -> Self {
         match error {
@@ -36,17 +47,6 @@ impl From<HandleError> for BamlCffiStatus {
             HandleError::UnsupportedHandleType => Self::UnsupportedHandleType,
             HandleError::InvalidInput(_) => Self::InternalError,
         }
-    }
-}
-
-fn media_kind_from_proto(media_kind: i32) -> Option<MediaKind> {
-    match media_kind {
-        x if x == MediaTypeEnum::Image as i32 => Some(MediaKind::Image),
-        x if x == MediaTypeEnum::Audio as i32 => Some(MediaKind::Audio),
-        x if x == MediaTypeEnum::Pdf as i32 => Some(MediaKind::Pdf),
-        x if x == MediaTypeEnum::Video as i32 => Some(MediaKind::Video),
-        x if x == MediaTypeEnum::Other as i32 => Some(MediaKind::Generic),
-        _ => None,
     }
 }
 
@@ -109,7 +109,7 @@ pub unsafe extern "C" fn baml_handle_clone(key: u64, out_key: *mut u64) -> BamlC
     if out_key.is_null() {
         return BamlCffiStatus::UnexpectedNullptr;
     }
-    match handle::clone_handle(key) {
+    match handle_cffi::clone_handle(key) {
         Ok(new_key) => write_u64(out_key, new_key),
         Err(error) => error.into(),
     }
@@ -122,7 +122,7 @@ pub unsafe extern "C" fn baml_handle_clone(key: u64, out_key: *mut u64) -> BamlC
 /// accept an `InvalidHandle` status.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_handle_release(key: u64) -> BamlCffiStatus {
-    match handle::release_handle(key) {
+    match handle_cffi::release_handle(key) {
         Ok(()) => BamlCffiStatus::Ok,
         Err(error) => error.into(),
     }
@@ -141,7 +141,7 @@ pub unsafe extern "C" fn __testonly_seed_function_ref(
         return BamlCffiStatus::UnexpectedNullptr;
     }
     write_handle_parts(
-        handle::seed_function_ref_handle(global_index),
+        handle_cffi::seed_function_ref_handle(global_index),
         out_key,
         out_handle_type,
     )
@@ -159,7 +159,26 @@ pub unsafe extern "C" fn __testonly_seed_generic_media(
         return BamlCffiStatus::UnexpectedNullptr;
     }
     write_handle_parts(
-        handle::seed_generic_media_handle(),
+        handle_cffi::seed_generic_media_handle(),
+        out_key,
+        out_handle_type,
+    )
+}
+
+/// # Safety
+/// `out_key` and `out_handle_type` must be either null or valid for writing
+/// one value of their pointee type.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __testonly_seed_heap_handle(
+    slab_key: u64,
+    out_key: *mut u64,
+    out_handle_type: *mut i32,
+) -> BamlCffiStatus {
+    if out_key.is_null() || out_handle_type.is_null() {
+        return BamlCffiStatus::UnexpectedNullptr;
+    }
+    write_handle_parts(
+        handle_cffi::seed_heap_handle(slab_key),
         out_key,
         out_handle_type,
     )
@@ -195,33 +214,52 @@ pub unsafe extern "C" fn baml_media_from_url(
             Err(_) => return BamlCffiStatus::InternalError,
         }
     };
-    match handle::media_from_url(kind, url, mime_type) {
+    match handle_cffi::media_from_url(kind, url, mime_type) {
         Ok(parts) => write_handle_parts(parts, out_key, out_handle_type),
         Err(error) => error.into(),
     }
 }
 
+/// Always `UnsupportedHandleType`: a media value is built from content, never
+/// from a file path, and this library reads no file.
+///
 /// # Safety
-/// `path` and `mime_type_or_null`, when non-null, must point to valid
-/// NUL-terminated C strings. `out_key` and `out_handle_type` must be either
-/// null or valid for writing one value of their pointee type.
+/// No argument is read or written.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn baml_media_from_file(
+    _media_kind: i32,
+    _path: *const libc::c_char,
+    _mime_type_or_null: *const libc::c_char,
+    _out_key: *mut u64,
+    _out_handle_type: *mut i32,
+) -> BamlCffiStatus {
+    BamlCffiStatus::UnsupportedHandleType
+}
+
+/// # Safety
+/// `file`, `base64` and `mime_type_or_null`, when non-null, must point to
+/// valid NUL-terminated C strings. `out_key` and `out_handle_type` must be
+/// either null or valid for writing one value of their pointee type.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn baml_media_from_file_content(
     media_kind: i32,
-    path: *const libc::c_char,
+    file: *const libc::c_char,
+    base64: *const libc::c_char,
     mime_type_or_null: *const libc::c_char,
     out_key: *mut u64,
     out_handle_type: *mut i32,
 ) -> BamlCffiStatus {
-    if path.is_null() || out_key.is_null() || out_handle_type.is_null() {
+    if file.is_null() || base64.is_null() || out_key.is_null() || out_handle_type.is_null() {
         return BamlCffiStatus::UnexpectedNullptr;
     }
     let Some(kind) = media_kind_from_proto(media_kind) else {
         return BamlCffiStatus::UnsupportedHandleType;
     };
-    let path = match unsafe { CStr::from_ptr(path) }.to_str() {
-        Ok(path) => path,
-        Err(_) => return BamlCffiStatus::InternalError,
+    let (Ok(file), Ok(base64)) = (
+        unsafe { CStr::from_ptr(file) }.to_str(),
+        unsafe { CStr::from_ptr(base64) }.to_str(),
+    ) else {
+        return BamlCffiStatus::InternalError;
     };
     let mime_type = if mime_type_or_null.is_null() {
         None
@@ -231,7 +269,7 @@ pub unsafe extern "C" fn baml_media_from_file(
             Err(_) => return BamlCffiStatus::InternalError,
         }
     };
-    match handle::media_from_file(kind, path, mime_type) {
+    match handle_cffi::media_from_file_content(kind, file, base64, mime_type) {
         Ok(parts) => write_handle_parts(parts, out_key, out_handle_type),
         Err(error) => error.into(),
     }
@@ -267,7 +305,7 @@ pub unsafe extern "C" fn baml_media_from_base64(
             Err(_) => return BamlCffiStatus::InternalError,
         }
     };
-    match handle::media_from_base64(kind, base64, mime_type) {
+    match handle_cffi::media_from_base64(kind, base64, mime_type) {
         Ok(parts) => write_handle_parts(parts, out_key, out_handle_type),
         Err(error) => error.into(),
     }
@@ -284,7 +322,7 @@ pub unsafe extern "C" fn baml_media_url(
     if out.is_null() {
         return BamlCffiStatus::UnexpectedNullptr;
     }
-    match handle::media_url(key, handle_type) {
+    match handle_cffi::media_url(key, handle_type) {
         Ok(url) => write_optional_string(out, url),
         Err(error) => error.into(),
     }
@@ -301,7 +339,7 @@ pub unsafe extern "C" fn baml_media_file(
     if out.is_null() {
         return BamlCffiStatus::UnexpectedNullptr;
     }
-    match handle::media_file(key, handle_type) {
+    match handle_cffi::media_file(key, handle_type) {
         Ok(file) => write_optional_string(out, file),
         Err(error) => error.into(),
     }
@@ -318,7 +356,7 @@ pub unsafe extern "C" fn baml_media_base64(
     if out.is_null() {
         return BamlCffiStatus::UnexpectedNullptr;
     }
-    match handle::media_base64(key, handle_type) {
+    match handle_cffi::media_base64(key, handle_type) {
         Ok(base64) => write_string(out, base64),
         Err(error) => error.into(),
     }
@@ -335,8 +373,25 @@ pub unsafe extern "C" fn baml_media_mime_type(
     if out.is_null() {
         return BamlCffiStatus::UnexpectedNullptr;
     }
-    match handle::media_mime_type(key, handle_type) {
+    match handle_cffi::media_mime_type(key, handle_type) {
         Ok(mime_type) => write_optional_string(out, mime_type),
+        Err(error) => error.into(),
+    }
+}
+
+/// # Safety
+/// `out` must be either null or valid for writing one `Buffer`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn baml_media_name(
+    key: u64,
+    handle_type: i32,
+    out: *mut Buffer,
+) -> BamlCffiStatus {
+    if out.is_null() {
+        return BamlCffiStatus::UnexpectedNullptr;
+    }
+    match handle_cffi::media_name(key, handle_type) {
+        Ok(name) => write_optional_string(out, name),
         Err(error) => error.into(),
     }
 }
@@ -422,5 +477,110 @@ mod tests {
             unsafe { baml_media_url(999, MediaTypeEnum::Image as i32, ptr::null_mut()) },
             BamlCffiStatus::UnexpectedNullptr
         );
+    }
+
+    /// What an accessor wrote: `None` for an absent value.
+    fn read(
+        accessor: unsafe extern "C" fn(u64, i32, *mut Buffer) -> BamlCffiStatus,
+        key: u64,
+        handle_type: i32,
+    ) -> Option<String> {
+        let mut out = Buffer {
+            ptr: ptr::null(),
+            len: 0,
+        };
+        assert_eq!(
+            unsafe { accessor(key, handle_type, &mut out) },
+            BamlCffiStatus::Ok
+        );
+        let text = (out.len != 0).then(|| {
+            let bytes = unsafe { std::slice::from_raw_parts(out.ptr.cast::<u8>(), out.len) };
+            String::from_utf8(bytes.to_vec()).unwrap()
+        });
+        crate::free_buffer(out);
+        text
+    }
+
+    #[test]
+    fn media_from_file_reads_nothing_and_makes_no_handle() {
+        let directory =
+            std::env::temp_dir().join(format!("baml-cffi-media-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("scan.pdf");
+        std::fs::write(&path, b"%PDF-1.7").unwrap();
+        let c_path = CString::new(path.to_str().unwrap()).unwrap();
+        let (mut key, mut handle_type) = (0, 0);
+        // The file is there to read, and is not read.
+        assert_eq!(
+            unsafe {
+                baml_media_from_file(
+                    MediaTypeEnum::Pdf as i32,
+                    c_path.as_ptr(),
+                    ptr::null(),
+                    &mut key,
+                    &mut handle_type,
+                )
+            },
+            BamlCffiStatus::UnsupportedHandleType
+        );
+        std::fs::remove_dir_all(&directory).unwrap();
+        assert_eq!((key, handle_type), (0, 0));
+    }
+
+    #[test]
+    fn media_from_file_content_is_named_and_reads_nothing() {
+        let file = CString::new("/nowhere/q3.pdf").unwrap();
+        let base64 = CString::new("JVBERi0xLjc=").unwrap();
+        let (mut key, mut handle_type) = (0, 0);
+        assert_eq!(
+            unsafe {
+                baml_media_from_file_content(
+                    MediaTypeEnum::Pdf as i32,
+                    file.as_ptr(),
+                    base64.as_ptr(),
+                    ptr::null(),
+                    &mut key,
+                    &mut handle_type,
+                )
+            },
+            BamlCffiStatus::Ok
+        );
+        assert_eq!(
+            read(baml_media_name, key, handle_type).as_deref(),
+            Some("q3.pdf")
+        );
+        assert_eq!(
+            read(baml_media_mime_type, key, handle_type).as_deref(),
+            Some("application/pdf")
+        );
+        assert_eq!(
+            read(baml_media_base64, key, handle_type).as_deref(),
+            Some("JVBERi0xLjc=")
+        );
+        // The value holds the content and the name, and no path.
+        assert_eq!(read(baml_media_file, key, handle_type), None);
+        assert_eq!(read(baml_media_url, key, handle_type), None);
+        assert_eq!(unsafe { baml_handle_release(key) }, BamlCffiStatus::Ok);
+    }
+
+    #[test]
+    fn only_media_built_from_a_file_has_a_name() {
+        let url = CString::new("https://example.com/image.png").unwrap();
+        let (mut key, mut handle_type) = (0, 0);
+        assert_eq!(
+            unsafe {
+                baml_media_from_url(
+                    MediaTypeEnum::Image as i32,
+                    url.as_ptr(),
+                    ptr::null(),
+                    &mut key,
+                    &mut handle_type,
+                )
+            },
+            BamlCffiStatus::Ok
+        );
+        assert_eq!(read(baml_media_name, key, handle_type), None);
+        assert_eq!(read(baml_media_file, key, handle_type), None);
+        assert_eq!(unsafe { baml_handle_release(key) }, BamlCffiStatus::Ok);
     }
 }

@@ -1,0 +1,1512 @@
+// Native Anthropic Messages client — offline wire tests.
+//
+// Everything here runs against the shared mock providers in ../ns_llm_mock/
+// (see its README for the authoring rules); the only network-touching cases are
+// the `::live::` testset at the bottom, which the default `offline` profile
+// excludes and which registers its leaves only when ANTHROPIC_API_KEY is set.
+//
+// The assertions are ported from sys_llm's `build_request/anthropic.rs` and
+// `parse_response/anthropic.rs` unit tests — system extraction, cache_control
+// placement, media block shapes, max_tokens default, stop-reason mapping,
+// cached-token usage — plus the six native-client bugs the migration fixed.
+//
+// Corpus convention: every case body is a top-level `function`, `test` blocks
+// only assert (test-block locals are boxed by the VM). Function bodies start
+// with a statement so the LLM-function token pre-scan short-circuits.
+
+// ─── functions under test ────────────────────────────────────────────────────
+
+function AnthMockAsk(question: string) -> string {
+    client: "anthropic/claude-haiku-4-5"
+    prompt: `
+      ${role("system")}
+      Follow the rules.
+      ${role("user")}
+      ${question}
+    `
+}
+
+// The SYSTEM message ends in a cache delimiter, which puts `cache_control` on
+// its last block (what `anthropic_cache_control_placement` asserts:
+// `system_cc=ephemeral`, `user_cc=-`).
+function AnthMockCached(question: string) -> string {
+    client: "anthropic/claude-haiku-4-5"
+    prompt: `
+      ${role("system")}
+      Follow the rules.
+      ${cache({ "type": "ephemeral" })}
+      ${role("user")}
+      ${question}
+    `
+}
+
+// A stable prefix and a variable suffix inside one user turn, after a picture,
+// with a TTL.
+function AnthCachedMidTurn(picture: image, question: string) -> string {
+    client: "anthropic/claude-haiku-4-5"
+    prompt: `
+      ${role("user")}
+      Before. ${picture} After.
+      ${cache({ "type": "ephemeral", "ttl": "1h" })}
+      ${question}
+    `
+}
+
+// `args` as written, and the positions that send no breakpoint.
+function AnthCacheArgs(args: json) -> string {
+    client: "anthropic/claude-haiku-4-5"
+    prompt: `
+      ${role("system")}
+      ${cache({ "type": "ephemeral" })}
+      Rules.
+      ${role("user")}
+      Stable.
+      ${cache(args)}
+      Variable.
+    `
+}
+
+// Role metadata is not a cache channel: a `cache_control` key there is not sent.
+function AnthRoleMetadata(question: string) -> string {
+    client: "anthropic/claude-haiku-4-5"
+    prompt: `
+      ${role("system", metadata = { "cache_control": { "type": "ephemeral" } })}
+      Follow the rules.
+      ${role("user")}
+      ${question}
+    `
+}
+
+// An assistant-first prompt with NO system content: the shape that used to
+// produce an API-rejected request whose first message was not `user`.
+function AnthAssistantFirst() -> string {
+    client: "anthropic/claude-haiku-4-5"
+    prompt: `
+      ${role("assistant")}
+      I already said hello.
+    `
+}
+
+// An ordinary single-user-message prompt, for journal-only assertions.
+function AnthMockPlain() -> string {
+    client: "anthropic/claude-haiku-4-5"
+    prompt: `
+      ${role("user")}
+      Hello.
+    `
+}
+
+function anth_weather(city: string) -> string {
+    let where = city;
+    "sunny in " + where
+}
+
+function AnthMockTools(question: string) -> string {
+    client: "anthropic/claude-haiku-4-5"
+    tools: [anth_weather]
+    prompt: `
+      ${role("user")}
+      ${question}
+    `
+}
+
+// A leading literal keeps the media part at a known index: the rendered parts
+// are ["Look at", <media>].
+function AnthMockVision(picture: image) -> string {
+    client: "anthropic/claude-haiku-4-5"
+    prompt: `
+      ${role("user")}
+      Look at ${picture}
+    `
+}
+
+function AnthMockListen(clip: audio) -> string {
+    client: "anthropic/claude-haiku-4-5"
+    prompt: `
+      ${role("user")}
+      Listen to ${clip}
+    `
+}
+
+// ─── shared helpers ──────────────────────────────────────────────────────────
+
+// A complete non-streaming Messages response with one text block.
+function anth_canned_text(text: string, stop_reason: string) -> string {
+    let head = `{"id":"msg_1","type":"message","role":"assistant","model":"claude-haiku-4-5","content":[{"type":"text","text":"${text}"}]`;
+    `${head},"stop_reason":"${stop_reason}","usage":{"input_tokens":9,"output_tokens":2,"cache_read_input_tokens":4,"cache_creation_input_tokens":6}}`
+}
+
+// The classified-failure label a test asserts on. Keeping the taxonomy visible
+// is the point: a 4xx must never come back as a retry-safe NetworkFailure.
+function anth_failure_label(e: unknown) -> string {
+    match (e) {
+        let r: ai.errors.RateLimited => "RateLimited",
+        let n: ai.errors.NetworkFailure => `NetworkFailure:${n.detail}`,
+        let i: ai.errors.InvalidRequest => `InvalidRequest:${i.detail}`,
+        let p: ai.errors.ParseFailed => `ParseFailed:${p.raw_output}`,
+        let p: ai.errors.InvalidResponse => `InvalidResponse:${p.message}`,
+        let p: ai.errors.ProviderError => `ProviderError:${p.error_type ?? ""}: ${p.message}`,
+        let f: ai.errors.FinishReasonError => {
+            `FinishReasonError:${f.finish_reason.to_string()}:${f.raw_output}`
+        },
+        let f: ai.errors.Refused => "Refused",
+        _ => `other:${e.to_string()}`,
+    }
+}
+
+// One SseStream batch string (a JSON array of {event,data,id}) from raw
+// `data:` payloads — the input `decode_batch` consumes.
+function anth_batch(payloads: string[]) -> string {
+    let items: map<string, unknown>[] = [];
+    for (let payload in payloads) {
+        let item: map<string, unknown> = {};
+        let _ = item.set("event", null);
+        let _ = item.set("data", payload);
+        let _ = item.set("id", null);
+        items.push(item);
+    }
+    baml.json.stringify(baml.json.to_json(items))
+}
+
+// Render one request without any server: the client below the runner.
+// Whether any map entry anywhere in `j` satisfies `pred(key, value)` — a
+// structural stand-in for searching the serialized body text.
+function _anth_json_any(j: json, pred: (string, json) -> bool) -> bool {
+    match (j) {
+        let m: map<string, json> => {
+            for (let k in m.keys()) {
+                let v = m.get(k);
+                if (pred(k, v) || _anth_json_any(v, pred)) {
+                    return true;
+                }
+            }
+            false
+        },
+        let arr: json[] => arr.some((item) -> { _anth_json_any(item, pred) }),
+        _ => false,
+    }
+}
+
+function anth_render_body(
+    cl: anthropic.Client,
+    spec: ai.FunctionSpec<string>,
+    journal: ai.Journal,
+) -> json {
+    let req = anthropic.internal.render(
+        cl,
+        ai.ModelTurnInput {
+            prompt: spec.prompt_template,
+            journal: journal,
+            toolbox: spec.tools(),
+            output_type: spec.output_type(),
+        },
+    );
+    baml.json.parse(req.body)
+}
+
+// The same ModelTurnInput `anth_render_body` builds, for calls that go through
+// the ai.Client interface instead of the internal render function.
+function anth_turn_input(spec: ai.FunctionSpec<string>) -> ai.ModelTurnInput {
+    let s = spec;
+    ai.ModelTurnInput {
+        prompt: s.prompt_template,
+        journal: ai.Journal { log: [] },
+        toolbox: s.tools(),
+        output_type: s.output_type(),
+    }
+}
+
+// `invoke` through the interface, as a string, so a caller can catch_all it.
+function anth_invoke_label(cl: anthropic.Client, input: ai.ModelTurnInput) -> string {
+    let turn = cl.invoke(input);
+    `blocks=${turn.content.length()}`
+}
+
+function anth_stream_value(cl: anthropic.Client) -> string {
+    let stream = ai.stream.from_spec<string>(
+        AnthMockAsk@spec("Say pong."),
+        client = cl,
+    );
+    stream.final()
+}
+
+// ─── request shape ───────────────────────────────────────────────────────────
+
+// The default request: POST /v1/messages, pinned anthropic-version, system
+// content hoisted out of `messages`, max_tokens 8192 (PLAN §5), no `stream`,
+// no `tools`/`tool_choice` for a tool-less spec, and cached tokens read out of
+// `usage.cache_read_input_tokens` instead of the hardcoded null.
+function anthropic_request_shape() -> string {
+    let canned = anth_canned_text("pong", "end_turn");
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(canned)],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = anthropic.Client.new(
+                model = "claude-haiku-4-5",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let result = ai.Agent.new(client = cl).run(AnthMockAsk@spec("Say pong."));
+            let sent = mock.last_request();
+            let body = sent.json();
+            [
+                `value=${result.value}`,
+                `method=${sent.method}`,
+                `path=${sent.path()}`,
+                `key=${sent.header("x-api-key") ?? "-"}`,
+                `version=${sent.header("anthropic-version") ?? "-"}`,
+                `model=${baml.json.path_or<string>(body, ".model", "-")}`,
+                `max_tokens=${baml.json.path_or<int>(body, ".max_tokens", -1)}`,
+                `system_type=${baml.json.path_or<string>(body, ".system[0].type", "-")}`,
+                `system_text=${baml.json.path_or<string>(body, ".system[0].text", "-")}`,
+                `role0=${baml.json.path_or<string>(body, ".messages[0].role", "-")}`,
+                `text0=${baml.json.path_or<string>(body, ".messages[0].content[0].text", "-")}`,
+                `has_stream=${baml.json.to<map<string, json>>(body).has("stream")}`,
+                `has_tools=${baml.json.to<map<string, json>>(body).has("tools")}`,
+                `has_null=${_anth_json_any(body, (k, v) -> { v == null })}`,
+                `cached=${_anth_usage(result.usage)?.cached_input_tokens ?? -1}`,
+                `input=${_anth_usage(result.usage)?.input_tokens ?? -1}`,
+            ].join("|")
+        },
+    )
+}
+
+/// The usage a run billed to the mocked Anthropic model, the only model these
+/// tests call.
+function _anth_usage(usage: ai.events.ModelUsage[]) -> ai.events.Usage? {
+    ai.events.usage_for(usage, ai.events.ModelKey { provider: "anthropic", model: "claude-haiku-4-5" })
+}
+
+test "anthropic_request_shape" {
+    let got = anthropic_request_shape();
+    assert.contains(got, "value=pong|");
+    assert.contains(got, "method=POST|");
+    assert.contains(got, "path=/v1/messages|");
+    assert.contains(got, "key=test-key|");
+    assert.contains(got, "version=2023-06-01|");
+    assert.contains(got, "model=claude-haiku-4-5|");
+    // PLAN §5: 8192, not the engine's 4096.
+    assert.contains(got, "max_tokens=8192|");
+    assert.contains(got, "system_type=text|");
+    assert.contains(got, "system_text=Follow the rules.|");
+    assert.contains(got, "role0=user|");
+    assert.contains(got, "text0=Say pong.|");
+    // unset optionals are dropped, never sent as explicit nulls
+    assert.contains(got, "has_stream=false|");
+    assert.contains(got, "has_tools=false|");
+    assert.contains(got, "has_null=false|");
+    // usage.cache_read_input_tokens is no longer hardcoded null
+    assert.contains(got, "cached=4|");
+    // input_tokens counts the cache reads and writes: 9 + 4 + 6.
+    assert.contains(got, "input=19")
+}
+
+function anthropic_request_timeout() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(anth_canned_text("pong", "end_turn"))],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = anthropic.Client.new(
+                model = "claude-haiku-4-5",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+                timeout = baml.time.Duration.from_milliseconds(20),
+            );
+            let outcome = anth_invoke_label(cl, anth_turn_input(AnthMockPlain@spec())) catch_all (e) {
+                let timeout: baml.errors.Timeout => `Timeout:${timeout.timeout_type}`,
+                _ => `other:${e.to_string()}`,
+            };
+            `${outcome}`
+        },
+        response_delay_ms = 200,
+    )
+}
+
+test "anthropic_request_timeout" {
+    assert.equal(anthropic_request_timeout(), "Timeout:timeout")
+}
+
+// Typed first-class parameters lower into the typed request; `headers` are
+// applied BEFORE the auth header (so anthropic-beta is reachable and
+// anthropic-version is overridable, while x-api-key still wins);
+// `query_params` reach the URL; and `request_body` deep-merges LAST, with a
+// null override deleting the client's own default.
+function anthropic_params_and_passthrough() -> string {
+    let canned = anth_canned_text("ok", "end_turn");
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(canned)],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let overrides: baml.json.json = {
+                "max_tokens": null,
+                "metadata": { "user_id": "u1" },
+            };
+            let cl = anthropic.Client.new(
+                model = "claude-haiku-4-5",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+                max_tokens = 2048,
+                temperature = 0.25,
+                top_p = 0.9,
+                top_k = 40,
+                stop_sequences = ["STOP"],
+                thinking = anthropic.ThinkingConfig.enabled(1024),
+                request_body = overrides,
+                headers = {
+                    "anthropic-beta": "context-1m-2025-08-07",
+                    "anthropic-version": "2024-01-01",
+                    "x-api-key": "hijacked",
+                },
+                query_params = { "beta": "true" },
+            );
+            let result = ai.Agent.new(client = cl).run(AnthMockAsk@spec("hi"));
+            let sent = mock.last_request();
+            let body = sent.json();
+            [
+                `value=${result.value}`,
+                `query=${sent.query() ?? "-"}`,
+                `beta=${sent.header("anthropic-beta") ?? "-"}`,
+                `version=${sent.header("anthropic-version") ?? "-"}`,
+                `key=${sent.header("x-api-key") ?? "-"}`,
+                `temperature=${baml.json.path_or<float>(body, ".temperature", -1.0)}`,
+                `top_p=${baml.json.path_or<float>(body, ".top_p", -1.0)}`,
+                `top_k=${baml.json.path_or<int>(body, ".top_k", -1)}`,
+                `stop0=${baml.json.path_or<string>(body, ".stop_sequences[0]", "-")}`,
+                `thinking=${baml.json.path_or<string>(body, ".thinking.type", "-")}`,
+                `budget=${baml.json.path_or<int>(body, ".thinking.budget_tokens", -1)}`,
+                `user_id=${baml.json.path_or<string>(body, ".metadata.user_id", "-")}`,
+                `has_max_tokens=${baml.json.to<map<string, json>>(body).has("max_tokens")}`,
+            ].join("|")
+        },
+    )
+}
+
+test "anthropic_params_and_passthrough" {
+    let got = anthropic_params_and_passthrough();
+    assert.contains(got, "query=beta=true|");
+    assert.contains(got, "beta=context-1m-2025-08-07|");
+    // user headers land before the defaults are frozen …
+    assert.contains(got, "version=2024-01-01|");
+    // … but auth is applied last, so it cannot be clobbered
+    assert.contains(got, "key=test-key|");
+    assert.contains(got, "temperature=0.25|");
+    assert.contains(got, "top_p=0.9|");
+    assert.contains(got, "top_k=40|");
+    assert.contains(got, "stop0=STOP|");
+    assert.contains(got, "thinking=enabled|");
+    assert.contains(got, "budget=1024|");
+    assert.contains(got, "user_id=u1|");
+    // `{"max_tokens": null}` deletes the client's default outright
+    assert.contains(got, "has_max_tokens=false")
+}
+
+// A `${cache(args)}` puts `cache_control: args` on the block before it, and a
+// message without one stays clean.
+function anthropic_cache_control_placement() -> json {
+    let canned = anth_canned_text("ok", "end_turn");
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(canned)],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = anthropic.Client.new(
+                model = "claude-haiku-4-5",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let _ = ai.Agent.new(client = cl).run(AnthMockCached@spec("hi"));
+            mock.last_request().json()
+        },
+    )
+}
+
+test "anthropic_cache_control_placement" {
+    let body = anthropic_cache_control_placement();
+    let system: json = [{ "type": "text", "text": "Follow the rules.", "cache_control": { "type": "ephemeral" } }];
+    assert.equal(baml.json.path<json>(body, ".system"), system);
+    let user: json = [{ "type": "text", "text": "hi" }];
+    assert.equal(baml.json.path<json>(body, ".messages[0].content"), user)
+}
+
+// One delimiter is ONE breakpoint, on the block before it, however many blocks
+// the message has; `ttl` reaches the wire; the text after it is its own block,
+// trimmed where it faced the delimiter.
+test "anthropic_cache_delimiter_mid_turn" {
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let picture = baml.media.Image.from_base64("SGVsbG8=", "image/png");
+    let body = anth_render_body(cl, AnthCachedMidTurn@spec(picture, "Describe it."), ai.Journal { log: [] });
+    let content = baml.json.path<json[]>(body, ".messages[0].content");
+    assert.equal(content.length(), 4);
+    let before: json = { "type": "text", "text": "Before." };
+    assert.equal(content[0], before);
+    // the picture is its own block, and carries no breakpoint
+    assert.equal(baml.json.path<string>(content[1], ".type"), "image");
+    assert.equal(baml.json.path_or<json>(content[1], ".cache_control", null), null);
+    let after: json = {
+        "type": "text",
+        "text": "After.",
+        "cache_control": { "type": "ephemeral", "ttl": "1h" },
+    };
+    assert.equal(content[2], after);
+    let question: json = { "type": "text", "text": "Describe it." };
+    assert.equal(content[3], question)
+}
+
+function _anth_cache_args(args: json) -> json {
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    anth_render_body(cl, AnthCacheArgs@spec(args), ai.Journal { log: [] })
+}
+
+// A non-null `args` is the value of `cache_control`, as written: not checked,
+// not merged with the default, a nested null kept. A delimiter with nothing
+// before it in its message sets nothing.
+test "anthropic_cache_delimiter_args_as_written" {
+    let rules: json = [{ "type": "text", "text": "Rules." }];
+
+    let object_args: json = { "ttl": "1h", "type": "ephemeral", "extra": { "keep": null } };
+    let with_object = _anth_cache_args(object_args);
+    assert.equal(baml.json.path<json>(with_object, ".system"), rules);
+    let stable_object: json = {
+        "type": "text",
+        "text": "Stable.",
+        "cache_control": { "ttl": "1h", "type": "ephemeral", "extra": { "keep": null } },
+    };
+    assert.equal(baml.json.path<json>(with_object, ".messages[0].content[0]"), stable_object);
+
+    let with_string = _anth_cache_args("1h");
+    assert.equal(baml.json.path<json>(with_string, ".system"), rules);
+    let stable_string: json = { "type": "text", "text": "Stable.", "cache_control": "1h" };
+    assert.equal(baml.json.path<json>(with_string, ".messages[0].content[0]"), stable_string)
+}
+
+// `${cache()}` takes the client's default, `{"type": "ephemeral"}`: one
+// breakpoint on the block before it. `${cache(null)}` is the same thing, and
+// `${cache(args = ...)}` is `${cache(...)}` spelled by name.
+function AnthCacheDefault(question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+      ${role("system")}
+      Follow the rules.
+      ${cache()}
+      ${role("user")}
+      Stable.
+      ${cache()}
+      ${question}
+    `
+}
+
+function AnthCacheNamed(question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+      ${role("system")}
+      Follow the rules.
+      ${cache(args = { "type": "ephemeral", "ttl": "1h" })}
+      ${role("user")}
+      ${question}
+    `
+}
+
+test "anthropic_cache_default_args" {
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let ephemeral: json = { "type": "ephemeral" };
+    assert.equal(cl.default_cache_args(), ephemeral);
+
+    let body = anth_render_body(cl, AnthCacheDefault@spec("Variable."), ai.Journal { log: [] });
+    let system: json = [{ "type": "text", "text": "Follow the rules.", "cache_control": { "type": "ephemeral" } }];
+    assert.equal(baml.json.path<json>(body, ".system"), system);
+    let user: json = [
+        { "type": "text", "text": "Stable.", "cache_control": { "type": "ephemeral" } },
+        { "type": "text", "text": "Variable." },
+    ];
+    assert.equal(baml.json.path<json>(body, ".messages[0].content"), user);
+
+    // null `args` is the default too
+    let nulled = _anth_cache_args(null);
+    let stable: json = { "type": "text", "text": "Stable.", "cache_control": { "type": "ephemeral" } };
+    assert.equal(baml.json.path<json>(nulled, ".messages[0].content[0]"), stable);
+
+    let named = anth_render_body(cl, AnthCacheNamed@spec("hi"), ai.Journal { log: [] });
+    let with_ttl: json = { "type": "ephemeral", "ttl": "1h" };
+    assert.equal(baml.json.path<json>(named, ".system[0].cache_control"), with_ttl)
+}
+
+function anthropic_role_metadata_is_not_a_cache_channel() -> bool {
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let spec = AnthRoleMetadata@spec("hi");
+    let journal = ai.Journal {
+        log: [
+            ai.events.UserMessage.of(["more"], metadata = { "cache_control": { "type": "ephemeral" } }),
+        ],
+    };
+    let body = anth_render_body(cl, spec, journal);
+    _anth_json_any(body, (k, v) -> { k == "cache_control" })
+}
+
+test "anthropic_role_metadata_is_not_a_cache_channel" {
+    assert.equal(anthropic_role_metadata_is_not_a_cache_channel(), false)
+}
+
+// BUG 7.1: an assistant-first prompt with no system content used to send
+// `messages[0].role == "assistant"`, which the API rejects outright.
+function anthropic_assistant_first_gets_leading_user() -> string {
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let body = anth_render_body(cl, AnthAssistantFirst@spec(), ai.Journal { log: [] });
+    [
+        `role0=${baml.json.path_or<string>(body, ".messages[0].role", "-")}`,
+        `text0=${baml.json.path_or<string>(body, ".messages[0].content[0].text", "-")}`,
+        `role1=${baml.json.path_or<string>(body, ".messages[1].role", "-")}`,
+    ].join("|")
+}
+
+test "anthropic_assistant_first_gets_leading_user" {
+    let got = anthropic_assistant_first_gets_leading_user();
+    assert.contains(got, "role0=user|");
+    assert.contains(got, "text0=(continue)|");
+    assert.contains(got, "role1=assistant")
+}
+
+// BUG 7.2: an assistant turn carrying only Reasoning used to lower to
+// `{"role":"assistant","content":[]}`, which the API rejects. Reasoning from a
+// FOREIGN client is removed by ai.wire.sanitize_for_client; reasoning from THIS
+// client survives sanitization and is dropped by the client's own lowering —
+// either way no empty message reaches the wire.
+function anthropic_reasoning_only_turn_is_dropped() -> json {
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let journal = ai.Journal {
+        log: [
+            ai.events.AssistantMessage {
+                content: [ai.content.Reasoning { summary: "quietly thinking" }],
+                resolved_model: ai.events.ModelKey { provider: "anthropic", model: "claude-haiku-4-5" },
+                requested_model: "claude-haiku-4-5",
+            },
+        ],
+    };
+    anth_render_body(cl, AnthMockPlain@spec(), journal)
+}
+
+test "anthropic_reasoning_only_turn_is_dropped" {
+    let messages = baml.json.path<json[]>(anthropic_reasoning_only_turn_is_dropped(), ".messages");
+    // the prompt's user message is the ONLY message left, and it is not empty
+    assert.equal(messages.length(), 1);
+    assert.equal(baml.json.path<string>(messages[0], ".role"), "user");
+    assert.is_true(baml.json.path<json[]>(messages[0], ".content").length() > 0)
+}
+
+// Dropping that turn MID-conversation left the user turns that bracketed it
+// adjacent, and the leading-role repair in `messages_request` only
+// fixes an assistant-FIRST list. `_render_messages` merges same-role
+// neighbours, so the roles alternate and both user payloads survive in order
+// inside one message.
+function anthropic_reasoning_only_turn_mid_conversation() -> string {
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let journal = ai.Journal {
+        log: [
+            ai.events.AssistantMessage {
+                content: [ai.content.Text { text: "4" }],
+                resolved_model: ai.events.ModelKey { provider: "anthropic", model: "claude-haiku-4-5" },
+                requested_model: "claude-haiku-4-5",
+            },
+            ai.events.UserMessage.new("And 3+3?"),
+            ai.events.AssistantMessage {
+                content: [ai.content.Reasoning { summary: "quietly thinking" }],
+                resolved_model: ai.events.ModelKey { provider: "anthropic", model: "claude-haiku-4-5" },
+                requested_model: "claude-haiku-4-5",
+            },
+            ai.events.UserMessage.new("And 4+4?"),
+        ],
+    };
+    let body = anth_render_body(cl, AnthMockPlain@spec(), journal);
+    [
+        `count=${baml.json.path_or<int>(body, ".messages.length", -1)}`,
+        `role0=${baml.json.path_or<string>(body, ".messages[0].role", "-")}`,
+        `role1=${baml.json.path_or<string>(body, ".messages[1].role", "-")}`,
+        `role2=${baml.json.path_or<string>(body, ".messages[2].role", "-")}`,
+        `role3=${baml.json.path_or<string>(body, ".messages[3].role", "-")}`,
+        `text0=${baml.json.path_or<string>(body, ".messages[2].content[0].text", "-")}`,
+        `text1=${baml.json.path_or<string>(body, ".messages[2].content[1].text", "-")}`,
+    ].join("|")
+}
+
+test "anthropic_reasoning_only_turn_mid_conversation" {
+    let got = anthropic_reasoning_only_turn_mid_conversation();
+    assert.contains(got, "role0=user|");
+    assert.contains(got, "role1=assistant|");
+    assert.contains(got, "role2=user|");
+    // exactly three messages: the fourth slot is empty
+    assert.contains(got, "role3=-|");
+    // both orphaned user payloads ride in the merged message, in order
+    assert.contains(got, "text0=And 3+3?|");
+    assert.contains(got, "text1=And 4+4?")
+}
+
+// An orphaned tool call — one with no result before the next user turn — is
+// closed by ai.wire.sanitize_for_client rather than sent unanswered.
+function anthropic_orphaned_tool_call_is_closed() -> string {
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let journal = ai.Journal {
+        log: [
+            ai.events.AssistantMessage {
+                content: [
+                    ai.content.ToolUse { id: "t1", name: "anth_weather", args: { "city": "SF" } },
+                ],
+                resolved_model: ai.events.ModelKey { provider: "anthropic", model: "claude-haiku-4-5" },
+                requested_model: "claude-haiku-4-5",
+            },
+            ai.events.UserMessage.new("never mind"),
+        ],
+    };
+    let body = anth_render_body(cl, AnthMockPlain@spec(), journal);
+    [
+        `type=${baml.json.path_or<string>(body, ".messages[2].content[0].type", "-")}`,
+        `id=${baml.json.path_or<string>(body, ".messages[2].content[0].tool_use_id", "-")}`,
+        `is_error=${baml.json.path_or<bool>(body, ".messages[2].content[0].is_error", false)}`,
+    ].join("|")
+}
+
+test "anthropic_orphaned_tool_call_is_closed" {
+    let got = anthropic_orphaned_tool_call_is_closed();
+    assert.contains(got, "type=tool_result|");
+    assert.contains(got, "id=t1|");
+    assert.contains(got, "is_error=true")
+}
+
+// A full tool round trip: native tool definitions go out, the assistant's
+// tool_use blocks are replayed, and consecutive tool results coalesce into ONE
+// user message (the API requires exactly that).
+function anthropic_tool_round_trip() -> string {
+    let first = `{"id":"msg_1","type":"message","role":"assistant","model":"claude-haiku-4-5","content":[{"type":"tool_use","id":"toolu_a","name":"anth_weather","input":{"city":"SF"}},{"type":"tool_use","id":"toolu_b","name":"anth_weather","input":{"city":"NY"}}],"stop_reason":"tool_use","usage":{"input_tokens":10,"output_tokens":5}}`;
+    root.llm_mock.mock_json_serve(
+        [
+            root.llm_mock.MockResponse.ok(first),
+            root.llm_mock.MockResponse.ok(anth_canned_text("done", "end_turn")),
+        ],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = anthropic.Client.new(
+                model = "claude-haiku-4-5",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let result = ai.Agent.new(client = cl).run(AnthMockTools@spec("weather?"));
+            let body = mock.last_request().json();
+            [
+                `value=${result.value}`,
+                `requests=${mock.request_count()}`,
+                `tool_name=${baml.json.path_or<string>(body, ".tools[0].name", "-")}`,
+                `schema=${baml.json.path_or<string>(body, ".tools[0].input_schema.properties.city.type", "-")}`,
+                `choice=${baml.json.path_or<string>(body, ".tool_choice.type", "-")}`,
+                `role1=${baml.json.path_or<string>(body, ".messages[1].role", "-")}`,
+                `use0=${baml.json.path_or<string>(body, ".messages[1].content[0].type", "-")}`,
+                `city0=${baml.json.path_or<string>(body, ".messages[1].content[0].input.city", "-")}`,
+                `role2=${baml.json.path_or<string>(body, ".messages[2].role", "-")}`,
+                `res0=${baml.json.path_or<string>(body, ".messages[2].content[0].type", "-")}`,
+                `res1=${baml.json.path_or<string>(body, ".messages[2].content[1].type", "-")}`,
+                `role3=${baml.json.path_or<string>(body, ".messages[3].role", "-")}`,
+            ].join("|")
+        },
+    )
+}
+
+test "anthropic_tool_round_trip" {
+    let got = anthropic_tool_round_trip();
+    assert.contains(got, "value=done|");
+    assert.contains(got, "requests=2|");
+    assert.contains(got, "tool_name=anth_weather|");
+    assert.contains(got, "schema=string|");
+    assert.contains(got, "choice=auto|");
+    assert.contains(got, "role1=assistant|");
+    assert.contains(got, "use0=tool_use|");
+    assert.contains(got, "city0=SF|");
+    // both results grouped into ONE user message …
+    assert.contains(got, "role2=user|");
+    assert.contains(got, "res0=tool_result|");
+    assert.contains(got, "res1=tool_result|");
+    // … so there is no fourth message
+    assert.contains(got, "role3=-")
+}
+
+// ─── response parsing ────────────────────────────────────────────────────────
+
+// BUG 7.5: `pause_turn` / `model_context_window_exceeded` / anything unknown
+// used to map to Complete, so a truncated candidate was reported as a success.
+// They are truncations now, exactly like max_tokens.
+function anthropic_stop_reason_outcome(stop_reason: string) -> string {
+    let canned = anth_canned_text("pong", stop_reason);
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(canned)],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = anthropic.Client.new(
+                model = "claude-haiku-4-5",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let outcome = ai.Agent.new(client = cl).run(AnthMockAsk@spec("hi")).value catch_all (e) {
+                _ => anth_failure_label(e),
+            };
+            outcome
+        },
+    )
+}
+
+test "anthropic_stop_reason_end_turn" {
+    assert.equal(anthropic_stop_reason_outcome("end_turn"), "pong")
+}
+
+test "anthropic_stop_reason_stop_sequence" {
+    assert.equal(anthropic_stop_reason_outcome("stop_sequence"), "pong")
+}
+
+test "anthropic_stop_reason_max_tokens" {
+    assert.equal(anthropic_stop_reason_outcome("max_tokens"), "FinishReasonError:MaxTokens:pong")
+}
+
+test "anthropic_stop_reason_pause_turn" {
+    assert.equal(anthropic_stop_reason_outcome("pause_turn"), "FinishReasonError:MaxTokens:pong")
+}
+
+test "anthropic_stop_reason_unknown" {
+    assert.equal(
+        anthropic_stop_reason_outcome("model_context_window_exceeded"),
+        "FinishReasonError:MaxTokens:pong",
+    )
+}
+
+test "anthropic_stop_reason_refusal" {
+    assert.equal(anthropic_stop_reason_outcome("refusal"), "Refused")
+}
+
+// A non-2xx status is classified by ai.wire.send_as; a 401 must not be a
+// retry-safe NetworkFailure.
+function anthropic_http_error(status: int) -> string {
+    let canned = `{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}`;
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.error(status, canned)],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = anthropic.Client.new(
+                model = "claude-haiku-4-5",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let outcome = ai.Agent.new(client = cl).run(AnthMockAsk@spec("hi")).value catch_all (e) {
+                _ => anth_failure_label(e),
+            };
+            outcome
+        },
+    )
+}
+
+test "anthropic_http_error_401" {
+    assert.equal(anthropic_http_error(401), "InvalidRequest:http 401")
+}
+
+test "anthropic_http_error_429" {
+    assert.equal(anthropic_http_error(429), "RateLimited")
+}
+
+test "anthropic_http_error_503" {
+    assert.equal(anthropic_http_error(503), "NetworkFailure:http 503")
+}
+
+// ─── streaming ───────────────────────────────────────────────────────────────
+
+// Text deltas accumulate; thinking deltas deliberately do NOT (they are not
+// part of the answer the parser sees), and `stream: true` reaches the wire.
+function anthropic_stream_text() -> string {
+    let events = [
+        root.llm_mock.sse_event(
+            "message_start",
+            `{"type":"message_start","message":{"id":"m","model":"claude-haiku-4-5","usage":{"input_tokens":5,"cache_read_input_tokens":2}}}`,
+        ),
+        root.llm_mock.sse_event(
+            "content_block_start",
+            `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`,
+        ),
+        root.llm_mock.sse_event(
+            "content_block_delta",
+            `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"po"}}`,
+        ),
+        root.llm_mock.sse_event(
+            "content_block_delta",
+            `{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"SECRET"}}`,
+        ),
+        root.llm_mock.sse_event(
+            "content_block_delta",
+            `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ng"}}`,
+        ),
+        root.llm_mock.sse_event("ping", `{"type":"ping"}`),
+        root.llm_mock.sse_event(
+            "message_delta",
+            `{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":7}}`,
+        ),
+        root.llm_mock.sse_event("message_stop", `{"type":"message_stop"}`),
+    ];
+    root.llm_mock.mock_sse_serve(
+        events,
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = anthropic.Client.new(
+                model = "claude-haiku-4-5",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let value = anth_stream_value(cl);
+            let sent = mock.last_request();
+            [`value=${value}`, `stream=${baml.json.path<bool>(sent.json(), ".stream")}`].join("|")
+        },
+    )
+}
+
+test "anthropic_stream_text" {
+    let got = anthropic_stream_text();
+    assert.contains(got, "value=pong|");
+    assert.contains(got, "stream=true")
+}
+
+// A streamed turn reports the cache split a non-streamed one does: input
+// excludes both cache counts, which arrive in message_start.
+function anthropic_stream_usage_splits_the_cache() -> string {
+    let events = [
+        root.llm_mock.sse_event(
+            "message_start",
+            `{"type":"message_start","message":{"id":"m","model":"claude-haiku-4-5","usage":{"input_tokens":5,"cache_read_input_tokens":2,"cache_creation_input_tokens":3}}}`,
+        ),
+        root.llm_mock.sse_event(
+            "content_block_start",
+            `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`,
+        ),
+        root.llm_mock.sse_event(
+            "content_block_delta",
+            `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"pong"}}`,
+        ),
+        root.llm_mock.sse_event(
+            "message_delta",
+            `{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":7,"output_tokens_details":{"thinking_tokens":4}}}`,
+        ),
+        root.llm_mock.sse_event("message_stop", `{"type":"message_stop"}`),
+    ];
+    root.llm_mock.mock_sse_serve(
+        events,
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = anthropic.Client.new(
+                model = "claude-haiku-4-5",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let spec = AnthMockAsk@spec("Say pong.");
+            let turn = cl
+                .invoke_stream(
+                ai.ModelTurnInput {
+                    prompt: spec.prompt_template,
+                    journal: ai.Journal { log: [] },
+                    toolbox: spec.tools(),
+                    output_type: spec.output_type(),
+                },
+                )
+                .final_turn();
+            let u = ai.events.usage_for(ai.events.call_usage(turn.calls), ai.events.ModelKey { provider: "anthropic", model: "claude-haiku-4-5" });
+            `${u?.input_tokens ?? -1}/${u?.cached_input_tokens ?? -1}/${u?.cache_write_input_tokens ?? -1}/${u?.uncached_input_tokens ?? -1}/${u?.output_tokens ?? -1}/${u?.reasoning_tokens ?? -1}`
+        },
+    )
+}
+
+test "anthropic_stream_usage_splits_the_cache" {
+    // input/cached/cache writes/uncached/output/reasoning
+    assert.equal(anthropic_stream_usage_splits_the_cache(), "10/2/3/5/7/4")
+}
+
+function anthropic_stream_first_token_timeout() -> string {
+    root.llm_mock.mock_sse_serve(
+        [
+            root.llm_mock.sse_event(
+                "message_start",
+                `{"type":"message_start","message":{"id":"m","model":"claude-haiku-4-5","usage":{"input_tokens":5}}}`,
+            ),
+        ],
+        (mock: root.llm_mock.MockSseServer) -> {
+            // The mock holds the first event for 10s, so only the 20ms TTFT can
+            // end this call, however slow the machine is.
+            let cl = anthropic.Client.new(
+                model = "claude-haiku-4-5",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+                timeout = ai.LlmTimeoutOptions {
+                    timeout: baml.time.Duration.from_milliseconds(15000),
+                    first_token_timeout: baml.time.Duration.from_milliseconds(20),
+                },
+            );
+            let outcome = anth_stream_value(cl) catch_all (e) {
+                let timeout: baml.errors.Timeout => `Timeout:${timeout.timeout_type}:${timeout.duration?.to_milliseconds() ?? -1n}`,
+                _ => `other:${e.to_string()}`,
+            };
+            `${outcome}`
+        },
+        first_event_delay_ms = 10000,
+    )
+}
+
+test "anthropic_stream_first_token_timeout" {
+    assert.equal(anthropic_stream_first_token_timeout(), "Timeout:first_token_timeout:20")
+}
+
+// A connection that ends BEFORE `message_stop` is a truncated turn, not a
+// short successful one: the mock serves a message_start and one text delta and
+// then closes. Without the decoder's `require_terminal` opt-in this returned
+// `par` as a completed answer — silent data corruption reported as success,
+// with nothing for ai.clients.Retry to act on.
+function anthropic_stream_truncated() -> string {
+    let events = [
+        root.llm_mock.sse_event(
+            "message_start",
+            `{"type":"message_start","message":{"id":"m","model":"claude-haiku-4-5","usage":{"input_tokens":5}}}`,
+        ),
+        root.llm_mock.sse_event(
+            "content_block_delta",
+            `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"par"}}`,
+        ),
+    ];
+    root.llm_mock.mock_sse_serve(
+        events,
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = anthropic.Client.new(
+                model = "claude-haiku-4-5",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            anth_stream_value(cl) catch_all (e) {
+                _ => anth_failure_label(e),
+            }
+        },
+    )
+}
+
+test "anthropic_stream_truncated" {
+    let got = anthropic_stream_truncated();
+    // retry-safe transport failure, not `par` as a Complete turn
+    assert.contains(got, "NetworkFailure:stream ended before the provider's terminal event")
+}
+
+// BUG 7.3: a mid-stream `error` event used to be dropped, ending the turn as a
+// short but SUCCESSFUL response. It is now the precise typed failure, and its
+// retry safety follows the provider's error type.
+function anthropic_stream_error_event(payload: string) -> string {
+    let events = [
+        root.llm_mock.sse_event(
+            "message_start",
+            `{"type":"message_start","message":{"id":"m","usage":{"input_tokens":5}}}`,
+        ),
+        root.llm_mock.sse_event(
+            "content_block_delta",
+            `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"par"}}`,
+        ),
+        root.llm_mock.sse_event("error", payload),
+    ];
+    root.llm_mock.mock_sse_serve(
+        events,
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = anthropic.Client.new(
+                model = "claude-haiku-4-5",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            anth_stream_value(cl) catch_all (e) {
+                _ => anth_failure_label(e),
+            }
+        },
+    )
+}
+
+test "anthropic_stream_error_overloaded" {
+    assert.equal(
+        anthropic_stream_error_event(
+            `{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}`,
+        ),
+        "ProviderError:overloaded_error: Overloaded",
+    )
+}
+
+test "anthropic_stream_error_rate_limit" {
+    assert.equal(
+        anthropic_stream_error_event(
+            `{"type":"error","error":{"type":"rate_limit_error","message":"slow down"}}`,
+        ),
+        "ProviderError:rate_limit_error: slow down",
+    )
+}
+
+test "anthropic_stream_error_auth" {
+    assert.equal(
+        anthropic_stream_error_event(
+            `{"type":"error","error":{"type":"authentication_error","message":"bad key"}}`,
+        ),
+        "ProviderError:authentication_error: bad key",
+    )
+}
+
+// BUG 7.4: every streaming transport error used to become a retry-SAFE
+// NetworkFailure, so ai.clients.Retry happily replayed a 400. The status
+// `send_sse` reports is now routed through the same classifier the
+// non-streaming path uses.
+function anthropic_stream_http_error(status: int) -> string {
+    let canned = `{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}`;
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.error(status, canned)],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = anthropic.Client.new(
+                model = "claude-haiku-4-5",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            anth_stream_value(cl) catch_all (e) {
+                _ => anth_failure_label(e),
+            }
+        },
+    )
+}
+
+test "anthropic_stream_http_error_401" {
+    assert.equal(anthropic_stream_http_error(401), "InvalidRequest:http 401")
+}
+
+test "anthropic_stream_http_error_429" {
+    assert.equal(anthropic_stream_http_error(429), "RateLimited")
+}
+
+test "anthropic_stream_http_error_500" {
+    assert.equal(anthropic_stream_http_error(500), "NetworkFailure:http 500")
+}
+
+// Typed SSE decode below the TurnStream: content_block_start names the tool,
+// input_json_delta assembles its arguments, thinking/signature deltas are kept
+// out of the answer text, and cache tokens survive to the end of the turn.
+// ai.stream.Event cannot carry tool calls or thinking yet (PLAN §6), so the
+// decoder folds them into AnthStreamState; token counts ride on TurnMeta.
+function anthropic_decode_tool_stream() -> json {
+    let state = anthropic.internal.AnthStreamState.new();
+    let batch = anth_batch(
+        [
+            `{"type":"message_start","message":{"id":"m1","model":"claude-haiku-4-5","usage":{"input_tokens":11,"cache_read_input_tokens":7,"cache_creation_input_tokens":3}}}`,
+            `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":"Hel"}}`,
+            `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"lo"}}`,
+            `{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_1","name":"anth_weather"}}`,
+            `{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\\\"city\\\":"}}`,
+            `{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"\\\"SF\\\"}"}}`,
+            `{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"hmm"}}`,
+            `{"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig1"}}`,
+            `{"type":"ping"}`,
+            `{"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":42,"cache_read_input_tokens":9,"output_tokens_details":{"thinking_tokens":13}}}`,
+            `{"type":"message_stop"}`,
+        ],
+    );
+    let seen: string[] = [];
+    for (let ev in anthropic.internal.decode_batch(batch, state)) {
+        match (ev) {
+            let d: ai.stream.TextDelta => {
+                seen.push(`text:${d.text}`);
+                null
+            },
+            let m: ai.stream.TurnMeta => {
+                seen.push(
+                    `meta:${m.stop_reason ?? "-"}/${m.usage?.input_tokens ?? -1}/${m.usage?.output_tokens ?? -1}/${m.usage?.cached_input_tokens ?? -1}/${m.usage?.cache_write_input_tokens ?? -1}/${m.usage?.uncached_input_tokens ?? -1}/${m.usage?.reasoning_tokens ?? -1}`,
+                );
+                null
+            },
+            let d: ai.stream.TurnDone => {
+                seen.push("done");
+                null
+            },
+            // Content with no text of its own (thinking, tool input): it only
+            // feeds the token deadlines, so it is not part of what this checks.
+            let c: ai.stream.ContentSeen => null,
+        };
+    }
+    let calls: json[] = [];
+    for (let u in state.tool_uses()) {
+        calls.push({ "id": u.id, "name": u.name, "args": baml.json.to_json(u.args) });
+    }
+    {
+        "events": baml.json.to_json(seen),
+        "thinking": state.thinking,
+        "signature": state.signature,
+        "calls": calls,
+        "raw_stop": state.stop_reason_raw,
+        "model": state.model,
+    }
+}
+
+test "anthropic_decode_tool_stream" {
+    assert.equal(
+        anthropic_decode_tool_stream(),
+        {
+            // stop/input/output/cached/cache writes/uncached/reasoning, per event
+            "events": [
+                "meta:-/21/-1/7/3/11/-1",
+                "text:Hel",
+                "text:lo",
+                "meta:ToolUse/-1/42/9/-1/-1/13",
+                "done",
+            ],
+            // thinking never becomes answer text
+            "thinking": "hmm",
+            "signature": "sig1",
+            "calls": [{ "id": "toolu_1", "name": "anth_weather", "args": { "city": "SF" } }],
+            "raw_stop": "tool_use",
+            "model": "claude-haiku-4-5",
+        },
+    )
+}
+
+// A malformed nonempty `data:` payload is an invalid provider response.
+function anthropic_decode_rejects_garbage() -> bool {
+    let state = anthropic.internal.AnthStreamState.new();
+    let batch = anth_batch(["not json at all"]);
+    anthropic.internal.decode_batch(batch, state) catch_all (e) {
+        let invalid: ai.errors.InvalidResponse => {
+            return invalid.provider == "anthropic"
+                && invalid.raw_body == "not json at all"
+                && invalid.message != "";
+        },
+        _ => {
+            return false;
+        },
+    };
+    false
+}
+
+test "anthropic_decode_rejects_garbage" {
+    assert.is_true(anthropic_decode_rejects_garbage())
+}
+
+// ─── media limits ────────────────────────────────────────────────────────────
+
+// The Messages API has NO audio input content block — audio is not an input
+// modality for it at all. This used to lower to an invented
+// `{"type":"input_audio"}` block, so every audio-bearing request was a
+// guaranteed provider 400; it is named client-side now, like video.
+function anthropic_audio_input_rejected() -> string {
+    let clip = baml.media.Audio.from_base64("QUJD", "audio/mp3");
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let label = baml.json.stringify(
+        anth_render_body(cl, AnthMockListen@spec(clip), ai.Journal { log: [] }),
+    ) catch_all (e) {
+        _ => e.to_string(),
+    };
+    label
+}
+
+test "anthropic_audio_input_rejected" {
+    let got = anthropic_audio_input_rejected();
+    assert.contains(got, "Anthropic does not support audio prompt input");
+    // the invented block never reaches a body
+    assert.is_true(!got.includes("input_audio"))
+}
+
+// A base64 image whose media_type is outside the API's allowed set
+// (jpeg/png/gif/webp) is a client-side error naming the type, not an opaque
+// provider 400 — `.svg` sources reach `baml.media.Image.infer_mime_type` as image/svg+xml.
+function anthropic_svg_image_rejected() -> string {
+    let picture = baml.media.Image.from_base64("PHN2Zy8+", "image/svg+xml");
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let label = baml.json.stringify(
+        anth_render_body(cl, AnthMockVision@spec(picture), ai.Journal { log: [] }),
+    ) catch_all (e) {
+        _ => e.to_string(),
+    };
+    label
+}
+
+test "anthropic_svg_image_rejected" {
+    let got = anthropic_svg_image_rejected();
+    assert.contains(got, "image/svg+xml");
+    assert.contains(got, "image/jpeg, image/png, image/gif and image/webp")
+}
+
+// A supported image still lowers to the documented base64 source shape.
+function anthropic_png_image_block() -> string {
+    let picture = baml.media.Image.from_base64("SGVsbG8=", "image/png");
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let body = anth_render_body(cl, AnthMockVision@spec(picture), ai.Journal { log: [] });
+    [
+        `type=${baml.json.path_or<string>(body, ".messages[0].content[1].type", "-")}`,
+        `src=${baml.json.path_or<string>(body, ".messages[0].content[1].source.type", "-")}`,
+        `mime=${baml.json.path_or<string>(body, ".messages[0].content[1].source.media_type", "-")}`,
+        `data=${baml.json.path_or<string>(body, ".messages[0].content[1].source.data", "-")}`,
+    ].join("|")
+}
+
+test "anthropic_png_image_block" {
+    assert.equal(anthropic_png_image_block(), "type=image|src=base64|mime=image/png|data=SGVsbG8=")
+}
+
+// ─── credentials ─────────────────────────────────────────────────────────────
+
+// A missing credential must be a CATCHABLE typed error: `get_or_panic` raised
+// an uncatchable panic that escaped catch_all, so it bypassed the client's own
+// `invoke` normalize wrapper entirely.
+//
+// The environment decides which branch is exercised: CI has no key, so the
+// error fires; a live/Infisical shell has ANTHROPIC_API_KEY, and the canonical
+// fallback resolves it (base_url points at a closed port, so nothing escapes to
+// the network either way). Both branches assert the same thing — no panic.
+function anth_missing_key_client() -> anthropic.Client {
+    // `env.NAME` naming a variable that exists nowhere: the ref resolves to
+    // null at REQUEST time and the client falls through to ANTHROPIC_API_KEY.
+    anthropic.Client.new(
+        model = "claude-haiku-4-5",
+        api_key = env.BAML_ANTHROPIC_KEY_THAT_IS_NEVER_SET,
+        base_url = "http://127.0.0.1:1",
+    )
+}
+
+function anthropic_missing_key_resolve() -> string {
+    let cl = anth_missing_key_client();
+    let outcome = cl.resolved_api_key() catch_all (e) {
+        _ => `caught:${e.to_string()}`,
+    };
+    if (baml.env.get("ANTHROPIC_API_KEY") != null) {
+        // the canonical variable is present: the fallback resolves it
+        let resolved = if (outcome.starts_with("caught:")) {
+            outcome
+        } else {
+            "resolved-from-env"
+        };
+        resolved
+    } else {
+        outcome
+    }
+}
+
+test "anthropic_missing_key_resolve" {
+    let got = anthropic_missing_key_resolve();
+    assert.is_true(got == "resolved-from-env" || got.includes("ANTHROPIC_API_KEY"))
+}
+
+// The same misconfiguration through `invoke`: catchable at the client boundary,
+// which is what ai.clients.Fallback/Retry composition needs.
+function anthropic_missing_key_invoke() -> string {
+    let cl = anth_missing_key_client();
+    let outcome = anth_invoke_label(cl, anth_turn_input(AnthMockPlain@spec())) catch_all (e) {
+        _ => `caught:${e.to_string()}`,
+    };
+    if (baml.env.get("ANTHROPIC_API_KEY") != null) {
+        // a key resolved: the request fails on transport against the closed
+        // port instead, which is still a caught, typed failure.
+        let labeled = `key-present:${outcome}`;
+        labeled
+    } else {
+        outcome
+    }
+}
+
+test "anthropic_missing_key_invoke" {
+    let got = anthropic_missing_key_invoke();
+    // never a completed turn, never a panic past catch_all
+    assert.contains(got, "caught:");
+    assert.is_true(got.starts_with("key-present:") || got.includes("ANTHROPIC_API_KEY"))
+}
+
+// ─── replayed tool arguments ─────────────────────────────────────────────────
+
+// `_anth_drop_nulls` prunes UNSET REQUEST OPTIONS, and must not touch the two
+// opaque JSON subtrees: a replayed tool call's `input` and a tool's
+// `input_schema`. A null argument is the schema-conformant answer for an
+// optional parameter (the generated schema types it `["string","null"]` and
+// marks it required), so dropping it rewrote conversation history.
+function anthropic_replayed_tool_args_keep_nulls() -> json {
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let args: map<string, unknown> = { "city": "SF", "unit": null };
+    let journal = ai.Journal {
+        log: [
+            ai.events.AssistantMessage {
+                content: [ai.content.ToolUse { id: "t1", name: "anth_weather", args: args }],
+                resolved_model: ai.events.ModelKey { provider: "anthropic", model: "claude-haiku-4-5" },
+                requested_model: "claude-haiku-4-5",
+            },
+            ai.events.ToolCompleted.new("t1", "sunny in SF"),
+        ],
+    };
+    anth_render_body(cl, AnthMockTools@spec("weather?"), journal)
+}
+
+test "anthropic_replayed_tool_args_keep_nulls" {
+    let body = anthropic_replayed_tool_args_keep_nulls();
+    let input: json = { "city": "SF", "unit": null };
+    assert.equal(baml.json.path<json>(body, ".messages[1].content[0].input"), input);
+    // the request's OWN unset optionals are still pruned
+    assert.equal(baml.json.to<map<string, json>>(body).has("temperature"), false)
+}
+
+// ─── extended-thinking usage ─────────────────────────────────────────────────
+
+// `usage.output_tokens_details.thinking_tokens` is the reasoning share of
+// output_tokens under extended thinking; it used to be dropped on the floor
+// with `reasoning_tokens: null` hardcoded.
+function anthropic_reasoning_tokens() -> string {
+    let canned = `{"id":"msg_1","type":"message","role":"assistant","model":"claude-haiku-4-5","content":[{"type":"text","text":"pong"}],"stop_reason":"end_turn","usage":{"input_tokens":9,"output_tokens":30,"output_tokens_details":{"thinking_tokens":21}}}`;
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(canned)],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = anthropic.Client.new(
+                model = "claude-haiku-4-5",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+                thinking = anthropic.ThinkingConfig.enabled(1024),
+            );
+            let result = ai.Agent.new(client = cl).run(AnthMockAsk@spec("hi"));
+            [
+                `value=${result.value}`,
+                `output=${_anth_usage(result.usage)?.output_tokens ?? -1}`,
+                `reasoning=${_anth_usage(result.usage)?.reasoning_tokens ?? -1}`,
+            ].join("|")
+        },
+    )
+}
+
+test "anthropic_reasoning_tokens" {
+    let got = anthropic_reasoning_tokens();
+    assert.contains(got, "value=pong|");
+    assert.contains(got, "output=30|");
+    assert.contains(got, "reasoning=21")
+}
+
+// ─── live ────────────────────────────────────────────────────────────────────
+//
+// Excluded by the default `offline` profile; selected by `--profile live`, and
+// registered only when the key is present. Model id live-verified 2026-08-13.
+
+function AnthLiveAsk(question: string) -> string {
+    client: "anthropic/claude-haiku-4-5"
+    prompt: `
+      ${role("user")}
+      Reply with exactly one word. ${question}
+    `
+}
+
+function anth_live_temperature(city: string) -> string {
+    let where = city;
+    "The temperature in " + where + " is 21 degrees celsius."
+}
+
+function AnthLiveTools(question: string) -> string {
+    client: "anthropic/claude-haiku-4-5"
+    tools: [anth_live_temperature]
+    prompt: `
+      ${role("user")}
+      ${question} Call the tool, then answer with the number.
+    `
+}
+
+function anth_live_answers() -> bool {
+    AnthLiveAsk("Say pong.").trim().length() > 0
+}
+
+function anth_live_streams() -> bool {
+    let stream = ai.stream.from_spec<string>(AnthLiveAsk@spec("Say pong."));
+    stream.final().trim().length() > 0
+}
+
+function anth_live_tool_round_trip() -> bool {
+    AnthLiveTools("What is the temperature in Paris?").includes("21")
+}
+
+testset "live" with testing.Sequential() {
+    // Always registered: guarantees a non-empty selection for `--profile live`.
+    test "preconditions" {
+        assert.is_true(true)
+    }
+
+    if (baml.env.get("ANTHROPIC_API_KEY") != null) {
+        test "anthropic_text" {
+            assert.is_true(anth_live_answers())
+        }
+
+        test "anthropic_stream" {
+            assert.is_true(anth_live_streams())
+        }
+
+        test "anthropic_tool_round_trip" {
+            assert.is_true(anth_live_tool_round_trip())
+        }
+    } else {
+        log.warn("live::anthropic not registered: ANTHROPIC_API_KEY is unset")
+    }
+}
+
+// ─── journal content blocks: media in tool results and user turns ─────────────
+//
+// Anthropic column of the lowering table (`_lower_block` in messages.baml):
+// image and pdf are Accepted inside `tool_result.content` and in user turns;
+// audio and video are Rejected everywhere.
+
+function _anth_media_body(media: image | audio | video | pdf) -> json {
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    anth_render_body(
+        cl,
+        AnthMockTools@spec("weather?"),
+        root.llm_mock.media_journal("anthropic/claude-haiku-4-5", media),
+    )
+}
+
+// The tool-result user turn and the following user turn merge into one
+// message: [tool_result(text), tool_result(blocks), text, image]. The
+// text-only result keeps `content` as a plain string.
+function anthropic_journal_image_accepted() -> string {
+    let body = _anth_media_body(root.llm_mock.media_png());
+    let m = ".messages[2].content";
+    [
+        baml.json.path<string>(body, ".messages[2].role"),
+        baml.json.path<string>(body, `${m}[0].content`),
+        baml.json.path<string>(body, `${m}[1].content[0].text`),
+        baml.json.path<string>(body, `${m}[1].content[1].type`),
+        baml.json.path<string>(body, `${m}[1].content[1].source.data`),
+        baml.json.path<string>(body, `${m}[2].text`),
+        baml.json.path<string>(body, `${m}[3].type`),
+        baml.json.path<string>(body, `${m}[3].source.media_type`),
+        baml.json.path_or<string>(body, ".messages[3].role", "absent"),
+    ].join("|")
+}
+
+test "anthropic_journal_image_accepted" {
+    assert.equal(
+        anthropic_journal_image_accepted(),
+        "user|sunny in SF|captured:|image|SGVsbG8=|Screenshot after the tool ran:|image|image/png|absent",
+    )
+}
+
+// Audio has no input block at any position: the typed error fires before a
+// request exists, for a tool result exactly as for a user turn.
+function anthropic_journal_audio_rejected() -> string {
+    baml.json.stringify(_anth_media_body(root.llm_mock.media_mp3())) catch_all (e) {
+        let invalid: ai.errors.InvalidRequest => invalid.detail,
+        _ => `unexpected error class: ${e.to_string()}`,
+    }
+}
+
+test "anthropic_journal_audio_rejected" {
+    assert.contains(anthropic_journal_audio_rejected(), "Anthropic does not support audio prompt input")
+}
+
+// `ai.wire.sanitize_for_client` closes a tool call still unanswered when a
+// user turn arrives, whatever the turn carries.
+function anthropic_orphaned_tool_call_closed_before_user_turn() -> string {
+    let cl = anthropic.Client.new(model = "claude-haiku-4-5", api_key = "test-key");
+    let args: map<string, unknown> = { "city": "SF" };
+    let journal = ai.Journal {
+        log: [
+            ai.events.AssistantMessage {
+                content: [ai.content.ToolUse { id: "t1", name: "anth_weather", args: args }],
+                resolved_model: ai.events.ModelKey { provider: "anthropic", model: "claude-haiku-4-5" },
+                requested_model: "claude-haiku-4-5",
+            },
+            ai.events.UserMessage.of(["never mind, look at this instead", root.llm_mock.media_png()]),
+        ],
+    };
+    let body = anth_render_body(cl, AnthMockPlain@spec(), journal);
+    [
+        baml.json.path<string>(body, ".messages[2].content[0].type"),
+        baml.json.path<string>(body, ".messages[2].content[0].tool_use_id"),
+        baml.json.path<bool>(body, ".messages[2].content[0].is_error").to_string(),
+        baml.json.path<string>(body, ".messages[2].content[1].text"),
+        baml.json.path<string>(body, ".messages[2].content[2].type"),
+    ].join("|")
+}
+
+test "anthropic_orphaned_tool_call_closed_before_user_turn" {
+    assert.equal(
+        anthropic_orphaned_tool_call_closed_before_user_turn(),
+        "tool_result|t1|true|never mind, look at this instead|image",
+    )
+}

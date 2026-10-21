@@ -1,0 +1,6 @@
+name = "splay 2k"
+description = "Octane Splay: 4,000 insert/remove modifications of a 2,000-node splay tree with payloads"
+origin = "Octane Splay"
+expect = "9294826652000"
+jobs = 2
+warmup = 1

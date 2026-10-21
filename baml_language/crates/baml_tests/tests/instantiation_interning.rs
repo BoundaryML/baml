@@ -15,21 +15,27 @@ use baml_tests::engine::compile_source;
 use bex_vm_types::Object;
 
 /// Collect the pool indices of every `Object::GenericFunction` whose type
-/// arguments (by display) mention `needle`.
+/// arguments reach a head with `fq_name`'s tag. An emitted program's heads
+/// carry the tag the linker assigned their declaration, so mentions are
+/// found by identity rather than by rendered name.
 fn generic_function_indices_mentioning(
     program: &bex_vm_types::Program,
-    needle: &str,
+    fq_name: &str,
 ) -> Vec<usize> {
+    let needle = baml_tests::engine::declared_type_tag(program, fq_name)
+        .unwrap_or_else(|| panic!("`{fq_name}` should be declared"));
     let mut indices = Vec::new();
     for i in 0..program.objects.len() {
         if let Some(Object::GenericFunction(gf)) = program.objects.get(i) {
-            let args = gf
-                .type_args
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>()
-                .join(",");
-            if args.contains(needle) {
+            let mut mentions = false;
+            for arg in &gf.type_args {
+                arg.visit_heads(&mut |head| {
+                    if head.tag() == needle {
+                        mentions = true;
+                    }
+                });
+            }
+            if mentions {
                 indices.push(i);
             }
         }
@@ -65,8 +71,8 @@ function other_one() -> bool {
 "#,
     );
 
-    let marker = generic_function_indices_mentioning(&program, "Marker");
-    let other = generic_function_indices_mentioning(&program, "Other");
+    let marker = generic_function_indices_mentioning(&program, "user.Marker");
+    let other = generic_function_indices_mentioning(&program, "user.Other");
 
     // Interning: two `identity<Marker>` references share ONE pooled object.
     assert_eq!(

@@ -159,7 +159,7 @@ pub(crate) fn render_for_test(query: &[&str]) -> String {
             .iter()
             .map(|part| (*part).to_string())
             .collect::<Vec<_>>(),
-        RuntimeCli::command_with_internal(false),
+        RuntimeCli::command().term_width(100),
     )
     .unwrap()
     .help
@@ -202,16 +202,16 @@ mod tests {
         let concise = normalize_snapshot(&render_for_test(&[]));
         insta::assert_snapshot!("root_concise_help", concise);
         insta::assert_snapshot!(
-            "describe_detailed_help",
-            normalize_snapshot(&render_for_test(&["describe"]))
-        );
-        insta::assert_snapshot!(
             "run_detailed_help",
             normalize_snapshot(&render_for_test(&["run"]))
         );
         insta::assert_snapshot!(
             "test_detailed_help",
             normalize_snapshot(&render_for_test(&["test"]))
+        );
+        insta::assert_snapshot!(
+            "describe_detailed_help",
+            normalize_snapshot(&render_for_test(&["describe"]))
         );
     }
 
@@ -232,7 +232,7 @@ mod tests {
         let error = render(&["auth".to_string(), "missing".to_string()]).unwrap_err();
         let message = error.to_string();
         assert!(message.contains("no command `missing` for `baml auth`"));
-        assert!(message.contains("whoami"));
+        assert!(message.contains("status"));
         assert!(message.contains("logout"));
     }
 

@@ -64,11 +64,9 @@ Type-shape fixture paths (representative):
 baml_sdk/Baml.java                          # runtime anchor (typemap + bytecode init)
 baml_sdk/Fns.java                           # root-namespace free functions
 baml_sdk/Foo.java
-baml_sdk/Foo$stream.java                    # stream companion, in-package
 baml_sdk/inlinedbaml.b64                    # compiled bytecode, base64 resource
 baml_sdk/primitives/Fns.java
 baml_sdk/primitives/Primitives.java
-baml_sdk/primitives/Primitives$stream.java
 baml_sdk/enums/Sentiment.java
 baml_sdk/symbol_collisions/lorem/Ipsum.java
 baml_sdk/void$/Fns.java                      # `void` namespace, keyword-escaped
@@ -84,14 +82,6 @@ Function-call fixture paths follow the same pattern
 > exist by virtue of their directory, so a container namespace emits *nothing*.
 > Reason: Java has no module-object indirection to lazily populate.
 > `sdkgen_java/src/lib.rs:15-16`.
-
-> ⚠ **Deviation from Python:** `$stream` companions stay **in the base type's
-> package** with a `$stream`-suffixed name (`Foo$stream`, `primitives/Primitives$stream`),
-> because `$` is a legal Java identifier character. Python cannot use `$` in an
-> identifier, so it emits a **parallel `stream_types/<ns>` package** and routes
-> the `$stream` FQN there via the type map. Reason: keep the BAML name verbatim;
-> no parallel package tree. `sdkgen_java/src/routing.rs:19-23`. (See
-> *Stream Companion Types*.)
 
 > ⚠ **Deviation from Python:** Package/segment names that collide with Java
 > reserved words are escaped with a trailing `$` (`void` → `void$`), not left
@@ -121,8 +111,7 @@ public final class Baml {
             if (in == null) {
                 throw new IllegalStateException("baml_sdk/inlinedbaml.b64 not found on the classpath — …");
             }
-            byte[] b64 = in.readAllBytes();
-            byte[] bytecode = java.util.Base64.getMimeDecoder().decode(b64);
+            byte[] bytecode = in.readAllBytes();
             baml_bridge.BamlFfi.initFromBytecode(bytecode);
         } catch (java.io.IOException e) {
             throw new java.io.UncheckedIOException("failed to read embedded BAML bytecode", e);
@@ -297,7 +286,7 @@ public static byte[] round_trip_uint8_array(byte[] b) {
 > `BamlType.union(BamlType.INT, BamlType.STRING)`), pooled per holder as a
 > `private static final BamlType $RET{n}` constant — so the decoder resolves union
 > arm order and element types without trusting the wire shape. A wholly
-> wire-driven return (bigint / uint8array / null / void / media / callable /
+> wire-driven return (bigint / uint8array / null / media / callable /
 > handle / the `unknown`-family) passes the literal `null`. The old
 > stringly-typed grammar (`"int"`, `"union[int;string]"`) and its hand-rolled
 > parser were **deleted** (`763a226ef`). Python's `.pyi` is the typed surface;
@@ -506,8 +495,7 @@ reified receiver so the class type args can be recovered")` when
 
 > ⚠ **Deviation from Python:** A BAML method/factory whose name is a Java reserved
 > word is `$`-escaped (`new` → `new$`, and its async sibling `new$_async`).
-> Python only escapes `$` (e.g. `$stream` → base name); Java escapes the JLS
-> keyword set. `routing.rs:119-133`; real output `GenericBox.java:24-40`.
+> Python only has to avoid `$`; Java escapes the JLS keyword set. `routing.rs:119-133`; real output `GenericBox.java:24-40`.
 
 **Explicit type-argument bindings** (Python's `identity[int](5)` subscript and
 low-level `_types={T: int}` kwarg, plus the `class_type_params=[…]` /
@@ -595,10 +583,11 @@ class is generated for it (`translate_ty.rs:101-108`; `lib.rs` test asserts
 // baml_bridge/src/main/java/baml_sdk/baml/media/Image.java (runtime-owned, hand-written)
 public final class Image implements BamlMedia {
     public static Image from_url(String url, String mimeType) { … }
-    public static Image from_file(String path, String mimeType) { … }
+    public static Image from_file(String path, String mimeType) { … }   // reads the file now
+    public static Image from_file_content(String file, String base64, String mimeType) { … }
     public static Image from_base64(String base64, String mimeType) { … }
     public String url()  { return handle.mediaUrl(); }
-    public String file() { return handle.mediaFile(); }
+    public String name() { return handle.mediaName(); }   // the file's base name, if any
     public String base64() { return handle.mediaBase64(); }
     public String mime_type() { return handle.mediaMimeType(); }   // PreserveCase: NOT mimeType()
 }
@@ -631,13 +620,13 @@ The runtime-owned `Stream` is re-exported: `ai.stream.Stream` resolves to
 
 **Streaming calls / `Stream`**: **LANDED** (commit `a6e3ca99e`, the streaming
 capability). `baml_bridge/BamlStream.java` is a **real**
-`BamlStream<TPartial, TFinal>` wrapping the tagged-heap handle:
+`BamlStream<T>` wrapping the tagged-heap handle:
 `next()` / `get_final()` (and their `_async` siblings) re-enter the engine via
 ordinary `BamlFfi.callSync`/`callAsync`. Decode retains the tagged handle's
 concrete `ty.class_ty.name`; the wrapper derives `<FQN>.next` / `<FQN>.final`
 from that identity and passes `this` as the `self` receiver with a **`null`
-(wire-driven) descriptor**. Generated `$stream` companions return
-`baml_bridge.BamlStream<TStream, TFinal>` directly. Exhaustion returns a
+(wire-driven) descriptor**. Generated `_stream` bindings return
+`baml_bridge.BamlStream<T>` directly. Exhaustion returns a
 runtime-owned `baml_sdk.ai.stream.Done` **value** (no `null`, no exception),
 registered in the typemap under `ai.stream.Done`. Decode maps
 `ADT_TAGGED_HEAP_HANDLE` to `BamlStream.fromHandle` after retaining its class
@@ -650,46 +639,6 @@ escape to `get_final`/`get_final_async` (Java reserved word; OWNER decision
 `llm_functions` fixture now exercises the deeper `$build_request` round-trip
 end-to-end on keyless replay (`TestStreamingE2e`, `llm_functions` 21/21), so it is
 no longer "codegen-only" — the runtime behavior is verified offline.
-
-## Stream Companion Types
-
-Java keeps the compiler-produced `$stream` companion as an **in-package class
-with the `$stream` name kept verbatim** — every optional-widened field boxes:
-
-```java
-// baml_sdk/primitives/Primitives$stream.java
-public final class Primitives$stream {
-    private final java.lang.Long int_field;       // int   → boxed Long   (partial ⇒ nullable)
-    private final java.lang.Double float_field;    // float → boxed Double
-    private final java.lang.String string_field;
-    private final java.lang.Boolean bool_field;
-    private final java.lang.Void null_field;
-    private final byte[] uint8array_field;
-    …
-}
-```
-
-The type map routes both the base and the companion FQN to their in-package Java
-classes (from `Baml.java`):
-
-```java
-registerClass("user.primitives.Primitives",        "baml_sdk.primitives.Primitives",        …);
-registerClass("user.primitives.Primitives$stream", "baml_sdk.primitives.Primitives$stream", …);
-```
-
-Generic and recursive companions follow the same in-package convention
-(`generics/WrapperMethods$stream.java`, `aliases/RecList$stream.java`). As in
-Python, codegen consumes the compiler-produced `$stream` class shape as a regular
-class; it does not derive a `Partial[T]` transformation at Java codegen time.
-
-> ⚠ **Deviation from Python:** Python puts companions in a **parallel
-> `stream_types/<ns>` package** and names the class the base name (because `$` is
-> not a Python identifier); the type map maps `…$stream` FQN → `stream_types`
-> module. Java keeps `<Name>$stream` **beside its base type** (no parallel tree).
-> `routing.rs:19-23,141-158` (routing ignores the `$stream` suffix). *Note (GAP B,
-> handoff):* the ported `TestStreams` tests were written to Python's
-> `stream_types.*` layout; DECIDED 2026-07-17 (Option B): tests were retargeted to
-> `$stream`, house-rule, vs move the emitter to parallel packages).
 
 ## Optional Function Arguments
 
@@ -951,9 +900,9 @@ conditionally-always via `__traceback__`). The generated `Person` /
 
 The generated Java SDK root includes:
 
-- **`inlinedbaml.b64`** — the compiler-produced bytecode as a base64 classpath
-  resource, decoded in `Baml.java`'s static initializer via
-  `Base64.getMimeDecoder()` (`lib.rs:11-13,320-326`; `Baml.java:450-460`);
+- **`inlinedbaml.b64`** — the compiler-produced bytecode as a base64-encoded LZ4
+  classpath resource, which `Baml.java`'s static initializer passes unchanged to
+  `BamlFfi.initFromBytecode` for native decoding;
 - **`Baml.java`** — the runtime anchor whose `static {}` block registers the type
   map (`registerClass` / `registerEnum` / `registerUnion`, carrying field
   declaration order + per-field decode descriptors) and calls

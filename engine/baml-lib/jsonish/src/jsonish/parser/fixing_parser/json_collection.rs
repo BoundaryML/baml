@@ -74,7 +74,7 @@ impl From<JsonCollection> for Option<Value> {
             JsonCollection::Object(keys, values, object_completion) => {
                 // log::debug!("keys: {:?}", keys);
                 let mut object: Vec<_> = Vec::new();
-                for (key, value) in keys.into_iter().zip(values.into_iter()) {
+                for (key, value) in keys.into_iter().zip(values) {
                     object.push((key, value));
                 }
                 Value::Object(object, object_completion)

@@ -3,6 +3,7 @@
 //! Identifier allocation, file routing, and C# validation are completed before
 //! the shared SDK output writer installs the generated tree.
 
+mod hash;
 pub mod names;
 pub mod pipeline;
 pub mod routing;
@@ -14,7 +15,7 @@ mod semantic;
 
 use std::{fmt, path::PathBuf};
 
-use baml_codegen_types::{OutputWriterError, SymbolPool, write_generated_output};
+use baml_sdkgen_types::{OutputWriterError, SymbolPool, write_generated_output};
 pub use output::{GenerationManifest, OutputValidationError};
 pub use semantic::CSharpGenerationError;
 

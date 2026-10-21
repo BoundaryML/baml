@@ -9,8 +9,8 @@ class NestedQuotes {
 
 // Test quotes in template strings
 function FormatMessage(name: string) -> string {
-  client GPT4
-  prompt `
+  client: GPT4
+  prompt: `
     Generate a message for "${name}"
     Include quotes like: "Welcome, '${name}'!"
   `

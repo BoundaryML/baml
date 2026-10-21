@@ -2,7 +2,7 @@ function configured_ast_grep_version(repo_root: string) -> string {
     for (let line in baml.fs.read(`${repo_root}/mise.toml`).lines()) {
         let trimmed = line.trim();
         if (trimmed.starts_with("ast-grep = \"") && trimmed.ends_with("\"")) {
-            return trimmed.substring(12, trimmed.length() - 1);
+            return trimmed.slice(12, trimmed.length() - 1);
         }
     }
     throw baml.errors.InvalidArgument {

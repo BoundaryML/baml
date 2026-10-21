@@ -1,9 +1,9 @@
-use crate::{baml_db, baml_tyannotated};
+use crate::{baml_db, baml_ty};
 
 test_deserializer!(
     test_map,
     r#"{"a": "b"}"#,
-    baml_tyannotated!(map<string, string>),
+    baml_ty!(map<string, string>),
     baml_db!{},
     {"a": "b"}
 );
@@ -11,7 +11,7 @@ test_deserializer!(
 test_deserializer!(
     test_map_with_quotes,
     r#"{"\"a\"": "\"b\""}"#,
-    baml_tyannotated!(map<string, string>),
+    baml_ty!(map<string, string>),
     baml_db!{},
     {"\"a\"": "\"b\""}
 );
@@ -19,7 +19,7 @@ test_deserializer!(
 test_deserializer!(
     test_map_with_extra_text,
     r#"{"a": "b"} is the output."#,
-    baml_tyannotated!(map<string, string>),
+    baml_ty!(map<string, string>),
     baml_db!{},
     {"a": "b"}
 );
@@ -27,7 +27,7 @@ test_deserializer!(
 test_deserializer!(
     test_map_with_invalid_extra_text,
     r#"{a: b} is the output."#,
-    baml_tyannotated!(map<string, string>),
+    baml_ty!(map<string, string>),
     baml_db!{},
     {"a": "b"}
 );
@@ -35,7 +35,7 @@ test_deserializer!(
 test_deserializer!(
     test_map_with_object_values,
     r#"{first: {"a": 1, "b": "hello"}, 'second': {"a": 2, "b": "world"}}"#,
-    baml_tyannotated!(map<string, Foo>),
+    baml_ty!(map<string, Foo>),
     baml_db!{
         class Foo {
             a: int,
@@ -51,7 +51,7 @@ test_deserializer!(
 {
     "a": "b
 "#,
-    baml_tyannotated!(map<string, string>),
+    baml_ty!(map<string, string>),
     baml_db!{},
     {"a": "b\n"}
 );
@@ -64,7 +64,7 @@ test_deserializer!(
         "b": "c",
         "d":
 "#,
-    baml_tyannotated!(map<string, (map<string, (string | null)>)>),
+    baml_ty!(map<string, (map<string, (string | null)>)>),
     baml_db!{},
     // NB: we explicitly drop "d" in this scenario, even though the : gives us a signal that it's a key,
     // and we could default to 'null' for the value, because this is reasonable behavior
@@ -78,7 +78,7 @@ test_deserializer!(
     "a
     ": "b"}
 "#,
-    baml_tyannotated!(map<string, string>),
+    baml_ty!(map<string, string>),
     baml_db!{},
     {"a\n    ": "b"}
 );
@@ -92,7 +92,7 @@ test_deserializer!(
     null: "n"
 }
 "#,
-    baml_tyannotated!(map<string, string>),
+    baml_ty!(map<string, string>),
     baml_db!{},
     {"5": "b", "2.17": "e", "null": "n"}
 );
@@ -101,7 +101,7 @@ test_deserializer!(
 test_deserializer!(
     test_union_of_class_and_map,
     r#"{"a": 1, "b": "hello"}"#,
-    baml_tyannotated!(Foo | map<string, string>),
+    baml_ty!(Foo | map<string, string>),
     baml_db!{
         class Foo {
             a: string,
@@ -115,7 +115,7 @@ test_deserializer!(
 test_deserializer!(
     test_union_of_map_and_class,
     r#"{"a": 1, "b": "hello"}"#,
-    baml_tyannotated!(Foo | map<string, string>),
+    baml_ty!(Foo | map<string, string>),
     baml_db!{
         class Foo {
             a: string,
@@ -128,7 +128,7 @@ test_deserializer!(
 test_deserializer!(
     test_map_with_enum_keys,
     r#"{"A": "one", "B": "two"}"#,
-    baml_tyannotated!(map<Key, string>),
+    baml_ty!(map<Key, string>),
     baml_db!{ enum Key { A, B } },
     {"A": "one", "B": "two"}
 );
@@ -136,7 +136,7 @@ test_deserializer!(
 test_partial_deserializer!(
     test_map_with_enum_keys_streaming,
     r#"{"A": "one", "B": "two"}"#,
-    baml_tyannotated!(map<Key, string>),
+    baml_ty!(map<Key, string>),
     baml_db!{ enum Key { A, B } },
     {"A": "one", "B": "two"}
 );
@@ -144,39 +144,36 @@ test_partial_deserializer!(
 test_partial_deserializer!(
     test_map_with_literal_keys_streaming,
     r#"{"A": "one", "B": "two"}"#,
-    baml_tyannotated!(map<("A" | "B"), string>),
+    baml_ty!(map<("A" | "B"), string>),
     baml_db!{},
     {"A": "one", "B": "two"}
 );
 
 // ============================================================================
-// Map parse_as tests
-// (note that streaming semantics mean the parse_as usually goes on the inner union)
+// Maps with nullable values
 // ============================================================================
 
-// Map parse_as with narrower value type
 test_deserializer!(
-    test_map_parse_as_narrower_value,
+    test_map_nullable_value,
     r#"{"a": 1}"#,
-    baml_tyannotated!(map<string, (int | null) @parse_without_null>),
+    baml_ty!(map<string, (int | null)>),
     baml_db!{},
     {"a": 1}
 );
 
-// Partial map through parse_as
+// An incomplete number has no partial parse and `null` is not one either: the entry waits.
 test_partial_deserializer!(
-    test_map_parse_as_partial,
+    test_map_nullable_value_partial_entry_dropped,
     r#"{"a": 1"#,
-    baml_tyannotated!(map<string, (int | null) @parse_without_null>),
-    baml_db!{},
-    {"a": 1}
-);
-
-// null value rejected by parse_as(map<string, int>) - entry dropped
-test_deserializer!(
-    test_map_parse_as_rejects_null_value,
-    r#"{"a": null}"#,
-    baml_tyannotated!(map<string, (int | null) @parse_without_null>),
+    baml_ty!(map<string, (int | null)>),
     baml_db! {},
     {}
+);
+
+test_deserializer!(
+    test_map_nullable_value_accepts_null,
+    r#"{"a": null}"#,
+    baml_ty!(map<string, (int | null)>),
+    baml_db! {},
+    {"a": null}
 );

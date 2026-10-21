@@ -1,23 +1,23 @@
 using Baml;
-using CsharpSlice;
+using CsharpBasicCalls;
 
 const string Text = "héllo\0雪";
 using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
-string synchronous = Functions.PrimitiveSlice(
+string synchronous = Functions.BasicCalls(
     flag: true,
     count: 42,
     ratio: 1.25,
     text: Text,
     nullable: null,
-    cancellation.Token);
-string asynchronous = await Functions.PrimitiveSliceAsync(
+    baml: new BamlOptions { CancellationToken = cancellation.Token });
+string asynchronous = await Functions.BasicCallsAsync(
     flag: false,
     count: -17,
     ratio: -2.5,
     text: Text,
     nullable: "present",
-    cancellation.Token);
+    baml: new BamlOptions { CancellationToken = cancellation.Token });
 Require(synchronous == Text && asynchronous == Text, "function example changed");
 
 BamlOptional<string?> omitted = default;
@@ -47,16 +47,17 @@ Require(
 BamlClient client = BamlClient.FromShorthand("openai/gpt-5");
 Require(client.Name == "openai/gpt-5", "client example changed");
 
-Func<long, CancellationToken, Task<long>> callback =
-    async (value, token) =>
+Func<long, Task<long>> callback =
+    async value =>
     {
         await Task.Yield();
+        CancellationToken token = Invocation.Current?.CancellationToken ?? CancellationToken.None;
         token.ThrowIfCancellationRequested();
         return checked(value * 2);
     };
-Require(await callback(21, cancellation.Token) == 42L, "callback example changed");
+Require(await callback(21) == 42L, "callback example changed");
 
-Func<BamlStream<string?, string>, Func<string?, Task>, CancellationToken, Task<string>>
+Func<BamlStream<string>, Func<string, Task>, CancellationToken, Task<string>>
     streamExample = ConsumeStreamAsync;
 Func<BamlHandle, BamlHandle> resourceExample = CloneResource;
 GC.KeepAlive(streamExample);
@@ -67,7 +68,8 @@ Require(await service.EchoAsync(Text, cancellation.Token) == Text, "DI example c
 
 try
 {
-    _ = await Functions.PrimitiveSliceAsync(true, 1, 1.0, Text, null, cancellation.Token);
+    _ = await Functions.BasicCallsAsync(true, 1, 1.0, Text, null,
+        baml: new BamlOptions { CancellationToken = cancellation.Token });
 }
 catch (BamlTypeMismatchException error)
 {
@@ -92,14 +94,14 @@ catch (BamlOperationCanceledException error)
 Console.WriteLine("csharp_documentation_consumer=ok");
 return 0;
 
-static async Task<TFinal> ConsumeStreamAsync<TPartial, TFinal>(
-    BamlStream<TPartial, TFinal> stream,
-    Func<TPartial, Task> onPartial,
+static async Task<T> ConsumeStreamAsync<T>(
+    BamlStream<T> stream,
+    Func<T, Task> onPartial,
     CancellationToken cancellationToken)
 {
     await using (stream)
     {
-        await foreach (TPartial partial in
+        await foreach (T partial in
             stream.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
             await onPartial(partial).ConfigureAwait(false);
@@ -127,11 +129,11 @@ public interface IPrimitiveService
 public sealed class PrimitiveService : IPrimitiveService
 {
     public Task<string> EchoAsync(string text, CancellationToken cancellationToken) =>
-        Functions.PrimitiveSliceAsync(
+        Functions.BasicCallsAsync(
             flag: true,
             count: 1,
             ratio: 1.0,
             text,
             nullable: null,
-            cancellationToken);
+            baml: new BamlOptions { CancellationToken = cancellationToken });
 }

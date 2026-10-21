@@ -87,10 +87,8 @@ impl Decoder {
                 self.data.push('\n');
                 self.has_data = true;
             }
-            "id" => {
-                if !value.contains('\0') {
-                    self.last_id = value.to_string();
-                }
+            "id" if !value.contains('\0') => {
+                self.last_id = value.to_string();
             }
             // "retry" and unknown fields are ignored.
             _ => {}

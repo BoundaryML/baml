@@ -1,0 +1,38 @@
+[package]
+name = "baml_query_profiles"
+version = { workspace = true }
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+homepage = { workspace = true }
+documentation = { workspace = true }
+repository = { workspace = true }
+license = { workspace = true }
+description = "Local profile-store providers for baml_query: binds a .baml/profiles-v1 store into a fixed snapshot, serves the catalog-v1 relations from the stream readers, and resolves value handles from the CAS"
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true
+
+# Providers may reach the store/reader leaf crate and the query core —
+# never bex_engine/bex_vm (scope §3.1).
+[package.metadata.ci]
+wasm_support = false
+
+[dependencies]
+baml_query = { workspace = true }
+bex_prof_store = { workspace = true }
+async-trait = { workspace = true }
+base64 = { workspace = true }
+datafusion = { workspace = true }
+hex = { workspace = true }
+num-bigint = { workspace = true }
+prost = { workspace = true }
+sha2 = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = [ "macros", "rt-multi-thread" ] }

@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0063
+
+  ⚠ unreachable arm
+     ╭─[errorcontext.baml:124:44]
+ 124 │ ╭─▶             baml.errors.InvalidArgument => {
+ 125 │ │                   "unreachable"
+ 126 │ ╰─▶             }
+     ╰────

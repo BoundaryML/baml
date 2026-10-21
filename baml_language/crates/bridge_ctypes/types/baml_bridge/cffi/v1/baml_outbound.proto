@@ -79,9 +79,11 @@ message BamlOutboundValue {
     BamlValuePromptAst prompt_ast_value = 18;
     bytes uint8array_value = 19;
     string bigint_value = 20;
-    // A reflected BAML type returned as a value (e.g. `reflect.type_of<T>()`).
+    // A reflected BAML type returned as a value (e.g. `reflect.Type.of<T>()`).
     // Shares the `BamlTy` representation with the inbound side.
     BamlTy ty_value = 21;
+    // Definition-carrying type handle. Identity is intentionally not encoded.
+    BamlTyDef ty_def_value = 22;
   }
 }
 
@@ -171,8 +173,17 @@ message BamlValueMedia {
   oneof value {
     string url = 3;
     string base64 = 4;
-    string file = 5;
+    BamlValueMediaFileContent file_content = 6;
   }
+  // A media value holds content, never a file path: field 5 named one.
+  reserved 5;
+  reserved "file";
+}
+
+// Base64 content that was read from a file, with the base name of that file.
+message BamlValueMediaFileContent {
+  string name = 1;
+  string base64 = 2;
 }
 
 message BamlValuePromptAst {
@@ -217,6 +228,19 @@ message BamlValuePromptAstSimpleMultiple {
 // `BamlOutboundValue` list previously passed to the dispatch FFI.
 message BamlToHostCall {
   repeated BamlToHostArg args = 1;
+}
+
+// V2 host dispatch envelope. The adapter owns the effective-state reference
+// and ordinary references in application_args/cancel until transferred or
+// released. application_args remains an encoded BamlToHostCall.
+message HostInvocation {
+  uint64 host_value_key = 1;
+  uint32 callback_id = 2;
+  bytes application_args = 3;
+  uint64 effective_state = 4;
+  uint64 host_environment = 5;
+  BamlOutboundValue cancel = 6;
+  optional uint64 deadline_ns = 7;
 }
 
 message BamlToHostArg {

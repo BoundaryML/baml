@@ -28,8 +28,10 @@
 // With that, `env!("CARGO_BIN_FILE_BAML_PACK_HOST_baml-pack-host")` would give
 // us the binary path, cargo would handle rebuilds, and we'd delete the setup
 // below. But `artifact = "bin"` requires `-Z bindeps` and is nightly-only as of
-// Rust 1.93 (2026-01). The workspace is pinned to stable, so nextest runs one
-// filtered setup script that builds the host before it launches any test case.
+// Rust 1.93 (2026-01). CI builds with `cargo build --tests --bins`, selecting
+// both packages and the same features as nextest, then sets
+// BAML_PACK_HOST_PREBUILT=1. Local nextest runs use a filtered setup script
+// to build the host when that outer prebuild was not requested.
 // Plain `cargo test` has no setup-script facility; its single test process uses
 // the fallback build in [`ensure_built`]. `baml pack` locates the host as a
 // sibling of the running `baml-cli`, so both paths build it into the same
@@ -39,6 +41,17 @@
 #![allow(unreachable_pub)] // Integration-test module; `pub` items are intentional.
 
 use std::{path::PathBuf, process::Command, sync::OnceLock};
+
+const SKILL_TEMPLATE: &str = include_str!("../../../../../skills/baml-core/SKILL.md");
+const TOOLCHAIN_VERSION_PLACEHOLDER: &str = "{{BAML_TOOLCHAIN_VERSION}}";
+
+pub fn installed_skill_content() -> String {
+    SKILL_TEMPLATE.replacen(
+        TOOLCHAIN_VERSION_PLACEHOLDER,
+        baml_version::CANONICAL_VERSION,
+        1,
+    )
+}
 
 /// Memoized host discovery for this test process. Nextest's filtered setup
 /// script prebuilds the host once for the whole run; plain `cargo test` falls
@@ -62,20 +75,46 @@ pub fn baml_cli() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_baml-cli"))
 }
 
-/// Shared on-disk bytecode-cache directory for spawned `baml-cli` invocations.
+/// Shared `BAML_HOME` for spawned `baml-cli` invocations that do not need a
+/// home of their own.
 ///
-/// Each e2e test drives the CLI against a fresh temp project, so the default
-/// cache location (`<project>/.baml/cache`) is always cold and every
-/// invocation recompiles the stdlib from scratch — the dominant cost of these
-/// suites. The cache is content-addressed and keyed by the compiler
-/// fingerprint, so one directory shared across tests, processes, and `cargo
-/// test` runs (it lives under `target/tmp`) is safe: the first invocation
-/// warms the stdlib entries, every later one serves them, and a rebuilt
-/// `baml-cli` invalidates itself via its fingerprint. Tests that assert on
-/// cold/warm cache behavior (e.g. `test_list_discovery_cache_e2e`) must keep
-/// setting their own isolated `BAML_CACHE_DIR` instead of this one.
-pub fn shared_cache_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("baml-cli-e2e-cache")
+/// Each e2e test drives the CLI against a fresh temp project, so a fresh
+/// `$BAML_HOME/build/cache` would be cold and every invocation would recompile
+/// the stdlib from scratch, the dominant cost of these suites. The build cache
+/// is content-addressed and keyed by the compiler fingerprint, so one
+/// directory shared across tests, processes, and `cargo test` runs (it lives
+/// under `target/tmp`) is safe: the first invocation warms the stdlib
+/// entries, every later one serves them, and a rebuilt `baml-cli` invalidates
+/// itself via its fingerprint. Tests that assert on cold/warm cache behavior
+/// (e.g. `test_list_discovery_cache_e2e`) must keep an isolated `BAML_HOME`
+/// instead of this one.
+pub fn shared_baml_home() -> PathBuf {
+    let home = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("baml-cli-e2e-home");
+    let config = home.join("config.toml");
+    if !config.exists() {
+        std::fs::create_dir_all(&home).expect("create shared BAML_HOME");
+        std::fs::write(config, "[update]\nauto_check = false\n").expect("write shared config");
+    }
+    home
+}
+
+/// Point `home/build/cache` at the shared build cache, for tests that need
+/// their own `BAML_HOME` (auth, telemetry) but not a cold cache. A no-op where
+/// symlinks are unavailable (the test then simply starts cold).
+pub fn share_build_cache(home: &std::path::Path) {
+    #[cfg(unix)]
+    {
+        let shared = shared_baml_home().join("build").join("cache");
+        std::fs::create_dir_all(&shared).expect("create shared build cache");
+        let build = home.join("build");
+        std::fs::create_dir_all(&build).expect("create build dir");
+        let link = build.join("cache");
+        if !link.exists() {
+            std::os::unix::fs::symlink(&shared, &link).expect("link shared build cache");
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = home;
 }
 
 /// Ensure `baml-pack-host` is built next to `baml-cli` and return both paths.

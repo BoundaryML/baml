@@ -36,17 +36,6 @@ testset "integration" {
   test "creates_order" { assert.is_true(true) }
 }
 
-client TestClient = openai.OpenAiClient.new(model = "gpt-4o-mini");
-
-function Summarize(input: string) -> string {
-  client TestClient
-  prompt `${input}`
-}
-
-test BasicTest {
-  functions [Summarize]
-  args { input "hello" }
-}
 "##,
     )
     .unwrap();
@@ -57,19 +46,41 @@ fn run(dir: &Path, args: &[&str]) -> std::process::Output {
 }
 
 fn run_with_env(dir: &Path, args: &[&str], env: Option<(&str, &str)>) -> std::process::Output {
+    run_impl(dir, args, env, true)
+}
+
+fn run_cache_sensitive(
+    dir: &Path,
+    args: &[&str],
+    env: Option<(&str, &str)>,
+) -> std::process::Output {
+    run_impl(dir, args, env, false)
+}
+
+fn run_impl(
+    dir: &Path,
+    args: &[&str],
+    env: Option<(&str, &str)>,
+    share_build_cache: bool,
+) -> std::process::Output {
     let home = dir.join(".baml-home");
     std::fs::create_dir_all(&home).unwrap();
+    if share_build_cache {
+        // These tests exercise profile selection and lazy expansion, not cold
+        // cache behavior: share content-addressed bytecode/stdlib entries
+        // across their otherwise-isolated projects.
+        common::share_build_cache(&home);
+    }
     std::fs::write(home.join("config.toml"), "[update]\nauto_check = false\n").unwrap();
     let mut command = Command::new(common::baml_cli());
     command
         .args(args)
         .current_dir(dir)
         .env("BAML_CLI_ALLOW_DIRECT", "1")
-        // Pin the human preset so inherited agent env (CLAUDECODE/AI_AGENT/…)
-        // cannot flip `--output-preset auto` to `agent` and hide progress lines.
-        .env("BAML_OUTPUT_PRESET", "human")
-        .env("BAML_HOME", home)
-        .env("BAML_CACHE_DIR", dir.join(".baml-cache"));
+        // Ignore inherited agent env (CLAUDECODE/AI_AGENT/…): it would flip
+        // `--output-preset auto` to `agent` and hide progress lines.
+        .env("DEV_BAML_CLI_DISABLE_AGENT_DETECTION", "1")
+        .env("BAML_HOME", home);
     if let Some((name, value)) = env {
         command.env(name, value);
     }
@@ -92,7 +103,6 @@ fn default_named_and_no_profile_select_expected_canonical_ids() {
         String::from_utf8_lossy(&regular.stderr)
     );
     assert!(stdout(&regular).contains("root.orders::unit::parses_order"));
-    assert!(stdout(&regular).contains("root.orders.Summarize::BasicTest"));
     assert!(!stdout(&regular).contains("integration"));
 
     let integration = run(tmp.path(), &["test", "--list", "--profile", "integration"]);
@@ -113,7 +123,6 @@ fn default_named_and_no_profile_select_expected_canonical_ids() {
     );
     assert!(stdout(&all).contains("root.orders::unit::parses_order"));
     assert!(stdout(&all).contains("root.orders::integration::hello_test"));
-    assert!(stdout(&all).contains("root.orders.Summarize::BasicTest"));
 }
 
 #[test]
@@ -381,11 +390,11 @@ testset "transient" {
     )
     .unwrap();
 
-    let cold_failure = run(tmp.path(), &["test", "--list", "--no-profile"]);
+    let cold_failure = run_cache_sensitive(tmp.path(), &["test", "--list", "--no-profile"], None);
     assert!(cold_failure.status.success());
     assert!(stdout(&cold_failure).contains("(failed to expand)"));
 
-    let retry = run_with_env(
+    let retry = run_cache_sensitive(
         tmp.path(),
         &["test", "--list", "--no-profile", "-i", "*::path/to/case"],
         Some(("PROFILE_EXPAND_OK", "1")),
@@ -397,4 +406,67 @@ testset "transient" {
     );
     assert!(stdout(&retry).contains("root.orders::transient::path/to/case"));
     assert!(!stdout(&retry).contains("(failed to expand)"));
+}
+
+/// Registration must observe mutable records, including edits that keep array
+/// lengths unchanged. Counting a cached name set would silently miss these.
+#[test]
+fn registration_suffixes_follow_current_mutable_names() {
+    let tmp = tempfile::tempdir().unwrap();
+    create_project(tmp.path());
+    std::fs::write(
+        tmp.path().join("baml_src/ns_orders/tests.baml"),
+        r#"
+test "registration" {
+  let c = testing.TestCollector.new("");
+  let body: testing.TestBody = () -> void {};
+  c.register_test("item#explicit", body, null);
+  c.register_test("item", body, null);
+  c.register_test("item", body, null);
+  assert.equal(c.tests[1].name, "item#2");
+  assert.equal(c.tests[2].name, "item#3");
+
+  c.tests[0].name = "unrelated";
+  c.register_test("item", body, null);
+  assert.equal(c.tests[3].name, "item#3");
+  c.tests[0] = testing.TestRegistration { name: "item#replacement", body: body, runner: null };
+  c.register_test("item", body, null);
+  assert.equal(c.tests[4].name, "item#5");
+  c.tests = [
+    testing.TestRegistration { name: "item_extra", body: body, runner: null },
+    testing.TestRegistration { name: "other", body: body, runner: null },
+    testing.TestRegistration { name: "third", body: body, runner: null },
+    testing.TestRegistration { name: "fourth", body: body, runner: null },
+    testing.TestRegistration { name: "fifth", body: body, runner: null },
+  ];
+  c.register_test("item", body, null);
+  assert.equal(c.tests[5].name, "item");
+
+  let collect: testing.TestSetBody = (child: testing.TestCollector) -> void {};
+  c.register_test_set("item", collect, null);
+  c.register_test_set("item", collect, null);
+  assert.equal(c.testsets[0].name, "item");
+  assert.equal(c.testsets[1].name, "item#2");
+  c.testsets[0].name = "other";
+  c.register_test_set("item", collect, null);
+  assert.equal(c.testsets[2].name, "item#2");
+  c.testsets[1] = testing.TestSetRegistration { name: "other", collector: collect, runner: null };
+  c.register_test_set("item", collect, null);
+  assert.equal(c.testsets[3].name, "item#2");
+}
+"#,
+    )
+    .unwrap();
+
+    let output = run(tmp.path(), &["test", "--no-profile"]);
+    let combined = format!(
+        "{}{}",
+        stdout(&output),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.status.success(), "{combined}");
+    assert!(
+        combined.contains("1 passed, 0 failed, 1 total"),
+        "{combined}"
+    );
 }

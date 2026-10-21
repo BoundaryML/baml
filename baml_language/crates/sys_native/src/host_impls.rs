@@ -34,15 +34,12 @@
 
 use std::sync::Arc;
 
-use baml_type::RuntimeTy;
 use bex_external_types::validate_host_return;
 use bex_heap::BexHeap;
 use bridge_ctypes::CffiHandleTableOptions;
 use prost::Message as _;
-use sys_ops::io::{
-    self, BexExternalValue, CallId, SysOpContext, SysOpOutput, VmBamlError, VmRustFnError,
-};
-use sys_types::{OpError, SysOp, SysOpResult, VmPanic};
+use sys_ops::io::{self, BexExternalValue, CallId, SysOpContext, SysOpOutput, VmRustFnError};
+use sys_types::{OpError, SapTy as RuntimeTy, SysOp, SysOpResult, VmInternalError, VmPanic};
 
 use crate::{NativeSysOps, host_dispatch};
 
@@ -50,7 +47,7 @@ impl io::IoNamespaceHost for NativeSysOps {
     fn call_host_value(
         &self,
         _heap: &Arc<BexHeap>,
-        _call_id: CallId,
+        origin_call_id: CallId,
         handle: BexExternalValue,
         args: Vec<BexExternalValue>,
         type_arg_0: RuntimeTy,
@@ -62,7 +59,7 @@ impl io::IoNamespaceHost for NativeSysOps {
         // forwards the throw via `OpError.host_thrown` (set by
         // `host_dispatch::complete_with_throw` on the bridge side).
         _type_arg_1: RuntimeTy,
-        _ctx: &SysOpContext,
+        ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
         // Extract the HostValueArc from the incoming handle and confirm
         // it's a callable. Only `HostValueKind::Callable` is dispatchable —
@@ -72,8 +69,11 @@ impl io::IoNamespaceHost for NativeSysOps {
         // identity; dispatching
         // it would either find no entry in the bridge's callable registry
         // (returning a confusing "no callable for key" error) or, worse,
-        // collide with a callable that happens to share its key. Reject
-        // up front with a clear `InvalidArgument`.
+        // collide with a callable that happens to share its key. Reject up
+        // front — this sysop is reached only from compiler-synthesized wrapper
+        // closures, which always pass a callable `HostValue`, and its `throws`
+        // clause is the callable's own `E`, so neither shape is something the
+        // contract can carry.
         let host_arc = match handle {
             BexExternalValue::HostValue(arc)
                 if arc.kind == bex_external_types::HostValueKind::Callable =>
@@ -81,7 +81,7 @@ impl io::IoNamespaceHost for NativeSysOps {
                 arc
             }
             BexExternalValue::HostValue(arc) => {
-                return SysOpOutput::err(VmBamlError::InvalidArgument {
+                return SysOpOutput::err(VmInternalError::BridgeFailure {
                     message: format!(
                         "expected a host callable, got a HostValue of kind {:?}",
                         arc.kind,
@@ -89,7 +89,7 @@ impl io::IoNamespaceHost for NativeSysOps {
                 });
             }
             other => {
-                return SysOpOutput::err(VmBamlError::InvalidArgument {
+                return SysOpOutput::err(VmInternalError::BridgeFailure {
                     message: format!("expected HostValue, got {other:?}"),
                 });
             }
@@ -123,9 +123,9 @@ impl io::IoNamespaceHost for NativeSysOps {
                 });
             }
         };
-        let encoded: Vec<u8> =
+        let mut encoded_args = bridge_ctypes::OwnedHostArguments(Some(
             match bridge_ctypes::build_to_host_call(&positional, &optional, &options) {
-                Ok(to_host_call) => to_host_call.encode_to_vec(),
+                Ok(to_host_call) => to_host_call,
                 Err(e) => {
                     // Arg encoding is bridge-side serialization, not a
                     // host-language error. A failure here means the engine
@@ -136,10 +136,33 @@ impl io::IoNamespaceHost for NativeSysOps {
                         message: format!("failed to encode host-call arguments: {e}"),
                     });
                 }
-            };
+            },
+        ));
+        let encoded = encoded_args.0.as_ref().unwrap().encode_to_vec();
 
         // Allocate a fresh call id and create a CompletionHandle.
         let call_id = host_dispatch::next_call_id();
+        let Some(capture) = ctx.spawner.capture_invocation() else {
+            return SysOpOutput::err(VmInternalError::BridgeFailure {
+                message: "host dispatch requires an effective invocation frame".into(),
+            });
+        };
+        let mut frame = bridge_ctypes::OwnedHostInvocation(
+            match bridge_ctypes::build_host_invocation(
+                Arc::clone(&capture),
+                host_arc.key,
+                call_id,
+                encoded,
+            ) {
+                Ok(envelope) => envelope,
+                Err(error) => {
+                    return SysOpOutput::err(VmInternalError::BridgeFailure {
+                        message: error.to_string(),
+                    });
+                }
+            },
+        );
+        let envelope = frame.0.encode_to_vec();
         let (result, completion) = SysOpResult::pending(SysOp::BamlHostCallHostValue);
 
         // On a (2^32-wrap) id collision `insert` returns `false` after failing
@@ -149,16 +172,16 @@ impl io::IoNamespaceHost for NativeSysOps {
         // already-failed call) and must NOT build an `InflightGuard` (its drop
         // would evict the other call's entry). `result` already carries the
         // collision error, so the `match result` below returns it.
-        let guard = if host_dispatch::insert(call_id, completion) {
-            // RAII guard that evicts this call's in-flight table entry on drop.
-            // Moved into the async future below so that if the engine drops the
-            // future on cancellation (the `tokio::select!` cancel arm), the
-            // dangling entry is removed — no leak, and a late
-            // `complete_host_call` for this id hits the benign unknown-id path.
-            // On normal completion the entry is already gone (taken by
-            // `complete_host_call`), so the guard's `take` is a no-op. The guard
-            // carries only the `Copy` `call_id`. No wall-clock timeout: see the
-            // module docs.
+        let guard = if host_dispatch::insert_with_capture(
+            call_id,
+            origin_call_id,
+            completion,
+            Box::new((ctx.clone(), host_arc, positional, optional)),
+            Some(capture),
+        ) {
+            // The sysop future owns result delivery. If cancelled, its guard
+            // retires the waiter; a bridge execution lease independently keeps
+            // context and borrowed argument owners alive through actual exit.
             let guard = host_dispatch::InflightGuard::new(call_id);
 
             // Fire the dispatch callback. If no bridge has registered, fail
@@ -171,16 +194,21 @@ impl io::IoNamespaceHost for NativeSysOps {
             // fast-fail missing-callable cases before this point — but the
             // engine-side contract has to be self-enforcing for any new
             // bridge that doesn't pre-check.)
-            if !host_dispatch::fire_dispatch(host_arc.key, call_id, &encoded) {
-                if let Some(c) = host_dispatch::take(call_id) {
-                    c.complete(Err(OpError::new(
+            host_dispatch::retain_abi_execution(call_id);
+            if !host_dispatch::fire_dispatch_v2(&envelope) {
+                host_dispatch::complete_with_error(
+                    call_id,
+                    OpError::new(
                         SysOp::BamlHostCallHostValue,
                         sys_types::VmInternalError::BridgeFailure {
                             message: "no host bridge registered for host-value dispatch"
                                 .to_string(),
                         },
-                    )));
-                }
+                    ),
+                );
+            } else {
+                frame.handoff();
+                encoded_args.0 = None;
             }
             Some(guard)
         } else {
@@ -253,15 +281,28 @@ impl io::IoNamespaceHost for NativeSysOps {
 ///
 /// Delegates to the shared, strict [`validate_host_return`] guard (shared
 /// with the WASM bridge) so the native and WASM bridges enforce an identical
-/// shape contract: scalar discrimination (`int` ≠ `float`), container
-/// recursion, enum identity, and class-name identity. Class *field types* are
+/// shape contract: scalar discrimination (including contextual JavaScript
+/// `number` resolution), container recursion, enum identity, and class-name identity. Class *field types* are
 /// validated engine-side at the result-push site, where the resolved class
 /// schema is available.
+/// Project a lane type into the name-headed form the contract check reads.
+///
+/// The check compares a returned wire value against the declared type, which
+/// it can only do by name. An anonymous declaration has none, so it widens to
+/// `unknown` — the check is weaker there, not wrong, and such a type cannot
+/// reach a host as a named value anyway.
+fn expected_wire_ty(expected: &RuntimeTy) -> baml_type::RuntimeTy {
+    expected
+        .clone()
+        .try_map_heads(&mut |head: &baml_type::TaggedTypeName| head.declared().cloned().ok_or(()))
+        .unwrap_or_else(|()| baml_type::RuntimeTy::unknown())
+}
+
 fn validate_return_value(
     value: &BexExternalValue,
     expected: &RuntimeTy,
 ) -> Result<(), VmRustFnError> {
-    validate_host_return(value, expected).map_err(|err| {
+    validate_host_return(value, &expected_wire_ty(expected)).map_err(|err| {
         VmPanic::HostContractViolation {
             message: format!(
                 "host callable returned a value of the wrong type: {err} (expected {expected})"
@@ -275,9 +316,8 @@ fn validate_return_value(
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{RuntimeTy, TyAttr};
     use sys_ops::io::{BexExternalValue, CallId, IoNamespaceHost as _, SysOpContext, SysOpOutput};
-    use sys_types::{OpError, SysOp, SysOpResult, VmBamlError, VmRustFnError};
+    use sys_types::{OpError, SapTy as RuntimeTy, SysOp, SysOpResult, VmBamlError, VmRustFnError};
 
     use super::*;
     use crate::host_dispatch;
@@ -287,9 +327,7 @@ mod tests {
     }
 
     fn int_ty() -> RuntimeTy {
-        RuntimeTy::Int {
-            attr: TyAttr::default(),
-        }
+        RuntimeTy::Int
     }
 
     // -------------------------------------------------------------------------
@@ -297,7 +335,7 @@ mod tests {
     // -------------------------------------------------------------------------
     #[tokio::test]
     async fn wrong_type_returns_type_error() {
-        let ops = NativeSysOps;
+        let ops = NativeSysOps::default();
         let heap = make_heap();
         let ctx = SysOpContext::empty();
         // Pass a String instead of a HostValue.
@@ -320,15 +358,15 @@ mod tests {
             }),
         };
         let err = result.expect_err("expected type error");
-        // The wrong-handle-type arg surfaces as a `VmBamlError::InvalidArgument`
-        // (which the host SDK sees as `baml.errors.InvalidArgument`), wrapped
-        // in the canonical `VmRustFnError::BamlError`.
+        // Only compiler-synthesized wrappers reach this sysop, and they always
+        // pass a callable `HostValue`, so a wrong-handle-type arg is an engine
+        // fault rather than anything the callable's `throws E` can carry.
         assert!(
             matches!(
                 err,
-                VmRustFnError::BamlError(VmBamlError::InvalidArgument { .. })
+                VmRustFnError::InternalError(VmInternalError::BridgeFailure { .. })
             ),
-            "expected InvalidArgument, got {err:?}"
+            "expected BridgeFailure, got {err:?}"
         );
     }
 
@@ -418,7 +456,7 @@ mod tests {
             u32::MAX - 3,
             OpError::new(
                 SysOp::BamlHostCallHostValue,
-                VmBamlError::NotImplemented {
+                VmBamlError::Io {
                     message: "unknown id".to_string(),
                 },
             ),
@@ -477,15 +515,20 @@ mod tests {
     }
 
     // -------------------------------------------------------------------------
-    // Return-type validation: an `int` value does NOT satisfy a `float`
-    // return (strict int≠float; the shared validator owns the recursive
-    // structural cases — see `bex_external_types::host_return`).
+    // Return-type validation keeps typed bridge values strict while resolving
+    // JavaScript's single Number type against the declared numeric context.
     // -------------------------------------------------------------------------
     #[test]
-    fn validate_return_value_int_does_not_satisfy_float() {
+    fn validate_return_value_resolves_javascript_numbers() {
         validate_return_value(&BexExternalValue::Int(3), &RuntimeTy::float())
-            .expect_err("an Int value must not satisfy a declared `float` return type");
+            .expect_err("a typed Int value must not satisfy a declared `float` return type");
+        validate_return_value(&BexExternalValue::JsNumber(3.0), &RuntimeTy::float())
+            .expect("an integral JavaScript Number should satisfy a declared `float` return type");
+        validate_return_value(&BexExternalValue::JsNumber(3.0), &RuntimeTy::int())
+            .expect("an integral JavaScript Number should satisfy a declared `int` return type");
         validate_return_value(&BexExternalValue::Float(3.0), &RuntimeTy::float())
             .expect("a Float value satisfies a declared `float` return type");
+        validate_return_value(&BexExternalValue::Float(3.0), &RuntimeTy::int())
+            .expect_err("a Float value must not satisfy a declared `int` return type");
     }
 }

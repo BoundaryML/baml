@@ -1,0 +1,13 @@
+---
+source: crates/baml_ide/src/describe.rs
+assertion_line: 1984
+expression: "project.format_description(&descs[0])"
+---
+enum Color  types.baml:12
+shape: enum Color {
+    Red
+    Green
+    Blue
+}
+refs: 1
+  funcs.baml:12  function use_color(c: Color) -> string {

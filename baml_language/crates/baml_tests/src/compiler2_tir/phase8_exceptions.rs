@@ -1,6 +1,46 @@
 //! Phase 8 tests: catch/throw/throws + match parity in compiler2 TIR.
 
+// Native ns_exceptions, ns_lambdas, and ns_defer suites cover successful panic
+// field access, inferred throwing lambdas, and throwing defer bodies.
 use super::support::{make_db, render_tir};
+use crate::engine::TestDbExt;
+
+#[test]
+fn chained_catches_render_each_handlers_typed_body() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+function fail() -> int throws string {
+    throw "original"
+}
+
+function recover() -> int throws never {
+    fail() catch (first) {
+        string => {
+            let original = first;
+            throw 42
+        },
+    } catch_all (second) {
+        int => {
+            let replacement = second;
+            replacement
+        },
+    }
+}
+"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("let original = first : string"),
+        "inner handler's typed block is missing:\n{output}"
+    );
+    assert!(
+        output.contains("let replacement = second : 42"),
+        "outer handler's typed block is missing:\n{output}"
+    );
+}
 
 fn assert_declared_throws_violation(output: &str, declared: &str, thrown: &str, message: &str) {
     let expected =
@@ -11,7 +51,7 @@ fn assert_declared_throws_violation(output: &str, declared: &str, thrown: &str, 
 #[test]
 fn throw_expr_is_never_and_marks_following_code_dead() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f() -> int {
   let x = throw "boom"
@@ -33,7 +73,7 @@ fn throw_expr_is_never_and_marks_following_code_dead() {
 #[test]
 fn throw_call_catch_binds_catch_to_call_payload() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"class TimeoutError {
   retryAfterMs int
@@ -64,7 +104,7 @@ function f() -> int {
 #[test]
 fn throws_never_contract_violation_reports_error() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function explode() -> int {
   throw "boom"
@@ -87,7 +127,7 @@ function f() -> int throws never {
 #[test]
 fn extraneous_throws_declaration_is_warning() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f() -> int throws string {
   return 1
@@ -106,9 +146,28 @@ fn extraneous_throws_declaration_is_warning() {
 }
 
 #[test]
+fn open_throws_contract_keeps_other_extraneous_members_as_warning() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"class UnusedError {}
+
+function f(value: unknown) -> int throws unknown | UnusedError {
+  throw value
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("??") && output.contains("extraneous throws declaration: UnusedError"),
+        "expected the unused concrete member to remain a warning, got:\n{output}"
+    );
+}
+
+#[test]
 fn match_bare_type_arm_narrows_scrutinee_in_arm_scope() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"class Ok {
   value int
@@ -140,7 +199,7 @@ function f(r: Ok | Err) -> int {
 #[test]
 fn bare_type_match_arm_is_not_variable_binding() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"class TimeoutError {
   retryAfterMs int
@@ -173,7 +232,7 @@ function f(e: TimeoutError | OtherError) -> int {
 #[test]
 fn impossible_typed_match_binding_reports_mismatch() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f(x: int) -> string {
   return match (x) {
@@ -201,7 +260,7 @@ fn impossible_typed_match_binding_reports_mismatch() {
 #[test]
 fn impossible_array_chain_match_arm_is_unreachable() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f(xs: int[]) -> string {
   return match (xs) {
@@ -228,7 +287,7 @@ fn impossible_array_chain_match_arm_is_unreachable() {
 #[test]
 fn array_pattern_with_non_array_ascription_is_rejected() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f(xs: int[]) -> string {
   return match (xs) {
@@ -248,7 +307,7 @@ fn array_pattern_with_non_array_ascription_is_rejected() {
 #[test]
 fn typed_pattern_without_widening_does_not_make_union_match_exhaustive() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f(v: int | string) -> string {
   return match (v) {
@@ -271,7 +330,7 @@ fn typed_pattern_without_widening_does_not_make_union_match_exhaustive() {
 #[test]
 fn catch_binding_is_narrowed_per_arm() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"class TimeoutError {
   retryAfterMs int
@@ -308,39 +367,9 @@ function f(which: int) -> int {
 }
 
 #[test]
-#[ignore = "catch bindings are now bare identifiers; typed `catch (e: any)` no longer parses"]
-fn typed_any_and_unknown_catch_bindings_are_rejected() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function f() -> int {
-  return 1 catch (e: any) {
-    _ => 0
-  }
-}
-
-function g() -> int {
-  return 1 catch (e: unknown) {
-    _ => 0
-  }
-}"#,
-    );
-
-    let output = render_tir(&db, file);
-    assert!(
-        output.contains("invalid catch binding type `any`"),
-        "expected `any` catch-binding diagnostic, got:\n{output}"
-    );
-    assert!(
-        output.contains("invalid catch binding type `unknown`"),
-        "expected `unknown` catch-binding diagnostic, got:\n{output}"
-    );
-}
-
-#[test]
 fn unreachable_catch_arm_is_warning() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"class TimeoutError {
   retryAfterMs int
@@ -368,7 +397,7 @@ function f() -> int {
 #[test]
 fn mixed_panic_union_catch_binding_requires_further_narrowing() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"class AppError {
   code int
@@ -399,61 +428,9 @@ function f(which: int) -> int {
 }
 
 #[test]
-fn panic_containing_union_after_wildcard_is_not_unreachable() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"class AppError {
-  code int
-}
-
-function fail() -> int {
-  throw AppError { code: 7 }
-}
-
-function f() -> int {
-  return fail() catch (e) {
-    _ => 1
-    AppError | baml.panics.DivisionByZero => 2
-  }
-}"#,
-    );
-
-    let output = render_tir(&db, file);
-    assert!(
-        !output.contains("unreachable arm"),
-        "mixed panic union arm should stay reachable because panics may still occur, got:\n{output}"
-    );
-}
-
-#[test]
-fn single_panic_catch_binding_allows_field_access() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function fail() -> int {
-  1 / 0
-}
-
-function f() -> int {
-  return fail() catch (e) {
-    DivisionByZero => e.dividend
-    _ => 0
-  }
-}"#,
-    );
-
-    let output = render_tir(&db, file);
-    assert!(
-        !output.contains("unresolved member") && !output.contains("cannot access field"),
-        "single-type catch binding should allow field access, got:\n{output}"
-    );
-}
-
-#[test]
 fn function_type_throws_direct_callback_violation_is_humanized() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function forward(cb: (value: int) -> int) -> int throws never {
   return cb(1)
@@ -477,7 +454,7 @@ fn function_type_throws_direct_callback_violation_is_humanized() {
 #[test]
 fn omitted_lambda_throws_inherits_direct_callback_context() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function forward(cb: (value: int) -> int) -> int {
   return cb(1)
@@ -503,37 +480,9 @@ function f() -> int throws never {
 }
 
 #[test]
-fn omitted_inline_lambda_covered_by_declared_throws_is_clean() {
-    // Historically a "current limitation": the checker could not see that the
-    // callback's throw was covered by `demo`'s declared `throws string` and
-    // reported a callback-aware violation anyway. The lambda's effective
-    // throws now binds the callee's effect param, so a covered throw is
-    // accepted silently.
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function forward(cb: (x: int) -> int) -> int {
-  return cb(1)
-}
-
-function demo() -> int throws string {
-  return forward((x: int) -> int {
-    throw "boom"
-  })
-}"#,
-    );
-
-    let output = render_tir(&db, file);
-    assert!(
-        !output.contains("declared throws"),
-        "expected no throws violation when the callback throw is covered by the declared throws, got:\n{output}"
-    );
-}
-
-#[test]
 fn explicit_lambda_throws_annotation_is_checked_against_body() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f() -> int {
   let risky = (x: int) -> int throws never {
@@ -555,7 +504,7 @@ fn explicit_lambda_throws_annotation_is_checked_against_body() {
 #[test]
 fn function_type_throws_local_alias_wrapper_uses_typed_callee_surface() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function outer(cb: (value: int) -> int) -> int {
   return cb(1)
@@ -582,7 +531,7 @@ function f(cb: (value: int) -> int) -> int throws never {
 #[test]
 fn omitted_lambda_throws_inherits_optional_function_context() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function maybe_call(cb: ((value: int) -> int throws string)?) -> int {
   return cb?.(1) ?? 0
@@ -607,7 +556,7 @@ function f() -> int throws never {
 #[test]
 fn function_type_throws_optional_call_propagates_callback_surface() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f(cb: ((value: int) -> int throws string)?) -> int throws never {
   return cb?.(1) ?? 0
@@ -626,7 +575,7 @@ fn function_type_throws_optional_call_propagates_callback_surface() {
 #[test]
 fn named_reordered_callback_arg_instantiates_throws_from_call_plan() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function invoke(cb: (value: int) -> int, value: int = 1) -> int {
   cb(value)
@@ -653,7 +602,7 @@ function f() -> int throws never {
 #[test]
 fn callable_throws_uses_call_plan_for_named_reordered_args() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function invoke(cb: (value: int) -> int, value: int = 1) -> int {
   cb(value)
@@ -684,7 +633,7 @@ function f() -> int throws never {
 #[test]
 fn unbound_method_call_propagates_callback_surface() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"class Box {
   function call<E>(self, cb: () -> int throws E) -> int throws E {
@@ -717,7 +666,7 @@ function f(box: Box) -> int throws never {
 #[test]
 fn omitted_lambda_throws_inherits_builtin_map_callback_context() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f(values: int[]) -> int[] throws never {
   return values.map((value: int) -> int {
@@ -745,7 +694,7 @@ fn omitted_lambda_throws_inherits_builtin_map_callback_context() {
 #[test]
 fn function_type_throws_builtin_map_propagates_callback_surface() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f(values: int[]) -> int[] throws never {
   return values.map((value: int) -> int throws string {
@@ -764,83 +713,9 @@ fn function_type_throws_builtin_map_propagates_callback_surface() {
 }
 
 #[test]
-fn generic_bound_associated_error_is_reused_by_throws_analysis() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"class Boom {}
-
-interface Runner<Input> {
-  type Output
-  type Error
-
-  function run(self, input: Input) -> Self.Output throws Self.Error
-}
-
-class Task<T> {
-  function run<Output, Error, R extends Runner<Task<T>, Output = Output, Error = Error>>(
-    self,
-    runner: R,
-  ) -> Output throws Error {
-    runner.run(self)
-  }
-}
-
-class ConcreteRunner {
-  implements Runner<Task<int>> {
-    type Output = int
-    type Error = Boom
-
-    function run(self, input: Task<int>) -> int throws Boom {
-      throw Boom {}
-    }
-  }
-}
-
-function caller(task: Task<int>) -> int throws Boom {
-  task.run(runner = ConcreteRunner {})
-}"#,
-    );
-
-    let output = render_tir(&db, file);
-    assert!(
-        !output.contains("declared throws"),
-        "expected the runner's concrete associated Error to satisfy the caller, got:\n{output}"
-    );
-    assert!(
-        !output.contains("extraneous throws declaration"),
-        "expected the concrete Boom throw to remain visible, got:\n{output}"
-    );
-}
-
-#[test]
-fn stored_lambda_with_omitted_throws_is_inferred_not_violation() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function f() -> int {
-  let risky = (value: int) -> int {
-    if (value < 0) { throw "boom" }
-    value
-  }
-  return 0
-}"#,
-    );
-
-    let output = render_tir(&db, file);
-    // The unannotated lambda's surface is INFERRED (`throws string`), so the
-    // throw inside it is not a local violation — it becomes part of the
-    // lambda's type and is checked wherever the lambda is invoked.
-    assert!(
-        !output.contains("declared throws"),
-        "expected no local violation for an unannotated lambda (throws are inferred), got:\n{output}"
-    );
-}
-
-#[test]
 fn defining_a_throwing_lambda_does_not_charge_the_enclosing_functions_throw_set() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function defines(value: int) -> int throws never {
   let risky = (n: int) -> int {
@@ -865,9 +740,11 @@ function calls(value: int) -> int throws never {
         "neither the definer nor its caller may violate `throws never`, got:\n{output}"
     );
     // The effect is not lost, just attributed to the right place: the lambda's
-    // own inferred type carries it.
+    // own inferred type carries it. FLIPPED to literal grain: the spec's
+    // callback_effect_param_flows_through fixture pins inferred surfaces
+    // keeping the thrown literal's type (TIR widened here).
     assert!(
-        output.contains("(n: int) -> int throws string"),
+        output.contains("(n: int) -> int throws \"boom\""),
         "the throw must land on the lambda's inferred type, got:\n{output}"
     );
 }
@@ -875,7 +752,7 @@ function calls(value: int) -> int throws never {
 #[test]
 fn alias_hidden_omitted_lambda_reports_local_violation() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"type HiddenHandler = (value: int) -> int throws never
 
@@ -902,7 +779,7 @@ function f() -> int {
 #[test]
 fn returned_omitted_lambda_reports_local_violation() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function make() -> (value: int) -> int {
   return (value: int) -> int {
@@ -923,7 +800,7 @@ fn returned_omitted_lambda_reports_local_violation() {
 #[test]
 fn function_type_throws_alias_hidden_callback_rejects_throwing_value() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"type HiddenHandler = (value: int) -> int throws never
 
@@ -952,7 +829,7 @@ function f() -> int {
 #[test]
 fn function_type_throws_stored_callback_rejects_throwing_value() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"class Holder {
   cb (value: int) -> int
@@ -979,7 +856,7 @@ function store() -> Holder {
 #[test]
 fn function_type_throws_returned_closure_rejects_throwing_value() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function make() -> (value: int) -> int {
   let risky = (value: int) -> int throws string {
@@ -1001,7 +878,7 @@ fn function_type_throws_returned_closure_rejects_throwing_value() {
 #[test]
 fn literal_catch_arm_does_not_consume_entire_type_from_residual() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function fail() -> int {
   throw 42
@@ -1018,18 +895,21 @@ function f() -> int {
 
     let output = render_tir(&db, file);
     let unreachable_count = output.matches("unreachable arm").count();
-    // Only the trailing wildcard `_ => 3` should be unreachable (int is fully
-    // handled by the literal + typed arms). The `int` arm must stay reachable.
-    assert!(
-        unreachable_count <= 1,
-        "typed int arm after literal 42 arm should NOT be unreachable, got:\n{output}"
+    // hir_ty keeps LITERAL grain on cross-function throw surfaces (the
+    // ratified S13 rule; TIR widened facts at the call boundary), so the
+    // one fact here is `42`: the literal arm handles it completely and
+    // BOTH later arms are provably unreachable.
+    assert_eq!(
+        unreachable_count, 2,
+        "under literal-grain facts the typed and wildcard arms are dead, got:
+{output}"
     );
 }
 
 #[test]
 fn enum_variant_catch_arm_does_not_consume_entire_enum_from_residual() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"enum Status {
   Active
@@ -1062,115 +942,105 @@ function f() -> int {
     );
 }
 
-// ── BEP-034 `spawn ... with` middleware diagnostics ──────────────────────
-// Every wrong shape must produce a CONCRETE, actionable message (the chain's
-// actual input type, never `T, E` placeholders or silence).
+// -- `spawn ... with` modifier diagnostics -----------------------------------
+// A `with` operand must be a `baml.spawn.Modifier` value. The sugar desugars
+// to `Plan.new(..).with(m)`, so the operand is an ordinary argument checked
+// against the interface existential `Plan.with` declares. The operands that
+// are NOT modifiers report at the operand; their diagnostics are pinned by
+// `projects/diagnostic_errors/spawn_modifier_operands`.
 
 #[test]
-fn spawn_with_non_callable_reports_concrete_mismatch() {
+fn spawn_with_modifier_typechecks() {
     let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function f() -> int { let x = spawn with 42 { 1 }; await x }"#,
-    );
-    let output = render_tir(&db, file);
-    assert!(
-        output.contains(
-            "expected (baml.spawn.SpawnParams<int, never>) -> baml.spawn.SpawnParams<unknown, unknown> throws unknown, got 42"
-        ),
-        "non-callable `with` must report the concrete transformer shape, got:\n{output}"
-    );
-}
-
-#[test]
-fn spawn_with_wrong_shape_fn_names_the_contract() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function g(n: int) -> int { n }
-function f() -> int { let x = spawn with g { 1 }; await x }"#,
-    );
-    let output = render_tir(&db, file);
-    assert!(
-        output.contains("must return a `baml.spawn.SpawnParams`")
-            && output.contains("got `(n: int) -> int throws never`"),
-        "wrong-shape `with` must name the middleware contract, got:\n{output}"
-    );
-}
-
-#[test]
-fn spawn_with_wrong_return_reports_link_input() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function h<T, E>() -> (baml.spawn.SpawnParams<T, E>) -> int throws never { (p) -> { 7 } }
-function f() -> int { let x = spawn with h() { 1 }; await x }"#,
-    );
-    let output = render_tir(&db, file);
-    assert!(
-        output.contains("this link receives `baml.spawn.SpawnParams<int, never>`")
-            && output.contains("must return a `baml.spawn.SpawnParams`"),
-        "wrong-return transformer must report the link's concrete input, got:\n{output}"
-    );
-}
-
-#[test]
-fn spawn_with_chain_input_mismatch_is_concrete() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function fix() -> (baml.spawn.SpawnParams<string, never>) -> baml.spawn.SpawnParams<string, never> throws never { (p) -> { p } }
-function f() -> int { let x = spawn with fix() { 1 }; await x }"#,
-    );
-    let output = render_tir(&db, file);
-    assert!(
-        output.contains("got (baml.spawn.SpawnParams<string, never>)")
-            && output.contains("expected (baml.spawn.SpawnParams<int, never>)"),
-        "chain input mismatch must show both concrete SpawnParams types, got:\n{output}"
-    );
-}
-
-#[test]
-fn spawn_with_non_fn_variable_reports() {
-    let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f() -> int {
-  let nope = 7;
-  let x = spawn with nope { 1 };
+  let limit = baml.spawn.Limit.new(2) catch (e) { baml.errors.InvalidArgument => baml.sys.panic("positive") };
+  let x = spawn with limit { 1 };
   await x
 }"#,
     );
     let output = render_tir(&db, file);
+    // `!!` marks a diagnostic; `!error` is only an error-TYPED expression, so
+    // checking for it alone passes a mismatch that leaves the types intact.
     assert!(
-        output.contains("takes middleware transformer functions") && output.contains("got `int`"),
-        "non-function variable in `with` must report, got:\n{output}"
+        !output.contains("!!"),
+        "a Limit modifier must typecheck cleanly, got:\n{output}"
+    );
+    assert!(
+        output.contains(".with(limit)) : baml.future.Future<int, never>"),
+        "a Limit leaves the task's value and error types alone, got:\n{output}"
     );
 }
 
 #[test]
-fn spawn_with_wrong_param_variable_reports() {
+fn spawn_with_type_changing_modifier_carries_its_output() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
-        r#"function g(n: int) -> int { n }
-function f() -> int {
-  let t = g;
-  let x = spawn with t { 1 };
+        r#"class Stringify {}
+implements<T, E> baml.spawn.Modifier<T, E> for Stringify {
+  type Output = string
+  function apply(self, plan: baml.spawn.Plan<T, E>) -> baml.spawn.Plan<string, E> throws never {
+    plan.wrap((body: () -> T throws E) -> string throws E { let _ = body(); "wrapped" })
+  }
+}
+function f() -> string {
+  let s = Stringify {};
+  let x = spawn with s { 1 };
   await x
 }"#,
     );
     let output = render_tir(&db, file);
     assert!(
-        output.contains("this link receives `baml.spawn.SpawnParams<int, never>`"),
-        "wrong-param variable transformer must report the link input, got:\n{output}"
+        !output.contains("!!"),
+        "a type-changing modifier must typecheck cleanly, got:\n{output}"
+    );
+    // The body yields `int`: only the modifier's `Output` makes it `string`.
+    assert!(
+        output.contains(".with(s)) : baml.future.Future<string, never>"),
+        "a modifier's `Output` must reach the future's value type, got:\n{output}"
+    );
+}
+
+#[test]
+fn spawn_with_apply_error_joins_the_spawner_throws() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"class Refuses {}
+implements<T, E> baml.spawn.Modifier<T, E> for Refuses {
+  type ApplyError = string
+  function apply(self, plan: baml.spawn.Plan<T, E>) -> baml.spawn.Plan<T, E> throws string {
+    throw "refused"
+  }
+}
+function f() -> int throws never {
+  let r = Refuses {};
+  let x = spawn with r { 1 };
+  await x
+}"#,
+    );
+    let output = render_tir(&db, file);
+    // `f` declares `throws never`, so the apply error surfacing in its throws
+    // is exactly this diagnostic. (The fixture spells `string` itself, so its
+    // mere presence in the output proves nothing.)
+    assert!(
+        output.contains("declared throws is `never`, but this function may also throw `string`"),
+        "a modifier's `ApplyError` must reach the spawner's throws surface, got:\n{output}"
+    );
+    // It is the SPAWNER's error, thrown before the task exists: the task's own
+    // error channel is untouched.
+    assert!(
+        output.contains(".with(r)) : baml.future.Future<int, never>"),
+        "`ApplyError` must not leak into the task's error type, got:\n{output}"
     );
 }
 
 #[test]
 fn defer_return_escape_reports_error() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f() -> int {
   defer { return 1 }
@@ -1187,7 +1057,7 @@ fn defer_return_escape_reports_error() {
 #[test]
 fn defer_break_escape_reports_error() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f() -> int {
   for (let i in [1, 2]) {
@@ -1200,45 +1070,5 @@ fn defer_break_escape_reports_error() {
     assert!(
         output.contains("`break` cannot leave a `defer` body"),
         "expected DeferControlFlowEscape error for break escaping to the outer loop, got:\n{output}"
-    );
-}
-
-#[test]
-fn defer_inner_loop_break_is_allowed() {
-    // BEP-042 loop-aware rule: a break targeting a loop declared INSIDE the
-    // defer body does not escape the defer and must be accepted.
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function f() -> int {
-  defer {
-    for (let x in [1, 2]) {
-      break
-    }
-  }
-  0
-}"#,
-    );
-    let output = render_tir(&db, file);
-    assert!(
-        !output.contains("cannot leave a `defer` body"),
-        "break targeting a loop inside the defer should be allowed, got:\n{output}"
-    );
-}
-
-#[test]
-fn defer_throw_is_allowed() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function f() -> int {
-  defer { throw "x" }
-  0
-}"#,
-    );
-    let output = render_tir(&db, file);
-    assert!(
-        !output.contains("cannot leave a `defer` body"),
-        "throw inside a defer should be allowed, got:\n{output}"
     );
 }

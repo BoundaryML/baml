@@ -3,18 +3,20 @@ use std::{
     fmt::Display,
     mem::MaybeUninit,
     sync::{
-        Arc, OnceLock,
+        Arc, Mutex, OnceLock,
         atomic::{AtomicU8, Ordering},
     },
 };
 
-use baml_type::RealizedTy;
 use borsh::{BorshDeserialize, BorshSerialize};
 use tokio_util::sync::CancellationToken;
 
-use crate::{HeapPtr, Value, errors::StackFrame};
+use crate::{
+    HeapPtr, RealizedTy, SessionEvalLease, Value, errors::StackFrame,
+    runtime_compile::WeakSessionEvalLease,
+};
 
-/// Error payload carried by a future's [`Future::ready`] `SetOnce` when the
+/// Error payload carried by a future's [`Future::ready_waiter`] `SetOnce` when the
 /// underlying engine produced an unrecoverable internal error.
 ///
 /// Type-erased so this crate doesn't have to pull in `bex_engine`'s
@@ -24,6 +26,11 @@ use crate::{HeapPtr, Value, errors::StackFrame};
 /// consumers (on the await side) downcast when surfacing the error to
 /// the host.
 pub type FutureInternalError = Box<dyn std::error::Error + Send + Sync>;
+
+struct FutureSettlement {
+    ready: Arc<tokio::sync::SetOnce<Result<(), FutureInternalError>>>,
+    cancelled_session_leases: Mutex<Vec<WeakSessionEvalLease>>,
+}
 
 /// A future heap object.
 ///
@@ -66,7 +73,8 @@ pub struct Future {
     /// `Pending → terminal` via `compare_exchange` is the unique writer.
     state: AtomicU8,
     /// Metadata orthogonal to the terminal state. `observed` is set when an
-    /// await delivers an error. `cancel_requested` is set by `f.cancel()` even
+    /// await delivers an error. `cancelled` records that cancellation reached
+    /// the producer (see [`Future::was_cancelled`]); `f.cancel()` sets it even
     /// when the future already settled and cancellation cannot change it.
     /// `reported` is set when GC transfers an unreachable error to the
     /// engine-owned reporting queue.
@@ -75,8 +83,12 @@ pub struct Future {
     id: FutureId,
     /// The return/throws types that the value will match.
     /// Used for reflection/pattern matching.
-    /// Read-only: set once when the future is created.
-    types: Arc<FutureOutputTypes>,
+    /// Set once when the future is created; the GC repoints the heads inside
+    /// through [`Future::visit_heads_mut`] when their declarations move.
+    /// `Box`, not `Arc`: a shared allocation cannot be soundly head-walked
+    /// (repointing would either fork it or mutate every holder), so each
+    /// future owns the types the GC fixes up in place.
+    types: Box<FutureOutputTypes>,
     /// Written at most once by whichever writer wins the `state` CAS.
     /// Valid only when `state` indicates `Ready` or `Error`. For
     /// `Cancelled` / `InternalError`, this stays uninitialized.
@@ -87,12 +99,14 @@ pub struct Future {
     /// Cancellation signal observed by the producer. Fired by
     /// `f.cancel()` or by parent-cascade when an ancestor is cancelled.
     pub cancel: CancellationToken,
-    /// Cross-task wake: producer (or cancel) sets it on terminal
+    /// Cross-task settlement state: producer (or cancel) sets `ready` on terminal
     /// transition; awaiter clones the Arc and `.wait().await`s.
     /// `Ok(())` is "look at `state` for the actual outcome"; `Err(_)`
     /// carries an unrecoverable engine error for surfacing through the
-    /// engine's `Await` resume path.
-    pub ready: Arc<tokio::sync::SetOnce<Result<(), FutureInternalError>>>,
+    /// engine's `Await` resume path. It also carries weak Session eval leases
+    /// that cancellation releases before waking the awaiter; keeping both in
+    /// one Arc preserves `Future`'s interpreter-hot-loop size budget.
+    settlement: Arc<FutureSettlement>,
 }
 
 // SAFETY: All access to `value` is gated by the Acquire/Release handshake
@@ -121,29 +135,6 @@ impl BorshDeserialize for Future {
     }
 }
 
-// `UnscheduledFuture` is a runtime spawn-request slot — same lifecycle
-// shape as `Future`, never appears in a compiled `Program`. The pack
-// envelope (`baml_exec::PackEnvelope`) serializes the bytecode + the
-// constant heap; if an `UnscheduledFuture` ever reaches the serializer
-// that's a malformed program and we want to fail fast.
-impl BorshSerialize for UnscheduledFuture {
-    fn serialize<W: std::io::Write>(&self, _writer: &mut W) -> std::io::Result<()> {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "UnscheduledFuture cannot be serialized",
-        ))
-    }
-}
-
-impl BorshDeserialize for UnscheduledFuture {
-    fn deserialize_reader<R: std::io::Read>(_reader: &mut R) -> std::io::Result<Self> {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            "UnscheduledFuture cannot be deserialized",
-        ))
-    }
-}
-
 // `Future::read` calls `MaybeUninit::<Value>::assume_init_read`, which is
 // sound only because `Value: Copy`. If `Value` ever gains a non-trivial
 // `Drop` (e.g. by holding an `Arc<…>` or `Box<…>`), `assume_init_read`
@@ -164,7 +155,8 @@ enum FutureTag {
 }
 
 const FUTURE_FLAG_OBSERVED: u8 = 1 << 0;
-const FUTURE_FLAG_CANCEL_REQUESTED: u8 = 1 << 1;
+/// Cancellation reached the producer: see [`Future::was_cancelled`].
+const FUTURE_FLAG_CANCELLED: u8 = 1 << 1;
 const FUTURE_FLAG_REPORTED: u8 = 1 << 2;
 
 /// Snapshot view of a [`Future`] used for pattern matching at read sites.
@@ -234,11 +226,40 @@ impl Future {
             state: AtomicU8::new(FutureTag::Pending as u8),
             flags: AtomicU8::new(0),
             id,
-            types: Arc::new(FutureOutputTypes { returns, throws }),
+            types: Box::new(FutureOutputTypes { returns, throws }),
             value: UnsafeCell::new(MaybeUninit::uninit()),
             error_trace: Arc::new(OnceLock::new()),
             cancel,
-            ready: Arc::new(tokio::sync::SetOnce::new()),
+            settlement: Arc::new(FutureSettlement {
+                ready: Arc::new(tokio::sync::SetOnce::new()),
+                cancelled_session_leases: Mutex::new(Vec::new()),
+            }),
+        }
+    }
+
+    /// Clone the wake signal used by an engine awaiter.
+    pub fn ready_waiter(&self) -> Arc<tokio::sync::SetOnce<Result<(), FutureInternalError>>> {
+        Arc::clone(&self.settlement.ready)
+    }
+
+    /// Associate a Session eval acquired by this future's producer with the
+    /// future's cancellation boundary.
+    ///
+    /// Registration and cancellation share the mutex so a racing cancel
+    /// either drains this lease before waking the awaiter or observes the
+    /// already-cancelled state here and releases it immediately.
+    pub fn register_session_lease(&self, lease: &SessionEvalLease) {
+        let mut leases = self
+            .settlement
+            .cancelled_session_leases
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match self.read() {
+            FutureRead::Pending(_) => leases.push(lease.downgrade()),
+            FutureRead::Cancelled
+            | FutureRead::Ready(_)
+            | FutureRead::Error(_)
+            | FutureRead::InternalError(_) => lease.release(),
         }
     }
 
@@ -249,6 +270,22 @@ impl Future {
 
     pub fn returns(&self) -> &RealizedTy {
         &self.types.returns
+    }
+
+    /// Every head the output types reach — the `Future<T, E>` the spawn site
+    /// was typed at. Named like the generated family walks so
+    /// `visit_object_heads(_mut)` can call it uniformly: the declarations
+    /// these heads name must stay live, and be repointed, for as long as the
+    /// future itself — independent of the settled value.
+    pub fn visit_heads(&self, f: &mut impl FnMut(&crate::TypeHead)) {
+        self.types.returns.visit_heads(f);
+        self.types.throws.visit_heads(f);
+    }
+
+    /// Mutable twin of [`Self::visit_heads`], for the GC's repoint pass.
+    pub fn visit_heads_mut(&mut self, f: &mut impl FnMut(&mut crate::TypeHead)) {
+        self.types.returns.visit_heads_mut(f);
+        self.types.throws.visit_heads_mut(f);
     }
 
     pub fn throws(&self) -> &RealizedTy {
@@ -288,12 +325,37 @@ impl Future {
         self.flags.fetch_or(FUTURE_FLAG_OBSERVED, Ordering::AcqRel);
     }
 
+    /// Report what this future keeps alive outside its slot: its output
+    /// types, the settlement shared with whoever resolves it, and an error
+    /// trace once one has been recorded.
+    pub(crate) fn measure(&self, meter: &mut crate::Meter) {
+        meter.bytes(size_of::<FutureOutputTypes>());
+        meter.shared(&self.settlement, |_| {});
+        meter.shared(&self.error_trace, |meter| {
+            if let Some(trace) = self.error_trace.get() {
+                meter.shared(trace, |_| {});
+            }
+        });
+    }
+
     pub fn is_observed(&self) -> bool {
         self.flags.load(Ordering::Acquire) & FUTURE_FLAG_OBSERVED != 0
     }
 
-    pub fn cancel_requested(&self) -> bool {
-        self.flags.load(Ordering::Acquire) & FUTURE_FLAG_CANCEL_REQUESTED != 0
+    /// Whether cancellation reached this future's producer: `f.cancel()` was
+    /// called on it (at any time, even after it settled), or the task's
+    /// cancellation fired by another route (a linked token, its parent's
+    /// cancellation, shutdown) before it settled with an error. An unobserved
+    /// error from such a future is not a failure of the program.
+    pub fn was_cancelled(&self) -> bool {
+        self.flags.load(Ordering::Acquire) & FUTURE_FLAG_CANCELLED != 0
+    }
+
+    /// Record that the producer's cancellation had fired before it failed.
+    /// Called before the error settles, so whoever reads the `Error` state
+    /// also reads this.
+    pub fn mark_cancelled(&self) {
+        self.flags.fetch_or(FUTURE_FLAG_CANCELLED, Ordering::AcqRel);
     }
 
     /// Mark this future's error as transferred to the engine reporting queue.
@@ -384,7 +446,7 @@ impl Future {
             Ordering::Acquire,
         ) {
             Ok(_) => {
-                let _ = self.ready.set(Ok(()));
+                let _ = self.settlement.ready.set(Ok(()));
                 true
             }
             Err(_) => {
@@ -425,7 +487,7 @@ impl Future {
         );
         match transitioned {
             Ok(_) => {
-                let _ = self.ready.set(Ok(()));
+                let _ = self.settlement.ready.set(Ok(()));
                 true
             }
             Err(_) => {
@@ -452,20 +514,40 @@ impl Future {
         ) {
             Ok(_) => {
                 self.cancel.cancel();
-                let _ = self.ready.set(Ok(()));
+                let leases = {
+                    let mut leases = self
+                        .settlement
+                        .cancelled_session_leases
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                    std::mem::take(&mut *leases)
+                };
+                for lease in leases {
+                    lease.release();
+                }
+                let _ = self.settlement.ready.set(Ok(()));
                 true
             }
             Err(_) => false,
         }
     }
 
-    /// Record an explicit `f.cancel()` request, then attempt to cancel the
-    /// future if it is still pending. The flag remains set when an existing
-    /// terminal error wins the race.
+    /// Record an explicit `f.cancel()` request and fire the cancel token, so
+    /// the producer observes it at its next checkpoint. The state stays the
+    /// producer's to settle: `Pending` until its body unwinds with
+    /// `Cancelled`, throws, or — with no checkpoint left — completes with its
+    /// value. Returns `true` when this call fired the token: no earlier call
+    /// had requested cancellation and the future was still pending. The
+    /// request is recorded even when a terminal state has already won the
+    /// race (an unobserved error whose future was then cancelled reports as
+    /// a non-fatal cancellation).
     pub fn request_cancel(&self) -> bool {
-        self.flags
-            .fetch_or(FUTURE_FLAG_CANCEL_REQUESTED, Ordering::AcqRel);
-        self.settle_cancelled()
+        let previous = self.flags.fetch_or(FUTURE_FLAG_CANCELLED, Ordering::AcqRel);
+        if previous & FUTURE_FLAG_CANCELLED != 0 || !matches!(self.read(), FutureRead::Pending(_)) {
+            return false;
+        }
+        self.cancel.cancel();
+        true
     }
 
     /// Attempt to transition `Pending → InternalError`, carrying `err`
@@ -481,7 +563,7 @@ impl Future {
             Ordering::Acquire,
         ) {
             Ok(_) => {
-                let _ = self.ready.set(Err(err));
+                let _ = self.settlement.ready.set(Err(err));
                 true
             }
             Err(_) => false,
@@ -492,17 +574,14 @@ impl Future {
 impl Clone for Future {
     fn clone(&self) -> Self {
         // Snapshot the current state and clone the corresponding payload.
-        // The only legitimate caller is the GC's heap-relocation copy
-        // (`gc.rs` `copy_object_to_inactive`), which clones the heap object
-        // into the inactive space.
+        // This exists so `Object` can derive `Clone`; the GC relocates a
+        // future by moving it, not by calling this.
         //
         // The `cancel` token and `ready` SetOnce are reference-counted
         // (CancellationToken has internal `Arc`, `ready` is wrapped in an
-        // explicit `Arc`), so the clone shares the same underlying sync
-        // primitives. Producers that hold a clone of `ready` from before
-        // the GC move continue to wake the same set of waiters, and the
-        // moved heap copy observes the same `ready.set(...)` because both
-        // copies' `Arc<SetOnce>` point at the same allocation.
+        // explicit `Arc`), so a clone shares the same underlying sync
+        // primitives: both copies wake the same set of waiters and observe
+        // the same `ready.set(...)` through the shared settlement allocation.
         //
         // Futures are conceptually *handles*, not values: there is no
         // "the same future, but a copy" at the user level. User-side
@@ -514,11 +593,11 @@ impl Clone for Future {
             state: AtomicU8::new(0), // placeholder; rewritten below
             flags: AtomicU8::new(self.flags.load(Ordering::Acquire)),
             id: self.id,
-            types: Arc::clone(&self.types),
+            types: self.types.clone(),
             value: UnsafeCell::new(MaybeUninit::uninit()),
             error_trace: Arc::clone(&self.error_trace),
             cancel: self.cancel.clone(),
-            ready: Arc::clone(&self.ready),
+            settlement: Arc::clone(&self.settlement),
         };
         let tag: u8 = match read {
             FutureRead::Pending(_) => FutureTag::Pending as u8,
@@ -551,61 +630,6 @@ impl std::fmt::Debug for Future {
             FutureRead::InternalError(id) => f.debug_tuple("InternalError").field(&id).finish(),
         }
     }
-}
-
-/// Runtime payload behind a `baml.spawn.SpawnConfig` instance's `_handle`
-/// (`Object::RustData`). Produced by `baml.spawn.options(...)` and read by the
-/// engine when dispatching a `spawn ... with` clause to derive the spawned
-/// task's effective cancel token. BEP-034 "spawn options".
-///
-/// PR1 carries only the optional cancel token; `group` (rate limiting) and
-/// `detach` are added as those features are wired, so the engine's downcast
-/// target stays stable across PRs.
-#[derive(Debug, Clone, Default)]
-pub struct SpawnConfigData {
-    /// User-provided cancel token from `options(cancel = ...)`, if any. Linked
-    /// into the spawn's effective token by the engine.
-    pub cancel: Option<CancellationToken>,
-    /// `detach = true`: the spawn opts out of the parent→child cancel cascade
-    /// (its effective token is independent of the parent's) and its unhandled
-    /// errors route to the root task rather than the spawner.
-    pub detach: bool,
-    /// `TaskGroup` from `options(group = ...)`, if any. The engine acquires a
-    /// concurrency slot from it before running the spawned body (BEP-034 rate
-    /// limiting).
-    pub group: Option<std::sync::Arc<crate::task_group::TaskGroupInner>>,
-}
-
-/// A pending user `spawn { body }` request that the engine still has to
-/// dispatch on a fresh `BexThread`.
-///
-/// BEP-034 phase D′: this struct used to also carry sys-op invocations
-/// (`kind: SysOp { ... }`), but sys-ops now go through the single-yield
-/// `VmExecState::SysOp` path without allocating a heap object. Only the
-/// spawn case survives.
-#[derive(Clone, Debug)]
-pub struct UnscheduledFuture {
-    /// Pointer to an `Object::Closure` carrying the spawn body.
-    pub closure: HeapPtr,
-    /// Optional human-readable name attached at the spawn site. Surfaces in
-    /// debug, stack traces, and the playground. Held here as a `HeapPtr` so
-    /// the GC keeps the underlying string alive while the unscheduled
-    /// future is on the heap.
-    pub name: Option<HeapPtr>,
-    /// Optional `baml.spawn.SpawnConfig` instance from a `spawn ... with
-    /// baml.spawn.options(...)` clause (BEP-034 "spawn options"). Held as a
-    /// `HeapPtr` — like `name` — so the GC keeps the config (and the
-    /// `CancelToken`/`TaskGroup` it references) alive while this slot is on the
-    /// heap. `None` when the spawn had no `with` clause. The engine reads the
-    /// config's `_handle` (`SpawnConfigData`) when dispatching the spawn.
-    pub config: Option<HeapPtr>,
-    /// The `T` of the `Future<T, E>` this spawn yields, already resolved
-    /// against the spawning frame's type args by `OpCode::Spawn`. Handed to
-    /// [`Future::pending`] so the scheduled future can answer reflection and
-    /// `is`/`match` on its generic parameters.
-    pub returns: RealizedTy,
-    /// The `E` of the `Future<T, E>` this spawn yields. See [`Self::returns`].
-    pub throws: RealizedTy,
 }
 
 /// A unique identifier for a future.
@@ -692,6 +716,7 @@ impl From<&Future> for FutureType {
     }
 }
 
+#[derive(Clone)]
 struct FutureOutputTypes {
     returns: RealizedTy,
     throws: RealizedTy,

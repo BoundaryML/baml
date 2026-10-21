@@ -1,19 +1,15 @@
-name: "Setup Rust"
-description: "Setup Rust toolchain with caching and optional WASM support"
+name: "Setup baml_language Rust"
+description: "Setup the baml_language Rust toolchain with caching and optional WASM support"
 
 inputs:
   toolchain:
     description: "Rust toolchain version"
     required: false
-    default: "1.93.0"
+    default: "1.98.0"
   enable-wasm:
-    description: "Enable WASM support (adds wasm32-unknown-unknown target and wasm-pack)"
+    description: "Enable WASM support (adds the wasm32-unknown-unknown target and a prebuilt wasm-pack)"
     required: false
     default: "false"
-  wasm-pack-version:
-    description: "wasm-pack version to install (only used when enable-wasm is true)"
-    required: false
-    default: "0.14.0"
   enable-cross:
     description: "Enable cross-rs for cross-compilation"
     required: false
@@ -25,7 +21,7 @@ inputs:
   workspace:
     description: "Workspace path for Rust cache"
     required: false
-    default: "engine"
+    default: "baml_language"
   prefix-key:
     description: "Cache key prefix for Rust cache"
     required: false
@@ -38,10 +34,6 @@ inputs:
     description: "Enable Rust cache"
     required: false
     default: "true"
-  github-token:
-    description: "GitHub token for API access (e.g., protoc installation)"
-    required: false
-    default: ${{ github.token }}
   skip-protoc:
     description: "Skip protoc installation (useful for cross-compilation targets)"
     required: false
@@ -83,6 +75,9 @@ runs:
         targets: ${{ inputs.targets }}
         components: rustfmt
 
+    - name: Export BAML build fingerprint
+      uses: ./.github/actions/export-build-fingerprint
+
     - name: Add additional targets
       if: inputs.targets != ''
       run: |
@@ -106,10 +101,13 @@ runs:
       run: rustup target add wasm32-unknown-unknown
       shell: bash
 
+    # Prebuilt, at the version mise.toml pins. Building it with `cargo install`
+    # resolves its dependencies fresh, which breaks whenever one is yanked.
     - name: Install wasm-pack
       if: inputs.enable-wasm == 'true'
-      run: cargo install wasm-pack --version ${{ inputs.wasm-pack-version }}
-      shell: bash
+      uses: ./.github/actions/setup-mise
+      with:
+        install_args: "github:rustwasm/wasm-pack"
 
     - name: Install cross-rs
       if: inputs.enable-cross == 'true'
@@ -118,6 +116,4 @@ runs:
 
     - name: Install Protoc
       if: inputs.skip-protoc != 'true'
-      uses: arduino/setup-protoc@v3
-      with:
-        repo-token: ${{ inputs.github-token }}
+      uses: ./.github/actions/setup-protoc

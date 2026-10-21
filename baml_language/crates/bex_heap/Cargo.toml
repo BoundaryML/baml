@@ -7,20 +7,26 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+baml_env = { workspace = true, optional = true }
 baml_type = { workspace = true }
 bex_external_types = { workspace = true }
 bex_str = { workspace = true }
 bex_vm_types = { workspace = true }
+btel_types = { workspace = true }
 indexmap = { workspace = true }
 num-bigint = { workspace = true }
 parking_lot = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "sync" ] }
+tracing = { workspace = true, optional = true }
+web-time = { workspace = true, optional = true }
 
 [dev-dependencies]
+baml_base = { workspace = true }
 baml_type = { workspace = true }
 tokio = { workspace = true, features = [ "macros", "rt-multi-thread", "time" ] }
 
 [features]
 default = [  ]
-heap_debug = [ "bex_vm_types/heap_debug" ]
+gc_profiling = [ "dep:tracing", "dep:web-time" ]
+heap_debug = [ "bex_vm_types/heap_debug", "dep:baml_env" ]

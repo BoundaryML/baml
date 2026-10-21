@@ -40,8 +40,8 @@ use owo_colors::{Style as OwoStyle, Styled};
 use crate::{
     diagnostic::{Annotation, Diagnostic, Severity},
     highlight::{
-        DiagnosticMessageHighlighter, HighlightAttributes, HighlightColor, HighlightSpan,
-        HighlightStyle, SourceHighlights,
+        DiagnosticMessageHighlightError, DiagnosticMessageHighlighter, HighlightAttributes,
+        HighlightColor, HighlightSpan, HighlightStyle, SourceHighlights,
     },
     message::{DiagnosticIdentifierKind, DiagnosticMessageHighlight, DiagnosticMessageKind},
 };
@@ -197,7 +197,7 @@ pub fn render_diagnostics_with_highlighters(
             DiagnosticFormat::Human => {
                 let handler =
                     miette_handler(highlighter.clone(), config.color, diagnostic.severity);
-                render_miette_with_handler(
+                match render_miette_with_handler(
                     diagnostic,
                     sources,
                     file_paths,
@@ -205,7 +205,22 @@ pub fn render_diagnostics_with_highlighters(
                     config.color,
                     config.show_error_codes,
                     message_highlighter,
-                )
+                ) {
+                    Ok(output) => output,
+                    Err(DiagnosticMessageHighlightError) => {
+                        let handler = miette_handler(None, false, diagnostic.severity);
+                        render_miette_with_handler(
+                            diagnostic,
+                            sources,
+                            file_paths,
+                            &handler,
+                            false,
+                            config.show_error_codes,
+                            None,
+                        )
+                        .expect("no-color diagnostics do not invoke the message highlighter")
+                    }
+                }
             }
             DiagnosticFormat::Agent => render_agent(
                 diagnostic,
@@ -289,6 +304,7 @@ fn render_miette(
         show_error_codes,
         None,
     )
+    .expect("rendering without a message highlighter cannot fail semantic highlighting")
 }
 
 fn miette_handler(
@@ -328,7 +344,7 @@ fn render_miette_with_handler(
     color: bool,
     show_error_codes: bool,
     message_highlighter: Option<&dyn DiagnosticMessageHighlighter>,
-) -> String {
+) -> Result<String, DiagnosticMessageHighlightError> {
     let diagnostic = build_rendered_diagnostic(
         diagnostic,
         sources,
@@ -336,15 +352,15 @@ fn render_miette_with_handler(
         color,
         show_error_codes,
         message_highlighter,
-    );
+    )?;
     let mut output = String::new();
     if handler.render_report(&mut output, &diagnostic).is_err() {
-        return "<error rendering diagnostic>".to_string();
+        return Ok("<error rendering diagnostic>".to_string());
     }
     if color {
-        apply_message_styles(&output)
+        Ok(apply_message_styles(&output))
     } else {
-        output
+        Ok(output)
     }
 }
 
@@ -355,7 +371,7 @@ fn build_rendered_diagnostic(
     color: bool,
     show_error_codes: bool,
     message_highlighter: Option<&dyn DiagnosticMessageHighlighter>,
-) -> RenderedDiagnostic {
+) -> Result<RenderedDiagnostic, DiagnosticMessageHighlightError> {
     let primary_file = diagnostic
         .primary_span()
         .or_else(|| {
@@ -373,40 +389,48 @@ fn build_rendered_diagnostic(
         .collect::<Vec<_>>();
     primary_labels.sort_by_key(|annotation| !annotation.is_primary);
 
+    let message = marked_message(
+        &diagnostic.message,
+        &diagnostic.message_highlights,
+        MessageParentStyle::None,
+        color,
+        message_highlighter,
+    )?;
+    let labels = primary_labels
+        .into_iter()
+        .enumerate()
+        .map(|(index, annotation)| {
+            let message = annotation
+                .message
+                .as_ref()
+                .filter(|message| message.as_str() != diagnostic.message)
+                .map(|message| {
+                    marked_message(
+                        message,
+                        &annotation.message_highlights,
+                        MessageParentStyle::Annotation {
+                            severity: diagnostic.severity,
+                            index,
+                        },
+                        color,
+                        message_highlighter,
+                    )
+                })
+                .transpose()?;
+            Ok(labeled_span(
+                annotation.span,
+                message,
+                annotation.is_primary,
+            ))
+        })
+        .collect::<Result<Vec<_>, DiagnosticMessageHighlightError>>()?;
+
     let mut rendered = RenderedDiagnostic {
-        message: marked_message(
-            &diagnostic.message,
-            &diagnostic.message_highlights,
-            MessageParentStyle::None,
-            color,
-            message_highlighter,
-        ),
+        message,
         code: show_error_codes.then(|| diagnostic.code()),
         severity: miette_severity(diagnostic.severity),
         source: primary_file.and_then(|file_id| named_source(file_id, sources, file_paths)),
-        labels: primary_labels
-            .into_iter()
-            .enumerate()
-            .map(|(index, annotation)| {
-                let message = annotation
-                    .message
-                    .as_ref()
-                    .filter(|message| message.as_str() != diagnostic.message)
-                    .map(|message| {
-                        marked_message(
-                            message,
-                            &annotation.message_highlights,
-                            MessageParentStyle::Annotation {
-                                severity: diagnostic.severity,
-                                index,
-                            },
-                            color,
-                            message_highlighter,
-                        )
-                    });
-                labeled_span(annotation.span, message, annotation.is_primary)
-            })
-            .collect(),
+        labels,
         related: Vec::new(),
     };
 
@@ -426,21 +450,24 @@ fn build_rendered_diagnostic(
         }
     }
     for (file_id, annotations) in related_files {
+        let related_message = annotations.iter().find_map(|annotation| {
+            annotation
+                .message
+                .as_ref()
+                .map(|message| (message, &annotation.message_highlights))
+        });
+        let message = match related_message {
+            Some((message, highlights)) => marked_message(
+                message,
+                highlights,
+                MessageParentStyle::None,
+                color,
+                message_highlighter,
+            )?,
+            None => "related location".to_string(),
+        };
         rendered.related.push(RenderedDiagnostic {
-            message: annotations
-                .iter()
-                .find_map(|annotation| {
-                    annotation.message.as_ref().map(|message| {
-                        marked_message(
-                            message,
-                            &annotation.message_highlights,
-                            MessageParentStyle::None,
-                            color,
-                            message_highlighter,
-                        )
-                    })
-                })
-                .unwrap_or_else(|| "related location".to_string()),
+            message,
             code: None,
             severity: MietteSeverity::Advice,
             source: named_source(file_id, sources, file_paths),
@@ -460,7 +487,7 @@ fn build_rendered_diagnostic(
                 MessageParentStyle::None,
                 color,
                 message_highlighter,
-            ),
+            )?,
             code: None,
             severity: MietteSeverity::Advice,
             source: named_source(related.span.file_id, sources, file_paths),
@@ -473,7 +500,7 @@ fn build_rendered_diagnostic(
         });
     }
 
-    rendered
+    Ok(rendered)
 }
 
 const MESSAGE_STYLE_START: char = '\u{1d}';
@@ -503,9 +530,9 @@ fn marked_message(
     parent: MessageParentStyle,
     color: bool,
     highlighter: Option<&dyn DiagnosticMessageHighlighter>,
-) -> String {
+) -> Result<String, DiagnosticMessageHighlightError> {
     if !color || highlights.is_empty() {
-        return message.to_string();
+        return Ok(message.to_string());
     }
 
     let mut highlights = highlights.to_vec();
@@ -529,7 +556,7 @@ fn marked_message(
                 &mut resolved,
                 start,
                 fragment,
-                highlighter.highlight(highlight.kind, fragment),
+                highlighter.highlight(highlight.kind, fragment)?,
             );
         } else {
             resolved.push(ResolvedMessageHighlight {
@@ -554,7 +581,7 @@ fn marked_message(
         cursor = highlight.end;
     }
     output.push_str(&message[cursor..]);
-    output
+    Ok(output)
 }
 
 #[derive(Clone, Copy)]
@@ -1484,8 +1511,12 @@ mod tests {
         struct GreenHighlighter;
 
         impl DiagnosticMessageHighlighter for GreenHighlighter {
-            fn highlight(&self, _kind: DiagnosticMessageKind, text: &str) -> Vec<HighlightSpan> {
-                vec![HighlightSpan {
+            fn highlight(
+                &self,
+                _kind: DiagnosticMessageKind,
+                text: &str,
+            ) -> Result<Vec<HighlightSpan>, DiagnosticMessageHighlightError> {
+                Ok(vec![HighlightSpan {
                     range: TextRange::new(
                         0.into(),
                         u32::try_from(text.len())
@@ -1496,7 +1527,7 @@ mod tests {
                         foreground: Some(HighlightColor::Green),
                         attributes: HighlightAttributes::empty(),
                     },
-                }]
+                }])
             }
         }
 
@@ -1521,6 +1552,44 @@ mod tests {
                     .contains(&u32::from(ch))
             ),
             "{output:?}"
+        );
+    }
+
+    #[test]
+    fn human_renderer_retries_failed_message_highlighting_with_pretty_nocolor_theme() {
+        struct FailingHighlighter;
+
+        impl DiagnosticMessageHighlighter for FailingHighlighter {
+            fn highlight(
+                &self,
+                _kind: DiagnosticMessageKind,
+                _text: &str,
+            ) -> Result<Vec<HighlightSpan>, DiagnosticMessageHighlightError> {
+                Err(DiagnosticMessageHighlightError)
+            }
+        }
+
+        let message = crate::DiagnosticText::new()
+            .text("invalid fragment ")
+            .code("${...}");
+        let diagnostic =
+            Diagnostic::error(DiagnosticId::TypeMismatch, message).with_primary_span(test_span());
+        let output = render_diagnostics_with_highlighters(
+            &[diagnostic],
+            &make_source(),
+            &make_file_paths(),
+            &SourceHighlights::new(),
+            Some(&FailingHighlighter),
+            &RenderConfig::cli(),
+        );
+
+        assert!(output.contains("E0001"), "{output:?}");
+        assert!(output.contains("╭─[test.baml:1:7]"), "{output:?}");
+        assert!(output.contains("class Foo"), "{output:?}");
+        assert!(output.contains("invalid fragment `${...}`"), "{output:?}");
+        assert!(
+            !output.contains('\u{1b}'),
+            "the fallback diagnostic should contain no ANSI styling: {output:?}"
         );
     }
 

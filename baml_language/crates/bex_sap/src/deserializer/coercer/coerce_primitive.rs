@@ -15,8 +15,8 @@ use crate::{
     },
     jsonish::{self, CompletionState},
     sap_model::{
-        AttrLiteral, BigintTy, BoolTy, FloatTy, FromLiteral as _, IntTy, MediaTy, NullTy,
-        PrimitiveTy, StringTy, TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent,
+        BigintTy, BoolTy, FloatTy, IntTy, MediaTy, NullTy, PrimitiveTy, StringTy, TyResolvedRef,
+        TypeIdent,
     },
 };
 
@@ -47,58 +47,60 @@ where
 {
     fn coerce(
         ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        target: &'t Self,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>>, ParsingError> {
-        match target.ty {
+        match target {
             PrimitiveTy::String(ty) => {
-                StringTy::coerce(ctx, TyWithMeta::new(ty, target.meta), value)
-                    .map(|v| v.map(|v| v.map_value(Into::into)))
+                StringTy::coerce(ctx, ty, value).map(|v| v.map(|v| v.map_value(Into::into)))
             }
-            PrimitiveTy::Int(ty) => IntTy::coerce(ctx, TyWithMeta::new(ty, target.meta), value)
-                .map(|v| v.map(|v| v.map_value(Into::into))),
+            PrimitiveTy::Int(ty) => {
+                IntTy::coerce(ctx, ty, value).map(|v| v.map(|v| v.map_value(Into::into)))
+            }
             PrimitiveTy::Bigint(ty) => {
-                BigintTy::coerce(ctx, TyWithMeta::new(ty, target.meta), value)
-                    .map(|v| v.map(|v| v.map_value(Into::into)))
+                BigintTy::coerce(ctx, ty, value).map(|v| v.map(|v| v.map_value(Into::into)))
             }
-            PrimitiveTy::Float(ty) => FloatTy::coerce(ctx, TyWithMeta::new(ty, target.meta), value)
-                .map(|v| v.map(|v| v.map_value(Into::into))),
-            PrimitiveTy::Bool(ty) => BoolTy::coerce(ctx, TyWithMeta::new(ty, target.meta), value)
-                .map(|v| v.map(|v| v.map_value(Into::into))),
-            PrimitiveTy::Null(ty) => NullTy::coerce(ctx, TyWithMeta::new(ty, target.meta), value)
-                .map(|v| v.map(|v| v.map_value(Into::into))),
-            PrimitiveTy::Media(ty) => MediaTy::coerce(ctx, TyWithMeta::new(ty, target.meta), value)
-                .map(|v| v.map(|v| v.map_value(Into::into))),
+            PrimitiveTy::Float(ty) => {
+                FloatTy::coerce(ctx, ty, value).map(|v| v.map(|v| v.map_value(Into::into)))
+            }
+            PrimitiveTy::Bool(ty) => {
+                BoolTy::coerce(ctx, ty, value).map(|v| v.map(|v| v.map_value(Into::into)))
+            }
+            PrimitiveTy::Null(ty) => {
+                NullTy::coerce(ctx, ty, value).map(|v| v.map(|v| v.map_value(Into::into)))
+            }
+            PrimitiveTy::Media(ty) => {
+                MediaTy::coerce(ctx, ty, value).map(|v| v.map(|v| v.map_value(Into::into)))
+            }
         }
     }
 
     fn try_cast(
         ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        target: &'t Self,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>> {
-        match target.ty {
+        match target {
             PrimitiveTy::String(ty) => {
-                StringTy::try_cast(ctx, TyWithMeta::new(ty, target.meta), value)
-                    .map(|v| v.map_value(Into::into))
+                StringTy::try_cast(ctx, ty, value).map(|v| v.map_value(Into::into))
             }
-            PrimitiveTy::Int(ty) => IntTy::try_cast(ctx, TyWithMeta::new(ty, target.meta), value)
-                .map(|v| v.map_value(Into::into)),
+            PrimitiveTy::Int(ty) => {
+                IntTy::try_cast(ctx, ty, value).map(|v| v.map_value(Into::into))
+            }
             PrimitiveTy::Bigint(ty) => {
-                BigintTy::try_cast(ctx, TyWithMeta::new(ty, target.meta), value)
-                    .map(|v| v.map_value(Into::into))
+                BigintTy::try_cast(ctx, ty, value).map(|v| v.map_value(Into::into))
             }
             PrimitiveTy::Float(ty) => {
-                FloatTy::try_cast(ctx, TyWithMeta::new(ty, target.meta), value)
-                    .map(|v| v.map_value(Into::into))
+                FloatTy::try_cast(ctx, ty, value).map(|v| v.map_value(Into::into))
             }
-            PrimitiveTy::Bool(ty) => BoolTy::try_cast(ctx, TyWithMeta::new(ty, target.meta), value)
-                .map(|v| v.map_value(Into::into)),
-            PrimitiveTy::Null(ty) => NullTy::try_cast(ctx, TyWithMeta::new(ty, target.meta), value)
-                .map(|v| v.map_value(Into::into)),
+            PrimitiveTy::Bool(ty) => {
+                BoolTy::try_cast(ctx, ty, value).map(|v| v.map_value(Into::into))
+            }
+            PrimitiveTy::Null(ty) => {
+                NullTy::try_cast(ctx, ty, value).map(|v| v.map_value(Into::into))
+            }
             PrimitiveTy::Media(ty) => {
-                MediaTy::try_cast(ctx, TyWithMeta::new(ty, target.meta), value)
-                    .map(|v| v.map_value(Into::into))
+                MediaTy::try_cast(ctx, ty, value).map(|v| v.map_value(Into::into))
             }
         }
     }
@@ -112,24 +114,16 @@ where
 {
     fn coerce(
         ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        target: &'t Self,
         // Parsed from JSONish
         value: &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlInt, N>>, ParsingError> {
         let mut flags = DeserializerConditions::new();
 
-        let result = match (value, target.meta.in_progress.as_ref()) {
-            (jsonish::Value::Number(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
-                return Ok(None);
-            }
-            (jsonish::Value::Number(_, CompletionState::Incomplete), Some(lit)) => {
-                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
-                target.ty.from_literal(lit, ctx)?
-            }
-            (jsonish::Value::Number(n, c), _) => {
-                if matches!(c, CompletionState::Incomplete) {
-                    flags.add_flag(Flag::Incomplete);
-                }
+        let result = match value {
+            // No partial parse: the value may still change as it streams in.
+            jsonish::Value::Number(_, CompletionState::Incomplete) => return Ok(None),
+            jsonish::Value::Number(n, CompletionState::Complete) => {
                 if let Some(n) = n.as_i64() {
                     BamlInt { value: n } // also covers u64
                 } else if n.as_u64().is_some() {
@@ -148,18 +142,9 @@ where
                     return Err(ctx.error_integer_out_of_bounds(n));
                 }
             }
-            (jsonish::Value::String(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
-                return Ok(None);
-            }
-            (jsonish::Value::String(s, CompletionState::Incomplete), Some(lit)) => {
-                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
-                flags.add_flag(Flag::StringToInt(s.clone()));
-                target.ty.from_literal(lit, ctx)?
-            }
-            (jsonish::Value::String(s, c), _) => {
-                if matches!(c, CompletionState::Incomplete) {
-                    flags.add_flag(Flag::Incomplete);
-                }
+            // No partial parse: the value may still change as it streams in.
+            jsonish::Value::String(_, CompletionState::Incomplete) => return Ok(None),
+            jsonish::Value::String(s, CompletionState::Complete) => {
                 let s = s.trim();
                 // Trim trailing commas
                 let s = s.trim_end_matches(',');
@@ -177,7 +162,7 @@ where
                     .or_else(|| float_from_comma_separated(s))
                 {
                     if !n.is_finite() {
-                        return Err(ctx.error_unexpected_type(&target, &value));
+                        return Err(ctx.error_unexpected_type(target, &value));
                     }
                     let rounded = n.round();
                     #[allow(clippy::cast_precision_loss)]
@@ -195,29 +180,19 @@ where
                         value: rounded as i64,
                     }
                 } else {
-                    return Err(ctx.error_unexpected_type(&target, &value));
+                    return Err(ctx.error_unexpected_type(target, &value));
                 }
             }
-            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
-                return Ok(None);
-            }
-            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(lit)) => {
-                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
-                target.ty.from_literal(lit, ctx)?
-            }
-            (jsonish::Value::Array(items, c), _) => {
+            jsonish::Value::Array(items, c) => {
                 if matches!(c, CompletionState::Incomplete) {
                     flags.add_flag(Flag::Incomplete);
                 }
-                let target_ty = target.ty;
-                let target_meta = target.meta;
                 let Some(singular) = coerce_array_to_singular(
                     ctx,
-                    TyWithMeta::new(TyResolvedRef::Int(IntTy), target_meta),
+                    TyResolvedRef::Int(IntTy),
                     items.iter(),
                     &|value| {
-                        Self::coerce(ctx, TyWithMeta::new(target_ty, target_meta), value)
-                            .map(|v| v.map(|v| v.map_value(Into::into)))
+                        Self::coerce(ctx, target, value).map(|v| v.map(|v| v.map_value(Into::into)))
                     },
                 )?
                 else {
@@ -229,50 +204,32 @@ where
                 };
                 singular
             }
-            _ => return Err(ctx.error_unexpected_type(&target, &value)),
+            _ => return Err(ctx.error_unexpected_type(target, &value)),
         };
         let result = ValueWithFlags::new(
             result,
             DeserializerMeta {
                 flags,
-                ty: target.map_ty(|_| TyResolvedRef::Int(IntTy)),
+                ty: TyResolvedRef::Int(IntTy),
             },
         );
         Ok(Some(result))
     }
 
     fn try_cast(
-        ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        _ctx: &ParsingContext<'s, 'v, 't, N>,
+        _target: &'t Self,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Option<ValueWithFlags<'s, 'v, 't, BamlInt, N>> {
         let jsonish::Value::Number(num, completion_state) = value else {
             return None;
         };
 
-        let flags = match (completion_state, target.meta.in_progress.as_ref()) {
-            (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return None,
-            (CompletionState::Incomplete, Some(lit)) => {
-                return target
-                    .ty
-                    .from_literal(lit, ctx)
-                    .map(|ret| {
-                        ValueWithFlags::new(
-                            ret,
-                            DeserializerMeta {
-                                flags: DeserializerConditions::new()
-                                    .with_flag(Flag::DefaultButHadValue(Cow::Borrowed(value))),
-                                ty: target.map_ty(|_| TyResolvedRef::Int(IntTy)),
-                            },
-                        )
-                    })
-                    .ok();
-            }
-            (CompletionState::Incomplete, None) => {
-                DeserializerConditions::new().with_flag(Flag::Incomplete)
-            }
-            (CompletionState::Complete, _) => DeserializerConditions::new(),
-        };
+        // No partial parse: the value may still change as it streams in.
+        if matches!(completion_state, CompletionState::Incomplete) {
+            return None;
+        }
+        let flags = DeserializerConditions::new();
 
         Some(ValueWithFlags::new(
             BamlInt {
@@ -280,7 +237,7 @@ where
             },
             DeserializerMeta {
                 flags,
-                ty: TyWithMeta::new(TyResolvedRef::Int(IntTy), target.meta),
+                ty: TyResolvedRef::Int(IntTy),
             },
         ))
     }
@@ -346,23 +303,15 @@ where
 {
     fn coerce(
         ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        target: &'t Self,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlBigint, N>>, ParsingError> {
         let mut flags = DeserializerConditions::new();
 
-        let result = match (value, target.meta.in_progress.as_ref()) {
-            (jsonish::Value::Number(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
-                return Ok(None);
-            }
-            (jsonish::Value::Number(_, CompletionState::Incomplete), Some(lit)) => {
-                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
-                target.ty.from_literal(lit, ctx)?
-            }
-            (jsonish::Value::Number(n, c), _) => {
-                if matches!(c, CompletionState::Incomplete) {
-                    flags.add_flag(Flag::Incomplete);
-                }
+        let result = match value {
+            // No partial parse: the value may still change as it streams in.
+            jsonish::Value::Number(_, CompletionState::Incomplete) => return Ok(None),
+            jsonish::Value::Number(n, CompletionState::Complete) => {
                 if let Some(i) = n.as_i64() {
                     BamlBigint {
                         value: BigInt::from(i),
@@ -376,29 +325,20 @@ where
                     BamlBigint { value: parsed }
                 } else if let Some(f) = n.as_f64() {
                     if !f.is_finite() {
-                        return Err(ctx.error_unexpected_type(&target, &value));
+                        return Err(ctx.error_unexpected_type(target, &value));
                     }
                     let Some(bi) = bigint_from_finite_f64(f) else {
-                        return Err(ctx.error_unexpected_type(&target, &value));
+                        return Err(ctx.error_unexpected_type(target, &value));
                     };
                     flags.add_flag(Flag::FloatToBigint(f));
                     BamlBigint { value: bi }
                 } else {
-                    return Err(ctx.error_unexpected_type(&target, &value));
+                    return Err(ctx.error_unexpected_type(target, &value));
                 }
             }
-            (jsonish::Value::String(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
-                return Ok(None);
-            }
-            (jsonish::Value::String(s, CompletionState::Incomplete), Some(lit)) => {
-                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
-                flags.add_flag(Flag::StringToBigint(s.clone()));
-                target.ty.from_literal(lit, ctx)?
-            }
-            (jsonish::Value::String(s, c), _) => {
-                if matches!(c, CompletionState::Incomplete) {
-                    flags.add_flag(Flag::Incomplete);
-                }
+            // No partial parse: the value may still change as it streams in.
+            jsonish::Value::String(_, CompletionState::Incomplete) => return Ok(None),
+            jsonish::Value::String(s, CompletionState::Complete) => {
                 let trimmed = s.trim();
                 // Trim trailing commas
                 let trimmed = trimmed.trim_end_matches(',');
@@ -412,38 +352,28 @@ where
                     .or_else(|| float_from_comma_separated(trimmed))
                 {
                     if !n.is_finite() {
-                        return Err(ctx.error_unexpected_type(&target, &value));
+                        return Err(ctx.error_unexpected_type(target, &value));
                     }
                     let Some(bi) = bigint_from_finite_f64(n) else {
-                        return Err(ctx.error_unexpected_type(&target, &value));
+                        return Err(ctx.error_unexpected_type(target, &value));
                     };
                     flags.add_flag(Flag::StringToBigint(s.clone()));
                     flags.add_flag(Flag::FloatToBigint(n));
                     BamlBigint { value: bi }
                 } else {
-                    return Err(ctx.error_unexpected_type(&target, &value));
+                    return Err(ctx.error_unexpected_type(target, &value));
                 }
             }
-            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
-                return Ok(None);
-            }
-            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(lit)) => {
-                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
-                target.ty.from_literal(lit, ctx)?
-            }
-            (jsonish::Value::Array(items, c), _) => {
+            jsonish::Value::Array(items, c) => {
                 if matches!(c, CompletionState::Incomplete) {
                     flags.add_flag(Flag::Incomplete);
                 }
-                let target_ty = target.ty;
-                let target_meta = target.meta;
                 let Some(singular) = coerce_array_to_singular(
                     ctx,
-                    TyWithMeta::new(TyResolvedRef::Bigint(BigintTy), target_meta),
+                    TyResolvedRef::Bigint(BigintTy),
                     items.iter(),
                     &|value| {
-                        Self::coerce(ctx, TyWithMeta::new(target_ty, target_meta), value)
-                            .map(|v| v.map(|v| v.map_value(Into::into)))
+                        Self::coerce(ctx, target, value).map(|v| v.map(|v| v.map_value(Into::into)))
                     },
                 )?
                 else {
@@ -455,50 +385,32 @@ where
                 };
                 singular
             }
-            _ => return Err(ctx.error_unexpected_type(&target, &value)),
+            _ => return Err(ctx.error_unexpected_type(target, &value)),
         };
         let result = ValueWithFlags::new(
             result,
             DeserializerMeta {
                 flags,
-                ty: target.map_ty(|_| TyResolvedRef::Bigint(BigintTy)),
+                ty: TyResolvedRef::Bigint(BigintTy),
             },
         );
         Ok(Some(result))
     }
 
     fn try_cast(
-        ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        _ctx: &ParsingContext<'s, 'v, 't, N>,
+        _target: &'t Self,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Option<ValueWithFlags<'s, 'v, 't, BamlBigint, N>> {
         let jsonish::Value::Number(num, completion_state) = value else {
             return None;
         };
 
-        let flags = match (completion_state, target.meta.in_progress.as_ref()) {
-            (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return None,
-            (CompletionState::Incomplete, Some(lit)) => {
-                return target
-                    .ty
-                    .from_literal(lit, ctx)
-                    .map(|ret| {
-                        ValueWithFlags::new(
-                            ret,
-                            DeserializerMeta {
-                                flags: DeserializerConditions::new()
-                                    .with_flag(Flag::DefaultButHadValue(Cow::Borrowed(value))),
-                                ty: target.map_ty(|_| TyResolvedRef::Bigint(BigintTy)),
-                            },
-                        )
-                    })
-                    .ok();
-            }
-            (CompletionState::Incomplete, None) => {
-                DeserializerConditions::new().with_flag(Flag::Incomplete)
-            }
-            (CompletionState::Complete, _) => DeserializerConditions::new(),
-        };
+        // No partial parse: the value may still change as it streams in.
+        if matches!(completion_state, CompletionState::Incomplete) {
+            return None;
+        }
+        let flags = DeserializerConditions::new();
 
         // Only accept exact JSON integer numbers — no float fallback, no string parsing.
         let bi = if let Some(i) = num.as_i64() {
@@ -514,7 +426,7 @@ where
             BamlBigint { value: bi },
             DeserializerMeta {
                 flags,
-                ty: TyWithMeta::new(TyResolvedRef::Bigint(BigintTy), target.meta),
+                ty: TyResolvedRef::Bigint(BigintTy),
             },
         ))
     }
@@ -528,23 +440,15 @@ where
 {
     fn coerce(
         ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        target: &'t Self,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlFloat, N>>, ParsingError> {
         let mut flags = DeserializerConditions::new();
 
-        let result = match (value, target.meta.in_progress.as_ref()) {
-            (jsonish::Value::Number(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
-                return Ok(None);
-            }
-            (jsonish::Value::Number(_, CompletionState::Incomplete), Some(lit)) => {
-                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
-                target.ty.from_literal(lit, ctx)?
-            }
-            (jsonish::Value::Number(n, c), _) => {
-                if matches!(c, CompletionState::Incomplete) {
-                    flags.add_flag(Flag::Incomplete);
-                }
+        let result = match value {
+            // No partial parse: the value may still change as it streams in.
+            jsonish::Value::Number(_, CompletionState::Incomplete) => return Ok(None),
+            jsonish::Value::Number(n, CompletionState::Complete) => {
                 if let Some(n) = n.as_f64() {
                     BamlFloat { value: n }
                 } else if let Some(n) = n.as_i64() {
@@ -552,21 +456,12 @@ where
                 } else if let Some(n) = n.as_u64() {
                     BamlFloat { value: n as f64 }
                 } else {
-                    return Err(ctx.error_unexpected_type(&target, &value));
+                    return Err(ctx.error_unexpected_type(target, &value));
                 }
             }
-            (jsonish::Value::String(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
-                return Ok(None);
-            }
-            (jsonish::Value::String(s, CompletionState::Incomplete), Some(lit)) => {
-                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
-                flags.add_flag(Flag::StringToFloat(s.clone()));
-                target.ty.from_literal(lit, ctx)?
-            }
-            (jsonish::Value::String(s, c), _) => {
-                if matches!(c, CompletionState::Incomplete) {
-                    flags.add_flag(Flag::Incomplete);
-                }
+            // No partial parse: the value may still change as it streams in.
+            jsonish::Value::String(_, CompletionState::Incomplete) => return Ok(None),
+            jsonish::Value::String(s, CompletionState::Complete) => {
                 let s = s.trim();
                 // Trim trailing commas
                 let s = s.trim_end_matches(',');
@@ -587,29 +482,19 @@ where
                     flags.add_flag(Flag::StringToFloat(s.to_string().into()));
                     BamlFloat { value: frac }
                 } else {
-                    return Err(ctx.error_unexpected_type(&target, &value));
+                    return Err(ctx.error_unexpected_type(target, &value));
                 }
             }
-            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
-                return Ok(None);
-            }
-            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(lit)) => {
-                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
-                target.ty.from_literal(lit, ctx)?
-            }
-            (jsonish::Value::Array(items, c), _) => {
+            jsonish::Value::Array(items, c) => {
                 if matches!(c, CompletionState::Incomplete) {
                     flags.add_flag(Flag::Incomplete);
                 }
-                let target_ty = target.ty;
-                let target_meta = target.meta;
                 let Some(singular) = coerce_array_to_singular(
                     ctx,
-                    TyWithMeta::new(TyResolvedRef::Float(FloatTy), target_meta),
+                    TyResolvedRef::Float(FloatTy),
                     items.iter(),
                     &|value| {
-                        Self::coerce(ctx, TyWithMeta::new(target_ty, target_meta), value)
-                            .map(|v| v.map(|v| v.map_value(Into::into)))
+                        Self::coerce(ctx, target, value).map(|v| v.map(|v| v.map_value(Into::into)))
                     },
                 )?
                 else {
@@ -621,50 +506,32 @@ where
                 };
                 singular
             }
-            _ => return Err(ctx.error_unexpected_type(&target, &value)),
+            _ => return Err(ctx.error_unexpected_type(target, &value)),
         };
         let result = ValueWithFlags::new(
             result,
             DeserializerMeta {
                 flags,
-                ty: target.map_ty(|_| TyResolvedRef::Float(FloatTy)),
+                ty: TyResolvedRef::Float(FloatTy),
             },
         );
         Ok(Some(result))
     }
 
     fn try_cast(
-        ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        _ctx: &ParsingContext<'s, 'v, 't, N>,
+        _target: &'t Self,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Option<ValueWithFlags<'s, 'v, 't, BamlFloat, N>> {
         let jsonish::Value::Number(num, completion_state) = value else {
             return None;
         };
 
-        let flags = match (completion_state, target.meta.in_progress.as_ref()) {
-            (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return None,
-            (CompletionState::Incomplete, Some(lit)) => {
-                return target
-                    .ty
-                    .from_literal(lit, ctx)
-                    .map(|ret| {
-                        ValueWithFlags::new(
-                            ret,
-                            DeserializerMeta {
-                                flags: DeserializerConditions::new()
-                                    .with_flag(Flag::DefaultButHadValue(Cow::Borrowed(value))),
-                                ty: target.map_ty(|_| TyResolvedRef::Float(FloatTy)),
-                            },
-                        )
-                    })
-                    .ok();
-            }
-            (CompletionState::Incomplete, None) => {
-                DeserializerConditions::new().with_flag(Flag::Incomplete)
-            }
-            (CompletionState::Complete, _) => DeserializerConditions::new(),
-        };
+        // No partial parse: the value may still change as it streams in.
+        if matches!(completion_state, CompletionState::Incomplete) {
+            return None;
+        }
+        let flags = DeserializerConditions::new();
 
         Some(ValueWithFlags::new(
             BamlFloat {
@@ -672,7 +539,7 @@ where
             },
             DeserializerMeta {
                 flags,
-                ty: TyWithMeta::new(TyResolvedRef::Float(FloatTy), target.meta),
+                ty: TyResolvedRef::Float(FloatTy),
             },
         ))
     }
@@ -685,24 +552,15 @@ where
 {
     fn coerce(
         ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        target: &'t Self,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlBool, N>>, ParsingError> {
         let mut flags = DeserializerConditions::new();
-        let result = match (value, target.meta.in_progress.as_ref()) {
-            (crate::jsonish::Value::Boolean(b), _) => BamlBool { value: *b },
-            (jsonish::Value::String(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
-                return Ok(None);
-            }
-            (jsonish::Value::String(s, CompletionState::Incomplete), Some(lit)) => {
-                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
-                flags.add_flag(Flag::StringToBool(s.clone()));
-                target.ty.from_literal(lit, ctx)?
-            }
-            (crate::jsonish::Value::String(s, c), _) => {
-                if matches!(c, CompletionState::Incomplete) {
-                    flags.add_flag(Flag::Incomplete);
-                }
+        let result = match value {
+            crate::jsonish::Value::Boolean(b) => BamlBool { value: *b },
+            // No partial parse: a prefix of `true`/`false` is not a bool.
+            jsonish::Value::String(_, CompletionState::Incomplete) => return Ok(None),
+            crate::jsonish::Value::String(s, CompletionState::Complete) => {
                 match s.to_lowercase().as_str() {
                     "true" => {
                         flags.add_flag(Flag::StringToBool(s.clone()));
@@ -714,7 +572,7 @@ where
                     }
                     _ => match super::match_string::match_string(
                         ctx,
-                        TyWithMeta::new(TyResolvedRef::Bool(BoolTy), target.meta),
+                        TyResolvedRef::Bool(BoolTy),
                         Cow::Borrowed(value),
                         &[
                             ("true", vec!["true", "True", "TRUE"]),
@@ -731,32 +589,22 @@ where
                                 flags.add_flag(Flag::StringToBool(Cow::Borrowed(val.value)));
                                 BamlBool { value: false }
                             }
-                            _ => return Err(ctx.error_unexpected_type(&target, &value)),
+                            _ => return Err(ctx.error_unexpected_type(target, &value)),
                         },
-                        Err(_) => return Err(ctx.error_unexpected_type(&target, &value)),
+                        Err(_) => return Err(ctx.error_unexpected_type(target, &value)),
                     },
                 }
             }
-            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(AttrLiteral::Never)) => {
-                return Ok(None);
-            }
-            (jsonish::Value::Array(_, CompletionState::Incomplete), Some(lit)) => {
-                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
-                target.ty.from_literal(lit, ctx)?
-            }
-            (crate::jsonish::Value::Array(items, c), _) => {
+            crate::jsonish::Value::Array(items, c) => {
                 if matches!(c, CompletionState::Incomplete) {
                     flags.add_flag(Flag::Incomplete);
                 }
-                let target_ty = target.ty;
-                let target_meta = target.meta;
                 let Some(singular) = coerce_array_to_singular(
                     ctx,
-                    TyWithMeta::new(TyResolvedRef::Bool(BoolTy), target_meta),
+                    TyResolvedRef::Bool(BoolTy),
                     items.iter(),
                     &|value| {
-                        Self::coerce(ctx, TyWithMeta::new(target_ty, target_meta), value)
-                            .map(|v| v.map(|v| v.map_value(Into::into)))
+                        Self::coerce(ctx, target, value).map(|v| v.map(|v| v.map_value(Into::into)))
                     },
                 )?
                 else {
@@ -768,13 +616,13 @@ where
                 };
                 singular
             }
-            _ => return Err(ctx.error_unexpected_type(&target, &value)),
+            _ => return Err(ctx.error_unexpected_type(target, &value)),
         };
         let value = ValueWithFlags::new(
             result,
             DeserializerMeta {
                 flags,
-                ty: target.map_ty(|_| TyResolvedRef::Bool(BoolTy)),
+                ty: TyResolvedRef::Bool(BoolTy),
             },
         );
         Ok(Some(value))
@@ -782,10 +630,10 @@ where
 
     fn try_cast(
         _ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        _target: &'t Self,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Option<ValueWithFlags<'s, 'v, 't, BamlBool, N>> {
-        // Boolean doesn't carry CompletionState, so it's always complete — no in_progress handling needed.
+        // Boolean doesn't carry CompletionState, so it's always complete.
         let crate::jsonish::Value::Boolean(b) = value else {
             return None;
         };
@@ -794,7 +642,7 @@ where
             BamlBool { value: *b },
             DeserializerMeta {
                 flags: DeserializerConditions::new(),
-                ty: TyWithMeta::new(TyResolvedRef::Bool(BoolTy), target.meta),
+                ty: TyResolvedRef::Bool(BoolTy),
             },
         ))
     }
@@ -806,34 +654,16 @@ where
     's: 'v,
 {
     fn coerce(
-        ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        _ctx: &ParsingContext<'s, 'v, 't, N>,
+        _target: &'t Self,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlNull, N>>, ParsingError> {
-        if target.meta.parse_without_null {
-            return Err(ctx.error_unexpected_null(&target));
+        // An incomplete value is not yet known to be unparseable as anything else, so it is
+        // not `null` either.
+        if value.completion_state() == &CompletionState::Incomplete {
+            return Ok(None);
         }
         let mut flags = DeserializerConditions::new();
-
-        // Handle in_progress for all incomplete values
-        match (value.completion_state(), target.meta.in_progress.as_ref()) {
-            (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return Ok(None),
-            (CompletionState::Incomplete, Some(lit)) => {
-                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
-                let result = target.ty.from_literal(lit, ctx)?;
-                return Ok(Some(ValueWithFlags::new(
-                    result,
-                    DeserializerMeta {
-                        flags,
-                        ty: target.map_ty(|_| TyResolvedRef::Null(NullTy)),
-                    },
-                )));
-            }
-            (CompletionState::Incomplete, None) => {
-                flags.add_flag(Flag::Incomplete);
-            }
-            (CompletionState::Complete, _) => {}
-        }
 
         match value {
             crate::jsonish::Value::Null => {}
@@ -846,20 +676,17 @@ where
             result,
             DeserializerMeta {
                 flags,
-                ty: target.map_ty(|_| TyResolvedRef::Null(NullTy)),
+                ty: TyResolvedRef::Null(NullTy),
             },
         )))
     }
 
     fn try_cast(
         _ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        _target: &'t Self,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Option<ValueWithFlags<'s, 'v, 't, BamlNull, N>> {
-        if target.meta.parse_without_null {
-            return None;
-        }
-        // Null doesn't carry CompletionState, so it's always complete — no in_progress handling needed.
+        // Null doesn't carry CompletionState, so it's always complete.
         let crate::jsonish::Value::Null = value else {
             return None;
         };
@@ -868,7 +695,7 @@ where
             BamlNull,
             DeserializerMeta {
                 flags: DeserializerConditions::new(),
-                ty: TyWithMeta::new(TyResolvedRef::Null(NullTy), target.meta),
+                ty: TyResolvedRef::Null(NullTy),
             },
         ))
     }
@@ -881,34 +708,18 @@ where
 {
     fn coerce(
         ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        target: &'t Self,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlString<'s>, N>>, ParsingError> {
         let mut flags = DeserializerConditions::new();
-
-        // Handle in_progress for all incomplete values
-        match (value.completion_state(), target.meta.in_progress.as_ref()) {
-            (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return Ok(None),
-            (CompletionState::Incomplete, Some(lit)) => {
-                flags.add_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value)));
-                let result = target.ty.from_literal(lit, ctx)?;
-                return Ok(Some(ValueWithFlags::new(
-                    result,
-                    DeserializerMeta {
-                        flags,
-                        ty: target.map_ty(|_| TyResolvedRef::String(StringTy)),
-                    },
-                )));
-            }
-            (CompletionState::Incomplete, None) => {
-                flags.add_flag(Flag::Incomplete);
-            }
-            (CompletionState::Complete, _) => {}
+        // A string streams: the prefix seen so far is the partial parse.
+        if value.completion_state() == &CompletionState::Incomplete {
+            flags.add_flag(Flag::Incomplete);
         }
 
         let result: String = match value {
             crate::jsonish::Value::String(s, _) => s.to_string(),
-            crate::jsonish::Value::Null => return Err(ctx.error_unexpected_null(&target)),
+            crate::jsonish::Value::Null => return Err(ctx.error_unexpected_null(target)),
             // Handle AnyOf explicitly to extract the string content.
             // If one of the variants is a String, prefer that over the raw input.
             // Otherwise, use the original raw string.
@@ -934,6 +745,9 @@ where
 
                 string_val.into_owned()
             }
+            // Rendering a half-streamed number, array, or object as text is not a partial
+            // parse of anything: it would change shape with every chunk.
+            v if v.completion_state() == &CompletionState::Incomplete => return Ok(None),
             v => {
                 flags.add_flag(Flag::JsonToString(Cow::Borrowed(v)));
                 v.to_string()
@@ -948,42 +762,25 @@ where
             result,
             DeserializerMeta {
                 flags,
-                ty: target.map_ty(|_| TyResolvedRef::String(StringTy)),
+                ty: TyResolvedRef::String(StringTy),
             },
         )))
     }
 
     fn try_cast(
-        ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        _ctx: &ParsingContext<'s, 'v, 't, N>,
+        _target: &'t Self,
         value: &'v crate::jsonish::Value<'s>,
     ) -> Option<ValueWithFlags<'s, 'v, 't, BamlString<'s>, N>> {
         let jsonish::Value::String(s, completion_state) = value else {
             return None;
         };
 
-        let flags = match (completion_state, target.meta.in_progress.as_ref()) {
-            (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return None,
-            (CompletionState::Incomplete, Some(lit)) => {
-                return target
-                    .ty
-                    .from_literal(lit, ctx)
-                    .map(|ret| {
-                        ValueWithFlags::new(
-                            ret,
-                            DeserializerMeta {
-                                flags: DeserializerConditions::new()
-                                    .with_flag(Flag::DefaultButHadValue(Cow::Borrowed(value))),
-                                ty: target.map_ty(|_| TyResolvedRef::String(StringTy)),
-                            },
-                        )
-                    })
-                    .ok();
-            }
-            (CompletionState::Incomplete, None) => {
+        let flags = match completion_state {
+            CompletionState::Incomplete => {
                 DeserializerConditions::new().with_flag(Flag::Incomplete)
             }
-            (CompletionState::Complete, _) => DeserializerConditions::new(),
+            CompletionState::Complete => DeserializerConditions::new(),
         };
 
         Some(ValueWithFlags::new(
@@ -992,7 +789,7 @@ where
             },
             DeserializerMeta {
                 flags,
-                ty: TyWithMeta::new(TyResolvedRef::String(StringTy), target.meta),
+                ty: TyResolvedRef::String(StringTy),
             },
         ))
     }
@@ -1005,10 +802,10 @@ where
 {
     fn coerce(
         ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        target: &'t Self,
         _value: &'v crate::jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, BamlMedia, N>>, ParsingError> {
-        let e = match target.ty {
+        let e = match target {
             MediaTy::Image => ctx.error_image_not_supported(),
             MediaTy::Audio => ctx.error_audio_not_supported(),
             MediaTy::Pdf => ctx.error_pdf_not_supported(),
@@ -1020,7 +817,7 @@ where
 
     fn try_cast(
         _ctx: &ParsingContext<'s, 'v, 't, N>,
-        _target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        _target: &'t Self,
         _value: &'v crate::jsonish::Value<'s>,
     ) -> Option<ValueWithFlags<'s, 'v, 't, BamlMedia, N>> {
         None
@@ -1155,8 +952,7 @@ mod tests {
         let db: TypeRefDb<'_, &str> = TypeRefDb::new();
         let ctx = ParsingContext::new(&db);
 
-        let annotations: TypeAnnotations<'_, &str> = TypeAnnotations::default();
-        let result = StringTy::coerce(&ctx, TyWithMeta::new(&StringTy, &annotations), &anyof_value);
+        let result = StringTy::coerce(&ctx, &StringTy, &anyof_value);
 
         // The bug would cause this to return "AnyOf[..."
         // The fix should prefer the String variant from the choices if available
@@ -1186,8 +982,7 @@ mod tests {
         let db: TypeRefDb<'_, &str> = TypeRefDb::new();
         let ctx = ParsingContext::new(&db);
 
-        let annotations: TypeAnnotations<'_, &str> = TypeAnnotations::default();
-        let result = StringTy::coerce(&ctx, TyWithMeta::new(&StringTy, &annotations), &anyof_value);
+        let result = StringTy::coerce(&ctx, &StringTy, &anyof_value);
 
         assert!(result.is_ok());
         let baml_value = result.unwrap().unwrap();

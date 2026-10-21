@@ -11,8 +11,8 @@ function call_with_callback(callback: (int) -> string, x: int) -> string {
 // A callback with an omitted `throws` gets an inferred effect param `E`. What
 // the *outer* function throws then depends on the body — cases python/TS erase
 // but Rust surfaces as real, distinct `Error<…>` types. (The callback's return
-// type must be concrete — the engine validates the host's returned value
-// against it — so these use `() -> int`, not `() -> void`.)
+// type must be concrete: the engine validates the host's returned value
+// against it.)
 
 // The callback's error is caught and replaced, so the outer function throws
 // nothing (`throws never`): `Error<Infallible>`, with the effect param used
@@ -57,6 +57,25 @@ function call_with_two_args(callback: (int, string) -> string, x: int, prefix: s
 // non-string return type.
 function call_int_callback(callback: (int) -> int, x: int) -> int {
     callback(x)
+}
+
+// JavaScript represents both integers and floats as `number`. The Node bridge
+// preserves that ambiguity so a float callback contract can resolve an
+// integral callback result as a float.
+function call_float_callback(callback: () -> float) -> float {
+    callback()
+}
+
+function call_float_bigint_union_callback(callback: () -> float | bigint) -> float | bigint {
+    callback()
+}
+
+class FloatSize {
+    width float
+}
+
+function call_float_class_callback(callback: () -> FloatSize) -> float {
+    callback().width
 }
 
 // A user-defined class flows through the callback as the argument type;
@@ -169,6 +188,23 @@ function call_throwing_void_callback(
     callback(value)
 }
 
+// A unit callback takes its arguments positionally like any other, whatever
+// its arity and whichever of `void` and `null` spells its return type.
+function call_void_callback_two_args(callback: (int, string) -> void, value: int, label: string) -> int {
+    callback(value, label)
+    value
+}
+
+function call_void_callback_three_args(
+    callback: (int, string, bool) -> null,
+    value: int,
+    label: string,
+    flag: bool,
+) -> int {
+    callback(value, label, flag)
+    value
+}
+
 function propagate_throwing_callback(
     callback: (int) -> string throws baml.errors.HostCallable,
     value: int,
@@ -203,6 +239,32 @@ function make_counter(start: int) -> () -> int throws never {
     return () -> int {
         current += 1;
         current
+    }
+}
+
+// A returned closure with no value: the host's call completes with nothing to
+// read back.
+function make_void_callback() -> () -> void throws never {
+    return () -> void {}
+}
+
+// The retained host callback is the only observer of the returned closure's
+// arguments.
+function make_void_forwarder(
+    callback: (int, string) -> void throws baml.errors.HostCallable,
+) -> (value: int, label: string) -> void throws baml.errors.HostCallable {
+    return (value: int, label: string) -> void throws baml.errors.HostCallable {
+        callback(value, label)
+    }
+}
+
+// Retain a host callback in a returned BAML closure. Registration does not
+// invoke the callback; the later caller supplies its execution environment.
+function make_callback_forwarder(
+    callback: (int) -> int throws baml.errors.HostCallable,
+) -> (value: int) -> int throws baml.errors.HostCallable {
+    return (value: int) -> int throws baml.errors.HostCallable {
+        callback(value)
     }
 }
 
@@ -338,4 +400,9 @@ function call_with_typed_throws_propagating(
     x: int,
 ) -> string throws ValidationError {
     callback(x)
+}
+
+// Marker defaults are resolved against this explicit callback-call patch.
+function call_configured_callback(callback: (int) -> int, x: int, options: trace.Options) -> int {
+    callback(x, $trace = options)
 }

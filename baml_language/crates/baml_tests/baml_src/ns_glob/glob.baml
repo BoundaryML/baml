@@ -115,39 +115,34 @@ test "glob_matches_negated_pattern" {
 // ─── glob_scan_finds_txt_files ───────────────────────────────────────────────
 
 function scan_finds_txt_files() -> string[] {
-    let root = glob_tmp("scan_txt");
-    baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
-    let _ = baml.fs.write(root + "/a.txt", "a");
-    let _ = baml.fs.write(root + "/b.txt", "b");
-    let _ = baml.fs.write(root + "/c.rs", "c");
+    let dir = glob_tmp("scan_txt");
+    baml.fs.mkdir(dir, baml.fs.MkdirOptions { recursive: true });
+    let _ = baml.fs.write(dir + "/a.txt", "a");
+    let _ = baml.fs.write(dir + "/b.txt", "b");
+    let _ = baml.fs.write(dir + "/c.rs", "c");
     let g = baml.glob.new("*.txt");
-    let result = g.scan(root);
-    let _ = baml.sys.shell("rm -rf " + root, null);
+    let result = g.scan(dir);
+    let _ = baml.sys.shell("rm -rf " + dir, null);
     result
 }
 
-test "glob_scan_finds_txt_files_length" {
-    assert.equal(scan_finds_txt_files().length(), 2)
-}
-
-test "glob_scan_finds_txt_files_has_a" {
-    assert.is_true(scan_finds_txt_files().includes("a.txt"))
-}
-
-test "glob_scan_finds_txt_files_has_b" {
-    assert.is_true(scan_finds_txt_files().includes("b.txt"))
+test "glob_scan_finds_txt_files" {
+    let files = scan_finds_txt_files();
+    assert.equal(files.length(), 2);
+    assert.is_true(files.includes("a.txt"));
+    assert.is_true(files.includes("b.txt"))
 }
 
 // ─── glob_scan_returns_empty_for_no_match ────────────────────────────────────
 
 function scan_returns_empty_for_no_match() -> string[] {
-    let root = glob_tmp("scan_empty");
-    baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
-    let _ = baml.fs.write(root + "/a.rs", "rust");
-    let _ = baml.fs.write(root + "/b.rs", "rust");
+    let dir = glob_tmp("scan_empty");
+    baml.fs.mkdir(dir, baml.fs.MkdirOptions { recursive: true });
+    let _ = baml.fs.write(dir + "/a.rs", "rust");
+    let _ = baml.fs.write(dir + "/b.rs", "rust");
     let g = baml.glob.new("*.txt");
-    let result = g.scan(root);
-    let _ = baml.sys.shell("rm -rf " + root, null);
+    let result = g.scan(dir);
+    let _ = baml.sys.shell("rm -rf " + dir, null);
     result
 }
 
@@ -160,18 +155,15 @@ test "glob_scan_returns_empty_for_no_match" {
 // Default scan only returns files, not directories, even if the dir name
 // matches the pattern.
 function scan_only_files_by_default_checks() -> bool[] {
-    let root = glob_tmp("only_files");
-    baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
-    let _ = baml.fs.write(root + "/file.txt", "content");
+    let dir = glob_tmp("only_files");
+    baml.fs.mkdir(dir, baml.fs.MkdirOptions { recursive: true });
+    let _ = baml.fs.write(dir + "/file.txt", "content");
     // Create a directory named dir.txt — should be excluded from *.txt results.
-    baml.fs.mkdir(root + "/dir.txt", baml.fs.MkdirOptions { recursive: false });
+    baml.fs.mkdir(dir + "/dir.txt", baml.fs.MkdirOptions { recursive: false });
     let g = baml.glob.new("*.txt");
-    let result = g.scan(root);
-    let ok = [
-        result.length() == 1,
-        result.includes("file.txt"),
-    ];
-    let _ = baml.sys.shell("rm -rf " + root, null);
+    let result = g.scan(dir);
+    let ok = [result.length() == 1, result.includes("file.txt")];
+    let _ = baml.sys.shell("rm -rf " + dir, null);
     ok
 }
 
@@ -185,20 +177,20 @@ test "glob_scan_only_files_by_default" {
 // encode all assertions in one bool[] return [length_ok, has_hidden, has_dir,
 // has_file] so a single hermetic run (unique temp root) covers the test.
 function scan_opts_include_dot_absolute_and_dirs_checks() -> bool[] {
-    let root = glob_tmp("scan_opts2");
-    baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
-    let _ = baml.fs.write(root + "/file.txt", "content");
-    let _ = baml.fs.write(root + "/.hidden.txt", "hidden");
-    baml.fs.mkdir(root + "/dir.txt", baml.fs.MkdirOptions { recursive: false });
+    let dir = glob_tmp("scan_opts2");
+    baml.fs.mkdir(dir, baml.fs.MkdirOptions { recursive: true });
+    let _ = baml.fs.write(dir + "/file.txt", "content");
+    let _ = baml.fs.write(dir + "/.hidden.txt", "hidden");
+    baml.fs.mkdir(dir + "/dir.txt", baml.fs.MkdirOptions { recursive: false });
     let g = baml.glob.new("**/*.txt");
-    let result = g.scan(baml.glob.ScanOptions { cwd: root, dot: true, absolute: true, only_files: false });
+    let result = g.scan(baml.glob.ScanOptions { cwd: dir, dot: true, absolute: true, only_files: false });
     let ok = [
         result.length() == 3,
-        result.includes(root + "/.hidden.txt"),
-        result.includes(root + "/dir.txt"),
-        result.includes(root + "/file.txt"),
+        result.includes(dir + "/.hidden.txt"),
+        result.includes(dir + "/dir.txt"),
+        result.includes(dir + "/file.txt"),
     ];
-    let _ = baml.sys.shell("rm -rf " + root, null);
+    let _ = baml.sys.shell("rm -rf " + dir, null);
     ok
 }
 
@@ -209,37 +201,32 @@ test "glob_scan_options_include_dot_absolute_and_directories" {
 // ─── glob_scan_matches_dot_slash_pattern ─────────────────────────────────────
 
 function scan_matches_dot_slash_pattern() -> string[] {
-    let root = glob_tmp("dotslash");
-    baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
-    let _ = baml.fs.write(root + "/file.txt", "content");
+    let dir = glob_tmp("dotslash");
+    baml.fs.mkdir(dir, baml.fs.MkdirOptions { recursive: true });
+    let _ = baml.fs.write(dir + "/file.txt", "content");
     let g = baml.glob.new("./*.txt");
-    let result = g.scan(root);
-    let _ = baml.sys.shell("rm -rf " + root, null);
+    let result = g.scan(dir);
+    let _ = baml.sys.shell("rm -rf " + dir, null);
     result
 }
 
-test "glob_scan_matches_dot_slash_pattern_length" {
-    assert.equal(scan_matches_dot_slash_pattern().length(), 1)
-}
-
-test "glob_scan_matches_dot_slash_pattern_has_file" {
-    assert.is_true(scan_matches_dot_slash_pattern().includes("file.txt"))
+test "glob_scan_matches_dot_slash_pattern" {
+    let files = scan_matches_dot_slash_pattern();
+    assert.equal(files.length(), 1);
+    assert.is_true(files.includes("file.txt"))
 }
 
 // ─── glob_scan_matches_absolute_pattern ──────────────────────────────────────
 
 function scan_matches_absolute_pattern_checks() -> bool[] {
-    let root = glob_tmp("abs_pat");
-    baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
-    let _ = baml.fs.write(root + "/file.txt", "content");
-    let pattern = root + "/**/*.txt";
+    let dir = glob_tmp("abs_pat");
+    baml.fs.mkdir(dir, baml.fs.MkdirOptions { recursive: true });
+    let _ = baml.fs.write(dir + "/file.txt", "content");
+    let pattern = dir + "/**/*.txt";
     let g = baml.glob.new(pattern);
-    let result = g.scan(baml.glob.ScanOptions { cwd: root, absolute: true });
-    let ok = [
-        result.length() == 1,
-        result.includes(root + "/file.txt"),
-    ];
-    let _ = baml.sys.shell("rm -rf " + root, null);
+    let result = g.scan(baml.glob.ScanOptions { cwd: dir, absolute: true });
+    let ok = [result.length() == 1, result.includes(dir + "/file.txt")];
+    let _ = baml.sys.shell("rm -rf " + dir, null);
     ok
 }
 
@@ -251,42 +238,37 @@ test "glob_scan_matches_absolute_pattern" {
 
 // Regression: `.*` must match `.hidden` but NOT `regular.txt`.
 function scan_dot_pattern_matches_only_dot_files() -> string[] {
-    let root = glob_tmp("dotpat");
-    baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
-    let _ = baml.fs.write(root + "/.hidden", "h");
-    let _ = baml.fs.write(root + "/regular.txt", "r");
+    let dir = glob_tmp("dotpat");
+    baml.fs.mkdir(dir, baml.fs.MkdirOptions { recursive: true });
+    let _ = baml.fs.write(dir + "/.hidden", "h");
+    let _ = baml.fs.write(dir + "/regular.txt", "r");
     let g = baml.glob.new(".*");
-    let result = g.scan(baml.glob.ScanOptions { cwd: root, dot: true });
-    let _ = baml.sys.shell("rm -rf " + root, null);
+    let result = g.scan(baml.glob.ScanOptions { cwd: dir, dot: true });
+    let _ = baml.sys.shell("rm -rf " + dir, null);
     result
 }
 
-test "glob_scan_dot_pattern_matches_only_dot_files_length" {
-    assert.equal(scan_dot_pattern_matches_only_dot_files().length(), 1)
-}
-
-test "glob_scan_dot_pattern_matches_only_dot_files_has_hidden" {
-    assert.is_true(scan_dot_pattern_matches_only_dot_files().includes(".hidden"))
+test "glob_scan_dot_pattern_matches_only_dot_files" {
+    let files = scan_dot_pattern_matches_only_dot_files();
+    assert.equal(files.length(), 1);
+    assert.is_true(files.includes(".hidden"))
 }
 
 // ─── glob_scan_default_prunes_dot_directories ────────────────────────────────
 
 // dot=false (default) must skip files inside dot directories (e.g. .git/).
 function scan_default_prunes_dot_directories_checks() -> bool[] {
-    let root = glob_tmp("prune_dot");
-    baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
-    let _ = baml.fs.write(root + "/visible.txt", "visible");
-    baml.fs.mkdir(root + "/.git", baml.fs.MkdirOptions { recursive: false });
-    baml.fs.mkdir(root + "/.git/objects", baml.fs.MkdirOptions { recursive: false });
-    let _ = baml.fs.write(root + "/.git/objects/secret.txt", "x");
-    let _ = baml.fs.write(root + "/.git/HEAD", "x");
+    let dir = glob_tmp("prune_dot");
+    baml.fs.mkdir(dir, baml.fs.MkdirOptions { recursive: true });
+    let _ = baml.fs.write(dir + "/visible.txt", "visible");
+    baml.fs.mkdir(dir + "/.git", baml.fs.MkdirOptions { recursive: false });
+    baml.fs.mkdir(dir + "/.git/objects", baml.fs.MkdirOptions { recursive: false });
+    let _ = baml.fs.write(dir + "/.git/objects/secret.txt", "x");
+    let _ = baml.fs.write(dir + "/.git/HEAD", "x");
     let g = baml.glob.new("**/*.txt");
-    let result = g.scan(root);
-    let ok = [
-        result.length() == 1,
-        result.includes("visible.txt"),
-    ];
-    let _ = baml.sys.shell("rm -rf " + root, null);
+    let result = g.scan(dir);
+    let ok = [result.length() == 1, result.includes("visible.txt")];
+    let _ = baml.sys.shell("rm -rf " + dir, null);
     ok
 }
 
@@ -308,10 +290,7 @@ function scan_follows_symlinked_directory_checks() -> bool[] {
     let _ = baml.sys.shell("ln -s " + target + " " + outer_root + "/link_dir", null);
     let g = baml.glob.new("**/*.txt");
     let result = g.scan(baml.glob.ScanOptions { cwd: outer_root, follow_symlinks: true });
-    let ok = [
-        result.length() == 1,
-        result.includes("link_dir/hidden_via_link.txt"),
-    ];
+    let ok = [result.length() == 1, result.includes("link_dir/hidden_via_link.txt")];
     let _ = baml.sys.shell("rm -rf " + outer_root + " " + target, null);
     ok
 }
@@ -325,14 +304,14 @@ test "glob_scan_follows_symlinked_directory_when_enabled" {
 // follow_symlinks=true + a broken symlink: default behaviour is to skip it
 // and still return the real files.
 function scan_skips_broken_symlinks_by_default() -> string[] {
-    let root = glob_tmp("broken_sym");
-    baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
-    let _ = baml.fs.write(root + "/real.txt", "content");
+    let dir = glob_tmp("broken_sym");
+    baml.fs.mkdir(dir, baml.fs.MkdirOptions { recursive: true });
+    let _ = baml.fs.write(dir + "/real.txt", "content");
     // Create a dangling symlink pointing to a non-existent file.
-    let _ = baml.sys.shell("ln -s " + root + "/missing.txt " + root + "/dangling.txt", null);
+    let _ = baml.sys.shell("ln -s " + dir + "/missing.txt " + dir + "/dangling.txt", null);
     let g = baml.glob.new("*.txt");
-    let result = g.scan(baml.glob.ScanOptions { cwd: root, follow_symlinks: true });
-    let _ = baml.sys.shell("rm -rf " + root, null);
+    let result = g.scan(baml.glob.ScanOptions { cwd: dir, follow_symlinks: true });
+    let _ = baml.sys.shell("rm -rf " + dir, null);
     result
 }
 
@@ -349,23 +328,25 @@ test "glob_scan_skips_broken_symlinks_by_default_has_real" {
 // throw_error_on_broken_symlink=true: a dangling symlink makes the scan throw.
 // Scan failures surface as a BAML-catchable `baml.errors.Io`.
 function scan_throws_on_broken_symlink_when_opted_in_fn() -> bool {
-    let root = glob_tmp("broken_throw");
-    baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
-    let _ = baml.fs.write(root + "/real.txt", "content");
+    let dir = glob_tmp("broken_throw");
+    baml.fs.mkdir(dir, baml.fs.MkdirOptions { recursive: true });
+    let _ = baml.fs.write(dir + "/real.txt", "content");
     // Create a dangling symlink pointing to a non-existent file.
-    let _ = baml.sys.shell("ln -s " + root + "/missing.txt " + root + "/dangling.txt", null);
+    let _ = baml.sys.shell("ln -s " + dir + "/missing.txt " + dir + "/dangling.txt", null);
     let g = baml.glob.new("*.txt");
     let threw = {
-        let _ = g.scan(baml.glob.ScanOptions {
-            cwd: root,
-            follow_symlinks: true,
-            throw_error_on_broken_symlink: true,
-        });
+        let _ = g.scan(
+            baml.glob.ScanOptions {
+                cwd: dir,
+                follow_symlinks: true,
+                throw_error_on_broken_symlink: true,
+            },
+        );
         false
     } catch (e) {
         baml.errors.Io => true
     };
-    let _ = baml.sys.shell("rm -rf " + root, null);
+    let _ = baml.sys.shell("rm -rf " + dir, null);
     threw
 }
 
@@ -382,10 +363,10 @@ test "glob_scan_throws_on_broken_symlink_when_opted_in" {
 // permissions; root can still read, so probe first and trivially pass there
 // (CI containers) — the test premise is invalid under root.
 function scan_propagates_permission_errors_fn() -> bool {
-    let root = glob_tmp("perm_err");
-    baml.fs.mkdir(root, baml.fs.MkdirOptions { recursive: true });
-    let _ = baml.fs.write(root + "/ok.txt", "ok");
-    let locked = root + "/locked";
+    let dir = glob_tmp("perm_err");
+    baml.fs.mkdir(dir, baml.fs.MkdirOptions { recursive: true });
+    let _ = baml.fs.write(dir + "/ok.txt", "ok");
+    let locked = dir + "/locked";
     baml.fs.mkdir(locked, baml.fs.MkdirOptions { recursive: false });
     let _ = baml.fs.write(locked + "/inner.txt", "x");
     let _ = baml.sys.shell("chmod 000 " + locked, null);
@@ -394,7 +375,7 @@ function scan_propagates_permission_errors_fn() -> bool {
         true
     } else {
         {
-            let _ = baml.glob.new("**/*.txt").scan(root);
+            let _ = baml.glob.new("**/*.txt").scan(dir);
             false
         } catch (e) {
             baml.errors.Io => true
@@ -402,7 +383,7 @@ function scan_propagates_permission_errors_fn() -> bool {
     };
     // Restore permissions so the temp dir can be cleaned up.
     let _ = baml.sys.shell("chmod 755 " + locked, null);
-    let _ = baml.sys.shell("rm -rf " + root, null);
+    let _ = baml.sys.shell("rm -rf " + dir, null);
     threw
 }
 

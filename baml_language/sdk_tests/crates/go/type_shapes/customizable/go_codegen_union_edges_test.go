@@ -38,7 +38,7 @@ func Test_dynamic_union_delegates_semantic_validation_to_baml(t *testing.T) {
 }
 
 func Test_dynamic_union_rejects_unserializable_go_values_in_bridge(t *testing.T) {
-	_, err := baml_sdk.GoCodegenUnionEdgesRoundTripLargeUnion(context.Background(), func() {})
+	_, err := baml_sdk.GoCodegenUnionEdgesRoundTripLargeUnion(context.Background(), func(_ context.Context) {})
 	if err == nil || !strings.Contains(err.Error(), "unsupported Go value") {
 		t.Fatalf("unexpected error: %v", err)
 	}

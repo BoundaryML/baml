@@ -4,7 +4,7 @@
 // must carry the correct runtime `class_type_args`, and a method dispatched
 // through a multi-implementor interface must receive the resolved
 // class/interface type args in its frame. Without this, a method body that
-// reads its enclosing `T` at runtime — `reflect.type_of<T>()`, or constructing
+// reads its enclosing `T` at runtime — `reflect.Type.of<T>()`, or constructing
 // `Other<T>{}` — resolves `T` to `unknown`; the new instance gets empty
 // `class_type_args`; and the runtime `IsType` dispatch guard falls through to
 // the WRONG implementor (a silent wrong answer, or a field-access panic when
@@ -184,7 +184,7 @@ test "inferred_static_ctor_dispatches_through_generic_interface" {
 interface Named<T> {
   function first(self) -> T throws unknown
   function tname(self) -> string {
-    return reflect.type_of<T>().to_string()
+    return reflect.Type.of<T>().to_string()
   }
 }
 
@@ -269,7 +269,7 @@ test "class_method_builds_generic_via_class_type_var" {
 
 interface Counter<T> {
   function element_type(self) -> string {
-    return reflect.type_of<T>().to_string()
+    return reflect.Type.of<T>().to_string()
   }
   function describe(self) -> string
 }
@@ -307,7 +307,7 @@ test "default_method_forward_reads_interface_type_var" {
 // The interface request pins no type args (it has none), so the dispatch guard
 // is `Any` and can't name the implementor's class args statically. The matched
 // runtime instance still carries them, so the dispatched class-owned method
-// must resolve its class `T` (here via `reflect.type_of<T>()`).
+// must resolve its class `T` (here via `reflect.Type.of<T>()`).
 
 interface Describable {
   function describe(self) -> string
@@ -317,7 +317,7 @@ class TypedBox<T> {
     value: T,
     implements Describable {
         function describe(self) -> string {
-            return reflect.type_of<T>().to_string();
+            return reflect.Type.of<T>().to_string();
         }
     }
 }
@@ -356,7 +356,7 @@ test "generic_class_behind_nongeneric_interface_reads_type_var" {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function free_fn_tname<T>(a: T[]) -> string {
-    return reflect.type_of<T>().to_string();
+    return reflect.Type.of<T>().to_string();
 }
 
 function free_fn_inferred_t() -> string {
@@ -460,7 +460,7 @@ test "inferred_ctor_default_method_collects_all" {
 // to `unknown` (the unseeded status quo), not lower `Self` to `void`.
 
 function echo_type<T>(a: T) -> string {
-    return reflect.type_of<T>().to_string();
+    return reflect.Type.of<T>().to_string();
 }
 
 interface SelfEcho {
@@ -510,7 +510,7 @@ interface TypeProbe {
 class ProbeA {
     implements TypeProbe {
         function seen<U>(self, value: U) -> string {
-            return reflect.type_of<U>().to_string();
+    return reflect.Type.of<U>().to_string();
         }
     }
 }

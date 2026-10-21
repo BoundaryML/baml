@@ -21,14 +21,14 @@ class NestedGenerics {
 
 // Function parameter with extra >
 function BadParam(x: map<string, int>>) -> string {
-  client GPT4
-  prompt `test`
+  client: GPT4
+  prompt: `test`
 }
 
 // Function return type with extra >
 function BadReturnType() -> map<string, int>> {
-  client GPT4
-  prompt `test`
+  client: GPT4
+  prompt: `test`
 }
 
 // Type alias with extra >

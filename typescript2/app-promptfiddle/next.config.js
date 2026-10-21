@@ -1,6 +1,6 @@
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
 import { PHASE_DEVELOPMENT_SERVER } from 'next/constants.js';
 
 const projectDir = path.dirname(fileURLToPath(import.meta.url));
@@ -17,7 +17,12 @@ try {
   );
   const { TerserPlugin } = require(terserPath);
   const origOptimize = TerserPlugin.prototype.optimize;
-  TerserPlugin.prototype.optimize = async function (compiler, compilation, assets, ...rest) {
+  TerserPlugin.prototype.optimize = async function (
+    compiler,
+    compilation,
+    assets,
+    ...rest
+  ) {
     for (const [name, info] of compilation.assetsInfo) {
       if (/worker/i.test(name) && /\.js$/i.test(name)) {
         compilation.assetsInfo.set(name, { ...info, minimized: true });
@@ -35,10 +40,10 @@ export default function nextConfig(phase) {
     // Keep dev and production builds isolated so a running dev server
     // can't corrupt the manifests that `next build` needs to finalize.
     distDir: phase === PHASE_DEVELOPMENT_SERVER ? '.next-dev' : '.next-build',
-    reactStrictMode: true,
     experimental: {
-      typedRoutes: true
+      typedRoutes: true,
     },
+    reactStrictMode: true,
     transpilePackages: ['pkg-editor', 'pkg-playground', 'pkg-proto'],
     webpack: (config, { webpack }) => {
       config.resolve = config.resolve || {};
@@ -46,7 +51,7 @@ export default function nextConfig(phase) {
         ...config.resolve.alias,
         'pkg-editor': path.resolve(projectDir, '../pkg-editor/src'),
         'pkg-playground': path.resolve(projectDir, '../pkg-playground/src'),
-        'pkg-proto': path.resolve(projectDir, '../pkg-proto/src')
+        'pkg-proto': path.resolve(projectDir, '../pkg-proto/src'),
       };
 
       // Enable WASM support for bridge_wasm
@@ -54,6 +59,11 @@ export default function nextConfig(phase) {
         ...config.experiments,
         asyncWebAssembly: true,
       };
+
+      config.module.rules.push({
+        test: /\.baml$/,
+        type: 'asset/source',
+      });
 
       // just-bash/browser bundle still references a few Node.js built-ins
       // (gzip/gunzip commands — dead code in browser). Webpack 5 treats
@@ -63,7 +73,7 @@ export default function nextConfig(phase) {
       config.plugins.push(
         new webpack.NormalModuleReplacementPlugin(/^node:/, (resource) => {
           resource.request = resource.request.replace(/^node:/, '');
-        })
+        }),
       );
       config.resolve.fallback = {
         ...config.resolve.fallback,
@@ -71,6 +81,6 @@ export default function nextConfig(phase) {
       };
 
       return config;
-    }
+    },
   };
 }

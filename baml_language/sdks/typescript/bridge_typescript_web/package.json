@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml-bridge-web",
-  "version": "0.16.0",
+  "version": "0.22.2",
   "type": "module",
   "repository": {
     "type": "git",
@@ -44,5 +44,6 @@
     "typescript": "^5.9.3",
     "vitest": "^4.1.0",
     "wrangler": "4.110.0"
-  }
+  },
+  "license": "Apache-2.0"
 }

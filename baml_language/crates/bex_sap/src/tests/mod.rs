@@ -16,7 +16,7 @@ mod test_streaming;
 mod test_unions;
 mod test_word_bug;
 
-use crate::{baml_db, baml_tyannotated, sap_model::*};
+use crate::{baml_db, baml_ty, sap_model::*};
 
 // ---------------------------------------------------------------------------
 // Inline tests from old mod.rs (primitives + simple classes)
@@ -25,7 +25,7 @@ use crate::{baml_db, baml_tyannotated, sap_model::*};
 test_deserializer!(
     test_string_from_string,
     r#"hello"#,
-    baml_tyannotated!(string),
+    baml_ty!(string),
     baml_db! {},
     "hello"
 );
@@ -33,7 +33,7 @@ test_deserializer!(
 test_deserializer!(
     test_string_from_complete_json_string,
     r#""hello""#,
-    baml_tyannotated!(string),
+    baml_ty!(string),
     baml_db! {},
     "hello"
 );
@@ -41,7 +41,7 @@ test_deserializer!(
 test_deserializer!(
     test_string_from_object,
     r#"{"hi":    "hello"}"#,
-    baml_tyannotated!(string),
+    baml_ty!(string),
     baml_db! {},
     r#"{"hi":    "hello"}"#
 );
@@ -49,7 +49,7 @@ test_deserializer!(
 test_deserializer!(
     test_string_from_obj_and_string,
     r#"The output is: {"hello": "world"}"#,
-    baml_tyannotated!(string),
+    baml_ty!(string),
     baml_db! {},
     "The output is: {\"hello\": \"world\"}"
 );
@@ -57,7 +57,7 @@ test_deserializer!(
 test_deserializer!(
     test_string_from_list,
     r#"["hello", "world"]"#,
-    baml_tyannotated!(string),
+    baml_ty!(string),
     baml_db! {},
     "[\"hello\", \"world\"]"
 );
@@ -65,7 +65,7 @@ test_deserializer!(
 test_deserializer!(
     test_string_from_int,
     r#"1"#,
-    baml_tyannotated!(string),
+    baml_ty!(string),
     baml_db! {},
     "1"
 );
@@ -87,7 +87,7 @@ test_deserializer!(
         "blah": "blah"
       }
     ]"#,
-    baml_tyannotated!(string),
+    baml_ty!(string),
     baml_db! {},
     r#"Some preview text
 
@@ -125,7 +125,7 @@ test_deserializer!(
     ]
     ```
     "#,
-    baml_tyannotated!(string),
+    baml_ty!(string),
     baml_db! {},
     r#"Hello there.
 
@@ -157,10 +157,10 @@ test_deserializer!(
     }
 
   "#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
-            id: (string | null) @class_in_progress_field_missing(null) @class_completed_field_missing(null),
+            id: (string | null),
         }
     },
     {"id": null }
@@ -177,10 +177,10 @@ test_deserializer!(
       }
 
     "#,
-    baml_tyannotated!(Foo),
+    baml_ty!(Foo),
     baml_db!{
         class Foo {
-            id: (string | null) @class_completed_field_missing(null),
+            id: (string | null),
         }
     },
     {"id": r#"{{hi} there"# }
@@ -228,7 +228,7 @@ test_deserializer!(
         ]
       }
     "#,
-    baml_tyannotated!(BookAnalysis),
+    baml_ty!(BookAnalysis),
     baml_db!{
         class Score {
             year: int,
@@ -264,12 +264,12 @@ test_deserializer!(
     "four": "four"
   }
   "#,
-    baml_tyannotated!(OrderedClass),
+    baml_ty!(OrderedClass),
     baml_db!{
         class OrderedClass {
-            one: (string | null) @class_completed_field_missing(null),
+            one: (string | null),
             two: string,
-            three: (string | null) @class_completed_field_missing(null),
+            three: (string | null),
             four: string,
         }
     },
@@ -291,12 +291,12 @@ test_deserializer!(
     "four": "four"
   }
     "#,
-    baml_tyannotated!(OrderedClass),
+    baml_ty!(OrderedClass),
     baml_db!{
         class OrderedClass {
-            one: (string | null) @class_completed_field_missing(null),
+            one: (string | null),
             two: string,
-            three: (string | null) @class_completed_field_missing(null),
+            three: (string | null),
             four: string,
         }
     },

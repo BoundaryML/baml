@@ -1,10 +1,10 @@
 use super::*;
-use crate::{baml_db, baml_tyannotated};
+use crate::{baml_db, baml_ty};
 
 test_deserializer!(
     test_enum,
     r#"TWO"#,
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
             ONE,
@@ -17,7 +17,7 @@ test_deserializer!(
 test_deserializer!(
     case_insensitive,
     r#"two"#,
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
             ONE,
@@ -30,7 +30,7 @@ test_deserializer!(
 test_deserializer!(
     with_quotes,
     r#""TWO""#,
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
             ONE,
@@ -43,7 +43,7 @@ test_deserializer!(
 test_deserializer!(
     from_enum_list_single,
     r#"["TWO"]"#,
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
             ONE,
@@ -56,7 +56,7 @@ test_deserializer!(
 test_deserializer!(
     from_enum_list_multi,
     r#"["TWO", "THREE"]"#,
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
             ONE,
@@ -69,7 +69,7 @@ test_deserializer!(
 test_deserializer!(
     from_string_with_extra_text_after_1,
     r#""ONE: The description of k1""#,
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
             ONE,
@@ -82,7 +82,7 @@ test_deserializer!(
 test_deserializer!(
     from_string_and_case_mismatch,
     "The answer is One",
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
             ONE,
@@ -95,7 +95,7 @@ test_deserializer!(
 test_deserializer!(
     from_string_and_case_mismatch_wrapped,
     "**one** is the answer",
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
             ONE,
@@ -108,7 +108,7 @@ test_deserializer!(
 test_deserializer!(
     from_string_and_case_mismatch_upper,
     "**ONE** is the answer",
-    baml_tyannotated!(PascalCaseCategory),
+    baml_ty!(PascalCaseCategory),
     baml_db! {
         enum PascalCaseCategory {
             One,
@@ -121,7 +121,7 @@ test_deserializer!(
 test_deserializer!(
     from_string_with_extra_text_after_2,
     r#""ONE - The description of an enum value""#,
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
             ONE,
@@ -134,7 +134,7 @@ test_deserializer!(
 test_deserializer!(
     case_sensitive_non_ambiguous_match,
     r#"TWO" is one of the correct answers."#,
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
             ONE,
@@ -147,7 +147,7 @@ test_deserializer!(
 test_failing_deserializer!(
     case_insensitive_ambiguous_match,
     r#"Two" is one of the correct answers."#,
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
             ONE,
@@ -159,7 +159,7 @@ test_failing_deserializer!(
 test_failing_deserializer!(
     from_string_with_extra_text_after_3,
     r#""ONE - is the answer, not TWO""#,
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
             ONE,
@@ -171,7 +171,7 @@ test_failing_deserializer!(
 test_failing_deserializer!(
     from_string_with_extra_text_after_4,
     r#""ONE. is the answer, not TWO""#,
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
             ONE,
@@ -183,7 +183,7 @@ test_failing_deserializer!(
 test_failing_deserializer!(
     from_string_with_extra_text_after_5,
     r#""ONE: is the answer, not TWO""#,
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
             ONE,
@@ -195,11 +195,11 @@ test_failing_deserializer!(
 test_deserializer!(
     aliases_1,
     r#"k1"#,
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -209,11 +209,11 @@ test_deserializer!(
 test_deserializer!(
     aliases_2,
     r#"k-2-3.1_1"#,
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -223,11 +223,11 @@ test_deserializer!(
 test_deserializer!(
     aliases_3,
     r#"NUMBER THREE"#,
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -237,11 +237,11 @@ test_deserializer!(
 test_deserializer!(
     no_punctuation,
     r#"number three"#,
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -251,11 +251,11 @@ test_deserializer!(
 test_deserializer!(
     no_punctuation_2,
     r#"k-2-3 1_1"#,
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -265,11 +265,11 @@ test_deserializer!(
 test_deserializer!(
     descriptions,
     r#"k1: The description of enum value une"#,
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -279,11 +279,11 @@ test_deserializer!(
 test_deserializer!(
     descriptions_whitespace,
     r#"k-2-3.1_1 The description of enum value deux"#,
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -293,11 +293,11 @@ test_deserializer!(
 test_deserializer!(
     descriptions_period,
     r#"k-2-3.1_1. The description of enum value deux"#,
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -307,11 +307,11 @@ test_deserializer!(
 test_deserializer!(
     alias_with_text,
     r#"I would think k-2-3.1_1 is the best"#,
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -321,11 +321,11 @@ test_deserializer!(
 test_deserializer!(
     multi_aliases,
     r#"k1 is the best! k-2-3.1_1 is bad. k1!"#,
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -335,11 +335,11 @@ test_deserializer!(
 test_deserializer!(
     multi_aliases_1,
     r#"k1 is ok! k-2-3.1_1 is better. I would advise k-2-3.1_1!"#,
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -350,11 +350,11 @@ test_deserializer!(
 test_failing_deserializer!(
     multi_aliases_2,
     r#"k1 is the best! k-2-3.1_1 is bad. NUMBER_THREE!"#,
-    baml_tyannotated!(Category),
+    baml_ty!(Category),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     }
@@ -363,11 +363,11 @@ test_failing_deserializer!(
 test_deserializer!(
     list_of_enums,
     r#"["k1", "k-2-3.1_1"]"#,
-    baml_tyannotated!([Category]),
+    baml_ty!([Category]),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -381,11 +381,11 @@ test_deserializer!(
 [k1, "k-2-3.1_1", "NUMBER THREE"]
 ```
 "#,
-    baml_tyannotated!([Category]),
+    baml_ty!([Category]),
     baml_db! {
         enum Category {
-            ONE @alias("k1"),
-            TWO @alias("k-2-3.1_1"),
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
             THREE @alias("NUMBER THREE")
         }
     },
@@ -405,7 +405,7 @@ null
 
 This indicates that there is no relevant tax return form type present on the page.
     "#,
-    baml_tyannotated!((TaxReturnFormType | null)),
+    baml_ty!((TaxReturnFormType | null)),
     baml_db! {
         enum TaxReturnFormType {
             F9325 @alias("9325"),
@@ -420,7 +420,7 @@ This indicates that there is no relevant tax return form type present on the pag
 test_failing_deserializer!(
     test_ambiguous_substring_enum,
     "The answer is not car or car-2!",
-    baml_tyannotated!(Car),
+    baml_ty!(Car),
     baml_db! {
         enum Car {
             A @alias("car"),
@@ -437,7 +437,7 @@ offers and urgency ($^{$_{Ω}$rel}$), which are common traits of spam messages. 
 
 - **SPAM**
     "#,
-    baml_tyannotated!(MessageType),
+    baml_ty!(MessageType),
     baml_db! {
         enum MessageType {
             SPAM,
@@ -447,7 +447,199 @@ offers and urgency ($^{$_{Ω}$rel}$), which are common traits of spam messages. 
     "SPAM"
 );
 
-// test_enum_from_string is skipped because it uses `res.meta_mut().streaming_behavior.done = true`
+// Upstream marks the target `@stream.done`; that only shapes partial parses, and this is a
+// complete one.
+test_deserializer!(
+    test_enum_from_string,
+    " `k5`\n\nThe category \"k5: User is excited\" is designed to identify and classify user inputs that express strong positive emotions, enthusiasm, or anticipation. This classification applies when the language used by the user conveys an eagerness or thrill about something they are experiencing or expecting.\n\n### Characteristics of Excitement\n- **Emotional Expressions:** The use of exclamation marks, emphatic words like \"amazing,\" \"incredible,\" or \"fantastic.\"\n- **Positive Language:** Use of positive adjectives and adverbs such as \"can't wait,\" \"thrilled,\" \"excited,\" or \"elated.\"\n- **Anticipation:** Statements that show looking forward to an event, result, or item.\n  \n### Examples\n- *\"I can’t wait for the concert tonight! It's going to be amazing!\"*\n- *\"This new game release has me super excited. I've been waiting months for this!\"*\n\n### Long Description:\nWhen a user demonstrates excitement in their communication, it generally reflects an emotional high, eagerness, or intense positivity regarding whatever they are discussing. This could pertain to events like attending a sports game or concert, receiving positive news or achievements, encountering something novel and stimulating (like a new gadget or experience), or anticipating something eagerly awaited.\n\nThe user’s input might include dynamic language that conveys an elevated state of anticipation or satisfaction with an imminent or forthcoming occurrence. Often associated with increased energy levels in the text itself—through phrases like \"so excited!\" or actions (\"counting down until\") — this category taps into the positive psychology aspects, depicting a scenario where the user feels joyous eagerness and anticipatory pleasure.\n\nUnderstanding excitement is crucial because it can drive engagement, motivation, and personal enthusiasm which might influence decision-making and behavior. Recognizing exciting expressions helps in tailoring responses or actions that resonate with the user's emotional state, maintaining an enthusiastic interaction, and potentially amplifying positive outcomes.",
+    baml_ty!(MessageType),
+    baml_db! {
+        enum MessageType {
+            SPAM @alias("k5"),
+            NOT_SPAM @alias("k6")
+        }
+    },
+    "SPAM"
+);
+
+// ============================================================================
+// Matching a variant by its `@description`
+//
+// The output format renders a variant as `<name>: <description>`, so models
+// answer with the description alone, or with the whole rendered line.
+// ============================================================================
+
+fn described_category_db() -> TypeRefDb<'static, &'static str> {
+    baml_db! {
+        enum Category {
+            ONE @alias("k1") @description("The description of enum value une"),
+            TWO @alias("k-2-3.1_1") @description("The description of enum value deux"),
+            THREE @alias("NUMBER THREE")
+        }
+    }
+}
+
+test_deserializer!(
+    description_only,
+    r#"The description of enum value une"#,
+    baml_ty!(Category),
+    described_category_db(),
+    "ONE"
+);
+
+test_deserializer!(
+    description_only_quoted,
+    r#""The description of enum value deux""#,
+    baml_ty!(Category),
+    described_category_db(),
+    "TWO"
+);
+
+test_deserializer!(
+    description_only_case_insensitive,
+    r#"the description of enum value DEUX"#,
+    baml_ty!(Category),
+    described_category_db(),
+    "TWO"
+);
+
+test_deserializer!(
+    description_only_with_surrounding_text,
+    r#"I would pick: The description of enum value deux."#,
+    baml_ty!(Category),
+    described_category_db(),
+    "TWO"
+);
+
+test_deserializer!(
+    description_only_list,
+    r#"["The description of enum value une", "k-2-3.1_1", "NUMBER THREE"]"#,
+    baml_ty!([Category]),
+    described_category_db(),
+    ["ONE", "TWO", "THREE"]
+);
+
+// An alias replaces the name, with or without a description alongside it.
+test_failing_deserializer!(
+    description_does_not_restore_aliased_name,
+    r#"ONE"#,
+    baml_ty!(Category),
+    described_category_db()
+);
+
+fn colliding_description_db() -> TypeRefDb<'static, &'static str> {
+    baml_db! {
+        enum Rank {
+            FIRST @description("SECOND"),
+            SECOND
+        }
+    }
+}
+
+// A variant's name outranks another variant's description of the same text, whichever is
+// declared first.
+test_deserializer!(
+    name_outranks_another_variants_description,
+    r#"SECOND"#,
+    baml_ty!(Rank),
+    colliding_description_db(),
+    "SECOND"
+);
+
+test_deserializer!(
+    name_outranks_another_variants_description_case_insensitive,
+    r#"second"#,
+    baml_ty!(Rank),
+    colliding_description_db(),
+    "SECOND"
+);
+
+fn day_db() -> TypeRefDb<'static, &'static str> {
+    baml_db! {
+        enum Day {
+            ONE @description("MONDAY"),
+            TWO @description("TUESDAY"),
+            // Blank descriptions are not match candidates.
+            THREE @description("  ")
+        }
+        class DayEntry {
+            day: Day,
+            note: string,
+        }
+    }
+}
+
+test_deserializer!(
+    description_only_unaliased,
+    r#"MONDAY"#,
+    baml_ty!(Day),
+    day_db(),
+    "ONE"
+);
+
+test_deserializer!(
+    description_only_unaliased_case_insensitive,
+    r#"Tuesday"#,
+    baml_ty!(Day),
+    day_db(),
+    "TWO"
+);
+
+// The name still matches when the variant has a description.
+test_deserializer!(
+    name_with_description,
+    r#"TWO"#,
+    baml_ty!(Day),
+    day_db(),
+    "TWO"
+);
+
+test_deserializer!(
+    rendered_line_with_description,
+    r#"ONE: MONDAY"#,
+    baml_ty!(Day),
+    day_db(),
+    "ONE"
+);
+
+test_failing_deserializer!(
+    blank_description_is_not_a_candidate,
+    r#""#,
+    baml_ty!(Day),
+    day_db()
+);
+
+test_deserializer!(
+    description_in_class_field,
+    r#"{"day": "MONDAY", "note": "rest"}"#,
+    baml_ty!(DayEntry),
+    day_db(),
+    {"day": "ONE", "note": "rest"}
+);
+
+// Every element survives: one named by its description, one by its name.
+test_deserializer!(
+    description_in_list_of_classes,
+    r#"[{"day": "MONDAY", "note": "rest"}, {"day": "TWO", "note": "run"}]"#,
+    baml_ty!([DayEntry]),
+    day_db(),
+    [{"day": "ONE", "note": "rest"}, {"day": "TWO", "note": "run"}]
+);
+
+test_deserializer!(
+    description_for_enum_variant_type,
+    r#"MONDAY"#,
+    Ty::Resolved(TyResolved::EnumVariant(EnumVariantTy {
+        name: "Day",
+        value: AnnotatedEnumVariant {
+            name: "ONE".into(),
+            aliases: vec![],
+            description: Some("MONDAY".into()),
+        },
+    })),
+    day_db(),
+    "ONE"
+);
 
 // ============================================================================
 // Enum atomic streaming behavior
@@ -459,7 +651,7 @@ offers and urgency ($^{$_{Ω}$rel}$), which are common traits of spam messages. 
 test_partial_deserializer!(
     test_enum_in_array_partial_excluded,
     r#"["RED", "GR"#,
-    baml_tyannotated!([Color @ in_progress(never)]),
+    baml_ty!([Color]),
     baml_db! { enum Color { RED, GREEN, BLUE } },
     ["RED"]
 );
@@ -472,16 +664,16 @@ fn enum_field_db() -> TypeRefDb<'static, &'static str> {
             BLUE
         }
         class ColorHolder {
-            color: (Color | null) @in_progress(never) @class_in_progress_field_missing(null) @class_completed_field_missing(never),
+            color: (Color | null),
         }
     }
 }
 
-// Incomplete enum field -> null via cascade (in_progress(never) -> missing -> class_in_progress_field_missing(null))
+// An incomplete enum has no partial parse, so the nullable field falls back to `null`.
 test_partial_deserializer!(
     test_enum_field_partial_null,
     r#"{"color": "RE"#,
-    baml_tyannotated!(ColorHolder),
+    baml_ty!(ColorHolder),
     enum_field_db(),
     {"color": null}
 );
@@ -490,7 +682,7 @@ test_partial_deserializer!(
 test_deserializer!(
     test_enum_field_complete,
     r#"{"color": "RED"}"#,
-    baml_tyannotated!(ColorHolder),
+    baml_ty!(ColorHolder),
     enum_field_db(),
     {"color": "RED"}
 );

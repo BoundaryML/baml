@@ -5,30 +5,51 @@ use crate::{
     baml_value::BamlEnum,
     deserializer::{
         coercer::{ParsingError, TypeCoercer, match_string::match_string},
-        deserialize_flags::{DeserializerConditions, Flag},
+        deserialize_flags::Flag,
         types::{DeserializerMeta, ValueWithFlags},
     },
     jsonish::{self, CompletionState},
-    sap_model::{
-        AnnotatedEnumVariant, AttrLiteral, EnumTy, EnumVariantTy, FromLiteral, TyResolvedRef,
-        TyWithMeta, TypeAnnotations, TypeIdent, TypeValue,
-    },
+    sap_model::{AnnotatedEnumVariant, EnumTy, EnumVariantTy, TyResolvedRef, TypeIdent, TypeValue},
 };
 
+/// The strings that match one enum variant.
+///
+/// The rendered names come first: the aliases when any exist (the original name is then
+/// excluded), otherwise the name itself. A variant with a non-blank description also
+/// matches the description alone and each `<rendered name>: <description>` line, which is how
+/// the output format shows the variant to the model.
+fn variant_match_candidates<'t>(v: &'t AnnotatedEnumVariant<'t>) -> Vec<Cow<'t, str>> {
+    let rendered_names: Vec<&'t str> = if v.aliases.is_empty() {
+        vec![v.name.trim()]
+    } else {
+        v.aliases.iter().map(|a| a.trim()).collect()
+    };
+    let description = v
+        .description
+        .as_deref()
+        .map(str::trim)
+        .filter(|d| !d.is_empty());
+
+    let mut candidates: Vec<Cow<'t, str>> =
+        rendered_names.iter().copied().map(Cow::Borrowed).collect();
+    if let Some(description) = description {
+        candidates.push(Cow::Borrowed(description));
+        candidates.extend(
+            rendered_names
+                .iter()
+                .map(|name| Cow::Owned(format!("{name}: {description}"))),
+        );
+    }
+    candidates
+}
+
 /// Produces a list of (name, candidates) tuples for each enum variant.
-/// When aliases exist, only aliases are used as candidates (original name excluded).
-/// When no aliases, the name itself is the sole candidate.
-fn enum_match_candidates<'t, N: TypeIdent>(ty: &'t EnumTy<'t, N>) -> Vec<(&'t str, Vec<&'t str>)> {
+fn enum_match_candidates<'t, N: TypeIdent>(
+    ty: &'t EnumTy<'t, N>,
+) -> Vec<(&'t str, Vec<Cow<'t, str>>)> {
     ty.variants
         .iter()
-        .map(|v| {
-            let candidates = if v.aliases.is_empty() {
-                vec![v.name.trim()]
-            } else {
-                v.aliases.iter().map(|a| a.trim()).collect()
-            };
-            (v.name.as_ref(), candidates)
-        })
+        .map(|v| (v.name.as_ref(), variant_match_candidates(v)))
         .collect()
 }
 
@@ -37,47 +58,22 @@ where
     't: 's,
     's: 'v,
 {
-    /// Strict: does not use aliases, just the name.
+    /// Strict: only an exact rendered name (the aliases, or the name when there are none);
+    /// descriptions are left to `coerce`.
     fn try_cast(
-        ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        _ctx: &ParsingContext<'s, 'v, 't, N>,
+        enum_ty: &'t Self,
         value: &'v jsonish::Value<'s>,
     ) -> Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>> {
-        let enum_ty = target.ty;
-        let meta = target.meta;
-
-        // Enums can only be cast from string values
-        let jsonish::Value::String(s, completion) = value else {
+        // Enums can only be cast from complete string values: a prefix of a variant name is
+        // not a variant.
+        let jsonish::Value::String(s, CompletionState::Complete) = value else {
             return None;
-        };
-
-        let flags = match (completion, target.meta.in_progress.as_ref()) {
-            (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return None,
-            (CompletionState::Incomplete, Some(lit)) => {
-                return target
-                    .ty
-                    .from_literal(lit, ctx)
-                    .map(|ret| {
-                        ValueWithFlags::new(
-                            ret,
-                            DeserializerMeta {
-                                flags: DeserializerConditions::new()
-                                    .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value))),
-                                ty: TyWithMeta::new(TyResolvedRef::Enum(enum_ty), meta),
-                            },
-                        )
-                    })
-                    .ok();
-            }
-            (CompletionState::Incomplete, None) => {
-                DeserializerConditions::new().with_flag(Flag::Incomplete)
-            }
-            (CompletionState::Complete, _) => DeserializerConditions::new(),
         };
 
         // assumes no name or alias can have the same value as another name or alias
         // When aliases exist, only aliases are valid for matching (name is excluded)
-        for AnnotatedEnumVariant { name, aliases } in &enum_ty.variants {
+        for AnnotatedEnumVariant { name, aliases, .. } in &enum_ty.variants {
             let matches = if aliases.is_empty() {
                 name == s
             } else {
@@ -90,10 +86,7 @@ where
                 };
                 return Some(ValueWithFlags::new(
                     value,
-                    DeserializerMeta {
-                        flags,
-                        ty: TyWithMeta::new(TyResolvedRef::Enum(enum_ty), meta),
-                    },
+                    DeserializerMeta::new(TyResolvedRef::Enum(enum_ty)),
                 ));
             }
         }
@@ -103,39 +96,19 @@ where
 
     fn coerce(
         ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        target: &'t Self,
         value: &'v jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>>, ParsingError> {
         // Enums can only be cast from string values
         if matches!(value, jsonish::Value::Null) {
-            return Err(ctx.error_unexpected_null(&target));
+            return Err(ctx.error_unexpected_null(target));
         }
-
-        let enum_ty = target.ty;
-        let meta = target.meta;
-        let mut add_flags = Vec::new();
-
+        // An enum has no partial parse: a prefix of a variant name is not a variant.
         if value.completion_state() == &CompletionState::Incomplete {
-            match &meta.in_progress {
-                Some(AttrLiteral::Never) => return Ok(None),
-                Some(lit) => {
-                    let in_progress = enum_ty.from_literal(lit, ctx)?;
-                    return Ok(Some(ValueWithFlags::new(
-                        in_progress,
-                        DeserializerMeta {
-                            flags: DeserializerConditions::new()
-                                .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value))),
-                            ty: TyWithMeta::new(TyResolvedRef::Enum(enum_ty), meta),
-                        },
-                    )));
-                }
-                None => {
-                    add_flags.push(Flag::Incomplete);
-                }
-            }
+            return Ok(None);
         }
 
-        Self::coerce_from_cow(ctx, target, Cow::Borrowed(value), add_flags)
+        Self::coerce_from_cow(ctx, target, Cow::Borrowed(value), [])
     }
 }
 
@@ -143,7 +116,7 @@ impl<'s, 'v, 't, N: TypeIdent> EnumTy<'t, N> {
     #[allow(clippy::type_complexity, clippy::needless_pass_by_value)]
     pub fn coerce_from_cow(
         ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        target: &'t Self,
         value: Cow<'v, jsonish::Value<'s>>,
         add_flags: impl IntoIterator<Item = Flag<'s, 'v, 't, N>>,
     ) -> Result<
@@ -152,14 +125,14 @@ impl<'s, 'v, 't, N: TypeIdent> EnumTy<'t, N> {
     > {
         match_string(
             ctx,
-            target.clone().map_ty(TyResolvedRef::Enum),
+            TyResolvedRef::Enum(target),
             value,
-            &enum_match_candidates(target.ty),
+            &enum_match_candidates(target),
             true,
         )
         .map(|v| {
             v.map_value(|val| BamlEnum {
-                name: &target.ty.name,
+                name: &target.name,
                 value: val,
             })
             .with_flags(add_flags)
@@ -171,14 +144,9 @@ impl<'s, 'v, 't, N: TypeIdent> EnumTy<'t, N> {
 /// Produces match candidates for a single enum variant.
 fn enum_variant_match_candidates<'t, N: TypeIdent>(
     ty: &'t EnumVariantTy<'t, N>,
-) -> Vec<(&'t str, Vec<&'t str>)> {
+) -> Vec<(&'t str, Vec<Cow<'t, str>>)> {
     let v = &ty.value;
-    let candidates = if v.aliases.is_empty() {
-        vec![v.name.trim()]
-    } else {
-        v.aliases.iter().map(|a| a.trim()).collect()
-    };
-    vec![(v.name.as_ref(), candidates)]
+    vec![(v.name.as_ref(), variant_match_candidates(v))]
 }
 
 impl<'s, 'v, 't, N: TypeIdent + 't> TypeCoercer<'s, 'v, 't, N> for EnumVariantTy<'t, N>
@@ -187,41 +155,16 @@ where
     's: 'v,
 {
     fn try_cast(
-        ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        _ctx: &ParsingContext<'s, 'v, 't, N>,
+        ev_ty: &'t Self,
         value: &'v jsonish::Value<'s>,
     ) -> Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>> {
-        let ev_ty = target.ty;
-        let meta = target.meta;
-
-        let jsonish::Value::String(s, completion) = value else {
+        // A prefix of the variant name is not the variant.
+        let jsonish::Value::String(s, CompletionState::Complete) = value else {
             return None;
         };
 
-        let flags = match (completion, meta.in_progress.as_ref()) {
-            (CompletionState::Incomplete, Some(AttrLiteral::Never)) => return None,
-            (CompletionState::Incomplete, Some(lit)) => {
-                return ev_ty
-                    .from_literal(lit, ctx)
-                    .map(|ret| {
-                        ValueWithFlags::new(
-                            ret,
-                            DeserializerMeta {
-                                flags: DeserializerConditions::new()
-                                    .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value))),
-                                ty: TyWithMeta::new(TyResolvedRef::EnumVariant(ev_ty), meta),
-                            },
-                        )
-                    })
-                    .ok();
-            }
-            (CompletionState::Incomplete, None) => {
-                DeserializerConditions::new().with_flag(Flag::Incomplete)
-            }
-            (CompletionState::Complete, _) => DeserializerConditions::new(),
-        };
-
-        let AnnotatedEnumVariant { name, aliases } = &ev_ty.value;
+        let AnnotatedEnumVariant { name, aliases, .. } = &ev_ty.value;
         let matches = if aliases.is_empty() {
             name == s
         } else {
@@ -234,10 +177,7 @@ where
             };
             return Some(ValueWithFlags::new(
                 value,
-                DeserializerMeta {
-                    flags,
-                    ty: TyWithMeta::new(TyResolvedRef::EnumVariant(ev_ty), meta),
-                },
+                DeserializerMeta::new(TyResolvedRef::EnumVariant(ev_ty)),
             ));
         }
 
@@ -246,38 +186,18 @@ where
 
     fn coerce(
         ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        target: &'t Self,
         value: &'v jsonish::Value<'s>,
     ) -> Result<Option<ValueWithFlags<'s, 'v, 't, Self::Value, N>>, ParsingError> {
         if matches!(value, jsonish::Value::Null) {
-            return Err(ctx.error_unexpected_null(&target));
+            return Err(ctx.error_unexpected_null(target));
         }
-
-        let ev_ty = target.ty;
-        let meta = target.meta;
-        let mut add_flags = Vec::new();
-
+        // A prefix of the variant name is not the variant.
         if value.completion_state() == &CompletionState::Incomplete {
-            match &meta.in_progress {
-                Some(AttrLiteral::Never) => return Ok(None),
-                Some(lit) => {
-                    let in_progress = ev_ty.from_literal(lit, ctx)?;
-                    return Ok(Some(ValueWithFlags::new(
-                        in_progress,
-                        DeserializerMeta {
-                            flags: DeserializerConditions::new()
-                                .with_flag(Flag::DefaultFromInProgress(Cow::Borrowed(value))),
-                            ty: TyWithMeta::new(TyResolvedRef::EnumVariant(ev_ty), meta),
-                        },
-                    )));
-                }
-                None => {
-                    add_flags.push(Flag::Incomplete);
-                }
-            }
+            return Ok(None);
         }
 
-        Self::coerce_from_cow(ctx, target, Cow::Borrowed(value), add_flags)
+        Self::coerce_from_cow(ctx, target, Cow::Borrowed(value), [])
     }
 }
 
@@ -285,7 +205,7 @@ impl<'s, 'v, 't, N: TypeIdent> EnumVariantTy<'t, N> {
     #[allow(clippy::type_complexity, clippy::needless_pass_by_value)]
     pub fn coerce_from_cow(
         ctx: &ParsingContext<'s, 'v, 't, N>,
-        target: TyWithMeta<&'t Self, &'t TypeAnnotations<'t, N>>,
+        target: &'t Self,
         value: Cow<'v, jsonish::Value<'s>>,
         add_flags: impl IntoIterator<Item = Flag<'s, 'v, 't, N>>,
     ) -> Result<
@@ -296,14 +216,14 @@ impl<'s, 'v, 't, N: TypeIdent> EnumVariantTy<'t, N> {
     > {
         match_string(
             ctx,
-            target.clone().map_ty(TyResolvedRef::EnumVariant),
+            TyResolvedRef::EnumVariant(target),
             value,
-            &enum_variant_match_candidates(target.ty),
+            &enum_variant_match_candidates(target),
             true,
         )
         .map(|v| {
             v.map_value(|val| BamlEnum {
-                name: &target.ty.name,
+                name: &target.name,
                 value: val,
             })
             .with_flags(add_flags)

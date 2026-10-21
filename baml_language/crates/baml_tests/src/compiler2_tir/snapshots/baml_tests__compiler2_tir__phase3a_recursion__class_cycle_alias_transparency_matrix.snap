@@ -1,0 +1,23 @@
+---
+source: crates/baml_tests/src/compiler2_tir/phase3a_recursion.rs
+expression: "render_labeled_cases(&[(\"class_cycle_through_type_alias\",\n\"class A { b AliasB }\\ntype AliasB = B\\nclass B { a A }\",),\n(\"class_cycle_broken_by_alias_to_optional\",\n\"class A { b AliasB }\\ntype AliasB = B?\\nclass B { a A }\",),])"
+---
+=== class_cycle_through_type_alias ===
+class user.A {
+  b: user.AliasB
+}
+  !! 0..20: class cycle: user.A -> user.B -> user.A
+type user.AliasB = user.B
+class user.B {
+  a: user.A
+}
+  !! 37..52: class cycle: user.A -> user.B -> user.A
+
+=== class_cycle_broken_by_alias_to_optional ===
+class user.A {
+  b: user.AliasB
+}
+type user.AliasB = user.B | null
+class user.B {
+  a: user.A
+}

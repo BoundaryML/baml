@@ -5,19 +5,22 @@
  * Proto:  baml_language/crates/bridge_ctypes/types/baml_bridge/cffi/v1/*.proto
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
-import { BamlRuntime, BamlCallContext, HostSpanManager, Collector as NativeCollector, FunctionLog as NativeFunctionLog, Timing, Usage, LLMCall } from './native.js';
-export { BamlRuntime, BamlCallContext, BamlHandle, HostSpanManager, getRuntime, getBridgeRuntimeVersion, getToolchainVersion, getVersion, flushEvents, } from './native.js';
-export { Timing, Usage, LLMCall } from './native.js';
+import './bridge_path.js';
+import { BamlRuntime } from './native.js';
+import './media.js';
+export { BamlRuntime, BamlHandle, getRuntime, getBridgeRuntimeVersion, getToolchainVersion, getVersion, } from './native.js';
 export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
 export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';
 export { BamlStream } from './stream.js';
-export { encodeCallArgs, decodeCallResult } from './proto.js';
-export { CtxManager } from './ctx_manager.js';
+export { BamlFunctionSpec } from './function_spec.js';
+export type { BamlFunctionSpecBuildRequestOptions, BamlFunctionSpecCallOptions } from './function_spec.js';
+export { BamlPrompt, encodeCallArgs, decodeCallResult } from './proto.js';
+export type { BamlPromptCallOptions, BamlPromptMessage } from './proto.js';
 export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap.js';
 export { defineFunction, defineInstanceFunction, UNSET } from './define_function.js';
 export type { GenericParams } from './define_function.js';
-export { Never, lowerTypeToWireTy } from './wire_ty.js';
-export type { BamlType, BamlPrimitiveToken, BamlClassCtor } from './wire_ty.js';
+export { BamlType, Never, lowerTypeToWireTy, reflectType } from './wire_ty.js';
+export type { BamlTypeMetadata, BamlTypeToken, BamlPrimitiveToken, BamlClassCtor, BamlInterfaceToken } from './wire_ty.js';
 /**
  * Free-function runtime initializer used by generated `baml_sdk/index.ts`:
  * `initializeRuntime("baml_src", _inlinedbaml.FILES)`. Thin wrapper over the
@@ -29,7 +32,7 @@ export declare function initializeRuntime(srcDir: string, files: Record<string, 
  * Free-function runtime initializer used by generated `baml_sdk/index.ts` when
  * codegen embeds precompiled BAML bytecode.
  */
-export declare function initializeRuntimeFromBytecode(bytecode: Buffer | Uint8Array, embeddedBamlToml?: string): void;
+export declare function initializeRuntimeFromBlob(bytecode: string | Buffer | Uint8Array, embeddedBamlToml?: string): void;
 export { BamlAbortError, BamlError, BamlInvalidArgumentError, BamlClientError, BamlCancelledError, BamlPanic, wrapNativeError, } from './errors.js';
 export declare function newFunctionCall(): bigint;
 export declare function cancelFunctionCall(callId: bigint): boolean;
@@ -40,29 +43,11 @@ export declare class FunctionResult {
     result(): unknown;
     toString(): string;
 }
-export declare class FunctionLog {
-    private _inner;
-    constructor(inner: NativeFunctionLog);
-    get id(): string;
-    get functionName(): string;
-    get timing(): Timing;
-    get usage(): Usage;
-    get calls(): LLMCall[];
-    get tags(): Record<string, string>;
-    get result(): unknown;
-}
-export declare class Collector {
-    private _inner;
-    constructor(name?: string);
-    get name(): string;
-    get logs(): FunctionLog[];
-    get last(): FunctionLog | null;
-    get usage(): Usage;
-    clear(): number;
-    id(functionLogId: string): FunctionLog | null;
-    /** Internal: get native collector for passing to Rust */
-    _native(): NativeCollector;
-}
-export declare function callFunctionSync(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, collectors?: Collector[], callCtx?: BamlCallContext): FunctionResult;
-export declare function callFunction(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, ctx?: HostSpanManager, collectors?: Collector[], callCtx?: BamlCallContext): Promise<FunctionResult>;
+export declare function callFunctionSync(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, baml?: InvocationOptions | null): FunctionResult;
+export declare function callFunction(rt: BamlRuntime, functionName: string, kwargs: Record<string, unknown>, baml?: InvocationOptions | null): Promise<FunctionResult>;
+export { current as _currentExecutionContext, ExecutionContext as _ExecutionContext, currentContext as _currentTraceContext, currentContextAsync as _currentTraceContextAsync, currentCancelToken as _currentCancelToken, withExecutionContext as _withExecutionContext } from './execution_context.js';
+export { invoke as _invoke, invokeAsync as _invokeAsync } from './invocation.js';
+export { instrument as _instrument, TraceUsageError } from './instrumentation.js';
+export { registerCapture, captureFor } from './host_capture.js';
+import type { InvocationOptions } from './invocation.js';
 //# sourceMappingURL=index.d.ts.map

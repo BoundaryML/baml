@@ -11,7 +11,7 @@ Syntax:
   output_dir = "."
   naming_convention = "preserve-case"
 
-Generators are declared in `baml.toml` as `[generator.<name>]` tables, where `<name>` is an arbitrary identifier. `output_type` and `naming_convention` are required. `output_dir` is optional and defaults to `..`; BAML creates a `baml_sdk` directory inside it (`baml_client` for C#).
+Generators are declared in `baml.toml` as `[generator.<name>]` tables, where `<name>` is an arbitrary identifier. `output_type` and `naming_convention` are required. `output_dir` is optional and defaults to `.`; BAML creates a `baml_sdk` directory inside it for every generator.
 
 Accepted `output_type` values:
 
@@ -26,4 +26,4 @@ Accepted `output_type` values:
 - `"cpp"` — C++17
 - `"csharp"` — C#
 
-`naming_convention` accepts `"preserve-case"` or `"language"`. Go requires `"language"` and also requires `sdk_import_path`.
+`naming_convention` accepts `"preserve-case"` or `"language"`. Go and C# require `"language"`; Go also requires `sdk_import_path`. All other targets require `"preserve-case"`.

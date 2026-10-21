@@ -9,32 +9,45 @@
 mod class;
 mod const_value;
 mod containers;
+mod decl_path;
 mod enums;
 mod function;
 mod future;
 mod interface;
 mod object;
+mod owner;
 mod package;
+mod type_alias;
+mod type_value;
 mod value;
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap, HashSet};
 
-use baml_type::RuntimeTy;
+/// Re-exported from `baml_type`, which owns the naming vocabulary; the
+/// runtime spells it unqualified everywhere it builds a declaration.
+pub use baml_type::DeclarationName;
 use borsh::{BorshDeserialize, BorshSerialize};
 pub use class::*;
 pub use const_value::*;
 pub use containers::*;
+pub use decl_path::*;
 pub use enums::*;
 pub use function::*;
 pub use future::*;
 use indexmap::IndexMap;
 pub use interface::*;
 pub use object::*;
+pub use owner::*;
 pub use package::*;
 pub use tokio_util::sync::CancellationToken;
+pub use type_alias::*;
+pub use type_value::*;
 pub use value::*;
 
-use crate::{heap_ptr::HeapPtr, indexable::ObjectPool};
+use crate::{
+    heap_ptr::HeapPtr,
+    indexable::{GlobalIndex, ObjectIndex, ObjectPool},
+};
 
 // ============================================================================
 // Type Tags for Jump Table Dispatch
@@ -70,77 +83,499 @@ pub struct Program {
     /// `StoreGlobal` against the still-mutable pool. See `Instruction::StoreGlobal`.
     pub globals: Vec<ConstValue>,
 
-    /// Maps function names to their object indices.
-    pub function_indices: HashMap<String, usize>,
+    /// Per-package program structure (global-index-keyed), by package
+    /// ordinal. A package's identity in the executable is its position here;
+    /// its `name` is display metadata (and the spelling the prelude is bound
+    /// by at load). In program order — the language packages first, then the
+    /// root and every package it reaches breadth-first by edge name: a
+    /// function of the world graph, an order and not a key. Holds each
+    /// package's classes, enums, interfaces, impl rules, and
+    /// recursive type aliases. The loader allocates the heap `Object::Package`
+    /// / `Object::Interface` / `Object::ImplRule` objects and the `vm.packages`
+    /// index from this, resolving each `ObjectIndex` to a compile-time
+    /// `HeapPtr` (every slot is pre-allocated, so cross-package references are
+    /// order-independent). The single source of truth for interface dispatch,
+    /// named-item lookup, and recursive-alias rendering.
+    pub packages: Vec<ProgramPackage>,
+    /// The packages whose `$init` runs, as ordinals into [`Self::packages`],
+    /// in initialization order: every package after each package with `let`s
+    /// it reaches, directly or through packages without any; packages free to
+    /// initialize together go by position in the link set.
+    pub init_order: Vec<u32>,
+    /// The package the program was compiled for — the world's root — as an
+    /// ordinal into [`Self::packages`]: the viewpoint every host-supplied
+    /// name resolves from, and whose tests a test run collects. Always
+    /// linked, even when it declares nothing yet.
+    pub root: u32,
 
-    /// Maps function names to their global indices.
-    /// Used for dynamic function lookup at runtime.
-    pub function_global_indices: HashMap<String, usize>,
-
-    /// Maps let-binding fully-qualified names to their global slot indices.
-    /// E.g., `"user.my_const" -> 5`. Populated in Pass 1; slots hold `ConstValue::Null`
-    /// until `$init` runs at load time via `StoreGlobal`.
-    pub let_global_indices: HashMap<String, usize>,
-
-    /// Client build metadata for constructing full client trees at runtime.
-    /// Keyed by client name.
-    pub client_metadata: HashMap<String, ClientBuildMeta>,
-
-    /// Compiled test cases.
-    pub test_cases: Vec<TestCase>,
-
-    /// Ordered list of `$init` function names to run at load time.
-    /// E.g., `["baml.$init", "$init"]` — builtins before user package.
-    /// Empty when there are no top-level let bindings in any package.
-    pub package_init_order: Vec<String>,
-
-    /// Per-package program structure (global-index-keyed), sorted by package name
-    /// for deterministic output. Holds each package's classes, enums, interfaces,
-    /// impl rules, and recursive type aliases. The loader allocates the heap
-    /// `Object::Package` / `Object::Interface` / `Object::ImplRule` objects and the
-    /// `vm.packages` index from this, resolving each `ObjectIndex` to a
-    /// compile-time `HeapPtr` (every slot is pre-allocated, so cross-package
-    /// references are order-independent). The single source of truth for interface
-    /// dispatch, named-item lookup, and recursive-alias rendering.
-    pub packages: IndexMap<baml_type::Name, ProgramPackage>,
+    /// Conservative source-content identity of the compiled file set
+    /// (streams spec §2.3): SHA-256 over the domain string, compiler
+    /// version, and every (path, bytes) pair. `None` when the compiling
+    /// host chose not to provide one (e.g. mounted-unit links) — the
+    /// profiler then falls back to a random per-engine `ProgramId`, which
+    /// over-splits (the safe direction).
+    ///
+    /// In-memory metadata, NOT compiled content: it is `borsh(skip)`ped so
+    /// program/unit byte-identity oracles compare compiled output only,
+    /// and per-file `CompilationUnit`s never carry project-wide state. A
+    /// host that materializes a `Program` from stored bytes restamps it
+    /// (the CLI bytecode cache recomputes from the project files it just
+    /// validated); a host that cannot leaves `None`.
+    #[borsh(skip)]
+    pub source_content_hash: Option<[u8; 32]>,
 }
 
-/// Metadata for building a client tree at runtime.
-///
-/// Stored on `Program` during compilation, transferred to `SysOpContext` during engine construction.
-#[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
-pub struct ClientBuildMeta {
-    /// Provider type mapped to client type enum.
-    pub client_type: ClientBuildType,
-    /// Sub-client names (for composite clients).
-    pub sub_client_names: Vec<String>,
-    /// Retry policy metadata, if specified.
-    pub retry_policy: Option<RetryPolicyMeta>,
-    /// Optional round-robin start index (`options { start ... }`).
-    pub round_robin_start: Option<i32>,
-}
-
-/// Client type for build metadata (mirrors runtime `LlmClientType`).
-#[derive(Debug, Clone, Default, BorshSerialize, BorshDeserialize)]
-pub enum ClientBuildType {
-    #[default]
-    Primitive,
-    Fallback,
-    RoundRobin,
-}
-
-/// Retry policy metadata stored at compile time.
-#[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
-pub struct RetryPolicyMeta {
-    pub max_retries: i64,
-    pub initial_delay_ms: i64,
-    pub multiplier: f64,
-    pub max_delay_ms: i64,
-}
+/// An executable that breaks the format's laws: an index outside its pool, a
+/// table naming an object of another kind, a head or switch the loader
+/// could not bind. See [`Program::validate`].
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("invalid program: {0}")]
+pub struct InvalidProgram(pub String);
 
 impl Program {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// The names a host can call the program's declarations by, built once
+    /// from the package tables: every pooled declaration a package the root
+    /// reaches lists, spelled as the ROOT reaches that package — the same
+    /// view [`Self::rendered_callables`] gives a function, and the only one a
+    /// host has. A pooled declaration carries its path alone; which package
+    /// declares it, and what the root calls that package, is read here.
+    pub fn host_declaration_names(&self) -> HostDeclarationNames<'_> {
+        let mut by_object = HashMap::new();
+        for (spelling, package) in self.root_viewpoint() {
+            for (path, object) in [
+                &package.classes,
+                &package.enums,
+                &package.interfaces,
+                &package.type_aliases,
+            ]
+            .into_iter()
+            .flat_map(IndexMap::iter)
+            {
+                // The root first, then its edges: the first spelling is the
+                // nearest one, as in `rendered_callables`.
+                by_object
+                    .entry(object.raw())
+                    .or_insert_with(|| path.under(spelling));
+            }
+        }
+        HostDeclarationNames {
+            program: self,
+            by_object,
+        }
+    }
+
+    /// The rendered name of the function at `index` as the loader will render
+    /// it: under the display label of the package that placed it
+    /// ([`ProgramPackage::objects`]), which the loader binds as the
+    /// function's owner. `None` when `index` is not a function.
+    pub fn function_name(&self, index: ObjectIndex) -> Option<String> {
+        let Object::Function(function) = &self.objects[index] else {
+            return None;
+        };
+        let owner = self.package_placing(index);
+        Some(function.identity.render(owner.map(|package| &package.name)))
+    }
+
+    /// The package whose placed objects hold `index`, if any package does
+    /// (a hand-built program may list no ranges).
+    pub fn package_placing(&self, index: ObjectIndex) -> Option<&ProgramPackage> {
+        let raw = u32::try_from(index.raw()).ok()?;
+        self.packages
+            .iter()
+            .find(|package| package.objects.contains(&raw))
+    }
+
+    /// Check the executable against the format's laws — every index within
+    /// its pool, every table naming an object of the kind it says, every
+    /// head bindable to the declaration its tag encodes, every type switch
+    /// solved, the init order exactly the packages with an `$init` — so that
+    /// nothing downstream indexes into a program that breaks them. A linked
+    /// program satisfies them by construction; a decoded one is checked here,
+    /// at the one road into a VM, so a corrupt or forged artifact is refused
+    /// rather than a panic in the loader.
+    ///
+    /// # Errors
+    ///
+    /// The first law broken, named.
+    pub fn validate(&self) -> Result<(), InvalidProgram> {
+        let invalid = |message: String| InvalidProgram(message);
+        let object_count = self.objects.len();
+        let object = |index: ObjectIndex, role: &str| -> Result<&Object, InvalidProgram> {
+            self.objects.get(index.raw()).ok_or_else(|| {
+                invalid(format!(
+                    "{role} names object {} of {object_count}",
+                    index.raw()
+                ))
+            })
+        };
+        let function =
+            |index: ObjectIndex, role: &str, is_body: bool| -> Result<(), InvalidProgram> {
+                match object(index, role)? {
+                    Object::Function(function) if function.is_interface_body() == is_body => Ok(()),
+                    other => Err(invalid(format!(
+                        "{role} names a {:?} object where {} is required",
+                        ObjectType::of(other),
+                        if is_body {
+                            "an interface body"
+                        } else {
+                            "a function"
+                        }
+                    ))),
+                }
+            };
+
+        for (index, pooled) in self.objects.iter().enumerate() {
+            if let Object::Class(class) = pooled
+                && let Some(position) = class.cleanup
+                && position >= class.methods.len()
+            {
+                return Err(invalid(format!(
+                    "class object {index} places its finalizer at method {position} of {}",
+                    class.methods.len()
+                )));
+            }
+            if let Object::Function(function) = pooled
+                && matches!(function.identity, FunctionIdentity::Entry(_))
+            {
+                return Err(invalid(format!(
+                    "function object {index} is an entry trampoline, which the VM synthesizes and \
+                     no executable carries"
+                )));
+            }
+        }
+
+        let package_count = self.packages.len();
+        if self.root as usize >= package_count {
+            return Err(invalid(format!(
+                "the root is package {} of {package_count}",
+                self.root
+            )));
+        }
+        // The packages' placed objects are disjoint and contiguous from the
+        // start of the pool: every object the linker placed belongs to
+        // exactly one package. Objects after the last range belong to none
+        // — the linker places none, but a program a test extends by hand
+        // may hold some.
+        let mut placed: Vec<&ProgramPackage> = self.packages.iter().collect();
+        placed.sort_by_key(|package| (package.objects.start, package.objects.end));
+        let mut next = 0u32;
+        for package in placed {
+            let objects = &package.objects;
+            if objects.start != next || objects.end < objects.start {
+                return Err(invalid(format!(
+                    "package `{}` places objects {}..{} where {next} was expected next",
+                    package.name, objects.start, objects.end
+                )));
+            }
+            next = objects.end;
+        }
+        if next as usize > object_count {
+            return Err(invalid(format!(
+                "the packages place {next} objects of {object_count}"
+            )));
+        }
+        // The runtime finds each language package by what it is, so an
+        // executable holds at most one of each.
+        let mut language_packages = HashSet::new();
+        for package in &self.packages {
+            let name = &package.name;
+            if let PackageKind::Language(language) = package.kind
+                && !language_packages.insert(language)
+            {
+                return Err(invalid(format!(
+                    "package `{name}` is a second `{}` language package",
+                    language.manifest_name()
+                )));
+            }
+            let placed_here = |index: ObjectIndex, role: &str| -> Result<(), InvalidProgram> {
+                let raw = u32::try_from(index.raw()).expect("object pools fit u32");
+                if package.objects.contains(&raw) {
+                    Ok(())
+                } else {
+                    Err(invalid(format!(
+                        "{role} names object {raw}, which the package did not place"
+                    )))
+                }
+            };
+            for (role, index) in [
+                ("`$init`", package.init),
+                ("`$init_test`", package.test_init),
+            ] {
+                if let Some(index) = index {
+                    function(index, &format!("package `{name}` {role}"), false)?;
+                    placed_here(index, &format!("package `{name}` {role}"))?;
+                }
+            }
+            for (path, ordinal) in &package.globals {
+                let slot = package.slot_base.raw() + *ordinal as usize;
+                if let Some(ConstValue::Object(index)) = self.globals.get(slot) {
+                    placed_here(*index, &format!("package `{name}` cell `{path}`"))?;
+                }
+            }
+            let mut edge_names = HashSet::new();
+            for edge in &package.edges {
+                if edge.target as usize >= package_count {
+                    return Err(invalid(format!(
+                        "package `{name}` edge `{}` names package {} of {package_count}",
+                        edge.name, edge.target
+                    )));
+                }
+                if !edge_names.insert(&edge.name) {
+                    return Err(invalid(format!(
+                        "package `{name}` reaches two packages as `{}`",
+                        edge.name
+                    )));
+                }
+            }
+            let declarations = |kind: &str,
+                                table: &IndexMap<LocalName, ObjectIndex>,
+                                holds: fn(&Object) -> bool|
+             -> Result<(), InvalidProgram> {
+                for (item, &index) in table {
+                    let role = format!("package `{name}` {kind} `{item}`");
+                    let pooled = object(index, &role)?;
+                    if !holds(pooled) {
+                        return Err(invalid(format!(
+                            "{role} names a {:?} object",
+                            ObjectType::of(pooled)
+                        )));
+                    }
+                    placed_here(index, &role)?;
+                }
+                Ok(())
+            };
+            declarations("class", &package.classes, |object| {
+                matches!(object, Object::Class(_))
+            })?;
+            declarations("enum", &package.enums, |object| {
+                matches!(object, Object::Enum(_))
+            })?;
+            declarations("interface", &package.interfaces, |object| {
+                matches!(object, Object::Interface(_))
+            })?;
+            declarations("type alias", &package.type_aliases, |object| {
+                matches!(object, Object::TypeAlias(_))
+            })?;
+            for (&interface, rules) in &package.impl_rules {
+                let role = format!("package `{name}` implements object {}", interface.raw());
+                if !matches!(object(interface, &role)?, Object::Interface(_)) {
+                    return Err(invalid(format!("{role}, which is not an interface")));
+                }
+                for rule in rules {
+                    if rule.interface_head != interface {
+                        return Err(invalid(format!(
+                            "{role} with a rule whose head is object {}",
+                            rule.interface_head.raw()
+                        )));
+                    }
+                    for (method, body) in &rule.methods {
+                        function(body.fqn, &format!("{role}, method `{method}`,"), true)?;
+                    }
+                }
+            }
+            if let Some(init) = package.init {
+                function(init, &format!("package `{name}` `$init`"), false)?;
+            }
+            if let Some(test_init) = package.test_init {
+                function(test_init, &format!("package `{name}` `$init_test`"), false)?;
+            }
+            for (path, &ordinal) in &package.globals {
+                if !path.owns_global_slot() {
+                    return Err(invalid(format!(
+                        "package `{name}` slots {path}, which owns no cell"
+                    )));
+                }
+                let slot = package.slot_base.raw() + ordinal as usize;
+                let Some(cell) = self.globals.get(slot) else {
+                    return Err(invalid(format!(
+                        "package `{name}` slots {path} at cell {slot} of {}",
+                        self.globals.len()
+                    )));
+                };
+                match path {
+                    DeclPath::Function(_) | DeclPath::InterfaceBody(_) => {
+                        let ConstValue::Object(index) = cell else {
+                            return Err(invalid(format!(
+                                "package `{name}` cell for {path} holds no object"
+                            )));
+                        };
+                        function(
+                            *index,
+                            &format!("package `{name}` cell for {path}"),
+                            matches!(path, DeclPath::InterfaceBody(_)),
+                        )?;
+                    }
+                    DeclPath::Let(_) => {}
+                    DeclPath::Class(_)
+                    | DeclPath::Enum(_)
+                    | DeclPath::Interface(_)
+                    | DeclPath::TypeAlias(_) => {
+                        unreachable!("a type owns no cell: checked above")
+                    }
+                }
+            }
+        }
+
+        let with_init: BTreeSet<usize> = self
+            .packages
+            .iter()
+            .enumerate()
+            .filter(|(_, package)| package.init.is_some())
+            .map(|(ordinal, _)| ordinal)
+            .collect();
+        let mut ordered = BTreeSet::new();
+        for &ordinal in &self.init_order {
+            let ordinal = ordinal as usize;
+            if ordinal >= package_count {
+                return Err(invalid(format!(
+                    "the init order names package {ordinal} of {package_count}"
+                )));
+            }
+            if !ordered.insert(ordinal) {
+                return Err(invalid(format!(
+                    "the init order names package {ordinal} twice"
+                )));
+            }
+        }
+        if ordered != with_init {
+            return Err(invalid(
+                "the init order is not exactly the packages with an `$init`".to_string(),
+            ));
+        }
+
+        for (slot, cell) in self.globals.iter().enumerate() {
+            if let ConstValue::Object(index) = cell {
+                object(*index, &format!("cell {slot}"))?;
+            }
+        }
+
+        for (index, pooled) in self.objects.iter().enumerate() {
+            let role = format!("object {index}");
+            let mut failure = None;
+            crate::head_walk::visit_object_heads(pooled, &mut |head| {
+                if failure.is_some() {
+                    return;
+                }
+                let tag = head.tag();
+                let bound = tag
+                    .static_index()
+                    .and_then(|declaration| self.objects.get(declaration))
+                    .is_some_and(|declaration| declaration.declaration_tag() == Some(tag));
+                if !bound {
+                    failure = Some(invalid(format!(
+                        "{role} carries a head with tag {tag:?}, which names no declaration"
+                    )));
+                }
+            });
+            if let Some(failure) = failure {
+                return Err(failure);
+            }
+            match pooled {
+                Object::Function(function) => {
+                    crate::relink::visit_index_operands_ref(function, |operand| {
+                        if failure.is_some() {
+                            return;
+                        }
+                        let in_range = match operand {
+                            crate::relink::IndexOperandRef::Object(index) => {
+                                index.raw() < object_count
+                            }
+                            crate::relink::IndexOperandRef::Global(slot) => {
+                                slot.raw() < self.globals.len()
+                            }
+                        };
+                        if !in_range {
+                            failure = Some(invalid(format!(
+                                "{role} (function `{}`) references an operand outside the program",
+                                function.name()
+                            )));
+                        }
+                    });
+                    if let Some(failure) = failure {
+                        return Err(failure);
+                    }
+                    for instruction in &function.bytecode.instructions {
+                        match instruction {
+                            crate::bytecode::Instruction::LoadCurrentPackage(package)
+                                if *package >= package_count =>
+                            {
+                                return Err(invalid(format!(
+                                    "{role} (function `{}`) loads package {package} of \
+                                     {package_count}",
+                                    function.name()
+                                )));
+                            }
+                            // The VM reads the dispatch value at `args_offset +
+                            // self_arg`; past `nargs` that is past the stack.
+                            crate::bytecode::Instruction::VirtualCall {
+                                nargs, self_arg, ..
+                            } if self_arg >= nargs => {
+                                return Err(invalid(format!(
+                                    "{role} (function `{}`) dispatches a virtual call on \
+                                     argument {self_arg} of {nargs}",
+                                    function.name()
+                                )));
+                            }
+                            _ => {}
+                        }
+                    }
+                    if let Some((table, _)) = function
+                        .bytecode
+                        .switch_tables
+                        .iter()
+                        .enumerate()
+                        .find(|(_, table)| !table.dispatch.is_dispatchable())
+                    {
+                        return Err(invalid(format!(
+                            "{role} (function `{}`) switch table {table} is not solved",
+                            function.name()
+                        )));
+                    }
+                }
+                Object::Interface(interface) => {
+                    if let Some(default) = &interface.structural_default {
+                        function(
+                            default.function,
+                            &format!("{role} structural default"),
+                            false,
+                        )?;
+                    }
+                    for method in &interface.methods {
+                        if let Some(default) = method.default {
+                            function(
+                                default,
+                                &format!("{role} (interface) default of `{}`", method.name),
+                                true,
+                            )?;
+                        }
+                    }
+                }
+                Object::Class(class) => {
+                    for (name, method) in &class.methods {
+                        function(
+                            method.function,
+                            &format!("{role} (class) method `{name}`"),
+                            false,
+                        )?;
+                    }
+                }
+                Object::GenericFunction(generic)
+                    if generic.function.raw() >= self.globals.len() =>
+                {
+                    return Err(invalid(format!(
+                        "{role} (generic value) references cell {} of {}",
+                        generic.function.raw(),
+                        self.globals.len()
+                    )));
+                }
+                _ => {}
+            }
+        }
+        Ok(())
     }
 
     /// Add an object to the pool and return its index.
@@ -150,20 +585,30 @@ impl Program {
         idx
     }
 
-    /// Flatten every package's recursive type aliases into one
-    /// `TypeName → RuntimeTy` map (only recursive aliases survive; non-recursive
-    /// ones are expanded inline), reconstructing each qualified name from its
+    /// Flatten every package's recursive type aliases into one map keyed by
+    /// declaration identity (only recursive aliases survive; non-recursive ones
+    /// are expanded inline), reconstructing each alias's declared name from its
     /// package + `LocalName`. The shape output-format rendering consumes.
-    pub fn recursive_type_aliases(&self) -> IndexMap<baml_type::TypeName, RuntimeTy> {
+    ///
+    /// Aliases are `Object::TypeAlias` declarations, so this dereferences each
+    /// through the object pool rather than reading a side map — which is also
+    /// where the identity comes from.
+    pub fn recursive_type_aliases(&self) -> IndexMap<baml_type::TaggedTypeName, crate::RealizedTy> {
         let mut out = IndexMap::new();
-        for (pkg_name, package) in &self.packages {
-            for (local, ty) in &package.recursive_type_aliases {
-                let qtn = baml_type::TypeName::new(
-                    pkg_name.clone(),
-                    local.namespace.clone(),
-                    local.name.clone(),
+        for package in &self.packages {
+            for (local, idx) in &package.type_aliases {
+                let Some(Object::TypeAlias(alias)) = self.objects.get(idx.raw()) else {
+                    // An index that does not resolve to an alias means the pool
+                    // and the package map disagree — skip rather than guess.
+                    continue;
+                };
+                out.insert(
+                    baml_type::TaggedTypeName::new(
+                        alias.type_tag,
+                        baml_type::DeclarationName::Declared(local.under(&package.name)),
+                    ),
+                    alias.definition.clone(),
                 );
-                out.insert(qtn, ty.clone());
             }
         }
         out
@@ -174,10 +619,120 @@ impl Program {
         self.globals.push(value);
     }
 
-    /// Look up a function's object index by name.
-    pub fn function_index(&self, name: &str) -> Option<usize> {
-        self.function_indices.get(name).copied()
+    /// The packages a host can name, as the root reaches them: the root under
+    /// its own name, then each package under the root's edge to it. A package
+    /// the root reaches only transitively has no host-facing name.
+    fn root_viewpoint(&self) -> impl Iterator<Item = (&baml_base::Name, &ProgramPackage)> {
+        let root = &self.packages[self.root as usize];
+        std::iter::once((&root.name, root)).chain(
+            root.edges
+                .iter()
+                .map(|edge| (&edge.name, &self.packages[edge.target as usize])),
+        )
     }
+
+    /// The executable's callables by rendered name — `pkg.ns.name` for a free
+    /// function, `pkg.ns.Class.name` for a method, `pkg` being how the root
+    /// reaches the package (the root by its own name, a dependency by the
+    /// root's edge to it; a transitively reached package has no host-facing
+    /// name). The view behind the
+    /// surfaces that legitimately start from a host-supplied name (the run
+    /// entry point, test discovery, reflection by name), derived from the
+    /// package tables: the executable carries no such spelling, and nothing
+    /// resolves through it internally.
+    pub fn rendered_callables(&self) -> HashMap<String, RenderedCallable> {
+        let mut out = HashMap::new();
+        for (spelling, package) in self.root_viewpoint() {
+            for path in package.globals.keys() {
+                let name = match path {
+                    DeclPath::Function(FnPath::Free(local)) => format!("{spelling}.{local}"),
+                    DeclPath::Function(FnPath::Method { class, name }) => {
+                        format!("{spelling}.{class}.{name}")
+                    }
+                    DeclPath::Let(_) | DeclPath::InterfaceBody(_) => continue,
+                    DeclPath::Class(_)
+                    | DeclPath::Enum(_)
+                    | DeclPath::Interface(_)
+                    | DeclPath::TypeAlias(_) => unreachable!("a type owns no cell"),
+                };
+                let slot = package
+                    .global_slot(path)
+                    .unwrap_or_else(|| unreachable!("the path was read from the slot map"));
+                let ConstValue::Object(object) = self.globals[slot.raw()] else {
+                    unreachable!("a callable's cell holds its object")
+                };
+                out.insert(name, RenderedCallable { object, slot });
+            }
+        }
+        out
+    }
+
+    /// The executable's top-level `let`s by rendered name (`pkg.ns.name`) to
+    /// the global slot each holds — derived like [`Self::rendered_callables`].
+    pub fn rendered_lets(&self) -> HashMap<String, GlobalIndex> {
+        let mut out = HashMap::new();
+        for (spelling, package) in self.root_viewpoint() {
+            for path in package.globals.keys() {
+                if let DeclPath::Let(local) = path {
+                    let slot = package
+                        .global_slot(path)
+                        .unwrap_or_else(|| unreachable!("the path was read from the slot map"));
+                    out.insert(format!("{spelling}.{local}"), slot);
+                }
+            }
+        }
+        out
+    }
+}
+
+/// The host-facing names of a program's declarations, by pool index. See
+/// [`Program::host_declaration_names`].
+pub struct HostDeclarationNames<'a> {
+    program: &'a Program,
+    by_object: HashMap<usize, baml_type::TypeName>,
+}
+
+impl HostDeclarationNames<'_> {
+    /// Name a compiled type head without binding it to a heap: the pooled
+    /// declaration the tag's static index names, as the root spells it.
+    ///
+    /// Like the loader, the static index is trusted only when the pooled
+    /// declaration carries that exact tag. Never dereferences a head's
+    /// pointer.
+    ///
+    /// # Errors
+    ///
+    /// [`crate::UnnameableHead`] if the tag does not identify a declaration of
+    /// this program's pool, or if no package the root reaches declares it (a
+    /// package reached only transitively has no host-facing name).
+    pub fn type_head_name(
+        &self,
+        head: &crate::TypeHead,
+    ) -> Result<baml_type::TypeName, crate::UnnameableHead> {
+        let tag = head.tag();
+        let index = tag
+            .static_index()
+            .filter(|index| {
+                self.program
+                    .objects
+                    .get(*index)
+                    .and_then(Object::declaration_tag)
+                    == Some(tag)
+            })
+            .ok_or(crate::UnnameableHead(tag))?;
+        self.by_object
+            .get(&index)
+            .cloned()
+            .ok_or(crate::UnnameableHead(tag))
+    }
+}
+
+/// A callable of the executable as a host names it: its function object and
+/// the cell it links as, which holds that object.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RenderedCallable {
+    pub object: ObjectIndex,
+    pub slot: GlobalIndex,
 }
 
 // ============================================================================
@@ -202,13 +757,13 @@ pub enum SysOpErrorCategory {
     /// stream we tried to parse are malformed".
     ParseError,
     Unsupported,
-    NotImplemented,
     AccessError,
     RenderPrompt,
     LlmClient,
-    /// Wildcard for development convenience. Must be explicitly declared in
-    /// `#[throws(DevOther)]` and should be migrated to named categories.
-    DevOther,
+    /// Runtime source compilation was rejected with compiler diagnostics.
+    CompilationError,
+    /// A live Session already has an evaluation in flight.
+    SessionBusy,
     /// A host-language callable raised an exception or invalid-argument error.
     HostCallable,
 }
@@ -221,11 +776,11 @@ impl std::fmt::Display for SysOpErrorCategory {
             Self::InvalidArgument => write!(f, "InvalidArgument"),
             Self::ParseError => write!(f, "ParseError"),
             Self::Unsupported => write!(f, "Unsupported"),
-            Self::NotImplemented => write!(f, "NotImplemented"),
             Self::AccessError => write!(f, "AccessError"),
             Self::RenderPrompt => write!(f, "RenderPrompt"),
             Self::LlmClient => write!(f, "LlmClient"),
-            Self::DevOther => write!(f, "DevOther"),
+            Self::CompilationError => write!(f, "CompilationError"),
+            Self::SessionBusy => write!(f, "SessionBusy"),
             Self::HostCallable => write!(f, "HostCallable"),
         }
     }
@@ -262,9 +817,6 @@ include!(concat!(env!("OUT_DIR"), "/sys_op_generated.rs"));
 #[derive(Clone, Debug)]
 pub enum SentinelKind {
     Uninit,
-    FromSpacePoison {
-        epoch: u32,
-    },
     TlabCanary {
         chunk_start: usize,
         chunk_end: usize,
@@ -356,73 +908,6 @@ include!(concat!(env!("OUT_DIR"), "/errors_generated.rs"));
 // PanicClass (tag enum), PanicInstance (with Value fields), associated methods.
 include!(concat!(env!("OUT_DIR"), "/panics_generated.rs"));
 
-// ============================================================================
-// Test Cases
-// ============================================================================
-
-/// A constant value for test arguments.
-///
-/// Self-contained type with no dependency on HIR or external types.
-/// Converted from HIR's `TestArgValue` during emission, and converted
-/// to `BexExternalValue` in the engine for function calls.
-#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
-pub enum TestArgValue {
-    Null,
-    Int(i64),
-    Float(f64),
-    Bool(bool),
-    String(String),
-    Array {
-        element_type: RuntimeTy,
-        items: Vec<TestArgValue>,
-    },
-    Map {
-        key_type: RuntimeTy,
-        value_type: RuntimeTy,
-        entries: IndexMap<String, TestArgValue>,
-    },
-}
-
-/// A compiled test case, ready for execution.
-#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
-pub struct TestCase {
-    /// Test name (e.g., "`TestAddOne`").
-    pub name: String,
-    /// Function names this test targets.
-    pub function_names: Vec<String>,
-    /// Test arguments, keyed by parameter name.
-    pub args: IndexMap<String, TestArgValue>,
-    /// Project-root-relative path of the file that *defines* this test block.
-    ///
-    /// Recorded so `baml test --list` reports the test-defining file
-    /// identically whether the program was freshly compiled or served from the
-    /// bytecode cache. Empty only for programs compiled before this field
-    /// existed.
-    pub source_file: String,
-}
-
-/// Media value.
-///
-/// Kept as a type alias for compatibility with downstream crates that still use it.
-/// Within `bex_vm`, media is now stored as `Object::Instance` with a `$rust_type` `_data` field.
-pub type MediaValue = std::sync::Arc<baml_builtins2::MediaValue>;
-
-/// Prompt AST tree node.
-pub type PromptAst = std::sync::Arc<baml_builtins2::PromptAst>;
-
-/// Opaque handle to a `Collector` object from `bex_events`.
-///
-/// Uses `Arc<dyn Any + Send + Sync>` to avoid a dependency from `bex_vm_types` on `bex_events`.
-/// Downcast to `bex_events::Collector` at the `bex_engine` layer.
-#[derive(Clone, Debug)]
-pub struct CollectorRef(pub std::sync::Arc<dyn std::any::Any + Send + Sync>);
-
-impl PartialEq for CollectorRef {
-    fn eq(&self, other: &Self) -> bool {
-        std::sync::Arc::ptr_eq(&self.0, &other.0)
-    }
-}
-
 /// A mutable cell wrapping a single captured value.
 ///
 /// Variables that are closed over are heap-allocated as `Cell` objects so that
@@ -505,7 +990,99 @@ impl Type {
 
 #[cfg(test)]
 mod tests {
-    use super::{ConstValue, HeapPtr, Instance, Type, Value, format_float};
+    use super::{ConstValue, HeapPtr, Instance, Program, Type, Value, format_float};
+
+    #[test]
+    fn compiled_head_names_require_a_matching_named_declaration() {
+        use baml_base::Name;
+        use baml_type::{TypeName, typetag::TypeTag};
+
+        use crate::{
+            Enum, Object, TypeHead,
+            types::{LocalName, Owner, ProgramPackage},
+        };
+
+        let mut program = Program::default();
+        program.packages.push(ProgramPackage {
+            name: Name::new("user"),
+            ..ProgramPackage::default()
+        });
+        let tag = TypeTag::of_static_index(0);
+        let head = TypeHead::unresolved(tag);
+        assert!(
+            program
+                .host_declaration_names()
+                .type_head_name(&head)
+                .is_err()
+        );
+
+        program
+            .objects
+            .push(Object::String("not a declaration".into()));
+        assert!(
+            program
+                .host_declaration_names()
+                .type_head_name(&head)
+                .is_err()
+        );
+
+        let path = LocalName::new(Vec::new(), Name::new("Status"));
+        program.objects[crate::ObjectIndex::from_raw(0)] = Object::Enum(Box::new(Enum {
+            path: path.clone(),
+            type_tag: TypeTag::of_static_index(1),
+            variants: vec![],
+            description: None,
+            alias: None,
+            docstring: None,
+            other: indexmap::IndexMap::new(),
+            owner: Owner::anonymous(),
+        }));
+        assert!(
+            program
+                .host_declaration_names()
+                .type_head_name(&head)
+                .is_err()
+        );
+
+        // The pool knows the declaration; only a package the root reaches
+        // can say what it is called.
+        program.objects[crate::ObjectIndex::from_raw(0)].assign_declaration_tag(tag);
+        assert!(
+            program
+                .host_declaration_names()
+                .type_head_name(&head)
+                .is_err()
+        );
+        program.packages[0]
+            .enums
+            .insert(path, crate::ObjectIndex::from_raw(0));
+        assert_eq!(
+            program.host_declaration_names().type_head_name(&head),
+            Ok(TypeName::from_dotted_path("user.Status"))
+        );
+        assert!(!head.is_resolved());
+        assert!(head.to_name().is_err());
+
+        // A declaration no package table lists has no host-facing name.
+        program.packages[0].enums.clear();
+        let names = program.host_declaration_names();
+        assert!(names.type_head_name(&head).is_err());
+        assert!(
+            names
+                .type_head_name(&TypeHead::unresolved(TypeTag::fresh_dynamic()))
+                .is_err()
+        );
+    }
+
+    /// The empty program names a root it does not have; nothing may index
+    /// into it, and the check says so instead.
+    #[test]
+    fn an_empty_program_is_refused_for_its_root() {
+        let error = Program::default()
+            .validate()
+            .expect_err("no package for the root");
+        assert!(error.0.contains("the root is package 0 of 0"), "{error}");
+    }
 
     #[test]
     fn test_format_float() {

@@ -1,0 +1,15 @@
+// Backtick string literals as test names should work.
+
+test `backtick string name` {
+  assert.is_true(true)
+}
+
+test `has "quotes" inside` {
+  assert.is_true(true)
+}
+
+testset `backtick testset name` {
+  test `nested backtick name` {
+    assert.is_true(true)
+  }
+}

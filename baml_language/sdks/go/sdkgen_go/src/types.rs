@@ -11,8 +11,11 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-use baml_base::{Literal, MediaKind, Name as BaseName, qualified_name::BAML_JSON_JSON};
-use baml_codegen_types::{CodegenFunctionParamMode, Name, Symbol, SymbolPool, Ty};
+use baml_base::{
+    Literal, MediaKind, Name as BaseName,
+    qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_STREAM, BAML_JSON_JSON},
+};
+use baml_sdkgen_types::{CodegenFunctionParamMode, Name, Symbol, SymbolPool, Ty};
 
 /// A canonical, attribute-free Go type identity.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -35,6 +38,13 @@ pub(crate) enum GoTy {
     /// Opaque Rust-managed state (`$rust_type`). The native handle table owns
     /// the underlying value; Go only holds a cloneable lifetime token.
     RustType,
+    FunctionSpec {
+        output: Box<Self>,
+    },
+    /// `ai.stream.Stream<T>`: partials and the settled value share `value`.
+    Stream {
+        value: Box<Self>,
+    },
     /// A Go type parameter projected from the compiler-owned BAML `TypeVar`.
     TypeVar(BaseName),
     Literal(GoLiteral),
@@ -192,6 +202,15 @@ impl<'a> GoTypeProjection<'a> {
     }
 
     fn collect(&mut self) {
+        fn function_tys(function: &baml_sdkgen_types::Function) -> Vec<&Ty> {
+            function
+                .arguments
+                .iter()
+                .map(|argument| &argument.ty)
+                .chain(std::iter::once(&function.return_type))
+                .collect()
+        }
+
         let symbols = self
             .pool
             .iter()
@@ -199,30 +218,18 @@ impl<'a> GoTypeProjection<'a> {
             .collect::<Vec<_>>();
         for (name, symbol) in symbols {
             let tys: Vec<&Ty> = match &symbol {
-                Symbol::Function(function) => function
-                    .arguments
-                    .iter()
-                    .map(|argument| &argument.ty)
-                    .chain(std::iter::once(&function.return_type))
-                    .collect(),
-                Symbol::Class(class) => class
-                    .properties
-                    .iter()
-                    .map(|field| &field.ty)
-                    .chain(
-                        class
-                            .static_methods
-                            .iter()
-                            .chain(&class.instance_methods)
-                            .flat_map(|method| {
-                                method
-                                    .arguments
-                                    .iter()
-                                    .map(|argument| &argument.ty)
-                                    .chain(std::iter::once(&method.return_type))
-                            }),
-                    )
-                    .collect(),
+                Symbol::Function(function) => function_tys(function),
+                Symbol::Class(class) => {
+                    let mut tys = class
+                        .properties
+                        .iter()
+                        .map(|field| &field.ty)
+                        .collect::<Vec<_>>();
+                    for method in class.static_methods.iter().chain(&class.instance_methods) {
+                        tys.extend(function_tys(method));
+                    }
+                    tys
+                }
                 Symbol::TypeAlias(alias) => vec![&alias.resolves_to],
                 Symbol::Enum(_) => Vec::new(),
             };
@@ -246,17 +253,17 @@ impl<'a> GoTypeProjection<'a> {
 
     fn project_inner(&self, ty: &Ty, aliases: &mut HashSet<Name>) -> GoTy {
         match ty {
-            Ty::String { .. } => GoTy::String,
-            Ty::Int { .. } => GoTy::Int,
-            Ty::Bigint { .. } => GoTy::Bigint,
-            Ty::Float { .. } => GoTy::Float,
-            Ty::Bool { .. } => GoTy::Bool,
-            Ty::Null { .. } => GoTy::Null,
-            Ty::Uint8Array { .. } => GoTy::Uint8Array,
-            Ty::Media(MediaKind::Generic, _) => GoTy::Unsupported,
-            Ty::Media(kind, _) => GoTy::Media(*kind),
-            Ty::Type { .. } => GoTy::ReflectedType,
-            Ty::RustType { .. } => GoTy::RustType,
+            Ty::String => GoTy::String,
+            Ty::Int => GoTy::Int,
+            Ty::Bigint => GoTy::Bigint,
+            Ty::Float => GoTy::Float,
+            Ty::Bool => GoTy::Bool,
+            Ty::Null => GoTy::Null,
+            Ty::Uint8Array => GoTy::Uint8Array,
+            Ty::Media(MediaKind::Generic) => GoTy::Unsupported,
+            Ty::Media(kind) => GoTy::Media(*kind),
+            Ty::Type => GoTy::ReflectedType,
+            Ty::RustType => GoTy::RustType,
             Ty::Literal(literal, ..) => GoTy::Literal(match literal {
                 Literal::String(value) => GoLiteral::String(value.clone()),
                 Literal::Int(value) => GoLiteral::Int(*value),
@@ -264,23 +271,37 @@ impl<'a> GoTypeProjection<'a> {
                 Literal::Float(value) => GoLiteral::Float(value.clone()),
                 Literal::Bool(value) => GoLiteral::Bool(*value),
             }),
-            Ty::TypeVar(param, _) => GoTy::TypeVar(param.name().clone()),
-            Ty::Class(name, arguments, _) => GoTy::Class(
-                name.clone(),
-                arguments
-                    .iter()
-                    .map(|argument| self.project_inner(argument, aliases))
-                    .collect::<Vec<_>>()
-                    .into_boxed_slice(),
-            ),
-            Ty::Enum(name, _) => GoTy::Enum(name.clone()),
-            Ty::EnumVariant(name, variant, _) => GoTy::EnumVariant(name.clone(), variant.clone()),
-            Ty::List(inner, _) => GoTy::List(Box::new(self.project_inner(inner, aliases))),
+            Ty::TypeVar(param) => GoTy::TypeVar(param.name().clone()),
+            Ty::Class(name, arguments) => {
+                if is_reflect_kind_type(name) {
+                    GoTy::ReflectedType
+                } else if name.to_string() == AI_FUNCTION_SPEC && arguments.len() == 1 {
+                    GoTy::FunctionSpec {
+                        output: Box::new(self.project_inner(&arguments[0], aliases)),
+                    }
+                } else if name.to_string() == AI_STREAM_STREAM && arguments.len() == 1 {
+                    GoTy::Stream {
+                        value: Box::new(self.project_inner(&arguments[0], aliases)),
+                    }
+                } else {
+                    GoTy::Class(
+                        name.clone(),
+                        arguments
+                            .iter()
+                            .map(|argument| self.project_inner(argument, aliases))
+                            .collect::<Vec<_>>()
+                            .into_boxed_slice(),
+                    )
+                }
+            }
+            Ty::Enum(name) => GoTy::Enum(name.clone()),
+            Ty::EnumVariant(name, variant) => GoTy::EnumVariant(name.clone(), variant.clone()),
+            Ty::List(inner) => GoTy::List(Box::new(self.project_inner(inner, aliases))),
             Ty::Map { key, value, .. } => GoTy::Map {
                 key: Box::new(self.project_inner(key, aliases)),
                 value: Box::new(self.project_inner(value, aliases)),
             },
-            Ty::TypeAlias(name, _) => {
+            Ty::TypeAlias(name) => {
                 if is_baml_json(name) {
                     return GoTy::Json;
                 }
@@ -296,17 +317,17 @@ impl<'a> GoTypeProjection<'a> {
                 aliases.remove(name);
                 projected
             }
-            Ty::Union(members, _) => self.project_union(members, aliases),
+            Ty::Union(members) => self.project_union(members, aliases),
             Ty::Function {
                 params,
                 ret,
                 throws,
                 ..
             } => {
-                let throws = if matches!(throws.as_ref(), Ty::Never { .. })
+                let throws = if matches!(throws.as_ref(), Ty::Never)
                     || matches!(
                         throws.as_ref(),
-                        Ty::TypeVar(name, _) if name.as_str().starts_with("__effect_param_")
+                        Ty::TypeVar(name) if name.as_str().starts_with("__effect_param_")
                     ) {
                     false
                 } else if self.throws_accepts_host_callable(throws, aliases) {
@@ -338,7 +359,8 @@ impl<'a> GoTypeProjection<'a> {
                     })
                     .collect::<Vec<_>>();
                 let ret = match ret.as_ref() {
-                    Ty::Void { .. } | Ty::Never { .. } => None,
+                    Ty::Never => None,
+                    ret if ret.is_unit() => None,
                     ret => Some(Box::new(self.project_inner(ret, aliases))),
                 };
                 if params
@@ -363,7 +385,7 @@ impl<'a> GoTypeProjection<'a> {
 
     fn throws_accepts_host_callable(&self, ty: &Ty, aliases: &mut HashSet<Name>) -> bool {
         match ty {
-            Ty::Class(name, arguments, _) => {
+            Ty::Class(name, arguments) => {
                 arguments.is_empty()
                     && name
                         == &Name::new(
@@ -372,10 +394,10 @@ impl<'a> GoTypeProjection<'a> {
                             BaseName::new("HostCallable"),
                         )
             }
-            Ty::Union(members, _) => members
+            Ty::Union(members) => members
                 .iter()
                 .any(|member| self.throws_accepts_host_callable(member, aliases)),
-            Ty::TypeAlias(name, _) => {
+            Ty::TypeAlias(name) => {
                 if !aliases.insert(name.clone()) {
                     return false;
                 }
@@ -459,12 +481,12 @@ impl<'a> GoTypeProjection<'a> {
         projected: &mut Vec<GoTy>,
     ) {
         match member {
-            Ty::Union(nested, _) => {
+            Ty::Union(nested) => {
                 for member in nested {
                     self.project_union_member(member, aliases, projected);
                 }
             }
-            Ty::TypeAlias(name, _) => {
+            Ty::TypeAlias(name) => {
                 if is_baml_json(name) {
                     projected.push(GoTy::Json);
                     return;
@@ -498,6 +520,27 @@ impl<'a> GoTypeProjection<'a> {
     }
 }
 
+fn is_reflect_kind_type(name: &Name) -> bool {
+    matches!(
+        name.namespace().as_slice(),
+        [reflect, kind]
+            if reflect.as_str() == "reflect"
+                && matches!(
+                    kind.as_str(),
+                    "array"
+                        | "class"
+                        | "enum"
+                        | "function"
+                        | "interface"
+                        | "literal"
+                        | "map"
+                        | "primitive"
+                        | "union"
+                )
+    ) && name.package().as_str() == "baml"
+        && name.name().as_str() == "Type"
+}
+
 fn is_baml_json(name: &Name) -> bool {
     // Parse the canonical compiler-owned FQN into the typed identity rather
     // than recognizing arbitrary recursive aliases by their expansion.
@@ -524,6 +567,8 @@ fn collect_typed_unions(ty: &GoTy, found: &mut BTreeSet<GoUnionKey>) {
                 collect_typed_unions(argument, found);
             }
         }
+        GoTy::FunctionSpec { output } => collect_typed_unions(output, found),
+        GoTy::Stream { value } => collect_typed_unions(value, found),
         GoTy::List(inner) | GoTy::Optional(inner) => collect_typed_unions(inner, found),
         GoTy::Function(key) => {
             for param in key.params() {
@@ -558,6 +603,8 @@ fn collect_callback_options(ty: &GoTy, found: &mut BTreeSet<GoFunctionKey>) {
                 collect_callback_options(argument, found);
             }
         }
+        GoTy::FunctionSpec { output } => collect_callback_options(output, found),
+        GoTy::Stream { value } => collect_callback_options(value, found),
         GoTy::List(inner) | GoTy::Optional(inner) => collect_callback_options(inner, found),
         GoTy::Map { key, value } => {
             collect_callback_options(key, found);
@@ -576,6 +623,8 @@ fn contains_unsupported(ty: &GoTy) -> bool {
     match ty {
         GoTy::Unsupported => true,
         GoTy::Class(_, arguments) => arguments.iter().any(contains_unsupported),
+        GoTy::FunctionSpec { output } => contains_unsupported(output),
+        GoTy::Stream { value } => contains_unsupported(value),
         GoTy::List(inner) | GoTy::Optional(inner) => contains_unsupported(inner),
         GoTy::Map { key, value } => contains_unsupported(key) || contains_unsupported(value),
         GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => {
@@ -595,6 +644,8 @@ fn contains_type_var(ty: &GoTy) -> bool {
     match ty {
         GoTy::TypeVar(_) => true,
         GoTy::Class(_, arguments) => arguments.iter().any(contains_type_var),
+        GoTy::FunctionSpec { output } => contains_type_var(output),
+        GoTy::Stream { value } => contains_type_var(value),
         GoTy::List(inner) | GoTy::Optional(inner) => contains_type_var(inner),
         GoTy::Map { key, value } => contains_type_var(key) || contains_type_var(value),
         GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => {
@@ -621,6 +672,8 @@ fn contains_function(ty: &GoTy) -> bool {
     match ty {
         GoTy::Function(_) => true,
         GoTy::Class(_, arguments) => arguments.iter().any(contains_function),
+        GoTy::FunctionSpec { output } => contains_function(output),
+        GoTy::Stream { value } => contains_function(value),
         GoTy::List(inner) | GoTy::Optional(inner) => contains_function(inner),
         GoTy::Map { key, value } => contains_function(key) || contains_function(value),
         GoTy::TypedUnion(key) | GoTy::DynamicUnion { key, .. } => {
@@ -635,6 +688,8 @@ fn contains_dynamic_union(ty: &GoTy) -> bool {
         GoTy::DynamicUnion { .. } => true,
         GoTy::TypedUnion(key) => key.members().iter().any(contains_dynamic_union),
         GoTy::Class(_, arguments) => arguments.iter().any(contains_dynamic_union),
+        GoTy::FunctionSpec { output } => contains_dynamic_union(output),
+        GoTy::Stream { value } => contains_dynamic_union(value),
         GoTy::List(inner) | GoTy::Optional(inner) => contains_dynamic_union(inner),
         GoTy::Map { key, value } => contains_dynamic_union(key) || contains_dynamic_union(value),
         GoTy::Function(key) => {
@@ -659,17 +714,13 @@ pub(crate) fn literal_surface(literal: &GoLiteral) -> GoTy {
 
 #[cfg(test)]
 mod tests {
-    use baml_codegen_types::{CallableParam, Origin, TypeAlias};
-    use baml_type::{Freshness, TyAttr};
+    use baml_sdkgen_types::{CallableParam, Origin, TypeAlias};
+    use baml_type::Freshness;
 
     use super::*;
 
-    fn a() -> TyAttr {
-        TyAttr::default()
-    }
-
     fn union(members: Vec<Ty>) -> Ty {
-        Ty::Union(members, a()).canonicalize()
+        Ty::Union(members.into()).canonicalize()
     }
 
     fn alias_name(value: &str) -> Name {
@@ -678,10 +729,9 @@ mod tests {
 
     fn callable(params: Vec<CallableParam>, ret: Ty, throws: Ty) -> Ty {
         Ty::Function {
-            params,
+            params: params.into(),
             ret: Box::new(ret),
             throws: Box::new(throws),
-            attr: a(),
         }
     }
 
@@ -708,8 +758,7 @@ mod tests {
                 vec![BaseName::new("errors")],
                 BaseName::new("HostCallable"),
             ),
-            vec![],
-            a(),
+            Box::new([]),
         )
     }
 
@@ -717,16 +766,8 @@ mod tests {
     fn reordered_unions_share_one_identity_and_null_does_not_count() {
         let pool = SymbolPool::default();
         let projection = GoTypeProjection::new(&pool, 2);
-        let left = projection.project(&union(vec![
-            Ty::String { attr: a() },
-            Ty::Int { attr: a() },
-            Ty::Null { attr: a() },
-        ]));
-        let right = projection.project(&union(vec![
-            Ty::Int { attr: a() },
-            Ty::Null { attr: a() },
-            Ty::String { attr: a() },
-        ]));
+        let left = projection.project(&union(vec![Ty::String, Ty::Int, Ty::Null]));
+        let right = projection.project(&union(vec![Ty::Int, Ty::Null, Ty::String]));
         assert_eq!(left, right);
         assert!(matches!(left, GoTy::Optional(inner) if matches!(*inner, GoTy::TypedUnion(_))));
     }
@@ -736,11 +777,7 @@ mod tests {
         let pool = SymbolPool::default();
         let projection = GoTypeProjection::new(&pool, 0);
         assert!(matches!(
-            projection.project(&union(vec![
-                Ty::Int { attr: a() },
-                Ty::String { attr: a() },
-                Ty::Null { attr: a() },
-            ])),
+            projection.project(&union(vec![Ty::Int, Ty::String, Ty::Null,])),
             GoTy::DynamicUnion { nullable: true, .. }
         ));
     }
@@ -749,14 +786,8 @@ mod tests {
     fn rust_type_projects_as_one_canonical_opaque_leaf_while_resource_stays_deferred() {
         let pool = SymbolPool::default();
         let projection = GoTypeProjection::new(&pool, 3);
-        assert_eq!(
-            projection.project(&Ty::RustType { attr: a() }),
-            GoTy::RustType
-        );
-        assert_eq!(
-            projection.project(&Ty::Resource { attr: a() }),
-            GoTy::Unsupported
-        );
+        assert_eq!(projection.project(&Ty::RustType), GoTy::RustType);
+        assert_eq!(projection.project(&Ty::Resource), GoTy::Unsupported);
     }
 
     #[test]
@@ -767,7 +798,7 @@ mod tests {
             foo.clone(),
             Symbol::TypeAlias(TypeAlias {
                 name: foo.clone(),
-                resolves_to: union(vec![Ty::String { attr: a() }, Ty::Int { attr: a() }]),
+                resolves_to: union(vec![Ty::String, Ty::Int]),
                 recursive: false,
                 origin: Origin {
                     source_file_path: "types.baml".to_string(),
@@ -776,15 +807,8 @@ mod tests {
             }),
         );
         let projection = GoTypeProjection::new(&pool, 3);
-        let expanded = projection.project(&union(vec![
-            Ty::TypeAlias(foo, a()),
-            Ty::Bool { attr: a() },
-        ]));
-        let direct = projection.project(&union(vec![
-            Ty::String { attr: a() },
-            Ty::Int { attr: a() },
-            Ty::Bool { attr: a() },
-        ]));
+        let expanded = projection.project(&union(vec![Ty::TypeAlias(foo), Ty::Bool]));
+        let direct = projection.project(&union(vec![Ty::String, Ty::Int, Ty::Bool]));
         assert_eq!(expanded, direct);
     }
 
@@ -802,7 +826,7 @@ mod tests {
                 name.clone(),
                 Symbol::TypeAlias(TypeAlias {
                     name: name.clone(),
-                    resolves_to: Ty::TypeAlias(name, a()),
+                    resolves_to: Ty::TypeAlias(name),
                     recursive: true,
                     origin: Origin {
                         source_file_path: "types.baml".to_string(),
@@ -812,12 +836,9 @@ mod tests {
             );
         }
         let projection = GoTypeProjection::new(&pool, 3);
+        assert_eq!(projection.project(&Ty::TypeAlias(canonical)), GoTy::Json);
         assert_eq!(
-            projection.project(&Ty::TypeAlias(canonical, a())),
-            GoTy::Json
-        );
-        assert_eq!(
-            projection.project(&Ty::TypeAlias(lookalike, a())),
+            projection.project(&Ty::TypeAlias(lookalike)),
             GoTy::Unsupported
         );
     }
@@ -830,7 +851,7 @@ mod tests {
             canonical.clone(),
             Symbol::TypeAlias(TypeAlias {
                 name: canonical.clone(),
-                resolves_to: Ty::TypeAlias(canonical.clone(), a()),
+                resolves_to: Ty::TypeAlias(canonical.clone()),
                 recursive: true,
                 origin: Origin {
                     source_file_path: "types.baml".to_string(),
@@ -840,10 +861,7 @@ mod tests {
         );
         let projection = GoTypeProjection::new(&pool, 3);
         assert_eq!(
-            projection.project(&union(vec![
-                Ty::TypeAlias(canonical, a()),
-                Ty::Null { attr: a() },
-            ])),
+            projection.project(&union(vec![Ty::TypeAlias(canonical), Ty::Null,])),
             GoTy::Json
         );
     }
@@ -856,7 +874,7 @@ mod tests {
             canonical.clone(),
             Symbol::TypeAlias(TypeAlias {
                 name: canonical.clone(),
-                resolves_to: Ty::TypeAlias(canonical.clone(), a()),
+                resolves_to: Ty::TypeAlias(canonical.clone()),
                 recursive: true,
                 origin: Origin {
                     source_file_path: "types.baml".to_string(),
@@ -865,10 +883,7 @@ mod tests {
             }),
         );
         let projection = GoTypeProjection::new(&pool, 3);
-        let projected = projection.project(&union(vec![
-            Ty::TypeAlias(canonical, a()),
-            Ty::String { attr: a() },
-        ]));
+        let projected = projection.project(&union(vec![Ty::TypeAlias(canonical), Ty::String]));
         assert!(matches!(projected, GoTy::DynamicUnion { .. }));
     }
 
@@ -881,7 +896,7 @@ mod tests {
             canonical.clone(),
             Symbol::TypeAlias(TypeAlias {
                 name: canonical.clone(),
-                resolves_to: Ty::TypeAlias(canonical.clone(), a()),
+                resolves_to: Ty::TypeAlias(canonical.clone()),
                 recursive: true,
                 origin: Origin {
                     source_file_path: "types.baml".to_string(),
@@ -893,7 +908,7 @@ mod tests {
             alias.clone(),
             Symbol::TypeAlias(TypeAlias {
                 name: alias.clone(),
-                resolves_to: Ty::TypeAlias(canonical, a()),
+                resolves_to: Ty::TypeAlias(canonical),
                 recursive: false,
                 origin: Origin {
                     source_file_path: "types.baml".to_string(),
@@ -903,14 +918,11 @@ mod tests {
         );
         let projection = GoTypeProjection::new(&pool, 3);
         assert_eq!(
-            projection.project(&Ty::TypeAlias(alias.clone(), a())),
+            projection.project(&Ty::TypeAlias(alias.clone())),
             GoTy::Json
         );
         assert_eq!(
-            projection.project(&union(vec![
-                Ty::TypeAlias(alias, a()),
-                Ty::String { attr: a() },
-            ])),
+            projection.project(&union(vec![Ty::TypeAlias(alias), Ty::String,])),
             GoTy::Unsupported
         );
     }
@@ -920,8 +932,8 @@ mod tests {
         let pool = SymbolPool::default();
         let projection = GoTypeProjection::new(&pool, 3);
         let projected = projection.project(&union(vec![
-            Ty::Literal(Literal::String("draft".into()), Freshness::Regular, a()),
-            Ty::String { attr: a() },
+            Ty::Literal(Literal::String("draft".into()), Freshness::Regular),
+            Ty::String,
         ]));
         let GoTy::TypedUnion(key) = projected else {
             panic!("two literal-distinct members should remain a typed union")
@@ -943,10 +955,10 @@ mod tests {
             MediaKind::Video,
             MediaKind::Pdf,
         ] {
-            assert_eq!(projection.project(&Ty::Media(kind, a())), GoTy::Media(kind));
+            assert_eq!(projection.project(&Ty::Media(kind)), GoTy::Media(kind));
         }
         assert_eq!(
-            projection.project(&Ty::Media(MediaKind::Generic, a())),
+            projection.project(&Ty::Media(MediaKind::Generic)),
             GoTy::Unsupported
         );
     }
@@ -957,13 +969,13 @@ mod tests {
         let projection = GoTypeProjection::new(&pool, 3);
         let projected = projection.project(&callable(
             vec![
-                callable_param(CodegenFunctionParamMode::Required, Ty::Int { attr: a() }),
+                callable_param(CodegenFunctionParamMode::Required, Ty::Int),
                 callable_param(
                     CodegenFunctionParamMode::Required,
-                    Ty::List(Box::new(Ty::String { attr: a() }), a()),
+                    Ty::List(Box::new(Ty::String)),
                 ),
             ],
-            Ty::Bool { attr: a() },
+            Ty::Bool,
             host_callable_error(),
         ));
         let GoTy::Function(key) = projected else {
@@ -984,16 +996,16 @@ mod tests {
                 named_callable_param(
                     "ignored_required_name",
                     CodegenFunctionParamMode::Required,
-                    Ty::Int { attr: a() },
+                    Ty::Int,
                 ),
                 named_callable_param(
                     "wire_name",
                     CodegenFunctionParamMode::Optional,
-                    union(vec![Ty::String { attr: a() }, Ty::Null { attr: a() }]),
+                    union(vec![Ty::String, Ty::Null]),
                 ),
             ],
-            Ty::Bool { attr: a() },
-            Ty::Never { attr: a() },
+            Ty::Bool,
+            Ty::Never,
         ));
         let GoTy::Function(key) = projected else {
             panic!("optional callback should project to a Go function")
@@ -1015,19 +1027,11 @@ mod tests {
         let project = |required: &str, optional: &str| {
             projection.project(&callable(
                 vec![
-                    named_callable_param(
-                        required,
-                        CodegenFunctionParamMode::Required,
-                        Ty::Int { attr: a() },
-                    ),
-                    named_callable_param(
-                        optional,
-                        CodegenFunctionParamMode::Optional,
-                        Ty::String { attr: a() },
-                    ),
+                    named_callable_param(required, CodegenFunctionParamMode::Required, Ty::Int),
+                    named_callable_param(optional, CodegenFunctionParamMode::Optional, Ty::String),
                 ],
-                Ty::Bool { attr: a() },
-                Ty::Never { attr: a() },
+                Ty::Bool,
+                Ty::Never,
             ))
         };
         assert_eq!(project("left", "value"), project("right", "value"));
@@ -1038,13 +1042,13 @@ mod tests {
     fn callback_projection_supports_closed_unions_and_omits_unsound_shapes() {
         let pool = SymbolPool::default();
         let projection = GoTypeProjection::new(&pool, 3);
-        let never = || Ty::Never { attr: a() };
+        let never = || Ty::Never;
         let closed_union = callable(
             vec![callable_param(
                 CodegenFunctionParamMode::Required,
-                union(vec![Ty::Int { attr: a() }, Ty::String { attr: a() }]),
+                union(vec![Ty::Int, Ty::String]),
             )],
-            union(vec![Ty::Bool { attr: a() }, Ty::String { attr: a() }]),
+            union(vec![Ty::Bool, Ty::String]),
             never(),
         );
         let GoTy::Function(closed_union) = projection.project(&closed_union) else {
@@ -1057,17 +1061,17 @@ mod tests {
             callable(
                 vec![callable_param(
                     CodegenFunctionParamMode::Required,
-                    Ty::TypeVar(baml_codegen_types::ParamTy::new(0, BaseName::new("T")), a()),
+                    Ty::TypeVar(baml_sdkgen_types::ParamTy::new(0, BaseName::new("T"))),
                 )],
-                Ty::String { attr: a() },
+                Ty::String,
                 never(),
             ),
             callable(
                 vec![callable_param(
                     CodegenFunctionParamMode::Required,
-                    callable(vec![], Ty::String { attr: a() }, never()),
+                    callable(vec![], Ty::String, never()),
                 )],
-                Ty::String { attr: a() },
+                Ty::String,
                 never(),
             ),
             // Arity above the configured threshold projects dynamically as
@@ -1076,14 +1080,9 @@ mod tests {
             callable(
                 vec![callable_param(
                     CodegenFunctionParamMode::Required,
-                    union(vec![
-                        Ty::Int { attr: a() },
-                        Ty::String { attr: a() },
-                        Ty::Bool { attr: a() },
-                        Ty::Float { attr: a() },
-                    ]),
+                    union(vec![Ty::Int, Ty::String, Ty::Bool, Ty::Float]),
                 )],
-                Ty::String { attr: a() },
+                Ty::String,
                 never(),
             ),
         ];
@@ -1094,16 +1093,13 @@ mod tests {
 
     #[test]
     fn callback_projection_rejects_incompatible_declared_throws() {
-        let validation_error = Ty::Class(alias_name("ValidationError"), vec![], a());
+        let validation_error = Ty::Class(alias_name("ValidationError"), Box::new([]));
         let pool = SymbolPool::default();
         let projection = GoTypeProjection::new(&pool, 3);
         assert_eq!(
             projection.project(&callable(
-                vec![callable_param(
-                    CodegenFunctionParamMode::Required,
-                    Ty::Int { attr: a() },
-                )],
-                Ty::String { attr: a() },
+                vec![callable_param(CodegenFunctionParamMode::Required, Ty::Int)],
+                Ty::String,
                 validation_error.clone(),
             )),
             GoTy::Unsupported
@@ -1111,7 +1107,7 @@ mod tests {
         assert!(matches!(
             projection.project(&callable(
                 vec![],
-                Ty::String { attr: a() },
+                Ty::String,
                 union(vec![validation_error, host_callable_error()]),
             )),
             GoTy::Function(key) if key.throws()
@@ -1120,11 +1116,9 @@ mod tests {
         assert!(matches!(
             projection.project(&callable(
                 vec![],
-                Ty::String { attr: a() },
+                Ty::String,
                 Ty::TypeVar(
-                    baml_codegen_types::ParamTy::new(0, BaseName::new("__effect_param_0")),
-                    a(),
-                ),
+                    baml_sdkgen_types::ParamTy::new(0, BaseName::new("__effect_param_0")))
             )),
             GoTy::Function(key) if !key.throws()
         ));

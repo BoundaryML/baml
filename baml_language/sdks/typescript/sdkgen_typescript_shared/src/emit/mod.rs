@@ -1,7 +1,7 @@
 //! Shared emitter-internal representation of TypeScript-side symbols.
 //!
 //! These types describe what the emitter will render to TypeScript, as
-//! opposed to `baml_codegen_types` which describes BAML-side input
+//! opposed to `baml_sdkgen_types` which describes BAML-side input
 //! symbols. The fan-out logic (sync + async per callable, companion
 //! suffix rules) is a verbatim port of `sdkgen_python_pydantic2/src/emit/mod.rs`.
 
@@ -12,7 +12,7 @@ pub(crate) mod method;
 pub(crate) mod type_alias;
 pub(crate) mod typemap_file;
 
-use baml_codegen_types::{FunctionArgument, Name, Symbol, SymbolPool, Ty};
+use baml_sdkgen_types::{FunctionArgument, Name, Symbol, SymbolPool, Ty};
 
 use crate::{
     emit::{
@@ -51,10 +51,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
 
     for (key, symbol) in entries {
         let leaf = route(key);
-        // spec2: preserve the BAML name verbatim — `$` is a valid TS
-        // identifier char, so a `$stream` companion class is emitted as
-        // e.g. `Resume$stream` (not stripped to `Resume`). Non-stream
-        // symbols are unaffected (their name carries no `$stream`).
+        // spec2: preserve the BAML name verbatim.
         let bare = key.name().as_str().to_string();
 
         match symbol {
@@ -145,7 +142,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
 fn expand_function(
     leaf: &LeafPath,
     key: &Name,
-    f: &baml_codegen_types::Function,
+    f: &baml_sdkgen_types::Function,
     sort_key: &SortKey,
     out: &mut Vec<(LeafPath, EmittedSymbol, SortKey)>,
 ) {
@@ -188,18 +185,18 @@ fn expand_function(
 /// `Ty`, in source order, de-duping exact-equal names. Class/Enum/
 /// `TypeAlias` contribute their unqualified leaf name; a union contributes
 /// each member's; an optional unwraps; anything else contributes nothing.
-fn collect_raises_names(throws: Option<&baml_codegen_types::Ty>) -> Vec<String> {
-    use baml_codegen_types::Ty;
+fn collect_raises_names(throws: Option<&baml_sdkgen_types::Ty>) -> Vec<String> {
+    use baml_sdkgen_types::Ty;
 
     fn walk(ty: &Ty, out: &mut Vec<String>) {
         match ty {
-            Ty::Class(name, _, _) | Ty::Enum(name, _) | Ty::TypeAlias(name, _) => {
+            Ty::Class(name, _) | Ty::Enum(name) | Ty::TypeAlias(name) => {
                 let n = name.name().as_str().to_string();
                 if !out.contains(&n) {
                     out.push(n);
                 }
             }
-            Ty::Union(members, _) => members.iter().for_each(|m| walk(m, out)),
+            Ty::Union(members) => members.iter().for_each(|m| walk(m, out)),
             _ => {}
         }
     }
@@ -215,11 +212,11 @@ fn collect_raises_names(throws: Option<&baml_codegen_types::Ty>) -> Vec<String> 
 /// `TypeScriptMethodBinding` per emitted line. Methods are sorted by `(file,
 /// span, name)` so a parent and its companions cluster together.
 fn expand_methods(
-    methods: &[baml_codegen_types::Function],
+    methods: &[baml_sdkgen_types::Function],
     class_fqn_root: &str,
     kind: MethodKind,
 ) -> Vec<TypeScriptMethodBinding> {
-    let mut sorted: Vec<&baml_codegen_types::Function> = methods.iter().collect();
+    let mut sorted: Vec<&baml_sdkgen_types::Function> = methods.iter().collect();
     sorted.sort_by_key(|m| (origin_key(&m.origin), m.name.as_str()));
 
     let mut out: Vec<TypeScriptMethodBinding> = Vec::new();
@@ -286,13 +283,15 @@ fn split_arguments(arguments: &[FunctionArgument]) -> (Vec<RequiredArg>, Vec<Opt
 /// The TS-side bare identifier for a callable's BAML name, used as the LHS
 /// of the sync binding (the async sibling appends `_async`).
 ///
-/// spec2: the BAML name — including any `$<suffix>` companion marker — is
-/// preserved verbatim, because `$` is a valid TypeScript identifier
-/// character. So `foo` → `foo`, `foo$stream` → `foo$stream`,
-/// `foo$build_request` → `foo$build_request`. (Python must translate these
-/// to `_stream` / `__build_request`; TypeScript does not.)
+/// A `@stream` companion becomes `$stream` (`$` is a valid TypeScript
+/// identifier character), and every other `@` becomes `_`. Thus `foo` stays
+/// `foo`, `foo@stream` becomes `foo$stream`, and `foo@spec` becomes `foo_spec`.
 fn bare_callable_name(name: &str) -> String {
-    name.to_string()
+    if let Some(base) = name.strip_suffix("@stream") {
+        format!("{base}$stream")
+    } else {
+        name.replace('@', "_")
+    }
 }
 
 /// Shared fan-out for free functions. Calls `emit` twice: once for the sync
@@ -301,7 +300,7 @@ fn bare_callable_name(name: &str) -> String {
 fn expand_callable<F>(
     bare: &str,
     fqn_root: &str,
-    arguments: &[baml_codegen_types::FunctionArgument],
+    arguments: &[baml_sdkgen_types::FunctionArgument],
     return_type: &Ty,
     mut emit: F,
 ) where
@@ -311,7 +310,7 @@ fn expand_callable<F>(
         SyncAsync,
         Vec<String>,
         Vec<Ty>,
-        Vec<Option<baml_codegen_types::FunctionArgumentDefault>>,
+        Vec<Option<baml_sdkgen_types::FunctionArgumentDefault>>,
         Ty,
     ),
 {
@@ -320,7 +319,7 @@ fn expand_callable<F>(
         .map(|a| a.name.as_str().to_string())
         .collect();
     let arg_types: Vec<Ty> = arguments.iter().map(|a| a.ty.clone()).collect();
-    let arg_defaults: Vec<Option<baml_codegen_types::FunctionArgumentDefault>> =
+    let arg_defaults: Vec<Option<baml_sdkgen_types::FunctionArgumentDefault>> =
         arguments.iter().map(|a| a.default.clone()).collect();
     emit(
         bare.to_string(),
@@ -342,6 +341,18 @@ fn expand_callable<F>(
     );
 }
 
-fn origin_key(origin: &baml_codegen_types::Origin) -> SortKey {
+fn origin_key(origin: &baml_sdkgen_types::Origin) -> SortKey {
     (origin.source_file_path.clone(), origin.span_start)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::bare_callable_name;
+
+    #[test]
+    fn bare_callable_name_maps_companion_suffixes() {
+        assert_eq!(bare_callable_name("foo"), "foo");
+        assert_eq!(bare_callable_name("foo@stream"), "foo$stream");
+        assert_eq!(bare_callable_name("foo@spec"), "foo_spec");
+    }
 }

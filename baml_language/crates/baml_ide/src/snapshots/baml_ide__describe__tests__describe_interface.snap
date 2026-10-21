@@ -1,0 +1,14 @@
+---
+source: crates/baml_ide/src/describe.rs
+expression: "project.format_description(&descs[0])"
+---
+interface Named  interfaces.baml:2
+shape: interface Named {
+    name: string,
+    function label(self) -> string throws never
+}
+members:
+  [field] name: string,
+  [required method] function label(self) -> string throws never
+implementations:
+  implement Named for Person

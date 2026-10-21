@@ -5,9 +5,9 @@
 //!
 //! # Layout: folder tree = package + ns_* subfolders = namespace
 //!
-//! Everything lives under `baml_std/baml/` → package **baml**.
-//! Sub-namespaces (env, llm, http, etc.) are expressed via `ns_*` subdirectories
-//! on disk, and namespace is derived from path segments at runtime.
+//! Each directory below `baml_std/` is a package. Sub-namespaces are expressed
+//! via `ns_*` subdirectories, and namespace is derived from path segments at
+//! runtime.
 //!
 //! # Virtual path
 //!
@@ -49,9 +49,6 @@ impl BuiltinFile {
 
 /// Package name for the main std package (baml types and namespaces).
 pub const PACKAGE_BAML: &str = "baml";
-/// Package name for boundary identity and capture helpers.
-pub const PACKAGE_BOUNDARY: &str = "boundary";
-
 /// Absolute path to the `baml_std/` source tree, captured at compile time via
 /// `CARGO_MANIFEST_DIR`. Used by `baml_builtins2_codegen` to produce clickable
 /// file paths in build-script diagnostic messages (stderr only, never in
@@ -81,13 +78,59 @@ macro_rules! builtin {
     };
 }
 
+/// A builtin package's `baml.toml`, embedded at compile time.
+///
+/// The stdlib describes its own package graph the way every package does:
+/// `[package]` names the package and `[dependencies]` lists the packages it
+/// reaches, by the name it spells them with. The loader
+/// (`baml_db::ProjectDatabase::ensure_stdlib_sources`) builds the stdlib
+/// roots and their edges from these, so no compiler code names a stdlib
+/// package or hardcodes its dependencies.
+pub struct BuiltinManifest {
+    /// Package name (the directory under `baml_std/`).
+    pub package: &'static str,
+    /// The manifest text.
+    pub contents: &'static str,
+}
+
+/// Manifest registration macro: package directory under `baml_std/`.
+macro_rules! manifest {
+    ($pkg:literal) => {
+        BuiltinManifest {
+            package: $pkg,
+            contents: include_str!(concat!("../baml_std/", $pkg, "/baml.toml")),
+        }
+    };
+}
+
+/// Every builtin package's manifest. One entry per package directory; the
+/// files of a package listed here are the [`ALL`] entries with that
+/// `package`.
+pub const MANIFESTS: &[BuiltinManifest] = &[
+    manifest!("baml"),
+    manifest!("log"),
+    manifest!("reflect"),
+    manifest!("testing"),
+    manifest!("assert"),
+    manifest!("trace"),
+    manifest!("ai"),
+    manifest!("openai"),
+    manifest!("anthropic"),
+    manifest!("typesafeai"),
+    manifest!("google"),
+    manifest!("claude_code"),
+    manifest!("aws"),
+    manifest!("vercel"),
+];
+
 /// All builtin `.baml` files, in registration order. Namespaces derived from
 /// `ns_*` folder segments in `relative_path`.
 pub const ALL: &[BuiltinFile] = &[
     // --- Root namespace (no ns_* prefix) ---
     builtin!("baml", "containers.baml"),
-    builtin!("baml", "comparable.baml"),
+    builtin!("baml", "sortable.baml"),
     builtin!("baml", "conversions.baml"),
+    builtin!("baml", "hashing.baml"),
     builtin!("baml", "core.baml"),
     builtin!("baml", "int.baml"),
     builtin!("baml", "bigint.baml"),
@@ -96,7 +139,6 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "null.baml"),
     builtin!("baml", "string.baml"),
     builtin!("baml", "uint8array.baml"),
-    builtin!("baml", "type_class.baml"),
     // --- Namespaced (ns_* folders) ---
     builtin!("baml", "ns_errors/errors.baml"),
     builtin!("baml", "ns_errors/unknown_error.baml"),
@@ -105,21 +147,22 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_panics/panics.baml"),
     builtin!("baml", "ns_env/env.baml"),
     builtin!("baml", "ns_io/io.baml"),
+    builtin!("baml", "ns_io/read.baml"),
+    builtin!("baml", "ns_io/write.baml"),
     builtin!("baml", "ns_http/http.baml"),
     builtin!("baml", "ns_http/server.baml"),
     builtin!("baml", "ns_events/events.baml"),
-    builtin!("baml", "ns_id/id.baml"),
     builtin!("baml", "ns_sys/sys.baml"),
     builtin!("baml", "ns_fs/fs.baml"),
     builtin!("baml", "ns_glob/glob.baml"),
+    builtin!("baml", "ns_hash/hash.baml"),
     builtin!("baml", "ns_net/net.baml"),
     builtin!("baml", "ns_media/media.baml"),
+    builtin!("baml", "ns_regex/regex.baml"),
     builtin!("baml", "ns_json/json.baml"),
     builtin!("baml", "ns_yaml/yaml.baml"),
     builtin!("baml", "ns_toml/toml.baml"),
     builtin!("baml", "ns_csv/csv.baml"),
-    builtin!("baml", "ns_prompt/prompt.baml"),
-    builtin!("baml", "ns_prompt/sys_llm_types.baml"),
     builtin!("baml", "ns_sap/sap.baml"),
     builtin!("baml", "ns_ws/ws.baml"),
     builtin!("baml", "ns_iter/iter.baml"),
@@ -133,14 +176,27 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_time/plaindate.baml"),
     builtin!("baml", "ns_time/plaindatetime.baml"),
     builtin!("baml", "ns_time/zoneddatetime.baml"),
+    builtin!("baml", "ns_ops/bitwise.baml"),
     builtin!("baml", "ns_ops/comparison.baml"),
+    builtin!("baml", "ns_ops/index.baml"),
     builtin!("baml", "ns_ops/math.baml"),
     builtin!("baml", "ns_random/random.baml"),
-    // --- boundary package ---
-    builtin!("boundary", "core.baml"),
-    builtin!("boundary", "ns_id/id.baml"),
-    // --- reflect package (standalone, accessible as `reflect.type_of(...)`) ---
+    builtin!("baml", "ns_crypto/errors.baml"),
+    builtin!("baml", "ns_crypto/interfaces.baml"),
+    builtin!("baml", "ns_crypto/aes_gcm_siv.baml"),
+    builtin!("baml", "ns_crypto/chacha20poly1305.baml"),
+    builtin!("baml", "ns_crypto/sha2.baml"),
+    // --- reflect package ---
     builtin!("reflect", "reflect.baml"),
+    builtin!("reflect", "type.baml"),
+    builtin!("reflect", "kinds.baml"),
+    builtin!("reflect", "ns_class/class.baml"),
+    builtin!("reflect", "ns_enum/enum.baml"),
+    builtin!("reflect", "ns_interface/interface.baml"),
+    builtin!("reflect", "ns_function/function.baml"),
+    builtin!("reflect", "ns_errors/errors.baml"),
+    // --- trace package ---
+    builtin!("trace", "trace.baml"),
     // --- testing package ---
     builtin!("testing", "types.baml"),
     builtin!("testing", "registry.baml"),
@@ -153,26 +209,66 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("ai", "ns_content/content.baml"),
     builtin!("ai", "ns_events/events.baml"),
     builtin!("ai", "journal.baml"),
+    // Render-context surface (`ai.Context`, `ai.Role`, `ai.OutputFormat`,
+    // `ai.ContextClient`) — the `ctx` object LLM prompt bodies touch.
+    builtin!("ai", "context.baml"),
     builtin!("ai", "spec.baml"),
     builtin!("ai", "ns_tools/tools.baml"),
     builtin!("ai", "turn.baml"),
+    builtin!("ai", "timeouts.baml"),
     builtin!("ai", "ns_wire/wire.baml"),
     builtin!("ai", "ns_clients/clients.baml"),
     builtin!("ai", "runner.baml"),
     builtin!("ai", "ns_stream/stream.baml"),
     builtin!("ai", "ns_errors/errors.baml"),
     builtin!("ai", "ns_internal/helpers.baml"),
+    // Provider auth sys-ops (`ai.internal._gcp_*` / `ai.internal._aws_*`),
+    // implemented in `crates/sys_auth`.
+    builtin!("ai", "ns_internal/auth.baml"),
+    // `ai.internal` is where the package's PRIVATE free functions live, so that
+    // `baml describe ai` / `ai.wire` / `ai.errors` / `ai.clients` list only the
+    // public surface. Each file backs the like-named public namespace.
+    builtin!("ai", "ns_internal/media_output.baml"),
+    builtin!("ai", "ns_internal/media_resolve.baml"),
+    builtin!("ai", "ns_internal/wire.baml"),
+    builtin!("ai", "ns_internal/clients.baml"),
+    builtin!("ai", "ns_internal/http_errors.baml"),
+    // Prompt-rendering plumbing shared by `ai.*` and the `prompt` tag desugar;
+    // lives here; the render-context classes sit in ai/context.baml.
+    builtin!("ai", "ns_internal/prompt.baml"),
     // --- provider client packages ---
+    builtin!("openai", "decisions.baml"),
+    builtin!("openai", "ns_internal/ns_decisions/decisions.baml"),
     builtin!("openai", "responses.baml"),
     builtin!("openai", "ns_internal/responses.baml"),
+    builtin!("openai", "chat.baml"),
+    builtin!("openai", "generic.baml"),
+    builtin!("openai", "azure.baml"),
+    builtin!("openai", "ollama.baml"),
+    builtin!("openai", "openrouter.baml"),
+    builtin!("openai", "images.baml"),
+    builtin!("openai", "ns_internal/chat.baml"),
+    builtin!("openai", "ns_internal/images.baml"),
     builtin!("anthropic", "messages.baml"),
+    builtin!("typesafeai", "client.baml"),
+    builtin!("typesafeai", "ns_internal/jev.baml"),
     builtin!("anthropic", "ns_internal/messages.baml"),
     builtin!("google", "gemini.baml"),
+    builtin!("google", "vertex.baml"),
     builtin!("google", "ns_internal/gemini.baml"),
+    builtin!("google", "ns_internal/vertex.baml"),
+    builtin!("google", "ns_internal/auth.baml"),
+    builtin!("aws", "bedrock.baml"),
+    builtin!("aws", "ns_internal/bedrock.baml"),
+    builtin!("aws", "ns_internal/auth.baml"),
+    builtin!("vercel", "images.baml"),
+    builtin!("vercel", "ns_internal/images.baml"),
     builtin!("claude_code", "cli.baml"),
     builtin!("claude_code", "ns_internal/cli.baml"),
+    builtin!("claude_code", "ns_internal/content.baml"),
     // ai.mcp: MCP servers as ordinary ai tools (part of the ai package).
     builtin!("ai", "ns_mcp/mcp.baml"),
+    builtin!("ai", "ns_internal/mcp.baml"),
 ];
 
 /// The distinct standard-library / builtin package names, derived from the
@@ -203,7 +299,106 @@ pub fn stdlib_package_names() -> &'static [&'static str] {
     })
 }
 
-mod adt;
-mod media;
-pub use adt::*;
-pub use media::{MediaContent, MediaValue};
+/// Every name a dependency edge may not use, in stable first-appearance
+/// order: the builtin packages (their names are language-fixed edges every
+/// package already has), the two source-level qualifiers `root` (the
+/// package's own root namespace) and `env` (environment variables), and, for
+/// now, [`RESERVED_USER_EDGE_UNTIL_WIRE_CARRIES_IDENTITY`].
+///
+/// This is the single source of truth shared by the compiler's edge
+/// validation and runtime reflection's mount-alias check, so both reject
+/// exactly the same names.
+pub fn reserved_edge_names() -> &'static [&'static str] {
+    static NAMES: std::sync::OnceLock<Vec<&'static str>> = std::sync::OnceLock::new();
+    NAMES.get_or_init(|| {
+        let mut names = stdlib_package_names().to_vec();
+        names.extend([
+            "root",
+            "env",
+            RESERVED_USER_EDGE_UNTIL_WIRE_CARRIES_IDENTITY,
+        ]);
+        names
+    })
+}
+
+/// `user`, reserved as an edge name ONLY to paper over a runtime limitation,
+/// and to be released the moment that limitation is gone.
+///
+/// The name has no semantics in the language: it is the display default for a
+/// package that declares no name, and nothing may branch on it. The runtime is
+/// the problem. The wire still carries a package's identity as its *spelling*,
+/// and the codec that reads a spelling back maps the literal string `user`
+/// onto "this artifact's own package". So an edge named `user` would encode a
+/// dependency's declarations as the emitting package's own, fusing two
+/// identities into one. Nothing catches it: the spelling really is unique
+/// within that world, so it is not a collision, and the fusion only shows up
+/// later as a type from the wrong package.
+///
+/// Reserving the name makes that unrepresentable in the meantime. The moment
+/// the wire addresses a package by identity rather than by name, this
+/// reservation is dead weight and both it and the codec's `user` carve-out
+/// must go. The test below fails loudly if the carve-out disappears first.
+pub const RESERVED_USER_EDGE_UNTIL_WIRE_CARRIES_IDENTITY: &str = "user";
+
+#[cfg(test)]
+mod package_inventory_tests {
+    use super::*;
+
+    #[test]
+    fn manifests_match_registered_packages() {
+        let mut packages = stdlib_package_names().to_vec();
+        let mut manifests: Vec<_> = MANIFESTS.iter().map(|manifest| manifest.package).collect();
+        packages.sort_unstable();
+        manifests.sort_unstable();
+        assert_eq!(manifests, packages);
+    }
+
+    #[test]
+    fn developer_docs_cover_every_stdlib_package() {
+        #[derive(serde::Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct DocsPackages {
+            packages: Vec<String>,
+        }
+
+        let mut docs: DocsPackages = serde_yaml::from_str(include_str!(
+            "../../../../typescript2/app-developer-docs/content-data/reference/stdlib-packages.yaml"
+        ))
+        .expect("valid developer docs package inventory");
+        let mut packages = stdlib_package_names().to_vec();
+        docs.packages.sort_unstable();
+        packages.sort_unstable();
+        assert_eq!(
+            docs.packages, packages,
+            "update the developer docs package inventory when builtin packages change"
+        );
+    }
+}
+
+#[cfg(test)]
+mod reserved_edge_name_tests {
+    use super::*;
+
+    /// The `user` reservation exists ONLY because the wire codec still maps
+    /// that spelling onto the artifact's own package. When the codec stops
+    /// doing that, this test fails, and the right response is to delete the
+    /// reservation rather than to update the test: it is not a language rule
+    /// and must not outlive its cause.
+    #[test]
+    fn user_is_reserved_only_while_the_wire_codec_claims_that_spelling() {
+        assert!(
+            reserved_edge_names().contains(&RESERVED_USER_EDGE_UNTIL_WIRE_CARRIES_IDENTITY),
+            "the edge name is unreserved while the wire codec still claims the spelling"
+        );
+        assert_eq!(
+            baml_type::Package::from_name(baml_type::Name::new(
+                RESERVED_USER_EDGE_UNTIL_WIRE_CARRIES_IDENTITY
+            )),
+            baml_type::Package::Local,
+            "the wire codec no longer fuses this spelling into the artifact's own \
+             package, so the reservation is dead weight: delete \
+             RESERVED_USER_EDGE_UNTIL_WIRE_CARRIES_IDENTITY and drop it from \
+             reserved_edge_names"
+        );
+    }
+}

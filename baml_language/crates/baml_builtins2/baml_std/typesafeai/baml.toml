@@ -1,0 +1,8 @@
+[package]
+name = "typesafeai"
+prelude = true
+
+[dependencies]
+baml = { path = "../baml" }
+ai = { path = "../ai" }
+reflect = { path = "../reflect" }

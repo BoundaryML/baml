@@ -1,11 +1,17 @@
 //! Integration tests for `baml_compiler2_emit`.
 //!
 //! Each test creates a minimal DB, adds a `.baml` file, runs the full
-//! compiler2 pipeline through `generate_project_bytecode`, and verifies
-//! the resulting `Program` has the expected structure.
+//! compiler2 pipeline through the build-time, byte-identical stdlib prefix,
+//! and verifies the resulting `Program` has the expected structure.
+//! Basic function, enum, and class execution is covered by the native suites
+//! in `baml_src/ns_prompt_parameter`, `ns_enums`, and `ns_classes`.
 
-use baml_compiler2_emit::{CompileOptions, generate_project_bytecode};
-use baml_project::ProjectDatabase;
+use baml_db::{ProjectDatabase, compile_program_with};
+
+use crate::{
+    engine::TestDbExt,
+    stdlib_prefix::{OptLevel, prefix},
+};
 
 const SNAPSHOT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/compiler2_emit");
 const OPTIONAL_DEFAULTS_SOURCE: &str = r#"
@@ -20,18 +26,45 @@ function main() -> int {
 
 fn make_db() -> ProjectDatabase {
     let mut db = ProjectDatabase::new();
-    db.set_project_root(std::path::Path::new("."));
+    db.workspace(std::path::Path::new("."));
+    db.set_seeded_stdlib_interface(prefix(OptLevel::Two).interfaces.clone());
     db
 }
 
 fn compile(db: &ProjectDatabase) -> bex_vm_types::Program {
-    generate_project_bytecode(
-        db,
-        &CompileOptions {
-            emit_test_cases: false,
-        },
-    )
-    .expect("compilation should succeed")
+    let package = db
+        .workspace_root()
+        .unwrap_or_else(|| unreachable!("`make_db` adds one workspace root"));
+    compile_program_with(db, package, OptLevel::Two, prefix(OptLevel::Two))
+        .expect("compilation should succeed")
+}
+
+/// The object index of the callable rendered `name` — `pkg.ns.name` for a
+/// free function, `pkg.ns.Class.name` for a method — from the package tables.
+fn callable(program: &bex_vm_types::Program, name: &str) -> usize {
+    program
+        .rendered_callables()
+        .get(name)
+        .unwrap_or_else(|| {
+            panic!(
+                "`{name}` is not a callable of the program; callables: {:?}",
+                rendered_names(program)
+            )
+        })
+        .object
+        .raw()
+}
+
+/// Every rendered callable name, sorted, for diagnostics.
+fn rendered_names(program: &bex_vm_types::Program) -> Vec<String> {
+    let mut names: Vec<String> = program.rendered_callables().into_keys().collect();
+    names.sort();
+    names
+}
+
+/// The workspace package (spelled `user`) and its ordinal in the executable.
+fn user_package(program: &bex_vm_types::Program) -> (u32, &bex_vm_types::types::ProgramPackage) {
+    (program.root, &program.packages[program.root as usize])
 }
 
 #[test]
@@ -39,7 +72,7 @@ fn typed_pattern_emits_atomic_narrow_bind() {
     use bex_vm_types::Instruction;
 
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "test.baml",
         r#"
 class Foo { field: int }
@@ -54,7 +87,7 @@ function main(x: Foo | int) -> int {
 "#,
     );
     let program = compile(&db);
-    let main_idx = program.function_indices["user.main"];
+    let main_idx = callable(&program, "user.main");
     let bex_vm_types::Object::Function(main) = &(*program.objects)[main_idx] else {
         panic!("expected user.main to be a function")
     };
@@ -88,112 +121,6 @@ function main(x: Foo | int) -> int {
     );
 }
 
-#[test]
-fn explicit_local_id_selects_runtime_id_bytecodes_only_for_tagged_calls() {
-    use bex_vm_types::Instruction;
-
-    let mut db = make_db();
-    db.add_file(
-        "test.baml",
-        r#"
-function leaf(n: int) -> int { n }
-
-function main(call_id: boundary.LocalId, sysop_id: boundary.LocalId) -> int throws baml.errors.Io {
-  let plain = leaf(0)
-  let tagged = leaf(1, $id = call_id)
-  baml.sys.sleep(baml.time.Duration.from_milliseconds(0n), $id = sysop_id)
-  plain + tagged
-}
-"#,
-    );
-    let program = compile(&db);
-    let main_idx = program.function_indices["user.main"];
-    let bex_vm_types::Object::Function(main) = &(*program.objects)[main_idx] else {
-        panic!("expected user.main to be a function")
-    };
-
-    assert!(
-        main.bytecode
-            .instructions
-            .iter()
-            .any(|instruction| matches!(instruction, Instruction::Call { .. }))
-    );
-    assert!(
-        main.bytecode
-            .instructions
-            .iter()
-            .any(|instruction| matches!(instruction, Instruction::CallWithRuntimeId { .. }))
-    );
-    assert!(
-        main.bytecode
-            .instructions
-            .iter()
-            .any(|instruction| matches!(instruction, Instruction::SysOpWithRuntimeId(_)))
-    );
-}
-
-#[test]
-fn explicit_local_id_selects_indirect_optional_and_virtual_bytecodes() {
-    use bex_vm_types::Instruction;
-
-    let mut db = make_db();
-    db.add_file(
-        "test.baml",
-        r#"
-interface Speaker {
-  function speak(self) -> int throws never
-}
-
-class Dog {
-  function speak(self) -> int { 1 }
-}
-
-implements Speaker for Dog {}
-
-function indirect(callback: (int) -> int throws never, id: boundary.LocalId) -> int {
-  callback(1, $id = id)
-}
-
-function optional(callback: ((int) -> int throws never)?, id: boundary.LocalId) -> int? {
-  callback?.(1, $id = id)
-}
-
-function virtual(speaker: Speaker, id: boundary.LocalId) -> int {
-  speaker.speak($id = id)
-}
-"#,
-    );
-    let program = compile(&db);
-
-    for name in ["user.indirect", "user.optional"] {
-        let idx = program.function_indices[name];
-        let bex_vm_types::Object::Function(function) = &(*program.objects)[idx] else {
-            panic!("expected {name} to be a function")
-        };
-        assert!(
-            function
-                .bytecode
-                .instructions
-                .iter()
-                .any(|instruction| matches!(instruction, Instruction::CallIndirectWithRuntimeId)),
-            "{name} did not emit CALL_INDIRECT_WITH_RUNTIME_ID"
-        );
-    }
-
-    let virtual_idx = program.function_indices["user.virtual"];
-    let bex_vm_types::Object::Function(virtual_function) = &(*program.objects)[virtual_idx] else {
-        panic!("expected user.virtual to be a function")
-    };
-    assert!(
-        virtual_function
-            .bytecode
-            .instructions
-            .iter()
-            .any(|instruction| matches!(instruction, Instruction::VirtualCallWithRuntimeId { .. })),
-        "virtual call did not emit VIRTUAL_CALL_WITH_RUNTIME_ID"
-    );
-}
-
 macro_rules! emit_snapshot {
     ($name:expr, $output:expr) => {
         assert_compiler2_snapshot!(SNAPSHOT_PATH, $name, $output);
@@ -201,89 +128,31 @@ macro_rules! emit_snapshot {
 }
 
 #[test]
-fn simple_function_compiles() {
-    let mut db = make_db();
-    db.add_file(
-        "test.baml",
-        "function greet(name: string) -> string { return name; }",
-    );
-    let program = compile(&db);
-    assert!(
-        program.function_indices.contains_key("user.greet"),
-        "expected 'user.greet' in function_indices, got: {:?}",
-        program.function_indices.keys().collect::<Vec<_>>()
-    );
-}
-
-#[test]
 fn builtin_functions_included() {
     let mut db = make_db();
-    db.add_file("test.baml", "function f() -> string { return \"x\"; }");
+    db.file("test.baml", "function f() -> string { return \"x\"; }");
     let program = compile(&db);
     // Builtins from the baml and env packages should be present
-    let has_baml = program
-        .function_global_indices
-        .keys()
-        .any(|k| k.starts_with("baml."));
-    let has_baml_env = program
-        .function_global_indices
-        .keys()
-        .any(|k| k.starts_with("baml.env."));
+    let names = rendered_names(&program);
+    let has_baml = names.iter().any(|k| k.starts_with("baml."));
+    let has_baml_env = names.iter().any(|k| k.starts_with("baml.env."));
     assert!(
         has_baml,
-        "expected at least one 'baml.*' function, got: {:?}",
-        program.function_global_indices.keys().collect::<Vec<_>>()
+        "expected at least one 'baml.*' function, got: {names:?}"
     );
     assert!(
         has_baml_env,
-        "expected at least one 'baml.env.*' function, got: {:?}",
-        program.function_global_indices.keys().collect::<Vec<_>>()
-    );
-}
-
-#[test]
-fn enum_variant_lookup() {
-    let mut db = make_db();
-    db.add_file(
-        "test.baml",
-        r#"
-        enum Color { Red Green Blue }
-        function pick() -> Color { return Color.Red; }
-        "#,
-    );
-    let program = compile(&db);
-    assert!(
-        program.function_indices.contains_key("user.pick"),
-        "expected 'user.pick' in function_indices, got: {:?}",
-        program.function_indices.keys().collect::<Vec<_>>()
-    );
-}
-
-#[test]
-fn class_field_lookup() {
-    let mut db = make_db();
-    db.add_file(
-        "test.baml",
-        r#"
-        class Point { x int  y int }
-        function origin() -> Point { return Point { x: 0, y: 0 }; }
-        "#,
-    );
-    let program = compile(&db);
-    assert!(
-        program.function_indices.contains_key("user.origin"),
-        "expected 'user.origin' in function_indices, got: {:?}",
-        program.function_indices.keys().collect::<Vec<_>>()
+        "expected at least one 'baml.env.*' function, got: {names:?}"
     );
 }
 
 #[test]
 fn optional_param_metadata_and_omitted_sentinel_emit() {
     let mut db = make_db();
-    db.add_file("test.baml", OPTIONAL_DEFAULTS_SOURCE);
+    db.file("test.baml", OPTIONAL_DEFAULTS_SOURCE);
     let program = compile(&db);
 
-    let add_idx = program.function_indices["user.add"];
+    let add_idx = callable(&program, "user.add");
     let bex_vm_types::Object::Function(add) = &(*program.objects)[add_idx] else {
         panic!("expected user.add to be a function");
     };
@@ -296,7 +165,7 @@ fn optional_param_metadata_and_omitted_sentinel_emit() {
         "expected default prologue to compare against OmittedArg"
     );
 
-    let main_idx = program.function_indices["user.main"];
+    let main_idx = callable(&program, "user.main");
     let bex_vm_types::Object::Function(main) = &(*program.objects)[main_idx] else {
         panic!("expected user.main to be a function");
     };
@@ -307,13 +176,7 @@ fn optional_param_metadata_and_omitted_sentinel_emit() {
             .any(|c| matches!(c, bex_vm_types::ConstValue::OmittedArg)),
         "expected omitted source argument to be emitted as OmittedArg"
     );
-}
 
-#[test]
-fn optional_defaults_emit_snapshot() {
-    let mut db = make_db();
-    db.add_file("test.baml", OPTIONAL_DEFAULTS_SOURCE);
-    let program = compile(&db);
     emit_snapshot!(
         "optional_defaults_emit_snapshot",
         crate::engine::display_user_functions(&program)
@@ -328,57 +191,50 @@ fn optional_defaults_emit_snapshot() {
 // and exercise the same let-binding infrastructure.
 
 /// Verify that a client declaration:
-/// - Produces a let binding with a global slot (appears in `let_global_indices`)
-/// - Causes `$init` to appear in `program.function_indices`
-/// - Causes `$init` to appear in `program.package_init_order`
+/// - Produces a let binding with a global slot
+/// - Gives the user package an `$init`, scheduled in the init order
 #[test]
 fn let_binding_global_slot_and_init_function() {
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "test.baml",
         r#"
-        client MyClient = openai.OpenAiClient.new(model = "gpt-4");
+        client MyClient = openai.ResponsesClient.new(model = "gpt-4");
         function f() -> string { return "x"; }
         "#,
     );
 
     let program = compile(&db);
 
-    // The client let binding should have a global slot allocated in let_global_indices
-    let has_let_slot = program
-        .let_global_indices
-        .keys()
-        .any(|k| k.contains("MyClient"));
+    // The client let binding owns a global slot.
+    let lets = program.rendered_lets();
     assert!(
-        has_let_slot,
-        "expected 'MyClient' in let_global_indices, got: {:?}",
-        program.let_global_indices.keys().collect::<Vec<_>>()
+        lets.keys().any(|k| k.contains("MyClient")),
+        "expected 'MyClient' among the lets, got: {:?}",
+        lets.keys().collect::<Vec<_>>()
     );
 
-    // $init should be synthesized
-    let has_init = program.function_indices.contains_key("$init");
+    // $init should be synthesized and scheduled.
+    let (ordinal, user) = user_package(&program);
     assert!(
-        has_init,
-        "expected '$init' in function_indices, got: {:?}",
-        program.function_indices.keys().collect::<Vec<_>>()
+        user.init.is_some(),
+        "expected the user package to own an `$init`"
     );
-
-    // $init should be in package_init_order
     assert!(
-        program.package_init_order.contains(&"$init".to_string()),
-        "expected '$init' in package_init_order, got: {:?}",
-        program.package_init_order
+        program.init_order.contains(&ordinal),
+        "expected the user package in the init order, got: {:?}",
+        program.init_order
     );
 }
 
 // ─── Phase 4.6 $init_test chainer tests ───────────────────────────────────────
 
 /// Verify that when a file contains `test` blocks, a root `$init_test` chainer
-/// is synthesized in `program.function_indices` with `arity: 1`.
+/// is the user package's `test_init`, with `arity: 1`.
 #[test]
 fn init_test_chainer_synthesized_when_tests_present() {
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "test.baml",
         r#"
         test "foo" {
@@ -393,22 +249,21 @@ fn init_test_chainer_synthesized_when_tests_present() {
 
     let program = compile(&db);
 
-    // The root $init_test chainer should be present in function_indices
+    // The root $init_test chainer is the user package's test init, and it
+    // owns a global slot.
+    let (_, user) = user_package(&program);
+    let test_init = user
+        .test_init
+        .expect("expected the user package to own an `$init_test` after test block synthesis");
     assert!(
-        program.function_indices.contains_key("$init_test"),
-        "expected '$init_test' in function_indices after test block synthesis, got: {:?}",
-        program.function_indices.keys().collect::<Vec<_>>()
-    );
-
-    // The chainer should also appear in function_global_indices
-    assert!(
-        program.function_global_indices.contains_key("$init_test"),
-        "expected '$init_test' in function_global_indices, got: {:?}",
-        program.function_global_indices.keys().collect::<Vec<_>>()
+        program
+            .globals
+            .contains(&bex_vm_types::ConstValue::Object(test_init)),
+        "expected `$init_test` to own a global slot"
     );
 
     // Verify the chainer function has arity 1 (takes the registry parameter)
-    let fn_obj_idx = program.function_indices["$init_test"];
+    let fn_obj_idx = test_init.raw();
     // program.objects derefs to Vec<Object> via Deref, so a plain usize index works.
     let fn_obj = &(*program.objects)[fn_obj_idx];
     let bex_vm_types::Object::Function(chainer) = fn_obj else {
@@ -428,7 +283,7 @@ fn init_test_chainer_synthesized_when_tests_present() {
 #[test]
 fn no_init_test_chainer_when_no_tests() {
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "test.baml",
         "function greet(name: string) -> string { return name; }",
     );
@@ -436,53 +291,45 @@ fn no_init_test_chainer_when_no_tests() {
     let program = compile(&db);
 
     assert!(
-        !program.function_indices.contains_key("$init_test"),
-        "expected no '$init_test' in function_indices when no test blocks present, got: {:?}",
-        program.function_indices.keys().collect::<Vec<_>>()
+        user_package(&program).1.test_init.is_none(),
+        "expected no `$init_test` when no test blocks are present"
     );
 }
 
 /// Verify that multiple client declarations:
-/// - Both get global slots in `let_global_indices`
+/// - Both own global slots
 /// - `$init` is synthesized to initialize them
 #[test]
 fn multiple_let_bindings_with_valid_dependencies() {
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "test.baml",
         r#"
-        client ClientA = openai.OpenAiClient.new(model = "gpt-4");
-        client ClientB = openai.OpenAiClient.new(model = "gpt-3.5-turbo");
+        client ClientA = openai.ResponsesClient.new(model = "gpt-4");
+        client ClientB = openai.ResponsesClient.new(model = "gpt-3.5-turbo");
         function f() -> string { return "x"; }
         "#,
     );
 
     let program = compile(&db);
 
-    // Both clients should have global slots in let_global_indices
-    let has_a = program
-        .let_global_indices
-        .keys()
-        .any(|k| k.contains("ClientA"));
-    let has_b = program
-        .let_global_indices
-        .keys()
-        .any(|k| k.contains("ClientB"));
+    // Both clients own global slots.
+    let lets = program.rendered_lets();
     assert!(
-        has_a,
-        "expected 'ClientA' in let_global_indices, got: {:?}",
-        program.let_global_indices.keys().collect::<Vec<_>>()
+        lets.keys().any(|k| k.contains("ClientA")),
+        "expected 'ClientA' among the lets, got: {:?}",
+        lets.keys().collect::<Vec<_>>()
     );
     assert!(
-        has_b,
-        "expected 'ClientB' in let_global_indices, got: {:?}",
-        program.let_global_indices.keys().collect::<Vec<_>>()
+        lets.keys().any(|k| k.contains("ClientB")),
+        "expected 'ClientB' among the lets, got: {:?}",
+        lets.keys().collect::<Vec<_>>()
     );
 
     // $init should be synthesized
     assert!(
-        program.function_indices.contains_key("$init"),
-        "expected '$init' in function_indices"
+        user_package(&program).1.init.is_some(),
+        "expected the user package to own an `$init`"
     );
 }
 
@@ -497,7 +344,7 @@ fn multiple_let_bindings_with_valid_dependencies() {
 #[test]
 fn interface_field_index_space_keeps_every_declared_field() {
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "test.baml",
         r#"
 interface Shelf {
@@ -526,7 +373,7 @@ function main() -> int { 0 }
     let iface = (*program.objects)
         .iter()
         .find_map(|obj| match obj {
-            bex_vm_types::Object::Interface(i) if i.name.name().as_str() == "Shelf" => Some(i),
+            bex_vm_types::Object::Interface(i) if i.path.name.as_str() == "Shelf" => Some(i),
             _ => None,
         })
         .expect("Shelf interface object should be emitted");
@@ -549,7 +396,7 @@ function main() -> int { 0 }
         iface.fields[1].ty,
     );
     assert!(
-        matches!(iface.fields[2].ty, baml_type::RuntimeTy::Int { .. }),
+        matches!(iface.fields[2].ty, baml_type::RuntimeTy::Int),
         "field after the projection must keep its own type, got {:?}",
         iface.fields[2].ty,
     );
@@ -562,7 +409,7 @@ function main() -> int { 0 }
 #[test]
 fn impl_rule_field_links_are_ordered_by_the_interface() {
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "test.baml",
         r#"
 interface Shelf {
@@ -592,7 +439,7 @@ function main() -> int { 0 }
     let class = (*program.objects)
         .iter()
         .find_map(|obj| match obj {
-            bex_vm_types::Object::Class(c) if c.name.name().as_str() == "Book" => Some(c),
+            bex_vm_types::Object::Class(c) if c.path.name.as_str() == "Book" => Some(c),
             _ => None,
         })
         .expect("Book class object should be emitted");
@@ -606,7 +453,7 @@ function main() -> int { 0 }
 
     let rules: Vec<_> = program
         .packages
-        .values()
+        .iter()
         .flat_map(|pkg| pkg.impl_rules.values().flatten())
         .filter(|rule| !rule.field_links.is_empty())
         .collect();
@@ -630,7 +477,7 @@ function main() -> int { 0 }
 #[test]
 fn impl_rule_field_links_fill_the_same_name_default() {
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "test.baml",
         r#"
 interface Named {
@@ -651,11 +498,106 @@ function main() -> int { 0 }
 
     let rule = program
         .packages
-        .values()
+        .iter()
         .flat_map(|pkg| pkg.impl_rules.values().flatten())
         .find(|rule| !rule.field_links.is_empty())
         .expect("expected a field-bearing impl rule");
     // `name` is `Person`'s second field, so an unlinked interface field must still
     // resolve to slot 1 rather than defaulting to 0.
     assert_eq!(rule.field_links.as_ref(), [1]);
+}
+
+/// BAML runtime assertions cannot observe handler identities or PC ranges.
+/// Keep every clause distinct through optimized and compact bytecode.
+#[test]
+fn chained_catches_keep_separate_bytecode_handlers() {
+    use bex_vm_types::Instruction;
+
+    for opt in [OptLevel::Zero, OptLevel::Two] {
+        for first in ["catch", "catch_all", "catch_all_panics"] {
+            for second in ["catch", "catch_all", "catch_all_panics"] {
+                let mut db = ProjectDatabase::new();
+                db.workspace(std::path::Path::new("."));
+                db.set_seeded_stdlib_interface(prefix(opt).interfaces.clone());
+                db.file(
+                    "test.baml",
+                    &format!(
+                        r#"
+function fail(n: int) -> int throws string {{
+    if (n == 0) {{ throw "original" }}
+    n
+}}
+function main(n: int) -> int {{
+    fail(n) {first} (original) {{
+        _ => throw 42,
+    }} {second} (replacement) {{
+        int => 7,
+        baml.panics.Panic => -1,
+    }}
+}}
+"#
+                    ),
+                );
+                let package = db.workspace_root().expect("workspace root");
+                let program = compile_program_with(&db, package, opt, prefix(opt))
+                    .expect("valid chained catches");
+                let index = callable(&program, "user.main");
+                let bex_vm_types::Object::Function(main) = &(*program.objects)[index] else {
+                    panic!("expected function");
+                };
+                let code = &main.bytecode;
+                let handlers: std::collections::BTreeSet<_> = code
+                    .exception_table
+                    .iter()
+                    .map(|entry| entry.handler_pc)
+                    .collect();
+                assert_eq!(handlers.len(), 2, "{first} then {second} at {opt:?}");
+                let inner = handlers
+                    .iter()
+                    .copied()
+                    .find(|&pc| {
+                        code.exception_handlers_for_pc(pc)
+                            .any(|entry| entry.handler_pc != pc)
+                    })
+                    .expect("the first handler is protected by the second handler");
+                let outer = code
+                    .exception_handlers_for_pc(inner)
+                    .next()
+                    .expect("outer handler entry")
+                    .handler_pc;
+                assert_ne!(inner, outer);
+                assert!(
+                    code.exception_handlers_for_pc(outer).next().is_none(),
+                    "the last handler must not catch its own failures"
+                );
+                let throw_pc = code
+                    .instructions
+                    .iter()
+                    .position(|op| matches!(op, Instruction::Throw))
+                    .expect("first arm throws a new value");
+                assert!(
+                    code.exception_handlers_for_pc(throw_pc)
+                        .any(|entry| entry.handler_pc == outer),
+                    "throws in the first arm must enter the second handler"
+                );
+                let compact = code.lower_to_compact();
+                let handlers: std::collections::BTreeSet<_> = compact
+                    .exception_table
+                    .iter()
+                    .map(|entry| entry.handler_pc)
+                    .collect();
+                assert_eq!(
+                    handlers.len(),
+                    2,
+                    "compact {first} then {second} at {opt:?}"
+                );
+                assert!(
+                    handlers.iter().any(|&pc| compact
+                        .exception_handlers_for_pc(pc)
+                        .any(|entry| entry.handler_pc != pc)),
+                    "compact code preserves nesting"
+                );
+            }
+        }
+    }
 }

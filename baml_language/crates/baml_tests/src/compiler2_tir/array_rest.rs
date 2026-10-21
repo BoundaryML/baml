@@ -1,5 +1,10 @@
 //! Array rest-pattern binding tests (B-531).
 //!
+//! Shared positive runtime cases live in
+//! `baml_src/ns_array_rest_binding/array_rest_binding.baml`; positive compiler
+//! cases live in `baml_src/ns_compiler/ns_positive_compilation`. Keep inferred
+//! types and negative diagnostic assertions here.
+//!
 //! Semantics under test (the "Rust-parity subset"):
 //!   - `..` may carry a binding: `..let r`, `.._`, and pure bind chains
 //!     (`..let r: let s`), optionally ascribed with a list type
@@ -37,6 +42,7 @@
 //! by the subset check.
 
 use super::support::{make_db, render_tir};
+use crate::engine::TestDbExt;
 
 /// Stable prefix of the subset-rejection diagnostic. The full message is
 /// "rest pattern `..` can only carry a binding; write `..let name` or
@@ -53,7 +59,7 @@ const OLD_GATE: &str = "rest pattern `..` cannot carry a sub-pattern";
 #[test]
 fn rest_binding_types_slice_as_element_list() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(xs: int[]) -> int {
@@ -76,78 +82,6 @@ function f(xs: int[]) -> int {
     );
 }
 
-#[test]
-fn rest_binding_between_prefix_and_suffix() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-function f(xs: int[]) -> int {
-    match (xs) {
-        [let a, ..let mid, let z] => mid.length() + a + z,
-        _ => 0
-    }
-}
-"#,
-    );
-    let output = render_tir(&db, file);
-
-    assert!(
-        !output.contains(REST_BINDING_ONLY) && !output.contains(OLD_GATE),
-        "rest binding between prefix and suffix should be allowed, got:\n{output}"
-    );
-    assert!(
-        !output.contains("type mismatch"),
-        "prefix/suffix elements are int, mid is int[], got:\n{output}"
-    );
-}
-
-#[test]
-fn rest_wildcard_is_allowed() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-function f(xs: int[]) -> int {
-    match (xs) {
-        [let a, .._] => a,
-        _ => 0
-    }
-}
-"#,
-    );
-    let output = render_tir(&db, file);
-
-    assert!(
-        !output.contains(REST_BINDING_ONLY) && !output.contains(OLD_GATE),
-        "`.._` should behave like bare `..`, got:\n{output}"
-    );
-}
-
-#[test]
-fn rest_binding_list_ascription_is_valid() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-function f() -> int {
-    let [..let rest: int[]] = [1, 2]
-    return rest[0]
-}
-"#,
-    );
-    let output = render_tir(&db, file);
-
-    assert!(
-        !output.contains(REST_BINDING_ONLY) && !output.contains(OLD_GATE),
-        "list-ascribed rest binding should be allowed, got:\n{output}"
-    );
-    assert!(
-        !output.contains("type mismatch"),
-        "int[] ascription matches the slice type, got:\n{output}"
-    );
-}
-
 /// A narrowing ascription can never match at runtime: the slice produced by
 /// `Array.slice` carries the scrutinee's element tag (`(int|string)[]` here),
 /// and runtime list type tests compare tags with invariant element positions.
@@ -156,7 +90,7 @@ function f() -> int {
 #[test]
 fn rest_binding_narrowing_ascription_is_rejected() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(xs: (int | string)[]) -> int {
@@ -175,149 +109,15 @@ function f(xs: (int | string)[]) -> int {
     );
 }
 
-#[test]
-fn rest_binding_pure_bind_chain_is_valid() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-function f(xs: int[]) -> int {
-    match (xs) {
-        [..let r: let s] => r[0] + s[0],
-        _ => 0
-    }
-}
-"#,
-    );
-    let output = render_tir(&db, file);
-
-    assert!(
-        !output.contains(REST_BINDING_ONLY) && !output.contains(OLD_GATE),
-        "pure bind chains after `..` should be allowed, got:\n{output}"
-    );
-    assert!(
-        !output.contains("type mismatch") && !output.contains("unresolved name"),
-        "both chain links bind the slice (int[]), got:\n{output}"
-    );
-}
-
-#[test]
-fn rest_binding_union_element_type() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-function f(xs: (int | string)[]) -> int {
-    match (xs) {
-        [..let r] => r.length()
-    }
-}
-"#,
-    );
-    let output = render_tir(&db, file);
-
-    assert!(
-        !output.contains(REST_BINDING_ONLY) && !output.contains(OLD_GATE),
-        "rest binding over a union element type should be allowed, got:\n{output}"
-    );
-    assert!(
-        !output.contains("type mismatch") && !output.contains("non-exhaustive"),
-        "rest-only pattern is irrefutable and well-typed, got:\n{output}"
-    );
-}
-
-#[test]
-fn rest_binding_generic_element_type() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-function f<T>(xs: T[]) -> int {
-    match (xs) {
-        [let first, ..let r] => r.length(),
-        _ => 0
-    }
-}
-"#,
-    );
-    let output = render_tir(&db, file);
-
-    assert!(
-        !output.contains(REST_BINDING_ONLY) && !output.contains(OLD_GATE),
-        "rest binding over a generic element type should be allowed, got:\n{output}"
-    );
-    assert!(
-        !output.contains("type mismatch"),
-        "rest binds T[], got:\n{output}"
-    );
-}
-
-#[test]
-fn rest_binding_evolving_list_scrutinee() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-function f() -> int {
-    let xs = [];
-    xs.push(1);
-    match (xs) {
-        [..let r] => r.length()
-    }
-}
-"#,
-    );
-    let output = render_tir(&db, file);
-
-    assert!(
-        !output.contains(REST_BINDING_ONLY) && !output.contains(OLD_GATE),
-        "rest binding over an evolving list should be allowed, got:\n{output}"
-    );
-    assert!(
-        !output.contains("type mismatch"),
-        "rest binds the settled element list, got:\n{output}"
-    );
-}
-
 // ============================================================================
 // Or-patterns: rest bindings participate in the same-names rule
 // ============================================================================
-
-#[test]
-fn or_pattern_rest_binding_same_names_across_branches() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-class NumberBag {
-    field int[]
-}
-
-function f(v: NumberBag | int[][]) -> int {
-    match (v) {
-        NumberBag { field } | [[..let field]: int[], .._] => field[0],
-        _ => 0
-    }
-}
-"#,
-    );
-    let output = render_tir(&db, file);
-
-    assert!(
-        !output.contains(REST_BINDING_ONLY) && !output.contains(OLD_GATE),
-        "rest binding inside an or-branch should be allowed, got:\n{output}"
-    );
-    assert!(
-        !output.contains("must bind the same names"),
-        "both branches bind `field` (int[]), got:\n{output}"
-    );
-}
 
 /// The same-names rule for or-patterns is a HIR diagnostic, so this test
 /// goes through `collect_diagnostics` rather than the TIR renderer.
 #[test]
 fn or_pattern_rest_binding_missing_in_sibling_is_rejected() {
-    let db = baml_project::testing::setup_test_db(
+    let db = baml_db::testing::setup_test_db(
         r#"
 function f(xs: int[]) -> int {
     match (xs) {
@@ -328,7 +128,7 @@ function f(xs: int[]) -> int {
 function main() -> int { 0 }
 "#,
     );
-    let diags = baml_project::collect_diagnostics(&db);
+    let diags = baml_db::collect_diagnostics(&db);
 
     assert!(
         diags
@@ -344,33 +144,9 @@ function main() -> int { 0 }
 // ============================================================================
 
 #[test]
-fn rest_only_binding_is_irrefutable_in_let() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-function f(xs: int[]) -> int {
-    let [..let r] = xs
-    return r.length()
-}
-"#,
-    );
-    let output = render_tir(&db, file);
-
-    assert!(
-        !output.contains("refutable pattern in"),
-        "`[..let r]` matches every list, got:\n{output}"
-    );
-    assert!(
-        !output.contains(REST_BINDING_ONLY) && !output.contains(OLD_GATE),
-        "rest-only binding should be allowed, got:\n{output}"
-    );
-}
-
-#[test]
 fn rest_binding_with_prefix_is_refutable_in_let() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(xs: int[]) -> int {
@@ -387,32 +163,6 @@ function f(xs: int[]) -> int {
     );
 }
 
-#[test]
-fn match_with_rest_binding_arm_is_exhaustive() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-function f(xs: int[]) -> int {
-    match (xs) {
-        [] => 0,
-        [let x, ..let r] => x
-    }
-}
-"#,
-    );
-    let output = render_tir(&db, file);
-
-    assert!(
-        !output.contains("non-exhaustive"),
-        "[] plus [x, ..r] covers every length, got:\n{output}"
-    );
-    assert!(
-        !output.contains(REST_BINDING_ONLY) && !output.contains(OLD_GATE),
-        "rest binding should be allowed, got:\n{output}"
-    );
-}
-
 // ============================================================================
 // Rejected shapes: targeted diagnostic, no cascades
 // ============================================================================
@@ -420,7 +170,7 @@ function f(xs: int[]) -> int {
 #[test]
 fn rest_bare_type_pattern_is_rejected() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(xs: int[]) -> int {
@@ -446,7 +196,7 @@ function f(xs: int[]) -> int {
 #[test]
 fn rest_list_type_pattern_is_rejected() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(xs: int[]) -> int {
@@ -468,7 +218,7 @@ function f(xs: int[]) -> int {
 #[test]
 fn rest_structural_array_is_rejected() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(xs: int[]) -> int {
@@ -490,7 +240,7 @@ function f(xs: int[]) -> int {
 #[test]
 fn rest_class_destructure_is_rejected() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Box {
@@ -516,7 +266,7 @@ function f(boxes: Box[]) -> int {
 #[test]
 fn rest_or_pattern_is_rejected() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(xs: int[]) -> int {
@@ -538,7 +288,7 @@ function f(xs: int[]) -> int {
 #[test]
 fn rest_bind_chain_with_structural_tail_is_rejected() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(xs: int[]) -> int {
@@ -560,7 +310,7 @@ function f(xs: int[]) -> int {
 #[test]
 fn rest_binding_non_list_ascription_is_type_mismatch() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f() -> int {
@@ -588,7 +338,7 @@ function f() -> int {
 #[test]
 fn nested_bare_rest_is_rejected_once() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(xs: int[]) -> int {
@@ -611,7 +361,7 @@ function f(xs: int[]) -> int {
 #[test]
 fn nested_rest_binding_is_rejected_without_name_cascade() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(xs: int[]) -> int {
@@ -637,7 +387,7 @@ function f(xs: int[]) -> int {
 #[test]
 fn rest_empty_array_is_rejected() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(xs: int[]) -> int {
@@ -659,7 +409,7 @@ function f(xs: int[]) -> int {
 #[test]
 fn rest_nested_array_with_inner_rest_is_rejected() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(xs: int[]) -> int {
@@ -685,7 +435,7 @@ function f(xs: int[]) -> int {
 #[test]
 fn deeply_nested_rest_reports_single_diagnostic() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(xs: int[]) -> int {
@@ -708,7 +458,7 @@ function f(xs: int[]) -> int {
 #[test]
 fn rest_binding_on_non_list_scrutinee_has_no_name_cascade() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f() -> int {

@@ -1,0 +1,44 @@
+---
+title: Classify support tickets
+description: Assign a support category to an incoming message.
+breadcrumbs:
+  - href: /examples
+    label: Examples
+  - label: Classify support tickets
+---
+
+Create a [Canary project](/baml/get-started) first. This example uses OpenAI and requires an `OPENAI_API_KEY`.
+
+## Source
+
+Put this code in `baml_src/main.baml`:
+
+<BamlSnippet id="examples/classify-support-tickets" />
+
+## Call it
+
+From the project root:
+
+```sh
+export OPENAI_API_KEY="your-api-key"
+baml check
+baml run classify_message -- --input "I was charged twice for my order"
+```
+
+The expected category is `Refund`; model responses can vary.
+
+For Node.js, [generate the TypeScript SDK](/baml/bridges/typescript#generate-the-sdk), then call the async export:
+
+```typescript
+import { classify_message_async } from "./baml_sdk/index.js"
+
+export async function classifyTicket(message: string) {
+  return await classify_message_async(message)
+}
+```
+
+## Why this shape
+
+An enum limits the result to the categories you declare. Your application can switch on those values without parsing free-form model text.
+
+Read the [function reference](/baml/language/functions) for syntax details or expand the same pattern in the [structured extraction tutorial](/tutorials/structured-extraction).

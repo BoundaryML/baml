@@ -1,0 +1,748 @@
+//! BEP-066 mounted-package linking capstone: consuming a dependency from source and from its
+//! `PackageInterface` blob must be observationally equivalent.
+//!
+//! The SOURCE path puts the rich `app` fixture and the consumer in one database.
+//! The BLOB path compiles `app` independently into its check artifact (borsh of
+//! `PackageInterface`) and run artifact (its `EmittedPackage`), then mounts the
+//! former in a fresh source-less consumer database and links the latter through
+//! `compile_program_with`, served for the mount.
+//!
+//! The oracle pins four boundaries:
+//!
+//! 1. normalized diagnostic bytes (code, message, and user-source range),
+//! 2. runtime values and caught throws,
+//! 3. the emitted program: a consumer linked against the served dependency
+//!    is byte-identical to one compiled beside its source,
+//! 4. primary-only E0132 attribution for a user impl conflicting with a
+//!    span-less mounted impl.
+//!
+//! Unit import tables do not legitimately diverge: both paths name library
+//! symbols by the same fully-qualified B-693 identities. Raw consumer units and
+//! programs differ only in debug `FileId`s: removing the dependency source shifts
+//! the fresh consumer database's numeric id for `main.baml`. After normalizing
+//! those database-local ids (function span, line table, local-scope spans), every
+//! emitted byte is identical. Source paths/ranges and all executable content are
+//! unchanged.
+
+use baml_base::Name;
+use baml_compiler2_emit::{OptLevel, emit_package};
+use baml_compiler2_hir_ty::package_interface::{ExportedType, WireInterface, export_interface};
+use baml_db::{
+    EmittedPackage, PackageCache, ProjectDatabase, collect_diagnostics, compile_program,
+    compile_program_with, testing::assert_no_diagnostic_errors,
+};
+use baml_tests::engine::{TestDbExt, run_compiled};
+use bex_engine::BexExternalValue;
+use bex_vm_types::{Object, Program};
+use indexmap::IndexMap;
+
+const ROOT: &str = "/mounted-parity";
+const OPT: OptLevel = OptLevel::One;
+
+/// A deliberately broad package surface: requires/default methods, associated
+/// defaults, attrs, generic class/function bounds, enum/alias rows, every impl
+/// shape, a callback-effect impl method, and a throwing function.
+const LIB: &str = r#"
+interface Named {
+    name string
+
+    function label(self) -> string throws never {
+        self.name
+    }
+}
+
+interface Measured requires Named {
+    type Unit = string
+
+    function measure(self) -> int throws never
+
+    function decorated(self) -> string throws never {
+        self.label()
+    }
+}
+
+class Widget {
+    name string @description("public label")
+    value int @alias("score")
+
+    implements Named {}
+
+    implements Measured {
+        function measure(self) -> int throws never {
+            self.value
+        }
+    }
+}
+
+class Box<T extends Named> {
+    value T
+
+    function inner_name(self) -> string throws never {
+        self.value.name
+    }
+}
+
+class Plain {
+    name string
+    value int
+
+    implements Named {}
+}
+
+implement Measured for Plain {
+    function measure(self) -> int throws never {
+        self.value
+    }
+}
+
+enum Status {
+    Active
+    Retired
+}
+
+type Score = int
+
+interface Tagged {
+    function tag(self) -> string throws never
+}
+
+implement<T> Tagged for T {
+    function tag(self) -> string throws never {
+        "any"
+    }
+}
+
+interface Applies {
+    function apply(self, cb: (x: int) -> int throws never) -> int throws unknown
+}
+
+class Runner {
+    base int
+
+    implements Applies {
+        function apply(self, cb: (x: int) -> int) -> int {
+            cb(self.base)
+        }
+    }
+}
+
+class ParseError {
+    message string
+}
+
+function measure_twice<T extends Measured>(value: T) -> int throws never {
+    value.measure() + value.measure()
+}
+
+function tag_of<T extends Tagged>(value: T) -> string throws never {
+    value.tag()
+}
+
+function parse_positive(value: int) -> int throws ParseError {
+    if value < 0 {
+        throw ParseError { message: "negative" }
+    }
+    value
+}
+"#;
+
+fn library_db() -> ProjectDatabase {
+    let mut db = ProjectDatabase::new();
+    db.workspace(std::path::Path::new(ROOT));
+    db.dependency("app");
+    db.file("<builtin>/app/lib.baml", LIB);
+    db
+}
+
+struct LibraryArtifacts {
+    blob: Vec<u8>,
+    interface: WireInterface,
+    /// `app`'s run artifact: what a store serves for its mount.
+    emitted: EmittedPackage,
+}
+
+/// The store the blob path compiles against: it serves `app`'s output —
+/// emitted once in the library database — for the consumer database's
+/// source-less mount of `app`, and nothing else.
+struct ServedLibrary<'a> {
+    /// The consumer database's mount of `app`: the one root the output is
+    /// served for, by identity.
+    root: baml_db::SourceRoot,
+    app: &'a EmittedPackage,
+}
+
+impl PackageCache for ServedLibrary<'_> {
+    fn load(
+        &self,
+        _db: &dyn baml_compiler2_hir::Db,
+        root: baml_db::SourceRoot,
+        _opt: OptLevel,
+    ) -> Option<EmittedPackage> {
+        (root == self.root).then(|| self.app.clone())
+    }
+
+    fn store(
+        &self,
+        _db: &dyn baml_compiler2_hir::Db,
+        _root: baml_db::SourceRoot,
+        _opt: OptLevel,
+        _emitted: &EmittedPackage,
+    ) {
+    }
+}
+
+fn library_artifacts() -> LibraryArtifacts {
+    let db = library_db();
+    assert_no_diagnostic_errors(&db);
+    let app = db.dependency_named("app");
+    let interface = export_interface(&db, app);
+    let blob = baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
+        .expect("serialize app package interface");
+    let round_trip = baml_artifact::decode::<WireInterface>(
+        baml_artifact::ArtifactKind::PackageInterface,
+        &blob,
+    )
+    .expect("deserialize app package interface");
+    assert_eq!(
+        interface, round_trip,
+        "interface blob must round-trip exactly"
+    );
+    let emitted = emit_package(&db, app, OPT).expect("emit the app package");
+    LibraryArtifacts {
+        blob,
+        interface,
+        emitted,
+    }
+}
+
+/// The workspace root the fixture builder added: the package whose program
+/// the test compiles.
+fn package(db: &ProjectDatabase) -> baml_db::SourceRoot {
+    db.workspace_root()
+        .unwrap_or_else(|| unreachable!("the fixture builder adds one workspace root"))
+}
+
+fn source_db(user: &str) -> ProjectDatabase {
+    let mut db = library_db();
+    db.file("main.baml", user);
+    db
+}
+
+fn blob_db(user: &str, blob: Vec<u8>) -> ProjectDatabase {
+    let mut db = ProjectDatabase::new();
+    db.workspace(std::path::Path::new(ROOT));
+    db.mount("app", blob);
+    db.file("main.baml", user);
+    db
+}
+
+fn compile_source(user: &str) -> Program {
+    let db = source_db(user);
+    assert_no_diagnostic_errors(&db);
+    compile_program(&db, package(&db), OPT).expect("source-path compile")
+}
+
+fn compile_blob(user: &str, artifacts: &LibraryArtifacts) -> Program {
+    let db = blob_db(user, artifacts.blob.clone());
+    assert_no_diagnostic_errors(&db);
+    let served = ServedLibrary {
+        root: db.dependency_named("app"),
+        app: &artifacts.emitted,
+    };
+    compile_program_with(&db, package(&db), OPT, &served).expect("blob-path compile and link")
+}
+
+/// A program's bytes with every database-local debug `FileId` normalized:
+/// the two lanes number `main.baml` differently, and nothing else about
+/// the program may differ.
+fn normalized_bytes(mut program: Program) -> Vec<u8> {
+    let normalized = baml_base::FileId::new(0);
+    for object in program.objects.iter_mut() {
+        let Object::Function(function) = object else {
+            continue;
+        };
+        function.span.file_id = normalized;
+        for entry in &mut function.bytecode.line_table {
+            entry.span.file_id = normalized;
+        }
+        for local in &mut function.debug_locals {
+            local.scope_span.file_id = normalized;
+        }
+    }
+    borsh::to_vec(&program).expect("serialize program")
+}
+
+/// The static cache lane's oracle: a consumer compiled against `app`
+/// MOUNTED from its interface and linked against `app`'s SERVED unit is,
+/// byte for byte, the consumer compiled beside `app`'s source — every
+/// import key, slot, operand, and tag the served lane produces is what the
+/// source lane produces.
+#[test]
+fn a_consumer_linked_against_the_served_dependency_is_byte_identical_to_the_source_compile() {
+    let artifacts = library_artifacts();
+    let user = r#"
+function main() -> int throws never {
+    let widget = app.Widget { name: "widget", value: 7 }
+    let boxed = app.Box<app.Widget> { value: widget }
+    let score: app.Score = 3
+    widget.measure() + app.measure_twice(widget) + score + boxed.value.value
+}
+"#;
+    let source = normalized_bytes(compile_source(user));
+    let served = normalized_bytes(compile_blob(user, &artifacts));
+    let first_difference = source
+        .iter()
+        .zip(&served)
+        .position(|(left, right)| left != right)
+        .unwrap_or_else(|| source.len().min(served.len()));
+    assert!(
+        source == served,
+        "programs differ first at byte {first_difference} (source {} bytes, served {} bytes)",
+        source.len(),
+        served.len()
+    );
+}
+
+/// A mounted dependency is in the program through the output a store holds
+/// for it. A store that holds nothing is refused by name — never a package
+/// quietly missing from the link set with the consumer's imports of it left
+/// to fail as unknown edges.
+#[test]
+fn a_mounted_dependency_without_served_output_is_refused_by_name() {
+    let artifacts = library_artifacts();
+    let db = blob_db(WIDGET_CONSUMER, artifacts.blob.clone());
+    assert_no_diagnostic_errors(&db);
+    let error = compile_program_with(&db, package(&db), OPT, &baml_db::NoCache)
+        .expect_err("nothing serves `app`");
+    assert!(
+        matches!(
+            &error,
+            baml_db::CompileProgramError::ServedWithoutOutput { package } if package.as_str() == "app"
+        ),
+        "{error}"
+    );
+}
+
+async fn run(program: Program, entry: &str) -> Result<BexExternalValue, String> {
+    run_compiled(program, entry, IndexMap::new(), false)
+        .await
+        .result
+        .map_err(|error| format!("{error:?}"))
+}
+
+async fn assert_runtime_parity(user: &str, entry: &str, expected: BexExternalValue) {
+    let artifacts = library_artifacts();
+    let source = compile_source(user);
+    let blob = compile_blob(user, &artifacts);
+    let source_result = run(source, entry).await;
+    let blob_result = run(blob, entry).await;
+    assert_eq!(source_result, blob_result, "runtime paths diverged");
+    assert_eq!(source_result, Ok(expected));
+}
+
+#[tokio::test]
+async fn rich_surface_runtime_is_identical() {
+    assert_runtime_parity(
+        r#"
+class Local {
+    name string
+    implements app.Named {}
+}
+
+function status_score(status: app.Status) -> int throws never {
+    match status {
+        app.Status.Active => 1
+        app.Status.Retired => 2
+    }
+}
+
+function main() -> int throws never {
+    let widget = app.Widget { name: "widget", value: 7 }
+    let plain = app.Plain { name: "plain", value: 4 }
+    let boxed = app.Box<app.Widget> { value: widget }
+    let score: app.Score = 3
+    let enum_score = status_score(app.Status.Retired)
+    let local = Local { name: "local" }
+    let tagged = app.tag_of(local)
+    let boxed_score = if boxed.inner_name() == "widget" { 1 } else { 0 }
+    let decorated_score = if widget.decorated() == "widget" { 1 } else { 0 }
+    let tagged_score = if tagged == "any" { 1 } else { 0 }
+    let inherited_default_score = if local.label() == "local" { 1 } else { 0 }
+    widget.measure()
+        + plain.measure()
+        + app.measure_twice(widget)
+        + score
+        + enum_score
+        + boxed_score
+        + decorated_score
+        + tagged_score
+        + inherited_default_score
+}
+"#,
+        "main",
+        BexExternalValue::Int(34),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn existential_default_and_out_of_body_dispatch_are_identical() {
+    assert_runtime_parity(
+        r#"
+function read(value: app.Measured) -> int throws never {
+    value.measure()
+}
+
+function main() -> int throws never {
+    let widget = app.Widget { name: "widget", value: 20 }
+    let plain = app.Plain { name: "plain", value: 22 }
+    read(widget) + read(plain)
+}
+"#,
+        "main",
+        BexExternalValue::Int(42),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn impl_method_callback_effect_metadata_and_frame_are_identical() {
+    assert_runtime_parity(
+        r#"
+function plus_one(value: int) -> int throws never {
+    value + 1
+}
+
+function main() -> int throws never {
+    app.Runner { base: 41 }.apply(plus_one)
+}
+"#,
+        "main",
+        BexExternalValue::Int(42),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn caught_library_throw_is_identical() {
+    assert_runtime_parity(
+        r#"
+function classify(value: int) -> string {
+    let parsed = app.parse_positive(value) catch (error) {
+        let typed: app.ParseError => {
+            return typed.message
+        }
+    }
+    "ok:" + parsed.to_string()
+}
+
+function main() -> string {
+    classify(7) + ":" + classify(0 - 1)
+}
+"#,
+        "main",
+        BexExternalValue::String("ok:7:negative".into()),
+    )
+    .await;
+}
+
+/// A stable byte record deliberately excludes `FileId`: the source database
+/// allocates one extra id for the library file, while the blob database has no
+/// such file. Codes, messages, severity, phase, and user-text ranges are the
+/// user-observable diagnostic contract and must match byte-for-byte.
+fn diagnostic_bytes(db: &ProjectDatabase) -> Vec<u8> {
+    let rows: Vec<String> = collect_diagnostics(db)
+        .into_iter()
+        .filter(|diagnostic| {
+            matches!(
+                diagnostic.severity,
+                baml_compiler_diagnostics::Severity::Error
+            )
+        })
+        .map(|diagnostic| {
+            let range = diagnostic
+                .primary_span()
+                .expect("consumer error has a primary span")
+                .range;
+            format!(
+                "{}\0{:?}\0{:?}\0{}..{}\0{}",
+                diagnostic.code(),
+                diagnostic.severity,
+                diagnostic.phase,
+                u32::from(range.start()),
+                u32::from(range.end()),
+                diagnostic.message
+            )
+        })
+        .collect();
+    rows.join("\n").into_bytes()
+}
+
+#[test]
+fn representative_error_diagnostics_are_byte_identical() {
+    let artifacts = library_artifacts();
+    let cases = [
+        (
+            "wrong arity",
+            r#"
+function main() -> int {
+    app.measure_twice()
+}
+"#,
+        ),
+        (
+            "unsatisfied bound",
+            r#"
+class Rock { value int }
+
+function main() -> int {
+    app.measure_twice(Rock { value: 1 })
+}
+"#,
+        ),
+        (
+            "non-exhaustive enum",
+            r#"
+function inspect(status: app.Status) -> int throws never {
+    match status {
+        app.Status.Active => 1
+    }
+}
+"#,
+        ),
+        (
+            "missing impl member",
+            r#"
+class Broken {
+    name string
+    implements app.Named {}
+    implements app.Measured {}
+}
+"#,
+        ),
+    ];
+
+    for (label, user) in cases {
+        let source = diagnostic_bytes(&source_db(user));
+        let blob = diagnostic_bytes(&blob_db(user, artifacts.blob.clone()));
+        assert!(!source.is_empty(), "{label}: fixture must produce an error");
+        assert_eq!(source, blob, "{label}: source/blob diagnostics diverged");
+    }
+}
+
+#[test]
+fn exported_impl_method_preserves_synthetic_callback_effect_params() {
+    let artifacts = library_artifacts();
+    let runner = artifacts
+        .interface
+        .rows
+        .impls
+        .iter()
+        .find(|implementation| {
+            implementation.interface.name.name().as_str() == "Applies"
+                && matches!(
+                    &implementation.for_ty_pattern,
+                    baml_type::Ty::Class(qtn, _) if qtn.name().as_str() == "Runner"
+                )
+        })
+        .expect("Runner implements Applies row");
+    let apply = runner
+        .methods
+        .iter()
+        .find(|method| method.name.as_str() == "apply")
+        .expect("apply override export");
+    assert_eq!(apply.generic_params.len(), 1);
+    assert!(baml_type::is_synthetic_effect_param(
+        apply.generic_params[0].name()
+    ));
+    assert_eq!(apply.generic_param_bounds, vec![Vec::new()]);
+}
+
+#[test]
+fn user_vs_blob_overlap_is_e0132_primary_only_with_structural_partner() {
+    let artifacts = library_artifacts();
+    let db = blob_db(
+        r#"
+class Mine { value int }
+
+implement app.Tagged for Mine {
+    function tag(self) -> string throws never {
+        "mine"
+    }
+}
+"#,
+        artifacts.blob,
+    );
+    let overlap = collect_diagnostics(&db)
+        .into_iter()
+        .find(|diagnostic| diagnostic.code() == "E0132")
+        .expect("mounted blanket overlap must produce E0132");
+    assert_eq!(
+        overlap.message,
+        "overlapping interface implementations for the same receiver/interface \
+(conflicts with the mounted dependency's `implement app.Tagged for T`)"
+    );
+    assert_eq!(
+        overlap
+            .annotations
+            .iter()
+            .filter(|annotation| annotation.is_primary)
+            .count(),
+        1
+    );
+    assert_eq!(overlap.annotations.len(), 1, "blob side has no source span");
+    assert!(overlap.related_info.is_empty());
+}
+
+/// A user impl for a mounted ALIAS overlaps a user impl for the alias's body
+/// in both lanes: the blob's alias rows are the only place a mounted
+/// package's aliases exist, and an alias coherence cannot expand fails open —
+/// the unifier's fallback verdict is "disjoint".
+#[test]
+fn alias_headed_overlap_is_e0132_in_both_lanes() {
+    const USER: &str = r#"
+interface Marker {
+    function mark(self) -> int throws never
+}
+
+implement Marker for app.Score {
+    function mark(self) -> int throws never {
+        1
+    }
+}
+
+implement Marker for int {
+    function mark(self) -> int throws never {
+        2
+    }
+}
+"#;
+    let codes = |db: &ProjectDatabase| -> Vec<String> {
+        collect_diagnostics(db)
+            .iter()
+            .filter(|diagnostic| diagnostic.severity == baml_compiler_diagnostics::Severity::Error)
+            .map(|diagnostic| format!("{} {}", diagnostic.code(), diagnostic.message))
+            .collect()
+    };
+    let from_source = codes(&source_db(USER));
+    assert_eq!(from_source.len(), 1, "{from_source:?}");
+    assert!(from_source[0].starts_with("E0132 "), "{from_source:?}");
+    let from_blob = codes(&blob_db(USER, library_artifacts().blob));
+    assert_eq!(from_blob, from_source);
+}
+
+/// Two valid, independently checked mounted blobs cannot introduce a new
+/// blob-vs-blob overlap: the orphan rule requires either the interface or the
+/// receiver constructor to be local. Distinct packages therefore own distinct
+/// receiver constructors, while a package attempting to overlap a dependency's
+/// blanket impl is rejected by this same E0132 check before its blob is emitted.
+/// This makes user-vs-blob the only expressible load-time direction for valid
+/// mounted-package artifacts. An artifact whose OWN rows overlap is not the
+/// export of a checked package; the mount boundary refuses only the
+/// degenerate identity-level duplicate (`ImportError::DuplicateImpl`), so a
+/// served root's rows are trusted to be what its own compile checked.
+#[test]
+fn blob_vs_blob_overlap_is_not_expressible_for_valid_artifacts() {
+    // Keep the argument executable: the rich fixture's blanket impl is exported
+    // and therefore would reject any downstream overlapping source impl before
+    // that downstream package could become a second valid blob.
+    let artifacts = library_artifacts();
+    assert!(artifacts.interface.rows.impls.iter().any(|implementation| {
+        implementation.interface.name.name().as_str() == "Tagged"
+            && matches!(implementation.for_ty_pattern, baml_type::Ty::TypeVar(_))
+    }));
+    assert!(matches!(
+        artifacts
+            .interface
+            .rows
+            .lookup_type(&[], &Name::new("Tagged")),
+        Some(ExportedType::Interface { .. })
+    ));
+}
+
+/// `app`'s interface with one free function the consumers below never name
+/// removed: a different interface, hence a different fingerprint.
+fn mutated_interface(artifacts: &LibraryArtifacts) -> WireInterface {
+    let mut interface = artifacts.interface.clone();
+    let root_functions = interface
+        .rows
+        .functions
+        .get_mut(&Vec::new())
+        .expect("the library exports root-level functions");
+    root_functions
+        .shift_remove(&Name::new("parse_positive"))
+        .expect("the library exports `parse_positive`");
+    interface
+}
+
+fn encode_interface(interface: &WireInterface) -> Vec<u8> {
+    baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, interface)
+        .expect("serialize app package interface")
+}
+
+const WIDGET_CONSUMER: &str = r#"
+function main() -> int throws never {
+    app.Widget { name: "widget", value: 7 }.measure()
+}
+"#;
+
+fn assert_interface_mismatch(error: baml_db::CompileProgramError) {
+    match error {
+        baml_db::CompileProgramError::Link(baml_linker::LinkError::InterfaceMismatch {
+            package,
+            edge,
+            expected,
+            found,
+        }) => {
+            assert_eq!(package.as_str(), "user");
+            assert_eq!(edge.as_str(), "app");
+            assert_ne!(expected, found);
+        }
+        other => panic!("expected an interface mismatch, got {other:?}"),
+    }
+}
+
+/// The consumer compiled against a mutated `app` interface; the store serves
+/// `app`'s real output. The unit records the digest of what it read, so the
+/// link refuses to bind it to the package it did not compile against — the
+/// edge locates, the fingerprint binds.
+#[test]
+fn a_consumer_compiled_against_a_mutated_interface_is_refused() {
+    let artifacts = library_artifacts();
+    let mutated = encode_interface(&mutated_interface(&artifacts));
+    assert_ne!(mutated, artifacts.blob);
+    let db = blob_db(WIDGET_CONSUMER, mutated);
+    assert_no_diagnostic_errors(&db);
+    let served = ServedLibrary {
+        root: db.dependency_named("app"),
+        app: &artifacts.emitted,
+    };
+    let error = compile_program_with(&db, package(&db), OPT, &served)
+        .expect_err("a consumer of another interface must not link");
+    assert_interface_mismatch(error);
+}
+
+/// The consumer compiled against the real interface; the store serves an
+/// `app` output whose record carries a mutated interface — a stale or forged
+/// artifact. Refused the same way.
+#[test]
+fn a_served_output_carrying_another_interface_is_refused() {
+    let artifacts = library_artifacts();
+    let mut stale = artifacts.emitted.clone();
+    stale.record.interface_blob = encode_interface(&mutated_interface(&artifacts));
+    let db = blob_db(WIDGET_CONSUMER, artifacts.blob.clone());
+    assert_no_diagnostic_errors(&db);
+    let served = ServedLibrary {
+        root: db.dependency_named("app"),
+        app: &stale,
+    };
+    let error = compile_program_with(&db, package(&db), OPT, &served)
+        .expect_err("a stale served output must not link");
+    assert_interface_mismatch(error);
+    // The honest pairing links.
+    let served = ServedLibrary {
+        root: db.dependency_named("app"),
+        app: &artifacts.emitted,
+    };
+    compile_program_with(&db, package(&db), OPT, &served).expect("the real output links");
+}

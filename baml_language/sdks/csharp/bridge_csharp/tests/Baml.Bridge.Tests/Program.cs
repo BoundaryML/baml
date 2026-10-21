@@ -29,6 +29,7 @@ internal static unsafe class Program
     private static string fakeMediaUrl = string.Empty;
     private static string fakeMediaBase64 = string.Empty;
     private static string fakeMediaFile = string.Empty;
+    private static string fakeMediaName = string.Empty;
     private static string fakeMediaMimeType = string.Empty;
 
     public static int Main(string[] args)
@@ -54,7 +55,6 @@ internal static unsafe class Program
         VerifyCallbackIdentifiersAndCopy();
         VerifySafeHandleOwnership();
         VerifyStreamProtocolOwnership();
-        VerifyDeferredStreamArgumentOwnership();
         VerifyMediaAndHandleProtocol();
         Console.WriteLine("managed_foundation=ok");
         return 0;
@@ -62,6 +62,26 @@ internal static unsafe class Program
 
     private static int RunNativeChild(string[] args)
     {
+        if (args.Length == 1 && args[0] == "abi-migration")
+        {
+            VerifyNativeAbiLayoutAndValidation();
+            VerifyOwnedBuffers();
+            VerifyCallPipeline();
+            VerifyCallbackIdentifiersAndCopy();
+            VerifySafeHandleOwnership();
+            VerifyStreamProtocolOwnership();
+            VerifyMediaAndHandleProtocol();
+            Console.WriteLine("managed_abi_migration=ok");
+            return 0;
+        }
+
+        if (args.Length == 1 && args[0] == "spec-prompt")
+        {
+            VerifyFunctionSpecAndPromptMethods();
+            Console.WriteLine("managed_spec_prompt=ok");
+            return 0;
+        }
+
         if (args.Length == 2 && args[0] == "native-success")
         {
             NativeApi api = NativeApi.Instance;
@@ -1233,13 +1253,13 @@ internal static unsafe class Program
     {
         Require(sizeof(BamlBuffer) == 16, "BamlBuffer layout changed");
         Require(sizeof(BamlBridgeInfoV1) == 64, "BamlBridgeInfoV1 layout changed");
-        Require(sizeof(BamlApiV1) == 200, "BamlApiV1 layout changed");
+        Require(sizeof(BamlApiV1) == 272, "BamlApiV1 layout changed");
         (string Field, int Offset)[] layout =
         [
             (nameof(BamlApiV1.AbiVersion), 0),
             (nameof(BamlApiV1.StructSize), 8),
             (nameof(BamlApiV1.Version), 16),
-            (nameof(BamlApiV1.InitializeRuntimeFromBytecode), 24),
+            (nameof(BamlApiV1.InitializeRuntimeFromBlob), 24),
             (nameof(BamlApiV1.FreeBuffer), 32),
             (nameof(BamlApiV1.RegisterCallback), 40),
             (nameof(BamlApiV1.CallFunction), 48),
@@ -1260,7 +1280,16 @@ internal static unsafe class Program
             (nameof(BamlApiV1.RegisterBridge), 168),
             (nameof(BamlApiV1.RegisterUnhandledSpawnErrorCallback), 176),
             (nameof(BamlApiV1.ShutdownRuntime), 184),
-            (nameof(BamlApiV1.InitializeRuntimeFromBytecodeWithMetadata), 192),
+            (nameof(BamlApiV1.InitializeRuntimeFromBlobWithMetadata), 192),
+            (nameof(BamlApiV1.InvocationProtocolVersion), 200),
+            (nameof(BamlApiV1.InvocationClockNs), 208),
+            (nameof(BamlApiV1.ReleaseFunctionCall), 216),
+            (nameof(BamlApiV1.RegisterHostDispatchV2), 224),
+            (nameof(BamlApiV1.RegisterHostCancelCallback), 232),
+            (nameof(BamlApiV1.TraceSelection), 240),
+            (nameof(BamlApiV1.InvocationContext), 248),
+            (nameof(BamlApiV1.MediaName), 256),
+            (nameof(BamlApiV1.MediaFromFileContent), 264),
         ];
         foreach ((string field, int offset) in layout)
         {
@@ -1272,7 +1301,7 @@ internal static unsafe class Program
         BamlApiV1 table = CreateValidTable();
         NativeApi.ValidateTable(&table);
         Require(
-            BamlApiV1Layout.RequiredPrefixSize == 200,
+            BamlApiV1Layout.RequiredPrefixSize == 272,
             "BamlApiV1 required prefix changed");
         table = CreateValidTable();
         table.StructSize += 64;
@@ -1288,7 +1317,7 @@ internal static unsafe class Program
         table = CreateValidTable();
         table.RegisterBridge = null;
         ExpectInvalidTable(table);
-        for (int field = 0; field < 23; field++)
+        for (int field = 0; field < 32; field++)
         {
             table = CreateValidTable();
             ClearRequiredFunction(ref table, field);
@@ -1572,8 +1601,9 @@ internal static unsafe class Program
             Require(
                 fileAudio.TryGetBytes(out ReadOnlyMemory<byte> fileBytes, out string? fileType)
                     && fileBytes.Span.SequenceEqual(new byte[] { 3, 4, 5 })
-                    && fileType == "audio/test",
-                "file media was not eagerly owned");
+                    && fileType == "audio/test"
+                    && fileAudio.Name == Path.GetFileName(mediaPath),
+                "file media was not eagerly owned with its base name");
         }
         finally
         {
@@ -2119,7 +2149,7 @@ internal static unsafe class Program
 
         var streamClass = new BamlTyClass { Name = "ai.stream.Stream" };
         streamClass.TypeArgs.Add(partialType);
-        streamClass.TypeArgs.Add(finalType);
+
         var streamEnvelope = new BamlOutboundResult
         {
             Ok = new BamlOutboundValue
@@ -2136,8 +2166,7 @@ internal static unsafe class Program
         using (BamlStreamNativeHandle stream = PrimitiveProtocol.DecodeStreamHandle(
             streamEnvelope.ToByteArray(),
             partialMetadata,
-            finalMetadata,
-            "test.echo$stream",
+            "test.echo@stream",
             api))
         {
             Require(
@@ -2157,8 +2186,7 @@ internal static unsafe class Program
             _ = PrimitiveProtocol.DecodeStreamHandle(
                 streamEnvelope.ToByteArray(),
                 partialMetadata,
-                finalMetadata,
-                "test.echo$stream",
+                "test.echo@stream",
                 api));
         streamClass.Name = "ai.stream.Stream";
 
@@ -2240,65 +2268,284 @@ internal static unsafe class Program
         };
     }
 
-    private static void VerifyDeferredStreamArgumentOwnership()
+    private static void VerifyFunctionSpecAndPromptMethods()
     {
-        byte[] textMetadata =
-            PrimitiveType(BamlTyPrimitiveKind.BamlTyPrimitiveString).ToByteArray();
-        byte[] handleMetadata = new BamlTy
-        {
-            ClassTy = new BamlTyClass { Name = "test.Handle" },
-        }.ToByteArray();
-        BamlGeneratedRegistryBuilder builder =
-            BamlGeneratedContract.CreateRegistryBuilder(BamlGeneratedContract.Version);
-        BamlGeneratedType<string> text =
-            builder.DeclareType<string>("string", textMetadata);
-        BamlGeneratedType<Baml.BamlHandle> handleType =
-            builder.DeclareType<Baml.BamlHandle>("test.Handle", handleMetadata);
-        builder.RegisterCodec(text, new StringCodec());
-        builder.RegisterCodec(handleType, new HandleCodec());
-        BamlGeneratedFunction<string> function =
-            builder.DeclareFunction("test.echo$stream", "stream", text);
-        BamlGeneratedArgument<string, Baml.BamlHandle> handleArgument =
-            builder.DeclareArgument(function, "resource", handleType);
-        BamlGeneratedRegistry registry = builder.Build();
+        ResetFakeCalls();
+        BamlApiV1 table = CreateValidTable();
+        var api = new NativeApi(&table, "test");
+        (BamlGeneratedRegistry registry, BamlGeneratedFunction<string> function, _, _) =
+            CreateGeneratedRegistry();
+        var program = new BamlGeneratedProgram(
+            registry,
+            new Baml.Runtime.ProgramNativeState(api, "test"));
+        registry.AttachProgram(program);
 
         clonedHandles = 0;
         releasedHandles = 0;
         using var original = new Baml.BamlHandle(
-            new BamlSafeHandle(60, &CloneHandle, &ReleaseHandle),
-            BamlTypeDescriptor.CreateHandle("test.Handle"),
-            wireTypeMetadata: handleMetadata);
-        BamlGeneratedArgumentsBuilder<string> arguments =
-            registry.CreateArgumentsBuilder(function);
-        arguments.Add(handleArgument, original);
-        int programFactoryCalls = 0;
-        var deferredProgram = new Lazy<BamlGeneratedProgram>(() =>
-        {
-            Interlocked.Increment(ref programFactoryCalls);
-            throw new InvalidOperationException("the native program must remain cold");
-        });
+            new BamlSafeHandle(70, &CloneHandle, &ReleaseHandle),
+            BamlTypeDescriptor.CreateHandle("ai.FunctionSpec"),
+            BamlHandleType.AdtFunctionSpec);
+        using var spec = new BamlFunctionSpec<string>(
+            original.Clone(),
+            registry,
+            function.Result);
 
-        BamlStream<string, string> stream = BamlGeneratedContract.CreateStream(
-            deferredProgram,
-            function,
-            text,
-            arguments.Build(),
-            "string");
+        SetFakeResult(new BamlOutboundValue { StringValue = "user.test.Echo" });
         Require(
-            clonedHandles == 1
-                && releasedHandles == 0
-                && programFactoryCalls == 0
-                && !original.IsClosed,
-            "stream creation did not clone arguments before a cold native factory");
-        stream.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            spec.Name() == "user.test.Echo"
+                && lastFakeFunction == "ai.FunctionSpec.name",
+            "FunctionSpec.name did not use its authored stdlib method");
+
+        SetFakeResult(new BamlOutboundValue { StringValue = "parsed" });
         Require(
-            clonedHandles == 1
-                && releasedHandles == 1
-                && programFactoryCalls == 0
-                && !original.IsClosed,
-            "disposing an unstarted stream did not release only its deferred argument clone");
+            spec.Parse("\"parsed\"") == "parsed"
+                && lastFakeFunction == "ai.FunctionSpec.parse",
+            "FunctionSpec.parse did not use its authored stdlib method");
+        CallFunctionArgs parseCall = CallFunctionArgs.Parser.ParseFrom(lastFakeArguments!);
+        Require(
+            parseCall.Kwargs.Count == 2
+                && parseCall.Kwargs[0].StringKey == "self"
+                && parseCall.Kwargs[0].Value.Handle.HandleType
+                    == BamlHandleType.AdtFunctionSpec
+                && parseCall.Kwargs[1].StringKey == "json"
+                && parseCall.Kwargs[1].Value.StringValue == "\"parsed\"",
+            "FunctionSpec.parse did not encode its live receiver and json argument");
+
+        SetFakeResult(new BamlOutboundValue
+        {
+            PromptAstValue = PromptAstWithMedia(),
+        });
+        BamlPrompt prompt = spec.Prompt();
+        Require(
+            lastFakeFunction == "ai.FunctionSpec.prompt",
+            "FunctionSpec.prompt did not use its authored stdlib method");
+
+        BamlValue promptValue = BamlValue.From(prompt);
+        BamlPrompt roundTrippedPrompt = promptValue.As<BamlPrompt>();
+
+        var promptEntries = new[]
+        {
+            new KeyValuePair<string, BamlGeneratedValue>(
+                "prompt",
+                promptValue.GeneratedValue),
+        };
+        var nestedPromptList = new BamlValue(
+            BamlGeneratedValue.CreateList([promptValue.GeneratedValue]),
+            registry);
+        var nestedPromptMap = new BamlValue(
+            BamlGeneratedValue.CreateMap(promptEntries),
+            registry);
+        var nestedPromptClass = new BamlValue(
+            BamlGeneratedValue.CreateClass(
+                "test.PromptHolder",
+                promptEntries,
+                []),
+            registry);
+        BamlTy promptType = new() { PromptAst = new BamlTyPromptAst() };
+        BamlTy promptUnionType = new() { Union = new BamlTyUnion() };
+        promptUnionType.Union.Options.Add(promptType.Clone());
+        promptUnionType.Union.Options.Add(PrimitiveType(
+            BamlTyPrimitiveKind.BamlTyPrimitiveString));
+        var nestedPromptUnion = new BamlValue(
+            BamlGeneratedValue.CreateUnion(
+                promptUnionType.ToByteArray(),
+                promptType.ToByteArray(),
+                "ai.Prompt",
+                promptValue.GeneratedValue),
+            registry);
+        Require(
+            nestedPromptList.ReadListValues()[0].TryGet(out BamlPrompt? listPrompt)
+                && nestedPromptMap.ReadMapValues()[0].Value.TryGet(out BamlPrompt? mapPrompt)
+                && nestedPromptClass.ReadClassValues()[0].Value.TryGet(out BamlPrompt? classPrompt)
+                && nestedPromptClass.TryGetClassFields(out var promptFields)
+                && promptFields[0].Value.TryGet(out BamlPrompt? publicClassPrompt)
+                && nestedPromptUnion.ReadUnionValue().TryGet(out BamlPrompt? unionPrompt)
+                && nestedPromptUnion.TryGetUnion(out int promptCase, out BamlValue? selectedPrompt)
+                && promptCase == 0
+                && selectedPrompt.TryGet(out BamlPrompt? publicUnionPrompt)
+                && listPrompt is not null
+                && mapPrompt is not null
+                && classPrompt is not null
+                && publicClassPrompt is not null
+                && unionPrompt is not null
+                && publicUnionPrompt is not null,
+            "nested portable Prompt values lost their generated registry");
+
+        SetFakeResult(new BamlOutboundValue { StringValue = "user: Describe image" });
+        Require(
+            roundTrippedPrompt.Text() == "user: Describe image"
+                && prompt.Text() == "user: Describe image"
+                && lastFakeFunction == "ai.Prompt.text",
+            "portable Prompt did not round-trip through BamlValue");
+        CallFunctionArgs promptCall = CallFunctionArgs.Parser.ParseFrom(lastFakeArguments!);
+        Require(
+            promptCall.Kwargs.Count == 1
+                && promptCall.Kwargs[0].StringKey == "self"
+                && promptCall.Kwargs[0].Value.ValueCase
+                    == InboundValue.ValueOneofCase.PromptAstValue
+                && promptCall.Kwargs[0].Value.PromptAstValue.Message.Content.Multiple.Items[1]
+                    .ValueCase == BamlValuePromptAstSimple.ValueOneofCase.Media,
+            "portable Prompt re-entry dropped its inline media tree");
+
+        SetFakeResult(PromptMessagesResult());
+        IReadOnlyList<BamlPromptMessage> first = prompt.Messages();
+        IReadOnlyList<BamlPromptMessage> second = prompt.Messages();
+        Require(
+            first.Count == 1
+                && second.Count == 1
+                && first[0].Role == "user"
+                && first[0].Parts.Count == 2
+                && first[0].Parts[0].As<string>() == "Describe image"
+                && first[0].Parts[1].As<BamlImage>().TryGetBytes(
+                    out ReadOnlyMemory<byte> bytes,
+                    out string? mediaType)
+                && bytes.Span.SequenceEqual(new byte[] { 1, 2, 3 })
+                && mediaType == "image/png",
+            "portable Prompt.messages was not repeatable or lost media");
+
+        SetFakeResult(new BamlOutboundValue
+        {
+            ClassValue = new BamlValueClass { Name = "baml.http.Request" },
+        });
+        Require(
+            spec.BuildRequest().Kind == BamlValueKind.Class
+                && lastFakeFunction == "ai.FunctionSpec.build_request",
+            "FunctionSpec.build_request did not use its authored stdlib method");
+
+        SetFakeResult(new BamlOutboundValue
+        {
+            TyDefValue = new BamlTyDef
+            {
+                Root = PrimitiveType(BamlTyPrimitiveKind.BamlTyPrimitiveString),
+            },
+        });
+        Require(
+            spec.OutputType().Descriptor.Kind == BamlTypeDescriptorKind.String
+                && lastFakeFunction == "ai.FunctionSpec.output_type",
+            "FunctionSpec.output_type did not preserve its portable reflected type");
+
+        var boundArguments = new BamlValueMap
+        {
+            KeyType = PrimitiveType(BamlTyPrimitiveKind.BamlTyPrimitiveString),
+            ValueType = new BamlTy { Unknown = new BamlTyUnknown() },
+        };
+        boundArguments.Entries.Add(new BamlOutboundMapEntry
+        {
+            Key = "text",
+            Value = new BamlOutboundValue { StringValue = "bound" },
+        });
+        SetFakeResult(new BamlOutboundValue { MapValue = boundArguments });
+        Require(
+            spec.Arguments()["text"].As<string>() == "bound"
+                && lastFakeFunction == "ai.FunctionSpec.arguments",
+            "FunctionSpec.arguments did not preserve its bound values");
+
+        SetFakeResult(new BamlOutboundValue
+        {
+            ClassValue = new BamlValueClass { Name = "ai.tools.Toolbox" },
+        });
+        Require(
+            spec.Tools().Kind == BamlValueKind.Class
+                && lastFakeFunction == "ai.FunctionSpec.tools",
+            "FunctionSpec.tools did not use its authored stdlib method");
+
+        SetFakeResult(new BamlOutboundValue { StringValue = "client-id" });
+        Require(
+            spec.RequestedModelAsync().GetAwaiter().GetResult() == "client-id"
+                && lastFakeFunction == "ai.FunctionSpec.requested_model",
+            "FunctionSpec.requested_model async projection changed");
+
+        SetFakeResult(new BamlOutboundValue { StringValue = "called" });
+        Require(
+            spec.CallAsync().GetAwaiter().GetResult() == "called"
+                && lastFakeFunction == "ai.FunctionSpec.call",
+            "FunctionSpec.call async projection changed");
+
+        spec.Dispose();
         original.Dispose();
-        Require(releasedHandles == 2, "original stream argument handle ownership changed");
+        Require(releasedHandles == 2, "FunctionSpec test leaked its live handle");
+        fakeResult = null;
+    }
+
+    private static BamlValuePromptAst PromptAstWithMedia()
+    {
+        var multiple = new BamlValuePromptAstSimpleMultiple();
+        multiple.Items.Add(new BamlValuePromptAstSimple { String = "Describe image" });
+        multiple.Items.Add(new BamlValuePromptAstSimple
+        {
+            Media = new BamlValueMedia
+            {
+                Media = MediaTypeEnum.Image,
+                MimeType = "image/png",
+                Base64 = Convert.ToBase64String([1, 2, 3]),
+            },
+        });
+        return new BamlValuePromptAst
+        {
+            Message = new BamlValuePromptAstMessage
+            {
+                Role = "user",
+                Content = new BamlValuePromptAstSimple { Multiple = multiple },
+                MetadataAsJson = "{}",
+            },
+        };
+    }
+
+    private static BamlOutboundValue PromptMessagesResult()
+    {
+        BamlTy stringType = PrimitiveType(BamlTyPrimitiveKind.BamlTyPrimitiveString);
+        var parts = new BamlValueList { ItemType = new BamlTy { Unknown = new BamlTyUnknown() } };
+        parts.Items.Add(new BamlOutboundValue { StringValue = "Describe image" });
+        parts.Items.Add(new BamlOutboundValue
+        {
+            MediaValue = new BamlValueMedia
+            {
+                Media = MediaTypeEnum.Image,
+                MimeType = "image/png",
+                Base64 = Convert.ToBase64String([1, 2, 3]),
+            },
+        });
+        var metadata = new BamlValueMap
+        {
+            KeyType = stringType.Clone(),
+            ValueType = new BamlTy { Unknown = new BamlTyUnknown() },
+        };
+        var message = new BamlValueClass { Name = "ai.PromptMessage" };
+        message.Fields.Add(new BamlOutboundMapEntry
+        {
+            Key = "role",
+            Value = new BamlOutboundValue { StringValue = "user" },
+        });
+        message.Fields.Add(new BamlOutboundMapEntry
+        {
+            Key = "content",
+            Value = new BamlOutboundValue { StringValue = "Describe image" },
+        });
+        message.Fields.Add(new BamlOutboundMapEntry
+        {
+            Key = "parts",
+            Value = new BamlOutboundValue { ListValue = parts },
+        });
+        message.Fields.Add(new BamlOutboundMapEntry
+        {
+            Key = "metadata",
+            Value = new BamlOutboundValue { MapValue = metadata },
+        });
+        var messages = new BamlValueList
+        {
+            ItemType = new BamlTy
+            {
+                ClassTy = new BamlTyClass { Name = "ai.PromptMessage" },
+            },
+        };
+        messages.Items.Add(new BamlOutboundValue { ClassValue = message });
+        return new BamlOutboundValue { ListValue = messages };
+    }
+
+    private static void SetFakeResult(BamlOutboundValue value)
+    {
+        fakeResult = new BamlOutboundResult { Ok = value }.ToByteArray();
     }
 
     private static void VerifyMediaAndHandleProtocol()
@@ -2441,7 +2688,7 @@ internal static unsafe class Program
         Expect<BamlProtocolException>(() =>
             _ = handleContext.ReadHandle(exactHandle, "baml.glob.Glob", globMetadata));
 
-        var rowsClass = new BamlTyClass { Name = "baml.csv.CsvRows" };
+        var rowsClass = new BamlTyClass { Name = "baml.csv.Rows" };
         rowsClass.TypeArgs.Add(PrimitiveType(BamlTyPrimitiveKind.BamlTyPrimitiveString));
         var rowsEnvelope = new BamlOutboundResult
         {
@@ -2459,7 +2706,7 @@ internal static unsafe class Program
             PrimitiveProtocol.DecodeCallResult(rowsEnvelope.ToByteArray(), "rows", api))
             .As<Baml.BamlHandle>();
         Require(
-            rows.Type.Fqn == "baml.csv.CsvRows"
+            rows.Type.Fqn == "baml.csv.Rows"
                 && rows.Type.Arguments.Count == 1
                 && rows.Type.Arguments[0].Kind == BamlTypeDescriptorKind.String,
             "generic opaque-resource descriptor arguments were dropped");
@@ -2491,10 +2738,10 @@ internal static unsafe class Program
 
     private static BamlApiV1 CreateValidTable() => new()
     {
-        AbiVersion = 2,
+        AbiVersion = 4,
         StructSize = (nuint)sizeof(BamlApiV1),
         Version = &Version,
-        InitializeRuntimeFromBytecode = &Initialize,
+        InitializeRuntimeFromBlob = &Initialize,
         FreeBuffer = &FreeBuffer,
         RegisterCallback = &RegisterResult,
         CallFunction = &Call,
@@ -2512,10 +2759,17 @@ internal static unsafe class Program
         MediaFile = &MediaFile,
         MediaBase64 = &MediaBase64,
         MediaMimeType = &MediaMimeType,
+        MediaName = &MediaName,
+        MediaFromFileContent = &MediaFromFileContent,
         RegisterBridge = &RegisterBridge,
         RegisterUnhandledSpawnErrorCallback = &RegisterUnhandledSpawnError,
         ShutdownRuntime = &Shutdown,
-        InitializeRuntimeFromBytecodeWithMetadata = &InitializeWithMetadata,
+        InitializeRuntimeFromBlobWithMetadata = &InitializeWithMetadata,
+        InvocationProtocolVersion = &ProtocolVersion,
+        InvocationClockNs = &InvocationClock,
+        ReleaseFunctionCall = &ReleaseCall,
+        RegisterHostDispatchV2 = &RegisterHostDispatchV2,
+        RegisterHostCancelCallback = &RegisterHostCancel,
     };
 
     private static void ExpectInvalidTable(BamlApiV1 table, bool passNull = false)
@@ -2537,7 +2791,7 @@ internal static unsafe class Program
         switch (field)
         {
             case 0: table.Version = null; break;
-            case 1: table.InitializeRuntimeFromBytecode = null; break;
+            case 1: table.InitializeRuntimeFromBlob = null; break;
             case 2: table.FreeBuffer = null; break;
             case 3: table.RegisterCallback = null; break;
             case 4: table.CallFunction = null; break;
@@ -2558,7 +2812,16 @@ internal static unsafe class Program
             case 19: table.RegisterBridge = null; break;
             case 20: table.RegisterUnhandledSpawnErrorCallback = null; break;
             case 21: table.ShutdownRuntime = null; break;
-            case 22: table.InitializeRuntimeFromBytecodeWithMetadata = null; break;
+            case 22: table.InitializeRuntimeFromBlobWithMetadata = null; break;
+            case 23: table.InvocationProtocolVersion = null; break;
+            case 24: table.InvocationClockNs = null; break;
+            case 25: table.ReleaseFunctionCall = null; break;
+            case 26: table.RegisterHostDispatchV2 = null; break;
+            case 27: table.RegisterHostCancelCallback = null; break;
+            case 28: table.TraceSelection = null; break;
+            case 29: table.InvocationContext = null; break;
+            case 30: table.MediaName = null; break;
+            case 31: table.MediaFromFileContent = null; break;
             default: throw new ArgumentOutOfRangeException(nameof(field));
         }
     }
@@ -2643,6 +2906,17 @@ internal static unsafe class Program
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static uint ProtocolVersion() => 1;
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static BamlCffiStatus InvocationClock(ulong id, ulong* now) { *now = 0; return BamlCffiStatus.Ok; }
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static int ReleaseCall(ulong id) => 1;
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void RegisterHostDispatchV2(delegate* unmanaged[Cdecl]<byte*, nuint, void> callback) { }
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void RegisterHostCancel(delegate* unmanaged[Cdecl]<uint, void> callback) { }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static ulong NewCall() => checked((ulong)Interlocked.Increment(ref nextFakeCallId));
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -2712,6 +2986,7 @@ internal static unsafe class Program
         fakeMediaUrl = isUrl ? representation : string.Empty;
         fakeMediaBase64 = isUrl ? string.Empty : representation;
         fakeMediaFile = string.Empty;
+        fakeMediaName = string.Empty;
         fakeMediaMimeType = mime is null ? string.Empty : Marshal.PtrToStringUTF8((nint)mime)!;
         *key = unchecked((ulong)Interlocked.Increment(ref nextFakeHandleKey));
         return BamlCffiStatus.Ok;
@@ -2762,6 +3037,35 @@ internal static unsafe class Program
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static BamlCffiStatus MediaFile(ulong key, int handleType, BamlBuffer* output) =>
         FakeMediaField(key, output, fakeMediaFile);
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static BamlCffiStatus MediaName(ulong key, int handleType, BamlBuffer* output) =>
+        FakeMediaField(key, output, fakeMediaName);
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static BamlCffiStatus MediaFromFileContent(
+        int kind,
+        byte* file,
+        byte* base64,
+        byte* mime,
+        ulong* key,
+        int* handleType)
+    {
+        fakeMediaUrl = string.Empty;
+        fakeMediaBase64 = Marshal.PtrToStringUTF8((nint)base64)!;
+        fakeMediaFile = string.Empty;
+        fakeMediaName = Path.GetFileName(Marshal.PtrToStringUTF8((nint)file)!);
+        fakeMediaMimeType = mime is null ? string.Empty : Marshal.PtrToStringUTF8((nint)mime)!;
+        *handleType = kind switch
+        {
+            (int)MediaTypeEnum.Image => (int)BamlHandleType.AdtMediaImage,
+            (int)MediaTypeEnum.Audio => (int)BamlHandleType.AdtMediaAudio,
+            (int)MediaTypeEnum.Pdf => (int)BamlHandleType.AdtMediaPdf,
+            _ => (int)BamlHandleType.AdtMediaVideo,
+        };
+        *key = unchecked((ulong)Interlocked.Increment(ref nextFakeHandleKey));
+        return BamlCffiStatus.Ok;
+    }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static BamlCffiStatus MediaBase64(ulong key, int handleType, BamlBuffer* output) =>

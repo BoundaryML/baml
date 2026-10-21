@@ -3,7 +3,8 @@ use std::sync::Arc;
 use js_sys::{Function, Promise, Reflect, Uint8Array};
 use sys_ops::io::{self, IoNamespaceSys};
 use sys_types::{
-    BexExternalValue, BexHeap, CallId, SysOpContext, SysOpOutput, VmBamlError, VmRustFnError,
+    BexExternalValue, BexHeap, CallId, SysOpContext, SysOpOutput, VmBamlError, VmPanic,
+    VmRustFnError,
 };
 use wasm_bindgen::{JsCast, prelude::*};
 use wasm_bindgen_futures::JsFuture;
@@ -89,12 +90,8 @@ fn options_to_js(options: Option<&io::owned::sys::ProcessOptions>) -> JsValue {
             if let Some(ref stdin) = opts.stdin {
                 let _ = Reflect::set(&obj, &"stdin".into(), &stdin.into());
             }
-            if let Some(keep_stdin_open) = opts.keep_stdin_open {
-                let _ = Reflect::set(
-                    &obj,
-                    &"keep_stdin_open".into(),
-                    &JsValue::from_bool(keep_stdin_open),
-                );
+            if let Some(BexExternalValue::Variant { variant_name, .. }) = opts.stderr.as_ref() {
+                let _ = Reflect::set(&obj, &"stderr".into(), &variant_name.into());
             }
             js_sys::JSON::stringify(&obj)
                 .map(JsValue::from)
@@ -103,32 +100,78 @@ fn options_to_js(options: Option<&io::owned::sys::ProcessOptions>) -> JsValue {
     }
 }
 
+impl io::IoClassSysReadPipe for WasmSys {
+    fn read(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _readpipe: io::owned::sys::ReadPipe,
+        _limit: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<Vec<u8>>> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
+            message: "Live processes are not supported on this platform".to_string(),
+        })
+    }
+
+    fn close(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _readpipe: io::owned::sys::ReadPipe,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
+            message: "Live processes are not supported on this platform".to_string(),
+        })
+    }
+}
+
+impl io::IoClassSysWritePipe for WasmSys {
+    fn write_some(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _writepipe: io::owned::sys::WritePipe,
+        _data: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
+            message: "Live processes are not supported on this platform".to_string(),
+        })
+    }
+
+    fn flush(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _writepipe: io::owned::sys::WritePipe,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
+            message: "Live processes are not supported on this platform".to_string(),
+        })
+    }
+
+    fn close(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _writepipe: io::owned::sys::WritePipe,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
+            message: "Live processes are not supported on this platform".to_string(),
+        })
+    }
+}
+
 impl io::IoClassSysProcess for WasmSys {
-    fn write_stdin(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _process: io::owned::sys::Process,
-        _data: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Live processes are not supported on this platform".to_string(),
-        })
-    }
-
-    fn close_stdin(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _process: io::owned::sys::Process,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Live processes are not supported on this platform".to_string(),
-        })
-    }
-
     fn wait(
         &self,
         _heap: &Arc<BexHeap>,
@@ -136,7 +179,8 @@ impl io::IoClassSysProcess for WasmSys {
         _process: io::owned::sys::Process,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::ProcessExit> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Live processes are not supported on this platform".to_string(),
         })
     }
@@ -148,7 +192,8 @@ impl io::IoClassSysProcess for WasmSys {
         _process: io::owned::sys::Process,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Live processes are not supported on this platform".to_string(),
         })
     }
@@ -158,30 +203,6 @@ impl io::IoClassSysProcess for WasmSys {
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         _process: io::owned::sys::Process,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::ok(())
-    }
-}
-
-impl io::IoClassSysProcessLineStream for WasmSys {
-    fn _next(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _processlinestream: io::owned::sys::ProcessLineStream,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<String>> {
-        SysOpOutput::err(VmBamlError::Unsupported {
-            message: "Live processes are not supported on this platform".to_string(),
-        })
-    }
-
-    fn close(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        _processlinestream: io::owned::sys::ProcessLineStream,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::ok(())
@@ -252,7 +273,8 @@ impl IoNamespaceSys for WasmSys {
         _options: Option<io::owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::sys::Process> {
-        SysOpOutput::err(VmBamlError::Unsupported {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "process".to_string(),
             message: "Live processes are not supported on this platform".to_string(),
         })
     }
@@ -287,17 +309,14 @@ impl IoNamespaceSys for WasmSys {
         }))
     }
 
-    fn sleep(
+    fn _sleep(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        delay: BexExternalValue,
+        delay_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        let millis = match sleep_millis_from_delay(delay) {
-            Ok(millis) => millis,
-            Err(err) => return SysOpOutput::err(err),
-        };
+        let millis = sleep_millis(&delay_nanos);
         let promise = js_sys::Promise::new(&mut |resolve, _reject| {
             set_timeout(&resolve, millis);
         });
@@ -306,39 +325,44 @@ impl IoNamespaceSys for WasmSys {
             Ok(())
         }))
     }
+
+    fn pid(&self, _heap: &Arc<BexHeap>, _call_id: CallId, _ctx: &SysOpContext) -> SysOpOutput<i64> {
+        // Read `globalThis.process.pid` directly rather than through an
+        // injected callback — the same feature-detection route `WasmTime`
+        // takes to `globalThis.Temporal`. Node and Node-compatible runtimes
+        // provide it; a browser does not, and neither do the `process` shims
+        // bundlers inject, which is why a non-positive or non-integral value
+        // is treated as absent (no live process ever has PID 0).
+        match host_process_pid() {
+            Some(pid) => SysOpOutput::ok(pid),
+            // `baml.sys.pid` declares `throws never`, so an environment
+            // without process IDs panics rather than throwing.
+            None => SysOpOutput::err(VmPanic::HostUnavailable {
+                resource: "process-id".to_string(),
+                message: "the host JavaScript environment does not provide process.pid".to_string(),
+            }),
+        }
+    }
 }
 
-fn sleep_millis_from_delay(delay: BexExternalValue) -> Result<i32, VmRustFnError> {
-    match delay {
-        BexExternalValue::Instance {
-            class_name,
-            mut fields,
-            ..
-        } if class_name == "baml.time.Duration" => {
-            let Some(nanos) = fields.swap_remove("_nanoseconds") else {
-                return Err(VmRustFnError::from(VmBamlError::Io {
-                    message: "sleep delay is missing Duration._nanoseconds".to_string(),
-                }));
-            };
-            let BexExternalValue::Bigint(nanos) = nanos else {
-                return Err(VmRustFnError::from(VmBamlError::Io {
-                    message: "sleep delay Duration._nanoseconds is not a bigint".to_string(),
-                }));
-            };
-            if nanos.sign() == num_bigint::Sign::Plus {
-                let nanos = u64::try_from(&nanos).unwrap_or(u64::MAX);
-                let rounded_millis = nanos.saturating_add(999_999) / 1_000_000;
-                Ok(i32::try_from(rounded_millis).unwrap_or(i32::MAX))
-            } else {
-                Ok(0)
-            }
-        }
-        BexExternalValue::Union { value, .. } => sleep_millis_from_delay(*value),
-        other => Err(VmRustFnError::from(VmBamlError::Io {
-            message: format!(
-                "sleep delay must be baml.time.Duration, got {}",
-                other.type_name()
-            ),
-        })),
+/// `globalThis.process.pid`, or `None` when the host does not expose a usable
+/// process ID.
+fn host_process_pid() -> Option<i64> {
+    let process = Reflect::get(&js_sys::global(), &"process".into()).ok()?;
+    let pid = Reflect::get(&process, &"pid".into()).ok()?.as_f64()?;
+    // `from_f64` rejects non-finite, out-of-range, and fractional values, so
+    // only a genuine integral PID survives.
+    <i64 as num_traits::FromPrimitive>::from_f64(pid).filter(|pid| *pid > 0)
+}
+
+/// The `setTimeout` delay for a sleep of `delay_nanos`: whole milliseconds,
+/// rounded up so the wait is never shorter than asked. Zero or negative does
+/// not wait, and a delay past what `setTimeout` takes clamps to its maximum.
+fn sleep_millis(delay_nanos: &num_bigint::BigInt) -> i32 {
+    if delay_nanos.sign() != num_bigint::Sign::Plus {
+        return 0;
     }
+    let nanos = u64::try_from(delay_nanos).unwrap_or(u64::MAX);
+    let rounded_millis = nanos.saturating_add(999_999) / 1_000_000;
+    i32::try_from(rounded_millis).unwrap_or(i32::MAX)
 }

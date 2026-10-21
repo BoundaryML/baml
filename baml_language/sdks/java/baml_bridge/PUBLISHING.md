@@ -19,7 +19,7 @@ wins**:
 
 1. **System property `baml.bridge.lib`** — dev override, an absolute path to the
    `.so`/`.dylib`/`.dll`.
-2. **Environment variable `BAML_JAVA_BRIDGE_LIB`** — dev/test override, same
+2. **Environment variable `BAML_BRIDGE_PATH`** — dev/test override, same
    meaning. (The Gradle `test` task forwards this env var to the test JVM as
    `-Dbaml.bridge.lib`.)
 3. **Classpath resource `/native/{os}-{arch}/{libname}`** — the bundled path
@@ -60,7 +60,7 @@ working against a locally built cdylib uses step 1 or 2.
 Build the release cdylib first (from the repo root):
 
 ```
-rustup run 1.93.0 cargo build -p bridge_java --release
+cargo build -p bridge_java --release
 # → target/release/libbridge_java.so
 ```
 

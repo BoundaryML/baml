@@ -65,13 +65,13 @@ function is_name_char(c: string) -> bool {
 function trim_dots(name: string) -> string {
     let start = 0;
     let end = name.length();
-    while (start < end && name.char_at(start) == ".") {
+    while (start < end && name.at(start) == ".") {
         start += 1;
     }
-    while (end > start && name.char_at(end - 1) == ".") {
+    while (end > start && name.at(end - 1) == ".") {
         end -= 1;
     }
-    name.substring(start, end)
+    name.slice(start, end)
 }
 
 /// Every name a rendered type mentions, in order.
@@ -156,7 +156,7 @@ function resolve_all(
 function generic_param_name(declared: string) -> string {
     let out = declared;
     if let cut: int = declared.index_of(":") {
-        out = declared.substring(0, cut);
+        out = declared.slice(0, cut);
     }
     out.trim()
 }
@@ -165,7 +165,7 @@ function generic_param_name(declared: string) -> string {
 function generic_param_bound(declared: string) -> string {
     let out = "";
     if let cut: int = declared.index_of(":") {
-        out = declared.substring(cut + 1, declared.length()).trim();
+        out = declared.slice(cut + 1, declared.length()).trim();
     }
     out
 }
@@ -199,7 +199,7 @@ function baml_name_index(symbols: BamlSymbol[]) -> NameIndex {
         if (symbol.display != last_segment(path)) {
             let _ = index_put(index.types, symbol.display, symbol.id);
             if let open: int = symbol.display.index_of("<") {
-                let _ = index_put(index.types, symbol.display.substring(0, open), symbol.id);
+                let _ = index_put(index.types, symbol.display.slice(0, open), symbol.id);
             }
         }
     }

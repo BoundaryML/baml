@@ -1,0 +1,90 @@
+---
+source: crates/baml_tests/src/compiler2_tir/phase6.rs
+expression: "render_tir(&db, file)"
+---
+function user.array_length_returns_int(arr: int[]) -> int throws never {
+  { : int
+    arr.length() : int
+  }
+}
+function user.array_at_returns_element_type_int(arr: int[]) -> int | null throws never {
+  { : int | null
+    arr.at(0) : int | null
+  }
+}
+function user.array_at_returns_element_type_string(arr: string[]) -> string | null throws never {
+  { : string | null
+    arr.at(0) : string | null
+  }
+}
+function user.array_join_returns_string(arr: string[]) -> string throws never {
+  { : string
+    arr.join(",") : string
+  }
+}
+function user.map_keys_returns_key_type_array(m: map<string, int>) -> string[] throws never {
+  { : string[]
+    m.keys() : string[]
+  }
+}
+function user.map_values_returns_value_type_array(m: map<string, int>) -> int[] throws never {
+  { : int[]
+    m.values() : int[]
+  }
+}
+function user.map_has_returns_bool(m: map<string, int>) -> bool throws never {
+  { : bool
+    m.has("x") : bool
+  }
+}
+function user.map_length_returns_int(m: map<string, int>) -> int throws never {
+  { : int
+    m.length() : int
+  }
+}
+function user.string_length_returns_int(s: string) -> int throws never {
+  { : int
+    s.length() : int
+  }
+}
+function user.string_split_returns_string_array(s: string) -> string[] throws never {
+  { : string[]
+    s.split(",") : string[]
+  }
+}
+function user.string_includes_returns_bool(s: string) -> bool throws never {
+  { : bool
+    s.includes("ell") : bool
+  }
+}
+function user.string_to_lower_case_returns_string(s: string) -> string throws never {
+  { : string
+    s.to_lower_case() : string
+  }
+}
+function user.let_inferred_from_array_length(arr: int[]) -> int throws never {
+  { : int
+    let len = arr.length() : int
+    len : int
+  }
+}
+function user.let_inferred_from_array_at(arr: int[]) -> int | null throws never {
+  { : int | null
+    let x = arr.at(0) : int | null
+    x : int | null
+  }
+}
+function user.let_inferred_from_map_keys(m: map<string, int>) -> string[] throws never {
+  { : string[]
+    let keys = m.keys() : string[]
+    keys : string[]
+  }
+}
+function user.snapshot_builtin_method_calls(arr: string[], m: map<string, int>, s: string) -> int throws never {
+  { : int
+    let len = arr.length() : int
+    let keys = m.keys() : string[]
+    let parts = s.split(",") : string[]
+    len : int
+  }
+}

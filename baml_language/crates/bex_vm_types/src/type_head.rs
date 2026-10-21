@@ -1,0 +1,737 @@
+//! The runtime's nominal type head.
+//!
+//! [`TypeHead`] is what the runtime substitutes for `TypeName` as the `N`
+//! parameter of the `baml_type` family, giving `RealizedTy<TypeHead>` /
+//! `RuntimeTy<TypeHead>`. A head names a type by pointing directly at the
+//! `Object::Class` / `Object::Enum` / `Object::Interface` that defines it,
+//! instead of by a package-qualified string that must be looked up.
+
+use baml_type::typetag::TypeTag;
+
+use crate::{HeapPtr, ObjectIndex};
+
+/// A nominal type reference: a [`TypeTag`] identity, plus a pointer to reach the
+/// declaration it names.
+///
+/// Names a *head*, not a type — generic instantiations are distinct types that
+/// share one head, and their arguments live in the surrounding `Ty`.
+///
+/// # The tag is the identity; the pointer is an access path
+///
+/// **[`TypeTag`] answers "which head is this?"** Every relation — `Eq`, `Ord`,
+/// `Hash` — keys on it and nothing else, so identity is a plain integer compare
+/// that never touches the heap or depends on collector state. Tags are unique
+/// per declaration by construction: the linker gives every declaration of a
+/// static image its own tag (its object index), and the runtime mints every
+/// other one from a monotonic counter that never repeats. Two heads bearing
+/// the same tag *are* the same head.
+///
+/// **[`HeapPtr`] answers "where is its declaration?"** It is how a field list,
+/// variant set, or method table is reached — a dereference instead of a
+/// package-map lookup, and the only way to reach a runtime-created declaration
+/// at all, since it has no globally-namespaced name to look up. It is
+/// deliberately *not* part of identity.
+///
+/// Keeping the pointer out of identity is what makes the relations mutually
+/// consistent, which `Ord` requires: `cmp` returns `Equal` exactly when `eq`
+/// returns `true`, and equal heads hash equally. Splitting them — identity by
+/// address, ordering by tag — would let two values compare `Equal` while being
+/// unequal, quietly corrupting `sort`, `dedup`, and any `BTreeMap` keyed on a
+/// type.
+///
+/// It also decouples comparison from the collector. **The collector relocates
+/// objects**, so a pointer's numeric value is not stable over time; anything
+/// keyed on it would shift underneath a collection. That matters concretely: the
+/// type algebra sorts union members into canonical form by `Ord`, and canonical
+/// form must not change under a GC, nor may a long-lived memo rehash itself. A
+/// tag is assigned once and travels with the declaration, so comparing two heads
+/// is correct whether or not either pointer has been forwarded yet. Only
+/// *dereferencing* requires an up-to-date pointer.
+///
+/// # Unresolved heads, and serialization
+///
+/// Because the tag is the whole identity, the pointer is a *cache* of the
+/// tag→declaration lookup rather than part of the value. A head is therefore
+/// meaningful before that cache is filled: [`unresolved`](Self::unresolved)
+/// builds one that compares, orders, and hashes correctly but cannot yet be
+/// dereferenced, and the loader fills each pointer in via
+/// [`resolve`](Self::resolve).
+///
+/// Serialization follows from the same fact: only the tag is written, and
+/// decoding yields an unresolved head. That is not lossy, because the pointer
+/// was never identity — a round trip through a file returns *the same head*,
+/// just with a cold cache. It is why a compiled `Program` can hold
+/// `RealizedTy<TypeHead>` at all despite `Object`'s Borsh impl being
+/// context-free: there is nothing to resolve *at decode time*, only at load.
+///
+/// # The unit convention: a head is an operand
+///
+/// The compiler never assigns a tag. In a compilation unit
+/// (`baml_linker_types`), a head stands for "the tag of *this* declaration":
+/// the value written where the tag will be is the declaration's OBJECT
+/// OPERAND in the unit's convention — a local bucket offset, or an import
+/// ordinal above `IMPORT_BASE` — exactly as an `AllocInstance` operand names
+/// its class. [`unresolved_operand`](Self::unresolved_operand) builds one and
+/// [`operand`](Self::operand) reads it back. Whoever lays the declaration
+/// into an image assigns the tag and rewrites every head through the same
+/// relocation walk as every other operand: the linker with the declaration's
+/// image index, the grafter with a fresh runtime tag. Within one unit the
+/// relations still hold — one declaration has one operand — so a unit's
+/// types compare and hash consistently before any tag exists.
+///
+/// The cost is that "unresolved" is not distinguishable in the type system, so
+/// a head the loader misses fails on its first dereference. Loading therefore
+/// ends by asserting no unresolved head survives, and `resolve`/`forward_to`
+/// each assert the state they expect, so a double-resolve or a forward of a
+/// never-resolved head is caught where it happens rather than downstream.
+///
+/// # GC obligation
+///
+/// The pointer makes every reachable `TypeHead` a GC edge: it keeps the
+/// declaration alive, must be traced, and must be forwarded after a move. Types
+/// reach heads through arbitrary nesting, so the walk is generated rather than
+/// hand-written — see `visit_heads` / `visit_heads_mut` on every family member.
+///
+/// A missed head is a dangling pointer, but note what it is *not*: identity
+/// keeps working, because comparison never reads the pointer. So the failure
+/// surfaces on the next dereference, not as types mysteriously comparing
+/// unequal.
+#[derive(Clone, Copy, Debug)]
+pub struct TypeHead {
+    ptr: HeapPtr,
+    tag: TypeTag,
+}
+
+impl TypeHead {
+    /// Bind a tag to the object declaring it.
+    ///
+    /// `ptr` must point at the `Object::Class`/`Object::Enum`/`Object::Interface`
+    /// that `tag` identifies. Nothing checks the pairing, and comparison never
+    /// consults `ptr`, so a mismatched pair produces a head that compares as one
+    /// declaration but dereferences to another.
+    #[must_use]
+    pub fn new(ptr: HeapPtr, tag: TypeTag) -> Self {
+        debug_assert!(
+            tag.is_head(),
+            "a type head must carry a declared head's tag, not a primitive",
+        );
+        Self { ptr, tag }
+    }
+
+    /// A head that knows *which* declaration it names but not yet *where* it
+    /// lives — the form an image carries before the loader binds it, since
+    /// there is no heap at link time and the tag alone is the identity.
+    /// Dereferencing one before [`resolve`](Self::resolve) is a null
+    /// dereference.
+    #[must_use]
+    pub fn unresolved(tag: TypeTag) -> Self {
+        debug_assert!(
+            tag.is_head(),
+            "a type head must carry a declared head's tag, not a primitive",
+        );
+        Self {
+            ptr: HeapPtr::null(),
+            tag,
+        }
+    }
+
+    /// A head in the unit convention: the declaration's object operand stands
+    /// where the tag will (see the type-level doc). The linker or grafter that
+    /// lays the declaration into an image replaces it with the tag it assigns.
+    #[must_use]
+    pub fn unresolved_operand(operand: ObjectIndex) -> Self {
+        Self {
+            ptr: HeapPtr::null(),
+            tag: TypeTag::from_i64(
+                i64::try_from(operand.raw()).expect("an object operand fits a type tag"),
+            ),
+        }
+    }
+
+    /// The declaration operand of a head in the unit convention — the inverse
+    /// of [`unresolved_operand`](Self::unresolved_operand), for the emitter
+    /// reading back a head it minted itself. A consumer of a decoded unit
+    /// reads [`try_operand`](Self::try_operand) instead.
+    #[must_use]
+    pub fn operand(self) -> ObjectIndex {
+        self.try_operand()
+            .expect("a unit head carries an object operand")
+    }
+
+    /// The declaration operand of a head in the unit convention, or `None`
+    /// for a head that is not in it — a resolved head, or a tag no object
+    /// operand encodes. What a linker or grafter reads off a decoded unit,
+    /// where a malformed head is a link error rather than an invariant.
+    #[must_use]
+    pub fn try_operand(self) -> Option<ObjectIndex> {
+        if self.is_resolved() {
+            return None;
+        }
+        usize::try_from(self.tag.as_i64())
+            .ok()
+            .map(ObjectIndex::from_raw)
+    }
+
+    /// The fully-qualified name of the declaration this head points at, or
+    /// `None` if the head is unresolved, does not point at a declaration, or
+    /// points at an anonymous (runtime-created) declaration — which has no
+    /// qualified name for any name-keyed consumer to use.
+    ///
+    /// The boundary conversion: a head is a live pointer into this process's
+    /// heap, so anything leaving the
+    /// VM — an FFI payload, a serialized artifact, a host-facing value —
+    /// converts back to names first. Pair it with `try_map_heads` to carry a
+    /// whole type across.
+    #[must_use]
+    pub fn declared_name(self) -> Option<baml_type::TypeName> {
+        if !self.is_resolved() {
+            return None;
+        }
+        // SAFETY: as in `tagged_name`, the caller holds the heap permit for
+        // the read and the collector forwards heads when declarations move
+        // (runtime-created declarations live in the moving region).
+        // A declaration is immutable after it is created.
+        #[expect(
+            unsafe_code,
+            reason = "recovering a head's name requires reading its declaration"
+        )]
+        let object = unsafe { self.ptr.get() };
+        // An anonymous (runtime-created) declaration has no qualified name,
+        // so it is unnameable here by design — `to_name` refuses rather than
+        // fabricating a spelling nothing declares.
+        object.declaration_name()
+    }
+
+    /// This head's declaration name, or the head itself when it has none.
+    ///
+    /// The mapper form of [`declared_name`](Self::declared_name), for pairing
+    /// with `try_map_heads` to carry a whole type out of the VM:
+    /// `ty.try_map_heads(&mut |head| head.to_name())`.
+    ///
+    /// # Errors
+    ///
+    /// [`UnnameableHead`](crate::UnnameableHead) when the head is unresolved or
+    /// its declaration has no name a host could look up.
+    pub fn to_name(&self) -> Result<baml_type::TypeName, crate::UnnameableHead> {
+        self.declared_name().ok_or(crate::UnnameableHead(self.tag))
+    }
+
+    /// The per-call seam spelling of this head's declaration: its declared
+    /// name, or the bare item name as a local spelling when the declaration is
+    /// anonymous. `None` when the head is unresolved or points at no
+    /// declaration. See [`DeclarationName::overlay_name`](crate::DeclarationName::overlay_name)
+    /// for the contract — this spelling is only meaningful against tables the
+    /// same call built.
+    #[must_use]
+    pub fn overlay_name(self) -> Option<baml_type::TypeName> {
+        if !self.is_resolved() {
+            return None;
+        }
+        // SAFETY: as in `declared_name`.
+        #[expect(
+            unsafe_code,
+            reason = "recovering a head's name requires reading its declaration"
+        )]
+        let object = unsafe { self.ptr.get() };
+        match object {
+            crate::Object::Class(class) => Some(class.name().overlay_name()),
+            crate::Object::Enum(enm) => Some(enm.name().overlay_name()),
+            crate::Object::Interface(iface) => Some(iface.name().overlay_name()),
+            crate::Object::TypeAlias(alias) => Some(alias.name().overlay_name()),
+            _ => None,
+        }
+    }
+
+    /// This head at the sys-op lane's head: the identity it already carries,
+    /// plus the declaration's own name read off the declaration.
+    ///
+    /// Nothing is fabricated — an anonymous declaration stays anonymous — and
+    /// nothing is a pointer, so the result survives the collector moving
+    /// objects while a sys-op awaits. `None` when the head is unresolved or
+    /// points at something that is not a declaration.
+    #[must_use]
+    pub fn tagged_name(self) -> Option<baml_type::TaggedTypeName> {
+        if !self.is_resolved() {
+            return None;
+        }
+        // SAFETY: as in `declared_name` — the caller holds the heap permit for
+        // the read, and a declaration is immutable after it is created.
+        #[expect(
+            unsafe_code,
+            reason = "reading a head's declaration to carry its name off the heap"
+        )]
+        let object = unsafe { self.ptr.get() };
+        let name = match object {
+            crate::Object::Class(class) => class.name(),
+            crate::Object::Enum(enm) => enm.name(),
+            crate::Object::Interface(iface) => iface.name(),
+            crate::Object::TypeAlias(alias) => alias.name(),
+            _ => return None,
+        };
+        Some(baml_type::TaggedTypeName::new(self.tag, name))
+    }
+
+    /// The mapper form of [`tagged_name`](Self::tagged_name), for pairing with
+    /// `try_map_heads` to carry a whole type onto the lane.
+    ///
+    /// # Errors
+    ///
+    /// [`UnnameableHead`](crate::UnnameableHead) when the head is unresolved or
+    /// does not point at a declaration.
+    pub fn to_tagged_name(&self) -> Result<baml_type::TaggedTypeName, crate::UnnameableHead> {
+        self.tagged_name().ok_or(crate::UnnameableHead(self.tag))
+    }
+
+    /// The mapper form of [`overlay_name`](Self::overlay_name), for pairing
+    /// with `try_map_heads` — the per-call twin of [`to_name`](Self::to_name).
+    ///
+    /// # Errors
+    ///
+    /// [`UnnameableHead`](crate::UnnameableHead) when the head is unresolved
+    /// or does not point at a declaration.
+    pub fn to_overlay_name(&self) -> Result<baml_type::TypeName, crate::UnnameableHead> {
+        self.overlay_name().ok_or(crate::UnnameableHead(self.tag))
+    }
+
+    /// Whether the pointer cache has been filled — false for a head straight out
+    /// of emit or a decoder, true once the loader has bound it.
+    #[must_use]
+    pub fn is_resolved(self) -> bool {
+        !self.ptr.as_ptr().is_null()
+    }
+
+    /// Fill in the access path for a head that arrived from emit or a decoder.
+    ///
+    /// The identity does not change — this only populates the cache — so
+    /// resolving late, or in any order, is safe. Resolving twice is not: it
+    /// means the loader visited one head through two paths and the second write
+    /// could disagree with the first.
+    pub fn resolve(&mut self, definition: HeapPtr) {
+        debug_assert!(
+            !self.is_resolved(),
+            "a head is resolved once; re-resolving means two loader paths reached it",
+        );
+        self.ptr = definition;
+    }
+
+    /// Where the declaration lives — for dereferencing it, and for the collector
+    /// to trace. Not an identity; compare [`tag`](Self::tag) instead.
+    ///
+    /// Null until [`resolve`](Self::resolve) has run; see
+    /// [`is_resolved`](Self::is_resolved).
+    #[must_use]
+    pub fn ptr(self) -> HeapPtr {
+        self.ptr
+    }
+
+    /// This head's identity.
+    #[must_use]
+    pub fn tag(self) -> TypeTag {
+        self.tag
+    }
+
+    /// Repoint this head after the collector has moved its declaration.
+    ///
+    /// Identity is untouched: a moved head remains equal to, and hashes and
+    /// orders with, every other reference to the same declaration.
+    pub fn forward_to(&mut self, moved: HeapPtr) {
+        debug_assert!(
+            self.is_resolved(),
+            "forwarding an unresolved head: the collector reached a head the loader never bound",
+        );
+        self.ptr = moved;
+    }
+}
+
+/// A head names itself by reaching its declaration — the runtime counterpart of
+/// a `QualifiedTypeName` answering from the name it already is.
+///
+/// Unresolved heads, and the tag of something that is not a declaration, render
+/// as their tag rather than a guess: a display path must never invent a name,
+/// and this is reached from `Display`, which cannot report an error.
+impl baml_type::HeadDisplay for TypeHead {
+    fn head_display_name(&self) -> String {
+        if !self.is_resolved() {
+            return format!("<unresolved type #{}>", self.tag.as_i64());
+        }
+        // SAFETY: a resolved head points at a declaration object. Compiled
+        // declarations live in the never-moved compile-time region; a
+        // runtime-created one lives in the moving region, where the caller's
+        // heap permit keeps the collector parked and head fixup has already
+        // forwarded this pointer past any earlier move. Read-only, and
+        // declarations are immutable after creation, so no aliasing obligation
+        // arises either.
+        #[expect(
+            unsafe_code,
+            reason = "naming a head requires reading the declaration it points at"
+        )]
+        let object = unsafe { self.ptr.get() };
+        match object {
+            crate::Object::Class(class) => class.name().display_name().to_string(),
+            crate::Object::Enum(enm) => enm.name().display_name().to_string(),
+            crate::Object::Interface(iface) => iface.name().display_name().to_string(),
+            crate::Object::TypeAlias(alias) => alias.name().display_name().to_string(),
+            _ => format!("<type #{}>", self.tag.as_i64()),
+        }
+    }
+}
+
+// All three relations key on `tag` alone — hand-written rather than derived,
+// since deriving would fold `ptr` in and make identity address-dependent.
+
+impl PartialEq for TypeHead {
+    fn eq(&self, other: &Self) -> bool {
+        self.tag == other.tag
+    }
+}
+
+impl Eq for TypeHead {}
+
+impl PartialOrd for TypeHead {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for TypeHead {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.tag.cmp(&other.tag)
+    }
+}
+
+impl std::hash::Hash for TypeHead {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.tag.hash(state);
+    }
+}
+
+// Only the tag field crosses a boundary — the pointer is a per-process cache
+// of the tag→declaration lookup, so writing it would be meaningless and
+// reading it back would be unsound. Decoding therefore yields an unresolved
+// head: an image's carries the tag the loader binds, a unit's carries the
+// declaration operand the linker or grafter relocates. The decoder cannot
+// tell the two apart and does not try: a head that names nothing is refused
+// where the image or unit is checked (`Program::validate`, the linker's and
+// grafter's operand checks), before any bind. Hand-written rather than
+// derived so `ptr` cannot be folded in by someone adding a `#[derive]`.
+
+impl borsh::BorshSerialize for TypeHead {
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        self.tag.serialize(writer)
+    }
+}
+
+impl borsh::BorshDeserialize for TypeHead {
+    fn deserialize_reader<R: std::io::Read>(reader: &mut R) -> std::io::Result<Self> {
+        Ok(Self {
+            ptr: HeapPtr::null(),
+            tag: TypeTag::deserialize_reader(reader)?,
+        })
+    }
+}
+
+#[cfg(test)]
+#[expect(
+    unsafe_code,
+    reason = "a head must be built from a real pointer to exercise its relations; \
+              these point at stack slots that outlive them and are never dereferenced"
+)]
+mod tests {
+    use super::*;
+
+    /// Point at `slot`, spanning both shapes of [`HeapPtr::from_ptr`] — the
+    /// `heap_debug` build takes an allocation epoch as well. Kept in one place
+    /// so the tests below read identically under either feature set.
+    fn ptr_to(slot: &mut crate::Object) -> HeapPtr {
+        let raw = std::ptr::from_mut(slot);
+        // SAFETY: every caller's slot outlives the head built from it, so the
+        // pointer stays valid; these tests exercise the relations, never a deref.
+        // The epoch is arbitrary for the same reason — nothing reads through it.
+        #[cfg(not(feature = "heap_debug"))]
+        unsafe {
+            HeapPtr::from_ptr(raw)
+        }
+        #[cfg(feature = "heap_debug")]
+        unsafe {
+            HeapPtr::from_ptr(raw, 0)
+        }
+    }
+
+    fn head(slot: &mut crate::Object, tag: i64) -> TypeHead {
+        TypeHead::new(ptr_to(slot), TypeTag::from_i64(tag))
+    }
+
+    fn slot() -> crate::Object {
+        crate::Object::String(bex_str::BexStr::empty())
+    }
+
+    /// Identity is the tag, not the address — so the same declaration reached
+    /// through two different pointers is one head, and `Eq`/`Ord` agree as the
+    /// `Ord` contract requires. Pins this against a future `derive`, which would
+    /// fold `ptr` back in.
+    #[test]
+    fn identity_is_the_tag_not_the_address() {
+        let (mut a, mut b) = (slot(), slot());
+        let first = head(&mut a, 100);
+        let second = head(&mut b, 101);
+
+        assert_ne!(first, second);
+        assert!(first < second);
+
+        // Distinct addresses, same tag: the same head. A stale pointer and a
+        // forwarded one must not look like two types.
+        let same_tag_elsewhere = head(&mut b, 100);
+        assert_eq!(first, same_tag_elsewhere);
+        assert_eq!(first.cmp(&same_tag_elsewhere), std::cmp::Ordering::Equal);
+
+        // `Ord` and `Eq` must not disagree, or `sort`/`dedup`/`BTreeMap` break.
+        for (x, y) in [(first, second), (first, same_tag_elsewhere)] {
+            assert_eq!(
+                x.cmp(&y) == std::cmp::Ordering::Equal,
+                x == y,
+                "cmp must report Equal exactly when eq does",
+            );
+        }
+    }
+
+    /// The property the collector depends on: moving a declaration changes its
+    /// address but nothing observable. Comparison never consults the pointer, so
+    /// a head is correct whether or not it has been forwarded yet — only
+    /// dereferencing needs the new address.
+    #[test]
+    fn forwarding_leaves_identity_untouched() {
+        use std::{
+            collections::hash_map::DefaultHasher,
+            hash::{Hash, Hasher},
+        };
+
+        let hash_of = |h: &TypeHead| {
+            let mut hasher = DefaultHasher::new();
+            h.hash(&mut hasher);
+            hasher.finish()
+        };
+
+        let (mut from_space, mut to_space, mut other) = (slot(), slot(), slot());
+        let before = head(&mut from_space, 500);
+        let ordering_peer = head(&mut other, 900);
+        let (hash_before, was_less) = (hash_of(&before), before < ordering_peer);
+
+        let mut after = before;
+        after.forward_to(ptr_to(&mut to_space));
+
+        assert_eq!(after, before, "a moved head is still the same head");
+        assert_eq!(after.tag(), before.tag());
+        assert_eq!(hash_of(&after), hash_before, "hash must survive a move");
+        assert_eq!(after < ordering_peer, was_less, "order must survive a move");
+        assert_ne!(
+            after.ptr(),
+            before.ptr(),
+            "only the access path changed, and it is not identity",
+        );
+    }
+
+    /// A head survives serialization as *the same head* with a cold pointer
+    /// cache — the property that lets a compiled `Program` carry heap-headed
+    /// types even though `Object`'s decoder has no heap to resolve against.
+    #[test]
+    fn serialization_keeps_identity_and_drops_the_cache() {
+        use borsh::BorshDeserialize;
+
+        let mut definition = slot();
+        let tag = TypeTag::of_static_index(7);
+        let resolved = TypeHead::new(ptr_to(&mut definition), tag);
+        assert!(resolved.is_resolved());
+
+        let decoded = TypeHead::try_from_slice(&borsh::to_vec(&resolved).expect("serialize"))
+            .expect("decode");
+        assert_eq!(decoded, resolved, "a decoded head is the same head");
+        assert!(!decoded.is_resolved(), "the pointer cache does not travel");
+
+        // An image carries the tag the linker assigned, and the loader binds
+        // it without disturbing identity.
+        let mut loaded = TypeHead::unresolved(tag);
+        assert_eq!(loaded, resolved);
+        loaded.resolve(ptr_to(&mut definition));
+        assert_eq!(loaded, resolved);
+        assert!(loaded.is_resolved());
+    }
+
+    /// In a unit a head is an operand: the declaration's object index stands
+    /// where the tag will, round-trips as itself, and reads back for the
+    /// relocation that replaces it with an assigned tag.
+    #[test]
+    fn a_unit_head_is_a_declaration_operand() {
+        use borsh::BorshDeserialize;
+
+        let operand = ObjectIndex::from_raw(3);
+        let head = TypeHead::unresolved_operand(operand);
+        assert!(!head.is_resolved());
+        assert_eq!(head.operand(), operand);
+
+        let decoded =
+            TypeHead::try_from_slice(&borsh::to_vec(&head).expect("serialize")).expect("decode");
+        assert_eq!(decoded.operand(), operand, "the operand travels as itself");
+
+        // One declaration, one operand: the relations hold within a unit
+        // before any tag exists.
+        assert_eq!(head, TypeHead::unresolved_operand(operand));
+        assert_ne!(head, TypeHead::unresolved_operand(ObjectIndex::from_raw(4)));
+
+        // A consumer reads the operand fallibly: a head outside the unit
+        // convention — a negative tag on the wire, a bound head — is `None`.
+        assert_eq!(head.try_operand(), Some(operand));
+        // A head decodes from its tag alone, so the wire can carry any tag.
+        let negative =
+            TypeHead::try_from_slice(&borsh::to_vec(&TypeTag::from_i64(-7)).expect("serialize"))
+                .expect("decode");
+        assert_eq!(negative.try_operand(), None);
+    }
+
+    /// A heap-headed type renders by reaching its declaration, so the runtime
+    /// gets real names out of `Display` without a package-map lookup — and an
+    /// unresolved head degrades to its tag instead of inventing one.
+    #[test]
+    fn a_heap_headed_type_renders_through_its_declaration() {
+        use baml_type::RealizedTy;
+
+        // A class's name is its path under its package's display name, so the
+        // class needs a package to be `demo.Person`.
+        let mut package = crate::Object::Package(Box::new(crate::types::Package::empty(
+            baml_base::Name::new("demo"),
+        )));
+        let mut declaration = crate::Object::Class(Box::new(crate::types::Class {
+            path: crate::types::LocalName::new(vec![], baml_base::Name::new("Person")),
+            fields: vec![],
+            description: None,
+            alias: None,
+            docstring: None,
+            other: indexmap::IndexMap::default(),
+            stream_done: false,
+            type_tag: TypeTag::of_static_index(0),
+            cleanup: None,
+            methods: indexmap::IndexMap::new(),
+            generic_param_count: 0,
+            owner: crate::types::Owner::Package(ptr_to(&mut package)),
+        }));
+
+        let mut head = TypeHead::unresolved(TypeTag::of_static_index(0));
+        let unresolved: RealizedTy<TypeHead> = RealizedTy::Class(head, Box::new([]));
+        assert_eq!(
+            unresolved.to_string(),
+            format!("<unresolved type #{}>", head.tag().as_i64()),
+        );
+
+        head.resolve(ptr_to(&mut declaration));
+        let ty: RealizedTy<TypeHead> =
+            RealizedTy::List(Box::new(RealizedTy::Class(head, Box::new([]))));
+        assert_eq!(ty.to_string(), "demo.Person[]");
+    }
+
+    /// A runtime-created declaration is *anonymous*: it carries an item name
+    /// and nothing else — no package, no namespace path. So the strict
+    /// outbound conversion refuses to name it (inventing a spelling is how a
+    /// runtime declaration would come to impersonate a compiled one), the
+    /// per-call seam spells it locally so a call's own tables can key on it,
+    /// and rendering shows what the user called it.
+    #[test]
+    fn an_anonymous_declaration_has_no_qualified_name() {
+        use baml_type::RealizedTy;
+
+        let type_tag = TypeTag::fresh_dynamic();
+        let mut declaration = crate::Object::Class(Box::new(crate::types::Class {
+            path: crate::types::LocalName::new(vec![], baml_base::Name::new("Widget")),
+            fields: vec![],
+            description: None,
+            alias: None,
+            docstring: None,
+            other: indexmap::IndexMap::default(),
+            stream_done: false,
+            type_tag,
+            cleanup: None,
+            methods: indexmap::IndexMap::new(),
+            generic_param_count: 0,
+            owner: crate::types::Owner::anonymous(),
+        }));
+        let head = TypeHead::new(ptr_to(&mut declaration), type_tag);
+
+        assert_eq!(head.declared_name(), None);
+        assert!(head.to_name().is_err());
+
+        let overlay = head
+            .overlay_name()
+            .expect("an anonymous head still spells locally");
+        assert!(overlay.is_local());
+        assert!(overlay.namespace().is_empty());
+        assert_eq!(overlay.name().as_str(), "Widget");
+
+        let ty: RealizedTy<TypeHead> = RealizedTy::Class(head, Box::new([]));
+        assert_eq!(ty.to_string(), "Widget");
+    }
+
+    /// Dynamic tags are disjoint from every link-assigned one, so a
+    /// runtime-created head can never be confused with a compiled declaration.
+    /// Primitives sit below both, and are not heads at all.
+    #[test]
+    fn dynamic_tags_never_collide_with_static_ones() {
+        let dynamic = TypeTag::fresh_dynamic();
+        assert!(dynamic.is_dynamic() && dynamic.is_head());
+        let last_static = TypeTag::of_static_index((1 << 47) - 1);
+        assert!(!last_static.is_dynamic() && last_static.is_head());
+        assert_eq!(last_static.static_index(), Some((1 << 47) - 1));
+        assert_eq!(dynamic.static_index(), None);
+        assert!(dynamic.as_i64() > last_static.as_i64());
+        assert_ne!(TypeTag::fresh_dynamic(), dynamic, "tags are never reused");
+
+        // The primitives share the space but are not declared heads.
+        for primitive in [
+            baml_type::typetag::INT,
+            baml_type::typetag::STRING,
+            baml_type::typetag::UNKNOWN,
+        ] {
+            assert!(!TypeTag::from_i64(primitive).is_head());
+        }
+    }
+
+    /// The head substitutes into the `baml_type` family, which is the point of
+    /// the whole exercise: the runtime's types are the *same* types the compiler
+    /// uses, at a different head, not a parallel hierarchy.
+    ///
+    /// Instantiating the family here is also what forces the per-monomorphization
+    /// layout asserts guarding the reinterpreting conversions to be evaluated at
+    /// `TypeHead` — they are inline `const` blocks in generic functions, so they
+    /// fire only where the instantiation actually exists.
+    #[test]
+    fn family_instantiates_at_a_heap_head() {
+        use baml_type::RealizedTy;
+
+        let mut definition = slot();
+        let head = TypeHead::new(ptr_to(&mut definition), TypeTag::of_static_index(11));
+
+        let ty: RealizedTy<TypeHead> =
+            RealizedTy::List(Box::new(RealizedTy::Class(head, Box::new([]))));
+
+        // The generated walk finds the head through the `Box`.
+        let mut seen = Vec::new();
+        ty.visit_heads(&mut |h| seen.push(*h));
+        assert_eq!(seen, vec![head]);
+
+        // And the widening conversion reinterprets at this head.
+        let widened = baml_type::Ty::from(&ty);
+        let mut seen_wide = Vec::new();
+        widened.visit_heads(&mut |h| seen_wide.push(*h));
+        assert_eq!(seen_wide, vec![head]);
+    }
+}
+
+#[cfg(test)]
+mod head_trait {
+    /// `TypeHead` satisfies the algebra's `Head` contract, so `RealizedTy<TypeHead>`
+    /// can be normalized/compared by the same code the compiler uses. Nothing
+    /// implements it explicitly — `Head` is blanket-implemented over its bounds,
+    /// so this asserts the bounds are actually met rather than assumed.
+    #[test]
+    fn type_head_is_a_head() {
+        fn assert_head<H: baml_type::Head>() {}
+        assert_head::<super::TypeHead>();
+    }
+}

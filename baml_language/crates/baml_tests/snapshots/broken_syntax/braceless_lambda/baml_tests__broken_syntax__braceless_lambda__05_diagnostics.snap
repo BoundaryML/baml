@@ -2,6 +2,14 @@
 source: crates/baml_tests/src/generated_tests.rs
 ---
 === COMPILER2 DIAGNOSTICS ===
+  [type] E0002
+
+  × unresolved type: x
+   ╭─[braceless_lambda.baml:8:26]
+ 8 │   let add1 = (x: int) => x + 1;
+   ·                          ─
+   ╰────
+
   [parse] E0010
 
   × unexpected token
@@ -10,6 +18,14 @@ source: crates/baml_tests/src/generated_tests.rs
    ·                            ┬
    ·                            ╰── expected `lambda body '{'`, found `'+'`
    ╰────
+
+  [type] E0002
+
+  × unresolved type: x
+    ╭─[braceless_lambda.baml:15:26]
+ 15 │   let add1 = (x: int) => x + ;
+    ·                          ─
+    ╰────
 
   [parse] E0010
 

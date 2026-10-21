@@ -1,7 +1,7 @@
 //! Unified CLI output policy.
 //!
-//! A preset produces a concrete output policy. Explicit CLI flags and their
-//! environment-variable equivalents override individual fields afterward.
+//! A preset produces a concrete output policy. Explicit CLI flags override
+//! individual fields afterward.
 
 use std::{io::IsTerminal, sync::RwLock};
 
@@ -12,12 +12,10 @@ use clap::{Args, ValueEnum};
 pub(crate) struct OutputArgs {
     #[arg(
         long = "output-preset",
-        env = "BAML_OUTPUT_PRESET",
         value_enum,
         value_name = "PRESET",
         help = "Select output defaults [default: auto] [possible values: auto, human, agent]",
         hide_default_value = true,
-        hide_env = true,
         hide_possible_values = true,
         default_value_t = OutputPreset::Auto,
         global = true,
@@ -28,11 +26,9 @@ pub(crate) struct OutputArgs {
 
     #[arg(
         long,
-        env = "BAML_COLOR",
         value_enum,
         value_name = "WHEN",
         help = "Control ANSI colors [possible values: auto, always, never]",
-        hide_env = true,
         hide_possible_values = true,
         global = true,
         help_heading = "Global options",
@@ -51,11 +47,9 @@ pub(crate) struct OutputArgs {
 
     #[arg(
         long,
-        env = "BAML_HYPERLINKS",
         value_enum,
         value_name = "WHEN",
         help = "Control terminal hyperlinks [possible values: auto, always, never]",
-        hide_env = true,
         hide_possible_values = true,
         global = true,
         help_heading = "Global options",
@@ -65,17 +59,29 @@ pub(crate) struct OutputArgs {
 
     #[arg(
         long = "diagnostic-format",
-        env = "BAML_DIAGNOSTIC_FORMAT",
         value_enum,
         value_name = "FORMAT",
         help = "Select the diagnostic format [possible values: human, agent, concise]",
-        hide_env = true,
         hide_possible_values = true,
         global = true,
         help_heading = "Global options",
         display_order = 90
     )]
     pub diagnostic_format: Option<DiagnosticFormatChoice>,
+
+    #[arg(
+        long = "agent-skill-check",
+        value_enum,
+        value_name = "MODE",
+        help = "Control BAML agent skill validation [default: auto] [possible values: auto, require, warn, off]",
+        hide_default_value = true,
+        hide_possible_values = true,
+        default_value_t = AgentSkillCheckChoice::Auto,
+        global = true,
+        help_heading = "Global options",
+        display_order = 95
+    )]
+    pub agent_skill_check: AgentSkillCheckChoice,
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -119,12 +125,33 @@ pub(crate) enum DiagnosticFormatChoice {
     Concise,
 }
 
+#[derive(ValueEnum, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum AgentSkillCheckChoice {
+    /// Require a matching skill for agents; warn for humans.
+    #[default]
+    Auto,
+    /// Fail when the matching skill is missing or outdated.
+    Require,
+    /// Warn when the matching skill is missing or outdated.
+    Warn,
+    /// Skip agent skill validation.
+    Off,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum AgentSkillCheckPolicy {
+    Require,
+    Warn,
+    Off,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct OutputPolicy {
     pub stdout: StreamPolicy,
     pub stderr: StreamPolicy,
     pub diagnostics: DiagnosticPolicy,
     pub progress: bool,
+    pub agent_skill_check: AgentSkillCheckPolicy,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -163,18 +190,20 @@ const DEFAULT_POLICY: OutputPolicy = OutputPolicy {
         show_error_codes: true,
     },
     progress: true,
+    agent_skill_check: AgentSkillCheckPolicy::Warn,
 };
 
 static OUTPUT_POLICY: RwLock<OutputPolicy> = RwLock::new(DEFAULT_POLICY);
 
 /// Resolve and install the process-wide output policy before a command writes.
-pub(crate) fn init(args: OutputArgs) {
-    let policy = resolve(args, output_signals());
+pub(crate) fn init(args: OutputArgs) -> Result<(), baml_env::EnvError> {
+    let policy = resolve(args, output_signals()?);
     console::set_colors_enabled(policy.stdout.color);
     console::set_colors_enabled_stderr(policy.stderr.color);
     *OUTPUT_POLICY
         .write()
         .unwrap_or_else(std::sync::PoisonError::into_inner) = policy;
+    Ok(())
 }
 
 pub(crate) fn policy() -> OutputPolicy {
@@ -219,6 +248,12 @@ fn resolve(args: OutputArgs, signals: OutputSignals) -> OutputPolicy {
     if args.no_progress {
         policy.progress = false;
     }
+    policy.agent_skill_check = match args.agent_skill_check {
+        AgentSkillCheckChoice::Auto if signals.running_in_agent => AgentSkillCheckPolicy::Require,
+        AgentSkillCheckChoice::Auto | AgentSkillCheckChoice::Warn => AgentSkillCheckPolicy::Warn,
+        AgentSkillCheckChoice::Require => AgentSkillCheckPolicy::Require,
+        AgentSkillCheckChoice::Off => AgentSkillCheckPolicy::Off,
+    };
 
     policy
 }
@@ -240,6 +275,7 @@ impl OutputPreset {
                     show_error_codes: true,
                 },
                 progress: false,
+                agent_skill_check: AgentSkillCheckPolicy::Warn,
             },
             Self::Human | Self::Auto => OutputPolicy {
                 stdout: StreamPolicy {
@@ -255,6 +291,7 @@ impl OutputPreset {
                     show_error_codes: true,
                 },
                 progress: true,
+                agent_skill_check: AgentSkillCheckPolicy::Warn,
             },
         }
     }
@@ -276,15 +313,15 @@ fn resolve_hyperlinks(choice: HyperlinkChoice, is_terminal: bool) -> bool {
     }
 }
 
-fn output_signals() -> OutputSignals {
-    OutputSignals {
-        running_in_agent: running_in_agent(),
+fn output_signals() -> Result<OutputSignals, baml_env::EnvError> {
+    Ok(OutputSignals {
+        running_in_agent: running_in_agent()?,
         color_forced: env_truthy("CLICOLOR_FORCE"),
         stdout_auto_color: auto_color(&console::Term::stdout()),
         stderr_auto_color: auto_color(&console::Term::stderr()),
         stdout_is_terminal: std::io::stdout().is_terminal(),
         stderr_is_terminal: std::io::stderr().is_terminal(),
-    }
+    })
 }
 
 fn auto_color(term: &console::Term) -> bool {
@@ -293,11 +330,11 @@ fn auto_color(term: &console::Term) -> bool {
 }
 
 fn env_equals(var: &str, expected: &str) -> bool {
-    std::env::var(var).is_ok_and(|value| value == expected)
+    baml_env::raw_var(var).is_some_and(|value| value == expected)
 }
 
 fn env_truthy(var: &str) -> bool {
-    std::env::var(var).is_ok_and(|value| !value.is_empty() && value != "0")
+    baml_env::raw_var(var).is_some_and(|value| !value.is_empty() && value != "0")
 }
 
 /// Environment variables that identify a known coding-agent process.
@@ -312,8 +349,16 @@ const AGENT_ENV_VARS: &[&str] = &[
     "AGENT",
 ];
 
-fn running_in_agent() -> bool {
-    AGENT_ENV_VARS.iter().any(|var| env_truthy(var))
+/// Dev-only escape hatch for tools that spawn the CLI from inside an agent's
+/// shell (pre-commit hooks, task runners): skip the agent-variable checks so
+/// the run is treated as human and the skill check does not apply.
+const DISABLE_AGENT_DETECTION_ENV: &str = "DEV_BAML_CLI_DISABLE_AGENT_DETECTION";
+
+fn running_in_agent() -> Result<bool, baml_env::EnvError> {
+    if baml_env::bool_var(DISABLE_AGENT_DETECTION_ENV)? == Some(true) {
+        return Ok(false);
+    }
+    Ok(AGENT_ENV_VARS.iter().any(|var| env_truthy(var)))
 }
 
 #[cfg(test)]
@@ -336,6 +381,7 @@ mod tests {
             no_progress: false,
             hyperlinks: None,
             diagnostic_format: None,
+            agent_skill_check: AgentSkillCheckChoice::Auto,
         }
     }
 
@@ -355,6 +401,7 @@ mod tests {
         assert!(!policy.stderr.hyperlinks);
         assert_eq!(policy.diagnostics.format, DiagnosticFormat::Agent);
         assert!(!policy.progress);
+        assert_eq!(policy.agent_skill_check, AgentSkillCheckPolicy::Require);
     }
 
     #[test]
@@ -376,6 +423,7 @@ mod tests {
         assert!(policy.stderr.hyperlinks);
         assert_eq!(policy.diagnostics.format, DiagnosticFormat::Human);
         assert!(policy.progress);
+        assert_eq!(policy.agent_skill_check, AgentSkillCheckPolicy::Warn);
     }
 
     #[test]
@@ -420,5 +468,48 @@ mod tests {
         assert!(!policy.stdout.hyperlinks);
         assert!(!policy.stderr.hyperlinks);
         assert_eq!(policy.diagnostics.format, DiagnosticFormat::Agent);
+    }
+
+    #[test]
+    fn explicit_agent_skill_check_overrides_detection() {
+        for (choice, running_in_agent, expected) in [
+            (
+                AgentSkillCheckChoice::Require,
+                false,
+                AgentSkillCheckPolicy::Require,
+            ),
+            (
+                AgentSkillCheckChoice::Warn,
+                true,
+                AgentSkillCheckPolicy::Warn,
+            ),
+            (AgentSkillCheckChoice::Off, true, AgentSkillCheckPolicy::Off),
+        ] {
+            let mut output_args = args(OutputPreset::Auto);
+            output_args.agent_skill_check = choice;
+            let policy = resolve(
+                output_args,
+                OutputSignals {
+                    running_in_agent,
+                    ..INTERACTIVE
+                },
+            );
+
+            assert_eq!(policy.agent_skill_check, expected);
+        }
+    }
+
+    #[test]
+    fn explicit_human_output_does_not_disable_agent_skill_requirement() {
+        let policy = resolve(
+            args(OutputPreset::Human),
+            OutputSignals {
+                running_in_agent: true,
+                ..INTERACTIVE
+            },
+        );
+
+        assert_eq!(policy.diagnostics.format, DiagnosticFormat::Human);
+        assert_eq!(policy.agent_skill_check, AgentSkillCheckPolicy::Require);
     }
 }

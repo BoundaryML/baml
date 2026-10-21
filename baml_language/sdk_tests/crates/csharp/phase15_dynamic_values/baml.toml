@@ -1,7 +1,0 @@
-[package]
-name = "csharp-phase15-dynamic-values"
-
-[generator.csharp]
-output_type = "csharp"
-output_dir = "."
-naming_convention = "language"

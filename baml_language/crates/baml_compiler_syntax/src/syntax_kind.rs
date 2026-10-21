@@ -23,7 +23,6 @@ pub enum SyntaxKind {
     KW_TESTSET,
     KW_RETRY_POLICY,
     KW_TEMPLATE_STRING,
-    KW_TYPE_BUILDER,
 
     // Control flow keywords
     KW_IF,
@@ -49,7 +48,6 @@ pub enum SyntaxKind {
     // Other keywords
     KW_INSTANCEOF,
     KW_IS,
-    KW_DYNAMIC,
     KW_WITH,
     // Contextual keywords re-lexed from a `Word` at parse time (no lexer token).
     KW_AS,    // `.as<T>` cast / `(T as I)` / `field as field`
@@ -66,7 +64,7 @@ pub enum SyntaxKind {
 
     // String delimiters (parser assembles strings)
     QUOTE,    // "
-    HASH,     // # (for raw strings)
+    HASH,     // # (for removed hash string recovery)
     BACKTICK, // ` (for BEP-049 interpolated strings)
 
     // Brackets
@@ -162,14 +160,11 @@ pub enum SyntaxKind {
     INTERFACE_DEF,
     CLIENT_DEF,
     GENERATOR_DEF,
-    TEST_DEF,
     TEST_EXPR_DEF,
     TESTSET_DEF,
     RETRY_POLICY_DEF,
     TEMPLATE_STRING_DEF,
     TYPE_ALIAS_DEF,
-    TYPE_BUILDER_BLOCK, // type_builder { ... } inside test definitions
-    DYNAMIC_TYPE_DEF,   // dynamic class/enum inside type_builder blocks
 
     // Function components
     PARAMETER_LIST,
@@ -226,8 +221,8 @@ pub enum SyntaxKind {
     FUNCTION_TYPE_PARAM, // x: int (or just int)
 
     // Attributes
-    ATTRIBUTE,       // @alias("name")
-    BLOCK_ATTRIBUTE, // @@dynamic
+    ATTRIBUTE, // @alias("name")
+    BLOCK_ATTRIBUTE,
     ATTRIBUTE_ARGS,
 
     // Expressions (for attributes and function bodies)
@@ -263,10 +258,22 @@ pub enum SyntaxKind {
     FIELD_ACCESS_EXPR,
     /// Explicit interface/static upcast projection: `<expr>.as<T>`.
     UPCAST_EXPR,
-    /// LLM function spec reference: `MyFunc@spec` (postfix `@spec` on a path).
+    /// Fully-qualified item reference: `(Base as Interface).item`.
     ///
-    /// Structure: `<PATH_EXPR> AT WORD("spec")`. Lowered by renaming the
-    /// path's last segment to the `<name>$spec` companion function.
+    /// Structure: `L_PAREN TYPE_EXPR KW_AS TYPE_EXPR R_PAREN DOT WORD` — the
+    /// value-namespace twin of the associated-type projection the same
+    /// spelling denotes in type position, and the only spelling that pins
+    /// BOTH halves of the `(Self type, interface, item)` triple. Needed
+    /// wherever neither half can be inferred: a method declared by two
+    /// implemented interfaces, or one whose `Self` appears only in return
+    /// position.
+    QUALIFIED_PATH_EXPR,
+    /// LLM function companion reference: a postfix `@` selector on a path,
+    /// such as `MyFunc@spec`, `MyFunc@stream`, `MyFunc@render_prompt`,
+    /// `MyFunc@build_request`, or `MyFunc@parse`.
+    ///
+    /// Structure: `<PATH_EXPR> AT WORD(selector)`. Lowered by renaming the
+    /// path's last segment to `<name>@<selector>` for the matched selector.
     SPEC_EXPR,
     /// Optional field access: `obj?.field` — short-circuits to null if base is null.
     ///
@@ -395,6 +402,11 @@ pub enum SyntaxKind {
     WHILE_LET_STMT,
     FOR_EXPR,
     LET_STMT,
+    /// Scoped runtime type binding:
+    /// `let type T [extends A & B] = expr [else { … }];`. Also the recovery
+    /// node for the removed `type T = <type>;` body statement, which has no
+    /// `KW_LET` and a `TYPE_EXPR` right-hand side.
+    TYPE_BINDING_STMT,
     BREAK_STMT,
     CONTINUE_STMT,
     RETURN_STMT,
@@ -407,6 +419,9 @@ pub enum SyntaxKind {
     CALL_ARGS,
     CALL_ARG,
     GENERIC_ARGS,
+    /// The removed `unreflect(expr)` type atom, kept so it recovers with a
+    /// diagnostic that points at `let type`.
+    UNREFLECT_TYPE,
     /// Declaration-site generic type parameter list: `<T>` or `<K, V>` on class/function defs.
     GENERIC_PARAM_LIST,
     /// A single type parameter name inside a `GENERIC_PARAM_LIST`.
@@ -423,8 +438,9 @@ pub enum SyntaxKind {
 
     // String components (assembled by parser)
     STRING_LITERAL,
-    RAW_STRING_LITERAL,
-    BYTE_STRING_LITERAL,
+    DEPRECATED_HASH_STRING_LITERAL, // removed `#"..."#` strings, kept for diagnostics
+    RAW_STRING_LITERAL,             // r"..."
+    BYTE_STRING_LITERAL,            // b"..."
     UNQUOTED_STRING,
 
     // Backtick interpolated string (BEP-049)
@@ -533,7 +549,6 @@ impl SyntaxKind {
                 | Self::KW_TESTSET
                 | Self::KW_RETRY_POLICY
                 | Self::KW_TEMPLATE_STRING
-                | Self::KW_TYPE_BUILDER
                 | Self::KW_IF
                 | Self::KW_ELSE
                 | Self::KW_FOR
@@ -555,7 +570,6 @@ impl SyntaxKind {
                 | Self::KW_AWAIT
                 | Self::KW_DEFER
                 | Self::KW_INSTANCEOF
-                | Self::KW_DYNAMIC
                 | Self::KW_WITH
                 | Self::KW_AS
                 | Self::KW_TYPE

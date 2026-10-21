@@ -1,9 +1,7 @@
 //! BamlRuntime PyO3 class - wraps `Arc<dyn Bex>`.
 
-use bridge_ctypes::{HANDLE_TABLE, kwargs_to_bex_values};
-use prost::Message;
 use pyo3::{
-    Py, Python,
+    IntoPyObjectExt, Py, Python,
     prelude::{PyResult, pyfunction, pymethods},
     pyclass,
     types::PyAny,
@@ -14,21 +12,9 @@ use pyo3_stub_gen::{
 };
 
 use crate::{
+    callback_dispatch::{DispatchScope, SyncMessage},
     errors::{bridge_error_to_sdk_panic, py_sdk_panic},
-    types::collector::Collector,
 };
-
-struct DecodedCallArgs {
-    kwargs: bex_project::BexArgs,
-    call_id: bex_project::CallId,
-    target: bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget,
-    /// Explicit, named `TypeVar` bindings for a generic call (`_types=` + a
-    /// generic receiver's class type args): `TypeVar name -> concrete type`,
-    /// insertion order is De Bruijn order. Empty for non-generic calls. The
-    /// engine maps each name onto the entry-frame `type_args` slot by matching
-    /// the callee's generic params.
-    type_args: indexmap::IndexMap<String, bex_project::RuntimeTy>,
-}
 
 /// The main BAML runtime. A zero-sized handle: the single source of truth for
 /// the `Arc<dyn Bex>` singleton is `bridge_cffi`, fetched via
@@ -74,14 +60,11 @@ impl BamlRuntime {
     /// * `bytecode` - borsh-encoded BAML bytecode program
     #[staticmethod]
     #[pyo3(signature = (bytecode, embedded_baml_toml=None))]
-    fn initialize_runtime_from_bytecode(
+    fn initialize_runtime_from_blob(
         bytecode: Vec<u8>,
         embedded_baml_toml: Option<String>,
     ) -> PyResult<Self> {
-        match bridge_cffi::initialize_runtime_from_bytecode(
-            &bytecode,
-            embedded_baml_toml.as_deref(),
-        ) {
+        match bridge_cffi::initialize_runtime_from_blob(&bytecode, embedded_baml_toml.as_deref()) {
             Ok(_bex) => Ok(BamlRuntime),
             Err(e) => Err(crate::errors::bridge_error_to_initialization_error(e)),
         }
@@ -96,10 +79,10 @@ submit! {
         import typing
 
         class BamlRuntime:
-            def call_function(self, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None) -> typing.Any:
+            def call_function(self, args_proto: bytes, *, stream: bool = False) -> typing.Any:
                 """Call a BAML function asynchronously."""
 
-            def call_function_sync(self, args_proto: bytes, ctx: typing.Optional["HostSpanManager"] = None, collectors: typing.Optional[typing.Sequence["Collector"]] = None) -> bytes:
+            def call_function_sync(self, args_proto: bytes, *, stream: bool = False) -> typing.Any:
                 """Call a BAML function synchronously (blocking)."""
         "#
     }
@@ -111,51 +94,33 @@ impl BamlRuntime {
     ///
     /// # Arguments
     /// * `args_proto` - Protobuf-encoded `CallFunctionArgs` including its target
-    /// * `ctx` - Accepted for ABI compatibility; currently ignored
-    /// * `collectors` - Accepted for ABI compatibility; currently ignored
-    #[pyo3(signature = (args_proto, ctx=None, collectors=None))]
+    #[pyo3(signature = (args_proto, *, stream=false))]
     fn call_function<'py>(
         &self,
         py: Python<'py>,
         args_proto: Vec<u8>,
-        ctx: Option<&crate::types::HostSpanManager>,
-        collectors: Option<Vec<pyo3::PyRef<'py, Collector>>>,
+        stream: bool,
     ) -> PyResult<Py<PyAny>> {
         // Byte-returning site (32c): pre-call host-boundary failures don't
         // raise — they become a structured BamlOutboundResult envelope so the
         // future yields bytes that decode_call_result raises uniformly (same
         // BamlError(baml.errors.*) as an engine failure).
-        let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
-            let runtime = bridge_cffi::get_runtime()?;
-            let decoded = decode_args(&args_proto)?;
-            Ok((runtime, decoded))
-        })();
+        // `decode_invocation_request` pins a handle target before we yield to the event
+        // loop, so a Python-side release of that handle cannot race the call.
+        let request = bridge_cffi::decode_invocation_request(&args_proto);
 
-        // Tracing is a no-op: `ctx`/`collectors` are accepted for ABI
-        // stability but no longer wired into the call context.
-        let _ = (&ctx, &collectors);
+        let environment = match &request {
+            Ok(call) => Some(DispatchScope::asynchronous(py, call.host_call_id())?),
+            Err(_) => None,
+        };
 
         // The whole Result -> BamlOutboundResult translation (incl. the
         // catch_unwind -> SdkPanic boundary) lives in bridge_cffi; we just
         // return the encoded envelope bytes for Python to decode + raise.
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let bytes = match prepared {
-                Ok((runtime, decoded)) => {
-                    let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
-                        .with_type_args(decoded.type_args)
-                        .build();
-                    match decoded.target {
-                        bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionName(function_name) => {
-                            bridge_cffi::call_and_encode(runtime, function_name, decoded.kwargs, call_ctx).await
-                        }
-                        bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionHandle(handle_key) => {
-                            bridge_cffi::call_handle_and_encode(runtime, handle_key, decoded.kwargs, call_ctx).await
-                        }
-                    }
-                }
-                Err(e) => bridge_cffi::error_to_outbound(e),
-            };
-            Ok(bytes)
+            let _environment = environment;
+            let (bytes, retained) = execute_python_invocation(request, stream).await;
+            Python::attach(|py| result_with_stream(py, bytes, retained, stream))
         })
         .map(pyo3::Bound::into)
     }
@@ -164,94 +129,80 @@ impl BamlRuntime {
     ///
     /// # Arguments
     /// * `args_proto` - Protobuf-encoded `CallFunctionArgs` including its target
-    /// * `ctx` - Accepted for ABI compatibility; currently ignored
-    /// * `collectors` - Accepted for ABI compatibility; currently ignored
-    #[pyo3(signature = (args_proto, ctx=None, collectors=None))]
+    #[pyo3(signature = (args_proto, *, stream=false))]
     fn call_function_sync(
         &self,
         py: Python<'_>,
         args_proto: Vec<u8>,
-        ctx: Option<&crate::types::HostSpanManager>,
-        collectors: Option<Vec<pyo3::PyRef<'_, Collector>>>,
-    ) -> PyResult<Vec<u8>> {
+        stream: bool,
+    ) -> PyResult<Py<PyAny>> {
         // Byte-returning site (32c): pre-call host-boundary failures
         // (uninitialized runtime, malformed call-args, no tokio runtime) don't
         // raise — they become a structured BamlOutboundResult envelope so the
         // returned bytes decode + raise uniformly via decode_call_result.
-        let prepared = (|| -> Result<_, bridge_cffi::BridgeError> {
-            let runtime = bridge_cffi::get_runtime()?;
-            let decoded = decode_args(&args_proto)?;
+        let request = (|| -> Result<_, bridge_cffi::BridgeError> {
+            let request = bridge_cffi::decode_invocation_request(&args_proto)?;
             let rt = bridge_cffi::get_tokio_runtime()?;
-            Ok((runtime, decoded, rt))
+            Ok((request, rt))
         })();
 
-        let (runtime, decoded, rt) = match prepared {
+        let (request, rt) = match request {
             Ok(v) => v,
-            Err(e) => return Ok(bridge_cffi::error_to_outbound(e)),
+            Err(e) => {
+                return result_with_stream(py, bridge_cffi::error_to_outbound(e), None, stream);
+            }
         };
 
-        // Tracing is a no-op: `ctx`/`collectors` are accepted for ABI
-        // stability but no longer wired into the call context.
-        let _ = (&ctx, &collectors);
-        let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
-            .with_type_args(decoded.type_args)
-            .build();
-
-        // Same shared call_and_encode as the async + C-ABI paths — returns the
+        // Same shared execute_invocation as the async + C-ABI paths — returns the
         // encoded BamlOutboundResult envelope bytes.
-        let bytes = py.detach(|| match decoded.target {
-            bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionName(
-                function_name,
-            ) => rt.block_on(bridge_cffi::call_and_encode(
-                runtime,
-                function_name,
-                decoded.kwargs,
-                call_ctx,
-            )),
-            bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionHandle(
-                handle_key,
-            ) => rt.block_on(bridge_cffi::call_handle_and_encode(
-                runtime,
-                handle_key,
-                decoded.kwargs,
-                call_ctx,
-            )),
+        let call_id = request.host_call_id();
+        let (sender, mut receiver) = std::sync::mpsc::channel();
+        let _environment = DispatchScope::synchronous(call_id, sender.clone())?;
+        let (retained_sender, retained_receiver) = std::sync::mpsc::channel();
+        let task = rt.spawn(async move {
+            let (bytes, retained) = execute_python_invocation(Ok(request), stream).await;
+            let _ = retained_sender.send(retained);
+            bytes
         });
-        Ok(bytes)
+        // Observe panics/cancellation of the engine task as well as normal
+        // results; a producer disappearing must never strand the caller queue.
+        rt.spawn(async move {
+            let bytes = match task.await {
+                Ok(bytes) => bytes,
+                Err(error) => bridge_cffi::error_to_outbound(bridge_cffi::BridgeError::Internal(
+                    format!("BAML execution task failed: {error}"),
+                )),
+            };
+            let _ = sender.send(SyncMessage::Finished(bytes));
+        });
+        loop {
+            let message = py.detach({
+                let receiver = &mut receiver;
+                move || receiver.recv_timeout(std::time::Duration::from_millis(100))
+            });
+            if let Err(error) = py.check_signals() {
+                bridge_cffi::cancel_function_call_by_id(call_id);
+                return Err(error);
+            }
+            match message {
+                Ok(SyncMessage::Dispatch(dispatch)) => crate::host_value::dispatch_sync(dispatch),
+                Ok(SyncMessage::Finished(bytes)) => {
+                    return result_with_stream(
+                        py,
+                        bytes,
+                        retained_receiver.try_recv().ok().flatten(),
+                        stream,
+                    );
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err(py_sdk_panic(
+                        "BAML callback queue disconnected before completion",
+                    ));
+                }
+            }
+        }
     }
-}
-
-/// Decode protobuf-encoded function arguments into `BexArgs`.
-///
-/// Returns a `BridgeError` (not a `PyErr`) so the byte-returning call sites can
-/// route the failure through `bridge_cffi::error_to_outbound` into the
-/// structured `BamlOutboundResult` envelope (32c) rather than raising.
-fn decode_args(args_proto: &[u8]) -> Result<DecodedCallArgs, bridge_cffi::BridgeError> {
-    use bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget;
-
-    let args = bridge_ctypes::baml_bridge::cffi::CallFunctionArgs::decode(args_proto)
-        .map_err(bridge_ctypes::CtypesError::from)?;
-
-    if args.call_id == 0 {
-        return Err(bridge_cffi::BridgeError::InvalidCallId);
-    }
-
-    let call_id = bex_project::CallId(args.call_id);
-    let target = args
-        .call_target
-        .ok_or(bridge_cffi::BridgeError::MissingCallTarget)?;
-    if matches!(target, CallTarget::FunctionHandle(_)) && !args.type_args.is_empty() {
-        return Err(bridge_cffi::BridgeError::FunctionHandleTypeArgs);
-    }
-    let type_args = bridge_ctypes::proto_ty_args_to_named(&args.type_args)?;
-    let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)?;
-
-    Ok(DecodedCallArgs {
-        kwargs: kwargs.into(),
-        call_id,
-        target,
-        type_args,
-    })
 }
 
 /// Return the process-global `BamlRuntime`, or raise `BamlError` if
@@ -275,4 +226,47 @@ pub fn get_runtime() -> PyResult<BamlRuntime> {
         other => bridge_error_to_sdk_panic(other),
     })?;
     Ok(BamlRuntime)
+}
+
+type RetainedStream = (bex_project::HostInvocation, crate::py_handle::BamlPyHandle);
+
+async fn execute_python_invocation(
+    request: Result<bridge_cffi::InvocationRequest, bridge_cffi::BridgeError>,
+    stream: bool,
+) -> (Vec<u8>, Option<RetainedStream>) {
+    let mut request = match request {
+        Ok(request) => request,
+        Err(error) => return (bridge_cffi::error_to_outbound(error), None),
+    };
+    let retained = if stream {
+        match request.retain_stream().await {
+            Ok((execution, key)) => Some((
+                execution,
+                crate::py_handle::BamlPyHandle::new(
+                    key,
+                    bridge_ctypes::baml_bridge::cffi::BamlHandleType::InvocationState as u64,
+                ),
+            )),
+            Err(error) => return (bridge_cffi::error_to_outbound(error), None),
+        }
+    } else {
+        None
+    };
+    (bridge_cffi::execute_invocation(request).await, retained)
+}
+
+fn result_with_stream(
+    py: Python<'_>,
+    bytes: Vec<u8>,
+    retained: Option<RetainedStream>,
+    stream: bool,
+) -> PyResult<Py<PyAny>> {
+    if stream {
+        let frame = retained
+            .map(|(execution, key)| crate::invocation::stream_frame(execution, key))
+            .transpose()?;
+        (bytes, frame).into_py_any(py)
+    } else {
+        bytes.into_py_any(py)
+    }
 }

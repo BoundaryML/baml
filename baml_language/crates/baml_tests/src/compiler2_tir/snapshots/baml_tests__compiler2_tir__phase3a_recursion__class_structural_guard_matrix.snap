@@ -1,0 +1,27 @@
+---
+source: crates/baml_tests/src/compiler2_tir/phase3a_recursion.rs
+expression: "render_labeled_cases(&[(\"class_optional_field_breaks_cycle\",\n\"class A { b B? }\\nclass B { a A }\",),\n(\"class_list_field_breaks_cycle\", \"class A { bs B[] }\\nclass B { a A }\",),\n(\"class_map_field_breaks_cycle\",\n\"class A { bm map<string, B> }\\nclass B { a A }\",),])"
+---
+=== class_optional_field_breaks_cycle ===
+class user.A {
+  b: user.B | null
+}
+class user.B {
+  a: user.A
+}
+
+=== class_list_field_breaks_cycle ===
+class user.A {
+  bs: user.B[]
+}
+class user.B {
+  a: user.A
+}
+
+=== class_map_field_breaks_cycle ===
+class user.A {
+  bm: map<string, user.B>
+}
+class user.B {
+  a: user.A
+}

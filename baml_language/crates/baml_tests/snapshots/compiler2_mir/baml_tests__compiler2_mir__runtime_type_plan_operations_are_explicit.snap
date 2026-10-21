@@ -1,0 +1,58 @@
+---
+source: crates/baml_tests/src/compiler2_mir/mod.rs
+---
+fn user.accept(value: T) -> T {
+    // Locals:
+    let _0: T // _0 // return
+    let _1: T // value // param
+
+    bb0: {
+        _0 = copy _1;
+        goto -> bb1;
+    }
+
+    bb1: {
+        return;
+    }
+}
+
+fn user.f(t: reflect.Type, value: unknown) -> bool {
+    // Locals:
+    let _0: bool // _0 // return
+    let _1: reflect.Type // t // param
+    let _2: unknown // value // param
+    let _3: unknown
+    let _4: T // x
+    let _5: T
+    let _6: T
+    let _7: reflect.Type
+    let _8: bool
+
+    bb0: {
+        bind_type(0, copy _1);
+        _3 = copy _2;
+        _3 = narrow_bind copy _3 as TypeArgRef(0) -> [bb2, bb1];
+    }
+
+    bb1: {
+        _0 = const false;
+        goto -> bb4;
+    }
+
+    bb2: {
+        _4 = copy _3;
+        _6 = copy _4;
+        _7 = load_type(#0);
+        _5 = call const fn user.accept<copy _7>(copy _6) -> [bb3];
+    }
+
+    bb3: {
+        _8 = is_type(copy _5, #0);
+        _0 = copy _8;
+        goto -> bb4;
+    }
+
+    bb4: {
+        return;
+    }
+}

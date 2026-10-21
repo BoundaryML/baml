@@ -69,7 +69,7 @@ impl BamlClassFutureFuture for PackageBamlImpl {
         };
         // Surface `InternalError` as `is_error()` too — both are "future
         // failed" from the user's point of view; the user-facing enum
-        // `FutureState` has no separate `InternalError` variant.
+        // `State` has no separate `InternalError` variant.
         matches!(
             fut.read(),
             FutureRead::Error(_) | FutureRead::InternalError(_)
@@ -87,19 +87,19 @@ impl BamlClassFutureFuture for PackageBamlImpl {
             FutureRead::Error(_) | FutureRead::InternalError(_) => "Error",
             FutureRead::Cancelled => "Cancelled",
         };
-        let Some(enm_ptr) = vm.lookup_type_by_fqn("baml.future.FutureState") else {
-            return Value::NULL;
-        };
-        // SAFETY: enm_ptr came from resolved_class_names which holds
-        // compile-time-registered HeapPtrs valid for the program's lifetime.
+        // `baml.future.State` and its variants are the stdlib's own; a miss is
+        // the stdlib and the runtime out of step, not a null state.
+        let enm_ptr = vm.lang_object(crate::lang_items::BAML_FUTURE_STATE);
+        // SAFETY: `enm_ptr` is a compile-time declaration pointer, valid for
+        // the program's lifetime.
         let idx = match unsafe { enm_ptr.get() } {
             Object::Enum(e) => e.variants.iter().position(|v| v.name == variant_name),
             _ => None,
         };
-        match idx {
-            Some(i) => Value::object(vm.alloc_variant(enm_ptr, i)),
-            None => Value::NULL,
-        }
+        let idx = idx.unwrap_or_else(|| {
+            unreachable!("`baml.future.State` declares the variant `{variant_name}`")
+        });
+        Value::object(vm.alloc_variant(enm_ptr, idx))
     }
 }
 

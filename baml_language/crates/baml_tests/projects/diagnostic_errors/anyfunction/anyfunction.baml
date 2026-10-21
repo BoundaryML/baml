@@ -1,4 +1,4 @@
-// BEP-062: baml.AnyFunction is a compiler builtin. It cannot be implemented
+// BEP-062: reflect.AnyFunction is a compiler builtin. It cannot be implemented
 // by hand (E0153) and cannot be used as a generic bound (E0154) on
 // functions, classes, impl generics, or associated types.
 
@@ -6,19 +6,19 @@ class MyTool {
     name string
 }
 
-implements baml.AnyFunction for MyTool {
+implements reflect.AnyFunction for MyTool {
 }
 
-function pick<T extends baml.AnyFunction>(f: T) -> T throws never {
+function pick<T extends reflect.AnyFunction>(f: T) -> T throws never {
     return f
 }
 
-class Holder<T extends baml.AnyFunction> {
+class Holder<T extends reflect.AnyFunction> {
     f T
 }
 
 interface Registry {
-    type Callee extends baml.AnyFunction
+    type Callee extends reflect.AnyFunction
 }
 
 // BEP-062: AnyFunction coercion failures. The derived conformance checks the
@@ -42,10 +42,10 @@ function web_search(q: string) -> Doc[] throws ToolError {
 }
 
 function main() -> int throws never {
-    let bad_ret: baml.AnyFunction<Returns = string> = web_search
-    let bad_throws: baml.AnyFunction<Throws = never> = web_search
-    let not_a_fn: baml.AnyFunction = 42
-    let narrow: baml.AnyFunction<Returns = Doc[]> = web_search
-    let bad_widen: baml.AnyFunction<Returns = string> = narrow
+    let bad_ret: reflect.AnyFunction<Returns = string> = web_search
+    let bad_throws: reflect.AnyFunction<Throws = never> = web_search
+    let not_a_fn: reflect.AnyFunction = 42
+    let narrow: reflect.AnyFunction<Returns = Doc[]> = web_search
+    let bad_widen: reflect.AnyFunction<Returns = string> = narrow
     return 0
 }

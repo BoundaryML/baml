@@ -42,9 +42,14 @@
  * Revision 2 changes the `call_function` slot from the legacy four-argument
  * name-plus-payload signature to the unified three-argument payload signature.
  * Hosts and runtimes built against different revisions must reject one another
- * before reading that slot.
+ * before reading that slot. Revision 3 requires runtime-bound allocations,
+ * an invocation clock, allocation release and V2 host dispatch/cancellation.
+ *
+ * Revision 4: a media value holds content, never a file path.
+ * `media_from_file` always fails and `media_file` is always absent;
+ * `media_name` and `media_from_file_content` are required.
  */
-#define BAML_API_V1_ABI_VERSION 2
+#define BAML_API_V1_ABI_VERSION 4
 
 /**
  * Handle-type values returned by media constructors and carried on the wire.
@@ -67,11 +72,14 @@ enum BamlCffiHandleType
   BAML_CFFI_HANDLE_TYPE_MEDIA_PDF = 9,
   BAML_CFFI_HANDLE_TYPE_MEDIA_GENERIC = 10,
   BAML_CFFI_HANDLE_TYPE_PROMPT_AST = 11,
-  BAML_CFFI_HANDLE_TYPE_COLLECTOR = 12,
   BAML_CFFI_HANDLE_TYPE_TYPE = 13,
   BAML_CFFI_HANDLE_TYPE_TAGGED_HEAP_HANDLE = 14,
   BAML_CFFI_HANDLE_TYPE_HOST_VALUE_CALLABLE = 15,
   BAML_CFFI_HANDLE_TYPE_HOST_VALUE_OPAQUE = 16,
+  BAML_CFFI_HANDLE_TYPE_FUNCTION_SPEC = 17,
+  BAML_CFFI_HANDLE_TYPE_RUNTIME_VALUE = 18,
+  BAML_CFFI_HANDLE_TYPE_INVOCATION_STATE = 19,
+  BAML_CFFI_HANDLE_TYPE_TRACE_RESERVATION = 20,
 };
 #ifndef __cplusplus
 typedef int32_t BamlCffiHandleType;
@@ -155,6 +163,7 @@ enum BamlBridgeLanguage
   BAML_BRIDGE_LANGUAGE_JAVA = 7,
   BAML_BRIDGE_LANGUAGE_SWIFT = 8,
   BAML_BRIDGE_LANGUAGE_WEB = 9,
+  BAML_BRIDGE_LANGUAGE_RUBY = 10,
 };
 #ifndef __cplusplus
 typedef uint32_t BamlBridgeLanguage;
@@ -176,8 +185,7 @@ typedef struct BamlBuffer {
 
 typedef struct BamlBuffer (*BamlVersionFn)(void);
 
-typedef struct BamlBuffer (*BamlInitializeRuntimeFromBytecodeFn)(const uint8_t *bytecode,
-                                                                 size_t length);
+typedef struct BamlBuffer (*BamlInitializeRuntimeFromBlobFn)(const uint8_t *bytecode, size_t length);
 
 typedef void (*BamlFreeBufferFn)(struct BamlBuffer buffer);
 
@@ -296,9 +304,41 @@ typedef void (*BamlRegisterUnhandledSpawnErrorCallbackFn)(BamlUnhandledSpawnErro
 
 typedef struct BamlBuffer (*BamlShutdownRuntimeFn)(void);
 
-typedef struct BamlBuffer (*BamlInitializeRuntimeFromBytecodeWithMetadataFn)(const uint8_t *bytecode,
-                                                                             size_t length,
-                                                                             const char *baml_toml);
+typedef struct BamlBuffer (*BamlInitializeRuntimeFromBlobWithMetadataFn)(const uint8_t *bytecode,
+                                                                         size_t length,
+                                                                         const char *baml_toml);
+
+typedef uint32_t (*BamlInvocationProtocolVersionFn)(void);
+
+typedef BamlCffiStatus (*BamlInvocationClockNsFn)(uint64_t call_id, uint64_t *out_now);
+
+typedef int32_t (*BamlReleaseFunctionCallFn)(uint64_t call_id);
+
+typedef void (*BamlHostDispatchV2)(const uint8_t *request, size_t length);
+
+typedef void (*BamlRegisterHostDispatchV2Fn)(BamlHostDispatchV2 callback);
+
+typedef void (*BamlHostCancel)(uint32_t callback_id);
+
+typedef void (*BamlRegisterHostCancelCallbackFn)(BamlHostCancel callback);
+
+typedef BamlCffiStatus (*BamlTraceSelectionFn)(uint64_t call_id,
+                                               uint64_t key,
+                                               struct BamlBuffer *out_selection,
+                                               uint64_t *out_reservation);
+
+typedef BamlCffiStatus (*BamlInvocationContextFn)(uint64_t key, struct BamlBuffer *out_context);
+
+/**
+ * Construct media from base64 content read from a file, using a raw
+ * `BamlCffiMediaKind` value.
+ */
+typedef BamlCffiStatus (*BamlMediaFromFileContentFn)(int32_t media_kind,
+                                                     const char *file,
+                                                     const char *base64,
+                                                     const char *mime_type_or_null,
+                                                     uint64_t *out_key,
+                                                     int32_t *out_handle_type);
 
 /**
  * First version of the shared BAML C API.
@@ -311,7 +351,7 @@ typedef struct BamlBuffer (*BamlInitializeRuntimeFromBytecodeWithMetadataFn)(con
  *
  * A host must not unload the native library while a returned buffer, owned
  * handle, registered callback, or asynchronous call can still reach it. The
- * The ABI has no callback-unregistration operation in V1. Hosts must call
+ * ABI has no callback-unregistration operation in V1. Hosts must call
  * `shutdown_runtime` before unloading the native library.
  *
  * No Rust panic may unwind across this ABI. Operations with a diagnostic or
@@ -319,11 +359,12 @@ typedef struct BamlBuffer (*BamlInitializeRuntimeFromBytecodeWithMetadataFn)(con
  * An otherwise unexpected panic aborts the process rather than crossing into
  * foreign frames. Likewise, host callbacks must not unwind or throw into Rust.
  *
- * V1 is append-only: existing fields may never be reordered, removed, or
- * change type or semantics. New fields may only be appended. Before reading a
- * field, consumers must verify that `struct_size` reaches the end of that
- * field. `baml_api_v1_is_compatible` performs the check for the original V1
- * prefix. A larger unknown size is compatible; a truncated prefix is not.
+ * V1 is append-only: existing fields may never be reordered or removed, and
+ * a field changes type or semantics only with a new ABI revision. New fields
+ * may only be appended. Before reading a field, consumers must verify that
+ * `struct_size` reaches the end of that field. `baml_api_v1_is_compatible`
+ * performs the check for the fields this revision requires. A larger unknown
+ * size is compatible; a truncated prefix is not.
  */
 typedef struct BamlApiV1 {
   /**
@@ -348,7 +389,7 @@ typedef struct BamlApiV1 {
    * calls are serialized only while replacing the global runtime; calls
    * already in progress retain their previous runtime instance.
    */
-  BamlInitializeRuntimeFromBytecodeFn initialize_runtime_from_bytecode;
+  BamlInitializeRuntimeFromBlobFn initialize_runtime_from_blob;
   /**
    * Release exactly one runtime-owned buffer returned through this table.
    *
@@ -408,10 +449,14 @@ typedef struct BamlApiV1 {
    */
   BamlCompleteHostCallFn complete_host_call;
   /**
-   * Clone an owned engine handle into `out_key`.
+   * Take one more ownership of an engine handle, writing the key to release
+   * it through into `out_key`.
    *
-   * On `BAML_CFFI_STATUS_OK`, the host owns the new key and must release it
-   * exactly once with `handle_release`. `out_key` must be writable.
+   * On `BAML_CFFI_STATUS_OK` the host owns one more release of that key and
+   * must perform it exactly once with `handle_release`. `out_key` is a
+   * fresh key for identity-free handles (media, function refs) and the
+   * SAME key for an engine-heap handle (one key per heap object), so a
+   * host must not assume the two keys differ. `out_key` must be writable.
    */
   BamlHandleCloneFn handle_clone;
   /**
@@ -427,8 +472,11 @@ typedef struct BamlApiV1 {
    */
   BamlMediaConstructorFn media_from_url;
   /**
-   * Create an owned media handle from a borrowed NUL-terminated file path.
-   * Ownership and output rules match `media_from_url`.
+   * Always `UnsupportedHandleType`: a media value is built from content,
+   * never from a file path, and this library reads no file. A host reads
+   * the file itself and calls `media_from_file_content`, or calls
+   * `baml.media.<Kind>.from_file`. The slot stays because this table is
+   * append-only.
    */
   BamlMediaConstructorFn media_from_file;
   /**
@@ -445,7 +493,9 @@ typedef struct BamlApiV1 {
    */
   BamlMediaAccessorFn media_url;
   /**
-   * Read a media file path. Ownership rules match `media_url`.
+   * Always absent: a media value holds content, never a file path. The
+   * slot stays because this table is append-only. Ownership rules match
+   * `media_url`.
    */
   BamlMediaAccessorFn media_file;
   /**
@@ -477,7 +527,50 @@ typedef struct BamlApiV1 {
   /**
    * Replace the runtime from bytecode after validating embedded generation metadata.
    */
-  BamlInitializeRuntimeFromBytecodeWithMetadataFn initialize_runtime_from_bytecode_with_metadata;
+  BamlInitializeRuntimeFromBlobWithMetadataFn initialize_runtime_from_blob_with_metadata;
+  /**
+   * Native invocation contract; protobuf carries no version negotiation.
+   */
+  BamlInvocationProtocolVersionFn invocation_protocol_version;
+  /**
+   * Read the allocated call's original runtime clock, in nanoseconds.
+   */
+  BamlInvocationClockNsFn invocation_clock_ns;
+  /**
+   * Release an unsubmitted allocation; zero means success.
+   */
+  BamlReleaseFunctionCallFn release_function_call;
+  /**
+   * Install the envelope dispatcher. Revision 3 never dispatches through V1.
+   */
+  BamlRegisterHostDispatchV2Fn register_host_dispatch_v2;
+  /**
+   * Request cooperative cancellation; completion still reports actual exit.
+   */
+  BamlRegisterHostCancelCallbackFn register_host_cancel_callback;
+  /**
+   * Project generated trace options without admitting another invocation.
+   * The caller owns the returned buffer and optional reservation handle.
+   */
+  BamlTraceSelectionFn trace_selection;
+  /**
+   * Read a detached generated trace.Context; key zero reads empty context.
+   * The caller owns the returned buffer. This never admits an invocation.
+   */
+  BamlInvocationContextFn invocation_context;
+  /**
+   * Read a media value's name: the base name of the file its content was
+   * read from, absent otherwise. Ownership rules match `media_url`.
+   */
+  BamlMediaAccessorFn media_name;
+  /**
+   * Create an owned media handle from borrowed NUL-terminated base64
+   * content that was read from the file at `file`: the value is named by
+   * its base name, and its MIME type, when not given, is what the name
+   * implies. Nothing is read. Ownership and output rules match
+   * `media_from_url`.
+   */
+  BamlMediaFromFileContentFn media_from_file_content;
 } BamlApiV1;
 
 typedef const struct BamlApiV1 *(*BamlGetApiV1Fn)(void);
@@ -496,25 +589,34 @@ extern "C" {
 BAML_CFFI_API const struct BamlApiV1 *baml_get_api_v1(void);
 
 /**
+ * # Safety
+ * `out_key` and `out_handle_type` must be either null or valid for writing
+ * one value of their pointee type.
+ */
+BAML_CFFI_API
+BamlCffiStatus __testonly_seed_heap_handle(uint64_t slab_key,
+                                           uint64_t *out_key,
+                                           int32_t *out_handle_type);
+
+/**
  * Initialize generated bytecode after validating its embedded `baml.toml`.
  */
 BAML_CFFI_API
-struct BamlBuffer initialize_runtime_from_bytecode_with_metadata(const uint8_t *bytecode,
-                                                                 size_t length,
-                                                                 const char *baml_toml);
+struct BamlBuffer initialize_runtime_from_blob_with_metadata(const uint8_t *bytecode,
+                                                             size_t length,
+                                                             const char *baml_toml);
 
 #ifdef __cplusplus
 }  // extern "C"
 #endif  // __cplusplus
 
-/* Size of the original required V1 prefix. Future V1 fields may only follow it. */
+/* ABI revision 4 requires every operation through media_from_file_content. */
 #define BAML_API_V1_MIN_SIZE \
-  (offsetof(BamlApiV1, register_bridge) + sizeof(((BamlApiV1 *)0)->register_bridge))
+  (offsetof(BamlApiV1, media_from_file_content) + \
+   sizeof(((BamlApiV1 *)0)->media_from_file_content))
 
 /*
- * Validate the original V1 prefix without rejecting a runtime that appended
- * fields. Consumers must perform an equivalent end-of-field check before
- * reading any future appended field.
+ * Validate the complete revision-4 table while permitting appended fields.
  */
 static inline bool baml_api_v1_is_compatible(const BamlApiV1 *api) {
   return api != NULL && api->abi_version == BAML_API_V1_ABI_VERSION &&

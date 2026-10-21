@@ -1,0 +1,15 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0097
+
+  ⚠ extraneous throws declaration: string
+    ╭─[any_returns_first_success.baml:9:38]
+  9 │ ╭─▶ function good() -> int throws string {
+ 10 │ │       // The declared surface is exactly `string`, matching `bad` (Future's
+ 11 │ │       // error param is invariant, so the spawns must agree).
+ 12 │ │       baml.sys.sleep(baml.time.Duration.from_milliseconds(80n));
+ 13 │ │       42
+ 14 │ ╰─▶ }
+    ╰────

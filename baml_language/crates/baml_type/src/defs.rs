@@ -5,7 +5,7 @@
 
 use baml_base::Name;
 
-use crate::{Ty, TyAttr};
+use crate::Ty;
 
 /// Top-level container for all schema definitions.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,10 +21,8 @@ pub struct SchemaDefs {
 pub struct ClassDef {
     pub name: Name,
     pub fields: Vec<FieldDef>,
-    pub is_dynamic: bool,
     pub description: Option<String>,
     pub alias: Option<String>,
-    pub ty_attr: TyAttr,
 }
 
 /// A field within a class.
@@ -44,7 +42,6 @@ pub struct EnumDef {
     pub variants: Vec<EnumVariantDef>,
     pub description: Option<String>,
     pub alias: Option<String>,
-    pub ty_attr: TyAttr,
 }
 
 /// A variant within an enum.

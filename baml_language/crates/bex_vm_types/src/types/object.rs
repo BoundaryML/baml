@@ -1,13 +1,13 @@
-use std::{any::Any, sync::Arc};
+use std::sync::Arc;
 
 use borsh::{BorshDeserialize, BorshSerialize};
-use indexmap::IndexMap;
 
 use crate::{
-    ArrayContainer, BoundMethod, Class, CollectorRef, Enum, Function, GenericFunction, HostClosure,
-    Instance, MapContainer, Uint8ArrayContainer, UnscheduledFuture, Value, Variant,
+    ArrayContainer, BoundMethod, Class, Enum, Function, GenericFunction, HostClosure, Instance,
+    Uint8ArrayContainer, Value, Variant,
     types::{
-        Array, Cell, Closure, FunctionType, FutureType, InterfaceDef, Map, Package, RuntimeImplRule,
+        Array, Cell, Closure, FunctionType, FutureType, InterfaceDef, Map, Package,
+        RuntimeImplRule, TypeAliasDef,
     },
 };
 
@@ -42,6 +42,11 @@ pub enum Object {
     /// Enum object.
     Enum(Box<Enum>),
 
+    /// Type-alias object. A declaration, not a value — only recursive aliases
+    /// reach the runtime, and they exist so a nominal reference can point at the
+    /// indirection rather than expand it away.
+    TypeAlias(Box<TypeAliasDef>),
+
     /// Enum value object.
     Variant(Variant),
 
@@ -58,7 +63,7 @@ pub enum Object {
     /// compile time so identical instantiations share one object
     /// (pointer-stable `foo<int> === foo<int>`). When called, the VM resolves
     /// `function` via the global table and seeds `frame.type_args` from
-    /// `type_args`, so type-reifying bodies (`reflect.type_of<T>`, json natives)
+    /// `type_args`, so type-reifying bodies (`reflect.Type.of<T>`, json natives)
     /// work through the value.
     GenericFunction(GenericFunction),
 
@@ -96,8 +101,8 @@ pub enum Object {
     /// mutation under `spawn`.
     Array(Array),
 
-    /// Map of values. Wrapped in [`MapContainer`] so the underlying
-    /// `IndexMap` is protected by a [`LazyBiasedMutex`](`crate::lazy_biased_mutex::LazyBiasedMutex`) against racing
+    /// Map of values. Wrapped in [`crate::MapContainer`] so the underlying
+    /// [`crate::MapData`] is protected by a [`LazyBiasedMutex`](`crate::lazy_biased_mutex::LazyBiasedMutex`) against racing
     /// mutation under `spawn`.
     Map(Map),
 
@@ -108,21 +113,22 @@ pub enum Object {
     Float(f64),
 
     Future(crate::Future),
-    /// Only used for requesting scheduling of a future, passed from VM to engine.
-    /// Boxed: under `heap_debug` the instrumented `HeapPtr` makes the inline
-    /// payload (closure + name + config pointers) push `Object` past its
-    /// 64-byte interpreter-hot-loop budget.
-    UnscheduledFuture(Box<UnscheduledFuture>),
 
     /// Opaque Rust-managed data, accessed via `Arc<dyn Any>` downcast.
     /// Used for `$rust_type` fields in builtin classes (including media classes Pdf, Audio, Video, Image).
-    RustData(Arc<dyn Any + Send + Sync>),
+    RustData(Arc<dyn crate::BexRustData>),
 
-    /// Collector object (opaque handle to `bex_events::Collector`).
-    Collector(CollectorRef),
+    /// A type descriptor value — wraps a [`crate::types::TypeValue`]. The
+    /// described type is the whole of it: `==` is type equivalence, so a GC
+    /// copy, a `baml.deep_copy`, and a wire round trip all denote the same
+    /// type by construction.
+    Type(Box<crate::types::TypeValue>),
 
-    /// A type descriptor value — wraps a `baml_type::RealizedTy`.
-    Type(Box<baml_type::RealizedTy>),
+    /// What is left in a slot whose object is gone: a collection moved it to
+    /// another space. Nothing live points at a tombstone, so one is only ever
+    /// seen by code that walks slots by position; reaching one by following a
+    /// reference is a use-after-free.
+    Tombstone,
 
     #[cfg(feature = "heap_debug")]
     Sentinel(crate::types::SentinelKind),
@@ -134,6 +140,98 @@ const _: () = assert!(
 );
 
 impl Object {
+    /// The failure for code that followed a reference and found an
+    /// [`Object::Tombstone`]. Code that walks slots by position never calls
+    /// this: a tombstone there is expected and simply has no contents.
+    #[cold]
+    #[track_caller]
+    pub fn tombstone_reached() -> ! {
+        unreachable!("followed a reference to a tombstone: the object it named is gone")
+    }
+
+    /// The qualified name of a nominal declaration, if it has one: its path
+    /// under its package's display name, put together on demand (see
+    /// `declaration_name`). An anonymous (runtime-created) declaration has
+    /// none. Display and boundary spelling only — never an identity.
+    #[must_use]
+    pub fn declaration_name(&self) -> Option<baml_type::TypeName> {
+        match self {
+            Object::Class(class) => class.name().declared().cloned(),
+            Object::Enum(enm) => enm.name().declared().cloned(),
+            Object::Interface(interface) => interface.name().declared().cloned(),
+            Object::TypeAlias(alias) => alias.name().declared().cloned(),
+            _ => None,
+        }
+    }
+
+    /// The tag under which this object can head a nominal type, or `None`
+    /// when it is not a declaration.
+    #[must_use]
+    pub fn declaration_tag(&self) -> Option<baml_type::typetag::TypeTag> {
+        match self {
+            Object::Class(class) => Some(class.type_tag),
+            Object::Enum(enm) => Some(enm.type_tag),
+            Object::Interface(interface) => Some(interface.type_tag),
+            Object::TypeAlias(alias) => Some(alias.type_tag),
+            Object::Function(_)
+            | Object::GenericFunction(_)
+            | Object::String(_)
+            | Object::Bigint(_)
+            | Object::Uint8Array(_)
+            | Object::Type(_)
+            | Object::Package(_)
+            | Object::ImplRule(_)
+            | Object::Instance(_)
+            | Object::Variant(_)
+            | Object::Closure(_)
+            | Object::BoundMethod(_)
+            | Object::HostClosure(_)
+            | Object::Cell(_)
+            | Object::Array(_)
+            | Object::Map(_)
+            | Object::Float(_)
+            | Object::Future(_)
+            | Object::RustData(_)
+            | Object::Tombstone => None,
+            #[cfg(feature = "heap_debug")]
+            Object::Sentinel(_) => None,
+        }
+    }
+
+    /// Give a declaration the tag it heads types by; `false` when this
+    /// object is not a declaration and nothing was assigned.
+    pub fn assign_declaration_tag(&mut self, tag: baml_type::typetag::TypeTag) -> bool {
+        match self {
+            Object::Class(class) => class.type_tag = tag,
+            Object::Enum(enm) => enm.type_tag = tag,
+            Object::Interface(interface) => interface.type_tag = tag,
+            Object::TypeAlias(alias) => alias.type_tag = tag,
+            Object::Function(_)
+            | Object::GenericFunction(_)
+            | Object::String(_)
+            | Object::Bigint(_)
+            | Object::Uint8Array(_)
+            | Object::Type(_)
+            | Object::Package(_)
+            | Object::ImplRule(_)
+            | Object::Instance(_)
+            | Object::Variant(_)
+            | Object::Closure(_)
+            | Object::BoundMethod(_)
+            | Object::HostClosure(_)
+            | Object::Cell(_)
+            | Object::Array(_)
+            | Object::Map(_)
+            | Object::Float(_)
+            | Object::Future(_)
+            | Object::RustData(_)
+            | Object::Tombstone => return false,
+            #[cfg(feature = "heap_debug")]
+            Object::Sentinel(_) => return false,
+        }
+        true
+    }
+
     /// The inner [`Package`] if this is an [`Object::Package`].
     #[inline]
     pub fn as_package(&self) -> Option<&Package> {
@@ -162,17 +260,17 @@ impl Object {
     }
 }
 
-// Custom borsh for Object: RustData and Collector contain non-serializable
-// trait objects (Arc<dyn Any>). They should never appear in a compiled Program.
+// Custom borsh for Object: runtime-only trait objects cannot be serialized
+// and should never appear in a compiled Program.
 #[derive(BorshSerialize, BorshDeserialize)]
 enum ObjectWire {
     Function(Box<Function>),
     Interface(Box<InterfaceDef>),
-    Package(Box<Package>),
     ImplRule(Box<RuntimeImplRule>),
     Class(Box<Class>),
     Instance(Instance),
     Enum(Box<Enum>),
+    TypeAlias(Box<TypeAliasDef>),
     Variant(Variant),
     Closure(Closure),
     BoundMethod(BoundMethod),
@@ -191,21 +289,18 @@ enum ObjectWire {
         num_bigint::BigInt,
     ),
     Uint8Array(Vec<u8>),
-    Array(Box<baml_type::RealizedTy>, Vec<Value>),
-    Map(
-        Box<baml_type::RealizedTy>,
-        Box<baml_type::RealizedTy>,
-        IndexMap<String, Value>,
-    ),
+    Array(Box<crate::RealizedTy>, Vec<Value>),
+    // Reserved tag. Runtime maps need VM Hash callbacks to rebuild their index.
+    Map,
     Float(f64),
     Future(crate::Future),
-    // Boxed like the other large variants (and like `Object`'s own
-    // `UnscheduledFuture`): the struct carries the spawn's `Future<T, E>` type
-    // arguments, which are `RealizedTy`s, so inline it would set the whole
-    // enum's size. Borsh treats `Box<T>` transparently, so the wire form is
-    // unchanged.
-    UnscheduledFuture(Box<UnscheduledFuture>),
-    Type(Box<baml_type::RealizedTy>),
+    /// Carries the described type, which is the whole of a `type` value: two
+    /// `type` values are the same type exactly when their payloads are
+    /// equivalent, so a round trip through this form is lossless. No compiled
+    /// `Program` bakes an `Object::Type` into its object pool today
+    /// (`ConstValue::Type` templates materialize through the VM's `LoadType`),
+    /// so this round trip is exercised only by unit/link tooling.
+    Type(Box<crate::RealizedTy>),
 }
 
 impl BorshSerialize for Object {
@@ -213,11 +308,17 @@ impl BorshSerialize for Object {
         let proxy = match self {
             Self::Function(v) => ObjectWire::Function(v.clone()),
             Self::Interface(v) => ObjectWire::Interface(v.clone()),
-            Self::Package(v) => ObjectWire::Package(v.clone()),
+            Self::Package(_) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "a package object has no wire form; `ProgramPackage` is its wire twin",
+                ));
+            }
             Self::ImplRule(v) => ObjectWire::ImplRule(v.clone()),
             Self::Class(v) => ObjectWire::Class(v.clone()),
             Self::Instance(v) => ObjectWire::Instance(v.clone()),
             Self::Enum(v) => ObjectWire::Enum(v.clone()),
+            Self::TypeAlias(v) => ObjectWire::TypeAlias(v.clone()),
             Self::Variant(v) => ObjectWire::Variant(v.clone()),
             Self::Closure(v) => ObjectWire::Closure(v.clone()),
             Self::BoundMethod(v) => ObjectWire::BoundMethod(v.clone()),
@@ -227,34 +328,31 @@ impl BorshSerialize for Object {
             Self::Bigint(v) => ObjectWire::Bigint((**v).clone()),
             Self::Uint8Array(v) => ObjectWire::Uint8Array(v.lock().clone()),
             Self::Array(v) => ObjectWire::Array(v.element_ty.clone(), v.data.lock().clone()),
-            Self::Map(v) => ObjectWire::Map(
-                v.key_ty.clone(),
-                v.value_ty.clone(),
-                v.to_index_map()
-                    .into_iter()
-                    .map(|(k, v)| (k.to_string(), v))
-                    .collect(),
-            ),
+            Self::Map(_) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "runtime maps cannot be serialized; hash indexes require the VM",
+                ));
+            }
             Self::Float(v) => ObjectWire::Float(*v),
             Self::Future(v) => ObjectWire::Future(v.clone()),
-            Self::UnscheduledFuture(v) => ObjectWire::UnscheduledFuture(v.clone()),
-            Self::Type(v) => ObjectWire::Type(v.clone()),
+            Self::Type(v) => ObjectWire::Type(Box::new(v.ty.clone())),
             Self::RustData(_) => {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
                     "RustData cannot be serialized",
                 ));
             }
-            Self::Collector(_) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "Collector cannot be serialized",
-                ));
-            }
             Self::HostClosure(_) => {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
                     "HostClosure cannot be serialized",
+                ));
+            }
+            Self::Tombstone => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Tombstone cannot be serialized",
                 ));
             }
             #[cfg(feature = "heap_debug")]
@@ -275,11 +373,11 @@ impl BorshDeserialize for Object {
         Ok(match proxy {
             ObjectWire::Function(v) => Self::Function(v),
             ObjectWire::Interface(v) => Self::Interface(v),
-            ObjectWire::Package(v) => Self::Package(v),
             ObjectWire::ImplRule(v) => Self::ImplRule(v),
             ObjectWire::Class(v) => Self::Class(v),
             ObjectWire::Instance(v) => Self::Instance(v),
             ObjectWire::Enum(v) => Self::Enum(v),
+            ObjectWire::TypeAlias(v) => Self::TypeAlias(v),
             ObjectWire::Variant(v) => Self::Variant(v),
             ObjectWire::Closure(v) => Self::Closure(v),
             ObjectWire::BoundMethod(v) => Self::BoundMethod(v),
@@ -292,20 +390,15 @@ impl BorshDeserialize for Object {
                 element_ty: ty,
                 data: ArrayContainer::new(data),
             }),
-            ObjectWire::Map(key_ty, value_ty, data) => Self::Map(Map {
-                key_ty,
-                value_ty,
-                data: MapContainer::new(
-                    data.into_iter()
-                        .map(|(k, v)| (bex_str::BexStr::from(k), v))
-                        .collect::<IndexMap<bex_str::BexStr, Value>>()
-                        .into(),
-                ),
-            }),
+            ObjectWire::Map => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "runtime maps cannot be deserialized; hash indexes require the VM",
+                ));
+            }
             ObjectWire::Float(v) => Self::Float(v),
             ObjectWire::Future(v) => Self::Future(v),
-            ObjectWire::UnscheduledFuture(v) => Self::UnscheduledFuture(v),
-            ObjectWire::Type(v) => Self::Type(v),
+            ObjectWire::Type(v) => Self::Type(Box::new(crate::types::TypeValue::new(*v))),
         })
     }
 }
@@ -314,12 +407,13 @@ impl std::fmt::Display for Object {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Object::Function(function) => function.fmt(f),
-            Object::Interface(interface) => write!(f, "<interface {}>", interface.name),
+            Object::Interface(interface) => write!(f, "<interface {}>", interface.name()),
             Object::Package(_) => write!(f, "<package>"),
             Object::ImplRule(_) => write!(f, "<impl_rule>"),
             Object::Class(class) => class.fmt(f),
             Object::Instance(instance) => instance.fmt(f),
             Object::Enum(enm) => enm.fmt(f),
+            Object::TypeAlias(alias) => alias.fmt(f),
             Object::Variant(value) => value.fmt(f),
             Object::Closure(closure) => {
                 let captures_len = closure.captures.len();
@@ -348,11 +442,10 @@ impl std::fmt::Display for Object {
                 map.data.lock().len()
             ),
             Object::RustData(_) => write!(f, "<rust_data>"),
-            Object::Collector(_) => write!(f, "<collector>"),
-            Object::Type(ty) => write!(f, "<type: {ty}>"),
+            Object::Type(tv) => write!(f, "<type: {}>", tv.ty),
             Object::Future(future) => write!(f, "{}", future.read()),
-            Object::UnscheduledFuture(_) => write!(f, "<unscheduled: spawn>"),
             Object::Float(v) => write!(f, "{v}"),
+            Object::Tombstone => write!(f, "<tombstone>"),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(kind) => write!(f, "<sentinel {kind:?}>"),
             // Object::BamlType(type_ir) => write!(f, "<baml type: {type_ir}>"),
@@ -379,13 +472,14 @@ pub enum ObjectType {
     String,
     Bigint,
     Enum,
+    TypeAlias,
     Variant,
     Future(FutureType),
-    UnscheduledFuture,
-    Collector,
     Type,
     RustData,
     Float,
+    /// Not a value: the slot's object is gone. See [`Object::Tombstone`].
+    Tombstone,
 }
 
 impl ObjectType {
@@ -404,6 +498,7 @@ impl ObjectType {
             Object::Class(_) => Self::Class,
             Object::Instance(_) => Self::Instance,
             Object::Enum(_) => Self::Enum,
+            Object::TypeAlias(_) => Self::TypeAlias,
             Object::Variant(_) => Self::Enum,
             Object::String(_) => Self::String,
             Object::Bigint(_) => Self::Bigint,
@@ -411,11 +506,10 @@ impl ObjectType {
             Object::Array(_) => Self::Array,
             Object::Map(_) => Self::Map,
             Object::RustData(_) => Self::RustData,
-            Object::Collector(_) => Self::Collector,
             Object::Type(_) => Self::Type,
             Object::Future(fut) => Self::Future(fut.into()),
-            Object::UnscheduledFuture(_) => Self::UnscheduledFuture,
             Object::Float(_) => Self::Float,
+            Object::Tombstone => Self::Tombstone,
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => Self::Any,
             // Object::BamlType(_) => Self::Any, // TODO
@@ -450,16 +544,84 @@ impl std::fmt::Display for ObjectType {
             ObjectType::Cell => write!(f, "cell"),
             ObjectType::Class => write!(f, "class"),
             ObjectType::Enum => write!(f, "enum"),
+            ObjectType::TypeAlias => write!(f, "type_alias"),
             ObjectType::Variant => write!(f, "variant"),
             ObjectType::Future(future_type) => write!(f, "{future_type}"),
-            ObjectType::UnscheduledFuture => write!(f, "unscheduled_future"),
             ObjectType::String => write!(f, "string"),
             ObjectType::Bigint => write!(f, "bigint"),
             ObjectType::Uint8Array => write!(f, "uint8array"),
-            ObjectType::Collector => write!(f, "collector"),
             ObjectType::Type => write!(f, "type"),
             ObjectType::RustData => write!(f, "rust_data"),
             ObjectType::Float => write!(f, "float"),
+            ObjectType::Tombstone => write!(f, "tombstone"),
         }
+    }
+}
+
+#[cfg(test)]
+mod wire_tests {
+    use borsh::BorshDeserialize;
+
+    use super::*;
+    use crate::types::TypeValue;
+
+    #[test]
+    fn runtime_maps_do_not_persist_cached_hashes() {
+        for data in [
+            crate::MapData::new(),
+            crate::MapData::from_hashed_entries([(123, Value::int(1), Value::int(2))]),
+        ] {
+            let object = Object::Map(Map::new(
+                crate::RealizedTy::int(),
+                crate::RealizedTy::int(),
+                data,
+            ));
+            let error = borsh::to_vec(&object).expect_err("runtime map has no artifact wire form");
+            assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+            assert!(
+                error
+                    .to_string()
+                    .contains("runtime maps cannot be serialized")
+            );
+        }
+    }
+
+    #[test]
+    fn reserved_map_wire_tag_is_rejected_without_changing_later_tags() {
+        let encoded = borsh::to_vec(&ObjectWire::Map).unwrap();
+        assert_eq!(encoded, vec![16]);
+        let error = Object::try_from_slice(&encoded).expect_err("runtime map tag is reserved");
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+        assert!(
+            error
+                .to_string()
+                .contains("runtime maps cannot be deserialized")
+        );
+        let float = borsh::to_vec(&Object::Float(1.0)).unwrap();
+        assert_eq!(float[0], 17);
+        assert!(matches!(
+            Object::try_from_slice(&float),
+            Ok(Object::Float(1.0))
+        ));
+    }
+
+    #[test]
+    fn type_wire_round_trips_the_described_type() {
+        let ty = crate::RealizedTy::list(crate::RealizedTy::string());
+        let object = Object::Type(Box::new(TypeValue::new(ty.clone())));
+
+        let encoded_object = borsh::to_vec(&object).expect("type object serializes");
+        let encoded_legacy_shape =
+            borsh::to_vec(&ObjectWire::Type(Box::new(ty.clone()))).expect("wire proxy serializes");
+        assert_eq!(
+            encoded_object, encoded_legacy_shape,
+            "an Object::Type encodes exactly as its described type"
+        );
+
+        let decoded = Object::try_from_slice(&encoded_object).expect("type object deserializes");
+        let Object::Type(type_value) = decoded else {
+            panic!("decoded object should be a type")
+        };
+        assert_eq!(type_value.ty, ty);
     }
 }

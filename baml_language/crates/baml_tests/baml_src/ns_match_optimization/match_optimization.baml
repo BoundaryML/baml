@@ -81,7 +81,7 @@ test "match_jump_table_dense_four_arms_param" {
 }
 
 // ============================================================================
-// Binary Search Tests (4+ sparse arms trigger binary search optimization)
+// Sparse Switch Tests (4+ sparse arms dispatch through a switch table)
 // ============================================================================
 
 test "match_binary_search_first_arm" {
@@ -120,7 +120,30 @@ test "match_binary_search_large_values" {
     )
 }
 
-// Binary search with function parameter (non-constant scrutinee).
+// A switch's table has more slots than keys, and a slot no key fills selects
+// no arm: the extremes of `int` take the wildcard like any other value that
+// is not a key.
+function classify_sparse_with_vacant_slots(x: int) -> int {
+    match (x) {
+        1 => 101,
+        2 => 102,
+        3 => 103,
+        5 => 105,
+        100 => 200,
+        _ => 999
+    }
+}
+
+test "match_sparse_int_extremes_select_no_arm" {
+    assert.equal(classify_sparse_with_vacant_slots(-4611686018427387904), 999)
+    assert.equal(classify_sparse_with_vacant_slots(4611686018427387903), 999)
+    assert.equal(classify_sparse_with_vacant_slots(0), 999)
+    assert.equal(classify_sparse_with_vacant_slots(4), 999)
+    assert.equal(classify_sparse_with_vacant_slots(1), 101)
+    assert.equal(classify_sparse_with_vacant_slots(100), 200)
+}
+
+// Sparse switch with function parameter (non-constant scrutinee).
 function classify_binary_search_sparse_four_arms_param(x: int) -> int {
     match (x) {
         0 => 100,
@@ -352,7 +375,7 @@ test "match_large_jump_table" {
 }
 
 // ============================================================================
-// Large Binary Search Tree (8 sparse arms)
+// Large Sparse Switch (8 sparse arms)
 // ============================================================================
 
 function classify_binary_search_eight_arms(x: int) -> int {

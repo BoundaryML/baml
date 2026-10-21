@@ -10,6 +10,3 @@ function user.f(u: user.User | null) -> string | null throws never {
     u?.name : string | null
   }
 }
-class user.User$stream {
-  name: string | null
-}

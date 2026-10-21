@@ -17,26 +17,66 @@ use crate::{item_tree::DefaultExprRef, loc::FunctionLoc};
 /// Compiler2 function signature — param names + unresolved `ast::TypeExpr`.
 ///
 /// The `SignatureSourceMap` twin holds the item-level spans. This struct is NOT
-/// fully span-free, though: `ast::TypeExpr` carries its own `span` inline (its
-/// `PartialEq` ignores that span but transitively compares `RawAttribute` spans),
-/// so a whitespace edit near an attribute can still bust this query's cutoff. The
-/// span-free successor is `ppir::function_data` over the `TypeRef` arena; this
-/// struct is retained until its consumers migrate.
+/// span-free successor is [`crate::item_data::function_data`] over the
+/// `TypeRef` arena; this struct is retained until its consumers migrate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionSignature {
     pub name: baml_base::Name,
     /// Parameter names paired with their unresolved type expressions.
     pub params: Vec<SignatureParam>,
     /// Return type (None if omitted).
-    pub return_type: Option<TypeExpr>,
+    pub return_type: Option<SignatureTypeExpr>,
     /// Declared throws contract type (None if omitted).
-    pub throws: Option<TypeExpr>,
+    pub throws: Option<SignatureTypeExpr>,
+}
+
+/// A signature's written type, compared **including its spans**.
+///
+/// The signature queries are memoized, and consumers lower these types with a
+/// diagnostic sink that anchors on the spans inside them — including nested
+/// ones ([`SignatureSourceMap`] holds only the top-level spans, not the span of
+/// `Box` within `Box<int>`). [`TypeExpr`]'s own `PartialEq` ignores spans, so
+/// without this wrapper a signature whose types had merely *moved* would
+/// compare equal, Salsa would keep the older value, and every diagnostic
+/// anchored through it would point at a stale range.
+///
+/// Comparing spans costs this query its early cutoff across a whitespace edit,
+/// which is the honest price: a consumer that reads spans has to re-run when
+/// they move. Type-only consumers should move to the span-free
+/// [`crate::item_data::function_data`] instead.
+#[derive(Debug, Clone, Eq)]
+pub struct SignatureTypeExpr(TypeExpr);
+
+impl SignatureTypeExpr {
+    #[must_use]
+    pub fn new(ty: TypeExpr) -> Self {
+        Self(ty)
+    }
+
+    #[must_use]
+    pub fn into_type_expr(self) -> TypeExpr {
+        self.0
+    }
+}
+
+impl PartialEq for SignatureTypeExpr {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0 && self.0.spans() == other.0.spans()
+    }
+}
+
+impl std::ops::Deref for SignatureTypeExpr {
+    type Target = TypeExpr;
+
+    fn deref(&self) -> &TypeExpr {
+        &self.0
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignatureParam {
     pub name: Name,
-    pub ty: TypeExpr,
+    pub ty: SignatureTypeExpr,
     pub has_default: bool,
 }
 
@@ -58,8 +98,10 @@ impl FunctionParameterDefaults {
 /// Canonical callable-signature view used by TIR.
 ///
 /// This keeps the user-written top-level throws contract optional (inferred
-/// from the body, `TYPE_SYSTEM.md` rule 3). Immediate callback parameter roots
-/// with omitted throws are opened to a fresh synthetic effect parameter
+/// from the body, `TYPE_SYSTEM.md` rule 3). Callback parameter roots — the
+/// parameter type itself, or the function type reached through optionality
+/// (`T?` / `T | null`) — with omitted throws are opened to a fresh synthetic
+/// effect parameter
 /// (rule 4). Every other function type must declare its `throws` explicitly
 /// (rule 5) — an omitted clause is left as `None` here and rejected during TIR
 /// lowering (`FunctionTypeMissingThrows`, E0151).
@@ -69,8 +111,8 @@ pub struct ElaboratedFunctionSignature {
     pub user_generic_params: Vec<Name>,
     pub synthetic_effect_params: Vec<Name>,
     pub params: Vec<SignatureParam>,
-    pub return_type: Option<TypeExpr>,
-    pub throws: Option<TypeExpr>,
+    pub return_type: Option<SignatureTypeExpr>,
+    pub throws: Option<SignatureTypeExpr>,
 }
 
 /// Parallel span storage for a signature.
@@ -80,8 +122,14 @@ pub struct ElaboratedFunctionSignature {
 /// `function_signature`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SignatureSourceMap {
-    /// One span per parameter, parallel to `FunctionSignature::params`.
+    /// One span per parameter, parallel to `FunctionSignature::params`:
+    /// the whole `name: Type`, which is what a diagnostic underlines.
     pub param_spans: Vec<TextRange>,
+    /// One span per parameter's NAME token. Distinct from
+    /// [`Self::param_spans`] because a rename replaces an identifier and
+    /// go-to-definition should land on one, neither of which is the
+    /// annotated parameter.
+    pub param_name_spans: Vec<TextRange>,
     /// One span per parameter's type expression (just the type, not the name).
     /// `None` when the parameter has no explicit type annotation.
     pub param_type_spans: Vec<Option<TextRange>>,
@@ -91,8 +139,21 @@ pub struct SignatureSourceMap {
     pub throws_type_span: Option<TextRange>,
 }
 
+/// One signature parameter, with its type stripped of spans.
+fn signature_param(p: &crate::item_tree::FunctionParam) -> SignatureParam {
+    let type_expr = p
+        .type_expr
+        .clone()
+        .unwrap_or_else(|| TypeExprKind::Missing.at(TextRange::default()));
+    SignatureParam {
+        name: p.name.clone(),
+        ty: SignatureTypeExpr::new(type_expr),
+        has_default: p.default.is_some(),
+    }
+}
+
 /// Shared implementation — reads from the `ItemTree` (full AST data),
-/// splits into semantic (`TypeExpr`, no spans) + source map (spans only).
+/// splits into the semantic signature (no spans) + source map (spans only).
 fn function_signature_with_source_map<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,
@@ -101,34 +162,19 @@ fn function_signature_with_source_map<'db>(
     let item_tree = crate::file_item_tree(db, file);
     let func_data = &item_tree[function.id(db)];
 
-    // Build semantic signature — strip spans, keep TypeExpr
-    let params: Vec<_> = func_data
-        .params
-        .iter()
-        .map(|p| {
-            let type_expr = p.type_expr.clone().unwrap_or_else(|| {
-                TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default())
-            });
-            SignatureParam {
-                name: p.name.clone(),
-                ty: type_expr,
-                has_default: p.default.is_some(),
-            }
-        })
-        .collect();
-
-    let return_type = func_data.return_type.clone();
+    let params: Vec<_> = func_data.params.iter().map(signature_param).collect();
 
     let sig = Arc::new(FunctionSignature {
         name: func_data.name.clone(),
         params,
-        return_type,
-        throws: func_data.throws.clone(),
+        return_type: func_data.return_type.clone().map(SignatureTypeExpr::new),
+        throws: func_data.throws.clone().map(SignatureTypeExpr::new),
     });
 
     // Build source map — spans only (separate for early-cutoff)
     let source_map = SignatureSourceMap {
         param_spans: func_data.params.iter().map(|p| p.span).collect(),
+        param_name_spans: func_data.params.iter().map(|p| p.name_span).collect(),
         param_type_spans: func_data
             .params
             .iter()
@@ -143,10 +189,9 @@ fn function_signature_with_source_map<'db>(
 
 fn type_expr_for_effect_param(name: Name) -> TypeExpr {
     TypeExprKind::Path {
-        segments: vec![name],
+        path: baml_base::Path::bare(name),
         generic_args: Vec::new(),
         associated_type_bindings: Vec::new(),
-        attrs: Vec::new(),
     }
     .at(TextRange::default())
 }
@@ -165,16 +210,76 @@ fn fresh_effect_param_name(used_names: &mut FxHashSet<Name>) -> Name {
 fn elaborate_immediate_callback_param(
     params: Vec<FunctionTypeParam>,
     ret: TypeExpr,
-    attrs: Vec<baml_compiler2_ast::RawAttribute>,
     effect_param: Name,
 ) -> TypeExpr {
     TypeExprKind::Function {
         params,
         ret: Box::new(ret),
         throws: Some(Box::new(type_expr_for_effect_param(effect_param))),
-        attrs,
     }
     .at(TextRange::default())
+}
+
+/// Open one parameter's callback root to a synthetic effect param.
+///
+/// The callback root is the parameter type itself, or the function type
+/// reached from it through optionality only — `((v: int) -> int)?`, and the
+/// longhand `((v: int) -> int) | null` that denotes the same type. An
+/// optional callback is still a *callback slot* the caller fills at the call
+/// site, so it participates in the same per-call-site effect inference as the
+/// immediate form (rule 4); passing `null` simply leaves the effect variable
+/// unconstrained, which defaults to `never`.
+///
+/// Every other nesting (list element, map value, class field, alias body, a
+/// returned function type, a callback's own parameter, a union with a
+/// non-null arm) is deliberately NOT opened — those are stored/structural
+/// positions with no single call site to instantiate against, and an omitted
+/// `throws` there stays an E0151.
+fn elaborate_callback_param_root(
+    ty: TypeExpr,
+    used_names: &mut FxHashSet<Name>,
+    synthetic_effect_params: &mut Vec<Name>,
+) -> TypeExpr {
+    match ty.kind {
+        TypeExprKind::Function {
+            params,
+            ret,
+            throws: None,
+        } => {
+            let effect_param = fresh_effect_param_name(used_names);
+            synthetic_effect_params.push(effect_param.clone());
+            elaborate_immediate_callback_param(params, *ret, effect_param)
+        }
+        TypeExprKind::Optional { inner } => {
+            let inner = elaborate_callback_param_root(*inner, used_names, synthetic_effect_params);
+            TypeExprKind::Optional {
+                inner: Box::new(inner),
+            }
+            .at(ty.span)
+        }
+        // `T | null` is the same type as `T?`, so it opens the same way. A
+        // union carrying any other arm is not an optional callback and is
+        // left alone.
+        TypeExprKind::Union { variants }
+            if variants
+                .iter()
+                .filter(|variant| !matches!(variant.kind, TypeExprKind::Null))
+                .count()
+                == 1 =>
+        {
+            let variants = variants
+                .into_iter()
+                .map(|variant| match variant.kind {
+                    TypeExprKind::Null => variant,
+                    _ => {
+                        elaborate_callback_param_root(variant, used_names, synthetic_effect_params)
+                    }
+                })
+                .collect();
+            TypeExprKind::Union { variants }.at(ty.span)
+        }
+        other => other.at(ty.span),
+    }
 }
 
 pub fn elaborate_function_signature_parts(
@@ -182,8 +287,8 @@ pub fn elaborate_function_signature_parts(
     user_generic_params: Vec<Name>,
     reserved_effect_param_names: &[Name],
     params: Vec<SignatureParam>,
-    return_type: Option<TypeExpr>,
-    throws: Option<TypeExpr>,
+    return_type: Option<SignatureTypeExpr>,
+    throws: Option<SignatureTypeExpr>,
 ) -> ElaboratedFunctionSignature {
     let mut used_names: FxHashSet<Name> = user_generic_params.iter().cloned().collect();
     used_names.extend(reserved_effect_param_names.iter().cloned());
@@ -192,22 +297,14 @@ pub fn elaborate_function_signature_parts(
     let params = params
         .into_iter()
         .map(|param| {
-            let elaborated = match param.ty.kind {
-                TypeExprKind::Function {
-                    params,
-                    ret,
-                    throws: None,
-                    attrs,
-                } => {
-                    let effect_param = fresh_effect_param_name(&mut used_names);
-                    synthetic_effect_params.push(effect_param.clone());
-                    elaborate_immediate_callback_param(params, *ret, attrs, effect_param)
-                }
-                other => other.at(param.ty.span),
-            };
+            let elaborated = elaborate_callback_param_root(
+                param.ty.into_type_expr(),
+                &mut used_names,
+                &mut synthetic_effect_params,
+            );
             SignatureParam {
                 name: param.name,
-                ty: elaborated,
+                ty: SignatureTypeExpr::new(elaborated),
                 has_default: param.has_default,
             }
         })
@@ -231,23 +328,10 @@ fn elaborated_function_signature_with_source_map<'db>(
     let item_tree = crate::file_item_tree(db, file);
     let func_data = &item_tree[function.id(db)];
 
-    let params: Vec<_> = func_data
-        .params
-        .iter()
-        .map(|p| {
-            let type_expr = p.type_expr.clone().unwrap_or_else(|| {
-                TypeExprKind::Unknown { attrs: vec![] }.at(TextRange::default())
-            });
-            SignatureParam {
-                name: p.name.clone(),
-                ty: type_expr,
-                has_default: p.default.is_some(),
-            }
-        })
-        .collect();
+    let params: Vec<_> = func_data.params.iter().map(signature_param).collect();
 
-    let return_type = func_data.return_type.clone();
-    let throws = func_data.throws.clone();
+    let return_type = func_data.return_type.clone().map(SignatureTypeExpr::new);
+    let throws = func_data.throws.clone().map(SignatureTypeExpr::new);
     let reserved_effect_param_names: Vec<Name> = item_tree
         .enclosing_type_generic_params(function.id(db))
         .iter()
@@ -268,6 +352,7 @@ fn elaborated_function_signature_with_source_map<'db>(
 
     let source_map = SignatureSourceMap {
         param_spans: func_data.params.iter().map(|p| p.span).collect(),
+        param_name_spans: func_data.params.iter().map(|p| p.name_span).collect(),
         param_type_spans: func_data
             .params
             .iter()
@@ -280,11 +365,12 @@ fn elaborated_function_signature_with_source_map<'db>(
     (signature, source_map)
 }
 
-/// Salsa query: semantic function signature (no spans).
+/// Salsa query: semantic function signature.
 ///
-/// Cached independently of the source map. Downstream type-checking queries
-/// depend on this and will NOT re-run on whitespace-only file changes.
-#[salsa::tracked]
+/// Cached independently of the source map. Its written types keep their spans
+/// (see [`SignatureTypeExpr`]), so it does not cut off when they move;
+/// span-free consumers use [`crate::item_data::function_data`].
+#[salsa::tracked(returns(clone))]
 pub fn function_signature<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,
@@ -295,9 +381,8 @@ pub fn function_signature<'db>(
 
 /// Salsa query: function signature source map (spans only).
 ///
-/// Re-runs on any file change (including whitespace), but because downstream
-/// type queries only depend on `function_signature`, they are unaffected.
-#[salsa::tracked]
+/// Re-runs on any file change (including whitespace).
+#[salsa::tracked(returns(clone))]
 pub fn function_signature_source_map<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,
@@ -310,7 +395,7 @@ pub fn function_signature_source_map<'db>(
 ///
 /// Kept separate from `FunctionSignature` so changing a default expression does
 /// not invalidate consumers that only need callable shape or optionality.
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn function_parameter_defaults<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,
@@ -330,7 +415,7 @@ pub fn function_parameter_defaults<'db>(
 }
 
 /// Salsa query: elaborated callable signature used by TIR consumers.
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn elaborated_function_signature<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,
@@ -343,7 +428,7 @@ pub fn elaborated_function_signature<'db>(
 ///
 /// The elaboration rewrites types but does not change source spans, so this is
 /// intentionally parallel to `function_signature_source_map`.
-#[salsa::tracked]
+#[salsa::tracked(returns(clone))]
 pub fn elaborated_function_signature_source_map<'db>(
     db: &'db dyn crate::Db,
     function: FunctionLoc<'db>,

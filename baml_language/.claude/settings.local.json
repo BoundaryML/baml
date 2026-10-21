@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo doc *)",
+      "Bash(cargo test *)",
+      "Bash(cargo check *)",
+      "Bash(prek --all-files)",
+      "Bash(git show *)",
+      "Read(//tmp/**)",
+      "Bash(cargo clippy *)",
+      "Bash(git diff *)",
+      "Bash(cargo fmt *)",
+      "Bash(cargo nextest *)"
+    ],
+    "additionalDirectories": [
+      "/tmp"
+    ]
+  }
+}

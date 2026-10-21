@@ -1,4 +1,4 @@
-// Tests for `reflect.type_of<T>()` inside generic functions.
+// Tests for `reflect.Type.of<T>()` inside generic functions.
 //
 // Converted from crates/baml_tests/tests/reflect_type_of_generic.rs.
 //
@@ -15,7 +15,7 @@ class User { name string }
 // ─── Bare-T tests ─────────────────────────────────────────────────────────────
 
 function describe<T>() -> string {
-    reflect.type_of<T>().to_string()
+    reflect.Type.of<T>().to_string()
 }
 
 function describe_user_fn() -> string {
@@ -44,8 +44,8 @@ test "describe_string_returns_string" {
 
 // ─── Composite template tests ─────────────────────────────────────────────────
 
-function array_of<T>() -> type {
-    reflect.type_of<T[]>()
+function array_of<T>() -> reflect.Type {
+    reflect.Type.of<T[]>()
 }
 
 function array_of_user_to_string_fn() -> string {
@@ -66,12 +66,12 @@ test "array_of_int_to_string" {
 
 // ─── Equality tests ───────────────────────────────────────────────────────────
 
-function described_type<T>() -> type {
-    reflect.type_of<T>()
+function described_type<T>() -> reflect.Type {
+    reflect.Type.of<T>()
 }
 
 function described_type_eq_concrete_fn() -> bool {
-    described_type<User>() == reflect.type_of<User>()
+    described_type<User>() == User.type()
 }
 
 test "described_type_eq_concrete" {
@@ -79,7 +79,7 @@ test "described_type_eq_concrete" {
 }
 
 function described_type_neq_different_fn() -> bool {
-    described_type<int>() == reflect.type_of<User>()
+    described_type<int>() == User.type()
 }
 
 test "described_type_neq_different" {
@@ -89,7 +89,7 @@ test "described_type_neq_different" {
 // ─── Closure captures type args ───────────────────────────────────────────────
 
 function make_describer<T>() -> () -> string throws never {
-    return () -> string { reflect.type_of<T>().to_string() }
+    return () -> string { reflect.Type.of<T>().to_string() }
 }
 
 function closure_captures_type_arg_user_fn() -> string {
@@ -112,12 +112,12 @@ test "closure_captures_type_arg_int" {
 
 // ─── Forwarding chain tests ───────────────────────────────────────────────────
 
-function fwd<T>() -> type {
+function fwd<T>() -> reflect.Type {
     described_type<T>()
 }
 
 function fwd_user_eq_reflect_type_of_user_fn() -> bool {
-    fwd<User>() == reflect.type_of<User>()
+    fwd<User>() == User.type()
 }
 
 test "fwd_user_eq_reflect_type_of_user" {
@@ -125,27 +125,27 @@ test "fwd_user_eq_reflect_type_of_user" {
 }
 
 function fwd_int_neq_user_fn() -> bool {
-    fwd<int>() == reflect.type_of<User>()
+    fwd<int>() == User.type()
 }
 
 test "fwd_int_neq_user" {
     assert.is_true(!fwd_int_neq_user_fn())
 }
 
-function level1<T>() -> type {
-    reflect.type_of<T>()
+function level1<T>() -> reflect.Type {
+    reflect.Type.of<T>()
 }
 
-function level2<T>() -> type {
+function level2<T>() -> reflect.Type {
     level1<T>()
 }
 
-function level3<T>() -> type {
+function level3<T>() -> reflect.Type {
     level2<T>()
 }
 
 function three_level_forwarding_eq_concrete_fn() -> bool {
-    level3<User>() == reflect.type_of<User>()
+    level3<User>() == User.type()
 }
 
 test "three_level_forwarding_eq_concrete" {
@@ -153,7 +153,7 @@ test "three_level_forwarding_eq_concrete" {
 }
 
 function level1_str<T>() -> string {
-    reflect.type_of<T>().to_string()
+    reflect.Type.of<T>().to_string()
 }
 
 function level2_str<T>() -> string {
@@ -175,7 +175,7 @@ test "three_level_forwarding_to_string" {
 // ─── Closure capturing composite type ─────────────────────────────────────────
 
 function make_array_describer<T>() -> () -> string throws never {
-    return () -> string { reflect.type_of<T[]>().to_string() }
+    return () -> string { reflect.Type.of<T[]>().to_string() }
 }
 
 function closure_captures_type_arg_array_of_user_fn() -> string {
@@ -188,7 +188,7 @@ test "closure_captures_type_arg_array_of_user" {
 }
 
 function make_opt_describer<T>() -> () -> string throws never {
-    return () -> string { reflect.type_of<T?>().to_string() }
+    return () -> string { reflect.Type.of<T?>().to_string() }
 }
 
 function closure_captures_type_arg_optional_of_int_fn() -> string {
@@ -206,7 +206,7 @@ class Box<T> {
     value T
 
     function describe(self) -> string {
-        reflect.type_of<T>().to_string()
+        reflect.Type.of<T>().to_string()
     }
 }
 
@@ -227,7 +227,7 @@ class Inner<U> {
     v U
 
     function name(self) -> string {
-        reflect.type_of<U>().to_string()
+        reflect.Type.of<U>().to_string()
     }
 }
 
@@ -252,7 +252,7 @@ class InnerShow<U> {
     v U
 
     function show(self) -> string {
-        reflect.type_of<U>().to_string()
+        reflect.Type.of<U>().to_string()
     }
 }
 
@@ -277,7 +277,7 @@ class Leaf<T> {
     v T
 
     function describe(self) -> string {
-        reflect.type_of<T>().to_string()
+        reflect.Type.of<T>().to_string()
     }
 }
 

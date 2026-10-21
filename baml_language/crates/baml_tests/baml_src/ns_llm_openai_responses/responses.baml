@@ -1,0 +1,1596 @@
+// openai.ResponsesClient — wire-level tests against the mock provider servers
+// in ../ns_llm_mock (see its README for the authoring rules these follow):
+//
+//   * request shape — the EXACT typed body the client puts on the wire, the
+//     passthrough merge (including null-deletes), headers/query params, tool
+//     definitions, journal replay and image_generation tool injection;
+//   * response parse — usage detail fields, generated image output;
+//   * streaming — SSE decode, `response.failed` as a typed error, a non-2xx on
+//     the SSE endpoint classified like the non-streaming path, and the
+//     function-call argument assembly the decoder buffers.
+//
+// Everything here is offline. Real calls live in the `live` testset at the
+// bottom, which the default profile excludes.
+//
+// Per the corpus convention every case body is a top-level `function` and the
+// `test` block only asserts (test-block locals are boxed by the VM).
+
+// ─── specs under test ────────────────────────────────────────────────────────
+
+function OaiEcho(question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        Reply with exactly one word.
+        ${question}
+    `
+}
+
+function OaiPicture(subject: string) -> image {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        Draw ${subject}.
+    `
+}
+
+function OaiLook(pic: image, clip: audio, doc: pdf) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${role("user")}
+        Look: ${pic} ${clip} ${doc}
+    `
+}
+
+function OaiSystemLook(pic: image) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${role("system")}
+        Look: ${pic}
+    `
+}
+
+class OaiPickedTool {
+    tool: string,
+}
+
+function OaiPickTool() -> OaiPickedTool {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        Pick the tool to run.
+        ${ctx.output_format()}
+    `
+}
+
+// A per-message directive, authored on the role marker.
+function OaiMetaEcho(question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `${role("system", metadata = { "cache_hint": "ephemeral" })}Follow the rules.${role("user")}${question}`
+}
+
+// ─── canned provider bodies ──────────────────────────────────────────────────
+
+// A completed text response with the full usage envelope: totals, cached input
+// tokens and reasoning tokens.
+function _oai_text_response() -> string {
+    let body = `{"id":"resp_1","model":"gpt-4o-mini","status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"pong"}]}],"usage":{"input_tokens":3,"output_tokens":1,"total_tokens":4,"input_tokens_details":{"cached_tokens":2},"output_tokens_details":{"reasoning_tokens":7}}}`;
+    body
+}
+
+// A completed response whose only output item is a generated image.
+function _oai_image_response() -> string {
+    let body = `{"id":"resp_2","model":"gpt-4o-mini","status":"completed","output":[{"type":"image_generation_call","id":"ig_1","status":"completed","result":"aGVsbG8=","output_format":"jpeg","revised_prompt":"a red apple, studio light"}],"usage":{"input_tokens":10,"output_tokens":20}}`;
+    body
+}
+
+// A response whose `usage` omits every count — the optional-int hardening: a
+// short envelope must not become ai.errors.ParseFailed.
+function _oai_sparse_usage_response() -> string {
+    let body = `{"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"pong"}]}],"usage":{}}`;
+    body
+}
+
+// One assistant `message` output item with a `phase`.
+function _oai_phase_message(phase: string, text: string) -> map<string, unknown> {
+    {
+        "type": "message",
+        "phase": phase,
+        "role": "assistant",
+        "content": [{ "type": "output_text", "text": text }],
+    }
+}
+
+function _oai_response_with_output(output: map<string, unknown>[]) -> string {
+    _oai_json(
+        {
+            "id": "resp_commentary",
+            "model": "gpt-6-luna",
+            "status": "completed",
+            "output": output,
+            "usage": { "input_tokens": 3, "output_tokens": 1, "total_tokens": 4 },
+        },
+    )
+}
+
+// The shape gpt-6-luna returns when it splits one answer: a reasoning item,
+// `commentary` messages, then a `final_answer` message.
+function _oai_commentary_response(commentaries: string[], final_answer: string) -> string {
+    let output: map<string, unknown>[] = [{ "type": "reasoning", "content": [], "summary": [] }];
+    for (let text in commentaries) {
+        output.push(_oai_phase_message("commentary", text));
+    }
+    output.push(_oai_phase_message("final_answer", final_answer));
+    _oai_response_with_output(output)
+}
+
+// ─── helpers ─────────────────────────────────────────────────────────────────
+
+function _oai_json(fields: map<string, unknown>) -> string {
+    baml.json.stringify(baml.json.to_json(fields))
+}
+
+// One `SseStream.next()` batch: the JSON array of `{event,data,id}` objects the
+// provider decoders receive.
+function _oai_batch(payloads: string[]) -> string {
+    let events: map<string, unknown>[] = [];
+    for (let payload in payloads) {
+        let event: map<string, unknown> = { };
+        let _ = event.set("event", null);
+        let _ = event.set("data", payload);
+        let _ = event.set("id", null);
+        events.push(event);
+    }
+    baml.json.stringify(baml.json.to_json(events))
+}
+
+function _oai_first_text(events: ai.stream.Event[]) -> string {
+    for (let e in events) {
+        if let delta: ai.stream.TextDelta = e {
+            return delta.text;
+        };
+    }
+    ""
+}
+
+// The classified failure, as a comparable string.
+function _oai_error_name(error: unknown) -> string {
+    match (error) {
+        let invalid: ai.errors.InvalidRequest => `invalid_request:${invalid.detail}`,
+        let limited: ai.errors.RateLimited => "rate_limited",
+        let refused: ai.errors.Refused => `refused:${refused.reason}`,
+        let network: ai.errors.NetworkFailure => `network:${network.detail}`,
+        let parse: ai.errors.ParseFailed => "parse_failed",
+        let invalid: ai.errors.InvalidResponse => "invalid_response",
+        let provider: ai.errors.ProviderError => `provider_error:${provider.message}`,
+        _ => `other:${error.to_string()}`,
+    }
+}
+
+// The rendered request body, as a plain call so a `catch_all` at the call site
+// is unambiguous.
+function _oai_render_body(cl: openai.ResponsesClient, input: ai.ModelTurnInput) -> string {
+    let req = openai.internal.render(cl, input);
+    req.body
+}
+
+// A ModelTurnInput built from a spec, for driving the client below the runner.
+function _oai_input(
+    spec: ai.FunctionSpec<string>,
+    journal: ai.Journal,
+    toolbox: ai.tools.Toolbox,
+) -> ai.ModelTurnInput {
+    ai.ModelTurnInput {
+        prompt: spec.prompt_template,
+        journal: journal,
+        toolbox: toolbox,
+        output_type: spec.output_type(),
+    }
+}
+
+// What a mock call saw: the non-body facts joined into one comparable string,
+// and the captured request body parsed as json.
+class OaiSent {
+    head: string,
+    body: json,
+}
+
+// ─── request shape ───────────────────────────────────────────────────────────
+
+// Every first-class typed parameter lands in the body, unset ones are absent
+// (never an explicit null), and the endpoint/auth headers are the provider's.
+function oai_request_shape() -> OaiSent {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_oai_text_response())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+                temperature = 0.25,
+                top_p = 0.5,
+                max_output_tokens = 128,
+                reasoning_effort = "low",
+                reasoning_summary = "auto",
+                verbosity = "low",
+                parallel_tool_calls = true,
+            );
+            let result = ai.Agent.new(client = cl).run(OaiEcho@spec("Say pong."));
+            let sent = mock.last_request();
+            OaiSent {
+                head: [
+                    result.value,
+                    sent.method,
+                    sent.path(),
+                    sent.header("authorization") ?? "",
+                    sent.header("content-type") ?? "",
+                ].join("~~"),
+                body: sent.json(),
+            }
+        },
+    )
+}
+
+test "oai_request_shape" {
+    let got = oai_request_shape();
+    assert.equal(got.head, "pong~~POST~~/responses~~Bearer test-key~~application/json");
+    // the whole body: every typed request field, and nothing else — an unset
+    // optional is ABSENT, not null; no tools and no stream flag here
+    let expected: json = {
+        "model": "gpt-4o-mini",
+        "store": false,
+        "input": [
+            {
+                "role": "system",
+                "content": [{ "type": "input_text", "text": "Reply with exactly one word.\nSay pong." }],
+            },
+        ],
+        "temperature": 0.25,
+        "top_p": 0.5,
+        "max_output_tokens": 128,
+        "reasoning": { "effort": "low", "summary": "auto" },
+        "text": { "verbosity": "low" },
+        "parallel_tool_calls": true,
+    };
+    assert.equal(got.body, expected)
+}
+
+function oai_request_timeout() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_oai_text_response())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+                timeout = baml.time.Duration.from_milliseconds(20),
+            );
+            let outcome = `turn:${cl.invoke(_oai_input(OaiEcho@spec("Say pong."), ai.Journal { log: [] }, ai.tools.Toolbox.new([]))).terminal_text() ?? ""}` catch_all (e) {
+                let timeout: baml.errors.Timeout => `Timeout:${timeout.timeout_type}`,
+                _ => `other:${e.to_string()}`,
+            };
+            `${outcome}`
+        },
+        response_delay_ms = 200,
+    )
+}
+
+test "oai_request_timeout" {
+    assert.equal(oai_request_timeout(), "Timeout:timeout")
+}
+
+// request_body deep-merges over the serialized typed request: a scalar
+// replaces, a map merges key by key, and a null DELETES the key the client
+// injected. Headers and query params are the user's, authorization is not.
+function oai_passthrough() -> OaiSent {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_oai_text_response())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let overrides: json = {
+                "temperature": 0.75,
+                "metadata": { "tag": "unit" },
+                "store": null,
+                "reasoning": { "effort": "high" },
+            };
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+                temperature = 0.25,
+                reasoning_effort = "low",
+                reasoning_summary = "auto",
+                request_body = overrides,
+                headers = { "X-Trace": "abc", "authorization": "Bearer overridden" },
+                query_params = { "api-version": "2024 05" },
+            );
+            let result = ai.Agent.new(client = cl).run(OaiEcho@spec("Say pong."));
+            let sent = mock.last_request();
+            OaiSent {
+                head: [
+                    result.value,
+                    sent.query() ?? "",
+                    sent.header("x-trace") ?? "",
+                    sent.header("authorization") ?? "",
+                ].join("~~"),
+                body: sent.json(),
+            }
+        },
+    )
+}
+
+test "oai_passthrough" {
+    let got = oai_passthrough();
+    // query params are percent-encoded onto the endpoint
+    assert.equal(got.head, "pong~~api-version=2024%2005~~abc~~Bearer test-key");
+    // scalar override replaces the typed parameter
+    assert.equal(baml.json.path<json>(got.body, ".temperature"), 0.75);
+    // map override merges: effort replaced, summary survives
+    assert.equal(
+        baml.json.path<json>(got.body, ".reasoning"),
+        { "effort": "high", "summary": "auto" },
+    );
+    // a new key is added
+    assert.equal(baml.json.path<json>(got.body, ".metadata"), { "tag": "unit" });
+    // a null override deletes the client's own default
+    assert.equal(baml.json.to<map<string, json>>(got.body).has("store"), false)
+}
+
+// Toolbox tools become typed function tools with tool_choice "auto", the
+// journal replays as function_call items, and ai.wire.sanitize_for_client
+// closes the tool call that never got a result.
+function oai_tools_and_journal() -> json {
+    let spec = OaiEcho@spec("Say pong.");
+    let properties: map<string, unknown> = { };
+    let required: string[] = [];
+    let schema: map<string, unknown> = {
+        "type": "object",
+        "properties": properties,
+        "required": required,
+    };
+    let toolbox = ai.tools.Toolbox.new(
+        [
+            ai.tools.raw_tool(
+                "lookup",
+                "Look something up",
+                schema,
+                (args: map<string, unknown>) -> {
+                    let out = "ok";
+                    out
+                },
+            ),
+        ],
+    );
+    let args: map<string, unknown> = { };
+    let journal = ai.Journal {
+        log: [
+            ai.events.UserMessage.new("earlier question"),
+            ai.events.AssistantMessage {
+                content: [
+                    ai.content.Text { text: "on it" },
+                    ai.content.ToolUse { id: "call_1", name: "lookup", args: args },
+                ],
+                resolved_model: ai.events.ModelKey { provider: "openai", model: "gpt-4o-mini" },
+                requested_model: "gpt-4o-mini",
+            },
+        ],
+    };
+    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
+    let req = openai.internal.render(cl, _oai_input(spec, journal, toolbox));
+    baml.json.parse(req.body)
+}
+
+test "oai_tools_and_journal" {
+    let got = oai_tools_and_journal();
+    let tools: json = [
+        {
+            "type": "function",
+            "name": "lookup",
+            "description": "Look something up",
+            "parameters": { "type": "object", "properties": {}, "required": [] },
+            "strict": false,
+        },
+    ];
+    assert.equal(baml.json.path<json>(got, ".tools"), tools);
+    assert.equal(baml.json.path<json>(got, ".tool_choice"), "auto");
+    // the prompt, the journal replay in order, then the orphaned call closed by
+    // the shared sanitizer (a function_call_output's `output` is a string on
+    // the wire, so the sanitizer's error object arrives serialized)
+    let input: json = [
+        {
+            "role": "system",
+            "content": [{ "type": "input_text", "text": "Reply with exactly one word.\nSay pong." }],
+        },
+        { "role": "user", "content": [{ "type": "input_text", "text": "earlier question" }] },
+        { "role": "assistant", "content": [{ "type": "output_text", "text": "on it" }] },
+        { "type": "function_call", "call_id": "call_1", "name": "lookup", "arguments": "{}" },
+        {
+            "type": "function_call_output",
+            "call_id": "call_1",
+            "output": `{"error":"No result provided"}`,
+        },
+    ];
+    assert.equal(baml.json.path<json>(got, ".input"), input)
+}
+
+// Prompt media becomes typed Responses content parts: an image data URL with
+// `detail`, audio NESTED under `input_audio` (the Responses API's shape — the
+// flat `data`/`format` sys_llm sent was wrong), and a PDF URL as `file_url`
+// with the basename as filename.
+function oai_media_input() -> json {
+    let spec = OaiLook@spec(
+        baml.media.Image.from_base64("aW1n", "image/png"),
+        baml.media.Audio.from_base64("YXVk", "audio/wav"),
+        baml.media.Pdf.from_url("https://example.test/files/report.pdf?token=1", "application/pdf"),
+    );
+    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
+    let empty = ai.tools.Toolbox.new([]);
+    let req = openai.internal.render(cl, _oai_input(spec, ai.Journal.new(spec), empty));
+    baml.json.parse(req.body)
+}
+
+test "oai_media_input" {
+    let got = oai_media_input();
+    let expected: json = [
+        {
+            "role": "user",
+            "content": [
+                { "type": "input_text", "text": "Look:" },
+                {
+                    "type": "input_image",
+                    "image_url": "data:image/png;base64,aW1n",
+                    "detail": "auto",
+                },
+                { "type": "input_audio", "input_audio": { "data": "YXVk", "format": "wav" } },
+                {
+                    "type": "input_file",
+                    "filename": "report.pdf",
+                    "file_url": "https://example.test/files/report.pdf?token=1",
+                },
+            ],
+        },
+    ];
+    assert.equal(baml.json.path<json>(got, ".input"), expected)
+}
+
+// Responses compatibility permits image input in a system message. This is
+// important for role-less prompts, which the compiler lowers to system for
+// legacy parity, and for explicitly authored system prompts alike.
+function oai_system_image_input() -> json {
+    let spec = OaiSystemLook@spec(baml.media.Image.from_base64("aW1n", "image/png"));
+    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
+    let empty = ai.tools.Toolbox.new([]);
+    baml.json.parse(_oai_render_body(cl, _oai_input(spec, ai.Journal.new(spec), empty)))
+}
+
+test "oai_system_image_input" {
+    let got = oai_system_image_input();
+    let expected: json = [
+        {
+            "role": "system",
+            "content": [
+                { "type": "input_text", "text": "Look:" },
+                {
+                    "type": "input_image",
+                    "image_url": "data:image/png;base64,aW1n",
+                    "detail": "auto",
+                },
+            ],
+        },
+    ];
+    assert.equal(baml.json.path<json>(got, ".input"), expected)
+}
+
+// An `-> image` return type enables the provider-side image_generation tool and
+// pins tool_choice to it (sys_llm's image_generation_mode), and the
+// image_generation_call output item comes back as the run's value.
+function oai_image_generation() -> OaiSent {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_oai_image_response())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let result = ai.Agent.new(client = cl).run(OaiPicture@spec("a red apple"));
+            let sent = mock.last_request();
+            OaiSent {
+                head: [result.value.base64(), result.value.mime_type() ?? ""].join("~~"),
+                body: sent.json(),
+            }
+        },
+    )
+}
+
+test "oai_image_generation" {
+    let got = oai_image_generation();
+    assert.equal(got.head, "aGVsbG8=~~image/jpeg");
+    assert.equal(baml.json.path<json>(got.body, ".tools"), [{ "type": "image_generation" }]);
+    assert.equal(baml.json.path<json>(got.body, ".tool_choice"), { "type": "image_generation" })
+}
+
+// A tool's `parameters` is the CALLER's JSON Schema, where `"default": null`
+// and `"const": null` are legitimate members. The null-prune that drops the
+// typed request classes' unset optionals used to run over them too, so the
+// schema on the wire was not the schema the caller declared.
+function oai_tool_schema_keeps_nulls() -> json {
+    let spec = OaiEcho@spec("Say pong.");
+    let city: map<string, unknown> = { "type": "string", "default": null };
+    let properties: map<string, unknown> = { "city": city };
+    let required: string[] = [];
+    let schema: map<string, unknown> = {
+        "type": "object",
+        "properties": properties,
+        "required": required,
+        "const": null,
+    };
+    let toolbox = ai.tools.Toolbox.new(
+        [
+            ai.tools.raw_tool(
+                "lookup",
+                "Look something up",
+                schema,
+                (args: map<string, unknown>) -> {
+                    let out = "ok";
+                    out
+                },
+            ),
+        ],
+    );
+    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
+    let req = openai.internal.render(cl, _oai_input(spec, ai.Journal.new(spec), toolbox));
+    baml.json.parse(req.body)
+}
+
+test "oai_tool_schema_keeps_nulls" {
+    let got = oai_tool_schema_keeps_nulls();
+    let parameters: json = {
+        "type": "object",
+        "properties": { "city": { "type": "string", "default": null } },
+        "required": [],
+        "const": null,
+    };
+    assert.equal(baml.json.path<json>(got, ".tools[0].parameters"), parameters);
+    // the TYPED layer is still pruned: no unset optional reaches the wire
+    let top = baml.json.to<map<string, json>>(got);
+    assert.equal(top.has("temperature"), false);
+    assert.equal(top.has("reasoning"), false);
+    assert.equal(baml.json.path<json>(got, ".tool_choice"), "auto")
+}
+
+// A `${cache(args)}` in the prompt is `prompt_cache_breakpoint: args` on the
+// content part BEFORE the delimiter, wherever in the message that is; a part
+// with no delimiter after it stays clean.
+function OaiCached(picture: image, question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `${role("system")}Follow the rules.${cache({ "mode": "explicit" })}${role("user")}Look at ${picture} closely.${cache({ "mode": "explicit", "ttl": null })} ${question}`
+}
+
+function _oai_render_input(cl: openai.ResponsesClient, spec: ai.FunctionSpec<string>) -> json {
+    let empty = ai.tools.Toolbox.new([]);
+    let req = openai.internal.render(cl, _oai_input(spec, ai.Journal.new(spec), empty));
+    baml.json.path<json>(baml.json.parse(req.body), ".input")
+}
+
+test "oai_cache_delimiter_is_a_breakpoint_on_the_part_before" {
+    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
+    let picture = baml.media.Image.from_url("https://example.com/p.png", "image/png");
+    let expected: json = [
+        {
+            "role": "system",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": "Follow the rules.",
+                    "prompt_cache_breakpoint": { "mode": "explicit" },
+                },
+            ],
+        },
+        {
+            "role": "user",
+            "content": [
+                { "type": "input_text", "text": "Look at" },
+                { "type": "input_image", "image_url": "https://example.com/p.png", "detail": "auto" },
+                {
+                    "type": "input_text",
+                    "text": "closely.",
+                    "prompt_cache_breakpoint": { "mode": "explicit", "ttl": null },
+                },
+                { "type": "input_text", "text": "Describe it." },
+            ],
+        },
+    ];
+    assert.equal(_oai_render_input(cl, OaiCached@spec(picture, "Describe it.")), expected)
+}
+
+// A delimiter with nothing before it in its message sends no breakpoint, and
+// neither does one with null `args` on a model that has no default (this one
+// is GPT-5.5 or earlier); two in a row leave one, the later one's `args`.
+function OaiCacheEdges(args: json) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `${role("system")}${cache({ "mode": "explicit" })}Rules.${role("user")}Stable.${cache({ "mode": "explicit" })}${cache(args)} Variable.`
+}
+
+test "oai_cache_delimiter_edges" {
+    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
+    let rules: json = { "role": "system", "content": [{ "type": "input_text", "text": "Rules." }] };
+
+    // two in a row: one breakpoint, the later one's args
+    let later_args: json = { "mode": "explicit", "later": true };
+    let later: json = [
+        rules,
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": "Stable.",
+                    "prompt_cache_breakpoint": { "mode": "explicit", "later": true },
+                },
+                { "type": "input_text", "text": "Variable." },
+            ],
+        },
+    ];
+    assert.equal(_oai_render_input(cl, OaiCacheEdges@spec(later_args)), later);
+
+    // null args with no default: the first delimiter's breakpoint stands
+    let first: json = [
+        rules,
+        {
+            "role": "user",
+            "content": [
+                { "type": "input_text", "text": "Stable.", "prompt_cache_breakpoint": { "mode": "explicit" } },
+                { "type": "input_text", "text": "Variable." },
+            ],
+        },
+    ];
+    assert.equal(_oai_render_input(cl, OaiCacheEdges@spec(null)), first)
+}
+
+// `${cache()}` takes the client's default: `{"mode": "explicit"}` on GPT-5.6 and
+// later, and nothing on an earlier model, which answers 400 to the field. (The
+// model list itself is asserted in `chat_cache_default_by_model`; both clients
+// read it.)
+function OaiCacheDefault(question: string) -> string {
+    client: "openai/gpt-4o-mini"
+    prompt: `${role("system")}Follow the rules.${cache()}${role("user")}Stable.${cache()} ${question}`
+}
+
+test "oai_cache_default_args" {
+    let current = openai.ResponsesClient.new(model = "gpt-5.6-luna", api_key = "test-key");
+    let earlier = openai.ResponsesClient.new(model = "gpt-5.5", api_key = "test-key");
+    let marked: json = [
+        {
+            "role": "system",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": "Follow the rules.",
+                    "prompt_cache_breakpoint": { "mode": "explicit" },
+                },
+            ],
+        },
+        {
+            "role": "user",
+            "content": [
+                { "type": "input_text", "text": "Stable.", "prompt_cache_breakpoint": { "mode": "explicit" } },
+                { "type": "input_text", "text": "Variable." },
+            ],
+        },
+    ];
+    assert.equal(_oai_render_input(current, OaiCacheDefault@spec("Variable.")), marked);
+    let unmarked: json = [
+        { "role": "system", "content": [{ "type": "input_text", "text": "Follow the rules." }] },
+        { "role": "user", "content": [{ "type": "input_text", "text": "Stable. Variable." }] },
+    ];
+    assert.equal(_oai_render_input(earlier, OaiCacheDefault@spec("Variable.")), unmarked);
+    // null `args` is the default
+    let nulled: json = [
+        { "role": "system", "content": [{ "type": "input_text", "text": "Rules." }] },
+        {
+            "role": "user",
+            "content": [
+                { "type": "input_text", "text": "Stable.", "prompt_cache_breakpoint": { "mode": "explicit" } },
+                { "type": "input_text", "text": "Variable." },
+            ],
+        },
+    ];
+    assert.equal(_oai_render_input(current, OaiCacheEdges@spec(null)), nulled)
+}
+
+// Role metadata is not forwarded onto a content part any more: a key there no
+// longer reaches the endpoint, where an unknown one is rejected.
+test "oai_role_metadata_is_not_forwarded" {
+    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
+    let expected: json = [
+        { "role": "system", "content": [{ "type": "input_text", "text": "Follow the rules." }] },
+        { "role": "user", "content": [{ "type": "input_text", "text": "Say pong." }] },
+    ];
+    assert.equal(_oai_render_input(cl, OaiMetaEcho@spec("Say pong.")), expected)
+}
+
+// ─── response parsing ────────────────────────────────────────────────────────
+
+/// The usage a run billed to `gpt-4o-mini` on OpenAI, the model these tests use.
+function _oai_usage(usage: ai.events.ModelUsage[]) -> ai.events.Usage? {
+    ai.events.usage_for(usage, ai.events.ModelKey { provider: "openai", model: "gpt-4o-mini" })
+}
+
+// total/cached/reasoning token details reach ai.events.Usage.
+function oai_usage_details() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_oai_text_response())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let result = ai.Agent.new(client = cl).run(OaiEcho@spec("Say pong."));
+            let usage = _oai_usage(result.usage);
+            [
+                (usage?.input_tokens ?? -1).to_string(),
+                (usage?.output_tokens ?? -1).to_string(),
+                (usage?.cached_input_tokens ?? -1).to_string(),
+                (usage?.reasoning_tokens ?? -1).to_string(),
+            ].join("|")
+        },
+    )
+}
+
+test "oai_usage_details" {
+    assert.equal(oai_usage_details(), "3|1|2|7")
+}
+
+// A `usage` object with no counts at all still parses (the fields are optional
+// on purpose) and reports no counts: unreported is not zero.
+function oai_sparse_usage() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_oai_sparse_usage_response())],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let result = ai.Agent.new(client = cl).run(OaiEcho@spec("Say pong."));
+            let usage = _oai_usage(result.usage);
+            `${result.value}|${usage?.input_tokens ?? -1}|${usage?.output_tokens ?? -1}`
+        },
+    )
+}
+
+test "oai_sparse_usage" {
+    assert.equal(oai_sparse_usage(), "pong|-1|-1")
+}
+
+// A commentary message that parses into a structured output type is the
+// turn's output. The final answer is the fallback.
+function oai_commentary_answer(commentaries: string[], final_answer: string) -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(_oai_commentary_response(commentaries, final_answer))],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            ai.Agent.new(client = cl).run(OaiPickTool@spec()).value.tool
+        },
+    )
+}
+
+test "oai_commentary_answer" {
+    let tool_call = "{\"tool\": \"search_workouts\"} \n";
+    // the commentary wins over an empty final answer and over one that parses
+    assert.equal(oai_commentary_answer([tool_call], ""), "search_workouts");
+    assert.equal(oai_commentary_answer([tool_call], `{"tool": "none"}`), "search_workouts");
+    // commentary messages are tried in order
+    assert.equal(
+        oai_commentary_answer([`{"tool": "first"}`, `{"tool": "second"}`], `{"tool": "none"}`),
+        "first",
+    );
+    assert.equal(
+        oai_commentary_answer(["Let me look that up.", `{"tool": "second"}`], `{"tool": "none"}`),
+        "second",
+    );
+    // a commentary that does not parse leaves the final answer
+    assert.equal(oai_commentary_answer(["Let me look that up."], `{"tool": "none"}`), "none")
+}
+
+// The turn's content is the whole response, in order, whatever was parsed. A
+// string output is never taken from the commentary: any text parses as a
+// string, so a preamble would replace the answer.
+function oai_commentary_string_output() -> string {
+    root.llm_mock.mock_json_serve(
+        [
+            root.llm_mock.MockResponse.ok(_oai_commentary_response(["Let me look."], "pong")),
+            root.llm_mock.MockResponse.ok(_oai_commentary_response(["Let me look."], "pong")),
+        ],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let spec = OaiEcho@spec("Say pong.");
+            let turn = cl.invoke(_oai_input(spec, ai.Journal.new(spec), ai.tools.Toolbox.new([])));
+            let texts: string[] = [];
+            for (let block in turn.content) {
+                if let text: ai.content.Text = block {
+                    texts.push(text.text);
+                }
+            }
+            let decoded = if (turn.parsed_output == null) {
+                "not decoded"
+            } else {
+                "decoded"
+            };
+            let value = ai.Agent.new(client = cl).run(OaiEcho@spec("Say pong.")).value;
+            [texts.join("|"), decoded, value].join("~")
+        },
+    )
+}
+
+test "oai_commentary_string_output" {
+    assert.equal(oai_commentary_string_output(), "Let me look.|pong~not decoded~pong")
+}
+
+// With a native tool call in the response, the commentary is the preamble to
+// that call, not the output.
+function oai_commentary_with_tool_call() -> string {
+    let call: map<string, unknown> = {
+        "type": "function_call",
+        "id": "fc_1",
+        "call_id": "call_1",
+        "name": "lookup",
+        "arguments": "{}",
+    };
+    let body = _oai_response_with_output(
+        [_oai_phase_message("commentary", `{"tool": "search_workouts"}`), call],
+    );
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(body)],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let spec = OaiPickTool@spec();
+            let turn = cl.invoke(
+                ai.ModelTurnInput {
+                    prompt: spec.prompt_template,
+                    journal: ai.Journal.new(spec),
+                    toolbox: ai.tools.Toolbox.new([]),
+                    output_type: spec.output_type(),
+                },
+            );
+            let decoded = if (turn.parsed_output == null) {
+                "not decoded"
+            } else {
+                "decoded"
+            };
+            `${turn.tool_uses().length()} tool call|${decoded}`
+        },
+    )
+}
+
+test "oai_commentary_with_tool_call" {
+    assert.equal(oai_commentary_with_tool_call(), "1 tool call|not decoded")
+}
+
+// Malformed `arguments` on a function_call item is PROVIDER-malformed output:
+// it must arrive as ai.errors.ParseFailed, not as the raw baml baml.json.ParseError
+// escaping through the client's catch_all as an untyped UnknownError.
+function _oai_invoke_text(cl: openai.ResponsesClient, input: ai.ModelTurnInput) -> string {
+    cl.invoke(input).terminal_text() ?? ""
+}
+
+function oai_bad_tool_arguments() -> string {
+    let body = `{"status":"completed","output":[{"type":"function_call","id":"fc_1","call_id":"call_1","name":"lookup","arguments":"not json"}]}`;
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.ok(body)],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let spec = OaiEcho@spec("Say pong.");
+            let empty = ai.tools.Toolbox.new([]);
+            _oai_invoke_text(cl, _oai_input(spec, ai.Journal.new(spec), empty)) catch_all (e) {
+                _ => _oai_error_name(e),
+            }
+        },
+    )
+}
+
+test "oai_bad_tool_arguments" {
+    assert.equal(oai_bad_tool_arguments(), "parse_failed")
+}
+
+// A provider error status is classified, never reported as a transport failure.
+function _oai_run(cl: openai.ResponsesClient) -> string {
+    let result = ai.Agent.new(client = cl).run(OaiEcho@spec("Say pong."));
+    result.value
+}
+
+function oai_http_error_taxonomy() -> string {
+    root.llm_mock.mock_json_serve(
+        [
+            root.llm_mock.MockResponse.error(429, `{"error":{"message":"slow down"}}`),
+            root.llm_mock.MockResponse.error(400, `{"error":{"message":"bad request"}}`),
+        ],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let first = _oai_run(cl) catch_all (e) {
+                _ => _oai_error_name(e),
+            };
+            let second = _oai_run(cl) catch_all (e) {
+                _ => _oai_error_name(e),
+            };
+            `${first}|${second}`
+        },
+    )
+}
+
+test "oai_http_error_taxonomy" {
+    assert.equal(oai_http_error_taxonomy(), "rate_limited|invalid_request:http 400")
+}
+
+// ─── streaming ───────────────────────────────────────────────────────────────
+
+// Text deltas accumulate into the final value; the terminal event carries the
+// usage and stop reason.
+function oai_stream_text() -> OaiSent {
+    let completed = `{"type":"response.completed","response":{"status":"completed","model":"gpt-4o-mini","output":[{"type":"message","content":[{"type":"output_text","text":"pong"}]}],"usage":{"input_tokens":3,"output_tokens":1}}}`;
+    root.llm_mock.mock_sse_serve(
+        [
+            root.llm_mock.sse_data(
+                `{"type":"response.created","response":{"status":"in_progress","model":"gpt-4o-mini"}}`,
+            ),
+            root.llm_mock.sse_data(
+                `{"type":"response.output_text.delta","item_id":"msg_1","delta":"po"}`,
+            ),
+            root.llm_mock.sse_data(
+                `{"type":"response.output_text.delta","item_id":"msg_1","delta":"ng"}`,
+            ),
+            root.llm_mock.sse_data(
+                `{"type":"response.output_text.done","item_id":"msg_1","text":"pong"}`,
+            ),
+            root.llm_mock.sse_data(completed),
+        ],
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let stream = ai.stream.from_spec<string>(
+                OaiEcho@spec("Say pong."),
+                client = cl,
+            );
+            let value = stream.final();
+            let sent = mock.last_request();
+            OaiSent { head: value, body: sent.json() }
+        },
+    )
+}
+
+test "oai_stream_text" {
+    let got = oai_stream_text();
+    // `output_text.done` must NOT duplicate the deltas that already arrived
+    assert.equal(got.head, "pong");
+    assert.equal(baml.json.path<json>(got.body, ".stream"), true)
+}
+
+// A streamed turn reports the cache split a non-streamed one does:
+// input_tokens counts the cached share and the cache writes too.
+function oai_stream_usage_splits_the_cache() -> string {
+    let completed = `{"type":"response.completed","response":{"status":"completed","model":"gpt-4o-mini","output":[{"type":"message","content":[{"type":"output_text","text":"pong"}]}],"usage":{"input_tokens":100,"output_tokens":5,"input_tokens_details":{"cached_tokens":40,"cache_write_tokens":25},"output_tokens_details":{"reasoning_tokens":2}}}}`;
+    root.llm_mock.mock_sse_serve(
+        [
+            root.llm_mock.sse_data(
+                `{"type":"response.output_text.delta","item_id":"msg_1","delta":"pong"}`,
+            ),
+            root.llm_mock.sse_data(completed),
+        ],
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let spec = OaiEcho@spec("Say pong.");
+            let turn = cl
+                .invoke_stream(
+                ai.ModelTurnInput {
+                    prompt: spec.prompt_template,
+                    journal: ai.Journal { log: [] },
+                    toolbox: spec.tools(),
+                    output_type: spec.output_type(),
+                },
+                )
+                .final_turn();
+            let u = ai.events.usage_for(ai.events.call_usage(turn.calls), ai.events.ModelKey { provider: "openai", model: "gpt-4o-mini" });
+            `${u?.input_tokens ?? -1}/${u?.cached_input_tokens ?? -1}/${u?.cache_write_input_tokens ?? -1}/${u?.uncached_input_tokens ?? -1}/${u?.output_tokens ?? -1}/${u?.reasoning_tokens ?? -1}`
+        },
+    )
+}
+
+test "oai_stream_usage_splits_the_cache" {
+    // input/cached/cache writes/uncached/output/reasoning
+    assert.equal(oai_stream_usage_splits_the_cache(), "100/40/25/35/5/2")
+}
+
+// One streamed run to completion, as a plain call so a `catch_all` at the call
+// site is unambiguous.
+function _oai_stream_final(cl: openai.ResponsesClient) -> string {
+    let stream = ai.stream.from_spec<string>(
+        OaiEcho@spec("Say pong."),
+        client = cl,
+    );
+    stream.final()
+}
+
+function oai_stream_first_token_timeout() -> string {
+    let completed = `{"type":"response.completed","response":{"status":"completed","output":[],"usage":{"input_tokens":3,"output_tokens":1}}}`;
+    root.llm_mock.mock_sse_serve(
+        [root.llm_mock.sse_data(completed)],
+        (mock: root.llm_mock.MockSseServer) -> {
+            // The mock holds the first event for 10s, so only the 20ms TTFT can
+            // end this call, however slow the machine is.
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+                timeout = ai.LlmTimeoutOptions {
+                    timeout: baml.time.Duration.from_milliseconds(15000),
+                    first_token_timeout: baml.time.Duration.from_milliseconds(20),
+                },
+            );
+            let outcome = _oai_stream_final(cl) catch_all (e) {
+                let timeout: baml.errors.Timeout => `Timeout:${timeout.timeout_type}:${timeout.duration?.to_milliseconds() ?? -1n}`,
+                _ => `other:${e.to_string()}`,
+            };
+            `${outcome}`
+        },
+        first_event_delay_ms = 10000,
+    )
+}
+
+test "oai_stream_first_token_timeout" {
+    assert.equal(oai_stream_first_token_timeout(), "Timeout:first_token_timeout:20")
+}
+
+// A stream whose text arrives ONLY as `output_text.done` still yields it.
+function oai_stream_text_done_only() -> string {
+    let completed = `{"type":"response.completed","response":{"status":"completed","output":[],"usage":{"input_tokens":3,"output_tokens":1}}}`;
+    root.llm_mock.mock_sse_serve(
+        [
+            root.llm_mock.sse_data(
+                `{"type":"response.output_text.done","item_id":"msg_1","text":"pong"}`,
+            ),
+            root.llm_mock.sse_data(completed),
+        ],
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            _oai_stream_final(cl)
+        },
+    )
+}
+
+test "oai_stream_text_done_only" {
+    assert.equal(oai_stream_text_done_only(), "pong")
+}
+
+// `response.failed` is an ERROR, not a completed turn: the old decoder ran the
+// ordinary parse and emitted TurnDone, so a failed run looked empty.
+function oai_stream_failed_event() -> string {
+    let failed = `{"type":"response.failed","response":{"status":"failed","error":{"code":"server_error","message":"the model failed"}}}`;
+    root.llm_mock.mock_sse_serve(
+        [
+            root.llm_mock.sse_data(
+                `{"type":"response.output_text.delta","item_id":"msg_1","delta":"po"}`,
+            ),
+            root.llm_mock.sse_data(failed),
+        ],
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            _oai_stream_final(cl) catch_all (e) {
+                _ => _oai_error_name(e),
+            }
+        },
+    )
+}
+
+test "oai_stream_failed_event" {
+    // "server_error" is the docs' own `response.failed` example: a TRANSIENT
+    // provider failure that happens to be delivered inside a 200 body. It
+    // classifies exactly like the HTTP 500 form (NetworkFailure), so a Retry
+    // policy treats the two envelopes of the same failure alike.
+    assert.equal(oai_stream_failed_event(), "provider_error:the model failed")
+}
+
+// An in-body failure whose code is NOT transient stays a permanent
+// InvalidRequest — the classification is by code, not by envelope.
+function oai_stream_failed_event_permanent() -> string {
+    let failed = `{"type":"response.failed","response":{"status":"failed","error":{"code":"invalid_prompt","message":"bad prompt"}}}`;
+    root.llm_mock.mock_sse_serve(
+        [root.llm_mock.sse_data(failed)],
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            _oai_stream_final(cl) catch_all (e) {
+                _ => _oai_error_name(e),
+            }
+        },
+    )
+}
+
+test "oai_stream_failed_event_permanent" {
+    assert.equal(oai_stream_failed_event_permanent(), "provider_error:bad prompt")
+}
+
+// A stream that dies mid-turn — one delta, then the socket closes with no
+// terminal event — is a TRUNCATED turn. The Responses protocol always ends a
+// live turn with response.completed/incomplete/failed, so the decoder opts into
+// ai.stream's strict termination contract and the partial text is reported as
+// the transport failure it is instead of being handed back as a good answer.
+function oai_stream_truncated() -> string {
+    root.llm_mock.mock_sse_serve(
+        [
+            root.llm_mock.sse_data(
+                `{"type":"response.output_text.delta","item_id":"msg_1","content_index":0,"delta":"par"}`,
+            ),
+        ],
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            _oai_stream_final(cl) catch_all (e) {
+                _ => _oai_error_name(e),
+            }
+        },
+    )
+}
+
+test "oai_stream_truncated" {
+    assert.contains(
+        oai_stream_truncated(),
+        "network:stream ended before the provider's terminal event",
+    )
+}
+
+// The stop reason the decoder computes on the terminal event reaches the
+// completed turn through ai.stream.TurnMeta — a streamed refusal and a
+// max-tokens truncation are NOT StopReason.Complete.
+function _oai_stream_turn(cl: openai.ResponsesClient) -> string {
+    let spec = OaiEcho@spec("Say pong.");
+    let empty = ai.tools.Toolbox.new([]);
+    let stream = cl.invoke_stream(_oai_input(spec, ai.Journal.new(spec), empty));
+    let turn = stream.final_turn();
+    `${turn.stop_reason}|${turn.terminal_text() ?? ""}`
+}
+
+function oai_stream_refusal() -> string {
+    let completed = `{"type":"response.completed","response":{"status":"completed","output":[{"type":"message","content":[{"type":"refusal","refusal":"I cannot help with that."}]}]}}`;
+    root.llm_mock.mock_sse_serve(
+        [root.llm_mock.sse_data(completed)],
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            _oai_stream_turn(cl)
+        },
+    )
+}
+
+test "oai_stream_refusal" {
+    // no refusal DELTA event exists, so the turn's text is empty — what must
+    // not happen is an empty turn reported as a complete answer.
+    assert.equal(oai_stream_refusal(), "Refused|")
+}
+
+function oai_stream_incomplete() -> string {
+    let incomplete = `{"type":"response.incomplete","response":{"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[{"type":"message","content":[{"type":"output_text","text":"par"}]}],"usage":{"input_tokens":3,"output_tokens":9}}}`;
+    root.llm_mock.mock_sse_serve(
+        [
+            root.llm_mock.sse_data(
+                `{"type":"response.output_text.delta","item_id":"msg_1","content_index":0,"delta":"par"}`,
+            ),
+            root.llm_mock.sse_data(incomplete),
+        ],
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            _oai_stream_turn(cl)
+        },
+    )
+}
+
+test "oai_stream_incomplete" {
+    assert.equal(oai_stream_incomplete(), "MaxTokens|par")
+}
+
+// A bare `error` event mid-stream is classified from its own code/message.
+function oai_stream_error_event() -> string {
+    root.llm_mock.mock_sse_serve(
+        [
+            root.llm_mock.sse_data(
+                `{"type":"error","code":"rate_limit_exceeded","message":"slow down"}`,
+            ),
+        ],
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            _oai_stream_final(cl) catch_all (e) {
+                _ => _oai_error_name(e),
+            }
+        },
+    )
+}
+
+test "oai_stream_error_event" {
+    assert.equal(oai_stream_error_event(), "provider_error:slow down")
+}
+
+// Open a stream below the runner and drain it — the client interface directly,
+// no prompt rendering or SAP involved.
+function _oai_open_stream(cl: openai.ResponsesClient, input: ai.ModelTurnInput) -> string {
+    let stream = cl.invoke_stream(input);
+    let turn = stream.final_turn();
+    turn.terminal_text() ?? ""
+}
+
+// A non-2xx opening the SSE connection is classified exactly like the
+// non-streaming path — NOT a retry-safe NetworkFailure, which would make a
+// retry policy replay an unauthorized request forever.
+function oai_stream_status_error() -> string {
+    root.llm_mock.mock_json_serve(
+        [root.llm_mock.MockResponse.error(401, `{"error":{"message":"bad key"}}`)],
+        (mock: root.llm_mock.MockJsonServer) -> {
+            let cl = openai.ResponsesClient.new(
+                model = "gpt-4o-mini",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+            );
+            let spec = OaiEcho@spec("Say pong.");
+            let empty = ai.tools.Toolbox.new([]);
+            let input = _oai_input(spec, ai.Journal.new(spec), empty);
+            _oai_open_stream(cl, input) catch_all (e) {
+                _ => _oai_error_name(e),
+            }
+        },
+    )
+}
+
+test "oai_stream_status_error" {
+    assert.equal(oai_stream_status_error(), "invalid_request:http 401")
+}
+
+// The decoder buffers streamed function-call arguments across batches (the
+// stream event types cannot carry a tool call yet — PLAN §6), and a
+// `output_text.done` for an item that never streamed a delta emits it once.
+function oai_stream_decoder_buffers() -> string {
+    let state = openai.internal.OaStreamState.new();
+    let first: map<string, unknown> = {
+        "type": "response.function_call_arguments.delta",
+        "item_id": "fc_1",
+        "delta": "{\"city\":",
+    };
+    let second: map<string, unknown> = {
+        "type": "response.function_call_arguments.delta",
+        "item_id": "fc_1",
+        "delta": "\"paris\"}",
+    };
+    let done: map<string, unknown> = {
+        "type": "response.output_text.done",
+        "item_id": "msg_1",
+        "text": "hello",
+    };
+    let batch_one = openai.internal._decode_batch(
+        _oai_batch([_oai_json(first), _oai_json(second)]),
+        state,
+    );
+    let batch_two = openai.internal._decode_batch(_oai_batch([_oai_json(done)]), state);
+    [
+        state.call_arguments.get("fc_1") ?? "",
+        batch_one.length().to_string(),
+        batch_two.length().to_string(),
+        _oai_first_text(batch_two),
+        state.model ?? "unset",
+    ].join("|")
+}
+
+test "oai_stream_decoder_buffers" {
+    // The two argument deltas carry no text: each yields one ContentSeen, which
+    // only feeds the token deadlines.
+    assert.equal(oai_stream_decoder_buffers(), "{\"city\":\"paris\"}|2|1|hello|unset")
+}
+
+// The dedup key is the CONTENT PART, not the item: a message with two text
+// parts whose second part arrives only as `output_text.done` must still emit
+// it, even though part 0 already streamed a delta.
+function oai_stream_content_index_parts() -> string {
+    let state = openai.internal.OaStreamState.new();
+    let delta: map<string, unknown> = {
+        "type": "response.output_text.delta",
+        "item_id": "msg_1",
+        "content_index": 0,
+        "delta": "one",
+    };
+    let done_zero: map<string, unknown> = {
+        "type": "response.output_text.done",
+        "item_id": "msg_1",
+        "content_index": 0,
+        "text": "one",
+    };
+    let done_one: map<string, unknown> = {
+        "type": "response.output_text.done",
+        "item_id": "msg_1",
+        "content_index": 1,
+        "text": "two",
+    };
+    let events = openai.internal._decode_batch(
+        _oai_batch([_oai_json(delta), _oai_json(done_zero), _oai_json(done_one)]),
+        state,
+    );
+    let texts: string[] = [];
+    for (let e in events) {
+        if let d: ai.stream.TextDelta = e {
+            let _ = texts.push(d.text);
+        };
+    }
+    texts.join("+")
+}
+
+test "oai_stream_content_index_parts" {
+    // part 0's `done` is suppressed (its delta already arrived), part 1's is not
+    assert.equal(oai_stream_content_index_parts(), "one+two")
+}
+
+// ─── missing credential ──────────────────────────────────────────────────────
+//
+// A missing OpenAI key must be a CATCHABLE `ai.errors.Failure`, not a panic.
+// `resolved_api_key` used to end in `baml.env.get_or_panic("OPENAI_API_KEY")`,
+// and a panic unwinds straight past `catch_all` — so an unconfigured
+// deployment took the process down instead of reaching this client's own
+// `invoke` normalize wrapper, and no `ai.Fallback` / `ai.Retry` composition
+// could route around it.
+//
+// The environment decides which branch runs: CI has no key and the typed error
+// fires; a live shell has OPENAI_API_KEY and the canonical fallback resolves
+// it. `base_url` points at a closed port, so neither branch reaches the
+// network. Both assert the same thing — no panic.
+function _oai_missing_key_client() -> openai.ResponsesClient {
+    // `env.NAME` naming a variable that exists nowhere: the ref resolves to
+    // null at REQUEST time and the client falls through to OPENAI_API_KEY.
+    openai.ResponsesClient.new(
+        model = "gpt-4o-mini",
+        api_key = env.BAML_OPENAI_KEY_THAT_IS_NEVER_SET,
+        base_url = "http://127.0.0.1:1",
+    )
+}
+
+function oai_missing_key_resolve() -> string {
+    let outcome = _oai_missing_key_client().resolved_api_key() catch_all (e) {
+        _ => `caught:${e.to_string()}`,
+    };
+    if (baml.env.get("OPENAI_API_KEY") != null) {
+        // the canonical variable is present: the fallback resolves it
+        let resolved = if (outcome.starts_with("caught:")) {
+            outcome
+        } else {
+            "resolved-from-env"
+        };
+        resolved
+    } else {
+        outcome
+    }
+}
+
+test "oai_missing_key_resolve" {
+    assert.is_true(
+        oai_missing_key_resolve() == "resolved-from-env"
+            || oai_missing_key_resolve().includes("OPENAI_API_KEY"),
+    )
+}
+
+// The same misconfiguration through `invoke`: caught at the client boundary and
+// classified, which is what wrapper-client composition needs.
+function oai_missing_key_invoke() -> string {
+    let cl = _oai_missing_key_client();
+    let input = _oai_input(OaiEcho@spec("Say pong."), ai.Journal { log: [] }, ai.tools.Toolbox.new([]));
+    // The concrete classes, not the `ai.errors.Failure` interface: a
+    // configuration error and a transport error are both typed, and matching
+    // them by class is what proves the failure was CLASSIFIED rather than
+    // escaping as a raw panic or an unknown.
+    let outcome = `turn:${cl.invoke(input).terminal_text() ?? ""}` catch_all (e) {
+        let f: ai.errors.InvalidRequest => `caught:InvalidRequest|${f.detail}`,
+        let f: ai.errors.NetworkFailure => `caught:NetworkFailure|${f.detail}`,
+        _ => `caught-unclassified:${e.to_string()}`,
+    };
+    if (baml.env.get("OPENAI_API_KEY") != null) {
+        // a key resolved: the request fails on transport against the closed
+        // port instead, which is still a caught, typed failure.
+        let labeled = `key-present:${outcome}`;
+        labeled
+    } else {
+        outcome
+    }
+}
+
+test "oai_missing_key_invoke" {
+    // never a completed turn, never a panic past catch_all, never untyped
+    assert.contains(oai_missing_key_invoke(), "caught:");
+    assert.is_true(
+        oai_missing_key_invoke().starts_with("key-present:")
+            || oai_missing_key_invoke().includes("OPENAI_API_KEY"),
+    )
+}
+
+// ─── live ────────────────────────────────────────────────────────────────────
+//
+// Real OpenAI calls, excluded by the default profile and registered only when
+// the key is present. Run with:
+//
+//   cd /Users/aaron/projects/baml
+//   infisical run -- baml_language/target/debug/baml-cli test \
+//       --from baml_language/crates/baml_tests/baml_src --profile live \
+//       -i "::live::openai_responses"
+
+function _oai_live_client() -> openai.ResponsesClient {
+    openai.ResponsesClient.new(
+        model = "gpt-4o-mini",
+        temperature = 0.0,
+        max_output_tokens = 32,
+    )
+}
+
+// The whole wire path against the real endpoint: typed body, auth, parse.
+function oai_live_answers() -> bool {
+    let result = ai.Agent.new(client = _oai_live_client())
+        .run(OaiEcho@spec("Say pong."));
+    result.value.trim().length() > 0 && (_oai_usage(result.usage)?.output_tokens ?? 0) > 0
+}
+
+function oai_live_streams() -> bool {
+    let stream = ai.stream.from_spec<string>(
+        OaiEcho@spec("Say pong."),
+        client = _oai_live_client(),
+    );
+    stream.final().trim().length() > 0
+}
+
+// Image generation is billed per image, so it stays behind a second, explicit
+// gate: OPENAI_LIVE_IMAGE=1.
+function oai_live_generates_image() -> bool {
+    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini");
+    let picture = ai.Agent.new(client = cl).run(OaiPicture@spec("a single red apple"));
+    picture.value.base64().length() > 0
+}
+
+testset "live" with testing.Sequential() {
+    // Always registered: keeps a keyless `--profile live` selection non-empty.
+    test "preconditions" {
+        assert.is_true(true)
+    }
+
+    if (baml.env.get("OPENAI_API_KEY") != null) {
+        test "openai_responses" {
+            assert.is_true(oai_live_answers())
+        }
+
+        test "openai_responses_stream" {
+            assert.is_true(oai_live_streams())
+        }
+
+        if (baml.env.get("OPENAI_LIVE_IMAGE") != null) {
+            test "openai_responses_image" {
+                assert.is_true(oai_live_generates_image())
+            }
+        } else {
+            log.warn("live::openai_responses_image not registered: OPENAI_LIVE_IMAGE is unset")
+        }
+    } else {
+        log.warn("live::openai_responses not registered: OPENAI_API_KEY is unset")
+    }
+}
+
+// ─── journal content blocks: media in tool results and user turns ─────────────
+//
+// Responses column of the lowering table (`_lower_block` in responses.baml):
+// image and pdf are Accepted inside `function_call_output.output` as input
+// parts; audio has no part there and Degrades into a trailing user turn;
+// video is Rejected everywhere.
+
+function _oai_media_body(media: image | audio | video | pdf) -> json {
+    let cl = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "test-key");
+    let input = _oai_input(
+        OaiEcho@spec("Say pong."),
+        root.llm_mock.media_journal("openai/gpt-4o-mini", media),
+        ai.tools.Toolbox.new([]),
+    );
+    baml.json.parse(openai.internal.render(cl, input).body)
+}
+
+// input: [prompt user, function_call, function_call, function_call_output
+// (string), function_call_output (parts), user(text + image)].
+function oai_journal_image_accepted() -> string {
+    let body = _oai_media_body(root.llm_mock.media_png());
+    [
+        baml.json.path<string>(body, ".input[3].call_id"),
+        baml.json.path<string>(body, ".input[3].output"),
+        baml.json.path<string>(body, ".input[4].output[0].text"),
+        baml.json.path<string>(body, ".input[4].output[1].type"),
+        baml.json.path<string>(body, ".input[4].output[1].image_url"),
+        baml.json.path<string>(body, ".input[5].role"),
+        baml.json.path<string>(body, ".input[5].content[0].text"),
+        baml.json.path<string>(body, ".input[5].content[1].type"),
+        baml.json.path_or<string>(body, ".input[6].role", "absent"),
+    ].join("|")
+}
+
+test "oai_journal_image_accepted" {
+    assert.equal(
+        oai_journal_image_accepted(),
+        "call_text|sunny in SF|captured:|input_image|data:image/png;base64,SGVsbG8=|user|Screenshot after the tool ran:|input_image|absent",
+    )
+}
+
+// Degrade: the result's output stays the plain text; the audio follows as a
+// user message behind a note naming the tool.
+function oai_journal_audio_degrades() -> string {
+    let body = _oai_media_body(root.llm_mock.media_mp3());
+    [
+        baml.json.path<string>(body, ".input[4].output"),
+        baml.json.path<string>(body, ".input[5].role"),
+        baml.json.path<string>(body, ".input[5].content[0].text"),
+        baml.json.path<string>(body, ".input[5].content[1].input_audio.format"),
+        baml.json.path<string>(body, ".input[6].content[0].text"),
+        baml.json.path<string>(body, ".input[6].content[1].type"),
+    ].join("|")
+}
+
+test "oai_journal_audio_degrades" {
+    assert.equal(
+        oai_journal_audio_degrades(),
+        `captured:|user|${root.llm_mock.degrade_note("capture")}|mp3|Screenshot after the tool ran:|input_audio`,
+    )
+}
+
+function oai_journal_video_rejected() -> string {
+    let clip = baml.media.Video.from_base64("QUJD", "video/mp4");
+    baml.json.stringify(_oai_media_body(clip)) catch_all (e) {
+        let invalid: ai.errors.InvalidRequest => invalid.detail,
+        _ => `unexpected error class: ${e.to_string()}`,
+    }
+}
+
+test "oai_journal_video_rejected" {
+    assert.equal(oai_journal_video_rejected(), "OpenAI Responses does not support video prompt input")
+}

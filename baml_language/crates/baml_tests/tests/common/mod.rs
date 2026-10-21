@@ -4,7 +4,8 @@
 
 use std::path::Path;
 
-use baml_project::ProjectDatabase;
+use baml_db::ProjectDatabase;
+use baml_tests::engine::{TestDbExt, db_with_root};
 use bex_vm_types::Program;
 
 /// Three-file fixture with cross-file class + function references: `Point` is
@@ -52,10 +53,9 @@ pub const C_BAML: &str = r#"function main() -> int {
 /// Build an in-memory `ProjectDatabase` rooted at `root` holding `files`
 /// (`(name, content)` pairs written under the root).
 pub fn build_db(root: &str, files: &[(&str, &str)]) -> ProjectDatabase {
-    let mut db = ProjectDatabase::new();
-    db.set_project_root(Path::new(root));
+    let mut db = db_with_root(Path::new(root));
     for (name, content) in files {
-        db.add_or_update_file(&Path::new(root).join(name), content);
+        db.file(Path::new(root).join(name), content);
     }
     db
 }

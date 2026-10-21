@@ -45,7 +45,7 @@ function handle(sock: baml.net.TcpStream, conn_id: int) -> null {
     // Simulated work — without spawn this would dominate wall-clock time.
     baml.sys.sleep(500);
 
-    let body = "{\"hello\":\"world\",\"conn\":" + baml.unstable.string(conn_id) + "}";
+    let body = baml.json.stringify({ "hello": "world", "conn": conn_id });
     let _ = sock.write(build_response(body).to_utf8()) catch_all (e) {
         _ => { baml.io.println(label + " write failed"); null },
     };

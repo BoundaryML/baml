@@ -11,11 +11,11 @@
 
 use std::sync::{Arc, atomic::AtomicBool};
 
-use baml_project::testing::compile_source;
-use baml_type::{Name, RealizedTy, TyAttr, TyTemplate, TypeName};
+use baml_test_support::compile_source;
+use baml_type::{Name, RealizedTy, TyTemplate};
 use bex_vm::{BexVm, VmExecState};
 use bex_vm_types::{
-    ConstValue, FunctionCaptureProps, Instruction, Object, ObjectIndex, Value,
+    ConstValue, Instruction, Object, ObjectIndex, Value,
     bytecode::Bytecode,
     types::{Class, Function, FunctionKind, FunctionOrigin, Program},
 };
@@ -24,6 +24,15 @@ use bex_vm_types::{
 const STUB_SOURCE: &str = r#"
 function _stub() -> int { 42 }
 "#;
+
+/// The identity of an injected test function named `name`: a free function at
+/// the root namespace (a pooled function's package is its owner, which these
+/// tests never bind).
+fn test_identity(name: &str) -> bex_vm_types::types::FunctionIdentity {
+    bex_vm_types::types::FunctionIdentity::Declared(bex_vm_types::types::FnPath::Free(
+        bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new(name)),
+    ))
+}
 
 /// Add a synthetic bytecode function to an existing `Program`.
 fn inject_function(
@@ -39,51 +48,42 @@ fn inject_function(
         ..Bytecode::default()
     };
     let func = Function {
-        name: fn_name.to_string(),
+        identity: test_identity(fn_name),
         source_file: String::new(),
         docstring: None,
-        declared_name: None,
         arity,
         real_local_count: 0,
         bytecode,
         kind: FunctionKind::Bytecode,
+        telemetry_function_id: None,
+        telemetry_registration: bex_vm_types::FunctionRegistration::default(),
+        telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
         local_names: vec![],
         debug_locals: vec![],
         span: baml_type::Span::fake(),
-        return_type: baml_type::TyTemplate::Int {
-            attr: baml_type::TyAttr::default(),
-        },
+        return_type: baml_type::TyTemplate::Int,
         param_names: vec![],
         param_types: vec![],
         param_has_default: vec![false; arity],
         display_type_params: vec![],
+        type_param_names: Vec::new(),
+        generic_param_bounds: vec![],
         display_param_types: vec![],
         display_return_type: "int".to_string(),
-        throws_type: baml_type::TyTemplate::Never {
-            attr: baml_type::TyAttr::default(),
-        },
+        throws_type: baml_type::TyTemplate::Never,
         origin: FunctionOrigin::UserDefined,
+        native_key: None,
         body_meta: None,
-        capture: FunctionCaptureProps::disabled(),
-        function_id: 0,
+        trace_passthrough: false,
+        owner: bex_vm_types::HeapPtr::null(),
     };
     let fn_obj_idx = program.add_object(Object::Function(Box::new(func)));
-    let global_slot = program.globals.len();
-    program
-        .function_indices
-        .insert(fn_name.to_string(), fn_obj_idx);
     program.add_global(ConstValue::Object(ObjectIndex::from_raw(fn_obj_idx)));
-    program
-        .function_global_indices
-        .insert(fn_name.to_string(), global_slot);
     fn_obj_idx
 }
 
-/// Run a named function to completion and return the result + VM.
-fn run_fn(program: Program, fn_name: &str) -> (Value, BexVm) {
-    let function_index = program.function_index(fn_name).unwrap_or_else(|| {
-        panic!("function {fn_name:?} not found");
-    });
+/// Run the function at `function_index` to completion and return the result + VM.
+fn run_fn(program: Program, function_index: usize) -> (Value, BexVm) {
     let mut vm =
         BexVm::from_program(program, Arc::new(AtomicBool::new(false))).expect("from_program");
     let function_ptr = vm.heap.compile_time_ptr(function_index);
@@ -107,19 +107,23 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
 
     // Add a synthetic class to the object pool.
     let class_ptr_idx = program.add_object(Object::Class(Box::new(Class {
-        name: TypeName::local(Name::new("TestBox")),
+        path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("TestBox")),
         fields: vec![],
         description: None,
         alias: None,
-        type_tag: 100,
-        ty_attr: TyAttr::default(),
-        has_cleanup: false,
+        docstring: None,
+        other: indexmap::IndexMap::new(),
+        stream_done: false,
+        type_tag: baml_type::typetag::TypeTag::from_i64(100),
+        cleanup: None,
+        methods: indexmap::IndexMap::new(),
         generic_param_count: 0,
+        owner: bex_vm_types::types::Owner::anonymous(),
     })));
 
     // Function: push RuntimeTy::int() as a type arg, then AllocInstance with ntypeargs=1.
     let fn_name = "user.test_alloc_typearg";
-    inject_function(
+    let function_index = inject_function(
         &mut program,
         fn_name,
         0,
@@ -136,7 +140,7 @@ fn alloc_instance_ntypeargs_stores_class_type_args() {
         ))],
     );
 
-    let (result, vm) = run_fn(program, fn_name);
+    let (result, vm) = run_fn(program, function_index);
 
     let Some(inst_ptr) = result.as_object_ptr() else {
         panic!("expected Object, got {result:?}");
@@ -159,18 +163,22 @@ fn alloc_instance_ntypeargs_zero_gives_empty_class_type_args() {
     let mut program = compile_source(STUB_SOURCE);
 
     let class_ptr_idx = program.add_object(Object::Class(Box::new(Class {
-        name: TypeName::local(Name::new("MonoClass")),
+        path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("MonoClass")),
         fields: vec![],
         description: None,
         alias: None,
-        type_tag: 101,
-        ty_attr: TyAttr::default(),
-        has_cleanup: false,
+        docstring: None,
+        other: indexmap::IndexMap::new(),
+        stream_done: false,
+        type_tag: baml_type::typetag::TypeTag::from_i64(101),
+        cleanup: None,
+        methods: indexmap::IndexMap::new(),
         generic_param_count: 0,
+        owner: bex_vm_types::types::Owner::anonymous(),
     })));
 
     let fn_name = "user.test_mono_alloc";
-    inject_function(
+    let function_index = inject_function(
         &mut program,
         fn_name,
         0,
@@ -184,7 +192,7 @@ fn alloc_instance_ntypeargs_zero_gives_empty_class_type_args() {
         vec![],
     );
 
-    let (result, vm) = run_fn(program, fn_name);
+    let (result, vm) = run_fn(program, function_index);
     let Some(inst_ptr) = result.as_object_ptr() else {
         panic!("expected Object, got {result:?}");
     };
@@ -212,7 +220,7 @@ fn method_frame_type_args_seeded_with_class_type_args() {
 
     // Method body: LoadType(TypeArgRef(0)) + Return.
     let fn_name = "user.method_body";
-    inject_function(
+    let function_index = inject_function(
         &mut program,
         fn_name,
         0,
@@ -220,7 +228,6 @@ fn method_frame_type_args_seeded_with_class_type_args() {
         vec![ConstValue::Type(TyTemplate::TypeArgRef(0))],
     );
 
-    let function_index = program.function_index(fn_name).expect("fn not found");
     let mut vm =
         BexVm::from_program(program, Arc::new(AtomicBool::new(false))).expect("from_program");
     let function_ptr = vm.heap.compile_time_ptr(function_index);
@@ -249,9 +256,9 @@ fn method_frame_type_args_seeded_with_class_type_args() {
         panic!("expected Object, got {result:?}");
     };
     match vm.get_object(ptr) {
-        Object::Type(ty) => {
+        Object::Type(type_value) => {
             assert_eq!(
-                **ty,
+                type_value.ty,
                 RealizedTy::int(),
                 "TypeArgRef(0) with class_type_args=[int] should yield int"
             );
@@ -265,7 +272,7 @@ fn method_frame_type_args_seeded_with_class_type_args() {
 fn method_frame_type_args_seeded_string() {
     let mut program = compile_source(STUB_SOURCE);
     let fn_name = "user.method_body_str";
-    inject_function(
+    let function_index = inject_function(
         &mut program,
         fn_name,
         0,
@@ -273,7 +280,6 @@ fn method_frame_type_args_seeded_string() {
         vec![ConstValue::Type(TyTemplate::TypeArgRef(0))],
     );
 
-    let function_index = program.function_index(fn_name).expect("fn not found");
     let mut vm =
         BexVm::from_program(program, Arc::new(AtomicBool::new(false))).expect("from_program");
     let function_ptr = vm.heap.compile_time_ptr(function_index);
@@ -299,9 +305,9 @@ fn method_frame_type_args_seeded_string() {
         panic!("expected Object")
     };
     match vm.get_object(ptr) {
-        Object::Type(ty) => {
+        Object::Type(type_value) => {
             assert_eq!(
-                **ty,
+                type_value.ty,
                 RealizedTy::string(),
                 "TypeArgRef(0) with class_type_args=[string] should yield string"
             );
@@ -324,19 +330,46 @@ fn map_result_element_ty_is_closure_return_not_receiver() {
 function f() -> string[] {
     [1, 2].map((x: int) -> string { "s" })
 }
+
 "#,
     );
-    let (result, vm) = run_fn(program, "user.f");
+    let f = program.rendered_callables()["user.f"].object.raw();
+    let (result, vm) = run_fn(program, f);
     let ptr = result
         .as_object_ptr()
         .expect("map result should be an array object");
     match vm.get_object(ptr) {
         Object::Array(arr) => assert!(
-            matches!(&*arr.element_ty, RealizedTy::String { .. }),
+            matches!(&*arr.element_ty, RealizedTy::String),
             "map result element_ty should be `string` (closure return `U`), not `{:?}` \
              (the receiver `T`)",
             arr.element_ty
         ),
         other => panic!("expected Object::Array result, got {other:?}"),
     }
+}
+
+#[test]
+fn explicit_bound_method_specialization_preserves_receiver_and_aliases() {
+    let program = compile_source(
+        r#"
+class Holder<T> {
+    item: T,
+    function check<U>(self, value: U) -> bool {
+        reflect.Type.of<T>() == reflect.Type.of_value(self.item)
+            && reflect.Type.of<U>() == reflect.Type.of_value(value)
+    }
+}
+function f() -> bool {
+    let holder = Holder<int> { item: 3 };
+    let text = holder.check<string>;
+    let alias = text;
+    let number = holder.check<int>;
+    text("value") && number(5) && alias("again")
+}
+"#,
+    );
+    let f = program.rendered_callables()["user.f"].object.raw();
+    let (result, _) = run_fn(program, f);
+    assert_eq!(result.as_bool(), Some(true));
 }

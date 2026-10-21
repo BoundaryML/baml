@@ -1,0 +1,27 @@
+name: "Export BAML build fingerprint"
+description: >-
+  Export BAML_GIT_SHA as the commit checked out in the workspace. baml_artifact
+  stamps it into every compiler and bridge build, and canary runtimes only load
+  artifacts carrying their own fingerprint, so every build job of a release must
+  export the same commit. Build steps that run in their own container (cross,
+  maturin) must forward BAML_GIT_SHA into it explicitly.
+
+runs:
+  using: "composite"
+  steps:
+    - name: Export BAML build fingerprint
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Job and build containers often run as a different uid than the one
+        # that owns the checkout; Git then refuses the repository ("dubious
+        # ownership") unless it is marked safe.
+        if ! sha="$(git -c safe.directory='*' rev-parse HEAD)"; then
+          echo "::error::could not read the checked-out commit for the BAML build fingerprint"
+          exit 1
+        fi
+        if [[ ! "$sha" =~ ^[0-9a-f]{40}([0-9a-f]{24})?$ ]]; then
+          echo "::error::checked-out commit '$sha' is not a full Git commit id"
+          exit 1
+        fi
+        echo "BAML_GIT_SHA=$sha" >> "$GITHUB_ENV"

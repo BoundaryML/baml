@@ -1,0 +1,13 @@
+---
+source: crates/baml_ide/src/describe.rs
+assertion_line: 1968
+expression: "project.format_description(&descs[0])"
+---
+class Point  types.baml:2
+shape: class Point {
+    x: int,
+    y: int,
+}
+refs: 2
+  funcs.baml:3  function extract_point(text: string) -> Point {
+  funcs.baml:4  let result = Point { x: 0, y: 0 };

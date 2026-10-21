@@ -265,12 +265,12 @@ def main() -> None:
     module_version = go_release["version"]
     write_consumer(consumer, module_version)
 
-    runtime_cache = root / "runtime-cache"
+    baml_home = root / "baml-home"
+    runtime_cache = baml_home / "bridges"
     env = os.environ.copy()
     for name in list(env):
-        if name.startswith("BAML_RUNTIME_") or name in {
-            "BAML_CACHE_DIR",
-            "BAML_DISABLE_DOWNLOAD",
+        if name.startswith("BAML_BRIDGE_") or name in {
+            "BAML_HOME",
             "GONOSUMDB",
             "GONOPROXY",
             "GOPRIVATE",
@@ -278,8 +278,8 @@ def main() -> None:
             env.pop(name)
     env.update(
         {
-            "BAML_CACHE_DIR": str(runtime_cache),
-            "BAML_RUNTIME_MANIFEST_BASE_URL": manifest_base_url,
+            "BAML_HOME": str(baml_home),
+            "BAML_MANIFEST_BASE_URL": manifest_base_url,
             "CARGO": str(root / "forbidden-cargo"),
             "RUSTC": str(root / "forbidden-rustc"),
             "CGO_ENABLED": "1",

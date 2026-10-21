@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "preserveSymlinks": true,
+    "rootDir": "web",
+    "types": ["node", "vitest"]
+  },
+  "include": ["web/**/*.ts"],
+  "exclude": [
+    "node_modules",
+    "web/host_common_types.test.ts",
+    "web/host_recording_audit.test.ts"
+  ]
+}

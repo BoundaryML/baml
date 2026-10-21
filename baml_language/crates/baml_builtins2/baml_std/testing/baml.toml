@@ -1,2 +1,7 @@
 [package]
 name = "testing"
+# Implicitly available to every package (no `[dependencies]` entry needed).
+prelude = true
+
+[dependencies]
+baml = { path = "../baml" }

@@ -87,10 +87,9 @@ function Describe(flag: bool) -> string {
   }
 }
 
-test GoldenExtract {
-  functions [ExtractResume]
-  args {
-    /* who */ text "Jane Doe, 12 years of Rust"
-    hints ["skills", "email"]
-  }
+test "GoldenExtract" {
+  ExtractResume(
+    /* who */ "Jane Doe, 12 years of Rust",
+    ["skills", "email"],
+  )
 }

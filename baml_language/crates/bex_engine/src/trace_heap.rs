@@ -6,17 +6,22 @@
 //! host-owned values.
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     sync::{
         Arc, Mutex,
         atomic::{AtomicU64, Ordering},
     },
 };
 
-use baml_builtins2::{MediaContent, MediaValue};
 use bex_external_types::{BexExternalAdt, BexExternalValue, MediaKind, try_convert_rust_data};
 use bex_heap::{BexHeap, PermitProof};
-use bex_vm_types::{HeapPtr, Object, Value, ValueKind};
+use bex_vm_types::{HeapPtr, MediaContent, MediaValue, Object, Value, ValueKind};
+
+/// A structured-log snapshot could not allocate its owned value graph.
+#[derive(Debug)]
+enum CopyError {
+    CopyFailed,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct TraceSnapshotHandle(u64);
@@ -25,11 +30,6 @@ impl TraceSnapshotHandle {
     #[must_use]
     pub fn raw(self) -> u64 {
         self.0
-    }
-
-    #[cfg(test)]
-    pub(crate) fn for_test(raw: u64) -> Self {
-        Self(raw)
     }
 }
 
@@ -82,8 +82,11 @@ pub struct TraceMediaValue {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TraceMediaContent {
     Url(String),
-    Base64(String),
-    File(String),
+    Base64 {
+        base64: String,
+        /// The base name of the file the content was read from.
+        name: Option<String>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -141,6 +144,16 @@ impl TraceHeap {
         Self::default()
     }
 
+    /// Snapshot allocation failure follows the logging path's existing panic policy.
+    fn unbounded<T>(result: Result<T, CopyError>) -> T {
+        match result {
+            Ok(value) => value,
+            Err(CopyError::CopyFailed) => {
+                panic!("unbounded trace snapshot copy failed: allocator returned an error")
+            }
+        }
+    }
+
     pub fn copy_value_from_bex_heap(
         &self,
         heap: &BexHeap,
@@ -148,7 +161,7 @@ impl TraceHeap {
         value: Value,
     ) -> TraceSnapshotHandle {
         let mut builder = TraceSnapshotBuilder::default();
-        let root = builder.copy_value(heap, permit, value);
+        let root = Self::unbounded(builder.copy_value(heap, permit, value));
         self.insert_snapshot(builder.finish(root))
     }
 
@@ -162,9 +175,9 @@ impl TraceHeap {
         let items = values
             .iter()
             .copied()
-            .map(|value| builder.copy_value(heap, permit, value))
+            .map(|value| Self::unbounded(builder.copy_value(heap, permit, value)))
             .collect();
-        let root = builder.alloc(TraceValue::Array(items));
+        let root = Self::unbounded(builder.alloc(TraceValue::Array(items)));
         self.insert_snapshot(builder.finish(root))
     }
 
@@ -177,9 +190,14 @@ impl TraceHeap {
         let mut builder = TraceSnapshotBuilder::default();
         let entries = entries
             .iter()
-            .map(|(key, value)| (key.clone(), builder.copy_value(heap, permit, *value)))
+            .map(|(key, value)| {
+                (
+                    key.clone(),
+                    Self::unbounded(builder.copy_value(heap, permit, *value)),
+                )
+            })
             .collect();
-        let root = builder.alloc(TraceValue::Map(entries));
+        let root = Self::unbounded(builder.alloc(TraceValue::Map(entries)));
         self.insert_snapshot(builder.finish(root))
     }
 
@@ -230,10 +248,48 @@ impl TraceHeap {
 #[derive(Default)]
 struct TraceSnapshotBuilder {
     values: Vec<TraceValue>,
-    in_progress: HashSet<HeapPtr>,
+    in_progress: Vec<HeapPtr>,
 }
 
 impl TraceSnapshotBuilder {
+    fn reserve_values(&mut self) -> Result<(), CopyError> {
+        if self.values.len() < self.values.capacity() {
+            return Ok(());
+        }
+        let next_capacity = self.values.capacity().max(8).saturating_mul(2);
+        let additional = next_capacity.saturating_sub(self.values.capacity());
+        self.values
+            .try_reserve_exact(additional)
+            .map_err(|_| CopyError::CopyFailed)
+    }
+
+    fn reserve_progress(&mut self) -> Result<(), CopyError> {
+        if self.in_progress.len() < self.in_progress.capacity() {
+            return Ok(());
+        }
+        let next_capacity = self.in_progress.capacity().max(8).saturating_mul(2);
+        let additional = next_capacity.saturating_sub(self.in_progress.capacity());
+        self.in_progress
+            .try_reserve_exact(additional)
+            .map_err(|_| CopyError::CopyFailed)
+    }
+
+    fn vec_with_capacity<T>(capacity: usize) -> Result<Vec<T>, CopyError> {
+        let mut values = Vec::new();
+        values
+            .try_reserve_exact(capacity)
+            .map_err(|_| CopyError::CopyFailed)?;
+        Ok(values)
+    }
+
+    fn copy_str(value: &str) -> Result<String, CopyError> {
+        let mut output = String::new();
+        output
+            .try_reserve_exact(value.len())
+            .map_err(|_| CopyError::CopyFailed)?;
+        output.push_str(value);
+        Ok(output)
+    }
     fn finish(self, root: TraceValueRef) -> TraceSnapshot {
         TraceSnapshot {
             root,
@@ -241,10 +297,11 @@ impl TraceSnapshotBuilder {
         }
     }
 
-    fn alloc(&mut self, value: TraceValue) -> TraceValueRef {
+    fn alloc(&mut self, value: TraceValue) -> Result<TraceValueRef, CopyError> {
+        self.reserve_values()?;
         let value_ref = TraceValueRef(self.values.len());
         self.values.push(value);
-        value_ref
+        Ok(value_ref)
     }
 
     fn copy_value(
@@ -252,7 +309,7 @@ impl TraceSnapshotBuilder {
         heap: &BexHeap,
         permit: PermitProof<'_>,
         value: Value,
-    ) -> TraceValueRef {
+    ) -> Result<TraceValueRef, CopyError> {
         match value.kind() {
             ValueKind::Null => self.alloc(TraceValue::Null),
             ValueKind::Bool(value) => self.alloc(TraceValue::Bool(value)),
@@ -269,58 +326,94 @@ impl TraceSnapshotBuilder {
         heap: &BexHeap,
         permit: PermitProof<'_>,
         ptr: HeapPtr,
-    ) -> TraceValueRef {
+    ) -> Result<TraceValueRef, CopyError> {
         let object = unsafe { ptr.get() };
         let tracks_recursion = matches!(
             object,
             Object::Array(_) | Object::Map(_) | Object::Instance(_)
         );
-        if tracks_recursion && !self.in_progress.insert(ptr) {
+        if tracks_recursion && self.in_progress.contains(&ptr) {
             return self.omitted(TraceOmissionReason::CyclicReference, "cyclic reference");
+        }
+        if tracks_recursion {
+            self.reserve_progress()?;
+            self.in_progress.push(ptr);
         }
 
         let value_ref = match object {
-            Object::String(value) => self.alloc(TraceValue::String(value.to_string())),
+            Object::String(value) => {
+                let value = Self::copy_str(value.as_str())?;
+                self.alloc(TraceValue::String(value))
+            }
             Object::Bigint(value) => self.alloc(TraceValue::Bigint(value.to_string())),
             Object::Float(value) => self.alloc(TraceValue::Float(*value)),
-            Object::Uint8Array(bytes) => self.alloc(TraceValue::Bytes(bytes.to_vec())),
+            Object::Uint8Array(bytes) => {
+                let bytes = bytes.lock();
+                let mut copied = Vec::new();
+                copied
+                    .try_reserve_exact(bytes.len())
+                    .map_err(|_| CopyError::CopyFailed)?;
+                copied.extend_from_slice(&bytes);
+                self.alloc(TraceValue::Bytes(copied))
+            }
             Object::Array(array) => {
-                let items = array
-                    .to_vec()
-                    .into_iter()
-                    .map(|value| self.copy_value(heap, permit, value))
-                    .collect();
+                let array = array.lock();
+                let mut items = Self::vec_with_capacity(array.len())?;
+                for value in array.iter().copied() {
+                    items.push(self.copy_value(heap, permit, value)?);
+                }
                 self.alloc(TraceValue::Array(items))
             }
             Object::Map(map) => {
-                let entries = map
-                    .to_index_map()
-                    .into_iter()
-                    .map(|(key, value)| (key.to_string(), self.copy_value(heap, permit, value)))
-                    .collect();
-                self.alloc(TraceValue::Map(entries))
+                let map = map.data.lock();
+                let string_key = |key: &Value| {
+                    // SAFETY: the copy holds a heap permit for the entire traversal.
+                    match key.as_object_ptr().map(|ptr| unsafe { ptr.get() }) {
+                        Some(Object::String(key)) => Some(key),
+                        _ => None,
+                    }
+                };
+                if map.keys().any(|key| string_key(key).is_none()) {
+                    self.omitted(
+                        TraceOmissionReason::UnsupportedValue,
+                        "map with non-string keys",
+                    )
+                } else {
+                    let mut entries = Self::vec_with_capacity(map.len())?;
+                    for (key, value) in map.iter() {
+                        let key = string_key(key).expect("map keys validated under the same lock");
+                        let key = Self::copy_str(key.as_str())?;
+                        let value = self.copy_value(heap, permit, *value)?;
+                        entries.push((key, value));
+                    }
+                    self.alloc(TraceValue::Map(entries))
+                }
             }
             Object::Instance(instance) => {
                 let class_object = unsafe { instance.class.get() };
                 if let Object::Class(class) = class_object {
-                    let fields = class
-                        .fields
-                        .iter()
-                        .zip(instance.fields.iter())
-                        .map(|(field, slot)| {
-                            (
-                                field.name.clone(),
-                                self.copy_value(heap, permit, slot.load()),
-                            )
-                        })
-                        .collect();
+                    let mut fields = Self::vec_with_capacity(class.fields.len())?;
+                    for (field, slot) in class.fields.iter().zip(instance.fields.iter()) {
+                        let name = Self::copy_str(&field.name)?;
+                        let value = self.copy_value(heap, permit, slot.load())?;
+                        fields.push((name, value));
+                    }
+                    let mut type_args = Self::vec_with_capacity(instance.class_type_args.len())?;
+                    for type_arg in &instance.class_type_args {
+                        // Snapshots retain the wire form of the runtime type.
+                        let Ok(wire) = crate::conversion::overlay_wire_ty(
+                            &bex_vm_types::RuntimeTy::from(type_arg),
+                        ) else {
+                            continue;
+                        };
+                        type_args.push(wire);
+                    }
+                    // A trace is read by a person: the display name, never an
+                    // internal identity.
+                    let type_name = Self::copy_str(&class.name().to_string())?;
                     self.alloc(TraceValue::Instance {
-                        type_name: class.name.to_string(),
-                        type_args: instance
-                            .class_type_args
-                            .iter()
-                            .map(baml_type::RuntimeTy::from)
-                            .collect(),
+                        type_name,
+                        type_args,
                         fields,
                     })
                 } else {
@@ -344,12 +437,12 @@ impl TraceSnapshotBuilder {
                         "variant index was outside the enum definition",
                     );
                 };
-                self.alloc(TraceValue::Enum {
-                    type_name: enum_.name.to_string(),
-                    variant: variant_def.name.clone(),
-                })
+                let type_name = Self::copy_str(&enum_.name().to_string())?;
+                let variant = Self::copy_str(&variant_def.name)?;
+                self.alloc(TraceValue::Enum { type_name, variant })
             }
             Object::Function(_)
+            | Object::TypeAlias(_)
             | Object::Class(_)
             | Object::Enum(_)
             | Object::Interface(_)
@@ -360,8 +453,6 @@ impl TraceSnapshotBuilder {
             | Object::GenericFunction(_)
             | Object::Cell(_)
             | Object::Future(_)
-            | Object::UnscheduledFuture(_)
-            | Object::Collector(_)
             | Object::Type(_) => self.omitted(
                 TraceOmissionReason::UnsupportedValue,
                 unsupported_object_message(object),
@@ -377,6 +468,7 @@ impl TraceSnapshotBuilder {
                     unsupported_object_message(object),
                 ),
             },
+            Object::Tombstone => Object::tombstone_reached(),
             #[cfg(feature = "heap_debug")]
             Object::Sentinel(_) => self.omitted(
                 TraceOmissionReason::InvalidRuntimeValue,
@@ -384,12 +476,15 @@ impl TraceSnapshotBuilder {
             ),
         };
         if tracks_recursion {
-            self.in_progress.remove(&ptr);
+            // The pop is the cycle-tracker's unwind and must run in every
+            // build; only the equality check is debug-only.
+            let popped = self.in_progress.pop();
+            debug_assert_eq!(popped, Some(ptr));
         }
         value_ref
     }
 
-    fn copy_external_value(&mut self, value: BexExternalValue) -> TraceValueRef {
+    fn copy_external_value(&mut self, value: BexExternalValue) -> Result<TraceValueRef, CopyError> {
         match value {
             BexExternalValue::Adt(BexExternalAdt::Media(media)) => self.copy_media(&media),
             BexExternalValue::HostValue(host) => self.omitted(
@@ -412,15 +507,20 @@ impl TraceSnapshotBuilder {
         }
     }
 
-    fn copy_media(&mut self, media: &MediaValue) -> TraceValueRef {
+    fn copy_media(&mut self, media: &MediaValue) -> Result<TraceValueRef, CopyError> {
         let content = media.read_content(|content| match content {
-            MediaContent::Url { url, .. } => TraceMediaContent::Url(url.clone()),
-            MediaContent::Base64 { base64_data } => TraceMediaContent::Base64(base64_data.clone()),
-            MediaContent::File { file, .. } => TraceMediaContent::File(file.clone()),
-        });
+            MediaContent::Url { url, .. } => Self::copy_str(url).map(TraceMediaContent::Url),
+            MediaContent::Base64 { base64_data, name } => Ok(TraceMediaContent::Base64 {
+                base64: Self::copy_str(base64_data)?,
+                name: name.as_deref().map(Self::copy_str).transpose()?,
+            }),
+        })?;
+        let mime_type = media
+            .read_mime_type(|mime_type| mime_type.map(Self::copy_str))
+            .transpose()?;
         self.alloc(TraceValue::Media(TraceMediaValue {
             kind: media.kind,
-            mime_type: media.mime_type(),
+            mime_type,
             content,
         }))
     }
@@ -428,20 +528,22 @@ impl TraceSnapshotBuilder {
     fn omitted(
         &mut self,
         reason: TraceOmissionReason,
-        message: impl Into<String>,
-    ) -> TraceValueRef {
+        message: &str,
+    ) -> Result<TraceValueRef, CopyError> {
+        let message = Self::copy_str(message)?;
         self.alloc(TraceValue::Omitted(TraceOmissionDescriptor {
             reason,
-            message: message.into(),
+            message,
         }))
     }
 }
 
-fn unsupported_object_message(object: &Object) -> String {
+fn unsupported_object_message(object: &Object) -> &'static str {
     match object {
         Object::Function(_) => "function",
         Object::Class(_) => "class",
         Object::Enum(_) => "enum",
+        Object::TypeAlias(_) => "type alias",
         Object::Interface(_) => "interface",
         Object::Package(_) => "package",
         Object::ImplRule(_) => "impl rule",
@@ -451,10 +553,9 @@ fn unsupported_object_message(object: &Object) -> String {
         Object::HostClosure(_) => "host-owned callable",
         Object::Cell(_) => "cell",
         Object::Future(_) => "future",
-        Object::UnscheduledFuture(_) => "unscheduled future",
         Object::RustData(_) => "host-owned rust data",
-        Object::Collector(_) => "collector",
         Object::Type(_) => "type descriptor",
+        Object::Tombstone => Object::tombstone_reached(),
         #[cfg(feature = "heap_debug")]
         Object::Sentinel(_) => "heap sentinel",
         Object::String(_)
@@ -466,17 +567,15 @@ fn unsupported_object_message(object: &Object) -> String {
         | Object::Variant(_)
         | Object::Float(_) => "unsupported value",
     }
-    .to_string()
 }
 
 #[cfg(test)]
 mod tests {
     use std::{collections::HashMap, sync::Arc};
 
-    use baml_builtins2::MediaValue;
     use bex_external_types::MediaKind;
     use bex_heap::{BexHeap, HeapPermit as _, HeapPermitManager, Tlab, TlabHolder};
-    use bex_vm_types::{Object, RootHaver, Value};
+    use bex_vm_types::{MediaValue, Object, RootHaver, Value};
 
     use super::{TraceHeap, TraceMediaContent, TraceOmissionReason, TraceValue};
 
@@ -500,6 +599,90 @@ mod tests {
 
         fn tlab_mut(&mut self) -> &mut Tlab {
             &mut self.tlab
+        }
+    }
+
+    #[tokio::test]
+    async fn trace_heap_omits_only_the_unsupported_map_and_unwinds_its_visit() {
+        let heap = BexHeap::new(Vec::new());
+        let manager = HeapPermitManager::new();
+        let mut permit = manager
+            .new_permit(EmptyRoots {
+                tlab: Tlab::new(Arc::clone(&heap)),
+            })
+            .await
+            .acquire()
+            .await;
+        let first_key = permit.tlab_mut().alloc_string("first");
+        let discarded = permit.tlab_mut().alloc_string("must not survive omission");
+        let unsupported = permit
+            .tlab_mut()
+            .alloc(Object::Map(bex_vm_types::types::Map::new(
+                bex_vm_types::RealizedTy::Union(
+                    vec![
+                        bex_vm_types::RealizedTy::string(),
+                        bex_vm_types::RealizedTy::int(),
+                    ]
+                    .into(),
+                ),
+                bex_vm_types::RealizedTy::unknown(),
+                bex_vm_types::MapData::from_hashed_entries([
+                    (
+                        bex_vm_types::map_string_hash("first"),
+                        Value::object(first_key),
+                        Value::object(discarded),
+                    ),
+                    (0, Value::int(1), Value::int(2)),
+                ]),
+            )));
+        let outer = permit.tlab_mut().alloc_map(
+            bex_vm_types::RealizedTy::string(),
+            bex_vm_types::RealizedTy::unknown(),
+            [
+                ("before".into(), Value::int(7)),
+                ("unsupported".into(), Value::object(unsupported)),
+                ("again".into(), Value::object(unsupported)),
+                ("after".into(), Value::int(8)),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        let trace_heap = TraceHeap::new();
+        let handle =
+            trace_heap.copy_value_from_bex_heap(&heap, permit.proof(), Value::object(unsupported));
+        let root = trace_heap.release(handle).expect("root snapshot retained");
+        assert_eq!(
+            root.values.len(),
+            1,
+            "omitted map must retain no copied entries"
+        );
+        assert!(matches!(
+            root.value(root.root()),
+            Some(TraceValue::Omitted(descriptor))
+                if descriptor.reason == TraceOmissionReason::UnsupportedValue
+        ));
+        let handle =
+            trace_heap.copy_value_from_bex_heap(&heap, permit.proof(), Value::object(outer));
+        let snapshot = trace_heap
+            .release(handle)
+            .expect("sibling snapshot retained");
+        assert_eq!(
+            snapshot.values.len(),
+            5,
+            "only reachable snapshot values survive"
+        );
+        let Some(TraceValue::Map(entries)) = snapshot.value(snapshot.root()) else {
+            panic!("supported containing map must survive");
+        };
+        assert_eq!(entries.len(), 4);
+        assert_eq!(snapshot.value(entries[0].1), Some(&TraceValue::Int(7)));
+        assert_eq!(snapshot.value(entries[3].1), Some(&TraceValue::Int(8)));
+        for (_, reference) in &entries[1..3] {
+            assert!(matches!(
+                snapshot.value(*reference),
+                Some(TraceValue::Omitted(descriptor))
+                    if descriptor.reason == TraceOmissionReason::UnsupportedValue
+            ));
         }
     }
 
@@ -548,7 +731,9 @@ mod tests {
             .await;
         let host_owned = permit
             .tlab_mut()
-            .alloc(Object::RustData(std::sync::Arc::new(1_u64)));
+            .alloc(Object::RustData(std::sync::Arc::new(
+                bex_vm_types::TestRustData(1),
+            )));
         let trace_heap = TraceHeap::new();
 
         let handle = trace_heap.copy_values_from_bex_heap(
@@ -583,8 +768,11 @@ mod tests {
             .await
             .acquire()
             .await;
-        let media =
-            MediaValue::from_base64(MediaKind::Image, "aW1hZ2UtYnl0ZXM=", Some("image/png"));
+        let media = MediaValue::from_base64(
+            MediaKind::Image,
+            "aW1hZ2UtYnl0ZXM=".into(),
+            Some("image/png"),
+        );
         let media_ptr = permit.tlab_mut().alloc(Object::RustData(media));
         let trace_heap = TraceHeap::new();
 
@@ -599,7 +787,10 @@ mod tests {
         assert_eq!(media.mime_type.as_deref(), Some("image/png"));
         assert_eq!(
             media.content,
-            TraceMediaContent::Base64("aW1hZ2UtYnl0ZXM=".to_string())
+            TraceMediaContent::Base64 {
+                base64: "aW1hZ2UtYnl0ZXM=".to_string(),
+                name: None,
+            }
         );
     }
 
@@ -616,10 +807,10 @@ mod tests {
             .await;
         let array_ptr = permit
             .tlab_mut()
-            .alloc_array(baml_type::RealizedTy::unknown(), vec![]);
+            .alloc_array(bex_vm_types::RealizedTy::unknown(), vec![]);
         unsafe {
             *array_ptr.get_mut() = Object::Array(bex_vm_types::types::Array::new(
-                baml_type::RealizedTy::unknown(),
+                bex_vm_types::RealizedTy::unknown(),
                 vec![Value::int(1), Value::object(array_ptr)],
             ));
         }
@@ -638,5 +829,47 @@ mod tests {
             panic!("cycle back-edge should be omitted");
         };
         assert_eq!(cycle.reason, TraceOmissionReason::CyclicReference);
+    }
+
+    /// A container reached twice through *sibling* edges is shared, not
+    /// cyclic. The cycle tracker must unwind after each visit in every build
+    /// mode: if the unwind were debug-only, the second visit would be
+    /// reported as `CyclicReference`, corrupting structured log values.
+    #[tokio::test]
+    async fn trace_heap_shared_sibling_containers_are_not_cyclic() {
+        let heap = BexHeap::new(Vec::new());
+        let manager = HeapPermitManager::new();
+        let mut permit = manager
+            .new_permit(EmptyRoots {
+                tlab: Tlab::new(Arc::clone(&heap)),
+            })
+            .await
+            .acquire()
+            .await;
+        let shared = permit.tlab_mut().alloc_array(
+            bex_vm_types::RealizedTy::unknown(),
+            vec![Value::int(7), Value::int(8)],
+        );
+        let outer = permit.tlab_mut().alloc_array(
+            bex_vm_types::RealizedTy::unknown(),
+            vec![Value::object(shared), Value::object(shared)],
+        );
+        let trace_heap = TraceHeap::new();
+        let handle =
+            trace_heap.copy_value_from_bex_heap(&heap, permit.proof(), Value::object(outer));
+        let snapshot = trace_heap.release(handle).expect("snapshot retained");
+        let Some(TraceValue::Array(items)) = snapshot.value(snapshot.root()) else {
+            panic!("root should be an array");
+        };
+        assert_eq!(items.len(), 2);
+        for item in items {
+            let Some(TraceValue::Array(inner)) = snapshot.value(*item) else {
+                panic!(
+                    "shared sibling must be copied, not omitted: {:?}",
+                    snapshot.value(*item)
+                );
+            };
+            assert_eq!(inner.len(), 2);
+        }
     }
 }

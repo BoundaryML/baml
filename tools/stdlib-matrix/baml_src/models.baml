@@ -45,7 +45,7 @@ class ExportSignature {
     throws_spec: TyRef?,
 
     implements baml.FromJson {
-        function from_json(j: baml.json.json) -> Self throws baml.json.JsonDecodeError {
+        function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
             ExportSignature {
                 generics: baml.json.to<ExportGeneric[]?>(baml.json.field(j, "generics")),
                 params: baml.json.to<ExportParam[]>(baml.json.field(j, "params")),
@@ -127,7 +127,7 @@ class ExportImplMethod {
 /// A top-level impl record. `interface` is a declarable field name, but the
 /// parser rejects it in struct-literal position, so this class can only be
 /// built by JSON decoding — which is how it always arrives (tests build
-/// fixtures with `baml.json.from_string` for the same reason).
+/// fixtures as `json` literals decoded with `baml.json.to` for the same reason).
 class ExportImpl {
     id: string,
     interface: string,

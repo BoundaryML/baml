@@ -5,8 +5,11 @@
 //! the file is known from context. Conversion to the shared `Diagnostic`
 //! type happens lazily via `to_diagnostic(file_id)`.
 
-use baml_base::{FileId, Name, Span};
-use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase};
+use baml_base::{AttributePosition, FileId, Name, Span};
+use baml_compiler_diagnostics::{
+    diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase},
+    runtime_type::{self, DuplicateMemberKind, SerializedKeyContainer},
+};
 use text_size::TextRange;
 
 use crate::contributions::DefinitionKind;
@@ -33,23 +36,29 @@ pub enum Hir2Diagnostic {
         scope: Option<Name>,
         sites: Vec<MemberSite>,
     },
-    /// Unknown builtin-internal attribute.
-    UnknownInternalAttribute {
+    /// An attribute the language does not define. Attributes are a fixed
+    /// vocabulary (`baml_base::SCHEMA_ATTRIBUTE_SPECS`), so an unknown name is
+    /// a misspelling or a removed attribute, never a pass-through annotation.
+    UnknownAttribute {
         attr_name: Name,
+        position: AttributePosition,
         span: TextRange,
-        valid_attributes: Vec<&'static str>,
     },
-    /// An attribute on a type expression is not a known type or field attribute.
-    UnknownTypeAttribute { attr_name: Name, span: TextRange },
-    /// Builtin-internal attribute used in the wrong place.
-    InvalidAttributeContext {
+    /// A schema attribute written at a declaration position it has no meaning
+    /// at: `@stream.done` on an enum variant, `@@skip` on a class.
+    AttributeNotAllowedHere {
         attr_name: Name,
-        context: &'static str,
-        allowed_contexts: &'static str,
+        position: AttributePosition,
+        allowed: &'static [AttributePosition],
         span: TextRange,
     },
     /// Builtin-only syntax used outside builtin stdlib files.
     BuiltinOnlySyntax { feature: String, span: TextRange },
+    /// A binding, item, or type parameter named `root`, the path to the
+    /// package itself.
+    RootIsReserved { span: TextRange },
+    /// A file under a directory `ns_root/`: a namespace named `root`.
+    RootNamespace { span: TextRange },
     /// Generic single-span diagnostic for builtin contract validation.
     DiagnosticMessage {
         diagnostic_id: DiagnosticId,
@@ -71,18 +80,17 @@ pub enum Hir2Diagnostic {
     /// either two members share an `@alias("k")`, or one member's name equals
     /// another member's `@alias`. Because an aliased member's real name is never
     /// used for matching (see `bex_sap`'s `AnnotatedField::key_matches`), such
-    /// members are indistinguishable in the serialized schema: `ctx.output_format`
+    /// members are indistinguishable in the serialized schema: `ctx.output_format()`
     /// renders duplicate keys and only one member can ever be populated at parse
     /// time (for classes) or produced during parsing (for enum variants).
     ///
     /// `key` is the shared serialized key. `sites` lists the name span of every
     /// contributing member in source order; the first is treated as the original
-    /// and the rest as duplicates. `container` is the kind of declaration the
-    /// collision occurs in (`"class"` or `"enum"`), used only for the message.
+    /// and the rest as duplicates.
     DuplicateFieldAlias {
         key: String,
         sites: Vec<TextRange>,
-        container: &'static str,
+        container: SerializedKeyContainer,
     },
     /// A single declaration (class, enum, field, or variant) carries the same
     /// single-valued schema attribute more than once — e.g. two `@alias`, two
@@ -179,10 +187,6 @@ pub enum Hir2Diagnostic {
     /// must live inside an `implements baml.FromJson { ... }` block. (The
     /// auto-derived structural-default `from_json` delegate is exempt.)
     FromJsonMustImplementInterface { class_name: Name, span: TextRange },
-    /// A class declares a `cleanup` method whose signature is not the reserved
-    /// magic-finalizer shape `cleanup(self) -> void` (BEP-042). `cleanup` is a
-    /// reserved magic method name, so it must have that exact shape.
-    CleanupMagicMethodSignature { class_name: Name, span: TextRange },
     /// A class field has a different type than the interface declares for
     /// that name.
     InterfaceFieldTypeMismatch {
@@ -314,20 +318,40 @@ impl Hir2Diagnostic {
                 };
 
                 let kinds_match = rest.iter().all(|s| s.kind == first.kind);
-                let message = if kinds_match {
-                    format!("duplicate {} `{}`{}", first.kind, qualified, in_scope)
-                } else {
-                    let kind_list: Vec<&str> = sites.iter().map(|s| s.kind.as_str()).collect();
-                    format!(
-                        "name `{}`{} defined {} times as: {}",
-                        qualified,
-                        in_scope,
-                        sites.len(),
-                        kind_list.join(", ")
+                let mut diag = if kinds_match
+                    && first.kind == DefinitionKind::Field
+                    && let Some(scope) = scope
+                {
+                    runtime_type::duplicate_member(
+                        DuplicateMemberKind::Field,
+                        scope.as_str(),
+                        name.as_str(),
                     )
+                } else if kinds_match
+                    && first.kind == DefinitionKind::Variant
+                    && let Some(scope) = scope
+                {
+                    runtime_type::duplicate_member(
+                        DuplicateMemberKind::Variant,
+                        scope.as_str(),
+                        name.as_str(),
+                    )
+                } else {
+                    let message = if kinds_match {
+                        format!("duplicate {} `{}`{}", first.kind, qualified, in_scope)
+                    } else {
+                        let kind_list: Vec<&str> =
+                            sites.iter().map(|s| s.kind.as_str()).collect();
+                        format!(
+                            "name `{}`{} defined {} times as: {}",
+                            qualified,
+                            in_scope,
+                            sites.len(),
+                            kind_list.join(", ")
+                        )
+                    };
+                    Diagnostic::error(DiagnosticId::DuplicateField, message)
                 };
-
-                let mut diag = Diagnostic::error(DiagnosticId::DuplicateField, message);
                 let first_span = Span {
                     file_id,
                     range: first.range,
@@ -343,43 +367,77 @@ impl Hir2Diagnostic {
                 }
                 diag.with_phase(DiagnosticPhase::Hir)
             }
-            Hir2Diagnostic::UnknownInternalAttribute {
+            Hir2Diagnostic::UnknownAttribute {
                 attr_name,
+                position,
                 span,
-                valid_attributes,
-            } => Diagnostic::error(
-                DiagnosticId::UnknownAttribute,
-                format!(
-                    "unknown attribute `@@{}`. Valid builtin internal attributes are: {}",
-                    attr_name,
-                    valid_attributes.join(", ")
-                ),
-            )
-            .with_primary(Span { file_id, range: *span }, "unknown attribute")
-            .with_phase(DiagnosticPhase::Hir),
-            Hir2Diagnostic::UnknownTypeAttribute { attr_name, span } => Diagnostic::error(
-                DiagnosticId::UnknownAttribute,
-                format!("unknown attribute `@{attr_name}`"),
-            )
-            .with_primary(Span { file_id, range: *span }, "unknown attribute")
-            .with_phase(DiagnosticPhase::Hir),
-            Hir2Diagnostic::InvalidAttributeContext {
+            } => {
+                let sigil = position.sigil();
+                let valid = baml_base::schema_attribute_specs_at(*position)
+                    .map(|spec| format!("`{sigil}{}`", spec.name))
+                    .collect::<Vec<_>>();
+                let valid = if valid.is_empty() {
+                    format!("no attribute is valid on {}", position.describe())
+                } else {
+                    format!("valid on {}: {}", position.describe(), valid.join(", "))
+                };
+                Diagnostic::error(
+                    DiagnosticId::UnknownAttribute,
+                    format!("unknown attribute `{sigil}{attr_name}`; {valid}"),
+                )
+                .with_primary(Span { file_id, range: *span }, "unknown attribute")
+                .with_phase(DiagnosticPhase::Hir)
+            }
+            Hir2Diagnostic::AttributeNotAllowedHere {
                 attr_name,
-                context,
-                allowed_contexts,
+                position,
+                allowed,
                 span,
-            } => Diagnostic::error(
-                DiagnosticId::InvalidAttributeContext,
-                format!(
-                    "attribute `@@{attr_name}` is not valid on {context}. Allowed contexts: {allowed_contexts}",
-                ),
+            } => {
+                let allowed = allowed
+                    .iter()
+                    .map(|allowed| {
+                        format!("`{}{attr_name}` on {}", allowed.sigil(), allowed.describe())
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                Diagnostic::error(
+                    DiagnosticId::InvalidAttributeContext,
+                    format!(
+                        "attribute `{}{attr_name}` is not valid on {}; allowed: {allowed}",
+                        position.sigil(),
+                        position.describe(),
+                    ),
+                )
+                .with_primary(Span { file_id, range: *span }, "not valid here")
+                .with_phase(DiagnosticPhase::Hir)
+            }
+            Hir2Diagnostic::RootIsReserved { span } => Diagnostic::error(
+                DiagnosticId::RootIsReserved,
+                "`root` is the path to this package and cannot name a binding, an item, or a \
+                 type parameter"
+                    .to_string(),
             )
             .with_primary(
                 Span {
                     file_id,
                     range: *span,
                 },
-                "invalid attribute context",
+                "`root` is this package",
+            )
+            .with_phase(DiagnosticPhase::Hir),
+            Hir2Diagnostic::RootNamespace { span } => Diagnostic::error(
+                DiagnosticId::RootIsReserved,
+                "`root` is the path to this package and cannot name a namespace: rename the \
+                 directory `ns_root/`"
+                    .to_string(),
+            )
+            .with_primary(
+                Span {
+                    file_id,
+                    range: *span,
+                },
+                "this file is in `ns_root/`",
             )
             .with_phase(DiagnosticPhase::Hir),
             Hir2Diagnostic::BuiltinOnlySyntax { feature, span } => Diagnostic::error(
@@ -458,10 +516,7 @@ impl Hir2Diagnostic {
             } => {
                 let first = sites.first().copied().unwrap_or_default();
                 let rest = sites.get(1..).unwrap_or(&[]);
-                let mut diag = Diagnostic::error(
-                    DiagnosticId::DuplicateFieldAlias,
-                    format!("duplicate serialized key `{key}` in {container}"),
-                )
+                let mut diag = runtime_type::duplicate_serialized_key(key, *container)
                 .with_secondary(
                     Span {
                         file_id,
@@ -723,21 +778,6 @@ impl Hir2Diagnostic {
             )
             .with_phase(DiagnosticPhase::Hir),
 
-            Hir2Diagnostic::CleanupMagicMethodSignature { class_name, span } => Diagnostic::error(
-                DiagnosticId::CleanupMagicMethodSignature,
-                format!(
-                    "`cleanup` on class `{class_name}` must have the signature \
-                     `cleanup(self) -> void`; it is a reserved magic finalizer name"
-                ),
-            )
-            .with_primary(
-                Span {
-                    file_id,
-                    range: *span,
-                },
-                "expected `cleanup(self) -> void`",
-            )
-            .with_phase(DiagnosticPhase::Hir),
             Hir2Diagnostic::InterfaceFieldTypeMismatch {
                 class_name,
                 field_name,

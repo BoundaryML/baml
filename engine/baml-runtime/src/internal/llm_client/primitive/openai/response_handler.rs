@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 
 use super::types::{
     ChatCompletionResponse, ChatCompletionResponseDelta, ResponseOutputType, ResponsesApiResponse,
-    ResponsesApiStreamEvent,
+    ResponsesApiStreamEvent, TranscriptionResponse, TranscriptionStreamEvent, TranscriptionUsage,
 };
 use crate::internal::llm_client::{
     primitive::request::RequestBuilder, traits::WithClient, ErrorCode, LLMCompleteResponse,
@@ -18,6 +18,215 @@ fn to_prompt(
     match prompt {
         either::Left(prompt) => internal_baml_jinja::RenderedPrompt::Completion(prompt.clone()),
         either::Right(prompt) => internal_baml_jinja::RenderedPrompt::Chat(prompt.to_vec()),
+    }
+}
+
+#[cfg(test)]
+mod transcription_response_tests {
+    use std::time::Duration;
+
+    use pretty_assertions::assert_eq;
+
+    use super::*;
+    use crate::internal::llm_client::primitive::tests::MockClient;
+
+    fn empty_stream_response(system_now: web_time::SystemTime) -> Result<LLMCompleteResponse> {
+        Ok(LLMCompleteResponse {
+            client: "mock".to_string(),
+            prompt: internal_baml_jinja::RenderedPrompt::Chat(vec![]),
+            content: String::new(),
+            start_time: system_now,
+            latency: Duration::ZERO,
+            model: "gpt-transcribe".to_string(),
+            request_options: BamlMap::new(),
+            metadata: LLMCompleteResponseMetadata {
+                baml_is_complete: false,
+                finish_reason: None,
+                prompt_tokens: None,
+                output_tokens: None,
+                total_tokens: None,
+                cached_input_tokens: None,
+            },
+        })
+    }
+
+    #[test]
+    fn parses_transcription_text_response() {
+        let client = MockClient::new();
+        let prompt = vec![];
+        let response_body = serde_json::json!({ "text": "hello world" });
+        let system_now = web_time::SystemTime::now();
+        let instant_now = web_time::Instant::now();
+
+        let result = parse_openai_transcription_response(
+            &client,
+            either::Right(prompt.as_slice()),
+            response_body,
+            system_now,
+            instant_now,
+            Some("gpt-4o-transcribe".to_string()),
+        );
+
+        let expected = LLMCompleteResponse {
+            client: "mock".to_string(),
+            prompt: internal_baml_jinja::RenderedPrompt::Chat(vec![]),
+            content: "hello world".to_string(),
+            start_time: system_now,
+            latency: Duration::ZERO,
+            model: "gpt-4o-transcribe".to_string(),
+            request_options: client.request_options().clone(),
+            metadata: LLMCompleteResponseMetadata {
+                baml_is_complete: true,
+                finish_reason: Some("stop".to_string()),
+                prompt_tokens: None,
+                output_tokens: None,
+                total_tokens: None,
+                cached_input_tokens: None,
+            },
+        };
+
+        if let LLMResponse::Success(mut actual_result) = result {
+            actual_result.latency = Duration::ZERO;
+            assert_eq!(actual_result, expected);
+        } else {
+            panic!("Expected LLMResponse::Success, got {result:?}");
+        }
+    }
+
+    #[test]
+    fn parses_verbose_transcription_response_ignoring_extra_fields() {
+        let client = MockClient::new();
+        let prompt = vec![];
+        let response_body = serde_json::json!({
+            "text": "hello verbose",
+            "duration": 1.5,
+            "segments": [],
+        });
+
+        let result = parse_openai_transcription_response(
+            &client,
+            either::Right(prompt.as_slice()),
+            response_body,
+            web_time::SystemTime::now(),
+            web_time::Instant::now(),
+            Some("whisper-1".to_string()),
+        );
+
+        match result {
+            LLMResponse::Success(response) => {
+                assert_eq!(response.content, "hello verbose");
+                assert_eq!(response.model, "whisper-1");
+                assert!(response.metadata.baml_is_complete);
+                assert_eq!(response.metadata.finish_reason, Some("stop".to_string()));
+                assert_eq!(response.metadata.prompt_tokens, None);
+                assert_eq!(response.metadata.output_tokens, None);
+                assert_eq!(response.metadata.total_tokens, None);
+            }
+            other => panic!("Expected LLMResponse::Success, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn transcription_response_missing_text_fails() {
+        let client = MockClient::new();
+        let prompt = vec![];
+        let response_body = serde_json::json!({ "duration": 1.5 });
+
+        let result = parse_openai_transcription_response(
+            &client,
+            either::Right(prompt.as_slice()),
+            response_body,
+            web_time::SystemTime::now(),
+            web_time::Instant::now(),
+            Some("gpt-4o-transcribe".to_string()),
+        );
+
+        match result {
+            LLMResponse::LLMFailure(error) => {
+                assert!(matches!(error.code, ErrorCode::UnsupportedResponse(2)));
+                assert!(error.raw_response.is_some());
+            }
+            other => panic!("Expected LLMResponse::LLMFailure, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn transcription_response_malformed_shape_fails() {
+        let client = MockClient::new();
+        let prompt = vec![];
+        let response_body = serde_json::json!({ "text": ["not", "a", "string"] });
+
+        let result = parse_openai_transcription_response(
+            &client,
+            either::Right(prompt.as_slice()),
+            response_body,
+            web_time::SystemTime::now(),
+            web_time::Instant::now(),
+            None,
+        );
+
+        match result {
+            LLMResponse::LLMFailure(error) => {
+                assert!(matches!(error.code, ErrorCode::UnsupportedResponse(2)));
+                assert_eq!(error.model, None);
+            }
+            other => panic!("Expected LLMResponse::LLMFailure, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn accumulates_transcription_delta_and_done_events() {
+        let system_now = web_time::SystemTime::now();
+        let instant_now = web_time::Instant::now();
+        let prompt = internal_baml_jinja::RenderedPrompt::Chat(vec![]);
+        let model = Some("gpt-transcribe".to_string());
+        let request_options = BamlMap::new();
+        let mut accumulated = empty_stream_response(system_now);
+
+        for event in [
+            serde_json::json!({
+                "type": "transcript.text.delta",
+                "delta": "Friday ",
+            }),
+            serde_json::json!({
+                "type": "transcript.text.delta",
+                "delta": "rocks.",
+            }),
+            serde_json::json!({
+                "type": "transcript.text.done",
+                "text": "Friday rocks.",
+                "usage": {
+                    "type": "tokens",
+                    "input_tokens": 12,
+                    "output_tokens": 3,
+                    "total_tokens": 15,
+                    "input_token_details": {
+                        "audio_tokens": 10,
+                        "text_tokens": 2
+                    }
+                }
+            }),
+        ] {
+            scan_openai_transcription_stream(
+                "mock",
+                &request_options,
+                &prompt,
+                &system_now,
+                &instant_now,
+                &model,
+                &mut accumulated,
+                event,
+            )
+            .expect("valid transcription stream event should parse");
+        }
+
+        let response = accumulated.expect("stream should remain successful");
+        assert_eq!(response.content, "Friday rocks.");
+        assert!(response.metadata.baml_is_complete);
+        assert_eq!(response.metadata.finish_reason.as_deref(), Some("stop"));
+        assert_eq!(response.metadata.prompt_tokens, Some(12));
+        assert_eq!(response.metadata.output_tokens, Some(3));
+        assert_eq!(response.metadata.total_tokens, Some(15));
     }
 }
 
@@ -94,15 +303,131 @@ pub fn parse_openai_response<C: WithClient + RequestBuilder>(
             prompt_tokens: usage.map(|u| u.prompt_tokens),
             output_tokens: usage.map(|u| u.completion_tokens),
             total_tokens: usage.map(|u| u.total_tokens),
-            cached_input_tokens: usage.and_then(|u| {
-                // Extract cached tokens from input_tokens_details if available
-                u.input_tokens_details
-                    .as_ref()
-                    .and_then(|details| details.get("cached_tokens"))
-                    .and_then(|cached| cached.as_u64())
-            }),
+            cached_input_tokens: usage.and_then(|u| u.cached_input_tokens()),
         },
     })
+}
+
+pub fn parse_openai_transcription_response<C: WithClient + RequestBuilder>(
+    client: &C,
+    prompt: either::Either<&String, &[internal_baml_jinja::RenderedChatMessage]>,
+    response_body: serde_json::Value,
+    system_now: web_time::SystemTime,
+    instant_now: web_time::Instant,
+    model_name: Option<String>,
+) -> LLMResponse {
+    let response = match TranscriptionResponse::deserialize(&response_body)
+        .context(format!(
+            "Failed to parse into an OpenAI transcription response: {response_body}"
+        ))
+        .map_err(|e| LLMErrorResponse {
+            client: client.context().name.to_string(),
+            model: model_name.clone(),
+            prompt: to_prompt(prompt),
+            start_time: system_now,
+            request_options: client.request_options().clone(),
+            latency: instant_now.elapsed(),
+            message: format!("{e:?}"),
+            code: ErrorCode::UnsupportedResponse(2),
+            raw_response: Some(response_body.to_string()),
+        }) {
+        Ok(response) => response,
+        Err(e) => return LLMResponse::LLMFailure(e),
+    };
+
+    let (prompt_tokens, output_tokens, total_tokens, cached_input_tokens) =
+        transcription_usage_metadata(response.usage.as_ref());
+
+    LLMResponse::Success(LLMCompleteResponse {
+        client: client.context().name.to_string(),
+        prompt: to_prompt(prompt),
+        content: response.text,
+        start_time: system_now,
+        latency: instant_now.elapsed(),
+        model: model_name.unwrap_or_else(|| "<unknown>".to_string()),
+        request_options: client.request_options().clone(),
+        metadata: LLMCompleteResponseMetadata {
+            baml_is_complete: true,
+            finish_reason: Some("stop".to_string()),
+            prompt_tokens,
+            output_tokens,
+            total_tokens,
+            cached_input_tokens,
+        },
+    })
+}
+
+fn transcription_usage_metadata(
+    usage: Option<&TranscriptionUsage>,
+) -> (Option<u64>, Option<u64>, Option<u64>, Option<u64>) {
+    match usage {
+        Some(TranscriptionUsage::Tokens {
+            input_tokens,
+            output_tokens,
+            total_tokens,
+            input_token_details,
+        }) => (
+            Some(*input_tokens),
+            Some(*output_tokens),
+            Some(*total_tokens),
+            input_token_details
+                .as_ref()
+                .and_then(|details| details.get("cached_tokens"))
+                .and_then(Value::as_u64),
+        ),
+        Some(TranscriptionUsage::Duration { .. }) | None => (None, None, None, None),
+    }
+}
+
+pub fn scan_openai_transcription_stream(
+    client_name: &str,
+    request_options: &BamlMap<String, serde_json::Value>,
+    prompt: &internal_baml_jinja::RenderedPrompt,
+    system_now: &web_time::SystemTime,
+    instant_now: &web_time::Instant,
+    model_name: &Option<String>,
+    accumulated: &mut Result<LLMCompleteResponse>,
+    event_body: serde_json::Value,
+) -> Result<(), LLMErrorResponse> {
+    let inner = match accumulated {
+        Ok(accumulated) => accumulated,
+        Err(_) => return Ok(()),
+    };
+
+    let event = TranscriptionStreamEvent::deserialize(&event_body)
+        .context(format!(
+            "Failed to parse an OpenAI transcription stream event: {event_body}"
+        ))
+        .map_err(|e| LLMErrorResponse {
+            client: client_name.to_string(),
+            model: model_name.clone(),
+            prompt: prompt.clone(),
+            start_time: *system_now,
+            request_options: request_options.clone(),
+            latency: instant_now.elapsed(),
+            message: format!("{e:?}"),
+            code: ErrorCode::UnsupportedResponse(2),
+            raw_response: Some(event_body.to_string()),
+        })?;
+
+    match event {
+        TranscriptionStreamEvent::Delta { delta } => inner.content.push_str(&delta),
+        TranscriptionStreamEvent::Done { text, usage } => {
+            inner.content = text;
+            inner.metadata.baml_is_complete = true;
+            inner.metadata.finish_reason = Some("stop".to_string());
+            let (prompt_tokens, output_tokens, total_tokens, cached_input_tokens) =
+                transcription_usage_metadata(usage.as_ref());
+            inner.metadata.prompt_tokens = prompt_tokens;
+            inner.metadata.output_tokens = output_tokens;
+            inner.metadata.total_tokens = total_tokens;
+            inner.metadata.cached_input_tokens = cached_input_tokens;
+        }
+        TranscriptionStreamEvent::Segment | TranscriptionStreamEvent::Unknown => {}
+    }
+    inner.latency = instant_now.elapsed();
+
+    Ok(())
 }
 
 pub fn scan_openai_chat_completion_stream(
@@ -153,12 +478,7 @@ pub fn scan_openai_chat_completion_stream(
         inner.metadata.prompt_tokens = Some(usage.prompt_tokens);
         inner.metadata.output_tokens = Some(usage.completion_tokens);
         inner.metadata.total_tokens = Some(usage.total_tokens);
-        inner.metadata.cached_input_tokens =
-            usage.input_tokens_details.as_ref().and_then(|details| {
-                details
-                    .get("cached_tokens")
-                    .and_then(|cached| cached.as_u64())
-            })
+        inner.metadata.cached_input_tokens = usage.cached_input_tokens();
     }
 
     Ok(())
@@ -253,6 +573,108 @@ mod tests {
             panic!("Expected LLMResponse::Success, got {result:?}");
         }
     }
+
+    #[test]
+    fn accepts_chat_completion_with_both_token_details_field_names() {
+        let client = MockClient::new();
+        let prompt = vec![];
+        let response_body = serde_json::json!({
+            "id": "chatcmpl-fireworks",
+            "object": "chat.completion",
+            "model": "accounts/fireworks/models/deepseek-v4-flash-0731",
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "synthetic summary text"
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 20,
+                "total_tokens": 120,
+                "prompt_tokens_details": { "cached_tokens": 98 },
+                "input_tokens_details": { "cached_tokens": 99 },
+                "completion_tokens_details": { "reasoning_tokens": 0 },
+                "output_tokens_details": { "reasoning_tokens": 0 }
+            }
+        });
+
+        let result = parse_openai_response(
+            &client,
+            either::Right(prompt.as_slice()),
+            response_body,
+            web_time::SystemTime::now(),
+            web_time::Instant::now(),
+            Some("accounts/fireworks/models/deepseek-v4-flash-0731".to_string()),
+        );
+
+        let LLMResponse::Success(response) = result else {
+            panic!("Expected LLMResponse::Success, got {result:?}");
+        };
+        assert_eq!(response.content, "synthetic summary text");
+        assert_eq!(response.metadata.prompt_tokens, Some(100));
+        assert_eq!(response.metadata.output_tokens, Some(20));
+        assert_eq!(response.metadata.total_tokens, Some(120));
+        assert_eq!(response.metadata.cached_input_tokens, Some(99));
+    }
+
+    #[test]
+    fn accepts_stream_usage_with_both_token_details_field_names() {
+        let system_now = web_time::SystemTime::now();
+        let prompt = internal_baml_jinja::RenderedPrompt::Chat(vec![]);
+        let mut accumulated = Ok(LLMCompleteResponse {
+            client: "mock".to_string(),
+            prompt: prompt.clone(),
+            content: "synthetic summary text".to_string(),
+            start_time: system_now,
+            latency: Duration::ZERO,
+            model: "accounts/fireworks/models/deepseek-v4-flash-0731".to_string(),
+            request_options: BamlMap::new(),
+            metadata: LLMCompleteResponseMetadata {
+                baml_is_complete: true,
+                finish_reason: Some("stop".to_string()),
+                prompt_tokens: None,
+                output_tokens: None,
+                total_tokens: None,
+                cached_input_tokens: None,
+            },
+        });
+        let event_body = serde_json::json!({
+            "id": "chatcmpl-fireworks",
+            "object": "chat.completion.chunk",
+            "model": "accounts/fireworks/models/deepseek-v4-flash-0731",
+            "choices": [],
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 20,
+                "total_tokens": 120,
+                "prompt_tokens_details": { "cached_tokens": 98 },
+                "input_tokens_details": { "cached_tokens": 99 },
+                "completion_tokens_details": { "reasoning_tokens": 0 },
+                "output_tokens_details": { "reasoning_tokens": 0 }
+            }
+        });
+
+        scan_openai_chat_completion_stream(
+            "mock",
+            &BamlMap::new(),
+            &prompt,
+            &system_now,
+            &web_time::Instant::now(),
+            &Some("accounts/fireworks/models/deepseek-v4-flash-0731".to_string()),
+            &mut accumulated,
+            event_body,
+        )
+        .unwrap();
+
+        let response = accumulated.unwrap();
+        assert_eq!(response.metadata.prompt_tokens, Some(100));
+        assert_eq!(response.metadata.output_tokens, Some(20));
+        assert_eq!(response.metadata.total_tokens, Some(120));
+        assert_eq!(response.metadata.cached_input_tokens, Some(99));
+    }
 }
 
 pub fn parse_openai_responses_response<C: WithClient + RequestBuilder>(
@@ -343,13 +765,7 @@ pub fn parse_openai_responses_response<C: WithClient + RequestBuilder>(
             prompt_tokens: usage.map(|u| u.prompt_tokens),
             output_tokens: usage.map(|u| u.completion_tokens),
             total_tokens: usage.map(|u| u.total_tokens),
-            cached_input_tokens: usage.and_then(|u| {
-                // Extract cached tokens from input_tokens_details if available
-                u.input_tokens_details
-                    .as_ref()
-                    .and_then(|details| details.get("cached_tokens"))
-                    .and_then(|cached| cached.as_u64())
-            }),
+            cached_input_tokens: usage.and_then(|u| u.cached_input_tokens()),
         },
     })
 }
@@ -419,12 +835,7 @@ pub fn scan_openai_responses_stream(
                 inner.metadata.prompt_tokens = Some(usage.prompt_tokens);
                 inner.metadata.output_tokens = Some(usage.completion_tokens);
                 inner.metadata.total_tokens = Some(usage.total_tokens);
-                inner.metadata.cached_input_tokens =
-                    usage.input_tokens_details.as_ref().and_then(|details| {
-                        details
-                            .get("cached_tokens")
-                            .and_then(|cached| cached.as_u64())
-                    })
+                inner.metadata.cached_input_tokens = usage.cached_input_tokens();
             }
         }
         ResponseFailed { response, .. } => {
@@ -477,12 +888,7 @@ pub fn scan_openai_responses_stream(
                 inner.metadata.prompt_tokens = Some(usage.prompt_tokens);
                 inner.metadata.output_tokens = Some(usage.completion_tokens);
                 inner.metadata.total_tokens = Some(usage.total_tokens);
-                inner.metadata.cached_input_tokens =
-                    usage.input_tokens_details.as_ref().and_then(|details| {
-                        details
-                            .get("cached_tokens")
-                            .and_then(|cached| cached.as_u64())
-                    })
+                inner.metadata.cached_input_tokens = usage.cached_input_tokens();
             }
         }
         OutputTextDelta { delta, .. } => {
@@ -698,6 +1104,7 @@ mod responses_tests {
   "user": null,
   "metadata": {}
 }
+
     "#;
 
     const RESPONSES_API_RESPONSE_MCP: &str = r#"

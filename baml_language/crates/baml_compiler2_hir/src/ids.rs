@@ -22,14 +22,6 @@ pub struct InterfaceMarker;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TypeAliasMarker;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ClientMarker;
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct TestMarker;
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct TemplateStringMarker;
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct RetryPolicyMarker;
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LetMarker;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ImplMarker;
@@ -109,10 +101,6 @@ pub enum ItemKind {
     Enum,
     Interface,
     TypeAlias,
-    Client,
-    Test,
-    TemplateString,
-    RetryPolicy,
     Let,
     Impl,
 }

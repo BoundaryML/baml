@@ -16,16 +16,16 @@
 // The runtime exports this under its `BamlStream` name; codegen aliases it as
 // `Stream` on re-export (`export { BamlStream as Stream } from ...`).
 //
-// Spec note: at the codegen layer only async streaming is a real call
-// (`$stream_async`); the per-chunk `next`/`final` pulls here are unrelated to
-// that function-level distinction. The wrapper exposes both sync and async
-// pulls, as Python does.
-import { getRuntime, newFunctionCall as nativeNewFunctionCall } from './native.js';
+// The per-chunk `next`/`final` pulls here are independent of whether the host
+// obtained the stream through `Fn$stream` or `Fn$stream_async`. Those bindings
+// send the authored FQN with the Stream boundary operation; the engine resolves
+// PPIR's private `Fn@stream`. The wrapper exposes both sync and async pulls.
 import { supportsSyncStreamPulls } from './platform.js';
-import { encodeCallArgs, decodeCallResult } from './proto.js';
-function newFunctionCall() {
-    return BigInt(nativeNewFunctionCall());
-}
+import { invokeTarget } from './proto.js';
+/**
+ * A live `ai.stream.Stream<T>`. A partial and the settled value share the one
+ * type: a partial is `T` parsed from the text received so far.
+ */
 export class BamlStream {
     _handle;
     _classFqn;
@@ -44,32 +44,26 @@ export class BamlStream {
     _toHandle() {
         return this._handle;
     }
-    next() {
-        return this._callSync(`${this._classFqn}.next`);
+    next(options) {
+        return this._callSync(`${this._classFqn}.next`, options);
     }
-    async nextAsync() {
-        return (await this._callAsync(`${this._classFqn}.next`));
+    async nextAsync(options) {
+        return (await this._callAsync(`${this._classFqn}.next`, options));
     }
-    final() {
-        return this._callSync(`${this._classFqn}.final`);
+    final(options) {
+        return this._callSync(`${this._classFqn}.final`, options);
     }
-    async finalAsync() {
-        return (await this._callAsync(`${this._classFqn}.final`));
+    async finalAsync(options) {
+        return (await this._callAsync(`${this._classFqn}.final`, options));
     }
-    _callSync(fqn) {
+    _callSync(fqn, options) {
         if (!supportsSyncStreamPulls) {
             throw new Error('synchronous stream pulls are unavailable in Web runtimes; use nextAsync() or finalAsync() instead');
         }
-        const rt = getRuntime();
-        const argsProto = encodeCallArgs({ self: this }, { syncMode: true, callId: newFunctionCall(), functionName: fqn });
-        const resultBytes = rt.callFunctionSync(argsProto, null, null);
-        return decodeCallResult(resultBytes);
+        return invokeTarget(fqn, { self: this }, options, false);
     }
-    async _callAsync(fqn) {
-        const rt = getRuntime();
-        const argsProto = encodeCallArgs({ self: this }, { callId: newFunctionCall(), functionName: fqn });
-        const resultBytes = await rt.callFunction(argsProto, null, null);
-        return decodeCallResult(resultBytes);
+    async _callAsync(fqn, options) {
+        return await invokeTarget(fqn, { self: this }, options, true);
     }
 }
 //# sourceMappingURL=stream.js.map

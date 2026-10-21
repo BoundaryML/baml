@@ -19,8 +19,9 @@ use rand_core::{RngCore, SeedableRng};
 use rand_xoshiro::Xoshiro256PlusPlus as XoshiroRng;
 
 use super::{
-    BamlClassRandomChaCha20, BamlClassRandomXoshiro256PlusPlus, BamlNamespaceRandom,
-    PackageBamlImpl, copy, view,
+    BamlClassRandomChaCha20, BamlClassRandomRng_for_ChaCha20,
+    BamlClassRandomRng_for_Xoshiro256PlusPlus, BamlClassRandomXoshiro256PlusPlus,
+    BamlNamespaceRandom, PackageBamlImpl, copy, view,
 };
 use crate::{
     BexVm,
@@ -92,28 +93,39 @@ fn next_i63<R: RngCore>(mutex: &Mutex<R>) -> i64 {
 // Xoshiro256PlusPlus
 // =========================================================================
 
+/// A generator as `$rust_type` data: fixed size.
+struct RngState<R>(Mutex<R>);
+
+impl<R: Send + 'static> bex_vm_types::BexRustData for RngState<R> {
+    fn measure(&self, _: &mut bex_vm_types::Meter) {}
+}
+
+impl BamlClassRandomXoshiro256PlusPlus for PackageBamlImpl {
+    fn _new(vm: &mut BexVm, seed: &[u8]) -> Result<Value, VmRustFnError> {
+        let rng = XoshiroRng::from_seed(seed_array(seed)?);
+        let state: Arc<dyn bex_vm_types::BexRustData> = Arc::new(RngState(Mutex::new(rng)));
+        Ok(copy::random::Xoshiro256PlusPlus { _state: state }.to_value(vm))
+    }
+}
+
+// The `implements random.Rng` block's methods — impl-block methods, so
+// codegen emits a per-impl trait.
 #[expect(
     clippy::used_underscore_items,
     reason = "the `_state` view accessor is generated from the private BAML field"
 )]
-impl BamlClassRandomXoshiro256PlusPlus for PackageBamlImpl {
-    fn _new(vm: &mut BexVm, seed: &[u8]) -> Result<Value, VmRustFnError> {
-        let rng = XoshiroRng::from_seed(seed_array(seed)?);
-        let state: Arc<dyn std::any::Any + Send + Sync> = Arc::new(Mutex::new(rng));
-        Ok(copy::random::Xoshiro256PlusPlus { _state: state }.to_value(vm))
-    }
-
+impl BamlClassRandomRng_for_Xoshiro256PlusPlus for PackageBamlImpl {
     fn random(
         vm: &BexVm,
         rng: &view::random::Xoshiro256PlusPlus<'_>,
         bytes: i64,
     ) -> Result<Vec<u8>, VmRustFnError> {
         let n = byte_count(bytes)?;
-        fill(rng._state::<Mutex<XoshiroRng>>(vm), n)
+        fill(&rng._state::<RngState<XoshiroRng>>(vm).0, n)
     }
 
     fn random_int(vm: &BexVm, rng: &view::random::Xoshiro256PlusPlus<'_>) -> i64 {
-        next_i63(rng._state::<Mutex<XoshiroRng>>(vm))
+        next_i63(&rng._state::<RngState<XoshiroRng>>(vm).0)
     }
 }
 
@@ -121,28 +133,32 @@ impl BamlClassRandomXoshiro256PlusPlus for PackageBamlImpl {
 // ChaCha20
 // =========================================================================
 
+impl BamlClassRandomChaCha20 for PackageBamlImpl {
+    fn _new(vm: &mut BexVm, seed: &[u8]) -> Result<Value, VmRustFnError> {
+        let rng = ChaCha20Rng::from_seed(seed_array(seed)?);
+        let state: Arc<dyn bex_vm_types::BexRustData> = Arc::new(RngState(Mutex::new(rng)));
+        Ok(copy::random::ChaCha20 { _state: state }.to_value(vm))
+    }
+}
+
+// The `implements random.Rng` block's methods — impl-block methods, so
+// codegen emits a per-impl trait.
 #[expect(
     clippy::used_underscore_items,
     reason = "the `_state` view accessor is generated from the private BAML field"
 )]
-impl BamlClassRandomChaCha20 for PackageBamlImpl {
-    fn _new(vm: &mut BexVm, seed: &[u8]) -> Result<Value, VmRustFnError> {
-        let rng = ChaCha20Rng::from_seed(seed_array(seed)?);
-        let state: Arc<dyn std::any::Any + Send + Sync> = Arc::new(Mutex::new(rng));
-        Ok(copy::random::ChaCha20 { _state: state }.to_value(vm))
-    }
-
+impl BamlClassRandomRng_for_ChaCha20 for PackageBamlImpl {
     fn random(
         vm: &BexVm,
         rng: &view::random::ChaCha20<'_>,
         bytes: i64,
     ) -> Result<Vec<u8>, VmRustFnError> {
         let n = byte_count(bytes)?;
-        fill(rng._state::<Mutex<ChaCha20Rng>>(vm), n)
+        fill(&rng._state::<RngState<ChaCha20Rng>>(vm).0, n)
     }
 
     fn random_int(vm: &BexVm, rng: &view::random::ChaCha20<'_>) -> i64 {
-        next_i63(rng._state::<Mutex<ChaCha20Rng>>(vm))
+        next_i63(&rng._state::<RngState<ChaCha20Rng>>(vm).0)
     }
 }
 

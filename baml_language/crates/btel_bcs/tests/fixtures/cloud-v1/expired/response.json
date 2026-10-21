@@ -1,0 +1,19 @@
+{
+  "plan_id": "cloud-v1-expired",
+  "expires_at_unix_ms": 4102444800000,
+  "uploads": [
+    {
+      "upload_id": "recording",
+      "client_target_id": 0,
+      "object_key": "org-fixture/cloud-v1-expired/recording",
+      "presigned_put_url": "https://uploads.invalid/cloud-v1/expired/recording?capability=fixed-v1",
+      "expires_at_unix_ms": 1,
+      "required_headers": {"x-bcs-fixture": "cloud-v1", "x-amz-meta-upload-id": "recording"},
+      "kind": "recording",
+      "candidate_indices": [0]
+    }
+  ],
+  "cas": [
+    {"candidate_index": 0, "disposition": {"kind": "inline_with_recording", "upload_id": "recording"}}
+  ]
+}

@@ -100,6 +100,18 @@ public final class ProtoReader {
     private static final int ENUM_NAME = 1;
     private static final int ENUM_VALUE = 2;
 
+    // BamlValueMedia
+    private static final int MEDIA_KIND = 1;
+    private static final int MEDIA_MIME_TYPE = 2;
+    private static final int MEDIA_URL = 3;
+    private static final int MEDIA_BASE64 = 4;
+    // Field 5 once named a file and is reserved.
+    private static final int MEDIA_FILE_CONTENT = 6;
+
+    // BamlValueMediaFileContent
+    private static final int FILE_CONTENT_NAME = 1;
+    private static final int FILE_CONTENT_BASE64 = 2;
+
     // BamlValueUnionVariant
     private static final int UNION_SELF_TYPE = 4;
     private static final int UNION_VALUE = 6;
@@ -130,6 +142,7 @@ public final class ProtoReader {
     // the runtime-owned BamlStream wrapper (the sole tagged-heap-handle capability
     // today; the typed generics are erased, exactly as in bridge_python).
     private static final int ADT_TAGGED_HEAP_HANDLE = 14;
+    private static final int ADT_FUNCTION_SPEC = 17;
 
     // The single field name a handle-backed media class carries on the wire.
     private static final String MEDIA_DATA_FIELD = "_data";
@@ -150,7 +163,6 @@ public final class ProtoReader {
     private static final int TY_MEDIA = 11;
     private static final int TY_FUNCTION = 14;
     private static final int TY_RUST_TYPE = 16;
-    private static final int TY_VOID = 20;
 
     // Sub-message field numbers on the BamlTy variants.
     private static final int TY_NAME = 1; // BamlTyClass/BamlTyEnum.name
@@ -193,9 +205,8 @@ public final class ProtoReader {
      * Decode a {@code BamlOutboundResult} envelope. Returns the decoded value on
      * the {@code ok} arm; throws {@link BamlError} on {@code error}; throws
      * {@link BamlPanic} on a non-exit {@code panic}; and for an exit panic
-     * ({@code is_exit_panic}) runs the registered
-     * {@link baml_bridge.BamlFfi#runExitFlushHooks() exit-flush hooks} and then
-     * terminates the process via {@code Runtime.getRuntime().halt(exit_code)}.
+     * ({@code is_exit_panic}) terminates the process via
+     * {@code Runtime.getRuntime().halt(exit_code)}.
      *
      * <p>{@code returnDesc} is the type-directed decode descriptor ({@link BamlType})
      * for the declared return type (see {@code ref-java-codegen-conventions.md});
@@ -513,11 +524,7 @@ public final class ProtoReader {
             }
         }
         if (isExit) {
-            // Clean baml.sys.exit: run the best-effort telemetry-flush hooks (the
-            // spec'd flush step — exceptions swallowed, nothing may prevent the
-            // halt), then hard-terminate the process, bypassing JVM shutdown hooks
-            // (the analog of Python's os._exit, which flushes then _exits).
-            baml_bridge.BamlFfi.runExitFlushHooks();
+            // Clean baml.sys.exit: hard-terminate, bypassing JVM shutdown hooks.
             Runtime.getRuntime().halt((int) exitCode);
             // Unreachable: halt() never returns. Satisfy the compiler with an
             // Error (BamlPanic is now an Error, so this method returns Error).
@@ -534,10 +541,8 @@ public final class ProtoReader {
      * generated class instance / enum constant, and an unregistered FQN degrades
      * to a field {@code Map<String,Object>} (like Python's no-typemap fallback) /
      * the raw variant string — so a thrown {@code baml.errors.*} value still
-     * surfaces on the error/panic path. When {@code lenient}, the remaining
-     * undecodable capabilities (opaque handles/media/prompt-ast/ty) degrade to
-     * null; on the {@code ok} path ({@code lenient == false}) they throw
-     * {@link UnsupportedOperationException}.
+     * surfaces on the error/panic path. Runtime-owned capabilities decode into
+     * their Java wrappers, including portable media and prompt AST values.
      */
     public static Object decodeValue(WireReader r, boolean lenient) {
         Object result = null;
@@ -563,19 +568,94 @@ public final class ProtoReader {
                 case OV_CLASS -> result = decodeClass(r.readMessage(), lenient);
                 case OV_ENUM -> result = decodeEnum(r.readMessage());
                 case OV_HANDLE -> result = decodeHandle(r.readMessage());
-                case OV_MEDIA, OV_PROMPT_AST, OV_TY -> {
-                    if (lenient) {
-                        r.skipField(wire);
-                        result = null;
-                    } else {
-                        r.skipField(wire);
-                        throw unsupported(kindName(field));
+                case OV_PROMPT_AST -> result = baml_bridge.BamlPrompt.fromWire(r.readBytes());
+                case OV_TY -> result = BamlType.fromWireTy(r.readBytes());
+                case OV_MEDIA -> result = decodeMedia(r.readMessage());
+                default -> r.skipField(wire);
+            }
+        }
+        return result;
+    }
+
+    /** Decode canonical portable media data into the matching native-backed Java wrapper. */
+    private static Object decodeMedia(WireReader r) {
+        int kind = 0;
+        String mimeType = null;
+        int source = 0;
+        String value = null;
+        String name = null;
+        while (r.hasRemaining()) {
+            int tag = r.readTag();
+            int field = WireReader.fieldOf(tag);
+            int wire = WireReader.wireOf(tag);
+            switch (field) {
+                case MEDIA_KIND -> kind = (int) r.readVarint();
+                case MEDIA_MIME_TYPE -> mimeType = r.readString();
+                case MEDIA_URL, MEDIA_BASE64 -> {
+                    source = field;
+                    value = r.readString();
+                }
+                case MEDIA_FILE_CONTENT -> {
+                    source = field;
+                    // proto3 omits an empty string: absent means empty.
+                    name = "";
+                    value = "";
+                    WireReader content = r.readMessage();
+                    while (content.hasRemaining()) {
+                        int contentTag = content.readTag();
+                        switch (WireReader.fieldOf(contentTag)) {
+                            case FILE_CONTENT_NAME -> name = content.readString();
+                            case FILE_CONTENT_BASE64 -> value = content.readString();
+                            default -> content.skipField(WireReader.wireOf(contentTag));
+                        }
                     }
                 }
                 default -> r.skipField(wire);
             }
         }
-        return result;
+        if (source == 0) {
+            throw new BamlError(
+                    "BEX emitted a portable media value with no content", List.of(), null);
+        }
+        return switch (kind) {
+            case 1 -> constructMedia(source, value, name, mimeType,
+                    Image::from_url, Image::from_base64, Image::from_file_content);
+            case 2 -> constructMedia(source, value, name, mimeType,
+                    Audio::from_url, Audio::from_base64, Audio::from_file_content);
+            case 3 -> constructMedia(source, value, name, mimeType,
+                    Pdf::from_url, Pdf::from_base64, Pdf::from_file_content);
+            case 4 -> constructMedia(source, value, name, mimeType,
+                    Video::from_url, Video::from_base64, Video::from_file_content);
+            default -> throw new BamlError(
+                    "BEX emitted unsupported portable media kind " + kind, List.of(), null);
+        };
+    }
+
+    @FunctionalInterface
+    private interface MediaConstructor {
+        Object construct(String value, String mimeType);
+    }
+
+    @FunctionalInterface
+    private interface NamedMediaConstructor {
+        Object construct(String file, String base64, String mimeType);
+    }
+
+    private static Object constructMedia(
+            int source,
+            String value,
+            String name,
+            String mimeType,
+            MediaConstructor fromUrl,
+            MediaConstructor fromBase64,
+            NamedMediaConstructor fromFileContent) {
+        return switch (source) {
+            case MEDIA_URL -> fromUrl.construct(value, mimeType);
+            case MEDIA_BASE64 -> fromBase64.construct(value, mimeType);
+            // Content read from a file keeps the file's name.
+            case MEDIA_FILE_CONTENT -> fromFileContent.construct(name, value, mimeType);
+            default -> throw new AssertionError("unknown portable media source " + source);
+        };
     }
 
     private static Object decodeLiteral(WireReader r) {
@@ -686,6 +766,13 @@ public final class ProtoReader {
                 if (selectedOptionIndex != null) {
                     BamlType rawSelected = selfTypeOptionAt(selfTypeBytes, selectedOptionIndex);
                     if (rawSelected == null) {
+                        // Error values are decoded leniently so a host that cannot
+                        // represent one arm's type metadata still surfaces the
+                        // original thrown value instead of masking it with a
+                        // secondary bridge-decoder failure.
+                        if (lenient) {
+                            return inner;
+                        }
                         throw new BamlError(
                                 "union selected option index " + selectedOptionIndex
                                         + " does not name a representable non-null arm",
@@ -765,7 +852,7 @@ public final class ProtoReader {
 
     /**
      * Read one {@code BamlTy} into its {@link BamlType}, or {@code null} when it is
-     * outside the token grammar (media / function / rust_type / void / unknown, and
+     * outside the token grammar (media / function / rust_type / unknown, and
      * the {@code null} / {@code bytes} / {@code bigint} primitive kinds). Named
      * types (class / enum / type_alias) become a bare {@link BamlType#classByFqn}
      * (matching the emitter's arm rendering — a wire optional unwraps to its inner,
@@ -812,7 +899,8 @@ public final class ProtoReader {
             case PRIM_INT -> BamlType.INT;
             case PRIM_FLOAT -> BamlType.FLOAT;
             case PRIM_BOOL -> BamlType.BOOL;
-            // null / bytes / bigint are outside the token grammar → dropped from the arm set.
+            case PRIM_BIGINT -> BamlType.BIGINT;
+            // null / bytes are outside the token grammar → dropped from the arm set.
             default -> null;
         };
     }
@@ -1007,6 +1095,7 @@ public final class ProtoReader {
             // and `.final` from that identity. Java erases the generic args but
             // must not erase the receiver class FQN.
             case ADT_TAGGED_HEAP_HANDLE -> baml_bridge.BamlStream.fromHandle(handle);
+            case ADT_FUNCTION_SPEC -> baml_bridge.BamlFunctionSpec.fromHandle(handle);
             default -> handle;
         };
     }
@@ -1046,7 +1135,7 @@ public final class ProtoReader {
      * class / enum / recursive-alias; a union matches the wire value against the
      * declared arms in order and wraps the arm.
      */
-    static Object decodeWithDesc(byte[] valueBytes, BamlType desc, boolean lenient) {
+    public static Object decodeWithDesc(byte[] valueBytes, BamlType desc, boolean lenient) {
         if (valueBytes == null) {
             return null;
         }
@@ -1338,6 +1427,7 @@ public final class ProtoReader {
         int ov = outboundArm(valueBytes);
         return switch (arm.kind()) {
             case PRIMITIVE -> (arm.isInt() && ov == OV_INT)
+                    || (arm.isBigint() && ov == OV_BIGINT)
                     || (arm.isString() && ov == OV_STRING)
                     || (arm.isBool() && ov == OV_BOOL)
                     || (arm.isFloat() && ov == OV_FLOAT);
@@ -1651,10 +1741,6 @@ public final class ProtoReader {
         return inner;
     }
 
-    private static UnsupportedOperationException unsupported(String kind) {
-        return new UnsupportedOperationException("capability not yet implemented: " + kind);
-    }
-
     /**
      * Workspace bigint cap = 2^28 bits ⇒ at most {@code (2^28)/4} hex digits
      * (plus a small slack for the sign), mirroring the Rust-side
@@ -1727,13 +1813,4 @@ public final class ProtoReader {
         return true;
     }
 
-    private static String kindName(int field) {
-        return switch (field) {
-            case OV_HANDLE -> "handle_value";
-            case OV_MEDIA -> "media_value";
-            case OV_PROMPT_AST -> "prompt_ast_value";
-            case OV_TY -> "ty_value";
-            default -> "field " + field;
-        };
-    }
 }

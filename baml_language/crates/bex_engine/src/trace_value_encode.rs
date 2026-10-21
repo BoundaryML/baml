@@ -103,7 +103,8 @@ struct BamlValueMedia {
     media: i32,
     #[prost(string, optional, tag = "2")]
     mime_type: Option<String>,
-    #[prost(oneof = "BamlValueMediaValue", tags = "3, 4, 5")]
+    // Tag 5 once named a file and is reserved.
+    #[prost(oneof = "BamlValueMediaValue", tags = "3, 4, 6")]
     value: Option<BamlValueMediaValue>,
 }
 
@@ -113,8 +114,16 @@ enum BamlValueMediaValue {
     Url(String),
     #[prost(string, tag = "4")]
     Base64(String),
-    #[prost(string, tag = "5")]
-    File(String),
+    #[prost(message, tag = "6")]
+    FileContent(BamlValueMediaFileContent),
+}
+
+#[derive(Clone, PartialEq, Message)]
+struct BamlValueMediaFileContent {
+    #[prost(string, tag = "1")]
+    name: String,
+    #[prost(string, tag = "2")]
+    base64: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Enumeration)]
@@ -132,7 +141,7 @@ enum MediaTypeEnum {
 struct BamlTy {
     #[prost(
         oneof = "BamlTyVariant",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 22, 23, 24"
     )]
     ty: Option<BamlTyVariant>,
 }
@@ -177,8 +186,6 @@ enum BamlTyVariant {
     Resource(BamlTyResource),
     #[prost(message, tag = "19")]
     PromptAst(BamlTyPromptAst),
-    #[prost(message, tag = "20")]
-    Void(BamlTyVoid),
     #[prost(message, tag = "22")]
     TypeVar(BamlTyTypeVar),
     #[prost(message, tag = "23")]
@@ -417,13 +424,6 @@ struct BamlTyPromptAst {}
     clippy::empty_structs_with_brackets,
     reason = "Empty message mirrors the outbound protobuf shape."
 )]
-struct BamlTyVoid {}
-
-#[derive(Clone, PartialEq, Message)]
-#[allow(
-    clippy::empty_structs_with_brackets,
-    reason = "Empty message mirrors the outbound protobuf shape."
-)]
 struct BamlTyNever {}
 
 pub(crate) fn encode_trace_snapshot_body(snapshot: &TraceSnapshot) -> Result<Vec<u8>, String> {
@@ -502,8 +502,16 @@ fn media_to_proto(media: &TraceMediaValue) -> BamlValueMedia {
         mime_type: media.mime_type.clone(),
         value: Some(match &media.content {
             TraceMediaContent::Url(url) => BamlValueMediaValue::Url(url.clone()),
-            TraceMediaContent::Base64(base64) => BamlValueMediaValue::Base64(base64.clone()),
-            TraceMediaContent::File(file) => BamlValueMediaValue::File(file.clone()),
+            TraceMediaContent::Base64 { base64, name: None } => {
+                BamlValueMediaValue::Base64(base64.clone())
+            }
+            TraceMediaContent::Base64 {
+                base64,
+                name: Some(name),
+            } => BamlValueMediaValue::FileContent(BamlValueMediaFileContent {
+                name: name.clone(),
+                base64: base64.clone(),
+            }),
         }),
     }
 }
@@ -573,36 +581,36 @@ fn interface_to_proto_ty(
 
 fn runtime_ty_to_variant(ty: &RuntimeTy) -> BamlTyVariant {
     match ty {
-        RuntimeTy::String { .. } => primitive(BamlTyPrimitiveKind::String),
-        RuntimeTy::Int { .. } => primitive(BamlTyPrimitiveKind::Int),
-        RuntimeTy::Float { .. } => primitive(BamlTyPrimitiveKind::Float),
-        RuntimeTy::Bool { .. } => primitive(BamlTyPrimitiveKind::Bool),
-        RuntimeTy::Null { .. } => primitive(BamlTyPrimitiveKind::Null),
-        RuntimeTy::Uint8Array { .. } => primitive(BamlTyPrimitiveKind::Bytes),
-        RuntimeTy::Bigint { .. } => primitive(BamlTyPrimitiveKind::Bigint),
-        RuntimeTy::Class(name, args, _) => BamlTyVariant::ClassTy(BamlTyClass {
+        RuntimeTy::String => primitive(BamlTyPrimitiveKind::String),
+        RuntimeTy::Int => primitive(BamlTyPrimitiveKind::Int),
+        RuntimeTy::Float => primitive(BamlTyPrimitiveKind::Float),
+        RuntimeTy::Bool => primitive(BamlTyPrimitiveKind::Bool),
+        RuntimeTy::Null => primitive(BamlTyPrimitiveKind::Null),
+        RuntimeTy::Uint8Array => primitive(BamlTyPrimitiveKind::Bytes),
+        RuntimeTy::Bigint => primitive(BamlTyPrimitiveKind::Bigint),
+        RuntimeTy::Class(name, args) => BamlTyVariant::ClassTy(BamlTyClass {
             name: name.render_dotted(false),
             type_args: args.iter().map(runtime_ty_to_proto_ty).collect(),
         }),
-        RuntimeTy::TypeAlias(name, _) => BamlTyVariant::TypeAlias(BamlTyTypeAlias {
+        RuntimeTy::TypeAlias(name) => BamlTyVariant::TypeAlias(BamlTyTypeAlias {
             name: name.render_dotted(false),
             type_args: Vec::new(),
         }),
-        RuntimeTy::Enum(name, _) => BamlTyVariant::Enum(BamlTyEnum {
+        RuntimeTy::Enum(name) => BamlTyVariant::Enum(BamlTyEnum {
             name: name.render_dotted(false),
         }),
-        RuntimeTy::EnumVariant(name, variant, _) => BamlTyVariant::EnumVariant(BamlTyEnumVariant {
+        RuntimeTy::EnumVariant(name, variant) => BamlTyVariant::EnumVariant(BamlTyEnumVariant {
             name: name.render_dotted(false),
             variant: variant.as_str().to_string(),
         }),
-        RuntimeTy::List(inner, _) => BamlTyVariant::List(BamlTyList {
+        RuntimeTy::List(inner) => BamlTyVariant::List(BamlTyList {
             item: Some(Box::new(runtime_ty_to_proto_ty(inner))),
         }),
         RuntimeTy::Map { key, value, .. } => BamlTyVariant::Map(BamlTyMap {
             key: Some(Box::new(runtime_ty_to_proto_ty(key))),
             value: Some(Box::new(runtime_ty_to_proto_ty(value))),
         }),
-        RuntimeTy::Union(members, _) => {
+        RuntimeTy::Union(members) => {
             let has_null = members.iter().any(RuntimeTy::is_null);
             let non_null = members
                 .iter()
@@ -618,15 +626,13 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> BamlTyVariant {
                 })
             }
         }
-        RuntimeTy::Literal(lit, _, _) => BamlTyVariant::Literal(literal_to_proto(lit)),
-        RuntimeTy::Media(kind, _) => BamlTyVariant::Media(BamlTyMedia {
+        RuntimeTy::Literal(lit, _) => BamlTyVariant::Literal(literal_to_proto(lit)),
+        RuntimeTy::Media(kind) => BamlTyVariant::Media(BamlTyMedia {
             kind: media_kind_to_proto_ty(*kind) as i32,
         }),
-        RuntimeTy::Interface(name, args, bindings, _) => {
-            interface_to_proto_ty(name, args, bindings)
-                .ty
-                .unwrap_or_else(|| unreachable!("interface helper always sets ty"))
-        }
+        RuntimeTy::Interface(name, args, bindings) => interface_to_proto_ty(name, args, bindings)
+            .ty
+            .unwrap_or_else(|| unreachable!("interface helper always sets ty")),
         RuntimeTy::Function {
             params,
             ret,
@@ -645,16 +651,15 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> BamlTyVariant {
             ret: Some(Box::new(runtime_ty_to_proto_ty(ret))),
             throws: Some(Box::new(runtime_ty_to_proto_ty(throws))),
         }),
-        RuntimeTy::Future(value, error, _) => BamlTyVariant::Future(BamlTyFuture {
+        RuntimeTy::Future(value, error) => BamlTyVariant::Future(BamlTyFuture {
             value: Some(Box::new(runtime_ty_to_proto_ty(value))),
             error: Some(Box::new(runtime_ty_to_proto_ty(error))),
         }),
-        RuntimeTy::RustType { .. } => BamlTyVariant::RustType(BamlTyRustType {}),
-        RuntimeTy::Type { .. } => BamlTyVariant::MetaType(BamlTyMetaType {}),
-        RuntimeTy::Resource { .. } => BamlTyVariant::Resource(BamlTyResource {}),
-        RuntimeTy::PromptAst { .. } => BamlTyVariant::PromptAst(BamlTyPromptAst {}),
-        RuntimeTy::Void { .. } => BamlTyVariant::Void(BamlTyVoid {}),
-        RuntimeTy::TypeVar(param, _) => BamlTyVariant::TypeVar(BamlTyTypeVar {
+        RuntimeTy::RustType => BamlTyVariant::RustType(BamlTyRustType {}),
+        RuntimeTy::Type => BamlTyVariant::MetaType(BamlTyMetaType {}),
+        RuntimeTy::Resource => BamlTyVariant::Resource(BamlTyResource {}),
+        RuntimeTy::PromptAst => BamlTyVariant::PromptAst(BamlTyPromptAst {}),
+        RuntimeTy::TypeVar(param) => BamlTyVariant::TypeVar(BamlTyTypeVar {
             name: param.as_str().to_string(),
             index: param.index(),
         }),
@@ -673,8 +678,8 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> BamlTyVariant {
             ))),
             member: member.as_str().to_string(),
         }),
-        RuntimeTy::BuiltinUnknown { .. } => BamlTyVariant::Unknown(BamlTyUnknown {}),
-        RuntimeTy::Never { .. } => BamlTyVariant::Never(BamlTyNever {}),
+        RuntimeTy::Unknown => BamlTyVariant::Unknown(BamlTyUnknown {}),
+        RuntimeTy::Never => BamlTyVariant::Never(BamlTyNever {}),
     }
 }
 
@@ -728,7 +733,7 @@ fn bigint_to_hex(value: &str) -> String {
 ///
 /// The trace artifact itself remains an encoded [`BamlOutboundValue`]. This
 /// renderer is only used at the display boundary (for example, `baml test
-/// --logs`) and mirrors BAML's default structural `to_string()` shape:
+/// --log`) and mirrors BAML's default structural `to_string()` shape:
 /// top-level strings are bare, nested strings are quoted, and containers and
 /// class instances recurse without exposing protobuf or Rust wrapper types.
 pub(crate) fn render_encoded_trace_value(body: &[u8]) -> Result<String, String> {
@@ -818,29 +823,31 @@ fn render_media_value(media: &BamlValueMedia) -> String {
         .as_ref()
         .map(|mime| format!(", mime_type={mime:?}"))
         .unwrap_or_default();
+    let base64 = |value: &str, name: Option<&str>| {
+        let preview = if value.len() <= 10 {
+            value.to_owned()
+        } else {
+            format!(
+                "{}...{}",
+                &value[..5],
+                &value[value.len().saturating_sub(5)..]
+            )
+        };
+        let name = name
+            .map(|name| format!(", name={name:?}"))
+            .unwrap_or_default();
+        format!(
+            "{kind}::base64({preview:?}, len={}{name}{mime})",
+            value.len()
+        )
+    };
     match media.value.as_ref() {
         Some(BamlValueMediaValue::Url(value)) => {
             format!("{kind}::url({value:?}{mime})")
         }
-        Some(BamlValueMediaValue::File(value)) => {
-            format!("{kind}::file({value:?}{mime})")
-        }
-        Some(BamlValueMediaValue::Base64(value)) => {
-            let preview = if value.len() <= 10 {
-                value.clone()
-            } else {
-                format!(
-                    "{}...{}",
-                    &value[..5],
-                    &value[value.len().saturating_sub(5)..]
-                )
-            };
-            format!(
-                "{kind}::base64({preview:?}, len={}{}{})",
-                value.len(),
-                if mime.is_empty() { "" } else { ", " },
-                mime.trim_start_matches(", ")
-            )
+        Some(BamlValueMediaValue::Base64(value)) => base64(value, None),
+        Some(BamlValueMediaValue::FileContent(content)) => {
+            base64(&content.base64, Some(&content.name))
         }
         None => format!("{kind}::missing"),
     }
@@ -940,9 +947,10 @@ mod tests {
             vec![TraceValue::Media(crate::trace_heap::TraceMediaValue {
                 kind: bex_external_types::MediaKind::Image,
                 mime_type: Some("image/png".to_string()),
-                content: crate::trace_heap::TraceMediaContent::Base64(
-                    "aW1hZ2UtYnl0ZXM=".to_string(),
-                ),
+                content: crate::trace_heap::TraceMediaContent::Base64 {
+                    base64: "aW1hZ2UtYnl0ZXM=".to_string(),
+                    name: Some("cat.png".to_string()),
+                },
             })],
         );
 
@@ -952,10 +960,15 @@ mod tests {
             panic!("root should encode as media");
         };
         assert_eq!(media.mime_type.as_deref(), Some("image/png"));
-        assert!(matches!(
-            media.value,
-            Some(bridge_ctypes::baml_bridge::cffi::baml_value_media::Value::Base64(_))
-        ));
+        let Some(bridge_ctypes::baml_bridge::cffi::baml_value_media::Value::FileContent(content)) =
+            media.value
+        else {
+            panic!("named content should encode with its name");
+        };
+        assert_eq!(
+            (content.name.as_str(), content.base64.as_str()),
+            ("cat.png", "aW1hZ2UtYnl0ZXM=")
+        );
     }
 
     #[test]

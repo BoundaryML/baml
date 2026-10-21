@@ -1,6 +1,6 @@
 //! One shared setup path for every command that loads a BAML project.
 //!
-//! `check`, `run`, `test`, `pack`, `describe`, and `generate` all
+//! `check`, `run`, `test`, `pack`, and `generate` all
 //! need the same preamble — resolve the project, build the database, open
 //! the bytecode cache, install the warm seeds — but historically each
 //! command hand-rolled its own subset, and the subsets drifted: `pack`
@@ -17,46 +17,40 @@
 //! 2. [`ProjectSession::try_cached_program`] — the whole-program hit for
 //!    executing commands (`run`/`test`/`pack`); called *before* warm prep so
 //!    a hit skips it entirely.
-//! 3. [`ProjectSession::warm_prep`] — stdlib-interface seed + per-file reuse
-//!    plan (throw facts, callable-throws fragments, diagnostics blobs).
+//! 3. [`ProjectSession::warm_prep`] — stdlib-interface seed + the served
+//!    check rows (throw facts, callable-throws fragments, diagnostics blobs)
+//!    of an unchanged project.
 //! 4. [`ProjectSession::prime`] — parallel per-file semantic-index prime for
 //!    commands that query whole-package aggregates without running the check
-//!    collectors (which prime internally): `describe`.
+//!    collectors (which prime internally): `generate`.
 
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use baml_project::ProjectDatabase;
+use baml_db::{ProjectDatabase, SourceRoot};
 
 use crate::{
-    bytecode_cache::{CacheContext, ReusePlan},
-    project_load::{ResolvedProject, build_db_from_sources, resolve_project_sources},
+    bytecode_cache::{CacheContext, ServedChecks},
+    project_load::{ResolvedProject, build_db_from_sources, resolve_project_sources, workspace_db},
 };
 
 /// How a command participates in the bytecode cache.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CacheUse {
-    /// Read the warm seeds and store artifacts after a successful compile —
-    /// the `run`/`check`/`pack` keyspace (`emit_test_cases: false`).
+    /// Read warm seeds and store artifacts after a successful compile.
     ReadWrite,
-    /// Same, in the `baml test` keyspace (`emit_test_cases: true`).
-    ReadWriteTests,
     /// Consume warm seeds, never store: introspection commands
-    /// (`describe`, `generate`). Shares the run/check keyspace.
+    /// (`generate`). Shares the run/check keyspace.
     ReadOnly,
     /// No cache at all (projectless fallback, tests).
     Off,
 }
 
-impl CacheUse {
-    fn emit_test_cases(self) -> bool {
-        matches!(self, CacheUse::ReadWriteTests)
-    }
-}
-
 /// The state of the warm-database preamble after [`ProjectSession::warm_prep`].
 pub(crate) struct SessionWarmth {
-    pub(crate) reuse_plan: Option<ReusePlan>,
+    /// The served check rows (`None` when the project changed since the last
+    /// compile, so every file is checked honestly).
+    pub(crate) served: Option<ServedChecks>,
     /// Whether the stdlib typed interface was served from the cache —
     /// storing commands skip re-writing it in that case.
     pub(crate) stdlib_interface_hit: bool,
@@ -67,6 +61,9 @@ pub(crate) struct SessionWarmth {
 pub(crate) struct ProjectSession {
     pub(crate) resolved: ResolvedProject,
     pub(crate) db: ProjectDatabase,
+    /// The user's package — the `Workspace` root the project's sources were
+    /// added under — which every command-level query is asked of.
+    pub(crate) package: SourceRoot,
     pub(crate) cache: Option<CacheContext>,
 }
 
@@ -76,10 +73,11 @@ impl ProjectSession {
     /// commands own their empty-project error text.
     pub(crate) fn open(from: Option<&Path>, cache_use: CacheUse) -> Result<Self> {
         let resolved = resolve_project_sources(from)?;
-        Ok(Self::from_resolved(resolved, cache_use))
+        Self::from_resolved(resolved, cache_use)
     }
 
-    /// Lenient open for introspection commands (`describe`): never
+    /// Lenient open for introspection commands (`describe`, once it returns
+    /// with the IDE layer): never
     /// fails on a missing or invalid `baml.toml`. Inside a project the
     /// manifest is read raw (its bytes still key the cache, unvalidated);
     /// outside any project the session is an empty database rooted at the
@@ -87,11 +85,10 @@ impl ProjectSession {
     /// *something* to work with.
     pub(crate) fn open_lenient(from: Option<&Path>, cache_use: CacheUse) -> Result<Self> {
         match crate::project_load::resolve_project_sources_lenient(from)? {
-            Some(resolved) => Ok(Self::from_resolved(resolved, cache_use)),
+            Some(resolved) => Self::from_resolved(resolved, cache_use),
             None => {
                 let root = crate::project_load::projectless_search_dir(from)?;
-                let mut db = ProjectDatabase::new();
-                db.set_project_root(&root);
+                let (db, package) = workspace_db(&root);
                 Ok(Self {
                     resolved: ResolvedProject {
                         root,
@@ -99,95 +96,79 @@ impl ProjectSession {
                         files: Vec::new(),
                     },
                     db,
+                    package,
                     cache: None,
                 })
             }
         }
     }
 
-    fn from_resolved(resolved: ResolvedProject, cache_use: CacheUse) -> Self {
-        let db = build_db_from_sources(&resolved, |_| {});
+    fn from_resolved(resolved: ResolvedProject, cache_use: CacheUse) -> Result<Self> {
         let cache = match cache_use {
             CacheUse::Off => None,
-            _ => CacheContext::open(&resolved, cache_use.emit_test_cases()),
+            _ => {
+                crate::bytecode_cache::validate_env()?;
+                CacheContext::open(&resolved)
+            }
         };
-        Self {
+        let (db, package) = build_db_from_sources(&resolved, |_| {});
+        Ok(Self {
             resolved,
             db,
+            package,
             cache,
-        }
+        })
     }
 
     /// The whole-program cache hit, for commands that execute or package the
     /// compiled program. Call before [`Self::warm_prep`]: a hit makes the
-    /// warm preamble unnecessary. Gated off under `BAML_CACHE_VERIFY` so the
+    /// warm preamble unnecessary. Gated off under `DEV_BAML_BUILD_CACHE_VERIFY=always` so the
     /// verify tripwire always exercises the full compile path.
     pub(crate) fn try_cached_program(&self) -> Option<bex_vm_types::Program> {
         if CacheContext::verify_enabled() {
             return None;
         }
-        self.cache.as_ref().and_then(CacheContext::load)
+        let mut program = self.cache.as_ref().and_then(CacheContext::load)?;
+        // `source_content_hash` is in-memory metadata (`borsh(skip)`), so a
+        // cached program arrives without it. The cache hit just validated
+        // every project file byte-for-byte against this database, so
+        // recomputing here restores exactly the identity a fresh compile
+        // would have stamped.
+        program.source_content_hash = Some(
+            baml_db::baml_compiler2_emit::project_source_content_hash(&self.db, self.package),
+        );
+        Some(program)
     }
 
-    /// Seed the stdlib typed interface and prepare the per-file reuse plan —
+    /// Seed the stdlib typed interface and install the served check rows —
     /// the identical warm-database setup for every cache-participating
     /// command. A no-op (all-`None`) session without a cache.
     pub(crate) fn warm_prep(&mut self) -> SessionWarmth {
         let Some(ctx) = &self.cache else {
             return SessionWarmth {
-                reuse_plan: None,
+                served: None,
                 stdlib_interface_hit: false,
             };
         };
-        let prep = ctx.prepare_warm_db(&mut self.db);
+        let prep = ctx.prepare_warm_db(&mut self.db, self.package);
         SessionWarmth {
-            reuse_plan: prep.reuse_plan,
+            served: prep.served,
             stdlib_interface_hit: prep.stdlib_interface_hit,
         }
     }
 
-    /// Variant of [`Self::warm_prep`] for read-only introspection
-    /// (`describe`): installs the stdlib-interface seed always, and
-    /// the per-file throws seeds only on a **no-delta** plan — where they are
-    /// byte-for-byte the stored values and the serve-time gate is a proven
-    /// tautology. On a project with edits, introspection simply derives
-    /// honestly (no seeds, no gate, no staleness surface); the parallel
-    /// index prime keeps that fast.
-    pub(crate) fn warm_prep_seeds_only(&mut self) -> SessionWarmth {
-        let Some(ctx) = &self.cache else {
-            return SessionWarmth {
-                reuse_plan: None,
-                stdlib_interface_hit: false,
-            };
-        };
-        let stdlib_interface_hit = ctx.seed_stdlib_interface(&mut self.db);
-        let reuse_plan = ctx.plan_reuse(&self.db).and_then(|mut plan| {
-            if !plan.no_delta {
-                return None;
-            }
-            self.db
-                .set_seeded_throw_facts(std::mem::take(&mut plan.seeded_throw_facts));
-            self.db
-                .set_seeded_callable_throws(std::mem::take(&mut plan.seeded_callable_throws));
-            Some(plan)
-        });
-        SessionWarmth {
-            reuse_plan,
-            stdlib_interface_hit,
-        }
-    }
-
     /// Parallel per-file semantic-index prime. Commands that query
-    /// whole-package aggregates *outside* the check collectors (`describe`)
+    /// whole-package aggregates *outside* the check collectors (`generate`)
     /// call this so the aggregate fold is parallel-fed instead of a
     /// serial parse of the project. Harmless to call twice.
     pub(crate) fn prime(&self) {
-        baml_project::prime_file_indexes_parallel(&self.db);
+        baml_db::prime_file_indexes_parallel(&self.db);
     }
 
-    /// A fresh, un-seeded database over the same sources — the honest
-    /// baseline the sampled verify oracle compares served artifacts against.
-    pub(crate) fn honest_db(&self) -> ProjectDatabase {
+    /// A fresh, un-seeded database over the same sources, with the package
+    /// they were added under — the honest baseline the sampled verify oracle
+    /// compares served artifacts against.
+    pub(crate) fn honest_db(&self) -> (ProjectDatabase, SourceRoot) {
         build_db_from_sources(&self.resolved, |_| {})
     }
 

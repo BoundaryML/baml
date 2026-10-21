@@ -264,11 +264,11 @@ function judge(text: string, label: Label) -> Verdict {
 
 // Data-driven: load rows from a fixture (or fetch them), one case per row.
 testset "from_fixture" {
-  let cases = baml.json.from_string<Case[]>(#"[
-    { "name": "loved",   "text": "I love this", "expected": "positive" },
-    { "name": "hated",   "text": "I hate this", "expected": "negative" },
-    { "name": "neutral", "text": "it is okay",  "expected": "neutral" }
-  ]"#);
+  let cases = baml.json.to<Case[]>([
+    { "name": "loved", "text": "I love this", "expected": "positive" },
+    { "name": "hated", "text": "I hate this", "expected": "negative" },
+    { "name": "neutral", "text": "it is okay", "expected": "neutral" },
+  ]);
 
   for (let c in cases) {
     testset c.name {

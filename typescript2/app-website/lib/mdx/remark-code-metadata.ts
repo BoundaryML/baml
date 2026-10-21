@@ -1,5 +1,5 @@
-import { type Code, type Root } from 'mdast';
-import { type Plugin } from 'unified';
+import type { Code, Root } from 'mdast';
+import type { Plugin } from 'unified';
 import { visit } from 'unist-util-visit';
 
 /**

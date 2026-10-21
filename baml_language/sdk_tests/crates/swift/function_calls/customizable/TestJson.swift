@@ -35,6 +35,12 @@ final class TestJson: XCTestCase {
         XCTAssertEqual(try Baml.go_json_tests.json_kind(value: Json([Json(1)])), "array")
         XCTAssertEqual(try Baml.go_json_tests.json_kind(value: Json("text")), "string")
         XCTAssertEqual(try Baml.go_json_tests.json_kind(value: Json(3)), "other")
+        XCTAssertEqual(
+            try Baml.go_json_tests.json_kind(
+                value: Json(try BamlBigInt(hexadecimal: "18ee90ff6c373e0ee4e3f0ad2"))
+            ),
+            "other"
+        )
 
         XCTAssertEqual(
             try Baml.go_json_tests.json_path_string(value: object, selector: ".type"),
@@ -57,10 +63,10 @@ final class TestJson: XCTestCase {
             _ = try Baml.go_json_tests.json_path_string(value: object, selector: ".absent")
             XCTFail("expected BamlError")
         } catch let error as BamlError {
-            let decoded = try error.value(as: Baml.baml.json.JsonPathError.self)
+            let decoded = try error.value(as: Baml.baml.json.PathError.self)
             XCTAssertTrue(
                 decoded.message.contains("missing field"),
-                "unexpected JsonPathError message: \(decoded.message)"
+                "unexpected PathError message: \(decoded.message)"
             )
         }
     }

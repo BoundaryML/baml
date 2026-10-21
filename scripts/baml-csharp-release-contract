@@ -26,7 +26,7 @@ VERSION_RE = re.compile(
 )
 GENERATED_SOURCE_SENTINELS = (
     "Baml/Generated/BamlProgram.g.cs",
-    "CsharpSlice/Functions.g.cs",
+    "CsharpBasicCalls/Functions.g.cs",
 )
 
 
@@ -357,9 +357,12 @@ def stage_native(args: argparse.Namespace) -> None:
         sidecars = [
             path for path in files if path.name == f"{entry['producer_asset']}.sha256"
         ]
-        if len(files) != 2 or len(sources) != 1 or len(sidecars) != 1:
+        licenses = [
+            path for path in files if path.name == f"{entry['producer_asset']}.LICENSE"
+        ]
+        if len(files) != 3 or len(sources) != 1 or len(sidecars) != 1 or len(licenses) != 1:
             fail(
-                f"{artifact_name} must contain exactly the native library and "
+                f"{artifact_name} must contain exactly the native library, license and "
                 f"checksum sidecar; found {[path.name for path in files]}"
             )
         source = sources[0]

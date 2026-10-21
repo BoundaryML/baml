@@ -15,6 +15,37 @@ Usage: install.sh [--channel canary|nightly] [--version VERSION] [--wrapper-only
 USAGE
 }
 
+detect_linux_libc() {
+  libc_version=""
+  if command -v getconf >/dev/null 2>&1; then
+    libc_version="$(getconf GNU_LIBC_VERSION 2>/dev/null || true)"
+  fi
+  case "$libc_version" in
+    glibc*) printf '%s\n' gnu; return 0 ;;
+  esac
+
+  ldd_version=""
+  if command -v ldd >/dev/null 2>&1; then
+    ldd_version="$(ldd --version 2>&1 || true)"
+  fi
+  if printf '%s\n' "$ldd_version" | grep -Eiq 'musl'; then
+    printf '%s\n' musl
+    return 0
+  fi
+  if printf '%s\n' "$ldd_version" | grep -Eiq 'glibc|gnu libc'; then
+    printf '%s\n' gnu
+    return 0
+  fi
+  if [ -f /etc/alpine-release ]; then
+    printf '%s\n' musl
+    return 0
+  fi
+
+  # The musl wrapper is self-contained, so it is the safe bootstrap fallback
+  # when a minimal Linux environment exposes neither getconf nor a useful ldd.
+  printf '%s\n' musl
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --channel) CHANNEL="${2:?missing channel}"; shift 2 ;;
@@ -37,8 +68,14 @@ system="$(uname -s)"
 case "$system:$machine" in
   Darwin:arm64) target="aarch64-apple-darwin" ;;
   Darwin:x86_64) target="x86_64-apple-darwin" ;;
-  Linux:aarch64|Linux:arm64) target="aarch64-unknown-linux-gnu" ;;
-  Linux:x86_64) target="x86_64-unknown-linux-gnu" ;;
+  Linux:aarch64|Linux:arm64)
+    libc="$(detect_linux_libc)" || exit 2
+    target="aarch64-unknown-linux-$libc"
+    ;;
+  Linux:x86_64)
+    libc="$(detect_linux_libc)" || exit 2
+    target="x86_64-unknown-linux-$libc"
+    ;;
   *) echo "error: unsupported platform $system $machine" >&2; exit 2 ;;
 esac
 

@@ -68,15 +68,15 @@ class TypeVariety {
 }
 
 // ===== Block attribute =====
-class DynamicClass {
+class BlockAttributedClass {
     name: string
-    @@dynamic
+    @@streaming
 }
 
 // ===== Multiple block attributes =====
 class MultiBlockAttr {
     name string
-    @@dynamic
+    @@first
     @@streaming
 }
 

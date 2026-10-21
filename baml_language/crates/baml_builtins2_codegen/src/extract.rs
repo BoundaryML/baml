@@ -6,7 +6,7 @@
 //! `NativeBuiltin` record. The CST is also retained per file for
 //! `//baml:mut_self`, `//baml:vm`, and `//baml:mut_vm` directive scanning.
 
-use baml_base::FileId;
+use baml_base::{FileId, native_key_spelling};
 use baml_compiler_diagnostics::ToDiagnostic;
 use baml_compiler_syntax::{NodeOrToken, SyntaxKind, SyntaxNode};
 use baml_compiler2_ast::ast::{
@@ -47,13 +47,32 @@ impl std::fmt::Display for ExtractNativeBuiltinsError {
 
 impl std::error::Error for ExtractNativeBuiltinsError {}
 
+/// Stdlib packages outside `baml` that also declare `$rust_io_function`
+/// sys-ops, and so contribute to the generated IO dispatch surface (`SysOp`,
+/// the `IoNamespace*` traits, `RuntimeIo`).
+///
+/// Scanning is deliberately narrow: only the files that actually contain a
+/// `$rust_io_function` are parsed, and only their IO builtins and class defs
+/// are kept — a package's `$rust_function` (VM) builtins keep coming from its
+/// own per-package extraction (`extract_native_builtins_for`, used by
+/// `bex_vm`'s build script), so nothing else about these packages is dragged
+/// into the IO codegen.
+const EXTRA_IO_PACKAGES: &[&str] = &["ai", "reflect"];
+
+/// Marker whose presence in a file's source selects it for the extra-package
+/// IO scan (see `EXTRA_IO_PACKAGES`).
+const IO_BUILTIN_MARKER: &str = "$rust_io_function";
+
 /// Parse, lower, and extract all `$rust_function` and `$rust_io_function` builtins
 /// from the `.baml` stdlib.
 ///
 /// Returns `(vm_builtins, io_builtins, class_defs)`:
-/// - `vm_builtins`: `$rust_function` builtins (synchronous, run inline in VM)
+/// - `vm_builtins`: `$rust_function` builtins of the `baml` package
+///   (synchronous, run inline in VM)
 /// - `io_builtins`: `$rust_io_function` builtins (async, dispatched via engine)
-/// - `class_defs`: class definitions with fields (for view/owned struct generation)
+///   of the `baml` package plus `EXTRA_IO_PACKAGES`
+/// - `class_defs`: `baml`-package class definitions with fields (for view/owned
+///   struct generation)
 ///
 /// Fails with [`ExtractNativeBuiltinsError`] if any file has parse errors or non-empty HIR
 /// diagnostics (so codegen never runs on a silently broken stdlib).
@@ -61,7 +80,22 @@ impl std::error::Error for ExtractNativeBuiltinsError {}
 pub fn extract_native_builtins()
 -> Result<(Vec<NativeBuiltin>, Vec<NativeBuiltin>, Vec<NativeClassDef>), ExtractNativeBuiltinsError>
 {
-    extract_native_builtins_for(baml_builtins2::PACKAGE_BAML)
+    let (vm_builtins, mut io_builtins, mut class_defs) =
+        extract_native_builtins_for(baml_builtins2::PACKAGE_BAML)?;
+    for package in EXTRA_IO_PACKAGES {
+        let (_vm, extra_io, extra_classes) =
+            extract_scoped(package, |f| f.contents.contains(IO_BUILTIN_MARKER))?;
+        io_builtins.extend(extra_io);
+        // Classes declared alongside extra-package IO builtins (e.g. the
+        // `ai.Context` render-context surface) participate in owned/view
+        // struct generation so receiver methods and typed returns marshal
+        // through generated structs, exactly like `baml`-package classes.
+        // `filter_io_class_defs` still drops anything in a namespace without
+        // IO builtins, and `sys_op_variant_name` keys are package-qualified,
+        // so this cannot collide with `baml` names.
+        class_defs.extend(extra_classes);
+    }
+    Ok((vm_builtins, io_builtins, class_defs))
 }
 
 /// [`extract_native_builtins`] scoped to one stdlib package, so each package
@@ -71,12 +105,26 @@ pub fn extract_native_builtins_for(
     package: &str,
 ) -> Result<(Vec<NativeBuiltin>, Vec<NativeBuiltin>, Vec<NativeClassDef>), ExtractNativeBuiltinsError>
 {
+    extract_scoped(package, |_| true)
+}
+
+/// [`extract_native_builtins_for`] restricted to the package's files matching
+/// `keep_file`.
+#[allow(clippy::type_complexity)]
+fn extract_scoped(
+    package: &str,
+    keep_file: impl Fn(&baml_builtins2::BuiltinFile) -> bool,
+) -> Result<(Vec<NativeBuiltin>, Vec<NativeBuiltin>, Vec<NativeClassDef>), ExtractNativeBuiltinsError>
+{
     let mut vm_builtins = Vec::new();
     let mut io_builtins = Vec::new();
     let mut class_defs = Vec::new();
     let mut diagnostic_lines: Vec<String> = Vec::new();
 
-    for builtin_file in baml_builtins2::ALL.iter().filter(|f| f.package == package) {
+    for builtin_file in baml_builtins2::ALL
+        .iter()
+        .filter(|f| f.package == package && keep_file(f))
+    {
         let path = builtin_file.virtual_path();
         // Real filesystem path for diagnostic messages (clickable in editors).
         let diag_path = format!(
@@ -163,6 +211,7 @@ pub fn extract_native_builtins_for(
                 Item::ImplementsFor(impl_def) => {
                     extract_from_implements_for(
                         impl_def,
+                        &items,
                         &namespace_prefix,
                         &cst_root,
                         &path,
@@ -219,15 +268,17 @@ fn extract_from_class(
     // Builtin methods may be declared directly on the class or inside an
     // `implements I { ... }` block (BEP-044) — e.g. the `random.Rng`
     // implementors put their `$rust_function` / `$rust_io_function` methods in
-    // an `implements Rng { ... }` block. A method inside `implements I` is named
-    // `{ns}.{Class}.{I}.{method}` at runtime (matching MIR's
-    // `scoped_implements_method_name`), so it carries the interface qualifier; a
-    // direct method is just `{ns}.{Class}.{method}`.
+    // an `implements Rng { ... }` block. A method inside `implements I` is an
+    // impl-block method like any other and is keyed `{ns}.{I}$for${Class}.{method}`
+    // (matching MIR's `native_key_for` — the KEY partner; `definition_display_name`
+    // renders the separate `<(target as iface)>` DISPLAY spelling); a direct
+    // method is just `{ns}.{Class}.{method}`.
     let direct = class_def.methods.iter().map(|m| (m, None));
     let in_impl = class_def.implements.iter().flat_map(|b| {
-        // The interface `TypeExpr`'s `Display` is the exact form MIR uses to
-        // build the method's fully-qualified name, so reuse it verbatim.
-        let iface = b.target.to_string();
+        // The interface `TypeExpr`'s `Display` is the exact form MIR keys
+        // on, with a written `root.` spelled as the package — through the
+        // same function MIR uses, so the two cannot drift.
+        let iface = native_key_spelling(package_of(namespace_prefix), &b.target.to_string());
         b.methods.iter().map(move |m| (m, Some(iface.clone())))
     });
     for (method, iface_qualifier) in direct.chain(in_impl) {
@@ -248,15 +299,16 @@ fn extract_from_class(
             }
         }
 
-        let path = match &iface_qualifier {
-            Some(iface) => {
-                format!(
-                    "{namespace_prefix}.{class_name}.{iface}.{}",
-                    method.name.as_str()
-                )
-            }
-            None => format!("{namespace_prefix}.{class_name}.{}", method.name.as_str()),
+        // ONE construction for the class segment; the path derives from it
+        // so the two can never drift.
+        let class_segment = match &iface_qualifier {
+            Some(iface) => format!("{iface}$for${class_name}"),
+            None => class_name.to_string(),
         };
+        let path = format!(
+            "{namespace_prefix}.{class_segment}.{}",
+            method.name.as_str()
+        );
         let fn_name = path_to_fn_name(&path);
 
         let has_self = method
@@ -301,7 +353,7 @@ fn extract_from_class(
 
         // Always set receiver for class methods — even static methods (no `self`)
         // need it for dispatch routing. The runtime path is
-        // "baml.sap.ParseCache.new" which dispatches via class name.
+        // "baml.sap._ParseCache._new" which dispatches via class name.
         let receiver_type = if !has_self {
             ReceiverType::Static
         } else if is_mut {
@@ -311,16 +363,16 @@ fn extract_from_class(
         };
         let receiver = Some(Receiver {
             class_name: class_name.to_string(),
+            // The prefix's first segment is the PACKAGE (`baml.media`,
+            // `reflect.array`); the receiver namespace is everything after it.
             namespace: namespace_prefix
-                .strip_prefix("baml.")
-                .unwrap_or("")
+                .split_once('.')
+                .map_or("", |(_, namespaces)| namespaces)
                 .to_string(),
-            // Mirrors `extract_class_fields`: dedicated-variant types and
-            // field-less (opaque/marker) classes get no `view::` struct.
-            instance_backed: !matches!(class_name, "Array" | "Map" | "String" | "Uint8Array")
-                && !class_def.fields.is_empty(),
+            instance_backed: class_is_instance_backed(class_def, namespace_prefix),
             class_generics: class_generics.clone(),
             receiver_type,
+            builtin: package_of(namespace_prefix) == baml_builtins2::PACKAGE_BAML,
         });
         let params = if has_self {
             extract_params_skip_self(method, &all_generics)
@@ -330,6 +382,7 @@ fn extract_from_class(
                 .iter()
                 .map(|p| Param {
                     name: p.name.as_str().to_string(),
+                    empty_map_default: is_empty_map_default(method, p),
                     ty: p
                         .type_expr
                         .as_ref()
@@ -347,6 +400,8 @@ fn extract_from_class(
 
         let builtin = NativeBuiltin {
             path,
+            namespace: namespace_only(namespace_prefix),
+            class_segment: Some(class_segment),
             fn_name,
             params,
             return_type,
@@ -367,10 +422,25 @@ fn extract_from_class(
     }
 }
 
+/// Whether `class_def`'s values are `Object::Instance`s with a generated `view::`
+/// struct. The `baml` package's classes that keep dedicated `Object` variants
+/// (Array, Map, String, `Uint8Array`) are not, and neither are field-less
+/// classes (pure namespace markers, method-only and opaque classes). The ONE
+/// rule behind [`extract_class_fields`] and every receiver built for the class,
+/// so a receiver can never promise a view struct that was not generated.
+fn class_is_instance_backed(class_def: &ClassDef, namespace_prefix: &str) -> bool {
+    let dedicated_variant = package_of(namespace_prefix) == baml_builtins2::PACKAGE_BAML
+        && matches!(
+            class_def.name.as_str(),
+            "Array" | "Map" | "String" | "Uint8Array"
+        );
+    !dedicated_variant && !class_def.fields.is_empty()
+}
+
 /// Extract field definitions from a class, producing a `NativeClassDef`.
 ///
-/// Returns `None` for classes that keep dedicated `Object` variants (Array, Map, String, `Uint8Array`)
-/// since they don't use `Object::Instance`.
+/// Returns `None` for classes that are not instance-backed
+/// ([`class_is_instance_backed`]).
 fn extract_class_fields(
     class_def: &ClassDef,
     namespace_prefix: &str,
@@ -378,14 +448,7 @@ fn extract_class_fields(
 ) -> Option<NativeClassDef> {
     let class_name = class_def.name.as_str();
 
-    // Skip classes with dedicated Object variants — they are not Instance-based.
-    match class_name {
-        "Array" | "Map" | "String" | "Uint8Array" => return None,
-        _ => {}
-    }
-
-    // Skip classes with no fields (pure namespace markers or method-only classes).
-    if class_def.fields.is_empty() {
+    if !class_is_instance_backed(class_def, namespace_prefix) {
         return None;
     }
 
@@ -470,6 +533,7 @@ fn extract_from_free_function(
         .iter()
         .map(|p| Param {
             name: p.name.as_str().to_string(),
+            empty_map_default: is_empty_map_default(func_def, p),
             ty: p
                 .type_expr
                 .as_ref()
@@ -486,6 +550,8 @@ fn extract_from_free_function(
 
     let builtin = NativeBuiltin {
         path,
+        namespace: namespace_only(namespace_prefix),
+        class_segment: None,
         fn_name,
         params,
         return_type,
@@ -508,31 +574,56 @@ fn extract_from_free_function(
 /// Extract `$rust_function` methods from a top-level `implement Interface for Type`
 /// block (e.g. `implement Equals for int { function eq(...) { $rust_function } }`).
 ///
-/// These are dispatched at runtime under the synthetic class name
-/// `<Interface>$for$<for_target>`, which MUST match the name the MIR lowering
-/// assigns to such methods (see `baml_compiler2_mir::lower`'s
-/// `definition_item_ref` / `{iface}$for${for}` formatting) so that
+/// These are dispatched at runtime under the synthetic class segment
+/// `<Interface>$for$<for_target>`, which MUST match the native KEY the MIR
+/// lowering mints for such methods (`baml_compiler2_mir::native_key_for` —
+/// the `{iface}$for${for}` scheme; display spelling is separate) so that
 /// `get_native_fn` resolves the function the VM looks up.
 ///
 /// The receiver (`self`) and any `Self`-typed parameters are mapped to the
-/// `for` target's primitive class so the existing receiver/argument extraction
-/// machinery applies (`int` → `i64`, `bigint` → `Arc<BigInt>`, etc.). Only
-/// blocks implemented for a built-in primitive or container are native-backed;
-/// blocks for user-defined types compile as ordinary bytecode and are skipped.
+/// `for` target's receiver class so the existing receiver/argument extraction
+/// machinery applies (`int` → `i64`, `bigint` → `Arc<BigInt>`, a class → its
+/// instance, etc.). A native method's block must be implemented for a built-in
+/// primitive or container, or for a class declared in the same file
+/// ([`ImplReceiver`]); a block whose methods are all ordinary bytecode needs no
+/// receiver and is skipped whatever its target.
 fn extract_from_implements_for(
     impl_def: &ImplementsForDef,
+    items: &[Item],
     namespace_prefix: &str,
     cst_root: &SyntaxNode,
     source_file: &str,
     vm_builtins: &mut Vec<NativeBuiltin>,
     io_builtins: &mut Vec<NativeBuiltin>,
 ) {
-    let Some(recv_class) = receiver_class_for_target(&impl_def.for_target) else {
+    if impl_def
+        .methods
+        .iter()
+        .all(|method| extract_builtin_pipeline(method).is_none())
+    {
         return;
-    };
+    }
+    // A native method with no receiver the codegen can extract would register
+    // nothing, and the VM would fail to resolve it at the first call. Reject
+    // it here instead.
+    let impl_receiver =
+        ImplReceiver::for_target(&impl_def.for_target, items).unwrap_or_else(|| {
+            panic!(
+                "baml codegen error: {source_file}: `implement {} for {}` has a native method, \
+             but its `for` target is neither a built-in primitive/container nor a class \
+             declared in the same file",
+                impl_def.interface_target, impl_def.for_target
+            )
+        });
 
-    // The synthetic class segment must match MIR's `{iface}$for${for}` exactly.
-    let synthetic_class = format!("{}$for${}", impl_def.interface_target, impl_def.for_target);
+    // The synthetic class segment must match MIR's `{iface}$for${for}`
+    // exactly: both spell a written `root.` as the package.
+    let package = package_of(namespace_prefix);
+    let synthetic_class = format!(
+        "{}$for${}",
+        native_key_spelling(package, &impl_def.interface_target.to_string()),
+        native_key_spelling(package, &impl_def.for_target.to_string()),
+    );
 
     let impl_generics: Vec<String> = impl_def
         .generic_params
@@ -544,11 +635,12 @@ fn extract_from_implements_for(
     let self_baml = type_expr_to_baml_type(&impl_def.for_target, &impl_generics);
 
     // Container element comparison reads heap values, so it needs a `&BexVm`;
-    // scalar comparisons operate on `Copy`/`Arc` receivers and need no VM. A
-    // method-level `//baml:vm` / `//baml:mut_vm` directive overrides this default.
-    let default_vm_usage = match recv_class {
-        "Array" | "Map" => VmUsage::Ref,
-        _ => VmUsage::None,
+    // scalar comparisons operate on `Copy`/`Arc` receivers and need no VM, and a
+    // class method says what it needs. A method-level `//baml:vm` /
+    // `//baml:mut_vm` directive overrides this default.
+    let default_vm_usage = match impl_receiver {
+        ImplReceiver::Builtin("Array" | "Map") => VmUsage::Ref,
+        ImplReceiver::Builtin(_) | ImplReceiver::Class(_) => VmUsage::None,
     };
 
     for method in &impl_def.methods {
@@ -606,14 +698,22 @@ fn extract_from_implements_for(
         };
 
         let receiver = Some(Receiver {
-            class_name: recv_class.to_string(),
+            class_name: impl_receiver.class_name().to_string(),
+            // The prefix's first segment is the PACKAGE (`baml.media`,
+            // `reflect.array`); the receiver namespace is everything after it.
             namespace: namespace_prefix
-                .strip_prefix("baml.")
-                .unwrap_or("")
+                .split_once('.')
+                .map_or("", |(_, namespaces)| namespaces)
                 .to_string(),
-            instance_backed: false,
+            instance_backed: impl_receiver.is_instance_backed(namespace_prefix),
             class_generics: impl_generics.clone(),
             receiver_type: ReceiverType::RefSelf,
+            builtin: match impl_receiver {
+                ImplReceiver::Builtin(_) => true,
+                ImplReceiver::Class(_) => {
+                    package_of(namespace_prefix) == baml_builtins2::PACKAGE_BAML
+                }
+            },
         });
 
         let params: Vec<Param> = method
@@ -622,6 +722,7 @@ fn extract_from_implements_for(
             .skip(1) // skip `self`
             .map(|p| Param {
                 name: p.name.as_str().to_string(),
+                empty_map_default: is_empty_map_default(method, p),
                 ty: p
                     .type_expr
                     .as_ref()
@@ -638,6 +739,8 @@ fn extract_from_implements_for(
 
         let builtin = NativeBuiltin {
             path,
+            namespace: namespace_only(namespace_prefix),
+            class_segment: Some(synthetic_class.clone()),
             fn_name,
             params,
             return_type,
@@ -658,22 +761,61 @@ fn extract_from_implements_for(
     }
 }
 
-/// Map a `for` target type expression to the receiver class name whose
-/// extraction logic the codegen already knows. Returns `None` for targets that
-/// are not native-backed primitives/containers.
-fn receiver_class_for_target(ty: &TypeExpr) -> Option<&'static str> {
-    Some(match &ty.kind {
-        TypeExprKind::Int { .. } => "Int",
-        TypeExprKind::Bigint { .. } => "Bigint",
-        TypeExprKind::Float { .. } => "Float",
-        TypeExprKind::Bool { .. } => "Bool",
-        TypeExprKind::Null { .. } => "Null",
-        TypeExprKind::String { .. } => "String",
-        TypeExprKind::Uint8Array { .. } => "Uint8Array",
-        TypeExprKind::List { .. } => "Array",
-        TypeExprKind::Map { .. } => "Map",
-        _ => return None,
-    })
+/// What `self` is in an `implement ... for <target>` block's native methods:
+/// the receiver the codegen generates extraction for.
+#[derive(Clone, Copy)]
+enum ImplReceiver<'a> {
+    /// A built-in primitive or container, by the receiver class name whose
+    /// extraction logic the codegen already knows.
+    Builtin(&'static str),
+    /// A class declared in the same file as the block, so its receiver is the
+    /// one [`extract_from_class`] builds for the class's own methods.
+    Class(&'a ClassDef),
+}
+
+impl<'a> ImplReceiver<'a> {
+    /// The receiver for a `for` target type expression, or `None` when the
+    /// target is neither a primitive/container nor a class among `items` (the
+    /// items of the block's own file).
+    fn for_target(ty: &TypeExpr, items: &'a [Item]) -> Option<Self> {
+        Some(match &ty.kind {
+            TypeExprKind::Int => Self::Builtin("Int"),
+            TypeExprKind::Bigint => Self::Builtin("Bigint"),
+            TypeExprKind::Float => Self::Builtin("Float"),
+            TypeExprKind::Bool => Self::Builtin("Bool"),
+            TypeExprKind::Null => Self::Builtin("Null"),
+            TypeExprKind::String => Self::Builtin("String"),
+            TypeExprKind::Uint8Array => Self::Builtin("Uint8Array"),
+            TypeExprKind::List { .. } => Self::Builtin("Array"),
+            TypeExprKind::Map { .. } => Self::Builtin("Map"),
+            TypeExprKind::Path { path, .. } => {
+                let [name] = path.segments() else {
+                    return None;
+                };
+                return items.iter().find_map(|item| match item {
+                    Item::Class(class_def) if class_def.name == *name => {
+                        Some(Self::Class(class_def))
+                    }
+                    _ => None,
+                });
+            }
+            _ => return None,
+        })
+    }
+
+    fn class_name(self) -> &'a str {
+        match self {
+            Self::Builtin(name) => name,
+            Self::Class(class_def) => class_def.name.as_str(),
+        }
+    }
+
+    fn is_instance_backed(self, namespace_prefix: &str) -> bool {
+        match self {
+            Self::Builtin(_) => false,
+            Self::Class(class_def) => class_is_instance_backed(class_def, namespace_prefix),
+        }
+    }
 }
 
 /// Like [`type_expr_to_baml_type`] but resolves a `Self` path to `self_baml`
@@ -694,9 +836,7 @@ fn type_expr_to_baml_type_with_self(
 ) -> BamlType {
     let recurse = |inner: &TypeExpr| type_expr_to_baml_type_with_self(inner, generics, self_baml);
     match &ty.kind {
-        TypeExprKind::Path { segments, .. }
-            if segments.len() == 1 && segments[0].as_str() == "Self" =>
-        {
+        TypeExprKind::Path { path, .. } if path.len() == 1 && path[0].as_str() == "Self" => {
             self_baml.clone()
         }
         TypeExprKind::Optional { inner, .. } => BamlType::Optional(Box::new(recurse(inner))),
@@ -707,7 +847,7 @@ fn type_expr_to_baml_type_with_self(
         TypeExprKind::Union { variants, .. } => {
             let non_null: Vec<_> = variants
                 .iter()
-                .filter(|v| !matches!(v.kind, TypeExprKind::Null { .. }))
+                .filter(|v| !matches!(v.kind, TypeExprKind::Null))
                 .collect();
             if non_null.len() == 1 && non_null.len() < variants.len() {
                 BamlType::Optional(Box::new(recurse(non_null[0])))
@@ -747,13 +887,15 @@ fn extract_throws(func: &FunctionDef) -> Option<Vec<String>> {
 #[allow(clippy::redundant_closure_for_method_calls)]
 fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
     match &ty.kind {
-        TypeExprKind::Path { segments, .. } => {
-            let path: Vec<&str> = segments.iter().map(|s| s.as_str()).collect();
+        TypeExprKind::Path {
+            path: type_path, ..
+        } => {
+            let path: Vec<&str> = type_path.iter().map(|s| s.as_str()).collect();
             if path.len() >= 3 && (path[0] == "baml" || path[0] == "root") && path[1] == "errors" {
                 vec![path[2..].join(".")]
             } else {
                 vec![
-                    segments
+                    type_path
                         .iter()
                         .map(|s| s.as_str())
                         .collect::<Vec<_>>()
@@ -768,6 +910,30 @@ fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
     }
 }
 
+/// The package of a `{package}` or `{package}.{ns…}` prefix: the stdlib
+/// package's fixed name, which a native key spells a written `root.` as.
+fn package_of(namespace_prefix: &str) -> &str {
+    namespace_prefix
+        .split_once('.')
+        .map_or(namespace_prefix, |(package, _)| package)
+}
+
+/// The namespace-only part of a `{package}` or `{package}.{ns…}` prefix.
+fn namespace_only(namespace_prefix: &str) -> String {
+    let ns = namespace_prefix
+        .split_once('.')
+        .map_or(String::new(), |(_, rest)| rest.to_string());
+    // The generated dispatch idents (`__dispatch_{ns}`, `IoNamespace{Ns}`)
+    // take the namespace as one identifier segment; a NESTED namespace
+    // would reach `format_ident!` as a dotted string and panic
+    // inscrutably inside syn. Fail here with the actual reason instead.
+    assert!(
+        !ns.contains('.'),
+        "nested builtin namespace `{ns}` is unsupported by the sys-op ident scheme"
+    );
+    ns
+}
+
 /// Convert a dotted path to a Rust function name.
 ///
 /// Examples:
@@ -776,16 +942,28 @@ fn extract_throw_categories(ty: &TypeExpr) -> Vec<String> {
 /// - `"baml.sys.argv"` → `"baml_sys_argv"`
 /// - `"baml.media.Pdf.url"` → `"baml_media_pdf_url"`
 fn path_to_fn_name(path: &str) -> String {
-    path.replace('.', "_").to_lowercase()
+    // `$` appears in impl-block method paths (`{iface}$for${Class}.method`)
+    // and is not a valid identifier character.
+    path.replace(['.', '$'], "_").to_lowercase()
 }
 
 /// Extract parameters from a method, skipping the first `self` parameter.
+fn is_empty_map_default(func: &FunctionDef, param: &baml_compiler2_ast::Param) -> bool {
+    param.default.is_some_and(|default| {
+        matches!(
+            &func.defaults.exprs.exprs[default.expr()],
+            baml_compiler2_ast::Expr::Map { entries } if entries.is_empty()
+        )
+    })
+}
+
 fn extract_params_skip_self(func: &FunctionDef, generics: &[String]) -> Vec<Param> {
     func.params
         .iter()
         .skip(1) // skip `self`
         .map(|p| Param {
             name: p.name.as_str().to_string(),
+            empty_map_default: is_empty_map_default(func, p),
             ty: p
                 .type_expr
                 .as_ref()
@@ -801,14 +979,13 @@ fn extract_params_skip_self(func: &FunctionDef, generics: &[String]) -> Vec<Para
 #[allow(clippy::redundant_closure_for_method_calls)]
 fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
     match &ty.kind {
-        TypeExprKind::Int { .. } => BamlType::Int,
-        TypeExprKind::Bigint { .. } => BamlType::Bigint,
-        TypeExprKind::Float { .. } => BamlType::Float,
-        TypeExprKind::String { .. } => BamlType::String,
-        TypeExprKind::Bool { .. } => BamlType::Bool,
-        TypeExprKind::Null { .. } => BamlType::Null,
-        TypeExprKind::Never { .. } => BamlType::Null,
-        TypeExprKind::Void { .. } => BamlType::Null,
+        TypeExprKind::Int => BamlType::Int,
+        TypeExprKind::Bigint => BamlType::Bigint,
+        TypeExprKind::Float => BamlType::Float,
+        TypeExprKind::String => BamlType::String,
+        TypeExprKind::Bool => BamlType::Bool,
+        TypeExprKind::Null => BamlType::Null,
+        TypeExprKind::Never => BamlType::Null,
 
         TypeExprKind::Media { kind, .. } => {
             // Map MediaKind to the class name string.
@@ -822,7 +999,7 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
             BamlType::Media(name.to_string())
         }
 
-        TypeExprKind::Uint8Array { .. } => BamlType::Uint8Array,
+        TypeExprKind::Uint8Array => BamlType::Uint8Array,
 
         TypeExprKind::Optional { inner, .. } => {
             BamlType::Optional(Box::new(type_expr_to_baml_type(inner, generics)))
@@ -837,10 +1014,10 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
             Box::new(type_expr_to_baml_type(value, generics)),
         ),
 
-        TypeExprKind::Path { segments, .. } => {
+        TypeExprKind::Path { path, .. } => {
             // Single-segment path may be a generic type param or a named type.
-            if segments.len() == 1 {
-                let name = segments[0].as_str();
+            if path.len() == 1 {
+                let name = path[0].as_str();
                 if generics.iter().any(|g| g == name) {
                     BamlType::Generic(name.to_string())
                 } else {
@@ -848,7 +1025,7 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
                 }
             } else {
                 // Multi-segment path (e.g. `baml.errors.Io`) — treat as Named.
-                let name = segments
+                let name = path
                     .iter()
                     .map(|s| s.as_str())
                     .collect::<Vec<_>>()
@@ -860,7 +1037,7 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
         TypeExprKind::Union { variants, .. } => {
             let non_null: Vec<_> = variants
                 .iter()
-                .filter(|v| !matches!(v.kind, TypeExprKind::Null { .. }))
+                .filter(|v| !matches!(v.kind, TypeExprKind::Null))
                 .collect();
             if non_null.len() == 1 && non_null.len() < variants.len() {
                 BamlType::Optional(Box::new(type_expr_to_baml_type(non_null[0], generics)))
@@ -871,12 +1048,12 @@ fn type_expr_to_baml_type(ty: &TypeExpr, generics: &[String]) -> BamlType {
         TypeExprKind::Literal { .. } => BamlType::Named("literal".to_string()),
         TypeExprKind::Function { .. } => BamlType::Named("function".to_string()),
         TypeExprKind::AssociatedTypeProjection { .. }
-        | TypeExprKind::BuiltinUnknown { .. }
-        | TypeExprKind::Unknown { .. }
-        | TypeExprKind::Error { .. }
-        | TypeExprKind::Infer { .. } => BamlType::Named("unknown".to_string()),
-        TypeExprKind::Type { .. } => BamlType::Named("type".to_string()),
-        TypeExprKind::Rust { .. } => BamlType::RustType,
+        | TypeExprKind::Unknown
+        | TypeExprKind::Missing
+        | TypeExprKind::Error
+        | TypeExprKind::Infer => BamlType::Named("unknown".to_string()),
+        TypeExprKind::Type => BamlType::Named("type".to_string()),
+        TypeExprKind::Rust => BamlType::RustType,
     }
 }
 
@@ -1146,7 +1323,8 @@ mod tests {
             .find(|c| c.name == "Request")
             .expect("missing Request");
         assert_eq!(request.namespace_prefix, "baml.http");
-        assert_eq!(request.fields.len(), 4);
+        // method, url, headers, body, timeout, connect_timeout
+        assert_eq!(request.fields.len(), 6);
 
         // The structural prompt lives in the ai package.
         let (_ai_vm, _ai_io, ai_class_defs) = extract_native_builtins_for("ai").unwrap();
@@ -1172,6 +1350,8 @@ mod tests {
     fn test_sys_op_variant_name() {
         let make = |path: &str| NativeBuiltin {
             path: path.to_string(),
+            namespace: String::new(),
+            class_segment: None,
             fn_name: String::new(),
             params: vec![],
             return_type: BamlType::Null,
@@ -1197,9 +1377,22 @@ mod tests {
         assert_eq!(make("baml.sys.panic").sys_op_variant_name(), "BamlSysPanic");
         assert_eq!(make("ai.Prompt.text").sys_op_variant_name(), "AiPromptText");
         assert_eq!(
-            make("baml.prompt.render_output_format").sys_op_variant_name(),
-            "BamlPromptRenderOutputFormat"
+            make("ai.internal.render_output_format").sys_op_variant_name(),
+            "AiInternalRenderOutputFormat"
         );
+    }
+
+    #[test]
+    fn context_controls_resolve_empty_map_defaults_without_a_wrapper_frame() {
+        let (builtins, _, _) = extract_native_builtins_for("trace").unwrap();
+        for path in ["trace.context", "trace.Options.context"] {
+            let builtin = builtins
+                .iter()
+                .find(|builtin| builtin.path == path)
+                .unwrap();
+            assert!(builtin.params[0].empty_map_default, "{path}");
+            assert!(!builtin.params[1].empty_map_default, "{path}");
+        }
     }
 
     #[test]
@@ -1261,11 +1454,13 @@ mod tests {
             .expect("missing Array.push");
         assert!(array_push.receiver.as_ref().unwrap().receiver_type.is_mut());
 
-        let string_length = vm_builtins
+        // `String.length` is a BAML-bodied alias for `char_count`; the native
+        // builtin behind both is `char_count`.
+        let string_char_count = vm_builtins
             .iter()
-            .find(|b| b.path == "baml.String.length")
-            .expect("missing String.length");
-        assert_eq!(string_length.fn_name, "baml_string_length");
+            .find(|b| b.path == "baml.String.char_count")
+            .expect("missing String.char_count");
+        assert_eq!(string_char_count.fn_name, "baml_string_char_count");
 
         let trunc_to_int = vm_builtins
             .iter()
@@ -1300,6 +1495,90 @@ mod tests {
         assert_eq!(string_split.vm_usage, VmUsage::None);
     }
 
+    /// A native method in an `implements ... for <Class>` block is extracted
+    /// under the `{iface}$for${Class}` key MIR mints for it, with the class as
+    /// its receiver — instance-backed exactly when the class's own methods are.
+    /// (No stdlib file has one today, so the block is written here.)
+    #[test]
+    fn impl_block_natives_extract_for_a_class_target() {
+        let source = r#"
+interface Modifier<T, E> {
+    function apply(self, value: T) -> T throws E;
+}
+
+class Limit {
+    _handle: $rust_type,
+}
+
+class Root {}
+
+implements<T, E> Modifier<T, E> for Limit {
+    //baml:mut_vm
+    //baml:fallible
+    function apply(self, value: T) -> T throws E {
+        $rust_function
+    }
+}
+
+implements<T, E> Modifier<T, E> for Root {
+    function apply(self, value: T) -> T throws E {
+        $rust_function
+    }
+}
+"#;
+        let tokens = baml_compiler_lexer::lex_lossless(source, FileId::new(0));
+        let (green, errors) = baml_compiler_parser::parse_file(&tokens);
+        assert!(errors.is_empty(), "the source parses");
+        let cst_root = SyntaxNode::new_root(green);
+        let (items, diags, _) = baml_compiler2_ast::lower_file(&cst_root);
+        assert!(diags.is_empty(), "the source lowers");
+
+        let mut vm_builtins = Vec::new();
+        let mut io_builtins = Vec::new();
+        for item in &items {
+            if let Item::ImplementsFor(impl_def) = item {
+                extract_from_implements_for(
+                    impl_def,
+                    &items,
+                    "test",
+                    &cst_root,
+                    "test.baml",
+                    &mut vm_builtins,
+                    &mut io_builtins,
+                );
+            }
+        }
+        assert!(io_builtins.is_empty());
+        let apply_for = |class: &str| {
+            let path = format!("test.Modifier<T, E>$for${class}.apply");
+            vm_builtins
+                .iter()
+                .find(|b| b.path == path)
+                .unwrap_or_else(|| panic!("missing {path}"))
+        };
+
+        let limit = apply_for("Limit");
+        assert_eq!(
+            limit.class_segment.as_deref(),
+            Some("Modifier<T, E>$for$Limit")
+        );
+        assert_eq!(limit.generics, vec!["T", "E"]);
+        assert_eq!(limit.vm_usage, VmUsage::MutRef);
+        assert!(limit.fallible);
+        let receiver = limit
+            .receiver
+            .as_ref()
+            .expect("impl methods have a receiver");
+        assert_eq!(receiver.class_name, "Limit");
+        assert!(receiver.instance_backed, "`Limit` has a `_handle` field");
+
+        // `Root` declares no fields, so it gets no `view::` struct — from an
+        // impl block just as from the class's own methods.
+        let root = apply_for("Root").receiver.as_ref().unwrap();
+        assert_eq!(root.class_name, "Root");
+        assert!(!root.instance_backed);
+    }
+
     #[test]
     fn test_io_builtin_throws() {
         let (_vm, io_builtins, _class_defs) = extract_native_builtins().unwrap();
@@ -1323,11 +1602,53 @@ mod tests {
             .find(|b| b.path == "baml.http._fetch")
             .unwrap();
         assert_eq!(http_fetch.throws, throws(&["Io", "Timeout"]));
+    }
 
-        let sap_final = io_builtins
+    /// Schema-aligned parsing does no IO, so its entry points are VM natives.
+    #[test]
+    fn test_sap_parse_is_a_vm_builtin() {
+        let (vm_builtins, io_builtins, _class_defs) = extract_native_builtins().unwrap();
+
+        assert!(!io_builtins.iter().any(|b| b.path.starts_with("baml.sap.")));
+        let sap_final = vm_builtins
             .iter()
-            .find(|b| b.path == "baml.sap.__parse_final")
+            .find(|b| b.path == "baml.sap._ParseCache._parse_final")
             .unwrap();
         assert_eq!(sap_final.throws, throws(&["LlmClient"]));
+    }
+
+    /// Keys and glue names derive from the path by `.`/`$` → `_` +
+    /// lowercase — the exact spelling the hand-written sys-op glue in
+    /// `crates/sys_ops` must carry.
+    #[test]
+    fn path_to_fn_name_sanitizes_impl_block_segments() {
+        assert_eq!(
+            super::path_to_fn_name("baml.Array.length"),
+            "baml_array_length"
+        );
+        assert_eq!(super::path_to_fn_name("baml.deep_copy"), "baml_deep_copy");
+        assert_eq!(
+            super::path_to_fn_name("baml.random.Rng$for$SystemRandom.random"),
+            "baml_random_rng_for_systemrandom_random"
+        );
+        assert_eq!(
+            super::path_to_fn_name("baml.fs.baml.io.Read$for$File.read"),
+            "baml_fs_baml_io_read_for_file_read"
+        );
+    }
+
+    #[test]
+    fn namespace_only_strips_the_package() {
+        assert_eq!(super::namespace_only("baml.fs"), "fs");
+        assert_eq!(super::namespace_only("baml"), "");
+        assert_eq!(super::namespace_only("ai.internal"), "internal");
+    }
+
+    /// Nested namespaces would reach `format_ident!` as dotted strings and
+    /// panic inside syn; `namespace_only` refuses them with the reason.
+    #[test]
+    #[should_panic(expected = "nested builtin namespace")]
+    fn namespace_only_rejects_nested_namespaces() {
+        let _ = super::namespace_only("baml.sys.io");
     }
 }

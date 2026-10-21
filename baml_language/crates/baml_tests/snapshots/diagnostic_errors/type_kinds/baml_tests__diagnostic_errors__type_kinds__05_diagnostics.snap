@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0062
+
+  × non-exhaustive match on type reflect.Array | reflect.Class | reflect.Enum | reflect.Function | reflect.Interface | reflect.Literal | reflect.Map | reflect.Primitive | reflect.Union; missing:
+  │ reflect.Function { _ty: _ }
+    ╭─[main.baml:2:3]
+  2 │ ╭─▶   match (t.kind()) {
+  3 │ │       reflect.Class => "class",
+  4 │ │       reflect.Enum => "enum",
+  5 │ │       reflect.Union => "union",
+  6 │ │       reflect.Literal => "literal",
+  7 │ │       reflect.Array => "array",
+  8 │ │       reflect.Map => "map",
+  9 │ │       reflect.Interface => "interface",
+ 10 │ │       reflect.Primitive => "primitive"
+ 11 │ ╰─▶   }
+    ╰────
+
+  [type] E0001
+
+  × reflection kind `reflect.Class` cannot be constructed; obtain it from a type value
+    ╭─[main.baml:15:3]
+ 15 │   reflect.Class {}
+    ·   ────────────────
+    ╰────

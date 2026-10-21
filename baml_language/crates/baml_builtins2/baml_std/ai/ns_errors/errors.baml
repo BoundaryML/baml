@@ -8,23 +8,147 @@ enum RetrySafety {
 }
 
 interface Failure {
-    function retry_safety(self) -> RetrySafety throws never
+    function retry_safety(self) -> RetrySafety throws never;
 }
 
-// Close an untyped error channel at an ai boundary. Classified failures and
-// already-normalized unknown errors retain their identity; everything else is
-// captured in the standard untyped wrapper.
-function normalize(error: unknown) -> Failure | baml.errors.UnknownError throws never {
+/// The closed error channel of the client surface: every typed failure the
+/// stack can produce, the deadline signal that must survive each boundary
+/// untouched, and schema-compilation failures from output-format rendering.
+/// `throws unknown` is not used on this surface; stored callback positions
+/// declare this alias explicitly (TYPE_SYSTEM.md rule 5) and parameter
+/// positions infer per call site.
+///
+/// Cancellation is absent by construction: `baml.panics.Cancelled` is a panic,
+/// so it unwinds past this channel rather than travelling in it. It reaches a
+/// caller only through an arm that names it.
+type InvokeError = Failure
+    | baml.errors.Timeout
+    | baml.errors.UnknownError
+    | reflect.errors.CompilationError;
+
+/// Every raw type the client stack is known to raise before classification.
+/// This union is deliberately CLOSED: when a new throw appears anywhere in
+/// the provider stack, the call into `normalize` stops compiling and the new
+/// type must be added here with an explicit classification below.
+type RaisedInClient = InvokeError
+    | baml.errors.InvalidArgument
+    | reflect.errors.InvalidArgument
+    | baml.errors.Io
+    | baml.errors.ParseError
+    | baml.json.SerializationError
+    | baml.json.ParseError
+    | baml.json.DecodeError
+    | baml.errors.AccessError
+    | baml.errors.Unsupported;
+
+/// The classifying gate at every client boundary. Nothing is wrapped in
+/// UnknownError here: each raw infrastructure type maps to a typed Failure,
+/// and UnknownError only passes through when a host boundary already
+/// produced one. Classifications:
+///   InvalidArgument / ParseError / baml.json.SerializationError / AccessError /
+///   Unsupported -> InvalidRequest
+///     (request construction or client configuration bug; not retryable)
+///   Io -> NetworkFailure (transport-adjacent; safely retryable)
+///   baml.json.ParseError / baml.json.DecodeError -> InvalidResponse
+///     (malformed provider wire payload)
+///   Timeout / CompilationError / Failure / UnknownError -> as-is
+function normalize(error: RaisedInClient) -> InvokeError throws never {
     match (error) {
         let failure: Failure => failure,
-        let unknown_error: baml.errors.UnknownError => unknown_error,
-        _ => baml.errors.UnknownError { data: error, message: [error.to_string()] },
+        let unknown_error: baml.errors.UnknownError => {
+            // A host boundary may have wrapped a genuinely typed Failure;
+            // `from<Failure>` unwraps exactly that case (and never
+            // double-wraps), so typedness survives the host round-trip.
+            baml.errors.UnknownError.from<Failure>(unknown_error)
+        },
+        let timeout: baml.errors.Timeout => timeout,
+        let compilation: reflect.errors.CompilationError => compilation,
+        let invalid: baml.errors.InvalidArgument => {
+            InvalidRequest {
+                provider: "client",
+                status_code: null,
+                detail: invalid.message,
+                raw_body: null,
+            }
+        },
+        let invalid: reflect.errors.InvalidArgument => {
+            InvalidRequest {
+                provider: "client",
+                status_code: null,
+                detail: invalid.message,
+                raw_body: null,
+            }
+        },
+        let parse: baml.errors.ParseError => {
+            InvalidRequest {
+                provider: "client",
+                status_code: null,
+                detail: parse.message,
+                raw_body: null,
+            }
+        },
+        let serialize: baml.json.SerializationError => {
+            InvalidRequest {
+                provider: "client",
+                status_code: null,
+                detail: serialize.message,
+                raw_body: null,
+            }
+        },
+        let access: baml.errors.AccessError => {
+            InvalidRequest {
+                provider: "client",
+                status_code: null,
+                detail: access.message,
+                raw_body: null,
+            }
+        },
+        let unsupported: baml.errors.Unsupported => {
+            InvalidRequest {
+                provider: "client",
+                status_code: null,
+                detail: unsupported.message,
+                raw_body: null,
+            }
+        },
+        let io: baml.errors.Io => {
+            NetworkFailure {
+                status_code: null,
+                provider: "client",
+                detail: io.message,
+                raw_body: null,
+            }
+        },
+        let json_parse: baml.json.ParseError => {
+            InvalidResponse {
+                provider: "client",
+                message: json_parse.message,
+                raw_body: null,
+                status_code: null,
+            }
+        },
+        let json_decode: baml.json.DecodeError => {
+            InvalidResponse {
+                provider: "client",
+                message: json_decode.message,
+                raw_body: null,
+                status_code: null,
+            }
+        },
     }
+}
+
+/// Kept as a named boundary for the invoke-path call sites; identical gate.
+function normalize_invoke(error: RaisedInClient) -> InvokeError throws never {
+    normalize(error)
 }
 
 class RateLimited {
     provider: string,
     retry_after_ms: int?,
+    // The HTTP status that classified here (429); null when constructed
+    // without a wire response.
+    status_code: int?,
     raw_body: string?,
     implements Failure {
         function retry_safety(self) -> RetrySafety {
@@ -36,6 +160,9 @@ class RateLimited {
 class NetworkFailure {
     provider: string,
     detail: string,
+    // The HTTP status that classified here (408/5xx); null for pure
+    // transport failures that never produced a response.
+    status_code: int?,
     raw_body: string?,
     implements Failure {
         function retry_safety(self) -> RetrySafety {
@@ -56,6 +183,33 @@ class InvalidRequest {
     }
 }
 
+/// A user expression inside a prompt template threw while rendering (for
+/// example `${value.to_json()}`). The original error rides `cause`; prompt
+/// rendering is deterministic and nothing has been sent, so retrying without
+/// changing the input cannot succeed — but nothing committed either.
+class PromptRenderError {
+    message: string,
+    cause: unknown,
+    implements Failure {
+        function retry_safety(self) -> RetrySafety {
+            RetrySafety.Safe
+        }
+    }
+}
+
+/// A request preview cannot represent this input without performing the I/O
+/// that the preview API explicitly forbids (for example, downloading a URL
+/// for a provider that has no URL wire form).
+class PreviewUnsupported {
+    provider: string,
+    detail: string,
+    implements Failure {
+        function retry_safety(self) -> RetrySafety {
+            RetrySafety.Safe
+        }
+    }
+}
+
 class Refused {
     provider: string,
     reason: string,
@@ -67,8 +221,59 @@ class Refused {
     }
 }
 
+/// The model's output does not fit the requested output schema.
+/// `raw_output` is the model output; `message` preserves the parser diagnostic
+/// when available. Malformed provider envelopes raise InvalidResponse instead.
 class ParseFailed {
     provider: string,
+    raw_output: string,
+    message: string?,
+    implements Failure {
+        function retry_safety(self) -> RetrySafety {
+            RetrySafety.Safe
+        }
+    }
+}
+
+/// A provider response or event does not conform to its wire format.
+/// This is distinct from model output that fails the requested output schema.
+class InvalidResponse {
+    provider: string,
+    message: string,
+    raw_body: string?,
+    status_code: int?,
+    implements Failure {
+        function retry_safety(self) -> RetrySafety {
+            RetrySafety.Safe
+        }
+    }
+}
+
+/// The provider explicitly reported a failure in a valid response or event.
+/// Native error metadata is retained without inventing an HTTP status for an
+/// in-band error. Retry policy can distinguish transient from permanent errors.
+class ProviderError {
+    provider: string,
+    message: string,
+    error_type: string?,
+    error_code: string?,
+    raw_body: string?,
+    status_code: int?,
+    implements Failure {
+        function retry_safety(self) -> RetrySafety {
+            RetrySafety.Safe
+        }
+    }
+}
+
+/// The provider completed a turn with a terminal reason that is not a valid
+/// successful completion. This stays distinct from ParseFailed: the response
+/// may be syntactically valid but incomplete because the model exhausted its
+/// output budget. Host SDKs can map MaxTokens to their legacy `length` finish
+/// reason without treating it as a schema-validation failure.
+class FinishReasonError {
+    provider: string,
+    finish_reason: root.content.StopReason,
     raw_output: string,
     implements Failure {
         function retry_safety(self) -> RetrySafety {
@@ -77,10 +282,10 @@ class ParseFailed {
     }
 }
 
-// The runner hit its step budget. Unlike the client-layer failures above,
-// this is thrown AFTER turns were committed to the journal — and any tools
-// those turns called have already run. Local state advanced, so a blind
-// replay is not safe.
+/// The runner hit its step budget. Unlike the client-layer failures above,
+/// this is thrown AFTER turns were committed to the journal — and any tools
+/// those turns called have already run. Local state advanced, so a blind
+/// replay is not safe.
 class StepBudgetExceeded {
     steps: int,
     implements Failure {
@@ -90,10 +295,10 @@ class StepBudgetExceeded {
     }
 }
 
-// A tool failed and the run was configured to raise. Thrown after the
-// ToolFailed event is on the record, and a tool is arbitrary user code that
-// may have committed effects before it failed — so this is never blind-
-// replayable, whatever the underlying `cause` reports.
+/// A tool failed and the run was configured to raise. Thrown after the
+/// ToolFailed event is on the record, and a tool is arbitrary user code that
+/// may have committed effects before it failed — so this is never blind-
+/// replayable, whatever the underlying `cause` reports.
 class ToolFailedError {
     id: string,
     name: string,
@@ -106,12 +311,12 @@ class ToolFailedError {
     }
 }
 
-// The selected client cannot stream: it does not implement
-// ai.StreamingClient. Thrown by ai.from_spec when the spec's default
-// client lacks the capability (an explicit override is caught at the call
-// site by its StreamingClient type).
+/// The selected client cannot stream: it does not implement
+/// ai.StreamingClient. Thrown by ai.from_spec when the spec's default
+/// client lacks the capability (an explicit override is caught at the call
+/// site by its StreamingClient type).
 class StreamingUnsupported {
-    client_id: string,
+    requested_model: string,
     implements Failure {
         function retry_safety(self) -> RetrySafety {
             RetrySafety.Safe
@@ -119,13 +324,35 @@ class StreamingUnsupported {
     }
 }
 
-// HTTP status -> classified failure. The classifier attaches the body it
-// received as raw_body, so a failure always carries what the provider said.
-function classify_http(provider: string, status_code: int, body: string) -> Failure {
+/// HTTP status -> classified failure. The classifier attaches the body it
+/// received as raw_body, so a failure always carries what the provider said.
+///
+/// `headers` is the response's header map when the caller has it (ai.wire.send_as
+/// passes `resp.headers`); it is what fills RateLimited.retry_after_ms. It
+/// defaults to null so a caller that only has a status and a body still compiles
+/// — such a call just cannot report a retry delay.
+function classify_http(
+    provider: string,
+    status_code: int,
+    body: string,
+    headers: map<string, string>? = null,
+) -> Failure {
     if (status_code == 429) {
-        RateLimited { provider: provider, retry_after_ms: null, raw_body: body }
+        RateLimited {
+            status_code: null,
+            provider: provider,
+            retry_after_ms: root.internal._retry_after_ms(headers),
+            status_code: status_code,
+            raw_body: body,
+        }
     } else if (status_code == 408 || status_code >= 500) {
-        NetworkFailure { provider: provider, detail: `http ${status_code}`, raw_body: body }
+        NetworkFailure {
+            status_code: null,
+            provider: provider,
+            detail: `http ${status_code}`,
+            status_code: status_code,
+            raw_body: body,
+        }
     } else {
         InvalidRequest {
             provider: provider,

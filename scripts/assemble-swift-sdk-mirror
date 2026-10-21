@@ -48,6 +48,8 @@ def main() -> None:
     # The hand-written runtime package, copied verbatim.
     shutil.copytree(runtime_sources, destination / "Sources" / "BamlBridge", symlinks=False)
 
+    shutil.copy2(repository / "LICENSE", destination / "LICENSE")
+
     # Stamp Package.swift placeholders.
     manifest = destination / "Package.swift"
     text = manifest.read_text(encoding="utf-8")

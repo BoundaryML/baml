@@ -115,7 +115,7 @@ test "stringify_round_trip" {
 
 // ─── Per-record errors ──────────────────────────────────────────────────────
 
-/// A malformed record throws a positional CsvError and the reader resumes.
+/// A malformed record throws a positional Error and the reader resumes.
 function csv_smoke_record_error_resumes() -> string {
     let r = baml.csv.reader("a,b\n1,2\n\"oops,9\n3,4\n", options = baml.csv.ReaderOptions {
         ragged: "pad",
@@ -126,10 +126,10 @@ function csv_smoke_record_error_resumes() -> string {
         let step = {
             match (r.next()) {
                 baml.iter.Done => "done",
-                let rec: baml.csv.CsvRecord => rec.fields()[0],
+                let rec: baml.csv.Record => rec.fields()[0],
             }
         } catch (_) {
-            baml.csv.CsvError { line } => {
+            baml.csv.Error { line } => {
                 bad += 1;
                 "err@" + match (line) { null => "?", let l: int => baml.json.stringify(l) }
             },
@@ -191,7 +191,7 @@ function csv_smoke_typed_returns_probe() -> string {
     let rec_name = {
         match (r.next()) {
             baml.iter.Done => "none",
-            let rec: baml.csv.CsvRecord => rec.get<string>("name") ?? "<null>",
+            let rec: baml.csv.Record => rec.get<string>("name") ?? "<null>",
         }
     };
     let total = 0;

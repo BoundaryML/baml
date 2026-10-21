@@ -1,0 +1,5 @@
+name = "fib32 recursive"
+description = "naive recursive fib(32): about 7 million calls"
+expect = "2178309"
+jobs = 2
+warmup = 1

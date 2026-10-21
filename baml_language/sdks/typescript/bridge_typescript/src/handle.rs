@@ -1,31 +1,17 @@
 //! Node.js handle lifecycle — released via ObjectFinalize.
 //! Mirrors bridge_python/src/handle.rs.
 
-use bridge_cffi::{
-    __testonly_seed_function_ref, __testonly_seed_generic_media, BamlCffiStatus, baml_handle_clone,
-    baml_handle_release,
-};
+use bridge_cffi::{BamlCffiStatus, handle_cffi};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
 pub(crate) fn status_to_napi(context: &str, status: BamlCffiStatus) -> napi::Error {
-    let detail = match status {
-        BamlCffiStatus::Ok => "ok",
-        BamlCffiStatus::InvalidHandle => "invalid handle",
-        BamlCffiStatus::TypeMismatch => "handle type mismatch",
-        BamlCffiStatus::UnsupportedHandleType => "unsupported handle type",
-        BamlCffiStatus::InternalError => "internal error",
-        BamlCffiStatus::UnexpectedNullptr => "unexpected null pointer",
-    };
+    let detail = status.description();
     napi::Error::new(napi::Status::GenericFailure, format!("{context}: {detail}"))
 }
 
 pub(crate) fn handle_clone(key: u64, context: &str) -> napi::Result<u64> {
-    let mut out_key = 0;
-    match unsafe { baml_handle_clone(key, &mut out_key) } {
-        BamlCffiStatus::Ok => Ok(out_key),
-        status => Err(status_to_napi(context, status)),
-    }
+    handle_cffi::clone_handle(key).map_err(|error| status_to_napi(context, error.into()))
 }
 
 /// A u64 handle key split into two i32 halves, mirroring the shape of
@@ -119,30 +105,54 @@ impl BamlHandle {
 
 impl ObjectFinalize for BamlHandle {
     fn finalize(self, _env: Env) -> napi::Result<()> {
-        let _ = unsafe { baml_handle_release(self.key) };
+        let _ = handle_cffi::release_handle(self.key);
         Ok(())
     }
+}
+
+/// Release one owned wire reference that never reached a host wrapper.
+#[napi(js_name = "_releaseWireHandle")]
+pub fn release_wire_handle(key: HandleKey) -> napi::Result<()> {
+    handle_cffi::release_handle(key.to_u64())
+        .map_err(|error| status_to_napi("host-call decode rollback", error.into()))
 }
 
 /// Test-only: seed a `FunctionRef` entry into `HANDLE_TABLE`, returning
 /// `[key, handleType]` so test code can construct a `BamlHandle`.
 #[napi(js_name = "_seedFunctionRefHandle")]
 pub fn seed_function_ref_handle(global_index: u32) -> napi::Result<(HandleKey, i32)> {
-    let mut key = 0;
-    let mut handle_type = 0;
-    match unsafe { __testonly_seed_function_ref(global_index as u64, &mut key, &mut handle_type) } {
-        BamlCffiStatus::Ok => Ok((HandleKey::from_u64(key), handle_type)),
-        status => Err(status_to_napi("_seedFunctionRefHandle", status)),
-    }
+    let parts = handle_cffi::seed_function_ref_handle(u64::from(global_index));
+    Ok((HandleKey::from_u64(parts.key), parts.handle_type))
 }
 
 /// Test-only: seed an `Adt(Media(generic))` entry into `HANDLE_TABLE`.
 #[napi(js_name = "_seedGenericMediaHandle")]
 pub fn seed_generic_media_handle() -> napi::Result<(HandleKey, i32)> {
-    let mut key = 0;
-    let mut handle_type = 0;
-    match unsafe { __testonly_seed_generic_media(&mut key, &mut handle_type) } {
-        BamlCffiStatus::Ok => Ok((HandleKey::from_u64(key), handle_type)),
-        status => Err(status_to_napi("_seedGenericMediaHandle", status)),
-    }
+    let parts = handle_cffi::seed_generic_media_handle();
+    Ok((HandleKey::from_u64(parts.key), parts.handle_type))
+}
+
+/// Test-only: seed an engine-heap (`BexHeapHandle`) entry into `HANDLE_TABLE`
+/// — the identity-bearing, deduplicating arm — returning `[key, handleType]`.
+/// Two seeds of one `slabKey` share a key.
+#[napi(js_name = "_seedHeapHandle")]
+pub fn seed_heap_handle(slab_key: u32) -> napi::Result<(HandleKey, i32)> {
+    let parts = handle_cffi::seed_heap_handle(u64::from(slab_key));
+    Ok((HandleKey::from_u64(parts.key), parts.handle_type))
+}
+
+/// Test-only: the number of live `HANDLE_TABLE` rows (a refcounted engine-heap
+/// row counts once however many owners it has).
+#[napi(js_name = "_liveHandleCount")]
+pub fn live_handle_count() -> u32 {
+    u32::try_from(bridge_cffi::handle_cffi::live_handle_count()).unwrap_or(u32::MAX)
+}
+
+/// Test-only: the outstanding ownership count of a live key — the releases it
+/// still owes — or `null` for a dead/unknown key. Lets an audit see an
+/// exactly-once imbalance on a shared engine-heap key, which row counts hide.
+#[napi(js_name = "_handleRefcount")]
+pub fn handle_refcount(key: HandleKey) -> Option<u32> {
+    bridge_cffi::handle_cffi::handle_refcount(key.to_u64())
+        .map(|count| u32::try_from(count).unwrap_or(u32::MAX))
 }

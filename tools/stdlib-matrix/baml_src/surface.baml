@@ -9,7 +9,7 @@
 function strip_kind_prefix(id: string) -> string {
     let out = id;
     if let idx: int = id.index_of(":") {
-        out = id.substring(idx + 1, id.length());
+        out = id.slice(idx + 1, id.length());
     }
     out
 }
@@ -18,12 +18,12 @@ function last_segment(path: string) -> string {
     let cut = -1;
     let i = 0;
     while (i < path.length()) {
-        if (path.char_at(i) == ".") {
+        if (path.at(i) == ".") {
             cut = i;
         }
         i += 1;
     }
-    path.substring(cut + 1, path.length())
+    path.slice(cut + 1, path.length())
 }
 
 /// Rewrites a companion class's name to the type it backs, leaving every other

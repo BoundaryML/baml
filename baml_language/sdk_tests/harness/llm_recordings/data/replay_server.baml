@@ -1,7 +1,7 @@
 // Transport pin for the streaming replay harness
 // (thoughts/sam-projects/bridge-generics/streaming/02): serve an OpenAI-shaped
 // SSE body from a BAML `http.Server` and consume it with the engine's own SSE
-// client — `baml.http.fetch_sse`, the exact transport the LLM streaming path
+// client — `baml.http.send_sse`, the exact transport the LLM streaming path
 // uses (baml_std/baml/ns_llm/llm_types.baml). This proves a BAML-implemented
 // server can stand in for WireMock before any bridge/SDK machinery is involved,
 // so a bridge-level (pytest/vitest) replay failure can only be a
@@ -25,7 +25,7 @@
 class ReplayPin {
   sse_body: string
 
-  function handle(self, req: baml.http.Request) -> baml.http.Response {
+  function handle(self, req: baml.http.ServerRequest) -> baml.http.Response {
     if (req.method == "POST") {
       baml.http.Response.new(200, { "content-type": "text/event-stream" }, self.sse_body.to_utf8())
     } else {
@@ -44,7 +44,7 @@ function replay_sse_roundtrip() -> string {
   let server = baml.http.Server.bind("127.0.0.1:0");
   let task = spawn { server.serve(pin.handle) };
 
-  let sse = baml.http.fetch_sse(baml.http.Request {
+  let sse = baml.http.send_sse(baml.http.Request {
     method: "POST",
     url: "http://" + server.addr + "/chat/completions",
     headers: { "content-type": "application/json" },

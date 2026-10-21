@@ -22,6 +22,10 @@ use std::{
 
 use baml_sdk::replay::replay_serve_until_shutdown;
 
+/// The replay client is selected through process-wide environment variables,
+/// so only one replay server/test pair may own them at a time.
+static REPLAY_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Absolute path to a checked-in SSE recording under `sdk_tests/fixtures`.
 ///
 /// Python walks up from `__file__`; the compiled analogue walks up from the
@@ -158,6 +162,9 @@ fn post_shutdown(addr: &str) -> std::io::Result<()> {
 /// Python's decorator works on both sync and `async` tests; the `async`
 /// sibling here is [`replay_server_async`].
 pub fn replay_server<T>(recording_path: &str, test: impl FnOnce() -> T) -> T {
+    let _env_guard = REPLAY_ENV_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let _server = _running_server(recording_path);
     test()
 }
@@ -166,6 +173,9 @@ pub fn replay_server<T>(recording_path: &str, test: impl FnOnce() -> T) -> T {
 /// test body via the same RAII guard (its setup polls with blocking sleeps,
 /// exactly as python's harness blocks inside the event loop).
 pub async fn replay_server_async<T>(recording_path: &str, test: impl Future<Output = T>) -> T {
+    let _env_guard = REPLAY_ENV_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let _server = _running_server(recording_path);
     test.await
 }

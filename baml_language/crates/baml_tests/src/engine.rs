@@ -20,11 +20,9 @@
 //! }
 //! ```
 
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
-pub use baml_project::testing::{
-    OptLevel, compile_multi_file, compile_source, compile_source_with_opt,
-};
+use baml_db::ProjectDatabase;
 use bex_engine::{BexCallArg, BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_vm::debug::{BytecodeFormat, display_program};
 use bex_vm_types::{Function, Object, Program};
@@ -32,6 +30,14 @@ pub use indexmap::IndexMap;
 #[cfg(test)]
 use insta::{assert_snapshot, with_settings};
 use sys_native::SysOpsExt;
+
+// The stdlib slice these helpers splice in is compiled once at build time
+// rather than once per test; see `crate::stdlib_prefix`. Output is byte-identical
+// to `baml_db::testing`'s honest helpers, pinned by the
+// `stdlib_prefix_equivalence` oracle.
+pub use crate::stdlib_prefix::{
+    OptLevel, compile_multi_file, compile_source, compile_source_with_opt,
+};
 
 #[cfg(test)]
 const SNAPSHOT_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/snapshots/engine");
@@ -66,13 +72,47 @@ pub fn display_user_functions(program: &Program) -> String {
     display_user_functions_with_options(program, false)
 }
 
+/// The object index of the callable rendered `name`, from the package
+/// tables — a test's entry point by name, the way a host names one.
+pub fn function_index(program: &Program, name: &str) -> Option<usize> {
+    program
+        .rendered_callables()
+        .get(name)
+        .map(|callable| callable.object.raw())
+}
+
+/// The program's named functions plus its interface bodies, as
+/// `(fq name, object index)` pairs. Named callables come from the package
+/// tables' rendered view; bodies are anonymous (in no table), so they are
+/// enumerated straight off the object pool and rendered under the label of
+/// the package whose cells hold them — the spelling bytecode snapshots show.
+pub fn named_and_interface_body_functions(
+    program: &Program,
+) -> impl Iterator<Item = (String, usize)> + '_ {
+    program
+        .rendered_callables()
+        .into_iter()
+        .map(|(name, callable)| (name, callable.object.raw()))
+        .chain(program.objects.iter().enumerate().filter_map(|(idx, obj)| {
+            match obj {
+                bex_vm_types::Object::Function(f) if f.is_interface_body() => Some((
+                    program
+                        .function_name(bex_vm_types::ObjectIndex::from_raw(idx))
+                        .unwrap_or_else(|| {
+                            unreachable!("every pooled function is placed by a package")
+                        }),
+                    idx,
+                )),
+                _ => None,
+            }
+        }))
+}
+
 /// Like [`display_user_functions`], but lets the caller include auto-derived
 /// methods in the bytecode output.
 pub fn display_user_functions_with_options(program: &Program, show_auto_derive: bool) -> String {
-    let mut functions: Vec<(String, &Function)> = program
-        .function_indices
-        .iter()
-        .filter_map(|(name, idx)| match program.objects.get(*idx) {
+    let mut functions: Vec<(String, &Function)> = named_and_interface_body_functions(program)
+        .filter_map(|(name, idx)| match program.objects.get(idx) {
             Some(Object::Function(f)) => {
                 if !f.origin.is_user_callable() {
                     return None;
@@ -94,19 +134,131 @@ pub fn display_user_functions_with_options(program: &Program, show_auto_derive: 
     display_program(&functions, BytecodeFormat::Textual)
 }
 
+/// Build the pool into an (unsealed) heap and bind every head, so rendered
+/// metadata reflects what the runtime shows: the loader always binds before
+/// anything can display a type, and an unbound head renders as its tag
+/// (`<unresolved type #…>`).
+///
+/// Float constants are boxed into the pool first, exactly as the engine's
+/// load path does — `resolve_function_constants` (inside the heap build)
+/// refuses a raw `ConstValue::Float`.
+pub fn bound_pool(program: &Program) -> bex_heap::BexHeap {
+    let mut objects = program.objects.0.clone();
+    for index in 0..objects.len() {
+        let Object::Function(function) = &objects[index] else {
+            continue;
+        };
+        let floats: Vec<(usize, f64)> = function
+            .bytecode
+            .constants
+            .iter()
+            .enumerate()
+            .filter_map(|(slot, constant)| match constant {
+                bex_vm_types::ConstValue::Float(value) => Some((slot, *value)),
+                _ => None,
+            })
+            .collect();
+        for (slot, value) in floats {
+            let boxed = objects.len();
+            objects.push(Object::Float(value));
+            let Object::Function(function) = &mut objects[index] else {
+                unreachable!("the object at `index` was a function above");
+            };
+            function.bytecode.constants[slot] =
+                bex_vm_types::ConstValue::Object(bex_vm_types::ObjectIndex::from_raw(boxed));
+        }
+    }
+    let mut heap = bex_heap::BexHeap::build_unsealed_default(objects);
+    heap.bind_type_heads();
+    heap.assert_switch_tables_dispatch();
+    heap
+}
+
+/// The tag the linker assigned to the class, enum, interface, or alias
+/// `program` declares as `fq_name`, or `None` if it declares none. Every head
+/// in the program that names the declaration carries exactly this tag, so a
+/// type position is checked by identity rather than by rendered name.
+pub fn declared_type_tag(program: &Program, fq_name: &str) -> Option<baml_type::typetag::TypeTag> {
+    // A pooled declaration carries only its path; the package tables say
+    // which package declares it, and so what it is called.
+    program.packages.iter().find_map(|package| {
+        [
+            &package.classes,
+            &package.enums,
+            &package.interfaces,
+            &package.type_aliases,
+        ]
+        .into_iter()
+        .flatten()
+        .find(|(path, _)| path.under(&package.name).render_dotted(false) == fq_name)
+        .and_then(|(_, object)| program.objects[*object].declaration_tag())
+    })
+}
+
+/// Every class `program` declares at the root namespace under the item name
+/// `name`, as `(display name, tag)` in package order. Read from the package
+/// tables: a pooled class carries only its path, and its package's label is
+/// what it renders under — `Point` in a package labelled `user`, `lib.Point`
+/// in one labelled `lib`. Display names, so two entries may read alike.
+pub fn classes_named(program: &Program, name: &str) -> Vec<(String, baml_type::typetag::TypeTag)> {
+    let path = bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new(name));
+    program
+        .packages
+        .iter()
+        .filter_map(|package| {
+            let object = package.classes.get(&path)?;
+            Some((
+                path.under(&package.name).display_name().to_string(),
+                program.objects[*object].declaration_tag()?,
+            ))
+        })
+        .collect()
+}
+
+/// Read the function at pool index `idx` out of a heap built by
+/// [`bound_pool`], or `None` if the slot holds something else.
+pub fn bound_function(heap: &bex_heap::BexHeap, idx: usize) -> Option<&Function> {
+    let ptr = heap.compile_time_ptr(idx);
+    // SAFETY: `ptr` indexes the pool the heap was built from, and the returned
+    // borrow is tied to `heap`, which owns that pool for the borrow's lifetime.
+    match unsafe { ptr.get() } {
+        Object::Function(f) => Some(&**f),
+        _ => None,
+    }
+}
+
+/// [`display_user_functions`] over a [`bound_pool`], so type positions in the
+/// rendered bytecode show declaration names instead of raw head tags.
+pub fn display_user_functions_bound(program: &Program) -> String {
+    let heap = bound_pool(program);
+    let mut functions: Vec<(String, &Function)> = named_and_interface_body_functions(program)
+        .filter_map(|(name, idx)| {
+            let f = bound_function(&heap, idx)?;
+            if !f.origin.is_user_callable() {
+                return None;
+            }
+            let display_name = name.strip_prefix("user.").unwrap_or(&name).to_owned();
+            Some((display_name, f))
+        })
+        .collect();
+    functions.sort_by(|(a, _), (b, _)| a.cmp(b));
+    display_program(&functions, BytecodeFormat::Textual)
+}
+
 /// Resolve a user-provided entry name to the fully-qualified name used in the program.
 ///
 /// Compiler2 qualifies function names with their package (e.g. `"user.main"`).
 /// Test code passes bare names (`"main"`), so we try both the bare name and the
 /// `"user.<name>"` qualified form, returning whichever is present.
 fn resolve_entry_name(program: &Program, entry: &str) -> String {
+    let callables = program.rendered_callables();
     // Try exact match first.
-    if program.function_index(entry).is_some() {
+    if callables.contains_key(entry) {
         return entry.to_owned();
     }
     // Try with "user." prefix (compiler2 qualifies user functions).
     let qualified = format!("user.{entry}");
-    if program.function_indices.contains_key(qualified.as_str()) {
+    if callables.contains_key(qualified.as_str()) {
         return qualified;
     }
     panic!("function '{entry}' not found in program (tried '{entry}' and 'user.{entry}')")
@@ -120,7 +272,9 @@ fn resolve_args(
 ) -> Vec<BexCallArg> {
     let resolved_entry = resolve_entry_name(program, entry);
     let function_idx = program
-        .function_index(&resolved_entry)
+        .rendered_callables()
+        .get(resolved_entry.as_str())
+        .map(|callable| callable.object.raw())
         .unwrap_or_else(|| panic!("function '{entry}' not found in program"));
 
     let function = match program.objects.get(function_idx) {
@@ -229,8 +383,13 @@ pub async fn run_compiled(
     let positional_args = resolve_args(&program, entry, args);
 
     // Create engine and execute.
-    let engine = BexEngine::new(program, Arc::new(sys_ops::SysOps::native()), Vec::new())
-        .expect("Failed to create BexEngine");
+    let engine = BexEngine::new_with_runtime_compiler(
+        program,
+        Arc::new(sys_ops::SysOps::native()),
+        Vec::new(),
+        bex_project::runtime_compiler(),
+    )
+    .expect("Failed to create BexEngine");
     let engine = Arc::new(engine);
 
     let result = engine
@@ -243,6 +402,42 @@ pub async fn run_compiled(
         .await;
 
     TestOutput { bytecode, result }
+}
+
+/// Attempt an engine call by fq name WITHOUT the harness's entry-name
+/// resolution (which panics on a missing entry). For asserting that a
+/// spelling is — or is not — runtime-addressable.
+pub async fn try_call_by_name(
+    program: Program,
+    name: &str,
+) -> Result<BexExternalValue, bex_engine::EngineError> {
+    let engine = BexEngine::new_with_runtime_compiler(
+        program,
+        Arc::new(sys_ops::SysOps::native()),
+        Vec::new(),
+        bex_project::runtime_compiler(),
+    )
+    .expect("Failed to create BexEngine");
+    let engine = Arc::new(engine);
+    engine
+        .call_function_bound_args(
+            name,
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+}
+
+pub use baml_db::testing::TestDbExt;
+
+/// A fresh database with the stdlib installed and one `Workspace` root at
+/// `root` (package `user`) — [`ProjectDatabase::new`] followed by
+/// [`TestDbExt::workspace`].
+pub fn db_with_root(root: &Path) -> ProjectDatabase {
+    let mut db = ProjectDatabase::new();
+    db.workspace(root);
+    db
 }
 
 /// Like `run_test` but at `OptLevel::Two` (includes MIR constant folding).
@@ -291,12 +486,13 @@ mod tests {
         }
         "#;
 
-        let omitted = run_test(source, "is_null", IndexMap::new(), OptLevel::One).await;
+        let program = compile_source_with_opt(source, OptLevel::One);
+        let omitted = run_compiled(program.clone(), "is_null", IndexMap::new(), false).await;
         assert_eq!(omitted.result, Ok(BexExternalValue::Bool(false)));
 
         let mut args = IndexMap::new();
         args.insert("value", BexExternalValue::Null);
-        let explicit_null = run_test(source, "is_null", args, OptLevel::One).await;
+        let explicit_null = run_compiled(program, "is_null", args, false).await;
         assert_eq!(explicit_null.result, Ok(BexExternalValue::Bool(true)));
     }
 
@@ -352,7 +548,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn optional_dropping_adapter_preserves_source_defaults() {
+    async fn narrowed_function_value_preserves_source_defaults() {
         let output = run_test(
             r#"
             function combine(x: int, a: int = 10, b: int = 100) -> int {
@@ -372,80 +568,8 @@ mod tests {
 
         assert_eq!(output.result, Ok(BexExternalValue::Int(16)));
         engine_snapshot!(
-            "optional_dropping_adapter_preserves_source_defaults_bytecode",
+            "narrowed_function_value_preserves_source_defaults_bytecode",
             output.bytecode
         );
-    }
-
-    #[tokio::test]
-    async fn optional_adapter_reorders_named_optional_params() {
-        let output = run_test(
-            r#"
-            function combine(x: int, a: int = 10, b: int = 100) -> int {
-              (x * 100) + (a * 10) + b
-            }
-
-            function main() -> int {
-              let f: (x: int, b?: int, a?: int) -> int throws never = combine;
-              f(1, b = 5, a = 2)
-            }
-            "#,
-            "main",
-            IndexMap::new(),
-            OptLevel::One,
-        )
-        .await;
-
-        assert_eq!(output.result, Ok(BexExternalValue::Int(125)));
-    }
-
-    #[tokio::test]
-    async fn optional_adapter_applies_to_concrete_call_argument() {
-        let output = run_test(
-            r#"
-            function combine(x: int, a: int = 10, b: int = 100) -> int {
-              x + a + b
-            }
-
-            function apply(f: (x: int, b?: int) -> int) -> int {
-              f(1, b = 5)
-            }
-
-            function main() -> int {
-              apply(combine)
-            }
-            "#,
-            "main",
-            IndexMap::new(),
-            OptLevel::One,
-        )
-        .await;
-
-        assert_eq!(output.result, Ok(BexExternalValue::Int(16)));
-    }
-
-    #[tokio::test]
-    async fn optional_adapter_applies_to_generic_call_argument() {
-        let output = run_test(
-            r#"
-            function combine(x: int, a: int = 10, b: int = 100) -> int {
-              x + a + b
-            }
-
-            function apply<T>(f: (x: T, b?: int) -> T, value: T) -> T {
-              f(value, b = 5)
-            }
-
-            function main() -> int {
-              apply(combine, 1)
-            }
-            "#,
-            "main",
-            IndexMap::new(),
-            OptLevel::One,
-        )
-        .await;
-
-        assert_eq!(output.result, Ok(BexExternalValue::Int(16)));
     }
 }

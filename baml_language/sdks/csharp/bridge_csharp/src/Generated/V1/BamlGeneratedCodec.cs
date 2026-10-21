@@ -86,6 +86,18 @@ public readonly partial struct BamlGeneratedCodecContext
     public BamlGeneratedValue Media(global::Baml.BamlPdf value) =>
         BamlGeneratedValue.CreateMedia(value);
 
+    public BamlGeneratedValue Prompt(global::Baml.BamlPrompt value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        return BamlGeneratedValue.CreatePromptAst(value.WireCopy());
+    }
+
+    public BamlGeneratedValue Type(global::Baml.BamlType value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        return BamlGeneratedValue.CreateType(value);
+    }
+
     public BamlGeneratedValue Handle(global::Baml.BamlHandle value) =>
         BamlGeneratedValue.CreateHandle(value);
 
@@ -106,6 +118,16 @@ public readonly partial struct BamlGeneratedCodecContext
             value,
             expectedIdentity,
             ResourceTypeMetadata(expectedIdentity, expectedTypeArguments));
+
+    public BamlGeneratedValue FunctionSpec<TFinal>(
+        global::Baml.BamlFunctionSpec<TFinal> value,
+        string expectedIdentity,
+        ReadOnlySpan<byte> expectedTypeMetadata)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        value.RequireRegistry(registry);
+        return Handle(value.Handle, expectedIdentity, expectedTypeMetadata);
+    }
 
     public BamlGeneratedValue Resource(
         BamlGeneratedResource value,
@@ -373,6 +395,12 @@ public readonly partial struct BamlGeneratedCodecContext
     public global::Baml.BamlPdf ReadPdf(BamlGeneratedValue value) =>
         Require(value).ReadMedia<global::Baml.BamlPdf>();
 
+    public global::Baml.BamlPrompt ReadPrompt(BamlGeneratedValue value) =>
+        new(Require(value).ReadPromptAst(), registry);
+
+    public global::Baml.BamlType ReadType(BamlGeneratedValue value) =>
+        Require(value).ReadType();
+
     public global::Baml.BamlHandle ReadHandle(BamlGeneratedValue value) =>
         Require(value).ReadHandle();
 
@@ -394,6 +422,23 @@ public readonly partial struct BamlGeneratedCodecContext
             value,
             expectedIdentity,
             ResourceTypeMetadata(expectedIdentity, expectedTypeArguments));
+
+    public global::Baml.BamlFunctionSpec<TFinal> ReadFunctionSpec<TFinal>(
+        BamlGeneratedValue value,
+        string expectedIdentity,
+        ReadOnlySpan<byte> expectedTypeMetadata,
+        BamlGeneratedType<TFinal> finalType)
+    {
+        TypeDeclaration<TFinal> final = registry.RequireType(finalType);
+        global::Baml.BamlHandle handle = ReadHandle(
+            value,
+            expectedIdentity,
+            expectedTypeMetadata);
+        return new global::Baml.BamlFunctionSpec<TFinal>(
+            handle,
+            registry,
+            final);
+    }
 
     public BamlGeneratedResource ReadResource(
         BamlGeneratedValue value,
@@ -544,11 +589,12 @@ public readonly partial struct BamlGeneratedCodecContext
             && StringComparer.Ordinal.Equals(expected.Fqn, expectedIdentity)
             && StringComparer.Ordinal.Equals(value.Type.Fqn, expectedIdentity)
             && value.Type.Arguments.SequenceEqual(expected.Arguments);
-        BamlHandleType expectedHandleType = StringComparer.Ordinal.Equals(
-            expectedIdentity,
-            "baml.llm.PromptAst")
-                ? BamlHandleType.AdtPromptAst
-                : BamlHandleType.AdtTaggedHeapHandle;
+        BamlHandleType expectedHandleType = expectedIdentity switch
+        {
+            "baml.llm.PromptAst" => BamlHandleType.AdtPromptAst,
+            "ai.FunctionSpec" => BamlHandleType.AdtFunctionSpec,
+            _ => BamlHandleType.AdtTaggedHeapHandle,
+        };
         if (descriptorMatches && value.HandleType == expectedHandleType)
         {
             return;
@@ -797,6 +843,8 @@ public readonly partial struct BamlGeneratedCodecContext
         return async (arguments, cancellationToken) =>
         {
             ArgumentNullException.ThrowIfNull(arguments);
+            var baml = BamlInvocationPreparation.CurrentOptions;
+            if (baml is not null) cancellationToken = baml.CancellationToken;
             Baml.Cffi.NativeApi api = Baml.Cffi.NativeApi.Instance;
             Task<byte[]> completion;
             using (Baml.Cffi.BamlSafeHandleLease lease = handle.Lease())
@@ -807,7 +855,7 @@ public readonly partial struct BamlGeneratedCodecContext
                         arguments,
                         callId,
                         api),
-                    cancellationToken);
+                    cancellationToken, baml);
             }
 
             byte[] bytes = await completion.ConfigureAwait(false);
@@ -950,6 +998,11 @@ public sealed class BamlGeneratedResource : IDisposable
         ?? throw new ObjectDisposedException(nameof(BamlGeneratedResource));
 
     public bool IsClosed => Volatile.Read(ref value) is null;
+
+    public BamlGeneratedValue InvocationValue => Value;
+
+    public global::Baml.BamlHandle InvocationHandle => Value.ReadClassFields()
+        .Single(item => item.Key == "_handle").Value.ReadHandle();
 
     public BamlGeneratedResource Clone()
     {
@@ -1199,6 +1252,35 @@ public sealed class BamlGeneratedValue
 
         return new BamlGeneratedValue(
             PrimitiveCarrierKind.Media,
+            managedValue: value,
+            sourcePath: sourcePath);
+    }
+
+    internal static BamlGeneratedValue CreatePromptAst(
+        BamlValuePromptAst value,
+        string sourcePath = "generated argument")
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        if (value.ValueCase == BamlValuePromptAst.ValueOneofCase.None)
+        {
+            throw new ArgumentException(
+                "A generated prompt carrier requires a non-empty prompt tree.",
+                nameof(value));
+        }
+
+        return new BamlGeneratedValue(
+            PrimitiveCarrierKind.Prompt,
+            managedValue: value.Clone(),
+            sourcePath: sourcePath);
+    }
+
+    internal static BamlGeneratedValue CreateType(
+        global::Baml.BamlType value,
+        string sourcePath = "generated argument")
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        return new BamlGeneratedValue(
+            PrimitiveCarrierKind.Type,
             managedValue: value,
             sourcePath: sourcePath);
     }
@@ -1597,6 +1679,18 @@ public sealed class BamlGeneratedValue
         return managedValue!;
     }
 
+    internal BamlValuePromptAst ReadPromptAst()
+    {
+        RequireKind(PrimitiveCarrierKind.Prompt);
+        return ((BamlValuePromptAst)managedValue!).Clone();
+    }
+
+    internal global::Baml.BamlType ReadType()
+    {
+        RequireKind(PrimitiveCarrierKind.Type);
+        return (global::Baml.BamlType)managedValue!;
+    }
+
     internal global::Baml.BamlHandle ReadHandle()
     {
         RequireKind(PrimitiveCarrierKind.Handle);
@@ -1763,6 +1857,8 @@ internal enum PrimitiveCarrierKind
     Enum,
     Union,
     Media,
+    Prompt,
+    Type,
     Handle,
     HostCallable,
 }

@@ -12,16 +12,21 @@
 //! - Per-item queries: `function_signature`, `function_body`
 //! - Cross-file aggregation: `namespace_items`, `package_items`
 
+mod attrs;
 pub mod body;
+pub mod body_type_refs;
 mod builder;
 pub mod contributions;
 pub mod diagnostic;
 pub mod file_package;
 pub mod ids;
+pub mod inputs;
+pub mod item_data;
 pub mod item_tree;
 pub mod loc;
 pub mod namespace;
 pub mod package;
+pub mod resolve;
 pub mod scope;
 pub mod semantic_index;
 pub mod signature;
@@ -41,62 +46,97 @@ use crate::{
 
 // ── Db trait ─────────────────────────────────────────────────────────────────
 
-/// Database trait for `compiler2_hir` queries.
+/// Database trait for `compiler2_hir` queries — the base of the compiler2
+/// `Db` trait chain.
 ///
-/// Extends `baml_workspace::Db`. Use `file_semantic_index` for HIR queries.
-///
-/// The `compiler2_extra_files()` method provides access to compiler2-only
-/// builtin stub files that must NOT be in the shared `project.files()` list
-/// (because the v1 parser cannot handle compiler2-specific syntax like generic
-/// type parameters or `$rust_type` fields). Implementors that have such files
-/// should override this to return the appropriate `Compiler2ExtraFiles` handle.
+/// Provides the source-root table (the packages, their files, and their
+/// dependency edges) plus the compile-cache seed inputs ([`inputs`]). Use
+/// `file_semantic_index` for HIR queries.
 #[salsa::db]
-pub trait Db: baml_workspace::Db {
-    /// Returns the compiler2-only extra files, or `None` if not configured.
+pub trait Db: salsa::Database {
+    /// The ordered set of source roots in this database.
     ///
-    /// The default implementation returns `None`, meaning no extra files.
-    /// `ProjectDatabase` overrides this to return the v2 builtin stubs.
-    fn compiler2_extra_files(&self) -> Option<baml_workspace::Compiler2ExtraFiles> {
+    /// See [`baml_base::SourceRootTable`] for the order invariant
+    /// (`Stdlib` < `Dependency` < `Workspace` < `Dynamic`).
+    fn source_roots(&self) -> baml_base::SourceRootTable;
+
+    /// Per-file throw-analysis facts seeded from a previous compile.
+    ///
+    /// When present, `throw_inference::file_throw_facts` returns the seeded
+    /// facts for a file instead of re-walking its body — the bytecode
+    /// cache's per-file reuse sets this for files whose content is
+    /// unchanged (facts are a pure function of file content + name
+    /// resolution, and the cache's dirty-set analysis re-walks any file
+    /// whose resolution-relevant surroundings changed). Defaults to `None`:
+    /// every other database compiles honestly.
+    fn seeded_throw_facts(&self) -> Option<inputs::SeededThrowFacts> {
+        None
+    }
+
+    /// The stdlib packages' resolved typed interfaces from a previous compile,
+    /// keyed by package name.
+    ///
+    /// When present, `package_interface::package_interface` returns the seeded
+    /// interface for a stdlib package instead of re-deriving it from source —
+    /// removing the cold-typecheck floor a fresh process otherwise pays to
+    /// re-normalize every stdlib signature/class/alias before it can typecheck
+    /// user code. The stdlib is a compiler-build constant (no user file can
+    /// contribute to a stdlib package), so the CLI caches this once per compiler
+    /// build under `bex_cache::stdlib_interface_key` and seeds it back on every
+    /// compile. Defaults to `None`: every other database compiles honestly.
+    fn seeded_stdlib_interface(&self) -> Option<inputs::SeededStdlibInterface> {
+        None
+    }
+
+    /// Per-function `callable_throws` values from a previous compile, keyed by
+    /// (source path, item-tree `LocalItemId`).
+    ///
+    /// When present, `callable::callable_throws` returns the seeded `Ty` for a
+    /// clean function instead of inferring its body — the bytecode cache sets
+    /// this for functions the per-file reuse plan proved unchanged (both their
+    /// own body and their transitive throw contributors are stable, per the
+    /// throws-taint closure). Cutting `callable_throws` removes the last cold
+    /// `infer_scope_types` pull a dirty file otherwise forces on its clean
+    /// callees. Defaults to `None`: every other database infers honestly.
+    fn seeded_callable_throws(&self) -> Option<inputs::SeededCallableThrows> {
+        None
+    }
+
+    /// Where the language packages are installed (see
+    /// [`package::lang_roots`]). Defaults to `None`: a database with no
+    /// stdlib knows no language package, and every identity test against
+    /// one is `false`.
+    fn lang_roots_input(&self) -> Option<inputs::LangRootsInput> {
         None
     }
 }
 
 // ── compiler2_all_files ───────────────────────────────────────────────────────
 
-/// Returns all files visible to compiler2 HIR queries.
+/// Returns all files visible to compiler2 queries, in source-root table order.
 ///
-/// This is the union of:
-/// - `db.project().files()` excluding legacy `<builtin>/...` v1 builtin files
-/// - `db.compiler2_extra_files().files()` — compiler2-owned builtin sources
-///   (e.g., `Array<T>`, `Map<K,V>`, `String`, `Media` from `baml_builtins2`)
+/// `Stdlib` roots come FIRST and `Dynamic` roots LAST (the table's order
+/// invariant): everything
+/// assigned by whole-program iteration order downstream (emit's
+/// `GlobalIndex`/`ObjectIndex` slots) then gives the
+/// stdlib a stable prefix of every index space, independent of user code.
+/// That stability is what lets a precompiled stdlib `Program` slice (keyed
+/// only by compiler build) be spliced into any project's compile. User edits
+/// only ever shift *user* indices.
 ///
-/// The v1 compiler continues to see `project.files()` including the legacy
-/// builtin BAML sources. Compiler2 HIR queries (`namespace_items`,
-/// `package_items`) intentionally ignore those legacy builtin files once the
-/// compiler2-owned builtin stdlib is present, so there is only one builtin
-/// source of truth in the compiler2 package graph.
+/// Whole-program consumers only (check drivers, emit, MIR tags, caches).
+/// Package-scoped readers use `root.files(db)` so edits in one root cannot
+/// invalidate another package's file-set-derived queries.
 pub fn compiler2_all_files(db: &dyn Db) -> Vec<baml_base::SourceFile> {
-    // Builtin stubs come FIRST: everything assigned by whole-project
-    // iteration order downstream (emit's `GlobalIndex`/`ObjectIndex` slots,
-    // MIR's `class_type_tags`) then gives the stdlib a stable prefix of every
-    // index space, independent of user code. That stability is what lets a
-    // precompiled stdlib `Program` slice (keyed only by compiler build) be
-    // spliced into any project's compile. User edits only ever shift *user*
-    // indices. Within each group the order is unchanged (sorted project
-    // files; fixed stub order), and no package receives contributions from
-    // both groups, so HIR per-package merge order is unaffected.
-    let mut files: Vec<baml_base::SourceFile> = db
-        .compiler2_extra_files()
-        .map(|extra| extra.files(db).clone())
-        .unwrap_or_default();
-    files.extend(
-        db.project()
-            .files(db)
-            .iter()
-            .copied()
-            .filter(|file| !file.path(db).to_string_lossy().starts_with("<builtin>/")),
+    let roots = db.source_roots().roots(db);
+    debug_assert!(
+        roots.is_sorted_by_key(|root| root.kind(db)),
+        "source-root table order invariant violated (Stdlib < Dependency < Workspace < Dynamic)"
     );
-    files
+    roots
+        .iter()
+        .flat_map(|root| root.files(db).iter().copied())
+        .collect()
 }
 
 // ── file_ast ──────────────────────────────────────────────────────────────────
@@ -110,40 +150,19 @@ pub struct FileAst {
     pub env_var_refs: Vec<baml_compiler2_ast::EnvVarRef>,
 }
 
-// Safety: `FileAst` holds only plain (non-`'db`) data, so storing it by value
-// in a Salsa slot is sound. This manual `Update` impl uses `PartialEq` so the
-// query gets early-cutoff (dependents skip re-running when the AST is
-// unchanged) rather than the always-`true` behavior of a no-eq value.
-#[allow(unsafe_code)]
-unsafe impl salsa::Update for FileAst {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
-
 /// CST → AST lowering for one file, computed once and shared.
 ///
 /// Salsa-tracked because several different consumers need a file's AST items:
-/// both `file_semantic_index` queries (HIR + PPIR), `ppir_expansion_items`,
-/// PPIR's two project-wide expansion-map collectors, and the LSP check pass.
+/// `file_semantic_index` and the LSP check pass.
 /// Before this query existed each of them re-lowered the syntax tree from
 /// scratch; the repeated CST traversal was ~31% of cold-compile CPU on the
 /// test corpus (see `crates/tools_compile_profile/README.md`, July 2026 audit).
 #[salsa::tracked(returns(ref))]
 pub fn file_ast(db: &dyn Db, file: SourceFile) -> FileAst {
     let tree = baml_compiler_parser::syntax_tree(db, file);
-    let path = file.path(db);
+    // Root-relative: the path names the file's `$init_test_…` function, which
+    // is part of the package's unit and must not carry the checkout's location.
+    let path = file_package::root_relative_path(db, file);
     let package = file_package::file_package(db, file);
     let test_owner = if package.namespace_path.is_empty() {
         "root".to_string()
@@ -158,12 +177,22 @@ pub fn file_ast(db: &dyn Db, file: SourceFile) -> FileAst {
                 .join(".")
         )
     };
-    let (items, diagnostics, env_var_refs) =
-        baml_compiler2_ast::lower_file_with_path_and_test_owner(
-            &tree,
-            Some(path.as_path()),
-            Some(&test_owner),
-        );
+    let lower = if file.is_session_submission(db) {
+        baml_compiler2_ast::lower_session_file_with_path_and_test_owner
+    } else {
+        baml_compiler2_ast::lower_file_with_path_and_test_owner
+    };
+    let (mut items, diagnostics, env_var_refs) =
+        lower(&tree, Some(path.as_path()), Some(&test_owner));
+    if package.root.exclude_tests(db) {
+        // Both test forms lower into per-file registrars. Remove them before
+        // building HIR so their entire subtree (including nested/catch
+        // lambdas) is absent from code, constants, and package interfaces.
+        items.retain(|item| {
+            !matches!(item, baml_compiler2_ast::Item::Function(function)
+                if function.metadata.origin == baml_compiler2_ast::FunctionOrigin::TestInitializer)
+        });
+    }
     FileAst {
         items,
         diagnostics,
@@ -214,12 +243,24 @@ pub fn file_symbol_contributions(
 /// Not tracked — the item tree is cached via `file_semantic_index`.
 ///
 /// `pub(crate)`: the raw `ItemTree` is an implementation detail behind the
-/// PPIR item-data firewall (`baml_compiler2_ppir::item_data`). Consumers use
-/// the enumeration (`file_classes`/`file_functions`/…) and lookup
-/// (`class_data`/`function_data`/…) queries there, never the tree itself.
+/// [`item_data`] firewall. Consumers use the enumeration
+/// (`file_classes`/`file_functions`/…) and lookup (`class_data`/
+/// `function_data`/…) queries there, never the tree itself.
 pub(crate) fn file_item_tree(db: &dyn Db, file: SourceFile) -> Arc<ItemTree> {
     let index = file_semantic_index(db, file);
     Arc::clone(&index.item_tree)
+}
+
+/// Returns the item-tree source map for a file.
+///
+/// `pub(crate)`: spans are served by the per-item `*_source_map` queries in
+/// [`item_data`].
+pub(crate) fn file_item_tree_source_map(
+    db: &dyn Db,
+    file: SourceFile,
+) -> Arc<crate::item_tree::ItemTreeSourceMap> {
+    let index = file_semantic_index(db, file);
+    Arc::clone(&index.item_tree_source_map)
 }
 
 /// Returns the `ScopeBindings` for a given scope.

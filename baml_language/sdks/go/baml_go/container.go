@@ -96,6 +96,25 @@ func Map[T any](values map[string]T, encode func(T) Input) Input {
 	return mapInput(keys, inputs, nil)
 }
 
+// NamedInput is one ordered map row. Reflection constructors use a slice of
+// these rows because Go maps do not preserve insertion order.
+type NamedInput struct {
+	Name  string
+	Value Input
+}
+
+// OrderedMap preserves rows exactly as supplied. Duplicate keys are retained
+// for the native compiler-equivalent validator to diagnose.
+func OrderedMap(values []NamedInput) Input {
+	keys := make([]string, len(values))
+	inputs := make([]Input, len(values))
+	for index, value := range values {
+		keys[index] = value.Name
+		inputs[index] = value.Value
+	}
+	return mapInput(keys, inputs, nil)
+}
+
 func mapInput(keys []string, inputs []Input, valueType *BAMLType) Input {
 	prepare := func(transaction *inputTransaction) (*cffi.InboundValue, error) {
 		if valueType != nil {

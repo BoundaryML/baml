@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/useFilenamingConvention: Preserve the existing public component path.
 'use client';
 
 import { useState } from 'react';
@@ -40,7 +41,12 @@ interface Feature {
 
 const LANGS: { id: SdkLang; label: string; Icon: IconType; color: string }[] = [
   { color: '#3776AB', Icon: SiPython, id: 'python', label: 'Python' },
-  { color: '#3178C6', Icon: SiTypescript, id: 'typescript', label: 'TypeScript' },
+  {
+    color: '#3178C6',
+    Icon: SiTypescript,
+    id: 'typescript',
+    label: 'TypeScript',
+  },
   { color: '#00ADD8', Icon: SiGo, id: 'go', label: 'Go' },
   { color: '#1a1612', Icon: SiRust, id: 'rust', label: 'Rust' },
 ];
@@ -48,9 +54,6 @@ const LANGS: { id: SdkLang; label: string; Icon: IconType; color: string }[] = [
 const FEATURES: Feature[] = [
   // ── functions ──────────────────────────────────────────────────────────
   {
-    id: 'functions',
-    label: 'Functions',
-    bamlFile: 'resume.baml',
     baml: `class Resume {
   name: string,
   email: string?,
@@ -58,13 +61,13 @@ const FEATURES: Feature[] = [
 
 function extract_resume(text: string) -> Resume {
   client: "openai/gpt-4o-mini"
-  prompt: \`Extract the resume. \${ctx.output_format}\\n\${text}\`
+  prompt: \`Extract the resume. \${ctx.output_format()}\\n\${text}\`
 }`,
+    bamlFile: 'resume.baml',
+    id: 'functions',
+    label: 'Functions',
     panes: {
       python: {
-        filename: 'baml_sdk',
-        lang: 'python',
-        note: 'Every function generates a sync + async pair; Resume is a real pydantic v2 model.',
         code: `from baml_sdk import extract_resume, Resume
 
 # typed call — or: await extract_resume_async(text=...)
@@ -73,11 +76,11 @@ resume: Resume = extract_resume(text="Jane Doe, jane@acme.com ...")
 resume.name          # str
 resume.email         # str | None
 resume.model_dump()  # plain pydantic underneath`,
+        filename: 'baml_sdk',
+        lang: 'python',
+        note: 'Every function generates a sync + async pair; Resume is a real pydantic v2 model.',
       },
       typescript: {
-        filename: 'baml_sdk',
-        lang: 'typescript',
-        note: 'Resume is a typed class; extract_resume_async returns a Promise.',
         code: `import { extract_resume, type Resume } from './baml_sdk';
 
 // typed call — or: await extract_resume_async('...')
@@ -85,14 +88,14 @@ const resume: Resume = extract_resume('Jane Doe, jane@acme.com ...');
 
 resume.name;   // string
 resume.email;  // string | null`,
+        filename: 'baml_sdk',
+        lang: 'typescript',
+        note: 'Resume is a typed class; extract_resume_async returns a Promise.',
       },
     },
   },
   // ── classes / methods ──────────────────────────────────────────────────
   {
-    id: 'classes',
-    label: 'Classes / methods',
-    bamlFile: 'greeter.baml',
     baml: `class Greeter {
   name: string,
 
@@ -106,11 +109,11 @@ resume.email;  // string | null`,
     Greeter { name: name }
   }
 }`,
+    bamlFile: 'greeter.baml',
+    id: 'classes',
+    label: 'Classes / methods',
     panes: {
       python: {
-        filename: 'baml_sdk',
-        lang: 'python',
-        note: 'BAML methods come through bound — static factory on the class, instance method on the value.',
         code: `from baml_sdk import Greeter
 
 g = Greeter.create("Ada")   # static factory -> Greeter
@@ -118,11 +121,11 @@ g.greet("hello")            # "hello, Ada" — the BAML method, bound
 g.name                      # "Ada"
 
 await g.greet_async("hi")   # every callable has an _async twin`,
+        filename: 'baml_sdk',
+        lang: 'python',
+        note: 'BAML methods come through bound — static factory on the class, instance method on the value.',
       },
       typescript: {
-        filename: 'baml_sdk',
-        lang: 'typescript',
-        note: 'Static methods sit on the class; instance methods are bound to the value.',
         code: `import { Greeter } from './baml_sdk';
 
 const g = Greeter.create('Ada');  // static factory -> Greeter
@@ -130,14 +133,14 @@ g.greet('hello');                 // "hello, Ada" — the BAML method, bound
 g.name;                           // "Ada"
 
 await g.greet_async('hi');        // async twin`,
+        filename: 'baml_sdk',
+        lang: 'typescript',
+        note: 'Static methods sit on the class; instance methods are bound to the value.',
       },
     },
   },
   // ── generics ───────────────────────────────────────────────────────────
   {
-    id: 'generics',
-    label: 'Generics',
-    bamlFile: 'box.baml',
     baml: `class Box<T> {
   value: T,
 
@@ -145,11 +148,11 @@ await g.greet_async('hi');        // async twin`,
 }
 
 function identity<T>(x: T) -> T { x }`,
+    bamlFile: 'box.baml',
+    id: 'generics',
+    label: 'Generics',
     panes: {
       python: {
-        filename: 'baml_sdk',
-        lang: 'python',
-        note: 'Type params flow through: subscript syntax fn[T](...) carries the BAML generic.',
         code: `from baml_sdk import Box, identity
 
 # generic args via subscript: fn[T](...)
@@ -158,11 +161,11 @@ identity[str]("hi")       # "hi"
 
 box = Box[int](value=42)  # Box[int]
 box.get()                 # 42 (typed T)`,
+        filename: 'baml_sdk',
+        lang: 'python',
+        note: 'Type params flow through: subscript syntax fn[T](...) carries the BAML generic.',
       },
       typescript: {
-        filename: 'baml_sdk',
-        lang: 'typescript',
-        note: 'BAML <T> maps straight onto a TypeScript generic; Box<number> stays typed end to end.',
         code: `import { Box, identity } from './baml_sdk';
 
 // generic args in angle brackets
@@ -171,6 +174,9 @@ identity<string>('hi');   // "hi"
 
 const box = new Box<number>({ value: 42 });  // Box<number>
 box.get();                // 42 (typed T)`,
+        filename: 'baml_sdk',
+        lang: 'typescript',
+        note: 'BAML <T> maps straight onto a TypeScript generic; Box<number> stays typed end to end.',
       },
     },
   },
@@ -234,7 +240,7 @@ export function SdkExplorer() {
           {comingSoon || !pane ? (
             <div className="l6-sdk-soon-pane">
               <p>
-                {`Join our `}
+                {'Join our '}
                 <a
                   className="l6-link"
                   href={DISCORD_URL}

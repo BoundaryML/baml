@@ -496,7 +496,7 @@ impl RenderTestExecutionStatus for PrettyTestExecutionStatusRenderer {
     ) {
         {
             let mut bars = self.test_bars.borrow_mut();
-            for (_, pb) in bars.iter_mut() {
+            for pb in bars.values_mut() {
                 pb.finish_and_clear();
             }
         }

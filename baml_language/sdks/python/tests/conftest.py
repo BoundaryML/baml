@@ -47,15 +47,3 @@ class MockLLMHandler(http.server.BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):
         pass  # suppress request logging
-
-
-# ============================================================================
-# Cleanup fixture
-# ============================================================================
-@pytest.fixture(scope="session", autouse=True)
-def flush_traces():
-    """Ensure traces are flushed when pytest exits."""
-    yield
-    from baml_bridge import flush_events
-
-    flush_events()

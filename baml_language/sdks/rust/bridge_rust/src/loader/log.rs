@@ -1,9 +1,10 @@
 //! Minimal stderr logger for the library loader.
 //!
 //! The loader runs before any engine is available, so it cannot use the
-//! engine's logging pipeline. Levels follow the engine's `BAML_LOG`
-//! convention (TRACE/DEBUG/INFO/WARN/ERROR/OFF, default INFO; an invalid
-//! value is reported once and treated as INFO), and lines carry the same
+//! engine's logging pipeline. Levels follow the shared `BAML_LOG`
+//! convention (`off`, `error`, `warn`, `info`, `debug`, `trace`, matched
+//! case-insensitively, default `info`; an invalid value is reported once
+//! and treated as `info`), and lines carry the same
 //! `<timestamp> [BAML <LEVEL>] <message>` shape as the other bridges'
 //! loaders. Level colors are applied only when stderr is a terminal.
 
@@ -54,22 +55,28 @@ fn configured_level() -> Level {
     static LEVEL: OnceLock<Level> = OnceLock::new();
     *LEVEL.get_or_init(|| {
         let raw = std::env::var("BAML_LOG").unwrap_or_default();
-        match raw.to_ascii_uppercase().as_str() {
-            "TRACE" => Level::Trace,
-            "DEBUG" => Level::Debug,
-            "" | "INFO" => Level::Info,
-            "WARN" | "WARNING" => Level::Warn,
-            "ERROR" => Level::Error,
-            "OFF" => Level::Off,
-            other => {
-                emit(
-                    Level::Warn,
-                    &format!("Invalid BAML_LOG '{other}'. Defaulting to INFO."),
-                );
-                Level::Info
-            }
-        }
+        parse_level(&raw).unwrap_or_else(|| {
+            emit(
+                Level::Warn,
+                &format!("Invalid BAML_LOG '{}'. Defaulting to info.", raw.trim()),
+            );
+            Level::Info
+        })
     })
+}
+
+/// Parse a `BAML_LOG` value; empty means the default (`info`), `None` means
+/// invalid.
+fn parse_level(raw: &str) -> Option<Level> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "trace" => Some(Level::Trace),
+        "debug" => Some(Level::Debug),
+        "" | "info" => Some(Level::Info),
+        "warn" => Some(Level::Warn),
+        "error" => Some(Level::Error),
+        "off" => Some(Level::Off),
+        _ => None,
+    }
 }
 
 pub(crate) fn debug(msg: &str) {
@@ -145,7 +152,20 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
 
 #[cfg(test)]
 mod tests {
-    use super::civil_from_days;
+    use super::{Level, civil_from_days, parse_level};
+
+    #[test]
+    fn parses_levels_case_insensitively() {
+        assert!(parse_level("off") == Some(Level::Off));
+        assert!(parse_level("Error") == Some(Level::Error));
+        assert!(parse_level("WARN") == Some(Level::Warn));
+        assert!(parse_level("info") == Some(Level::Info));
+        assert!(parse_level("Debug") == Some(Level::Debug));
+        assert!(parse_level("TRACE") == Some(Level::Trace));
+        assert!(parse_level("") == Some(Level::Info));
+        assert!(parse_level("verbose").is_none());
+        assert!(parse_level("warning").is_none());
+    }
 
     #[test]
     fn civil_from_days_matches_known_dates() {

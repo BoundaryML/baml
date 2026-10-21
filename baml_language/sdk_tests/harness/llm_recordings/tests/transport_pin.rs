@@ -3,7 +3,7 @@
 //!
 //! Compiles `data/replay_server.baml` and runs `replay_sse_roundtrip` through
 //! the engine helpers: a BAML `http.Server` serves an OpenAI-shaped SSE body
-//! and the engine's own SSE client (`baml.http.fetch_sse`) consumes it. This
+//! and the engine's own SSE client (`baml.http.send_sse`) consumes it. This
 //! proves a BAML-implemented server can stand in for WireMock before any
 //! bridge/SDK machinery is involved — so a bridge-level replay failure
 //! (pytest/vitest) can only be a bridge/orchestration issue, not transport.
@@ -43,7 +43,7 @@ async fn replay_sse_roundtrip() {
     assert_eq!(event_count, 5, "expected 5 SSE events, acc = {acc}");
 
     // The content chunks, the finish event, and the [DONE] sentinel all arrived
-    // intact through the BAML server -> fetch_sse transport...
+    // intact through the BAML server -> send_sse transport...
     for marker in ["Hello", ", world", "finish_reason", "[DONE]"] {
         assert!(acc.contains(marker), "missing {marker:?} in {acc}");
     }

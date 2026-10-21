@@ -9,7 +9,7 @@ source: crates/baml_tests/src/generated_tests.rs
 // statically reachable (a rigid arm never covers a concrete member).
 
 interface DeadMarked {
-    function tag(self) -> string throws never
+    function tag(self) -> string throws never;
 }
 
 // `T extends DeadMarked` refutes every member: neither `string` nor `int`

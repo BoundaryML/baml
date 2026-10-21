@@ -14,13 +14,12 @@ use std::{
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 
-/// The per-platform report artifacts a complete CI run uploads. We require
-/// all of them so a fetch never adopts a partial set (which would leave some
-/// platforms on a stale baseline).
-const REQUIRED_ARTIFACTS: [&str; 4] = [
+/// The reports from enabled CI platforms. Keep this in sync with the jobs in
+/// `.github/workflows/size-gate.reusable.yaml`; macOS and Windows are paused.
+const REQUIRED_ARTIFACTS: [&str; 2] = [
     "size-gate-linux",
-    "size-gate-macos",
-    "size-gate-windows",
+    // "size-gate-macos",
+    // "size-gate-windows",
     "size-gate-wasm",
 ];
 
@@ -44,7 +43,7 @@ struct RunListEntry {
     head_sha: String,
 }
 
-/// Find the newest *completed* CI run on `branch` that has all four
+/// Find the newest *completed* CI run on `branch` that has all enabled
 /// size-gate reports, download them into `download_dir`, and return their
 /// paths plus the run's id and head SHA.
 ///
@@ -109,7 +108,7 @@ pub(crate) fn fetch_branch_reports(
     let chosen = chosen.with_context(|| {
         format!(
             "none of the last {SCAN_LIMIT} completed `{CI_WORKFLOW}` runs on `{branch}` \
-             had all four size-gate reports"
+             had all required size-gate reports"
         )
     })?;
     let run_id = chosen.database_id.to_string();

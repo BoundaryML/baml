@@ -5,19 +5,27 @@ import initWasm, {
   cloneHandle as cloneWasmHandle,
   completeWebHostCall,
   configureWebSysops,
-  flushEvents as flushWasmEvents,
   getBridgeRuntimeVersion as getWasmBridgeRuntimeVersion,
   getToolchainVersion as getWasmToolchainVersion,
   getVersion as getWasmVersion,
   mediaBase64 as mediaWasmBase64,
-  mediaFile as mediaWasmFile,
   mediaFromBase64 as mediaWasmFromBase64,
-  mediaFromFile as mediaWasmFromFile,
+  mediaFromFileBytes as mediaWasmFromFileBytes,
+  mediaFromFileContent as mediaWasmFromFileContent,
   mediaFromUrl as mediaWasmFromUrl,
   mediaMimeType as mediaWasmMimeType,
+  mediaName as mediaWasmName,
   mediaUrl as mediaWasmUrl,
   mintWebHostValueKey,
   newFunctionCall as newWasmFunctionCall,
+  releaseFunctionCall as releaseWasmFunctionCall,
+  invocationClockNs as invocationWasmClockNs,
+  registerWebHostCancelCallback,
+  traceSelection as wasmTraceSelection,
+  invocationContext as wasmInvocationContext,
+  cloneOutboundValue as wasmCloneOutboundValue,
+  watchInvocationCancellation as wasmWatchInvocationCancellation,
+  isInvocationCancelled as wasmIsInvocationCancelled,
   registerWebHostCallable,
   registerWebHostValueReleaseCallback,
   releaseHandle as releaseWasmHandle,
@@ -27,6 +35,7 @@ import initWasm, {
   stageRuntimeBytecode,
   stageRuntimeSources,
 } from "./wasm/bridge_web_core.js";
+import { baml_bridge } from "./shared/proto/baml_cffi.js";
 import { BamlClientError, wrapNativeError } from "./shared/errors.js";
 await initWasm();
 
@@ -139,6 +148,28 @@ function webReadFileSync(path: unknown): WebReadFileResult {
   }
 }
 
+/**
+ * The bytes of `file`, read now with the installed `readFileSync`: this
+ * module has no file system of its own. A media value holds content, never
+ * a path.
+ */
+function readMediaFile(file: string, operation: string): Uint8Array {
+  if (!readFileSyncImpl) {
+    throw new Error(
+      `${operation}: fs.readFileSync is not available in this JavaScript runtime; read the file yourself and use fromFileContent`,
+    );
+  }
+  try {
+    return readFileSyncImpl(file);
+  } catch (error) {
+    throw new Error(`${operation}: media file ${JSON.stringify(file)} could not be read: ${errorMessage(error)}`);
+  }
+}
+
+function mediaFromFile(kind: number, file: string, mimeType: string | null | undefined): bigint {
+  return mediaWasmFromFileBytes(kind, file, readMediaFile(file, "fromFile"), mimeType ?? undefined);
+}
+
 function ensureWebSysopsConfigured(): void {
   if (!hostCallableDispatchFactory) throw new Error("Web HOST_VALUE_CALLABLE dispatch is not installed");
   if (!webSysopKeys) {
@@ -192,6 +223,11 @@ const ordinaryHandleFinalizer = new FinalizationRegistry<bigint>((key) => {
     // Finalizers may run during isolate teardown. Eventual cleanup is best-effort.
   }
 });
+
+/** Release one owned wire reference that never reached a host wrapper. */
+export function _releaseWireHandle(key: HandleKey): void {
+  releaseWasmHandle(keyToBigint(key));
+}
 
 export class BamlHandle {
   private readonly rawKey: bigint;
@@ -271,9 +307,10 @@ abstract class BamlMedia {
     return mediaWasmUrl(this.rawKey, this.handleType) ?? null;
   }
 
-  file(): string | null {
+  /** The base name of the file the content was read from, if any. */
+  name(): string | null {
     this.assertLive();
-    return mediaWasmFile(this.rawKey, this.handleType) ?? null;
+    return mediaWasmName(this.rawKey, this.handleType) ?? null;
   }
 
   base64(): string {
@@ -297,7 +334,8 @@ abstract class BamlMedia {
 export class BamlImage extends BamlMedia {
   private constructor(rawKey: bigint) { super(rawKey, HANDLE_MEDIA_IMAGE); }
   static fromUrl(url: string, mimeType?: string | null): BamlImage { return new BamlImage(mediaWasmFromUrl(MEDIA_IMAGE, url, mimeType ?? undefined)); }
-  static fromFile(file: string, mimeType?: string | null): BamlImage { return new BamlImage(mediaWasmFromFile(MEDIA_IMAGE, file, mimeType ?? undefined)); }
+  static fromFile(file: string, mimeType?: string | null): BamlImage { return new BamlImage(mediaFromFile(MEDIA_IMAGE, file, mimeType)); }
+  static fromFileContent(file: string, base64: string, mimeType?: string | null): BamlImage { return new BamlImage(mediaWasmFromFileContent(MEDIA_IMAGE, file, base64, mimeType ?? undefined)); }
   static fromBase64(base64: string, mimeType?: string | null): BamlImage { return new BamlImage(mediaWasmFromBase64(MEDIA_IMAGE, base64, mimeType ?? undefined)); }
   static _fromHandle(handle: BamlHandle): BamlImage { return new BamlImage(this.cloneKeyFromHandle(handle, HANDLE_MEDIA_IMAGE, "BamlImage")); }
 }
@@ -305,7 +343,8 @@ export class BamlImage extends BamlMedia {
 export class BamlAudio extends BamlMedia {
   private constructor(rawKey: bigint) { super(rawKey, HANDLE_MEDIA_AUDIO); }
   static fromUrl(url: string, mimeType?: string | null): BamlAudio { return new BamlAudio(mediaWasmFromUrl(MEDIA_AUDIO, url, mimeType ?? undefined)); }
-  static fromFile(file: string, mimeType?: string | null): BamlAudio { return new BamlAudio(mediaWasmFromFile(MEDIA_AUDIO, file, mimeType ?? undefined)); }
+  static fromFile(file: string, mimeType?: string | null): BamlAudio { return new BamlAudio(mediaFromFile(MEDIA_AUDIO, file, mimeType)); }
+  static fromFileContent(file: string, base64: string, mimeType?: string | null): BamlAudio { return new BamlAudio(mediaWasmFromFileContent(MEDIA_AUDIO, file, base64, mimeType ?? undefined)); }
   static fromBase64(base64: string, mimeType?: string | null): BamlAudio { return new BamlAudio(mediaWasmFromBase64(MEDIA_AUDIO, base64, mimeType ?? undefined)); }
   static _fromHandle(handle: BamlHandle): BamlAudio { return new BamlAudio(this.cloneKeyFromHandle(handle, HANDLE_MEDIA_AUDIO, "BamlAudio")); }
 }
@@ -313,7 +352,8 @@ export class BamlAudio extends BamlMedia {
 export class BamlVideo extends BamlMedia {
   private constructor(rawKey: bigint) { super(rawKey, HANDLE_MEDIA_VIDEO); }
   static fromUrl(url: string, mimeType?: string | null): BamlVideo { return new BamlVideo(mediaWasmFromUrl(MEDIA_VIDEO, url, mimeType ?? undefined)); }
-  static fromFile(file: string, mimeType?: string | null): BamlVideo { return new BamlVideo(mediaWasmFromFile(MEDIA_VIDEO, file, mimeType ?? undefined)); }
+  static fromFile(file: string, mimeType?: string | null): BamlVideo { return new BamlVideo(mediaFromFile(MEDIA_VIDEO, file, mimeType)); }
+  static fromFileContent(file: string, base64: string, mimeType?: string | null): BamlVideo { return new BamlVideo(mediaWasmFromFileContent(MEDIA_VIDEO, file, base64, mimeType ?? undefined)); }
   static fromBase64(base64: string, mimeType?: string | null): BamlVideo { return new BamlVideo(mediaWasmFromBase64(MEDIA_VIDEO, base64, mimeType ?? undefined)); }
   static _fromHandle(handle: BamlHandle): BamlVideo { return new BamlVideo(this.cloneKeyFromHandle(handle, HANDLE_MEDIA_VIDEO, "BamlVideo")); }
 }
@@ -321,7 +361,8 @@ export class BamlVideo extends BamlMedia {
 export class BamlPdf extends BamlMedia {
   private constructor(rawKey: bigint) { super(rawKey, HANDLE_MEDIA_PDF); }
   static fromUrl(url: string, mimeType?: string | null): BamlPdf { return new BamlPdf(mediaWasmFromUrl(MEDIA_PDF, url, mimeType ?? undefined)); }
-  static fromFile(file: string, mimeType?: string | null): BamlPdf { return new BamlPdf(mediaWasmFromFile(MEDIA_PDF, file, mimeType ?? undefined)); }
+  static fromFile(file: string, mimeType?: string | null): BamlPdf { return new BamlPdf(mediaFromFile(MEDIA_PDF, file, mimeType)); }
+  static fromFileContent(file: string, base64: string, mimeType?: string | null): BamlPdf { return new BamlPdf(mediaWasmFromFileContent(MEDIA_PDF, file, base64, mimeType ?? undefined)); }
   static fromBase64(base64: string, mimeType?: string | null): BamlPdf { return new BamlPdf(mediaWasmFromBase64(MEDIA_PDF, base64, mimeType ?? undefined)); }
   static _fromHandle(handle: BamlHandle): BamlPdf { return new BamlPdf(this.cloneKeyFromHandle(handle, HANDLE_MEDIA_PDF, "BamlPdf")); }
 }
@@ -348,45 +389,8 @@ export function _setCallCancellationObserverForTest(observer: ((callId: bigint) 
   callCancellationObserver = observer;
 }
 
-export class BamlCallContext {
-  private readonly activeCallIds = new Set<bigint>();
-  private isAborted = false;
-  abort(): void {
-    if (this.isAborted) return;
-    this.isAborted = true;
-    for (const callId of [...this.activeCallIds]) cancelCallId(callId);
-  }
-  get aborted(): boolean { return this.isAborted; }
-  _attachCallId(callId: string): void {
-    const id = parseCallId(callId);
-    const alreadyAttached = this.activeCallIds.has(id);
-    this.activeCallIds.add(id);
-    if (this.isAborted && !alreadyAttached) cancelCallId(id);
-  }
-  _detachCallId(callId: string): void { this.activeCallIds.delete(parseCallId(callId)); }
-  _activeCallIdsForTest(): bigint[] { return [...this.activeCallIds]; }
-}
-
-export class HostSpanManager {
-  enter(_name: string, _args: unknown): void {}
-  exitOk(): void {}
-  exitError(_message: string): void {}
-  upsertTags(_tags: Record<string, string>): void {}
-  deepClone(): HostSpanManager { return new HostSpanManager(); }
-  contextDepth(): number { return 0; }
-}
-
-export class Timing {}
-export class Usage {}
-export class LlmCall {}
-export { LlmCall as LLMCall };
-export class FunctionLog {}
-export class Collector {
-  constructor(_name?: string | null) {}
-}
-
 export class BamlRuntime {
-  static initializeRuntimeFromBytecode(bytecode: Uint8Array, embeddedBamlToml?: string): BamlRuntime {
+  static initializeRuntimeFromBlob(bytecode: string | Uint8Array, embeddedBamlToml?: string): BamlRuntime {
     ensureWebSysopsConfigured();
     try {
       stageRuntimeBytecode(bytecode, embeddedBamlToml);
@@ -406,14 +410,14 @@ export class BamlRuntime {
     runtime = new BamlRuntime();
     return runtime;
   }
-  callFunctionSync(encodedArgs: Uint8Array, _ctx?: HostSpanManager | null, _collectors?: Collector[] | null): Uint8Array {
+  callFunctionSync(encodedArgs: Uint8Array): Uint8Array {
     try {
       return callWasmFunctionSync(encodedArgs);
     } catch (error) {
       throw wrapNativeError(error);
     }
   }
-  async callFunction(encodedArgs: Uint8Array, _ctx?: HostSpanManager | null, _collectors?: Collector[] | null): Promise<Uint8Array> {
+  async callFunction(encodedArgs: Uint8Array): Promise<Uint8Array> {
     try {
       return await callWasmFunction(encodedArgs);
     } catch (error) {
@@ -430,6 +434,34 @@ export function getRuntime(): BamlRuntime {
   return runtime;
 }
 export function newFunctionCall(): bigint { return newWasmFunctionCall(); }
+export function releaseFunctionCall(callId: string): boolean { return releaseWasmFunctionCall(parseCallId(callId)); }
+export function invocationClockNs(callId: string): string { return invocationWasmClockNs(parseCallId(callId)).toString(); }
+export interface WebHostExecution { state: BamlHandle; cancel: Uint8Array; cancelled: boolean; }
+const hostExecutions = new Map<number, WebHostExecution>();
+registerWebHostCancelCallback((id: number) => { const execution = hostExecutions.get(id); if (execution) execution.cancelled = true; });
+export function _hostInvocationFrame(execution: object): [BamlHandle, Uint8Array] {
+    const frame = execution as WebHostExecution;
+    return [frame.state.clone(), wasmCloneOutboundValue(frame.cancel)];
+}
+export function _traceSelection(handle: BamlHandle, callId: string): [Uint8Array, BamlHandle | undefined] {
+    const [wire, owner] = wasmTraceSelection(parseCallId(callId), keyToBigint(handle.key)) as [Uint8Array, bigint | null];
+    return [wire, owner == null ? undefined : new BamlHandle(keyFromBigint(owner), 20)];
+}
+export function _invocationContext(handle?: BamlHandle): Uint8Array { return wasmInvocationContext(handle ? keyToBigint(handle.key) : 0n); }
+export function _watchInvocationCancellation(handle: BamlHandle, callback: () => void): object { return wasmWatchInvocationCancellation(keyToBigint(handle.key), callback); }
+export function _isInvocationCancelled(handle: BamlHandle): boolean { return wasmIsInvocationCancelled(keyToBigint(handle.key)); }
+export function _startHostCallExecution(execution: object): string | null { return (execution as WebHostExecution).cancelled ? null : ""; }
+export function _finishHostCallExecution(_execution: object): void { }
+function releaseControlValue(value: baml_bridge.cffi.v1.IBamlOutboundValue): void {
+    if (value.handleValue && !isHostValueHandleType(value.handleValue.handleType ?? 0)) releaseWasmHandle(BigInt(value.handleValue.key!.toString()));
+    for (const item of value.listValue?.items ?? []) releaseControlValue(item);
+    for (const item of value.mapValue?.entries ?? value.classValue?.fields ?? []) if (item.value) releaseControlValue(item.value);
+    if (value.unionVariantValue?.value) releaseControlValue(value.unionVariantValue.value);
+}
+export function _discardHostCallArgs(bytes: Uint8Array): void {
+  const call = baml_bridge.cffi.v1.BamlToHostCall.decode(bytes);
+  for (const arg of call.args) if (arg.value) releaseControlValue(arg.value);
+}
 export function cancelFunctionCall(callId: bigint | string): boolean {
   const parsed = typeof callId === "bigint" ? callId : parseCallId(callId);
   if (parsed < 0n || parsed > MAX_UINT64) {
@@ -437,7 +469,6 @@ export function cancelFunctionCall(callId: bigint | string): boolean {
   }
   return cancelCallId(parsed);
 }
-export function flushEvents(): void { flushWasmEvents(); }
 export function getVersion(): string { return getWasmVersion(); }
 export function getToolchainVersion(): string { return getWasmToolchainVersion(); }
 export function getBridgeRuntimeVersion(): string { return getWasmBridgeRuntimeVersion(); }
@@ -446,13 +477,32 @@ export function registerHostValueReleaseCallback(callback: (key: HandleKey) => v
   hostRelease = callback;
   registerWebHostValueReleaseCallback((key: bigint) => hostRelease?.(keyFromBigint(key)));
 }
-export function registerHostCallable(callback: (callId: number, args: Uint8Array) => void): HandleKey { return keyFromBigint(registerWebHostCallable(callback)); }
+export function registerHostCallable(callback: (callId: number, args: Uint8Array, execution?: object) => void, marker?: BamlHandle): HandleKey {
+    if (marker) throw new TypeError("host instrumentation is not supported in Web");
+    return keyFromBigint(registerWebHostCallable((bytes: Uint8Array) => {
+        const wire = baml_bridge.cffi.v1.HostInvocation.decode(bytes);
+        const execution = { state: new BamlHandle(keyFromBigint(BigInt(wire.effectiveState.toString())), 19), cancel: baml_bridge.cffi.v1.BamlOutboundValue.encode(wire.cancel!).finish(), cancelled: false };
+        hostExecutions.set(wire.callbackId, execution);
+        // Controls stay owned until completeHostCall reports actual exit.
+        hostControls.set(wire.callbackId, wire.cancel ?? undefined);
+        callback(wire.callbackId, wire.applicationArgs, execution);
+    }));
+}
+const hostControls = new Map<number, baml_bridge.cffi.v1.IBamlOutboundValue | undefined>();
 export function releaseHostCallable(key: HandleKey): void {
   const value = BigInt.asUintN(64, BigInt(key.high) << 32n | BigInt.asUintN(32, BigInt(key.low)));
   releaseWebHostCallable(value);
   hostRelease?.(key);
 }
-export function completeHostCall(callId: number, isError: number, content: Uint8Array): void { completeWebHostCall(callId, isError, content); }
+export function completeHostCall(callId: number, isError: number, content: Uint8Array): void {
+    try { completeWebHostCall(callId, isError, content); }
+    finally {
+        const controls = hostControls.get(callId);
+        hostControls.delete(callId);
+        if (controls) releaseControlValue(controls);
+        hostExecutions.delete(callId);
+    }
+}
 export function _seedFunctionRefHandle(globalIndex: number): [HandleKey, number] {
   return [keyFromBigint(seedWasmFunctionRefHandle(globalIndex)), HANDLE_FUNCTION_REF];
 }

@@ -114,13 +114,20 @@ function DeepParamTypes(
 
 // ===== Trivia on function declaration (line comments) =====
 // 1 function keyword leading
-function TriviaFunc( // 6 open paren trailing
+function // 2 function keyword trailing
+    // 3 name leading
+    TriviaFunc // 4 name trailing
+    // 5 open paren leading
+    ( // 6 open paren trailing
     // 7 param leading
     x: int, // 11 type trailing
     // 12 close paren leading
-) -> // 15 arrow trailing
+) // 13 close paren trailing
+    // 14 arrow leading
+    -> // 15 arrow trailing
     // 16 return type leading
     int // 17 return type trailing
+// 18 body leading
 { // 19 body open trailing
     x
 } // 20 body close trailing
@@ -129,11 +136,11 @@ function TriviaFunc( // 6 open paren trailing
 
 // ===== Trivia on function declaration (block comments) =====
 /* 1 function keyword leading */
-function TriviaFuncBlock( /* 6 open paren trailing */
+function /* 2 function keyword trailing */ /* 3 name leading */ TriviaFuncBlock /* 4 name trailing */ /* 5 open paren leading */ ( /* 6 open paren trailing */
     /* 7 param leading */
     x: /* 9 colon trailing *//* 10 type leading */int, /* 11 type trailing */
     /* 12 close paren leading */
-) -> /* 15 arrow trailing */ /* 16 return type leading */ int /* 17 return type trailing */ { /* 19 body open trailing */
+) /* 13 close paren trailing */ /* 14 arrow leading */ -> /* 15 arrow trailing */ /* 16 return type leading */ int /* 17 return type trailing */ /* 18 body leading */ { /* 19 body open trailing */
     x
 } /* 20 body close trailing */
 
@@ -161,7 +168,10 @@ function MultiParamTriviaBlock(
 
 // ===== Trivia on wrapping function with many params (line comments) =====
 // 1 leading
-function TriviaWrapParams( // 5 trailing
+function // 2 trailing
+    // 3 leading
+    TriviaWrapParams // 4 trailing
+    ( // 5 trailing
     // 6 leading
     first_parameter: int, // 11 trailing
     // 12 leading
@@ -170,9 +180,12 @@ function TriviaWrapParams( // 5 trailing
     third_parameter: bool, // 23 trailing
     // 24 leading
     fourth_parameter: float, // 28 trailing
-) -> // 31 trailing
+) // 29 trailing
+    // 30 leading
+    -> // 31 trailing
     // 32 leading
     string // 33 trailing
+// 34 leading
 { // 35 trailing
     "result"
 } // 36 trailing
@@ -181,7 +194,7 @@ function TriviaWrapParams( // 5 trailing
 
 // ===== Trivia on wrapping function with many params (block comments) =====
 /* 1 leading */
-function TriviaWrapParamsBlock( /* 5 trailing */
+function /* 2 trailing */ /* 3 leading */ TriviaWrapParamsBlock /* 4 trailing */ ( /* 5 trailing */
     /* 6 leading */
     first_parameter: /* 8 trailing *//* 9 leading */int/* 10 trailing */, /* 11 trailing */
     /* 12 leading */
@@ -190,7 +203,7 @@ function TriviaWrapParamsBlock( /* 5 trailing */
     third_parameter: /* 20 trailing *//* 21 leading */bool/* 22 trailing */, /* 23 trailing */
     /* 24 leading */
     fourth_parameter: /* 26 trailing *//* 27 leading */float, /* 28 trailing */
-) -> /* 31 trailing */ /* 32 leading */ string /* 33 trailing */ { /* 35 trailing */
+) /* 29 trailing */ /* 30 leading */ -> /* 31 trailing */ /* 32 leading */ string /* 33 trailing */ /* 34 leading */ { /* 35 trailing */
     "result"
 } /* 36 trailing */
 
@@ -229,14 +242,20 @@ function TriviaWrapReturnTypeBlock(
 
 // ===== Trivia on wrapping long-name + params + return (line comments) =====
 // 1 leading
-function TriviaEverythingLong_NameAndParamsAndReturn( // 5 trailing
+function // 2 trailing
+    // 3 leading
+    TriviaEverythingLong_NameAndParamsAndReturn // 4 trailing
+    ( // 5 trailing
     // 6 leading
     first_long_param: map<string, int>, // 11 trailing
     // 12 leading
     second_long_param: (int | string | bool)[], // 16 trailing
-) -> // 19 trailing
+) // 17 trailing
+    // 18 leading
+    -> // 19 trailing
     // 20 leading
     map<string, int | string | bool | float | null> // 21 trailing
+// 22 leading
 { // 23 trailing
     { "a": 1 }
 } // 24 trailing
@@ -245,12 +264,15 @@ function TriviaEverythingLong_NameAndParamsAndReturn( // 5 trailing
 
 // ===== Trivia on wrapping long-name + params + return (block comments) =====
 /* 1 leading */
-function TriviaEverythingLong_NameAndParamsAndReturnBlock( /* 5 trailing */
+function /* 2 trailing */ /* 3 leading */ TriviaEverythingLong_NameAndParamsAndReturnBlock /* 4 trailing */ ( /* 5 trailing */
     /* 6 leading */
     first_long_param: /* 8 trailing *//* 9 leading */map<string, int>/* 10 trailing */, /* 11 trailing */
     /* 12 leading */
     second_long_param: /* 14 trailing *//* 15 leading */(int | string | bool)[], /* 16 trailing */
-) -> /* 19 trailing */ /* 20 leading */ map<string, int | string | bool | float | null> /* 21 trailing */ { /* 23 trailing */
+) /* 17 trailing */ /* 18 leading */ -> /* 19 trailing */ /* 20 leading */ map<
+    string,
+    int | string | bool | float | null
+> /* 21 trailing */ /* 22 leading */ { /* 23 trailing */
     { "a": 1 }
 } /* 24 trailing */
 

@@ -27,7 +27,7 @@
 
 import { vi } from 'vitest';
 
-import { BamlRuntime } from '../dist/native.js';
+import { BamlRuntime, newFunctionCall, releaseFunctionCall } from '../dist/native.js';
 import { callFunction, callFunctionSync } from '../dist/index.js';
 import { encodeCallArgs } from '../dist/proto.js';
 import * as hostValueRegistry from '../dist/host_value_registry.js';
@@ -40,6 +40,10 @@ function CallCb(callback: (int) -> string, x: int) -> string {
 function CallIntCb(callback: (int) -> int, x: int) -> int {
     callback(x)
 }
+
+function CallFloatCb(callback: () -> float) -> float {
+    callback()
+}
 `;
 
 function makeRuntime(): BamlRuntime {
@@ -47,6 +51,17 @@ function makeRuntime(): BamlRuntime {
 }
 
 describe('host-callable round-trip', () => {
+    test('invalid target preparation releases its allocated call', () => {
+        makeRuntime();
+        const callId = BigInt(newFunctionCall());
+        expect(() => encodeCallArgs({}, {
+            callId,
+            functionName: 'CallCb',
+            functionHandle: '1',
+        })).toThrow(/exactly one BAML call target/);
+        expect(releaseFunctionCall(callId.toString())).toBe(false);
+    });
+
     test('plain function callback returns a string', async () => {
         const rt = makeRuntime();
         const cb = (x: number) => `got ${x}`;
@@ -59,6 +74,12 @@ describe('host-callable round-trip', () => {
         const cb = (x: number) => x + 1;
         const result = await callFunction(rt, 'CallIntCb', { callback: cb, x: 41 });
         expect(result.result()).toBe(42);
+    });
+
+    test('integral Number returned for float stays a float contract value', async () => {
+        const rt = makeRuntime();
+        const result = await callFunction(rt, 'CallFloatCb', { callback: () => 1 });
+        expect(result.result()).toBe(1);
     });
 
     test('arrow function (lambda) callback', async () => {

@@ -42,6 +42,8 @@ jobs:
       thir: ${{ steps.check_thir.outputs.changed }}
       # Flag for codegen changes
       codegen: ${{ steps.check_codegen.outputs.changed }}
+      # Docs example changes need the CLI, but not the full platform/SDK matrix.
+      documentation_snippets: ${{ steps.check_documentation_snippets.outputs.changed }}
       # Flag for docs/frontend changes
       docs: ${{ steps.check_docs.outputs.changed }}
       # Flag for typescript2/webview changes
@@ -52,8 +54,6 @@ jobs:
       unsafe: ${{ steps.check_unsafe.outputs.changed }}
       # Flag for proto codegen changes - triggers generated file sync check
       proto: ${{ steps.check_proto.outputs.changed }}
-      # Flag for profiling-ring changes (bex_events) - triggers loom + miri
-      prof: ${{ steps.check_prof.outputs.changed }}
       # Flag for inputs that can change the shipping bridge_cffi binaries
       bridge_cffi_release: ${{ steps.check_bridge_cffi_release.outputs.changed }}
       # Flag for SDK test changes - triggers the SDK parity analysis pipeline
@@ -72,8 +72,10 @@ jobs:
         id: merge_base
         env:
           BASE_REF: ${{ github.event.pull_request.base.ref || 'canary' }}
+          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
         run: |
-          sha=$(git merge-base HEAD "origin/${BASE_REF}")
+          set -euo pipefail
+          sha=${MERGE_GROUP_BASE_SHA:-$(git merge-base HEAD "origin/${BASE_REF}")}
           echo "sha=${sha}" >> "$GITHUB_OUTPUT"
 
       - name: Check if code changed
@@ -83,12 +85,14 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':baml_language/**' \
+            ':typescript2/app-promptfiddle/src/playground/default.baml' \
             ':scripts/baml-language-version' \
             ':scripts/baml-wrapper-version' \
             ':scripts/baml-release-manifests' \
             ':scripts/baml-package-manager-artifacts' \
             ':scripts/baml-release-platforms' \
             ':scripts/baml_release_platforms.py' \
+            ':tools/baml_nightly_select.py' \
             ':scripts/baml-bridge-cffi-hygiene' \
             ':scripts/tests/**' \
             ':release/platforms.json' \
@@ -106,6 +110,7 @@ jobs:
             ':.github/workflows/publish2-nodejs-sdk.yaml' \
             ':.github/workflows/publish2-web-sdk.yaml' \
             ':.github/workflows/cargo-tests.reusable.yaml' \
+            ':.github/workflows/compiler-tests.reusable.yaml' \
             ':.github/workflows/size-gate.reusable.yaml' \
             ':.github/workflows/wasm-pack-tests.reusable.yaml' \
           ; then
@@ -153,7 +158,6 @@ jobs:
         run: |
           if git diff --quiet "${MERGE_BASE}...HEAD" -- \
             ':baml_language/crates/baml_compiler_hir/**' \
-            ':baml_language/crates/baml_workspace/**' \
             ':baml_language/crates/baml_compiler_parser/**' \
             ':baml_language/crates/baml_base/**' \
           ; then
@@ -192,6 +196,35 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Check if documentation examples changed
+        id: check_documentation_snippets
+        env:
+          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          # Content includes expected inferred signatures in MDX, as well as
+          # canonical code. CSS/components do not require a Rust build.
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]] || ! git diff --quiet "${MERGE_BASE}...HEAD" -- \
+            ':typescript2/app-developer-docs/content/**' \
+            ':typescript2/app-developer-docs/lib/snippets/**' \
+            ':typescript2/app-developer-docs/scripts/validate-snippets.ts' \
+            ':typescript2/app-developer-docs/scripts/validate-book-behavior.ts' \
+            ':typescript2/app-developer-docs/scripts/operator-arguments.ts' \
+            ':typescript2/app-developer-docs/package.json' \
+            ':typescript2/package.json' \
+            ':typescript2/pnpm-lock.yaml' \
+            ':typescript2/pnpm-workspace.yaml' \
+            ':.envrc' \
+            ':mise.toml' \
+            ':tools/baml-sccache' \
+            ':.github/actions/setup-mise/**' \
+            ':.github/actions/setup-node2/**' \
+          ; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Check if docs changed
         id: check_docs
         env:
@@ -216,6 +249,7 @@ jobs:
             ':typescript2/pkg-playground/**' \
             ':typescript2/pkg-proto/**' \
             ':baml_language/crates/bridge_ctypes/types/**' \
+            ':baml_language/crates/bridge_wasm/**' \
             ':.github/workflows/webview-tests.reusable.yaml' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -268,28 +302,6 @@ jobs:
             ':baml_language/crates/bridge_cffi/include/**' \
             ':baml_language/sdks/swift/Sources/BamlBridge/Proto/**' \
             ':baml_language/sdks/swift/Sources/CBamlBridge/include/**' \
-          ; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      # Includes the job's own inputs (workspace manifest with the
-      # loom/minstant dep versions + check-cfg list, the pinned toolchain,
-      # and this workflow file) so a change that can break the loom/miri
-      # build re-runs the gate. Cargo.lock is deliberately excluded: it
-      # churns on every dep bump and the cargo-tests job already covers the
-      # std halves of the suite.
-      - name: Check if profiling ring code changed
-        id: check_prof
-        env:
-          MERGE_BASE: ${{ steps.merge_base.outputs.sha }}
-        run: |
-          if git diff --quiet "${MERGE_BASE}...HEAD" -- \
-            ':baml_language/crates/bex_events/**' \
-            ':baml_language/Cargo.toml' \
-            ':baml_language/rust-toolchain.toml' \
-            ':.github/workflows/ci.yaml' \
           ; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
@@ -462,10 +474,10 @@ jobs:
         with:
           # Temporarily omit Hawk while its CI check is disabled.
           # install_args: "cargo:prek cargo:https://github.com/astral-sh/hawk python uv node clang-format"
-          install_args: "cargo:prek python uv node clang-format"
+          install_args: "sccache cargo:prek python uv node clang-format"
 
       - name: "Cache prek"
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
@@ -588,14 +600,36 @@ jobs:
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     uses: ./.github/workflows/cargo-tests.reusable.yaml
-    secrets: inherit
+    # Map repository Actions secrets into the reusable-workflow contract.
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
+
+  documentation-snippets:
+    name: "Documentation examples"
+    needs: determine_changes
+    # Cargo CI already runs this reusable job when code changes or on main/canary.
+    # The two paths are mutually exclusive: never build a second CLI for docs.
+    if: >-
+      needs.determine_changes.outputs.documentation_snippets == 'true' &&
+      needs.determine_changes.outputs.code != 'true' &&
+      github.ref != 'refs/heads/main' && github.ref != 'refs/heads/canary'
+    uses: ./.github/workflows/compiler-tests.reusable.yaml
+    with:
+      run-compiler-tests: false
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
 
   size-gate:
     name: "Size Gate"
     needs: determine_changes
     if: needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/canary'
     uses: ./.github/workflows/size-gate.reusable.yaml
-    secrets: inherit
+    # Structural mapping only; see cargo-tests above.
+    secrets:
+      BAML_SCCACHE_R2_ACCESS_KEY_ID: ${{ secrets.BAML_SCCACHE_R2_ACCESS_KEY_ID }}
+      BAML_SCCACHE_R2_SECRET_ACCESS_KEY: ${{ secrets.BAML_SCCACHE_R2_SECRET_ACCESS_KEY }}
     permissions:
       contents: read
       pull-requests: write
@@ -750,63 +784,6 @@ jobs:
       - name: "Run Miri tests on bex_heap"
         run: cargo miri test -p bex_heap --lib
         working-directory: baml_language
-
-  # Loom + Miri verification for the lock-free profiling ring
-  # (bex_events::prof). Scoped to the prof:: tests so it stays minutes-fast —
-  # deliberately narrower than the (disabled) whole-crate miri-tests job
-  # above, whose bex_heap runs were timing out.
-  prof-concurrency:
-    name: "Profiling ring (loom + miri)"
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    needs: determine_changes
-    if: needs.determine_changes.outputs.prof == 'true'
-    timeout-minutes: 45
-    steps:
-      - name: "Checkout"
-        uses: useblacksmith/checkout@v1
-        with:
-          persist-credentials: false
-
-      # Install Rust toolchain BEFORE rust-cache so cache key uses correct Rust version.
-      - name: "Install Rust toolchain"
-        run: rustup toolchain install
-        working-directory: baml_language
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: "baml_language -> target"
-          shared-key: "prof-concurrency"
-
-      - name: "Fetch cargo dependencies"
-        run: cargo fetch
-        working-directory: baml_language
-
-      # The model checker explores every interleaving (bounded at 3
-      # preemptions, set in the test harness) of the ring's
-      # producer/consumer/lifecycle protocols. The custom cfg name
-      # (baml_loom, not the conventional loom) keeps the flag from
-      # half-activating loom support in third-party deps (e.g. boxcar) that
-      # gate on cfg(loom) but need their own loom feature enabled to compile.
-      - name: "Loom model checking (bex_events::prof)"
-        run: 'cargo test -p bex_events --release --lib prof::'
-        working-directory: baml_language
-        env:
-          RUSTFLAGS: "--cfg baml_loom"
-          CARGO_TARGET_DIR: target/loom
-
-      - name: "Install Rust nightly and Miri"
-        run: rustup toolchain install nightly --component miri
-        working-directory: baml_language
-
-      # Miri checks the raw-pointer/UnsafeCell discipline of the same
-      # scenarios on real threads. Leaked rings are by design (&'static
-      # lifetime model); isolation is off for park_timeout/sleep in the
-      # stress tests.
-      - name: "Miri (bex_events::prof)"
-        run: 'cargo +nightly miri test -p bex_events --lib prof::'
-        working-directory: baml_language
-        env:
-          MIRIFLAGS: "-Zmiri-ignore-leaks -Zmiri-disable-isolation"
 
   proto-sync:
     name: "proto generated files sync"
@@ -1002,7 +979,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: "Checkout Branch"
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -1062,7 +1039,9 @@ jobs:
       # index + git checkouts, not the unpacked sources, so this keeps the
       # artifact (and the run job's download/untar) small.
       - name: "Pack cargo home for benchmarks-run"
-        run: tar -C "$HOME" --exclude='.cargo/registry/src' -cf cargo-home.tar .cargo/registry .cargo/git
+        run: |
+          mkdir -p "$HOME/.cargo/git"
+          tar -C "$HOME" --exclude='.cargo/registry/src' -cf cargo-home.tar .cargo/registry .cargo/git
       - name: "Upload cargo home"
         uses: actions/upload-artifact@v7
         with:
@@ -1082,7 +1061,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: "Checkout Branch"
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -1097,7 +1076,7 @@ jobs:
       # re-cloning git deps on the bare codspeed-macro runner (~24 min). Comes
       # via artifact, not cache — see the build job for why cache misses here.
       - name: "Download cargo home"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: codspeed-cargo-home
           path: /tmp/cargo-home
@@ -1110,7 +1089,7 @@ jobs:
           tool: cargo-codspeed@4.7.0
 
       - name: "Download prebuilt benchmark binaries"
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: codspeed-walltime-benches
           path: baml_language/target/codspeed/walltime
@@ -1174,7 +1153,7 @@ jobs:
       pull-requests: write
     steps:
       - name: "Comment perf opt-in instructions"
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           RUN_PERF: ${{ needs.determine_changes.outputs.run_perf }}
         with:
@@ -1234,13 +1213,13 @@ jobs:
       - release-metadata
       - bridge-cffi-release
       - cargo-tests
+      - documentation-snippets
       - wasm-pack-tests
       - docs
       - webview-tests
       - grammar-tests
       - linguist-compile-gate
       # - miri-tests  # TEMPORARILY DISABLED: miri tests timing out
-      - prof-concurrency
       - proto-sync
       - sdk_parity_check
       # NOTE: size-gate is intentionally NOT a required gate. It is an
@@ -1263,13 +1242,13 @@ jobs:
           echo "| release-metadata | ${{ needs.release-metadata.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| bridge-cffi-release | ${{ needs.bridge-cffi-release.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| cargo-tests | ${{ needs.cargo-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| documentation-snippets | ${{ needs.documentation-snippets.result }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| wasm-pack-tests | ${{ needs.wasm-pack-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| docs | ${{ needs.docs.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| webview-tests | ${{ needs.webview-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| grammar-tests | ${{ needs.grammar-tests.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| linguist-compile-gate | ${{ needs.linguist-compile-gate.result }} |" >> $GITHUB_STEP_SUMMARY
           # echo "| miri-tests | ${{ needs.miri-tests.result }} |" >> $GITHUB_STEP_SUMMARY  # TEMPORARILY DISABLED
-          echo "| prof-concurrency | ${{ needs.prof-concurrency.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| proto-sync | ${{ needs.proto-sync.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| sdk-parity-check | ${{ needs.sdk_parity_check.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -1302,19 +1281,19 @@ jobs:
       - release-metadata
       - bridge-cffi-release
       - cargo-tests
+      - documentation-snippets
       - wasm-pack-tests
       - docs
       - webview-tests
       - grammar-tests
       - linguist-compile-gate
       # - miri-tests  # TEMPORARILY DISABLED: miri tests timing out
-      - prof-concurrency
       - proto-sync
       - sdk_parity_check
     # `!failure() && !cancelled()` rather than `success()`, because that is what
     # the old `workflow_run.conclusion == 'success'` gate meant: a skipped gate
-    # is not a failure. prof-concurrency and proto-sync are change-detected with
-    # no `|| ref == canary` escape hatch, so they are skipped on most canary
+    # is not a failure. proto-sync is change-detected with
+    # no `|| ref == canary` escape hatch, so it is skipped on most canary
     # pushes and `success()` would keep the release from ever firing.
     if: ${{ !failure() && !cancelled() && github.event_name == 'push' && github.ref_name == 'canary' }}
     permissions:
@@ -1432,6 +1411,12 @@ jobs:
           RELEASE_WORKFLOW_REF: ${{ steps.release-workflow-ref.outputs.ref }}
         run: |
           set -euo pipefail
+          release_plan="$RUNNER_TEMP/canary-release-plan.json"
+          scripts/baml-language-version plan \
+            --channel canary \
+            --out "$release_plan"
+          release_version="$(jq -r .canonical_version "$release_plan")"
+          echo "Requested canary release version: $release_version"
           # Load the workflow definition from the same immutable commit that the
           # release checks out, even if canary advances while this CI run finishes.
           gh workflow run release-baml-language.yml \
@@ -1439,5 +1424,6 @@ jobs:
             --ref "$RELEASE_WORKFLOW_REF" \
             -f channel=canary \
             -f dry_run=false \
+            -f version="$release_version" \
             -f source_sha="$GITHUB_SHA" \
             -f source_ci_run_id="$GITHUB_RUN_ID"

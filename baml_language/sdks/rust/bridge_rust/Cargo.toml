@@ -9,9 +9,10 @@ rust-version.workspace = true
 # crates.io, so its version must be the canonical BAML language version.
 # `scripts/baml-language-version` keeps this equal to the canary version and
 # stamps it to the release version at packaging time (`check` guards it).
-version = "0.16.0"
+version = "0.22.2"
 authors.workspace = true
 license.workspace = true
+license-file = "LICENSE"
 homepage.workspace = true
 documentation.workspace = true
 repository.workspace = true
@@ -38,6 +39,7 @@ num-bigint = { workspace = true }
 prost = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "rt", "rt-multi-thread" ] }
 ureq = { workspace = true }
 

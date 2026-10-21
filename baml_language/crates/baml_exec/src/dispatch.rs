@@ -7,11 +7,14 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{Context, Result, anyhow};
 use bex_engine::{
-    BexCallArg, BexEngine, BexExternalValue, CallId, EngineError, FunctionCallContextBuilder,
-    RuntimeTy,
+    BexCallArg, BexEngine, BexExternalValue, CallId, EngineError, FunctionCallContext,
+    FunctionCallContextBuilder, RuntimeTy,
 };
 
-use crate::output::{OutputFormat, write_output};
+use crate::{
+    HelperCallContext,
+    output::{OutputFormat, write_output_with_context},
+};
 
 /// Result of dispatching a target.
 pub enum DispatchResult {
@@ -30,7 +33,15 @@ pub fn validate_help_param(engine: &BexEngine, function_name: &str) -> Result<()
     let params = engine
         .function_params(function_name)
         .with_context(|| format!("failed to resolve target `{function_name}`"))?;
-    if params.iter().any(|(name, _, _)| *name == "help") {
+    validate_help_param_names(function_name, params.iter().map(|(name, _, _)| *name))
+}
+
+/// Check a signature before constructing an engine.
+pub fn validate_help_param_names<'a>(
+    function_name: &str,
+    param_names: impl IntoIterator<Item = &'a str>,
+) -> Result<()> {
+    if param_names.into_iter().any(|name| name == "help") {
         anyhow::bail!(
             "Target `{function_name}` declares a parameter named `help`, \
              which collides with the auto-derived `--help` flag. \
@@ -61,6 +72,33 @@ pub async fn dispatch_target(
     json_args: Option<serde_json::Value>,
     output_format: OutputFormat,
 ) -> Result<DispatchResult> {
+    Box::pin(dispatch_target_with_context(
+        engine,
+        target_name,
+        cli_values,
+        json_args,
+        output_format,
+        FunctionCallContextBuilder::new(CallId::next()).build(),
+        || {},
+    ))
+    .await
+}
+
+/// Invoke a target with a caller-provided function context.
+///
+/// The callback runs after the target call completes and again after any output
+/// conversion hook, immediately before its return value is written. CLI callers
+/// use these boundaries to flush captured `log.*` events without changing the
+/// default dispatch behavior used by packaged binaries.
+pub async fn dispatch_target_with_context(
+    engine: Arc<BexEngine>,
+    target_name: &str,
+    cli_values: HashMap<String, BexExternalValue>,
+    json_args: Option<serde_json::Value>,
+    output_format: OutputFormat,
+    call_context: FunctionCallContext,
+    after_call: impl Fn(),
+) -> Result<DispatchResult> {
     let func_info = engine
         .find_user_function(target_name)
         .ok_or_else(|| anyhow!("function `{target_name}` not found"))?;
@@ -73,35 +111,50 @@ pub async fn dispatch_target(
     // `find_user_function` matched, not the raw user input.
     validate_help_param(&engine, &func_info.qualified_name)?;
 
-    let args = build_args_from_signature(
+    let helper_context = HelperCallContext::from_call_context(&call_context);
+    let args = build_args_from_signature_with_context(
         &engine,
         cli_values,
         json_args.as_ref(),
         &func_info.param_names,
         &func_info.param_types,
         &func_info.param_has_default,
+        &helper_context,
     )
     .await?;
 
     let result = engine
-        .call_function_bound_args(
-            target_name,
-            args,
-            FunctionCallContextBuilder::new(CallId::next()).build(),
-            true,
-        )
+        .call_function_bound_args(target_name, args, call_context, true)
         .await;
+    after_call();
 
     match result {
         Ok(value) => {
-            // No stdout for `void` return; value-carrying types like `int?`
-            // still emit their serialization even when null.
-            if !matches!(func_info.return_type, RuntimeTy::Void { .. }) {
-                write_output(&engine, value, &func_info.return_type, output_format).await?;
+            // A unit return (`-> void` / `-> null`) carries no information, so
+            // the human format prints nothing for it. JSON output is a document
+            // a consumer parses, so it always prints one — `null` for unit.
+            // Value-carrying types like `int?` print in both, even when null.
+            let elide = match output_format {
+                OutputFormat::Debug => func_info.return_type.is_unit(),
+                OutputFormat::Json => false,
+            };
+            if !elide {
+                write_output_with_context(
+                    &engine,
+                    value,
+                    &func_info.return_type,
+                    output_format,
+                    &helper_context,
+                    after_call,
+                )
+                .await?;
             }
             Ok(DispatchResult::Ok)
         }
         Err(EngineError::Exit { code }) => Ok(DispatchResult::Exit(code)),
+        // Hosts report initial telemetry refusal after shutdown has joined authorization.
+        #[cfg(not(target_arch = "wasm32"))]
+        Err(error @ EngineError::CloudAuthorization(_)) => Err(error.into()),
         Err(e) => {
             // Bold-red `error:` matching ariadne / cargo. Same renderer
             // used by `baml run`'s top-level error path so target-side
@@ -133,7 +186,7 @@ enum RawArg {
 ///
 /// Complex-typed parameters are coerced through `baml.json.deserialize<T>`
 /// so user `from_json` overrides on classes are honored — same model as
-/// the output side using `baml.json.serialize<T>`. Primitive parameters
+/// the output side using the stdlib JSON serializer. Primitive parameters
 /// skip the engine and bind directly.
 pub async fn build_args_from_signature(
     engine: &Arc<BexEngine>,
@@ -142,6 +195,27 @@ pub async fn build_args_from_signature(
     param_names: &[String],
     param_types: &[RuntimeTy],
     param_has_default: &[bool],
+) -> Result<Vec<BexCallArg>> {
+    build_args_from_signature_with_context(
+        engine,
+        cli_values,
+        json_args,
+        param_names,
+        param_types,
+        param_has_default,
+        &HelperCallContext::disabled(),
+    )
+    .await
+}
+
+async fn build_args_from_signature_with_context(
+    engine: &Arc<BexEngine>,
+    cli_values: HashMap<String, BexExternalValue>,
+    json_args: Option<&serde_json::Value>,
+    param_names: &[String],
+    param_types: &[RuntimeTy],
+    param_has_default: &[bool],
+    helper_context: &HelperCallContext,
 ) -> Result<Vec<BexCallArg>> {
     let _ = param_types;
     let mut merged: HashMap<String, RawArg> = HashMap::new();
@@ -175,7 +249,7 @@ pub async fn build_args_from_signature(
         match merged.remove(name.as_str()) {
             Some(RawArg::Primitive(v)) => ordered.push(BexCallArg::Provided(Box::new(*v))),
             Some(RawArg::JsonText(s)) => {
-                let value = deserialize_via_baml_json(engine, &s, ty)
+                let value = deserialize_via_baml_json(engine, &s, ty, helper_context)
                     .await
                     .with_context(|| format!("parameter `--{name}`"))?;
                 ordered.push(BexCallArg::Provided(Box::new(value)));
@@ -223,14 +297,13 @@ async fn deserialize_via_baml_json(
     engine: &Arc<BexEngine>,
     json_text: &str,
     ty: &RuntimeTy,
+    helper_context: &HelperCallContext,
 ) -> Result<BexExternalValue> {
     let result = engine
         .call_function(
             "baml.json.deserialize",
             vec![BexExternalValue::String(json_text.into())],
-            FunctionCallContextBuilder::new(CallId::next())
-                .with_type_args(indexmap::IndexMap::from([("T".to_string(), ty.clone())]))
-                .build(),
+            helper_context.call_context(indexmap::IndexMap::from([("T".to_string(), ty.clone())])),
             true,
         )
         .await
@@ -240,7 +313,6 @@ async fn deserialize_via_baml_json(
 
 #[cfg(test)]
 mod tests {
-    use baml_type::TyAttr;
     use bex_engine::BexEngine;
     use sys_native::SysOpsExt;
 
@@ -255,14 +327,10 @@ mod tests {
     }
 
     fn ty_string() -> RuntimeTy {
-        RuntimeTy::String {
-            attr: TyAttr::default(),
-        }
+        RuntimeTy::String
     }
     fn ty_int() -> RuntimeTy {
-        RuntimeTy::Int {
-            attr: TyAttr::default(),
-        }
+        RuntimeTy::Int
     }
 
     // ── clamp_exit_code ─────────────────────────────────────────────────

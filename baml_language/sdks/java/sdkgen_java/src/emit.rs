@@ -47,11 +47,13 @@
 
 use std::collections::BTreeSet;
 
-use baml_codegen_types::{Class, CodegenFunctionParamMode, Enum, Function, Ty};
+use baml_sdkgen_types::{Class, CodegenFunctionParamMode, Enum, Function, Ty};
 
 use crate::{
     routing::{java_identifier, java_method_identifier},
-    translate_ty::{CallbackInterface, TranslateCtx, TyPosition, UnionSink, translate_ty},
+    translate_ty::{
+        CallbackInterface, CallbackReturn, TranslateCtx, TyPosition, UnionSink, translate_ty,
+    },
 };
 
 /// Per-holder pool of return-type decode descriptors. Each distinct descriptor
@@ -300,7 +302,7 @@ pub(crate) fn collect_raises_names(throws: Option<&Ty>) -> Vec<String> {
                     out.push(n);
                 }
             }
-            Ty::Union(members, _) => members.iter().for_each(|m| walk(m, out)),
+            Ty::Union(members) => members.iter().for_each(|m| walk(m, out)),
             _ => {}
         }
     }
@@ -410,11 +412,22 @@ pub(crate) fn render_class(
 
     // `final`: generated value classes carry exact-class value semantics — the
     // encoder keys its typemap on the concrete class, so a user subclass would
-    // silently break inbound encode. This covers plain value classes, generic
-    // classes, and `$stream` companions (all routed through here). Sealed-union
+    // silently break inbound encode. This covers plain value classes and generic
+    // classes (both routed through here). Sealed-union
     // interfaces and their permitted records are emitted elsewhere (records are
     // already final).
-    out.push_str(&format!("public final class {ident}{generics} {{\n"));
+    let trace_selection = matches!(class_fqn, "trace.Options" | "trace.ReservedSpan");
+    let implements = if trace_selection {
+        " implements baml_sdk.vendor.trace.TraceSelection"
+    } else {
+        ""
+    };
+    out.push_str(&format!(
+        "public final class {ident}{generics}{implements} {{\n"
+    ));
+    if trace_selection {
+        out.push_str("    public baml_bridge.BamlHandle bamlTraceHandle() { return _handle; }\n");
+    }
 
     // A class that carries method bindings (static or instance) must boot the
     // runtime when it is the FIRST generated symbol a program touches — merely
@@ -789,6 +802,7 @@ fn render_callable_pair(
         None
     };
     let ident = java_method_identifier(function.name.as_str());
+    let is_stream_companion = function.name.as_str().ends_with("@stream");
     // The `_async` sibling name, escaped past a user callable that already
     // claims `{ident}_async` (see [`async_sibling_ident`]).
     let async_ident = async_sibling_ident(&ident, sibling_idents);
@@ -808,12 +822,7 @@ fn render_callable_pair(
     let param_decls: Vec<String> = required
         .iter()
         .map(|a| {
-            // `void` is legal only as a return type; a unit-typed
-            // parameter (stdlib type-position args) boxes to Void.
             let mut ty = translate_ty(&a.ty, TyPosition::TopLevel, ctx, sink);
-            if ty == "void" {
-                ty = "java.lang.Void".to_string();
-            }
             // A nullable required param (`x: T?`) carries `@Nullable` so callers
             // (Kotlin especially) see it accepts `null`.
             if crate::translate_ty::is_nullable(&a.ty, ctx.aliases) {
@@ -868,13 +877,28 @@ fn render_callable_pair(
         }
     }
 
-    let mut ret_top = translate_ty(&function.return_type, TyPosition::TopLevel, ctx, sink);
-    let mut ret_boxed = translate_ty(&function.return_type, TyPosition::Boxed, ctx, sink);
+    // A unit return (`-> void` / `-> null`) is a Java `void` method: the result
+    // carries no information. Its async sibling completes with `java.lang.Void`,
+    // Java's own spelling of a value-less future.
+    let returns_unit = function.return_type.is_unit();
+    let mut ret_top = match &function.return_type {
+        _ if returns_unit => "void".to_string(),
+        Ty::Function { params, ret, .. } => {
+            crate::translate_ty::translate_return_callable(params, ret, ctx, sink)
+        }
+        ty => translate_ty(ty, TyPosition::TopLevel, ctx, sink),
+    };
+    let mut ret_boxed = match &function.return_type {
+        Ty::Function { params, ret, .. } => {
+            crate::translate_ty::translate_return_callable(params, ret, ctx, sink)
+        }
+        ty => translate_ty(ty, TyPosition::Boxed, ctx, sink),
+    };
     // A nullable return (`-> T?`) carries `@Nullable` on both the sync signature
     // and the async future's element type (`CompletableFuture<@Nullable T>`). A
-    // nullable type is always a boxed reference, so `ret_top == "void"` (the
-    // void-return sentinel checked downstream) can never be a nullable type.
-    if crate::translate_ty::is_nullable(&function.return_type, ctx.aliases) {
+    // unit return is not one: `void` has no value to annotate, which keeps
+    // `ret_top == "void"` (the void-return sentinel checked downstream) exact.
+    if !returns_unit && crate::translate_ty::is_nullable(&function.return_type, ctx.aliases) {
         ret_top = crate::translate_ty::annotate_nullable(&ret_top);
         ret_boxed = crate::translate_ty::annotate_nullable(&ret_boxed);
     }
@@ -1000,7 +1024,7 @@ fn render_callable_pair(
     // trailing `Consumer<<Ident>$Opts>` (so `f(required…, opts?, types?, ctx?)`),
     // plus the nested opts class. The required-only base above stays untouched,
     // so omitting the configurator still lets the engine evaluate BAML defaults.
-    if !optionals.is_empty() {
+    if !optionals.is_empty() || is_stream_companion {
         out.push_str(&render_optional_configurator(
             &ident,
             &async_ident,
@@ -1023,6 +1047,7 @@ fn render_callable_pair(
             sink,
             pool,
             returned_callable.as_ref(),
+            is_stream_companion,
         ));
     }
 
@@ -1060,7 +1085,7 @@ fn render_overload_family(
 ) -> String {
     // `types` and `ctx` derive from distinct base names, so their yield-to-user
     // escapes can never collide with each other.
-    let ctx_name = synthetic_param_name("ctx", taken);
+    let ctx_name = synthetic_param_name("baml", taken);
 
     let mut out = render_method_pair(
         doc,
@@ -1163,7 +1188,7 @@ fn render_overload_family(
 /// `params` is the already-joined Java parameter list (required args, plus an
 /// optional configurator when present). The synthetic trailing params stack in
 /// a fixed order after it: `types_name` (a `baml_bridge.BamlTypes` explicit
-/// binding bag) then `ctx_name` (a `baml_bridge.BamlCallContext`), each
+/// binding bag) then `ctx_name` (a `baml_sdk.BamlOptions`), each
 /// appended only when set (both names already escaped past colliding user
 /// arguments). They thread to the runtime through the 6-arg
 /// `callSync`/`callAsync` overload `(…, returnDesc, ctx, typeArgs)`: an absent
@@ -1208,7 +1233,7 @@ fn render_method_pair(
         trailing.push_str(&format!(", baml_bridge.BamlTypes {name}"));
     }
     if let Some(name) = ctx_name {
-        trailing.push_str(&format!(", baml_bridge.BamlCallContext {name}"));
+        trailing.push_str(&format!(", @BAML_OPTIONS_FACADE@ {name}"));
     }
     let sig_params = if params.is_empty() {
         trailing.strip_prefix(", ").unwrap_or("").to_string()
@@ -1226,9 +1251,13 @@ fn render_method_pair(
         (Some(c), Some(t)) => format!(", {c}, {t}"),
     };
 
-    let sync_call = format!(
-        "baml_bridge.BamlFfi.callSync({fqn:?}, {call_names}, {call_args}, {descriptor}{call_suffix})"
-    );
+    let sync_call = if fqn == "trace.current_context" {
+        format!("baml_bridge.BamlFfi.currentTraceContext({descriptor})")
+    } else {
+        format!(
+            "baml_bridge.BamlFfi.callSync({fqn:?}, {call_names}, {call_args}, {descriptor}{call_suffix})"
+        )
+    };
     let sync_body = if ret_top == "void" {
         format!("{prologue}        {sync_call};")
     } else if let Some(callable) = returned_callable {
@@ -1239,9 +1268,15 @@ fn render_method_pair(
     } else {
         format!("{prologue}        return ({ret_boxed}) {sync_call};")
     };
-    let async_call = format!(
-        "(java.util.concurrent.CompletableFuture<java.lang.Object>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync({fqn:?}, {call_names}, {call_args}, {descriptor}{call_suffix})"
-    );
+    let async_call = if fqn == "trace.current_context" {
+        format!(
+            "java.util.concurrent.CompletableFuture.completedFuture(baml_bridge.BamlFfi.currentTraceContext({descriptor}))"
+        )
+    } else {
+        format!(
+            "(java.util.concurrent.CompletableFuture<java.lang.Object>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync({fqn:?}, {call_names}, {call_args}, {descriptor}{call_suffix})"
+        )
+    };
     let async_body = if let Some(callable) = returned_callable {
         format!(
             "{prologue}        return (java.util.concurrent.CompletableFuture<{ret_boxed}>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.returnedClosureAsync({async_call}, {}.class, {}, {});",
@@ -1249,7 +1284,7 @@ fn render_method_pair(
         )
     } else {
         format!(
-            "{prologue}        return (java.util.concurrent.CompletableFuture<{ret_boxed}>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync({fqn:?}, {call_names}, {call_args}, {descriptor}{call_suffix});"
+            "{prologue}        return (java.util.concurrent.CompletableFuture<{ret_boxed}>) (java.util.concurrent.CompletableFuture<?>) {async_call};"
         )
     };
 
@@ -1277,7 +1312,7 @@ fn render_method_pair(
 fn render_optional_configurator(
     ident: &str,
     async_ident: &str,
-    optionals: &[&baml_codegen_types::FunctionArgument],
+    optionals: &[&baml_sdkgen_types::FunctionArgument],
     doc: &str,
     static_kw: &str,
     generics_kw: &str,
@@ -1296,6 +1331,7 @@ fn render_optional_configurator(
     sink: &mut UnionSink,
     pool: &mut DescriptorPool,
     returned_callable: Option<&ReturnedCallable>,
+    include_stream_client: bool,
 ) -> String {
     // A generic callable's optional arg may reference class/method type
     // vars; the (static) opts class must then re-declare exactly those, so
@@ -1359,6 +1395,11 @@ fn render_optional_configurator(
     // method name is the Java-escaped identifier (they differ only when the
     // arg name is a Java keyword).
     let mut setters = String::new();
+    if include_stream_client {
+        setters.push_str(&format!(
+            "\n        public {opts_ty} client(java.lang.Object v) {{\n            this.$values.put(\"client\", v);\n            this.$touched.add(\"client\");\n            return this;\n        }}\n"
+        ));
+    }
     for a in optionals {
         let mut boxed = translate_ty(&a.ty, TyPosition::Boxed, ctx, sink);
         // A nullable optional (`y?: T?`) accepts `null` as its VALUE (distinct
@@ -1413,10 +1454,18 @@ fn typed_callable_expr(
     let mut resolved = ty;
     loop {
         match resolved {
-            Ty::TypeAlias(name, _) => match ctx.aliases.get(name) {
+            Ty::TypeAlias(name) => match ctx.aliases.get(name) {
                 Some((inner, false)) => resolved = inner,
                 _ => return None,
             },
+            Ty::Union(members) => {
+                let mut non_null = members.iter().filter(|member| !matches!(member, Ty::Null));
+                let inner = non_null.next()?;
+                if non_null.next().is_some() {
+                    return None;
+                }
+                resolved = inner;
+            }
             Ty::Function { .. } => break,
             _ => return None,
         }
@@ -1478,8 +1527,8 @@ fn typed_callable_expr(
 fn needs_inbound_descriptor(ty: &Ty, ctx: &TranslateCtx<'_>) -> bool {
     match ty {
         Ty::List(..) | Ty::Map { .. } | Ty::Union(..) | Ty::Literal(..) => true,
-        Ty::Class(_, args, _) => !args.is_empty(),
-        Ty::TypeAlias(name, _) => ctx.aliases.get(name).is_none_or(|(resolved, recursive)| {
+        Ty::Class(_, args) => !args.is_empty(),
+        Ty::TypeAlias(name) => ctx.aliases.get(name).is_none_or(|(resolved, recursive)| {
             *recursive || needs_inbound_descriptor(resolved, ctx)
         }),
         _ => false,
@@ -1531,18 +1580,61 @@ pub(crate) fn render_callback_interface(iface: &CallbackInterface) -> String {
         "public interface {} extends baml_bridge.BamlHostCallable {{\n",
         iface.name
     ));
+    // A unit SAM is a `void` method; its value-shaped surfaces (`__bamlDispatch`,
+    // `callAsync`) answer the unit value, `null`.
+    let (sam_ret, future_ret) = match &iface.ret {
+        CallbackReturn::Unit => ("void", "java.lang.Void"),
+        CallbackReturn::Value(ty) => (ty.as_str(), ty.as_str()),
+    };
     out.push_str(&format!(
-        "    {} apply({});\n\n",
-        iface.ret,
+        "    {sam_ret} apply({});\n\n",
         apply_params.join(", ")
     ));
     out.push_str(
         "    /**\n     * Bridge dispatch: reshape the engine's flat declared-order arg list\n     * into this callable's SAM. Required args arrive positionally; supplied\n     * optionals fold into the always-non-null {@code Opts} bag.\n     */\n    @Override\n    default java.lang.Object __bamlDispatch(java.util.List<java.lang.Object> $positional, java.util.Map<java.lang.String, java.lang.Object> $optional) {\n",
     );
-    out.push_str(&format!(
-        "        return apply({});\n    }}\n",
-        apply_args.join(", ")
-    ));
+    out.push_str(&match iface.ret {
+        CallbackReturn::Unit => format!(
+            "        apply({});\n        return null;\n    }}\n",
+            apply_args.join(", ")
+        ),
+        CallbackReturn::Value(_) => {
+            format!("        return apply({});\n    }}\n", apply_args.join(", "))
+        }
+    });
+
+    let bare_names = iface
+        .required
+        .iter()
+        .map(|(name, _)| name.clone())
+        .chain(has_opts.then(|| "$opts".to_string()))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let params = apply_params.join(", ");
+    let controlled = format!(
+        "{params}{}@BAML_OPTIONS_FACADE@ $baml",
+        if params.is_empty() { "" } else { ", " }
+    );
+    let (call_body, async_body) = match iface.ret {
+        CallbackReturn::Unit => (
+            format!("apply({bare_names});"),
+            format!(
+                "call({bare_names}); return java.util.concurrent.CompletableFuture.completedFuture(null);"
+            ),
+        ),
+        CallbackReturn::Value(_) => (
+            format!("return apply({bare_names});"),
+            format!(
+                "return java.util.concurrent.CompletableFuture.completedFuture(call({bare_names}));"
+            ),
+        ),
+    };
+    let _ = std::fmt::Write::write_fmt(
+        &mut out,
+        format_args!(
+            "    default {sam_ret} call({params}) {{ {call_body} }}\n    default {sam_ret} call({controlled}) {{ throw new UnsupportedOperationException(\"Controls require a returned BAML callable\"); }}\n    default java.util.concurrent.CompletableFuture<{future_ret}> callAsync({params}) {{ {async_body} }}\n    default java.util.concurrent.CompletableFuture<{future_ret}> callAsync({controlled}) {{ throw new UnsupportedOperationException(\"Controls require a returned BAML callable\"); }}\n",
+        ),
+    );
 
     if has_opts {
         out.push_str(&render_opts_bag(&iface.optionals));

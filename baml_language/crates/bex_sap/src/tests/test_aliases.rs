@@ -1,11 +1,11 @@
 use super::*;
-use crate::{baml_db, baml_tyannotated};
+use crate::{baml_db, baml_ty};
 
 // type A = A[]
 test_deserializer!(
     test_simple_recursive_alias_list,
     "[[], [], [[]]]",
-    baml_tyannotated!([A]),
+    baml_ty!([A]),
     baml_db! { type A = [A]; },
     [[], [], [[]]]
 );
@@ -14,12 +14,8 @@ test_deserializer!(
 test_deserializer!(
     test_simple_recursive_alias_map,
     r#"{"one": {"two": {}}, "three": {"four": {}}}"#,
-    baml_tyannotated!(A),
-    {
-        let mut db = baml_db! {};
-        db.try_add("A", crate::baml_tyresolved!(map<string, A>)).ok().unwrap();
-        db
-    },
+    baml_ty!(A),
+    baml_db! { type A = (map<string, A>); },
     {
         "one": {"two": {}},
         "three": {"four": {}}
@@ -30,12 +26,8 @@ test_deserializer!(
 test_deserializer!(
     test_simple_recursive_alias_map_union,
     r#"{"one": {"two": {}}, "three": {"four": {}}}"#,
-    baml_tyannotated!((A | int)),
-    {
-        let mut db = baml_db! {};
-        db.try_add("A", crate::baml_tyresolved!(map<string, A>)).ok().unwrap();
-        db
-    },
+    baml_ty!((A | int)),
+    baml_db! { type A = (map<string, A>); },
     {
         "one": {"two": {}},
         "three": {"four": {}}
@@ -47,7 +39,7 @@ test_deserializer!(
 test_deserializer!(
     test_recursive_alias_cycle,
     "[[], [], [[]]]",
-    baml_tyannotated!([A]),
+    baml_ty!([A]),
     baml_db! { type A = [A]; type B = [A]; type C = [A]; },
     [[], [], [[]]]
 );
@@ -78,7 +70,7 @@ test_deserializer!(
         "bool": true
     }
     "#,
-    baml_tyannotated!(JsonValue),
+    baml_ty!(JsonValue),
     json_value_db(),
     {
         "int": 1,
@@ -98,7 +90,7 @@ test_deserializer!(
         "list": [1, 2, 3]
     }
     "#,
-    baml_tyannotated!(JsonValue),
+    baml_ty!(JsonValue),
     json_value_db(),
     {
         "number": 1,
@@ -122,7 +114,7 @@ test_deserializer!(
         }
     }
     "#,
-    baml_tyannotated!(JsonValue),
+    baml_ty!(JsonValue),
     json_value_db(),
     {
         "number": 1,
@@ -164,7 +156,7 @@ test_deserializer!(
         }
     }
     "#,
-    baml_tyannotated!(JsonValue),
+    baml_ty!(JsonValue),
     json_value_db(),
     {
         "number": 1,
@@ -210,7 +202,7 @@ test_deserializer!(
         }
     ]
     "#,
-    baml_tyannotated!(JsonValue),
+    baml_ty!(JsonValue),
     json_value_db(),
     [
         {
@@ -233,7 +225,7 @@ test_deserializer!(
     r#"
     [[42.1]]
     "#,
-    baml_tyannotated!(JsonValue),
+    baml_ty!(JsonValue),
     json_value_db(),
     [[42.1]]
 );
@@ -245,22 +237,11 @@ test_deserializer!(
 /// type JsonObject = map<string, JsonValue>
 /// ```
 fn json_value_with_cycles_db() -> TypeRefDb<'static, &'static str> {
-    let mut db = baml_db! {
+    baml_db! {
         type JsonArray = [JsonValue];
-    };
-    db.try_add(
-        "JsonObject",
-        crate::baml_tyresolved!(map<string, JsonValue>),
-    )
-    .ok()
-    .unwrap();
-    db.try_add(
-        "JsonValue",
-        crate::baml_tyresolved!((int | float | bool | string | null | JsonArray | JsonObject)),
-    )
-    .ok()
-    .unwrap();
-    db
+        type JsonObject = (map<string, JsonValue>);
+        type JsonValue = (int | float | bool | string | null | JsonArray | JsonObject);
+    }
 }
 
 test_deserializer!(
@@ -277,7 +258,7 @@ test_deserializer!(
         }
     }
     "#,
-    baml_tyannotated!(JsonValue),
+    baml_ty!(JsonValue),
     json_value_with_cycles_db(),
     {
         "number": 1,
@@ -320,7 +301,7 @@ test_deserializer!(
         }
     }
     "#,
-    baml_tyannotated!(JsonValue),
+    baml_ty!(JsonValue),
     json_value_db(),
     {
         "recipe": {
@@ -377,7 +358,7 @@ test_deserializer!(
             ]
         }
     }"#,
-    baml_tyannotated!(JsonValue),
+    baml_ty!(JsonValue),
     json_value_with_cycles_db(),
     {
         "recipe": {

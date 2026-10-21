@@ -129,7 +129,7 @@ func Test_opaque_rust_type_default_and_host_callback_positions(t *testing.T) {
 	called := 0
 	returned, err := b.GoCodegenRustTypeEdgesInvokeOpaqueResponseCallback(
 		ctx,
-		func(response baml.HttpResponse) baml.HttpResponse {
+		func(_ context.Context, response baml.HttpResponse) baml.HttpResponse {
 			called++
 			return response
 		},

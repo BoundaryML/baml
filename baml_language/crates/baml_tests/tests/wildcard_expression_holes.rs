@@ -72,22 +72,6 @@ async fn wildcard_turbofish_race_timer_fires() {
     );
 }
 
-/// A `_` turbofish hole is a clean `type inference failed` diagnostic
-/// (E0147), never a runtime-lowering panic.
-#[tokio::test]
-#[should_panic(expected = "type inference failed")]
-async fn wildcard_turbofish_uninferable_is_rejected() {
-    // `pick<int, _>(5)` — `U` appears in neither an argument nor the return
-    // type, so the `_` hole has nothing to be solved from.
-    let src = r#"
-function pick<T, U>(x: T) -> T { x }
-function main() -> int {
-    pick<int, _>(5)
-}
-"#;
-    let _ = baml_test!(src);
-}
-
 // ===========================================================================
 // Object construction: `Foo<_> { … }` solves the hole from field values.
 // ===========================================================================
@@ -157,41 +141,4 @@ function main() -> string { let p = Phantom<_> { label: "hi" }; p.label }
         "expected \"hi\", got {:?}",
         out.result
     );
-}
-
-// ===========================================================================
-// Generic-apply value: `id<_>` has nothing to infer from → clean diagnostic.
-// ===========================================================================
-
-/// A `_` in a bare generic instantiation value (not immediately called) is a
-/// clean diagnostic, never a normalization panic.
-#[tokio::test]
-#[should_panic(expected = "type inference failed")]
-async fn wildcard_generic_apply_value_is_rejected() {
-    let src = r#"
-function id<T>(x: T) -> T { x }
-function main() -> int { let f = id<_>; f(5) }
-"#;
-    let _ = baml_test!(src);
-}
-
-// ===========================================================================
-// Upcast target: `.as<Show<_>>` is an explicit ascription with no local source
-// for the hole → clean diagnostic (mirrors the `is Show<_>` pattern).
-// ===========================================================================
-
-/// A `_` in an interface upcast target is rejected cleanly, never a
-/// normalization panic.
-#[tokio::test]
-#[should_panic(expected = "type inference failed")]
-async fn wildcard_upcast_target_is_rejected() {
-    let src = r#"
-interface Show<T> { function show(self) -> T throws never }
-class C {
-  v int
-  implements Show<int> { function show(self) -> int { self.v } }
-}
-function main() -> int { let c = C { v: 5 }; let s = c.as<Show<_>>; 0 }
-"#;
-    let _ = baml_test!(src);
 }

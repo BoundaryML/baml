@@ -18,9 +18,13 @@ use async_trait::async_trait;
 pub use bex_external_types::{AsBexExternalValue, BexExternalValue, Handle};
 pub use bex_heap::BexHeap;
 // Re-export SysOp for convenience
-pub use bex_vm_types::SysOp;
+pub use bex_vm_types::{
+    BexRustData, Meter, MeteredMutex, RetainedBytes, RetainedFootprint, RustDataArc, SysOp,
+    TestRustData,
+};
 pub use tokio_util::sync::CancellationToken;
 
+pub mod network;
 pub mod sse;
 
 /// Outcome of [`resolve_name`].
@@ -91,11 +95,10 @@ pub fn resolve_name<'a, T>(
     ResolveOutcome::Found(first.0.as_str(), first.1)
 }
 
-/// Types generated from `llm_types.baml`.
+/// Types generated from the stdlib `.baml` sources.
 /// NOTE: sys_ops also generates the same code via its own build.rs because the
 /// generated IO traits contain blanket impls that must live in the crate that
-/// defines the SysOps struct (orphan rule). The owned structs here are used by
-/// sys_llm for provider option types.
+/// defines the SysOps struct (orphan rule).
 #[allow(warnings, clippy::all, clippy::pedantic)]
 pub mod generated {
 
@@ -142,7 +145,11 @@ impl CallId {
     /// bridges (e.g. Python) when multiple overlapping calls can occur.
     #[inline]
     pub fn next() -> Self {
-        CallId(NEXT_CALL_ID.fetch_add(1, Ordering::Relaxed))
+        CallId(
+            NEXT_CALL_ID
+                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+                .unwrap_or(0),
+        )
     }
 }
 
@@ -360,7 +367,9 @@ impl std::fmt::Display for ContractViolation {
 pub fn validate_sys_op_error(op: SysOp, err: &VmRustFnError) -> Result<(), ContractViolation> {
     let baml_err = match err {
         VmRustFnError::BamlError(b) => b,
-        VmRustFnError::Panic(_) | VmRustFnError::Thrown(_) | VmRustFnError::InternalError(_) => {
+        VmRustFnError::Panic(_)
+        | VmRustFnError::Thrown { .. }
+        | VmRustFnError::InternalError(_) => {
             return Ok(());
         }
     };
@@ -562,6 +571,11 @@ pub type SysOpFn = Arc<
 pub trait VmSpawner<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static>>:
     Send + Sync
 {
+    /// Engine-owned callback frame. Transport layers may downcast it through
+    /// the runtime facade; application SDK packages never participate here.
+    fn capture_invocation(&self) -> Option<Arc<dyn BexRustData>> {
+        None
+    }
     /// Spawn a a new VM with the given function name and arguments.
     ///
     /// Generally just calls `BexEngine::call_function`.
@@ -606,10 +620,6 @@ pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static
     /// Used by LLM ops that need to look up function prompt templates, client names, etc.
     pub llm_functions: Arc<std::collections::HashMap<String, LlmFunctionInfo>>,
 
-    /// Maps function names to their global indices in the VM.
-    /// Used by `resolve_client` to return `FunctionRef` values.
-    pub function_global_indices: Arc<std::collections::HashMap<String, usize>>,
-
     /// Per-call cancellation token.
     ///
     /// Defaults to a never-cancelled token for the shared engine context.
@@ -617,17 +627,17 @@ pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static
     pub cancel: CancellationToken,
 
     /// Pre-extracted class definitions for output format rendering.
-    /// Keyed by class name.
-    pub class_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, ClassDefinition>>,
+    /// Keyed by declaration identity.
+    pub class_definitions: Arc<indexmap::IndexMap<DefKey, ClassDefinition>>,
 
     /// Pre-extracted enum definitions for output format rendering.
-    /// Keyed by enum name.
-    pub enum_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, EnumDefinition>>,
+    /// Keyed by declaration identity.
+    pub enum_definitions: Arc<indexmap::IndexMap<DefKey, EnumDefinition>>,
 
     /// Recursive type alias definitions for output format rendering.
     /// Only recursive aliases are stored (non-recursive ones are expanded inline).
-    /// Maps alias name → target type.
-    pub type_alias_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::RuntimeTy>>,
+    /// Maps alias identity → target type.
+    pub type_alias_definitions: Arc<indexmap::IndexMap<DefKey, SapTy>>,
 
     /// Can be used to spawn new VMs.
     pub spawner: Arc<dyn VmSpawner<E>>,
@@ -635,19 +645,23 @@ pub struct SysOpContext<E: Send + Sync + 'static = Box<dyn Send + Sync + 'static
     /// Typed async IO interface for calling back into the runtime IO layer.
     /// Built once by the engine from the `SysOps` table and shared across calls.
     pub runtime_io: Arc<dyn runtime_io::RuntimeIo>,
+
+    /// The span of the request this call makes. `None` unless telemetry is
+    /// on and the op sends an HTTP request.
+    pub network: Option<network::NetworkContext>,
 }
 
 impl<E: Send + Sync + 'static> Clone for SysOpContext<E> {
     fn clone(&self) -> Self {
         Self {
             llm_functions: self.llm_functions.clone(),
-            function_global_indices: self.function_global_indices.clone(),
             cancel: self.cancel.clone(),
             class_definitions: self.class_definitions.clone(),
             enum_definitions: self.enum_definitions.clone(),
             type_alias_definitions: self.type_alias_definitions.clone(),
             spawner: self.spawner.clone(),
             runtime_io: self.runtime_io.clone(),
+            network: self.network.clone(),
         }
     }
 }
@@ -660,22 +674,18 @@ pub struct EngineSysOpContext {
     /// Used by LLM ops that need to look up function prompt templates, client names, etc.
     pub llm_functions: Arc<std::collections::HashMap<String, LlmFunctionInfo>>,
 
-    /// Maps function names to their global indices in the VM.
-    /// Used by `resolve_client` to return `FunctionRef` values.
-    pub function_global_indices: Arc<std::collections::HashMap<String, usize>>,
-
     /// Pre-extracted class definitions for output format rendering.
-    /// Keyed by class name.
-    pub class_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, ClassDefinition>>,
+    /// Keyed by declaration identity.
+    pub class_definitions: Arc<indexmap::IndexMap<DefKey, ClassDefinition>>,
 
     /// Pre-extracted enum definitions for output format rendering.
-    /// Keyed by enum name.
-    pub enum_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, EnumDefinition>>,
+    /// Keyed by declaration identity.
+    pub enum_definitions: Arc<indexmap::IndexMap<DefKey, EnumDefinition>>,
 
     /// Recursive type alias definitions for output format rendering.
     /// Only recursive aliases are stored (non-recursive ones are expanded inline).
-    /// Maps alias name → target type.
-    pub type_alias_definitions: Arc<indexmap::IndexMap<baml_type::TypeName, baml_type::RuntimeTy>>,
+    /// Maps alias identity → target type.
+    pub type_alias_definitions: Arc<indexmap::IndexMap<DefKey, SapTy>>,
 
     /// Typed async IO interface, built from the `SysOps` table at engine init.
     pub runtime_io: Arc<dyn runtime_io::RuntimeIo>,
@@ -686,29 +696,65 @@ pub struct EngineSysOpContext {
 /// This is built during engine construction by reading function objects from the heap,
 /// so that LLM `sys_ops` don't need to access raw heap pointers.
 pub struct LlmFunctionInfo {
-    /// The client name (e.g., `"MyClient"`) declared in the function.
-    pub client_name: String,
     /// The expected return type, used for response parsing.
-    pub return_type: baml_type::RuntimeTy,
+    pub return_type: SapTy,
 }
+
+/// A type as the sys-op / SAP lane carries it: heads are
+/// [`TaggedTypeName`](baml_type::TaggedTypeName), so a definition table can be
+/// keyed by declaration identity while still rendering the name a user wrote.
+///
+/// Plain owned data with no heap pointers, which is what lets SAP hold one
+/// across the permit release.
+pub type SapTy = baml_type::RuntimeTy<baml_type::TaggedTypeName>;
+
+/// How the lane's definition tables are keyed: by declaration identity, never
+/// by name. Two declarations a user spelled alike are different keys; a runtime
+/// declaration can no longer shadow a compiled one.
+///
+/// The key is the whole head rather than a bare tag because its `Eq`/`Hash` are
+/// already tag-only, so lookups compare identity — while `Display` still yields
+/// the name, which SAP and the output-format renderer put in front of users. A
+/// bare tag would key correctly and render `#4713`.
+pub type DefKey = baml_type::TaggedTypeName;
+
+/// [`SapTy`]'s symbolic twin: a field's template with class-level generic
+/// references (`TypeArgRef`) preserved, headed by the same lane identity.
+pub type SapTyTemplate = baml_type::TyTemplate<baml_type::TaggedTypeName>;
 
 /// Pre-extracted class definition for output format rendering.
 #[derive(Clone, Debug)]
 pub struct ClassDefinition {
     pub name: String,
     pub description: Option<String>,
+    pub docstring: Option<String>,
     pub alias: Option<String>,
     pub fields: Vec<ClassFieldDefinition>,
+    /// `@@stream.done`: no partial parse until the whole object is complete.
+    pub stream_done: bool,
 }
 
 /// A field in a pre-extracted class definition.
 #[derive(Clone, Debug)]
 pub struct ClassFieldDefinition {
     pub name: String,
-    pub field_type: baml_type::RuntimeTy,
+    pub field_type: SapTy,
+    /// Symbolic field type with class-level generic references preserved.
+    ///
+    /// `field_type` is intentionally erased for some runtime paths, so
+    /// output-format rendering uses this template when a class is visited
+    /// with concrete type arguments. `None` is retained for synthetic/test
+    /// definitions that only provide an already-realized `field_type`.
+    pub field_template: Option<SapTyTemplate>,
     pub description: Option<String>,
+    pub docstring: Option<String>,
     pub alias: Option<String>,
     pub skip: bool,
+    /// `@stream.done`: the field holds its default until its value is complete.
+    pub stream_done: bool,
+    /// `@stream.must_exist`: the field has no default, so its class has no
+    /// partial parse until the field is present.
+    pub must_exist: bool,
 }
 
 /// Pre-extracted enum definition for output format rendering.
@@ -716,6 +762,7 @@ pub struct ClassFieldDefinition {
 pub struct EnumDefinition {
     pub name: String,
     pub description: Option<String>,
+    pub docstring: Option<String>,
     pub alias: Option<String>,
     pub variants: Vec<EnumVariantDefinition>,
 }
@@ -725,7 +772,36 @@ pub struct EnumDefinition {
 pub struct EnumVariantDefinition {
     pub name: String,
     pub description: Option<String>,
+    pub docstring: Option<String>,
     pub alias: Option<String>,
+}
+
+impl EnumVariantDefinition {
+    /// The description the output format shows for this variant; see
+    /// [`rendered_enum_variant_description`].
+    pub fn rendered_description(&self) -> Option<String> {
+        rendered_enum_variant_description(self.description.as_deref(), self.docstring.as_deref())
+    }
+}
+
+/// The description the output format shows after an enum variant's name
+/// (`<name>: <description>`): its `@description` followed by its `///`
+/// docstring, each trimmed, joined by a space. `None` when both are blank.
+///
+/// The parser matches a model's answer against this same text, so the prompt
+/// and the parser cannot disagree about what a variant is called.
+pub fn rendered_enum_variant_description(
+    description: Option<&str>,
+    docstring: Option<&str>,
+) -> Option<String> {
+    let docs = [description, docstring]
+        .into_iter()
+        .flatten()
+        .map(str::trim)
+        .filter(|docs| !docs.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    (!docs.is_empty()).then_some(docs)
 }
 
 impl SysOpContext {
@@ -758,20 +834,13 @@ impl SysOpContext {
         }
         Self {
             llm_functions: Arc::new(std::collections::HashMap::new()),
-            function_global_indices: Arc::new(std::collections::HashMap::new()),
             cancel: CancellationToken::new(),
-            class_definitions: Arc::new(
-                indexmap::IndexMap::<baml_type::TypeName, ClassDefinition>::new(),
-            ),
-            enum_definitions: Arc::new(
-                indexmap::IndexMap::<baml_type::TypeName, EnumDefinition>::new(),
-            ),
-            type_alias_definitions: Arc::new(indexmap::IndexMap::<
-                baml_type::TypeName,
-                baml_type::RuntimeTy,
-            >::new()),
+            class_definitions: Arc::new(indexmap::IndexMap::<DefKey, ClassDefinition>::new()),
+            enum_definitions: Arc::new(indexmap::IndexMap::<DefKey, EnumDefinition>::new()),
+            type_alias_definitions: Arc::new(indexmap::IndexMap::<DefKey, SapTy>::new()),
             spawner: Arc::new(NeverSpawner),
             runtime_io: Arc::new(runtime_io::NoopRuntimeIo),
+            network: None,
         }
     }
 }
@@ -785,13 +854,13 @@ impl EngineSysOpContext {
     ) -> SysOpContext {
         SysOpContext {
             llm_functions: self.llm_functions.clone(),
-            function_global_indices: self.function_global_indices.clone(),
             cancel,
             class_definitions: self.class_definitions.clone(),
             enum_definitions: self.enum_definitions.clone(),
             type_alias_definitions: self.type_alias_definitions.clone(),
             spawner,
             runtime_io: self.runtime_io.clone(),
+            network: None,
         }
     }
 }
@@ -989,7 +1058,8 @@ mod tests {
         let op = bex_vm_types::sys_op_for_path("baml.http._fetch").unwrap();
         let err: bex_vm_types::errors::VmRustFnError = bex_vm_types::errors::VmBamlError::Timeout {
             message: "timed out".into(),
-            duration_ms: Some(30_000),
+            duration: Some(std::time::Duration::from_secs(30)),
+            timeout_type: "timeout".into(),
         }
         .into();
         assert!(validate_sys_op_error(op, &err).is_ok());
@@ -1009,23 +1079,6 @@ mod tests {
         assert_eq!(violation.actual_category, SysOpErrorCategory::LlmClient);
     }
 
-    #[test]
-    fn contract_allows_devother_when_declared() {
-        // `baml.http.fetch` is a thin BAML wrapper; the sys-op (which carries
-        // the `throws Io | Timeout` contract) is `baml.http._fetch`.
-        let op = bex_vm_types::sys_op_for_path("baml.http._fetch").unwrap();
-        let err: bex_vm_types::errors::VmRustFnError =
-            bex_vm_types::errors::VmBamlError::DevOther {
-                message: "some debug detail".into(),
-            }
-            .into();
-        let result = validate_sys_op_error(op, &err);
-        assert!(
-            result.is_err(),
-            "DevOther should be rejected when not in #[throws]"
-        );
-    }
-
     /// `Panic` / `Thrown` / `InternalError` variants of `VmRustFnError` are
     /// outside the `#[throws(...)]` contract surface; validation must let
     /// them pass even on an op that declares no throws categories.
@@ -1034,7 +1087,7 @@ mod tests {
         let op = bex_vm_types::sys_op_for_path("baml.env.get").unwrap();
         for err in [
             bex_vm_types::errors::VmRustFnError::Panic(bex_vm_types::errors::VmPanic::Cancelled),
-            bex_vm_types::errors::VmRustFnError::Thrown(bex_vm_types::Value::NULL),
+            bex_vm_types::errors::VmRustFnError::thrown_fresh(bex_vm_types::Value::NULL),
             bex_vm_types::errors::VmRustFnError::InternalError(
                 bex_vm_types::errors::VmInternalError::UnexpectedEmptyStack,
             ),
@@ -1067,9 +1120,6 @@ mod tests {
             },
             bex_vm_types::errors::VmBamlError::Unsupported {
                 message: "u".into(),
-            },
-            bex_vm_types::errors::VmBamlError::DevOther {
-                message: "x".into(),
             },
         ] {
             let rust_err: bex_vm_types::errors::VmRustFnError = err.into();
@@ -1113,7 +1163,8 @@ mod tests {
             },
             VmBamlError::Timeout {
                 message: "t".into(),
-                duration_ms: Some(1_000),
+                duration: Some(std::time::Duration::from_secs(1)),
+                timeout_type: "timeout".into(),
             },
             VmBamlError::Unsupported {
                 message: "u".into(),
@@ -1124,14 +1175,8 @@ mod tests {
             VmBamlError::RenderPrompt {
                 message: "r".into(),
             },
-            VmBamlError::NotImplemented {
-                message: "n".into(),
-            },
             VmBamlError::LlmClient {
                 message: "l".into(),
-            },
-            VmBamlError::DevOther {
-                message: "test".into(),
             },
             VmBamlError::HostCallable {
                 class_name: "C".into(),

@@ -8,6 +8,7 @@ package baml_bridge.cffi.v1;
 // this inbound file.
 import "baml_bridge/cffi/v1/baml_handle.proto";
 import "baml_bridge/cffi/v1/baml_type.proto";
+import "baml_bridge/cffi/v1/baml_outbound.proto";
 
 option go_package = "./cffi";
 // C++ generates against the lite runtime (no descriptors/reflection);
@@ -37,10 +38,24 @@ message InboundValue {
     BamlHandle handle = 10;
     bytes uint8array_value = 11;
     string bigint_value = 12;
-    // A reflected BAML type passed as a value (mirrors a `type`-typed BAML
-    // value, e.g. the result of `reflect.type_of<T>()`). Accepted as an
+    // A reflected BAML type passed as a value (mirrors a `reflect.Type` BAML
+    // value, e.g. the result of `reflect.Type.of<T>()`). Accepted as an
     // argument value so the host can pass types as data.
     BamlTy ty_value = 13;
+    // Definition-carrying reflected type. New hosts use this for values that
+    // must retain runtime-created class/enum schemas; tag 13 remains for
+    // rollout compatibility with structural/static type senders.
+    BamlTyDef ty_def_value = 14;
+    // Rust-backed values cross as portable data, never as capability handles.
+    // These message shapes are shared with the outbound side so host-created
+    // and engine-created values have one canonical representation.
+    BamlValueMedia media_value = 15;
+    BamlValuePromptAst prompt_ast_value = 16;
+    // A JavaScript `number`. Unlike `int_value` and `float_value`, this does
+    // not choose a BAML numeric representation: an integral value may inhabit
+    // either `int` or `float`, and the declared contextual type selects one.
+    // Non-integral values can inhabit only `float`.
+    double js_number_value = 17;
   }
   // Absent oneof = null value.
 }
@@ -82,6 +97,10 @@ message InboundEnumValue {
 message BamlTyArg {
   string type_var = 1; // TypeVar name, e.g. "T", "A"
   BamlTy type_value = 2; // the concrete binding
+  // Preferred for a runtime reflected type. Mutually exclusive with
+  // `type_value` by convention; retained as separate fields for backwards
+  // compatibility with already generated SDKs.
+  BamlTyDef type_definition = 3;
 }
 
 message CallFunctionArgs {
@@ -99,6 +118,50 @@ message CallFunctionArgs {
   oneof call_target {
     string function_name = 4;
     uint64 function_handle = 5;
+  }
+  // The sole invocation-control channel. This is a breaking internal schema;
+  // the native ABI revision protects function-table compatibility.
+  InvocationOptions invocation = 6;
+}
+
+message InvocationOptions {
+  TraceSelection trace = 1;
+  InboundValue cancel = 2;
+  optional uint64 deadline_ns = 3;
+  uint64 inherited_state = 4;
+  uint64 host_environment = 5;
+}
+
+message TraceSelection {
+  oneof selection {
+    TraceOptions options = 1;
+    uint64 reservation = 2;
+  }
+}
+
+message TraceOptions {
+  optional TraceMode mode = 1;
+  optional bool inputs = 2;
+  optional bool output = 3;
+  optional bool error = 4;
+  optional string distinct_id = 5;
+  map<string, TraceMetadataValue> metadata = 6;
+}
+
+enum TraceMode {
+  TRACE_MODE_UNSPECIFIED = 0;
+  TRACE_MODE_HIDDEN = 1;
+  TRACE_MODE_TIMING = 2;
+  TRACE_MODE_SPAN = 3;
+}
+
+message TraceMetadataValue {
+  oneof value {
+    string string_value = 1;
+    sint64 int_value = 2;
+    double float_value = 3;
+    bool bool_value = 4;
+    bool remove = 5;
   }
 }
 

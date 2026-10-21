@@ -1,17 +1,16 @@
 //! Thread-Local Allocation Buffer (TLAB) for per-VM allocation.
 //!
-//! Each VM gets its own TLAB, which is a reserved chunk of the heap.
-//! Allocation within a TLAB is a simple bump-pointer increment - no
-//! locks, no atomics, no contention.
-//!
-//! When a TLAB is exhausted, the VM requests a new chunk from the heap.
-//! This is the only point where synchronization is needed (an atomic
-//! fetch_add on the heap's next_chunk counter).
+//! Each VM owns a bump-allocated region. Reservations begin at 32 slots and grow
+//! to 1024 as the VM allocates. Reserved slots spend the GC budget when they are
+//! reserved; what each object keeps alive outside its slot is measured as it is
+//! allocated and kept in a local balance, which is settled with the budget in
+//! quanta, at every refill, when the owner asks, and when the TLAB is dropped.
+//! Ordinary yields preserve unused capacity.
 
 use std::sync::Arc;
 
 use bex_vm_types::{
-    HeapPtr, Object, Value,
+    AllocDebt, HeapPtr, Meter, Object, Value,
     types::{Array, Instance, Map, Variant},
 };
 use indexmap::IndexMap;
@@ -34,6 +33,11 @@ impl TlabChunk {
     }
 }
 
+/// Payload bytes an allocator may hold unsettled before it settles with the
+/// shared budget. Settling is one shared atomic update, so this bounds both
+/// how often that happens and how far spending can lag behind allocation.
+pub const SETTLE_QUANTUM: isize = 64 * 1024;
+
 /// Thread-Local Allocation Buffer for a BEX VM.
 ///
 /// A TLAB provides fast, lock-free allocation within an exclusive heap region.
@@ -54,10 +58,9 @@ impl TlabChunk {
 ///
 /// # Performance
 ///
-/// - **Fast path**: `alloc()` is a single pointer increment + write
-/// - **No atomics**: Each VM owns its TLAB exclusively
-/// - **No locks**: Direct memory access via `UnsafeCell`
-/// - **Refill cost**: One `AtomicUsize::fetch_add` per ~1024 allocations
+/// Object placement uses an exclusive bump pointer. Reservations update the shared
+/// allocation budget; no collection runs here.
+/// Refill reserves another region from the heap.
 ///
 /// # Example
 ///
@@ -67,7 +70,7 @@ impl TlabChunk {
 ///
 /// // Fast allocation - just bumps pointer
 /// let ptr1 = tlab.alloc_string("hello".to_string());
-/// let ptr2 = tlab.alloc_array(baml_type::RealizedTy::int(), vec![Value::int(1), Value::int(2)]);
+/// let ptr2 = tlab.alloc_array(bex_vm_types::RealizedTy::int(), vec![Value::int(1), Value::int(2)]);
 ///
 /// // When chunk exhausted, refill gets a new region
 /// for _ in 0..2000 {
@@ -83,6 +86,20 @@ pub struct Tlab {
 
     /// Reference to the shared heap.
     heap: Arc<BexHeap>,
+
+    next_chunk_size: usize,
+
+    /// Payload bytes allocated (less released) since the last settlement.
+    debt: AllocDebt,
+
+    /// The heap's full-collection count when `debt` last started from zero.
+    /// A full collection takes a census of everything, so a balance that
+    /// predates one is already counted and must be discarded, not settled.
+    debt_epoch: usize,
+
+    /// Set when a settlement by this TLAB took spending over the budget, until
+    /// the owner reads it with [`Self::take_budget_crossed`].
+    budget_crossed: bool,
 }
 
 impl Tlab {
@@ -102,12 +119,9 @@ impl Tlab {
     /// TLAB mechanics without the permit infrastructure (those tests
     /// guarantee single-threaded access).
     pub fn new(heap: Arc<BexHeap>) -> Self {
-        let chunk = heap.alloc_tlab_chunk();
-        Self {
-            alloc_ptr: chunk.start,
-            alloc_limit: chunk.end,
-            heap,
-        }
+        let mut tlab = Self::new_empty(heap);
+        tlab.refill();
+        tlab
     }
 
     /// Create a TLAB without allocating an initial chunk.
@@ -121,6 +135,14 @@ impl Tlab {
         Self {
             alloc_ptr: 0,
             alloc_limit: 0,
+
+            // Zero marks the first reservation, so the first size is repeated:
+            // 32, 32, 64, ... gives aligned cumulative reservations of
+            // 32, 64, 128, ... rather than 32, 96, 224, ... .
+            next_chunk_size: 0,
+            debt: AllocDebt::new(),
+            debt_epoch: heap.gc_budget().full_collections,
+            budget_crossed: false,
             heap,
         }
     }
@@ -130,7 +152,14 @@ impl Tlab {
     /// This is the fast path - just bump the pointer and write.
     /// If the current chunk is exhausted, refill from the heap.
     #[inline]
-    pub fn alloc(&mut self, obj: Object) -> HeapPtr {
+    pub fn alloc(&mut self, mut obj: Object) -> HeapPtr {
+        let mut charge = Meter::charge();
+        obj.measure(&mut charge);
+        self.debt.grow(charge.total());
+        if self.debt.balance().unsigned_abs() >= SETTLE_QUANTUM.unsigned_abs() {
+            self.flush_alloc_debt();
+        }
+
         if self.alloc_ptr >= self.alloc_limit {
             self.refill();
         }
@@ -148,7 +177,8 @@ impl Tlab {
             self.heap.write_runtime_object(runtime_idx, obj);
         }
 
-        // Track allocation for GC heuristic
+        // Track allocation for GC profiling
+        #[cfg(feature = "gc_profiling")]
         self.heap.record_alloc();
 
         // Get the pointer to the newly written object in Gen0.
@@ -157,6 +187,18 @@ impl Tlab {
 
         // SAFETY: The pointer is valid and points to a valid object we just wrote
         unsafe { self.heap.make_heap_ptr(ptr) }
+    }
+
+    /// Assign a fresh telemetry identity without registering a weak reference.
+    /// Call-path creation registers the completed definition on first observation.
+    /// Like allocation, this requires the caller to exclude GC.
+    pub fn alloc_function(
+        &mut self,
+        mut function: Box<bex_vm_types::Function>,
+    ) -> Result<HeapPtr, btel_types::FunctionIdExhausted> {
+        function.telemetry_function_id = Some(self.heap.functions.allocate_id()?);
+        function.telemetry_registration = btel_types::FunctionRegistration::default();
+        Ok(self.alloc(Object::Function(function)))
     }
 
     /// Allocate a float object.
@@ -175,7 +217,7 @@ impl Tlab {
     #[inline]
     pub fn alloc_array(
         &mut self,
-        element_ty: baml_type::RealizedTy,
+        element_ty: bex_vm_types::RealizedTy,
         values: Vec<Value>,
     ) -> HeapPtr {
         self.alloc(Object::Array(Array::new(element_ty, values)))
@@ -185,10 +227,15 @@ impl Tlab {
     #[inline]
     pub fn alloc_map(
         &mut self,
-        key_ty: baml_type::RealizedTy,
-        value_ty: baml_type::RealizedTy,
+        key_ty: bex_vm_types::RealizedTy,
+        value_ty: bex_vm_types::RealizedTy,
         values: IndexMap<bex_str::BexStr, Value>,
     ) -> HeapPtr {
+        let values =
+            bex_vm_types::MapData::from_hashed_entries(values.into_iter().map(|(key, value)| {
+                let hash = bex_vm_types::map_string_hash(&key);
+                (hash, Value::object(self.alloc_string(key)), value)
+            }));
         self.alloc(Object::Map(Map::new(key_ty, value_ty, values)))
     }
 
@@ -205,7 +252,7 @@ impl Tlab {
     pub fn alloc_instance_with_type_args(
         &mut self,
         class: HeapPtr,
-        type_args: Box<[baml_type::RealizedTy]>,
+        type_args: Box<[bex_vm_types::RealizedTy]>,
         fields: Vec<Value>,
     ) -> HeapPtr {
         self.alloc(Object::Instance(Instance::new(class, type_args, fields)))
@@ -232,20 +279,17 @@ impl Tlab {
 
     /// Allocate opaque Rust data on the heap.
     #[inline]
-    pub fn alloc_rust_data(&mut self, data: Arc<dyn std::any::Any + Send + Sync>) -> HeapPtr {
+    pub fn alloc_rust_data(&mut self, data: Arc<dyn bex_vm_types::BexRustData>) -> HeapPtr {
         self.alloc(Object::RustData(data))
     }
 
-    /// Allocate a collector object on the heap.
-    #[inline]
-    pub fn alloc_collector(&mut self, collector: bex_vm_types::CollectorRef) -> HeapPtr {
-        self.alloc(Object::Collector(collector))
-    }
-
     /// Allocate a type descriptor object on the heap.
+    ///
+    /// Static materialization inside the VM should go through
+    /// `BexVm::alloc_static_type`.
     #[inline]
-    pub fn alloc_type(&mut self, ty: baml_type::RealizedTy) -> HeapPtr {
-        self.alloc(Object::Type(Box::new(ty)))
+    pub fn alloc_type(&mut self, tv: bex_vm_types::types::TypeValue) -> HeapPtr {
+        self.alloc(Object::Type(Box::new(tv)))
     }
 
     /// Allocate a future object on the heap.
@@ -263,7 +307,18 @@ impl Tlab {
     /// Get a new chunk from the heap (cold path).
     #[cold]
     fn refill(&mut self) {
-        let chunk = self.heap.alloc_tlab_chunk();
+        let size = if self.next_chunk_size == 0 {
+            self.heap.tlab_size()
+        } else {
+            self.next_chunk_size
+        };
+        let (chunk, crossed) = self.heap.alloc_tlab_chunk_sized(size, self.debt.take());
+        self.budget_crossed |= crossed;
+        self.next_chunk_size = if self.next_chunk_size == 0 {
+            size
+        } else {
+            size.saturating_mul(2).min(self.heap.max_tlab_size)
+        };
         self.alloc_ptr = chunk.start;
         self.alloc_limit = chunk.end;
     }
@@ -285,6 +340,31 @@ impl Tlab {
     pub fn invalidate(&mut self) {
         self.alloc_limit = 0;
         self.alloc_ptr = 0;
+        // A full collection counted everything this balance covers.
+        let full_collections = self.heap.gc_budget().full_collections;
+        if full_collections != self.debt_epoch {
+            self.debt.take();
+            self.debt_epoch = full_collections;
+            self.budget_crossed = false;
+        }
+    }
+
+    /// The local balance of payload bytes, for callers that charge growth or
+    /// release against it.
+    pub fn alloc_debt(&self) -> &AllocDebt {
+        &self.debt
+    }
+
+    /// Settle the local balance with the shared budget now.
+    pub fn flush_alloc_debt(&mut self) {
+        let balance = self.debt.take();
+        self.budget_crossed |= self.heap.gc_policy.adjust(balance);
+    }
+
+    /// Whether a settlement by this TLAB took spending over the budget since
+    /// the owner last asked. The owner should reach a safe point promptly.
+    pub fn take_budget_crossed(&mut self) -> bool {
+        std::mem::take(&mut self.budget_crossed)
     }
 
     /// Check if this TLAB is valid (has an allocated chunk).
@@ -304,26 +384,28 @@ impl Tlab {
         unsafe { self.heap.get_object(idx) }
     }
 
-    /// Write an object by HeapPtr.
+    /// Write an object by HeapPtr. Test-only: it replaces an object without
+    /// measuring what either one keeps alive, so the budget does not see it.
     ///
     /// # Safety
     ///
     /// - The pointer must be valid (not collected by GC)
     /// - Caller must ensure exclusive access to this object
     /// - Only runtime objects can be written (compile-time objects are immutable)
-    ///
-    /// # Write Barrier
-    ///
-    /// If `ptr` points to an older-generation object, callers must fire the
-    /// generational write barrier for any `HeapPtr` references in `obj` that
-    /// point into a younger generation. During normal execution this is called
-    /// only for Gen0 objects (newly allocated), so no barrier is needed.
-    pub unsafe fn set_object(&mut self, ptr: HeapPtr, obj: Object) {
+    #[cfg(test)]
+    pub(crate) unsafe fn set_object(&mut self, ptr: HeapPtr, obj: Object) {
         // SAFETY: Caller ensures exclusive access
         // Direct write to the object through the pointer
         unsafe {
             *ptr.get_mut() = obj;
         }
+    }
+}
+
+impl Drop for Tlab {
+    fn drop(&mut self) {
+        // What this allocator spent must not vanish with it.
+        self.flush_alloc_debt();
     }
 }
 
@@ -353,14 +435,14 @@ pub trait TlabHolder {
         self.tlab_mut().alloc_string(s)
     }
 
-    fn alloc_array(&mut self, element_ty: baml_type::RealizedTy, values: Vec<Value>) -> HeapPtr {
+    fn alloc_array(&mut self, element_ty: bex_vm_types::RealizedTy, values: Vec<Value>) -> HeapPtr {
         self.tlab_mut().alloc_array(element_ty, values)
     }
 
     fn alloc_map(
         &mut self,
-        key_ty: baml_type::RealizedTy,
-        value_ty: baml_type::RealizedTy,
+        key_ty: bex_vm_types::RealizedTy,
+        value_ty: bex_vm_types::RealizedTy,
         values: IndexMap<bex_str::BexStr, Value>,
     ) -> HeapPtr {
         self.tlab_mut().alloc_map(key_ty, value_ty, values)
@@ -382,16 +464,12 @@ pub trait TlabHolder {
         self.tlab_mut().alloc_bigint(value)
     }
 
-    fn alloc_rust_data(&mut self, data: Arc<dyn std::any::Any + Send + Sync>) -> HeapPtr {
+    fn alloc_rust_data(&mut self, data: Arc<dyn bex_vm_types::BexRustData>) -> HeapPtr {
         self.tlab_mut().alloc_rust_data(data)
     }
 
-    fn alloc_collector(&mut self, collector: bex_vm_types::CollectorRef) -> HeapPtr {
-        self.tlab_mut().alloc_collector(collector)
-    }
-
-    fn alloc_type(&mut self, ty: baml_type::RealizedTy) -> HeapPtr {
-        self.tlab_mut().alloc_type(ty)
+    fn alloc_type(&mut self, tv: bex_vm_types::types::TypeValue) -> HeapPtr {
+        self.tlab_mut().alloc_type(tv)
     }
 
     fn alloc_future(&mut self, future: bex_vm_types::Future) -> HeapPtr {
@@ -546,7 +624,7 @@ mod tests {
         let mut tlab = Tlab::new(heap);
 
         let values = vec![Value::int(1), Value::int(2), Value::int(3)];
-        let ptr = tlab.alloc_array(baml_type::RealizedTy::int(), values);
+        let ptr = tlab.alloc_array(bex_vm_types::RealizedTy::int(), values);
 
         unsafe {
             match ptr.get() {
@@ -567,15 +645,20 @@ mod tests {
         let mut map = IndexMap::new();
         map.insert(bex_str::BexStr::from("key"), Value::int(42));
         let ptr = tlab.alloc_map(
-            baml_type::RealizedTy::string(),
-            baml_type::RealizedTy::int(),
+            bex_vm_types::RealizedTy::string(),
+            bex_vm_types::RealizedTy::int(),
             map,
         );
 
         unsafe {
             match ptr.get() {
                 Object::Map(m) => {
-                    assert_eq!(m.get("key"), Some(Value::int(42)));
+                    let entries = m.snapshot_entries();
+                    assert_eq!(entries.len(), 1);
+                    assert_eq!(entries[0].1, Value::int(42));
+                    assert!(
+                        matches!(entries[0].0.as_object_ptr().unwrap().get(), Object::String(key) if key == "key")
+                    );
                 }
                 _ => panic!("Expected Map"),
             }
@@ -592,39 +675,48 @@ mod tests {
 
         // Simulate a class at index 0
         let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
-            name: baml_type::TypeName::local(baml_type::Name::new("TestClass")),
+            path: bex_vm_types::types::LocalName::new(
+                Vec::new(),
+                baml_type::Name::new("TestClass"),
+            ),
             fields: vec![
                 bex_vm_types::ClassField {
                     name: "x".to_string(),
-                    field_type: baml_type::RuntimeTy::Int {
-                        attr: baml_type::TyAttr::default(),
-                    },
-                    field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int {
-                        attr: baml_type::TyAttr::default(),
-                    }),
+                    field_type: baml_type::RuntimeTy::Int,
+                    field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int),
                     description: None,
                     alias: None,
+                    docstring: None,
+                    other: Default::default(),
                     skip: false,
+                    stream_done: false,
+                    must_exist: false,
+                    runtime_type: None,
                 },
                 bex_vm_types::ClassField {
                     name: "y".to_string(),
-                    field_type: baml_type::RuntimeTy::Int {
-                        attr: baml_type::TyAttr::default(),
-                    },
-                    field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int {
-                        attr: baml_type::TyAttr::default(),
-                    }),
+                    field_type: baml_type::RuntimeTy::Int,
+                    field_template: baml_type::TyTemplate::from(baml_type::RealizedTy::Int),
                     description: None,
                     alias: None,
+                    docstring: None,
+                    other: Default::default(),
                     skip: false,
+                    stream_done: false,
+                    must_exist: false,
+                    runtime_type: None,
                 },
             ],
             description: None,
             alias: None,
-            type_tag: 100,
-            ty_attr: baml_type::TyAttr::default(),
-            has_cleanup: false,
+            docstring: None,
+            other: Default::default(),
+            stream_done: false,
+            type_tag: baml_type::typetag::TypeTag::from_i64(100),
+            cleanup: None,
+            methods: IndexMap::new(),
             generic_param_count: 0,
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
 
         // Allocate an instance of that class
@@ -652,30 +744,39 @@ mod tests {
 
         // Simulate an enum at index 0
         let enum_ptr = tlab.alloc(Object::Enum(Box::new(Enum {
-            name: baml_type::TypeName::local(baml_type::Name::new("Color")),
+            type_tag: baml_type::typetag::TypeTag::from_i64(200),
+            path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("Color")),
             variants: vec![
                 bex_vm_types::EnumVariant {
                     name: "Red".to_string(),
                     description: None,
                     alias: None,
+                    docstring: None,
+                    other: Default::default(),
                     skip: false,
                 },
                 bex_vm_types::EnumVariant {
                     name: "Green".to_string(),
                     description: None,
                     alias: None,
+                    docstring: None,
+                    other: Default::default(),
                     skip: false,
                 },
                 bex_vm_types::EnumVariant {
                     name: "Blue".to_string(),
                     description: None,
                     alias: None,
+                    docstring: None,
+                    other: Default::default(),
                     skip: false,
                 },
             ],
             description: None,
             alias: None,
-            ty_attr: baml_type::TyAttr::default(),
+            docstring: None,
+            other: Default::default(),
+            owner: bex_vm_types::types::Owner::anonymous(),
         })));
 
         // Allocate a variant (Color::Green = index 1)

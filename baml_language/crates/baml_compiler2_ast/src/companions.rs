@@ -5,15 +5,15 @@
 //! `FunctionDef`. Companions are complete, self-contained AST items that flow
 //! through HIR → TIR → MIR → emit with zero special-casing.
 //!
-//! Adding a new companion = writing one `fn(&FunctionDef) -> Option<FunctionDef>`
-//! and appending it to `COMPANIONS`.
+//! Adding a new companion = writing one expander returning `Option<FunctionDef>`
+//! and adding it to `expand_companions`.
 //!
-//! Every LLM function lives in the single-path ai world and gets three
-//! companions: `$spec` (the bound, unrun `ai.FunctionSpec<Out>`), `$render_prompt`
-//! (the spec's prompt rendered with the return type's output-format text), and
-//! `$parse` (a network-free `baml.sap.parse<Out>` of an existing reply).
-//! `$stream` is synthesized at PPIR level — its body needs the stream-expanded
-//! return type, which only PPIR can compute.
+//! Every LLM function lives in the single-path ai world and gets its
+//! companions: `@spec` (the bound, unrun `ai.FunctionSpec<Out>`), `@render_prompt`
+//! (the spec's prompt rendered with the return type's output-format text),
+//! `@build_request` (a network-free provider request preview), `@parse`
+//! (a network-free `baml.sap.parse<Out>` of an existing reply), and `@stream`
+//! (one-turn streaming over the spec, for functions that cannot hold tools).
 
 use baml_base::Name;
 
@@ -23,17 +23,23 @@ use crate::{
     lower_expr_body,
 };
 
-type CompanionExpander = fn(&FunctionDef) -> Option<FunctionDef>;
-
-const COMPANIONS: &[CompanionExpander] = &[llm_spec, llm_render_prompt, llm_parse];
-
 /// Run all companion expanders on the given function.
 /// Works identically for top-level functions and class methods.
-pub(crate) fn expand_companions(func: &FunctionDef) -> Vec<FunctionDef> {
-    COMPANIONS
-        .iter()
-        .filter_map(|expand| expand(func))
-        .collect()
+pub(crate) fn expand_companions(
+    func: &FunctionDef,
+    owner_class_name: Option<&Name>,
+    owner_generic_param_names: &[Name],
+) -> Vec<FunctionDef> {
+    [
+        llm_spec(func),
+        llm_render_prompt(func, owner_class_name, owner_generic_param_names),
+        llm_build_request(func, owner_class_name, owner_generic_param_names),
+        llm_parse(func),
+        llm_stream(func, owner_class_name, owner_generic_param_names),
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
 }
 
 /// The parent's LLM metadata when its spec desugar succeeded — the gate for
@@ -51,30 +57,14 @@ fn spec_llm_meta(parent: &FunctionDef) -> Option<&crate::ast::LlmBodyDef> {
     }
 }
 
-/// The function's own parameters — the compiler-injected `client` override
-/// belongs to the runner, never to a companion's surface.
+/// The function's own parameters — the compiler-injected `client` and
+/// `on_event` overrides belong to the runner, never to a companion's surface.
 fn own_params(parent: &FunctionDef) -> Vec<Param> {
     parent
         .params
         .iter()
-        .filter(|p| p.name.as_str() != "client")
+        .filter(|p| p.name.as_str() != "client" && p.name.as_str() != "on_event")
         .cloned()
-        .collect()
-}
-
-fn generic_type_args(parent: &FunctionDef) -> Vec<crate::ast::TypeExpr> {
-    parent
-        .generic_params
-        .iter()
-        .map(|param| {
-            TypeExprKind::Path {
-                segments: vec![param.name.clone()],
-                generic_args: vec![],
-                associated_type_bindings: vec![],
-                attrs: vec![],
-            }
-            .at(parent.span)
-        })
         .collect()
 }
 
@@ -85,6 +75,7 @@ fn companion_def(
     return_type: Option<crate::ast::TypeExpr>,
     body: (crate::ast::ExprBody, crate::ast::AstSourceMap),
 ) -> FunctionDef {
+    let trace_passthrough = name.as_str().ends_with("@spec") || name.as_str().ends_with("@stream");
     FunctionDef {
         name,
         generic_params: parent.generic_params.clone(),
@@ -94,16 +85,20 @@ fn companion_def(
         throws: None,
         body: Some(FunctionBodyDef::Expr(body.0, body.1)),
         declarative_meta: None,
-        metadata: crate::ast::FunctionMetadata::user_facing(crate::ast::FunctionOrigin::Companion),
+        metadata: crate::ast::FunctionMetadata {
+            trace_passthrough,
+            ..crate::ast::FunctionMetadata::user_facing(crate::ast::FunctionOrigin::Companion)
+        },
         attributes: vec![],
         docstring: parent.docstring.clone(),
         is_tagged_template_tag: parent.is_tagged_template_tag,
+        trace_hook: None,
         span: parent.span,
         name_span: parent.name_span,
     }
 }
 
-/// Build the `<Fn>$spec` companion: the function's parameters in, an
+/// Build the `<Fn>@spec` companion: the function's parameters in, an
 /// `ai.FunctionSpec<Out>` out. The body was pre-lowered in `lower_cst` (the
 /// CST backtick is unreachable here) and stashed under the `"spec"` key.
 fn llm_spec(parent: &FunctionDef) -> Option<FunctionDef> {
@@ -116,60 +111,114 @@ fn llm_spec(parent: &FunctionDef) -> Option<FunctionDef> {
     let out = parent.return_type.clone()?;
 
     let return_type = (TypeExprKind::Path {
-        segments: vec![Name::new("ai"), Name::new("FunctionSpec")],
+        path: baml_base::compiler_path!(ai.FunctionSpec),
         generic_args: vec![out],
         associated_type_bindings: vec![],
-        attrs: vec![],
     })
     .at(parent.span);
 
     Some(companion_def(
         parent,
-        Name::new(format!("{}$spec", parent.name)),
+        Name::new(format!("{}@spec", parent.name)),
         own_params(parent),
         Some(return_type),
         (body, source_map),
     ))
 }
 
-/// Build the `<Fn>$render_prompt` companion: the spec's prompt rendered with
+/// Build the `<Fn>@render_prompt` companion: the spec's prompt rendered with
 /// the return type's output-format text as a structural `ai.Prompt`.
-fn llm_render_prompt(parent: &FunctionDef) -> Option<FunctionDef> {
+fn llm_render_prompt(
+    parent: &FunctionDef,
+    owner_class_name: Option<&Name>,
+    owner_generic_param_names: &[Name],
+) -> Option<FunctionDef> {
     spec_llm_meta(parent)?;
-    let out = parent.return_type.clone()?;
+    parent.return_type.as_ref()?;
     let params = own_params(parent);
-    let param_names: Vec<Name> = params.iter().map(|p| p.name.clone()).collect();
+    let generic_param_names: Vec<Name> = parent
+        .generic_params
+        .iter()
+        .map(|p| p.name.clone())
+        .collect();
     let body = lower_expr_body::synthesize_spec_render_prompt_body(
         parent.name.as_str(),
-        &param_names,
-        generic_type_args(parent),
-        Some(out),
+        &params,
+        &generic_param_names,
+        owner_class_name,
+        owner_generic_param_names,
         parent.span,
     );
     let return_type = (TypeExprKind::Path {
-        segments: vec![Name::new("ai"), Name::new("Prompt")],
+        path: baml_base::compiler_path!(ai.Prompt),
         generic_args: vec![],
         associated_type_bindings: vec![],
-        attrs: vec![],
     })
     .at(parent.span);
     Some(companion_def(
         parent,
-        Name::new(format!("{}$render_prompt", parent.name)),
+        Name::new(format!("{}@render_prompt", parent.name)),
         params,
         Some(return_type),
         body,
     ))
 }
 
-/// Build the `<Fn>$parse` companion: a network-free parse of an existing
+/// Build the `<Fn>@build_request` companion. It accepts the same parameters as
+/// the parent plus its injected `client` override and delegates to the spec's
+/// pure `FunctionSpec.build_request` method. This keeps request construction
+/// provider-neutral while preserving the parent's default-client semantics.
+fn llm_build_request(
+    parent: &FunctionDef,
+    owner_class_name: Option<&Name>,
+    owner_generic_param_names: &[Name],
+) -> Option<FunctionDef> {
+    spec_llm_meta(parent)?;
+    // Keep the injected `client` (default-client semantics) but not
+    // `on_event`: a network-free request preview never runs the agent, so
+    // there are no events to listen to.
+    let params: Vec<Param> = parent
+        .params
+        .iter()
+        .filter(|p| p.name.as_str() != "on_event")
+        .cloned()
+        .collect();
+    let body = lower_expr_body::synthesize_spec_build_request_body(
+        parent.name.as_str(),
+        &own_params(parent),
+        &parent
+            .generic_params
+            .iter()
+            .map(|p| p.name.clone())
+            .collect::<Vec<_>>(),
+        owner_class_name,
+        owner_generic_param_names,
+        parent.span,
+    );
+    Some(companion_def(
+        parent,
+        Name::new(format!("{}@build_request", parent.name)),
+        params,
+        Some(
+            (TypeExprKind::Path {
+                path: baml_base::compiler_path!(baml.http.Request),
+                generic_args: vec![],
+                associated_type_bindings: vec![],
+            })
+            .at(parent.span),
+        ),
+        body,
+    ))
+}
+
+/// Build the `<Fn>@parse` companion: a network-free parse of an existing
 /// reply string into the function's return type.
 fn llm_parse(parent: &FunctionDef) -> Option<FunctionDef> {
     spec_llm_meta(parent)?;
     let return_type = parent.return_type.clone()?;
     let json_param = Param {
         name: Name::new("json"),
-        type_expr: Some((TypeExprKind::String { attrs: vec![] }).at(parent.span)),
+        type_expr: Some((TypeExprKind::String).at(parent.span)),
         default: None,
         span: parent.span,
         name_span: parent.name_span,
@@ -177,9 +226,91 @@ fn llm_parse(parent: &FunctionDef) -> Option<FunctionDef> {
     let body = lower_expr_body::synthesize_spec_parse_body(Some(return_type.clone()), parent.span);
     Some(companion_def(
         parent,
-        Name::new(format!("{}$parse", parent.name)),
+        Name::new(format!("{}@parse", parent.name)),
         vec![json_param],
         Some(return_type),
         body,
     ))
+}
+
+/// Build the `<Fn>@stream` companion: one-turn streaming over the function's
+/// own spec, returning `ai.stream.Stream<Out>`. It takes the parent's
+/// parameters with the injected `client` narrowed to
+/// `ai.stream.StreamingClient?`. A function that can hold tools gets none:
+/// streaming does not run the tool loop.
+fn llm_stream(
+    parent: &FunctionDef,
+    owner_class_name: Option<&Name>,
+    owner_generic_param_names: &[Name],
+) -> Option<FunctionDef> {
+    let llm = spec_llm_meta(parent)?;
+    if llm.has_tools {
+        return None;
+    }
+    let out = parent.return_type.clone()?;
+    let span = parent.span;
+    // Partial and final values share the return type: there is no separate
+    // stream-shaped type.
+    let type_args = vec![out];
+    let return_type = (TypeExprKind::Path {
+        path: baml_base::compiler_path!(ai.stream.Stream),
+        generic_args: type_args.clone(),
+        associated_type_bindings: vec![],
+    })
+    .at(span);
+
+    let params = parent
+        .params
+        .iter()
+        .cloned()
+        .map(|mut param| {
+            if param.name.as_str() == "client" {
+                let streaming_client = (TypeExprKind::Path {
+                    path: baml_base::compiler_path!(ai.stream.StreamingClient),
+                    generic_args: vec![],
+                    associated_type_bindings: vec![],
+                })
+                .at(span);
+                param.type_expr = Some(
+                    (TypeExprKind::Optional {
+                        inner: Box::new(streaming_client),
+                    })
+                    .at(span),
+                );
+            }
+            param
+        })
+        .collect();
+
+    let body = lower_expr_body::synthesize_spec_stream_body(
+        parent.name.as_str(),
+        &own_params(parent),
+        &parent
+            .generic_params
+            .iter()
+            .map(|p| p.name.clone())
+            .collect::<Vec<_>>(),
+        owner_class_name,
+        owner_generic_param_names,
+        type_args,
+        span,
+    );
+    let mut stream = companion_def(
+        parent,
+        Name::new(format!("{}@stream", parent.name)),
+        params,
+        Some(return_type),
+        body,
+    );
+    // `@stream` is the LLM call when a caller streams, so it carries the
+    // parent's client for telemetry. It keeps none of the parent's companion
+    // bodies or prompt geometry: those belong to the declaration.
+    stream.declarative_meta = Some(DeclarativeMeta::Llm(crate::ast::LlmBodyDef {
+        client: llm.client.clone(),
+        companion_bodies: vec![],
+        prompt_spans: None,
+        has_tools: llm.has_tools,
+        span: llm.span,
+    }));
+    Some(stream)
 }

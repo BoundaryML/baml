@@ -13,7 +13,7 @@ documentation_project="$test_dir/../Baml.Bridge.DocumentationConsumer/Baml.Bridg
 generated_contract_project="$test_dir/../Baml.Bridge.GeneratedContract.Tests/Baml.Bridge.GeneratedContract.Tests.csproj"
 emitter_project="$test_dir/../../tools/Baml.BytecodeCarrierEmitter/Baml.BytecodeCarrierEmitter.csproj"
 runtime_project="$test_dir/../../src/Baml.Bridge.csproj"
-generated_source_root="$repo_root/baml_language/sdk_tests/crates/csharp/primitive_slice/baml_client"
+generated_source_root="$repo_root/baml_language/sdk_tests/crates/csharp/basic_calls/baml_sdk"
 
 if [[ "$(uname -s)" != "Linux" ]]; then
   echo "Baml.Bridge.Tests native loader matrix currently requires Linux." >&2
@@ -80,14 +80,14 @@ fi
 
 run_success() {
   local mode="$1"
-  BAML_BRIDGE_CSHARP_NATIVE_LIBRARY="$valid_library" \
+  BAML_BRIDGE_PATH="$valid_library" \
     BAML_FAKE_NATIVE_MODE="$mode" \
     dotnet run --project "$project" --configuration Release --no-build --no-restore -- \
       native-success 0.15.0
 }
 
 run_registration() {
-  BAML_BRIDGE_CSHARP_NATIVE_LIBRARY="$valid_library" \
+  BAML_BRIDGE_PATH="$valid_library" \
     dotnet run --project "$project" --configuration Release --no-build --no-restore -- \
       register-success 0.15.0
 }
@@ -96,7 +96,7 @@ run_failure() {
   local library="$1"
   local mode="$2"
   local marker="$3"
-  BAML_BRIDGE_CSHARP_NATIVE_LIBRARY="$library" \
+  BAML_BRIDGE_PATH="$library" \
     BAML_FAKE_NATIVE_MODE="$mode" \
     dotnet run --project "$project" --configuration Release --no-build --no-restore -- \
       native-failure "$marker"

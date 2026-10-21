@@ -16,12 +16,9 @@
 //!
 //! Env-var overrides:
 //!
-//! - `BAML_TELEMETRY_DISABLED=1`  → one-shot disable (matches `NEXT_TELEMETRY_DISABLED`)
-//! - `BAML_TELEMETRY_DEBUG=1`     → dry-run: print payloads to stderr, do not send
-//! - `DO_NOT_TRACK=1`             → one-shot disable (cross-tool convention)
-//! - `BAML_TELEMETRY=0/false/…`   → one-shot disable (legacy from before the subcommand existed)
+//! - `DO_NOT_TRACK=1` → one-shot disable (cross-tool convention)
 
-#![allow(clippy::print_stderr)] // The notice / [telemetry] debug lines are deliberate stderr writes.
+#![allow(clippy::print_stderr)] // The first-run notice is a deliberate stderr write.
 
 use std::{
     io::IsTerminal,
@@ -93,7 +90,6 @@ struct Inner {
     config: Mutex<Config>,
     config_path: PathBuf,
     session_id: String,
-    debug: bool,
     /// Whether an env-var overrides the persistent config to `disabled`.
     /// Snapshotted at construction so a race between `record` and env
     /// mutation can't leak an event.
@@ -133,7 +129,6 @@ impl Telemetry {
         let config_path = config_path();
         let config = load_or_init_config(&config_path, &legacy_id_path());
         let session_id = random_hex_32();
-        let debug = env_is_truthy("BAML_TELEMETRY_DEBUG");
         let disabled_by_env = env_disables();
         let live_path = queue::new_live_path_in(&queue::queue_dir());
 
@@ -142,7 +137,6 @@ impl Telemetry {
                 config: Mutex::new(config),
                 config_path,
                 session_id,
-                debug,
                 disabled_by_env,
                 live_path: Mutex::new(live_path),
             }),
@@ -159,12 +153,6 @@ impl Telemetry {
             return false;
         }
         self.inner.config.lock().map(|c| c.enabled).unwrap_or(false)
-    }
-
-    /// `true` if `BAML_TELEMETRY_DEBUG=1`. In debug mode we print the
-    /// payload to stderr instead of sending it — see [`post::send`].
-    pub(crate) fn debug_mode(&self) -> bool {
-        self.inner.debug
     }
 
     /// The path we persist to. Shown by `baml telemetry status` so users
@@ -248,19 +236,7 @@ impl Telemetry {
     /// ~10µs. No HTTP happens on the caller's thread, ever; delivery is
     /// the detached flush child's job (see [`queue`]). Because the event
     /// hits disk immediately, it survives panics, Ctrl-C, and SIGKILL.
-    ///
-    /// In debug mode (`BAML_TELEMETRY_DEBUG=1`) the payload is printed to
-    /// stderr instead and nothing is written or sent — even when opted
-    /// out, so users can always audit what *would* go out.
     pub(crate) fn record(&self, event: TelemetryEvent) {
-        if self.debug_mode() {
-            if let Some(body) = post::build_body(self, &event) {
-                if let Ok(rendered) = serde_json::to_string_pretty(&body) {
-                    eprintln!("[telemetry] {rendered}");
-                }
-            }
-            return;
-        }
         if !self.is_enabled() {
             return;
         }
@@ -282,9 +258,6 @@ impl Telemetry {
     /// previous failed sends drains without this invocation having
     /// recorded anything itself.
     pub(crate) fn flush(&self) {
-        if self.debug_mode() {
-            return;
-        }
         let sealed = self
             .inner
             .live_path
@@ -463,31 +436,22 @@ fn write_config(path: &Path, config: &Config) -> std::io::Result<()> {
 
 // ── Env-var / helpers ────────────────────────────────────────────────────────
 
-/// Whether ANY env var opts telemetry out for this invocation. Snapshotted
-/// once at [`Telemetry::load`] so opt-out is deterministic across the run.
+/// Whether `DO_NOT_TRACK` opts telemetry out for this invocation. Snapshotted
+/// once at [`Telemetry::load`] so opt-out is deterministic across the run. An
+/// unparseable value opts out: we never track on a value we cannot read.
 fn env_disables() -> bool {
-    env_is_truthy("BAML_TELEMETRY_DISABLED")
-        || env_is_truthy("DO_NOT_TRACK")
-        || env_is_falsy("BAML_TELEMETRY") // legacy — retained for parity with the pre-subcommand era
+    baml_env::bool_var("DO_NOT_TRACK")
+        .unwrap_or(Some(true))
+        .unwrap_or(false)
 }
 
 pub(crate) fn env_is_truthy(name: &str) -> bool {
-    match std::env::var(name) {
-        Ok(value) => {
+    match baml_env::raw_var(name) {
+        Some(value) => {
             let v = value.trim().to_ascii_lowercase();
             !v.is_empty() && !matches!(v.as_str(), "0" | "false" | "no" | "off")
         }
-        Err(_) => false,
-    }
-}
-
-pub(crate) fn env_is_falsy(name: &str) -> bool {
-    match std::env::var(name) {
-        Ok(value) => matches!(
-            value.trim().to_ascii_lowercase().as_str(),
-            "0" | "false" | "no" | "off"
-        ),
-        Err(_) => false,
+        None => false,
     }
 }
 
@@ -627,40 +591,14 @@ mod tests {
         assert_ne!(h1, h3);
     }
 
-    /// `BAML_TELEMETRY_DISABLED=1` shuts things off regardless of what
-    /// the config file says.
-    #[test]
-    fn env_disables_overrides_config() {
-        let _lock = env_lock();
-        let dir = tempfile::tempdir().unwrap();
-        let _home = EnvGuard::set("BAML_HOME", dir.path().to_str().unwrap());
-        let _disable = EnvGuard::set("BAML_TELEMETRY_DISABLED", "1");
-
-        let t = Telemetry::load();
-        assert!(!t.is_enabled());
-    }
-
-    /// `DO_NOT_TRACK=1` (the cross-tool convention) also disables.
+    /// `DO_NOT_TRACK=1` (the cross-tool convention) shuts things off
+    /// regardless of what the config file says.
     #[test]
     fn do_not_track_disables() {
         let _lock = env_lock();
         let dir = tempfile::tempdir().unwrap();
         let _home = EnvGuard::set("BAML_HOME", dir.path().to_str().unwrap());
         let _dnt = EnvGuard::set("DO_NOT_TRACK", "1");
-
-        let t = Telemetry::load();
-        assert!(!t.is_enabled());
-    }
-
-    /// Legacy `BAML_TELEMETRY=0` is still honored — we never want to break
-    /// a user's existing opt-out just because they were early enough to
-    /// use the old env var.
-    #[test]
-    fn legacy_baml_telemetry_zero_disables() {
-        let _lock = env_lock();
-        let dir = tempfile::tempdir().unwrap();
-        let _home = EnvGuard::set("BAML_HOME", dir.path().to_str().unwrap());
-        let _legacy = EnvGuard::set("BAML_TELEMETRY", "0");
 
         let t = Telemetry::load();
         assert!(!t.is_enabled());
@@ -674,6 +612,8 @@ mod tests {
         let _lock = env_lock();
         let dir = tempfile::tempdir().unwrap();
         let _home = EnvGuard::set("BAML_HOME", dir.path().to_str().unwrap());
+        // This repo's `.envrc` exports `DO_NOT_TRACK=1`.
+        let _track = EnvGuard::unset("DO_NOT_TRACK");
 
         let t = Telemetry::load();
         t.record(TelemetryEvent::cli_invocation("fmt"));
@@ -694,6 +634,8 @@ mod tests {
         let _lock = env_lock();
         let dir = tempfile::tempdir().unwrap();
         let _home = EnvGuard::set("BAML_HOME", dir.path().to_str().unwrap());
+        // This repo's `.envrc` exports `DO_NOT_TRACK=1`.
+        let _track = EnvGuard::unset("DO_NOT_TRACK");
 
         let t = Telemetry::load();
         t.record(TelemetryEvent::cli_invocation("check"));
@@ -722,7 +664,7 @@ mod tests {
         let _lock = env_lock();
         let dir = tempfile::tempdir().unwrap();
         let _home = EnvGuard::set("BAML_HOME", dir.path().to_str().unwrap());
-        let _disable = EnvGuard::set("BAML_TELEMETRY_DISABLED", "1");
+        let _disable = EnvGuard::set("DO_NOT_TRACK", "1");
 
         let t = Telemetry::load();
         t.record(TelemetryEvent::cli_invocation("fmt"));
@@ -742,11 +684,23 @@ mod tests {
     impl EnvGuard {
         #[allow(unsafe_code)] // `env::set_var` is `unsafe` on 2024 edition; scoped to test guard.
         fn set(name: &'static str, value: &str) -> Self {
-            let prior = std::env::var(name).ok();
+            let prior = baml_env::raw_var(name);
             // SAFETY: callers hold `env_lock()`; no other test thread is
             // reading env vars during this guard's lifetime.
             unsafe {
                 std::env::set_var(name, value);
+            }
+            Self { name, prior }
+        }
+    }
+
+    impl EnvGuard {
+        #[allow(unsafe_code)] // See `set`.
+        fn unset(name: &'static str) -> Self {
+            let prior = baml_env::raw_var(name);
+            // SAFETY: callers hold `env_lock()`; see `EnvGuard::set`.
+            unsafe {
+                std::env::remove_var(name);
             }
             Self { name, prior }
         }

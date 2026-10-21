@@ -29,13 +29,20 @@ mod runtime_ty_identity;
 pub use baml_type::MediaKind;
 pub use bex_external_value::{
     AsBexExternalValue, BexExternalAdt, BexExternalValue, MEDIA_WRAPPER_DATA_FIELD,
-    OpaqueExternalValue, RuntimeTy, ToBexExternalValue, TyAttr, TypeName, UnionMetadata,
-    try_convert_rust_data,
+    OpaqueExternalValue, RuntimeTy, TaggedHeapHandleKind, ToBexExternalValue, TypeDefRef, TypeName,
+    UnionMetadata, js_number_to_i64, try_convert_rust_data,
 };
 pub use bex_resource_types::{
     HostReleaseFn, HostValueArc, HostValueKind, host_release_dispatch, host_value,
 };
 pub use bex_str::BexStr;
+pub use bex_vm_types::{
+    BexRustData, Meter, RetainedBytes, RustDataArc,
+    types::{
+        DynWitnessDef, PortableClassDef, PortableClassFieldDef, PortableEnumDef,
+        PortableEnumVariantDef, PortableMetadata, PortableTypeDef,
+    },
+};
 pub use handle::{Handle, HandleInner, WeakHeapRef};
 pub use host_return::{
     HostReturnTypeError, is_canonical_json_alias, validate_host_return, value_satisfies_json,

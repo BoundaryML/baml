@@ -149,12 +149,12 @@ function ts_symbol_text(symbol: TsSymbol) -> string {
 /// this exists to prevent.
 function load_revision(path: string) -> Revision {
     let report = baml.json.to<PriorReport>(baml.json.parse(baml.fs.read(path))) catch (_) {
-        baml.json.JsonParseError => {
+        baml.json.ParseError => {
             throw baml.errors.InvalidArgument {
                 message: `${path} is not valid JSON; regenerate it with tools/stdlib-matrix/run`,
             }
         },
-        baml.json.JsonDecodeError => {
+        baml.json.DecodeError => {
             throw baml.errors.InvalidArgument {
                 message: `${path} does not match the current report model, probably written by an older tool; regenerate it with tools/stdlib-matrix/run`,
             }
@@ -338,14 +338,14 @@ function judgement_carries(
 /// Cycle-safe: `seen` gates every push, and a standard library is full of
 /// mutually referential types.
 function is_fresh_transitively(
-    root: string,
+    start: string,
     now: map<string, string>,
     before: Revision,
     references: map<string, string[]>,
 ) -> bool {
     let no_references: string[] = [];
     let seen: map<string, bool> = {};
-    let pending: string[] = [root];
+    let pending: string[] = [start];
     while (pending.length() > 0) {
         let id = match (pending.pop()) {
             null => {

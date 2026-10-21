@@ -43,7 +43,10 @@ pub fn create_http_client(
             let danger_accept_invalid_certs = matches!(std::env::var("DANGER_ACCEPT_INVALID_CERTS").as_deref(), Ok("1"));
             let mut builder = reqwest::Client::builder()
                 .danger_accept_invalid_certs(danger_accept_invalid_certs)
-                .http2_keep_alive_interval(Some(Duration::from_secs(10)))
+                .http2_keep_alive_interval(Some(Duration::from_secs(10)));
+
+            if !http_config.enable_connection_pooling {
+                builder = builder
                 // To prevent stalling in python, we set the pool to 0 and idle timeout to 0.
                 // See:
                 // https://github.com/seanmonstar/reqwest/issues/600
@@ -52,6 +55,7 @@ pub fn create_http_client(
                 // https://github.com/Azure/azure-sdk-for-rust/pull/1550
                 .pool_max_idle_per_host(0)
                 .pool_idle_timeout(std::time::Duration::from_nanos(1));
+            }
 
             // Apply connect timeout if specified
             // Note: 0 means infinite timeout (no timeout)
@@ -84,4 +88,79 @@ pub(crate) fn create_tracing_client() -> Result<reqwest::Client> {
     }
 
     cb.build().context("Failed to create reqwest client")
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::{TcpListener, TcpStream},
+    };
+
+    use super::create_http_client;
+
+    const RESPONSE: &[u8] =
+        b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\nconnection: keep-alive\r\n\r\nok";
+
+    async fn serve_connection(mut socket: TcpStream) {
+        let mut pending = Vec::new();
+        let mut buffer = [0_u8; 4096];
+
+        loop {
+            let bytes_read = socket.read(&mut buffer).await.unwrap();
+            if bytes_read == 0 {
+                return;
+            }
+            pending.extend_from_slice(&buffer[..bytes_read]);
+
+            while let Some(header_end) = pending.windows(4).position(|bytes| bytes == b"\r\n\r\n") {
+                pending.drain(..header_end + 4);
+                socket.write_all(RESPONSE).await.unwrap();
+            }
+        }
+    }
+
+    async fn accepted_connections(enable_connection_pooling: bool) -> usize {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let connection_count = Arc::new(AtomicUsize::new(0));
+        let server_count = Arc::clone(&connection_count);
+        let server = tokio::spawn(async move {
+            loop {
+                let (socket, _) = listener.accept().await.unwrap();
+                server_count.fetch_add(1, Ordering::Relaxed);
+                tokio::spawn(serve_connection(socket));
+            }
+        });
+
+        let client = create_http_client(&internal_llm_client::HttpConfig {
+            enable_connection_pooling,
+            ..Default::default()
+        })
+        .unwrap();
+
+        for _ in 0..3 {
+            let response = client
+                .get(format!("http://{address}"))
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(response.text().await.unwrap(), "ok");
+        }
+
+        let accepted = connection_count.load(Ordering::Relaxed);
+        server.abort();
+        accepted
+    }
+
+    #[tokio::test]
+    async fn connection_pooling_is_opt_in() {
+        assert_eq!(accepted_connections(false).await, 3);
+        assert_eq!(accepted_connections(true).await, 1);
+    }
 }

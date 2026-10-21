@@ -3,6 +3,7 @@ package sdk_test
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -14,20 +15,20 @@ const mediaURL = "https://example.com/asset"
 const mediaBase64 = "aGVsbG8="
 
 var (
-	_ func(context.Context, string, *string) (baml_go.Image, error)                         = baml_sdk.MediaReturnImage
-	_ func(context.Context, string, *string) (baml_go.Audio, error)                         = baml_sdk.MediaReturnAudio
-	_ func(context.Context, string, *string) (baml_go.Video, error)                         = baml_sdk.MediaReturnVideo
-	_ func(context.Context, string, *string) (baml_go.Pdf, error)                           = baml_sdk.MediaReturnPdf
-	_ func(context.Context, baml_go.Image) (baml_go.Image, error)                           = baml_sdk.MediaRoundTripImage
-	_ func(context.Context, baml_go.Audio) (baml_go.Audio, error)                           = baml_sdk.MediaRoundTripAudio
-	_ func(context.Context, baml_go.Video) (baml_go.Video, error)                           = baml_sdk.MediaRoundTripVideo
-	_ func(context.Context, baml_go.Pdf) (baml_go.Pdf, error)                               = baml_sdk.MediaRoundTripPdf
-	_ func(context.Context, *baml_go.Image) (*baml_go.Image, error)                         = baml_sdk.MediaRoundTripOptionalImage
-	_ func(context.Context, []baml_go.Image) ([]baml_go.Image, error)                       = baml_sdk.MediaRoundTripImageList
-	_ func(context.Context, map[string]baml_go.Image) (map[string]baml_go.Image, error)     = baml_sdk.MediaRoundTripImageMap
-	_ func(context.Context, baml_sdk.ImageOrAudio) (baml_sdk.ImageOrAudio, error)           = baml_sdk.MediaRoundTripImageOrAudio
-	_ func(context.Context, baml_sdk.ImageOrMediaImage) (baml_sdk.ImageOrMediaImage, error) = baml_sdk.MediaRoundTripMediaOrImageClass
-	_ func(context.Context, any) (any, error)                                               = baml_sdk.MediaRoundTripAllMedia
+	_ func(context.Context, string, *string, ...baml_go.CallOption) (baml_go.Image, error)                         = baml_sdk.MediaReturnImage
+	_ func(context.Context, string, *string, ...baml_go.CallOption) (baml_go.Audio, error)                         = baml_sdk.MediaReturnAudio
+	_ func(context.Context, string, *string, ...baml_go.CallOption) (baml_go.Video, error)                         = baml_sdk.MediaReturnVideo
+	_ func(context.Context, string, *string, ...baml_go.CallOption) (baml_go.Pdf, error)                           = baml_sdk.MediaReturnPdf
+	_ func(context.Context, baml_go.Image, ...baml_go.CallOption) (baml_go.Image, error)                           = baml_sdk.MediaRoundTripImage
+	_ func(context.Context, baml_go.Audio, ...baml_go.CallOption) (baml_go.Audio, error)                           = baml_sdk.MediaRoundTripAudio
+	_ func(context.Context, baml_go.Video, ...baml_go.CallOption) (baml_go.Video, error)                           = baml_sdk.MediaRoundTripVideo
+	_ func(context.Context, baml_go.Pdf, ...baml_go.CallOption) (baml_go.Pdf, error)                               = baml_sdk.MediaRoundTripPdf
+	_ func(context.Context, *baml_go.Image, ...baml_go.CallOption) (*baml_go.Image, error)                         = baml_sdk.MediaRoundTripOptionalImage
+	_ func(context.Context, []baml_go.Image, ...baml_go.CallOption) ([]baml_go.Image, error)                       = baml_sdk.MediaRoundTripImageList
+	_ func(context.Context, map[string]baml_go.Image, ...baml_go.CallOption) (map[string]baml_go.Image, error)     = baml_sdk.MediaRoundTripImageMap
+	_ func(context.Context, baml_sdk.ImageOrAudio, ...baml_go.CallOption) (baml_sdk.ImageOrAudio, error)           = baml_sdk.MediaRoundTripImageOrAudio
+	_ func(context.Context, baml_sdk.ImageOrMediaImage, ...baml_go.CallOption) (baml_sdk.ImageOrMediaImage, error) = baml_sdk.MediaRoundTripMediaOrImageClass
+	_ func(context.Context, any, ...baml_go.CallOption) (any, error)                                               = baml_sdk.MediaRoundTripAllMedia
 )
 
 func assertOptionalString(t *testing.T, got *string, want string) {
@@ -153,8 +154,8 @@ func Test_media_constructors_and_accessors(t *testing.T) {
 	if url, err := image.Url(); err != nil || url != nil {
 		t.Fatalf("base64 image URL = %#v, %v; want nil", url, err)
 	}
-	if path, err := image.File(); err != nil || path != nil {
-		t.Fatalf("base64 image file = %#v, %v; want nil", path, err)
+	if name, err := image.Name(); err != nil || name != nil {
+		t.Fatalf("base64 image name = %#v, %v; want nil", name, err)
 	}
 
 	audio, err := baml_go.NewAudioFromUrl(mediaURL, nil)
@@ -169,8 +170,8 @@ func Test_media_constructors_and_accessors(t *testing.T) {
 	if got, err := audio.MimeType(); err != nil || got != nil {
 		t.Fatalf("URL audio MIME type = %#v, %v; want nil", got, err)
 	}
-	if got, err := audio.File(); err != nil || got != nil {
-		t.Fatalf("URL audio file = %#v, %v; want nil", got, err)
+	if got, err := audio.Name(); err != nil || got != nil {
+		t.Fatalf("URL audio name = %#v, %v; want nil", got, err)
 	}
 
 	file, err := os.CreateTemp(t.TempDir(), "media-*")
@@ -187,11 +188,21 @@ func Test_media_constructors_and_accessors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	path, err := video.File()
+	// The value holds the file's content and base name, read now.
+	if err := os.Remove(file.Name()); err != nil {
+		t.Fatal(err)
+	}
+	name, err := video.Name()
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertOptionalString(t, path, file.Name())
+	assertOptionalString(t, name, filepath.Base(file.Name()))
+	if content, err := video.Base64(); err != nil || content != "cGF5bG9hZA==" {
+		t.Fatalf("file video base64 = %q, %v", content, err)
+	}
+	if _, err := baml_go.NewVideoFromFile(file.Name(), &mime); err == nil {
+		t.Fatal("a missing file was accepted")
+	}
 	if got, err := video.Url(); err != nil || got != nil {
 		t.Fatalf("file video URL = %#v, %v; want nil", got, err)
 	}
@@ -210,8 +221,8 @@ func Test_media_constructors_and_accessors(t *testing.T) {
 	if got, err := pdf.Url(); err != nil || got != nil {
 		t.Fatalf("base64 PDF URL = %#v, %v; want nil", got, err)
 	}
-	if got, err := pdf.File(); err != nil || got != nil {
-		t.Fatalf("base64 PDF file = %#v, %v; want nil", got, err)
+	if got, err := pdf.Name(); err != nil || got != nil {
+		t.Fatalf("base64 PDF name = %#v, %v; want nil", got, err)
 	}
 	if _, err := baml_sdk.MediaRoundTripPdf(context.Background(), pdf); err != nil {
 		t.Fatal(err)

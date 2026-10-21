@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/compiler2_tir/phase3a_recursion.rs
+expression: "render_labeled_cases(&[(\"type_alias_valid_recursive_via_container\",\n\"type JSON = string | int | bool | null | JSON[] | map<string, JSON>\",),\n(\"type_alias_list_in_union\", \"type A = A[] | string\"),\n(\"type_alias_optional_list_self_reference\", \"type A = A[]?\",),\n(\"type_alias_map_in_union\", \"type A = map<string, A> | string\",),\n(\"type_alias_mutual_cycle_through_list\", \"type A = B[]\\ntype B = A\",),])"
+---
+=== type_alias_valid_recursive_via_container ===
+type user.JSON = string | int | bool | null | user.JSON[] | map<string, user.JSON>
+
+=== type_alias_list_in_union ===
+type user.A = user.A[] | string
+
+=== type_alias_optional_list_self_reference ===
+type user.A = user.A[] | null
+
+=== type_alias_map_in_union ===
+type user.A = map<string, user.A> | string
+
+=== type_alias_mutual_cycle_through_list ===
+type user.A = user.B[]
+type user.B = user.A

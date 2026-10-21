@@ -1,0 +1,38 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// BEP-075: the streaming attributes belong to class declarations — a field's
+// `@stream.done` / `@stream.must_exist`, a class's `@@stream.done`. Anywhere
+// else they would be accepted and silently ignored, so they are errors.
+
+enum Status {
+    Active @stream.done,
+    Retired @stream.must_exist,
+    @@stream.done
+}
+
+class Envelope {
+    body: string,
+    @@stream.must_exist
+}
+
+// An interface is a contract, not a concrete data type: nothing is ever
+// parsed or rendered *as* one, so no schema attribute has meaning on its
+// fields.
+interface Shaped {
+    label: string @stream.done,
+    weight: int @alias("w"),
+    hidden: bool @skip,
+}
+
+// A streaming attribute takes effect at most once.
+class Twice {
+    body: string @stream.done @stream.done,
+}
+
+// The `stream.` namespace is the compiler's: a name it does not define is a
+// misspelling, not a pass-through annotation — on a block as on a field.
+class Misspelt {
+    body: string @stream.dne,
+    @@stream.finished
+}

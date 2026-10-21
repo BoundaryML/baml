@@ -4,7 +4,7 @@ use text_size::TextRange;
 
 use crate::{
     ids::{FunctionMarker, LocalItemId},
-    item_tree::{Attribute, GenericParam, ImplementsBlock},
+    item_tree::{ClassAttrs, ClassFieldAttrs, GenericParam, ImplementsBlock},
 };
 
 /// A class field stored in the `ItemTree`.
@@ -14,7 +14,8 @@ pub struct ClassField {
     /// Always present — see [`ast::FieldDef::type_expr`]. A field written without a
     /// type recovers as `TypeExprKind::Error`, not as an absent type.
     pub type_expr: ast::TypeExpr,
-    pub attributes: Vec<Attribute>,
+    /// The field's lowered `@` attributes.
+    pub attrs: ClassFieldAttrs,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<String>,
 }
@@ -37,8 +38,8 @@ pub struct Class {
     /// the raw target `TypeExpr` so generic parameters like `Container<int>`
     /// survive name resolution, plus field redeclarations from the block.
     pub implements: Vec<ImplementsBlock>,
-    /// Block-level attributes (@@description, @@alias, etc.).
-    pub attributes: Vec<Attribute>,
+    /// The class's lowered `@@` attributes.
+    pub attrs: ClassAttrs,
     /// Joined `///` doc-comment lines preceding this declaration.
     pub docstring: Option<String>,
     /// Full source span of the class declaration.

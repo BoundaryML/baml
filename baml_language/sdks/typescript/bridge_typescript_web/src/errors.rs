@@ -1,6 +1,6 @@
 //! JavaScript boundary-error adapters.
 
-use bridge_cffi::handle::HandleError;
+use bridge_cffi::handle_cffi::HandleError;
 use wasm_bindgen::{JsError, JsValue};
 
 pub(crate) const INVALID_ARGUMENT: &str = "invalid_argument";
@@ -31,6 +31,8 @@ pub(crate) fn bridge_error(error: &bridge_cffi::BridgeError) -> JsValue {
         | BridgeError::MissingCallTarget
         | BridgeError::FunctionHandleTypeArgs
         | BridgeError::MissingArgument { .. }
+        | BridgeError::UnknownCallAllocation(_)
+        | BridgeError::InvocationProtocol(_)
         | BridgeError::InvalidCallId => INVALID_ARGUMENT,
         BridgeError::Runtime(RuntimeError::InvalidArgument { .. }) => INVALID_ARGUMENT,
         BridgeError::Runtime(RuntimeError::Compilation { .. }) => COMPILATION,

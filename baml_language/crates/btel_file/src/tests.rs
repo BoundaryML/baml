@@ -1,0 +1,642 @@
+use std::{
+    cell::RefCell,
+    num::NonZeroUsize,
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
+
+use btel_processor::{AggregateDelta, Publisher};
+use btel_recorder::{RecordingConfig, RecordingPublisher, proto};
+use btel_types::{AwaitDuration, CallPathId, CallPathNodeId, ClockDuration};
+use prost::Message;
+
+use super::*;
+
+fn delta() -> AggregateDelta {
+    AggregateDelta {
+        node: CallPathNodeId::new(CallPathId::new_non_root(7).unwrap(), false),
+        count: 1,
+        total_duration: ClockDuration::from_ticks(3),
+        total_self_await: AwaitDuration::ZERO,
+        errored: 0,
+        cancelled: 0,
+        ..Default::default()
+    }
+}
+
+#[test]
+fn process_completion_accepts_unknown_outcomes_but_rejects_invalid_statuses() {
+    let id = RecordingId::generate();
+    for status in [-1, 0, 1, 2, 3, 4, 5] {
+        let file = proto::RecordingFile {
+            header: Some(proto::RecordingHeader {
+                format_major: btel_settings::encoding::FORMAT_MAJOR,
+                format_minor: btel_settings::encoding::UNKNOWN_PROCESS_OUTCOME_FORMAT_MINOR,
+                recording_id: id.as_bytes().to_vec(),
+                ..Default::default()
+            }),
+            sequence: 1,
+            end: Some(proto::RecordingEnd {
+                process_end: Some(proto::ProcessEnd {
+                    status,
+                    at_unix_ns: 123,
+                }),
+            }),
+            ..Default::default()
+        };
+        let parsed = reader::validate_file(&file.encode_to_vec(), id, 1);
+        assert_eq!(
+            parsed.is_ok(),
+            (1..=4).contains(&status),
+            "status {status}: {parsed:?}"
+        );
+    }
+}
+
+fn files(id: RecordingId, count: usize) -> Vec<SealedFile> {
+    let output = RefCell::new(Vec::new());
+    let mut publisher = RecordingPublisher::new(id, RecordingConfig::default(), |f| {
+        output.borrow_mut().push(f);
+    })
+    .unwrap();
+    for _ in 0..count {
+        publisher.aggregate(delta());
+        publisher.flush();
+    }
+    drop(publisher);
+    output.into_inner()
+}
+
+#[test]
+fn local_publisher_finishes_encoding_before_disk_drain() {
+    let root = tempfile::tempdir().unwrap();
+    let id = RecordingId::generate();
+    let (entered, started) = mpsc::channel();
+    let (release, released) = mpsc::channel();
+    // Finishing seals the pending window as the terminal file.
+    let expected_bytes = {
+        let output = RefCell::new(Vec::new());
+        let mut publisher = RecordingPublisher::new(id, RecordingConfig::default(), |f| {
+            output.borrow_mut().push(f);
+        })
+        .unwrap();
+        publisher.aggregate(delta());
+        publisher.finish();
+        drop(publisher);
+        let [file] = <[SealedFile; 1]>::try_from(output.into_inner())
+            .ok()
+            .unwrap();
+        assert!(
+            proto::RecordingFile::decode(file.bytes())
+                .unwrap()
+                .end
+                .is_some()
+        );
+        file.bytes().to_vec()
+    };
+    let sink = LocalDelivery::start(
+        root.path().to_owned(),
+        LocalDeliveryConfig::default(),
+        move |file| {
+            entered.send(()).unwrap();
+            released.recv_timeout(Duration::from_secs(5)).unwrap();
+            assert_eq!(file.bytes(), expected_bytes);
+            Ok(())
+        },
+        |_| {},
+    )
+    .unwrap();
+    let builder = btel_recorder::RecordingBuilder::new(id, RecordingConfig::default()).unwrap();
+    let mut publisher = LocalPublisher::new(builder, sink);
+    let sink = publisher.delivery().unwrap().clone();
+    publisher.aggregate(delta());
+    publisher.finish();
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert_eq!(sink.result(), None);
+    drop(publisher);
+    release.send(()).unwrap();
+    sink.finish().unwrap();
+    assert_eq!(sink.result(), Some(Ok(())));
+}
+
+#[test]
+fn local_recording_ends_after_its_flushed_data_and_only_once() {
+    let root = tempfile::tempdir().unwrap();
+    let id = RecordingId::generate();
+    let delivery = LocalDelivery::create(root.path(), id, LocalDeliveryConfig::default()).unwrap();
+    let builder = btel_recorder::RecordingBuilder::new(id, RecordingConfig::default()).unwrap();
+    let mut publisher = LocalPublisher::new(builder, delivery);
+    let sink = publisher.delivery().unwrap().clone();
+    publisher.aggregate(delta());
+    publisher.flush();
+    publisher.finish();
+    publisher.finish();
+    drop(publisher);
+    sink.finish().unwrap();
+    let read = read_directory(sink.directory()).unwrap();
+    assert_eq!(
+        read.files
+            .iter()
+            .map(|f| (f.sequence, f.end.is_some()))
+            .collect::<Vec<_>>(),
+        [(1, false), (2, true)],
+        "the data file stays unsealed; the end is its own last file"
+    );
+    assert!(read.has_recording_end);
+    assert!(!read.issues.contains(&ReadIssue::FilesAfterRecordingEnd));
+}
+
+#[test]
+fn writes_exact_publisher_bytes_and_finish_is_idempotent() {
+    let root = tempfile::tempdir().unwrap();
+    let id = RecordingId::generate();
+    let mut sink = LocalDelivery::create(root.path(), id, LocalDeliveryConfig::default()).unwrap();
+    let sender = sink.take_handle();
+    let produced = files(id, 3);
+    let expected: Vec<_> = produced
+        .iter()
+        .map(|f| (f.sequence(), f.bytes().to_vec()))
+        .collect();
+    for file in produced {
+        sender.send(file).unwrap();
+    }
+    std::thread::scope(|scope| {
+        scope.spawn(|| sink.finish().unwrap());
+        scope.spawn(|| sink.finish().unwrap());
+    });
+    assert_eq!(sink.result(), Some(Ok(())));
+    assert_eq!(fs::read_dir(sink.directory()).unwrap().count(), 3);
+    for (sequence, bytes) in &expected {
+        let path = sink.directory().join(format!("{sequence:020}.btel"));
+        assert_eq!(&fs::read(path).unwrap(), bytes);
+    }
+    assert!(sender.send(files(id, 1).pop().unwrap()).is_err());
+    assert!(LocalDelivery::create(root.path(), id, LocalDeliveryConfig::default()).is_err());
+    let read = read_directory(sink.directory()).unwrap();
+    assert_eq!(read.files.len(), 3);
+    assert!(!read.has_recording_end);
+    assert_eq!(
+        read.issues,
+        vec![ReadIssue::UnresolvedReference {
+            kind: "call path",
+            id: 7
+        }]
+    );
+}
+
+#[test]
+fn full_queue_waits_for_capacity_and_unblocks_on_writer_failure() {
+    for fail in [false, true] {
+        let root = tempfile::tempdir().unwrap();
+        let (entered, started) = mpsc::channel();
+        let (release, released) = mpsc::channel();
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let written = Arc::clone(&seen);
+        let mut first = true;
+        let mut sink = LocalDelivery::start(
+            root.path().to_owned(),
+            LocalDeliveryConfig {
+                queue_files: NonZeroUsize::new(1).unwrap(),
+            },
+            move |file| {
+                if first {
+                    first = false;
+                    entered.send(()).unwrap();
+                    released.recv_timeout(Duration::from_secs(5)).unwrap();
+                    if fail {
+                        return Err(LocalDeliveryError("injected disk failure".into()));
+                    }
+                }
+                written.lock().unwrap().push(file.sequence().get());
+                Ok(())
+            },
+            |_| {},
+        )
+        .unwrap();
+        let sender = sink.take_handle();
+        let mut files = files(RecordingId::generate(), 3).into_iter();
+        sender.send(files.next().unwrap()).unwrap();
+        started.recv_timeout(Duration::from_secs(5)).unwrap();
+        sender.send(files.next().unwrap()).unwrap();
+        let third = files.next().unwrap();
+        let (attempting, attempted) = mpsc::channel();
+        let (completed, completion) = mpsc::channel();
+        let pending = std::thread::spawn(move || {
+            attempting.send(()).unwrap();
+            completed.send(sender.send(third)).unwrap();
+        });
+        attempted.recv_timeout(Duration::from_secs(5)).unwrap();
+        let early = completion.recv_timeout(Duration::from_millis(50));
+        // Always unblock the worker before asserting, including on a regression.
+        release.send(()).unwrap();
+        assert!(matches!(early, Err(mpsc::RecvTimeoutError::Timeout)));
+        let admission = completion.recv_timeout(Duration::from_secs(5)).unwrap();
+        pending.join().unwrap();
+        let finished = sink.finish();
+        if fail {
+            let expected = Err(LocalDeliveryError("injected disk failure".into()));
+            assert_eq!(admission, expected);
+            assert_eq!(finished, expected);
+        } else {
+            admission.unwrap();
+            finished.unwrap();
+            assert_eq!(*seen.lock().unwrap(), [1, 2, 3]);
+        }
+    }
+}
+
+/// A sender's error stops the publisher, which fails the recording unless it
+/// was already disabled: so `on_failure` runs before a blocked send returns.
+#[test]
+fn writer_failure_is_reported_before_a_blocked_send_returns() {
+    let root = tempfile::tempdir().unwrap();
+    let (entered, started) = mpsc::channel();
+    let (release, released) = mpsc::channel();
+    let send_returned = Arc::new(AtomicBool::new(false));
+    let returned = Arc::clone(&send_returned);
+    let (reported, report) = mpsc::channel();
+    let mut first = true;
+    let mut sink = LocalDelivery::start(
+        root.path().to_owned(),
+        LocalDeliveryConfig {
+            queue_files: NonZeroUsize::new(1).unwrap(),
+        },
+        move |_file| {
+            if first {
+                first = false;
+                entered.send(()).unwrap();
+                released.recv_timeout(Duration::from_secs(5)).unwrap();
+            }
+            Err(LocalDeliveryError("injected disk failure".into()))
+        },
+        move |_| {
+            // Long enough for a send released early to return.
+            std::thread::sleep(Duration::from_millis(200));
+            reported.send(returned.load(Ordering::SeqCst)).unwrap();
+        },
+    )
+    .unwrap();
+    let sender = sink.take_handle();
+    let mut files = files(RecordingId::generate(), 3).into_iter();
+    sender.send(files.next().unwrap()).unwrap();
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    sender.send(files.next().unwrap()).unwrap();
+    let third = files.next().unwrap();
+    let flag = Arc::clone(&send_returned);
+    let pending = std::thread::spawn(move || {
+        let result = sender.send(third);
+        flag.store(true, Ordering::SeqCst);
+        result
+    });
+    // Let the third send block on the full queue, then fail the writer.
+    std::thread::sleep(Duration::from_millis(50));
+    release.send(()).unwrap();
+    let returned_before_report = report.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert!(
+        !returned_before_report,
+        "a blocked send returned before on_failure ran"
+    );
+    assert!(pending.join().unwrap().is_err());
+    assert!(sink.finish().is_err());
+}
+
+#[test]
+fn disk_failure_and_duplicate_sequence_are_observable() {
+    let root = tempfile::tempdir().unwrap();
+    let id = RecordingId::generate();
+    let mut sink = LocalDelivery::create(root.path(), id, LocalDeliveryConfig::default()).unwrap();
+    let sender = sink.take_handle();
+    let original = files(id, 1).pop().unwrap();
+    // Interfere after successful setup, so failure occurs asynchronously.
+    fs::remove_dir(sink.directory()).unwrap();
+    fs::write(sink.directory(), b"not a directory").unwrap();
+    sender.send(original).unwrap();
+    let error = sink.finish().unwrap_err();
+    assert_eq!(sink.result(), Some(Err(error.clone())));
+    assert_eq!(sink.finish(), Err(error));
+
+    let id = RecordingId::generate();
+    let mut sink = LocalDelivery::create(root.path(), id, LocalDeliveryConfig::default()).unwrap();
+    let sender = sink.take_handle();
+    let original = files(id, 1).pop().unwrap();
+    let expected = original.bytes().to_vec();
+    sender.send(original).unwrap();
+    sender.send(files(id, 1).pop().unwrap()).unwrap();
+    assert!(sink.finish().unwrap_err().to_string().contains("sequence"));
+    assert_eq!(
+        fs::read(sink.directory().join("00000000000000000001.btel")).unwrap(),
+        expected
+    );
+}
+
+#[test]
+fn recovery_keeps_later_files_when_a_middle_file_is_missing_or_corrupt() {
+    let root = tempfile::tempdir().unwrap();
+    let id = RecordingId::generate();
+    let mut sink = LocalDelivery::create(root.path(), id, LocalDeliveryConfig::default()).unwrap();
+    let sender = sink.take_handle();
+    for file in files(id, 4) {
+        sender.send(file).unwrap();
+    }
+    sink.finish().unwrap();
+    fs::remove_file(sink.directory().join("00000000000000000002.btel")).unwrap();
+    fs::write(sink.directory().join("00000000000000000003.btel"), [0xff]).unwrap();
+    fs::write(
+        sink.directory().join("00000000000000000005.btel.part"),
+        [0x08],
+    )
+    .unwrap();
+    let read = read_directory(sink.directory()).unwrap();
+    assert_eq!(
+        read.files.iter().map(|f| f.sequence).collect::<Vec<_>>(),
+        vec![1, 4]
+    );
+    assert!(
+        read.issues
+            .contains(&ReadIssue::MissingSequences { first: 2, last: 3 })
+    );
+    assert!(
+        read.issues
+            .iter()
+            .any(|i| matches!(i, ReadIssue::InvalidFile { .. }))
+    );
+    assert!(
+        read.issues
+            .iter()
+            .any(|i| matches!(i, ReadIssue::UnfinishedFile(_)))
+    );
+    assert!(!read.has_recording_end);
+}
+
+#[test]
+fn later_definitions_resolve_a_live_prefix_and_wrong_identity_is_rejected() {
+    let root = tempfile::tempdir().unwrap();
+    let id = RecordingId::generate();
+    let mut sink = LocalDelivery::create(root.path(), id, LocalDeliveryConfig::default()).unwrap();
+    let sender = sink.take_handle();
+    let original = files(id, 1).pop().unwrap();
+    let original_bytes = original.bytes().to_vec();
+    sender.send(original).unwrap();
+    sink.finish().unwrap();
+    assert!(!read_directory(sink.directory()).unwrap().issues.is_empty());
+    let mut second = proto::RecordingFile::decode(original_bytes.as_slice()).unwrap();
+    second.sequence = 2;
+    second.aggregates = None;
+    second.definitions = Some(proto::Definitions {
+        functions: vec![proto::FunctionDefinition {
+            function_id: 8,
+            resolution: Some(proto::function_definition::Resolution::Unavailable(
+                proto::MetadataUnavailable {},
+            )),
+        }],
+        call_paths: vec![proto::CallPathDefinition {
+            call_path_id: 7,
+            thread_id: 5,
+            callee_function_id: 8,
+            edge: proto::CallPathEdge::Synchronous as i32,
+            ..Default::default()
+        }],
+        threads: vec![proto::ThreadDefinition {
+            thread_id: 5,
+            clock_epoch_id: 3,
+            ..Default::default()
+        }],
+        clock_epochs: vec![proto::ClockEpochDefinition {
+            epoch_id: 3,
+            domain_id: 3,
+            source: proto::ClockSource::OsMonotonic as i32,
+            multiplier: 1,
+            ..Default::default()
+        }],
+    });
+    let path = sink.directory().join("00000000000000000002.btel");
+    fs::write(&path, second.encode_to_vec()).unwrap();
+    assert!(read_directory(sink.directory()).unwrap().issues.is_empty());
+    second.header.as_mut().unwrap().recording_id = RecordingId::generate().as_bytes().to_vec();
+    fs::write(path, second.encode_to_vec()).unwrap();
+    let read = read_directory(sink.directory()).unwrap();
+    assert_eq!(read.files.len(), 1);
+    assert!(read.issues.iter().any(
+        |i| matches!(i, ReadIssue::InvalidFile { reason, .. } if reason.contains("identity"))
+    ));
+}
+
+fn root_blob(snapshot: &btel_snapshot::Snapshot) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    snapshot
+        .root_blob()
+        .write(&mut btel_snapshot::BlobScratch::default(), &mut bytes)
+        .unwrap();
+    bytes
+}
+
+fn snapshot(pool: &btel_snapshot::SnapshotPool, n: i64) -> btel_snapshot::Snapshot {
+    pool.try_acquire().unwrap().finish(
+        btel_snapshot::SnapshotValue::Int(n),
+        &mut btel_snapshot::Shaper::default(),
+    )
+}
+
+#[test]
+fn cas_is_shared_across_recordings_and_atomic_under_concurrent_writers() {
+    let root = tempfile::tempdir().unwrap();
+    let cas = root.path().join("cas");
+    let pool = btel_snapshot::SnapshotPool::new(3, btel_snapshot::Limits::default());
+    let value = snapshot(&pool, 42);
+    let id = value.root_id();
+    let expected = root_blob(&value);
+    drop(value);
+    let mut a = LocalDelivery::create_with_cas(
+        root.path(),
+        &cas,
+        RecordingId::generate(),
+        LocalDeliveryConfig::default(),
+        |_| {},
+    )
+    .unwrap();
+    let mut b = LocalDelivery::create_with_cas(
+        root.path(),
+        &cas,
+        RecordingId::generate(),
+        LocalDeliveryConfig::default(),
+        |_| {},
+    )
+    .unwrap();
+    a.take_handle().send_snapshot(snapshot(&pool, 42)).unwrap();
+    b.take_handle().send_snapshot(snapshot(&pool, 42)).unwrap();
+    a.finish().unwrap();
+    b.finish().unwrap();
+    assert_eq!(pool.stats().in_use, 0);
+    let path = cas_path(&cas, id);
+    assert_eq!(fs::read(&path).unwrap(), expected);
+    let filename = path.file_name().unwrap().to_str().unwrap();
+    assert_eq!(filename.len(), 32);
+    assert_eq!(
+        path,
+        cas.join(format!("v{}", btel_snapshot::BLOB_VERSION))
+            .join(&filename[..2])
+            .join(filename)
+    );
+    assert_eq!(
+        fs::read_dir(path.parent().unwrap()).unwrap().count(),
+        1,
+        "no partials left behind"
+    );
+    let modified = fs::metadata(&path).unwrap().modified().unwrap();
+    let mut c = LocalDelivery::create_with_cas(
+        root.path(),
+        &cas,
+        RecordingId::generate(),
+        LocalDeliveryConfig::default(),
+        |_| {},
+    )
+    .unwrap();
+    c.take_handle().send_snapshot(snapshot(&pool, 42)).unwrap();
+    c.finish().unwrap();
+    assert_eq!(
+        fs::metadata(path).unwrap().modified().unwrap(),
+        modified,
+        "existing CAS entry was reused"
+    );
+}
+
+/// A list of three strings, two of them large enough for blobs of their own.
+fn cut_snapshot(pool: &btel_snapshot::SnapshotPool) -> btel_snapshot::Snapshot {
+    use btel_snapshot::SnapshotValue;
+    let mut b = pool.try_acquire().unwrap();
+    let element_type = b.leaves().ty(btel_snapshot::OwnedType::string());
+    let texts = ["a".repeat(100), "small".to_owned(), "b".repeat(100)];
+    let list = b.list(element_type, texts.iter(), |leaves, text| {
+        leaves.string_value(&text.as_str().into())
+    });
+    let list = b.leaves().object(list).unwrap();
+    let mut shaper = btel_snapshot::Shaper::new(btel_snapshot::ShapePolicy::Split {
+        unit_bytes: 1 << 20,
+        leaf_bytes: 64,
+    });
+    b.finish(SnapshotValue::Object(list), &mut shaper)
+}
+
+#[test]
+fn every_blob_of_a_capture_is_written_and_stored_ones_are_kept() {
+    let root = tempfile::tempdir().unwrap();
+    let cas = root.path().join("cas");
+    let pool = btel_snapshot::SnapshotPool::new(2, btel_snapshot::Limits::default());
+    let value = cut_snapshot(&pool);
+    let mut scratch = btel_snapshot::BlobScratch::default();
+    let expected: Vec<_> = value
+        .blobs()
+        .map(|blob| {
+            let mut bytes = Vec::new();
+            blob.write(&mut scratch, &mut bytes).unwrap();
+            (cas_path(&cas, blob.id()), bytes)
+        })
+        .collect();
+    assert_eq!(
+        expected.len(),
+        3,
+        "two strings and the list that names them"
+    );
+    // One child is stored already, as another capture would have left it.
+    let (stored, bytes) = &expected[0];
+    fs::create_dir_all(stored.parent().unwrap()).unwrap();
+    fs::write(stored, bytes).unwrap();
+    let modified = fs::metadata(stored).unwrap().modified().unwrap();
+
+    let mut delivery = LocalDelivery::create_with_cas(
+        root.path(),
+        &cas,
+        RecordingId::generate(),
+        LocalDeliveryConfig::default(),
+        |_| {},
+    )
+    .unwrap();
+    delivery.take_handle().send_snapshot(value).unwrap();
+    delivery.finish().unwrap();
+    assert_eq!(pool.stats().in_use, 0);
+    for (path, bytes) in &expected {
+        assert_eq!(&fs::read(path).unwrap(), bytes);
+    }
+    assert_eq!(fs::metadata(stored).unwrap().modified().unwrap(), modified);
+}
+
+#[test]
+fn a_writer_does_not_check_again_for_blobs_it_placed() {
+    let root = tempfile::tempdir().unwrap();
+    let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+    let value = cut_snapshot(&pool);
+    let child = cas_path(root.path(), value.blobs().next().unwrap().id());
+    let mut writer = crate::cas::CasWriter::new(root.path().to_owned());
+    writer.write(&value).unwrap();
+    let bytes = fs::read(&child).unwrap();
+    // Removing a blob behind a running writer is outside its contract: the
+    // writer trusts what it placed and does not look again.
+    fs::remove_file(&child).unwrap();
+    writer.write(&value).unwrap();
+    assert!(!child.exists());
+    crate::cas::CasWriter::new(root.path().to_owned())
+        .write(&value)
+        .unwrap();
+    assert_eq!(fs::read(&child).unwrap(), bytes);
+}
+
+#[test]
+fn new_cas_version_does_not_reuse_or_overwrite_old_namespace() {
+    let root = tempfile::tempdir().unwrap();
+    let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+    let value = snapshot(&pool, 42);
+    let path = cas_path(root.path(), value.root_id());
+    let legacy = crate::cas_path_versioned(
+        root.path(),
+        value.root_id(),
+        btel_snapshot::BLOB_VERSION - 1,
+    );
+    fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+    fs::write(&legacy, b"existing legacy entry").unwrap();
+    crate::cas::CasWriter::new(root.path().to_owned())
+        .write(&value)
+        .unwrap();
+    assert_eq!(fs::read(&path).unwrap(), root_blob(&value));
+    assert_eq!(fs::read(&legacy).unwrap(), b"existing legacy entry");
+}
+
+#[test]
+fn cas_failure_releases_full_queue_and_retained_snapshot_owners() {
+    let root = tempfile::tempdir().unwrap();
+    let pool = btel_snapshot::SnapshotPool::new(3, btel_snapshot::Limits::default());
+    let (entered, started) = mpsc::channel();
+    let (release, released) = mpsc::channel();
+    let mut sink = LocalDelivery::start_with_snapshots(
+        root.path().to_owned(),
+        LocalDeliveryConfig {
+            queue_files: NonZeroUsize::new(1).unwrap(),
+        },
+        |_| Ok(()),
+        move |_| {
+            entered.send(()).unwrap();
+            released.recv_timeout(Duration::from_secs(5)).unwrap();
+            Err(LocalDeliveryError("injected ENOSPC".into()))
+        },
+        |_| {},
+    )
+    .unwrap();
+    let sender = sink.take_handle();
+    sender.send_snapshot(snapshot(&pool, 1)).unwrap();
+    started.recv_timeout(Duration::from_secs(5)).unwrap();
+    sender.send_snapshot(snapshot(&pool, 2)).unwrap();
+    let third = snapshot(&pool, 3);
+    let (completed, completion) = mpsc::channel();
+    let waiting = std::thread::spawn(move || completed.send(sender.send_snapshot(third)).unwrap());
+    let early = completion.recv_timeout(Duration::from_millis(50));
+    release.send(()).unwrap();
+    assert!(matches!(early, Err(mpsc::RecvTimeoutError::Timeout)));
+    assert!(
+        completion
+            .recv_timeout(Duration::from_secs(5))
+            .unwrap()
+            .is_err()
+    );
+    waiting.join().unwrap();
+    assert!(sink.finish().is_err());
+    assert_eq!(pool.stats().in_use, 0);
+}

@@ -41,3 +41,21 @@ def test_main_lorem_resume_reachable():
 
 def test_main_deep_namespace_thing_reachable():
     from baml_sdk.a.b import Thing  # noqa: F401
+
+
+# SDK_PARITY_LINT(skip): validates Python Pydantic extra-field compatibility
+def test_main_generated_models_ignore_extra_fields():
+    from baml_sdk.generics import Wrapper
+    from baml_sdk.lorem import Resume
+
+    resume = Resume.model_validate(
+        {"name": "Ada", "email": None, "future_field": "ignored"}
+    )
+    wrapper = Wrapper[int].model_validate({"value": 42, "future_field": "ignored"})
+
+    assert resume.model_dump() == {"name": "Ada", "email": None}
+    assert wrapper.model_dump() == {"value": 42}
+
+    for model in (resume, wrapper):
+        assert model.model_config["extra"] == "ignore"
+        assert model.model_extra is None

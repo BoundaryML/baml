@@ -5,13 +5,11 @@
 //! place instead of drifting between per-file copies.
 
 use std::{
-    collections::HashSet,
     path::{Path, PathBuf},
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use baml_db::{SourceFile, baml_compiler2_emit::CompileOptions};
-use baml_project::ProjectDatabase;
+use baml_db::ProjectDatabase;
 
 use crate::{
     bytecode_cache::{CacheContext, compile_program},
@@ -23,30 +21,28 @@ static COUNTER: AtomicUsize = AtomicUsize::new(0);
 /// The on-disk cache is disabled (so a disk-round-trip test must skip) whenever
 /// caching is turned off wholesale or the verify tripwire forces a full compile.
 pub(crate) fn cache_disabled() -> bool {
-    std::env::var_os("BAML_NO_BYTECODE_CACHE").is_some()
-        || std::env::var_os("BAML_CACHE_VERIFY").is_some()
+    !crate::bytecode_cache::build_cache_enabled() || CacheContext::verify_enabled()
 }
 
-/// The compile options every disk-round-trip test uses.
-pub(crate) fn opts() -> CompileOptions {
-    CompileOptions {
-        emit_test_cases: false,
-    }
+/// Open the cache for `resolved` in a directory of its own (beside its
+/// sources), so a test starts cold and never touches `$BAML_HOME`.
+pub(crate) fn open(resolved: &ResolvedProject) -> Option<CacheContext> {
+    CacheContext::open_in(resolved, resolved.root.join(".baml").join("cache"))
 }
 
 /// A unique on-disk project root named `<prefix>-<pid>-<n>`, anchored beneath
 /// the *canonical* temp base so it is already in the OS's resolved form (macOS
 /// resolves the `/var` -> `/private/var` symlink; Windows adds the `\\?\`
-/// verbatim prefix). `ProjectDatabase` canonicalizes both the project root and
+/// verbatim prefix). `ProjectDatabase` canonicalizes both the workspace root and
 /// every source path, but only when they exist on disk: db1 is built before the
 /// cache dir exists (root canonicalize is a no-op fallback), then
-/// `store_with_manifest` materializes the root, so db2's `set_project_root`
+/// `store_program_and_manifest` materializes the root, so db2's `add_source_root`
 /// *does* canonicalize it — while the in-memory `.baml` files never exist to
 /// canonicalize. If the base held an unresolved symlink, the root would then
 /// gain a resolved prefix the file paths lack, `strip_prefix` would fail, every
-/// rel_path would come out absolute, the reuse plan would collapse to `None`,
-/// and `plan.dirty_files` would be empty (macOS/Windows only; `/tmp` on Linux
-/// has no symlink so it was silently fine). Canonicalizing the base up front
+/// rel_path would come out absolute and no served row would match its file
+/// (macOS/Windows only; `/tmp` on Linux has no symlink so it was silently
+/// fine). Canonicalizing the base up front
 /// keeps the root idempotent under `canonicalize`, so db1 and db2 agree on every
 /// platform.
 pub(crate) fn unique_root(prefix: &str) -> PathBuf {
@@ -68,34 +64,23 @@ pub(crate) fn resolved(root: &Path, files: &[(&str, &str)]) -> ResolvedProject {
     }
 }
 
-/// Compile `files` at `root` and persist the v1 manifest + per-file units — the
-/// setup every reuse-plan scenario runs before editing. Returns the v1 database
-/// and cache context for the callers that assert against them.
+/// Compile `files` at `root` and persist the v1 program, package entries, and
+/// manifest — the setup every warm-path scenario runs before reopening.
+/// Returns the v1 database and cache context for the callers that assert
+/// against them.
 pub(crate) fn compile_and_store_v1(
     root: &Path,
     files: &[(&str, &str)],
 ) -> (ProjectDatabase, CacheContext) {
     let _ = std::fs::remove_dir_all(root);
     let r1 = resolved(root, files);
-    let db1 = project_load::build_db_from_sources(&r1, |_| {});
-    let ctx1 = CacheContext::open(&r1, false).expect("cache opens");
-    let program1 = compile_program(&db1, &opts(), Some(&ctx1), None).expect("v1 compile succeeds");
+    let (db1, pkg1) = project_load::build_db_from_sources(&r1, |_| {});
+    let ctx1 = open(&r1).expect("cache opens");
+    let program = compile_program(&db1, pkg1, Some(&ctx1)).expect("v1 compile succeeds");
     let fresh1 = ctx1
-        .collect_diagnostics_incremental(&db1, None)
+        .collect_diagnostics_incremental(&db1, pkg1, None)
         .fresh_by_file;
-    ctx1.store_with_manifest(&db1, &program1, &fresh1, None)
+    ctx1.store_program_and_manifest(&db1, pkg1, &program, &fresh1, None)
         .expect("v1 manifest stored");
     (db1, ctx1)
-}
-
-/// The basenames of a reuse plan's dirty files.
-pub(crate) fn dirty_basenames(dirty_files: &[SourceFile], db: &ProjectDatabase) -> HashSet<String> {
-    dirty_files
-        .iter()
-        .filter_map(|sf| {
-            sf.path(db)
-                .file_name()
-                .map(|name| name.to_string_lossy().into_owned())
-        })
-        .collect()
 }

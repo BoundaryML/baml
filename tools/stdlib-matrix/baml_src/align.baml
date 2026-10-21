@@ -26,9 +26,9 @@
 // outright rather than ignoring it. Run-to-run stability comes from
 // `--previous` instead — an unchanged symbol is never asked about twice.
 //
-// No `api_key_env` either: `OPENAI_API_KEY` is what `OpenAiClient` falls back
-// to, so naming it would restate the default and invite the two to drift.
-client AlignerBase = openai.OpenAiClient.new(model = "gpt-5.5");
+// No `api_key_env` either: `OPENAI_API_KEY` is what `ResponsesClient` falls
+// back to, so naming it would restate the default and invite the two to drift.
+client AlignerBase = openai.ResponsesClient.new(model = "gpt-5.5");
 
 // `max_attempts` counts attempts, where the old `max_retries: 3` counted
 // retries after the first, so four keeps the previous budget. The backoff
@@ -203,8 +203,13 @@ class SessionRequest {
 /// A session that produced nothing, and why.
 type SessionResult = Answer | PassFailure;
 
+// One single-tick string, with the backticks the rules quote symbols in
+// escaped. A multi-tick delimiter would carry them unescaped but cannot carry
+// this text: the scan for the closing run stops at a line-leading item keyword
+// (BEP-049 §8), and these rules both say "function." and show a `function`
+// example.
 function session_rules() -> string {
-    #"
+    `
         You are mapping the TypeScript standard library onto BAML's, for a developer who
         knows TypeScript and wants to know how to do the same thing in BAML.
 
@@ -214,50 +219,50 @@ function session_rules() -> string {
         that matters here, because it is indistinguishable from an answer.
 
         Tools, one JSON object each:
-          describe  a BAML symbol or namespace by name — `baml.sys.exec`, `baml.time`
+          describe  a BAML symbol or namespace by name — \`baml.sys.exec\`, \`baml.time\`
           search    what something does, in words — "run a subprocess", "parse a date"
           examples  real call sites for a symbol, from the BAML repository
           docs      one section of the BAML type system reference
 
-        `search` is the one to reach for first when you do not know the name, which is
-        most of the time. `describe` is for confirming a name you have.
+        \`search\` is the one to reach for first when you do not know the name, which is
+        most of the time. \`describe\` is for confirming a name you have.
 
         Answer once per TypeScript symbol, with one of:
           match        the same operation, reached the same way
-          divergent    the same operation, reached differently — say how in `divergence`
+          divergent    the same operation, reached differently — say how in \`divergence\`
           unnecessary  BAML makes the question not arise
           none         nothing in BAML does this symbol's job
 
-        `unnecessary` is the verdict that needs care, and it is often the right one.
-        `Array.isArray` is not missing from BAML and has no counterpart: BAML checks
+        \`unnecessary\` is the verdict that needs care, and it is often the right one.
+        \`Array.isArray\` is not missing from BAML and has no counterpart: BAML checks
         types by pattern matching, so the question only comes up for a value in a union,
-        and `foo is int[]` answers it there. Say that, rather than "none". The same goes
-        for anything the language answers instead of the library — `typeof` against
-        `match`, `instanceof` against a type pattern.
+        and \`foo is int[]\` answers it there. Say that, rather than "none". The same goes
+        for anything the language answers instead of the library — \`typeof\` against
+        \`match\`, \`instanceof\` against a type pattern.
 
         Do not assume BAML's semantics; look them up. BAML values are mutable and arrays
         are references, so anything you would justify with "values are immutable" is
         probably wrong.
 
         Name TypeScript symbols by the id inside [ ], exactly as written. Name BAML
-        symbols by their full dotted path, the way `describe --search` prints it —
-        `baml.time.Instant.now`, not `Instant.now`. A BAML path you have not seen in a
+        symbols by their full dotted path, the way \`describe --search\` prints it —
+        \`baml.time.Instant.now\`, not \`Instant.now\`. A BAML path you have not seen in a
         tool result does not exist.
 
-        `match` and `divergent` must name at least one BAML symbol — they are claims
+        \`match\` and \`divergent\` must name at least one BAML symbol — they are claims
         that something over there does this job, so they have to say what. If the answer
-        is syntax rather than a symbol — indexing, an operator, `.to_string()` — that is
-        `unnecessary`, with an example. If you could not find anything, that is `none`,
+        is syntax rather than a symbol — indexing, an operator, \`.to_string()\` — that is
+        \`unnecessary\`, with an example. If you could not find anything, that is \`none\`,
         with a reason saying what you looked for.
 
         Prefer "none" over a strained pairing. TypeScript has plenty BAML has not, and
         saying so is a finding rather than a failure to try harder.
 
-        Attach an `example` only where seeing both spellings teaches something the
-        reason cannot — a divergence, or an `unnecessary` whose answer is syntax rather
+        Attach an \`example\` only where seeing both spellings teaches something the
+        reason cannot — a divergence, or an \`unnecessary\` whose answer is syntax rather
         than a symbol. Most findings want none.
 
-        An example's `baml` field is compiled before your answer is accepted. It must be
+        An example's \`baml\` field is compiled before your answer is accepted. It must be
         a complete BAML file: declarations at the top level, statements inside a
         function. This compiles:
 
@@ -269,7 +274,7 @@ function session_rules() -> string {
         If it does not compile you will be shown the error and asked again. Dropping the
         example is a fine outcome; an example that does not compile is not, because it is
         the part a reader will copy.
-    "#
+    `
 }
 
 /// What a session is told before it is asked anything: what BAML is, then what
@@ -310,7 +315,7 @@ function session_step(transcript: string) -> Step {
     prompt: `
         ${transcript}
 
-        ${ctx.output_format}
+        ${ctx.output_format()}
     `
 }
 
@@ -326,7 +331,7 @@ function session_final(transcript: string) -> Answer {
     prompt: `
         ${transcript}
 
-        ${ctx.output_format}
+        ${ctx.output_format()}
     `
 }
 
@@ -716,7 +721,7 @@ function clip(text: string, budget: int) -> string {
     if (text.length() <= budget) {
         text
     } else {
-        `${text.substring(0, budget)}\n… truncated at ${budget} characters; ask something narrower to see the rest`
+        `${text.slice(0, budget)}\n… truncated at ${budget} characters; ask something narrower to see the rest`
     }
 }
 
@@ -1035,9 +1040,11 @@ function run_sessions(
     limit: int,
     baml_names: map<string, string>,
 ) -> SessionResult[] {
-    let group = baml.spawn.TaskGroup.new(limit, name = "sessions");
+    let session_limit = baml.spawn.Limit.new(limit) catch (e) {
+        baml.errors.InvalidArgument => baml.sys.panic(`session limit must be positive, got ${limit}`),
+    };
     let pending = requests.map((request) -> {
-        spawn with baml.spawn.options(group = group) { run_session(box, request, baml_names) }
+        spawn with session_limit { run_session(box, request, baml_names) }
     });
     report_progress(`${requests.length()} sessions, ${limit} at a time`);
     let results: SessionResult[] = [];

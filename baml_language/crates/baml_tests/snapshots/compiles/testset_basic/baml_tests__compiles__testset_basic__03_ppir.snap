@@ -1,8 +1,0 @@
----
-source: crates/baml_tests/src/generated_tests.rs
-assertion_line: 32863
----
-=== PPIR ===
-function user.$init_test_main(registry: testing.TestCollector) -> ?  [expr] {
-  { registry.register_test_set_at("root", "basic group", (testset: testing.TestCollector) -> void { { testset.register_test("first", () -> { {  } assert.is_true(true) }, null); testset.register_test("second", () -> { {  } assert.is_true(true) }, null) } null }, null) } null
-}

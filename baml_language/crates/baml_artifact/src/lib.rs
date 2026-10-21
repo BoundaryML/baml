@@ -1,0 +1,628 @@
+//! Versioned, integrity-checked envelopes for compiler artifacts.
+//!
+//! Artifacts cross process and package boundaries where a raw Borsh payload
+//! could otherwise be decoded with a different type layout. The envelope keeps
+//! the release metadata check at bridge startup useful while adding an ABI
+//! check that runs even when generated metadata is unavailable.
+
+use std::{
+    fmt,
+    io::{Read as _, Write as _},
+};
+
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use borsh::{BorshDeserialize, BorshSerialize};
+use sha2::{Digest, Sha256};
+
+pub const MAGIC: &[u8; 8] = b"BAMLART\0";
+
+/// Artifact ABI version.
+///
+/// Any change to a Borsh-derived type reachable from `Program` or
+/// `PackageInterface` bumps this. The same rule applies to other payload types
+/// stored in this envelope, such as the `baml pack` dispatch envelope.
+///
+/// Version 3: `PopJumpIfTrue`, `JumpIfFalseOrPop`, `JumpIfTrueOrPop`, and
+/// `JumpIfNotNullOrPop` appended to the instruction set (#4759).
+///
+/// Version 4: `ExternalCallTarget::{Free, Method}` name their item by head
+/// (`function` / `class` as a qualified name) instead of a package spelling
+/// plus path, so a package interface's call targets carry package identity
+/// the way its types do.
+///
+/// Version 5: inline `unreflect(…)` is gone with the `RuntimeIsType` opcode and
+/// the call-site marker-check flag it needed, which renumbers the instruction
+/// discriminants after it.
+///
+/// Version 6 adds `Bytecode::call_layouts` (per-call-site argument layouts).
+///
+/// Version 7: the interface-dispatch rework — `Function` gained
+/// `is_interface_body` + `native_key` wire fields, impl-rule method tables
+/// became provided-only, and `ProgramMethodImplFrag` carries a code-bucket
+/// offset instead of a name. (The rework shipped without bumping this
+/// constant; canary/dev builds were covered by the `BUILD_FINGERPRINT`
+/// equality check, which is exactly the gap this constant exists to close
+/// for stable builds.)
+///
+/// Version 8: every type dropped its `TyAttr` payload and the runtime `Class`
+/// and `Enum` their `ty_attr` field (BEP-075 removed type attributes), so the
+/// serialized shape of every type-bearing record changed.
+///
+/// Version 10 combines that layout with the runtime-ID instruction and serialized
+/// function capture-policy removals from the runtime foundation branch (versions
+/// 8 and 9 there). Artifacts from either pre-merge layout must be rejected.
+///
+/// Version 11 adds `Bytecode::shield_table` (the PC ranges of `defer` bodies,
+/// which run shielded from cancellation), and changes what the `Spawn` opcode
+/// yields: the VM now pushes a `baml.spawn.Plan` for the engine to start,
+/// where it used to push a pre-allocated `UnscheduledFuture`, and `Spawn`
+/// moved to the end of the `Instruction` and `OpCode` enums (after
+/// `SetCallTrace`), which changes its serialized discriminant. The same
+/// version covers the `Object`/`ObjectType` lattice losing `UnscheduledFuture`
+/// from the middle of the enum, which renumbers the Borsh discriminants of
+/// every variant declared after it, and `Rethrow`/`ThrowIfPanic` popping the
+/// caught error's context under its value, with every exception-table entry
+/// naming a context slot.
+///
+/// Version 12: `Object::Class` gained `methods` (its inherent methods by name,
+/// each an `ObjectIndex` bound to a pointer at load), `ProgramPackage` gained
+/// `globals` (its own function and `let` slots by declaration path), `init`,
+/// and `name`, and `Program::packages` became a `Vec` (a package's identity in
+/// the executable is its position; its name is display metadata), so every
+/// serialized program changed shape. The identity-keyed unit format that
+/// produces them (`baml_linker_types`) rides the same version.
+///
+/// Version 13 adds a shared native implementation descriptor to each structural
+/// interface, used when no explicit implementation applies.
+///
+/// Version 14 adds publisher-owned telemetry policy to the packed dispatch envelope.
+///
+/// Version 16 carries declared trace-hook opcodes and compact continuation metadata.
+///
+/// Version 17: BEP-079's unit type. The type family lost `Void` (Borsh
+/// discriminant 22, now reserved): `void` is a spelling of `null`, and an
+/// artifact carrying the retired discriminant no longer decodes.
+///
+/// Version 18: a pooled `Class` carries its finalizer as a position in its
+/// method table (`cleanup: Option<usize>`) where it carried a `has_cleanup`
+/// flag, so the collector reads the method off the class and resolves no
+/// name; and a pooled `Class`, `Enum`, `Interface` and `TypeAlias` carries
+/// its path inside its package (`path`) where it used to carry a
+/// package-qualified name (`name`): a declaration's name is put together from
+/// its package's display name when one is wanted, so no serialized
+/// declaration states which package it belongs to or what that package is
+/// called. An interface's dependency table names a language package by
+/// identity (`Locator::Prelude(LangPackage)`) rather than by an edge name;
+/// a `ProgramPackage` carries its `PackageKind` (`Language(LangPackage)` or
+/// `Ordinary`) and each of its edges an `EdgeKind` (`Dependency` or
+/// `ReExported`).
+///
+/// Version 19: `SatisfiesBound` and `BoundMismatch` (the run-time bound check
+/// of `let type T extends I = …`) appended to the instruction set.
+///
+/// Version 20: `BoundMismatch` removed from the end of the instruction set. A
+/// bounded `let type` must have an `else` block, so a missed bound never
+/// throws.
+///
+/// Version 21 adds pass-through tracing strategy to serialized function metadata.
+///
+/// Version 22: the `ThrowIfPanic` instruction is gone. A catch's wildcard
+/// arm that does not trap panics is now entered after an `IsType` test
+/// against the `PANIC` pseudo-tag (`baml_type::typetag::PANIC`), so the
+/// discriminants of every opcode declared after `TypeTag` shifted down by
+/// one.
+///
+/// Version 23: `FunctionMeta::Llm` lost its `client` string and marks every
+/// LLM function, including one whose client is an expression.
+pub const FORMAT_VERSION: u32 = 23;
+
+/// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
+/// HEAD), or empty when neither was available.
+const BUILD_COMMIT: &str = env!("BAML_ARTIFACT_BUILD_COMMIT");
+
+/// Identity of the build that encodes and accepts artifacts: the Git commit
+/// this crate was built from. Only a channel that does not enforce it (see
+/// [`ENFORCE_BUILD_FINGERPRINT`]) may build without a commit, e.g. from a
+/// source archive; it then falls back to the canonical BAML version.
+pub const BUILD_FINGERPRINT: &str = if BUILD_COMMIT.is_empty() {
+    baml_version::CANONICAL_VERSION
+} else {
+    BUILD_COMMIT
+};
+
+const PREFIX_LEN: usize = MAGIC.len() + size_of::<u32>() + size_of::<u64>();
+
+/// Canary and development artifacts must come from the exact same commit.
+///
+/// Stable release archives may not carry Git metadata, so stable builds rely on
+/// [`FORMAT_VERSION`] plus the existing release-version metadata check instead;
+/// an equal-format fingerprint mismatch is accepted there with a warning.
+pub const ENFORCE_BUILD_FINGERPRINT: bool = channel_is(b"canary") || channel_is(b"dev");
+
+// Without a commit, an enforcing build would carry the version as its
+// fingerprint: it would reject every correctly fingerprinted artifact of its
+// own release while accepting any other commitless build of that version.
+const _: () = assert!(
+    !ENFORCE_BUILD_FINGERPRINT || !BUILD_COMMIT.is_empty(),
+    "this channel requires a Git commit fingerprint: build from a Git checkout, or set BAML_GIT_SHA to the commit being built",
+);
+
+const fn channel_is(expected: &[u8]) -> bool {
+    let actual = baml_version::CHANNEL.as_bytes();
+    if actual.len() != expected.len() {
+        return false;
+    }
+    let mut index = 0;
+    while index < actual.len() {
+        if actual[index] != expected[index] {
+            return false;
+        }
+        index += 1;
+    }
+    true
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, BorshSerialize, BorshDeserialize, PartialOrd, Ord)]
+pub enum ArtifactKind {
+    Program,
+    PackageInterface,
+    PackedProgram,
+}
+
+impl ArtifactKind {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Program => "generated bytecode",
+            Self::PackageInterface => "package interface",
+            Self::PackedProgram => "packed program",
+        }
+    }
+
+    const fn remediation(self) -> &'static str {
+        match self {
+            Self::Program => "regenerate baml_sdk and rebuild the bridge from the same commit",
+            Self::PackageInterface => {
+                "recompile the package and runtime with the same BAML toolchain"
+            }
+            Self::PackedProgram => "re-run baml pack with the matching BAML toolchain",
+        }
+    }
+}
+
+impl fmt::Display for ArtifactKind {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(self.label())
+    }
+}
+
+pub type Hash = [u8; 32];
+
+#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+struct ArtifactHeader {
+    build_fingerprint: String,
+    kind: ArtifactKind,
+    payload_len: u64,
+    payload_hash: Hash,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("{kind} artifact is truncated")]
+    Truncated { kind: ArtifactKind },
+    #[error(
+        "{kind} is not a versioned BAML artifact; {}",
+        kind.remediation()
+    )]
+    InvalidMagic { kind: ArtifactKind },
+    #[error("invalid {kind} artifact header: {message}")]
+    InvalidHeader { kind: ArtifactKind, message: String },
+    #[error("expected {expected} artifact, found {actual}")]
+    WrongKind {
+        expected: ArtifactKind,
+        actual: ArtifactKind,
+    },
+    #[error("{kind} artifact failed integrity validation")]
+    InvalidPayloadHash { kind: ArtifactKind },
+    #[error(
+        "{kind}: toolchain {artifact_fingerprint} / format {artifact_format}; this runtime: {runtime_fingerprint} / format {runtime_format} — {remediation}"
+    )]
+    Incompatible {
+        kind: ArtifactKind,
+        artifact_fingerprint: String,
+        artifact_format: u32,
+        runtime_fingerprint: &'static str,
+        runtime_format: u32,
+        remediation: &'static str,
+    },
+    #[error("failed to encode {kind}: {message}")]
+    Encode { kind: ArtifactKind, message: String },
+    #[error("failed to decode {kind}: {message}")]
+    Decode { kind: ArtifactKind, message: String },
+    #[error("failed to decode embedded {kind}: {message}")]
+    Embedded { kind: ArtifactKind, message: String },
+}
+
+/// Encode an artifact for embedding as a single-line string literal in
+/// generated SDK source: an LZ4 frame, then standard padded base64.
+/// [`decode_embedded`] reverses this; bridges call it so host languages never
+/// decode the payload themselves. The encoding cannot begin with [`MAGIC`], so
+/// bridges can accept either form.
+pub fn encode_embedded(artifact: &[u8]) -> String {
+    let mut encoder = lz4_flex::frame::FrameEncoder::new(Vec::new());
+    encoder
+        .write_all(artifact)
+        .expect("writing to a Vec cannot fail");
+    BASE64.encode(encoder.finish().expect("writing to a Vec cannot fail"))
+}
+
+/// Largest artifact [`decode_embedded`] will inflate. Generated programs are a
+/// few MB; the cap keeps a malformed, highly compressible payload from
+/// allocating unbounded memory before artifact validation can reject it.
+pub const MAX_EMBEDDED_ARTIFACT_BYTES: u64 = 512 * 1024 * 1024;
+
+/// Decode an [`encode_embedded`] payload back into the artifact bytes.
+pub fn decode_embedded(kind: ArtifactKind, encoded: &[u8]) -> Result<Vec<u8>, Error> {
+    decode_embedded_within(kind, encoded, MAX_EMBEDDED_ARTIFACT_BYTES)
+}
+
+fn decode_embedded_within(
+    kind: ArtifactKind,
+    encoded: &[u8],
+    max_artifact_bytes: u64,
+) -> Result<Vec<u8>, Error> {
+    let embedded_error = |message: String| Error::Embedded { kind, message };
+    let compressed = BASE64
+        .decode(encoded)
+        .map_err(|error| embedded_error(format!("invalid base64: {error}")))?;
+    let mut artifact = Vec::new();
+    // Read one byte past the cap so an oversized artifact is detectable.
+    lz4_flex::frame::FrameDecoder::new(compressed.as_slice())
+        .take(max_artifact_bytes.saturating_add(1))
+        .read_to_end(&mut artifact)
+        .map_err(|error| embedded_error(format!("invalid LZ4 frame: {error}")))?;
+    if artifact.len() as u64 > max_artifact_bytes {
+        return Err(embedded_error(format!(
+            "decoded artifact exceeds {max_artifact_bytes} bytes"
+        )));
+    }
+    Ok(artifact)
+}
+
+/// Serialize `value` and wrap it in a versioned artifact envelope.
+pub fn encode<T: BorshSerialize>(kind: ArtifactKind, value: &T) -> Result<Vec<u8>, Error> {
+    let payload = borsh::to_vec(value).map_err(|error| Error::Encode {
+        kind,
+        message: error.to_string(),
+    })?;
+    encode_payload(kind, &payload)
+}
+
+/// Encode a value with an explicit artifact format for cross-crate skew tests.
+#[cfg(feature = "test-support")]
+#[doc(hidden)]
+pub fn encode_with_format_for_test<T: BorshSerialize>(
+    artifact_format: u32,
+    kind: ArtifactKind,
+    value: &T,
+) -> Result<Vec<u8>, Error> {
+    let payload = borsh::to_vec(value).map_err(|error| Error::Encode {
+        kind,
+        message: error.to_string(),
+    })?;
+    encode_payload_with_metadata(artifact_format, BUILD_FINGERPRINT, kind, &payload)
+}
+
+/// Wrap an already-serialized payload in a versioned artifact envelope.
+pub fn encode_payload(kind: ArtifactKind, payload: &[u8]) -> Result<Vec<u8>, Error> {
+    encode_payload_with_metadata(FORMAT_VERSION, BUILD_FINGERPRINT, kind, payload)
+}
+
+fn encode_payload_with_metadata(
+    artifact_format: u32,
+    build_fingerprint: &str,
+    kind: ArtifactKind,
+    payload: &[u8],
+) -> Result<Vec<u8>, Error> {
+    let payload_len = u64::try_from(payload.len()).map_err(|error| Error::Encode {
+        kind,
+        message: error.to_string(),
+    })?;
+    let header = ArtifactHeader {
+        build_fingerprint: build_fingerprint.to_owned(),
+        kind,
+        payload_len,
+        payload_hash: authenticated_hash(
+            artifact_format,
+            build_fingerprint,
+            kind,
+            payload_len,
+            payload,
+        )
+        .map_err(|error| Error::Encode {
+            kind,
+            message: error.to_string(),
+        })?,
+    };
+    let header_bytes = borsh::to_vec(&header).map_err(|error| Error::Encode {
+        kind,
+        message: error.to_string(),
+    })?;
+    let capacity = PREFIX_LEN
+        .checked_add(header_bytes.len())
+        .and_then(|size| size.checked_add(payload.len()))
+        .ok_or(Error::Truncated { kind })?;
+    let mut artifact = Vec::with_capacity(capacity);
+    artifact.extend_from_slice(MAGIC);
+    artifact.extend_from_slice(&artifact_format.to_le_bytes());
+    artifact.extend_from_slice(&(header_bytes.len() as u64).to_le_bytes());
+    artifact.extend_from_slice(&header_bytes);
+    artifact.extend_from_slice(payload);
+    Ok(artifact)
+}
+
+/// Hash the canonical Borsh encoding of the authenticated metadata followed by
+/// the payload. Keep this field order in sync with [`ArtifactHeader`].
+fn authenticated_hash(
+    artifact_format: u32,
+    build_fingerprint: &str,
+    kind: ArtifactKind,
+    payload_len: u64,
+    payload: &[u8],
+) -> std::io::Result<Hash> {
+    let mut metadata = Vec::new();
+    BorshSerialize::serialize(&artifact_format, &mut metadata)?;
+    BorshSerialize::serialize(build_fingerprint, &mut metadata)?;
+    BorshSerialize::serialize(&kind, &mut metadata)?;
+    BorshSerialize::serialize(&payload_len, &mut metadata)?;
+
+    let mut hasher = Sha256::new();
+    hasher.update(metadata);
+    hasher.update(payload);
+    Ok(hasher.finalize().into())
+}
+
+/// Validate and deserialize an artifact payload.
+pub fn decode<T: BorshDeserialize>(kind: ArtifactKind, bytes: &[u8]) -> Result<T, Error> {
+    let payload = decode_payload(kind, bytes)?;
+    T::try_from_slice(payload).map_err(|error| Error::Decode {
+        kind,
+        message: error.to_string(),
+    })
+}
+
+/// The sha256 of an artifact's validated payload — the identity of WHAT the
+/// artifact carries, independent of the envelope (whose own hash is bound to
+/// the build fingerprint). Two artifacts of one payload written by two builds
+/// share it; a consumer that read the payload and a linker that holds the
+/// artifact compute the same value.
+pub fn payload_digest(kind: ArtifactKind, bytes: &[u8]) -> Result<[u8; 32], Error> {
+    let payload = decode_payload(kind, bytes)?;
+    Ok(Sha256::digest(payload).into())
+}
+
+/// Validate an artifact and borrow its raw payload.
+pub fn decode_payload(kind: ArtifactKind, bytes: &[u8]) -> Result<&[u8], Error> {
+    if bytes.len() < PREFIX_LEN {
+        return Err(Error::Truncated { kind });
+    }
+    if &bytes[..MAGIC.len()] != MAGIC {
+        return Err(Error::InvalidMagic { kind });
+    }
+
+    let artifact_format = u32::from_le_bytes(
+        bytes[MAGIC.len()..MAGIC.len() + size_of::<u32>()]
+            .try_into()
+            .expect("fixed prefix"),
+    );
+    let header_len = u64::from_le_bytes(
+        bytes[MAGIC.len() + size_of::<u32>()..PREFIX_LEN]
+            .try_into()
+            .expect("fixed prefix"),
+    );
+    let header_end = PREFIX_LEN
+        .checked_add(usize::try_from(header_len).map_err(|_| Error::Truncated { kind })?)
+        .ok_or(Error::Truncated { kind })?;
+    let header_bytes = bytes
+        .get(PREFIX_LEN..header_end)
+        .ok_or(Error::Truncated { kind })?;
+    let header =
+        ArtifactHeader::try_from_slice(header_bytes).map_err(|error| Error::InvalidHeader {
+            kind,
+            message: error.to_string(),
+        })?;
+
+    let payload_len = usize::try_from(header.payload_len).map_err(|_| Error::Truncated { kind })?;
+    let payload_end = header_end
+        .checked_add(payload_len)
+        .ok_or(Error::Truncated { kind })?;
+    let payload = bytes
+        .get(header_end..payload_end)
+        .ok_or(Error::Truncated { kind })?;
+    if payload_end != bytes.len() {
+        return Err(Error::InvalidHeader {
+            kind,
+            message: "trailing bytes after payload".to_owned(),
+        });
+    }
+    let expected_hash = authenticated_hash(
+        artifact_format,
+        &header.build_fingerprint,
+        header.kind,
+        header.payload_len,
+        payload,
+    )
+    .map_err(|error| Error::InvalidHeader {
+        kind,
+        message: error.to_string(),
+    })?;
+    if expected_hash != header.payload_hash {
+        return Err(Error::InvalidPayloadHash { kind });
+    }
+
+    if artifact_format != FORMAT_VERSION
+        || (ENFORCE_BUILD_FINGERPRINT && header.build_fingerprint != BUILD_FINGERPRINT)
+    {
+        return Err(Error::Incompatible {
+            kind,
+            artifact_fingerprint: header.build_fingerprint,
+            artifact_format,
+            runtime_fingerprint: BUILD_FINGERPRINT,
+            runtime_format: FORMAT_VERSION,
+            remediation: kind.remediation(),
+        });
+    }
+    if header.build_fingerprint != BUILD_FINGERPRINT {
+        log::warn!(
+            "{kind}: toolchain {} / format {artifact_format}; this runtime: {} / format {FORMAT_VERSION}; accepting the equal-format stable artifact",
+            header.build_fingerprint,
+            BUILD_FINGERPRINT,
+        );
+    }
+    if header.kind != kind {
+        return Err(Error::WrongKind {
+            expected: kind,
+            actual: header.kind,
+        });
+    }
+    Ok(payload)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn payload_digest_is_the_payload_hash_alone() {
+        let payload = borsh::to_vec(&vec![1_u32, 2, 3]).unwrap();
+        let artifact = encode(ArtifactKind::Program, &vec![1_u32, 2, 3]).unwrap();
+        let expected: [u8; 32] = Sha256::digest(&payload).into();
+        assert_eq!(
+            payload_digest(ArtifactKind::Program, &artifact).unwrap(),
+            expected
+        );
+        assert!(payload_digest(ArtifactKind::Program, &[]).is_err());
+    }
+
+    #[test]
+    fn embedded_encoding_round_trips() {
+        let artifact = encode(ArtifactKind::Program, &vec![7_u32; 1024]).unwrap();
+        let encoded = encode_embedded(&artifact);
+        assert!(encoded.len() < artifact.len());
+        assert!(!encoded.contains('\n'));
+        assert!(!encoded.as_bytes().starts_with(MAGIC));
+        let restored = decode_embedded(ArtifactKind::Program, encoded.as_bytes()).unwrap();
+        assert_eq!(restored, artifact);
+        let decoded: Vec<u32> = decode(ArtifactKind::Program, &restored).unwrap();
+        assert_eq!(decoded, vec![7_u32; 1024]);
+    }
+
+    #[test]
+    fn oversized_embedded_artifacts_are_rejected() {
+        let artifact = encode(ArtifactKind::Program, &vec![0_u8; 4096]).unwrap();
+        let encoded = encode_embedded(&artifact);
+        let limit = artifact.len() as u64;
+        assert_eq!(
+            decode_embedded_within(ArtifactKind::Program, encoded.as_bytes(), limit).unwrap(),
+            artifact
+        );
+        let error = decode_embedded_within(ArtifactKind::Program, encoded.as_bytes(), limit - 1)
+            .unwrap_err();
+        assert!(
+            matches!(&error, Error::Embedded { message, .. } if message.contains("exceeds")),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn corrupt_embedded_payloads_are_embedded_errors() {
+        let encoded = encode_embedded(&encode(ArtifactKind::Program, &vec![1_u32; 64]).unwrap());
+        for corrupt in ["not base64!", &encoded[..(encoded.len() / 2) & !3]] {
+            let corrupt = corrupt.as_bytes();
+            let error = decode_embedded(ArtifactKind::Program, corrupt).unwrap_err();
+            assert!(matches!(error, Error::Embedded { .. }), "{error}");
+        }
+    }
+
+    #[test]
+    fn round_trips_payload() {
+        let artifact = encode(ArtifactKind::Program, &vec![1_u32, 2, 3]).unwrap();
+        let decoded: Vec<u32> = decode(ArtifactKind::Program, &artifact).unwrap();
+        assert_eq!(decoded, [1, 2, 3]);
+    }
+
+    #[test]
+    fn version_skew_has_actionable_message() {
+        let payload = borsh::to_vec(&7_u32).unwrap();
+        let artifact = encode_payload_with_metadata(
+            FORMAT_VERSION + 1,
+            BUILD_FINGERPRINT,
+            ArtifactKind::Program,
+            &payload,
+        )
+        .unwrap();
+
+        let error = decode::<u32>(ArtifactKind::Program, &artifact).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "generated bytecode: toolchain {BUILD_FINGERPRINT} / format {}; this runtime: {BUILD_FINGERPRINT} / format {FORMAT_VERSION} — regenerate baml_sdk and rebuild the bridge from the same commit",
+                FORMAT_VERSION + 1
+            )
+        );
+    }
+
+    #[test]
+    fn build_skew_follows_the_channel_policy() {
+        let payload = borsh::to_vec(&7_u32).unwrap();
+        let artifact = encode_payload_with_metadata(
+            FORMAT_VERSION,
+            "different-build-fingerprint",
+            ArtifactKind::Program,
+            &payload,
+        )
+        .unwrap();
+
+        let result = decode::<u32>(ArtifactKind::Program, &artifact);
+        if ENFORCE_BUILD_FINGERPRINT {
+            assert!(matches!(result, Err(Error::Incompatible { .. })));
+        } else {
+            assert_eq!(result.unwrap(), 7);
+        }
+    }
+
+    #[test]
+    fn rejects_kind_metadata_corruption() {
+        let mut artifact = encode(ArtifactKind::Program, &7_u32).unwrap();
+        // The Borsh header starts with the fingerprint String, followed by the
+        // one-byte ArtifactKind discriminant.
+        let kind_offset = PREFIX_LEN + size_of::<u32>() + BUILD_FINGERPRINT.len();
+        artifact[kind_offset] = borsh::to_vec(&ArtifactKind::PackageInterface).unwrap()[0];
+
+        assert!(matches!(
+            decode::<u32>(ArtifactKind::PackageInterface, &artifact),
+            Err(Error::InvalidPayloadHash { .. })
+        ));
+    }
+
+    #[test]
+    fn rejects_truncated_and_corrupt_payloads() {
+        let artifact = encode(ArtifactKind::PackageInterface, &"surface").unwrap();
+        let truncated = &artifact[..artifact.len() - 1];
+        assert!(matches!(
+            decode::<String>(ArtifactKind::PackageInterface, truncated),
+            Err(Error::Truncated { .. })
+        ));
+
+        let mut corrupt = artifact;
+        *corrupt.last_mut().unwrap() ^= 1;
+        assert!(matches!(
+            decode::<String>(ArtifactKind::PackageInterface, &corrupt),
+            Err(Error::InvalidPayloadHash { .. })
+        ));
+
+        assert!(matches!(
+            decode::<String>(ArtifactKind::PackageInterface, b"not an artifact"),
+            Err(Error::Truncated { .. })
+        ));
+    }
+}

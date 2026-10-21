@@ -1,0 +1,35 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+    ╭─[break_continue.baml:14:3]
+ 14 │   return 0;
+    ·   ─────────
+    ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+    ╭─[break_continue.baml:48:9]
+ 48 │     if (true) {
+    ·         ────
+    ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+    ╭─[break_continue.baml:60:9]
+ 60 │     if (true) {
+    ·         ────
+    ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+    ╭─[break_continue.baml:65:3]
+ 65 │   return 5;
+    ·   ─────────
+    ╰────

@@ -17,8 +17,8 @@
 
 function classify_list(x: int[] | string[]) -> string {
     match (x) {
-        let a: int[] => "ints",
-        let b: string[] => "strings",
+        [..]: int[] => "ints",
+        [..]: string[] => "strings",
     }
 }
 
@@ -226,7 +226,7 @@ test "is_unknown_constructed_list_is_unknown_list" {
 
 // The same invariance through a match arm: an `unknown[]` arm does not capture
 // an `int[]` value, and static coverage now agrees — user-written `unknown`
-// is the real top type (`BuiltinUnknown`), invariant in element position like
+// is the real top type (`Unknown`), invariant in element position like
 // any other type, so the `unknown[]` arm covers only its own member and the
 // `int[]` arm stays reachable without a guard. (Coverage's recovery escape
 // counts only the `Unknown`/`Error` resolution-failure sentinels, not the

@@ -42,19 +42,19 @@ class Box<T> {
         }
     }
     function turbofish_self(self) -> string {
-        reflect.type_of<Self>().to_string()
+        reflect.Type.of<Self>().to_string()
     }
 }
 
 // ── Interface default-method body (the previously-silent hole) ───────────────
 
 interface Tester {
-    function eq(self, other: Self) -> bool throws never
+    function eq(self, other: Self) -> bool throws never;
     function check(self, other: Self) -> bool throws never {
         other is Self
     }
     function describe(self) -> string throws never {
-        reflect.type_of<Self>().to_string()
+        reflect.Type.of<Self>().to_string()
     }
     function bind_self(self, other: Self) -> bool throws never {
         let a: Self = other;

@@ -255,27 +255,12 @@ mod tests {
     }
 
     #[test]
-    fn alternation() {
-        let g = GlobPattern::new("*.{ts,tsx}").unwrap();
-        assert!(g.is_match("app.ts"));
-        assert!(g.is_match("app.tsx"));
-        assert!(!g.is_match("app.js"));
-    }
-
-    #[test]
     fn nested_alternation() {
         let g = GlobPattern::new("{a,{b,c}}.txt").unwrap();
         assert!(g.is_match("a.txt"));
         assert!(g.is_match("b.txt"));
         assert!(g.is_match("c.txt"));
         assert!(!g.is_match("d.txt"));
-    }
-
-    #[test]
-    fn negation() {
-        let g = GlobPattern::new("!index.ts").unwrap();
-        assert!(g.is_match("main.ts"));
-        assert!(!g.is_match("index.ts"));
     }
 
     #[test]

@@ -1,0 +1,5 @@
+name = "wide nested class create 50k"
+description = "construct 50,000 wide classes with nested members"
+expect = "8754025000"
+jobs = 8
+warmup = 1

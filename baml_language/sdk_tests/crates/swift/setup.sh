@@ -22,6 +22,11 @@ cd "$(dirname "$0")"  # baml_language/sdk_tests/crates/swift
 
 WORKSPACE_ROOT="$(cd ../../.. && pwd)"
 
+# Generate each fixture's SwiftPM package first: nothing else produces it, and
+# `swift test` builds against it.
+echo "==> sdk_test_codegen swift (generate fixture packages)"
+(cd "$WORKSPACE_ROOT" && cargo run --quiet -p sdk_test_codegen -- swift)
+
 echo "==> build-xcframework.sh --host-only (bridge_swift staticlib)"
 "$WORKSPACE_ROOT/sdks/swift/scripts/build-xcframework.sh" --host-only
 
@@ -29,7 +34,7 @@ echo "==> build-xcframework.sh --host-only (bridge_swift staticlib)"
 # after this script and injects these vars into the matched tests'
 # processes — so `setup_guard::ran` (see harness_runner) can prove
 # this script ran *this* run. Keep the var name in sync with
-# SETUP_ENV_VAR in harness_setup/src/swift.rs.
+# SETUP_ENV_VAR in codegen/src/swift.rs.
 if [[ -n "${NEXTEST_ENV:-}" ]]; then
     echo "SDK_TEST_SWIFT_SETUP=1" >> "$NEXTEST_ENV"
 fi

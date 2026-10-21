@@ -3,176 +3,29 @@
 //! Each test documents a gap from the Phase 3A checklist. Snapshots capture
 //! the current (possibly incorrect) behavior so regressions are visible
 //! as the gaps get fixed.
+//!
+//! Successful shorthand lookup under pattern binders is exercised by
+//! `baml_src/ns_property_shorthand_binders`; keep diagnostic checks here.
 
 use super::support::{make_db, render_tir};
-
-#[test]
-fn explicit_local_id_is_structural_call_metadata() {
-    use baml_compiler2_ppir::item_data::{file_functions, function_data, function_scope};
-    use baml_compiler2_tir::inference::{ParamBinding, infer_scope_types};
-
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-function choose<T>(value: T, fallback: T = value) -> T {
-  value
-}
-
-function main(id: boundary.LocalId) -> int {
-  choose(1, $id = id)
-}
-"#,
-    );
-
-    let rendered = render_tir(&db, file);
-    assert!(
-        !rendered.contains("!!"),
-        "a trailing LocalId side channel must compile cleanly:\n{rendered}"
-    );
-
-    let main_loc = *file_functions(&db, file)
-        .iter()
-        .find(|&&loc| function_data(&db, loc).name.as_str() == "main")
-        .expect("main function");
-    let main_scope = function_scope(&db, main_loc).expect("main function scope");
-    let inference = infer_scope_types(&db, main_scope);
-    let plans = inference.iter_call_plans().collect::<Vec<_>>();
-    assert_eq!(plans.len(), 1, "main contains exactly one call: {rendered}");
-
-    let plan = plans[0].1;
-    assert!(
-        plan.side_channels.runtime_id.is_some(),
-        "CallPlan must retain the explicit LocalId expression"
-    );
-    assert_eq!(
-        plan.provided_arg_count(),
-        1,
-        "the LocalId must not count as an ordinary argument"
-    );
-    assert!(matches!(
-        plan.bindings.as_slice(),
-        [
-            ParamBinding::Provided { param_index: 0, .. },
-            ParamBinding::OmittedDefault { param_index: 1, .. }
-        ]
-    ));
-    assert_eq!(
-        plan.type_args.len(),
-        1,
-        "generic inference must still record only the ordinary argument's T"
-    );
-}
-
-#[test]
-fn explicit_local_id_has_targeted_call_diagnostics() {
-    let cases = [
-        (
-            "positional_after_id",
-            "target($id = id, 1)",
-            "`$id` must be the final call argument",
-        ),
-        (
-            "named_after_id",
-            "target($id = id, x = 1)",
-            "`$id` must be the final call argument",
-        ),
-        (
-            "duplicate_id",
-            "target(1, $id = id, $id = id)",
-            "duplicate `$id` call argument",
-        ),
-        (
-            "wrong_type",
-            "target(1, $id = \"not-a-local-id\")",
-            "`$id` at a call site expects `boundary.LocalId`, got",
-        ),
-        (
-            "missing_ordinary_arg",
-            "target($id = id)",
-            "expected 1 argument(s), got 0",
-        ),
-    ];
-
-    for (label, call, expected) in cases {
-        let mut db = make_db();
-        let source = format!(
-            r#"
-function target(x: int) -> int {{ x }}
-function main(id: boundary.LocalId) -> int {{
-  {call}
-}}
-"#
-        );
-        let file = db.add_file("test.baml", &source);
-        let rendered = render_tir(&db, file);
-        assert!(
-            rendered.contains(expected),
-            "[{label}] expected {expected:?}, got:\n{rendered}"
-        );
-    }
-}
-
-#[test]
-fn explicit_local_id_preserves_real_named_argument_diagnostics() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-function target(a: int, b: int) -> int { a + b }
-function main(id: boundary.LocalId) -> int {
-  target(a = 1, $id = id)
-}
-"#,
-    );
-
-    let rendered = render_tir(&db, file);
-    assert!(
-        rendered.contains("missing required argument `b`"),
-        "a real named argument must retain per-parameter diagnostics:\n{rendered}"
-    );
-    assert!(
-        !rendered.contains("expected 2 argument(s), got 1"),
-        "the trailing LocalId must not hide the real named argument:\n{rendered}"
-    );
-}
-
-#[test]
-fn explicit_local_id_on_native_target_remains_a_runtime_contract() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-function main(id: boundary.LocalId) -> string {
-  baml.json.to_string(7, $id = id) catch (e) {
-    baml.errors.InvalidArgument => "caught"
-  }
-}
-"#,
-    );
-    let rendered = render_tir(&db, file);
-    assert!(
-        !rendered.contains("!!"),
-        "TIR must allow the VM to throw the catchable native-target error:\n{rendered}"
-    );
-}
+use crate::engine::TestDbExt;
 
 #[test]
 fn backtick_llm_function_compiles_to_agent_loop() {
     // Single-path world: a backtick prompt in an LLM function desugars to the
     // ai Agent loop — the direct-call body runs
     // `ai.Agent<Out>.new(client = client).run(Greet@spec(...))` and the
-    // `Greet$spec` companion builds the bound `ai.FunctionSpec`. The `${name}`
+    // `Greet@spec` companion builds the bound `ai.FunctionSpec`. The `${name}`
     // interp captures the function param inside the spec's prompt closure.
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
-client MyClient = openai.OpenAiClient.new(model = "gpt-4o-mini", api_key = "k");
+client MyClient = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "k");
 
 function Greet(name: string) -> string {
-  client MyClient
-  prompt `Hello ${name}!`
+  client: MyClient
+  prompt: `Hello ${name}!`
 }
 "#,
     );
@@ -182,8 +35,59 @@ function Greet(name: string) -> string {
         "backtick LLM function should compile clean, got:\n{tir}"
     );
     assert!(
-        tir.contains("Greet$spec") && tir.contains("FunctionSpec"),
+        tir.contains("Greet@spec") && tir.contains("FunctionSpec"),
         "the spec companion should build an ai.FunctionSpec, got:\n{tir}"
+    );
+}
+
+#[test]
+fn llm_companions_name_defaulted_spec_arguments() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+client MyClient = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "k");
+
+function Greet(name: string, suffix: string = "!") -> string {
+  client: MyClient
+  prompt: `Hello ${name}${suffix}`
+}
+
+function main() -> string {
+  Greet@render_prompt("Ada").text()
+}
+"#,
+    );
+
+    let tir = render_tir(&db, file);
+    assert!(
+        !tir.contains("!!"),
+        "defaulted LLM companions should compile without diagnostics:\n{tir}"
+    );
+    assert!(
+        tir.contains("Greet@render_prompt(name: string, suffix: string = \"!\")")
+            && tir.contains("Greet@build_request(name: string, suffix: string = \"!\", client:")
+            && tir.contains("suffix = suffix"),
+        "render-prompt/build-request companions must preserve the defaulted argument as named:\n{tir}"
+    );
+    assert!(
+        tir.contains(
+            "ai.Agent.new(client = client, on_event = on_event).run(Greet@spec(name, suffix = suffix), $trace = trace._passthrough()).value"
+        ),
+        "the direct-call companion must name the defaulted spec argument and thread on_event:\n{tir}"
+    );
+    // Bind the argument tuple to the from_spec call itself: the tuple must
+    // appear right after this marker's generic args, not just anywhere in the
+    // rendered TIR.
+    let stream_call = tir
+        .split("ai.stream.from_spec<")
+        .nth(1)
+        .unwrap_or_else(|| panic!("stream companion must call ai.stream.from_spec:\n{tir}"));
+    let window = &stream_call[..stream_call.len().min(200)];
+    assert!(
+        window
+            .contains("(Greet@spec(name, suffix = suffix), client = client, on_event = on_event, $trace = trace._passthrough())"),
+        "the stream companion must pass spec, client, and on_event to from_spec:\n{tir}"
     );
 }
 
@@ -193,7 +97,7 @@ fn new_mode_failures_have_good_diagnostics() {
     // surface a diagnostic that points at the user's `${…}` source with a
     // user-facing message — never a `0..0` span and never a leaked internal
     // desugaring type. The prompt body is lowered into a synthesized
-    // `(ctx: baml.prompt.Context) -> PromptAst` closure, so the risk is that
+    // `(ctx: ai.Context) -> PromptAst` closure, so the risk is that
     // errors land on compiler-generated nodes. These cases pin that they don't.
     //
     // `expect_substr` is asserted; the span column is checked to be non-`0..0`
@@ -202,34 +106,40 @@ fn new_mode_failures_have_good_diagnostics() {
         // (label, client clause, prompt body, a phrase the diagnostic must contain)
         (
             "undef_var",
-            "client C",
-            "prompt `Hi ${nobody}!`",
+            "client: C",
+            "prompt: `Hi ${nobody}!`",
             "unresolved name: nobody",
         ),
         (
             "ctx_bad_field",
-            "client C",
-            "prompt `${ctx.nope}`",
+            "client: C",
+            "prompt: `${ctx.nope}`",
             "has no member `nope`",
         ),
         (
             "arith_type_err",
-            "client C",
-            r#"prompt `${1 + "a"}`"#,
+            "client: C",
+            r#"prompt: `${1 + "a"}`"#,
             "operator `+`",
         ),
         // `ctx.output_format_with` is removed surface: only `output_format`
         // exists on the spec ctx, so this is a member error now.
         (
             "removed_ctx_method",
-            "client C",
-            "prompt `${ctx.output_format_with(5)}`",
+            "client: C",
+            "prompt: `${ctx.output_format_with(5)}`",
             "has no member `output_format_with`",
         ),
         (
+            "bare_output_format",
+            "client: C",
+            "prompt: `${ctx.output_format}`",
+            "`output_format` must be called; use `output_format()`",
+        ),
+        (
             "bad_client",
-            "client Nope",
-            "prompt `Hi ${name}!`",
+            "client: Nope",
+            "prompt: `Hi ${name}!`",
             "unresolved name: Nope",
         ),
         // Block-tag interps (`${for}`) must also report at the user's
@@ -237,29 +147,31 @@ fn new_mode_failures_have_good_diagnostics() {
         // it matches plain `if`/`while`, which BAML does not bool-check.)
         (
             "for_non_iterable",
-            "client C",
-            "prompt `${for (let x in 5)}${x}${endfor}`",
+            "client: C",
+            "prompt: `${for (let x in 5)}${x}${endfor}`",
             "cannot iterate over type `5`",
         ),
         (
             "for_body_type_err",
-            "client C",
-            r#"prompt `${for (let x in [1, 2])}${x + "a"}${endfor}`"#,
+            "client: C",
+            r#"prompt: `${for (let x in [1, 2])}${x + "a"}${endfor}`"#,
             "operator `+`",
         ),
         (
             "role_marker_requires_name",
-            "client C",
-            "prompt `${role()}hi`",
+            "client: C",
+            "prompt: `${role()}hi`",
             "expected 1 argument(s), got 0",
         ),
     ];
+    let mut db = make_db();
     for (label, client, body, expect_substr) in cases {
-        let mut db = make_db();
         let src = format!(
-            "client C = openai.OpenAiClient.new(model = \"m\", api_key = \"k\");\n\nfunction Greet(name: string) -> string {{\n  {client}\n  {body}\n}}\n"
+            "client C = openai.ResponsesClient.new(model = \"m\", api_key = \"k\");\n\nfunction Greet(name: string) -> string {{\n  {client}\n  {body}\n}}\n"
         );
-        let file = db.add_file("test.baml", &src);
+        // Keep every case in its own namespace so one database can share the
+        // stdlib setup without duplicate C/Greet declarations.
+        let file = db.file(format!("ns_new_mode_{label}/test.baml"), &src);
         let tir = render_tir(&db, file);
         let diags: Vec<&str> = tir
             .lines()
@@ -284,6 +196,35 @@ fn new_mode_failures_have_good_diagnostics() {
 }
 
 #[test]
+fn output_format_must_be_called_on_context_values() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+function bare(render_ctx: ai.Context) -> string {
+  `${render_ctx.output_format}`
+}
+
+function called(render_ctx: ai.Context) -> string {
+  `${render_ctx.output_format()}`
+}
+
+function stringified(render_ctx: ai.Context) -> string {
+  `${render_ctx.output_format.to_string()}`
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    let message = "`output_format` must be called; use `output_format()`";
+
+    assert_eq!(
+        tir.matches(message).count(),
+        2,
+        "bare output_format references should fail while calls remain valid:\n{tir}"
+    );
+}
+
+#[test]
 fn nested_lambda_diagnostic_has_real_span() {
     // Regression: a type error inside a nested lambda body must point at the
     // offending expression, not collapse to a `0..0` span. The lambda body is
@@ -292,7 +233,7 @@ fn nested_lambda_diagnostic_has_real_span() {
     // map (see `InferContext::freeze_diagnostic_spans_from`). Before the fix
     // this rendered as `!! 0..0: operator `+` ...`.
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f() -> () -> int throws never {\n  let g = () -> { let x: int = 5; let y: string = \"a\"; x + y }\n  g\n}\n",
     );
@@ -313,11 +254,11 @@ fn nested_lambda_diagnostic_has_real_span() {
 #[test]
 fn union_normalization_deduplicates() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f(x: int | int) -> int { return x; }");
+    let file = db.file("test.baml", "function f(x: int | int) -> int { return x; }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: int | int) -> int throws never {
       { : never
-        return x : int | int
+        return x : int
       }
     }
     ");
@@ -326,7 +267,7 @@ fn union_normalization_deduplicates() {
 #[test]
 fn union_normalization_alias() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "type A = int | string\nfunction f(x: A) -> string { return x; }",
     );
@@ -338,7 +279,6 @@ fn union_normalization_alias() {
       }
       !! 58..59: type mismatch: expected string, got A
     }
-    type user.A$stream = int | string
     ");
 }
 
@@ -347,7 +287,7 @@ fn union_normalization_alias() {
 #[test]
 fn unknown_type_in_param() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(x: Nonexistent) -> int { return 0; }",
     );
@@ -364,7 +304,7 @@ fn unknown_type_in_param() {
 #[test]
 fn unknown_type_in_return() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> DoesNotExist { return 0; }");
+    let file = db.file("test.baml", "function f() -> DoesNotExist { return 0; }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> !error throws never {
       { : never
@@ -380,14 +320,14 @@ fn unknown_type_in_return() {
 #[test]
 fn unresolved_variable() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f() -> int { return nonexistent_var; }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> int throws never {
       { : never
-        return nonexistent_var : unknown
+        return nonexistent_var : !error
       }
       !! 29..44: unresolved name: nonexistent_var
     }
@@ -397,15 +337,15 @@ fn unresolved_variable() {
 #[test]
 fn unresolved_variable_in_let() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f() -> int { let x = unknown_thing; return x; }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> int throws never {
       { : never
-        let x = unknown_thing : unknown
-        return x : unknown
+        let x = unknown_thing : !error
+        return x : !error
       }
       !! 30..43: unresolved name: unknown_thing
     }
@@ -413,13 +353,14 @@ fn unresolved_variable_in_let() {
 }
 
 #[test]
-fn property_shorthand_suggests_explicit_mapping_for_nearby_variable() {
+fn class_property_shorthand_suggests_explicit_mapping_for_nearby_variable() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
-function build(option: string) -> map<string, string> {
-  { options }
+class Config { options string }
+function build(option: string) -> Config {
+  Config { options }
 }
 "#,
     );
@@ -437,10 +378,129 @@ function build(option: string) -> map<string, string> {
     );
 }
 
+/// Shorthand-ness is the parser's fact, not key text: a WRITTEN
+/// `{ "key": key }` is an ordinary entry, so an unbound value reports the
+/// generic unresolved-name diagnostic, never the shorthand rewrite hint.
+#[test]
+fn quoted_key_matching_value_name_is_not_property_shorthand() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+function build(v: string?) -> map<string, string> {
+  if let other: string = v { { "key": key } } else { {} }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("unresolved name: key"),
+        "a quoted entry with an unbound value is a plain unresolved name, got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("property shorthand"),
+        "a quoted key is not shorthand and must not draw the shorthand diagnostic:\n{tir}"
+    );
+}
+
+/// Near-match candidates come from the EXPRESSION's scope, so a pattern
+/// binder is offered as the explicit-mapping suggestion.
+#[test]
+fn class_property_shorthand_suggests_a_pattern_binder() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+class Config { options string }
+function build(v: string?) -> Config {
+  if let option: string = v { Config { options } } else { Config { options: "" } }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains(
+            "property shorthand `options` requires an in-scope value named `options`. Did you \
+             mean `options: option`?"
+        ),
+        "expected the `if let` binder as a near match, got:\n{tir}"
+    );
+}
+
+#[test]
+fn class_property_shorthand_in_parameter_default_uses_structural_syntax() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+class Config { options string }
+function build(option: string, config: Config = Config { options }) -> Config {
+  config
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains(
+            "property shorthand `options` requires an in-scope value named `options`. Did you \
+             mean `options: option`?"
+        ),
+        "expected a shorthand diagnostic in the parameter-default arena, got:\n{tir}"
+    );
+}
+
+#[test]
+fn class_property_shorthand_uses_the_value_expression_scope() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+class Config { options string }
+function build(input: string?) -> Config {
+  if let option: string = input {
+    Config { options }
+  } else {
+    Config { options: "" }
+  }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains(
+            "property shorthand `options` requires an in-scope value named `options`. Did you \
+             mean `options: option`?"
+        ),
+        "expected the if-let binding in shorthand suggestions, got:\n{tir}"
+    );
+}
+
+#[test]
+fn explicit_quoted_map_key_is_not_property_shorthand() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+function build() -> map<string, string> {
+  { "options": options }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("unresolved name: options"),
+        "expected the ordinary unresolved-name diagnostic, got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("property shorthand"),
+        "an explicit quoted key must not use shorthand diagnostics:\n{tir}"
+    );
+}
+
 #[test]
 fn class_property_shorthand_suggests_field_to_variable_mapping() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Config { options string }
@@ -466,7 +526,7 @@ function build(option: string) -> Config {
 #[test]
 fn explicit_unknown_class_field_is_rejected() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Config { goodField int }
@@ -487,9 +547,32 @@ function build() -> Config {
 }
 
 #[test]
+fn explicit_same_name_unknown_class_field_is_not_shorthand() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+class Config { goodField int }
+function build(badField: int) -> Config {
+  Config { badField: badField }
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("class `Config` has no field `badField`"),
+        "expected an unknown-field diagnostic, got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("property shorthand"),
+        "an explicit same-name field must not use shorthand diagnostics:\n{tir}"
+    );
+}
+
+#[test]
 fn inferred_object_rejects_explicit_unknown_class_field() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Config { goodField int }
@@ -513,7 +596,7 @@ function build() -> Config {
 #[test]
 fn unresolved_function_call_reports_callee_span() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function Main() -> int {
@@ -521,14 +604,14 @@ function Main() -> int {
 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    insta::assert_snapshot!(render_tir(&db, file), @"
     function user.Main() -> int throws never {
-      { : unknown
-        MissingFunction(1) : unknown
+      { : !error
+        MissingFunction(1) : !error
       }
       !! 28..43: unresolved name: MissingFunction
     }
-    "#);
+    ");
 }
 
 #[test]
@@ -545,9 +628,9 @@ testset "invoice pipeline" {
   }
 }
 "#;
-    db.add_file("test.baml", source);
+    db.file("test.baml", source);
 
-    let diagnostics = baml_project::collect_compiler2_diagnostics(&db);
+    let diagnostics = baml_db::collect_compiler2_diagnostics(&db);
     let unresolved = diagnostics
         .iter()
         .filter(|diag| {
@@ -587,7 +670,7 @@ testset "invoice pipeline" {
 #[test]
 fn optional_params_accept_omission_and_named_override() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function search(query: string, max: int = 10) -> string { query }
@@ -615,18 +698,18 @@ function f() -> string {
 fn llm_client_override_argument_is_callable_on_function() {
     // The compiler injects a `client: ai.Client? = null` override parameter on
     // every LLM function; a call site can pass any ai.Client value for it.
-    // (The legacy `$build_request` companion — which shared the override — is
-    // gone with the legacy LLM path.)
+    // The generated `@build_request` companion shares the client override with
+    // the parent LLM function.
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r##"
-client DefaultClient = openai.OpenAiClient.new(model = "gpt-4o-mini", api_key = "default-key");
-client OverrideClient = openai.OpenAiClient.new(model = "gpt-4o-mini", api_key = "override-key");
+client DefaultClient = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "default-key");
+client OverrideClient = openai.ResponsesClient.new(model = "gpt-4o-mini", api_key = "override-key");
 
 function Ask(input: string) -> string {
-  client DefaultClient
-  prompt `${input}`
+  client: DefaultClient
+  prompt: `${input}`
 }
 
 function call_overrides() -> string {
@@ -638,7 +721,7 @@ function call_overrides() -> string {
     let tir = render_tir(&db, file);
 
     assert!(
-        tir.contains("function user.Ask(input: string, client: ai.Client | null = null)"),
+        tir.contains("function user.Ask(input: string, client: ai.Client | null = null, on_event:"),
         "{tir}"
     );
     assert!(
@@ -651,7 +734,7 @@ function call_overrides() -> string {
 #[test]
 fn raw_generic_constructor_infers_typevar_from_field_value() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Box<T> {
@@ -678,7 +761,7 @@ function f() -> int {
 #[test]
 fn misspelled_explicit_constructor_in_checked_context_errors() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class ValidationIssue {
@@ -709,7 +792,7 @@ function f() -> ValidationIssue[] {
 #[test]
 fn optional_param_call_binding_diagnostics() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function search(query: string, max: int = 10) -> string { query }
@@ -717,13 +800,15 @@ function positional_default() -> string { search("cats", 5) }
 function positional_after_named() -> string { search(query = "cats", 5) }
 function duplicate_named() -> string { search(query = "cats", max = 1, max = 2) }
 function unknown_named() -> string { search(q = "cats") }
+function positional_then_same_named() -> string { search("cats", query = "dogs") }
 "#,
     );
     let tir = render_tir(&db, file);
     insta::assert_snapshot!("optional_param_call_binding_diagnostics", tir);
     assert!(tir.contains("defaulted parameter `max` must be passed by name"));
     assert!(tir.contains("positional arguments cannot appear after named arguments"));
-    assert!(tir.contains("duplicate named argument `max`"));
+    assert_eq!(tir.matches("duplicate named argument `max`").count(), 1);
+    assert_eq!(tir.matches("duplicate named argument `query`").count(), 1);
     assert!(tir.contains("unknown named argument `q`"));
     assert!(tir.contains("missing required argument `query`"));
 }
@@ -731,7 +816,7 @@ function unknown_named() -> string { search(q = "cats") }
 #[test]
 fn optional_param_default_declaration_diagnostics() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function type_mismatch(a: int = "bad") -> int { a }
@@ -749,25 +834,9 @@ function required_after_default(a: int = 1, b: int) -> int { b }
 }
 
 #[test]
-fn optional_param_default_forward_reference_is_scope_aware() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"
-function shadow_later_param(a: int = { let b = 1; b }, b: int = 2) -> int { a }
-"#,
-    );
-    let tir = render_tir(&db, file);
-    assert!(
-        !tir.contains("default for parameter `a` cannot reference later parameter `b`"),
-        "{tir}"
-    );
-}
-
-#[test]
 fn optional_param_default_forward_reference_checks_lambda_bodies() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function lambda_capture_later_param(a: int = { let f = () -> int { b }; f() }, b: int = 1) -> int { a }
@@ -787,7 +856,7 @@ function lambda_capture_later_param(a: int = { let f = () -> int { b }; f() }, b
 #[test]
 fn self_param_default_reports_single_semantic_error() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Counter {
@@ -812,7 +881,7 @@ class Counter {
 #[test]
 fn too_many_args() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function add(a: int, b: int) -> int { return a + b; }\nfunction f() -> int { return add(1, 2, 3); }",
     );
@@ -834,7 +903,7 @@ fn too_many_args() {
 #[test]
 fn too_few_args() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function add(a: int, b: int) -> int { return a + b; }\nfunction f() -> int { return add(1); }",
     );
@@ -858,7 +927,7 @@ fn too_few_args() {
 #[test]
 fn calling_non_function() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f() -> int { let x = 42; return x(1); }",
     );
@@ -866,9 +935,9 @@ fn calling_non_function() {
     function user.f() -> int throws never {
       { : never
         let x = 42 : 42 -> int
-        return x(1) : unknown
+        return x(1) : !error
       }
-      !! 41..45: `int` is not a function — it cannot be called
+      !! 41..42: `int` is not a function — it cannot be called
     }
     ");
 }
@@ -876,7 +945,7 @@ fn calling_non_function() {
 #[test]
 fn calling_class_as_function() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "class Foo { name string }\nfunction f() -> int { return Foo(1); }",
     );
@@ -886,12 +955,9 @@ fn calling_class_as_function() {
     }
     function user.f() -> int throws never {
       { : never
-        return Foo(1) : unknown
+        return Foo(1) : !error
       }
-      !! 55..61: `Foo` is not a function — it cannot be called
-    }
-    class user.Foo$stream {
-      name: string | null
+      !! 55..58: unresolved name: Foo
     }
     ");
 }
@@ -901,13 +967,13 @@ fn calling_class_as_function() {
 #[test]
 fn missing_return() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> int { let x = 1; }");
+    let file = db.file("test.baml", "function f() -> int { let x = 1; }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> int throws never {
-      { : int
+      { : !error
         let x = 1 : 1 -> int
       }
-      !! 20..34: missing return: expected `int`
+      !! 20..34: expected `int`, but this block ends without a value
     }
     ");
 }
@@ -915,13 +981,13 @@ fn missing_return() {
 #[test]
 fn block_ending_in_stmt() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> string { let x = \"hello\"; }");
+    let file = db.file("test.baml", "function f() -> string { let x = \"hello\"; }");
     insta::assert_snapshot!(render_tir(&db, file), @r#"
     function user.f() -> string throws never {
-      { : string
+      { : !error
         let x = "hello" : "hello" -> string
       }
-      !! 23..43: missing return: expected `string`
+      !! 23..43: expected `string`, but this block ends without a value
     }
     "#);
 }
@@ -931,11 +997,11 @@ fn block_ending_in_stmt() {
 #[test]
 fn invalid_binary_op_string_minus_int() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> int { return \"hello\" - 5; }");
+    let file = db.file("test.baml", "function f() -> int { return \"hello\" - 5; }");
     insta::assert_snapshot!(render_tir(&db, file), @r#"
     function user.f() -> int throws never {
       { : never
-        return "hello" - 5 : unknown
+        return "hello" - 5 : !error
       }
       !! 29..40: operator `-` cannot be applied to `"hello"` and `5`
     }
@@ -945,11 +1011,11 @@ fn invalid_binary_op_string_minus_int() {
 #[test]
 fn invalid_binary_op_bool_add() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> int { return true + false; }");
+    let file = db.file("test.baml", "function f() -> int { return true + false; }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> int throws never {
       { : never
-        return true + false : unknown
+        return true + false : !error
       }
       !! 29..41: operator `+` cannot be applied to `true` and `false`
     }
@@ -959,11 +1025,11 @@ fn invalid_binary_op_bool_add() {
 #[test]
 fn invalid_binary_op_float_plus_bigint() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> bigint { return 1.5 + 100n; }");
+    let file = db.file("test.baml", "function f() -> bigint { return 1.5 + 100n; }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> bigint throws never {
       { : never
-        return 1.5 + 100n : unknown
+        return 1.5 + 100n : !error
       }
       !! 32..42: operator `+` cannot be applied to `1.5` and `100n`
     }
@@ -973,11 +1039,11 @@ fn invalid_binary_op_float_plus_bigint() {
 #[test]
 fn invalid_binary_op_bigint_plus_float() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> bigint { return 100n + 1.5; }");
+    let file = db.file("test.baml", "function f() -> bigint { return 100n + 1.5; }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> bigint throws never {
       { : never
-        return 100n + 1.5 : unknown
+        return 100n + 1.5 : !error
       }
       !! 32..42: operator `+` cannot be applied to `100n` and `1.5`
     }
@@ -987,7 +1053,7 @@ fn invalid_binary_op_bigint_plus_float() {
 #[test]
 fn compound_assign_float_plus_string_is_rejected_in_tir() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f() -> float {
@@ -1007,7 +1073,7 @@ function f() -> float {
 #[test]
 fn invalid_binary_op_float_lt_bigint() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> bool { return 1.5 < 100n; }");
+    let file = db.file("test.baml", "function f() -> bool { return 1.5 < 100n; }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> bool throws never {
       { : never
@@ -1024,7 +1090,7 @@ fn bigint_eq_float_permitted() {
     // no diagnostic. The always-false lint (a warning on provably-disjoint operands) lands
     // with `==` lowering in Phase 3B, where it matches the concrete-equality runtime.
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> bool { return 100n == 1.5; }");
+    let file = db.file("test.baml", "function f() -> bool { return 100n == 1.5; }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> bool throws never {
       { : never
@@ -1038,7 +1104,7 @@ fn bigint_eq_float_permitted() {
 fn ordering_unrelated_classes_is_error() {
     // `<` `>` `<=` `>=` are exact-type; two different classes can't be ordered.
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "class Dog { name string }\nclass Cat { name string }\n\
          function f(a: Dog, b: Cat) -> bool { return a < b; }",
@@ -1055,7 +1121,7 @@ fn ordering_subtype_related_is_error() {
     // Exact-type: even though `int <: int?`, ordering requires the *same* type — only
     // `==` may span a subtype relationship.
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(a: int, b: int?) -> bool { return a < b; }",
     );
@@ -1071,7 +1137,7 @@ fn ordering_non_compare_class_is_error() {
     // A common type is found (both `Widget`), but `Widget` does not implement `Compare`,
     // so it has no ordering.
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "class Widget { id int }\n\
          function f(a: Widget, b: Widget) -> bool { return a < b; }",
@@ -1089,7 +1155,7 @@ fn equality_disjoint_types_warns_always_false() {
     // `string` — distinct concrete types) make it always false, so it warns
     // (`ComparisonAlwaysDisjoint`) rather than erroring.
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(a: int, b: string) -> bool { return a == b; }",
     );
@@ -1104,7 +1170,7 @@ fn equality_disjoint_types_warns_always_false() {
 #[ignore = "`Array.filled` mutable-literal aliasing warning is not yet implemented. Un-ignore when the warning lands."]
 fn array_filled_with_mutable_literal_warns_aliasing() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f() -> int {
   let rows = baml.Array.filled(3, [0])
@@ -1125,7 +1191,7 @@ fn array_filled_with_mutable_literal_warns_aliasing() {
 #[test]
 fn array_filled_with_primitive_value_has_no_aliasing_warning() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f() -> int {
   let xs = baml.Array.filled(3, 0)
@@ -1145,7 +1211,7 @@ fn array_filled_with_map_literal_warns_aliasing() {
     // A map literal (`Expr::Map`) is a reference type: every slot would alias
     // the same map, so it warns like the array-literal case.
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f() -> int {
   let rows = baml.Array.filled(3, {})
@@ -1169,7 +1235,7 @@ fn array_filled_with_class_instance_literal_warns_aliasing() {
     // A class-instance literal (`Expr::Object`) is a reference type too, so the
     // same object is shared across every slot: warn.
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"class Cell { n int }
 function f() -> int {
@@ -1194,7 +1260,7 @@ fn array_filled_named_value_arg_warns_aliasing() {
     // The fill value can be passed by name (`value = ...`) rather than
     // positionally; the mutable-literal detection must handle that path too.
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f() -> int {
   let rows = baml.Array.filled(3, value = [0])
@@ -1213,36 +1279,11 @@ fn array_filled_named_value_arg_warns_aliasing() {
 }
 
 #[test]
-fn array_filled_with_variable_bound_mutable_value_does_not_warn() {
-    // KNOWN LIMITATION (Linear B-548): detection is purely *syntactic* — it only
-    // fires when the fill value is written inline as a literal. Binding the same
-    // mutable value to a variable first (`let x = [0]; Array.filled(3, x)`) still
-    // aliases every slot at runtime, but produces NO warning because the arg is a
-    // `Path`, not a literal. This characterizes (does not endorse) that gap; the
-    // real fix (Linear B-638) is the `Array.generate(length, f)` factory, which
-    // calls `f` once per index and so builds an independent value per slot.
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function f() -> int {
-  let x = [0]
-  let rows = baml.Array.filled(3, x)
-  return rows.length()
-}"#,
-    );
-    let tir = render_tir(&db, file);
-    assert!(
-        !tir.contains("reuses the same mutable value"),
-        "variable-bound mutable value is a known false-negative (must not warn), got:\n{tir}"
-    );
-}
-
-#[test]
 fn aliased_float_plus_bigint_is_rejected() {
     // Aliases on either side must still trip the float×bigint reject —
     // `infer_binary_op` peels them at entry before classifying.
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "type FF = float\nfunction f(x: FF) -> bigint { return x + 100n; }",
     );
@@ -1259,7 +1300,7 @@ fn aliased_int_arithmetic_resolves_to_int() {
     // wraps the primitive — `infer_arithmetic` should classify aliased
     // operands the same as bare ones after entry-level peeling.
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "type II = int\nfunction f(x: II, y: int) -> int { return x + y; }",
     );
@@ -1277,13 +1318,13 @@ fn aliased_int_arithmetic_resolves_to_int() {
 #[test]
 fn invalid_unary_op_neg_string() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> int { return -\"hello\"; }");
+    let file = db.file("test.baml", "function f() -> int { return -\"hello\"; }");
     insta::assert_snapshot!(render_tir(&db, file), @r#"
     function user.f() -> int throws never {
       { : never
-        return Neg "hello" : unknown
+        return Neg "hello" : !error
       }
-      !! 29..37: operator `-` cannot be applied to `"hello"`
+      !! 30..37: operator `-` cannot be applied to `"hello"`
     }
     "#);
 }
@@ -1293,11 +1334,11 @@ fn invalid_unary_op_neg_string() {
 #[test]
 fn indexing_bool() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f(x: bool) -> int { return x[0]; }");
+    let file = db.file("test.baml", "function f(x: bool) -> int { return x[0]; }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: bool) -> int throws never {
       { : never
-        return x[0] : unknown
+        return x[0] : !error
       }
       !! 36..40: type `bool` is not indexable
     }
@@ -1307,11 +1348,11 @@ fn indexing_bool() {
 #[test]
 fn indexing_int() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f(x: int) -> int { return x[0]; }");
+    let file = db.file("test.baml", "function f(x: int) -> int { return x[0]; }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: int) -> int throws never {
       { : never
-        return x[0] : unknown
+        return x[0] : !error
       }
       !! 35..39: type `int` is not indexable
     }
@@ -1323,62 +1364,64 @@ fn indexing_int() {
 #[test]
 fn float_literal_in_annotation() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(x: 3.14 | 2.72) -> float { return x; }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: 3.14 | 2.72) -> float throws never {
       { : never
-        return x : 3.14 | 2.72
+        return x : 2.72 | 3.14
       }
     }
     ");
 }
 
-// ── 3A-10. if-without-else should produce Optional(T) ────────────────────
+// ── 3A-10. if-without-else is the unit value, never Optional(T) ─────────
 
 #[test]
-fn if_without_else_optional() {
+fn if_without_else_is_refused_where_optional_is_expected() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(x: bool) -> int? { return if (x) { 5 }; }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: bool) -> int | null throws never {
       { : never
-        return : void
-          if (x : bool) : void
+        return : !error
+          if (x : bool) : !error
             { : 5
               5 : 5
             }
       }
-      !! 37..49: `if` without `else` cannot be used as a value; add an `else` branch
+      !! 37..49: expected `int | null`, but an `if` without `else` evaluates to `null`; add an `else` branch
+    }
+    block user.f {
     }
     ");
 }
 
 #[test]
-fn if_without_else_let_binding() {
+fn if_without_else_branch_cannot_produce_a_value() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(x: bool) -> int { let y = if (x) { 5 }; return y ?? 0; }",
     );
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: bool) -> int throws never {
       { : never
-        let y = : void
-          if (x : bool) : void
+        let y = : !error
+          if (x : bool) : !error
             { : 5
               5 : 5
             }
-        return y ?? 0 : void
+        return y ?? 0 : 0 | !error
       }
-      !! 37..49: `if` without `else` cannot be used as a value; add an `else` branch
-      !! 58..64: did you mean `y`? `y ?? 0` is unnecessary, because `y` cannot be null
-      !! 58..64: type mismatch: expected int, got void
+      !! 46..47: an `if` without `else` evaluates to `null`, so its branch cannot produce `5`; add an `else` branch
+    }
+    block user.f {
     }
     ");
 }
@@ -1388,7 +1431,7 @@ fn if_without_else_let_binding() {
 #[test]
 fn match_enum_variants() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"enum Color { Red
 Green
@@ -1405,8 +1448,8 @@ function f(x: Color) -> string {
     enum user.Color
     function user.f(x: user.Color) -> string throws never {
       { : never
-        return : "red" | "green" | "blue"
-          match (x : user.Color) : "red" | "green" | "blue"
+        return : "blue" | "green" | "red"
+          match (x : user.Color) : "blue" | "green" | "red"
             Color.Red =>
               "red" : "red"
             Color.Green =>
@@ -1421,7 +1464,7 @@ function f(x: Color) -> string {
 #[test]
 fn match_catch_all() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f(x: int) -> int {
   return match (x) {
@@ -1444,9 +1487,9 @@ fn match_catch_all() {
 // ── 3A-12. Union member field access ─────────────────────────────────────
 
 #[test]
-fn union_field_access_shared() {
+fn union_field_access_without_interface_is_rejected() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"class Cat { name string
 legs int }
@@ -1465,17 +1508,9 @@ function f(x: Cat | Dog) -> string { return x.name; }"#,
     }
     function user.f(x: user.Cat | user.Dog) -> string throws never {
       { : never
-        return x.name : unknown
+        return x.name : !error
       }
-      !! 116..120: type `Cat | Dog` has no member `name`: its members implement no common interface that declares `name`
-    }
-    class user.Cat$stream {
-      name: string | null
-      legs: int | null
-    }
-    class user.Dog$stream {
-      name: string | null
-      legs: int | null
+      !! 114..120: type `Cat | Dog` has no member `name`: its members implement no common interface that declares `name`
     }
     ");
 }
@@ -1483,7 +1518,7 @@ function f(x: Cat | Dog) -> string { return x.name; }"#,
 #[test]
 fn union_field_access_missing_on_some() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"class Cat { name string
 whiskers int }
@@ -1502,17 +1537,9 @@ function f(x: Cat | Dog) -> int { return x.whiskers; }"#,
     }
     function user.f(x: user.Cat | user.Dog) -> int throws never {
       { : never
-        return x.whiskers : unknown
+        return x.whiskers : !error
       }
-      !! 118..126: type `Cat | Dog` has no member `whiskers`: its members implement no common interface that declares `whiskers`
-    }
-    class user.Cat$stream {
-      name: string | null
-      whiskers: int | null
-    }
-    class user.Dog$stream {
-      name: string | null
-      tail: bool | null
+      !! 116..126: type `Cat | Dog` has no member `whiskers`: its members implement no common interface that declares `whiskers`
     }
     ");
 }
@@ -1520,7 +1547,7 @@ function f(x: Cat | Dog) -> int { return x.whiskers; }"#,
 #[test]
 fn union_field_access_missing_on_one_of_three() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"class A { name string }
 class B { name string }
@@ -1540,18 +1567,9 @@ function f(x: A | B | C) -> string { return x.name; }"#,
     }
     function user.f(x: user.A | user.B | user.C) -> string throws never {
       { : never
-        return x.name : unknown
+        return x.name : !error
       }
-      !! 114..118: type `A | B | C` has no member `name`: its members implement no common interface that declares `name`
-    }
-    class user.A$stream {
-      name: string | null
-    }
-    class user.B$stream {
-      name: string | null
-    }
-    class user.C$stream {
-      age: int | null
+      !! 112..118: type `A | B | C` has no member `name`: its members implement no common interface that declares `name`
     }
     ");
 }
@@ -1559,7 +1577,7 @@ function f(x: A | B | C) -> string { return x.name; }"#,
 #[test]
 fn union_field_access_missing_on_two_of_three() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"class A { name string }
 class B { age string }
@@ -1579,18 +1597,9 @@ function f(x: A | B | C) -> string { return x.name; }"#,
     }
     function user.f(x: user.A | user.B | user.C) -> string throws never {
       { : never
-        return x.name : unknown
+        return x.name : !error
       }
-      !! 113..117: type `A | B | C` has no member `name`: its members implement no common interface that declares `name`
-    }
-    class user.A$stream {
-      name: string | null
-    }
-    class user.B$stream {
-      age: string | null
-    }
-    class user.C$stream {
-      age: int | null
+      !! 111..117: type `A | B | C` has no member `name`: its members implement no common interface that declares `name`
     }
     ");
 }
@@ -1598,13 +1607,12 @@ function f(x: A | B | C) -> string { return x.name; }"#,
 #[test]
 fn union_field_access_different_types() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"class A { value int }
 class B { value string }
 function f(x: A | B) -> string { return x.value; }"#,
     );
-    // Both have `value` but different types → union of field types
     insta::assert_snapshot!(render_tir(&db, file), @"
     class user.A {
       value: int
@@ -1614,23 +1622,38 @@ function f(x: A | B) -> string { return x.value; }"#,
     }
     function user.f(x: user.A | user.B) -> string throws never {
       { : never
-        return x.value : unknown
+        return x.value : !error
       }
-      !! 89..94: type `A | B` has no member `value`: its members implement no common interface that declares `value`
-    }
-    class user.A$stream {
-      value: int | null
-    }
-    class user.B$stream {
-      value: string | null
+      !! 87..94: type `A | B` has no member `value`: its members implement no common interface that declares `value`
     }
     ");
 }
 
 #[test]
+fn union_field_assignment_without_interface_is_rejected() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"class A { value int }
+class B { value string }
+function f(x: A | B) -> int {
+  x.value = 1;
+  return 0;
+}"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains(
+            "type `A | B` has no member `value`: its members implement no common interface that declares `value`"
+        ),
+        "{tir}"
+    );
+}
+
+#[test]
 fn union_field_access_optional_member() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"class A { name string }
 class B { name string }
@@ -1646,17 +1669,9 @@ function f(x: A | B | null) -> string { return x.name; }"#,
     }
     function user.f(x: user.A | user.B | null) -> string throws never {
       { : never
-        return x.name : unknown | null
+        return x.name : !error
       }
-      !! 95..101: did you mean `x?.name`? `x.name` does not handle the case when `x` is null
-      !! 97..101: type `A | B` has no member `name`: its members implement no common interface that declares `name`
-      !! 95..101: type mismatch: expected string, got unknown | null
-    }
-    class user.A$stream {
-      name: string | null
-    }
-    class user.B$stream {
-      name: string | null
+      !! 95..101: type `A | B | null` has no member `name`: its members implement no common interface that declares `name`
     }
     ");
 }
@@ -1666,7 +1681,7 @@ function f(x: A | B | null) -> string { return x.name; }"#,
 #[test]
 fn null_coalesce_unwraps_optional() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f(x: int?) -> int { x ?? 0 }");
+    let file = db.file("test.baml", "function f(x: int?) -> int { x ?? 0 }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: int | null) -> int throws never {
       { : int
@@ -1679,7 +1694,7 @@ fn null_coalesce_unwraps_optional() {
 #[test]
 fn null_coalesce_with_variable_default() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f(x: int?, y: int) -> int { x ?? y }");
+    let file = db.file("test.baml", "function f(x: int?, y: int) -> int { x ?? y }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f(x: int | null, y: int) -> int throws never {
       { : int
@@ -1692,7 +1707,7 @@ fn null_coalesce_with_variable_default() {
 #[test]
 fn null_coalesce_with_string() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f(name: string?) -> string { let x = "Anonymous"; name ?? x }"#,
     );
@@ -1711,7 +1726,7 @@ fn null_coalesce_with_string() {
 #[test]
 fn optional_field_access() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class User { name string }
@@ -1724,7 +1739,7 @@ function f(u: User?) -> string? { u?.name }
 #[test]
 fn optional_chaining_with_null_coalesce() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class User { name string }
@@ -1737,7 +1752,7 @@ function f(u: User?, fallback: string) -> string { u?.name ?? fallback }
 #[test]
 fn chained_optional_field_access() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Address { street string }
@@ -1751,7 +1766,7 @@ function f(u: User?) -> string? { u?.address?.street }
 #[test]
 fn optional_method_call_basic() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class User {
@@ -1767,7 +1782,7 @@ function f(u: User?) -> string? { u?.getName() }
 #[test]
 fn optional_call_chain_continues() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class User { name string }
@@ -1782,7 +1797,7 @@ function f(callback: (() -> User throws never)?) -> string? {
 #[test]
 fn optional_field_access_through_optional_alias() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class User { name string }
@@ -1796,7 +1811,7 @@ function f(u: MaybeUser) -> string? { u?.name }
 #[test]
 fn optional_index_through_optional_alias() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 type MaybeInts = int[]?
@@ -1811,10 +1826,10 @@ function f(xs: MaybeInts) -> int? { xs?.[0] }
 #[test]
 fn void_function_basic() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> void { }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f() -> void throws never {
-      { : void
+    let file = db.file("test.baml", "function f() -> void { }");
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    function user.f() -> null throws never {
+      { : null
       }
     }
     ");
@@ -1823,9 +1838,9 @@ fn void_function_basic() {
 #[test]
 fn void_function_bare_return() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> void { return; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f() -> void throws never {
+    let file = db.file("test.baml", "function f() -> void { return; }");
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    function user.f() -> null throws never {
       { : never
         return
       }
@@ -1834,40 +1849,134 @@ fn void_function_bare_return() {
 }
 
 #[test]
-fn void_function_return_value_error() {
+fn non_void_lambda_bare_return_is_rejected() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> void { return 42; }");
-    insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.f() -> void throws never {
-      { : never
-        return 42 : 42
+    let file = db.file(
+        "test.baml",
+        "function f() -> bool { let g = () -> int { return; }; true }",
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    function user.f() -> bool throws never {
+      { : true
+        let g = : () -> int throws never
+          () -> int { ... } : () -> int throws never
+            {
+              return
+            }
+        true : true
       }
-      !! 30..32: type mismatch: expected void, got 42
+      !! 43..50: expected a value of type `int`, but a bare `return` returns `null`
+    }
+    lambda user.f {
     }
     ");
 }
 
 #[test]
-fn void_function_result_used_error() {
+fn contextual_nested_generic_bare_return_is_rejected_after_inference() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
+        "test.baml",
+        r#"
+class Pair<A, B> {
+  first A
+  second B
+}
+
+function accept<T>(callback: () -> Pair<T, int>, value: T) -> bool { true }
+
+function f() -> bool {
+  accept(() -> { return; }, "later evidence")
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains(
+            "expected a value of type `Pair<string, int>`, but a bare `return` returns `null`"
+        ),
+        "{tir}"
+    );
+}
+
+#[test]
+fn contextual_generic_bare_return_accepts_unit_after_inference() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+function accept<T>(callback: () -> T, value: T) -> bool { true }
+
+function f() -> bool {
+  accept(() -> { return; }, null)
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(!tir.contains("!!"), "{tir}");
+}
+
+#[test]
+fn lambda_return_mismatch_uses_lambda_contract() {
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"function f() -> bool {
+  let g = () -> int { return "wrong" }
+  true
+}"#,
+    );
+    insta::assert_snapshot!(render_tir(&db, file), @r#"
+    function user.f() -> bool throws never {
+      { : true
+        let g = : () -> int throws never
+          () -> int { ... } : () -> int throws never
+            {
+              return "wrong"
+            }
+        true : true
+      }
+      !! 52..59: type mismatch: expected int, got "wrong"
+    }
+    lambda user.f {
+    }
+    "#);
+}
+
+#[test]
+fn void_function_return_value_error() {
+    let mut db = make_db();
+    let file = db.file("test.baml", "function f() -> void { return 42; }");
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    function user.f() -> null throws never {
+      { : never
+        return 42 : 42
+      }
+      !! 30..32: type mismatch: expected null, got 42
+    }
+    ");
+}
+
+#[test]
+fn void_function_result_is_the_unit_value() {
+    let mut db = make_db();
+    let file = db.file(
         "test.baml",
         r#"
 function g() -> void { }
 function f() -> int { let x = g(); 1 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.g() -> void throws never {
-      { : void
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    function user.g() -> null throws never {
+      { : null
       }
     }
     function user.f() -> int throws never {
       { : 1
-        let x = g() : void
+        let x = g() : null
         1 : 1
       }
-      !! 56..59: cannot use return value of a void function
     }
     ");
 }
@@ -1875,21 +1984,21 @@ function f() -> int { let x = g(); 1 }
 #[test]
 fn void_function_bare_call_ok() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function g() -> void { }
 function f() -> int { g(); 1 }
 "#,
     );
-    insta::assert_snapshot!(render_tir(&db, file), @r"
-    function user.g() -> void throws never {
-      { : void
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    function user.g() -> null throws never {
+      { : null
       }
     }
     function user.f() -> int throws never {
       { : 1
-        g() : void
+        g() : null
         1 : 1
       }
     }
@@ -1899,7 +2008,7 @@ function f() -> int { g(); 1 }
 #[test]
 fn lambda_checks_against_aliased_and_optional_function_contexts() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 type Body = () -> void throws never
@@ -1925,8 +2034,8 @@ function main() -> void {
         "expected lambda alias checking without mismatches, got:\n{tir}"
     );
     assert!(
-        tir.contains("() -> { ... } : () -> void throws never"),
-        "expected lambdas to inherit void-returning aliased function context, got:\n{tir}"
+        tir.contains("() -> { ... } : () -> null throws never"),
+        "expected lambdas to inherit unit-returning aliased function context, got:\n{tir}"
     );
 }
 
@@ -1939,12 +2048,12 @@ fn explicit_unknown_list_annotation_pins_element_type() {
     // heterogeneous mix (a `Role`, then a string), so a regression here
     // surfaces as a bogus "expected Role, got string" on the second push.
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function main() -> int {
   let xs: unknown[] = []
-  let r = baml.prompt.Role { name: "x", metadata: {} }
+  let r = ai.Role { name: "x", metadata: {} }
   xs.push(r)
   xs.push("hello")
   return 0

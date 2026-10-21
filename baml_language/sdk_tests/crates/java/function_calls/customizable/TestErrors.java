@@ -19,11 +19,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import baml_bridge.BamlCallContext;
+import baml_sdk.BamlOptions;
+import baml_sdk.baml.spawn.CancelToken;
 import baml_bridge.BamlCancelledError;
 import baml_bridge.BamlError;
 import baml_bridge.BamlPanic;
-import baml_sdk.baml.json.JsonParseError;
 import baml_sdk.baml.panics.UserPanic;
 import baml_sdk.raises_test.ParseError;
 import baml_sdk.throws_test.MyError;
@@ -48,11 +48,11 @@ class TestErrors {
     @Test
     void test_errors_stdlib_error_surfaces_as_baml_error() {
         // `baml.json.parse` on bad input -> BamlError whose `.value()` is a
-        // `JsonParseError` (a plain generated value class). Proves stdlib error
+        // `baml.json.ParseError` (a plain generated value class). Proves stdlib error
         // classes surface structured, independent of any `throws` clause.
         BamlError exc =
                 assertThrows(BamlError.class, () -> baml_sdk.throws_test.Fns.ParseJson(BAD_JSON));
-        assertInstanceOf(JsonParseError.class, exc.value());
+        assertInstanceOf(baml_sdk.baml.json.ParseError.class, exc.value());
     }
 
     @Test
@@ -111,13 +111,13 @@ class TestErrors {
         // java-port note: Python drives the low-level `call_function` +
         // `asyncio.gather`, aborting after ~100ms, and asserts an
         // `asyncio.CancelledError` whose `.reason` is a `BamlCancelledError`.
-        // Java uses the generated `SleepMs_async(ms, ctx)` sibling; engine-driven
+        // Java uses the generated `SleepMs_async(ms, BamlOptions.builder().cancel(ctx).build())` sibling; engine-driven
         // cancellation completes the future exceptionally with a
         // `BamlCancelledError`. Under Design B that type extends
         // `CancellationException`, so `join()` surfaces it DIRECTLY (unwrapped),
         // the analog of Python's directly-raised `CancelledError`.
-        BamlCallContext ctx = new BamlCallContext();
-        CompletableFuture<Void> future = baml_sdk.throws_test.Fns.SleepMs_async(2000L, ctx);
+        CancelToken ctx = CancelToken.new$();
+        CompletableFuture<Void> future = baml_sdk.throws_test.Fns.SleepMs_async(2000L, BamlOptions.builder().cancel(ctx).build());
         CompletableFuture.runAsync(
                 () -> {
                     try {
@@ -125,7 +125,7 @@ class TestErrors {
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                     }
-                    ctx.abort();
+                    ctx.cancel();
                 });
 
         assertThrows(BamlCancelledError.class, future::join);

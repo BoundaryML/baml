@@ -49,42 +49,20 @@ async fn full_creds_with_token() {
     assert_eq!(creds.session_token.as_deref(), Some("token"));
 }
 
-/// Mirrors upstream `secret_key_fallback`: the legacy `SECRET_ACCESS_KEY` is
-/// used when `AWS_SECRET_ACCESS_KEY` is absent.
+/// BAML divergence from upstream: the legacy `SECRET_ACCESS_KEY` fallback is
+/// gone, so only `AWS_SECRET_ACCESS_KEY` supplies the secret.
 #[tokio::test]
-async fn legacy_secret_key_fallback() {
+async fn legacy_secret_key_is_ignored() {
     let io = MockIo::new()
         .env("AWS_ACCESS_KEY_ID", "access")
         .env("SECRET_ACCESS_KEY", "secret")
-        .env("AWS_SESSION_TOKEN", "token");
+        .env("AWS_SESSION_TOKEN", "token")
+        .env("AWS_EC2_METADATA_DISABLED", "true");
 
-    let creds = resolve_credentials(&io, None)
+    let err = resolve_credentials(&io, None)
         .await
-        .expect("valid credentials");
-
-    assert_eq!(creds.access_key_id, "access");
-    assert_eq!(creds.secret_access_key, "secret");
-    assert_eq!(creds.session_token.as_deref(), Some("token"));
-}
-
-/// Mirrors upstream `secret_key_fallback_empty`: when
-/// `AWS_SECRET_ACCESS_KEY` is blank it is treated as unset and the legacy
-/// `SECRET_ACCESS_KEY` fallback supplies the secret.
-#[tokio::test]
-async fn blank_secret_key_falls_back_to_legacy() {
-    let io = MockIo::new()
-        .env("AWS_ACCESS_KEY_ID", "access")
-        .env("AWS_SECRET_ACCESS_KEY", " ")
-        .env("SECRET_ACCESS_KEY", "secret")
-        .env("AWS_SESSION_TOKEN", "token");
-
-    let creds = resolve_credentials(&io, None)
-        .await
-        .expect("valid credentials");
-
-    assert_eq!(creds.access_key_id, "access");
-    assert_eq!(creds.secret_access_key, "secret");
-    assert_eq!(creds.session_token.as_deref(), Some("token"));
+        .expect_err("legacy SECRET_ACCESS_KEY must not be read");
+    assert!(matches!(err, ConfigError::NoCredentials(_)), "got {err:?}");
 }
 
 /// Mirrors upstream `empty_token_env_var`: a blank `AWS_SESSION_TOKEN` is
@@ -136,7 +114,7 @@ async fn blank_access_key_is_unset_then_chain_exhausts() {
 async fn missing_secret_exhausts_chain() {
     let io = MockIo::new()
         .env("AWS_ACCESS_KEY_ID", "access")
-        // No AWS_SECRET_ACCESS_KEY / SECRET_ACCESS_KEY.
+        // No AWS_SECRET_ACCESS_KEY.
         .env("AWS_EC2_METADATA_DISABLED", "true");
 
     let err = resolve_credentials(&io, None)

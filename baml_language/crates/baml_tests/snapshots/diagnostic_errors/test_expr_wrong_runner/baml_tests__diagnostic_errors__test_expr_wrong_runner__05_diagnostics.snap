@@ -8,7 +8,7 @@ source: crates/baml_tests/src/generated_tests.rs
    ╭─[main.baml:4:31]
  4 │ test "wrong runner type" with 42 {
    ·                               ─┬
-   ·                                ╰── expected `testing.TestRunner | null`, found `42`
+   ·                                ╰── expected `((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null`, found `42`
    ╰────
 
   [type] E0001
@@ -17,7 +17,7 @@ source: crates/baml_tests/src/generated_tests.rs
    ╭─[main.baml:8:30]
  8 │ test "string as runner" with "not a runner" {
    ·                              ───────┬──────
-   ·                                     ╰── expected `testing.TestRunner | null`, found `"not a runner"`
+   ·                                     ╰── expected `((() -> testing.TestReport throws never) -> (() -> testing.TestReport throws never) throws never) | null`, found `"not a runner"`
    ╰────
 
   [type] E0001
@@ -26,5 +26,5 @@ source: crates/baml_tests/src/generated_tests.rs
     ╭─[main.baml:12:37]
  12 │ testset "wrong testset runner" with 42 {
     ·                                     ─┬
-    ·                                      ╰── expected `testing.TestSetRunner | null`, found `42`
+    ·                                      ╰── expected `((testing.TestSetChild[]) -> testing.TestSetReport throws never) | null`, found `42`
     ╰────

@@ -30,14 +30,13 @@ use std::{
 };
 
 use baml_db::{
-    FileId, SourceFile, Span,
+    FileId, ProjectDatabase, SourceFile, Span,
     baml_compiler_diagnostics::{
         Diagnostic, DiagnosticId, DiagnosticMessageHighlight, DiagnosticPhase, Severity,
         diagnostic::{Annotation, RelatedInfo},
     },
     baml_compiler2_hir,
 };
-use baml_project::ProjectDatabase;
 use text_size::{TextRange, TextSize};
 
 /// A source span keyed by project-root-relative path + byte range, so it is
@@ -378,7 +377,7 @@ fn rehydrate_builtin_span(
 
 /// Run `check_file` over every builtin (stdlib) file and return the honest
 /// diagnostics. Called only off the warm serve path — the cold/miss store and
-/// the `BAML_CACHE_VERIFY` oracle. On a database that already checked the
+/// the `DEV_BAML_BUILD_CACHE_VERIFY=always` oracle. On a database that already checked the
 /// builtins (the same compile's honest pass) every scope is Salsa-memoized, so
 /// this re-walk pulls no fresh inference.
 pub(crate) fn collect_builtin_diagnostics(db: &ProjectDatabase) -> Vec<Diagnostic> {
@@ -438,10 +437,9 @@ mod tests {
 
     fn build_db(files: &[(&str, &str)]) -> (ProjectDatabase, std::path::PathBuf) {
         let root = std::path::PathBuf::from("/diag-cache-test");
-        let mut db = ProjectDatabase::new();
-        db.set_project_root(&root);
+        let (mut db, workspace) = crate::project_load::workspace_db(&root);
         for (name, content) in files {
-            db.add_or_update_file(&root.join(name), content);
+            db.add_or_update_file_in(workspace, &root.join(name), content);
         }
         (db, root)
     }

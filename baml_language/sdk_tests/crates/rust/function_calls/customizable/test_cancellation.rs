@@ -1,18 +1,13 @@
-//! Cancellation coverage for `throws_test.SleepMs`.
-//!
-//! PROVISIONAL API: the Rust bridge has not pinned its explicit-cancellation
-//! surface yet. This port assumes a `baml_bridge::runtime::BamlCallContext`
-//! handle with `abort()`, threaded into a call through a `*_with_ctx`
-//! sibling — the analogue of python's `_ctx=` keyword argument. (A
-//! `baml_bridge::runtime::cancel_function_call(call_id)`-style free function is
-//! the other candidate shape.) Expect fixups here when the surface lands.
+//! Cancellation through the generated BEP-81 controls and native future lifecycle.
 
 use std::time::{Duration, Instant};
 
-use baml_bridge::runtime::BamlCallContext;
+use baml_sdk::baml::spawn::CancelToken;
 use baml_sdk::throws_test;
 
-const _MAX_CANCELLATION_SECONDS: f64 = 0.5;
+// The cancelled calls below sleep 60s: the operation must dwarf this bound, or a
+// regression that ignored cancellation would still finish inside it and pass.
+const _MAX_CANCELLATION_SECONDS: f64 = 5.0;
 
 /// python asserts `isinstance(exc.value, Cancelled)`; `baml_bridge::Error::Panic`
 /// carries only the rendered message + trace, so the class check adapts to
@@ -21,7 +16,7 @@ const _MAX_CANCELLATION_SECONDS: f64 = 0.5;
 fn _assert_cancelled_panic<E: std::fmt::Debug>(exc: baml_bridge::Error<E>) {
     match exc {
         baml_bridge::Error::Panic { message, .. } => {
-            assert!(message.contains("Cancelled"), "{message}");
+            assert!(message.to_lowercase().contains("cancel"), "{message}");
         }
         other => panic!("expected Error::Panic, got {other:?}"),
     }
@@ -57,7 +52,7 @@ async fn test_cancellation_async_call_returns_none() {
 #[test]
 fn test_cancellation_sync_cancel_via_call_context() {
     let start = Instant::now();
-    let ctx = BamlCallContext::new();
+    let ctx = CancelToken::new().unwrap();
 
     // python arms a `threading.Timer` and cancels it in `finally`; a scoped
     // thread is joined instead (aborting a context whose call has already
@@ -65,11 +60,10 @@ fn test_cancellation_sync_cancel_via_call_context() {
     std::thread::scope(|scope| {
         let timer = scope.spawn(|| {
             std::thread::sleep(Duration::from_millis(50));
-            ctx.abort();
+            ctx.cancel().unwrap();
         });
 
-        // PROVISIONAL: `_ctx=ctx` → the `_with_ctx` sibling.
-        let result = throws_test::SleepMs_with_ctx(2000, &ctx);
+        let result = throws_test::SleepMs_with_options(60000, &ctx);
         _assert_cancelled_panic(result.unwrap_err());
         timer.join().unwrap();
     });
@@ -80,16 +74,18 @@ fn test_cancellation_sync_cancel_via_call_context() {
 #[tokio::test]
 async fn test_cancellation_async_cancel_via_call_context() {
     let start = Instant::now();
-    let ctx = BamlCallContext::new();
+    let ctx = CancelToken::new_async().await.unwrap();
 
     // python cancels a spawned task and catches `asyncio.CancelledError`;
     // here the call and the aborter run under `join!` and the aborted call
     // itself resolves to the cancellation error.
-    // PROVISIONAL: `_ctx=ctx` → the `_with_ctx` sibling.
-    let (result, ()) = tokio::join!(throws_test::SleepMs_async_with_ctx(2000, &ctx), async {
-        tokio::time::sleep(Duration::from_millis(50)).await;
-        ctx.abort();
-    });
+    let (result, ()) = tokio::join!(
+        throws_test::SleepMs_async_with_options(60000, &ctx),
+        async {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            ctx.cancel_async().await.unwrap();
+        }
+    );
 
     _assert_cancelled_reason(result.unwrap_err());
     _assert_fast_cancellation(start);
@@ -98,7 +94,7 @@ async fn test_cancellation_async_cancel_via_call_context() {
 #[tokio::test]
 async fn test_cancellation_async_cancel_via_task_cancel() {
     let start = Instant::now();
-    let task = tokio::spawn(throws_test::SleepMs_async(2000));
+    let task = tokio::spawn(throws_test::SleepMs_async(60000));
 
     tokio::time::sleep(Duration::from_millis(50)).await;
     task.abort();
@@ -127,7 +123,7 @@ async fn test_cancellation_async_cancel_via_task_group_sibling() {
     // `task.cancelled()`.
     let result = tokio::try_join!(
         async {
-            throws_test::SleepMs_async(2000)
+            throws_test::SleepMs_async(60000)
                 .await
                 .map_err(|_| "sleep failed")
         },
@@ -145,7 +141,7 @@ async fn test_cancellation_async_cancel_via_asyncio_timeout() {
     // elapsed error is the `TimeoutError`, and the timed-out call future is
     // dropped (cancelled).
     let result =
-        tokio::time::timeout(Duration::from_millis(50), throws_test::SleepMs_async(2000)).await;
+        tokio::time::timeout(Duration::from_millis(50), throws_test::SleepMs_async(60000)).await;
     assert!(result.is_err());
 
     _assert_fast_cancellation(start);

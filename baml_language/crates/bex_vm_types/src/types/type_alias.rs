@@ -1,0 +1,70 @@
+use borsh::{BorshDeserialize, BorshSerialize};
+
+/// Runtime type-alias representation.
+///
+/// A declaration object like [`Class`](crate::Class) and [`Enum`](crate::Enum),
+/// rather than an entry in a name-keyed map: that is what lets a nominal
+/// reference point *at* an alias instead of carrying a name to look it up by,
+/// and it gives the alias a [`TypeTag`](baml_type::typetag::TypeTag) identity of
+/// its own.
+///
+/// Only *recursive* aliases reach the runtime — a non-recursive alias is
+/// expanded inline at lowering, and an irreducible one is why the indirection
+/// has to survive at all.
+///
+/// # Transparency
+///
+/// An alias is not a nominal type. `type A = int` and `type B = int` are the
+/// same type with different tags, so an alias tag is a *definition reference*,
+/// not an identity: tag equality implies same type, but tag inequality implies
+/// nothing. Equivalence must expand through the alias — see the equirecursive
+/// canonicalization, which is deliberately invariant over binder names. What the
+/// alias must nonetheless preserve is the indirection itself, so reflection can
+/// report `MyAlias` rather than whatever it expands to.
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
+pub struct TypeAliasDef {
+    /// Where this alias is declared inside its package: its namespace path
+    /// and item name. All of its name it carries — see [`Self::name`].
+    pub path: super::LocalName,
+
+    /// This alias's head identity — assigned by the linker (`CLASS_BASE +` its
+    /// object index in the image) or minted fresh by the grafter; in a unit,
+    /// its own object operand — in the same space as every other declared
+    /// head.
+    pub type_tag: baml_type::typetag::TypeTag,
+
+    /// The aliased type.
+    ///
+    /// [`RealizedTy`](crate::RealizedTy) rather than
+    /// [`RuntimeTy`](crate::RuntimeTy) because aliases cannot be generic —
+    /// the declaration has no type-parameter list, so nothing is in scope for
+    /// the right-hand side to reference. That rules out the `typevar` and
+    /// `projection` axes structurally instead of by convention.
+    pub definition: crate::RealizedTy,
+
+    /// The package that owns this declaration (a static package's is
+    /// assigned at load; a `with_types` view's for the aliases it declares).
+    /// A member back-edge: reaching the alias keeps its package — globals,
+    /// dependencies, sibling declarations — alive. This is a GC edge, never
+    /// serialized.
+    #[borsh(skip)]
+    pub owner: crate::HeapPtr,
+}
+
+impl TypeAliasDef {
+    /// How this alias is named: its path under its package's display name.
+    /// Display and boundary spelling only — see
+    /// [`declaration_name`](super::declaration_name). An alias always
+    /// belongs to a package, so the name is declared once it is loaded;
+    /// before the loader places it, it is the path alone.
+    #[must_use]
+    pub fn name(&self) -> crate::DeclarationName {
+        super::declaration_name((!self.owner.is_null()).then_some(self.owner), &self.path)
+    }
+}
+
+impl std::fmt::Display for TypeAliasDef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<type {}>", self.name())
+    }
+}

@@ -51,7 +51,6 @@ external_deps = ["serde_json", "tokio", "clap", "anyhow", "salsa", "rowan", "req
 # Implied dependencies: if a crate depends on both the key and a value,
 # the edge to the value is hidden (it's visually implied by the key).
 [graph.implied_deps]
-baml_project = ["baml_db"]
 baml_type = ["baml_base"]
 bex_heap = ["bex_external_types"]
 bex_external_types = ["bex_vm_types"]
@@ -82,10 +81,22 @@ allowed_crates = [
 regular_deps_only = true
 reason = "Use thiserror for proper error types in library crates."
 
+# Only the test harness imports these helpers as a regular dependency. Other
+# consumers share the embedded stdlib through dev-dependencies.
+[[dependency_rules]]
+pattern = "baml_test_support"
+allowed_crates = ["baml_tests"]
+regular_deps_only = true
+reason = "Precompiled stdlib test helpers belong in dev-dependencies."
+
 # baml namespace configuration
 [[namespaces]]
 name = "baml"
-approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "lsp2", "type"]
+# `fmt` is the formatter, `baml_fmt`, and its browser build, `baml_fmt_wasm`.
+approved_prefixes = ["compiler", "builtins", "builtins2", "compiler2", "type", "query", "fmt"]
+# The type provider crate: `hir_ty` is one name (rust-analyzer's crate of
+# the same shape), not a prefix + word.
+approved_suffixes = ["artifact", "compiler2_hir_ty", "test_support"]
 test_crate_exceptions = ["baml_tests"]
 embed_crates = ["bex_project"]
 # The Rust SDK runtime crate keeps the `bridge_rust` folder (mirroring
@@ -96,11 +107,11 @@ name_exceptions = { "bridge_rust" = "baml_bridge" }
 [[namespaces.dependency_rules]]
 pattern = "baml_compiler*"
 allowed_prefixes = ["compiler", "compiler2"]
-# `baml_surface` is the semantic-surface API boundary over the compiler
-# (handles + export IR); it wraps compiler queries so downstream consumers
-# don't have to be on this list.
-allowed_crates = ["baml_db", "baml_project", "bridge_cffi", "baml_type", "baml_lsp2_actions", "baml_builtins2_codegen", "baml_surface"]
-reason = "Use baml_db, baml_project, or baml_surface to access compiler interfaces."
+# `baml_ide` is the IDE/analysis layer over the compiler (rust-analyzer's
+# `ide` shape); it wraps compiler queries so downstream consumers don't
+# have to be on this list.
+allowed_crates = ["baml_db", "baml_ide", "bridge_cffi", "baml_type", "baml_builtins2_codegen"]
+reason = "Use baml_db or baml_ide to access compiler interfaces."
 
 [[namespaces.dependency_rules]]
 pattern.select = "bex_*"
@@ -109,19 +120,47 @@ pattern.exclude = ["bex_vm_types"]
 # (shared executor + packed-binary runtime host) and sit at the same
 # application boundary as `baml_cli` — they need direct access to the
 # engine, events, and VM types.
+#
+# Each bex boundary is written as two rules so one crate can get a
+# non-production exception: a `regular_deps_only` guard over
+# [dependencies], plus a companion rule over every section whose
+# allowlist adds only `baml_query_btel`. Stow's `regular_deps_only`
+# skips both [dev-dependencies] and [build-dependencies], so the
+# exception covers both; stow does not enforce dev-only. Today
+# `baml_query_btel` uses it only in [dev-dependencies]: its integration
+# tests run real engine programs (bex_engine, bex_heap, bex_vm_types)
+# to record executions and exercise GC. Its [dependencies] stay
+# btel_*-only. Keep both allowlists in sync.
 allowed_crates = ["bridge_cffi", "baml_cli", "baml_exec", "baml_pack_host"]
+regular_deps_only = true
 reason = "baml_* crates should not depend on bex_* crates."
 
 [[namespaces.dependency_rules]]
+pattern.select = "bex_*"
+pattern.exclude = ["bex_vm_types"]
+allowed_crates = ["bridge_cffi", "baml_cli", "baml_exec", "baml_pack_host", "baml_query_btel"]
+reason = "baml_* crates should not depend on bex_* crates (baml_query_btel: non-production dev/build dependencies only)."
+
+# `baml_linker_types` carries the compilation-unit wire format over the
+# runtime's object types, and `baml_linker` folds units into a `Program`:
+# both sit on the compiler's output side, beside emit. Keep both
+# `bex_vm_types` allowlists in sync. The test-support crate also returns the
+# compiler's Program data, without importing the engine or VM implementation.
+[[namespaces.dependency_rules]]
 pattern.select = "bex_vm_types"
-allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_project", "baml_cli", "baml_exec", "baml_pack_host"]
-reason = "Only compiler_emit and baml_project crates should depend on bex_vm_types (pure data layer)."
+allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_linker", "baml_linker_types", "baml_db", "baml_cli", "baml_exec", "baml_pack_host", "baml_test_support"]
+regular_deps_only = true
+reason = "Only the compiler's output side (emit, the linker crates, baml_db) should depend on bex_vm_types (pure data layer)."
+
+[[namespaces.dependency_rules]]
+pattern.select = "bex_vm_types"
+allowed_crates = ["baml_compiler_emit", "baml_compiler2_emit", "baml_linker", "baml_linker_types", "baml_db", "baml_cli", "baml_exec", "baml_pack_host", "baml_query_btel", "baml_test_support"]
+reason = "Only the compiler's output side (emit, the linker crates, baml_db) should depend on bex_vm_types (pure data layer; baml_query_btel: non-production dev/build dependencies only)."
 
 
 # tools namespace configuration
 [[namespaces]]
 name = "tools"
-approved_prefixes = ["sap", "semantic", "compile"]
 # Allow tools_stow folder to have package name "cargo-stow" for cargo subcommand convention
 name_exceptions = { "tools_stow" = "cargo-stow", "tools_size_gate" = "cargo-size-gate" }
 
@@ -129,7 +168,8 @@ name_exceptions = { "tools_stow" = "cargo-stow", "tools_size_gate" = "cargo-size
 # package names that cannot collide with the real crates.
 [[namespaces]]
 name = "forked_aws"
-name_exceptions = { "aws-bedrock" = "forked_aws_bedrock", "aws-config" = "forked_aws_config", "aws-sigv4" = "forked_aws_sigv4" }
+approved_prefixes = ["smithy"]
+name_exceptions = { "aws-config" = "forked_aws_config", "aws-sigv4" = "forked_aws_sigv4", "aws-smithy-eventstream" = "forked_aws_smithy_eventstream" }
 
 # forked Google crates follow the same package-name convention.
 [[namespaces]]
@@ -140,13 +180,22 @@ name_exceptions = { "google-cloud-auth" = "forked_google_cloud_auth" }
 # bex namespace configuration
 [[namespaces]]
 name = "bex"
-approved_prefixes = ["events"]
+approved_prefixes = ["events", "prof"]
 link_crates = ["baml_type", "sys_types"]
+
+# Btel telemetry pipeline crates. The producer starts with `btel_types`;
+# transport, processing, and publication crates will join this family later.
+[[namespaces]]
+name = "btel"
+
+# Boundary Cloud Service API contracts and clients.
+[[namespaces]]
+name = "bcs"
 
 # lsp namespace configuration
 [[namespaces]]
 name = "baml_lsp"
-link_crates = ["baml_db", "baml_project"]
+link_crates = ["baml_db", "baml_ide"]
 
 # bridge namespace configuration
 [[namespaces]]

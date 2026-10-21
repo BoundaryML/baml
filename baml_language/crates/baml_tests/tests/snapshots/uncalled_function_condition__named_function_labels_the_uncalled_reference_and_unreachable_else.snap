@@ -1,0 +1,18 @@
+---
+source: crates/baml_tests/tests/uncalled_function_condition.rs
+expression: "render_diagnostic(&diagnostic,\n&HashMap::from([(file_id, source.to_string())]),\n&HashMap::from([(file_id, Path::new(\"main.baml\").to_path_buf())]),\n&RenderConfig::test(),)"
+---
+E0167
+
+  ⚠ function `condition` is always truthy
+   ╭─[main.baml:4:9]
+ 4 │     if (condition) {
+   ·         ────┬────
+   ·             ╰── did you mean to call this function? Replace with `condition()`
+   ╰────
+   ╭─[main.baml:6:12]
+ 6 │ ╭─▶     } else {
+ 7 │ │           "unreachable"
+ 8 │ ├─▶     }
+   · ╰──── this branch is unreachable
+   ╰────

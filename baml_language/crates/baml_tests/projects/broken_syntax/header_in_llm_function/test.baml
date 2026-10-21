@@ -11,10 +11,10 @@ client<llm> VertexGCP {
 
 function FetchDatax(user_id: string) -> Hi {
     //# collect source material
-    client VertexGCP
+    client: VertexGCP
 
-    prompt `
+    prompt: `
         give short story ${user_id}
-        ${ctx.output_format}
+        ${ctx.output_format()}
     `
 }

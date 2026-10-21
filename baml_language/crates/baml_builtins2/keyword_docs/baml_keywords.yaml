@@ -121,6 +121,26 @@ skip:
   details: |
     `@skip` takes no arguments and may appear at most once on a declaration.
 
+stream.done:
+  summary: "Holds a field at its default, or a whole class back, until the streamed value is complete. Takes no arguments."
+  syntax: |
+    class Article {
+      slug string @stream.done
+      body string
+    }
+  details: |
+    `@stream.done` applies to a class field: while the value is incomplete the partial parse uses the field's default, `""` for a string, rather than the text received so far. `@@stream.done` applies to a class: the object has no partial parse until every field is complete. Without either, a field streams its partial value whenever its type has one, which strings, arrays, maps, classes, and unions do. Takes no arguments, at most once per declaration.
+
+stream.must_exist:
+  summary: "Removes a class field's default, so the class has no partial parse until that field arrives. Takes no arguments."
+  syntax: |
+    class Invoice {
+      customer string
+      currency string @stream.must_exist
+    }
+  details: |
+    A class field normally has a default the partial parse uses before the field arrives, `""` for a string. `@stream.must_exist` makes that default `never`, and a class with any `never` field has no partial parse, so nothing is produced for `Invoice` until `currency` is present. Reach for it when a partial object missing that field would mislead. Applies to class fields only. Takes no arguments, at most once per declaration.
+
 function:
   summary: "Declares a named callable with typed parameters and a return type."
   syntax: |
@@ -272,7 +292,7 @@ generator:
     output_dir = "."
     naming_convention = "preserve-case"
   details: |
-    Generators are declared in `baml.toml` as `[generator.<name>]` tables, where `<name>` is an arbitrary identifier. `output_type` and `naming_convention` are required. `output_dir` is optional and defaults to `..`; BAML creates a `baml_sdk` directory inside it (`baml_client` for C#).
+    Generators are declared in `baml.toml` as `[generator.<name>]` tables, where `<name>` is an arbitrary identifier. `output_type` and `naming_convention` are required. `output_dir` is optional and defaults to `.`; BAML creates a `baml_sdk` directory inside it for every generator.
 
     Accepted `output_type` values:
 
@@ -287,7 +307,7 @@ generator:
     - `"cpp"` — C++17
     - `"csharp"` — C#
 
-    `naming_convention` accepts `"preserve-case"` or `"language"`. Go requires `"language"` and also requires `sdk_import_path`.
+    `naming_convention` accepts `"preserve-case"` or `"language"`. Go and C# require `"language"`; Go also requires `sdk_import_path`. All other targets require `"preserve-case"`.
 
 test:
   summary: "Defines a named executable test using ordinary BAML expressions."
@@ -330,8 +350,18 @@ retry_policy:
       }
     }
 
+env:
+  summary: "Names an environment variable to read later, without reading it now."
+  syntax: |
+    client MyClient = openai.ResponsesClient.new(
+      model = "gpt-4o-mini",
+      api_key = env.OPENAI_API_KEY,
+    )
+  details: |
+    `env.VAR_NAME` builds a `baml.env.Ref`, which carries the variable's name and nothing else. The value is read when the reference is used: `.get()` gives `null` for an unset variable, `.get_or_panic()` stops with an error, and `.or(fallback)` substitutes a default. Because nothing is read where the reference is written, a top-level `client` can name a variable the host only sets after startup, and the secret never ends up inside the client value. Write `baml.env.get("VAR_NAME")` to read a variable directly; there is no `env.get(...)` shorthand.
+
 type:
-  summary: "Creates a type alias, and declares associated type members inside interfaces."
+  summary: "Creates type bindings; runtime type values use reflect.Type."
   syntax: |
     type UserId = string
     type Result = string | int
@@ -345,15 +375,21 @@ type:
         type Item = int
       }
     }
+    function from_runtime(t: reflect.Type) -> reflect.Type {
+      let type T = t;
+      reflect.Type.of<T>()
+    }
   details: |
-    At top level, `type Name = ...` creates an alias. Inside an interface, `type Item`, `type Item extends Bound`, `type Item = Default`, and `type Item extends Bound = Default` declare associated types. Inside an `implements` block, bind associated types with `type Item = Concrete`.
+    At top level, `type Name = ...` creates an alias. Inside an interface, `type Item`, `type Item extends Bound`, `type Item = Default`, and `type Item extends Bound = Default` declare associated types. Inside an `implements` block, bind associated types with `type Item = Concrete`. Inside a function, lambda, or block body, `let type T = t;` binds a block-scoped type parameter to a runtime type value (`t: reflect.Type | reflect.TypeView`; an `unknown` must be narrowed first with `match` or `is`, and a class builder's pending type is not accepted: bind the class `build()` returns). `T` is a rigid type parameter for the rest of the block: nothing typed by `T` may leave the block except through a type that does not mention it, such as `unknown`. `let type T extends I = t else { ... };` also gives `T` the interface bound `I` (several bounds join with `&`): the statement checks the bound when it runs and runs the diverging `else { ... }` block when the type misses it. A bounded `let type` must have that `else` block. A body-level `type T = ...` alias and `unreflect(...)` no longer exist; write `let type`. The old `type.of<T>()` shorthand and bare `type` value annotation do not exist either; write `reflect.Type.of<T>()` and `reflect.Type`.
 
 void:
-  summary: "The return type of a function that produces no value."
+  summary: "The unit type, written as the return type of a function that produces no value."
   syntax: |
     function log_message(message: string) -> void {
       log.info(message)
     }
+  details: |
+    `void` is another spelling of `null`: the unit type, whose only value is `null`. The two are the same type in every position, and a call to a `void` function has a result like any other call — it is `null`. A function returning the unit type may leave out its final expression and may write a bare `return;`; both are shorthand for `null`. The shorthand holds only where the unit type itself is expected, or nothing is: a function returning `int?` must write its `null`, and a block with no final expression cannot be one branch of an `if` whose other branch produces a value. A unit-returning body is still checked against its return type, so a value left as its final expression is an error — end the expression with `;` to discard the value. An `if` with no `else` evaluates to `null` too, so when its value is used its branch must not produce one.
 
 never:
   summary: "The bottom type of an expression that never returns normally."
@@ -479,6 +515,9 @@ let:
   syntax: |
     let name = "Alice"
     let count = items.length()
+    let type T = runtime_type;
+  details: |
+    `let type T = t;` binds the runtime type value `t` as the block-scoped type `T`; see `type`.
 
 const:
   summary: "Declares a compile-time constant binding."
@@ -540,7 +579,7 @@ catch:
       errors.NotFound => other_value,
     }
   details: |
-    `expr catch (e) { ErrorType => handler, ... }` binds the caught error to `e` and dispatches on its type. Only the listed error types are handled; any other error keeps propagating, so `catch` need not be exhaustive. Chain a `catch_all` to handle the rest.
+    `expr catch (e) { ErrorType => handler, ... }` binds the caught error to `e` and dispatches on its type. Only the listed error types are handled; any other error keeps propagating, so `catch` need not be exhaustive. Put alternative handlers in one block; use `catch_all` for that block when it must cover every ordinary error. Chained clauses nest left to right: `expr catch (a) { ... } catch (b) { ... }` means `(expr catch (a) { ... }) catch (b) { ... }`. A later clause handles both unhandled errors from the preceding expression and errors thrown by its handler arms. Throws bypass sibling arms in the same block. A normally completing handler supplies the result and skips later handlers. A wildcard arm (`_` or a bare `let x`) takes every remaining error but not panics: a panic passes over it to the arms after it, and is caught only by an arm that names its type (`baml.panics.Cancelled => ...`) or by a `catch_all_panics` wildcard.
 
 catch_all:
   summary: "Handles every error type a preceding expression can throw (exhaustive over errors, not panics)."
@@ -549,16 +588,17 @@ catch_all:
       _ => fallback_value,
     }
   details: |
-    `expr catch_all (e) { ... }` binds the caught error to `e` and must cover every error type the expression can throw — either list them all or end with the wildcard `_ => ...`. The compiler reports a non-exhaustive `catch_all` if a throw type is left unhandled. Panics (`baml.panics.*`, such as `baml.panics.Cancelled`) are not part of an expression's throws-set, so the `_` wildcard does not catch them — a panic keeps unwinding past `catch_all`. To intercept a panic, name its type explicitly in an arm, e.g. `risky_call() catch (e) { baml.panics.Cancelled => ... }`; the bare `_` never catches panics.
+    `expr catch_all (e) { ... }` binds the caught error to `e` and must cover every error type the expression can throw — either list them all or end with the wildcard `_ => ...`. The compiler reports a non-exhaustive `catch_all` (E0062) if a throw type is left unhandled, so a callee that gains a new error type breaks the build here instead of silently propagating it. In a chain, a `catch_all` protects the whole preceding expression, including earlier handler bodies, and must cover their residual errors and new arm-body errors. Its own arm-body errors can still propagate; a later catch can handle them. Panics (`baml.panics.*`, such as `baml.panics.Cancelled`) are not part of an expression's throws-set, so the `_` wildcard does not catch them — a panic keeps unwinding past `catch_all`. To intercept a panic, name its type explicitly in an arm, e.g. `risky_call() catch (e) { baml.panics.Cancelled => ... }`; the bare `_` never catches panics.
 
 catch_all_panics:
-  summary: "Handles every panic raised by a preceding expression."
+  summary: "Handles every error and every panic raised by a preceding expression."
   syntax: |
-    let result = risky_call() catch_all_panics (panic) {
-      _ => fallback_value,
+    let result = risky_call() catch_all_panics (e) {
+      let panic: baml.panics.Panic => fallback_value,
+      _ => other_value,
     }
   details: |
-    Use `catch_all` for ordinary declared errors. `catch_all_panics` is the explicit boundary for runtime panics.
+    Use `catch_all` for ordinary declared errors. `catch_all_panics` is the explicit boundary for runtime panics: like `catch_all` it must cover every error the expression can throw, and it must also cover every panic — with a wildcard arm (`_` or a bare `let x`, which here receives panics too) or an arm naming `baml.panics.Panic` (or each `baml.panics.*` class). The compiler reports a non-exhaustive `catch_all_panics` (E0062) otherwise. Like every chained catch, a later `catch_all_panics` protects earlier handler bodies too, so it can recover from a panic raised while an earlier error is being handled. Its own handler failures propagate to an enclosing or later catch.
 
 defer:
   summary: "Schedules a block to run when the enclosing block exits, in LIFO order."
@@ -584,7 +624,7 @@ cleanup:
       }
     }
   details: |
-    `cleanup` is a magic method recognized by name (like `to_json`), not an interface: if a class defines `function cleanup(self) -> void { ... }`, that method is its finalizer. It runs at most once per instance — a per-instance latch skips every call after the first — whether it is invoked explicitly (`value.cleanup()`), scheduled with `defer`, or reclaimed by the garbage collector. The blessed shape is exactly one `self` parameter (no default), no generic parameters, an explicit `-> void` return, and no `throws` clause (an explicit `throws never` is also accepted). A finalizer must not propagate errors, so handle them internally with `... catch { ... }`; a method named `cleanup` with any other shape is a malformed finalizer and is rejected. See `baml describe defer`.
+    `cleanup` is a magic method recognized by name (like `to_json`), not an interface: if a class defines `function cleanup(self) -> void { ... }`, that method is its finalizer. It runs at most once per instance — a per-instance latch skips every call after the first — whether it is invoked explicitly (`value.cleanup()`), scheduled with `defer`, or reclaimed by the garbage collector. The blessed shape is exactly one `self` parameter (no default), no generic parameters, an explicit `-> void` return (or `-> null`, the same type), and no `throws` clause (an explicit `throws never` is also accepted). A finalizer must not propagate errors, so handle them internally with `... catch_all (e) { ... }`; a method named `cleanup` with any other shape is a malformed finalizer and is rejected. See `baml describe defer`.
 
 match:
   summary: "Pattern matching — branches based on the shape or type of a value."
@@ -595,7 +635,7 @@ match:
       _             => fallback,
     }
   details: |
-    The scrutinee is parenthesized: `match (value) { ... }`. Each arm is `pattern => expr`. Patterns include literals (`0`, `"ok"`), a binding with a type (`let x: int`) which both matches and narrows, the wildcard `_`, and optional guards (`let n: int if n > 0 => ...`). Use `let x: T => ...`, not `x is T => ...`, for type-based arms. Arms must be exhaustive, and a `_` arm is only allowed when earlier arms leave something uncovered.
+    The scrutinee is parenthesized: `match (value) { ... }`. Each arm is `pattern => expr`. Patterns include literals (`0`, `"ok"`), a binding with a type (`let x: int`) which both matches and narrows, the wildcard `_`, and optional guards (`let n: int if n > 0 => ...`). Use `let x: T => ...`, not `x is T => ...`, for type-based arms. Arms must be exhaustive, and a `_` arm is only allowed when earlier arms leave something uncovered. A catch-all binding (`let rest => ...`) has the type that the earlier arms left: after a `null` arm it is not null. `match` reads its scrutinee one time, so it is the form to use for a field (`match (holder.value) { let v: T => ... }`): `is` does not narrow a field path (see `baml describe is`).
 
 is:
   summary: "Tests whether a value matches a type or pattern."
@@ -603,6 +643,43 @@ is:
     if x is string {
       // x is narrowed to string here
     }
+
+    // The right side of `&&` and `||` has the facts of the left side.
+    if x is User && x.name == "ada" { ... }
+    if s == null || s.length() == 0 { ... }
+
+    // A field is not narrowed. Bind it first, or use `if let` or `match`.
+    let v = holder.value;
+    if v is User && v.name == "ada" { ... }
+    if let user: User = holder.value { user.name } else { "" }
+    match (holder.value) { let user: User => user.name, _ => "" }
+  details: |
+    `x is T` is a `bool`. It also narrows `x` when `x` is a local binding (a
+    `let` or a parameter) that no closure captures. A null test (`x != null`)
+    and a truthiness test (`if (x)`) narrow in the same places:
+
+    - in the `if` branch or the `while` body that the test guards;
+    - after an early exit: after `if (!(x is T)) { return ...; }`, `x` is a `T`
+      for the rest of the block;
+    - on the right side of `&&` (the left side was true) and of `||` (the left
+      side was false): `x is T && x.f == 1`, `x == null || x.f == 1`. The two
+      operators short-circuit, so the right side runs only then.
+
+    These are not narrowed: a local that a closure captures, a field path
+    (`holder.value is T`) and an index path (`items[0] is T`). BAML tasks can
+    interleave between statements. So another task, or another name for the
+    same object, can change a field between the test and the read. A local
+    that no closure captures belongs to one call, and the type of a value does
+    not change after the value is created, so the test stays true for it.
+
+    For a field, bind the value first (`let v = holder.value;`), or use
+    `if let v: T = holder.value { ... }` or
+    `match (holder.value) { let v: T => ... }`. Each form reads the field one
+    time and tests the value that it read.
+
+    An assignment to the binding replaces the fact with the type of the
+    assigned value. A call never narrows its arguments: `assert.is_type<T>(x)`
+    returns the value as a `T` and leaves `x` as it was.
 
 as:
   summary: "Projects a value or type through an interface, and maps interface fields to class fields."
@@ -923,7 +1000,7 @@ await:
     let result = await future
 
 with:
-  summary: "Optional clause that attaches a runner to a test/testset or options to a spawn."
+  summary: "Optional clause that attaches a runner to a test/testset or modifiers to a spawn."
   syntax: |
     test "uses a quorum runner" with testing.Quorum(5, 3) {
       assert.is_true(true)
@@ -933,11 +1010,11 @@ with:
       test "case" { assert.is_true(true) }
     }
 
-    let task = spawn with baml.spawn.options(group = g) {
+    let task = spawn with limit, retry {
       do_work()
     }
   details: |
-    `with` is a contextual keyword, not a general operator — it is only special right after a `test`/`testset` name (selecting the test runner expression) or after `spawn` (passing `baml.spawn.options(...)`). Everywhere else `with` is an ordinary identifier and may be used as a variable or field name.
+    `with` is a contextual keyword, not a general operator — it is only special right after a `test`/`testset` name (selecting the test runner expression) or after `spawn` (listing `baml.spawn.Modifier` values, applied left to right). Everywhere else `with` is an ordinary identifier and may be used as a variable or field name.
 
 # ── Cross-language SDKs (baml generate) ──────────────────────────────────────
 
@@ -1034,6 +1111,11 @@ patterns:
     `<pattern> if cond`. `match` must be exhaustive — a `_` arm is allowed only
     when earlier arms leave a gap. Same topic: `baml describe match`.
 
+    `is` narrows a local binding that no closure captures, also on the right
+    side of `&&` / `||`. It does not narrow a field path or an index path:
+    use `if let` or `match` for those. The rule and the reason are in
+    `baml describe is`.
+
 pattern:
   summary: "Pattern matching — see `baml describe patterns` (or `match`)."
   syntax: |
@@ -1042,3 +1124,36 @@ pattern:
     if let x: T = v { ... } else { ... }
   details: |
     Full guide: `baml describe patterns`. Match-arm reference: `baml describe match`.
+
+query:
+  summary: "SQL over the project's local recordings: `baml query \"SELECT …\"`."
+  syntax: |
+    baml query "SELECT process_id, status, command, last_updated FROM processes"
+    baml query "SELECT span_name, status, duration FROM spans
+                WHERE span_type = 'future' AND parent_span_id IS NULL
+                ORDER BY start_time DESC LIMIT 20"
+    baml query "SELECT function_name, sum(invocation_count) calls, sum(self_time) self_ns
+                FROM profiler GROUP BY function_name ORDER BY self_ns DESC LIMIT 10"
+    baml query "SELECT span_id, input_args['customer']['age'] AS age, output_value
+                FROM spans WHERE input_args['customer']['age'] >= 30" --format jsonl
+    baml query "SELECT span_name, total_usage[0]['model'], total_usage[0]['input_tokens']
+                FROM spans WHERE span_type = 'future' AND parent_span_id IS NULL"
+    baml query --schema --table spans
+  details: |
+    Every `baml run`/`baml test` records to `.baml/btel`; the first query
+    builds `.baml/btel/query.sqlite` and later queries apply only new files.
+    Relations: `processes` (one row per process, with its status),
+    `spans` (completed function calls that were retained, and futures: a
+    root call is a future without a parent; `input_args`, `output_value`,
+    `error_value` (a `baml.errors.Context`), `self_usage` (the model usage
+    of the calls an `ai.Client.invoke` span made) and `total_usage` (every
+    call under a span, one entry per model with its token counts) are BAML values), `span_announcements` (every
+    started span), and `profiler` (one row per calling-context node of an
+    ended process: invocations, outcomes, total/self/I/O time). Value columns
+    support ordinary subscripts and comparisons —
+    `input_args['customer']['age'] >= 30`,
+    `input_args = baml_value_json('{"x":1}')` — decoded on demand. `WITH
+    RECURSIVE` walks span trees through `parent_span_id`. Discovery:
+    `--schema`, `--explain`. Output: `--format table|json|jsonl` (jsonl ends
+    with an outcome frame). Exit codes: 0 complete, 1 evidence-incomplete,
+    2 invalid SQL, 3 budget, 4 cancelled, 5 index/internal.

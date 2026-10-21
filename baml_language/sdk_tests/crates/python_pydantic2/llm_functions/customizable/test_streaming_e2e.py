@@ -6,7 +6,7 @@ OpenAI. The `@replay_server` decorator (see `replay_harness.py`) runs each test
 against an in-process BAML server replaying a checked-in SSE recording, with the
 env-driven `StreamStub` client pointed at it:
 
-  * string `T` — `stream_e2e_extract(text) -> string` (Stream<null | string, string>)
+  * string `T` — `stream_e2e_extract(text) -> string` (Stream<string, string>)
   * class  `T` — `stream_e2e_extract_doc(text) -> StreamingDoc { title, body, word_count }`
 
 The recordings stream many SSE chunks, so each `next()` yields >= 10 partials
@@ -22,7 +22,7 @@ from replay_harness import replay_server
 
 
 # ---------------------------------------------------------------------------
-# String-typed `T` — Stream<null | string, string>.
+# String-typed `T` — Stream<string, string>.
 # ---------------------------------------------------------------------------
 
 
@@ -39,7 +39,7 @@ def test_streaming_e2e_stream():
         if isinstance(v, Done):
             break
         results += 1
-        assert v is None or isinstance(v, str)
+        assert isinstance(v, str)
         assert results < 10_000, "stream.next() failed to terminate"
     assert results >= 10, "expected stream.next() to yield at least 10 partials"
     assert isinstance(stream.final(), str)
@@ -58,7 +58,7 @@ async def test_streaming_e2e_stream_async():
         if isinstance(v, Done):
             break
         results += 1
-        assert v is None or isinstance(v, str)
+        assert isinstance(v, str)
         assert results < 10_000, "stream.next_async() failed to terminate"
     assert results >= 10, "expected stream.next_async() to yield at least 10 partials"
     assert isinstance(await stream.final_async(), str)
@@ -66,19 +66,19 @@ async def test_streaming_e2e_stream_async():
 
 @replay_server(recording_path="replay_extract_string")
 def test_streaming_e2e_stream_collect_in_baml():
-    """BAML-driven counterpart: the `S | Done` union stays engine-side."""
+    """BAML-driven counterpart: the `Partial | Done` union stays engine-side."""
     from baml_sdk.lorem import stream_e2e_collect, StreamE2ECollectResult
 
     result = stream_e2e_collect("ignored-by-replay-server")
     assert isinstance(result, StreamE2ECollectResult)
     assert len(result.next_calls) >= 10, "expected at least 10 collected partials"
     for item in result.next_calls:
-        assert item is None or isinstance(item, str)
+        assert isinstance(item, str)
     assert isinstance(result.final_call, str)
 
 
 # ---------------------------------------------------------------------------
-# Class-typed `T` — Stream<StreamingDoc$stream, StreamingDoc>. The case the
+# Class-typed `T` — Stream<StreamingDoc, StreamingDoc>. The case the
 # plain-`string` tests above deliberately avoid; the regression guard for the
 # class-typed streaming bug (doc 00).
 # ---------------------------------------------------------------------------
@@ -97,8 +97,7 @@ def test_streaming_e2e_stream_doc():
         if isinstance(v, Done):
             break
         results += 1
-        if v is not None:
-            assert hasattr(v, "title"), f"unexpected partial: {v!r}"
+        assert isinstance(v, StreamingDoc), f"unexpected partial: {v!r}"
         assert results < 10_000, "stream.next() failed to terminate"
     assert results >= 10, "expected stream.next() to yield at least 10 partials"
     assert isinstance(stream.final(), StreamingDoc)
@@ -117,8 +116,7 @@ async def test_streaming_e2e_stream_doc_async():
         if isinstance(v, Done):
             break
         results += 1
-        if v is not None:
-            assert hasattr(v, "title"), f"unexpected partial: {v!r}"
+        assert isinstance(v, StreamingDoc), f"unexpected partial: {v!r}"
         assert results < 10_000, "stream.next_async() failed to terminate"
     assert results >= 10, "expected stream.next_async() to yield at least 10 partials"
     assert isinstance(await stream.final_async(), StreamingDoc)
@@ -126,11 +124,10 @@ async def test_streaming_e2e_stream_doc_async():
 
 @replay_server(recording_path="replay_extract_doc")
 def test_streaming_e2e_stream_doc_collect_in_baml():
-    """BAML-driven counterpart: the `S | Done` union stays engine-side;
+    """BAML-driven counterpart: the `Partial | Done` union stays engine-side;
     only the concrete `StreamingDoc` crosses the FFI boundary."""
     from baml_sdk.lorem import stream_e2e_collect_doc, StreamingDoc
-    from baml_sdk.stream_types.lorem import StreamingDoc as StreamingDocPartial
 
     result = stream_e2e_collect_doc("ignored-by-replay-server")
-    assert isinstance(result, (StreamingDoc, StreamingDocPartial))
+    assert isinstance(result, StreamingDoc)
     assert hasattr(result, "title")

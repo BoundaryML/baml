@@ -1,7 +1,7 @@
 //! Swift SDK generator for BAML.
 //!
 //! Mirrors `sdkgen_python_pydantic2`'s public entry point: consumes a
-//! [`baml_codegen_types::SymbolPool`] plus borsh-serialized bytecode and
+//! [`baml_sdkgen_types::SymbolPool`] plus borsh-serialized bytecode and
 //! returns generated Swift sources as `(relative_path, content)` pairs.
 //! The paths are relative to the generated package's `Sources/Baml/`
 //! output root (the harness / CLI decides where that root lives).
@@ -35,9 +35,8 @@ use std::{
 };
 
 use baml_base::qualified_name::AI_STREAM_STREAM;
-use baml_codegen_types::{Class, Name, Symbol, SymbolPool, Ty, TypeAlias};
-pub use baml_codegen_types::{NamingConvention, OutputType};
-use base64::Engine as _;
+use baml_sdkgen_types::{Class, Name, Symbol, SymbolPool, Ty, TypeAlias};
+pub use baml_sdkgen_types::{NamingConvention, OutputType};
 use emit::{
     FnKind, RenderedField, indent_lines, render_callable, render_class, render_enum,
     render_type_alias, sort_key,
@@ -76,6 +75,10 @@ fn to_source_code_with_optional_metadata(
         render_inlined_baml(baml_bytecode, embedded_baml_toml),
     );
 
+    out.insert(
+        PathBuf::from("_Invocation.swift"),
+        include_str!("invocation_facade.swift").to_string(),
+    );
     let ctx = build_translate_ctx(pool);
     let boxed_fields = compute_boxed_fields(pool, &ctx);
 
@@ -90,6 +93,7 @@ fn to_source_code_with_optional_metadata(
     // surfaced in the generated `_BamlSkipped.swift` manifest — absent
     // API must never be silent.
     let mut skips: Vec<diagnostics::Skip> = Vec::new();
+    let free_callable_names = allocate_free_callable_names(pool);
 
     let mut namespaces: BTreeMap<Vec<String>, BTreeMap<String, String>> = BTreeMap::new();
     for (key, symbol) in sorted_pool {
@@ -99,16 +103,12 @@ fn to_source_code_with_optional_metadata(
         if fqn == AI_STREAM_STREAM {
             continue;
         }
-        let mut ns = translate_ty::namespace_for(key);
-        if key.is_stream() && matches!(symbol, Symbol::Function(_)) {
-            // Only `$stream` CLASSES route under stream_types;
-            // `$stream` FUNCTION companions sit beside their parent
-            // (Python's routing rule, mirrored).
-            ns.remove(0);
-        }
+        let ns = translate_ty::namespace_for(key);
         let rendered = match symbol {
             Symbol::Function(function) => {
-                let rendered = render_callable(&key.to_string(), function, FnKind::Free, &ctx);
+                let binding_name = &free_callable_names[&fqn];
+                let rendered =
+                    render_callable(&key.to_string(), binding_name, function, FnKind::Free, &ctx);
                 if rendered.is_none() {
                     skips.push(diagnostics::Skip {
                         fqn: fqn.clone(),
@@ -148,9 +148,6 @@ fn to_source_code_with_optional_metadata(
             }
         };
         let Some(rendered) = rendered else { continue };
-        // Sort key uses the RAW name: bare_name() strips `$stream`, so
-        // a base function and its `$stream` companion would collide in
-        // the decl map and silently overwrite each other.
         let bare = key.name().as_str().to_string();
         namespaces
             .entry(ns)
@@ -171,8 +168,8 @@ fn to_source_code_with_optional_metadata(
     // (Python separates module vs attribute lookup), but in Swift the
     // namespace enum and the func collide in one scope. The namespace
     // wins — it carries arbitrarily many symbols — and the colliding
-    // function is dropped (e.g. vendor `boundary.id()` vs the
-    // `boundary.id.*` namespace).
+    // function is dropped (e.g. vendor `factory.open()` vs the
+    // `factory.open.*` namespace).
     let all_paths: Vec<Vec<String>> = namespaces.keys().cloned().collect();
     for path in &all_paths {
         if path.is_empty() {
@@ -227,7 +224,6 @@ fn to_source_code_with_optional_metadata(
 /// Fixpoint over named types: start assuming every candidate class /
 /// alias is supported, then repeatedly drop any whose definition uses
 /// an unsupported type, until stable. Enums are always supported.
-/// Generic and `$stream` classes are excluded up front (later phases).
 fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
     let mut supported_classes: BTreeSet<String> = BTreeSet::new();
     let mut supported_aliases: BTreeSet<String> = BTreeSet::new();
@@ -275,11 +271,11 @@ fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
                         changed = true;
                     }
                 }
-                Symbol::TypeAlias(alias) => {
-                    if supported_aliases.contains(&fqn) && !alias_definition_ok(alias, &ctx) {
-                        supported_aliases.remove(&fqn);
-                        changed = true;
-                    }
+                Symbol::TypeAlias(alias)
+                    if supported_aliases.contains(&fqn) && !alias_definition_ok(alias, &ctx) =>
+                {
+                    supported_aliases.remove(&fqn);
+                    changed = true;
                 }
                 _ => {}
             }
@@ -305,8 +301,8 @@ fn direct_class_targets(ty: &Ty, pool: &SymbolPool, out: &mut Vec<String>) {
         // Parameterized targets box exactly like bare ones —
         // `GenericLinkedList<T>` self-references store inline via
         // Optional the same way.
-        Ty::Class(name, _, _) => out.push(name.to_string()),
-        Ty::Union(members, _) => {
+        Ty::Class(name, _) => out.push(name.to_string()),
+        Ty::Union(members) => {
             let (non_null, _) = normalize_union(members);
             // A >=2-arm union renders as an `indirect` BamlUnionN — its
             // payload is heap-boxed, so it breaks cycles on its own.
@@ -315,7 +311,7 @@ fn direct_class_targets(ty: &Ty, pool: &SymbolPool, out: &mut Vec<String>) {
                 direct_class_targets(&non_null[0], pool, out);
             }
         }
-        Ty::TypeAlias(name, _) => {
+        Ty::TypeAlias(name) => {
             if let Some(Symbol::TypeAlias(alias)) = pool.get(name) {
                 if !alias.recursive {
                     direct_class_targets(&alias.resolves_to, pool, out);
@@ -397,7 +393,7 @@ fn render_supported_class(
             ty: translate_ty(&prop.ty, ctx)?,
             boxed: boxed_fields.contains(&(fqn.clone(), prop.name.as_str().to_string())),
             doc: prop.docstring.clone(),
-            is_rust: matches!(prop.ty, Ty::RustType { .. }),
+            is_rust: matches!(prop.ty, Ty::RustType),
         });
     }
 
@@ -405,9 +401,22 @@ fn render_supported_class(
     // an unemittable method never drops the class (fields alone decide
     // supportability, matching Python).
     let mut methods = Vec::new();
+    let method_names = allocate_callable_names(
+        class
+            .static_methods
+            .iter()
+            .chain(&class.instance_methods)
+            .map(|method| method.name.as_str()),
+    );
     for method in &class.static_methods {
         let method_fqn = format!("{fqn}.{}", method.name.as_str());
-        if let Some(rendered) = render_callable(&method_fqn, method, FnKind::Static, ctx) {
+        if let Some(rendered) = render_callable(
+            &method_fqn,
+            &method_names[method.name.as_str()],
+            method,
+            FnKind::Static,
+            ctx,
+        ) {
             methods.push(rendered);
         } else {
             skips.push(diagnostics::Skip {
@@ -420,7 +429,13 @@ fn render_supported_class(
     }
     for method in &class.instance_methods {
         let method_fqn = format!("{fqn}.{}", method.name.as_str());
-        if let Some(rendered) = render_callable(&method_fqn, method, FnKind::Instance, ctx) {
+        if let Some(rendered) = render_callable(
+            &method_fqn,
+            &method_names[method.name.as_str()],
+            method,
+            FnKind::Instance,
+            ctx,
+        ) {
             methods.push(rendered);
         } else {
             skips.push(diagnostics::Skip {
@@ -435,6 +450,53 @@ fn render_supported_class(
     Some(render_class(class, key, &fields, &methods))
 }
 
+fn allocate_free_callable_names(pool: &SymbolPool) -> HashMap<String, String> {
+    let mut scopes: BTreeMap<Vec<String>, Vec<(String, String)>> = BTreeMap::new();
+    for (name, symbol) in pool {
+        if !matches!(symbol, Symbol::Function(_)) {
+            continue;
+        }
+        scopes
+            .entry(translate_ty::namespace_for(name))
+            .or_default()
+            .push((name.to_string(), name.name().as_str().to_string()));
+    }
+
+    let mut allocated = HashMap::new();
+    for callables in scopes.values() {
+        let names = allocate_callable_names(callables.iter().map(|(_, raw)| raw.as_str()));
+        for (fqn, raw) in callables {
+            allocated.insert(fqn.clone(), names[raw].clone());
+        }
+    }
+    allocated
+}
+
+/// Preserve authored Swift API names and suffix only synthesized companions
+/// when replacing `@` with `_` would collide in the same declaration scope.
+fn allocate_callable_names<'a>(
+    raw_names: impl IntoIterator<Item = &'a str>,
+) -> HashMap<String, String> {
+    let mut raw_names: Vec<&str> = raw_names.into_iter().collect();
+    raw_names.sort_by_key(|name| (name.contains(['@', '$']), *name));
+
+    let mut used = BTreeSet::new();
+    let mut allocated = HashMap::new();
+    for raw in raw_names {
+        let base = raw.replace(['@', '$'], "_");
+        let mut candidate = base.clone();
+        let mut suffix = 2;
+        while used.contains(&candidate) || used.contains(&format!("{candidate}_async")) {
+            candidate = format!("{base}_{suffix}");
+            suffix += 1;
+        }
+        used.insert(candidate.clone());
+        used.insert(format!("{candidate}_async"));
+        allocated.insert(raw.to_string(), candidate);
+    }
+    allocated
+}
+
 /// `Some(non-null arms)` when this alias is a recursive union with >=2
 /// arms after normalization — the shape that gets a nominal
 /// family-surface enum. Null-bearing recursive union aliases are
@@ -443,7 +505,7 @@ pub(crate) fn recursive_union_alias_arms(alias: &TypeAlias) -> Option<(Vec<Ty>, 
     if !alias.recursive {
         return None;
     }
-    let Ty::Union(members, _) = &alias.resolves_to else {
+    let Ty::Union(members) = &alias.resolves_to else {
         return None;
     };
     let (non_null, nullable) = normalize_union(members);
@@ -632,36 +694,30 @@ fn render_ns_enum(
     out
 }
 
-/// The borsh bytecode payload, base64-encoded, as ONE multiline string
-/// literal. Two rejected alternatives, both fatal at engine sizes: a
-/// `[UInt8]` literal type-checks element-by-element, and a `"…" + "…"`
-/// chunk chain builds a `+` expression whose type-check is
-/// super-linear in the number of chunks (observed: 55+ minutes for a
-/// multi-MB payload). A `"""…"""` literal is a single token — instant —
-/// and the embedded newlines are skipped by the base64 decoder via
-/// `.ignoreUnknownCharacters`.
+/// The bytecode payload (base64 of an LZ4 frame, which the bridge decodes
+/// natively) as ONE single-line string literal, handed to the bridge as its
+/// UTF-8 bytes. Two rejected alternatives, both fatal at engine sizes: a
+/// `[UInt8]` literal type-checks element-by-element, and a `"…" + "…"` chunk
+/// chain builds a `+` expression whose type-check is super-linear in the
+/// number of chunks (observed: 55+ minutes for a multi-MB payload). A single
+/// literal is a single token — instant.
 fn render_inlined_baml(baml_bytecode: &[u8], embedded_baml_toml: Option<&str>) -> String {
-    // Fixed-width lines inside the literal for editor/diff friendliness.
-    const CHUNK: usize = 96;
-    let b64 = base64::engine::general_purpose::STANDARD.encode(baml_bytecode);
     let mut out = String::from(
         "// Generated by BAML. DO NOT EDIT.\n\
          import Foundation\n\n\
-         enum _BamlInlined {\n    static let bytecodeBase64: String = \"\"\"\n",
+         enum _BamlInlined {\n",
     );
-    for chunk in b64.as_bytes().chunks(CHUNK) {
-        out.push_str("        ");
-        out.push_str(std::str::from_utf8(chunk).expect("base64 is ascii"));
-        out.push('\n');
-    }
-    out.push_str("        \"\"\"\n");
+    let _ = writeln!(
+        out,
+        "    static let bytecodeBase64: String = \"{}\"",
+        baml_sdkgen_types::embedded_bytecode_base64(baml_bytecode)
+    );
     let manifest = embedded_baml_toml
         .map(|manifest| format!("Optional.some({manifest:?})"))
         .unwrap_or_else(|| "Optional.none".to_string());
     let _ = writeln!(out, "    static let embeddedBamlToml: String? = {manifest}");
     out.push_str(
-        "\n    static var bytecode: Data {\n        \
-         Data(base64Encoded: bytecodeBase64, options: .ignoreUnknownCharacters)!\n    }\n}\n",
+        "\n    static var bytecode: Data {\n        Data(bytecodeBase64.utf8)\n    }\n}\n",
     );
     out
 }
@@ -671,67 +727,106 @@ mod tests {
     use super::*;
 
     #[test]
-    fn bytecode_payload_round_trips_via_base64() {
+    fn bytecode_payload_round_trips_through_embedded_encoding() {
         let pool = SymbolPool::default();
         let bytecode = vec![0u8, 1, 2, 250, 251, 252];
         let files = to_source_code_with_bytecode(&pool, &bytecode, NamingConvention::PreserveCase);
 
         let inlined = &files[&PathBuf::from("_InlinedBaml.swift")];
-        // Collect the bare base64 lines between the `"""` delimiters.
-        let b64: String = inlined
+        let encoded = inlined
             .lines()
-            .skip_while(|l| !l.contains("\"\"\""))
-            .skip(1)
-            .take_while(|l| !l.contains("\"\"\""))
-            .map(str::trim)
-            .collect();
-        let decoded = base64::engine::general_purpose::STANDARD
-            .decode(b64)
-            .expect("valid base64");
+            .find_map(|l| {
+                l.trim()
+                    .strip_prefix("static let bytecodeBase64: String = \"")
+            })
+            .and_then(|l| l.strip_suffix('"'))
+            .expect("single-line bytecode literal");
+        let decoded = baml_artifact::decode_embedded(
+            baml_artifact::ArtifactKind::Program,
+            encoded.as_bytes(),
+        )
+        .expect("valid embedded bytecode");
         assert_eq!(decoded, bytecode);
 
         assert!(files[&PathBuf::from("BamlRoot.swift")].contains("public enum Baml"));
     }
 
+    #[test]
+    fn companion_bindings_do_not_collide_with_authored_swift_names() {
+        let allocated = allocate_callable_names([
+            "extract_spec",
+            "extract@spec",
+            "extract_stream_async",
+            "extract@stream",
+        ]);
+
+        assert_eq!(allocated["extract_spec"], "extract_spec");
+        assert_eq!(allocated["extract_stream_async"], "extract_stream_async");
+        assert_eq!(allocated["extract@spec"], "extract_spec_2");
+        assert_eq!(allocated["extract@stream"], "extract_stream_2");
+    }
+
     fn int() -> Ty {
-        Ty::Int {
-            attr: baml_base::TyAttr::EMPTY,
-        }
+        Ty::Int
+    }
+    fn bigint() -> Ty {
+        Ty::Bigint
     }
     fn float() -> Ty {
-        Ty::Float {
-            attr: baml_base::TyAttr::EMPTY,
-        }
+        Ty::Float
     }
     fn string() -> Ty {
-        Ty::String {
-            attr: baml_base::TyAttr::EMPTY,
-        }
+        Ty::String
     }
     fn null() -> Ty {
-        Ty::Null {
-            attr: baml_base::TyAttr::EMPTY,
-        }
+        Ty::Null
     }
     fn list(inner: Ty) -> Ty {
-        Ty::List(Box::new(inner), baml_base::TyAttr::EMPTY)
+        Ty::List(Box::new(inner))
     }
     fn map(key: Ty, value: Ty) -> Ty {
         Ty::Map {
             key: Box::new(key),
             value: Box::new(value),
-            attr: baml_base::TyAttr::EMPTY,
         }
     }
     fn union(members: Vec<Ty>) -> Ty {
-        Ty::Union(members, baml_base::TyAttr::EMPTY)
+        Ty::Union(members.into())
     }
     fn literal(value: baml_base::Literal) -> Ty {
-        Ty::Literal(
-            value,
-            baml_codegen_types::Freshness::Regular,
-            baml_base::TyAttr::EMPTY,
-        )
+        Ty::Literal(value, baml_sdkgen_types::Freshness::Regular)
+    }
+
+    #[test]
+    fn unit_return_has_no_result() {
+        // A function returning the unit type (`null`, also spelled `void`) has
+        // no Swift result and calls the envelope-discarding `callSyncVoid`,
+        // rather than decoding a `BamlNull`.
+        let unit = null();
+        let function = baml_sdkgen_types::Function {
+            name: "settle".into(),
+            generic_params: Vec::new(),
+            docstring: None,
+            arguments: Vec::new(),
+            return_type: unit,
+            throws: None,
+            watchers: Vec::new(),
+            origin: baml_sdkgen_types::Origin {
+                source_file_path: "unit.baml".to_string(),
+                span_start: 0,
+            },
+        };
+        let pool = SymbolPool::from([(
+            Name::new("user".into(), Vec::new(), "settle".into()),
+            Symbol::Function(function),
+        )]);
+        let files = to_source_code_with_bytecode(&pool, &[], NamingConvention::PreserveCase);
+        let emitted: String = files.values().map(String::as_str).collect();
+        assert!(
+            emitted.contains("callSyncVoid(\"user.settle\""),
+            "{emitted}"
+        );
+        assert!(!emitted.contains("-> BamlNull"), "{emitted}");
     }
 
     #[test]
@@ -744,6 +839,7 @@ mod tests {
         };
         let t = |ty: &Ty| translate_ty(ty, &ctx);
         assert_eq!(t(&int()).as_deref(), Some("Swift.Int"));
+        assert_eq!(t(&bigint()).as_deref(), Some("BamlBigInt"));
         assert_eq!(t(&float()).as_deref(), Some("Swift.Double"));
         assert_eq!(t(&list(int())).as_deref(), Some("[Swift.Int]"));
         assert_eq!(
@@ -766,15 +862,8 @@ mod tests {
             vec![baml_base::Name::new("stream")],
             baml_base::Name::new("Stream"),
         );
-        let stream = Ty::Class(
-            stream_name,
-            vec![string(), string()],
-            baml_base::TyAttr::EMPTY,
-        );
-        assert_eq!(
-            t(&stream).as_deref(),
-            Some("BamlStream<Swift.String, Swift.String>")
-        );
+        let stream = Ty::Class(stream_name, Box::new([string()]));
+        assert_eq!(t(&stream).as_deref(), Some("BamlStream<Swift.String>"));
         // Same shape is the same type everywhere (structural identity).
         assert_eq!(
             t(&union(vec![int(), string(), null()])).as_deref(),

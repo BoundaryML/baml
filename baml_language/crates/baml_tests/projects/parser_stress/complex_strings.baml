@@ -1,8 +1,8 @@
 class StringTorture {
-  // Nested quotes in raw strings
-  raw1 string @description(#"She said "Hello""#)
-  raw2 string @description(##"This has #"nested"# raw strings"##)
-  raw3 string @description(###"Even ##"more #"nesting"#"## here"###)
+  // Nested quotes in backtick strings
+  raw1 string @description(`She said "Hello"`)
+  raw2 string @description(`This has #"nested"# hash delimiters`)
+  raw3 string @description(`Even ##"more #"nesting"#"## here`)
   
   // Unicode edge cases  
   emoji string @alias("🎉🎊🎈")

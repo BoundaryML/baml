@@ -5,8 +5,7 @@
 //! `record()` time (in the process that owns the event, so session id and
 //! metadata are correct); [`send_body`] POSTs one such body and runs only
 //! inside the detached flush child (see [`super::queue`]) — never on a
-//! user-visible code path. The `BAML_TELEMETRY_DEBUG=1` stderr dry-run
-//! lives in [`super::storage::Telemetry::record`].
+//! user-visible code path.
 
 use std::time::Duration;
 

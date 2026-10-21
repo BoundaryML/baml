@@ -1,0 +1,19 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0173
+
+  × class `baml.spawn.Limit` cannot be built with a class literal: its field `_handle` holds state that only the class's own functions create
+   ╭─[opaque_class_literals.baml:8:16]
+ 8 │     let fake = baml.spawn.Limit { _handle: token._handle };
+   ·                ───────────────────────────────────────────
+   ╰────
+
+  [type] E0173
+
+  × class `baml.spawn.Limit` cannot be built with a class literal: its field `_handle` holds state that only the class's own functions create
+    ╭─[opaque_class_literals.baml:14:5]
+ 14 │     baml.spawn.Limit { ...limit }
+    ·     ─────────────────────────────
+    ╰────

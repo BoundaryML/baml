@@ -3,19 +3,21 @@
 //! Run with: cargo bench --bench runtime_benchmark
 //!
 //! Every bench in this file is auto-generated from the cross-language speedtest
-//! corpus under `tools/speedtest/workloads/*.md` (see `build.rs`:
+//! corpus under `tools/speedtest/workloads/` (see `build.rs`:
 //! `generate_speedtest_benches`). There are intentionally no hand-written
-//! benches here — to add or change one, edit a workload `.md` so the speedtest
+//! benches here — to add or change one, edit a workload's `main.baml` so the speedtest
 //! harness and CodSpeed stay in sync from a single source of truth.
 //!
 //! Each generated bench measures *pure VM execution*: the BAML source is
 //! compiled and the tokio runtime is built ONCE, outside the measured region
 //! (see `bench_vm_main`), so only the cost of calling `main()` is timed.
+#![allow(clippy::disallowed_methods)]
 
 use std::{path::Path, sync::Arc};
 
-use baml_compiler2_emit::{CompileOptions, generate_project_bytecode};
-use baml_project::ProjectDatabase;
+use baml_compiler2_emit::OptLevel;
+use baml_db::{ProjectDatabase, compile_program};
+use baml_tests::engine::TestDbExt;
 use bex_engine::{BexEngine, FunctionCallContextBuilder};
 use divan::{Bencher, black_box};
 use sys_native::{CallId, SysOpsExt};
@@ -39,6 +41,7 @@ fn main() {
         // reads its args/env. No other thread can observe the environment.
         unsafe { std::env::set_var("DIVAN_MAX_TIME", "2") };
     }
+
     divan::main();
 }
 
@@ -49,15 +52,10 @@ fn main() {
 /// Compile BAML source into a ready-to-run engine.
 fn compile_source(source: &str) -> (ProjectDatabase, BexEngine) {
     let mut db = ProjectDatabase::new();
-    db.set_project_root(Path::new("."));
-    db.add_file("bench.baml", source);
-    let bytecode = generate_project_bytecode(
-        &db,
-        &CompileOptions {
-            emit_test_cases: false,
-        },
-    )
-    .expect("benchmark compilation failed");
+    let package = db.workspace(Path::new("."));
+    db.file("bench.baml", source);
+    let bytecode =
+        compile_program(&db, package, OptLevel::Two).expect("benchmark compilation failed");
     let engine = BexEngine::new(bytecode, Arc::new(sys_native::SysOps::native()), vec![])
         .expect("benchmark engine creation failed");
     (db, engine)

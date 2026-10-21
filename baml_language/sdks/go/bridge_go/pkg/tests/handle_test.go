@@ -39,8 +39,3 @@ func TestInvalidHandleErrors(t *testing.T) {
 		t.Fatal("expected release of invalid handle to return an error")
 	}
 }
-
-func TestFlushEvents(t *testing.T) {
-	// Should not panic even without a runtime or event sink.
-	pkg.FlushEvents()
-}

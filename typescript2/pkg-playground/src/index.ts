@@ -6,6 +6,8 @@ export type { ExecutionPanelProps } from './ExecutionPanel';
 export type { RuntimePort } from './runtime-port';
 export { WorkerRuntimePort } from './ports/WorkerRuntimePort';
 export { WebSocketRuntimePort } from './ports/WebSocketRuntimePort';
+export { projectLabel, projectLabels, toProjectEntry } from './project-label';
+export type { ProjectEntry } from './project-label';
 export { createRunStoreClient } from './run-store-client';
 export { applyRunPatch, createExecutionStore } from './execution-store';
 export { decodeRunResultValue } from './run-store-projections';

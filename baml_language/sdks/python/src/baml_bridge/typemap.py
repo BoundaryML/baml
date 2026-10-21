@@ -7,6 +7,7 @@ that constructs a `BamlTypeMap` from three literal dicts of
 happens on first `get_class(fqn)` call via `importlib.import_module +
 getattr`, then memoizes.
 """
+
 from __future__ import annotations
 import importlib
 from typing import Dict, Tuple, Type
@@ -25,19 +26,24 @@ _STDLIB_REVERSE_OVERRIDES: Dict[Tuple[str, str], str] = {
     ("baml_bridge.baml_py", "BamlImage"): "baml.media.Image",
     ("baml_bridge.baml_py", "BamlAudio"): "baml.media.Audio",
     ("baml_bridge.baml_py", "BamlVideo"): "baml.media.Video",
-    ("baml_bridge.baml_py", "BamlPdf"):   "baml.media.Pdf",
+    ("baml_bridge.baml_py", "BamlPdf"): "baml.media.Pdf",
     # `BamlStream` is re-exported from `baml_bridge` but defined in
     # `baml_bridge._stream`; `__module__` reflects the defining module.
     ("baml_bridge._stream", "BamlStream"): "ai.stream.Stream",
+    ("baml_bridge._function_spec", "BamlFunctionSpec"): "ai.FunctionSpec",
 }
 
 
 class BamlTypeMap:
     __slots__ = (
         # Lazy entries — codegen-emitted, resolved on first lookup.
-        "_class_lazy", "_enum_lazy", "_alias_lazy",
+        "_class_lazy",
+        "_enum_lazy",
+        "_alias_lazy",
         # Resolved cache — populated by first successful lazy resolution.
-        "_class_cache", "_enum_cache", "_alias_cache",
+        "_class_cache",
+        "_enum_cache",
+        "_alias_cache",
         # Reverse map: (module, qualname) → engine FQN. Populated from
         # forward entries in `from_lazy_entries`, seeded with stdlib
         # PyO3-identity overrides. `py_type_to_baml_type` walks
@@ -47,10 +53,10 @@ class BamlTypeMap:
 
     def __init__(self) -> None:
         self._class_lazy: Dict[str, _LazyEntry] = {}
-        self._enum_lazy:  Dict[str, _LazyEntry] = {}
+        self._enum_lazy: Dict[str, _LazyEntry] = {}
         self._alias_lazy: Dict[str, _LazyEntry] = {}
         self._class_cache: Dict[str, Type] = {}
-        self._enum_cache:  Dict[str, Type] = {}
+        self._enum_cache: Dict[str, Type] = {}
         self._alias_cache: Dict[str, object] = {}
         # Seed with the stdlib identity overrides every typemap needs
         # (BamlImage at baml_bridge.baml_py → "baml.media.Image", etc.).
@@ -61,13 +67,13 @@ class BamlTypeMap:
     @classmethod
     def from_lazy_entries(
         cls,
-        classes:      Dict[str, _LazyEntry],
-        enums:        Dict[str, _LazyEntry],
+        classes: Dict[str, _LazyEntry],
+        enums: Dict[str, _LazyEntry],
         type_aliases: Dict[str, _LazyEntry],
     ) -> "BamlTypeMap":
         m = cls()
         m._class_lazy = dict(classes)
-        m._enum_lazy  = dict(enums)
+        m._enum_lazy = dict(enums)
         m._alias_lazy = dict(type_aliases)
         # Derive (module, attr) → FQN from forward entries.
         # `setdefault` lets stdlib seeds (populated in __init__) win
@@ -161,6 +167,22 @@ class BamlTypeMap:
             self.get_enum(fqn)
         for fqn in list(self._alias_lazy):
             self.get_type_alias(fqn)
+
+    def capture_type(self, cls: type):
+        """Identify an actual generated class/enum without instance discovery."""
+        mro = type.__dict__["__mro__"].__get__(cls)
+        for base in mro:
+            attributes = type.__dict__["__dict__"].__get__(base)
+            module = attributes.get("__module__")
+            if type(module) is not str:
+                continue
+            name = type.__dict__["__qualname__"].__get__(base)
+            fqn = self._reverse.get((module, name))
+            if fqn in self._class_lazy and self.get_class(fqn) is base:
+                return fqn, False, base
+            if fqn in self._enum_lazy and self.get_enum(fqn) is base:
+                return fqn, True, base
+        return None
 
 
 _TYPE_MAP = BamlTypeMap()

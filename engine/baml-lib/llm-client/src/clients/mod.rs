@@ -187,6 +187,9 @@ impl crate::OpenAIClientProviderVariant {
             crate::OpenAIClientProviderVariant::Responses => {
                 openai::UnresolvedOpenAI::create_responses(properties)
             }
+            crate::OpenAIClientProviderVariant::Transcriptions => {
+                openai::UnresolvedOpenAI::create_transcriptions(properties)
+            }
             crate::OpenAIClientProviderVariant::OpenRouter => {
                 openai::UnresolvedOpenAI::create_openrouter(properties)
             }
@@ -212,4 +215,43 @@ impl crate::StrategyClientProvider {
 
 pub trait StrategyClientProperty<Meta> {
     fn strategy(&self) -> &Vec<(either::Either<StringOr, ClientSpec>, Meta)>;
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_types::{EvaluationContext, UnresolvedValue};
+    use indexmap::IndexMap;
+
+    use super::*;
+    use crate::{ClientProvider, OpenAIClientProviderVariant};
+
+    #[test]
+    fn openai_transcriptions_provider_routes_to_transcriptions_defaults() {
+        let provider = ClientProvider::OpenAI(OpenAIClientProviderVariant::Transcriptions);
+        let options: IndexMap<String, ((), UnresolvedValue<()>)> = IndexMap::new();
+
+        let unresolved = match provider.parse_client_property(PropertyHandler::new(options, ())) {
+            Ok(unresolved) => unresolved,
+            Err(errors) => panic!(
+                "openai-transcriptions options should parse: {}",
+                errors
+                    .iter()
+                    .map(|error| error.message.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        };
+
+        let openai = match unresolved {
+            UnresolvedClientProperty::OpenAI(openai) => openai,
+            _ => panic!("openai-transcriptions should produce OpenAI properties"),
+        };
+        let resolved = openai
+            .resolve(&provider, &EvaluationContext::default())
+            .expect("openai-transcriptions options should resolve");
+
+        assert_eq!(resolved.base_url, "https://api.openai.com/v1");
+        assert_eq!(resolved.supported_request_modes.stream, None);
+        assert!(resolved.supports_streaming());
+    }
 }

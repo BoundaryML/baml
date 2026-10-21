@@ -197,7 +197,10 @@ impl<'s> Value<'s> {
                     elem.complete_deeply();
                 }
             }
-            Value::Markdown(_, _, s) => *s = CompletionState::Complete,
+            Value::Markdown(_, inner, s) => {
+                *s = CompletionState::Complete;
+                inner.complete_deeply();
+            }
             Value::FixedJson(val, _fixes) => {
                 val.complete_deeply();
             }

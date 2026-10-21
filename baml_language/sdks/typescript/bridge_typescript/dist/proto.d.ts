@@ -7,6 +7,8 @@
  */
 import { baml_bridge } from './proto/baml_cffi.js';
 import { HandleKey } from './native.js';
+import type { InvocationOptions, InvokeOptions } from './invocation.js';
+import { BamlType } from './wire_ty.js';
 /**
  * Error thrown when a host callable (a JS `function`) is passed to the
  * *synchronous* call path. See {@link encodeCallArgs} for why this can't work.
@@ -16,6 +18,7 @@ export declare class HostCallableSyncError extends Error {
 }
 export interface EncodeCallArgsOptions {
     callId: bigint;
+    baml?: InvocationOptions | null;
     syncMode?: boolean;
     functionName?: string;
     functionHandle?: HandleKey;
@@ -26,7 +29,44 @@ export interface EncodeCallArgsOptions {
      * `CallFunctionArgs.type_args`. Mirrors Python's `encode_call_args`
      * `type_args` argument. Omitted/empty for non-generic calls.
      */
-    typeArgs?: Array<[string, baml_bridge.cffi.v1.IBamlTy]>;
+    typeArgs?: Array<[string, baml_bridge.cffi.v1.IBamlTy | BamlType]>;
+}
+export interface BamlPromptCallOptions {
+    $baml?: InvocationOptions | null;
+}
+/** Structural view returned by `BamlPrompt.messages()`. */
+export interface BamlPromptMessage {
+    role: string;
+    content: string;
+    parts: unknown[];
+    metadata: Record<string, unknown>;
+}
+/**
+ * Portable representation of `ai.Prompt` at the bridge boundary.
+ *
+ * The protobuf payload is copied both in and out so this wrapper never owns an
+ * engine handle and can safely be passed to another runtime. Its helpers
+ * re-enter the canonical `ai.Prompt` methods with a fresh inline copy, so the
+ * same prompt remains reusable across repeated calls and runtimes.
+ */
+export declare class BamlPrompt {
+    private readonly wire;
+    private constructor();
+    static _fromWire(wire: baml_bridge.cffi.v1.IBamlValuePromptAst): BamlPrompt;
+    _wireCopy(): baml_bridge.cffi.v1.IBamlValuePromptAst;
+    /** A detached JSON-compatible view of the canonical prompt tree. */
+    toJSON(): unknown;
+    text(options?: BamlPromptCallOptions): string;
+    textAsync(options?: BamlPromptCallOptions): Promise<string>;
+    /** Compatibility with the generated SDK's existing async-method spelling. */
+    text_async(options?: BamlPromptCallOptions): Promise<string>;
+    messages(options?: BamlPromptCallOptions): BamlPromptMessage[];
+    messagesAsync(options?: BamlPromptCallOptions): Promise<BamlPromptMessage[]>;
+    /** Compatibility with the generated SDK's existing async-method spelling. */
+    messages_async(options?: BamlPromptCallOptions): Promise<BamlPromptMessage[]>;
+    private _callSync;
+    private _callAsync;
+    private static cloneWire;
 }
 /**
  * Encode kwargs into `CallFunctionArgs` bytes.
@@ -46,12 +86,31 @@ export interface EncodeCallArgsOptions {
  * already registered, so we release them here.
  */
 export declare function encodeCallArgs(kwargs: Record<string, unknown>, options: EncodeCallArgsOptions): Buffer;
+interface InvocationSnapshot {
+    wire: baml_bridge.cffi.v1.IInvocationOptions;
+    cancel: unknown;
+    signal?: AbortSignal | null;
+    retained: unknown[];
+}
+export declare function encodedInvocation(bytes: Uint8Array): InvocationSnapshot | undefined;
+export declare function invokeTarget(target: string | ((...args: any[]) => unknown), args: Record<string, unknown>, options: InvokeOptions | undefined, asynchronous: boolean): unknown;
 /**
  * Decode a bare `BamlOutboundValue` to a JS value. Used for the host-callable
  * args path, where the engine sends a list-shaped `BamlOutboundValue` rather
  * than the call-result `BamlOutboundResult` envelope.
  */
 export declare function decodeOutboundValue(data: Buffer | Uint8Array): unknown;
+/**
+ * Decode the engine→host `BamlToHostCall`. The engine has already resolved the
+ * call against the callee's declared params and dropped omitted optionals, so
+ * `args` is a flat, declared-order list of the supplied args. Partition it back
+ * into the required positional run and the supplied optionals (keyed by
+ * `argName`) using each arg's `isOptionalArg` flag.
+ */
+export declare function decodeHostCall(data: Buffer | Uint8Array): {
+    positional: unknown[];
+    optional: Record<string, unknown>;
+};
 /**
  * Decode a `BamlOutboundResult` envelope (the engine's call-result wire shape
  * after 31c/31e). The `ok` arm returns the decoded value; the `error`/`panic`
@@ -62,5 +121,6 @@ export declare function decodeOutboundValue(data: Buffer | Uint8Array): unknown;
  * rather than throwing.
  */
 export declare function decodeCallResult(data: Buffer | Uint8Array): unknown;
-export declare function makeHostCallableDispatch(userFn: (...args: unknown[]) => unknown): (callId: number, argsBytes: Buffer) => void;
+export declare function makeHostCallableDispatch(userFn: (...args: unknown[]) => unknown): (callId: number, argsBytes: Buffer, execution?: object) => void;
+export {};
 //# sourceMappingURL=proto.d.ts.map

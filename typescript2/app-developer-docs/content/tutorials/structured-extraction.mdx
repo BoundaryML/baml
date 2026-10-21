@@ -1,0 +1,62 @@
+---
+title: Build a structured extractor
+description: Extract line items and totals from receipt text.
+breadcrumbs:
+  - href: /tutorials
+    label: Tutorials
+  - label: Structured extraction
+---
+
+## What you will build
+
+Extract a list of items and a nullable total from receipt text. Create a [Canary project](/baml/get-started) first. You need an OpenAI API key to run the model call; the TypeScript option also needs Node.js.
+
+## 1. Model the result
+
+Add these types to `baml_src/main.baml`. The example uses floating-point prices for extraction; validate and convert them to your application’s money representation before financial calculations.
+
+<BamlSnippet id="receipts/extract-receipt" region="types" />
+
+## 2. Add the function
+
+Add this function below the types. It configures an OpenAI client, puts instructions and the output format in the system message, and puts receipt text in the user message.
+
+<BamlSnippet id="receipts/extract-receipt" region="function" />
+
+`ctx.output_format` inserts instructions based on the return type. You don't need to repeat the schema in the prompt.
+
+## 3. Call the client
+
+Set the API key and try the function from the project root:
+
+```sh
+export OPENAI_API_KEY="your-api-key"
+baml check
+baml run extract_receipt -- --text 'Coffee x2 $3.00 each. Total $6.00.'
+```
+
+To call it from Node.js, [generate the TypeScript SDK](/baml/bridges/typescript#generate-the-sdk), then use the async export from server-side application code:
+
+```typescript
+import { extract_receipt_async } from "./baml_sdk/index.js"
+
+export async function extractReceipt(text: string) {
+  const receipt = await extract_receipt_async(text)
+
+  return {
+    lineItems: receipt.items.length,
+    total: receipt.total ?? null,
+  }
+}
+```
+
+<span id="4-harden-the-boundary" />
+
+## 4. Add tests and handle missing data
+
+- Add representative tests for clean, noisy, and incomplete receipts.
+- Decide whether a missing total is acceptable before making it optional.
+- Keep credentials and model calls in server-only modules.
+- Regenerate the client whenever the result model changes.
+
+Review the [TypeScript bridge](/baml/bridges/typescript) for host-language details, or open the [function reference](/baml/language/functions) for the syntax.

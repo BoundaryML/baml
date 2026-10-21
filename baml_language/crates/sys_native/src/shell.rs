@@ -113,7 +113,7 @@ fn detect_unix() -> ResolvedShell {
 /// Read the user's default shell from the SHELL environment variable.
 #[cfg(not(target_os = "windows"))]
 fn user_default_shell() -> Option<ResolvedShell> {
-    let shell_str = std::env::var("SHELL").ok()?;
+    let shell_str = baml_env::raw_var("SHELL")?;
     let shell_path = PathBuf::from(&shell_str);
 
     if !shell_path.exists() {

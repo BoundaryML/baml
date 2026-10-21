@@ -48,7 +48,7 @@ test "call_scrutinee_third_arm_ignores_enum_local" {
 
 // The crash shape: the local below the scrutinee is a closure — the stray
 // discriminant pop used to raise `expected variant, got closure`.
-function pick_with_closure_local(which: int, cb: () -> null throws never) -> string {
+function pick_with_closure_local(which: int, cb: () -> void throws never) -> string {
     match (decide(which)) {
         Decision.Alpha => "alpha",
         Decision.Beta => "beta",
@@ -59,9 +59,7 @@ function pick_with_closure_local(which: int, cb: () -> null throws never) -> str
 test "call_scrutinee_second_arm_with_closure_local" {
     assert
         .equal(
-            pick_with_closure_local(2, () -> null {
-                null
-            }),
+            pick_with_closure_local(2, () -> void {}),
             "beta",
         )
 }

@@ -20,7 +20,7 @@ function rt_list(x: int[]) -> int[] { x }
 function no_op() -> void {}
 function opt_probe(a: int, o: int? = 5) -> int?[] { [a, o] }
 function gid<T>(x: T) -> T { x }
-function gname<T>() -> string { reflect.type_of<T>().to_string() }
+function gname<T>() -> string { reflect.Type.of<T>().to_string() }
 "#;
 
 /// Initialize the process-global runtime once for every test in this
@@ -211,7 +211,7 @@ fn return_only_type_param_is_bound_from_type_args() {
     ensure_runtime();
     // gname<T>() has no argument carrying `T`, so the binding can only come
     // from the explicit type_args — proving they are honored, not merely
-    // recovered from argument inference. `reflect.type_of<T>()` reflects the
+    // recovered from argument inference. `reflect.Type.of<T>()` reflects the
     // bound type's name back as a string.
     let int_name = runtime::invoke_sync::<String, Infallible>(
         "user.gname",

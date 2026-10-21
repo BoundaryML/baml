@@ -11,23 +11,27 @@ class Tool {
     name: string,
     description: string,
     input_schema: map<string, unknown>, // JSON Schema for the arguments object
-    handler: baml.AnyFunction?, // signature-derived dispatch; null for raw tools
+    handler: reflect.AnyFunction?, // signature-derived dispatch; null for raw tools
     // Dynamic-source dispatch: the handler receives the validated-by-schema
     // argument map as one value. Set by raw_tool() when the schema does not
     // derive from a BAML signature (MCP servers, OpenAPI specs).
     raw_handler: ((map<string, unknown>) -> string throws unknown)?,
     on_error: ErrorMode?, // null: inherit the run's tool_errors mode
 
-    // The total boundary around one call: validate, dispatch through
-    // reflection, serialize. A throw here is the tool's failure, not the
-    // run's. The reflection boundary widens exactly representable integral
-    // arguments into float parameters (see reflect.call_any).
+    /// The total boundary around one call. A throw here is the tool's
+    /// failure, not the run's.
+    ///
+    /// A raw tool (`raw_tool`) hands the argument map straight to its
+    /// `raw_handler` and returns that string as-is. A schema-derived tool
+    /// aligns a model's arguments to its handler's parameters
+    /// (`_typed_arguments`), dispatches through reflection, which validates
+    /// them, and JSON-serializes the result.
     function call(self, args: map<string, unknown>) -> string {
         if let rh: (map<string, unknown>) -> string throws unknown = self.raw_handler {
             return rh(args);
         }
-        if let h: baml.AnyFunction = self.handler {
-            let value = reflect.call_any(h, args) catch (e) {
+        if let h: reflect.AnyFunction = self.handler {
+            let value = reflect.call_any(h, _typed_arguments(self.name, h, args)) catch (e) {
                 let bad: reflect.InvalidArgumentError => {
                     throw baml.errors.InvalidArgument { message: `invalid arguments for ${self.name}: ${bad.to_string()}` }
                 },
@@ -39,9 +43,74 @@ class Tool {
     }
 }
 
-// The explicit constructor. `tools: [f]` normalizes through this.
+/// (internal) The arguments of a tool call as `reflect.call_any` takes them.
+///
+/// A provider hands over a model's arguments as parsed JSON: a class is a
+/// map, an enum a string, a list a list of json. `reflect.call_any` takes
+/// values of the parameter types, and the only JSON values that are such
+/// values are the scalars. So the parameters that were sent JSON are read as
+/// the fields of one class, the JSON is aligned to that class as any other
+/// model output is (`baml.sap.coerce`), and the fields of the result are
+/// the arguments.
+///
+/// An argument passes as it arrived when it names no parameter, and when it is
+/// already a value of its parameter's type: that is what BAML code passes when
+/// it calls a tool itself, and it is every value of an `unknown` parameter.
+/// `reflect.call_any` judges every argument that passed.
+function _typed_arguments(
+    tool: string,
+    handler: reflect.AnyFunction,
+    args: map<string, unknown>,
+) -> map<string, unknown> throws baml.errors.InvalidArgument {
+    let sig = reflect.signature(handler);
+    let fields: map<string, reflect.TypeView | reflect.WithMeta<reflect.Type>> = {};
+    let sent: map<string, baml.json.json> = {};
+    for (let param in sig.args.concat(sig.opts.values())) {
+        if (!args.has(param.name)) {
+            continue;
+        }
+        if let value: baml.json.json = args.get(param.name) {
+            let type Declared = param.type;
+            if (!(value is Declared)) {
+                let _ = fields.set(param.name, param.type);
+                let _ = sent.set(param.name, value);
+            }
+        }
+    }
+    if (fields.length() == 0) {
+        return args;
+    }
+    let parameters = reflect.Class.new("Arguments", fields) catch (e) {
+        reflect.errors.CompilationError => {
+            throw baml.errors.InvalidArgument { message: `invalid arguments for ${tool}: ${e.message}` }
+        },
+    };
+    let type Arguments = parameters;
+    let aligned = baml.sap.coerce<Arguments>(sent) catch (e) {
+        baml.errors.ParseError => {
+            // The text goes back to the model, and it quotes the value that
+            // did not align, whatever its size.
+            throw baml.errors.InvalidArgument { message: `invalid arguments for ${tool}: ${e.message.slice(0, 1000)}` }
+        },
+    };
+    let typed: map<string, unknown> = {};
+    for (let name in args.keys()) {
+        let _ = typed.set(name, args.get(name));
+    }
+    for (let name in fields.keys()) {
+        let value = reflect.Class.get_field<unknown>(aligned, name) catch (e) {
+            reflect.errors.CompilationError => {
+                baml.sys.panic(`the aligned arguments of ${tool} have no field ${name}`)
+            },
+        };
+        let _ = typed.set(name, value);
+    }
+    typed
+}
+
+/// The explicit constructor. `tools: [f]` normalizes through this.
 function tool(
-    handler: baml.AnyFunction,
+    handler: reflect.AnyFunction,
     name: string? = null,
     description: string? = null,
     on_error: ErrorMode? = null,
@@ -65,10 +134,10 @@ function tool(
     }
 }
 
-// The constructor for tools whose schema does not derive from a BAML
-// signature: the caller supplies the JSON Schema and a handler over the raw
-// argument map. This is how dynamic tool sources (MCP servers) become
-// ordinary tools.
+/// The constructor for tools whose schema does not derive from a BAML
+/// signature: the caller supplies the JSON Schema and a handler over the raw
+/// argument map. This is how dynamic tool sources (MCP servers) become
+/// ordinary tools.
 function raw_tool(
     name: string,
     description: string,
@@ -92,7 +161,7 @@ function raw_tool(
 class Toolbox {
     entries: Tool[],
 
-    // Rejects duplicate names, so a toolbox is well-formed on construction.
+    /// Rejects duplicate names, so a toolbox is well-formed on construction.
     function new(tools: Tool[]) -> Toolbox {
         let names: string[] = [];
         for (let t in tools) {

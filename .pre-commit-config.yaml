@@ -67,6 +67,22 @@ repos:
         files: ^baml_language/(sdks/cpp/|sdk_tests/crates/cpp/).*\.(h|cc)$
         priority: 2
 
+      - id: baml-fmt-stdlib
+        name: baml fmt (stdlib)
+        entry: bash -c 'cd baml_language && mise run fmt-stdlib'
+        language: system
+        pass_filenames: false
+        files: ^baml_language/crates/baml_builtins2/baml_std/.*\.baml$
+        priority: 2
+
+      - id: baml-fmt-type-quiz
+        name: baml fmt (type quiz)
+        entry: bash -c 'cd baml_language && mise run fmt-type-quiz'
+        language: system
+        pass_filenames: false
+        files: ^baml_language/tools/type_quiz/.*\.baml$
+        priority: 2
+
       - id: cargo-stow
         name: cargo stow
         entry: bash -c 'cd baml_language && mise run stow'

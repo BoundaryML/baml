@@ -8,11 +8,13 @@ import (
 	"math"
 	"math/big"
 	"os"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/boundaryml/baml-go/internal/cffi"
 	"google.golang.org/protobuf/proto"
@@ -271,8 +273,13 @@ func Bool(value bool) Input {
 // Type encodes a reflected BAML type value. The descriptor remains opaque to
 // callers and is validated before it crosses the ABI.
 func Type(value BAMLType) Input {
-	if err := validateBAMLType(value.value, 0); err != nil {
+	if err := validateBAMLTypeValue(value); err != nil {
 		return InvalidInput("invalid BAML type value: " + err.Error())
+	}
+	if value.definition != nil {
+		return Input{value: &cffi.InboundValue{Value: &cffi.InboundValue_TyDefValue{
+			TyDefValue: proto.Clone(value.definition).(*cffi.BamlTyDef),
+		}}}
 	}
 	return Input{value: &cffi.InboundValue{Value: &cffi.InboundValue_TyValue{TyValue: value.value}}}
 }
@@ -296,8 +303,8 @@ type Value struct {
 
 // Call invokes one fully-qualified BAML callable and blocks until it returns
 // or the context is cancelled.
-func Call(ctx context.Context, function string, args map[string]Input) (Value, error) {
-	return callWithTypeArgs(ctx, function, args, nil)
+func Call(ctx context.Context, function string, args map[string]Input, options ...CallOption) (Value, error) {
+	return CallWithPreparedOptions(ctx, function, args, ApplyInvocationOptions(args, nil, options...))
 }
 
 // TypeArgument binds one BAML callable type parameter to a concrete runtime
@@ -308,25 +315,77 @@ type TypeArgument struct {
 	Type BAMLType
 }
 
+type callOptions struct {
+	arguments   map[string]Input
+	typeArgs    []TypeArgument
+	controls    InvocationControls
+	controlsSet bool
+	err         error
+}
+
+// CallOption is shared by every generated callable option type. WithTypeArg
+// therefore composes with ordinary defaulted arguments and nil options remain
+// valid Go values.
+type CallOption func(*callOptions)
+
+// WithTypeArg explicitly binds one named BAML type parameter. A later binding
+// of the same name replaces the generated Go-instantiation default in place.
+func WithTypeArg(name string, value BAMLType) CallOption {
+	return func(options *callOptions) {
+		for index := range options.typeArgs {
+			if options.typeArgs[index].Name == name {
+				options.typeArgs[index].Type = value
+				return
+			}
+		}
+		options.typeArgs = append(options.typeArgs, TypeArgument{Name: name, Type: value})
+	}
+}
+
+// WithArgument is the generator hook used by ordinary optional BAML
+// parameters. Public generated setters retain their type-safe signatures.
+func WithArgument(name string, value Input) CallOption {
+	return func(options *callOptions) { options.arguments[name] = value }
+}
+
+// ApplyCallOptions mutates arguments and returns an independent ordered type
+// binding slice. The engine remains authoritative for unknown parameter names.
+func ApplyCallOptions(arguments map[string]Input, defaults []TypeArgument, values ...CallOption) []TypeArgument {
+	options := callOptions{
+		arguments: arguments,
+		typeArgs:  append([]TypeArgument(nil), defaults...),
+	}
+	for _, value := range values {
+		if value != nil {
+			value(&options)
+		}
+	}
+	return options.typeArgs
+}
+
 // CallWithTypeArgs invokes a generic BAML callable with explicit, named type
 // bindings. Bindings use structured BAML descriptors so nested classes,
 // containers, and unions retain their complete runtime identity.
-func CallWithTypeArgs(ctx context.Context, function string, args map[string]Input, typeArgs []TypeArgument) (Value, error) {
-	return callWithTypeArgs(ctx, function, args, typeArgs)
+func CallWithTypeArgs(ctx context.Context, function string, args map[string]Input, typeArgs []TypeArgument, options ...CallOption) (Value, error) {
+	return CallWithPreparedOptions(ctx, function, args, ApplyInvocationOptions(args, typeArgs, options...))
 }
 
-func callWithTypeArgs(ctx context.Context, function string, args map[string]Input, typeArgs []TypeArgument) (Value, error) {
+func callWithTypeArgs(ctx context.Context, function string, args map[string]Input, typeArgs []TypeArgument, controls ...InvocationControls) (Value, error) {
 	if ctx == nil {
 		return Value{}, errors.New("baml_go.Call: nil context")
 	}
-	if err := ctx.Err(); err != nil {
+	waitContext := ctx
+	if function == "baml.spawn.CancelToken.cancel" || function == "baml.spawn.CancelToken.is_cancelled" {
+		waitContext = context.WithoutCancel(ctx)
+	}
+	if err := waitContext.Err(); err != nil {
 		return Value{}, err
 	}
 	if strings.IndexByte(function, 0) >= 0 {
 		return Value{}, errors.New("baml_go.Call: function name contains a NUL byte")
 	}
 
-	if err := ensureNativeRuntime(ctx); err != nil {
+	if err := ensureNativeRuntime(waitContext); err != nil {
 		return Value{}, err
 	}
 	registerCallbackOnce.Do(nativeRegisterCallback)
@@ -334,6 +393,13 @@ func callWithTypeArgs(ctx context.Context, function string, args map[string]Inpu
 	engineCallID := nativeNewFunctionCall()
 	if engineCallID == 0 {
 		return Value{}, errors.New("BAML returned an invalid zero call ID")
+	}
+	defer nativeReleaseFunctionCall(engineCallID)
+	defer runtime.KeepAlive(ctx)
+	options, controlTransaction, err := prepareInvocation(waitContext, engineCallID, controls)
+	defer controlTransaction.rollback()
+	if err != nil {
+		return Value{}, err
 	}
 	call := &pendingCall{result: make(chan []byte, 1)}
 	callbackID := reservePendingCall(call)
@@ -343,6 +409,7 @@ func callWithTypeArgs(ctx context.Context, function string, args map[string]Inpu
 		args,
 		typeArgs,
 		namedCallTarget(function),
+		options,
 	)
 	if err != nil {
 		pendingCalls.Delete(callbackID)
@@ -352,7 +419,7 @@ func callWithTypeArgs(ctx context.Context, function string, args map[string]Inpu
 	nativeCall(encoded, callbackID)
 	transaction.commitHostValues()
 
-	payload, err := waitForCallResult(ctx, call.result)
+	payload, err := waitForCallResult(waitContext, call.result)
 	if err != nil {
 		pendingCalls.Delete(callbackID)
 		nativeCancel(engineCallID)
@@ -361,7 +428,7 @@ func callWithTypeArgs(ctx context.Context, function string, args map[string]Inpu
 	return decodeResult(payload)
 }
 
-func callHandle(ctx context.Context, handleKey uint64, args map[string]Input) (Value, error) {
+func callHandle(ctx context.Context, handleKey uint64, args map[string]Input, controls ...InvocationControls) (Value, error) {
 	if ctx == nil {
 		return Value{}, errors.New("baml_go.Function.Call: nil context")
 	}
@@ -380,6 +447,13 @@ func callHandle(ctx context.Context, handleKey uint64, args map[string]Input) (V
 	if engineCallID == 0 {
 		return Value{}, errors.New("BAML returned an invalid zero call ID")
 	}
+	defer nativeReleaseFunctionCall(engineCallID)
+	defer runtime.KeepAlive(ctx)
+	options, controlTransaction, err := prepareInvocation(ctx, engineCallID, controls)
+	defer controlTransaction.rollback()
+	if err != nil {
+		return Value{}, err
+	}
 	call := &pendingCall{result: make(chan []byte, 1)}
 	callbackID := reservePendingCall(call)
 	encoded, transaction, err := encodeCallForDispatchWithTargetAndTypeArgs(
@@ -387,6 +461,7 @@ func callHandle(ctx context.Context, handleKey uint64, args map[string]Input) (V
 		args,
 		nil,
 		handleCallTarget(handleKey),
+		options,
 	)
 	if err != nil {
 		pendingCalls.Delete(callbackID)
@@ -414,6 +489,13 @@ func waitForCallResult(ctx context.Context, result <-chan []byte) ([]byte, error
 		// cancellation panic envelope.
 		if err := ctx.Err(); err != nil {
 			return nil, err
+		}
+		// The runtime and Go timer can observe the same deadline in different
+		// orders. Once the caller deadline has elapsed, wait for its timer to
+		// publish the exact context error instead of exposing a native panic.
+		if deadline, ok := ctx.Deadline(); ok && !time.Now().Before(deadline) && ctx.Done() != nil {
+			<-ctx.Done()
+			return nil, ctx.Err()
 		}
 		return payload, nil
 	case <-ctx.Done():
@@ -473,6 +555,7 @@ func encodeCallForDispatchWithTargetAndTypeArgs(
 	args map[string]Input,
 	typeArgs []TypeArgument,
 	target *callTarget,
+	options ...*cffi.InvocationOptions,
 ) ([]byte, *inputTransaction, error) {
 	transaction := &inputTransaction{}
 	failed := true
@@ -510,20 +593,27 @@ func encodeCallForDispatchWithTargetAndTypeArgs(
 		if _, duplicate := seenTypeArgs[binding.Name]; duplicate {
 			return nil, nil, fmt.Errorf("duplicate type argument %q", binding.Name)
 		}
-		if err := validateBAMLType(binding.Type.value, 0); err != nil {
+		if err := validateBAMLTypeValue(binding.Type); err != nil {
 			return nil, nil, fmt.Errorf("type argument %q: %w", binding.Name, err)
 		}
 		seenTypeArgs[binding.Name] = struct{}{}
-		encodedTypeArgs = append(encodedTypeArgs, &cffi.BamlTyArg{
-			TypeVar:   binding.Name,
-			TypeValue: binding.Type.value,
-		})
+		encoded := &cffi.BamlTyArg{TypeVar: binding.Name}
+		if binding.Type.definition != nil {
+			encoded.TypeDefinition = proto.Clone(binding.Type.definition).(*cffi.BamlTyDef)
+		} else {
+			encoded.TypeValue = proto.Clone(binding.Type.value).(*cffi.BamlTy)
+		}
+		encodedTypeArgs = append(encodedTypeArgs, encoded)
 	}
 
 	callArgs := &cffi.CallFunctionArgs{
-		CallId:   callID,
-		Kwargs:   kwargs,
-		TypeArgs: encodedTypeArgs,
+		CallId:     callID,
+		Kwargs:     kwargs,
+		TypeArgs:   encodedTypeArgs,
+		Invocation: &cffi.InvocationOptions{HostEnvironment: callID},
+	}
+	if len(options) != 0 {
+		callArgs.Invocation = options[0]
 	}
 	if target != nil && target.functionName != nil {
 		callArgs.CallTarget = &cffi.CallFunctionArgs_FunctionName{FunctionName: *target.functionName}
@@ -593,26 +683,102 @@ func processExitCode(code int64) int {
 	return int(code)
 }
 
-// outboundFailure intentionally returns a plain Go error. The current Go SDK
-// does not expose a structured BAML error hierarchy, but retaining the thrown
-// class name, conventional message field, and BAML trace in Error() keeps the
-// string contract useful and distinguishes errors from non-exit panics.
+// BamlError is the structured base payload for an ordinary BAML throw. The
+// three BEP-066 reflection channels below are distinct concrete Go errors;
+// other BAML classes remain BamlError values with their exact class identity.
+type BamlError struct {
+	Kind      string
+	ClassName string
+	Message   string
+	Trace     []string
+	Value     any
+}
+
+func (failure *BamlError) Error() string { return renderBamlError(failure) }
+
+type Diagnostic struct {
+	Code    string
+	Message string
+	Span    any
+}
+
+type CompilationError struct {
+	BamlError
+	Diagnostics []Diagnostic
+}
+
+func (failure *CompilationError) Error() string { return renderBamlError(&failure.BamlError) }
+
+type EvaluationError struct{ BamlError }
+
+func (failure *EvaluationError) Error() string { return renderBamlError(&failure.BamlError) }
+
+type SessionBusy struct{ BamlError }
+
+func (failure *SessionBusy) Error() string { return renderBamlError(&failure.BamlError) }
+
+// NotFound is a reflection lookup by name that found nothing.
+type NotFound struct{ BamlError }
+
+func (failure *NotFound) Error() string { return renderBamlError(&failure.BamlError) }
+
 func outboundFailure(kind string, value *cffi.BamlOutboundValue, trace []string) error {
 	className, message := outboundFailureIdentity(value)
 	if className == "" {
 		className = "baml." + kind
 	}
-
-	var rendered strings.Builder
-	fmt.Fprintf(&rendered, "BAML %s: %s", kind, className)
-	if message != "" {
-		fmt.Fprintf(&rendered, ": %s", message)
+	decoded, _ := decodeDynamicValue(Value{value: value}, "error", 0)
+	base := BamlError{
+		Kind: kind, ClassName: className, Message: message,
+		Trace: append([]string(nil), trace...), Value: decoded,
 	}
-	for _, line := range trace {
+	switch className {
+	case "reflect.errors.CompilationError":
+		return &CompilationError{BamlError: base, Diagnostics: decodeDiagnostics(decoded)}
+	case "reflect.errors.EvaluationError":
+		return &EvaluationError{BamlError: base}
+	case "reflect.errors.SessionBusy":
+		return &SessionBusy{BamlError: base}
+	case "reflect.errors.NotFound":
+		return &NotFound{BamlError: base}
+	default:
+		return &base
+	}
+}
+
+func renderBamlError(failure *BamlError) string {
+	var rendered strings.Builder
+	fmt.Fprintf(&rendered, "BAML %s: %s", failure.Kind, failure.ClassName)
+	if failure.Message != "" {
+		fmt.Fprintf(&rendered, ": %s", failure.Message)
+	}
+	for _, line := range failure.Trace {
 		rendered.WriteString("\n    ")
 		rendered.WriteString(line)
 	}
-	return errors.New(rendered.String())
+	return rendered.String()
+}
+
+func decodeDiagnostics(value any) []Diagnostic {
+	object, ok := value.(map[string]any)
+	if !ok {
+		return nil
+	}
+	rows, ok := object["diagnostics"].([]any)
+	if !ok {
+		return nil
+	}
+	diagnostics := make([]Diagnostic, 0, len(rows))
+	for _, row := range rows {
+		fields, ok := row.(map[string]any)
+		if !ok {
+			continue
+		}
+		code, _ := fields["code"].(string)
+		message, _ := fields["message"].(string)
+		diagnostics = append(diagnostics, Diagnostic{Code: code, Message: message, Span: fields["span"]})
+	}
+	return diagnostics
 }
 
 func outboundFailureIdentity(value *cffi.BamlOutboundValue) (string, string) {
@@ -653,4 +819,29 @@ func outboundFailureIdentity(value *cffi.BamlOutboundValue) (string, string) {
 // when the bridge unexpectedly receives an ok result arm.
 func UnexpectedNeverReturn(function string) error {
 	return fmt.Errorf("BAML never-returning function %q returned successfully", function)
+}
+
+func invocationOptions(ctx context.Context, id uint64) (*cffi.InvocationOptions, error) {
+	options := &cffi.InvocationOptions{HostEnvironment: id}
+	if carrier, ok := ctx.Value(invocationStateContextKey{}).(*invocationStateCarrier); ok {
+		options.InheritedState = carrier.state
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		// Sample the remaining host budget first so the conversion cannot
+		// shorten it by the time spent querying the runtime's clock.
+		remaining := time.Until(deadline)
+		now, err := nativeInvocationClockNs(id)
+		if err != nil {
+			return nil, err
+		}
+		absolute := now
+		if remaining > 0 {
+			if uint64(remaining) > math.MaxUint64-now {
+				return nil, errors.New("BAML deadline overflows invocation clock")
+			}
+			absolute += uint64(remaining)
+		}
+		options.DeadlineNs = &absolute
+	}
+	return options, nil
 }

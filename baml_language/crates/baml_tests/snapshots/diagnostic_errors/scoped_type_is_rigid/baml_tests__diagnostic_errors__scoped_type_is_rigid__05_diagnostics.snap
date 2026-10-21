@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × type `T` does not implement interface `Named`
+    ╭─[scoped_type_is_rigid.baml:31:5]
+ 31 │     needs_bound<T>()
+    ·     ────────────────
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[scoped_type_is_rigid.baml:37:13]
+ 37 │     echo<T>(42)
+    ·             ─┬
+    ·              ╰── expected `T`, found `42`
+    ╰────
+
+  [type] E0096
+
+  × declared throws is `string`, but this function may also throw `Boom<T>`
+    ╭─[scoped_type_is_rigid.baml:44:5]
+ 44 │     risky<T>(as_t<T>("x"), false)
+    ·     ────────
+    ╰────

@@ -13,6 +13,7 @@
 //! Its only job, like the shell script, is to map the `BAML_SCCACHE_R2_*`
 //! credentials to the `AWS_*` names sccache reads, then hand off to sccache
 //! with the same arguments.
+#![allow(clippy::disallowed_methods)]
 
 use std::process::{Command, exit};
 

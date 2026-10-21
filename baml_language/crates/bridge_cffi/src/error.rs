@@ -40,6 +40,12 @@ pub enum BridgeError {
     #[error("call_id must be a nonzero uint64")]
     InvalidCallId,
 
+    #[error("call_id {0} does not identify a live runtime-bound allocation")]
+    UnknownCallAllocation(u64),
+
+    #[error("Invalid invocation protocol: {0}")]
+    InvocationProtocol(String),
+
     #[error("Internal error: {0}")]
     Internal(String),
 

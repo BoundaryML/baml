@@ -12,8 +12,6 @@
 //!    the same commit.
 //! 3. Fire it from anywhere: `crate::telemetry::record(TelemetryEvent::my_event(...))`.
 //!    Delivery, crash-safety, opt-out, and retries are handled for you.
-//! 4. Validate with `BAML_TELEMETRY_DEBUG=1 cargo run -- <cmd>` — the
-//!    payload prints to stderr instead of being sent.
 
 use serde::Serialize;
 use serde_json::json;
@@ -36,16 +34,6 @@ impl TelemetryEvent {
     /// `command` is the clap-registered subcommand name (e.g. `"test"`,
     /// `"lsp"`, `"fmt"`). Never argument values.
     pub(crate) fn cli_invocation(command: &str) -> Self {
-        // Which environment this invocation came from. `.envrc` sets
-        // `BAML_TELEMETRY_ENV=internal` in this repo (CI + local dev), so
-        // internal traffic filters out of product analytics by default.
-        // Unset (a real user's machine) reports as `production`.
-        let environment = std::env::var("BAML_TELEMETRY_ENV")
-            .ok()
-            .map(|v| v.trim().to_string())
-            .filter(|v| !v.is_empty())
-            .unwrap_or_else(|| "production".to_string());
-
         // Non-human invocations: editor-spawned language servers and any
         // CI run. Flagged `robot=1` so dashboards can exclude them by
         // default.
@@ -55,7 +43,7 @@ impl TelemetryEvent {
             event_name: "cli_invocation",
             payload: json!({
                 "command": command,
-                "environment": environment,
+                "environment": "production",
                 "robot": u8::from(robot),
             }),
         }

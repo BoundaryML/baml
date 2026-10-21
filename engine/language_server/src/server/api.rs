@@ -91,7 +91,7 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                         .as_ref()
                         .unwrap_or(&default_flags);
 
-                    for (_, project) in projects.iter() {
+                    for project in projects.values() {
                         let functions = project
                             .lock()
                             .baml_project

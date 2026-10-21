@@ -136,6 +136,9 @@ func wireArmName(_ v: BamlBridge_Cffi_V1_BamlOutboundValue) -> String {
     case .uint8ArrayValue: return "uint8array"
     case .bigintValue: return "bigint"
     case .tyValue: return "type reference"
+    case .tyDefValue:
+        return "runtime type definition (requires BEP-066 reflection support, "
+            + "which the Swift SDK does not provide)"
     }
 }
 
@@ -157,6 +160,31 @@ extension Int: BamlDecodable {
             throw BamlDecodeError.typeMismatch(expected: "Int", got: wireArmName(raw))
         default:
             throw BamlDecodeError.typeMismatch(expected: "Int", got: wireArmName(raw))
+        }
+    }
+}
+
+extension BamlBigInt: BamlDecodable {
+    public static var _bamlArmIdentity: String? { "bigint" }
+
+    public static func _bamlDecode(_ value: BamlOutboundValue) throws -> BamlBigInt {
+        let raw = value.normalized
+        let hexadecimal: String
+        switch raw.value {
+        case .bigintValue(let bigint):
+            hexadecimal = bigint
+        case .literalValue(let literal):
+            guard case .bigintValue(let bigint) = literal.literal else {
+                throw BamlDecodeError.typeMismatch(expected: "BamlBigInt", got: wireArmName(raw))
+            }
+            hexadecimal = bigint
+        default:
+            throw BamlDecodeError.typeMismatch(expected: "BamlBigInt", got: wireArmName(raw))
+        }
+        do {
+            return try BamlBigInt(hexadecimal: hexadecimal)
+        } catch {
+            throw BamlDecodeError.typeMismatch(expected: "canonical bigint", got: "bigint \(hexadecimal)")
         }
     }
 }
@@ -348,8 +376,6 @@ func unwrapEnvelope(_ data: Data) throws -> BamlOutboundValue {
         throw bamlError(from: error.value, trace: error.trace)
     case .panic(let panic):
         if panic.isExitPanic {
-            // (The pre-V1 ABI had a flush_events() hook here; event
-            // production was removed upstream, so exit directly.)
             exit(Int32(truncatingIfNeeded: panic.exitCode))
         }
         let (message, className) = describeThrownValue(panic.value)

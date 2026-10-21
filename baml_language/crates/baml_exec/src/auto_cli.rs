@@ -19,11 +19,11 @@ use bex_engine::{BexExternalValue, RuntimeTy};
 /// primitive (the user just passes `--name null` or the value).
 pub fn is_auto_cli_primitive(ty: &RuntimeTy) -> bool {
     match ty {
-        RuntimeTy::String { .. }
-        | RuntimeTy::Int { .. }
-        | RuntimeTy::Float { .. }
-        | RuntimeTy::Bool { .. }
-        | RuntimeTy::Null { .. }
+        RuntimeTy::String
+        | RuntimeTy::Int
+        | RuntimeTy::Float
+        | RuntimeTy::Bool
+        | RuntimeTy::Null
         | RuntimeTy::Enum(..) => true,
         // `T?` is `T | null`: a nullable wrapper around a primitive is still
         // CLI-passable; a genuine multi-member union is not.
@@ -42,29 +42,29 @@ pub fn is_auto_cli_primitive(ty: &RuntimeTy) -> bool {
 /// survives nontrivial shell quoting.
 pub fn parse_cli_value(raw: &str, ty: &RuntimeTy) -> Result<BexExternalValue> {
     match ty {
-        RuntimeTy::String { .. } => Ok(BexExternalValue::String(raw.into())),
+        RuntimeTy::String => Ok(BexExternalValue::String(raw.into())),
 
-        RuntimeTy::Int { .. } => {
+        RuntimeTy::Int => {
             let v: i64 = raw
                 .parse()
                 .with_context(|| format!("expected integer, got `{raw}`"))?;
             Ok(BexExternalValue::Int(v))
         }
 
-        RuntimeTy::Float { .. } => {
+        RuntimeTy::Float => {
             let v: f64 = raw
                 .parse()
                 .with_context(|| format!("expected float, got `{raw}`"))?;
             Ok(BexExternalValue::Float(v))
         }
 
-        RuntimeTy::Bool { .. } => match raw {
+        RuntimeTy::Bool => match raw {
             "true" => Ok(BexExternalValue::Bool(true)),
             "false" => Ok(BexExternalValue::Bool(false)),
             _ => anyhow::bail!("expected `true` or `false`, got `{raw}`"),
         },
 
-        RuntimeTy::Null { .. } => {
+        RuntimeTy::Null => {
             if raw == "null" {
                 Ok(BexExternalValue::Null)
             } else {
@@ -82,7 +82,7 @@ pub fn parse_cli_value(raw: &str, ty: &RuntimeTy) -> Result<BexExternalValue> {
             }
         }
 
-        RuntimeTy::Enum(type_name, _) => Ok(BexExternalValue::Variant {
+        RuntimeTy::Enum(type_name) => Ok(BexExternalValue::Variant {
             enum_name: type_name.display_name().to_string(),
             variant_name: raw.to_string(),
         }),
@@ -91,7 +91,7 @@ pub fn parse_cli_value(raw: &str, ty: &RuntimeTy) -> Result<BexExternalValue> {
         // faithfully represent must be delivered via `--json-args`.
         // Structured types (class/list/map/union) are the obvious case;
         // media, literals, type aliases, opaque types, and the engine-
-        // internal types (function/void/future) fall in the same
+        // internal types (function/future) fall in the same
         // bucket — they either can't survive shell quoting or aren't
         // valid CLI parameter types. The previous catchall silently
         // String-coerced everything that fell through; that hides
@@ -107,46 +107,36 @@ pub fn parse_cli_value(raw: &str, ty: &RuntimeTy) -> Result<BexExternalValue> {
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{MediaKind, TyAttr, TypeName};
+    use baml_type::{MediaKind, TypeName};
 
     use super::*;
 
     fn ty_string() -> RuntimeTy {
-        RuntimeTy::String {
-            attr: TyAttr::default(),
-        }
+        RuntimeTy::String
     }
     fn ty_int() -> RuntimeTy {
-        RuntimeTy::Int {
-            attr: TyAttr::default(),
-        }
+        RuntimeTy::Int
     }
     fn ty_bool() -> RuntimeTy {
-        RuntimeTy::Bool {
-            attr: TyAttr::default(),
-        }
+        RuntimeTy::Bool
     }
     fn ty_float() -> RuntimeTy {
-        RuntimeTy::Float {
-            attr: TyAttr::default(),
-        }
+        RuntimeTy::Float
     }
     fn ty_null() -> RuntimeTy {
-        RuntimeTy::Null {
-            attr: TyAttr::default(),
-        }
+        RuntimeTy::Null
     }
     fn ty_optional(inner: RuntimeTy) -> RuntimeTy {
         RuntimeTy::optional(inner)
     }
     fn ty_enum(name: &str) -> RuntimeTy {
-        RuntimeTy::Enum(TypeName::local(name.into()), TyAttr::default())
+        RuntimeTy::Enum(TypeName::local(name.into()))
     }
     fn ty_list(elem: RuntimeTy) -> RuntimeTy {
-        RuntimeTy::List(Box::new(elem), TyAttr::default())
+        RuntimeTy::List(Box::new(elem))
     }
     fn ty_class(name: &str) -> RuntimeTy {
-        RuntimeTy::Class(TypeName::local(name.into()), vec![], TyAttr::default())
+        RuntimeTy::Class(TypeName::local(name.into()), Box::new([]))
     }
 
     fn assert_string(raw: &BexExternalValue, expected: &str) {
@@ -278,7 +268,7 @@ mod tests {
     /// `--json-args` pointer as structured types (BEP-027 Open Q #5).
     #[test]
     fn parse_cli_value_media_rejected_with_json_args_hint() {
-        let ty = RuntimeTy::Media(MediaKind::Image, TyAttr::default());
+        let ty = RuntimeTy::Media(MediaKind::Image);
         let err = parse_cli_value("/tmp/cat.png", &ty).unwrap_err();
         let msg = format!("{err}");
         assert!(
@@ -295,14 +285,9 @@ mod tests {
     #[test]
     fn parse_cli_value_engine_internal_type_rejected() {
         let ty = RuntimeTy::Function {
-            params: vec![],
-            ret: Box::new(RuntimeTy::Int {
-                attr: TyAttr::default(),
-            }),
-            throws: Box::new(RuntimeTy::Void {
-                attr: TyAttr::default(),
-            }),
-            attr: TyAttr::default(),
+            params: Box::new([]),
+            ret: Box::new(RuntimeTy::Int),
+            throws: Box::new(RuntimeTy::Never),
         };
         let err = parse_cli_value("anything", &ty).unwrap_err();
         let msg = format!("{err}");

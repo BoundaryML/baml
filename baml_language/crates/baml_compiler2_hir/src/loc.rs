@@ -3,7 +3,7 @@
 //! Each `*Loc` uniquely identifies where an item is defined:
 //!   `SourceFile` (Salsa input) + `LocalItemId<Marker>`.
 //!
-//! Nine `#[salsa::interned]` structs — one per item kind.
+//! Seven `#[salsa::interned]` structs — one per item kind.
 //! Modeled after `baml_compiler_hir::loc` but independent types.
 //!
 //! Manual `Debug` impls are required because Salsa-generated interned types
@@ -12,67 +12,55 @@
 use baml_base::SourceFile;
 
 use crate::ids::{
-    ClassMarker, ClientMarker, EnumMarker, FunctionMarker, ImplMarker, InterfaceMarker, LetMarker,
-    LocalItemId, RetryPolicyMarker, TemplateStringMarker, TestMarker, TypeAliasMarker,
+    ClassMarker, EnumMarker, FunctionMarker, ImplMarker, InterfaceMarker, LetMarker, LocalItemId,
+    TypeAliasMarker,
 };
 
 #[salsa::interned]
 pub struct FunctionLoc<'db> {
+    #[returns(clone)]
     pub file: SourceFile,
+    #[returns(clone)]
     pub id: LocalItemId<FunctionMarker>,
 }
 
 #[salsa::interned]
 pub struct ClassLoc<'db> {
+    #[returns(clone)]
     pub file: SourceFile,
+    #[returns(clone)]
     pub id: LocalItemId<ClassMarker>,
 }
 
 #[salsa::interned]
 pub struct EnumLoc<'db> {
+    #[returns(clone)]
     pub file: SourceFile,
+    #[returns(clone)]
     pub id: LocalItemId<EnumMarker>,
 }
 
 #[salsa::interned]
 pub struct InterfaceLoc<'db> {
+    #[returns(clone)]
     pub file: SourceFile,
+    #[returns(clone)]
     pub id: LocalItemId<InterfaceMarker>,
 }
 
 #[salsa::interned]
 pub struct TypeAliasLoc<'db> {
+    #[returns(clone)]
     pub file: SourceFile,
+    #[returns(clone)]
     pub id: LocalItemId<TypeAliasMarker>,
 }
 
 #[salsa::interned]
-pub struct ClientLoc<'db> {
-    pub file: SourceFile,
-    pub id: LocalItemId<ClientMarker>,
-}
-
-#[salsa::interned]
-pub struct TestLoc<'db> {
-    pub file: SourceFile,
-    pub id: LocalItemId<TestMarker>,
-}
-
-#[salsa::interned]
-pub struct TemplateStringLoc<'db> {
-    pub file: SourceFile,
-    pub id: LocalItemId<TemplateStringMarker>,
-}
-
-#[salsa::interned]
-pub struct RetryPolicyLoc<'db> {
-    pub file: SourceFile,
-    pub id: LocalItemId<RetryPolicyMarker>,
-}
-
-#[salsa::interned]
 pub struct LetLoc<'db> {
+    #[returns(clone)]
     pub file: SourceFile,
+    #[returns(clone)]
     pub id: LocalItemId<LetMarker>,
 }
 
@@ -84,8 +72,50 @@ pub struct LetLoc<'db> {
 /// intentionally absent from `Definition`/`ItemId`.
 #[salsa::interned]
 pub struct ImplLoc<'db> {
+    #[returns(clone)]
     pub file: SourceFile,
+    #[returns(clone)]
     pub id: LocalItemId<ImplMarker>,
+}
+
+// ── Provenance ───────────────────────────────────────────────────────────────
+
+/// A reference to a possibly-external declaration, algebraic over PROVENANCE.
+///
+/// Every entity kind that can arrive from outside the compiling database's
+/// sources (functions, classes, enums, interfaces, impls, type aliases, lets) is
+/// referenced through this ONE shape rather than through partial
+/// `*Loc`-keyed maps whose live-only domain a reader cannot see. The variant
+/// determines which questions are even answerable:
+///
+/// - [`DeclRef::Source`] — source available: type-checked by this database,
+///   every salsa query answers. Where its compiled artifact comes from
+///   (emitted here, spliced from the precompiled stdlib, reused clean) is
+///   PLACEMENT, a separate axis that emit's placement registry owns —
+///   resolution never depends on cache state, so provenance is two-valued.
+/// - [`DeclRef::External`] — no source: the declaration is known only
+///   through a package interface (a mounted blob, the precompiled stdlib in
+///   a runtime compile). Only its exported shape is askable; it has no
+///   slot, no pooled object, no body. `E` is a kind-specific interned extern
+///   identity, minted ONCE at the interface boundary from the lookup key —
+///   downstream code compares ids and reads rows through memoized queries,
+///   never by re-resolving name bundles.
+///
+/// `L` is the kind's `*Loc` type (salsa's macros take no generics, so the
+/// seven loc structs stay concrete and this enum is generic over them); `E`
+/// is the kind's extern-loc type, defined where the exported rows live.
+/// Equality is declaration identity: two refs are equal iff they name the
+/// same source item or the same exported row.
+///
+/// There are deliberately no one-sided projections (`source_loc()` /
+/// `external()`): every consumer matches both arms, so handling one lane
+/// and dropping the other is a compile error, never a silent `None`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum DeclRef<L, E> {
+    /// Source available: type-checked by this database.
+    Source(L),
+    /// Source unavailable: shape known only through a package interface.
+    External(E),
 }
 
 // ── Manual Debug impls ───────────────────────────────────────────────────────
@@ -122,30 +152,6 @@ impl std::fmt::Debug for TypeAliasLoc<'_> {
     }
 }
 
-impl std::fmt::Debug for ClientLoc<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ClientLoc(..)")
-    }
-}
-
-impl std::fmt::Debug for TestLoc<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "TestLoc(..)")
-    }
-}
-
-impl std::fmt::Debug for TemplateStringLoc<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "TemplateStringLoc(..)")
-    }
-}
-
-impl std::fmt::Debug for RetryPolicyLoc<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "RetryPolicyLoc(..)")
-    }
-}
-
 impl std::fmt::Debug for LetLoc<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "LetLoc(..)")
@@ -168,10 +174,6 @@ pub enum ItemId<'db> {
     Enum(EnumLoc<'db>),
     Interface(InterfaceLoc<'db>),
     TypeAlias(TypeAliasLoc<'db>),
-    Client(ClientLoc<'db>),
-    Test(TestLoc<'db>),
-    TemplateString(TemplateStringLoc<'db>),
-    RetryPolicy(RetryPolicyLoc<'db>),
     Let(LetLoc<'db>),
 }
 
@@ -183,10 +185,6 @@ impl std::fmt::Debug for ItemId<'_> {
             ItemId::Enum(_) => write!(f, "ItemId::Enum(..)"),
             ItemId::Interface(_) => write!(f, "ItemId::Interface(..)"),
             ItemId::TypeAlias(_) => write!(f, "ItemId::TypeAlias(..)"),
-            ItemId::Client(_) => write!(f, "ItemId::Client(..)"),
-            ItemId::Test(_) => write!(f, "ItemId::Test(..)"),
-            ItemId::TemplateString(_) => write!(f, "ItemId::TemplateString(..)"),
-            ItemId::RetryPolicy(_) => write!(f, "ItemId::RetryPolicy(..)"),
             ItemId::Let(_) => write!(f, "ItemId::Let(..)"),
         }
     }

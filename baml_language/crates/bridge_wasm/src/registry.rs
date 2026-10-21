@@ -88,12 +88,18 @@ impl WasmRegistry {
     }
 }
 
-/// Opaque body handle stored in `owned::http::Response._body` as `Arc<dyn Any + Send + Sync>`.
+/// Opaque body handle stored in `owned::http::Response._body` as `Arc<dyn BexRustData>`.
 ///
 /// Ties the response's body promise to the registry and cleans up on drop.
 pub(crate) struct WasmResponseBody {
     pub(crate) registry: Arc<WasmRegistry>,
     pub(crate) key: usize,
+}
+
+impl sys_types::BexRustData for WasmResponseBody {
+    fn measure(&self, _: &mut sys_types::Meter) {
+        // The body is a promise the registry holds on the host's behalf.
+    }
 }
 
 impl Drop for WasmResponseBody {
@@ -126,17 +132,31 @@ pub(crate) type SseEventReceiver =
 pub(crate) struct WasmSseStreamHandle {
     /// Channel receiver for parsed SSE events. `None` after `close()`.
     receiver: SendWrapper<RefCell<Option<SseEventReceiver>>>,
+    /// Bytes of events sent and not yet received, shared with the sender.
+    retained: Arc<sys_types::RetainedBytes>,
 }
 
 // SAFETY: wasm32-unknown-unknown is single-threaded.
 unsafe impl Send for WasmSseStreamHandle {}
 unsafe impl Sync for WasmSseStreamHandle {}
 
+impl sys_types::BexRustData for WasmSseStreamHandle {
+    fn measure(&self, meter: &mut sys_types::Meter) {
+        meter.bytes(self.retained.get());
+    }
+}
+
 impl WasmSseStreamHandle {
-    pub(crate) fn new(receiver: SseEventReceiver) -> Self {
+    pub(crate) fn new(receiver: SseEventReceiver, retained: Arc<sys_types::RetainedBytes>) -> Self {
         Self {
             receiver: SendWrapper::new(RefCell::new(Some(receiver))),
+            retained,
         }
+    }
+
+    /// An event left the channel.
+    pub(crate) fn received(&self, event: &sys_types::sse::SseEvent) {
+        self.retained.sub(event.retained_bytes());
     }
 
     /// Returns true if the stream has been closed (receiver dropped).
@@ -150,6 +170,7 @@ impl WasmSseStreamHandle {
     /// and exit.
     pub(crate) fn mark_done(&self) {
         self.receiver.borrow_mut().take();
+        self.retained.set(0);
     }
 
     /// Borrow the inner `RefCell` for synchronous drain and poll operations.

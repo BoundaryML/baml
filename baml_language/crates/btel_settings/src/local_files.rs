@@ -1,0 +1,36 @@
+//! Local delivery settings. File output is enabled explicitly per engine.
+use std::num::NonZeroUsize;
+
+/// Standard recording directory relative to the CLI-resolved BAML project root.
+/// User-level recordings instead resolve `btel/recordings` beneath the BAML home.
+/// Each recording gets its own ID directory beneath this path.
+pub const RECORDINGS_DIRECTORY: &str = ".baml/btel/recordings";
+
+/// **Tune first for disk bursts.** Queued files or snapshot owners, excluding the one being
+/// written. More slots absorb short disk stalls but retain more encoded memory.
+/// Exhaustion blocks downstream delivery after input chunks have been released.
+/// Increasing this limit absorbs bursts; it cannot fix sustained writer lag.
+pub const QUEUE_FILES: NonZeroUsize = NonZeroUsize::new(8).unwrap();
+
+#[derive(Clone, Copy, Debug)]
+pub struct LocalDeliveryConfig {
+    pub queue_files: NonZeroUsize,
+}
+impl Default for LocalDeliveryConfig {
+    fn default() -> Self {
+        Self {
+            queue_files: QUEUE_FILES,
+        }
+    }
+}
+
+/// CAS directory relative to the BAML project root, shared across recordings.
+/// User-level recordings instead resolve `btel/cas` beneath the BAML home.
+/// Local delivery appends the blob format version before the digest shards.
+pub const CAS_DIRECTORY: &str = ".baml/btel/cas";
+/// Writer buffering for scalar-heavy snapshot blobs; does not constrain capture size.
+pub const CAS_WRITE_BUFFER_BYTES: usize = 64 * 1024;
+/// Blob IDs one local CAS writer remembers as in place, so a blob that repeats
+/// across captures (a shared payload, the unchanged elements of a list) costs
+/// no filesystem check. Forgetting them at capacity costs checks, never blobs.
+pub const KNOWN_BLOB_IDS: usize = 65_536;

@@ -14,6 +14,13 @@ function immediate_callback(cb: (value: int) -> int) -> int {
     cb(1)
 }
 
+// An optional callback is a callback root too — its omitted `throws` opens
+// to a synthetic effect param instantiated per call site, same as the
+// immediate form above.
+function optional_callback(cb: ((value: int) -> int)?) -> int {
+    1
+}
+
 function lambda_explicit_callback() -> int {
     let apply = (f: (value: int) -> int throws never, x: int) -> int {
         f(x)

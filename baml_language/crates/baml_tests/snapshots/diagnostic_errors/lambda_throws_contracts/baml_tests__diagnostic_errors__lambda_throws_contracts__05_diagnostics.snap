@@ -1,0 +1,51 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0097
+
+  ⚠ extraneous throws declaration: string
+   ╭─[contracts.baml:4:45]
+ 4 │ function Named() -> int throws string | int { throw 1 }
+   ·                                             ───────────
+   ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: string
+   ╭─[contracts.baml:7:48]
+ 7 │     let unused = () -> int throws string | int { throw 1 };
+   ·                                                ───────────
+   ╰────
+
+  [type] E0097
+
+  × `throws unknown` is unnecessary: BAML infers thrown types automatically, and this function does not throw. Remove the declaration; write an explicit `throws` type only to bound what may escape
+   ╭─[contracts.baml:8:46]
+ 8 │     let imprecise = () -> int throws unknown { 1 };
+   ·                                              ─────
+   ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: UnusedError
+   ╭─[contracts.baml:9:59]
+ 9 │     let mixed = () -> int throws OpenErrors | UnusedError { throw value };
+   ·                                                           ───────────────
+   ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: string
+    ╭─[contracts.baml:10:45]
+ 10 │     let violation = () -> int throws string { throw 1 };
+    ·                                             ───────────
+    ╰────
+
+  [type] E0096
+
+  × declared throws is `string`, but this function may also throw `int`
+    ╭─[contracts.baml:10:53]
+ 10 │     let violation = () -> int throws string { throw 1 };
+    ·                                                     ─
+    ╰────

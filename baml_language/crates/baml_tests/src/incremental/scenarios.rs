@@ -6,15 +6,51 @@
 //! NOTE: These scenarios were ported from the legacy HIR (baml_compiler_hir)
 //! to compiler2 HIR (baml_compiler2_hir) as part of the compiler2 migration.
 
-use baml_compiler2_tir::inference::infer_scope_types;
 use baml_db::{SourceFile, baml_compiler2_hir};
 use salsa::Setter;
 
 use super::IncrementalTestDb;
+use crate::engine::TestDbExt;
 
 /// Query the semantic index for all files in a project (forces full HIR build).
-fn query_semantic_index(db: &baml_project::ProjectDatabase, file: SourceFile) {
+fn query_semantic_index(db: &baml_db::ProjectDatabase, file: SourceFile) {
     let _ = baml_compiler2_hir::file_semantic_index(db, file);
+}
+
+/// An empty package needs no dependency export work. Adding implementations
+/// afterward must still invalidate the empty coherence result.
+#[test]
+fn empty_package_check_avoids_dependency_interfaces_and_tracks_new_impls() {
+    let mut test_db = IncrementalTestDb::new();
+    let file = test_db
+        .db_mut()
+        .file("test.baml", "// No declarations yet.\n");
+
+    let diagnostics = test_db.assert_not_executed(
+        |db| db.check_file(file),
+        &[
+            "package_resolution_context",
+            "package_interface",
+            "normalized_alias_map",
+        ],
+    );
+    assert!(diagnostics.is_empty(), "{diagnostics:#?}");
+
+    file.set_text(test_db.db_mut()).to(r#"
+interface Marker {}
+class Subject {}
+implement Marker for Subject {}
+implement Marker for Subject {}
+"#
+    .to_string());
+    let diagnostics =
+        test_db.assert_not_executed(|db| db.check_file(file), &["package_resolution_context"]);
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic.id == baml_compiler_diagnostics::DiagnosticId::OverlappingImplements
+        }),
+        "adding local implementations must invalidate the empty coherence result: {diagnostics:#?}",
+    );
 }
 
 /// Test that editing a function body doesn't invalidate the item tree.
@@ -25,12 +61,12 @@ fn query_semantic_index(db: &baml_project::ProjectDatabase, file: SourceFile) {
 fn editing_function_body_preserves_item_tree() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         r##"
 function Greet(name: string) -> string {
-    client GPT4
-    prompt `Hello ${name}`
+    client: GPT4
+    prompt: `Hello ${name}`
 }
 "##,
     );
@@ -46,8 +82,8 @@ function Greet(name: string) -> string {
     // Modify only the prompt (body change)
     file.set_text(test_db.db_mut()).to(r##"
 function Greet(name: string) -> string {
-    client GPT4
-    prompt `Hi there ${name}!`
+    client: GPT4
+    prompt: `Hi there ${name}!`
 }
 "##
     .to_string());
@@ -68,12 +104,12 @@ function Greet(name: string) -> string {
 fn renaming_function_invalidates_item_tree() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         r##"
 function OldName(x: string) -> string {
-    client GPT4
-    prompt `test`
+    client: GPT4
+    prompt: `test`
 }
 "##,
     );
@@ -89,8 +125,8 @@ function OldName(x: string) -> string {
     // Rename the function
     file.set_text(test_db.db_mut()).to(r##"
 function NewName(x: string) -> string {
-    client GPT4
-    prompt `test`
+    client: GPT4
+    prompt: `test`
 }
 "##
     .to_string());
@@ -109,7 +145,7 @@ function NewName(x: string) -> string {
 fn adding_class_invalidates_item_tree() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         r#"
 class Person {
@@ -164,7 +200,7 @@ class NewClass {
 fn comment_changes_recompute_item_tree() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         r#"
 class MyClass {
@@ -204,7 +240,7 @@ class MyClass {
 fn editing_one_file_doesnt_affect_other() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file_a = test_db.db_mut().add_file(
+    let file_a = test_db.db_mut().file(
         "file_a.baml",
         r#"
 class ClassA {
@@ -213,7 +249,7 @@ class ClassA {
 "#,
     );
 
-    let file_b = test_db.db_mut().add_file(
+    let file_b = test_db.db_mut().file(
         "file_b.baml",
         r#"
 class ClassB {
@@ -261,12 +297,12 @@ class ClassA {
 fn type_inference_cached_on_no_change() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         r##"
 function Greet(name: string) -> string {
-    client GPT4
-    prompt `Hello ${name}`
+    client: GPT4
+    prompt: `Hello ${name}`
 }
 "##,
     );
@@ -283,11 +319,11 @@ function Greet(name: string) -> string {
 fn type_inference_cached_on_whitespace_change() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         r##"function Greet(name: string) -> string {
-    client GPT4
-    prompt `Hello ${name}`
+    client: GPT4
+    prompt: `Hello ${name}`
 }"##,
     );
 
@@ -297,8 +333,8 @@ fn type_inference_cached_on_whitespace_change() {
     // Add whitespace (blank lines at end)
     file.set_text(test_db.db_mut())
         .to(r##"function Greet(name: string) -> string {
-    client GPT4
-    prompt `Hello ${name}`
+    client: GPT4
+    prompt: `Hello ${name}`
 }
 
 
@@ -319,12 +355,12 @@ fn type_inference_cached_on_whitespace_change() {
 fn type_inference_invalidated_on_signature_change() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         r##"
 function Greet(name: string) -> string {
-    client GPT4
-    prompt `Hello ${name}`
+    client: GPT4
+    prompt: `Hello ${name}`
 }
 "##,
     );
@@ -335,8 +371,8 @@ function Greet(name: string) -> string {
     // Change the return type
     file.set_text(test_db.db_mut()).to(r##"
 function Greet(name: string) -> int {
-    client GPT4
-    prompt `Hello ${name}`
+    client: GPT4
+    prompt: `Hello ${name}`
 }
 "##
     .to_string());
@@ -359,14 +395,14 @@ function Greet(name: string) -> int {
 // ones (spans ignored by `PartialEq`). These tests pin both halves of that.
 
 fn type_alias_loc<'db>(
-    db: &'db baml_project::ProjectDatabase,
+    db: &'db baml_db::ProjectDatabase,
     file: SourceFile,
     name: &str,
 ) -> baml_compiler2_hir::loc::TypeAliasLoc<'db> {
-    *baml_compiler2_ppir::item_data::file_type_aliases(db, file)
+    *baml_compiler2_hir::item_data::file_type_aliases(db, file)
         .iter()
         .find(|&&loc| {
-            baml_compiler2_ppir::item_data::type_alias_data(db, loc)
+            baml_compiler2_hir::item_data::type_alias_data(db, loc)
                 .name
                 .as_str()
                 == name
@@ -380,14 +416,14 @@ fn type_alias_loc<'db>(
 fn whitespace_edit_preserves_item_data_but_moves_spans() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file("test.baml", "type Ids = int[]\n");
+    let file = test_db.db_mut().file("test.baml", "type Ids = int[]\n");
 
     let (data_before, span_before) = {
         let db = test_db.db();
         let loc = type_alias_loc(db, file, "Ids");
         (
-            baml_compiler2_ppir::item_data::type_alias_data(db, loc).clone(),
-            baml_compiler2_ppir::item_data::type_alias_source_map(db, loc).clone(),
+            baml_compiler2_hir::item_data::type_alias_data(db, loc).clone(),
+            baml_compiler2_hir::item_data::type_alias_source_map(db, loc).clone(),
         )
     };
 
@@ -399,8 +435,8 @@ fn whitespace_edit_preserves_item_data_but_moves_spans() {
         let db = test_db.db();
         let loc = type_alias_loc(db, file, "Ids");
         (
-            baml_compiler2_ppir::item_data::type_alias_data(db, loc).clone(),
-            baml_compiler2_ppir::item_data::type_alias_source_map(db, loc).clone(),
+            baml_compiler2_hir::item_data::type_alias_data(db, loc).clone(),
+            baml_compiler2_hir::item_data::type_alias_source_map(db, loc).clone(),
         )
     };
 
@@ -420,12 +456,12 @@ fn whitespace_edit_preserves_item_data_but_moves_spans() {
 fn semantic_edit_changes_item_data() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file("test.baml", "type Ids = int[]\n");
+    let file = test_db.db_mut().file("test.baml", "type Ids = int[]\n");
 
     let data_before = {
         let db = test_db.db();
         let loc = type_alias_loc(db, file, "Ids");
-        baml_compiler2_ppir::item_data::type_alias_data(db, loc).clone()
+        baml_compiler2_hir::item_data::type_alias_data(db, loc).clone()
     };
 
     file.set_text(test_db.db_mut())
@@ -434,21 +470,21 @@ fn semantic_edit_changes_item_data() {
     let data_after = {
         let db = test_db.db();
         let loc = type_alias_loc(db, file, "Ids");
-        baml_compiler2_ppir::item_data::type_alias_data(db, loc).clone()
+        baml_compiler2_hir::item_data::type_alias_data(db, loc).clone()
     };
 
     assert_ne!(data_before, data_after);
 }
 
 fn class_loc<'db>(
-    db: &'db baml_project::ProjectDatabase,
+    db: &'db baml_db::ProjectDatabase,
     file: SourceFile,
     name: &str,
 ) -> baml_compiler2_hir::loc::ClassLoc<'db> {
-    *baml_compiler2_ppir::item_data::file_classes(db, file)
+    *baml_compiler2_hir::item_data::file_classes(db, file)
         .iter()
         .find(|&&loc| {
-            baml_compiler2_ppir::item_data::class_data(db, loc)
+            baml_compiler2_hir::item_data::class_data(db, loc)
                 .name
                 .as_str()
                 == name
@@ -457,14 +493,14 @@ fn class_loc<'db>(
 }
 
 fn function_loc<'db>(
-    db: &'db baml_project::ProjectDatabase,
+    db: &'db baml_db::ProjectDatabase,
     file: SourceFile,
     name: &str,
 ) -> baml_compiler2_hir::loc::FunctionLoc<'db> {
-    *baml_compiler2_ppir::item_data::file_functions(db, file)
+    *baml_compiler2_hir::item_data::file_functions(db, file)
         .iter()
         .find(|&&loc| {
-            baml_compiler2_ppir::item_data::function_data(db, loc)
+            baml_compiler2_hir::item_data::function_data(db, loc)
                 .name
                 .as_str()
                 == name
@@ -479,26 +515,26 @@ fn function_loc<'db>(
 /// and carries no spans, so projecting it away loses nothing these tests check.
 type ClassFingerprint = (
     baml_base::Name,
-    Vec<baml_compiler2_ppir::item_data::GenericParamData>,
+    Vec<baml_compiler2_hir::item_data::GenericParamData>,
     baml_compiler2_hir::type_ref::TypeRefStore,
-    Vec<baml_compiler2_ppir::item_data::FieldData>,
-    Vec<baml_compiler2_ppir::item_data::ImplementsData>,
-    Vec<baml_compiler2_hir::item_tree::Attribute>,
+    Vec<baml_compiler2_hir::item_data::FieldData>,
+    Vec<baml_compiler2_hir::item_data::ImplementsData>,
+    baml_compiler2_hir::item_tree::ClassAttrs,
 );
 
 fn class_fingerprint(
-    db: &baml_project::ProjectDatabase,
+    db: &baml_db::ProjectDatabase,
     file: SourceFile,
     name: &str,
 ) -> ClassFingerprint {
-    let data = baml_compiler2_ppir::item_data::class_data(db, class_loc(db, file, name));
+    let data = baml_compiler2_hir::item_data::class_data(db, class_loc(db, file, name));
     (
         data.name.clone(),
         data.generic_params.clone(),
         data.type_refs.clone(),
         data.fields.clone(),
         data.implements.clone(),
-        data.attributes.clone(),
+        data.attrs.clone(),
     )
 }
 
@@ -508,7 +544,7 @@ fn class_fingerprint(
 fn editing_one_class_preserves_the_others_data() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         "class Person {\n  name string\n}\n\nclass Address {\n  city string\n}\n",
     );
@@ -540,7 +576,7 @@ fn editing_one_class_preserves_the_others_data() {
 fn moving_an_attribute_preserves_class_data() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         "class Person {\n  name string @description(\"who\")\n}\n",
     );
@@ -565,14 +601,14 @@ fn moving_an_attribute_preserves_class_data() {
 fn editing_a_function_body_preserves_its_signature_data() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         "function Add(x: int, y: int) -> int {\n  x + y\n}\n",
     );
 
     let before = {
         let db = test_db.db();
-        baml_compiler2_ppir::item_data::function_data(db, function_loc(db, file, "Add")).clone()
+        baml_compiler2_hir::item_data::function_data(db, function_loc(db, file, "Add")).clone()
     };
 
     file.set_text(test_db.db_mut())
@@ -580,7 +616,7 @@ fn editing_a_function_body_preserves_its_signature_data() {
 
     let after = {
         let db = test_db.db();
-        baml_compiler2_ppir::item_data::function_data(db, function_loc(db, file, "Add")).clone()
+        baml_compiler2_hir::item_data::function_data(db, function_loc(db, file, "Add")).clone()
     };
 
     assert_eq!(
@@ -588,6 +624,56 @@ fn editing_a_function_body_preserves_its_signature_data() {
         "a body edit must not invalidate the signature"
     );
     assert_eq!(before.params.len(), 2);
+}
+
+/// A downstream consumer that reads spans out of the memoized signature, the
+/// way a signature-lowering pass anchors its diagnostics.
+#[salsa::tracked(returns(clone))]
+fn signature_param_type_spans<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    function: baml_compiler2_hir::loc::FunctionLoc<'db>,
+) -> Vec<text_size::TextRange> {
+    baml_compiler2_hir::signature::function_signature(db, function).params[0]
+        .ty
+        .spans()
+}
+
+/// A signature's written types carry the nested spans that diagnostics anchor
+/// on. An edit that only moves them must not let the signature cut off, or a
+/// consumer reading those spans is never re-run and keeps the old positions.
+#[test]
+fn moving_a_function_refreshes_its_signature_type_spans() {
+    fn param_type_texts(
+        db: &baml_db::ProjectDatabase,
+        file: SourceFile,
+        text: &str,
+    ) -> Vec<String> {
+        signature_param_type_spans(db, function_loc(db, file, "lookup"))
+            .iter()
+            .map(|span| text[usize::from(span.start())..usize::from(span.end())].to_string())
+            .collect()
+    }
+    let expected = [
+        "map<string, map<string, int>>",
+        "string",
+        "map<string, int>",
+        "string",
+        "int",
+    ];
+
+    let mut test_db = IncrementalTestDb::new();
+    let before_text = "function lookup(table: map<string, map<string, int>>) -> int {\n  1\n}\n";
+    let file = test_db.db_mut().file("test.baml", before_text);
+    assert_eq!(param_type_texts(test_db.db(), file, before_text), expected);
+
+    let after_text =
+        "// a comment\nfunction lookup(table: map<string, map<string, int>>) -> int {\n  1\n}\n";
+    file.set_text(test_db.db_mut()).to(after_text.to_string());
+    assert_eq!(
+        param_type_texts(test_db.db(), file, after_text),
+        expected,
+        "a span-reading consumer must re-run when the signature's types move"
+    );
 }
 
 // ── Item ↔ scope index ───────────────────────────────────────────────────────
@@ -608,25 +694,25 @@ fn function_scope_index_agrees_with_the_span_join_it_replaces() {
     // their parent" — so the span-join was ambiguous exactly there. If the index
     // and the scan disagree for any of these, migrating the call sites is a
     // behavior change and needs to be handled deliberately.
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         "function Add(x: int, y: int) -> int {\n  x + y\n}\n\n\
          function Sub(x: int, y: int) -> int {\n  x - y\n}\n\n\
          class Holder {\n  n int\n\n  function get(self) -> int {\n    self.n\n  }\n}\n\n\
          function Greet(name: string) -> string {\n  \
-         client \"openai/gpt-4o-mini\"\n  prompt `Hello ${name}`\n}\n",
+         client: \"openai/gpt-4o-mini\"\n  prompt: `Hello ${name}`\n}\n",
     );
 
     let db = test_db.db();
-    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
     // Guard against a vacuous test: the declarative `Greet` must actually have
     // synthesized companions, or the ambiguous case is not being exercised.
-    let functions = baml_compiler2_ppir::item_data::file_functions(db, file);
+    let functions = baml_compiler2_hir::item_data::file_functions(db, file);
     let companions = functions
         .iter()
         .filter(|&&loc| {
             !matches!(
-                baml_compiler2_ppir::item_data::function_data(db, loc)
+                baml_compiler2_hir::item_data::function_data(db, loc)
                     .metadata
                     .origin,
                 baml_compiler2_ast::FunctionOrigin::UserDefined
@@ -640,8 +726,8 @@ fn function_scope_index_agrees_with_the_span_join_it_replaces() {
     );
 
     for &loc in functions {
-        let func = baml_compiler2_ppir::item_data::function_data(db, loc);
-        let func_span = baml_compiler2_ppir::item_data::function_source_map(db, loc).span;
+        let func = baml_compiler2_hir::item_data::function_data(db, loc);
+        let func_span = baml_compiler2_hir::item_data::function_source_map(db, loc).span;
 
         // The scan being retired.
         let legacy = index
@@ -656,7 +742,7 @@ fn function_scope_index_agrees_with_the_span_join_it_replaces() {
             })
             .map(|scope| scope.file_scope_id(db));
 
-        let indexed = baml_compiler2_ppir::item_data::function_scope(db, loc)
+        let indexed = baml_compiler2_hir::item_data::function_scope(db, loc)
             .map(|scope| scope.file_scope_id(db));
 
         assert_eq!(
@@ -674,7 +760,7 @@ fn function_scope_index_agrees_with_the_span_join_it_replaces() {
 fn function_scope_survives_a_whitespace_edit() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         "function Add(x: int, y: int) -> int {\n  x + y\n}\n",
     );
@@ -682,7 +768,7 @@ fn function_scope_survives_a_whitespace_edit() {
     let before = {
         let db = test_db.db();
         let loc = function_loc(db, file, "Add");
-        baml_compiler2_ppir::item_data::function_scope(db, loc).map(|scope| scope.file_scope_id(db))
+        baml_compiler2_hir::item_data::function_scope(db, loc).map(|scope| scope.file_scope_id(db))
     };
 
     file.set_text(test_db.db_mut())
@@ -691,7 +777,7 @@ fn function_scope_survives_a_whitespace_edit() {
     let after = {
         let db = test_db.db();
         let loc = function_loc(db, file, "Add");
-        baml_compiler2_ppir::item_data::function_scope(db, loc).map(|scope| scope.file_scope_id(db))
+        baml_compiler2_hir::item_data::function_scope(db, loc).map(|scope| scope.file_scope_id(db))
     };
 
     assert!(before.is_some());
@@ -708,15 +794,15 @@ fn scope_owner_round_trips() {
 
     let file = test_db
         .db_mut()
-        .add_file("test.baml", "function Add(x: int) -> int {\n  x\n}\n");
+        .file("test.baml", "function Add(x: int) -> int {\n  x\n}\n");
 
     let db = test_db.db();
     let loc = function_loc(db, file, "Add");
-    let scope = baml_compiler2_ppir::item_data::function_scope(db, loc).expect("scope");
+    let scope = baml_compiler2_hir::item_data::function_scope(db, loc).expect("scope");
 
     assert_eq!(
-        baml_compiler2_ppir::item_data::scope_owner(db, scope),
-        Some(baml_compiler2_ppir::item_data::ScopeOwner::Function(loc)),
+        baml_compiler2_hir::item_data::scope_owner(db, scope),
+        Some(baml_compiler2_hir::item_data::ScopeOwner::Function(loc)),
     );
 }
 
@@ -731,7 +817,7 @@ fn scope_owner_round_trips() {
 fn method_owner_index_agrees_with_the_scans_it_replaces() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         r#"
 interface Greeter {
@@ -760,8 +846,8 @@ class Robot {
 }
 
 // A simple `implements I for C` is merged onto the class during AST lowering
-// (its method becomes class-owned); only a *generic* out-of-body impl stays a
-// free impl block.
+// as an in-class block; its methods stay Impl-owned either way (the block
+// spelling is syntax, not ownership).
 implements Greeter for Robot {
     function greet(self) -> string throws never {
         self.id
@@ -789,44 +875,44 @@ function free_standing(x: int) -> int throws never {
     );
 
     let db = test_db.db();
-    assert!(!baml_compiler2_ppir::item_data::file_functions(db, file).is_empty());
+    assert!(!baml_compiler2_hir::item_data::file_functions(db, file).is_empty());
 
     let mut cases = (0usize, 0usize, 0usize, 0usize);
-    for &loc in baml_compiler2_ppir::item_data::file_functions(db, file) {
-        let func_name = baml_compiler2_ppir::item_data::function_data(db, loc)
+    for &loc in baml_compiler2_hir::item_data::file_functions(db, file) {
+        let func_name = baml_compiler2_hir::item_data::function_data(db, loc)
             .name
             .clone();
 
         // The scans being retired.
-        let by_class = baml_compiler2_ppir::item_data::file_classes(db, file)
+        let by_class = baml_compiler2_hir::item_data::file_classes(db, file)
             .iter()
             .copied()
             .find(|&class_loc| {
-                baml_compiler2_ppir::item_data::class_data(db, class_loc)
+                baml_compiler2_hir::item_data::class_data(db, class_loc)
                     .methods
                     .contains(&loc)
             });
-        let by_interface = baml_compiler2_ppir::item_data::file_interfaces(db, file)
+        let by_interface = baml_compiler2_hir::item_data::file_interfaces(db, file)
             .iter()
             .copied()
             .find(|&iface_loc| {
-                baml_compiler2_ppir::item_data::interface_data(db, iface_loc)
-                    .default_methods
+                baml_compiler2_hir::item_data::interface_data(db, iface_loc)
+                    .methods
                     .contains(&loc)
             });
-        let by_free_impl = baml_compiler2_ppir::item_data::file_free_impls(db, file)
+        let by_impl = baml_compiler2_hir::item_data::file_impls(db, file)
             .iter()
             .copied()
             .find(|&impl_loc| {
-                baml_compiler2_ppir::item_data::impl_block_data(db, impl_loc)
+                baml_compiler2_hir::item_data::impl_block_data(db, impl_loc)
                     .methods
                     .contains(&loc)
             });
 
-        let indexed = baml_compiler2_ppir::item_data::method_owner(db, loc);
+        let indexed = baml_compiler2_hir::item_data::method_owner(db, loc);
 
-        use baml_compiler2_ppir::item_data::MethodOwner;
-        match (by_class, by_interface, by_free_impl) {
+        use baml_compiler2_hir::item_data::MethodOwner;
+        match (by_class, by_interface, by_impl) {
             (Some(class_loc), None, None) => {
                 cases.0 += 1;
                 assert!(
@@ -844,8 +930,8 @@ function free_standing(x: int) -> int throws never {
             (None, None, Some(impl_loc)) => {
                 cases.2 += 1;
                 assert!(
-                    matches!(indexed, Some(MethodOwner::FreeImpl(b)) if b == impl_loc),
-                    "free-impl scan and index disagree for {func_name:?}"
+                    matches!(indexed, Some(MethodOwner::Impl(b)) if b == impl_loc),
+                    "impl scan and index disagree for {func_name:?}"
                 );
             }
             (None, None, None) => {
@@ -862,12 +948,12 @@ function free_standing(x: int) -> int throws never {
     }
 
     // Guard against a vacuous fixture: every ownership case must be present.
-    assert!(
-        cases.0 >= 2,
-        "expected class methods (plain + in-body impl)"
-    );
+    assert!(cases.0 >= 1, "expected a plain class method");
     assert!(cases.1 >= 1, "expected an interface default method");
-    assert!(cases.2 >= 1, "expected a free-impl method");
+    assert!(
+        cases.2 >= 2,
+        "expected impl methods (in-body + out-of-body)"
+    );
     assert!(cases.3 >= 1, "expected a top-level function");
 }
 
@@ -879,7 +965,7 @@ function free_standing(x: int) -> int throws never {
 fn elaborated_function_data_cuts_off_and_still_elaborates() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
         "function Apply(x: int, f: (int) -> int) -> int throws never {\n  f(x)\n}\n",
     );
@@ -887,7 +973,7 @@ fn elaborated_function_data_cuts_off_and_still_elaborates() {
     let before = {
         let db = test_db.db();
         let loc = function_loc(db, file, "Apply");
-        baml_compiler2_ppir::item_data::elaborated_function_data(db, loc).clone()
+        baml_compiler2_hir::item_data::elaborated_function_data(db, loc).clone()
     };
 
     // The callback param `f` omits its throws — elaboration must have opened a
@@ -908,7 +994,7 @@ fn elaborated_function_data_cuts_off_and_still_elaborates() {
     let after = {
         let db = test_db.db();
         let loc = function_loc(db, file, "Apply");
-        baml_compiler2_ppir::item_data::elaborated_function_data(db, loc).clone()
+        baml_compiler2_hir::item_data::elaborated_function_data(db, loc).clone()
     };
 
     assert_eq!(
@@ -926,27 +1012,27 @@ fn elaborated_function_data_cuts_off_and_still_elaborates() {
 fn editing_a_function_prompt_preserves_its_llm_meta() {
     let mut test_db = IncrementalTestDb::new();
 
-    let file = test_db.db_mut().add_file(
+    let file = test_db.db_mut().file(
         "test.baml",
-        "function Greet(name: string) -> string {\n  client GPT4\n  prompt `Hi ${name}`\n}\n",
+        "function Greet(name: string) -> string {\n  client: GPT4\n  prompt: `Hi ${name}`\n}\n",
     );
 
     let before = {
         let db = test_db.db();
-        baml_compiler2_ppir::item_data::function_llm_meta(db, function_loc(db, file, "Greet"))
+        baml_compiler2_hir::item_data::function_llm_meta(db, function_loc(db, file, "Greet"))
             .clone()
     };
 
     // Rewrite only the prompt — the client (the one fact the projection keeps) is
     // untouched.
     file.set_text(test_db.db_mut()).to(
-        "function Greet(name: string) -> string {\n  client GPT4\n  prompt `Hello there ${name}!`\n}\n"
+        "function Greet(name: string) -> string {\n  client: GPT4\n  prompt: `Hello there ${name}!`\n}\n"
             .to_string(),
     );
 
     let after = {
         let db = test_db.db();
-        baml_compiler2_ppir::item_data::function_llm_meta(db, function_loc(db, file, "Greet"))
+        baml_compiler2_hir::item_data::function_llm_meta(db, function_loc(db, file, "Greet"))
             .clone()
     };
 
@@ -957,46 +1043,110 @@ fn editing_a_function_prompt_preserves_its_llm_meta() {
     );
 }
 
-/// The whole refactor exists so that a cosmetic edit does not re-run type
-/// inference. That does not hold yet: `infer_scope_types` reads the `no_eq`
-/// `file_semantic_index` directly, so any edit to its file re-executes it.
-/// Un-ignore once inference consumes the per-item firewall queries instead of the
-/// coarse index.
-#[test]
-#[ignore = "infer_scope_types still reads the no_eq file_semantic_index directly; un-ignore once it consumes the firewall queries"]
-fn comment_edit_does_not_reexecute_type_inference() {
-    let mut test_db = IncrementalTestDb::new();
+// ── hir_ty inference firewall (S2/S3) ────────────────────────────────────────
 
-    let file = test_db.db_mut().add_file(
+/// Run hir_ty inference for every body owner in `file`.
+fn query_hir_ty_inference(db: &baml_db::ProjectDatabase, file: SourceFile) {
+    for owner in baml_compiler2_hir::body::file_body_owners(db, file) {
+        let _ = baml_compiler2_hir_ty::infer::infer_body(db, owner);
+    }
+}
+
+/// The tracked `infer_function_body` is cached: a repeat query with no
+/// edit executes nothing.
+#[test]
+fn hir_ty_inference_cached_on_repeat() {
+    let mut test_db = IncrementalTestDb::new();
+    let file = test_db.db_mut().file(
         "test.baml",
-        "function Add(x: int, y: int) -> int {\n  x + y\n}\n",
+        "function f(x: int) -> int throws never {\n    x + 1\n}\n",
     );
 
-    // Prime inference for `Add`'s body scope.
-    let scope_id = {
-        let db = test_db.db();
-        baml_compiler2_ppir::item_data::function_scope(db, function_loc(db, file, "Add"))
-            .expect("Add has a scope")
-    };
-    let _ = test_db.log_executed(|db| {
-        let _ = infer_scope_types(db, scope_id);
-    });
-
-    // Add a comment: semantically a no-op for the function body.
-    file.set_text(test_db.db_mut())
-        .to("// a comment\nfunction Add(x: int, y: int) -> int {\n  x + y\n}\n".to_string());
-
-    // Re-fetch the scope (its tracked-struct id may have been re-minted by the
-    // no_eq index) and assert inference is served from cache.
-    let scope_id = {
-        let db = test_db.db();
-        baml_compiler2_ppir::item_data::function_scope(db, function_loc(db, file, "Add"))
-            .expect("Add has a scope")
-    };
+    test_db.assert_executed(
+        |db| query_hir_ty_inference(db, file),
+        &[("infer_function_body", 1)],
+    );
     test_db.assert_not_executed(
+        |db| query_hir_ty_inference(db, file),
+        &[
+            "infer_function_body",
+            "function_signature",
+            "callable_throws",
+        ],
+    );
+}
+
+/// Editing one file's body leaves OTHER files' inference untouched
+/// (cross-file isolation: inference inputs are per-file).
+#[test]
+fn hir_ty_editing_one_file_preserves_other_files_inference() {
+    let mut test_db = IncrementalTestDb::new();
+    let file_a = test_db.db_mut().file(
+        "a.baml",
+        "function alpha() -> int throws never {\n    1\n}\n",
+    );
+    let file_b = test_db.db_mut().file(
+        "b.baml",
+        "function beta() -> int throws never {\n    2\n}\n",
+    );
+
+    test_db.assert_executed(
         |db| {
-            let _ = infer_scope_types(db, scope_id);
+            query_hir_ty_inference(db, file_a);
+            query_hir_ty_inference(db, file_b);
         },
-        &["infer_scope_types"],
+        &[("infer_function_body", 2)],
+    );
+
+    file_b
+        .set_text(test_db.db_mut())
+        .to("function beta() -> int throws never {\n    3\n}\n".to_string());
+
+    // Re-querying A alone recomputes nothing: its inputs are unchanged.
+    test_db.assert_not_executed(
+        |db| query_hir_ty_inference(db, file_a),
+        &["infer_function_body"],
+    );
+}
+
+/// THE firewall (S3): a body edit that leaves the callee's SIGNATURE
+/// unchanged (declared return, unchanged inferred effect) does not
+/// re-infer its callers - `function_signature`/`callable_throws`
+/// re-execute but produce EQUAL results, and Salsa's PartialEq-based change
+/// detection cuts the caller's `infer_function_body` off.
+#[test]
+fn hir_ty_body_edit_with_stable_signature_does_not_reinfer_callers() {
+    let mut test_db = IncrementalTestDb::new();
+    let file_a = test_db.db_mut().file(
+        "a.baml",
+        "function callee() -> int throws never {\n    1\n}\n",
+    );
+    let file_b = test_db.db_mut().file(
+        "b.baml",
+        "function caller() -> int throws never {\n    callee()\n}\n",
+    );
+
+    test_db.assert_executed(
+        |db| {
+            query_hir_ty_inference(db, file_a);
+            query_hir_ty_inference(db, file_b);
+        },
+        &[("infer_function_body", 2)],
+    );
+
+    // Edit the callee's BODY only: its own inference changes (the literal
+    // types differ), but the signature - declared return, `never` effect -
+    // is identical.
+    file_a
+        .set_text(test_db.db_mut())
+        .to("function callee() -> int throws never {\n    2\n}\n".to_string());
+
+    // Only the callee re-infers; the caller is cut off at the signature.
+    test_db.assert_executed(
+        |db| {
+            query_hir_ty_inference(db, file_a);
+            query_hir_ty_inference(db, file_b);
+        },
+        &[("infer_function_body", 1)],
     );
 }

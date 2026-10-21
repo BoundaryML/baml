@@ -1,0 +1,5 @@
+{
+  "enabledPlugins": {
+    "slack@claude-plugins-official": true
+  }
+}

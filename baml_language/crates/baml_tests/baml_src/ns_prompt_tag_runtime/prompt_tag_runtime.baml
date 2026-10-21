@@ -60,8 +60,8 @@ class PersonNick {
 // ─── Role construction (isolation) ────────────────────────────────────────────
 
 // Isolation: does constructing a `Role { name, metadata }` even type-check?
-function pt_role_construction_fn() -> baml.prompt.Role {
-    baml.prompt.Role { name: "system", metadata: {} }
+function pt_role_construction_fn() -> ai.Role {
+    ai.Role { name: "system", metadata: {} }
 }
 
 test "role_construction_isolation" {
@@ -74,8 +74,8 @@ test "role_construction_isolation" {
 // system message "You are helpful." then a user message "Hi World!".
 function pt_role_messages_fn() -> string {
     let name = "World"
-    let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-    let ctx = baml.prompt.Context { client: cc, tags: {} }
+    let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(string.type()) }
     let render = ai.prompt`${role("system")}You are helpful.${role("user")}Hi ${name}!`
     render(ctx).text()
 }
@@ -88,11 +88,11 @@ test "prompt_tag_builds_promptast_with_role_messages" {
 }
 
 // Ergonomic fallback: bare `prompt`...`` resolves to `ai.prompt`
-// (no `baml.prompt.` qualifier needed). Same assembly as the qualified form.
+// (no `ai.` qualifier needed). Same assembly as the qualified form.
 function pt_unqualified_prompt_fn() -> string {
     let name = "World"
-    let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-    let ctx = baml.prompt.Context { client: cc, tags: {} }
+    let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(string.type()) }
     let render = prompt`${role("system")}You are helpful.${role("user")}Hi ${name}!`
     render(ctx).text()
 }
@@ -115,8 +115,8 @@ test "unqualified_prompt_tag_resolves_to_baml_llm_prompt" {
 function pt_class_array_interp_fn() -> string {
     let p = Point { x: 1, y: 2 }
     let xs = [10, 20, 30]
-    let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system"] }
-    let ctx = baml.prompt.Context { client: cc, tags: {} }
+    let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system"] }
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(string.type()) }
     let render = prompt`Point ${p} list ${xs}`
     let from_prompt = render(ctx).text()
     let from_string = `Point ${p} list ${xs}`
@@ -138,8 +138,8 @@ test "prompt_interpolates_class_and_array_like_ordinary_string" {
 // structural renderer could not do this. `${role(...)}` still splits messages.
 function pt_tostring_override_fn() -> string {
     let v = Labeled { tag: "hi" }
-    let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system", "user"] }
-    let ctx = baml.prompt.Context { client: cc, tags: {} }
+    let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "system", allowed_roles: ["system", "user"] }
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(string.type()) }
     let render = prompt`${role("system")}head ${v}${role("user")}tail ${v}`
     render(ctx).text()
 }
@@ -182,8 +182,8 @@ function pt_nested_media_fn() -> string {
         gallery: [bundle],
         lookup: { "copy": bundle },
     }
-    let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-    let ctx = baml.prompt.Context { client: cc, tags: {} }
+    let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(string.type()) }
     let render = prompt`${role("user")}Inspect ${envelope}`
     render(ctx).text()
 }
@@ -206,8 +206,8 @@ function pt_nested_tostring_and_media_fn() -> string {
         label: Labeled { tag: "hi" },
         picture: image.from_url("https://example.com/picture.png", "image/png"),
     }
-    let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-    let ctx = baml.prompt.Context { client: cc, tags: {} }
+    let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(string.type()) }
     let render = prompt`${value}`
     render(ctx).text()
 }
@@ -215,7 +215,7 @@ function pt_nested_tostring_and_media_fn() -> string {
 test "prompt_preserves_nested_tostring_overrides_beside_media" {
     assert.equal(
         pt_nested_tostring_and_media_fn(),
-        "LabeledMedia { label: LBL<hi>, picture: image::url(https://example.com/picture.png, loaded=false) }"
+        "LabeledMedia { label: LBL<hi>, picture:image::url(https://example.com/picture.png, loaded=false)}"
     )
 }
 
@@ -223,8 +223,8 @@ function pt_parent_tostring_owns_media_fn() -> string {
     let value = RedactedMedia {
         picture: image.from_url("https://example.com/secret.png", "image/png"),
     }
-    let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-    let ctx = baml.prompt.Context { client: cc, tags: {} }
+    let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(string.type()) }
     let render = prompt`${value}`
     render(ctx).text()
 }
@@ -233,18 +233,17 @@ test "prompt_parent_tostring_override_owns_media_subtree" {
     assert.equal(pt_parent_tostring_owns_media_fn(), "REDACTED")
 }
 
-// ─── ${ctx.output_format} (M5b) ───────────────────────────────────────────────
+// ${ctx.output_format()} (M5b)
 
-// BEP-049 M5b: `${ctx.output_format}` renders the return type's schema.
-// `render_output_format(reflect.type_of<Person>())` produces the schema string
-// the orchestrator will later populate `Context.output_format` with; here we
-// wire it by hand and assert the assembled prompt embeds the schema.
+// BEP-049 M5b: `${ctx.output_format()}` renders the return type's schema.
+// Build the same schema handle the orchestrator supplies and assert the
+// assembled prompt embeds its rendered schema.
 function pt_ctx_output_format_fn() -> string {
-    let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-    let of = baml.prompt.render_output_format(reflect.type_of<Person>())
-    let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: of }
+    let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+    let of = ai.internal.build_output_format(Person.type())
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: of }
     let render = ai.prompt`Answer using this schema:
-${ctx.output_format}`
+${ctx.output_format()}`
     render(ctx).text()
 }
 
@@ -256,14 +255,14 @@ test "prompt_interpolates_ctx_output_format" {
 }
 
 function PtRenderPerson() -> Person {
-    client "openai/gpt-4o-mini"
-    prompt `Make a person.${ctx.output_format}`
+    client: "openai/gpt-4o-mini"
+    prompt: `Make a person.${ctx.output_format()}`
 }
 
 function pt_render_prompt_companion_output_format_fn() -> string {
-    // `$render_prompt` returns the structural prompt; use `.text()` only when
+    // `@render_prompt` returns the structural prompt; use `.text()` only when
     // this assertion intentionally wants its readable text projection.
-    PtRenderPerson$render_prompt().text()
+    PtRenderPerson@render_prompt().text()
 }
 
 test "render_prompt_companion_interpolates_ctx_output_format" {
@@ -276,9 +275,9 @@ test "render_prompt_companion_interpolates_ctx_output_format" {
 // built-in `prompt` tag above. This exercises the real @spec path instead of
 // constructing a prompt tag by hand.
 function PtStructuredGreeting(name: string) -> string {
-    client "openai/gpt-4o-mini"
-    tools []
-    prompt `${role("system")}Follow the rules.${role("user")}Hello ${name}.`
+    client: "openai/gpt-4o-mini"
+    tools: []
+    prompt: `${role("system")}Follow the rules.${role("user")}Hello ${name}.`
 }
 
 function pt_spec_prompt_messages_fn() -> ai.PromptMessage[] {
@@ -295,7 +294,7 @@ test "spec_prompt_render_preserves_structural_messages" {
 }
 
 function pt_render_prompt_messages_fn() -> ai.PromptMessage[] {
-    PtStructuredGreeting$render_prompt(name = "Ada").messages()
+    PtStructuredGreeting@render_prompt(name = "Ada").messages()
 }
 
 test "render_prompt_companion_returns_promptast_messages" {
@@ -306,9 +305,9 @@ test "render_prompt_companion_returns_promptast_messages" {
 }
 
 function PtStructuredImage(photo: image) -> string {
-    client "openai/gpt-4o-mini"
-    tools []
-    prompt `${role("user")}Inspect ${photo}`
+    client: "openai/gpt-4o-mini"
+    tools: []
+    prompt: `${role("user")}Inspect ${photo}`
 }
 
 function pt_spec_prompt_media_fn() -> string {
@@ -325,25 +324,25 @@ test "spec_prompt_render_keeps_media_in_promptast" {
     )
 }
 
-// BEP-049 M5b.2: `${ctx.output_format_with(prefix=..., ...)}` re-renders the
+// BEP-049 M5b.2: `${ctx.output_format(prefix=..., ...)}` re-renders the
 // return type's schema with caller options. `Context._output_format` carries
 // the prebuilt schema handle; a non-default `prefix` must appear in the
 // assembled prompt, proving the option took effect. Exercises two infra paths:
 // a method call on a body-param inside a template, and an io-function with
 // optional params called with most omitted.
-function pt_output_format_with_prefix_fn() -> string {
-    let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-    let rt = reflect.type_of<Person>()
-    let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: baml.prompt.render_output_format(rt), _output_format: baml.prompt.build_output_format(rt) }
-    let render = ai.prompt`${ctx.output_format_with(prefix = "Use this exact schema:")}`
+function pt_output_format_prefix_fn() -> string {
+    let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+    let rt = Person.type()
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(rt) }
+    let render = ai.prompt`${ctx.output_format(prefix = "Use this exact schema:")}`
     render(ctx).text()
 }
 
-test "prompt_interpolates_ctx_output_format_with" {
+test "prompt_interpolates_ctx_output_format_options" {
     // The custom `prefix` option is applied and the schema lists Person fields.
-    assert.contains(pt_output_format_with_prefix_fn(), "Use this exact schema:")
-    assert.contains(pt_output_format_with_prefix_fn(), "name")
-    assert.contains(pt_output_format_with_prefix_fn(), "age")
+    assert.contains(pt_output_format_prefix_fn(), "Use this exact schema:")
+    assert.contains(pt_output_format_prefix_fn(), "name")
+    assert.contains(pt_output_format_prefix_fn(), "age")
 }
 
 // Regression: a method io-sysop (`$rust_io_function` instance method) called
@@ -353,33 +352,33 @@ test "prompt_interpolates_ctx_output_format_with" {
 // `self`'s (absent) default → `OmittedArg` → engine panic. Here
 // `quote_class_fields = true` is provided while `prefix` (and everything
 // before it) is omitted. Must render the schema, not panic.
-function pt_output_format_with_omitted_leading_fn() -> string {
-    let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-    let rt = reflect.type_of<Person>()
-    let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: baml.prompt.render_output_format(rt), _output_format: baml.prompt.build_output_format(rt) }
-    let render = ai.prompt`${ctx.output_format_with(quote_class_fields = true)}`
+function pt_output_format_omitted_leading_fn() -> string {
+    let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+    let rt = Person.type()
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(rt) }
+    let render = ai.prompt`${ctx.output_format(quote_class_fields = true)}`
     render(ctx).text()
 }
 
-test "prompt_output_format_with_omits_leading_optional_arg" {
+test "prompt_output_format_omits_leading_optional_arg" {
     // The rendered schema lists the Person fields (and rendering did not panic).
-    assert.contains(pt_output_format_with_omitted_leading_fn(), "name")
-    assert.contains(pt_output_format_with_omitted_leading_fn(), "age")
+    assert.contains(pt_output_format_omitted_leading_fn(), "name")
+    assert.contains(pt_output_format_omitted_leading_fn(), "age")
 }
 
 // `render_null_as = "omit"` replaces the default `string or null` rendering of
 // the optional `nickname` field with `string or omit`.
-function pt_output_format_with_null_as_omit_fn() -> string {
-    let cc = baml.prompt.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
-    let rt = reflect.type_of<PersonNick>()
-    let ctx = baml.prompt.Context { client: cc, tags: {}, output_format: baml.prompt.render_output_format(rt), _output_format: baml.prompt.build_output_format(rt) }
-    let render = ai.prompt`${ctx.output_format_with(render_null_as = "omit")}`
+function pt_output_format_null_as_omit_fn() -> string {
+    let cc = ai.ContextClient { name: "c", provider: "openai", default_role: "user", allowed_roles: ["user"] }
+    let rt = PersonNick.type()
+    let ctx = ai.Context { client: cc, tags: {}, _output_format: ai.internal.build_output_format(rt) }
+    let render = ai.prompt`${ctx.output_format(render_null_as = "omit")}`
     render(ctx).text()
 }
 
-test "prompt_output_format_with_can_render_null_as_omit" {
-    // Custom null rendering applies to output_format_with…
-    assert.contains(pt_output_format_with_null_as_omit_fn(), "nickname: string or omit,")
+test "prompt_output_format_can_render_null_as_omit" {
+    // Custom null rendering applies to output_format().
+    assert.contains(pt_output_format_null_as_omit_fn(), "nickname: string or omit,")
     // …and the default null rendering is replaced.
-    assert.is_true(pt_output_format_with_null_as_omit_fn().includes("string or null") == false)
+    assert.is_true(pt_output_format_null_as_omit_fn().includes("string or null") == false)
 }

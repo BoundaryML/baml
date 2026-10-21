@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0010
+
+  × top-level `let` bindings are not supported
+   ╭─[test.baml:1:1]
+ 1 │ let x = 1;
+   · ─────┬────
+   ·      ╰── move this binding into a function body
+   ╰────

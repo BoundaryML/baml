@@ -36,8 +36,6 @@ use output::{
 const EXIT_OK: i32 = 0;
 const EXIT_POLICY_VIOLATED: i32 = 1;
 const EXIT_BASELINE_MISSING: i32 = 2;
-#[allow(dead_code)]
-const EXIT_BUILD_FAILED: i32 = 3;
 const EXIT_TOOL_ERROR: i32 = 4;
 
 #[derive(Parser)]

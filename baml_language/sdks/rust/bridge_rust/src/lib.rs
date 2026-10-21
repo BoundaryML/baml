@@ -11,16 +11,26 @@
 //! ([`encode`]), the result-envelope decoding ([`decode`]), the typed
 //! error surface ([`error`]), and the call machinery ([`runtime`]).
 
+// Symlink to `crates/baml_env/src/lib.rs`: this crate is published and cannot
+// depend on the workspace-only `baml_env`, so it compiles the same file.
+#[allow(dead_code, unreachable_pub)]
+mod baml_env;
 pub mod baml_value;
 mod capi;
 mod completion;
 pub mod decode;
+pub mod dynamic;
 pub mod encode;
 pub mod error;
 mod function;
+mod rust_type;
+pub use rust_type::RustType;
 pub mod host_value;
+#[doc(hidden)]
+pub mod invocation;
 pub mod loader;
 pub mod runtime;
+mod spec;
 #[cfg(test)]
 pub(crate) mod test_support;
 mod version;
@@ -34,6 +44,7 @@ pub use host_value::{HostCallable, HostCallback, HostParam};
 // reexports
 pub use indexmap::IndexMap;
 pub use num_bigint::BigInt;
+pub use spec::{CallOptions, FunctionSpec, Prompt, Stream};
 
 /// Order-preserving map type of BAML `map` values (the engine's own
 /// representation is insertion-ordered).

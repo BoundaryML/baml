@@ -13,7 +13,7 @@
 // like the one below work because TIR persists inferred instantiations in
 // `CallPlan.type_args` (including phase-0 reverse inference from the
 // expected return type) and MIR materializes them into the callee frame,
-// where `__make_stream` reifies them via `reflect.type_of<TStream/TFinal>()`.
+// where `__make_stream` reifies them via `reflect.Type.of<TStream/TFinal>()`.
 // There is no name-keyed registry fallback anymore — a propagation gap
 // would surface as "Non-parsable type: ..." from `StreamCache.new`.
 // Runtime coverage: `streaming_parsing::stream_string_final_value` and

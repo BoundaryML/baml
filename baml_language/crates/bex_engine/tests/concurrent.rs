@@ -11,8 +11,8 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-use baml_type::TyAttr;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder, RuntimeTy};
+use bex_vm_types::RustDataArc as _;
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 
@@ -117,9 +117,7 @@ async fn test_concurrent_allocations_no_overlap() {
         // Verify the result is correct
         let value = result.unwrap();
         let expected = BexExternalValue::Array {
-            element_type: RuntimeTy::String {
-                attr: TyAttr::default(),
-            },
+            element_type: RuntimeTy::String,
             items: vec![
                 BexExternalValue::String("a".to_string().into()),
                 BexExternalValue::String("b".to_string().into()),
@@ -306,9 +304,7 @@ async fn test_concurrent_array_allocations() {
 
         // Build expected array [0, 1, 2, ..., size-1]
         let expected = BexExternalValue::Array {
-            element_type: RuntimeTy::Int {
-                attr: TyAttr::default(),
-            },
+            element_type: RuntimeTy::Int,
             items: (0..size).map(BexExternalValue::Int).collect(),
         };
         assert_eq!(value, expected, "Array mismatch for size {size}");
@@ -365,9 +361,7 @@ async fn test_call_function_with_external_args() {
 
     // Test passing an array via BexExternalValue
     let arr = BexExternalValue::Array {
-        element_type: RuntimeTy::Int {
-            attr: TyAttr::default(),
-        },
+        element_type: RuntimeTy::Int,
         items: vec![
             BexExternalValue::Int(1),
             BexExternalValue::Int(2),
@@ -451,4 +445,100 @@ async fn test_closures_in_loop_vars() {
         .expect("call_function failed");
 
     assert_eq!(result, BexExternalValue::Int(10));
+}
+
+/// Native authentication calls back through `RuntimeIo` into the host's IO table.
+/// Sharing that table must not share the invoking call's context or env result.
+#[tokio::test]
+async fn runtime_io_preserves_concurrent_invocation_contexts() {
+    let program = compile_for_engine(
+        r#"
+        function quota_project() -> string? {
+            ai.internal._gcp_quota_project_id(`{"quota_project_id":"credential-project"}`)
+        }
+        "#,
+    );
+    let reads = Arc::new(AtomicUsize::new(0));
+    let rendezvous = Arc::new(tokio::sync::Barrier::new(2));
+    let mut sys_ops = sys_native::SysOps::native();
+    sys_ops.baml_env_get = {
+        let reads = Arc::clone(&reads);
+        Arc::new(move |heap, permit, mut args, ctx, _call_id| {
+            assert_eq!(args.len(), 1);
+            assert_eq!(
+                args.pop()
+                    .unwrap()
+                    .as_string(heap, permit)
+                    .unwrap()
+                    .as_str(),
+                "GOOGLE_CLOUD_QUOTA_PROJECT",
+            );
+            let capture = ctx
+                .spawner
+                .capture_invocation()
+                .expect("nested IO must retain the invoking call")
+                .downcast_payload::<bex_engine::InvocationCapture>()
+                .unwrap_or_else(|_| panic!("expected engine invocation capture"));
+            let environment = capture.host_environment();
+            assert_eq!(
+                capture.state.trace_context().distinct_id(),
+                Some(format!("request-{environment}").as_str()),
+            );
+            assert!(!capture.state.is_cancelled());
+            reads.fetch_add(1, Ordering::SeqCst);
+            let cancel = ctx.cancel.clone();
+            let rendezvous = Arc::clone(&rendezvous);
+            sys_types::SysOpResult::Async(Box::pin(async move {
+                // Neither callback may finish before the other has entered
+                // the generated adapter; fail promptly if one never arrives.
+                tokio::time::timeout(std::time::Duration::from_secs(5), rendezvous.wait())
+                    .await
+                    .expect("both invocation callbacks must overlap");
+                assert!(!cancel.is_cancelled());
+                Ok(match environment {
+                    1 => BexExternalValue::String("environment-project".into()),
+                    2 => BexExternalValue::Null,
+                    _ => panic!("wrong invocation environment: {environment}"),
+                })
+            }))
+        })
+    };
+    let engine = Arc::new(BexEngine::new(program, Arc::new(sys_ops), Vec::new()).unwrap());
+    let mut calls = Vec::new();
+    for environment in [1, 2] {
+        let engine = Arc::clone(&engine);
+        calls.push(tokio::spawn(async move {
+            engine
+                .call_function(
+                    "quota_project",
+                    vec![],
+                    FunctionCallContextBuilder::new(sys_types::CallId::next())
+                        .with_host_environment(environment)
+                        .with_trace_options(bex_vm_types::trace::TraceOptionsData {
+                            context: Some(
+                                btel_types::context::ContextPatch {
+                                    distinct_id: Some(format!("request-{environment}")),
+                                    ..Default::default()
+                                }
+                                .into(),
+                            ),
+                            ..Default::default()
+                        })
+                        .build(),
+                    true,
+                )
+                .await
+                .unwrap()
+        }));
+    }
+    for (call, expected) in calls
+        .into_iter()
+        .zip(["environment-project", "credential-project"])
+    {
+        assert_eq!(
+            call.await.unwrap(),
+            BexExternalValue::String(expected.into()),
+        );
+    }
+    assert_eq!(reads.load(Ordering::SeqCst), 2);
 }

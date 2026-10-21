@@ -125,6 +125,10 @@ pub(crate) fn display_instruction(
         .and_then(|m| m.operand.as_ref());
 
     let metadata = match instruction {
+        Instruction::LoadCurrentPackage(ordinal) => operand_meta.map_or_else(
+            || format!("(package {ordinal})"),
+            |meta| format!("({})", meta.as_str()),
+        ),
         Instruction::LoadConst(index) => {
             // Prefer resolved_constants (runtime), fall back to constants (compile-time)
             if let Some(value) = function.bytecode.resolved_constants.get(*index) {
@@ -139,18 +143,20 @@ pub(crate) fn display_instruction(
             display_global_ref(*index, globals, objects, compile_time_globals)
         }
         Instruction::Call { callee, .. }
-        | Instruction::CallWithRuntimeId { callee, .. }
-        | Instruction::SysOp(callee)
-        | Instruction::SysOpWithRuntimeId(callee) => {
+        | Instruction::CallHooked { callee, .. }
+        | Instruction::SysOp(callee) => {
             display_global_ref(*callee, globals, objects, compile_time_globals)
         }
         Instruction::MakeGenericFunction { function, .. } => {
             display_global_ref(*function, globals, objects, compile_time_globals)
         }
         Instruction::MakeGenericFunctionFromValue { .. } => String::new(),
-        Instruction::VirtualCall { nargs, ntypeargs }
-        | Instruction::VirtualCallWithRuntimeId { nargs, ntypeargs } => {
-            format!("nargs={nargs} ntypeargs={ntypeargs}")
+        Instruction::VirtualCall {
+            nargs,
+            ntypeargs,
+            self_arg,
+        } => {
+            format!("nargs={nargs} ntypeargs={ntypeargs} self_arg={self_arg}")
         }
         Instruction::LoadVar(index)
         | Instruction::StoreVar(index)
@@ -178,6 +184,10 @@ pub(crate) fn display_instruction(
         }
         Instruction::Jump(offset)
         | Instruction::PopJumpIfFalse(offset)
+        | Instruction::PopJumpIfTrue(offset)
+        | Instruction::JumpIfFalseOrPop(offset)
+        | Instruction::JumpIfTrueOrPop(offset)
+        | Instruction::JumpIfNotNullOrPop(offset)
         | Instruction::JumpIfFalse(offset) => {
             format!("(to {})", instruction_ptr.wrapping_add_signed(*offset))
         }
@@ -197,13 +207,20 @@ pub(crate) fn display_instruction(
             format!("(table {table_idx})")
         }
         Instruction::DenseTag(table_idx) => {
-            if let Some(table) = function.bytecode.match_hash_tables.get(*table_idx) {
+            if let Some(table) = function.bytecode.switch_tables.get(*table_idx) {
                 format!("({})", table.key_names.join(", "))
             } else {
-                format!("(hash table {table_idx})")
+                format!("(switch table {table_idx})")
             }
         }
-        Instruction::Pop(_)
+        Instruction::BeginTraceHook(_)
+        | Instruction::EndTraceHook
+        | Instruction::TraceHookHidden
+        | Instruction::TraceHookTiming
+        | Instruction::TraceHookSpan
+        | Instruction::TraceHookRich
+        | Instruction::TraceHookEmptySpan
+        | Instruction::Pop(_)
         | Instruction::Copy(_)
         | Instruction::BinOp(_)
         | Instruction::CmpOp(_)
@@ -241,17 +258,17 @@ pub(crate) fn display_instruction(
         | Instruction::Await
         | Instruction::AwaitAny
         | Instruction::CallIndirect
-        | Instruction::CallIndirectWithRuntimeId
+        | Instruction::SetCallTrace
         | Instruction::Throw
         | Instruction::Rethrow
         | Instruction::Discriminant
         | Instruction::TypeTag
         | Instruction::IsType(_)
-        | Instruction::ThrowIfPanic
         | Instruction::Unreachable
         | Instruction::MakeClosure { .. }
         | Instruction::MakeBoundMethod(_)
         | Instruction::MakeVirtualBoundMethod { .. }
+        | Instruction::MakeVirtualFunction { .. }
         | Instruction::MakeCell
         | Instruction::LoadDeref(_)
         | Instruction::StoreDeref(_)
@@ -262,7 +279,9 @@ pub(crate) fn display_instruction(
         | Instruction::SendEvent
         | Instruction::ContainerLen
         | Instruction::Spawn
-        | Instruction::LoadType(_) => String::new(),
+        | Instruction::LoadType(_)
+        | Instruction::BindType(_)
+        | Instruction::SatisfiesBound => String::new(),
     };
 
     (instruction.to_string(), metadata)
@@ -299,6 +318,7 @@ fn display_const_value(value: &bex_vm_types::ConstValue, objects: Option<&Object
             }
         }
         bex_vm_types::ConstValue::Type(template) => format!("<type_template {template}>"),
+        bex_vm_types::ConstValue::Literal(literal) => format!("<literal {literal}>"),
         bex_vm_types::ConstValue::ClassWithTypeArgs {
             class_obj,
             type_args_templates,
@@ -316,9 +336,9 @@ fn display_object_from_pool(index: usize, objects: &ObjectPool) -> String {
     if let Some(obj) = objects.get(index) {
         match obj {
             Object::String(s) => format!("{s:?}"),
-            Object::Function(f) => format!("<fn {}>", f.name),
-            Object::Class(c) => format!("<class {}>", c.name),
-            Object::Enum(e) => format!("<enum {}>", e.name),
+            Object::Function(f) => format!("<fn {}>", f.name()),
+            Object::Class(c) => format!("<class {}>", c.name()),
+            Object::Enum(e) => format!("<enum {}>", e.name()),
             _ => format!("<object {index}>"),
         }
     } else {
@@ -336,7 +356,7 @@ fn display_object_ptr(ptr: HeapPtr) -> String {
             // SAFETY: During debug display, we assume the pointer is valid
             let class = unsafe { instance.class.get() };
             match class {
-                Object::Class(class) => format!("<{} instance>", class.name),
+                Object::Class(class) => format!("<{} instance>", class.name()),
                 // This will most likely never happen, but we're trying not
                 // to panic.
                 other => format!("<{other} instance>"),
@@ -347,7 +367,7 @@ fn display_object_ptr(ptr: HeapPtr) -> String {
             // SAFETY: During debug display, we assume the pointer is valid
             let enm = unsafe { variant.enm.get() };
             match enm {
-                Object::Enum(enm) => format!("<{} variant>", enm.name),
+                Object::Enum(enm) => format!("<{} variant>", enm.name()),
                 other => format!("<{other} variant>"),
             }
         }
@@ -365,6 +385,7 @@ const COLUMN_MARGIN: usize = 3;
 fn instruction_style(instruction: &Instruction) -> Style {
     match instruction {
         Instruction::LoadConst(_)
+        | Instruction::LoadCurrentPackage(_)
         | Instruction::LoadVar(_)
         | Instruction::LoadVar2(..)
         | Instruction::LoadGlobal(_)
@@ -409,15 +430,25 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::UnaryOp(_) => Style::new().blue().bright(),
         Instruction::Jump(_)
         | Instruction::PopJumpIfFalse(_)
+        | Instruction::PopJumpIfTrue(_)
+        | Instruction::JumpIfFalseOrPop(_)
+        | Instruction::JumpIfTrueOrPop(_)
+        | Instruction::JumpIfNotNullOrPop(_)
         | Instruction::JumpIfFalse(_)
         | Instruction::JumpTable { .. }
         | Instruction::DenseTag(_) => Style::new().yellow(),
         Instruction::Call { .. }
-        | Instruction::CallWithRuntimeId { .. }
+        | Instruction::CallHooked { .. }
+        | Instruction::BeginTraceHook(_)
+        | Instruction::EndTraceHook
+        | Instruction::TraceHookHidden
+        | Instruction::TraceHookTiming
+        | Instruction::TraceHookSpan
+        | Instruction::TraceHookRich
+        | Instruction::TraceHookEmptySpan
         | Instruction::CallIndirect
-        | Instruction::CallIndirectWithRuntimeId
-        | Instruction::VirtualCall { .. }
-        | Instruction::VirtualCallWithRuntimeId { .. } => Style::new().magenta(),
+        | Instruction::SetCallTrace
+        | Instruction::VirtualCall { .. } => Style::new().magenta(),
         Instruction::Return
         | Instruction::Pop(_)
         | Instruction::Copy(_)
@@ -428,21 +459,21 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::InitInstance(_)
         | Instruction::AllocVariant(_)
         | Instruction::AllocArray(_) => Style::new().cyan(),
-        Instruction::SysOp(_)
-        | Instruction::SysOpWithRuntimeId(_)
-        | Instruction::Spawn
-        | Instruction::Await
-        | Instruction::AwaitAny => Style::new().green().bright(),
+        Instruction::SysOp(_) | Instruction::Spawn | Instruction::Await | Instruction::AwaitAny => {
+            Style::new().green().bright()
+        }
         Instruction::Discriminant
         | Instruction::TypeTag
         | Instruction::IsType(_)
         | Instruction::NarrowBind { .. }
         | Instruction::LoadType(_)
-        | Instruction::ThrowIfPanic => Style::new().blue().bright(),
+        | Instruction::BindType(_)
+        | Instruction::SatisfiesBound => Style::new().blue().bright(),
         Instruction::Unreachable => Style::new().red().bright(),
         Instruction::MakeClosure { .. }
         | Instruction::MakeBoundMethod(_)
         | Instruction::MakeVirtualBoundMethod { .. }
+        | Instruction::MakeVirtualFunction { .. }
         | Instruction::MakeGenericFunction { .. }
         | Instruction::MakeGenericFunctionFromValue { .. }
         | Instruction::MakeCell => Style::new().cyan(),
@@ -652,6 +683,10 @@ fn display_bytecode_textual(function: &Function) -> String {
         match instruction {
             Instruction::Jump(offset)
             | Instruction::PopJumpIfFalse(offset)
+            | Instruction::PopJumpIfTrue(offset)
+            | Instruction::JumpIfFalseOrPop(offset)
+            | Instruction::JumpIfTrueOrPop(offset)
+            | Instruction::JumpIfNotNullOrPop(offset)
             | Instruction::JumpIfFalse(offset) => {
                 let target = ip.wrapping_add_signed(*offset);
                 jump_targets.insert(target);
@@ -803,6 +838,23 @@ fn display_instruction_textual(
                 .unwrap_or_else(|| format!("?{target}"));
             format!("jump_if_false {label}")
         }
+        Instruction::PopJumpIfTrue(offset)
+        | Instruction::JumpIfFalseOrPop(offset)
+        | Instruction::JumpIfTrueOrPop(offset)
+        | Instruction::JumpIfNotNullOrPop(offset) => {
+            let name = match instruction {
+                Instruction::PopJumpIfTrue(_) => "pop_jump_if_true",
+                Instruction::JumpIfFalseOrPop(_) => "jump_if_false_or_pop",
+                Instruction::JumpIfTrueOrPop(_) => "jump_if_true_or_pop",
+                _ => "jump_if_not_null_or_pop",
+            };
+            let target = ip.wrapping_add_signed(*offset);
+            let label = label_map
+                .get(&target)
+                .cloned()
+                .unwrap_or_else(|| format!("?{target}"));
+            format!("{name} {label}")
+        }
         Instruction::JumpTable(table_idx) => {
             let default_target =
                 ip.wrapping_add_signed(function.bytecode.jump_tables[*table_idx].default);
@@ -905,17 +957,29 @@ fn display_instruction_textual(
 
         // --- Calls ---
         Instruction::Call { .. } => format!("call {}", meta_str(&"")),
-        Instruction::CallWithRuntimeId { .. } => format!("call_with_runtime_id {}", meta_str(&"")),
+        Instruction::CallHooked { .. } => format!("call_hooked {}", meta_str(&"")),
+        Instruction::BeginTraceHook(value) => format!("begin_trace_hook {value}"),
+        Instruction::EndTraceHook => "end_trace_hook".into(),
+        Instruction::TraceHookHidden => "trace_hook_hidden".into(),
+        Instruction::TraceHookTiming => "trace_hook_timing".into(),
+        Instruction::TraceHookSpan => "trace_hook_span".into(),
+        Instruction::TraceHookRich => "trace_hook_rich".into(),
+        Instruction::TraceHookEmptySpan => "trace_hook_empty_span".into(),
+        Instruction::SatisfiesBound => "satisfies_bound".into(),
+
         Instruction::CallIndirect => "call_indirect".to_string(),
-        Instruction::CallIndirectWithRuntimeId => "call_indirect_with_runtime_id".to_string(),
-        Instruction::VirtualCall { nargs, ntypeargs } => {
-            format!("virtual_call nargs={nargs} ntypeargs={ntypeargs}")
+        Instruction::SetCallTrace => "set_call_trace".to_string(),
+
+        Instruction::VirtualCall {
+            nargs,
+            ntypeargs,
+            self_arg,
+        } => {
+            format!("virtual_call nargs={nargs} ntypeargs={ntypeargs} self_arg={self_arg}")
         }
-        Instruction::VirtualCallWithRuntimeId { nargs, ntypeargs } => {
-            format!("virtual_call_with_runtime_id nargs={nargs} ntypeargs={ntypeargs}")
-        }
+
         Instruction::SysOp(_) => format!("sys_op {}", meta_str(&"")),
-        Instruction::SysOpWithRuntimeId(_) => format!("sys_op_with_runtime_id {}", meta_str(&"")),
+
         Instruction::Spawn => "spawn".to_string(),
         Instruction::Await => "await".to_string(),
         Instruction::AwaitAny => "await_any".to_string(),
@@ -939,16 +1003,20 @@ fn display_instruction_textual(
             let name = meta_str(const_idx);
             format!("load_type {name}")
         }
+        Instruction::BindType(slot) => format!("bind_type {slot}"),
+        Instruction::LoadCurrentPackage(const_idx) => {
+            let name = meta_str(const_idx);
+            format!("load_current_package {name}")
+        }
         Instruction::DenseTag(table_idx) => {
             let names = function
                 .bytecode
-                .match_hash_tables
+                .switch_tables
                 .get(*table_idx)
                 .map(|t| t.key_names.join(", "))
                 .unwrap_or_default();
             format!("dense_tag [{names}]")
         }
-        Instruction::ThrowIfPanic => "throw_if_panic".to_string(),
 
         // --- Closures and cells ---
         Instruction::MakeClosure {
@@ -969,6 +1037,9 @@ fn display_instruction_textual(
         }
         Instruction::MakeVirtualBoundMethod { ntypeargs } => {
             format!("make_virtual_bound_method ntypeargs={ntypeargs}")
+        }
+        Instruction::MakeVirtualFunction { ntypeargs } => {
+            format!("make_virtual_function ntypeargs={ntypeargs}")
         }
         Instruction::MakeGenericFunction { ntypeargs, .. } => {
             let name = meta_str(&"");
@@ -1153,9 +1224,15 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::InitField(_)
         | Instruction::InitSpread(_)
         | Instruction::Call { .. }
-        | Instruction::CallWithRuntimeId { .. }
+        | Instruction::CallHooked { .. }
+        | Instruction::BeginTraceHook(_)
+        | Instruction::EndTraceHook
+        | Instruction::TraceHookHidden
+        | Instruction::TraceHookTiming
+        | Instruction::TraceHookSpan
+        | Instruction::TraceHookRich
+        | Instruction::TraceHookEmptySpan
         | Instruction::SysOp(_)
-        | Instruction::SysOpWithRuntimeId(_)
         | Instruction::AllocInstance { .. }
         | Instruction::InitInstance(_)
         | Instruction::AllocVariant(_) => meta
@@ -1165,6 +1242,10 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         // Jumps: show absolute target address.
         Instruction::Jump(offset)
         | Instruction::PopJumpIfFalse(offset)
+        | Instruction::PopJumpIfTrue(offset)
+        | Instruction::JumpIfFalseOrPop(offset)
+        | Instruction::JumpIfTrueOrPop(offset)
+        | Instruction::JumpIfNotNullOrPop(offset)
         | Instruction::JumpIfFalse(offset) => {
             let target = ip.wrapping_add_signed(*offset);
             format!("(to {target})")
@@ -1232,8 +1313,14 @@ pub fn display_compact_bytecode(
         write!(f, "{offset:04}  {op:<24}")?;
 
         match op {
+            OpCode::BeginTraceHook => {
+                let value = code[pc];
+                pc += 1;
+                writeln!(f, "{value}")?;
+            }
             // Unit ops: no operands
             OpCode::Return
+            | OpCode::SatisfiesBound
             | OpCode::Await
             | OpCode::AwaitAny
             | OpCode::Throw
@@ -1243,10 +1330,16 @@ pub fn display_compact_bytecode(
             | OpCode::StoreArrayElement
             | OpCode::StoreMapElement
             | OpCode::CallIndirect
-            | OpCode::CallIndirectWithRuntimeId
+            | OpCode::EndTraceHook
+            | OpCode::TraceHookHidden
+            | OpCode::TraceHookTiming
+            | OpCode::TraceHookSpan
+            | OpCode::TraceHookRich
+            | OpCode::TraceHookEmptySpan
+            | OpCode::SetCallTrace
             | OpCode::Discriminant
             | OpCode::TypeTag
-            | OpCode::ThrowIfPanic
+            | OpCode::Truthy
             | OpCode::Unreachable
             | OpCode::MakeCell
             | OpCode::SendEvent
@@ -1347,10 +1440,11 @@ pub fn display_compact_bytecode(
             | OpCode::InitInstance
             | OpCode::AllocVariant
             | OpCode::SysOp
-            | OpCode::SysOpWithRuntimeId
             | OpCode::IsType
             | OpCode::DenseTag
             | OpCode::LoadType
+            | OpCode::BindType
+            | OpCode::LoadCurrentPackage
             | OpCode::MakeBoundMethod
             | OpCode::LoadDeref
             | OpCode::StoreDeref
@@ -1362,7 +1456,13 @@ pub fn display_compact_bytecode(
             }
 
             // Jump i32 operand: show relative offset and resolved absolute target
-            OpCode::Jump | OpCode::PopJumpIfFalse | OpCode::JumpIfFalse => {
+            OpCode::Jump
+            | OpCode::PopJumpIfFalse
+            | OpCode::JumpIfFalse
+            | OpCode::PopJumpIfTrue
+            | OpCode::JumpIfFalseOrPop
+            | OpCode::JumpIfTrueOrPop
+            | OpCode::JumpIfNotNullOrPop => {
                 let offset_val = read_i32(code, &mut pc);
                 let target = (pc as i64 + offset_val as i64) as usize;
                 writeln!(f, "{offset_val:+}  (-> {target:04})")?;
@@ -1378,7 +1478,7 @@ pub fn display_compact_bytecode(
                 )?;
             }
 
-            OpCode::Call | OpCode::CallWithRuntimeId => {
+            OpCode::Call | OpCode::CallExactArgs | OpCode::CallHooked => {
                 let callee = read_u32(code, &mut pc);
                 let ntypeargs = read_u16(code, &mut pc);
                 writeln!(f, "callee={callee}  ntypeargs={ntypeargs}")?;
@@ -1396,15 +1496,18 @@ pub fn display_compact_bytecode(
                 writeln!(f, "function={function}  ntypeargs={ntypeargs}")?;
             }
 
-            OpCode::MakeGenericFunctionFromValue | OpCode::MakeVirtualBoundMethod => {
+            OpCode::MakeGenericFunctionFromValue
+            | OpCode::MakeVirtualBoundMethod
+            | OpCode::MakeVirtualFunction => {
                 let ntypeargs = read_u16(code, &mut pc);
                 writeln!(f, "ntypeargs={ntypeargs}")?;
             }
 
-            OpCode::VirtualCall | OpCode::VirtualCallWithRuntimeId => {
+            OpCode::VirtualCall => {
                 let nargs = read_u16(code, &mut pc);
                 let ntypeargs = read_u16(code, &mut pc);
-                writeln!(f, "nargs={nargs} ntypeargs={ntypeargs}")?;
+                let self_arg = read_u16(code, &mut pc);
+                writeln!(f, "nargs={nargs} ntypeargs={ntypeargs} self_arg={self_arg}")?;
             }
 
             OpCode::MakeClosure => {

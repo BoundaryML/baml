@@ -100,6 +100,19 @@ static BamlCffiStatus probe_media_accessor(
   return BAML_CFFI_STATUS_INVALID_HANDLE;
 }
 
+static BamlCffiStatus probe_media_from_file_content(int32_t media_kind, const char *file,
+                                                    const char *base64,
+                                                    const char *mime_type_or_null,
+                                                    uint64_t *out_key, int32_t *out_handle_type) {
+  (void)media_kind;
+  (void)file;
+  (void)base64;
+  (void)mime_type_or_null;
+  (void)out_key;
+  (void)out_handle_type;
+  return BAML_CFFI_STATUS_INTERNAL_ERROR;
+}
+
 static BamlBuffer probe_register_bridge(const BamlBridgeInfoV1 *info) {
   (void)info;
   BamlBuffer buffer = {NULL, 0};
@@ -110,7 +123,7 @@ static BamlApiV1 probe_api = {
     .abi_version = BAML_API_V1_ABI_VERSION,
     .struct_size = sizeof(BamlApiV1),
     .version = probe_version,
-    .initialize_runtime_from_bytecode = probe_initialize,
+    .initialize_runtime_from_blob = probe_initialize,
     .free_buffer = probe_free,
     .register_callback = probe_register_result,
     .call_function = probe_call,
@@ -129,6 +142,8 @@ static BamlApiV1 probe_api = {
     .media_base64 = probe_media_accessor,
     .media_mime_type = probe_media_accessor,
     .register_bridge = probe_register_bridge,
+    .media_name = probe_media_accessor,
+    .media_from_file_content = probe_media_from_file_content,
 };
 
 const BamlApiV1 *baml_get_api_v1(void) {

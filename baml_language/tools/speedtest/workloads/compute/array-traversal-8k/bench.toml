@@ -1,0 +1,6 @@
+name = "array traversal 8k"
+description = "iterate, index and rebuild an array of 8,192 integers"
+origin = "native-bench 01_array_traversal"
+expect = "44953194"
+jobs = 100
+warmup = 6

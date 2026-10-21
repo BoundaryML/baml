@@ -11,7 +11,7 @@ function make_opaque_response(body: string) -> baml.http.Response {
   baml.http.Response.new(207, { "x-baml-go": "opaque" }, body.to_utf8())
 }
 
-function read_opaque_response(response: baml.http.Response) -> string throws baml.errors.Io {
+function read_opaque_response(response: baml.http.Response) -> string throws baml.errors.Io | baml.errors.Timeout {
   response.text()
 }
 

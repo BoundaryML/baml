@@ -28,29 +28,36 @@ enum BamlApi {
     }()
 
     static let version = v1.version!
-    static let initializeRuntimeFromBytecode = v1.initialize_runtime_from_bytecode!
+    static let initializeRuntimeFromBlob = v1.initialize_runtime_from_blob!
     static let freeBuffer = v1.free_buffer!
     static let registerCallback = v1.register_callback!
     static let callFunction = v1.call_function!
     static let newFunctionCall = v1.new_function_call!
     static let cancelFunctionCall = v1.cancel_function_call!
     static let registerHostDispatchCallback = v1.register_host_dispatch_callback!
+    static let invocationProtocolVersion = v1.invocation_protocol_version!
+    static let invocationClockNs = v1.invocation_clock_ns!
+    static let releaseFunctionCall = v1.release_function_call!
+    static let registerHostDispatchV2 = v1.register_host_dispatch_v2!
+    static let registerHostCancelCallback = v1.register_host_cancel_callback!
+    static let traceSelection = v1.trace_selection!
+    static let invocationContext = v1.invocation_context!
     static let registerHostReleaseCallback = v1.register_host_release_callback!
     static let completeHostCall = v1.complete_host_call!
     static let handleClone = v1.handle_clone!
     static let handleRelease = v1.handle_release!
     static let mediaFromUrl = v1.media_from_url!
-    static let mediaFromFile = v1.media_from_file!
     static let mediaFromBase64 = v1.media_from_base64!
     static let mediaUrl = v1.media_url!
-    static let mediaFile = v1.media_file!
+    static let mediaName = v1.media_name!
+    static let mediaFromFileContent = v1.media_from_file_content!
     static let mediaBase64 = v1.media_base64!
     static let mediaMimeType = v1.media_mime_type!
     static let registerBridge = v1.register_bridge!
     static let registerUnhandledSpawnErrorCallback = v1.register_unhandled_spawn_error_callback!
     static let shutdownRuntime = v1.shutdown_runtime!
-    static let initializeRuntimeFromBytecodeWithMetadata =
-        v1.initialize_runtime_from_bytecode_with_metadata!
+    static let initializeRuntimeFromBlobWithMetadata =
+        v1.initialize_runtime_from_blob_with_metadata!
 
     /// Copy a runtime-owned buffer to a `Data` and release it exactly
     /// once via the table's `free_buffer`. A zero-length buffer may have

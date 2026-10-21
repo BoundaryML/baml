@@ -32,6 +32,15 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                ╰── first defined as parameter here
     ╰────
 
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:11:17]
+ 11 │         value = true;
+    ·                 ──┬─
+    ·                   ╰── expected `int`, found `true`
+    ╰────
+
   [hir] E0012
 
   × duplicate parameter `value` in `lambda_last`
@@ -40,4 +49,13 @@ source: crates/baml_tests/src/generated_tests.rs
     ·              ──┬──          ──┬──
     ·                │              ╰── duplicate parameter definition
     ·                ╰── first defined as parameter here
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:19:17]
+ 19 │         value = true;
+    ·                 ──┬─
+    ·                   ╰── expected `string`, found `true`
     ╰────

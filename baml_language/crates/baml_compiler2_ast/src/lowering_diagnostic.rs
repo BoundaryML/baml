@@ -13,6 +13,18 @@ use text_size::TextRange;
 /// rather than semantic ones ("duplicate definition", "type mismatch").
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LoweringDiagnostic {
+    /// A declaration trace hook directive is malformed or misplaced.
+    InvalidTraceHook { message: String, span: TextRange },
+    /// Builtin aliases have a fixed arity and no associated bindings. Report
+    /// these before AST lowering erases their written type arguments.
+    InvalidBuiltinTypeArguments {
+        name: String,
+        expected: usize,
+        got: usize,
+        associated_bindings: usize,
+        span: TextRange,
+    },
+
     /// A top-level item (class, function, enum, etc.) has no name token.
     MissingItemName {
         item_kind: &'static str,
@@ -37,11 +49,12 @@ pub enum LoweringDiagnostic {
     /// A parameter default was parsed in a context that does not support defaults.
     UnsupportedParameterDefault { context: String, span: TextRange },
 
-    /// A user-authored LLM function declared `client`, which is reserved for
-    /// the compiler-injected client override parameter.
-    ReservedLlmClientParam {
+    /// A user-authored LLM function parameter collides with a binding owned by
+    /// the compiler's LLM lowering.
+    ReservedLlmParam {
         function_name: String,
         param_name: String,
+        reserved_for: &'static str,
         span: TextRange,
     },
 
@@ -91,13 +104,13 @@ pub enum LoweringDiagnostic {
         span: TextRange,
     },
 
-    /// A field attribute (`@alias`, `@description`, `@skip`) appeared in a type
-    /// expression where only type attributes are valid (e.g. inside parens, on a
-    /// non-final union member, or in a function signature).
-    FieldAttributeInTypePosition { attr_name: String, span: TextRange },
-
-    /// A byte string literal contains an invalid escape sequence.
-    InvalidByteStringEscape { message: String, span: TextRange },
+    /// A `"..."`, backtick, or `b"..."` literal contains an unknown or
+    /// malformed escape sequence, or a byte string contains a non-ASCII
+    /// character.
+    InvalidStringEscape {
+        issue: baml_base::escape::EscapeIssue,
+        span: TextRange,
+    },
 
     /// The `instanceof` operator was used; it has been removed. Use `match` instead.
     InstanceofRemoved { span: TextRange },
@@ -111,9 +124,6 @@ pub enum LoweringDiagnostic {
 
     /// A `${}` interpolation with no expression inside.
     EmptyInterpolation { span: TextRange },
-
-    /// `void` was used outside of a function return type position.
-    VoidInNonReturnPosition { context: String, span: TextRange },
 
     /// The `_` wildcard type was used in a position where it cannot be inferred
     /// (a signature, field, or alias type, as opposed to a `let` binding
@@ -129,6 +139,10 @@ pub enum LoweringDiagnostic {
         span: TextRange,
     },
 
+    /// A source-authored `let` appeared at file scope. Only compiler-synthesized
+    /// globals (such as clients and retry policies) are supported.
+    TopLevelLetNotSupported { span: TextRange },
+
     /// `const` currently parses as a non-immutable alias for `let`.
     ConstBindingIntroducer { span: TextRange },
 
@@ -136,16 +150,16 @@ pub enum LoweringDiagnostic {
     /// binding name.
     ReservedConstBindingName { span: TextRange },
 
-    /// `$id` is the runtime-identity special form (reads lower to
-    /// `baml.id.current()`, writes to `baml.id.set(...)`); a binding named
-    /// `$id` would be silently dead, so it is rejected.
-    ReservedRuntimeIdBindingName { span: TextRange },
-
     /// An assignment operator (`=`, `+=`, …) appeared in expression position,
     /// e.g. `(x = 5)`. Assignment is statement-only in BAML, so the expression
     /// has no value; without this diagnostic it would lower to a `Missing` that
     /// only fails at runtime.
     AssignmentInExpressionPosition { span: TextRange },
+
+    /// Parser recovery produced an object-literal node without a constructor
+    /// identifier. The AST cannot represent a constructor-less object, so the
+    /// expression lowers to `Missing` and this diagnostic preserves the error.
+    MissingObjectConstructor { span: TextRange },
 
     /// Top-level `implements I for T` where `T` does not match any class in the file.
     UnresolvedImplementsForTarget {
@@ -186,7 +200,15 @@ pub enum LoweringDiagnostic {
 
     /// A legacy `client<llm> Name { ... }` config block. Removed: clients are
     /// plain values now — `client Name = <expr>;`.
-    ClientBlockRemoved { name: String, span: TextRange },
+    ///
+    /// `provider` is the block's own `provider` value when it had one, so the
+    /// suggested replacement names the class that actually speaks to that
+    /// provider; see this module's private `client_replacement_expr`.
+    ClientBlockRemoved {
+        name: String,
+        provider: Option<String>,
+        span: TextRange,
+    },
 
     /// A legacy `retry_policy` block. Removed: retry composes at the client
     /// boundary via `ai.Retry.new(inner, ...)`.
@@ -195,6 +217,11 @@ pub enum LoweringDiagnostic {
     /// A legacy Jinja `#"..."#` prompt on an LLM function. Removed: prompts
     /// are backtick templates.
     LlmJinjaPromptRemoved { span: TextRange },
+
+    /// A `${` in a quoted LLM prompt. Regular strings do not interpolate, so
+    /// the marker reaches the model as literal text — almost always a prompt
+    /// ported from a form where it did interpolate.
+    QuotedPromptInterpolation { span: TextRange },
 
     /// A legacy `template_string` declaration. Removed: use a function
     /// returning a backtick string.
@@ -228,6 +255,40 @@ pub enum LoweringDiagnostic {
     },
 }
 
+/// The client expression a removed `client<llm>` block should become, given the
+/// block's own `provider` value.
+///
+/// The suggestion is the whole point of the diagnostic, so it has to name the
+/// class that speaks the provider's protocol: telling the author of an
+/// `anthropic` block to write `openai.ResponsesClient` is migration guidance
+/// that changes behavior. The mapping is the legacy `provider` name -> the
+/// native client, and it is deliberately the same set the `"provider/model"`
+/// shorthand resolves (`SHORTHAND_PROVIDERS` in `lower_cst.rs`).
+///
+/// An unrecognized or absent provider keeps the generic `OpenAI` suggestion:
+/// there is nothing better to say, and it is still a valid client expression.
+///
+/// KNOWN GAP: the composite providers only get a shape, not their configured
+/// `strategy` list — the diagnostic does not carry the block's option values.
+fn client_replacement_expr(provider: Option<&str>) -> &'static str {
+    match provider.map(str::trim).map(|p| p.trim_matches('"')) {
+        Some("anthropic") => "anthropic.Client.new(model = \"...\")",
+        Some("google-ai" | "google" | "gemini") => "google.GeminiClient.new(model = \"...\")",
+        Some("vertex-ai" | "vertex") => "google.VertexClient.new(model = \"...\")",
+        Some("aws-bedrock" | "bedrock") => "aws.BedrockClient.new(model = \"...\")",
+        Some("azure-openai" | "azure") => {
+            "openai.AzureClient.new(model = \"...\", base_url = \"...\")"
+        }
+        Some("ollama") => "openai.OllamaClient.new(model = \"...\")",
+        Some("openrouter") => "openai.OpenRouterClient.new(model = \"...\")",
+        Some("openai-generic") => "openai.GenericClient.new(model = \"...\", base_url = \"...\")",
+        Some("openai-chat") => "openai.ChatClient.new(model = \"...\")",
+        Some("fallback") => "ai.Fallback.new(members = [FirstClient, SecondClient])",
+        Some("round-robin") => "ai.RoundRobin.new(members = [FirstClient, SecondClient])",
+        _ => "openai.ResponsesClient.new(model = \"...\")",
+    }
+}
+
 impl LoweringDiagnostic {
     /// Convert to the shared `Diagnostic` type for rendering.
     ///
@@ -235,6 +296,27 @@ impl LoweringDiagnostic {
     /// construct `Span` values from the stored `TextRange`s.
     pub fn to_diagnostic(&self, file_id: FileId) -> Diagnostic {
         let (id, severity, message, range, label) = match self {
+            Self::InvalidTraceHook { message, span } => (
+                DiagnosticId::MalformedAttribute, Severity::Error, message.clone(),
+                *span, "invalid trace hook",
+            ),
+            LoweringDiagnostic::InvalidBuiltinTypeArguments {
+                name,
+                expected,
+                got,
+                associated_bindings,
+                span,
+            } => (
+                DiagnosticId::InvalidBuiltinTypeArguments,
+                Severity::Error,
+                if *associated_bindings == 0 {
+                    format!("type `{name}` expects {expected} type argument(s), got {got}")
+                } else {
+                    format!("builtin type `{name}` does not accept associated-type bindings")
+                },
+                *span,
+                "invalid builtin type arguments",
+            ),
             LoweringDiagnostic::MissingItemName { item_kind, span } => (
                 DiagnosticId::MissingName,
                 Severity::Error,
@@ -273,18 +355,19 @@ impl LoweringDiagnostic {
                 *span,
                 "default value is not allowed here",
             ),
-            LoweringDiagnostic::ReservedLlmClientParam {
+            LoweringDiagnostic::ReservedLlmParam {
                 function_name,
                 param_name,
+                reserved_for,
                 span,
             } => (
                 DiagnosticId::InvalidSyntax,
                 Severity::Error,
                 format!(
-                    "LLM function `{function_name}` cannot declare a parameter named `{param_name}`; `client` is reserved for the compiler-injected LLM client override"
+                    "LLM function `{function_name}` cannot declare a parameter named `{param_name}`; `{param_name}` is reserved for {reserved_for}"
                 ),
                 *span,
-                "`client` is reserved here",
+                "reserved LLM parameter name",
             ),
             LoweringDiagnostic::MissingVariantName { enum_name, span } => (
                 DiagnosticId::MissingName,
@@ -366,25 +449,15 @@ impl LoweringDiagnostic {
                 *span,
                 "missing options",
             ),
-            LoweringDiagnostic::FieldAttributeInTypePosition { attr_name, span } => (
-                DiagnosticId::FieldAttributeInTypePosition,
+            LoweringDiagnostic::InvalidStringEscape { issue, span } => (
+                DiagnosticId::InvalidStringEscape,
                 Severity::Error,
-                format!(
-                    "`@{attr_name}` is only allowed on class fields and enum variants; \
-                     remove it here"
-                ),
+                issue.to_string(),
                 *span,
-                "field attribute here",
-            ),
-            LoweringDiagnostic::InvalidByteStringEscape { message, span } => (
-                DiagnosticId::InvalidByteStringEscape,
-                Severity::Error,
-                format!("invalid byte string literal: {message}"),
-                *span,
-                "invalid escape",
+                issue.kind.label(),
             ),
             LoweringDiagnostic::InstanceofRemoved { span } => (
-                DiagnosticId::InstanceofRemoved,
+                DiagnosticId::RemovedFeature,
                 Severity::Error,
                 "`instanceof` is no longer supported. Use a `match` expression for type checking instead.".to_string(),
                 *span,
@@ -454,13 +527,6 @@ impl LoweringDiagnostic {
                 *span,
                 "expected an expression inside ${…}",
             ),
-            LoweringDiagnostic::VoidInNonReturnPosition { context, span } => (
-                DiagnosticId::VoidInNonReturnPosition,
-                Severity::Error,
-                format!("`void` can only be used as a function return type, not as {context}"),
-                *span,
-                "`void` not allowed here",
-            ),
             LoweringDiagnostic::WildcardTypeNotAllowed { context, span } => (
                 DiagnosticId::WildcardTypeNotAllowed,
                 Severity::Error,
@@ -477,6 +543,13 @@ impl LoweringDiagnostic {
                 *span,
                 "type ascription not allowed here",
             ),
+            LoweringDiagnostic::TopLevelLetNotSupported { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "top-level `let` bindings are not supported".to_string(),
+                *span,
+                "move this binding into a function body",
+            ),
             LoweringDiagnostic::ConstBindingIntroducer { span } => (
                 DiagnosticId::InvalidSyntax,
                 Severity::Warning,
@@ -491,13 +564,6 @@ impl LoweringDiagnostic {
                 *span,
                 "`const` is reserved here",
             ),
-            LoweringDiagnostic::ReservedRuntimeIdBindingName { span } => (
-                DiagnosticId::InvalidSyntax,
-                Severity::Error,
-                "`$id` is the runtime identity and cannot be used as a binding name".to_string(),
-                *span,
-                "`$id` is reserved here",
-            ),
             LoweringDiagnostic::AssignmentInExpressionPosition { span } => (
                 DiagnosticId::InvalidSyntax,
                 Severity::Error,
@@ -505,6 +571,13 @@ impl LoweringDiagnostic {
                     .to_string(),
                 *span,
                 "assignment not allowed here",
+            ),
+            LoweringDiagnostic::MissingObjectConstructor { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "object construction requires a class or type name".to_string(),
+                *span,
+                "expected a constructor name before `{`",
             ),
             LoweringDiagnostic::UnresolvedImplementsForTarget {
                 interface_name,
@@ -557,13 +630,18 @@ impl LoweringDiagnostic {
                 *span,
                 "`tools` requires a backtick prompt and a \"provider/model\" client string",
             ),
-            LoweringDiagnostic::ClientBlockRemoved { name, span } => (
+            LoweringDiagnostic::ClientBlockRemoved {
+                name,
+                provider,
+                span,
+            } => (
                 DiagnosticId::InvalidSyntax,
                 Severity::Error,
                 format!(
                     "`client<llm>` config blocks are removed; declare a client value instead: \
-                     `client {name} = openai.OpenAiClient.new(model = \"...\");` \
-                     (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)"
+                     `client {name} = {replacement};` \
+                     (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)",
+                    replacement = client_replacement_expr(provider.as_deref()),
                 ),
                 *span,
                 "replace with `client Name = <expr>;`",
@@ -586,6 +664,17 @@ impl LoweringDiagnostic {
                     .to_string(),
                 *span,
                 "use a backtick prompt instead",
+            ),
+            LoweringDiagnostic::QuotedPromptInterpolation { span } => (
+                DiagnosticId::InvalidSyntax,
+                // Advisory: the prompt is well-formed and renders, it just
+                // renders the marker verbatim. Erroring would reject prompts
+                // that legitimately want a literal `${`.
+                Severity::Warning,
+                r#"`${...}` in a quoted prompt is sent to the model as literal text — `"..."` strings do not interpolate. Use a backtick prompt to interpolate, or write `\${...}` in a backtick prompt to keep the literal `${`."#
+                    .to_string(),
+                *span,
+                "literal text here, not an interpolation",
             ),
             LoweringDiagnostic::TemplateStringRemoved { span } => (
                 DiagnosticId::InvalidSyntax,

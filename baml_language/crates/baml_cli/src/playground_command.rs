@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use baml_workspace::{find_baml_project_root, resolve_project_search_start};
+use baml_db::{find_baml_project_root, resolve_project_search_start};
 use clap::Args;
 
 use crate::project_load::{SourceLocation, load_project_from, resolve_source_location};
@@ -46,18 +46,40 @@ pub struct PlaygroundArgs {
 }
 
 impl PlaygroundArgs {
+    #[expect(
+        clippy::print_stdout,
+        reason = "the banner is this command's primary output"
+    )]
     pub fn run(&self) -> Result<crate::ExitCode> {
         let playground_dir = resolve_playground_assets()?;
 
         let roots = workspace_roots(self.from.as_deref(), self.file.as_deref())?;
+        // The server owns no terminal output (in editor mode its stdout is
+        // the LSP channel), so the banner is printed from here once the port
+        // is bound.
+        let banner_roots = roots.clone();
         let options = baml_lsp_server::PlaygroundServerOptions {
             port: self.port,
-            open_browser: !self.no_open
-                && !is_headless_session(|key| std::env::var_os(key).is_some()),
+            open_browser: !self.no_open && !is_headless_session(baml_env::has_var),
+            on_listening: Some(Box::new(move |port| {
+                println!("{}", playground_banner(port, &banner_roots));
+            })),
         };
         baml_lsp_server::run_playground_server(roots, playground_dir, options)?;
         Ok(crate::ExitCode::Success)
     }
+}
+
+fn playground_banner(port: u16, roots: &[PathBuf]) -> String {
+    let root = roots
+        .first()
+        .map(|root| root.display().to_string())
+        .unwrap_or_else(|| "(no workspace roots)".to_string());
+    format!(
+        "\n  Playground:  http://localhost:{port}/\n  Project:     {root}\n\n  \
+         Remote machine? Forward the port, then open the URL locally:\n    \
+         ssh -L {port}:localhost:{port} <user@host>\n\n  Press Ctrl-C to stop.\n"
+    )
 }
 
 /// A browser can't usefully open here: an SSH session, or a Linux/BSD session
@@ -95,16 +117,16 @@ fn workspace_roots(from: Option<&Path>, file: Option<&Path>) -> Result<Vec<PathB
             search_start.display()
         );
     };
-    let (_db, root, files) = load_project_from(Some(&marked_root))?;
-    if files.is_empty() {
+    let project = load_project_from(Some(&marked_root))?;
+    let root = project.root().to_path_buf();
+    if project.files.is_empty() {
         anyhow::bail!("no `.baml` files found in {}", root.display());
     }
     Ok(vec![root])
 }
 
 fn resolve_playground_assets() -> Result<Option<PathBuf>> {
-    if std::env::var_os("BAML_PLAYGROUND_DEV_PORT").is_some()
-        || std::env::var_os("BAML_PLAYGROUND_DIR").is_some()
+    if baml_env::has_var("DEV_BAML_PLAYGROUND_PORT") || baml_env::has_var("DEV_BAML_PLAYGROUND_DIR")
     {
         return Ok(None);
     }
@@ -116,7 +138,7 @@ fn resolve_playground_assets() -> Result<Option<PathBuf>> {
     anyhow::bail!(
         "could not find packaged playground assets. For local debugging, run \
          `pnpm --filter app-vscode-webview dev -- --host 127.0.0.1 --port 4000` \
-         and set `BAML_PLAYGROUND_DEV_PORT=4000`, or set `BAML_PLAYGROUND_DIR` \
+         and set `DEV_BAML_PLAYGROUND_PORT=4000`, or set `DEV_BAML_PLAYGROUND_DIR` \
          to a built app-vscode-webview/dist directory."
     );
 }

@@ -349,9 +349,6 @@ function onPlaygroundNotification(notification: PlaygroundNotification): void {
         type: 'commandError',
       });
       break;
-    case 'profileArtifactChunk':
-      postOut(notification as WorkerOutMessage);
-      break;
     default:
       postOut({
         notification: notification as unknown as WorkerPlaygroundNotification,
@@ -924,6 +921,18 @@ self.onmessage = async (event: MessageEvent) => {
     case 'inputResponse':
       // Website playground does not request input from the user — stub the
       // response handler so the protocol union is exhaustive.
+      return;
+
+    // Profiling is unavailable in both browser and local runtimes.
+    case 'listExecutions':
+    case 'openExecution':
+    case 'readTelemetryMedia':
+      postOut({
+        code: 'profilingUnavailable',
+        message: 'Profiling is currently unavailable.',
+        requestId: msg.requestId,
+        type: 'commandError',
+      });
       return;
   }
 

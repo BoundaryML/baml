@@ -53,8 +53,13 @@ cd "$(dirname "$0")"  # baml_language/sdk_tests/crates/python_pydantic2
 WORKSPACE_ROOT="$(cd ../../.. && pwd)"
 SDK_PY="$WORKSPACE_ROOT/sdks/python"
 
+# Generate each fixture's baml_sdk/ and pyproject.toml first: nothing else
+# produces them, and every `uv sync` below needs that pyproject.
+echo "==> sdk_test_codegen python_pydantic2 (generate fixture SDKs)"
+(cd "$WORKSPACE_ROOT" && cargo run --quiet -p sdk_test_codegen -- python_pydantic2)
+
 # Shared uv cache under target/, matching the UV_CACHE_DIR the emitted
-# tests thread through (run_test_cmd / CACHE_ENV_VAR in harness_setup).
+# tests thread through (run_test_cmd / CACHE_ENV_VAR in codegen).
 export UV_CACHE_DIR="$WORKSPACE_ROOT/target/uv-cache"
 mkdir -p "$UV_CACHE_DIR"
 
@@ -92,7 +97,7 @@ echo "==> maturin develop (shared baml_bridge extension)"
 # this script ran *this* run. Plain `cargo test` has no $NEXTEST_ENV,
 # so the var stays unset and the guard fails with a helpful message.
 # Keep the var name in sync with SETUP_ENV_VAR in
-# harness_setup/src/python_pydantic2.rs.
+# codegen/src/python_pydantic2.rs.
 if [[ -n "${NEXTEST_ENV:-}" ]]; then
     echo "SDK_TEST_PYTHON_PYDANTIC2_SETUP=1" >> "$NEXTEST_ENV"
 fi

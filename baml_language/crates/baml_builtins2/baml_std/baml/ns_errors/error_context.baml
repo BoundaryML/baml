@@ -6,21 +6,21 @@
 /// The chain runs newest → oldest through `cause`; `root_cause` walks to the
 /// original failure at the tail, and `to_string` renders the whole chain
 /// Python-style ("During handling of the above error, another error occurred").
-class ErrorContext {
+class Context {
     error: unknown,
     stack_trace: StackTrace,
-    cause: ErrorContext?,
+    cause: Context?,
 
     /// The original error at the tail of the cause chain — walks `cause` to the
     /// deepest link. Returns `self` when nothing was superseded.
-    function root_cause(self) -> ErrorContext throws never {
+    function root_cause(self) -> Context throws never {
         match (self.cause) {
             null => self,
-            let c: ErrorContext => c.root_cause(),
+            let c: Context => c.root_cause(),
         }
     }
 
-    implements baml.ToString {
+    implements root.ToString {
         function to_string(self) -> string throws never {
             self._to_string_impl()
         }

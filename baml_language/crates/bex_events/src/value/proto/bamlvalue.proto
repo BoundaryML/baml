@@ -16,20 +16,8 @@ enum ValueAvailability {
   VALUE_AVAILABILITY_LOST = 5;
 }
 
-enum ValueCaptureKind {
-  VALUE_CAPTURE_KIND_UNSPECIFIED = 0;
-  VALUE_CAPTURE_KIND_ROOT_INPUT = 1;
-  VALUE_CAPTURE_KIND_ROOT_OUTPUT = 2;
-  VALUE_CAPTURE_KIND_ROOT_ERROR = 3;
-  VALUE_CAPTURE_KIND_LOG_BODY = 4;
-  VALUE_CAPTURE_KIND_CALL_OUTPUT = 5;
-  VALUE_CAPTURE_KIND_CALL_ERROR = 6;
-  VALUE_CAPTURE_KIND_CALL_INPUT = 7;
-}
-
 enum CaptureLossKind {
   CAPTURE_LOSS_KIND_UNSPECIFIED = 0;
-  CAPTURE_LOSS_KIND_VALUE = 1;
   CAPTURE_LOSS_KIND_LOG = 2;
 }
 
@@ -70,11 +58,11 @@ message BlobRefV1 {
   uint64 size_bytes = 3;
 }
 
-message TraceCallKeyV1 {
+message ThreadKeyV1 {
   bytes process_id = 1;
   uint64 engine_id = 2;
   uint64 thread_id = 3;
-  uint64 call_id = 4;
+  reserved 4; // Retired per-invocation identity.
 }
 
 message SourceLocationV1 {
@@ -88,13 +76,8 @@ message SourceLocationV1 {
   optional uint32 end_offset = 8;
 }
 
-message ValueCaptureV1 {
-  ValueCaptureKind kind = 1;
-  TraceCallKeyV1 call = 2;
-}
-
 message LogEventV1 {
-  TraceCallKeyV1 call = 1;
+  ThreadKeyV1 call = 1;
   optional string level = 2;
   SourceLocationV1 source = 3;
   uint64 timestamp_ms = 4;
@@ -105,7 +88,7 @@ message CaptureLossV1 {
   CaptureLossKind kind = 1;
   CaptureLossReason reason = 2;
   uint64 skipped_count = 3;
-  optional TraceCallKeyV1 call = 4;
+  optional ThreadKeyV1 call = 4;
   optional string message = 5;
   uint64 timestamp_ms = 6;
 }
@@ -183,7 +166,7 @@ message RunCompletedV1 {
 message ValueRecordV1 {
   ValueMetadataV1 metadata = 1;
   bytes body = 2;
-  ValueCaptureV1 capture = 3;
+  reserved 3;
   RunStartedV1 run_started = 10;
   RunCompletedV1 run_completed = 11;
   LogEventV1 log_event = 12;

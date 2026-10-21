@@ -1,0 +1,139 @@
+// The right side of `&&` / `||` is checked with what the left side proved,
+// for a bare local binding that no closure captures. These are the cases that
+// must stay errors. The cases that compile, and their run-time behavior, are
+// in the corpus namespace `ns_short_circuit_narrowing`.
+
+class A {
+    a: int,
+}
+
+class B {
+    b: string,
+}
+
+class Holder {
+    v: A | B,
+}
+
+// A captured local is not narrowed: the closure can change it between the
+// test and the read.
+function captured_local(x: A | B) -> bool {
+    let replace = () -> void {
+        x = B { b: "replaced" };
+    };
+    x is A && x.a == 1
+}
+
+// A captured local is not narrowed, also when the closure only reads it.
+function captured_local_read_only(x: A | B) -> bool {
+    let read = () -> bool {
+        x is A
+    };
+    x is A && x.a == 1
+}
+
+// A closure that is written after the test captures the local too.
+function captured_local_by_a_later_closure(x: A | B) -> bool {
+    let ok = x is A && x.a == 1;
+    let replace = () -> void {
+        x = B { b: "replaced" };
+    };
+    ok
+}
+
+// A `spawn` body is another task. A local that it uses is a captured local.
+function captured_local_by_a_task(x: A | B) -> bool {
+    let task = spawn {
+        x = B { b: "replaced" };
+        1
+    };
+    x is A && x.a == 1
+}
+
+// A closure on the right side captures the local, so the local is a captured
+// one: it is not narrowed, on the right side or in the closure.
+function captured_by_the_right_side(x: A | B, items: int[]) -> bool {
+    x is A && items.filter((item) -> { item == x.a }).length() > 0
+}
+
+// A field path is not narrowed: the field is read a second time on the right,
+// and another task or an alias can change it between the two reads.
+function field_path(h: Holder) -> bool {
+    h.v is A && h.v.a == 1
+}
+
+// An index path is not narrowed, for the same reason.
+function index_path(items: (A | B)[]) -> bool {
+    items[0] is A && items[0].a == 1
+}
+
+// A null test of a path through `?.` is not a fact about the binding.
+function optional_chain_is_not_a_null_guard(h: Holder?) -> bool {
+    h?.v != null && h.v is A
+}
+
+// `||` gives the right side the FALSE facts of the left side: `x` is a `B`.
+function or_has_the_false_facts(x: A | B) -> bool {
+    x is A || x.a == 1
+}
+
+// `&&` gives the right side the TRUE facts of the left side: `x` is not null.
+function and_has_the_true_facts(x: A | null) -> bool {
+    x == null && x.a == 1
+}
+
+// After `x is A || x is B`, no type is left for `x`: the read cannot run.
+function nothing_is_left(x: A | B) -> bool {
+    x is A || x is B || x.a == 1
+}
+
+// The facts are for the right side only. After the operator, `x` is `A | B`.
+function after_the_operator(x: A | B) -> int {
+    let ok = x is A && x.a == 1;
+    x.a
+}
+
+// The left side has no fact about its own left operand.
+function left_side_is_not_narrowed(x: A | B) -> bool {
+    x.a == 1 && x is A
+}
+
+// An assignment inside the right side replaces the fact: in the branch, `x`
+// is not known to be an `A`.
+function assignment_inside_the_right_side(x: A | B) -> int {
+    if (x is A && { x = B { b: "replaced" }; true }) {
+        x.a
+    } else {
+        0
+    }
+}
+
+// After an assignment inside the right side, the right side reads the
+// assigned type.
+function read_after_assignment_inside_the_right_side(x: A | B) -> bool {
+    x is A && { x = B { b: "replaced" }; x.a == 1 }
+}
+
+// In a condition, a test on the right that cannot match after the left side
+// is an error, as it is in a nested `if`.
+function test_that_cannot_match(x: A | B) -> int {
+    if (x is A && x is B) {
+        return 1;
+    }
+    if (x is A) {
+        if (x is B) {
+            return 2;
+        }
+    }
+    0
+}
+
+// After the test on the left, a `match` on the right has no value for the
+// arms of the other members: such an arm is unreachable, as it is in the
+// branch of an `if`.
+function unreachable_arm_after_the_test(x: A | B) -> bool {
+    x is A && match (x) {
+        let a: A => true,
+        _ => false,
+    }
+}

@@ -1,17 +1,26 @@
+import { CancelToken } from "./baml_sdk/baml/spawn/index.js";
 import "./baml_sdk/index.js";
-import { BamlAbortError, BamlCallContext, BamlError, BamlPanic, initializeRuntimeFromBytecode } from "@boundaryml/baml-bridge";
+import { BamlAbortError, BamlError, BamlPanic, initializeRuntimeFromBlob } from "@boundaryml/baml-bridge";
 import { describe, expect, it } from "vitest";
 import { BYTECODE } from "./baml_sdk/_inlinedbaml.js";
 import {
+  FloatSize,
   Person,
   ValidationError,
   call_callback_with_optional_args_all_set_async,
   call_callback_with_optional_args_all_unset_async,
   call_callback_with_optional_args_partially_set_async,
+  call_float_bigint_union_callback_async,
+  call_float_callback_async,
+  call_float_class_callback_async,
   call_int_callback_async,
   call_repeatedly_async,
   call_returned_callback_async,
   call_returned_callback_in_list_async,
+  call_throwing_void_callback_async,
+  call_void_callback_async,
+  call_void_callback_three_args_async,
+  call_void_callback_two_args_async,
   call_with_callback,
   call_with_callback_async,
   call_with_class_callback_async,
@@ -23,6 +32,8 @@ import {
   make_adder,
   make_counter,
   make_pair_builder,
+  make_void_callback,
+  make_void_forwarder_async,
 } from "./baml_sdk/host_callable_tests/index.js";
 import { isTestRuntime } from "./test_runtime.js";
 
@@ -47,6 +58,25 @@ describe("function_calls — generated SDK host callables", () => {
     await expect(call_int_callback_async(cb, 21)).resolves.toBe(42);
   });
 
+  // SDK_PARITY_LINT(skip): exercises the Node bridge's JavaScript number encoding for float host returns
+  it("host_callables_resolves_integral_number_for_float_return", async () => {
+    await expect(call_float_callback_async(() => 1)).resolves.toBe(1);
+  });
+
+  // SDK_PARITY_LINT(skip): exercises JavaScript's distinct number and bigint host representations
+  it("host_callables_preserves_number_kind_for_float_bigint_union", async () => {
+    const result = await call_float_bigint_union_callback_async(() => 1);
+    expect(result).toBe(1);
+    expect(typeof result).toBe("number");
+  });
+
+  // SDK_PARITY_LINT(skip): exercises the Node bridge's JavaScript number encoding in generated classes
+  it("host_callables_resolves_integral_number_for_float_class_field", async () => {
+    await expect(
+      call_float_class_callback_async(() => new FloatSize({ width: 612 })),
+    ).resolves.toBe(612);
+  });
+
   it("baml_closure_is_a_native_callable_with_host_language_arguments", () => {
     const addTen = make_adder(10);
     expect(typeof addTen).toBe("function");
@@ -64,6 +94,53 @@ describe("function_calls — generated SDK host callables", () => {
     const nextValue = make_counter(40);
     expect(nextValue()).toBe(41);
     expect(nextValue()).toBe(42);
+  });
+
+  // A unit callable has no result to carry in either direction: a host
+  // callback returns `null` whatever its arity, and calling a BAML closure
+  // returned to the host yields `null`.
+  it("host_callable_void_signatures", async () => {
+    const seen: unknown[][] = [];
+    const one = (value: number) => {
+      seen.push([value]);
+      return null;
+    };
+    const two = (value: number, label: string) => {
+      seen.push([value, label]);
+      return null;
+    };
+    const three = (value: number, label: string, flag: boolean) => {
+      seen.push([value, label, flag]);
+      return null;
+    };
+
+    await expect(call_void_callback_async(one, 1)).resolves.toBe(1);
+    await expect(call_void_callback_two_args_async(two, 2, "two")).resolves.toBe(2);
+    await expect(
+      call_void_callback_three_args_async(three, 3, "three", true),
+    ).resolves.toBe(3);
+
+    await expect(call_throwing_void_callback_async(one, 4)).resolves.toBeNull();
+    const thrown = new Error("void failed");
+    const failing = (_value: number): null => {
+      throw thrown;
+    };
+    await expect(call_throwing_void_callback_async(failing, 4)).rejects.toBe(thrown);
+
+    expect(make_void_callback()()).toBeNull();
+
+    const forward = await make_void_forwarder_async(two);
+    await expect(forward.callAsync(5, "five")).resolves.toBeNull();
+    await expect(forward.callAsync(6, "six")).resolves.toBeNull();
+
+    expect(seen).toEqual([
+      [1],
+      [2, "two"],
+      [3, "three", true],
+      [4],
+      [5, "five"],
+      [6, "six"],
+    ]);
   });
 
   it("host_callables_surfaces_a_throwing_callback_as_a_baml_error", async () => {
@@ -204,13 +281,13 @@ describe("function_calls — generated SDK host callables", () => {
 
     const pending = call_with_callback_async(callback, 9);
     await wasDispatched;
-    initializeRuntimeFromBytecode(BYTECODE);
+    initializeRuntimeFromBlob(BYTECODE);
     resolveResult("after-replacement");
     await expect(pending).resolves.toBe("after-replacement");
   });
 
   it("host_callables_ignores_a_host_promise_settlement_after_its_outer_call_is_cancelled", async () => {
-    const ctx = new BamlCallContext();
+    const ctx = CancelToken.new();
     let settle!: (value: string) => void;
     let dispatched!: () => void;
     const wasDispatched = new Promise<void>((resolve) => { dispatched = resolve; });
@@ -219,9 +296,9 @@ describe("function_calls — generated SDK host callables", () => {
       dispatched();
     })) as unknown as (value: number) => string;
 
-    const pending = call_with_callback_async(callback, 10, { $ctx: ctx });
+    const pending = call_with_callback_async(callback, 10, { $baml: { cancel: ctx } });
     await wasDispatched;
-    ctx.abort();
+    ctx.cancel();
     await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
     settle("too late");
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -229,7 +306,7 @@ describe("function_calls — generated SDK host callables", () => {
   });
 
   it("host_callables_cancels_through_the_originating_runtime_after_runtime_replacement", async () => {
-    const ctx = new BamlCallContext();
+    const ctx = CancelToken.new();
     let settle!: (value: string) => void;
     let dispatched!: () => void;
     const wasDispatched = new Promise<void>((resolve) => { dispatched = resolve; });
@@ -238,10 +315,10 @@ describe("function_calls — generated SDK host callables", () => {
       dispatched();
     })) as unknown as (value: number) => string;
 
-    const pending = call_with_callback_async(callback, 12, { $ctx: ctx });
+    const pending = call_with_callback_async(callback, 12, { $baml: { cancel: ctx } });
     await wasDispatched;
-    initializeRuntimeFromBytecode(BYTECODE);
-    ctx.abort();
+    initializeRuntimeFromBlob(BYTECODE);
+    ctx.cancel();
     await expect(pending).rejects.toBeInstanceOf(BamlAbortError);
     settle("late after replacement");
   });

@@ -1,0 +1,30 @@
+---
+source: crates/baml_tests/src/compiler2_tir/explicit_type_args.rs
+expression: "render_tir(&db, file)"
+---
+function user.identity<T>(x: T) -> T throws never {
+  { : T
+    x : T
+  }
+}
+function user.instantiation_value_call_keeps_ambient_typevar_rigid<T>(y: T) -> int throws never {
+  { : T
+    let f = identity<...> : (x: T) -> T throws never
+    f<T>(1) : T
+  }
+  !! 174..210: type mismatch: expected int, got T
+  !! 206..207: type mismatch: expected T, got 1
+}
+function user.instantiation_value_call_preserves_valid_inference<T>(y: T) -> T throws never {
+  { : T
+    let f = identity<...> : (x: T) -> T throws never
+    f<T>(y) : T
+  }
+}
+function user.bare_generic_reference_requires_specialization() -> int throws never {
+  { : int
+    let g = identity : (x: int) -> int throws never
+    g(5) : int
+  }
+  !! 608..616: generic function `identity` needs concrete type arguments before it can be stored in `g`. Specialize it explicitly, for example `identity<int>`. Or write the concrete function type after the binding name: `let g: (x: int) -> int throws never = identity`. Calling `identity(...)` directly works only when that call's arguments or expected result determine every type argument
+}

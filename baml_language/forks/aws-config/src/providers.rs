@@ -12,24 +12,16 @@ use crate::{
 // ---------------------------------------------------------------------------
 
 /// Static credentials from `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`
-/// (with the legacy `SECRET_ACCESS_KEY` fallback) and optional
-/// `AWS_SESSION_TOKEN`.
+/// and optional `AWS_SESSION_TOKEN`.
 pub(crate) async fn from_env(io: &dyn CredentialIo) -> Option<Credentials> {
     let access_key_id = io
         .env("AWS_ACCESS_KEY_ID")
         .await
         .filter(|s| !s.trim().is_empty())?;
-    let secret_access_key = match io
+    let secret_access_key = io
         .env("AWS_SECRET_ACCESS_KEY")
         .await
-        .filter(|s| !s.trim().is_empty())
-    {
-        Some(s) => s,
-        None => io
-            .env("SECRET_ACCESS_KEY")
-            .await
-            .filter(|s| !s.trim().is_empty())?,
-    };
+        .filter(|s| !s.trim().is_empty())?;
     let session_token = io.env("AWS_SESSION_TOKEN").await.and_then(|s| {
         let trimmed = s.trim();
         if trimmed.is_empty() {

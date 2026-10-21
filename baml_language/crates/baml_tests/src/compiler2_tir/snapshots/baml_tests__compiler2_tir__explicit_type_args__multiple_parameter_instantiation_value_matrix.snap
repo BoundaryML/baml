@@ -1,0 +1,22 @@
+---
+source: crates/baml_tests/src/compiler2_tir/explicit_type_args.rs
+expression: "render_tir(&db, file)"
+---
+function user.pair<A, B>(a: A, b: B) -> string throws never {
+  { : "ok"
+    "ok" : "ok"
+  }
+}
+function user.generic_apply_two_type_args_specialized() -> string throws never {
+  { : "done"
+    let f = pair<...> : (a: int, b: string) -> string throws never
+    "done" : "done"
+  }
+}
+function user.generic_apply_two_type_args_rejects_wrong_arg() -> string throws never {
+  { : string
+    let f = pair<...> : (a: int, b: string) -> string throws never
+    f(1, 2) : string
+  }
+  !! 360..361: type mismatch: expected string, got 2
+}

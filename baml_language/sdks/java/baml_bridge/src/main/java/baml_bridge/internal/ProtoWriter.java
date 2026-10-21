@@ -26,7 +26,8 @@ import java.util.Map;
  * InboundValue oneof: string_value = 2, int_value = 3, float_value = 4,
  *                     bool_value = 5, list_value = 6, map_value = 7,
  *                     class_value = 8, enum_value = 9,
- *                     uint8array_value = 11, bigint_value = 12
+ *                     uint8array_value = 11, bigint_value = 12,
+ *                     prompt_ast_value = 16
  *                     (handle = 10 / ty_value = 13 are not implemented in this slice)
  * InboundListValue:  values = 1 (repeated InboundValue)
  * InboundMapValue:   entries = 1 (repeated InboundMapEntry)
@@ -66,6 +67,7 @@ public final class ProtoWriter {
     private static final int IV_HANDLE = 10;
     private static final int IV_UINT8ARRAY = 11;
     private static final int IV_BIGINT = 12;
+    private static final int IV_PROMPT_AST = 16;
 
     // BamlHandle (baml_handle.proto): key = 1 (uint64), handle_type = 2 (enum).
     private static final int HANDLE_KEY = 1;
@@ -124,6 +126,11 @@ public final class ProtoWriter {
      */
     public static byte[] encodeCallFunctionArgs(
             String[] names, Object[] args, long callId, BamlTypes typeArgs) {
+        WireWriter invocation = new WireWriter();
+        invocation.writeInt64(4, InvocationFrames.currentState()); invocation.writeInt64(5, callId);
+        return encodeCallFunctionArgs(names, args, callId, typeArgs, invocation.toByteArray());
+    }
+    public static byte[] encodeCallFunctionArgs(String[] names, Object[] args, long callId, BamlTypes typeArgs, byte[] preparedInvocation) {
         if (names.length != args.length) {
             throw new IllegalArgumentException(
                     "names/args length mismatch: " + names.length + " vs " + args.length);
@@ -149,6 +156,7 @@ public final class ProtoWriter {
             }
         }
         w.writeInt64(CALL_ARGS_CALL_ID, callId);
+        w.writeMessage(6, preparedInvocation);
         if (typeArgs != null && !typeArgs.isEmpty()) {
             for (Map.Entry<String, BamlType> binding : typeArgs.bindings()) {
                 w.writeMessage(CALL_ARGS_TYPE_ARGS, encodeTypeArg(binding.getKey(), binding.getValue()));
@@ -163,19 +171,25 @@ public final class ProtoWriter {
             Object[] args,
             long callId,
             BamlTypes typeArgs) {
+        return encodeNamedCallFunctionArgs(functionName, names, args, callId, typeArgs, null);
+    }
+    public static byte[] encodeNamedCallFunctionArgs(String functionName, String[] names, Object[] args, long callId, BamlTypes typeArgs, byte[] preparedInvocation) {
         WireWriter w = new WireWriter();
-        w.writeRawBytes(encodeCallFunctionArgs(names, args, callId, typeArgs));
+        w.writeRawBytes(preparedInvocation == null ? encodeCallFunctionArgs(names, args, callId, typeArgs) : encodeCallFunctionArgs(names, args, callId, typeArgs, preparedInvocation));
         w.writeString(CALL_ARGS_FUNCTION_NAME, functionName);
         return w.toByteArray();
     }
 
     public static byte[] encodeHandleCallFunctionArgs(
             long functionHandle, String[] names, Object[] args, long callId) {
+        return encodeHandleCallFunctionArgs(functionHandle, names, args, callId, null);
+    }
+    public static byte[] encodeHandleCallFunctionArgs(long functionHandle, String[] names, Object[] args, long callId, byte[] preparedInvocation) {
         if (functionHandle <= 0) {
             throw new IllegalArgumentException("function handle must be positive");
         }
         WireWriter w = new WireWriter();
-        w.writeRawBytes(encodeCallFunctionArgs(names, args, callId, null));
+        w.writeRawBytes(preparedInvocation == null ? encodeCallFunctionArgs(names, args, callId, null) : encodeCallFunctionArgs(names, args, callId, null, preparedInvocation));
         w.writeInt64(CALL_ARGS_FUNCTION_HANDLE, functionHandle);
         return w.toByteArray();
     }
@@ -252,6 +266,15 @@ public final class ProtoWriter {
             return encodeInboundValue(inner, selected, true);
         }
         BamlType exactNodeType = selectedArm ? contextualType : null;
+        // Only a JDK proxy can be a returned BAML closure. Checking first keeps
+        // pure encoding from initializing BamlFfi, which loads the native library.
+        baml_bridge.BamlHandle returnedHandle =
+                value != null && java.lang.reflect.Proxy.isProxyClass(value.getClass())
+                        ? baml_bridge.BamlFfi.returnedClosureHandle(value)
+                        : null;
+        if (returnedHandle != null) {
+            return encodeInboundValue(returnedHandle, contextualType, selectedArm);
+        }
         boolean alreadyTyped = false;
         // bool must precede the integer arms (mirrors Python's isinstance order).
         if (value instanceof Boolean b) {
@@ -312,6 +335,18 @@ public final class ProtoWriter {
             writeMediaType(w, media.bamlFqn());
             w.writeMessage(IV_CLASS, encodeMediaClass(media));
             alreadyTyped = true;
+        } else if (value instanceof baml_bridge.BamlPrompt prompt) {
+            // ai.Prompt is portable rather than handle-backed. Preserve the
+            // canonical prompt AST bytes copied from the outbound boundary so
+            // the same host value can be passed into another ordinary BAML
+            // call (or another runtime) without consulting the handle table.
+            w.writeMessage(IV_PROMPT_AST, prompt.bamlWireCopy());
+        } else if (value instanceof baml_bridge.BamlFunctionSpec<?> spec) {
+            // FunctionSpec is an engine-owned capability. Its host wrapper is
+            // transparent on the inbound boundary, just like BamlStream: clone
+            // the owned handle key so the engine may drain the wire copy while
+            // the Java object remains reusable.
+            return encodeInboundValue(spec.bamlHandle(), contextualType, selectedArm);
         } else if (value instanceof baml_bridge.BamlStream stream) {
             // BamlStream (ai.stream.Stream receiver): lifted to a bare
             // handle_value(ADT_TAGGED_HEAP_HANDLE) on the wire — the engine

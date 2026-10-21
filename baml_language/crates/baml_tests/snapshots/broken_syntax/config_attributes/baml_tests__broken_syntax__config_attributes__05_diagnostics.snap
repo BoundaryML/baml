@@ -1,0 +1,75 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0010
+
+  × `client<llm>` config blocks are removed; declare a client value instead: `client Annotated = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
+    ╭─[main.baml:5:1]
+  5 │ ╭─▶ client<llm> Annotated {
+  6 │ │     @@description("not a declaration")
+  7 │ │     provider openai
+  8 │ │     options {
+  9 │ │       model "gpt-4o" @alias("m")
+ 10 │ │       @@stream.done
+ 11 │ │     }
+ 12 │ │     retry_policy Retry @description("x")
+ 13 │ ├─▶ }
+    · ╰──── replace with `client Name = <expr>;`
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[main.baml:6:3]
+ 6 │   @@description("not a declaration")
+   ·   ─┬
+   ·    ╰── attributes are not allowed in a config block
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[main.baml:9:20]
+ 9 │     model "gpt-4o" @alias("m")
+   ·                    ┬
+   ·                    ╰── a config value does not take attributes
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[main.baml:10:5]
+ 10 │     @@stream.done
+    ·     ─┬
+    ·      ╰── attributes are not allowed in a config block
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[main.baml:12:22]
+ 12 │   retry_policy Retry @description("x")
+    ·                      ┬
+    ·                      ╰── a config value does not take attributes
+    ╰────
+
+  [hir] E0010
+
+  × `retry_policy` blocks are removed; wrap the client instead: `client Reliable = ai.Retry.new(<inner>, max_attempts = ...);` (`Retry` has no effect)
+    ╭─[main.baml:15:1]
+ 15 │ ╭─▶ retry_policy Retry {
+ 16 │ │     max_retries 3 @alias("n")
+ 17 │ ├─▶ }
+    · ╰──── retry composes at the client boundary now
+    ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+    ╭─[main.baml:16:17]
+ 16 │   max_retries 3 @alias("n")
+    ·                 ┬
+    ·                 ╰── a config value does not take attributes
+    ╰────

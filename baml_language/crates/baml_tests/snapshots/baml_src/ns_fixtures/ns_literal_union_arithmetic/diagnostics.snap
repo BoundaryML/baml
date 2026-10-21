@@ -1,0 +1,39 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+   ╭─[ns_literal_union_arithmetic/main.baml:2:11]
+ 2 │   1 + if (true) { 2 } else { 3 }
+   ·           ────             ──┬──
+   ·             │                ╰── this branch is unreachable
+   ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+    ╭─[ns_literal_union_arithmetic/main.baml:14:8]
+ 14 │   (if (true) { 1 } else { 2 }) + (if (false) { 3 } else { 4 })
+    ·        ────             ──┬──
+    ·          │                ╰── this branch is unreachable
+    ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always falsy: a value of type `false` can never be truthy
+    ╭─[ns_literal_union_arithmetic/main.baml:14:39]
+ 14 │   (if (true) { 1 } else { 2 }) + (if (false) { 3 } else { 4 })
+    ·                                       ─────  ──┬──
+    ·                                         │      ╰── this branch is unreachable
+    ╰────
+
+  [type] E0167
+
+  ⚠ this condition is always truthy: a value of type `true` can never be falsy
+    ╭─[ns_literal_union_arithmetic/main.baml:18:13]
+ 18 │   100 - if (true) { 7 } else { 3 }
+    ·             ────             ──┬──
+    ·               │                ╰── this branch is unreachable
+    ╰────

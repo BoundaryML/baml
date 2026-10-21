@@ -27,6 +27,7 @@ func installInputHandleLifecycle(t *testing.T) *inputHandleLifecycle {
 	t.Helper()
 	lifecycle := &inputHandleLifecycle{next: 1000}
 	previousClone := cloneInboundHandle
+	previousMediaAccess := accessInboundMedia
 	previousRelease := releaseInboundHandle
 	cloneInboundHandle = func(source uint64) (uint64, error) {
 		lifecycle.mu.Lock()
@@ -43,8 +44,24 @@ func installInputHandleLifecycle(t *testing.T) *inputHandleLifecycle {
 		defer lifecycle.mu.Unlock()
 		lifecycle.released = append(lifecycle.released, key)
 	}
+	accessInboundMedia = func(operation mediaAccessor, key uint64, handleType cffi.BamlHandleType) (*string, error) {
+		if key != 77 || handleType != cffi.BamlHandleType_ADT_MEDIA_IMAGE {
+			return nil, errors.New("unexpected media handle")
+		}
+		var value string
+		switch operation {
+		case mediaURL:
+			value = "https://example.test/image.png"
+		case mediaMIMEType:
+			value = "image/png"
+		default:
+			return nil, nil
+		}
+		return &value, nil
+	}
 	t.Cleanup(func() {
 		cloneInboundHandle = previousClone
+		accessInboundMedia = previousMediaAccess
 		releaseInboundHandle = previousRelease
 	})
 	return lifecycle
@@ -61,6 +78,10 @@ func fakeImageInput() Input {
 		handle: &mediaHandle{key: 77, handleType: cffi.BamlHandleType_ADT_MEDIA_IMAGE},
 		kind:   mediaKindImage,
 	}})
+}
+
+func fakeRustTypeInput() Input {
+	return RustTypeInput(RustType{handle: &rustTypeHandle{key: 77}})
 }
 
 func TestMediaInputDoesNotCloneBeforeTransactionalEncoding(t *testing.T) {
@@ -161,8 +182,8 @@ func TestTransactionalEncodingRollsBackTopLevelAndNestedPartialFailures(t *testi
 				t.Fatalf("encode = transaction %#v, error %v; want rolled-back failure", transaction, err)
 			}
 			cloned, released := lifecycle.snapshot()
-			if !reflect.DeepEqual(cloned, []uint64{77}) || !reflect.DeepEqual(released, []uint64{1001}) {
-				t.Fatalf("clone/release = %v / %v, want [77] / [1001]", cloned, released)
+			if len(cloned) != 0 || len(released) != 0 {
+				t.Fatalf("portable media cloned/released handles: %v / %v", cloned, released)
 			}
 		})
 	}
@@ -177,15 +198,15 @@ func TestTransactionalEncodingRollsBackEarlierArgumentsAndCloneFailures(t *testi
 		t.Fatalf("encode = transaction %#v, error %v; want failure", transaction, err)
 	}
 	cloned, released := lifecycle.snapshot()
-	if !reflect.DeepEqual(cloned, []uint64{77}) || !reflect.DeepEqual(released, []uint64{1001}) {
-		t.Fatalf("clone/release = %v / %v, want [77] / [1001]", cloned, released)
+	if len(cloned) != 0 || len(released) != 0 {
+		t.Fatalf("portable media cloned/released handles: %v / %v", cloned, released)
 	}
 
 	lifecycle = installInputHandleLifecycle(t)
 	lifecycle.failAt = 2
 	if _, transaction, err := encodeCallForDispatch(42, map[string]Input{
-		"a": fakeImageInput(),
-		"b": fakeImageInput(),
+		"a": fakeRustTypeInput(),
+		"b": fakeRustTypeInput(),
 	}); err == nil || transaction != nil || !strings.Contains(err.Error(), "injected clone failure") {
 		t.Fatalf("encode = transaction %#v, error %v; want clone failure", transaction, err)
 	}
@@ -195,7 +216,7 @@ func TestTransactionalEncodingRollsBackEarlierArgumentsAndCloneFailures(t *testi
 	}
 }
 
-func TestRepeatedMediaInputGetsOneClonePerWireOccurrenceAndCleanupReleasesAll(t *testing.T) {
+func TestRepeatedMediaInputUsesPortablePayloadWithoutHandleClones(t *testing.T) {
 	lifecycle := installInputHandleLifecycle(t)
 	input := fakeImageInput()
 	payload, transaction, err := encodeCallForDispatch(42, map[string]Input{
@@ -211,16 +232,18 @@ func TestRepeatedMediaInputGetsOneClonePerWireOccurrenceAndCleanupReleasesAll(t 
 	if err := proto.Unmarshal(payload, &call); err != nil {
 		t.Fatal(err)
 	}
-	gotKeys := []uint64{
-		call.Kwargs[0].Value.GetHandle().Key,
-		call.Kwargs[1].Value.GetHandle().Key,
-	}
-	if !reflect.DeepEqual(gotKeys, []uint64{1001, 1002}) {
-		t.Fatalf("wire keys = %v, want distinct clones [1001 1002]", gotKeys)
+	for _, argument := range call.Kwargs {
+		media := argument.Value.GetMediaValue()
+		if media == nil || media.GetUrl() != "https://example.test/image.png" || media.GetMimeType() != "image/png" {
+			t.Fatalf("wire media = %#v, want portable URL payload", media)
+		}
+		if argument.Value.GetHandle() != nil {
+			t.Fatalf("portable media encoded as handle: %#v", argument.Value.GetHandle())
+		}
 	}
 	transaction.rollback()
 	cloned, released := lifecycle.snapshot()
-	if !reflect.DeepEqual(cloned, []uint64{77, 77}) || !reflect.DeepEqual(released, []uint64{1001, 1002}) {
+	if len(cloned) != 0 || len(released) != 0 {
 		t.Fatalf("clone/release = %v / %v", cloned, released)
 	}
 }
@@ -238,21 +261,21 @@ func TestDeferredClassCapturesFieldInputsBeforeCallerMutatesMap(t *testing.T) {
 	}
 	transaction.rollback()
 	cloned, released := lifecycle.snapshot()
-	if !reflect.DeepEqual(cloned, []uint64{77}) || !reflect.DeepEqual(released, []uint64{1001}) {
-		t.Fatalf("clone/release = %v / %v, want captured media input", cloned, released)
+	if len(cloned) != 0 || len(released) != 0 {
+		t.Fatalf("captured portable media cloned/released handles: %v / %v", cloned, released)
 	}
 }
 
 func TestPostNativeCleanupCoversMalformedUnionAndLaterSiblingHandles(t *testing.T) {
 	lifecycle := installInputHandleLifecycle(t)
 	malformed := SelectedUnionInput(
-		fakeImageInput(),
+		fakeRustTypeInput(),
 		UnionBAMLType(PrimitiveBAMLType(StringType), PrimitiveBAMLType(IntType)),
-		ImageBAMLType(),
+		RustTypeBAMLType(),
 	)
 	_, transaction, err := encodeCallForDispatch(42, map[string]Input{
 		"a_malformed_union": malformed,
-		"z_later_media":     fakeImageInput(),
+		"z_later_handle":    fakeRustTypeInput(),
 	})
 	if err != nil {
 		t.Fatalf("host encoding should preserve malformed metadata for native validation: %v", err)

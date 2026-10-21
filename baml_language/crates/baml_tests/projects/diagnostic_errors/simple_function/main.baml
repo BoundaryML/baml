@@ -1,6 +1,6 @@
 function HelloWorld(name: string) -> string {
-  client GPT4
-  prompt `
+  client: GPT4
+  prompt: `
     Say hello to ${name}
   `
 }

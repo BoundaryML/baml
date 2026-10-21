@@ -65,7 +65,6 @@ define_keyword_tokens! {
     "testset" => SyntaxKind::KW_TESTSET => TestSet;
     "retry_policy" => SyntaxKind::KW_RETRY_POLICY => RetryPolicy;
     "template_string" => SyntaxKind::KW_TEMPLATE_STRING => TemplateString;
-    "type_builder" => SyntaxKind::KW_TYPE_BUILDER => TypeBuilder;
     "if" => SyntaxKind::KW_IF => If;
     "else" => SyntaxKind::KW_ELSE => Else;
     "for" => SyntaxKind::KW_FOR => For;
@@ -83,7 +82,6 @@ define_keyword_tokens! {
     "catch_all_panics" => SyntaxKind::KW_CATCH_ALL_PANICS => CatchAllPanics;
     "instanceof" => SyntaxKind::KW_INSTANCEOF => Instanceof;
     "is" => SyntaxKind::KW_IS => Is;
-    "dynamic" => SyntaxKind::KW_DYNAMIC => Dynamic;
     "spawn" => SyntaxKind::KW_SPAWN => Spawn;
     "with" => SyntaxKind::KW_WITH => With;
     "throws" => SyntaxKind::KW_THROWS => Throws;
@@ -519,6 +517,35 @@ impl KnownKind for IntegerLiteral {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BigintLiteral {
+    pub token_span: TextRange,
+}
+impl BigintLiteral {
+    /// Does not verify that the span is actually a bigint literal token.
+    #[must_use]
+    pub fn new_from_span(token_span: TextRange) -> Self {
+        Self { token_span }
+    }
+}
+impl FromCST for BigintLiteral {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let token = StrongAstError::assert_is_token(elem)?;
+        StrongAstError::assert_kind_token(&token, SyntaxKind::BIGINT_LITERAL)?;
+        Ok(Self::new_from_span(token.text_range()))
+    }
+}
+impl Token for BigintLiteral {
+    fn span(&self) -> TextRange {
+        self.token_span
+    }
+}
+impl KnownKind for BigintLiteral {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::BIGINT_LITERAL
+    }
+}
+
 /// A boolean / null literal — `true` (`KW_TRUE`), `false` (`KW_FALSE`), or
 /// `null` (`KW_NULL`). One token type spanning the three re-lexed kinds.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -608,6 +635,9 @@ pub fn is_word_like(kind: SyntaxKind) -> bool {
         kind,
         SyntaxKind::WORD
             | SyntaxKind::KW_CLIENT
+            | SyntaxKind::KW_CLASS
+            | SyntaxKind::KW_ENUM
+            | SyntaxKind::KW_FUNCTION
             | SyntaxKind::KW_IMPLEMENTS
             | SyntaxKind::KW_IMPLEMENT
             | SyntaxKind::KW_EXTENDS
@@ -701,35 +731,35 @@ impl Printable for QuotedString {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct RawString {
+pub struct HashString {
     pub token_span: TextRange,
 }
-impl FromCST for RawString {
+impl FromCST for HashString {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::RAW_STRING_LITERAL)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::DEPRECATED_HASH_STRING_LITERAL)?;
 
         // Find the opening hash token to strip preceding trivia
         let start = node
             .first_child_token_of_kind(SyntaxKind::HASH)
             .ok_or_else(|| StrongAstError::missing(SyntaxKind::HASH, node.text_range()))?;
 
-        Ok(RawString {
+        Ok(HashString {
             token_span: TextRange::new(start.text_range().start(), node.text_range().end()),
         })
     }
 }
-impl Token for RawString {
+impl Token for HashString {
     fn span(&self) -> TextRange {
         self.token_span
     }
 }
-impl KnownKind for RawString {
+impl KnownKind for HashString {
     fn kind() -> SyntaxKind {
-        SyntaxKind::RAW_STRING_LITERAL
+        SyntaxKind::DEPRECATED_HASH_STRING_LITERAL
     }
 }
-impl Printable for RawString {
+impl Printable for HashString {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let text = &printer.input[self.span()];
         let multi_lined = text.contains('\n');
@@ -945,6 +975,57 @@ impl Printable for BacktickString {
             Some(reindented) => printer.print_str(&reindented),
             None => printer.print_raw_token(self),
         }
+        PrintInfo { multi_lined }
+    }
+    fn leftmost_token(&self) -> TextRange {
+        TextRange::new(
+            self.token_span.start(),
+            self.token_span.start() + TextSize::from(1),
+        )
+    }
+    fn rightmost_token(&self) -> TextRange {
+        TextRange::new(
+            self.token_span.end() - TextSize::from(1),
+            self.token_span.end(),
+        )
+    }
+}
+
+/// A raw `r"..."` string literal. Its body is verbatim, so it always prints
+/// as written.
+#[derive(Debug)]
+pub struct RawString {
+    pub token_span: TextRange,
+}
+impl FromCST for RawString {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::RAW_STRING_LITERAL)?;
+
+        // Find the `r` prefix word token to strip preceding trivia.
+        let start = node
+            .first_child_or_token_by_kind(&|kind| kind == SyntaxKind::WORD)
+            .ok_or_else(|| StrongAstError::missing(SyntaxKind::WORD, node.text_range()))?;
+
+        Ok(RawString {
+            token_span: TextRange::new(start.text_range().start(), node.text_range().end()),
+        })
+    }
+}
+impl Token for RawString {
+    fn span(&self) -> TextRange {
+        self.token_span
+    }
+}
+impl KnownKind for RawString {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::RAW_STRING_LITERAL
+    }
+}
+impl Printable for RawString {
+    fn print(&self, _shape: Shape, printer: &mut Printer) -> PrintInfo {
+        let multi_lined = printer.input[self.span()].contains('\n');
+        printer.print_raw_token(self);
         PrintInfo { multi_lined }
     }
     fn leftmost_token(&self) -> TextRange {

@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import baml_bridge.BamlError;
-import baml_sdk.baml.json.JsonPathError;
+import baml_sdk.baml.json.PathError;
 import baml_sdk.baml.json.json;
 import baml_sdk.go_json_tests.Fns;
 import java.util.List;
@@ -54,11 +54,11 @@ class TestJson {
         assertEquals("fallback", Fns.json_path_string_or(obj, ".missing", "fallback"));
 
         // java-port note: Python matches str(exc) against "missing field";
-        // the generated Java JsonPathError does not render its fields into
+        // the generated Java PathError does not render its fields into
         // BamlError's message, so assert on the decoded error's message field.
         BamlError exc =
                 assertThrows(BamlError.class, () -> Fns.json_path_string(obj, ".absent"));
-        JsonPathError pathError = assertInstanceOf(JsonPathError.class, exc.value());
+        PathError pathError = assertInstanceOf(PathError.class, exc.value());
         assertTrue(pathError.message().contains("missing field"), pathError.message());
     }
 

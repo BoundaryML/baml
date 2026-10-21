@@ -89,7 +89,7 @@ function ts_member_id(module: TsModule, container: TsContainer, member: TsMember
 /// is how you import `os`, not how you call `os.hostname`.
 function ts_display_of(id: string) -> string {
     if (id.starts_with("node:")) {
-        id.substring(5, id.length())
+        id.slice(5, id.length())
     } else {
         id
     }

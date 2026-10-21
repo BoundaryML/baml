@@ -327,7 +327,7 @@ pub(crate) fn is_safe_portable_segment(segment: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use baml_base::Name as BaseName;
-    use baml_codegen_types::Name;
+    use baml_sdkgen_types::Name;
 
     use super::*;
     use crate::names::{

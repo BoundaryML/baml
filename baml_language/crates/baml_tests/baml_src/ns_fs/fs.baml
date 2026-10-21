@@ -11,32 +11,11 @@
 // idempotent mkdir(recursive:true) so the suite stays safe to re-run and safe
 // under the parallel .baml runner.
 //
-// Tests left in Rust (not converted):
-//
-//   Should-error tests (cannot catch ExternalOpFailed in BAML — fs op failures
-//   are fatal engine errors, not BAML-level catchable throws):
-//     fs_open_nonexistent_file
-//     fs_file_write_on_readonly_errors
-//     fs_remove_nonexistent_errors
-//     fs_file_read_negative_n_errors
-//     fs_file_close_invalidates_handle
-//     fs_write_wrapper_closes_on_error
-//     fs_read_nonexistent_errors
-//     fs_file_seek_negative_errors
-//     fs_read_dir_nonexistent_errors
-//     fs_read_dir_on_file_errors
-//     fs_mkdir_non_recursive_errors_when_parent_missing
-//     fs_mkdir_non_recursive_errors_when_dir_exists
-//     fs_mkdir_recursive_errors_when_leaf_is_file
-//
-//   Other non-convertible tests:
-//     fs_file_invalid_mode        — tests a compile-time type error ("x" is not
-//                                   in the mode union); the Rust test uses
-//                                   #[should_panic] to catch a compile-time panic.
-//                                   No BAML equivalent.
-//     fs_read_dir_reports_symlink_flag — creates a Unix symlink via
-//                                   std::os::unix::fs::symlink; baml.fs has no
-//                                   symlink primitive.
+// Six Unix host-state tests remain in `crates/baml_tests/tests/fs.rs`: they
+// inspect real symlink identity/targets or exact permission bits, including
+// proving that a rejected chmod did not mutate the file. The catchable
+// language-level error contracts are covered below; see the Rust-survivor
+// ledger for the exact non-native boundary.
 
 // ============================================================================
 // open + read (text)
@@ -75,6 +54,63 @@ function fs_open_and_read_bytes_fn() -> bool {
 
 test "fs_open_and_read_bytes" {
     assert.is_true(fs_open_and_read_bytes_fn())
+}
+
+// ============================================================================
+// File.bytes — everything that remains, in one read
+// ============================================================================
+
+function fs_file_bytes_reads_past_one_chunk_fn() -> string {
+    let path = fs_tmp("bytes_large.txt");
+    // Longer than the 64 KiB a single `read` returns.
+    baml.fs.write(path, "0123456789".repeat(20000));
+    let file = baml.fs.open(path, "r");
+    let direct = file.bytes();
+    file.close();
+    let again = baml.fs.open(path, "r");
+    let through_read = again.as<baml.io.Read>.bytes();
+    again.close();
+    baml.fs.remove(path);
+    `${direct.length()}|${through_read.length()}|${direct.to_base64() == through_read.to_base64()}`
+}
+
+test "fs_file_bytes_reads_past_one_chunk" {
+    assert.equal(fs_file_bytes_reads_past_one_chunk_fn(), "200000|200000|true")
+}
+
+function fs_file_bytes_reads_what_remains_fn() -> string {
+    let path = fs_tmp("bytes_remaining.txt");
+    baml.fs.write(path, "Hello from BAML!");
+    let file = baml.fs.open(path, "r");
+    let head = file.read(6) ?? b"";
+    let rest = file.bytes();
+    let after = file.bytes();
+    file.close();
+    baml.fs.remove(path);
+    `${head.length()}|${rest.length()}|${after.length()}`
+}
+
+test "fs_file_bytes_reads_what_remains" {
+    // 16 bytes: 6 by `read`, the other 10 by `bytes`, then nothing is left.
+    assert.equal(fs_file_bytes_reads_what_remains_fn(), "6|10|0")
+}
+
+function fs_file_bytes_on_a_closed_file_fn() -> string {
+    let path = fs_tmp("bytes_closed.txt");
+    baml.fs.write(path, "x");
+    let file = baml.fs.open(path, "r");
+    file.close();
+    baml.fs.remove(path);
+    {
+        file.bytes();
+        "read"
+    } catch (e) {
+        baml.errors.Io => "io"
+    }
+}
+
+test "fs_file_bytes_on_a_closed_file" {
+    assert.equal(fs_file_bytes_on_a_closed_file_fn(), "io")
 }
 
 // ============================================================================
@@ -205,7 +241,7 @@ test "fs_file_rw_write_and_read_back" {
 }
 
 // ============================================================================
-// write_bytes to open file handle
+// write bytes to open file handle
 // ============================================================================
 
 function fs_file_rw_write_bytes_fn() -> bool {
@@ -218,7 +254,7 @@ function fs_file_rw_write_bytes_fn() -> bool {
     let bytes = baml.fs.open(src, "r").bytes();
     let file = baml.fs.open(dst, "r+");
     file.seek_from("start", 0);
-    let n = file.write_bytes(bytes);
+    let n = file.write(bytes);
     baml.fs.remove(src);
     baml.fs.remove(dst);
     // "AB" is 2 bytes
@@ -291,48 +327,48 @@ test "fs_size_returns_length" {
 }
 
 // ============================================================================
-// file.read(n) reads up to n bytes as a string
+// file.read(n) reads up to n bytes
 // ============================================================================
 
-function fs_file_read_n_bytes_fn() -> string {
+function fs_file_read_n_bytes_fn() -> uint8array {
     let path = fs_tmp("read_n.txt");
     baml.fs.write(path, "Hello, world!");
     let f = baml.fs.open(path, "r");
-    let result = f.read(5);
+    let result = f.read(5) ?? b"";
     baml.fs.remove(path);
     result
 }
 
 test "fs_file_read_n_bytes" {
-    assert.equal(fs_file_read_n_bytes_fn(), "Hello")
+    assert.equal(fs_file_read_n_bytes_fn(), "Hello".to_utf8())
 }
 
 // ============================================================================
 // file.read(n) truncates at EOF (doesn't error when n > file size)
 // ============================================================================
 
-function fs_file_read_truncates_at_eof_fn() -> string {
+function fs_file_read_truncates_at_eof_fn() -> uint8array {
     let path = fs_tmp("read_eof.txt");
     baml.fs.write(path, "abc");
     let f = baml.fs.open(path, "r");
-    let result = f.read(100);
+    let result = f.read(100) ?? b"";
     baml.fs.remove(path);
     result
 }
 
 test "fs_file_read_truncates_at_eof" {
-    assert.equal(fs_file_read_truncates_at_eof_fn(), "abc")
+    assert.equal(fs_file_read_truncates_at_eof_fn(), "abc".to_utf8())
 }
 
 // ============================================================================
-// file.read_bytes(n) reads n raw bytes — verified by length
+// file.read(n) reads raw bytes, verified by length
 // ============================================================================
 
 function fs_file_read_bytes_n_fn() -> bool {
     let path = fs_tmp("read_bytes_n.bin");
     baml.fs.write(path, "ABCDE");
     let f = baml.fs.open(path, "r");
-    let data = f.read_bytes(3);
+    let data = f.read(3) ?? b"";
     baml.fs.remove(path);
     // should have read exactly 3 bytes
     data.length() == 3
@@ -346,18 +382,18 @@ test "fs_file_read_bytes_n" {
 // file.read advances the cursor (sequential reads)
 // ============================================================================
 
-function fs_file_read_advances_cursor_fn() -> string {
+function fs_file_read_advances_cursor_fn() -> uint8array {
     let path = fs_tmp("read_advances.txt");
     baml.fs.write(path, "ABCDEFGH");
     let f = baml.fs.open(path, "r");
     f.read(3);
-    let result = f.read(3);
+    let result = f.read(3) ?? b"";
     baml.fs.remove(path);
     result
 }
 
 test "fs_file_read_advances_cursor" {
-    assert.equal(fs_file_read_advances_cursor_fn(), "DEF")
+    assert.equal(fs_file_read_advances_cursor_fn(), "DEF".to_utf8())
 }
 
 // ============================================================================
@@ -420,17 +456,16 @@ test "fs_open_append_plus_can_read" {
 }
 
 // ============================================================================
-// close is idempotent (calling close twice returns null both times)
+// close is idempotent (calling close twice succeeds both times)
 // ============================================================================
 
-function fs_file_close_is_idempotent_fn() -> null {
+function fs_file_close_is_idempotent_fn() -> void {
     let path = fs_tmp("close_idempotent.txt");
     baml.fs.write(path, "x");
     let f = baml.fs.open(path, "r");
     f.close();
     f.close();
     baml.fs.remove(path);
-    null
 }
 
 test "fs_file_close_is_idempotent" {
@@ -544,9 +579,15 @@ function fs_read_dir_returns_entries_fn() -> bool {
     baml.fs.remove(dir + "/b.txt");
     // 3 entries: a.txt, b.txt, subdir
     let count_ok = entries.length() == 3;
-    let has_a = entries.some((e: baml.fs.DirEntry) -> bool { e.name == "a.txt" });
-    let has_b = entries.some((e: baml.fs.DirEntry) -> bool { e.name == "b.txt" });
-    let has_sub = entries.some((e: baml.fs.DirEntry) -> bool { e.name == "subdir" });
+    let has_a = entries.some((e: baml.fs.DirEntry) -> bool {
+        e.name == "a.txt"
+    });
+    let has_b = entries.some((e: baml.fs.DirEntry) -> bool {
+        e.name == "b.txt"
+    });
+    let has_sub = entries.some((e: baml.fs.DirEntry) -> bool {
+        e.name == "subdir"
+    });
     count_ok && has_a && has_b && has_sub
 }
 
@@ -687,4 +728,112 @@ function fs_remove_dir_all_idempotent_fn() -> bool {
 
 test "fs_remove_dir_all_idempotent" {
     assert.is_true(fs_remove_dir_all_idempotent_fn())
+}
+
+// ============================================================================
+// chmod
+// ============================================================================
+//
+// Only the platform-independent behavior lives here. What `mode` does to a file
+// is meaningful on unix and reduces to one read-only bit on Windows, and BAML
+// has no way to read a mode back, so the effect is asserted from Rust
+// (tests/fs.rs::fs_chmod_sets_the_exact_mode).
+
+function fs_chmod_on_existing_file_fn() -> bool {
+    let path = fs_tmp("chmod_ok.txt");
+    baml.fs.write(path, "content");
+    baml.fs.chmod(path, 0o644);
+    let existed = baml.fs.exists(path);
+    baml.fs.remove(path);
+    existed
+}
+
+test "fs_chmod_on_existing_file" {
+    assert.is_true(fs_chmod_on_existing_file_fn())
+}
+
+// A mode outside `0..=0o7777` is a caller mistake, rejected before the syscall
+// the kernel would have silently masked it in.
+//
+// Each `catch` is the tail expression of its own helper so its result is
+// returned rather than bound to a local — the caller keeps the setup and
+// cleanup around the call.
+function fs_chmod_rejects_mode(path: string, mode: int) -> bool {
+    {
+        baml.fs.chmod(path, mode);
+        false
+    } catch (e) {
+        baml.errors.InvalidArgument => true
+    }
+}
+
+function fs_chmod_rejects_high_mode_fn() -> bool {
+    let path = fs_tmp("chmod_high_mode.txt");
+    baml.fs.write(path, "content");
+    let threw = fs_chmod_rejects_mode(path, 0o10000);
+    baml.fs.remove(path);
+    threw
+}
+
+test "fs_chmod_rejects_high_mode" {
+    assert.is_true(fs_chmod_rejects_high_mode_fn())
+}
+
+function fs_chmod_rejects_negative_mode_fn() -> bool {
+    let path = fs_tmp("chmod_negative_mode.txt");
+    baml.fs.write(path, "content");
+    let threw = fs_chmod_rejects_mode(path, 0 - 1);
+    baml.fs.remove(path);
+    threw
+}
+
+test "fs_chmod_rejects_negative_mode" {
+    assert.is_true(fs_chmod_rejects_negative_mode_fn())
+}
+
+// A missing path is an I/O failure on every platform — including Windows, where
+// the current attributes are read before they are rewritten.
+function fs_chmod_missing_path_errors_fn() -> bool {
+    let path = fs_tmp("chmod_missing.txt");
+    {
+        baml.fs.chmod(path, 0o644);
+        false
+    } catch (e) {
+        baml.errors.Io => true
+    }
+}
+
+test "fs_chmod_missing_path_errors" {
+    assert.is_true(fs_chmod_missing_path_errors_fn())
+}
+
+// ============================================================================
+// symlink
+// ============================================================================
+//
+// Creating a link needs privileges Windows CI does not grant, so the success
+// path is Unix-only and lives in Rust (tests/fs.rs::fs_symlink_*). What is
+// asserted here holds even where symlink creation is refused outright: the call
+// fails with `Io` and leaves the occupied path alone.
+
+function fs_symlink_is_refused_at(path: string) -> bool {
+    {
+        baml.fs.symlink(path, path);
+        false
+    } catch (e) {
+        baml.errors.Io => true
+    }
+}
+
+function fs_symlink_onto_existing_path_errors_fn() -> bool {
+    let path = fs_tmp("symlink_taken.txt");
+    baml.fs.write(path, "keep me");
+    let threw = fs_symlink_is_refused_at(path);
+    let intact = baml.fs.read(path) == "keep me";
+    baml.fs.remove(path);
+    threw && intact
+}
+
+test "fs_symlink_onto_existing_path_errors" {
+    assert.is_true(fs_symlink_onto_existing_path_errors_fn())
 }

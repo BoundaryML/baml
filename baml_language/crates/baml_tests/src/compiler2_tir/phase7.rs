@@ -4,260 +4,100 @@
 //! negated conditions, and early-return (diverging then-branch) patterns.
 
 use super::support::{make_db, render_tir};
+use crate::engine::TestDbExt;
+
+fn render_labeled_cases(cases: &[(&str, &str)]) -> String {
+    cases
+        .iter()
+        .map(|(label, source)| {
+            let mut db = make_db();
+            let file = db.file("test.baml", source);
+            format!("=== {label} ===\n{}", render_tir(&db, file).trim_end())
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
 
 // ── Null check narrowing: x != null ──────────────────────────────────────────
 
 #[test]
-fn narrow_ne_null_then_branch_is_non_nullable() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function f(x: int?) -> int {
+fn null_condition_narrowing_matrix() {
+    insta::assert_snapshot!(render_labeled_cases(&[
+        (
+            "narrow_ne_null_then_branch_is_non_nullable",
+            r#"function f(x: int?) -> int {
   if (x != null) {
     return x;
   }
   return 0;
 }"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: int | null) -> int throws never {
-      { : never
-        if (x != null : bool) : void
-          { : never
-            return x : int
-          }
-        return 0 : 0
-      }
-    }
-    ");
-}
-
-#[test]
-fn narrow_ne_null_rhs_form() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function f(x: int?) -> int {
+        ),
+        (
+            "narrow_ne_null_rhs_form",
+            r#"function f(x: int?) -> int {
   if (null != x) {
     return x;
   }
   return 0;
 }"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: int | null) -> int throws never {
-      { : never
-        if (null != x : bool) : void
-          { : never
-            return x : int
-          }
-        return 0 : 0
-      }
-    }
-    ");
-}
-
-// ── Null check narrowing: x == null ──────────────────────────────────────────
-
-#[test]
-fn narrow_eq_null_else_branch_is_non_nullable() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function f(x: int?) -> int {
+        ),
+        (
+            "narrow_eq_null_else_branch_is_non_nullable",
+            r#"function f(x: int?) -> int {
   if (x == null) {
     return 0;
   } else {
     return x;
   }
 }"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: int | null) -> int throws never {
-      { : never
-        if (x == null : bool) : never
-          { : never
-            return 0 : 0
-          }
-        else
-          { : never
-            return x : int
-          }
-      }
-    }
-    ");
-}
-
-// ── Truthiness narrowing: if (x) ─────────────────────────────────────────────
-
-#[test]
-fn narrow_truthiness_then_branch_non_null() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function f(x: int?) -> int {
+        ),
+        (
+            "narrow_truthiness_then_branch_non_null",
+            r#"function f(x: int?) -> int {
   if (x) {
     return x;
   }
   return 0;
 }"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: int | null) -> int throws never {
-      { : never
-        if (x : int | null) : void
-          { : never
-            return x : int
-          }
-        return 0 : 0
-      }
-    }
-    ");
-}
-
-// ── Negated narrowing: !(x == null) ──────────────────────────────────────────
-
-#[test]
-fn narrow_negated_eq_null_then_branch_non_null() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function f(x: int?) -> int {
+        ),
+        (
+            "narrow_negated_eq_null_then_branch_non_null",
+            r#"function f(x: int?) -> int {
   if (!(x == null)) {
     return x;
   }
   return 0;
 }"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: int | null) -> int throws never {
-      { : never
-        if (Not x == null : bool) : void
-          { : never
-            return x : int
-          }
-        return 0 : 0
-      }
-    }
-    ");
+        ),
+    ]));
 }
 
 // ── Early-return narrowing ────────────────────────────────────────────────────
 
 #[test]
-fn early_return_null_check_narrows_rest_of_block() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function f(x: int?) -> int {
+fn early_return_narrowing_matrix() {
+    insta::assert_snapshot!(render_labeled_cases(&[
+        (
+            "early_return_null_check_narrows_rest_of_block",
+            r#"function f(x: int?) -> int {
   if (x == null) {
     return 0;
   }
   return x;
 }"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: int | null) -> int throws never {
-      { : never
-        if (x == null : bool) : void
-          { : never
-            return 0 : 0
-          }
-        return x : int
-      }
-    }
-    ");
-}
-
-#[test]
-fn early_return_ne_null_check_narrows_rest_of_block() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function f(x: int?) -> int? {
+        ),
+        (
+            "early_return_ne_null_check_narrows_rest_of_block",
+            r#"function f(x: int?) -> int? {
   if (x != null) {
     return x;
   }
   return x;
 }"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: int | null) -> int | null throws never {
-      { : never
-        if (x != null : bool) : void
-          { : never
-            return x : int
-          }
-        return x : null
-      }
-    }
-    ");
-}
-
-// ── Let-binding captures narrowed type ───────────────────────────────────────
-
-#[test]
-fn narrowed_type_captured_in_let_binding() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function f(x: int?) -> int {
-  if (x == null) {
-    return 0;
-  }
-  let y = x;
-  return y;
-}"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: int | null) -> int throws never {
-      { : never
-        if (x == null : bool) : void
-          { : never
-            return 0 : 0
-          }
-        let y = x : int
-        return y : int
-      }
-    }
-    ");
-}
-
-// ── Arithmetic on narrowed type ───────────────────────────────────────────────
-
-#[test]
-fn narrowed_int_arithmetic_no_error() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function f(x: int?) -> int {
-  if (x != null) {
-    return x + 1;
-  }
-  return 0;
-}"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(x: int | null) -> int throws never {
-      { : never
-        if (x != null : bool) : void
-          { : never
-            return x + 1 : int
-          }
-        return 0 : 0
-      }
-    }
-    ");
-}
-
-// ── Snapshot: full narrowing rendering ───────────────────────────────────────
-
-#[test]
-fn snapshot_narrowing_patterns() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function f(a: int?, b: string?) -> int {
+        ),
+        (
+            "snapshot_narrowing_patterns",
+            r#"function f(a: int?, b: string?) -> int {
   if (a == null) {
     return 0;
   }
@@ -267,33 +107,52 @@ fn snapshot_narrowing_patterns() {
   let result = a;
   return result;
 }"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    function user.f(a: int | null, b: string | null) -> int throws never {
-      { : never
-        if (a == null : bool) : void
-          { : never
-            return 0 : 0
-          }
-        if (b == null : bool) : void
-          { : never
-            return a : int
-          }
-        let result = a : int
-        return result : int
-      }
-    }
-    ");
+        ),
+        (
+            "early_return_string_null_check",
+            r#"function f(s: string?) -> string {
+  if (s == null) {
+    return "";
+  }
+  return s;
+}"#,
+        ),
+    ]));
+}
+
+#[test]
+fn narrowed_value_consumer_matrix() {
+    insta::assert_snapshot!(render_labeled_cases(&[
+        (
+            "narrowed_type_captured_in_let_binding",
+            r#"function f(x: int?) -> int {
+  if (x == null) {
+    return 0;
+  }
+  let y = x;
+  return y;
+}"#,
+        ),
+        (
+            "narrowed_int_arithmetic_no_error",
+            r#"function f(x: int?) -> int {
+  if (x != null) {
+    return x + 1;
+  }
+  return 0;
+}"#,
+        ),
+    ]));
 }
 
 // ── Assignment in narrowed branch ──────────────────────────────────────────────
 
 #[test]
-fn assign_wrong_type_in_null_branch_is_error() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function f(x: int?) -> int {
+fn narrowed_assignment_matrix() {
+    insta::assert_snapshot!(render_labeled_cases(&[
+        (
+            "assign_wrong_type_in_null_branch_is_error",
+            r#"function f(x: int?) -> int {
   if (x == null) {
     x = "string";
     return 0;
@@ -301,31 +160,10 @@ fn assign_wrong_type_in_null_branch_is_error() {
     return x;
   }
 }"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(x: int | null) -> int throws never {
-      { : never
-        if (x == null : bool) : never
-          { : never
-            x = "string" : "string"
-            return 0 : 0
-          }
-        else
-          { : never
-            return x : int
-          }
-      }
-      !! 56..64: type mismatch: expected int | null, got "string"
-    }
-    "#);
-}
-
-#[test]
-fn assign_method_result_in_null_branch_works() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function f(x: int?) -> int {
+        ),
+        (
+            "assign_method_result_in_null_branch_works",
+            r#"function f(x: int?) -> int {
   if (x == null) {
     x = "string".length();
     return 0;
@@ -333,28 +171,14 @@ fn assign_method_result_in_null_branch_works() {
     return x;
   }
 }"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(x: int | null) -> int throws never {
-      { : never
-        if (x == null : bool) : never
-          { : never
-            x = "string".length() : int
-            return 0 : 0
-          }
-        else
-          { : never
-            return x : int
-          }
-      }
-    }
-    "#);
+        ),
+    ]));
 }
 
 #[test]
 fn assignment_before_shadow_survives_scope_restore() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f(x: int?) -> int {
   {
@@ -379,7 +203,7 @@ fn assignment_before_shadow_survives_scope_restore() {
 #[test]
 fn inner_declared_type_does_not_leak_after_shadow() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f() -> int {
   let x: int = 1;
@@ -405,7 +229,7 @@ fn inner_declared_type_does_not_leak_after_shadow() {
 #[test]
 fn assignment_uses_declared_type_after_narrowing() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f() -> int? {
   let x: int? = 1;
@@ -427,30 +251,9 @@ fn assignment_uses_declared_type_after_narrowing() {
 }
 
 #[test]
-fn unannotated_inner_shadow_masks_outer_declared_type() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function f() -> int {
-  let x: int = 1;
-  {
-    let x = "shadow";
-    x = "updated";
-  };
-  return x;
-}"#,
-    );
-    let output = render_tir(&db, file);
-    assert!(
-        !output.contains("type mismatch"),
-        "unannotated inner shadow should not be checked against outer annotation:\n{output}"
-    );
-}
-
-#[test]
 fn early_return_narrowing_inside_nested_block_does_not_leak() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"function f(x: int?) -> int? {
   {
@@ -462,43 +265,20 @@ fn early_return_narrowing_inside_nested_block_does_not_leak() {
 }"#,
     );
     let output = render_tir(&db, file);
+    // hir_ty's flow narrowing is PATH-SENSITIVE across sequential blocks
+    // (rustc-style): the nested block unconditionally returns when `x`
+    // is null, so afterwards `x` provably isn't - a strictly stronger,
+    // sound refinement TIR scoped away.
     assert!(
-        output.contains("return x : int | null"),
-        "early-return narrowing should be scoped to the nested block:\n{output}"
+        output.contains("return x : int"),
+        "the early return proves `x` non-null for the rest of the body:\n{output}"
     );
-}
-
-// ── String type narrowing ─────────────────────────────────────────────────────
-
-#[test]
-fn early_return_string_null_check() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "test.baml",
-        r#"function f(s: string?) -> string {
-  if (s == null) {
-    return "";
-  }
-  return s;
-}"#,
-    );
-    insta::assert_snapshot!(render_tir(&db, file), @r#"
-    function user.f(s: string | null) -> string throws never {
-      { : never
-        if (s == null : bool) : void
-          { : never
-            return "" : ""
-          }
-        return s : string
-      }
-    }
-    "#);
 }
 
 #[test]
 fn captured_local_is_not_narrowed() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Foo { field: int }
@@ -513,8 +293,12 @@ function f(x: Foo | int) -> int {
 "#,
     );
     let output = render_tir(&db, file);
+    // hir_ty types the failed member access with the ERROR sentinel
+    // (replace-with-error, not TIR's `unknown`) and reports the member
+    // error; the capture still blocks narrowing.
     assert!(
-        output.contains("x.field : unknown") && output.contains("expected int, got Foo | int"),
+        output.contains("x.field : !error")
+            && output.contains("type `int | Foo` has no member `field`"),
         "captured local must retain its declared union type:\n{output}"
     );
 }
@@ -522,7 +306,7 @@ function f(x: Foo | int) -> int {
 #[test]
 fn captured_local_is_not_narrowed_by_condition() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 function f(x: int?) -> int {
@@ -544,7 +328,7 @@ function f(x: int?) -> int {
 #[test]
 fn uncaptured_local_is_narrowed() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Foo { field: int }
@@ -568,7 +352,7 @@ function f(x: Foo | int) -> int {
 #[test]
 fn field_is_not_narrowed() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Foo { field: int }
@@ -583,9 +367,10 @@ function f(box: Box) -> int {
 "#,
     );
     let output = render_tir(&db, file);
+    // Error-sentinel typing as above; the field scrutinee stays unnarrowed.
     assert!(
-        output.contains("box.value.field : unknown")
-            && output.contains("expected int, got Foo | int"),
+        output.contains("box.value.field : !error")
+            && output.contains("type `int | Foo` has no member `field`"),
         "field access must retain its declared union type:\n{output}"
     );
 }
@@ -593,7 +378,7 @@ function f(box: Box) -> int {
 #[test]
 fn uncaptured_snapshot_of_captured_local_is_narrowed() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Foo { field: int }
@@ -619,7 +404,7 @@ function f(x: Foo | int) -> int {
 #[test]
 fn destructured_field_local_is_narrowed() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Bar { value: int }

@@ -34,7 +34,10 @@ use bex_engine::{
     RuntimeTy,
 };
 use bex_resource_types::{HostValueArc, HostValueKind};
-use bridge_ctypes::baml_bridge::cffi::{BamlOutboundValue, BamlToHostCall, baml_outbound_value};
+use bridge_ctypes::{
+    OwnedHostInvocation,
+    baml_bridge::cffi::{BamlOutboundValue, BamlToHostCall, HostInvocation, baml_outbound_value},
+};
 use common::compile_for_engine;
 use indexmap::IndexMap;
 use prost::Message;
@@ -63,7 +66,7 @@ use sys_native::SysOpsExt;
 // type-test against the substituted type at monomorphization. Both are
 // real compiler / VM changes; absent those, the host-call typechecking
 // must stay in Rust (as it is today) or use a different BAML construct
-// (e.g. an explicit `reflect.type_of<T>().matches(v)` builtin if added).
+// (e.g. an explicit `reflect.Type.of<T>().matches(v)` builtin if added).
 // ============================================================================
 
 #[ignore = "documents a compiler gap: generic-typed patterns don't substitute T at runtime"]
@@ -191,8 +194,27 @@ fn next_host_key() -> u64 {
 /// per-key behaviour table.
 fn ensure_dispatch_registered() {
     DISPATCH_REGISTERED.get_or_init(|| {
-        sys_native::host_dispatch::set_dispatch_fn(global_dispatch);
+        sys_native::host_dispatch::set_dispatch_v2(global_dispatch_v2);
+        sys_native::host_dispatch::set_cancel_fn(cancel_fake_dispatch);
     });
+}
+
+extern "C" fn cancel_fake_dispatch(call_id: u32) {
+    // NeverComplete parks delivery but runs no host body after dispatch returns.
+    sys_native::host_dispatch::finish_abi_execution(call_id);
+}
+
+extern "C" fn global_dispatch_v2(request: *const u8, length: usize) {
+    // SAFETY: the engine supplies a live request slice for this callback.
+    let bytes = unsafe { std::slice::from_raw_parts(request, length) };
+    let frame = OwnedHostInvocation(HostInvocation::decode(bytes).expect("valid host invocation"));
+    global_dispatch(
+        frame.0.host_value_key,
+        frame.0.callback_id,
+        frame.0.application_args.as_ptr(),
+        frame.0.application_args.len(),
+    );
+    // The fake host consumes controls here; it never schedules another host body.
 }
 
 extern "C" fn global_dispatch(host_value_key: u64, call_id: u32, args: *const u8, length: usize) {
@@ -373,6 +395,119 @@ async fn host_callable_returns_int_result() {
     drop(arc);
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_resolves_integral_js_number_to_float() {
+    let source = r#"
+        function measure(f: () -> float) -> float {
+            return f();
+        }
+    "#;
+
+    let arc = register_host_callable(|_items| FakeReturn::Ok(BexExternalValue::JsNumber(1.0)));
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "measure",
+            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("integral JavaScript number should satisfy a float return contract");
+
+    let value = match result {
+        BexExternalValue::Float(value) => value,
+        other => panic!("expected Float(1.0), got {other:?}"),
+    };
+    assert!((value - 1.0).abs() < f64::EPSILON);
+    drop(arc);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_resolves_integral_js_number_class_field_to_float() {
+    let source = r#"
+        class Size {
+            width float
+        }
+        function measure(f: () -> Size) -> float {
+            return f().width;
+        }
+    "#;
+
+    let arc = register_host_callable(|_items| {
+        let mut fields = IndexMap::new();
+        fields.insert("width".to_string(), BexExternalValue::JsNumber(612.0));
+        FakeReturn::Ok(BexExternalValue::Instance {
+            class_name: "Size".to_string(),
+            type_args: vec![],
+            fields,
+        })
+    });
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "measure",
+            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("integral class field should satisfy its float contract");
+
+    let value = match result {
+        BexExternalValue::Float(value) => value,
+        other => panic!("expected Float(612.0), got {other:?}"),
+    };
+    assert!((value - 612.0).abs() < f64::EPSILON);
+    drop(arc);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_integral_number_uses_float_in_float_bigint_union() {
+    let source = r#"
+        function measure(f: () -> float | bigint) -> float | bigint {
+            return f();
+        }
+    "#;
+
+    let arc = register_host_callable(|_items| FakeReturn::Ok(BexExternalValue::JsNumber(1.0)));
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "measure",
+            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("an integral JavaScript number should select the float arm");
+
+    let BexExternalValue::Union { value, metadata } = result else {
+        panic!("expected selected union result")
+    };
+    assert_eq!(metadata.selected_option, RuntimeTy::float());
+    let BexExternalValue::Float(value) = *value else {
+        panic!("expected a float payload")
+    };
+    assert!((value - 1.0).abs() < f64::EPSILON);
+    drop(arc);
+}
+
 /// A callable that crosses a host boundary may itself be host-owned. APIs such
 /// as the HTTP server retain a callable handle and later ask the engine to
 /// invoke it as a fresh VM root, so that entry path must accept the same
@@ -529,6 +664,59 @@ async fn host_callable_arguments_preserve_closed_union_selected_arm_on_wire() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_argument_selects_implemented_interface_arm_on_wire() {
+    let source = r#"
+        interface Failure {}
+        class ProviderFailure {
+            message string
+        }
+        implement Failure for ProviderFailure {}
+
+        function invoke(f: (Failure | string) -> string) -> string {
+            f(ProviderFailure { message: "boom" })
+        }
+    "#;
+    let arc = register_host_callable(|items| {
+        let Some(baml_outbound_value::Value::UnionVariantValue(union)) =
+            items.first().and_then(|value| value.value.as_ref())
+        else {
+            panic!("expected selected interface-union envelope, got {items:?}")
+        };
+        assert_eq!(union.selected_option_index, Some(0));
+        assert!(matches!(
+            union
+                .value
+                .as_deref()
+                .and_then(|value| value.value.as_ref()),
+            Some(baml_outbound_value::Value::ClassValue(class))
+                if class.name == "user.ProviderFailure"
+        ));
+        FakeReturn::Ok(BexExternalValue::String("handled".into()))
+    });
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "invoke",
+            vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("interface-union callback should succeed");
+
+    assert!(matches!(
+        result,
+        BexExternalValue::String(ref value) if value.as_str() == "handled"
+    ));
+    drop(arc);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn host_callable_union_envelope_preserves_empty_container_arm_identity() {
     let source = r#"
         function round_trip(
@@ -538,8 +726,8 @@ async fn host_callable_union_envelope_preserves_empty_container_arm_identity() {
             f(value)
         }
     "#;
-    let int_list = RuntimeTy::List(Box::new(RuntimeTy::int()), baml_type::TyAttr::default());
-    let string_list = RuntimeTy::List(Box::new(RuntimeTy::string()), baml_type::TyAttr::default());
+    let int_list = RuntimeTy::List(Box::new(RuntimeTy::int()));
+    let string_list = RuntimeTy::List(Box::new(RuntimeTy::string()));
     let arc = register_host_callable({
         let int_list = int_list.clone();
         let string_list = string_list.clone();
@@ -659,40 +847,6 @@ async fn host_callable_optional_union_is_omitted_or_sent_with_selected_arm() {
         BexExternalValue::Array { ref items, .. }
             if matches!(items.as_slice(), [BexExternalValue::Int(0), BexExternalValue::Int(1)])
     ));
-    drop(arc);
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn explicit_local_id_rejects_host_callable_with_catchable_invalid_argument() {
-    let source = r#"
-        function call_host_with_id(
-            f: (int) -> int throws baml.errors.InvalidArgument,
-            x: int,
-        ) -> string {
-            baml.json.to_string(f(x, $id = boundary.id())) catch (e) {
-                baml.errors.InvalidArgument => "caught"
-            }
-        }
-    "#;
-    let arc = register_host_callable(|_items| FakeReturn::Ok(BexExternalValue::Int(999)));
-    let snapshot = compile_for_engine(source);
-    let engine = Arc::new(
-        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
-            .expect("engine construction"),
-    );
-    let result = engine
-        .call_function(
-            "call_host_with_id",
-            vec![
-                BexExternalValue::HostValue(Arc::clone(&arc)),
-                BexExternalValue::Int(1),
-            ],
-            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
-            true,
-        )
-        .await
-        .expect("host-callable rejection should be caught in BAML");
-    assert_eq!(result, BexExternalValue::String("caught".into()));
     drop(arc);
 }
 
@@ -1377,10 +1531,120 @@ async fn host_callable_throw_implementing_interface_contract_is_on_contract() {
     drop(arc);
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn unhandled_throw_selects_implemented_interface_arm_in_throws_union() {
+    let source = r#"
+        interface Failure {
+            function kind(self) -> string throws never
+        }
+        implement Failure for baml.errors.HostCallable {
+            function kind(self) -> string throws never { "host" }
+        }
+        function call_typed(
+            f: (int) -> int throws Failure,
+            x: int,
+        ) -> int throws Failure | baml.errors.UnknownError {
+            return f(x);
+        }
+    "#;
+
+    let arc = register_host_callable(|_items| FakeReturn::Err {
+        class_name: "RuntimeError".to_string(),
+        message: "boom".to_string(),
+    });
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "call_typed",
+            vec![
+                BexExternalValue::HostValue(Arc::clone(&arc)),
+                BexExternalValue::Int(1),
+            ],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    match result {
+        Err(EngineError::UnhandledThrow { value, .. }) => match value.as_ref() {
+            BexExternalValue::Union { value, metadata } => {
+                assert!(
+                    matches!(
+                        &metadata.selected_option,
+                        RuntimeTy::Interface(name, _, _) if name.to_string() == "user.Failure"
+                    ),
+                    "expected the Failure interface arm, got {:?}",
+                    metadata.selected_option,
+                );
+                assert!(
+                    matches!(
+                        value.as_ref(),
+                        BexExternalValue::Instance { class_name, .. }
+                            if class_name == "baml.errors.HostCallable"
+                    ),
+                    "expected the concrete HostCallable throw, got {value:?}",
+                );
+            }
+            other => panic!("expected union-wrapped HostCallable throw, got {other:?}"),
+        },
+        other => panic!("expected UnhandledThrow, got {other:?}"),
+    }
+    drop(arc);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn root_return_selects_implemented_interface_arm_in_union() {
+    let source = r#"
+        interface Failure {}
+        class ProviderFailure {
+            message string
+        }
+        implement Failure for ProviderFailure {}
+
+        function provider_failure() -> Failure | string {
+            ProviderFailure { message: "boom" }
+        }
+    "#;
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "provider_failure",
+            vec![],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("interface-union return should succeed");
+
+    let BexExternalValue::Union { value, metadata } = result else {
+        panic!("expected selected interface-union return")
+    };
+    assert!(matches!(
+        &metadata.selected_option,
+        RuntimeTy::Interface(name, _, _) if name.to_string() == "user.Failure"
+    ));
+    assert!(matches!(
+        value.as_ref(),
+        BexExternalValue::Instance { class_name, .. }
+            if class_name == "user.ProviderFailure"
+    ));
+}
+
 // ============================================================================
 // Undeclared callback ⇒ `throws unknown` contract accepts a native throw as
-//         opaque. The FFI entry boundary normalizes the synthesized effect
-//         param (post-MIR `RuntimeTy::Void`) to `RuntimeTy::BuiltinUnknown` so the contract
+//         opaque. The synthesized effect param has no frame slot, so it
+//         reaches the FFI entry boundary as `RuntimeTy::Unknown` and the contract
 //         check at `materialize_host_throw` treats any thrown value as
 //         on-contract — including the opaque `baml.errors.HostCallable`
 //         Instance the bridge synthesizes for a native host exception. The
@@ -1391,8 +1655,8 @@ async fn host_callable_throw_implementing_interface_contract_is_on_contract() {
 //         This pins the "throws unknown" fallback: a host-provided callable
 //         whose error contract is undeclared must NOT be admitted by a
 //         concrete-throws check (that's the off-contract case above) and
-//         must NOT be rejected by an over-strict `RuntimeTy::Void` validator (the
-//         pre-D1 erasure path). Both failure modes are guarded against.
+//         must NOT be rejected by an over-strict validator. Both failure modes
+//         are guarded against.
 // ============================================================================
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1406,7 +1670,7 @@ async fn host_callable_undeclared_callback_accepts_native_throw_as_opaque() {
     // Behaviour: throw a generic native exception. With no declared throws
     // on `f`, the synthesized effect param normalizes to `unknown` at the
     // FFI boundary — `validate_host_return` accepts any value against
-    // `BuiltinUnknown`, so the throw propagates as the catchable
+    // `Unknown`, so the throw propagates as the catchable
     // `HostCallable` instance the fake dispatch builds.
     let arc = register_host_callable(|_items| FakeReturn::Err {
         class_name: "ValueError".to_string(),
@@ -1500,6 +1764,83 @@ async fn host_callable_throw_caught_in_baml() {
             );
         }
         other => panic!("expected the catch's recovery string, got {other:?}"),
+    }
+    drop(arc);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_callable_throw_normalized_as_unknown_error_preserves_context() {
+    let source = r#"
+        function invoke_host(
+            f: (int) -> string throws baml.errors.HostCallable,
+            x: int,
+        ) -> string {
+            f(x)
+        }
+
+        function normalize_host_throw(
+            f: (int) -> string throws baml.errors.HostCallable,
+            x: int,
+        ) -> string throws baml.errors.UnknownError {
+            invoke_host(f, x) catch_all (error) {
+                _ => throw baml.errors.UnknownError.with_message<never>(
+                    error,
+                    "host callback failed",
+                ),
+            }
+        }
+    "#;
+
+    let arc = register_host_callable(|_items| FakeReturn::Err {
+        class_name: "RuntimeError".to_string(),
+        message: "boom".to_string(),
+    });
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "normalize_host_throw",
+            vec![
+                BexExternalValue::HostValue(Arc::clone(&arc)),
+                BexExternalValue::Int(1),
+            ],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+
+    match result {
+        Err(EngineError::UnhandledThrow { value, trace }) => {
+            let BexExternalValue::Instance {
+                class_name, fields, ..
+            } = value.as_ref()
+            else {
+                panic!("expected UnknownError instance, got {value:?}");
+            };
+            assert_eq!(class_name, "baml.errors.UnknownError");
+            assert!(matches!(
+                fields.get("data"),
+                Some(BexExternalValue::Instance { class_name, .. })
+                    if class_name == "baml.errors.HostCallable"
+            ));
+            assert!(matches!(
+                fields.get("message"),
+                Some(BexExternalValue::Array { items, .. })
+                    if matches!(items.as_slice(), [BexExternalValue::String(message)] if &**message == "host callback failed")
+            ));
+            assert!(
+                trace
+                    .iter()
+                    .any(|frame| frame.function_name.ends_with("invoke_host")),
+                "expected the original host-call frame in {trace:?}"
+            );
+        }
+        other => panic!("expected UnhandledThrow(UnknownError), got {other:?}"),
     }
     drop(arc);
 }
@@ -1811,8 +2152,8 @@ async fn host_callable_throw_in_spawn_settles_child_does_not_hang() {
 
 // ============================================================================
 // A host callable bound to a generic function-typed parameter is rejected at
-//         call setup. A generic parameter's type variables erase to `RuntimeTy::Void`
-//         at runtime, which the return validator treats as "accept anything" —
+//         call setup. A generic parameter's type variable gives the return
+//         validator nothing to check the host's value against,
 //         so the host could return a value of any type into a position BAML
 //         treats as the instantiated type. Rather than admit that unvalidatable
 //         return, binding the callable fails up front.
@@ -1858,4 +2199,342 @@ async fn host_callable_with_generic_return_is_rejected() {
         "a generic-return host callable must be rejected at bind, got {result:?}"
     );
     drop(arc);
+}
+
+// ============================================================================
+// Regression: a spawned child that AWAITS a future which settles to an
+// `InternalError` must not leak its own future as `Pending` forever.
+// ============================================================================
+
+// Root cause (engine-shutdown wedge, reproduced from the live `baml test`
+// sweep): when a spawned awaiter is PARKED on a future and that future settles
+// to `InternalError`, the engine's `Await`/`AwaitAny` arm resolves the
+// awaiter's `SetOnce` wait with an `Err(EngineError)` and propagates it via
+// `AwaitOutcome::Done(r) => r?`. That bubbles the error out of
+// `run_thread_event_loop` WITHOUT any `settle_child_*` running, so
+// `spawn_thread_inner` used to only *log* it — leaving the awaiter's heap
+// `Future` `Pending`. Its `ready` wake never fires, so ITS awaiter (and,
+// transitively, the root's B-650 end-of-run wait) parks forever: the VM did all
+// its work but the engine never observes quiescence and the process wedges.
+//
+// The live trigger was a VM `TracedVmInternalError` surfaced on live data (its
+// `Display` renders with a Python-style `Traceback (most recent call last):`
+// header — BAML's own internal-error formatter, not an actual Python
+// exception). Here we seed the SAME leak deterministically and offline with a
+// host-bridge fault (`FakeReturn::BridgeFailure`), which the engine surfaces as
+// an uncatchable `EngineError::VmInternalError { BridgeFailure }` — a permanent
+// host surface, so this regression test does not rot when unrelated language
+// features change (unlike a type-soundness-hole seed; see Linear B-797).
+//
+// The 50ms sleep forces the "awaiter parked first" ordering the leak needs.
+// The load-bearing assertion is COMPLETION, not a value: before the fix
+// `call_function` never resolves (the wedge), so the test hangs and the
+// `timeout` fires.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn spawned_awaiter_of_internal_error_future_does_not_wedge() {
+    let source = r#"
+        function main(boom: () -> string) -> string {
+            // `f` yields (so its awaiter parks) then hits an uncatchable
+            // host-bridge internal error.
+            let f = spawn {
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(50n));
+                boom()
+            };
+            // `g` is a SPAWN that awaits `f`: its `r?`-propagated engine error
+            // is what used to leak. Nesting under a spawn is essential — a plain
+            // root `await` surfaces the error fine.
+            let g = spawn { await f };
+            await g
+        }
+    "#;
+
+    // The host callable faults with a fatal BridgeFailure → uncatchable
+    // `EngineError::VmInternalError` in whichever thread invokes it (here, `f`).
+    let arc = register_host_callable(|_items| FakeReturn::BridgeFailure {
+        message: "boom".to_string(),
+    });
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let call = engine.call_function(
+        "main",
+        vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+        FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+        true,
+    );
+    let outcome = tokio::time::timeout(std::time::Duration::from_secs(10), call).await;
+
+    // Load-bearing: the engine future RESOLVED (no wedge).
+    let result =
+        outcome.expect("engine wedged: call_function never resolved (the spawn-leak regressed)");
+    // With the fix the uncatchable internal error propagates deterministically
+    // up the await chain, so `main` returns an internal error rather than hanging.
+    assert!(
+        matches!(
+            result,
+            Err(
+                EngineError::VmInternalError(sys_types::VmInternalError::BridgeFailure { .. })
+                    | EngineError::TracedVmInternalError {
+                        source: sys_types::VmInternalError::BridgeFailure { .. },
+                        ..
+                    }
+            )
+        ),
+        "expected the `BridgeFailure` internal error to surface after the fix, got {result:?}"
+    );
+    drop(arc);
+}
+
+/// The scenario-15 "concurrent guards" topology: children spawned inside a
+/// closure (capturing a linked `CancelToken`), joined with `baml.future.all`
+/// under a spawned parent — and ONE child hitting an uncatchable engine error
+/// while its siblings are parked. Before the spawn-leak fix this parked at
+/// 0% CPU forever (the guardrail deadlock documented in
+/// `ns_ai_scenarios/15_guardrails`); with it, the error propagates and the
+/// call resolves. Kept alongside the minimal nested-spawn repro because the
+/// closure + `all()` + cancel-token topology exercises the settle path
+/// through `future.all`'s cancel-the-rest arm as well.
+///
+/// NOTE vs #3959's verbatim form: the closure's typed effects are caught
+/// inside the spawn bodies and the futures annotated `never` — the original
+/// `Future<string, null>` claim is now rejected by (intentionally) stricter
+/// effect inference, and the host-callable `callback` effect is not nameable
+/// in user source while futures are invariant in the error parameter. The
+/// bridge fault this test pins is an UNCATCHABLE engine error, which strikes
+/// regardless of the catches. The `.map`-spawned shape itself also exercises
+/// the closure-signature deduction fix (an annotated lambda argument commits
+/// its written signature into the callee's expected function type), without
+/// which the `.map` call's `U` stays unsolved during the walk and the body
+/// miscompiles.
+#[tokio::test]
+async fn spawn_in_map_closure_with_erroring_child_does_not_wedge() {
+    let source = r#"
+        function main(boom: () -> string) -> string {
+            let parent = spawn {
+                let tok = baml.spawn.CancelToken.new();
+                let items = [1, 2, 3];
+                let futures = items.map((n: int) -> baml.future.Future<string, never> {
+                    spawn with tok {
+                        if (n == 2) {
+                            // parks the awaiter first, then faults the bridge
+                            baml.sys.sleep(baml.time.Duration.from_milliseconds(50n)) catch_all (e) {
+                                _ => null
+                            };
+                            boom() catch_all (e) {
+                                _ => "boom-absorbed"
+                            }
+                        } else {
+                            baml.sys.sleep(baml.time.Duration.from_milliseconds(150n)) catch_all (e) {
+                                _ => null
+                            };
+                            "guard-" + n.to_string()
+                        }
+                    }
+                });
+                let all = (await baml.future.all(futures)) catch_all (e) {
+                    _ => ["all-failed"]
+                };
+                tok.cancel();
+                all.join(",")
+            };
+            await parent
+        }
+    "#;
+
+    let arc = register_host_callable(|_items| FakeReturn::BridgeFailure {
+        message: "guard boom".to_string(),
+    });
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let call = engine.call_function(
+        "main",
+        vec![BexExternalValue::HostValue(Arc::clone(&arc))],
+        FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+        true,
+    );
+    let outcome = tokio::time::timeout(std::time::Duration::from_secs(10), call).await;
+
+    // Load-bearing assertion: the engine RESOLVED (no 0%-CPU park). The exact
+    // shape of the result is secondary — an uncatchable bridge fault may
+    // surface as an engine error or be absorbed by the catch_all depending on
+    // scheduling; the deadlock is what this test pins.
+    let _result = outcome.expect(
+        "engine wedged: spawn-in-map guard topology never resolved (the spawn-leak regressed)",
+    );
+}
+
+/// Shutdown-deadline regression: a fire-and-forget spawn that outlives its
+/// call (the mock-server-leak shape — a test finishes but its background task
+/// never settles) must not park shutdown forever. With a grace of 500ms,
+/// `shutdown_with_deadline` cancels the straggler, force-settles it if it
+/// ignores the token, reports its spawn provenance, and returns. Without the
+/// deadline this waited the full sleep (60s) — the "Waiting for N remaining
+/// BAML futures" forever-loop, in miniature.
+#[tokio::test]
+async fn shutdown_deadline_abandons_leaked_spawn_and_reports_origin() {
+    let source = r#"
+        function main() -> string {
+            let _leak = spawn {
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n)) catch_all (e) {
+                    _ => null
+                };
+                "never observed"
+            };
+            "done"
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let result = engine
+        .call_function(
+            "main",
+            Vec::new(),
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .expect("main should return");
+    assert_eq!(result, BexExternalValue::String("done".into()));
+
+    let started = std::time::Instant::now();
+    let leaks: Arc<std::sync::Mutex<Vec<bex_engine::LeakedFuture>>> = Arc::default();
+    let leaks_out = Arc::clone(&leaks);
+    let shutdown = engine.shutdown_with_deadline(
+        Some(std::time::Duration::from_millis(500)),
+        |_count| {},
+        move |observed| {
+            leaks_out
+                .lock()
+                .expect("leak sink lock")
+                .extend(observed.iter().cloned());
+        },
+    );
+    tokio::time::timeout(std::time::Duration::from_secs(20), shutdown)
+        .await
+        .expect("shutdown wedged: the deadline did not bound the leaked-spawn wait");
+    // Well under the leaked sleep's 60s: the deadline (0.5s) plus the bounded
+    // cooperative-settle window, not the sleep, decides the wall clock.
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(15),
+        "shutdown took {:?}",
+        started.elapsed()
+    );
+
+    let leaks = leaks.lock().expect("leak sink lock");
+    assert_eq!(leaks.len(), 1, "expected exactly one leaked future");
+    assert_eq!(
+        leaks[0].origin.as_ref(),
+        "user.main",
+        "leak should be attributed to the spawning function"
+    );
+}
+
+/// Shutdown-deadline regression: an in-flight call may not finish in time
+/// once cancelled, because cancellation unwinds a call and its cleanup can
+/// take as long as it likes (a `defer` body runs shielded; a call can also
+/// catch its own `Cancelled` and keep going). The deadline bounds the wait for
+/// in-flight calls too: once it passes, the call's token fires, it gets one
+/// settle window, and shutdown stops waiting for it. Before, shutdown waited
+/// for in-flight calls with no bound, whatever the deadline.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn shutdown_deadline_abandons_a_call_whose_cleanup_outlasts_it() {
+    let source = r#"
+        function slow_cleanup() -> int {
+            defer {
+                baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
+            }
+            baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
+            0
+        }
+    "#;
+
+    let snapshot = compile_for_engine(source);
+    let engine = Arc::new(
+        BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
+            .expect("Failed to create engine"),
+    );
+
+    let call_engine = Arc::clone(&engine);
+    let call = tokio::spawn(async move {
+        call_engine
+            .call_function(
+                "slow_cleanup",
+                Vec::new(),
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await
+    });
+    // Let the call reach its first sleep.
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    assert!(!call.is_finished(), "the call should still be running");
+
+    let started = std::time::Instant::now();
+    let shutdown = engine.shutdown_with_deadline(
+        Some(std::time::Duration::from_millis(300)),
+        |_count| {},
+        |_leaks| {},
+    );
+    tokio::time::timeout(std::time::Duration::from_secs(30), shutdown)
+        .await
+        .expect("shutdown wedged: the deadline did not bound the in-flight call");
+    // The deadline (0.3s) plus the bounded settle window decide the wall
+    // clock, not the cleanup's 60s sleep.
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(15),
+        "shutdown took {:?}",
+        started.elapsed()
+    );
+    assert!(
+        !call.is_finished(),
+        "the call's cleanup should still be running"
+    );
+    call.abort();
+}
+
+/// `throws never` is a declared contract, not an absent one: a callback that
+/// promises it cannot throw must not have a native exception laundered into
+/// an accepted `unknown` throw.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn explicit_never_host_callback_rejects_native_throw() {
+    let source = r#"
+        function invoke(f: () -> int throws never) -> int throws never {
+            f()
+        }
+    "#;
+    let arc = register_host_callable(|_items| FakeReturn::Err {
+        class_name: "ValueError".to_string(),
+        message: "unexpected native exception".to_string(),
+    });
+    let engine = Arc::new(
+        BexEngine::new(
+            compile_for_engine(source),
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .expect("Failed to create engine"),
+    );
+    let result = engine
+        .call_function(
+            "invoke",
+            vec![BexExternalValue::HostValue(arc)],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await;
+    assert_host_contract_violation_panic(&result);
 }

@@ -50,8 +50,61 @@ test "shift_left" {
     assert.equal(10 << 3, 80)
 }
 
+// `<<` discards the bits pushed past the 63-bit width instead of overflowing,
+// so bit 62 lands on the sign and anything above it falls off entirely.
+// `ops_shl` takes its operands at runtime so the VM's shift opcode is
+// exercised; the literal forms next to it go through the constant folder, and
+// the two must agree.
+function ops_shl(x: int, n: int) -> int { x << n }
+
+test "shift_left_truncates" {
+    assert.equal(ops_shl(1, 61), 2305843009213693952)
+    assert.equal(1 << 61, 2305843009213693952)
+
+    // Bit 62 is the i63 sign bit, so `1 << 62` is `int.min_value()`.
+    assert.equal(ops_shl(1, 62), int.min_value())
+    assert.equal(1 << 62, int.min_value())
+
+    // Every bit is gone at 63 and beyond, whatever the left operand.
+    assert.equal(ops_shl(1, 63), 0)
+    assert.equal(1 << 63, 0)
+    assert.equal(ops_shl(-1, 100), 0)
+    assert.equal((-1) << 100, 0)
+
+    // Truncation keeps the low bits: `-1` is all-ones, so shifting it left by
+    // one clears bit 0 and leaves the rest, i.e. `-2`.
+    assert.equal(ops_shl(-1, 1), -2)
+    assert.equal((-1) << 1, -2)
+}
+
 test "shift_right" {
     assert.equal(10 >> 3, 1)
+}
+
+// `>>` is arithmetic: it propagates the sign rather than feeding in zeros, so a
+// count at or past the 63-bit width saturates to the sign bit: 0 for a
+// non-negative operand, -1 for a negative one. Regression for a VM arm that
+// returned 0 for both, which disagreed with the constant folder.
+function ops_shr(x: int, n: int) -> int { x >> n }
+
+test "shift_right_saturates_to_sign" {
+    assert.equal(ops_shr(-1, 63), -1)
+    assert.equal((-1) >> 63, -1)
+    assert.equal(ops_shr(-1, 200), -1)
+    assert.equal((-1) >> 200, -1)
+
+    assert.equal(ops_shr(1, 63), 0)
+    assert.equal(1 >> 63, 0)
+    assert.equal(ops_shr(1, 200), 0)
+    assert.equal(1 >> 200, 0)
+
+    // Below the width the sign still propagates: -8 >> 2 is -2, not a large
+    // positive value.
+    assert.equal(ops_shr(-8, 2), -2)
+    assert.equal((-8) >> 2, -2)
+
+    let negative = ops_shr(1, 0 - 1) catch (e) { baml.panics.NegativeBitShift => 7 };
+    assert.equal(negative, 7)
 }
 
 // Bitwise NOT (`~`) is two's-complement complement: `~x == -x - 1`. Regression
@@ -505,8 +558,15 @@ function drv_catch_int_div_zero() -> int {
 function drv_catch_int_rem_zero() -> int {
     drv_int_rem(1, 0) catch (e) { baml.panics.DivisionByZero => -1 }
 }
-function drv_catch_float_div_zero() -> float {
-    drv_float_div(1.0, 0.0) catch (e) { baml.panics.DivisionByZero => -1.0 }
+// `float` division by zero is IEEE-754 on every path — no panic to catch — so
+// this checks all three produce the same `inf`: the interface-bound driver, the
+// specialized `DivFloat` opcode (`float / float`), and the generic opcode that
+// a mixed `int`/`float` pair lowers to.
+function drv_float_div_zero_is_infinite() -> bool {
+    drv_float_div(1.0, 0.0).is_infinite()
+        && (1.0 / 0.0).is_infinite()
+        && (1 / 0.0).is_infinite()
+        && (1.0 / 0).is_infinite()
 }
 function drv_catch_bigint_div_zero() -> bigint {
     drv_bigint_div(1n, 0n) catch (e) { baml.panics.DivisionByZero => -1n }
@@ -519,7 +579,7 @@ test "driver_panics_match_opcodes" {
     assert.equal(drv_catch_div_min_by_minus_one(), -1)
     assert.equal(drv_catch_int_div_zero(), -1)
     assert.equal(drv_catch_int_rem_zero(), -1)
-    assert.equal(drv_catch_float_div_zero(), -1.0)
+    assert.is_true(drv_float_div_zero_is_infinite())
     assert.equal(drv_catch_bigint_div_zero(), -1n)
 }
 
@@ -547,15 +607,18 @@ test "ordering_on_bool_dispatches_compare" {
     assert.is_true(!ord_bool_ge(false, true))
 }
 
-// A user class implementing only the required `lt`; `le`/`gt`/`ge` resolve to the
-// interface defaults, which are merged into the impl's method table at bake time.
+// A user class implementing only the required `cmp`; `lt`/`le`/`gt`/`ge` resolve
+// to the interface defaults, which are merged into the impl's method table at
+// bake time.
 class Ranked {
     rank int
     implements baml.ops.Equals {
         function eq(self, other: Self) -> bool throws never { self.rank == other.rank }
     }
     implements baml.ops.Compare {
-        function lt(self, other: Self) -> bool throws never { self.rank < other.rank }
+        function cmp(self, other: Self) -> baml.ops.Ordering throws never {
+            self.rank.cmp(other.rank)
+        }
     }
 }
 
@@ -574,16 +637,18 @@ test "ordering_on_user_class_dispatches_compare" {
 }
 
 // Each operator dispatches its own method, so an override beats the default it
-// replaces. `gt` here is deliberately inconsistent with `!le`: the default would
+// replaces. `gt` here is deliberately inconsistent with `cmp`: the default would
 // make `a > a` false, the override makes it true. This fails if `>` is lowered as
-// `!(a <= b)` or as a swapped `b.lt(a)`.
+// `!(a <= b)`, as a swapped `b.lt(a)`, or as a `cmp` call.
 class OddOrder {
     n int
     implements baml.ops.Equals {
         function eq(self, other: Self) -> bool throws never { self.n == other.n }
     }
     implements baml.ops.Compare {
-        function lt(self, other: Self) -> bool throws never { self.n < other.n }
+        function cmp(self, other: Self) -> baml.ops.Ordering throws never {
+            self.n.cmp(other.n)
+        }
         function gt(self, other: Self) -> bool throws never { true }
     }
 }
@@ -593,7 +658,7 @@ function ord_odd_le(a: OddOrder, b: OddOrder) -> bool { a <= b }
 
 test "ordering_override_beats_default" {
     assert.is_true(ord_odd_gt(OddOrder { n: 1 }, OddOrder { n: 1 }))
-    // The un-overridden `le` still follows the default (`lt || eq`).
+    // The un-overridden `le` still follows the default (`cmp != Greater`).
     assert.is_true(ord_odd_le(OddOrder { n: 1 }, OddOrder { n: 1 }))
 }
 
@@ -629,20 +694,62 @@ test "generic_ordering_matches_opcodes" {
     assert.equal(ord_float_lt(1.5, 2.5), 1.5 < 2.5)
     assert.equal(ord_string_lt("a", "b"), "a" < "b")
     assert.equal(ord_bigint_lt(1n, 2n), 1n < 2n)
-    // NaN is unordered in every direction on both paths.
+    // NaN sorts above every number, identically on both paths.
     assert.is_true(!ord_float_lt(float.nan(), 1.0))
-    assert.is_true(!ord_float_ge(float.nan(), 1.0))
+    assert.is_true(ord_float_ge(float.nan(), 1.0))
     assert.is_true(!(float.nan() < 1.0))
-    assert.is_true(!(float.nan() >= 1.0))
+    assert.is_true(float.nan() >= 1.0)
     // The generic path reaches a user class too.
     assert.is_true(ord_rank_generic_lt(Ranked { rank: 1 }, Ranked { rank: 2 }))
 }
 
+// ─── Compare's derived min / max / clamp ─────────────────────────────────────
+// These are interface defaults over `cmp`, so they exist for any implementor
+// and are reached through a `T extends Compare` bound. `clamp` is the
+// `min`/`max` chain rather than a three-way match, which is what makes it agree
+// with `int.clamp` / `float.clamp` when a caller passes `min > max`.
+
+function ord_min<T extends baml.ops.Compare>(a: T, b: T) -> T { a.min(b) }
+function ord_max<T extends baml.ops.Compare>(a: T, b: T) -> T { a.max(b) }
+function ord_clamp<T extends baml.ops.Compare>(v: T, lo: T, hi: T) -> T { v.clamp(lo, hi) }
+
+function ord_int_min(a: int, b: int) -> int { ord_min(a, b) }
+function ord_int_max(a: int, b: int) -> int { ord_max(a, b) }
+function ord_int_clamp(v: int, lo: int, hi: int) -> int { ord_clamp(v, lo, hi) }
+function ord_rank_min(a: Ranked, b: Ranked) -> Ranked { ord_min(a, b) }
+function ord_rank_clamp(v: Ranked, lo: Ranked, hi: Ranked) -> Ranked { ord_clamp(v, lo, hi) }
+
+test "generic_min_max_clamp_match_the_primitive_methods" {
+    assert.equal(ord_int_min(1, 2), 1)
+    assert.equal(ord_int_min(2, 1), 1)
+    assert.equal(ord_int_max(1, 2), 2)
+    assert.equal(ord_int_max(2, 1), 2)
+    assert.equal(ord_int_clamp(5, 0, 10), (5).clamp(0, 10))
+    assert.equal(ord_int_clamp(-3, 0, 10), (-3).clamp(0, 10))
+    assert.equal(ord_int_clamp(15, 0, 10), (15).clamp(0, 10))
+    // Degenerate `lo > hi`: the lower clamp runs last, so both give `lo`.
+    assert.equal(ord_int_clamp(15, 10, 0), (15).clamp(10, 0))
+    assert.equal(ord_int_clamp(15, 10, 0), 10)
+}
+
+test "generic_min_clamp_reach_a_user_class" {
+    assert.equal(ord_rank_min(Ranked { rank: 1 }, Ranked { rank: 2 }).rank, 1)
+    assert.equal(ord_rank_min(Ranked { rank: 2 }, Ranked { rank: 1 }).rank, 1)
+    assert.equal(
+        ord_rank_clamp(Ranked { rank: 15 }, Ranked { rank: 0 }, Ranked { rank: 10 }).rank,
+        10,
+    )
+    assert.equal(
+        ord_rank_clamp(Ranked { rank: 5 }, Ranked { rank: 0 }, Ranked { rank: 10 }).rank,
+        5,
+    )
+}
+
 // ─── Ordering: panics propagate and unwind, like the arithmetic drivers ───────
 // The virtual call carries the enclosing catch's unwind edge. `Compare` methods
-// are `throws never`, so the only thing that can escape a user `lt` is a panic —
+// are `throws never`, so the only thing that can escape a user `cmp` is a panic —
 // which must still reach an enclosing catch arm, including through an inherited
-// default that nests another dispatch (`le` = `lt || eq`).
+// default that nests another dispatch (`le` = `cmp != Greater`).
 
 class Boom {
     n int
@@ -650,7 +757,9 @@ class Boom {
         function eq(self, other: Self) -> bool throws never { self.n == other.n }
     }
     implements baml.ops.Compare {
-        function lt(self, other: Self) -> bool throws never { (1 / self.n) < other.n }
+        function cmp(self, other: Self) -> baml.ops.Ordering throws never {
+            (1 / self.n).cmp(other.n)
+        }
     }
 }
 
@@ -744,7 +853,9 @@ class Tier {
         function eq(self, other: Self) -> bool throws never { self.level == other.level }
     }
     implements baml.ops.Compare {
-        function lt(self, other: Self) -> bool throws never { self.level < other.level }
+        function cmp(self, other: Self) -> baml.ops.Ordering throws never {
+            self.level.cmp(other.level)
+        }
     }
     implements Ordered {}
 }
@@ -755,7 +866,9 @@ class Wrapped<T> {
         function eq(self, other: Self) -> bool throws never { self.weight == other.weight }
     }
     implements baml.ops.Compare {
-        function lt(self, other: Self) -> bool throws never { self.weight < other.weight }
+        function cmp(self, other: Self) -> baml.ops.Ordering throws never {
+            self.weight.cmp(other.weight)
+        }
     }
 }
 

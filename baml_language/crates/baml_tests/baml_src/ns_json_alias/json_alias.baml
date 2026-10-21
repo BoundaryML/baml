@@ -71,15 +71,31 @@ test "let_json_map" {
     assert.is_true(json_map_has_key())
 }
 
+class OptionalJsonField {
+    data json?
+}
+
+function nested_map_in_optional_json_field() -> bool {
+    let value = OptionalJsonField {
+        data: { "chat_template_kwargs": { "enable_thinking": false } },
+    };
+    baml.json.path<bool>(value.data, ".chat_template_kwargs.enable_thinking")
+}
+
+test "nested_map_literal_in_optional_json_field" {
+    assert.is_true(!nested_map_in_optional_json_field())
+}
+
 // ─── 1.7 Exhaustive match against json ───────────────────────────────────────
 
 // The function takes `json` as a parameter; passing `null` should return "null".
-// All seven arms are covered.
+// All eight arms are covered.
 function match_json(j: json) -> string {
     match (j) {
         null => "null",
         let b: bool => "bool",
         let i: int => "int",
+        let bi: bigint => "bigint",
         let f: float => "float",
         let s: string => "string",
         let arr: json[] => "array",
@@ -120,4 +136,71 @@ function json_wrap_tag() -> string {
 
 test "impl_on_recursive_alias_generic_arg_dispatches" {
     assert.equal(json_wrap_tag(), "json-wrap")
+}
+
+// ─── 1.9 Container arms on a json scrutinee ──────────────────────────────────
+
+// `json[]` and `map<string, json>` are json's only list and map members, so a
+// match on a json value tests these arms by the runtime tag alone. Every kind
+// of json value must still reach its own arm, also through recursion (the
+// request builders prune nulls this way).
+
+function json_kind(j: json) -> string {
+    match (j) {
+        let object: map<string, json> => "map",
+        let items: json[] => "list",
+        _ => "scalar",
+    }
+}
+
+function json_kinds() -> string[] {
+    [
+        json_kind({"a": 1}),
+        json_kind({}),
+        json_kind([1, "two"]),
+        json_kind([]),
+        json_kind("map"),
+        json_kind(1),
+        json_kind(true),
+        json_kind(null),
+    ]
+}
+
+test "json_container_arms_match_each_kind" {
+    assert.equal(json_kinds(), ["map", "map", "list", "list", "scalar", "scalar", "scalar", "scalar"])
+}
+
+function drop_nulls(j: json) -> json {
+    match (j) {
+        let object: map<string, json> => {
+            let out: map<string, json> = {};
+            for (let key in object.keys()) {
+                let entry = object.get(key);
+                match (entry) {
+                    null => null,
+                    _ => {
+                        let _ = out.set(key, drop_nulls(entry));
+                        null
+                    },
+                };
+            }
+            out
+        },
+        let items: json[] => {
+            let out: json[] = [];
+            for (let item in items) {
+                out.push(drop_nulls(item));
+            }
+            out
+        },
+        _ => j,
+    }
+}
+
+function drop_nulls_nested() -> string {
+    baml.json.stringify(drop_nulls(baml.json.parse("{\"a\":null,\"b\":[1,{\"c\":null,\"d\":\"x\"}],\"e\":{\"f\":null}}")))
+}
+
+test "json_container_arms_recurse_through_nested_values" {
+    assert.equal(drop_nulls_nested(), "{\"b\":[1,{\"d\":\"x\"}],\"e\":{}}")
 }

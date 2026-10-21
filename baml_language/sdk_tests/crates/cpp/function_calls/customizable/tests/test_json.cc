@@ -15,7 +15,7 @@
 #include <vector>
 
 using baml_sdk::baml::json::json;
-using baml_sdk::baml::json::JsonPathError;
+using baml_sdk::baml::json::PathError;
 
 namespace {
 
@@ -62,9 +62,9 @@ BAML_TEST(host_supplied_json_supports_typed_narrowing) {
   try {
     baml_sdk::go_json_tests::json_path_string(object, ".absent");
     baml_test::fail("json_path_string(.absent) did not throw");
-  } catch (const baml::thrown<baml::variant<JsonPathError>>& e) {
+  } catch (const baml::thrown<baml::variant<PathError>>& e) {
     threw = true;
-    const JsonPathError decoded = e.get<JsonPathError>();
+    const PathError decoded = e.get<PathError>();
     BAML_ASSERT(decoded.message.find("missing field") != std::string::npos);
     BAML_ASSERT_EQ(decoded.selector, std::string(".absent"));
   }

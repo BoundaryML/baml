@@ -1,0 +1,15 @@
+---
+source: crates/baml_tests/tests/runtime_mount_parity.rs
+expression: wire_contract(&artifact.emitted.unit)
+---
+dep @1 app direct, digested
+dep @2 $1 via @1
+dep @3 $0 via @1
+dep @4 baml prelude
+import object @2 enum Level
+import object @3 class Minted
+import object @4 interface ToString
+export object function level_name = Code(2)
+export object function render = Code(6)
+export global function level_name = 0
+export global function render = 1

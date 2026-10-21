@@ -1,7 +1,9 @@
+// biome-ignore-all lint/style/useFilenamingConvention: Keep the existing public module path.
 'use client';
 
-import { useCallback, useMemo } from 'react';
 import { atom, useAtom } from 'jotai';
+import { useCallback, useMemo } from 'react';
+import defaultBaml from './default.baml';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -28,58 +30,8 @@ const STORAGE_KEY = 'baml-playground-files';
 const MEDIA_STORAGE_KEY = 'baml-playground-media';
 const OLD_STORAGE_KEY = 'baml-playground-code'; // migration from single-file
 
-const DEFAULT_BAML_CODE = `// Configure the LLM client
-client<llm> Gpt5 {
-  provider openai
-  options {
-    model "gpt-5.4-mini"
-    api_key env.OPENAI_API_KEY
-  }
-}
-
-
-client<llm> Sonnet {
-  provider anthropic
-  options {
-    model "claude-sonnet-4-6"
-    api_key env.ANTHROPIC_API_KEY
-  }
-}
-
-// Define a structured output type
-class Sentiment {
-  feeling string @description("The detected sentiment: positive, negative, or neutral")
-  confidence float @description("Confidence score between 0 and 1")
-  reasoning string @description("Brief explanation of why this sentiment was detected")
-}
-
-// Define a function that calls the LLM
-function ClassifySentiment(text: string) -> Sentiment {
-  client Gpt5
-  prompt #"
-    Classify the sentiment of the following text.
-
-    {{ ctx.output_format }}
-
-    Text:
-    ---
-    {{ text }}
-    ---
-  "#
-}
-
-// Add a test case
-test HappySentiment {
-  functions [ClassifySentiment]
-  args {
-    text "I absolutely love this new feature! It makes everything so much easier."
-  }
-}
-
-`;
-
 const DEFAULT_FILES: Record<string, string> = {
-  'baml_src/main.baml': DEFAULT_BAML_CODE,
+  'baml_src/main.baml': defaultBaml,
 };
 
 // ---------------------------------------------------------------------------
@@ -108,7 +60,9 @@ function loadPersistedFiles(): Record<string, string> {
         localStorage.removeItem(OLD_STORAGE_KEY);
       }
     }
-  } catch { /* localStorage unavailable */ }
+  } catch {
+    /* localStorage unavailable */
+  }
 
   // Merge in any separately-persisted media files (migration from old split storage)
   try {
@@ -120,7 +74,7 @@ function loadPersistedFiles(): Record<string, string> {
       }
       localStorage.removeItem(MEDIA_STORAGE_KEY);
     }
-  } catch { }
+  } catch {}
 
   if (Object.keys(result).length === 0) {
     return { ...DEFAULT_FILES };
@@ -148,12 +102,17 @@ export const blobUrlsAtom = atom<Record<string, string>>({});
 export const usePlayground = (): PlaygroundState => {
   const [files, setFilesRaw] = useAtom(filesAtom);
 
-  const setFiles = useCallback((value: Record<string, string>) => {
-    setFilesRaw(value);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
-    } catch { /* localStorage full or unavailable */ }
-  }, [setFilesRaw]);
+  const setFiles = useCallback(
+    (value: Record<string, string>) => {
+      setFilesRaw(value);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+      } catch {
+        /* localStorage full or unavailable */
+      }
+    },
+    [setFilesRaw],
+  );
 
   const resetFiles = useCallback(() => {
     const defaults = { ...DEFAULT_FILES };
@@ -162,11 +121,13 @@ export const usePlayground = (): PlaygroundState => {
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(MEDIA_STORAGE_KEY);
       localStorage.removeItem(OLD_STORAGE_KEY);
-    } catch { /* localStorage unavailable */ }
+    } catch {
+      /* localStorage unavailable */
+    }
   }, [setFilesRaw]);
 
   return useMemo<PlaygroundState>(
-    () => ({ files, setFiles, resetFiles }),
+    () => ({ files, resetFiles, setFiles }),
     [files, setFiles, resetFiles],
   );
 };

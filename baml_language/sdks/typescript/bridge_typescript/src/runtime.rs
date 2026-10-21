@@ -5,26 +5,10 @@
 //! at each call site (mirrors `bridge_python` after 31e-phase4), so this no
 //! longer caches its own clone.
 
-use bridge_ctypes::{HANDLE_TABLE, kwargs_to_bex_values};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
-use prost::Message;
 
-use crate::{
-    errors::bridge_error_to_napi,
-    types::{HostSpanManager, collector::Collector},
-};
-
-struct DecodedCallArgs {
-    kwargs: bex_project::BexArgs,
-    call_id: bex_project::CallId,
-    target: bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget,
-    /// Explicit TypeVar bindings for a generic call (`CallFunctionArgs.type_args`),
-    /// as a name-keyed map in wire (De Bruijn) order. Seeded into the entry
-    /// frame's `type_args` slot. Empty for non-generic calls. Mirrors
-    /// `bridge_python`'s `DecodedCallArgs::type_args`.
-    type_args: indexmap::IndexMap<String, bex_project::RuntimeTy>,
-}
+use crate::errors::bridge_error_to_napi;
 
 /// The main BAML runtime. A zero-sized handle (see module docs).
 #[napi]
@@ -51,16 +35,19 @@ impl BamlRuntime {
         }
     }
 
-    /// Initialize the process-global runtime from precompiled BAML bytecode.
-    #[napi(factory, js_name = "initializeRuntimeFromBytecode")]
-    pub fn initialize_runtime_from_bytecode(
-        bytecode: Buffer,
+    /// Initialize the process-global runtime from precompiled BAML bytecode:
+    /// a raw artifact, or the encoded string generated SDKs embed (decoded
+    /// natively, never in JavaScript).
+    #[napi(factory, js_name = "initializeRuntimeFromBlob")]
+    pub fn initialize_runtime_from_blob(
+        bytecode: Either<String, Buffer>,
         embedded_baml_toml: Option<String>,
     ) -> napi::Result<Self> {
-        match bridge_cffi::initialize_runtime_from_bytecode(
-            bytecode.as_ref(),
-            embedded_baml_toml.as_deref(),
-        ) {
+        let bytecode: &[u8] = match &bytecode {
+            Either::A(encoded) => encoded.as_bytes(),
+            Either::B(bytes) => bytes.as_ref(),
+        };
+        match bridge_cffi::initialize_runtime_from_blob(bytecode, embedded_baml_toml.as_deref()) {
             Ok(_bex) => Ok(BamlRuntime {}),
             Err(e) => Err(bridge_error_to_napi(e)),
         }
@@ -68,50 +55,24 @@ impl BamlRuntime {
 
     /// Call a BAML function synchronously (blocking).
     #[napi]
-    pub fn call_function_sync(
-        &self,
-        args_proto: Buffer,
-        ctx: Option<&HostSpanManager>,
-        collectors: Option<Vec<&Collector>>,
-    ) -> napi::Result<Buffer> {
-        let prepared = (|| -> std::result::Result<_, bridge_cffi::BridgeError> {
-            let runtime = bridge_cffi::get_runtime()?;
-            let decoded = decode_args(args_proto.as_ref())?;
+    pub fn call_function_sync(&self, args_proto: Buffer) -> napi::Result<Buffer> {
+        let request = (|| -> std::result::Result<_, bridge_cffi::BridgeError> {
+            let request = bridge_cffi::decode_invocation_request(args_proto.as_ref())?;
             let rt = bridge_cffi::get_tokio_runtime()?;
-            Ok((runtime, decoded, rt))
+            Ok((request, rt))
         })();
-        let _ = (&ctx, &collectors);
 
-        let (runtime, decoded, rt) = match prepared {
+        let (request, rt) = match request {
             Ok(v) => v,
             Err(e) => return Ok(Buffer::from(bridge_cffi::error_to_outbound(e))),
         };
-        let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
-            .with_type_args(decoded.type_args)
-            .build();
 
         // The whole Result -> BamlOutboundResult translation (incl. the
         // catch_unwind -> SdkPanic boundary and error/panic routing) lives in
         // bridge_cffi; we just return the encoded envelope bytes for the TS
         // decoder to surface.
-        let bytes = match decoded.target {
-            bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionName(
-                function_name,
-            ) => rt.block_on(bridge_cffi::call_and_encode(
-                runtime,
-                function_name,
-                decoded.kwargs,
-                call_ctx,
-            )),
-            bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionHandle(
-                handle_key,
-            ) => rt.block_on(bridge_cffi::call_handle_and_encode(
-                runtime,
-                handle_key,
-                decoded.kwargs,
-                call_ctx,
-            )),
-        };
+        let _sync_call = crate::host_value::SyncCallGuard::new(request.host_call_id());
+        let bytes = rt.block_on(bridge_cffi::execute_invocation(request));
 
         Ok(Buffer::from(bytes))
     }
@@ -122,33 +83,16 @@ impl BamlRuntime {
         &self,
         env: &'e Env,
         args_proto: Buffer,
-        ctx: Option<&HostSpanManager>,
-        collectors: Option<Vec<&Collector>>,
     ) -> napi::Result<PromiseRaw<'e, Buffer>> {
-        let prepared = (|| -> std::result::Result<_, bridge_cffi::BridgeError> {
-            let runtime = bridge_cffi::get_runtime()?;
-            let decoded = decode_args(args_proto.as_ref())?;
-            Ok((runtime, decoded))
-        })();
-        let _ = (&ctx, &collectors);
+        // `decode_invocation_request` pins a handle target before the future is spawned,
+        // so a JS-side release of that handle cannot race the call.
+        let request = bridge_cffi::decode_invocation_request(args_proto.as_ref());
 
-        // Same shared call_and_encode as the sync + C-ABI paths — returns the
+        // Same shared execute_invocation as the sync + C-ABI paths — returns the
         // encoded BamlOutboundResult envelope bytes for the TS decoder.
         env.spawn_future(async move {
-            let bytes = match prepared {
-                Ok((runtime, decoded)) => {
-                    let call_ctx = bridge_cffi::function_call_context_builder(decoded.call_id)
-                        .with_type_args(decoded.type_args)
-                        .build();
-                    match decoded.target {
-                        bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionName(function_name) => {
-                            bridge_cffi::call_and_encode(runtime, function_name, decoded.kwargs, call_ctx).await
-                        }
-                        bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget::FunctionHandle(handle_key) => {
-                            bridge_cffi::call_handle_and_encode(runtime, handle_key, decoded.kwargs, call_ctx).await
-                        }
-                    }
-                }
+            let bytes = match request {
+                Ok(request) => bridge_cffi::execute_invocation(request).await,
                 Err(e) => bridge_cffi::error_to_outbound(e),
             };
             Ok(Buffer::from(bytes))
@@ -170,35 +114,4 @@ pub fn get_runtime() -> napi::Result<BamlRuntime> {
         other => bridge_error_to_napi(other),
     })?;
     Ok(BamlRuntime {})
-}
-
-/// Decode protobuf-encoded function arguments into `BexArgs`.
-fn decode_args(
-    args_proto: &[u8],
-) -> std::result::Result<DecodedCallArgs, bridge_cffi::BridgeError> {
-    use bridge_ctypes::baml_bridge::cffi::call_function_args::CallTarget;
-
-    let args = bridge_ctypes::baml_bridge::cffi::CallFunctionArgs::decode(args_proto)
-        .map_err(bridge_ctypes::CtypesError::from)?;
-
-    if args.call_id == 0 {
-        return Err(bridge_cffi::BridgeError::InvalidCallId);
-    }
-
-    let call_id = bex_project::CallId(args.call_id);
-    let target = args
-        .call_target
-        .ok_or(bridge_cffi::BridgeError::MissingCallTarget)?;
-    if matches!(target, CallTarget::FunctionHandle(_)) && !args.type_args.is_empty() {
-        return Err(bridge_cffi::BridgeError::FunctionHandleTypeArgs);
-    }
-    let type_args = bridge_ctypes::proto_ty_args_to_named(&args.type_args)?;
-    let kwargs = kwargs_to_bex_values(args.kwargs, &HANDLE_TABLE)?;
-
-    Ok(DecodedCallArgs {
-        kwargs: kwargs.into(),
-        call_id,
-        target,
-        type_args,
-    })
 }

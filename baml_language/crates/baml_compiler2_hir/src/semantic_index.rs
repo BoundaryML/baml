@@ -36,15 +36,21 @@ impl ExprMetadataKey {
     }
 }
 
-/// HIR resolution of a value path's root segment.
+/// HIR's reading of a value path's first segment, recorded for every
+/// `Path` expression while the lexical scope stack is active.
 ///
-/// Local roots are resolved to declaration identity while the lexical scope
-/// stack is active. Non-local roots are completed by TIR because package-item
-/// resolution would introduce a HIR query cycle.
+/// A binding wins over everything (`#4543`: a local named `reflect` shadows
+/// the package). Otherwise the head is a package or a plain name
+/// ([`PathHead`]); which ITEM a plain name or a package path reaches is the
+/// checker's to complete — looking a package's items up here would cycle
+/// `file_semantic_index` through `package_items`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PathResolution {
+    /// A binding or parameter in scope; every later segment is a member of
+    /// its value.
     Local(BindingId),
-    Unknown,
+    /// Not a binding: an item path starting at `head`.
+    Item(PathHead),
 }
 
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -53,6 +59,7 @@ use crate::{
     contributions::FileSymbolContributions,
     diagnostic::Hir2Diagnostic,
     item_tree::{ItemTree, ItemTreeSourceMap},
+    package::PathHead,
     scope::{FileScopeId, ItemScopeOwner, Scope, ScopeId, ScopeKind},
 };
 
@@ -120,7 +127,15 @@ impl BindingId {
 pub struct LocalBinding {
     pub name: Name,
     pub site: DefinitionSite,
+    /// The ROOT pattern the binding was registered under (the whole
+    /// destructure for `let Pack { value }`). MIR's binding lookups key on
+    /// this.
     pub pattern: PatId,
+    /// The `Pattern::Bind` node that introduces THIS name - equal to
+    /// `pattern` for a bare `let x`, the inner bind for destructures. The
+    /// per-name identity type inference keys binding types on. For an
+    /// or-pattern, the first alternative's bind is representative.
+    pub bind_pattern: PatId,
     pub name_range: TextRange,
     pub visible_from: TextSize,
 }
@@ -248,12 +263,9 @@ pub struct FileSemanticIndex<'db> {
 
     /// Per-file item tree — maps `LocalItemId` to item data.
     ///
-    /// Reachable only inside HIR and PPIR: the `file_item_tree` doors in both
-    /// crates are `pub(crate)`, and everything downstream uses the PPIR
-    /// `item_data` firewall queries instead. This field stays `pub` solely
-    /// because PPIR (a separate crate) builds and reads the index; do not read
-    /// it from any other crate. (Collapsing HIR+PPIR onto one index would let
-    /// this become `pub(crate)` — see the plan's Fork B follow-up.)
+    /// Reachable only inside this crate: the `file_item_tree` door is
+    /// `pub(crate)` and everything downstream uses the [`crate::item_data`]
+    /// firewall queries instead.
     pub item_tree: Arc<ItemTree>,
 
     /// Source map for item tree — field/variant name spans.
@@ -270,37 +282,22 @@ pub struct FileSemanticIndex<'db> {
     /// arena-safe expression key for binary-search lookup.
     pub path_resolutions: Vec<(ExprMetadataKey, PathResolution)>,
 
+    /// Lambda expression -> the `Lambda` scope it opened, sorted by the
+    /// arena-safe expression key - the SPAN-FREE join (the
+    /// `lambda_scope_for*` span matches tie consumers to source maps;
+    /// type inference must not depend on spans).
+    pub lambda_scopes: Vec<(ExprMetadataKey, FileScopeId)>,
+
     /// Environment variable references (`env.X`) found in this file's expression bodies.
     pub env_var_refs: Vec<baml_compiler2_ast::EnvVarRef>,
 }
 
-// ── salsa::Update impl ────────────────────────────────────────────────────────
+// ── Salsa retention safety ────────────────────────────────────────────────
 
-/// # Safety
-///
-/// This impl is required for `FileSemanticIndex` to be returned from a
-/// `#[salsa::tracked(no_eq)]` query. With `no_eq`, Salsa never calls
-/// `values_equal` so the actual equality logic doesn't matter — but the
-/// `maybe_update` function must correctly transfer ownership of `new_value`
-/// into `old_pointer` and return whether a change occurred.
-///
-/// We always return `true` (always mark as changed), matching the `no_eq`
-/// semantics. The `*old_pointer = new_value` write is safe because `old_pointer`
-/// points to valid allocated memory that Salsa owns.
+// SAFETY: This type owns its data. Its database lifetime only appears
+// in Salsa identities; it contains no references into query storage.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for FileSemanticIndex<'_> {
-    #[allow(unsafe_code)]
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: `old_pointer` is valid, aligned, and points to memory Salsa
-        // has previously initialized. We drop the old value and write the new one.
-        #[allow(unsafe_code)]
-        unsafe {
-            std::ptr::drop_in_place(old_pointer);
-            std::ptr::write(old_pointer, new_value);
-        }
-        true
-    }
-}
+unsafe impl salsa::SalsaValue for FileSemanticIndex<'_> {}
 
 impl FileSemanticIndex<'_> {
     /// Find the `Lambda` scope whose range exactly matches `span`.
@@ -403,6 +400,14 @@ impl FileSemanticIndex<'_> {
             .binary_search_by_key(&key, |(candidate, _)| *candidate)
             .ok()
             .map(|idx| self.expr_scopes[idx].1)
+    }
+
+    /// The `Lambda` scope a lambda expression opened (span-free).
+    pub fn lambda_scope(&self, key: ExprMetadataKey) -> Option<FileScopeId> {
+        self.lambda_scopes
+            .binary_search_by_key(&key, |(candidate, _)| *candidate)
+            .ok()
+            .map(|idx| self.lambda_scopes[idx].1)
     }
 
     pub fn path_resolution(&self, key: ExprMetadataKey) -> Option<PathResolution> {

@@ -1,6 +1,6 @@
 //! Raw ordinary handle-table bindings.
 
-use bridge_cffi::handle::{self as handle_core, HandleError, HandleParts};
+use bridge_cffi::handle_cffi::{self, HandleError, HandleParts};
 use bridge_ctypes::baml_bridge::cffi::BamlHandleType;
 use wasm_bindgen::prelude::*;
 
@@ -24,12 +24,12 @@ fn key_with_expected_type(
 
 #[wasm_bindgen(js_name = cloneHandle)]
 pub fn clone_handle(key: u64) -> Result<u64, JsError> {
-    handle_core::clone_handle(key).map_err(|error| handle_error("cloneHandle", &error))
+    handle_cffi::clone_handle(key).map_err(|error| handle_error("cloneHandle", &error))
 }
 
 #[wasm_bindgen(js_name = releaseHandle)]
 pub fn release_handle(key: u64) -> bool {
-    match handle_core::release_handle(key) {
+    match handle_cffi::release_handle(key) {
         Ok(()) => true,
         Err(HandleError::InvalidHandle) => false,
         Err(_) => false,
@@ -38,7 +38,7 @@ pub fn release_handle(key: u64) -> bool {
 
 #[wasm_bindgen(js_name = _testHandleTableEntryCount)]
 pub fn test_handle_table_entry_count() -> Result<u32, JsError> {
-    u32::try_from(handle_core::live_handle_count())
+    u32::try_from(handle_cffi::live_handle_count())
         .map_err(|_| JsError::new("handle table entry count exceeds uint32"))
 }
 
@@ -46,7 +46,7 @@ pub fn test_handle_table_entry_count() -> Result<u32, JsError> {
 pub fn seed_function_ref_handle(global_index: u32) -> Result<u64, JsError> {
     key_with_expected_type(
         "seedFunctionRefHandle",
-        handle_core::seed_function_ref_handle(u64::from(global_index)),
+        handle_cffi::seed_function_ref_handle(u64::from(global_index)),
         BamlHandleType::FunctionRef,
     )
 }
@@ -55,7 +55,7 @@ pub fn seed_function_ref_handle(global_index: u32) -> Result<u64, JsError> {
 pub fn seed_generic_media_handle() -> Result<u64, JsError> {
     key_with_expected_type(
         "seedGenericMediaHandle",
-        handle_core::seed_generic_media_handle(),
+        handle_cffi::seed_generic_media_handle(),
         BamlHandleType::AdtMediaGeneric,
     )
 }

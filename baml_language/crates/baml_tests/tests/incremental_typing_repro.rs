@@ -1,6 +1,7 @@
 use std::{path::Path, process::Command};
 
-use baml_project::{ProjectDatabase, collect_compiler2_diagnostics};
+use baml_db::{ProjectDatabase, collect_compiler2_diagnostics};
+use baml_tests::engine::TestDbExt;
 
 const CHILD_TEST_NAME: &str = "incremental_function_typing_repro_child";
 const INCOMPLETE_LOG_CHILD_TEST_NAME: &str = "incremental_incomplete_log_repro_child";
@@ -9,7 +10,7 @@ fn run_incremental_repro_sequence() {
     let mut db = ProjectDatabase::new();
     let root = Path::new("/repro");
     let file = Path::new("/repro/repro.baml");
-    db.set_project_root(root);
+    db.workspace(root);
 
     let prefix = r#"
 function Existing() -> string {
@@ -23,7 +24,7 @@ function Existing() -> string {
     for i in 0..=typed.len() {
         let current = format!("{prefix}{}{}", &typed[..i], suffix);
         eprintln!("repro step {i}: `{}`", &typed[..i]);
-        db.add_or_update_file(file, &current);
+        db.file(file, &current);
 
         // This is the narrowest known path that reproduces the crash from
         // `textDocument/didChange`: mutate the same DB incrementally and then
@@ -62,7 +63,7 @@ fn run_incomplete_log_repro_sequence() {
     let mut db = ProjectDatabase::new();
     let root = Path::new("/repro-incomplete-log");
     let file = Path::new("/repro-incomplete-log/main.baml");
-    db.set_project_root(root);
+    db.workspace(root);
 
     let source = r##"
 client GPT4o {
@@ -79,26 +80,26 @@ class GuessResponse {
 }
 
 function GenerateFamousPersonName(previous_names: string[]) -> string {
-  client GPT4o
-  prompt `
+  client: GPT4o
+  prompt: `
     ${previous_names}
   `
 }
 
 function SimulateHumanGuess(history: string[]) -> string {
-  client GPT4o
-  prompt `
+  client: GPT4o
+  prompt: `
     ${history}
   `
 }
 
 function TakeGuess(user_guess: string, famous_person_name: string, history: string[]) -> GuessResponse {
-  client GPT4o
-  prompt `
+  client: GPT4o
+  prompt: `
     ${user_guess}
     ${famous_person_name}
     ${history}
-    ${ctx.output_format}
+    ${ctx.output_format()}
   `
 }
 
@@ -112,9 +113,8 @@ function GuessGameAgent() -> GuessResponse {
 }
 "##;
 
-    db.add_or_update_file(file, source);
+    db.file(file, source);
     let _ = collect_compiler2_diagnostics(&db);
-    let _ = baml_project::list_functions_with_metadata(&db);
 }
 
 #[test]
@@ -139,4 +139,70 @@ fn incremental_incomplete_log_repro_stays_alive() {
 #[ignore = "Executed by incremental_incomplete_log_repro_stays_alive in a subprocess"]
 fn incremental_incomplete_log_repro_child() {
     run_incomplete_log_repro_sequence();
+}
+
+#[test]
+fn incremental_map_key_expression_change_invalidates_inference() {
+    let mut db = ProjectDatabase::new();
+    let root = Path::new("/map-key-expression");
+    let file = Path::new("/map-key-expression/main.baml");
+    db.workspace(root);
+
+    db.file(
+        file,
+        r#"
+function build() -> map<string, string> {
+  { key: "value" }
+}
+"#,
+    );
+    let expression_messages: Vec<_> = collect_compiler2_diagnostics(&db)
+        .into_iter()
+        .filter(|diagnostic| diagnostic.severity == baml_compiler_diagnostics::Severity::Error)
+        .map(|diagnostic| diagnostic.message)
+        .collect();
+    assert!(
+        expression_messages
+            .iter()
+            .any(|message| message.contains("unresolved name: `key`")),
+        "expected unresolved key diagnostic, got: {expression_messages:#?}"
+    );
+
+    db.file(
+        file,
+        r#"
+function build() -> map<string, string> {
+  { "key": "value" }
+}
+"#,
+    );
+    let quoted_messages: Vec<_> = collect_compiler2_diagnostics(&db)
+        .into_iter()
+        .filter(|diagnostic| diagnostic.severity == baml_compiler_diagnostics::Severity::Error)
+        .map(|diagnostic| diagnostic.message)
+        .collect();
+    assert!(
+        quoted_messages.is_empty(),
+        "quoted key reused stale expression inference: {quoted_messages:#?}"
+    );
+
+    db.file(
+        file,
+        r#"
+function build() -> map<string, string> {
+  { key: "value" }
+}
+"#,
+    );
+    let restored_messages: Vec<_> = collect_compiler2_diagnostics(&db)
+        .into_iter()
+        .filter(|diagnostic| diagnostic.severity == baml_compiler_diagnostics::Severity::Error)
+        .map(|diagnostic| diagnostic.message)
+        .collect();
+    assert!(
+        restored_messages
+            .iter()
+            .any(|message| message.contains("unresolved name: `key`")),
+        "expression key reused stale quoted inference: {restored_messages:#?}"
+    );
 }

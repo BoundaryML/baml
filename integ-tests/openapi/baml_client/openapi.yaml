@@ -2925,6 +2925,32 @@ paths:
                 title: TestOpenAIShorthandResponse
                 type: string
       operationId: TestOpenAIShorthand
+  /call/TestOpenAITranscription:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenAITranscription'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenAITranscriptionResponse
+                type: string
+      operationId: TestOpenAITranscription
+  /call/TestOpenAITranscriptionMultipartChat:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenAITranscriptionMultipartChat'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenAITranscriptionMultipartChatResponse
+                type: string
+      operationId: TestOpenAITranscriptionMultipartChat
   /call/TestOpenAIWithFinishReasonError:
     post:
       requestBody:
@@ -6807,6 +6833,38 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - input
+            additionalProperties: false
+    TestOpenAITranscription:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenAITranscriptionRequest
+            type: object
+            properties:
+              audio:
+                $ref: '#/components/schemas/BamlAudio'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - audio
+            additionalProperties: false
+    TestOpenAITranscriptionMultipartChat:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenAITranscriptionMultipartChatRequest
+            type: object
+            properties:
+              audio:
+                $ref: '#/components/schemas/BamlAudio'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - audio
             additionalProperties: false
     TestOpenAIWithFinishReasonError:
       required: true

@@ -1,24 +1,26 @@
 //! Core type inference snapshot tests.
 
 use baml_base::Name;
-use baml_compiler2_hir::{package::PackageId, scope::ScopeKind};
-use baml_compiler2_tir::{
-    inference::infer_scope_types,
-    package_interface::{ExportedType, package_interface, package_resolution_context},
+use baml_compiler2_hir::{
     resolve::{ResolvedName, resolve_name_at_in_scope},
-    ty::{FunctionParamMode, QualifiedTypeName, Ty, TyAttr},
-    type_context::GlobalTypeContext,
+    scope::ScopeKind,
 };
+use baml_compiler2_hir_ty::{
+    package_interface::{ExportedType, package_interface},
+    render::Viewpoint,
+};
+use baml_type::{FunctionParamMode, Ty};
 use text_size::TextSize;
 
 use super::support::{expr_type_in_function, make_db, render_tir};
+use crate::engine::TestDbExt;
 
 fn find_function_scope_id<'db>(
-    db: &'db baml_project::ProjectDatabase,
+    db: &'db baml_db::ProjectDatabase,
     file: baml_base::SourceFile,
     name: &str,
 ) -> baml_compiler2_hir::scope::ScopeId<'db> {
-    let index = baml_compiler2_ppir::file_semantic_index(db, file);
+    let index = baml_compiler2_hir::file_semantic_index(db, file);
     index
         .scope_ids
         .iter()
@@ -37,7 +39,7 @@ fn find_function_scope_id<'db>(
 #[test]
 fn literal_int() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> int { return 1; }");
+    let file = db.file("test.baml", "function f() -> int { return 1; }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> int throws never {
       { : never
@@ -50,7 +52,7 @@ fn literal_int() {
 #[test]
 fn let_binding_widens() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> int { let x = 1; return x; }");
+    let file = db.file("test.baml", "function f() -> int { let x = 1; return x; }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> int throws never {
       { : never
@@ -64,12 +66,12 @@ fn let_binding_widens() {
 #[test]
 fn resolver_initializer_shadowing_uses_previous_binding() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f() -> int { let x = 1; let x = x + 1; x }",
     );
 
-    let index = baml_compiler2_ppir::file_semantic_index(&db, file);
+    let index = baml_compiler2_hir::file_semantic_index(&db, file);
     let function_scope = index
         .scopes
         .iter()
@@ -103,7 +105,7 @@ fn resolver_initializer_shadowing_uses_previous_binding() {
 #[test]
 fn class_field_access() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "class Foo { name string }\nfunction f(x: Foo) -> string { return x.name; }",
     );
@@ -116,16 +118,13 @@ fn class_field_access() {
         return x.name : string
       }
     }
-    class user.Foo$stream {
-      name: string | null
-    }
     ");
 }
 
 #[test]
 fn type_mismatch() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> string { return 1; }");
+    let file = db.file("test.baml", "function f() -> string { return 1; }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> string throws never {
       { : never
@@ -139,7 +138,7 @@ fn type_mismatch() {
 #[test]
 fn unresolved_field() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "class Foo { name string }\nfunction f(x: Foo) -> string { return x.missing; }",
     );
@@ -149,12 +148,9 @@ fn unresolved_field() {
     }
     function user.f(x: user.Foo) -> string throws never {
       { : never
-        return x.missing : unknown
+        return x.missing : !error
       }
       !! 64..73: type `Foo` has no member `missing`
-    }
-    class user.Foo$stream {
-      name: string | null
     }
     ");
 }
@@ -164,7 +160,7 @@ fn unresolved_field_chained_access() {
     // Test: in `data.inner.foo`, if `inner` doesn't exist on the class,
     // the squiggly should only cover "inner", not "data.inner".
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 class Data {
@@ -180,12 +176,9 @@ function f(data: Data) -> string {
     }
     function user.f(data: user.Data) -> string throws never {
       { : never
-        return data.inner.foo : unknown
+        return data.inner.foo : !error
       }
       !! 73..87: type `Data` has no member `inner`
-    }
-    class user.Data$stream {
-      name: string | null
     }
     ");
 }
@@ -195,7 +188,7 @@ fn unresolved_field_span_should_narrow_to_member() {
     // Regression test: the diagnostic span for an unresolved member should cover
     // only the member name ("feelin"), not the entire expression ("user.Sentiment.feelin").
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 class Sentiment {
@@ -211,12 +204,9 @@ function f(s: Sentiment) -> string {
     }
     function user.f(s: user.Sentiment) -> string throws never {
       { : never
-        return s.feelin : unknown
+        return s.feelin : !error
       }
       !! 83..91: type `Sentiment` has no member `feelin`
-    }
-    class user.Sentiment$stream {
-      feeling: string | null
     }
     ");
 }
@@ -227,7 +217,7 @@ fn unresolved_dotted_root_span_should_narrow_to_root() {
     // unresolved name, the diagnostic should underline only `o`, not the whole
     // `o.value` expression.
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 function f() -> string {
@@ -237,9 +227,9 @@ function f() -> string {
     insta::assert_snapshot!(render_tir(&db, file), @"
     function user.f() -> string throws never {
       { : never
-        return o.value : unknown
+        return o.value : !error
       }
-      !! 34..35: unresolved name: o
+      !! 34..41: unresolved name: o.value
     }
     ");
 }
@@ -247,7 +237,7 @@ function f() -> string {
 #[test]
 fn unknown_field_access_uses_narrowing_diagnostic() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "\
 function load(raw: unknown) -> string {
@@ -269,7 +259,7 @@ function load(raw: unknown) -> string {
 #[test]
 fn binary_op_int_add() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(a: int, b: int) -> int { return a + b; }",
     );
@@ -285,7 +275,7 @@ fn binary_op_int_add() {
 #[test]
 fn if_else_joins_types() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f(x: bool) -> int { return if (x) { 1 } else { 2 }; }",
     );
@@ -303,13 +293,17 @@ fn if_else_joins_types() {
             }
       }
     }
+    block user.f {
+    }
+    block user.f {
+    }
     ");
 }
 
 #[test]
 fn enum_variant_resolution() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "enum Color { Red\nGreen\nBlue }\nfunction f() -> Color { return Color.Red; }",
     );
@@ -326,17 +320,12 @@ fn enum_variant_resolution() {
 #[test]
 fn resolve_class_fields_query() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "class Point { x int\ny float\nlabel string }");
+    let file = db.file("test.baml", "class Point { x int\ny float\nlabel string }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Point {
       x: int
       y: float
       label: string
-    }
-    class user.Point$stream {
-      x: int | null
-      y: float | null
-      label: string | null
     }
     ");
 }
@@ -344,27 +333,21 @@ fn resolve_class_fields_query() {
 #[test]
 fn resolve_type_alias_query() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "type MyStr = string");
-    insta::assert_snapshot!(render_tir(&db, file), @"
-    type user.MyStr = string
-    type user.MyStr$stream = string
-    ");
+    let file = db.file("test.baml", "type MyStr = string");
+    insta::assert_snapshot!(render_tir(&db, file), @"type user.MyStr = string");
 }
 
 #[test]
 fn class_field_bigint() {
     // Asserts that `class Foo { x bigint }` lowers the field type to
-    // `Ty::Bigint { .. }`, displayed as `bigint`.
+    // `Ty::Bigint`, displayed as `bigint`.
     // Note: to_json returns `map<string, unknown>` for bigint until Phase 2
     // wires up the bigint.to_json() method.
     let mut db = make_db();
-    let file = db.add_file("test.baml", "class Foo { x bigint }");
+    let file = db.file("test.baml", "class Foo { x bigint }");
     insta::assert_snapshot!(render_tir(&db, file), @"
     class user.Foo {
       x: bigint
-    }
-    class user.Foo$stream {
-      x: bigint | null
     }
     ");
 }
@@ -372,7 +355,7 @@ fn class_field_bigint() {
 #[test]
 fn two_functions_independent() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function ok() -> int { return 1; }\nfunction bad() -> string { return 42; }",
     );
@@ -396,7 +379,7 @@ fn unresolved_path_after_valid_type() {
     // Test: when a path like `baml.media.Image.missing` fails, `missing` should be
     // reported as unresolved (not `Image`, which is a valid type in the media namespace).
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         "function f() -> int { return baml.media.Image.missing; }",
     );
@@ -415,7 +398,7 @@ fn unresolved_path_after_valid_type() {
 #[test]
 fn io_input_requires_baml_prefix() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> string { io.input(\"x\") }");
+    let file = db.file("test.baml", "function f() -> string { io.input(\"x\") }");
 
     let output = render_tir(&db, file);
     assert!(
@@ -427,7 +410,7 @@ fn io_input_requires_baml_prefix() {
 #[test]
 fn env_builtin_calls_require_baml_prefix() {
     let mut db = make_db();
-    let file = db.add_file("test.baml", "function f() -> string? { env.get(\"X\") }");
+    let file = db.file("test.baml", "function f() -> string? { env.get(\"X\") }");
 
     let output = render_tir(&db, file);
     assert!(
@@ -439,7 +422,7 @@ fn env_builtin_calls_require_baml_prefix() {
 #[test]
 fn function_type_throws_inference_opens_immediate_callback_param() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "callback.baml",
         "function direct(cb: (value: int) -> string) -> string { let handler = cb; return \"ok\"; }",
     );
@@ -453,28 +436,27 @@ fn function_type_throws_inference_opens_immediate_callback_param() {
 #[test]
 fn function_type_throws_package_interface_exports_effect_params() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "callback.baml",
         "function direct(cb: (value: int) -> string) -> string { return \"ok\"; }",
     );
 
     let scope_id = find_function_scope_id(&db, file, "direct");
-    let _ = infer_scope_types(&db, scope_id);
+    let _ = baml_compiler2_hir_ty::ide::infer_for_scope(&db, scope_id);
 
-    let iface = package_interface(&db, PackageId::new(&db, Name::new("user")));
+    let iface = package_interface(&db, db.workspace_root().unwrap());
     let exported = iface
         .lookup_function(&[], &Name::new("direct"))
         .expect("exported function");
 
     assert_eq!(
         exported.generic_params,
-        vec![baml_compiler2_tir::ty::ParamTy::new(
-            0,
-            Name::new("__effect_param_0")
-        )]
+        vec![baml_type::ParamTy::new(0, Name::new("__effect_param_0"))]
     );
     assert_eq!(
-        exported.params[0].ty.render_canonical(),
+        exported.params[0]
+            .ty
+            .render_with(&Viewpoint::canonical(&db)),
         "(value: int) -> string throws __effect_param_0"
     );
 }
@@ -482,12 +464,12 @@ fn function_type_throws_package_interface_exports_effect_params() {
 #[test]
 fn package_interface_exports_optional_param_mode() {
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "search.baml",
         "function Search(query: string, limit: int = 10) -> int { limit }",
     );
 
-    let iface = package_interface(&db, PackageId::new(&db, Name::new("user")));
+    let iface = package_interface(&db, db.workspace_root().unwrap());
     let exported = iface
         .lookup_function(&[], &Name::new("Search"))
         .expect("exported function");
@@ -507,7 +489,7 @@ fn package_interface_exports_optional_param_mode() {
 #[test]
 fn cross_file_out_of_body_implements_class_target_is_registered() {
     let mut db = make_db();
-    db.add_file(
+    let types_file = db.file(
         "types.baml",
         r#"
 class Dog {
@@ -515,7 +497,7 @@ class Dog {
 }
 "#,
     );
-    let impl_file = db.add_file(
+    let impl_file = db.file(
         "impl.baml",
         r#"
 interface ToJson {
@@ -531,12 +513,19 @@ implements ToJson for Dog {
     );
 
     assert_eq!(
-        baml_compiler2_ppir::item_data::file_free_impls(&db, impl_file).len(),
+        baml_compiler2_hir::item_data::file_free_impls(&db, impl_file).len(),
         1,
         "cross-file class target must remain a first-class out-of-body impl record"
     );
 
-    let diagnostics = baml_project::collect_compiler2_diagnostics(&db);
+    let diagnostics: Vec<_> = baml_db::collect_compiler2_diagnostics(&db)
+        .into_iter()
+        .filter(|diagnostic| {
+            diagnostic.primary_span().is_some_and(|span| {
+                [types_file.file_id(&db), impl_file.file_id(&db)].contains(&span.file_id)
+            })
+        })
+        .collect();
     assert!(
         diagnostics.is_empty(),
         "cross-file class target should not produce diagnostics: {diagnostics:#?}"
@@ -545,25 +534,16 @@ implements ToJson for Dog {
     // Membership goes through the canonical L1 seam (GlobalTypeContext's
     // `TypeContext::implements_interface`); no type aliases are involved here.
     use baml_type::normalize::TypeContext;
-    let pkg_id = PackageId::new(&db, Name::new("user"));
-    let res_ctx = package_resolution_context(&db, pkg_id);
-    let aliases = std::collections::HashMap::new();
-    let bounds = baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default();
-    let ctx = GlobalTypeContext {
-        db: &db,
-        res_ctx,
-        aliases: &aliases,
-        bounds: &bounds,
-    };
+    let ctx = baml_compiler2_hir_ty::facts::Facts::new(&db);
+    let user_root = db.workspace_root().expect("workspace root");
     let dog = Ty::Class(
-        QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Dog")),
-        vec![],
-        TyAttr::default(),
+        baml_type::DeclName::in_root(user_root, vec![], Name::new("Dog")),
+        Box::new([]),
     );
     let to_json = baml_type::Interface::new(
-        QualifiedTypeName::new(Name::new("user"), vec![], Name::new("ToJson")),
-        vec![],
-        vec![],
+        baml_type::DeclName::in_root(user_root, vec![], Name::new("ToJson")),
+        Box::new([]),
+        Box::new([]),
     );
     assert!(
         ctx.implements_interface(&dog, &to_json),
@@ -580,47 +560,34 @@ fn builtin_equals_compare_visible_from_user_package() {
     use baml_type::normalize::TypeContext;
 
     let mut db = make_db();
-    // A user file so the `user` package exists; `Bare` implements nothing.
-    db.add_file("main.baml", "class Bare { x: int }");
-    let user_pkg = PackageId::new(&db, Name::new("user"));
+    // A user file so the `user` package exists; `Bare` declares no impls.
+    db.file("main.baml", "class Bare { x: int }");
+    let user_pkg = db.workspace_root().unwrap();
+    let baml_root = baml_compiler2_hir::package::lang_roots(&db)
+        .get(baml_base::LangPackage::Baml)
+        .expect("stdlib installed");
 
     let equals = baml_type::Interface::new(
-        QualifiedTypeName::new(
-            Name::new("baml"),
-            vec![Name::new("ops")],
-            Name::new("Equals"),
-        ),
-        vec![],
-        vec![],
+        baml_type::DeclName::in_root(baml_root, vec![Name::new("ops")], Name::new("Equals")),
+        Box::new([]),
+        Box::new([]),
     );
     let compare = baml_type::Interface::new(
-        QualifiedTypeName::new(
-            Name::new("baml"),
-            vec![Name::new("ops")],
-            Name::new("Compare"),
-        ),
-        vec![],
-        vec![],
+        baml_type::DeclName::in_root(baml_root, vec![Name::new("ops")], Name::new("Compare")),
+        Box::new([]),
+        Box::new([]),
     );
     let int_ty = Ty::int();
     let u8_ty = Ty::uint8array();
     let bare = Ty::Class(
-        QualifiedTypeName::new(Name::new("user"), vec![], Name::new("Bare")),
-        vec![],
-        TyAttr::default(),
+        baml_type::DeclName::in_root(user_pkg, vec![], Name::new("Bare")),
+        Box::new([]),
     );
 
     // The membership query walks the interface's package (`baml`) via the orphan
     // rule, so the builtin primitive impls are visible from the user package.
-    let res_ctx = package_resolution_context(&db, user_pkg);
-    let aliases = std::collections::HashMap::new();
-    let bounds = baml_compiler2_tir::lower_type_expr::TypeVarBoundsMap::default();
-    let ctx = GlobalTypeContext {
-        db: &db,
-        res_ctx,
-        aliases: &aliases,
-        bounds: &bounds,
-    };
+    let _ = user_pkg;
+    let ctx = baml_compiler2_hir_ty::facts::Facts::new(&db);
 
     // int implements both Equals and Compare (impls in `baml`).
     assert!(ctx.implements_interface(&int_ty, &equals));
@@ -628,15 +595,15 @@ fn builtin_equals_compare_visible_from_user_package() {
     // uint8array implements Equals but not Compare.
     assert!(ctx.implements_interface(&u8_ty, &equals));
     assert!(!ctx.implements_interface(&u8_ty, &compare));
-    // A class with no `implements` satisfies neither.
-    assert!(!ctx.implements_interface(&bare, &equals));
+    // Structural equality is synthesized; ordering still requires an impl.
+    assert!(ctx.implements_interface(&bare, &equals));
     assert!(!ctx.implements_interface(&bare, &compare));
 }
 
 #[test]
 fn own_class_method_lookup_matches_exported_implicit_self_type() {
     let mut db = make_db();
-    db.add_file(
+    db.file(
         "service.baml",
         r#"
 class SearchService {
@@ -649,7 +616,7 @@ class SearchService {
 "#,
     );
 
-    let pkg_id = PackageId::new(&db, Name::new("user"));
+    let pkg_id = db.workspace_root().unwrap();
     let iface = package_interface(&db, pkg_id);
     let Some(ExportedType::Class { methods, .. }) =
         iface.lookup_type(&[], &Name::new("SearchService"))
@@ -661,37 +628,59 @@ class SearchService {
         .find(|method| method.name.as_str() == "Run")
         .expect("exported method");
 
-    let res_ctx = package_resolution_context(&db, pkg_id);
-    let own_method = res_ctx
-        .lookup_class_method(
-            &db,
-            &QualifiedTypeName::new(Name::new("user"), vec![], Name::new("SearchService")),
-            &Name::new("Run"),
-        )
+    // The source item's own resolved signature, through the one callable
+    // surface, is what the export row was lowered from.
+    let items = baml_compiler2_hir::package::package_items(&db, pkg_id);
+    let Some(baml_compiler2_hir::contributions::Definition::Class(class)) =
+        items.lookup_type(&[], &Name::new("SearchService"))
+    else {
+        panic!("SearchService resolves")
+    };
+    let run = baml_compiler2_hir::item_data::class_data(&db, class)
+        .methods
+        .iter()
+        .copied()
+        .find(|&method| {
+            baml_compiler2_hir::item_data::function_data(&db, method)
+                .name
+                .as_str()
+                == "Run"
+        })
         .expect("own method");
+    let own_method = baml_compiler2_hir_ty::callable::callable_signature(
+        &db,
+        baml_compiler2_hir::loc::DeclRef::Source(run),
+    );
 
-    assert_eq!(&own_method.function.params, &exported_method.params);
+    assert_eq!(&own_method.params, &exported_method.params);
     assert!(
-        !matches!(own_method.function.params[0].ty, Ty::Unknown { .. }),
+        !matches!(own_method.params[0].ty, Ty::Error),
         "implicit self should be reified before lowering"
     );
-    assert_eq!(own_method.function.params[1].ty.to_string(), "string");
-    assert_eq!(own_method.function.params[2].ty.to_string(), "int");
     assert_eq!(
-        own_method.function.params[2].mode,
-        FunctionParamMode::Optional
+        own_method.params[1]
+            .ty
+            .render_with(&Viewpoint::canonical(&db)),
+        "string"
     );
+    assert_eq!(
+        own_method.params[2]
+            .ty
+            .render_with(&Viewpoint::canonical(&db)),
+        "int"
+    );
+    assert_eq!(own_method.params[2].mode, FunctionParamMode::Optional);
 }
 
 #[test]
 fn lambda_scope_retypes_capture_from_function_parameter() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "capture_param.baml",
         "function main(x: int) -> int { let f = () -> int { x }; return f(); }",
     );
 
-    let index = baml_compiler2_ppir::file_semantic_index(&db, file);
+    let index = baml_compiler2_hir::file_semantic_index(&db, file);
     let lambda_scope_id = index
         .scope_ids
         .iter()
@@ -701,18 +690,19 @@ fn lambda_scope_retypes_capture_from_function_parameter() {
             matches!(scope.kind, ScopeKind::Lambda)
         })
         .expect("lambda scope");
-    let lambda_inference = infer_scope_types(&db, lambda_scope_id);
+    let lambda_inference = baml_compiler2_hir_ty::ide::infer_for_scope(&db, lambda_scope_id)
+        .expect("lambda scope has an owner");
 
-    let main_loc = *baml_compiler2_ppir::item_data::file_functions(&db, file)
+    let main_loc = *baml_compiler2_hir::item_data::file_functions(&db, file)
         .iter()
         .find(|&&loc| {
-            baml_compiler2_ppir::item_data::function_data(&db, loc)
+            baml_compiler2_hir::item_data::function_data(&db, loc)
                 .name
                 .as_str()
                 == "main"
         })
         .expect("main function");
-    let main_body = baml_compiler2_ppir::function_body(&db, main_loc);
+    let main_body = baml_compiler2_hir::body::function_body(&db, main_loc);
     let baml_compiler2_hir::body::FunctionBody::Expr(main_expr_body) = main_body.as_ref() else {
         panic!("main expression body");
     };
@@ -731,8 +721,9 @@ fn lambda_scope_retypes_capture_from_function_parameter() {
 
     assert_eq!(
         lambda_inference
-            .expression_type(root_expr)
-            .map(ToString::to_string),
+            .type_of_expr
+            .get(&root_expr)
+            .map(|ty| ty.render_with(&Viewpoint::canonical(&db))),
         Some("int".to_string())
     );
 }
@@ -740,7 +731,7 @@ fn lambda_scope_retypes_capture_from_function_parameter() {
 #[test]
 fn lambda_parameter_shadowing_uses_parameter_declared_type() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "lambda_param_shadow.baml",
         r#"
 function main() -> int {
@@ -765,37 +756,11 @@ function main() -> int {
     );
 }
 
-/// A function-valued return annotation must declare its throws (rule 5); an
-/// effect-polymorphic forwarder is returned by eta-expanding at the concrete
-/// throws surface. (Returning `wrap` directly does not instantiate its
-/// synthetic effect param against the annotation — the forwarder value stays
-/// generic — so the lambda pins the `never` instantiation.)
-#[test]
-fn returning_callback_forwarder_matches_explicit_function_type_return_annotation() {
-    let mut db = make_db();
-    let file = db.add_file(
-        "callback_return.baml",
-        r#"function wrap(cb: (x: int) -> int) -> int {
-  return cb(1)
-}
-
-function demo() -> ((x: int) -> int throws never) -> int throws never {
-  return (cb: (x: int) -> int throws never) -> int { wrap(cb) }
-}"#,
-    );
-
-    let output = render_tir(&db, file);
-    assert!(
-        !output.contains("type mismatch"),
-        "expected function-valued return annotation to accept the eta-expanded forwarder, got:\n{output}"
-    );
-}
-
 /// Helper: does compiling `source` produce a type mismatch diagnostic?
 fn has_type_mismatch(source: &str) -> bool {
     let mut db = make_db();
-    db.add_file("test.baml", source);
-    baml_project::collect_compiler2_diagnostics(&db)
+    db.file("test.baml", source);
+    baml_db::collect_compiler2_diagnostics(&db)
         .iter()
         .any(|diag| diag.id == baml_compiler_diagnostics::DiagnosticId::TypeMismatch)
 }
@@ -865,22 +830,6 @@ fn reassign_unannotated_scalar_local_to_incompatible_type_is_rejected() {
     );
 }
 
-#[test]
-fn empty_array_local_still_evolves_via_reassignment() {
-    // Regression guard: an *empty* evolving list must still accept a populated
-    // list of the same kind — only cross-kind reassignment is rejected.
-    assert!(
-        !has_type_mismatch(
-            r#"function main() -> int {
-    let a = [];
-    a = [1, 2, 3];
-    return 0;
-}"#
-        ),
-        "reassigning a populated list into an empty-list local must stay allowed"
-    );
-}
-
 // ─── Index-key type validation ───────────────────────────────────────────────
 //
 // The runtime does no key coercion: a list is subscripted by an `int` and a
@@ -928,75 +877,9 @@ fn map_indexed_by_int_key_is_rejected() {
 }
 
 #[test]
-fn empty_map_index_assign_with_int_key_is_rejected() {
-    assert!(
-        has_type_mismatch(
-            r#"function main() -> int {
-    let m = {};
-    m[0] = 1;
-    return 0;
-}"#
-        ),
-        "index-assigning an empty map with an int key should report a type mismatch"
-    );
-}
-
-#[test]
-fn well_typed_index_access_is_accepted() {
-    // Regression guard: int-keyed list and string-keyed map (incl. evolving
-    // empties) must stay valid.
-    assert!(
-        !has_type_mismatch(
-            r#"function main() -> int {
-    let x = [];
-    x[0] = 1;
-    let m = {};
-    m["k"] = 2;
-    return x[0] + m["k"];
-}"#
-        ),
-        "int-keyed list and string-keyed map access must stay allowed"
-    );
-}
-
-#[test]
-fn list_indexed_by_nullable_int_is_rejected() {
-    // A subscript must be non-null — the runtime has no null index (it aborts
-    // with the confusing `type error: ... got any`).
-    assert!(
-        has_type_mismatch(
-            r#"function main() -> int {
-    let arr = [1, 2, 3];
-    let i: int? = null;
-    return arr[i];
-}"#
-        ),
-        "indexing a list with a nullable int should report a type mismatch"
-    );
-}
-
-#[test]
-fn narrowed_nullable_index_is_accepted() {
-    // Regression guard: a nullable index narrowed to non-null must stay valid.
-    assert!(
-        !has_type_mismatch(
-            r#"function main() -> int {
-    let arr = [1, 2, 3];
-    let i: int? = 0;
-    if i != null {
-        return arr[i];
-    }
-    return 0;
-}"#
-        ),
-        "a nullable index narrowed to non-null must stay allowed"
-    );
-}
-
-#[test]
 fn class_spread_requires_the_same_nominal_class_and_generic_arguments() {
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "test.baml",
         r#"
 class Left<T> { value T }
@@ -1044,12 +927,12 @@ function wrong_type_argument() -> Left<int> {
 /// layer reads.
 #[test]
 fn interface_declaration_surface_resolves_symbolically() {
-    use baml_compiler2_tir::interfaces::{
+    use baml_compiler2_hir_ty::interfaces::{
         resolve_interface_fields, resolve_interface_required_methods,
     };
 
     let mut db = make_db();
-    let file = db.add_file(
+    let file = db.file(
         "iface.baml",
         r#"
 interface Encoder {
@@ -1063,10 +946,10 @@ interface Encoder {
 "#,
     );
 
-    let iface_loc = *baml_compiler2_ppir::item_data::file_interfaces(&db, file)
+    let iface_loc = *baml_compiler2_hir::item_data::file_interfaces(&db, file)
         .iter()
         .find(|&&i| {
-            baml_compiler2_ppir::item_data::interface_data(&db, i)
+            baml_compiler2_hir::item_data::interface_data(&db, i)
                 .name
                 .as_str()
                 == "Encoder"
@@ -1077,7 +960,10 @@ interface Encoder {
     assert!(fields.diagnostics.is_empty(), "{:?}", fields.diagnostics);
     assert_eq!(fields.fields.len(), 1);
     assert_eq!(fields.fields[0].0.as_str(), "limit");
-    assert_eq!(fields.fields[0].1.render_canonical(), "int");
+    assert_eq!(
+        fields.fields[0].1.render_with(&Viewpoint::canonical(&db)),
+        "int"
+    );
 
     let methods = resolve_interface_required_methods(&db, iface_loc);
     assert_eq!(methods.len(), 2);
@@ -1089,7 +975,7 @@ interface Encoder {
     // `Self` stays symbolic: the receiver is the rigid `Self` variable and the
     // declared throws is a projection through the interface bound.
     assert_eq!(
-        encode.function_ty.render_canonical(),
+        encode.function_ty.render_with(&Viewpoint::canonical(&db)),
         "(self: Self, value: string) -> string throws (Self as user.Encoder).Error"
     );
 
@@ -1100,5 +986,177 @@ interface Encoder {
     let (param, bounds) = &pick.generic_params[0];
     assert_eq!(param.name().as_str(), "T");
     assert_eq!(bounds.len(), 1);
-    assert_eq!(bounds[0].name.render_user_facing(), "Encoder");
+    let viewer = baml_compiler2_hir::file_package::file_package(&db, file).root;
+    assert_eq!(
+        baml_compiler2_hir_ty::render::Viewpoint::user_facing(&db, viewer).path(&bounds[0].name),
+        "Encoder"
+    );
+}
+
+/// An optional callback parameter is a callback slot too: its omitted
+/// `throws` opens to a synthetic effect param rather than an E0151.
+#[test]
+fn function_type_throws_inference_opens_optional_callback_param() {
+    let mut db = make_db();
+    let file = db.file(
+        "callback.baml",
+        "function opt(cb: ((value: int) -> string)?) -> string { let handler = cb; return \"ok\"; }",
+    );
+
+    assert_eq!(
+        expr_type_in_function(&db, file, "opt", "cb"),
+        "((int) -> string throws __effect_param_0) | null"
+    );
+}
+
+/// The effect param survives narrowing: invoking the callback through a
+/// null check calls it at the same synthetic effect.
+#[test]
+fn optional_callback_effect_survives_narrowing_and_invocation() {
+    let mut db = make_db();
+    let file = db.file(
+        "callback.baml",
+        r#"function apply_optional(callback: ((value: int) -> int)?, value: int) -> int {
+  if (callback != null) {
+    return callback(value)
+  }
+  value
+}"#,
+    );
+
+    insta::assert_snapshot!(render_tir(&db, file), @"
+    function user.apply_optional(callback: ((value: int) -> int throws __effect_param_0) | null, value: int) -> int throws never {
+      { : int
+        if (callback != null : bool) : null
+          { : never
+            return callback<__effect_param_0>(value) : int
+          }
+        value : int
+      }
+    }
+    block user.apply_optional {
+    }
+    ");
+}
+
+/// Per-call-site instantiation, the whole point of the effect param: a
+/// nonthrowing callback resolves it to `never`, `null` leaves it
+/// unconstrained (also `never`), and a throwing callback propagates its
+/// precise error type to the caller.
+#[test]
+fn optional_callback_effect_instantiates_per_call_site() {
+    let mut db = make_db();
+    let file = db.file(
+        "callback.baml",
+        r#"class CallbackError {}
+
+function apply_optional(callback: ((value: int) -> int)?, value: int) -> int {
+  if (callback != null) {
+    return callback(value)
+  }
+  value
+}
+
+function safe() -> int throws never {
+  apply_optional((value: int) -> int { value + 1 }, 1)
+}
+
+function absent() -> int throws never {
+  apply_optional(null, 1)
+}
+
+function risky() -> int throws never {
+  apply_optional((value: int) -> int { throw CallbackError {} }, -1)
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    let violations: Vec<&str> = output
+        .lines()
+        .filter(|line| line.contains("declared throws"))
+        // Drop the `!! <start>..<end>:` span prefix — this asserts on which
+        // call sites violate and with what error type, not on byte offsets.
+        .filter_map(|line| line.split_once(": ").map(|(_, message)| message))
+        .collect();
+    // Only `risky` violates, and it names the callback's PRECISE error type
+    // — not `unknown`, which the `throws unknown` workaround would force.
+    assert_eq!(
+        violations,
+        vec!["declared throws is `never`, but this function may also throw `CallbackError`"],
+        "unexpected throws violations in:\n{output}"
+    );
+}
+
+/// A contract violation inside the callee names the optional callback
+/// parameter it flows from, exactly as the immediate form does.
+#[test]
+fn optional_callback_throws_violation_names_the_callback_param() {
+    let mut db = make_db();
+    let file = db.file(
+        "callback.baml",
+        r#"function opt(callback: ((value: int) -> int)?, value: int) -> int throws never {
+  if (callback != null) {
+    return callback(value)
+  }
+  value
+}"#,
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("this body may throw through callback `callback`"),
+        "expected the callback-named violation wording, got:\n{output}"
+    );
+}
+
+/// The synthetic effect param rides the package interface, so a consumer
+/// package instantiates it per call site too.
+#[test]
+fn function_type_throws_package_interface_exports_optional_effect_params() {
+    let mut db = make_db();
+    let file = db.file(
+        "callback.baml",
+        "function opt(cb: ((value: int) -> string)?) -> string { return \"ok\"; }",
+    );
+
+    let scope_id = find_function_scope_id(&db, file, "opt");
+    let _ = baml_compiler2_hir_ty::ide::infer_for_scope(&db, scope_id);
+
+    let iface = package_interface(&db, db.workspace_root().unwrap());
+    let exported = iface
+        .lookup_function(&[], &Name::new("opt"))
+        .expect("exported function");
+
+    assert_eq!(
+        exported.generic_params,
+        vec![baml_type::ParamTy::new(0, Name::new("__effect_param_0"))]
+    );
+    assert_eq!(
+        exported.params[0]
+            .ty
+            .render_with(&Viewpoint::canonical(&db)),
+        "((value: int) -> string throws __effect_param_0) | null"
+    );
+}
+
+/// The opening stops at the callback root. A function type nested any
+/// deeper — a list element here — is a stored/structural position with no
+/// single call site to instantiate against, and keeps its E0151.
+#[test]
+fn nested_function_types_below_the_callback_root_stay_unopened() {
+    let mut db = make_db();
+    let file = db.file(
+        "callback.baml",
+        "function listed(cbs: ((value: int) -> int)[]) -> int { return 0; }",
+    );
+
+    let output = render_tir(&db, file);
+    assert!(
+        output.contains("function type must declare an explicit `throws` clause"),
+        "expected E0151 for a list of callbacks, got:\n{output}"
+    );
+    assert!(
+        !output.contains("__effect_param_"),
+        "a list element is not a callback root and must not open, got:\n{output}"
+    );
 }

@@ -1,2 +1,10 @@
 [package]
 name = "google"
+# Implicitly available to every package (no `[dependencies]` entry needed).
+prelude = true
+
+[dependencies]
+baml = { path = "../baml" }
+log = { path = "../log" }
+ai = { path = "../ai" }
+anthropic = { path = "../anthropic" }

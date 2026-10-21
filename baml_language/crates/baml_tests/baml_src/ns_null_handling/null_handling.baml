@@ -146,6 +146,28 @@ test "null_coalesce_null_lhs_evaluates_rhs" {
     assert.equal(nh_run_null_coalesce_null_lhs(), 11)
 }
 
+function nh_null_coalesce_self_local(input: int?) -> int {
+    let value = 7;
+    value = input ?? value;
+    value
+}
+
+test "null_coalesce_rhs_reads_old_local_destination" {
+    assert.equal(nh_null_coalesce_self_local(null), 7);
+    assert.equal(nh_null_coalesce_self_local(42), 42)
+}
+
+function nh_null_coalesce_self_field(input: int?) -> int {
+    let node = NhNode { value: 9, next: null, children: null, labels: null };
+    node.value = input ?? node.value;
+    node.value
+}
+
+test "null_coalesce_rhs_reads_old_field_destination" {
+    assert.equal(nh_null_coalesce_self_field(null), 9);
+    assert.equal(nh_null_coalesce_self_field(42), 42)
+}
+
 // ============================================================================
 // 3. Combined: compound assign through mixed chain with ??-provided fallback
 // ============================================================================

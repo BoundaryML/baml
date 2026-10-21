@@ -5,8 +5,9 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × mismatched types
-   ╭─[json_alias.baml:5:3]
- 5 │   j
-   ·   ┬
-   ·   ╰── expected `int`, found `baml.json.json`
+   ╭─[json_alias.baml:4:36]
+ 4 │ ╭─▶ function BadAssign(j: json) -> int {
+ 5 │ │     j
+ 6 │ ├─▶ }
+   · ╰──── expected `int`, found `baml.json.json`
    ╰────

@@ -10,14 +10,10 @@
 // Bytecode-snapshot-only tests are structured with test-running functions so
 // the test passes if the body compiles and runs without error.
 //
-// Cannot express in BAML corpus (require compile-error diagnostic assertions):
-// - array_index_with_null_is_rejected_at_compile_time  (type mismatch: int | null subscript)
-// - int_literal_above_max_is_rejected_at_compile_time  (E0150 oversize int literal)
-// - negated_int_literal_below_min_is_rejected_at_compile_time  (E0150)
-// - parenthesized_oversized_literal_is_rejected  (E0150)
-// - map_with_int_key_is_rejected_at_compile_time  (map keys must be `string`)
-// - generic_map_key_annotation_is_rejected  (map keys must be `string`; got `K`)
-// - map_with_int_alias_key_is_rejected_at_compile_time  (map keys must be `string`; got alias)
+// The compile-error cases formerly kept in Rust now use
+// `reflect.Package.compile` under `ns_compiler/ns_regression_diagnostics`.
+// That native matrix covers nullable indices, out-of-range integer literals,
+// and invalid map-key types.
 
 // ============================================================================
 // §0 — Bytecode-snapshot tests (is_ok: compile-and-run only)

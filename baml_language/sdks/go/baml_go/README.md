@@ -23,8 +23,8 @@ macOS or Linux:
 ```bash
 cargo build -p bridge_cffi
 case "$(uname -s)" in
-  Darwin) export BAML_RUNTIME_PATH="$PWD/target/debug/libbridge_cffi.dylib" ;;
-  Linux)  export BAML_RUNTIME_PATH="$PWD/target/debug/libbridge_cffi.so" ;;
+  Darwin) export BAML_BRIDGE_PATH="$PWD/target/debug/libbridge_cffi.dylib" ;;
+  Linux)  export BAML_BRIDGE_PATH="$PWD/target/debug/libbridge_cffi.so" ;;
 esac
 ```
 
@@ -32,53 +32,58 @@ Windows PowerShell:
 
 ```powershell
 cargo build -p bridge_cffi
-$env:BAML_RUNTIME_PATH = "$PWD\target\debug\bridge_cffi.dll"
+$env:BAML_BRIDGE_PATH = "$PWD\target\debug\bridge_cffi.dll"
 ```
 
-`BAML_RUNTIME_PATH` is the highest-priority local override and never performs
-a download.
+`BAML_BRIDGE_PATH` must be an absolute path. It is the highest-priority local
+override: it never performs a download, and an invalid path is an error with
+no fallback. A library built from a different toolchain version than this
+module fails the version check; set `DEV_BAML_BRIDGE_SKIP_VERSION_CHECK=1`
+(dev-only, valid only together with `BAML_BRIDGE_PATH`) to skip the
+toolchain-version match when testing a locally built library. The ABI table
+check is never skipped.
 
 ## Verified cache proof
 
 The artifact resolver selects the current platform from the shared `cffi`
 artifact map in the immutable BAML language release manifest and fetches the
 same native library published for every dynamically loaded SDK into
-`~/.baml/runtimes/<version>/abi-v1/<target>/` before loading it. Until the
-release is published, local tests can override discovery with:
+`$BAML_HOME/bridges/<version>/<target>/` before loading it. `BAML_HOME`
+defaults to `~/.baml` (`%USERPROFILE%\.baml` on Windows). The module always
+uses the version compiled into it; to test another build, use
+`BAML_BRIDGE_PATH`.
+
+Environment variables:
 
 ```text
-BAML_RUNTIME_URL
-BAML_RUNTIME_VERSION
-BAML_RUNTIME_TARGET
-BAML_RUNTIME_FILENAME
-BAML_RUNTIME_SHA256
-BAML_RUNTIME_ARCHIVE_SHA256
-BAML_RUNTIME_FORMAT
-BAML_CACHE_DIR
+BAML_BRIDGE_PATH
+BAML_BRIDGE_DISABLE_DOWNLOAD
+BAML_MANIFEST_BASE_URL
 BAML_HOME
-BAML_DISABLE_DOWNLOAD
-BAML_RUNTIME_MANIFEST_BASE_URL
+DEV_BAML_BRIDGE_SKIP_VERSION_CHECK
 ```
 
 Applications may instead call `ConfigureRuntime` before their first generated
-BAML function. `RuntimeArtifact` requires the same version, target, filename,
-URL, and SHA-256 identity.
+BAML function. Programmatic configuration takes precedence over the
+environment. A `RuntimeArtifact` override (explicit version, target, filename,
+URL, and SHA-256 identity, optionally gzip with `ArchiveSHA256`) can only be
+set this way; `RuntimeConfig.CacheDir` likewise replaces the derived
+`$BAML_HOME/bridges` root.
 
 Resolution order is:
 
-1. `RuntimeConfig.LibraryPath` or `BAML_RUNTIME_PATH`;
+1. `RuntimeConfig.LibraryPath` or `BAML_BRIDGE_PATH`;
 2. the cached exact-version release manifest;
 3. a verified exact-version artifact already in the cache;
 4. manifest/artifact download, SHA-256 verification, and atomic cache
    installation.
 
-Explicit `RuntimeArtifact` overrides may additionally use `Format: "gzip"`
-with `ArchiveSHA256`; release-manifest artifacts use the shared raw CFFI files.
+Release-manifest artifacts use the shared raw CFFI files.
 
-Set `BAML_DISABLE_DOWNLOAD=true` to prohibit every network request made by this
-package, including release-manifest requests. The environment setting is a
-one-way safety control: programmatic configuration cannot turn downloads back
-on. Resolution then requires an explicit path or both an already-cached
+Set `BAML_BRIDGE_DISABLE_DOWNLOAD=true` to prohibit every network request made
+by this package, including release-manifest requests. The environment setting
+is a one-way safety control: programmatic configuration cannot turn downloads
+back on. Resolution then requires an explicit path or both an already-cached
 manifest and its verified runtime artifact. A missing, corrupt,
 ABI-incompatible, or version-incompatible runtime fails before any BAML program
 is initialized.

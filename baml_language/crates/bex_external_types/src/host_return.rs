@@ -6,8 +6,8 @@
 //! the engine and must be type-checked against the declared return type `R`
 //! before it is materialized on the VM heap. Skipping this check lets a buggy
 //! or malicious host inject a value that violates `R` — a string where an
-//! `int` is declared, a `Variant` of the wrong enum, an `int` for a `float`,
-//! and so on — corrupting later type-directed VM operations.
+//! `int` is declared, a `Variant` of the wrong enum, and so on — corrupting
+//! later type-directed VM operations.
 //!
 //! # Layering
 //!
@@ -16,7 +16,8 @@
 //! everything that can be checked from the value tree + the declared [`RuntimeTy`]
 //! alone:
 //!
-//! - scalar discrimination (`Int` does *not* satisfy `Float` and vice-versa);
+//! - scalar discrimination (including contextual resolution of JavaScript
+//!   `number` values to `Int` or `Float`);
 //! - `String` / `Bool` / `Uint8Array` exact tags;
 //! - `Literal` value equality;
 //! - container recursion (`List` element types, `Map` value types);
@@ -34,14 +35,14 @@
 //! `bex_engine::conversion`). This module is the first, schema-free line of
 //! defense; the engine adds the schema-aware second line.
 //!
-//! `RuntimeTy::TypeVar`-style opaque positions and [`RuntimeTy::BuiltinUnknown`] accept any
+//! `RuntimeTy::TypeVar`-style opaque positions and [`RuntimeTy::Unknown`] accept any
 //! value: at the FFI boundary the declared return type handed to a host call
 //! is always concrete (generic functions are not host entry points), so these
 //! arms are defensive rather than load-bearing.
 
 use baml_type::{Literal, RuntimeTy, TypeName};
 
-use crate::BexExternalValue;
+use crate::{BexExternalValue, js_number_to_i64};
 
 /// Canonical dotted path of the builtin JSON alias — test fixtures build the
 /// builtin `TypeName` from it; runtime identity checks go through
@@ -158,7 +159,7 @@ fn inbound_annotation_satisfies_ty(actual: &RuntimeTy, expected: &RuntimeTy) -> 
 ///
 /// Unlike a conservative "reject only the obviously-wrong" check, this returns
 /// `false` whenever the value's runtime shape is not a member of `ty`. It
-/// stops short only where the type is genuinely "any" (`BuiltinUnknown`) or
+/// stops short only where the type is genuinely "any" (`Unknown`) or
 /// where the necessary schema (class field types) is unavailable in this
 /// crate — class checking is limited to name identity here and completed
 /// engine-side.
@@ -166,20 +167,18 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
     match ty {
         // `unknown` / `any`: accept anything. At the FFI boundary the declared
         // return type is concrete, so this is defensive.
-        RuntimeTy::BuiltinUnknown { .. } => true,
+        RuntimeTy::Unknown => true,
 
         // Union: matches at least one member. A `Union`-wrapped value is
         // unwrapped and checked against the arms.
-        RuntimeTy::Union(members, _) => match value {
+        RuntimeTy::Union(members) => match value {
             BexExternalValue::Union { value: inner, .. } => {
                 members.iter().any(|m| value_satisfies_ty(inner, m))
             }
             _ => members.iter().any(|m| value_satisfies_ty(value, m)),
         },
 
-        RuntimeTy::TypeAlias(name, _) if is_canonical_json_alias(name) => {
-            value_satisfies_json(value)
-        }
+        RuntimeTy::TypeAlias(name) if is_canonical_json_alias(name) => value_satisfies_json(value),
 
         // A `Union`-wrapped value against a non-union declared type: validate
         // the inner value against the declared type.
@@ -190,35 +189,45 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
             value_satisfies_ty(inner, ty)
         }
 
-        // A host bridge represents a completed `void` callback as Null on the
-        // wire.
-        RuntimeTy::Void { .. } | RuntimeTy::Null { .. } => {
+        // The unit type: a host bridge reports a completed `void` callback
+        // as Null on the wire.
+        RuntimeTy::Null => {
             matches!(value, BexExternalValue::Null)
         }
-        RuntimeTy::Bool { .. } => matches!(value, BexExternalValue::Bool(_)),
-        // `Int` and `Float` are distinct: an `Int` value does NOT satisfy
-        // `Float`, nor a `Float` value `Int`. A host-returned wire tag must match
-        // the declared representation exactly — never silently reinterpreted (the
-        // int→float/bigint conversions are boundary coercions, not subtyping).
-        RuntimeTy::Int { .. } => matches!(value, BexExternalValue::Int(_)),
-        RuntimeTy::Float { .. } => matches!(value, BexExternalValue::Float(_)),
-        RuntimeTy::Bigint { .. } => matches!(value, BexExternalValue::Bigint(_)),
-        RuntimeTy::String { .. } => matches!(value, BexExternalValue::String(_)),
-        RuntimeTy::Uint8Array { .. } => matches!(value, BexExternalValue::Uint8Array(_)),
+        RuntimeTy::Bool => matches!(value, BexExternalValue::Bool(_)),
+        RuntimeTy::Int => match value {
+            BexExternalValue::Int(_) => true,
+            BexExternalValue::JsNumber(value) => js_number_to_i64(*value).is_some(),
+            _ => false,
+        },
+        RuntimeTy::Float => {
+            matches!(
+                value,
+                BexExternalValue::Float(_) | BexExternalValue::JsNumber(_)
+            )
+        }
+        RuntimeTy::Bigint => matches!(value, BexExternalValue::Bigint(_)),
+        RuntimeTy::String => matches!(value, BexExternalValue::String(_)),
+        RuntimeTy::Uint8Array => matches!(value, BexExternalValue::Uint8Array(_)),
 
-        RuntimeTy::Literal(lit, _, _) => match (lit, value) {
+        RuntimeTy::Literal(lit, _) => match (lit, value) {
             (Literal::Bool(b), BexExternalValue::Bool(v)) => b == v,
             (Literal::Int(i), BexExternalValue::Int(v)) => i == v,
+            (Literal::Int(i), BexExternalValue::JsNumber(v)) => {
+                js_number_to_i64(*v).is_some_and(|v| &v == i)
+            }
             (Literal::Bigint(b), BexExternalValue::Bigint(v)) => b == v,
             (Literal::String(s), BexExternalValue::String(v)) => s == v,
-            // `Literal::Float` stores the literal as a string for precision;
-            // match by tag (any float), mirroring
-            // `bex_engine::conversion::value_matches_type`.
-            (Literal::Float(_), BexExternalValue::Float(_)) => true,
+            (Literal::Float(source), BexExternalValue::Float(value)) => {
+                float_literal_matches(*value, source)
+            }
+            (Literal::Float(source), BexExternalValue::JsNumber(value)) => {
+                float_literal_matches(*value, source)
+            }
             _ => false,
         },
 
-        RuntimeTy::List(inner, _) => match value {
+        RuntimeTy::List(inner) => match value {
             BexExternalValue::Array { items, .. } => {
                 items.iter().all(|item| value_satisfies_ty(item, inner))
             }
@@ -239,7 +248,7 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         // are not checked here (the declared `RuntimeTy::Class` carries no field
         // defs); the engine completes per-field validation against its resolved
         // schema.
-        RuntimeTy::Class(tn, _, _) => match value {
+        RuntimeTy::Class(tn, _) => match value {
             BexExternalValue::Instance { class_name, .. } => {
                 type_name_matches_external_name(class_name, tn)
             }
@@ -247,13 +256,13 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
         },
 
         // Enum identity: a `Variant` must name the declared enum.
-        RuntimeTy::Enum(tn, _) => match value {
+        RuntimeTy::Enum(tn) => match value {
             BexExternalValue::Variant { enum_name, .. } => {
                 type_name_matches_external_name(enum_name, tn)
             }
             _ => false,
         },
-        RuntimeTy::EnumVariant(tn, expected_variant, _) => match value {
+        RuntimeTy::EnumVariant(tn, expected_variant) => match value {
             BexExternalValue::Variant {
                 enum_name,
                 variant_name,
@@ -289,16 +298,22 @@ fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
     }
 }
 
+fn float_literal_matches(value: f64, source: &str) -> bool {
+    source
+        .parse::<f64>()
+        .is_ok_and(|expected| bex_vm_types::float_order::eq(value, expected))
+}
+
 /// Whether an external value is exactly in the recursive `baml.json.json`
-/// algebra. BAML extensions such as bigint, bytes, classes, enums, media,
-/// handles, and non-finite floats are intentionally rejected.
+/// algebra. BAML extensions such as bytes, classes, enums, media, handles, and
+/// non-finite floats are intentionally rejected.
 ///
 /// A sparse inbound `value_type` annotation (a transient
 /// `BexExternalValue::Union` with `is_inbound_type_annotation`, e.g. the
 /// Swift bridge annotates every json scalar leaf) is peeled — but only when
 /// the annotation itself stays within the JSON algebra, so a payload
-/// annotated as `bigint` or a class is still rejected. A genuine union
-/// carrier (a value produced from a declared union) is never JSON.
+/// annotated as a class is still rejected. A genuine union carrier (a value
+/// produced from a declared union) is never JSON.
 pub fn value_satisfies_json(value: &BexExternalValue) -> bool {
     fn recurse(value: &BexExternalValue, depth: usize) -> bool {
         if depth > 256 {
@@ -307,9 +322,10 @@ pub fn value_satisfies_json(value: &BexExternalValue) -> bool {
         match value {
             BexExternalValue::Null
             | BexExternalValue::Int(_)
+            | BexExternalValue::Bigint(_)
             | BexExternalValue::Bool(_)
             | BexExternalValue::String(_) => true,
-            BexExternalValue::Float(value) => value.is_finite(),
+            BexExternalValue::Float(value) | BexExternalValue::JsNumber(value) => value.is_finite(),
             BexExternalValue::Array { items, .. } => {
                 items.iter().all(|item| recurse(item, depth + 1))
             }
@@ -335,8 +351,8 @@ fn expected_admits_json_alias(ty: &RuntimeTy, depth: usize) -> bool {
         return false;
     }
     match ty {
-        RuntimeTy::TypeAlias(name, _) => is_canonical_json_alias(name),
-        RuntimeTy::Union(members, _) => members
+        RuntimeTy::TypeAlias(name) => is_canonical_json_alias(name),
+        RuntimeTy::Union(members) => members
             .iter()
             .any(|member| expected_admits_json_alias(member, depth + 1)),
         _ => false,
@@ -351,22 +367,27 @@ fn runtime_ty_within_json_algebra(ty: &RuntimeTy, depth: usize) -> bool {
         return false;
     }
     match ty {
-        RuntimeTy::Null { .. }
-        | RuntimeTy::Bool { .. }
-        | RuntimeTy::Int { .. }
-        | RuntimeTy::Float { .. }
-        | RuntimeTy::String { .. } => true,
-        RuntimeTy::TypeAlias(name, _) => is_canonical_json_alias(name),
-        RuntimeTy::Literal(literal, _, _) => matches!(
+        RuntimeTy::Null
+        | RuntimeTy::Bool
+        | RuntimeTy::Int
+        | RuntimeTy::Bigint
+        | RuntimeTy::Float
+        | RuntimeTy::String => true,
+        RuntimeTy::TypeAlias(name) => is_canonical_json_alias(name),
+        RuntimeTy::Literal(literal, _) => matches!(
             literal,
-            Literal::Bool(_) | Literal::Int(_) | Literal::String(_) | Literal::Float(_)
+            Literal::Bool(_)
+                | Literal::Int(_)
+                | Literal::Bigint(_)
+                | Literal::String(_)
+                | Literal::Float(_)
         ),
-        RuntimeTy::List(inner, _) => runtime_ty_within_json_algebra(inner, depth + 1),
+        RuntimeTy::List(inner) => runtime_ty_within_json_algebra(inner, depth + 1),
         RuntimeTy::Map { key, value, .. } => {
-            matches!(key.as_ref(), RuntimeTy::String { .. })
+            matches!(key.as_ref(), RuntimeTy::String)
                 && runtime_ty_within_json_algebra(value, depth + 1)
         }
-        RuntimeTy::Union(members, _) => {
+        RuntimeTy::Union(members) => {
             !members.is_empty()
                 && members
                     .iter()
@@ -390,9 +411,7 @@ fn type_name_matches_external_name(external_name: &str, type_name: &TypeName) ->
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{
-        Freshness, Literal, Name, RuntimeFunctionParamTy, RuntimeTy, TyAttr, TypeName,
-    };
+    use baml_type::{Freshness, Literal, Name, RuntimeFunctionParamTy, RuntimeTy, TypeName};
     use indexmap::IndexMap;
 
     use super::*;
@@ -403,10 +422,7 @@ mod tests {
     }
 
     fn json_ty() -> RuntimeTy {
-        RuntimeTy::TypeAlias(
-            TypeName::from_dotted_path(BAML_JSON_JSON),
-            TyAttr::default(),
-        )
+        RuntimeTy::TypeAlias(TypeName::from_dotted_path(BAML_JSON_JSON))
     }
 
     #[test]
@@ -420,6 +436,7 @@ mod tests {
                     BexExternalValue::Null,
                     BexExternalValue::Bool(true),
                     BexExternalValue::Int(7),
+                    BexExternalValue::Bigint(123123123123123123123123_u128.into()),
                     BexExternalValue::Float(1.5),
                     BexExternalValue::String("ok".into()),
                 ],
@@ -432,7 +449,7 @@ mod tests {
         };
         assert!(validate_host_return(&valid, &json_ty()).is_ok());
         assert!(validate_host_return(&BexExternalValue::Float(f64::NAN), &json_ty()).is_err());
-        assert!(validate_host_return(&BexExternalValue::Bigint(1.into()), &json_ty()).is_err());
+        assert!(validate_host_return(&BexExternalValue::Bigint(1.into()), &json_ty()).is_ok());
         assert!(validate_host_return(&BexExternalValue::Uint8Array(vec![1]), &json_ty()).is_err());
         assert!(
             validate_host_return(
@@ -468,14 +485,14 @@ mod tests {
         assert!(is_canonical_json_alias(&builtin));
         assert!(!is_canonical_json_alias(&shadow));
 
-        // The shadow alias must not inherit builtin JSON strictness: a bigint
-        // is rejected by the json algebra but passes the shadow alias through
-        // this layer's defensive accept-any tail (its body is validated
-        // engine-side, where alias definitions are available).
-        let shadow_ty = RuntimeTy::TypeAlias(shadow, TyAttr::default());
-        let bigint = BexExternalValue::Bigint(1.into());
-        assert!(validate_host_return(&bigint, &json_ty()).is_err());
-        assert!(validate_host_return(&bigint, &shadow_ty).is_ok());
+        // The shadow alias must not inherit builtin JSON strictness: bytes are
+        // rejected by the json algebra but pass the shadow alias through this
+        // layer's defensive accept-any tail (its body is validated engine-side,
+        // where alias definitions are available).
+        let shadow_ty = RuntimeTy::TypeAlias(shadow);
+        let bytes = BexExternalValue::Uint8Array(vec![1]);
+        assert!(validate_host_return(&bytes, &json_ty()).is_err());
+        assert!(validate_host_return(&bytes, &shadow_ty).is_ok());
     }
 
     #[test]
@@ -499,23 +516,39 @@ mod tests {
             RuntimeTy::Map {
                 key: Box::new(RuntimeTy::string()),
                 value: Box::new(json_ty()),
-                attr: TyAttr::default(),
             },
         );
         assert!(validate_host_return(&annotated_map, &json_ty()).is_ok());
 
         let annotated_bigint =
             BexExternalValue::typed(BexExternalValue::Bigint(1.into()), RuntimeTy::bigint());
-        assert!(validate_host_return(&annotated_bigint, &json_ty()).is_err());
+        assert!(validate_host_return(&annotated_bigint, &json_ty()).is_ok());
     }
 
     #[test]
-    fn scalar_int_does_not_satisfy_float_and_vice_versa() {
-        // The core int≠float distinction.
+    fn js_number_is_resolved_by_numeric_context_without_widening_typed_ints() {
         assert!(validate_host_return(&BexExternalValue::Int(1), &RuntimeTy::int()).is_ok());
         assert!(validate_host_return(&BexExternalValue::Int(1), &RuntimeTy::float()).is_err());
         assert!(validate_host_return(&BexExternalValue::Float(1.0), &RuntimeTy::float()).is_ok());
         assert!(validate_host_return(&BexExternalValue::Float(1.0), &RuntimeTy::int()).is_err());
+        assert!(validate_host_return(&BexExternalValue::JsNumber(1.0), &RuntimeTy::int()).is_ok());
+        assert!(
+            validate_host_return(&BexExternalValue::JsNumber(1.0), &RuntimeTy::float()).is_ok()
+        );
+        assert!(validate_host_return(&BexExternalValue::JsNumber(1.5), &RuntimeTy::int()).is_err());
+    }
+
+    #[test]
+    fn js_number_resolution_is_recursive() {
+        let floats = RuntimeTy::list(RuntimeTy::float());
+        let values = BexExternalValue::Array {
+            element_type: RuntimeTy::int(),
+            items: vec![
+                BexExternalValue::JsNumber(1.0),
+                BexExternalValue::JsNumber(2.5),
+            ],
+        };
+        assert!(validate_host_return(&values, &floats).is_ok());
     }
 
     #[test]
@@ -533,24 +566,6 @@ mod tests {
             .is_ok()
         );
         assert!(validate_host_return(&BexExternalValue::Null, &RuntimeTy::null()).is_ok());
-        assert!(
-            validate_host_return(
-                &BexExternalValue::Null,
-                &RuntimeTy::Void {
-                    attr: TyAttr::default()
-                }
-            )
-            .is_ok()
-        );
-        assert!(
-            validate_host_return(
-                &BexExternalValue::Int(1),
-                &RuntimeTy::Void {
-                    attr: TyAttr::default()
-                }
-            )
-            .is_err()
-        );
         // Cross-tag rejections.
         assert!(
             validate_host_return(&BexExternalValue::String("x".into()), &RuntimeTy::int()).is_err()
@@ -559,19 +574,28 @@ mod tests {
     }
 
     #[test]
-    fn void_requires_the_null_boundary_value() {
-        let void = RuntimeTy::Void {
-            attr: TyAttr::default(),
-        };
-        assert!(validate_host_return(&BexExternalValue::Null, &void).is_ok());
-        assert!(validate_host_return(&BexExternalValue::Int(1), &void).is_err());
+    fn unit_requires_the_null_boundary_value() {
+        let unit = RuntimeTy::null();
+        assert!(validate_host_return(&BexExternalValue::Null, &unit).is_ok());
+        assert!(validate_host_return(&BexExternalValue::Int(1), &unit).is_err());
     }
 
     #[test]
     fn literal_value_equality() {
-        let lit5 = RuntimeTy::Literal(Literal::Int(5), Freshness::Regular, TyAttr::default());
+        let lit5 = RuntimeTy::Literal(Literal::Int(5), Freshness::Regular);
         assert!(validate_host_return(&BexExternalValue::Int(5), &lit5).is_ok());
         assert!(validate_host_return(&BexExternalValue::Int(6), &lit5).is_err());
+
+        let lit1 = RuntimeTy::Literal(Literal::Float("1.0".to_string()), Freshness::Regular);
+        assert!(validate_host_return(&BexExternalValue::Int(1), &lit1).is_err());
+        assert!(validate_host_return(&BexExternalValue::Int(2), &lit1).is_err());
+        assert!(validate_host_return(&BexExternalValue::JsNumber(1.0), &lit1).is_ok());
+        assert!(validate_host_return(&BexExternalValue::Float(1.0), &lit1).is_ok());
+        assert!(validate_host_return(&BexExternalValue::Float(2.0), &lit1).is_err());
+
+        let negative_zero =
+            RuntimeTy::Literal(Literal::Float("-0.0".to_string()), Freshness::Regular);
+        assert!(validate_host_return(&BexExternalValue::Float(0.0), &negative_zero).is_ok());
     }
 
     #[test]
@@ -593,7 +617,7 @@ mod tests {
     #[test]
     fn enum_variant_requires_exact_enum_and_variant() {
         let mood = TypeName::from_dotted_path("user.callbacks.Mood");
-        let happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"), TyAttr::default());
+        let happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"));
         let value = BexExternalValue::Variant {
             enum_name: mood.to_string(),
             variant_name: "HAPPY".to_string(),
@@ -625,7 +649,7 @@ mod tests {
         assert!(validate_host_return(&nested_invalid, &nested).is_err());
 
         let nested_union = RuntimeTy::list(RuntimeTy::union([
-            RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"), TyAttr::default()),
+            RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY")),
             RuntimeTy::int(),
         ]));
         let nested_union_valid = BexExternalValue::Array {
@@ -673,7 +697,6 @@ mod tests {
         let map_int = RuntimeTy::Map {
             key: Box::new(RuntimeTy::string()),
             value: Box::new(int_ty()),
-            attr: TyAttr::default(),
         };
         let mut ok_entries = IndexMap::new();
         ok_entries.insert("a".to_string(), BexExternalValue::Int(1));
@@ -705,23 +728,17 @@ mod tests {
 
     #[test]
     fn enum_identity_is_enforced() {
-        let status = RuntimeTy::Enum(TypeName::local(Name::new("Status")), TyAttr::default());
+        let status = RuntimeTy::Enum(TypeName::local(Name::new("Status")));
         assert!(validate_host_return(&BexExternalValue::variant("Status", "Ok"), &status,).is_ok());
         // Wrong enum name → reject.
-        assert!(
-            validate_host_return(&BexExternalValue::variant("Color", "Red"), &status,).is_err()
-        );
+        assert!(validate_host_return(&BexExternalValue::variant("Color", "Red"), &status).is_err());
         // A non-variant value → reject.
         assert!(validate_host_return(&BexExternalValue::Int(1), &status).is_err());
     }
 
     #[test]
     fn class_name_identity_is_enforced() {
-        let user = RuntimeTy::Class(
-            TypeName::local(Name::new("User")),
-            Vec::new(),
-            TyAttr::default(),
-        );
+        let user = RuntimeTy::Class(TypeName::local(Name::new("User")), Box::new([]));
         assert!(
             validate_host_return(
                 &BexExternalValue::Instance {
@@ -764,8 +781,7 @@ mod tests {
     fn sparse_class_annotation_is_checked_before_anonymous_payload_shape() {
         let user = RuntimeTy::Class(
             TypeName::from_dotted_path("user.callbacks.User"),
-            vec![RuntimeTy::int()],
-            TyAttr::default(),
+            Box::new([RuntimeTy::int()]),
         );
         let anonymous_payload = BexExternalValue::Instance {
             class_name: String::new(),
@@ -783,8 +799,7 @@ mod tests {
 
         let other = RuntimeTy::Class(
             TypeName::from_dotted_path("user.callbacks.Other"),
-            vec![RuntimeTy::int()],
-            TyAttr::default(),
+            Box::new([RuntimeTy::int()]),
         );
         let error = validate_host_return(&BexExternalValue::typed(anonymous_payload, other), &user)
             .expect_err("an annotation for another class must not satisfy User<int>");
@@ -795,10 +810,9 @@ mod tests {
     #[test]
     fn function_type_accepts_only_callables() {
         let fn_ty = RuntimeTy::Function {
-            params: vec![RuntimeFunctionParamTy::required(None, RuntimeTy::int())],
+            params: Box::new([RuntimeFunctionParamTy::required(None, RuntimeTy::int())]),
             ret: Box::new(RuntimeTy::string()),
             throws: Box::new(RuntimeTy::null()),
-            attr: TyAttr::default(),
         };
         // A host callable satisfies a function-typed return.
         let host = BexExternalValue::HostValue(crate::HostValueArc::new(
@@ -821,7 +835,7 @@ mod tests {
     }
 
     #[test]
-    fn builtin_unknown_accepts_anything() {
+    fn unknown_accepts_anything() {
         assert!(
             validate_host_return(
                 &BexExternalValue::String("anything".into()),

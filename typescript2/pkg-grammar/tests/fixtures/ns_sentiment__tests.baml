@@ -20,12 +20,11 @@ testset "basics" {
         assert.equal(v.label, "positive");
     }
 
-    // You don't need a live model to test parsing and downstream logic:
-    // freeze a model reply once, decode it with the same machinery the
-    // runtime uses, and assert on the typed result. (no tokens)
+    // You don't need a live model to test decoding and downstream logic:
+    // freeze a model reply once as a json literal, decode it into the
+    // declared type, and assert on the typed result. (no tokens)
     test "frozen reply decodes" {
-        let raw = #"{"label": "negative", "confidence": 0.93}"#;
-        let v = baml.json.from_string<Verdict>(raw);
+        let v = baml.json.to<Verdict>({ "label": "negative", "confidence": 0.93 });
         assert.equal(v.label, "negative");
         assert.is_true(v.confidence > 0.5);
     }

@@ -17,7 +17,12 @@ class Io {
 /// An operation exceeded its time limit.
 class Timeout {
     message: string,
-    duration_ms: int?,
+    /// The limit that elapsed, when it is known.
+    duration: root.time.Duration?,
+    /// Which deadline fired: the name of the field or argument that set it.
+    /// `baml.http` reports `"timeout"` or `"connect_timeout"`; an LLM client
+    /// also reports `"first_token_timeout"` or `"stream_token_timeout"`.
+    timeout_type: string,
 }
 
 /// The requested operation is not supported in this context.
@@ -35,18 +40,8 @@ class RenderPrompt {
     message: string,
 }
 
-/// The operation has not been implemented.
-class NotImplemented {
-    message: string,
-}
-
 /// An LLM client request failed.
 class LlmClient {
-    message: string,
-}
-
-/// A catch-all error for development-time issues.
-class DevOther {
     message: string,
 }
 
@@ -86,7 +81,9 @@ class CompilationError {
 /// could not be inferred and must be specified, or repeat occurrences of a
 /// `TypeVar` have no consistent binding. Synthesized host-side from
 /// `EngineError::TypeMismatch`; each host SDK surfaces it as its native
-/// type-error (Python `TypeError`).
+/// type-error (Python `TypeError`). The stdlib itself never throws this class
+/// from BAML source (reflection's typed reads throw
+/// `reflect.errors.TypeMismatch` instead); user code remains free to.
 class TypeMismatch {
     message: string,
 }

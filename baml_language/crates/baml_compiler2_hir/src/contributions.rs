@@ -3,10 +3,7 @@
 use baml_base::{Name, SourceFile};
 use text_size::TextRange;
 
-use crate::loc::{
-    ClassLoc, ClientLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, RetryPolicyLoc,
-    TemplateStringLoc, TestLoc, TypeAliasLoc,
-};
+use crate::loc::{ClassLoc, EnumLoc, FunctionLoc, InterfaceLoc, LetLoc, TypeAliasLoc};
 
 // ── DefinitionKind ──────────────────────────────────────────────────────────
 
@@ -23,10 +20,7 @@ pub enum DefinitionKind {
     Interface,
     TypeAlias,
     Function,
-    TemplateString,
     Client,
-    Test,
-    RetryPolicy,
     Let,
 
     // Intra-item members
@@ -46,10 +40,7 @@ impl DefinitionKind {
             Self::Interface => "interface",
             Self::TypeAlias => "type",
             Self::Function => "function",
-            Self::TemplateString => "template_string",
             Self::Client => "client",
-            Self::Test => "test",
-            Self::RetryPolicy => "retry_policy",
             Self::Let => "let",
             Self::Field => "field",
             Self::AssociatedType => "associated type",
@@ -86,10 +77,6 @@ pub enum Definition<'db> {
     Interface(InterfaceLoc<'db>),
     TypeAlias(TypeAliasLoc<'db>),
     Function(FunctionLoc<'db>),
-    TemplateString(TemplateStringLoc<'db>),
-    Client(ClientLoc<'db>),
-    Test(TestLoc<'db>),
-    RetryPolicy(RetryPolicyLoc<'db>),
     Let(LetLoc<'db>),
 }
 
@@ -102,10 +89,6 @@ impl<'db> Definition<'db> {
             Definition::Interface(loc) => loc.file(db),
             Definition::TypeAlias(loc) => loc.file(db),
             Definition::Function(loc) => loc.file(db),
-            Definition::TemplateString(loc) => loc.file(db),
-            Definition::Client(loc) => loc.file(db),
-            Definition::Test(loc) => loc.file(db),
-            Definition::RetryPolicy(loc) => loc.file(db),
             Definition::Let(loc) => loc.file(db),
         }
     }
@@ -118,10 +101,6 @@ impl<'db> Definition<'db> {
             Definition::Interface(_) => DefinitionKind::Interface,
             Definition::TypeAlias(_) => DefinitionKind::TypeAlias,
             Definition::Function(_) => DefinitionKind::Function,
-            Definition::TemplateString(_) => DefinitionKind::TemplateString,
-            Definition::Client(_) => DefinitionKind::Client,
-            Definition::Test(_) => DefinitionKind::Test,
-            Definition::RetryPolicy(_) => DefinitionKind::RetryPolicy,
             Definition::Let(_) => DefinitionKind::Let,
         }
     }
@@ -143,7 +122,6 @@ impl<'db> Definition<'db> {
         let item_tree = crate::file_item_tree(db, loc.file(db));
         match item_tree.lets.get(&loc.id(db)).map(|item| item.origin) {
             Some(baml_compiler2_ast::LetOrigin::Client) => DefinitionKind::Client,
-            Some(baml_compiler2_ast::LetOrigin::RetryPolicy) => DefinitionKind::RetryPolicy,
             Some(baml_compiler2_ast::LetOrigin::Source) | None => DefinitionKind::Let,
         }
     }

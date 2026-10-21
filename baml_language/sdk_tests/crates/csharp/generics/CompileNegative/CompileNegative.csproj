@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>14.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <FixtureOutput>$(MSBuildThisFileDirectory)../bin/$(Configuration)/$(TargetFramework)</FixtureOutput>
+  </PropertyGroup>
+  <!-- Setup builds these assemblies once. Negative cases exercise the public
+       generated API as consumers, without recompiling the SDK for every case. -->
+  <ItemGroup>
+    <Reference Include="Baml.CSharp.Generics" HintPath="$(FixtureOutput)/Baml.CSharp.Generics.dll" />
+    <Reference Include="Baml.Bridge" HintPath="$(FixtureOutput)/Baml.Bridge.dll" />
+    <Compile Include="$(BamlNegativeCase).cs" />
+  </ItemGroup>
+  <PropertyGroup
+    Condition="'$(BamlNegativeCase)' == 'BareNullInference'
+      Or '$(BamlNegativeCase)' == 'ResultOnlyInference'
+      Or '$(BamlNegativeCase)' == 'RawNullableInference'
+      Or '$(BamlNegativeCase)' == 'StaticNullInference'">
+    <BamlNegativeCaseIsKnown>true</BamlNegativeCaseIsKnown>
+  </PropertyGroup>
+  <Target Name="ValidateBamlNegativeCase" BeforeTargets="CoreCompile">
+    <Error
+      Code="BAMLGEN001"
+      Condition="'$(BamlNegativeCaseIsKnown)' != 'true'"
+      Text="Unknown BamlNegativeCase '$(BamlNegativeCase)'." />
+  </Target>
+</Project>

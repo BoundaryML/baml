@@ -5,8 +5,8 @@
 
 use std::{collections::HashMap, path::PathBuf};
 
-use baml_codegen_types::SymbolPool;
-pub use baml_codegen_types::{NamingConvention, OutputType};
+use baml_sdkgen_types::SymbolPool;
+pub use baml_sdkgen_types::{NamingConvention, OutputType};
 
 const RUNTIME_PACKAGE: &str = "@boundaryml/baml-bridge-web";
 
@@ -49,7 +49,7 @@ pub fn to_source_code_with_bytecode_and_metadata(
 #[cfg(test)]
 mod tests {
     use baml_base::Name as BaseName;
-    use baml_codegen_types::{Class, Name, Origin, Symbol};
+    use baml_sdkgen_types::{Class, Name, Origin, Symbol};
 
     use super::*;
 

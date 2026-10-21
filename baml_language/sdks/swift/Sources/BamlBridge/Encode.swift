@@ -1,3 +1,4 @@
+import CBamlBridge
 import Foundation
 
 /// The BAML `null` type's Swift spelling. Swift has no untyped `nil`,
@@ -46,10 +47,17 @@ public struct BamlTypeDescriptor: @unchecked Sendable, Equatable {
 
     public static var string: BamlTypeDescriptor { primitive(.bamlTyPrimitiveString) }
     public static var int: BamlTypeDescriptor { primitive(.bamlTyPrimitiveInt) }
+    public static var bigint: BamlTypeDescriptor { primitive(.bamlTyPrimitiveBigint) }
     public static var float: BamlTypeDescriptor { primitive(.bamlTyPrimitiveFloat) }
     public static var bool: BamlTypeDescriptor { primitive(.bamlTyPrimitiveBool) }
     public static var null: BamlTypeDescriptor { primitive(.bamlTyPrimitiveNull) }
     public static var bytes: BamlTypeDescriptor { primitive(.bamlTyPrimitiveBytes) }
+
+    public static var prompt: BamlTypeDescriptor {
+        var ty = BamlBridge_Cffi_V1_BamlTy()
+        ty.promptAst = BamlBridge_Cffi_V1_BamlTyPromptAst()
+        return BamlTypeDescriptor(ty)
+    }
 
     public static func list(_ item: BamlTypeDescriptor) -> BamlTypeDescriptor {
         var list = BamlBridge_Cffi_V1_BamlTyList()
@@ -160,11 +168,20 @@ extension Int: BamlEncodable {
 
     public func _bamlEncode() -> BamlInboundValue {
         // Swift Int is 64-bit on all Apple targets, so it always fits
-        // the wire's int64. (Arbitrary-precision bigint is a separate
-        // BamlBigInt type, later phase.)
+        // the wire's int64. Arbitrary-precision bigint uses BamlBigInt.
         var v = BamlBridge_Cffi_V1_InboundValue()
         v.intValue = Int64(self)
         return BamlInboundValue(v)
+    }
+}
+
+extension BamlBigInt: BamlEncodable {
+    public static var _bamlType: BamlTypeDescriptor? { .bigint }
+
+    public func _bamlEncode() -> BamlInboundValue {
+        var value = BamlBridge_Cffi_V1_InboundValue()
+        value.bigintValue = hexadecimal
+        return BamlInboundValue(value)
     }
 }
 
@@ -276,6 +293,16 @@ extension BamlInboundValue {
         typeArguments: [BamlTypeDescriptor?] = [],
         _ fields: [(String, (any BamlEncodable)?)]
     ) -> BamlInboundValue {
+        // Generated media classes contain only `_data: BamlHandle?`. The
+        // handle encoder lowers that field to the canonical media payload;
+        // flatten the wrapper too so media never crosses as class+handle
+        // identity.
+        if fields.count == 1, fields[0].0 == "_data", let data = fields[0].1 {
+            let encoded = data._bamlEncode()
+            if case .mediaValue? = encoded.raw.value {
+                return encoded
+            }
+        }
         var cls = BamlBridge_Cffi_V1_InboundClassValue()
         cls.fields = fields.map { name, value in
             var entry = BamlBridge_Cffi_V1_InboundMapEntry()
@@ -317,12 +344,31 @@ extension BamlIndirect: BamlEncodable where Value: BamlEncodable {
 func encodeCallArgs(
     _ args: [(String, (any BamlEncodable)?)],
     callId: UInt64,
-    callTarget: BamlBridge_Cffi_V1_CallFunctionArgs.OneOf_CallTarget
+    callTarget: BamlBridge_Cffi_V1_CallFunctionArgs.OneOf_CallTarget,
+    baml: BamlInvocationOptions = .init()
 ) throws -> Data {
-    precondition(callId != 0, "call_id must be nonzero")
+    guard callId != 0 else { throw BamlDecodeError.unsupported("could not allocate invocation") }
     var msg = BamlBridge_Cffi_V1_CallFunctionArgs()
+    do {
     msg.callID = callId
     msg.callTarget = callTarget
+    msg.invocation.inheritedState = HostInvocationScope.current?.state.key ?? 0
+    msg.invocation.hostEnvironment = callId
+    if let timeout = baml.timeoutMs {
+        guard timeout >= 0 && timeout <= Int64(Int32.max) else { throw BamlDecodeError.unsupported("timeoutMs must be between 0 and 2147483647") }
+        var clock: UInt64 = 0
+        guard BamlApi.invocationClockNs(callId, &clock) == BAML_CFFI_STATUS_OK.rawValue else { throw BamlDecodeError.unsupported("invalid call allocation") }
+        let (deadline, overflow) = clock.addingReportingOverflow(UInt64(timeout) * 1_000_000)
+        guard !overflow else { throw BamlDecodeError.unsupported("deadline overflow") }
+        msg.invocation.deadlineNs = deadline
+    }
+    if let trace = baml.trace {
+        var buffer = BamlBuffer(); var owner: UInt64 = 0
+        guard BamlApi.traceSelection(callId, trace.key, &buffer, &owner) == BAML_CFFI_STATUS_OK.rawValue else { throw BamlDecodeError.unsupported("invalid trace selection") }
+        do { msg.invocation.trace = try BamlBridge_Cffi_V1_TraceSelection(serializedBytes: BamlApi.takeBuffer(buffer)) }
+        catch { if owner != 0 { _ = BamlApi.handleRelease(owner) }; throw error }
+    }
+    if let cancel = baml.cancel { msg.invocation.cancel = cancel().raw }
     msg.kwargs = args.map { name, value in
         var entry = BamlBridge_Cffi_V1_InboundMapEntry()
         entry.stringKey = name
@@ -330,4 +376,20 @@ func encodeCallArgs(
         return entry
     }
     return try msg.serializedData()
+    } catch {
+        func release(_ value: BamlBridge_Cffi_V1_InboundValue) {
+            switch value.value {
+            case .handle(let handle): if handle.handleType != .hostValueCallable && handle.handleType != .hostValueOpaque { _ = BamlApi.handleRelease(handle.key) }
+            case .classValue(let cls): for field in cls.fields { release(field.value) }
+            case .listValue(let list): for item in list.values { release(item) }
+            case .mapValue(let map): for entry in map.entries { release(entry.value) }
+            default: break
+            }
+        }
+        if case .reservation(let owner)? = msg.invocation.trace.selection { _ = BamlApi.handleRelease(owner) }
+        if msg.invocation.hasCancel { release(msg.invocation.cancel) }
+        for entry in msg.kwargs { release(entry.value) }
+        _ = BamlApi.releaseFunctionCall(callId)
+        throw error
+    }
 }

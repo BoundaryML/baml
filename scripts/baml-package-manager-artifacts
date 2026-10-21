@@ -98,7 +98,7 @@ def render_formula(version: str, shas: dict[str, str]) -> str:
   test do
     ENV["BAML_HOME"] = (testpath/"baml-home").to_s
     ENV["HOME"] = testpath.to_s
-    ENV.delete "BAML_VERSION"
+    ENV.delete "BAML_TOOLCHAIN"
 
     assert_match "baml wrapper {version}",
                  shell_output("#{{bin}}/baml --version")

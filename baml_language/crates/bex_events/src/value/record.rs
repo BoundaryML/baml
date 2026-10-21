@@ -2,10 +2,10 @@ use std::io;
 
 use super::BlobRef;
 use crate::{
-    ids::{BexCallId, BexThreadId, BoundaryId, EngineId, ProcessEuid},
+    ids::{BexThreadId, BoundaryId, EngineId, ProcessEuid},
     run::{
         CancellationState, ProjectGeneration, ProjectId, RunError, RunErrorClass,
-        RunRequestSummary, RunStatus, RunTarget, RunTimeAnchor, SourceLocation, TraceCallKey,
+        RunRequestSummary, RunStatus, RunTarget, RunTimeAnchor, SourceLocation, ThreadRef,
     },
 };
 
@@ -74,38 +74,6 @@ impl ValueRef {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ValueCaptureKind {
-    RootInput,
-    RootOutput,
-    RootError,
-    LogBody,
-    CallOutput,
-    CallError,
-    CallInput,
-}
-
-impl ValueCaptureKind {
-    #[must_use]
-    pub fn as_wire_str(self) -> &'static str {
-        match self {
-            Self::RootInput => "rootInput",
-            Self::RootOutput => "rootOutput",
-            Self::RootError => "rootError",
-            Self::LogBody => "logBody",
-            Self::CallOutput => "callOutput",
-            Self::CallError => "callError",
-            Self::CallInput => "callInput",
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ValueCapture {
-    pub kind: ValueCaptureKind,
-    pub call: TraceCallKey,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RunStartedRecord {
     pub request: RunRequestSummary,
@@ -124,16 +92,8 @@ pub struct RunCompletedRecord {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ValueRecord {
-    pub value_ref: ValueRef,
-    pub body: Vec<u8>,
-    pub blob_ref: Option<BlobRef>,
-    pub capture: Option<ValueCapture>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LogEventRecord {
-    pub call: TraceCallKey,
+    pub call: ThreadRef,
     pub level: Option<String>,
     pub source: Option<SourceLocation>,
     pub timestamp_ms: u64,
@@ -150,7 +110,6 @@ pub struct LogRecord {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CaptureLossKind {
-    Value,
     Log,
 }
 
@@ -158,7 +117,6 @@ impl CaptureLossKind {
     #[must_use]
     pub fn as_wire_str(self) -> &'static str {
         match self {
-            Self::Value => "value",
             Self::Log => "log",
         }
     }
@@ -174,14 +132,13 @@ pub struct CaptureLossRecord {
     pub kind: CaptureLossKind,
     pub reason: CaptureLossReason,
     pub skipped_count: u64,
-    pub call: Option<TraceCallKey>,
+    pub call: Option<ThreadRef>,
     pub message: Option<String>,
     pub timestamp_ms: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ValueFileRecord {
-    CapturedValue(ValueRecord),
     LogEvent(LogRecord),
     CaptureLoss(CaptureLossRecord),
     RunStarted(RunStartedRecord),
@@ -297,15 +254,15 @@ impl From<&BlobRef> for crate::value::pb::BlobRefV1 {
     }
 }
 
-impl TryFrom<crate::value::pb::TraceCallKeyV1> for TraceCallKey {
+impl TryFrom<crate::value::pb::ThreadKeyV1> for ThreadRef {
     type Error = io::Error;
 
-    fn try_from(value: crate::value::pb::TraceCallKeyV1) -> Result<Self, Self::Error> {
+    fn try_from(value: crate::value::pb::ThreadKeyV1) -> Result<Self, Self::Error> {
         let process_id: [u8; 16] = value.process_id.as_slice().try_into().map_err(|_| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!(
-                    "trace call process id must be 16 bytes, got {}",
+                    "log thread process id must be 16 bytes, got {}",
                     value.process_id.len()
                 ),
             )
@@ -314,68 +271,16 @@ impl TryFrom<crate::value::pb::TraceCallKeyV1> for TraceCallKey {
             process_euid: ProcessEuid(process_id),
             engine_id: EngineId(value.engine_id),
             thread_id: BexThreadId(value.thread_id),
-            call_id: BexCallId(value.call_id),
         })
     }
 }
 
-impl From<TraceCallKey> for crate::value::pb::TraceCallKeyV1 {
-    fn from(value: TraceCallKey) -> Self {
+impl From<ThreadRef> for crate::value::pb::ThreadKeyV1 {
+    fn from(value: ThreadRef) -> Self {
         Self {
             process_id: value.process_euid.0.to_vec(),
             engine_id: value.engine_id.0,
             thread_id: value.thread_id.0,
-            call_id: value.call_id.0,
-        }
-    }
-}
-
-impl TryFrom<crate::value::pb::ValueCaptureV1> for ValueCapture {
-    type Error = io::Error;
-
-    fn try_from(value: crate::value::pb::ValueCaptureV1) -> Result<Self, Self::Error> {
-        let kind = match value.kind() {
-            crate::value::pb::ValueCaptureKind::RootInput => ValueCaptureKind::RootInput,
-            crate::value::pb::ValueCaptureKind::RootOutput => ValueCaptureKind::RootOutput,
-            crate::value::pb::ValueCaptureKind::RootError => ValueCaptureKind::RootError,
-            crate::value::pb::ValueCaptureKind::LogBody => ValueCaptureKind::LogBody,
-            crate::value::pb::ValueCaptureKind::CallOutput => ValueCaptureKind::CallOutput,
-            crate::value::pb::ValueCaptureKind::CallError => ValueCaptureKind::CallError,
-            crate::value::pb::ValueCaptureKind::CallInput => ValueCaptureKind::CallInput,
-            crate::value::pb::ValueCaptureKind::Unspecified => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "value capture omitted kind",
-                ));
-            }
-        };
-        let call = value.call.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "value capture omitted call")
-        })?;
-        Ok(Self {
-            kind,
-            call: call.try_into()?,
-        })
-    }
-}
-
-impl From<&ValueCapture> for crate::value::pb::ValueCaptureV1 {
-    fn from(value: &ValueCapture) -> Self {
-        Self {
-            kind: match value.kind {
-                ValueCaptureKind::RootInput => crate::value::pb::ValueCaptureKind::RootInput as i32,
-                ValueCaptureKind::RootOutput => {
-                    crate::value::pb::ValueCaptureKind::RootOutput as i32
-                }
-                ValueCaptureKind::RootError => crate::value::pb::ValueCaptureKind::RootError as i32,
-                ValueCaptureKind::LogBody => crate::value::pb::ValueCaptureKind::LogBody as i32,
-                ValueCaptureKind::CallOutput => {
-                    crate::value::pb::ValueCaptureKind::CallOutput as i32
-                }
-                ValueCaptureKind::CallError => crate::value::pb::ValueCaptureKind::CallError as i32,
-                ValueCaptureKind::CallInput => crate::value::pb::ValueCaptureKind::CallInput as i32,
-            },
-            call: Some(value.call.into()),
         }
     }
 }
@@ -446,7 +351,6 @@ impl TryFrom<crate::value::pb::CaptureLossV1> for CaptureLossRecord {
 
     fn try_from(value: crate::value::pb::CaptureLossV1) -> Result<Self, Self::Error> {
         let kind = match value.kind() {
-            crate::value::pb::CaptureLossKind::Value => CaptureLossKind::Value,
             crate::value::pb::CaptureLossKind::Log => CaptureLossKind::Log,
             crate::value::pb::CaptureLossKind::Unspecified => {
                 return Err(io::Error::new(
@@ -478,10 +382,7 @@ impl TryFrom<crate::value::pb::CaptureLossV1> for CaptureLossRecord {
 impl From<&CaptureLossRecord> for crate::value::pb::CaptureLossV1 {
     fn from(value: &CaptureLossRecord) -> Self {
         Self {
-            kind: match value.kind {
-                CaptureLossKind::Value => crate::value::pb::CaptureLossKind::Value as i32,
-                CaptureLossKind::Log => crate::value::pb::CaptureLossKind::Log as i32,
-            },
+            kind: crate::value::pb::CaptureLossKind::Log as i32,
             reason: match value.reason {
                 CaptureLossReason::QueueFull => {
                     crate::value::pb::CaptureLossReason::QueueFull as i32

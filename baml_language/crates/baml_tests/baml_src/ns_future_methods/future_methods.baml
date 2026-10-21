@@ -34,7 +34,7 @@ test "methods_after_successful_settle" {
 // this 5s-sleep future can no longer be left orphaned — it would stall
 // shutdown. Capture the Pending state, then cancel it so it settles promptly
 // (a cancelled sleep is interrupted immediately, not run to term).
-function methods_on_pending_future() -> baml.future.FutureState {
+function methods_on_pending_future() -> baml.future.State {
     let f = spawn { baml.sys.sleep(baml.time.Duration.from_milliseconds(5000n)); 42 };
     let _ = f.is_settled();
     let observed = f.state();
@@ -43,18 +43,28 @@ function methods_on_pending_future() -> baml.future.FutureState {
 }
 
 test "methods_on_pending_future" {
-    assert.equal(methods_on_pending_future(), baml.future.FutureState.Pending)
+    assert.equal(methods_on_pending_future(), baml.future.State.Pending)
 }
 
-// After f.cancel() on a pending future: state() returns Cancelled.
-function methods_after_cancel() -> baml.future.FutureState {
-    let f = spawn { baml.sys.sleep(baml.time.Duration.from_milliseconds(5000n)); 42 };
+// After f.cancel() on a pending future: the token fires, and the task settles
+// the future Cancelled when it observes the token at its next checkpoint —
+// here inside the sleep, since the task is cancelled only once it is running.
+// Awaiting it observes that settlement.
+class Running { set: bool }
+
+function methods_after_cancel() -> baml.future.State {
+    let running = Running { set: false };
+    let f = spawn { running.set = true; baml.sys.sleep(baml.time.Duration.from_milliseconds(5000n)); 42 };
+    while (!running.set) {
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(1n));
+    }
     let _ = f.cancel();
+    let _ = (await f) catch (e) { baml.panics.Cancelled => 0 };
     f.state()
 }
 
 test "methods_after_cancel" {
-    assert.equal(methods_after_cancel(), baml.future.FutureState.Cancelled)
+    assert.equal(methods_after_cancel(), baml.future.State.Cancelled)
 }
 
 // Helper that throws so we can spawn it and observe an errored future.
@@ -63,12 +73,12 @@ function fail_io() -> int throws baml.errors.Io {
 }
 
 // After awaiting an errored future (catch swallows the throw): state() returns Error.
-function methods_on_errored_future() -> baml.future.FutureState {
+function methods_on_errored_future() -> baml.future.State {
     let f = spawn { fail_io() };
     let _ = (await f) catch (e) { baml.errors.Io => 0 };
     f.state()
 }
 
 test "methods_on_errored_future" {
-    assert.equal(methods_on_errored_future(), baml.future.FutureState.Error)
+    assert.equal(methods_on_errored_future(), baml.future.State.Error)
 }

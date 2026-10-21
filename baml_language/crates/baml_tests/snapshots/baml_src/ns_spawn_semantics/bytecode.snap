@@ -1,0 +1,26 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+function spawn_semantics.multiple_awaits_on_same_future_return_cached_value_fn() -> int {
+    load_type int
+    load_type never
+    make_closure .<lambda(multiple_awaits_on_same_future_return_cached_value_fn, 0)>, 0
+    load_const <omitted>
+    call baml.spawn.Plan.new
+    spawn
+    store_var f
+    load_var f
+    await
+    store_var a
+    load_var f
+    await
+    store_var b
+    load_var f
+    await
+    store_var c
+    load_var2 2 3
+    add_int
+    load_var c
+    add_int
+    return
+}

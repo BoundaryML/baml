@@ -11,40 +11,146 @@
 //! The instructions that the VM runs are defined in [`Instruction`] enum.
 
 pub mod bytecode;
+pub mod cancellation;
 pub mod errors;
+pub mod float_order;
+pub mod head_walk;
 pub mod heap_ptr;
+pub mod identity;
 pub mod indexable;
 pub mod lazy_biased_mutex;
-pub mod link;
+pub mod limit;
+pub mod media;
+pub mod meter;
+pub mod prompt;
 pub mod relink;
 mod roots;
-pub mod task_group;
+pub mod runtime_compile;
+pub mod rust_data;
+pub mod trace;
+pub mod type_head;
 pub mod types;
-pub mod unit;
 
 pub use bex_str::BexStr;
+pub use btel_types::{FunctionRegistration, TelemetryPolicyId};
 pub use bytecode::{BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp};
 pub use heap_ptr::HeapPtr;
 pub use indexable::{
     GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, SharedGlobals, StackIndex, VmGlobals,
 };
-pub use link::LinkError;
+pub use limit::{Admission, AdmissionTicket, LimitInner, LimitSet};
+pub use media::{MediaContent, MediaValue};
+pub use meter::{AllocDebt, Meter};
+pub use prompt::{PromptAst, PromptAstSimple, StructuredMessage};
 pub use roots::{PermitProof, RootHaver, WriteBarrier};
-pub use task_group::{TaskGroupInner, TaskGroupPermit, TaskGroupTicket};
-pub use types::{
-    ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BoundMethod, CaptureCategory,
-    CaptureOption, Class, ClassField, CleanupLatch, ClientBuildMeta, ClientBuildType, CollectorRef,
-    ConstValue, Enum, EnumVariant, Function, FunctionCaptureProps, FunctionKind, FunctionMeta,
-    FunctionOrigin, Future, FutureRead, GenericFunction, HostClosure, Instance, LockedContainer,
-    LockedReadGuard, LockedWriteGuard, MapContainer, MapReadGuard, MapWriteGuard, MediaValue,
-    Object, ObjectType, PanicClass, Program, PromptAst, RetryPolicyMeta, SysOp, SysOpErrorCategory,
-    SysOpPanicCategory, TestArgValue, TestCase, Uint8ArrayContainer, Uint8ArrayReadGuard,
-    Uint8ArrayWriteGuard, UnscheduledFuture, Value, ValueKind, Variant, format_float,
-    sys_op_for_path, type_tags,
+pub use runtime_compile::{
+    MountHead, RuntimeCompileDiagnostic, RuntimeCompileMode, RuntimeCompileRequest,
+    RuntimeDiagnosticAnnotation, RuntimeDiagnosticDetails, RuntimeDiagnosticHighlight,
+    RuntimeDiagnosticHighlightKind, RuntimeDiagnosticPhase, RuntimeDiagnosticRelatedInfo,
+    RuntimeDiagnosticSeverity, RuntimeMountEdge, RuntimeMountSurface, RuntimeMountedAlias,
+    RuntimeMountedClass, RuntimeMountedEnum, RuntimeMountedFieldAttrs, RuntimeMountedImpl,
+    RuntimeMountedVariantAttrs, RuntimePackageIdentity, RuntimePackageMount,
+    RuntimeProjectedSurface, RuntimeReExport, RuntimeReExportKind, RuntimeSessionCompileRequest,
+    RuntimeSourceSpan, SessionContract, SessionEvalLease, SessionVisibleKind, SessionVisibleSymbol,
 };
-pub use unit::{
-    CompilationUnit, ExportTable, GenericFnKey, InitTail, LocalRef, ProgramImplRuleFrag,
-    ProgramMethodImplFrag, ProgramPackageFrag, Symbol, SymbolKind,
+pub use rust_data::{
+    BexRustData, MeteredGuard, MeteredMutex, RetainedBytes, RetainedFootprint, RustDataArc,
+    TestRustData,
+};
+pub use type_head::TypeHead;
+
+// ── The runtime's instantiation of the `baml_type` family ────────────────────
+//
+// The runtime carries the *same* types the compiler does, at a different head:
+// a [`TypeHead`] (tag identity + pointer) instead of a `TypeName` that must be
+// looked up in a package map. These aliases name that instantiation, so runtime
+// code writes `bex_vm_types::RuntimeTy` where compiler code writes
+// `baml_type::RuntimeTy`.
+//
+// The shadowing is deliberate. A module that needs both forms gets a name
+// collision and must say which it means — which is exactly the place where
+// mixing a compiled type with a loaded one would otherwise pass silently.
+
+/// [`baml_type::RuntimeTy`] at the runtime's head. Declaration-facing: keeps
+/// type variables and projections for reflection and dispatch.
+pub type RuntimeTy = baml_type::RuntimeTy<TypeHead>;
+
+/// [`baml_type::RealizedTy`] at the runtime's head. Value-facing: no type
+/// variables, so it is what a live value's type is.
+pub type RealizedTy = baml_type::RealizedTy<TypeHead>;
+
+/// [`baml_type::TyTemplate`] at the runtime's head. Signature-facing: leaves may
+/// be positional `TypeArgRef`s awaiting a frame's type arguments.
+pub type TyTemplate = baml_type::TyTemplate<TypeHead>;
+
+/// [`baml_type::RuntimeInterface`] at the runtime's head.
+pub type RuntimeInterface = baml_type::RuntimeInterface<TypeHead>;
+
+/// [`baml_type::Interface`] at the runtime's head. An interface *instantiation*
+/// — which interface, at which args and associated bindings.
+pub type Interface = baml_type::Interface<TypeHead>;
+
+/// [`baml_type::Ty`] at the runtime's head. The algebra's own spelling — the
+/// widest member, admitting every position the others rule out.
+pub type Ty = baml_type::Ty<TypeHead>;
+
+/// [`baml_type::ConcreteRealizedTy`] at the runtime's head. What a live value's
+/// type narrows to once it is known to name no abstract position.
+pub type ConcreteRealizedTy = baml_type::ConcreteRealizedTy<TypeHead>;
+
+/// [`baml_type::RealizedFunctionParamTy`] at the runtime's head.
+pub type RealizedFunctionParamTy = baml_type::RealizedFunctionParamTy<TypeHead>;
+
+// ── Crossing between the two heads ───────────────────────────────────────────
+//
+// Emit is the one legitimate producer of runtime types without a heap: it
+// writes each head as the declaration's object operand and leaves the pointer
+// unfilled, for the linker to tag and the loader to bind. The reverse
+// direction is [`TypeHead::to_name`], which needs a live heap and so can fail.
+
+/// A head that could not be named when converting a type out of the VM.
+///
+/// Carries the tag rather than a stand-in name: a boundary that cannot say what
+/// a type *is* must fail rather than hand the host something that looks like a
+/// real type but names nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UnnameableHead(pub baml_type::typetag::TypeTag);
+
+impl std::fmt::Display for UnnameableHead {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "type head #{} names no loaded declaration",
+            self.0.as_i64()
+        )
+    }
+}
+
+impl std::error::Error for UnnameableHead {}
+
+/// Re-anchor a runtime type onto names, for handing it outside the VM.
+///
+/// A [`TypeHead`] is a live pointer into this process's heap, so it is
+/// meaningless in an FFI payload or a file. Every boundary out of the VM
+/// converts through here — see [`TypeHead::declared_name`].
+pub fn name_headed(ty: &RuntimeTy) -> Result<baml_type::RuntimeTy, UnnameableHead> {
+    ty.try_map_heads(&mut |head| head.declared_name().ok_or(UnnameableHead(head.tag())))
+}
+
+/// [`name_headed`] for a realized type.
+pub fn name_headed_realized(ty: &RealizedTy) -> Result<baml_type::RealizedTy, UnnameableHead> {
+    ty.try_map_heads(&mut |head| head.declared_name().ok_or(UnnameableHead(head.tag())))
+}
+pub use types::{
+    ArrayContainer, ArrayReadGuard, ArrayWriteGuard, AtomicValueSlot, BodyKey, BoundMethod, Class,
+    ClassField, ClassMethodDef, CleanupLatch, ConstValue, DeclPath, DeclarationName, EntryId, Enum,
+    EnumVariant, FnPath, Function, FunctionKind, FunctionMeta, FunctionOrigin, Future, FutureRead,
+    GenericFunction, HostClosure, ImplBodyCoherence, ImplBodyKey, ImplCoherenceKey, Instance,
+    InterfaceBound, InterfaceKey, ItemPath, LockedContainer, LockedReadGuard, LockedWriteGuard,
+    MapContainer, MapData, MapEntry, MapEpochChanged, MapReadGuard, MapWriteGuard, Object,
+    ObjectType, PanicClass, Program, RenderedCallable, SpelledBound, SysOp, SysOpErrorCategory,
+    SysOpPanicCategory, Uint8ArrayContainer, Uint8ArrayReadGuard, Uint8ArrayWriteGuard, Value,
+    ValueKind, Variant, format_float, map_string_hash, sys_op_for_path, type_tags,
 };
 
 /// Used to check if the VM should yield early.
@@ -70,6 +176,7 @@ pub use unit::{
 /// - For multi-threaded targets, it checks an atomic flag every `N` increments. If the flag is set, it returns `true`.
 ///   The flag should be set by another thread that wants to park the VM.
 pub struct EarlyYieldCheck {
+    gc_pressure: Option<::std::sync::Arc<::std::sync::atomic::AtomicBool>>,
     counter: u64,
     interval: u64,
     /// Only used in non-WASM targets, since WASM currently doesn't support threads.
@@ -78,14 +185,28 @@ pub struct EarlyYieldCheck {
     park_requested: ::std::sync::Arc<::std::sync::atomic::AtomicBool>,
 }
 
-/// Default poll interval: ~32M instructions (~1.5s at typical IPC).
+/// Legacy interval for checks constructed without allocation-pressure tracking.
+/// Production VMs set their interval through [`EarlyYieldCheck::with_gc_pressure`].
 pub const EARLY_YIELD_INTERVAL: u64 = 1 << 25;
 
 impl EarlyYieldCheck {
+    #[must_use]
+    pub fn with_gc_pressure(
+        mut self,
+        pressure: ::std::sync::Arc<::std::sync::atomic::AtomicBool>,
+        interval: u64,
+    ) -> Self {
+        assert!(interval > 0);
+        self.gc_pressure = Some(pressure);
+        self.interval = interval;
+        self.counter = interval;
+        self
+    }
     #[cfg(target_arch = "wasm32")]
     #[expect(clippy::new_without_default)]
     pub const fn new() -> Self {
         Self {
+            gc_pressure: None,
             counter: EARLY_YIELD_INTERVAL,
             interval: EARLY_YIELD_INTERVAL,
         }
@@ -93,6 +214,7 @@ impl EarlyYieldCheck {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn new(park_requested: ::std::sync::Arc<::std::sync::atomic::AtomicBool>) -> Self {
         Self {
+            gc_pressure: None,
             counter: EARLY_YIELD_INTERVAL,
             interval: EARLY_YIELD_INTERVAL,
             park_requested,
@@ -109,29 +231,65 @@ impl EarlyYieldCheck {
             "early-yield interval must be greater than zero"
         );
         Self {
+            gc_pressure: None,
             counter: interval,
             interval,
             park_requested,
         }
     }
-    /// Decrement and return true if we should yield.
-    ///
-    /// Checks every ~32M calls (~1.5s at typical IPC). GC parks at async
-    /// yield points anyway; this is just a fallback for tight compute loops.
+    /// Decrement and return true if we should yield: [`Self::tick`] followed
+    /// by [`Self::poll`] when the interval has elapsed.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    pub fn should_early_yield(&mut self) -> bool {
+        self.tick() && self.poll()
+    }
+
+    /// Count one control-flow check; true when the interval has elapsed and
+    /// the caller should [`Self::poll`].
     ///
     /// Counts down to zero so the check is a single `subs` + `b.ne` on ARM —
     /// the subtraction sets the zero flag, no separate compare needed.
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub fn should_early_yield(&mut self) -> bool {
+    pub fn tick(&mut self) -> bool {
         self.counter -= 1;
-        if self.counter != 0 {
-            return false;
-        }
+        self.counter == 0
+    }
+
+    /// Make the next [`Self::tick`] elapse, so the flags are polled at the
+    /// next control-flow check instead of up to an interval later. For a VM
+    /// that has just learned it took spending over the GC budget.
+    #[inline]
+    pub fn poll_soon(&mut self) {
+        self.counter = 1;
+    }
+
+    /// Read the flags and restart the interval; true if the VM should yield.
+    ///
+    /// GC parks at async yield points anyway; this is the fallback for tight
+    /// compute loops.
+    #[cold]
+    #[inline(never)]
+    pub fn poll(&mut self) -> bool {
         self.counter = self.interval;
+
+        if self
+            .gc_pressure
+            .as_ref()
+            .is_some_and(|p| p.load(::std::sync::atomic::Ordering::Relaxed))
+        {
+            return true;
+        }
 
         #[cfg(target_arch = "wasm32")]
         {
+            // Shorter polling must preserve cooperative yielding
+            // even when this VM has not itself spent the allocation budget.
+
+            if self.gc_pressure.is_some() {
+                return true;
+            }
             self.counter > (1 << 16)
         }
         #[cfg(not(target_arch = "wasm32"))]

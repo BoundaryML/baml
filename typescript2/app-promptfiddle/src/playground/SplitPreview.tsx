@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/useFilenamingConvention: Keep the existing public module path.
 /**
  * SplitPreview — composition shell for the promptfiddle editor + execution panel.
  *
@@ -9,12 +10,12 @@
  * and opens the execution panel pane via ExecutionPanelPane.ts.
  */
 
-import type { FC } from 'react';
-import { useState, useRef, useEffect, useMemo } from 'react';
-import { useSetAtom } from 'jotai';
 import { MonacoEditor } from '@b/pkg-editor';
 import { configureProxyEnvVar, initPlaygroundEnv } from '@b/pkg-playground';
-import { usePlayground, blobUrlsAtom } from './PlaygroundProvider';
+import { useSetAtom } from 'jotai';
+import type { FC } from 'react';
+import { useEffect, useMemo } from 'react';
+import { blobUrlsAtom, usePlayground } from './PlaygroundProvider';
 import { createWorkerBackend } from './worker-backend';
 
 /**
@@ -28,80 +29,36 @@ const BOUNDARY_PROXY_URL = 'https://proxy.promptfiddle.com';
 // promptfiddle surfaces a Boundary-gateway on/off toggle in the env-vars dialog
 // (the VS Code extension and CLI playground hide it). Configure at import,
 // before the ExecutionPanel pane mounts.
-configureProxyEnvVar({ visible: true, url: BOUNDARY_PROXY_URL });
-
-const ResetIcon: FC<{ size?: number }> = ({ size = 14 }) => (
-  <svg
-    aria-hidden="true"
-    fill="none"
-    height={size}
-    stroke="currentColor"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    strokeWidth="2"
-    viewBox="0 0 24 24"
-    width={size}
-  >
-    <path d="M3 2v6h6" />
-    <path d="M3 8a9 9 0 1 0 2.6-4.9L3 6" />
-  </svg>
-);
+configureProxyEnvVar({ url: BOUNDARY_PROXY_URL, visible: true });
 
 export const SplitPreview: FC = () => {
   const { files, setFiles, resetFiles } = usePlayground();
   const setBlobUrls = useSetAtom(blobUrlsAtom);
-  const backend = useMemo(() => createWorkerBackend(), []);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const confirmTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const backend = useMemo(
+    () =>
+      createWorkerBackend({
+        onReset: () => {
+          resetFiles();
+          window.location.reload();
+        },
+      }),
+    [resetFiles],
+  );
 
   // Seed playground env defaults once: placeholder provider keys + gateway on.
   useEffect(() => {
     initPlaygroundEnv();
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (confirmTimeoutRef.current) {
-        clearTimeout(confirmTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  const handleReset = () => {
-    if (showConfirm) {
-      if (confirmTimeoutRef.current) {
-        clearTimeout(confirmTimeoutRef.current);
-        confirmTimeoutRef.current = null;
-      }
-      resetFiles();
-      setShowConfirm(false);
-      window.location.reload();
-    } else {
-      if (confirmTimeoutRef.current) {
-        clearTimeout(confirmTimeoutRef.current);
-      }
-      setShowConfirm(true);
-      confirmTimeoutRef.current = setTimeout(() => setShowConfirm(false), 3000);
-    }
-  };
-
   return (
-    <div className="font-vsc text-vsc-text relative h-full w-full">
+    <div className="font-vsc text-vsc-text h-full w-full">
       <MonacoEditor
-        files={files}
-        onFilesChange={setFiles}
         backend={backend}
-        onBlobUrlsChange={setBlobUrls}
+        files={files}
         height="100%"
+        onBlobUrlsChange={setBlobUrls}
+        onFilesChange={setFiles}
       />
-      <button
-        onClick={handleReset}
-        className="absolute bottom-4 left-4 z-50 flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded bg-vsc-bg-secondary hover:bg-vsc-bg-tertiary border border-vsc-border text-vsc-text-muted hover:text-vsc-text transition-colors"
-        title="Reset to default code"
-      >
-        <ResetIcon size={14} />
-        {showConfirm ? 'Click again to confirm' : 'Reset'}
-      </button>
     </div>
   );
 };

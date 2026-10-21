@@ -41,12 +41,15 @@ impl ExprBody {
             | Expr::ByteStringLiteral(_)
             | Expr::Null
             | Expr::Path(_)
+            | Expr::QualifiedPath { .. }
             | Expr::Lambda(_)
             | Expr::Missing => {}
             Expr::GenericApply { base, .. }
             | Expr::MemberAccess { base, .. }
             | Expr::OptionalMemberAccess { base, .. }
-            | Expr::Upcast { base, .. } => out.push(BodyNode::Expr(*base)),
+            | Expr::Upcast { base, .. } => {
+                out.push(BodyNode::Expr(*base));
+            }
             Expr::Unary { expr, .. } | Expr::OptionalChain { expr } => {
                 out.push(BodyNode::Expr(*expr));
             }
@@ -83,22 +86,12 @@ impl ExprBody {
                 }
             }
             Expr::Is { scrutinee, .. } => out.push(BodyNode::Expr(*scrutinee)),
-            Expr::Catch { base, clauses } => {
+            Expr::Catch { base, clause } => {
                 out.push(BodyNode::Expr(*base));
-                for clause in clauses {
-                    for arm in &clause.arms {
-                        out.push(BodyNode::Expr(self.catch_arms[*arm].body));
-                    }
+                for arm in &clause.arms {
+                    let arm = &self.catch_arms[*arm];
+                    out.push(BodyNode::Expr(arm.body));
                 }
-            }
-            Expr::Spawn {
-                name,
-                with_exprs,
-                body,
-            } => {
-                out.extend(name.map(BodyNode::Expr));
-                out.extend(with_exprs.iter().copied().map(BodyNode::Expr));
-                out.push(BodyNode::Expr(*body));
             }
             Expr::Binary { lhs, rhs, .. } => {
                 out.push(BodyNode::Expr(*lhs));
@@ -108,27 +101,23 @@ impl ExprBody {
                 out.push(BodyNode::Expr(*base));
                 out.push(BodyNode::Expr(*index));
             }
-            Expr::Call { callee, args, .. } => {
-                out.push(BodyNode::Expr(*callee));
-                out.extend(args.iter().map(|arg| BodyNode::Expr(arg.expr)));
-            }
-            Expr::OptionalCall { callee, args } => {
+            Expr::Call { callee, args, .. } | Expr::OptionalCall { callee, args } => {
                 out.push(BodyNode::Expr(*callee));
                 out.extend(args.iter().map(|arg| BodyNode::Expr(arg.expr)));
             }
             Expr::Object {
                 fields, spreads, ..
             } => {
-                out.extend(fields.iter().map(|(_, expr)| BodyNode::Expr(*expr)));
+                out.extend(fields.iter().map(|field| BodyNode::Expr(field.value)));
                 out.extend(spreads.iter().map(|s| BodyNode::Expr(s.expr)));
             }
             Expr::Array { elements } => {
                 out.extend(elements.iter().copied().map(BodyNode::Expr));
             }
             Expr::Map { entries } => {
-                for (key, value) in entries {
-                    out.push(BodyNode::Expr(*key));
-                    out.push(BodyNode::Expr(*value));
+                for entry in entries {
+                    out.push(BodyNode::Expr(entry.key));
+                    out.push(BodyNode::Expr(entry.value));
                 }
             }
             Expr::Block { stmts, tail_expr } => {
@@ -159,11 +148,21 @@ impl ExprBody {
     }
 
     /// Append the direct children of `id` to `out`, in source order.
+    /// Patterns are not body nodes and hide no expressions, so only the
+    /// statement's own expression slots contribute.
     pub fn stmt_children(&self, id: StmtId, out: &mut Vec<BodyNode>) {
         match &self.stmts[id] {
             Stmt::Break | Stmt::Continue | Stmt::Missing | Stmt::HeaderComment { .. } => {}
             Stmt::Expr(expr) | Stmt::Throw { value: expr } | Stmt::Defer { body: expr } => {
                 out.push(BodyNode::Expr(*expr));
+            }
+            Stmt::TypeBinding {
+                operand,
+                else_branch,
+                ..
+            } => {
+                out.push(BodyNode::Expr(*operand));
+                out.extend(else_branch.map(BodyNode::Expr));
             }
             Stmt::Return(expr) => out.extend(expr.map(BodyNode::Expr)),
             Stmt::Let {
@@ -242,6 +241,9 @@ fn template_segment_children(segment: &TemplateSegment, out: &mut Vec<BodyNode>)
     match segment {
         TemplateSegment::Text(_) => {}
         TemplateSegment::Interp(expr) => out.push(BodyNode::Expr(*expr)),
+        TemplateSegment::Effect { stmts, .. } => {
+            out.extend(stmts.iter().copied().map(BodyNode::Stmt));
+        }
         TemplateSegment::For {
             collection, body, ..
         } => {

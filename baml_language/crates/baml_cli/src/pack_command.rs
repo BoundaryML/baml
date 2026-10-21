@@ -30,9 +30,8 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use baml_db::{baml_compiler_diagnostics::Severity, baml_compiler2_emit};
+use baml_db::{ProjectDatabase, baml_compiler_diagnostics::Severity};
 use baml_exec::{OutputFormat, PACK_SECTION_NAME, PackEnvelope, validate_help_param};
-use baml_project::ProjectDatabase;
 use bex_engine::BexEngine;
 use bex_vm_types::types::Program;
 use clap::Args;
@@ -40,7 +39,7 @@ use sys_native::SysOpsExt;
 
 use crate::{
     commands::release_version,
-    project_load::{resolve_standalone_file, validate_file_project_flags},
+    project_load::{resolve_standalone_file, validate_file_project_flags, workspace_db},
     reporter::Reporter,
 };
 
@@ -64,6 +63,8 @@ Examples:
   Package a function from a standalone file:
     baml pack --file script.baml main")]
 pub struct PackArgs {
+    #[command(flatten)]
+    pub telemetry: crate::embed_telemetry::EmbedTelemetryArgs,
     #[command(flatten)]
     pub compiler: crate::commands::CompilerArgs,
 
@@ -143,6 +144,24 @@ impl PackArgs {
 
     fn run_with_reporter(&self, reporter: &Reporter) -> Result<crate::ExitCode> {
         self.validate_flags()?;
+        let manifest = self.artifact_manifest()?;
+        let mut telemetry = btel_settings::artifact::ArtifactTelemetry::from_manifest(
+            &manifest,
+            btel_settings::artifact::ArtifactKind::Pack,
+        )?;
+        let default_environment = manifest
+            .get("pack")
+            .and_then(|table| table.get("telemetry_environment"));
+        let default_environment = default_environment
+            .map(|value| {
+                value
+                    .as_str()
+                    .context("pack.telemetry_environment must be a string.")
+            })
+            .transpose()?;
+        let provisioning = self
+            .telemetry
+            .prepare(&mut telemetry, default_environment, "pack")?;
 
         let (db, program, needs_format_hint) = self.load_and_compile(reporter)?;
         let _ = db;
@@ -170,7 +189,7 @@ impl PackArgs {
         let label = label_for(&targets);
         reporter.spin("Packaging", &label);
 
-        let envelope = PackEnvelope {
+        let mut envelope = PackEnvelope {
             program,
             mode: mode.clone(),
             targets: targets
@@ -182,12 +201,19 @@ impl PackArgs {
                 })
                 .collect(),
             output_format: self.output_format,
+            telemetry,
         };
-        let serialized = borsh::to_vec(&envelope)
-            .map_err(|e| anyhow!("failed to serialize pack envelope: {e}"))?;
-
         let target_triple = self.resolved_target_triple()?;
         let host_bytes = read_host_binary(target_triple, reporter)?;
+        if let Some(provisioning) = provisioning {
+            reporter.spin("Provisioning", "embedded telemetry");
+            envelope.telemetry.embedded =
+                Some(Box::new(provisioning.mint(envelope.telemetry_digest()?)?));
+        }
+        let serialized =
+            baml_artifact::encode(baml_artifact::ArtifactKind::PackedProgram, &envelope)
+                .map_err(|e| anyhow!("failed to serialize pack envelope: {e}"))?;
+
         let basename = self.resolve_output_basename()?;
         let output_path = self
             .output
@@ -269,25 +295,40 @@ impl PackArgs {
         if let Some(file) = self.file.as_deref() {
             // Standalone `--file` mode has no project root, so there is no
             // cache seam — always a cold compile, same as `baml run --file`.
-            let (db, needs_format_hint) = self.load_standalone(file)?;
+            let (db, package, needs_format_hint) = self.load_standalone(file)?;
             check_diagnostics(&db, "cannot pack: compilation errors found", reporter)?;
-            let program = baml_compiler2_emit::generate_project_bytecode(
-                &db,
-                &baml_compiler2_emit::CompileOptions {
-                    emit_test_cases: false,
-                },
-            )
-            .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
+            let program = crate::bytecode_cache::compile_program(&db, package, None)
+                .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
             return Ok((db, program, needs_format_hint));
         }
         self.load_and_compile_project(reporter)
     }
 
+    fn artifact_manifest(&self) -> Result<toml::Value> {
+        if self.file.is_some() {
+            return Ok(toml::Value::Table(toml::Table::new()));
+        }
+        let Some(root) = crate::project_load::find_project_root_from(self.from.as_deref())? else {
+            return Ok(toml::Value::Table(toml::Table::new()));
+        };
+        let path = root.join("baml.toml");
+        match std::fs::read_to_string(&path) {
+            Ok(content) => {
+                Ok(toml::from_str(&content)
+                    .with_context(|| format!("Invalid {}", path.display()))?)
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                Ok(toml::Value::Table(toml::Table::new()))
+            }
+            Err(error) => Err(error).with_context(|| format!("failed to read {}", path.display())),
+        }
+    }
+
     /// Project-mode load + compile through the bytecode cache — the same warm
     /// flow as `baml run` (`run_command::load_and_compile`): whole-program hit
-    /// when nothing changed, per-file unit reuse on a dirty edit, full compile
-    /// otherwise. Pack compiles with `emit_test_cases: false`, so it shares
-    /// run/check's exact cache key space — a pack right after a run (or a
+    /// when nothing changed, served packages plus a fresh user package on an
+    /// edit. Pack shares run/check's exact cache key space, so a pack
+    /// right after a run (or a
     /// re-pack) serves the identical `Program`. The packaged bytecode is
     /// target-independent (the `--target` triple only selects the host binary
     /// bytes), and emit determinism guarantees a reused image is byte-identical
@@ -308,17 +349,15 @@ impl PackArgs {
         let needs_format_hint = session.needs_format_hint();
 
         if let Some(program) = session.try_cached_program() {
-            crate::bytecode_cache::cache_debug(format_args!(
-                "pack: bytecode cache hit — skipping compile"
-            ));
             return Ok((session.db, program, needs_format_hint));
         }
 
-        // Seed the stdlib typed interface and prepare the per-file reuse plan —
+        // Seed the stdlib typed interface and install the served check rows —
         // the same warm-database setup run/check/test use.
         let warmth = session.warm_prep();
-        let (reuse_plan, stdlib_interface_hit) = (warmth.reuse_plan, warmth.stdlib_interface_hit);
+        let (served, stdlib_interface_hit) = (warmth.served, warmth.stdlib_interface_hit);
         let db = &session.db;
+        let package = session.package;
         let cache = &session.cache;
 
         // Keep `baml pack` quiet during compilation. Its visible progress is
@@ -326,11 +365,11 @@ impl PackArgs {
         // to `check` and `generate`.
         //
         // With a cache, gate diagnostics through the incremental collector: it
-        // checks only the reuse plan's dirty files and serves clean files from
-        // their cached blobs, returning the fresh per-file blobs to persist.
-        // Without a cache, run the honest full check (no blobs to store).
+        // serves the check rows of an unchanged project and checks every file
+        // otherwise, returning the fresh per-file blobs to persist. Without a
+        // cache, run the honest full check (no blobs to store).
         let fresh_diagnostics = if let Some(ctx) = cache {
-            let incremental = ctx.collect_diagnostics_incremental(db, reuse_plan.as_ref());
+            let incremental = ctx.collect_diagnostics_incremental(db, package, served.as_ref());
             bail_on_error_diagnostics(
                 db,
                 &incremental.merged,
@@ -343,41 +382,35 @@ impl PackArgs {
             None
         };
 
-        let compiled = crate::bytecode_cache::compile_program_artifacts(
-            db,
-            &baml_compiler2_emit::CompileOptions {
-                emit_test_cases: false,
-            },
-            cache.as_ref(),
-            reuse_plan.as_ref(),
-        )
-        .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
+        let program = crate::bytecode_cache::compile_program(db, package, cache.as_ref())
+            .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
         if let Some(ctx) = cache {
             let fresh = fresh_diagnostics
                 .as_ref()
                 .expect("a cache is present, so fresh diagnostics were computed");
             ctx.verify_and_store(
-                db,
-                &compiled,
+                &session,
+                &program,
                 fresh,
-                reuse_plan.as_ref(),
+                served.as_ref(),
                 stdlib_interface_hit,
-                || session.honest_db(),
             )?;
         }
-        Ok((session.db, compiled.program, needs_format_hint))
+        Ok((session.db, program, needs_format_hint))
     }
 
-    fn load_standalone(&self, file_path: &Path) -> Result<(ProjectDatabase, bool)> {
+    fn load_standalone(
+        &self,
+        file_path: &Path,
+    ) -> Result<(ProjectDatabase, baml_db::SourceRoot, bool)> {
         let canonical = resolve_standalone_file(file_path)?;
         let content = std::fs::read_to_string(&canonical)
             .with_context(|| format!("failed to read {}", canonical.display()))?;
         let needs_format_hint = crate::run_command::source_needs_format_hint(&content);
         let parent = canonical.parent().unwrap_or_else(|| Path::new("."));
-        let mut db = ProjectDatabase::new();
-        db.set_project_root(parent);
-        db.add_or_update_file(&canonical, &content);
-        Ok((db, needs_format_hint))
+        let (mut db, workspace) = workspace_db(parent);
+        db.add_or_update_file_in(workspace, &canonical, &content);
+        Ok((db, workspace, needs_format_hint))
     }
 
     /// Resolve into `(mode, targets)`. Positional `<TARGET>` →
@@ -497,7 +530,7 @@ fn label_for(targets: &[ResolvedPackTarget]) -> String {
 
 /// Collect diagnostics; render errors to stderr and bail with `ctx`.
 fn check_diagnostics(db: &ProjectDatabase, ctx: &str, reporter: &Reporter) -> Result<()> {
-    let diagnostics = baml_project::collect_diagnostics(db);
+    let diagnostics = baml_db::collect_diagnostics(db);
     bail_on_error_diagnostics(db, &diagnostics, ctx, reporter)
 }
 
@@ -603,24 +636,14 @@ fn host_binary_name(target_triple: &str) -> String {
 }
 
 fn download_host_binary_from_release(target: &str, host_name: &str) -> Result<Vec<u8>> {
-    let version = release_version_for_download();
-    let fetcher = baml_release::Fetcher::default_for(
-        baml_release::ReleaseSpec {
-            version,
-            target: target.to_string(),
-        },
-        baml_release::Product::Toolchain,
-    );
+    let fetcher = baml_release::Fetcher::from_toolchain_manifest(baml_release::ReleaseSpec {
+        version: release_version().to_string(),
+        target: target.to_string(),
+    })
+    .map_err(|err| anyhow!("{err}"))?;
     fetcher
         .fetch_binary(host_name)
         .map_err(|err| anyhow!("{err}"))
-}
-
-fn release_version_for_download() -> String {
-    std::env::var("BAML_PACK_HOST_RELEASE_VERSION")
-        .ok()
-        .filter(|v| !v.trim().is_empty())
-        .unwrap_or_else(|| release_version().to_string())
 }
 
 fn release_host_target_triple() -> Result<&'static str> {
@@ -698,13 +721,14 @@ mod tests {
     /// namespaced functions (`ns_<name>/foo.baml` → `<name>.foo`). Single
     /// `engine_from_source` can't express folder-based namespaces.
     fn engine_from_files(files: &[(&str, &str)]) -> BexEngine {
-        let snapshot = baml_project::testing::compile_multi_file(files);
+        let snapshot = baml_tests::stdlib_prefix::compile_multi_file(files);
         BexEngine::new(snapshot, Arc::new(sys_native::SysOps::native()), Vec::new())
             .expect("BexEngine::new should succeed")
     }
 
     fn pack_args() -> PackArgs {
         PackArgs {
+            telemetry: Default::default(),
             compiler: crate::commands::CompilerArgs::default(),
             target: None,
             functions: Vec::new(),
@@ -1185,9 +1209,9 @@ mod tests {
 
     // ── Envelope roundtrip ────────────────────────────────────────────
 
-    /// The PackEnvelope borsh roundtrip is the wire contract between
-    /// pack and the host. A regression here breaks every packaged binary,
-    /// so it gets its own test.
+    /// The versioned `PackedProgram` artifact envelope is the wire contract
+    /// between `baml pack` and the pack host. A regression here breaks every
+    /// packaged binary, so it gets its own roundtrip test.
     #[test]
     fn test_pack_envelope_roundtrip() {
         let snapshot = baml_tests::engine::compile_source("function main() -> int { 1 }");
@@ -1200,9 +1224,12 @@ mod tests {
                 subcommand_name: "main".to_string(),
             }],
             output_format: OutputFormat::Json,
+            telemetry: Default::default(),
         };
-        let bytes = borsh::to_vec(&envelope).unwrap();
-        let decoded: PackEnvelope = borsh::from_slice(&bytes).unwrap();
+        let bytes =
+            baml_artifact::encode(baml_artifact::ArtifactKind::PackedProgram, &envelope).unwrap();
+        let decoded: PackEnvelope =
+            baml_artifact::decode(baml_artifact::ArtifactKind::PackedProgram, &bytes).unwrap();
         assert!(matches!(decoded.mode, baml_exec::PackMode::Single));
         assert_eq!(decoded.targets.len(), 1);
         assert_eq!(decoded.targets[0].qualified_name, "user.main");

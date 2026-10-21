@@ -14,7 +14,7 @@ use bex_events::run::{
 };
 use js_sys::{Function, Promise};
 use sys_ops::io::IoNamespaceIo;
-use sys_types::{BexHeap, CallId, SysOpContext, SysOpOutput, VmBamlError, VmRustFnError};
+use sys_types::{BexHeap, CallId, SysOpContext, SysOpOutput, VmBamlError, VmPanic, VmRustFnError};
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
 
@@ -28,6 +28,19 @@ pub(crate) struct WasmIo {
     run_store: Arc<InMemoryRunStore>,
     notification_callback: SendWrapper<Function>,
     next_request_id: AtomicU64,
+}
+
+/// The host's `input` callback resolved to something other than a string.
+///
+/// `baml.io.input` declares `throws never`, and a host callable returning the
+/// wrong type is exactly what `HostContractViolation` names, so this is a
+/// panic rather than an error value.
+fn input_callback_contract_violation() -> VmPanic {
+    VmPanic::HostContractViolation {
+        message: "the host `input` callback did not return a string".to_string(),
+        class_name: None,
+        language: None,
+    }
 }
 
 impl WasmIo {
@@ -57,11 +70,11 @@ impl WasmIo {
         if text.is_empty() {
             return;
         }
-        let Some(host_call_id) = crate::wasm_host_call_id(call_id) else {
+        let Some(host_call_id) = crate::runs::wasm_host_call_id(call_id) else {
             return;
         };
         if let Some(patch) = self.run_store.ingest_output(&host_call_id, stream, text) {
-            crate::send_run_patch(&self.notification_callback, &patch);
+            crate::runs::send_run_patch(&self.notification_callback, &patch);
         }
     }
 }
@@ -76,7 +89,7 @@ impl IoNamespaceIo for WasmIo {
     ) -> SysOpOutput<String> {
         let input_fn = self.input_fn().clone();
         let request_id = self.next_request_id.fetch_add(1, Ordering::Relaxed);
-        let host_call_id = crate::wasm_host_call_id(call_id);
+        let host_call_id = crate::runs::wasm_host_call_id(call_id);
         #[allow(clippy::cast_precision_loss)] // request IDs are small sequential integers
         let js_request_id = wasm_bindgen::JsValue::from_f64(request_id as f64);
         let js_prompt = match &prompt {
@@ -100,7 +113,7 @@ impl IoNamespaceIo for WasmIo {
                 self.run_store
                     .ingest_input_requested(host_call_id, request_id, prompt)
         {
-            crate::send_run_patch(&self.notification_callback, &patch);
+            crate::runs::send_run_patch(&self.notification_callback, &patch);
         }
 
         if result.is_instance_of::<Promise>() {
@@ -116,9 +129,7 @@ impl IoNamespaceIo for WasmIo {
                 })?;
                 let value = result
                     .as_string()
-                    .ok_or_else(|| VmBamlError::DevOther {
-                        message: "Input callback did not return a string".into(),
-                    })
+                    .ok_or_else(input_callback_contract_violation)
                     .map_err(VmRustFnError::from)?;
                 publish_input_resolved(
                     &run_store,
@@ -140,9 +151,7 @@ impl IoNamespaceIo for WasmIo {
                 );
                 SysOpOutput::ok(s)
             }
-            None => SysOpOutput::err(VmBamlError::DevOther {
-                message: "Input callback did not return a string".into(),
-            }),
+            None => SysOpOutput::err(input_callback_contract_violation()),
         }
     }
 
@@ -208,7 +217,7 @@ fn publish_input_resolved(
         if result.outcome == RequestCommandOutcome::Accepted
             && let Some(patch) = result.patch
         {
-            crate::send_run_patch(notification_callback, &patch);
+            crate::runs::send_run_patch(notification_callback, &patch);
         }
         return;
     }
@@ -216,6 +225,6 @@ fn publish_input_resolved(
     if let Some(patch) =
         run_store.ingest_input_resolved(host_call_id, request_id, RunRequestState::Resolved)
     {
-        crate::send_run_patch(notification_callback, &patch);
+        crate::runs::send_run_patch(notification_callback, &patch);
     }
 }

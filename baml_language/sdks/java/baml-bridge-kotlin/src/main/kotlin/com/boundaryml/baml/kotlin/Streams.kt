@@ -20,14 +20,14 @@ import kotlinx.coroutines.future.await
  *
  * @see awaitFinal for the completed value.
  */
-public fun <P, F> BamlStream<P, F>.asFlow(): Flow<P> = streamFlow { next_async().await() }
+public fun <T> BamlStream<T>.asFlow(): Flow<T> = streamFlow { next_async().await() }
 
 /**
  * Suspends until the stream's final (completed) value is available —
  * `get_final_async().await()`, the coroutine-friendly form of
  * [BamlStream.get_final].
  */
-public suspend fun <P, F> BamlStream<P, F>.awaitFinal(): F = get_final_async().await()
+public suspend fun <T> BamlStream<T>.awaitFinal(): T = get_final_async().await()
 
 /**
  * The drain loop behind [asFlow], factored out as an internal seam so it can be

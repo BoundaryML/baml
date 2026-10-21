@@ -11,8 +11,8 @@ class RawStrings {
 }
 
 function ProcessText(input: string) -> string {
-  client GPT4
-  prompt `
+  client: GPT4
+  prompt: `
     Process the following text:
     ${input}
     

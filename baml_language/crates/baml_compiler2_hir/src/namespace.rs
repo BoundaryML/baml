@@ -8,20 +8,70 @@
 //! `NamespaceItems::conflicts` but do not prevent resolution — downstream
 //! layers always see a resolved symbol (the first one).
 
-use std::collections::BTreeSet;
-
-use baml_base::{Name, SourceFile, Span};
+use baml_base::{Name, SourceFile, SourceRoot, Span};
 use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase};
-use rustc_hash::FxHashMap;
+use indexmap::{IndexMap, IndexSet};
 use text_size::TextRange;
 
 use crate::contributions::{Contribution, Definition};
 
-/// Interned namespace identity — package name + path within package.
+/// Interned namespace identity — the package (its root) + path within it.
 #[salsa::interned]
 pub struct NamespaceId<'db> {
-    pub package: Name,
+    #[returns(clone)]
+    pub package: SourceRoot,
+    #[returns(clone)]
     pub path: Vec<Name>,
+}
+
+/// The name of every item the files of `namespace_id` declare, read off
+/// their ASTs — a layer below the semantic index, so the index builder may
+/// ask while it runs. Sorted, for [`namespace_declares`].
+#[salsa::tracked(returns(ref))]
+pub fn namespace_item_names<'db>(
+    db: &'db dyn crate::Db,
+    namespace_id: NamespaceId<'db>,
+) -> Vec<Name> {
+    let package = namespace_id.package(db);
+    let ns_path = namespace_id.path(db);
+    let mut names: Vec<Name> = package
+        .files(db)
+        .iter()
+        .copied()
+        .filter(|file| crate::file_package::file_package(db, *file).namespace_path == ns_path)
+        .flat_map(|file| crate::file_ast(db, file).items.iter().filter_map(item_name))
+        .collect();
+    names.sort_by(|left, right| left.as_str().cmp(right.as_str()));
+    names.dedup();
+    names
+}
+
+/// The name an item declares, if it declares one (an `implements` block
+/// declares none).
+fn item_name(item: &baml_compiler2_ast::Item) -> Option<Name> {
+    use baml_compiler2_ast::Item;
+    match item {
+        Item::Function(f) => Some(f.name.clone()),
+        Item::Class(c) => Some(c.name.clone()),
+        Item::Enum(e) => Some(e.name.clone()),
+        Item::TypeAlias(ta) => Some(ta.name.clone()),
+        Item::Let(l) => Some(l.name.clone()),
+        Item::Interface(i) => Some(i.name.clone()),
+        Item::ImplementsFor(_) => None,
+    }
+}
+
+/// Whether the namespace `namespace` of `package` declares an item named
+/// `name`, in either the type or the value namespace.
+pub fn namespace_declares(
+    db: &dyn crate::Db,
+    package: SourceRoot,
+    namespace: &[Name],
+    name: &Name,
+) -> bool {
+    namespace_item_names(db, NamespaceId::new(db, package, namespace.to_vec()))
+        .binary_search_by(|candidate| candidate.as_str().cmp(name.as_str()))
+        .is_ok()
 }
 
 /// One entry in a namespace conflict — the definition + its name span.
@@ -109,10 +159,10 @@ pub struct NamespaceItemsExtra<'db> {
 pub struct NamespaceItems<'db> {
     /// Type-namespace items (classes, enums, type aliases).
     /// First definition (alphabetically by file path) wins.
-    pub types: FxHashMap<Name, Definition<'db>>,
+    pub types: IndexMap<Name, Definition<'db>>,
     /// Value-namespace items (functions, clients, etc.).
     /// First definition (alphabetically by file path) wins.
-    pub values: FxHashMap<Name, Definition<'db>>,
+    pub values: IndexMap<Name, Definition<'db>>,
     /// Conflicts and other rare data. `None` when no conflicts exist.
     pub extra: Option<Box<NamespaceItemsExtra<'db>>>,
 }
@@ -126,34 +176,12 @@ impl<'db> NamespaceItems<'db> {
     }
 }
 
-// ── salsa::Update impl ────────────────────────────────────────────────────────
+// ── Salsa retention safety ────────────────────────────────────────────────
 
-/// # Safety
-///
-/// `NamespaceItems<'db>` contains `Definition<'db>` (Salsa interned types
-/// with a database-tied lifetime). This impl allows it to be stored and
-/// returned by `#[salsa::tracked(returns(ref))]` queries.
-///
-/// `maybe_update` uses `PartialEq` to determine whether the value changed,
-/// providing proper Salsa early-cutoff for downstream queries.
+// SAFETY: This type owns its data. Its database lifetime only appears
+// in Salsa identities; it contains no references into query storage.
 #[allow(unsafe_code)]
-unsafe impl salsa::Update for NamespaceItems<'_> {
-    unsafe fn maybe_update(old_pointer: *mut Self, new_value: Self) -> bool {
-        // SAFETY: `old_pointer` is valid, aligned, and Salsa-owned.
-        #[allow(unsafe_code)]
-        let old = unsafe { &*old_pointer };
-        if old == &new_value {
-            false
-        } else {
-            #[allow(unsafe_code)]
-            unsafe {
-                std::ptr::drop_in_place(old_pointer);
-                std::ptr::write(old_pointer, new_value);
-            }
-            true
-        }
-    }
-}
+unsafe impl salsa::SalsaValue for NamespaceItems<'_> {}
 
 /// Merges `file_symbol_contributions` for all files within a namespace.
 ///
@@ -169,22 +197,23 @@ pub fn namespace_items<'db>(
     let package = namespace_id.package(db);
     let ns_path = namespace_id.path(db);
 
-    // Collect matching files, then sort alphabetically by path.
-    // Use compiler2_all_files() so that compiler2-only builtin stubs (e.g.
-    // Array<T>, Map<K,V>) are visible here without being added to the v1
-    // compiler's project.files() list.
-    let mut matching_files: Vec<SourceFile> = crate::compiler2_all_files(db)
-        .into_iter()
+    // Collect matching files from the package's own root, then sort
+    // alphabetically by path — so edits to another package's file set never
+    // invalidate this namespace.
+    let mut matching_files: Vec<SourceFile> = package
+        .files(db)
+        .iter()
+        .copied()
         .filter(|file| {
             let pkg_info = crate::file_package::file_package(db, *file);
-            pkg_info.package == *package && pkg_info.namespace_path == *ns_path
+            pkg_info.namespace_path == *ns_path
         })
         .collect();
     matching_files.sort_by_key(|a| a.path(db));
 
     // Accumulate all contributions per name (preserving file order).
-    let mut type_defs: FxHashMap<Name, Vec<Contribution<'db>>> = FxHashMap::default();
-    let mut value_defs: FxHashMap<Name, Vec<Contribution<'db>>> = FxHashMap::default();
+    let mut type_defs: IndexMap<Name, Vec<Contribution<'db>>> = IndexMap::new();
+    let mut value_defs: IndexMap<Name, Vec<Contribution<'db>>> = IndexMap::new();
 
     for file in &matching_files {
         let contributions = crate::file_symbol_contributions(db, *file);
@@ -200,11 +229,11 @@ pub fn namespace_items<'db>(
     // not: all namespace-level declarations with the same spelling contribute
     // to one conflict. Build that conflict once so mixed declaration kinds do
     // not also produce redundant type-only or value-only diagnostics.
-    let mut types: FxHashMap<Name, Definition<'db>> = FxHashMap::default();
-    let mut values: FxHashMap<Name, Definition<'db>> = FxHashMap::default();
+    let mut types: IndexMap<Name, Definition<'db>> = IndexMap::new();
+    let mut values: IndexMap<Name, Definition<'db>> = IndexMap::new();
     let mut conflicts: Vec<NameConflict<'db>> = Vec::new();
 
-    let declaration_names: BTreeSet<_> =
+    let declaration_names: IndexSet<_> =
         type_defs.keys().chain(value_defs.keys()).cloned().collect();
     for name in declaration_names {
         let mut entries: Vec<_> = type_defs
@@ -215,12 +244,7 @@ pub fn namespace_items<'db>(
             .copied()
             .collect();
 
-        // Tests are function-scoped (identity is functionName/testName), so
-        // same-named tests for different functions remain legal.
-        let all_tests = entries
-            .iter()
-            .all(|entry| matches!(entry.definition, Definition::Test(_)));
-        if entries.len() < 2 || all_tests {
+        if entries.len() < 2 {
             continue;
         }
 

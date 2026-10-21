@@ -2,16 +2,16 @@ use super::{ParsingContext, ParsingError};
 use crate::{
     baml_value::BamlValue,
     deserializer::{deserialize_flags::Flag, types::BamlValueWithFlags},
-    sap_model::{TyResolvedRef, TyWithMeta, TypeAnnotations, TypeIdent},
+    sap_model::{TyResolvedRef, TypeIdent},
 };
 
 /// Tries to pick one of the items in the array and returns it.
 ///
-/// Returns `Ok(None)` when every candidate returned `Ok(None)` (e.g. all
-/// were incomplete with `@in_progress(never)`).
+/// Returns `Ok(None)` when every candidate returned `Ok(None)` (all were
+/// incomplete without a partial parse).
 pub(super) fn coerce_array_to_singular<'s, 'v, 't, N: TypeIdent>(
     ctx: &ParsingContext<'s, 'v, 't, N>,
-    target: TyWithMeta<TyResolvedRef<'t, N>, &TypeAnnotations<'t, N>>,
+    target: TyResolvedRef<'t, N>,
     items: impl IntoIterator<Item = &'v crate::jsonish::Value<'s>>,
     coercion: &dyn Fn(
         &'v crate::jsonish::Value<'s>,
@@ -31,15 +31,17 @@ pub(super) fn coerce_array_to_singular<'s, 'v, 't, N: TypeIdent>(
     Ok(Some(best))
 }
 
-/// Picks the best value to return for the target type+annotations.
+/// Picks the best value to return for the target type.
 ///
-/// Accepts `Ok(None)` entries (deferred/incomplete values). If all entries
-/// are `Ok(None)`, returns `Ok(None)`. Otherwise, filters them out and
-/// picks the best from the remaining `Ok(Some(...))` and `Err(...)` entries.
+/// Accepts `Ok(None)` entries (candidates whose value is incomplete and has no
+/// partial parse yet). When nothing parsed but some candidate is still
+/// pending, returns `Ok(None)`: the errors are not final while the value is
+/// still arriving. Otherwise picks the best from the `Ok(Some(...))` and
+/// `Err(...)` entries.
 #[allow(clippy::needless_pass_by_value)]
 pub(super) fn pick_best<'s, 'v, 't, N: TypeIdent>(
     ctx: &ParsingContext<'s, 'v, 't, N>,
-    target: TyWithMeta<TyResolvedRef<'t, N>, &TypeAnnotations<'t, N>>,
+    target: TyResolvedRef<'t, N>,
     res: Vec<Result<Option<BamlValueWithFlags<'s, 'v, 't, N>>, ParsingError>>,
 ) -> Result<Option<BamlValueWithFlags<'s, 'v, 't, N>>, ParsingError> {
     // Filter out Ok(None) entries, tracking whether we saw any.
@@ -56,11 +58,11 @@ pub(super) fn pick_best<'s, 'v, 't, N: TypeIdent>(
         })
         .collect();
 
+    if saw_deferred && res.iter().all(Result::is_err) {
+        return Ok(None);
+    }
     if res.is_empty() {
-        if saw_deferred {
-            return Ok(None);
-        }
-        return Err(ctx.error_unexpected_empty_array(&target.ty));
+        return Err(ctx.error_unexpected_empty_array(&target));
     }
     if res.len() == 1 {
         return res.into_iter().next().unwrap().map(Some);
@@ -202,7 +204,7 @@ pub(super) fn pick_best<'s, 'v, 't, N: TypeIdent>(
                 // If matching on a union, and one of the choices is picking an object that only
                 // had a single string coerced from JSON, prefer the other one
                 // (since string cost is low, its better to pick the other one if possible)
-                if matches!(target.ty, TyResolvedRef::Union(_)) {
+                if matches!(target, TyResolvedRef::Union(_)) {
                     let a_is_coerced_string = a_props.len() == 1
                         && a_props
                             .iter()
@@ -342,12 +344,12 @@ pub(super) fn pick_best<'s, 'v, 't, N: TypeIdent>(
                 if !has_union_match && !has_first_match {
                     // Store empty vec - the full results are only used for debugging display
                     // TODO: Restore if detailed debugging is needed:
-                    // v.add_flag(if matches!(target.ty, TyResolvedRef::Union(_)) {
+                    // v.add_flag(if matches!(target, TyResolvedRef::Union(_)) {
                     //     Flag::UnionMatch(i, res.to_vec())
                     // } else {
                     //     Flag::FirstMatch(i, res.to_vec())
                     // });
-                    v.add_flag(if matches!(target.ty, TyResolvedRef::Union(_)) {
+                    v.add_flag(if matches!(target, TyResolvedRef::Union(_)) {
                         Flag::UnionMatch(i, vec![])
                     } else {
                         Flag::FirstMatch(i, vec![])

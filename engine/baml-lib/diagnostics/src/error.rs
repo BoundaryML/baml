@@ -639,7 +639,7 @@ impl DatamodelError {
         alternatives: I,
     ) -> DatamodelError
     where
-        I: for<'a> Index<usize, Output = T>,
+        I: Index<usize, Output = T>,
         T: AsRef<str>,
         for<'a> &'a I: IntoIterator<Item = &'a T>,
     {

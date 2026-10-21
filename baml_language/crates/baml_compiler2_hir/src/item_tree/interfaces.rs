@@ -4,13 +4,30 @@ use text_size::TextRange;
 
 use crate::{
     ids::{ClassMarker, FunctionMarker, LocalItemId},
-    item_tree::{Attribute, ClassField, FunctionParam, GenericParam},
+    item_tree::GenericParam,
 };
+
+/// An interface field stored in the `ItemTree`.
+///
+/// An interface is a contract, not a concrete data type: nothing is ever
+/// parsed or rendered *as* one, so its fields carry no attributes (any
+/// written there is rejected at lowering).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InterfaceField {
+    pub name: Name,
+    /// Always present — see [`ast::FieldDef::type_expr`].
+    pub type_expr: ast::TypeExpr,
+    /// Joined `///` doc-comment lines preceding this declaration.
+    pub docstring: Option<String>,
+}
 
 /// An interface (BEP-044) stored in the `ItemTree`.
 ///
-/// Default methods are stored as full `FunctionMarker` entries in `methods`
-/// (same as `Class::methods`). Required signatures live in `required_methods`.
+/// ALL methods - default (with a body) and required (without) - are full
+/// `FunctionMarker` entries in `methods`, the same item kind classes use;
+/// a required method is simply a `Function` whose `body` is `None`
+/// (rust-analyzer's shape: the has-body distinction matters only to body
+/// lowering, never to signatures or resolution).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Interface {
     pub name: Name,
@@ -20,28 +37,12 @@ pub struct Interface {
     pub requires: Vec<ast::TypeExpr>,
     /// Field signatures declared on the interface. Interface fields cannot
     /// have default values.
-    pub fields: Vec<ClassField>,
+    pub fields: Vec<InterfaceField>,
     /// Associated type declarations on the interface (BEP-057).
     pub associated_types: Vec<ast::AssociatedTypeDef>,
-    /// Default methods (with bodies). Implementing classes inherit them.
-    pub default_methods: Vec<LocalItemId<FunctionMarker>>,
-    /// Required methods (no body). Implementing classes must provide a body.
-    pub required_methods: Vec<InterfaceMethodSig>,
-    pub attributes: Vec<Attribute>,
-    pub docstring: Option<String>,
-    pub span: TextRange,
-}
-
-/// A required (no-body) method signature on an interface (BEP-044).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InterfaceMethodSig {
-    pub name: Name,
-    /// Generic type parameters local to this method, each with its bounds.
-    pub generic_params: Vec<GenericParam>,
-    pub params: Vec<FunctionParam>,
-    pub return_type: Option<ast::TypeExpr>,
-    pub throws: Option<ast::TypeExpr>,
-    pub attributes: Vec<Attribute>,
+    /// Every method, default and required alike (required = `body: None`),
+    /// in declaration-list order (defaults first, then required).
+    pub methods: Vec<LocalItemId<FunctionMarker>>,
     pub docstring: Option<String>,
     pub span: TextRange,
 }

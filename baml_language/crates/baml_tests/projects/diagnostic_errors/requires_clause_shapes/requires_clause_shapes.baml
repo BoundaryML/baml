@@ -51,8 +51,12 @@ interface RequiresUnknown requires Nope {
 }
 
 // An ill-formed clause realizes to an unsatisfiable obligation. Implementors
-// must NOT each report a missing `Parent<!error>` — that cascade would restate
-// the declaration's error in a sentinel spelling no user wrote.
+// must NOT each report a missing `Parent<!error>`: the clause itself already
+// reported, and every implementor would restate that one fault. What rules
+// the cascade out is its CAUSE — a failure derived from an already-reported
+// one — not the `!error` in it. The sentinel is a fine thing for a user to
+// see (an inference failure shows one and means it); suppressing on the
+// spelling instead would hide the goals that genuinely could not be solved.
 interface RequiresErrorArg requires Parent<Nope> {
     function c(self) -> int throws never
 }

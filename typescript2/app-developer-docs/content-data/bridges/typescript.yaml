@@ -1,0 +1,37 @@
+schemaVersion: 1
+id: typescript
+compatibility:
+  - concern: Calls
+    behavior: Node.js exports synchronous functions and promise-returning _async variants.
+  - concern: Names
+    behavior: The default preserve-case convention keeps BAML names. Async variants add _async.
+  - concern: Regeneration
+    behavior: Generated files are replaced; application edits belong elsewhere.
+types:
+  - baml: string
+    host: string
+    notes: Text values map directly.
+  - baml: int / float
+    host: number
+    notes: Keep integer constraints in mind at runtime boundaries.
+  - baml: T[]
+    host: T[]
+    notes: Element types remain explicit.
+  - baml: T?
+    host: T | null
+    notes: Do not use truthiness when zero or empty text is valid.
+  - baml: class
+    host: Generated class
+    notes: Fields preserve their declared names and types.
+  - baml: enum
+    host: Generated enum
+    notes: Import the generated symbol instead of duplicating literals.
+transitions:
+  - Await the _async variants before using their results. Synchronous variants block until completion.
+  - Regenerate after changing a BAML function, class, enum, or generator configuration.
+  - Treat partial streaming values separately from the final typed result.
+gotchas:
+  - Never edit generated client files by hand.
+  - Keep secret-bearing client construction on the server side of web applications.
+  - Do not use truthiness to test nullable numbers or strings when zero or empty text is valid.
+  - Import generated enum symbols instead of duplicating their literal values.

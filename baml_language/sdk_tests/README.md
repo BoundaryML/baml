@@ -58,8 +58,18 @@ fails to *compile* (unlike pytest/vitest, where it just fails), so ported
 Rust tests are compiled only when the capability they exercise has landed:
 `generated/tests/main.rs` declares the enabled files as `#[path]` modules
 and lists the rest as `// LATER(<reason>)` comments. The single source of
-truth is the `TEST_MODS` table in `sdk_tests/harness_setup/src/rust.rs` —
+truth is the `TEST_MODS` table in `sdk_tests/codegen/src/rust.rs` —
 enabling a port is a one-line flip there.
+
+## Callable execution contracts
+
+The `callback_dispatch`, `callable_lifecycle`, and `callable_reentry` suites
+separate shared bridge behavior from host-language behavior. Shared cases use
+the same canonical names and assertions in each SDK port. Language-specific
+files and cases use a `_<lang>_only` suffix, such as `_python_only` or
+`_typescript_only`, and retain an explicit parity-lint waiver for other languages.
+Shared ports currently cover Python and TypeScript; other SDK ports remain
+coverage gaps.
 
 ## SDK implementation
 
@@ -146,7 +156,7 @@ sdk_tests/
     |   |       |-- customizable/         # symlinked from ../customizable/ (NOT under tests/ --
     |   |       |                         #   cargo would auto-discover gated-off ports)
     |   |       `-- tests/main.rs         # gate file: only modules declared here compile;
-    |   |                                 #   rows come from TEST_MODS in harness_setup/src/rust.rs
+    |   |                                 #   rows come from TEST_MODS in codegen/src/rust.rs
     |   |-- llm_functions/
     |   |   |-- customizable/
     |   |   `-- generated/
@@ -223,6 +233,8 @@ pnpm test:workers
    `sdk_tests/crates/typescript/<name>/customizable/main.test.ts`.
 3. Run `cargo nextest run -p sdk_test_python_pydantic2 <name>::` for Python, `cargo nextest run -p sdk_test_typescript <name>::` for Node TypeScript, and `cargo nextest run -p sdk_test_typescript_web <name>::` for browser and Workers.
 
-No code edits needed in `build.rs` or `src/lib.rs` -- the fixture
-list is discovered at build time from `sdk_tests/fixtures/` and
-emitted into the generated test scaffold.
+Adding a fixture also means adding a row: to
+`fixtures::SHARED` in `harness_runner/src/fixtures.rs`, and to the
+`test_suite! { ... }` block in each `crates/*/src/lib.rs` that should
+run it. The `fixture_manifest::matches_corpus` test fails until every
+one of them agrees with what is on disk, and names the file to edit.

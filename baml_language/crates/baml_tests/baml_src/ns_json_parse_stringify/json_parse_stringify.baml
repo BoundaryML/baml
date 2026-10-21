@@ -9,7 +9,7 @@
 // `stringify_pretty_multiline`: The Rust test checks s.contains('\n'). BAML has
 // string.includes, so we call it directly on the stringify_pretty result.
 //
-// `parse_throws_on_garbage`: checks that parsing "{[" raises JsonParseError.
+// `parse_throws_on_garbage`: checks that parsing "{[" raises baml.json.ParseError.
 // `roundtrip_nested_object`: uses a string local, moved to helper to avoid boxing.
 
 // ─── 2.1 Parse an array of ints ──────────────────────────────────────────────
@@ -71,6 +71,22 @@ test "parse_float_disambiguation" {
     assert.is_true(parse_is_float())
 }
 
+function parse_is_bigint() -> bool {
+    match (baml.json.parse("123123123123123123123123")) {
+        let n: bigint => n == 123123123123123123123123n
+        _ => false
+    }
+}
+
+test "parse_bigint_disambiguation" {
+    assert.is_true(parse_is_bigint())
+}
+
+test "roundtrip_nested_bigint" {
+    let source = "{\"foo\":123123123123123123123123}";
+    assert.equal(baml.json.stringify(baml.json.parse(source)), source)
+}
+
 // ─── 2.5 Parse throws on garbage input ───────────────────────────────────────
 
 test "parse_throws_on_garbage" {
@@ -78,7 +94,7 @@ test "parse_throws_on_garbage" {
         baml.json.parse("{[");
         baml.sys.panic("expected parse to throw")
     } catch (e) {
-        baml.json.JsonParseError => null
+        baml.json.ParseError => null
     }
 }
 

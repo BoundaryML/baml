@@ -40,7 +40,8 @@ pub enum DiagnosticPhase {
 ///
 /// The Borsh derives serialize the variant as a declaration-order
 /// discriminant for the per-file diagnostics cache; reordering variants is a
-/// wire-format break gated by the cache's `FORMAT_VERSION`.
+/// wire-format break gated by the cache's `FORMAT_VERSION`. A new variant is
+/// therefore appended at the end, whichever group below it belongs with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub enum DiagnosticId {
     // Parse errors (E0009, E0010)
@@ -157,12 +158,6 @@ pub enum DiagnosticId {
     TestFieldAttribute,
     UnknownFunctionInTest,
 
-    // Type builder diagnostics (E0040-E0043)
-    TypeBuilderInNonTestContext,
-    DuplicateTypeBuilderBlock,
-    IncompleteDynamicDefinition,
-    TypeBuilderSyntaxError,
-
     // Reserved prefix diagnostics
     ReservedStreamPrefix,
 
@@ -180,11 +175,12 @@ pub enum DiagnosticId {
     // VIR lowering errors (E0089)
     LoweringError,
 
-    // Removed feature errors (E0098)
-    InstanceofRemoved,
+    // Removed feature errors (E0098) — shared by all removed-syntax
+    // diagnostics (`instanceof`, legacy BEP-066 TypeBuilder syntax, ...).
+    RemovedFeature,
 
     // Namespace diagnostics (E0099)
-    NamespaceShadow,
+    NamespaceNameCollision,
 
     // Lowering diagnostics (E0101-E0105)
     MissingName,
@@ -193,14 +189,13 @@ pub enum DiagnosticId {
     MissingConfigKey,
     MalformedAttribute,
 
-    // Attribute disambiguation (E0106)
-    FieldAttributeInTypePosition,
+    // String literal escape errors (E0109): an unknown or malformed escape
+    // sequence in a `"..."`, backtick, or `b"..."` literal, or a non-ASCII
+    // character in a byte string.
+    InvalidStringEscape,
 
-    // Byte string literal errors (E0109)
-    InvalidByteStringEscape,
-
-    // Void type position errors (E0110)
-    VoidInNonReturnPosition,
+    // E0110 is retired and not to be reused: it reported `void` outside a
+    // return position, and `void` is a type like any other (BEP-079).
 
     // Wildcard `_` type in a non-inferable position (E0147)
     WildcardTypeNotAllowed,
@@ -258,6 +253,7 @@ pub enum DiagnosticId {
     /// `return`/`break`/`continue` inside a `defer` body that would escape the
     /// defer (BEP-042). Only `throw` may leave a defer.
     DeferControlFlowEscape,
+
     /// An out-of-body `implement<P..> I<args..> for T` violates the orphan rule
     /// (BEP-044, Rust's RFC 2451 "covered" rule): the interface is foreign and no
     /// type local to this package appears in `[T, args..]` before any uncovered
@@ -319,7 +315,7 @@ pub enum DiagnosticId {
     /// Two or more fields of a class serialize to the same JSON key — either two
     /// fields share an `@alias`, or one field's name equals another field's
     /// `@alias`. Such a schema is unsatisfiable: an aliased field's real name is
-    /// never matched, so `ctx.output_format` renders duplicate keys and a
+    /// never matched, so `ctx.output_format()` renders duplicate keys and a
     /// required shadowed field can never be parsed (Linear B-615).
     DuplicateFieldAlias,
 
@@ -332,13 +328,19 @@ pub enum DiagnosticId {
 
     // Builtin interfaces (BEP-062, E0153/E0154)
     /// An `implements` block targets a compiler-builtin interface
-    /// (`baml.AnyFunction`), whose conformance is derived by the compiler
+    /// (`reflect.AnyFunction`), whose conformance is derived by the compiler
     /// (every function type implements it) and cannot be written by hand.
     BuiltinInterfaceNotImplementable,
     /// A generic parameter's bound (`T extends X`) names a compiler-builtin
-    /// interface (`baml.AnyFunction`) that is only legal as a value type
+    /// interface (`reflect.AnyFunction`) that is only legal as a value type
     /// (an existential), never as a bound.
     BuiltinInterfaceNotABound,
+
+    // Mounted packages (BEP-066 mounted-package linking, E0158)
+    /// A call whose callee resolves into a MOUNTED (source-less) dependency
+    /// package. References type from the mounted interface; callables without
+    /// a loc-free bytecode link contract report this diagnostic.
+    MountedPackageCallUnsupported,
 
     // Projection bases (E0156)
     /// The dotted projection shorthand (`Base.Member`) was written with the
@@ -347,6 +349,90 @@ pub enum DiagnosticId {
     /// the interface explicitly takes a qualified projection
     /// (`(Base as Iterator).Element`). Rust's E0223 analog.
     InterfaceProjectionBase,
+
+    // Reflection render diagnostics (BEP-066, E0159+).
+    /// An enum definition reached an LLM schema boundary without any values.
+    /// Empty enums are legal declarations/constructions, but have no output
+    /// representation and therefore fail at render time (BEP-066 R-4).
+    EmptyEnumAtRender,
+    /// An interface method (required or default) omits its `throws` clause.
+    InterfaceMethodMissingThrows,
+
+    /// A runtime reflection union constructor received no members. Static
+    /// source cannot spell this defect, so BEP-066 reserves a surface code.
+    RuntimeEmptyUnion,
+
+    /// An interface-typed occurrence reached an LLM output schema renderer.
+    OpenInterfaceAtRender,
+
+    /// Two non-equivalent definitions with the same displayed qualified name
+    /// reached one LLM render/parse context.
+    ConflictingTypeDefinitionAtRender,
+    /// A top-level declaration ($init) can reach a yielding io sysop.
+    InitIoNotAllowed,
+
+    /// A non-data type reached an LLM output schema renderer. These types are
+    /// valid in BAML's type system but have no output-format representation.
+    NonDataTypeAtRender,
+    /// Reflection attempted to extract or dynamically invoke a generic
+    /// callable without a complete runtime type-argument frame.
+    UnspecializedReflectedGeneric,
+    /// A class literal named one of the builtin companion carriers
+    /// (`baml.Int`, `baml.Map`, …). They exist to hang methods on a builtin
+    /// type, never to be instantiated.
+    CannotConstructBuiltinCompanion,
+    /// A condition whose static type decides the branch (always truthy /
+    /// always falsy) - B-1563 truthiness.
+    ConditionAlwaysConstant,
+    /// Retired (E0168): `unreflect(value)` written anywhere other than as the
+    /// whole right-hand side of a body-level `type T = …;` binding. Nothing
+    /// produces it since `let type T = value;` replaced both spellings (their
+    /// removal reports E0098); the variant stays so later variants keep their
+    /// cached discriminants.
+    RuntimeTypeMustBeNamed,
+    /// `reflect.Function.specialize` was given type arguments the
+    /// callable cannot accept: the wrong number of them, one that fails a
+    /// declared interface bound, or any at all for a callable with nothing
+    /// left to bind.
+    ReflectSpecializationFailed,
+    /// An ordinary inference variable remained unresolved at writeback (E0155).
+    TypeMustBeKnown,
+    /// A builtin type spelling was written with type arguments or
+    /// associated-type bindings it does not take (`image<string>`,
+    /// `map<string>`), diagnosed at AST lowering before the arguments could
+    /// be silently erased.
+    InvalidBuiltinTypeArguments,
+    /// A value typed by a body-scoped `let type T = …` binding would be
+    /// observable outside the block that binds `T`: the block's value, a
+    /// thrown type a published clause would carry, or a type still being
+    /// inferred that would be decided as one.
+    ScopedTypeEscapesBlock,
+    /// A binding, item, type parameter, or namespace was named `root`, the
+    /// path to the package itself.
+    RootIsReserved,
+    /// A class literal named a class that holds a `$rust_type` field. That
+    /// state is created only by the class's own native functions; a literal
+    /// could only copy a handle out of another value, which relabels what the
+    /// handle means (its type arguments, or its class).
+    CannotConstructOpaqueClass,
+    /// Reserved (E0178): a value path into a package served from its
+    /// compiled interface that names a declaration the interface does not
+    /// carry. Not produced today — the interface cannot yet tell such a
+    /// declaration from a misspelling, so the path reports as an unresolved
+    /// name, as in source. Returns once the interface carries the names of
+    /// its unexported declarations. (Landed as E0173, which
+    /// `CannotConstructOpaqueClass` now uses, then held E0175, which
+    /// `AmbiguousUnion` now uses: a reserved code nothing produces is the one
+    /// safe to move.)
+    ServedInterfaceExportsFunctionsOnly,
+    /// A constant pattern passed to `baml.regex.new` does not compile (E0174).
+    InvalidRegexPattern,
+    /// An unparenthesized function/union boundary has two syntactic owners (E0175).
+    AmbiguousUnion,
+    /// A builtin the compiler lowers where it is called (`log.info`,
+    /// `baml.spawn.__spawn`, ...) was referenced as a value: it has no
+    /// function value, so it may only be called directly.
+    CallSiteBuiltinValue,
 }
 
 impl DiagnosticId {
@@ -447,12 +533,6 @@ impl DiagnosticId {
             DiagnosticId::TestFieldAttribute => "E0036",
             DiagnosticId::UnknownFunctionInTest => "E0088",
 
-            // Type builder diagnostics
-            DiagnosticId::TypeBuilderInNonTestContext => "E0040",
-            DiagnosticId::DuplicateTypeBuilderBlock => "E0041",
-            DiagnosticId::IncompleteDynamicDefinition => "E0042",
-            DiagnosticId::TypeBuilderSyntaxError => "E0043",
-
             // Cycle detection diagnostics
             DiagnosticId::AliasCycle => "E0068",
             DiagnosticId::ClassCycle => "E0069",
@@ -471,9 +551,9 @@ impl DiagnosticId {
             DiagnosticId::LoweringError => "E0089",
 
             // Removed feature errors
-            DiagnosticId::InstanceofRemoved => "E0098",
+            DiagnosticId::RemovedFeature => "E0098",
 
-            DiagnosticId::NamespaceShadow => "E0099",
+            DiagnosticId::NamespaceNameCollision => "E0099",
 
             // Lowering diagnostics
             DiagnosticId::MissingName => "E0107",
@@ -482,14 +562,9 @@ impl DiagnosticId {
             DiagnosticId::MissingConfigKey => "E0104",
             DiagnosticId::MalformedAttribute => "E0105",
 
-            // Attribute disambiguation
-            DiagnosticId::FieldAttributeInTypePosition => "E0106",
+            // String literal escape errors
+            DiagnosticId::InvalidStringEscape => "E0109",
 
-            // Byte string literal errors
-            DiagnosticId::InvalidByteStringEscape => "E0109",
-
-            // Void type position errors
-            DiagnosticId::VoidInNonReturnPosition => "E0110",
             DiagnosticId::WildcardTypeNotAllowed => "E0147",
 
             // Interface diagnostics
@@ -527,6 +602,12 @@ impl DiagnosticId {
             DiagnosticId::ToJsonMustImplementInterface => "E0142",
             DiagnosticId::FromJsonMustImplementInterface => "E0143",
             DiagnosticId::CleanupMagicMethodSignature => "E0144",
+            DiagnosticId::RuntimeEmptyUnion => "E0160",
+            DiagnosticId::OpenInterfaceAtRender => "E0161",
+            DiagnosticId::ConflictingTypeDefinitionAtRender => "E0162",
+            DiagnosticId::InitIoNotAllowed => "E0163",
+            DiagnosticId::NonDataTypeAtRender => "E0164",
+            DiagnosticId::ConditionAlwaysConstant => "E0167",
             DiagnosticId::GenericBoundNotInterface => "E0145",
             DiagnosticId::GenericSysOpMethodInInterfaceImpl => "E0153",
 
@@ -548,6 +629,24 @@ impl DiagnosticId {
             DiagnosticId::BuiltinInterfaceNotImplementable => "E0153",
             DiagnosticId::BuiltinInterfaceNotABound => "E0154",
             DiagnosticId::InterfaceProjectionBase => "E0156",
+            DiagnosticId::MountedPackageCallUnsupported => "E0158",
+            DiagnosticId::EmptyEnumAtRender => "E0159",
+            // E0164 is owned by the non-data output-format diagnostic in #4470.
+            DiagnosticId::UnspecializedReflectedGeneric => "E0165",
+            DiagnosticId::CannotConstructBuiltinCompanion => "E0166",
+            // E0167 is owned by the always-constant-condition lint in #4498.
+            DiagnosticId::RuntimeTypeMustBeNamed => "E0168",
+            DiagnosticId::ReflectSpecializationFailed => "E0169",
+            DiagnosticId::InterfaceMethodMissingThrows => "E0170",
+            DiagnosticId::InvalidRegexPattern => "E0174",
+            DiagnosticId::AmbiguousUnion => "E0175",
+            DiagnosticId::TypeMustBeKnown => "E0155",
+            DiagnosticId::InvalidBuiltinTypeArguments => "E0171",
+            DiagnosticId::ScopedTypeEscapesBlock => "E0172",
+            DiagnosticId::CannotConstructOpaqueClass => "E0173",
+            DiagnosticId::RootIsReserved => "E0176",
+            DiagnosticId::ServedInterfaceExportsFunctionsOnly => "E0178",
+            DiagnosticId::CallSiteBuiltinValue => "E0177",
         }
     }
 }
@@ -830,8 +929,8 @@ mod tests {
             DiagnosticId::UnexpectedToken,
             DiagnosticId::DuplicateName,
             DiagnosticId::LoweringError,
-            DiagnosticId::InstanceofRemoved,
-            DiagnosticId::NamespaceShadow,
+            DiagnosticId::RemovedFeature,
+            DiagnosticId::NamespaceNameCollision,
         ];
 
         for id in ids {
@@ -851,6 +950,12 @@ mod tests {
             vec![0]
         );
         assert_eq!(borsh::to_vec(&DiagnosticId::TypeMismatch).unwrap(), vec![3]);
+        // A late variant, so an insertion anywhere before it is caught too:
+        // new variants are appended.
+        assert_eq!(
+            borsh::to_vec(&DiagnosticId::ScopedTypeEscapesBlock).unwrap(),
+            vec![139]
+        );
         assert_eq!(borsh::to_vec(&Severity::Error).unwrap(), vec![0]);
         assert_eq!(borsh::to_vec(&Severity::Warning).unwrap(), vec![1]);
         assert_eq!(borsh::to_vec(&DiagnosticPhase::Parse).unwrap(), vec![0]);
@@ -865,5 +970,73 @@ mod tests {
             let bytes = borsh::to_vec(&id).unwrap();
             assert_eq!(borsh::from_slice::<DiagnosticId>(&bytes).unwrap(), id);
         }
+    }
+
+    /// Every variant, recovered from the declaration-order discriminant the
+    /// Borsh derive assigns. Deserializing `[i]` for ascending `i` enumerates
+    /// the enum without a hand-maintained list to fall out of date.
+    fn all_diagnostic_ids() -> Vec<DiagnosticId> {
+        (0..=u8::MAX)
+            .map_while(|byte| borsh::from_slice::<DiagnosticId>(&[byte]).ok())
+            .collect()
+    }
+
+    #[test]
+    fn a_code_is_shared_only_where_this_test_says_so() {
+        // Two ids may map to one code only when they are the same error to a
+        // reader. Everything else here is a pre-existing collision between
+        // unrelated errors: two authors reached for the next free number at
+        // the same time, and nothing failed. Adding a row is a decision, not
+        // a formality - a new id takes a fresh code.
+        const SHARED: &[(&str, &[&str])] = &[
+            ("E0010", &["UnexpectedToken", "InvalidSyntax"]),
+            // One error to a reader: the role-remapping config is invalid.
+            (
+                "E0044",
+                &[
+                    "RemapRolesNotMap",
+                    "RemapRoleValueNotString",
+                    "RemapRoleNotAllowed",
+                    "AllowedRolesEmpty",
+                    "AllowedRoleNotString",
+                ],
+            ),
+            ("E0093", &["DuplicateMethod", "InvalidCatchBindingType"]),
+            ("E0094", &["DuplicateBinding", "NonExhaustiveCatch"]),
+            ("E0112", &["IrrefutablePatternInIfLet", "UnknownInterface"]),
+            ("E0113", &["LetElseMustDiverge", "MissingInterfaceMethod"]),
+            (
+                "E0114",
+                &["IrrefutablePatternInLetElse", "DuplicateImplementsBlock"],
+            ),
+            (
+                "E0153",
+                &[
+                    "GenericSysOpMethodInInterfaceImpl",
+                    "BuiltinInterfaceNotImplementable",
+                ],
+            ),
+        ];
+
+        let mut by_code: std::collections::BTreeMap<&str, Vec<String>> =
+            std::collections::BTreeMap::new();
+        for id in all_diagnostic_ids() {
+            by_code
+                .entry(id.code())
+                .or_default()
+                .push(format!("{id:?}"));
+        }
+        let shared: Vec<(&str, Vec<String>)> = by_code
+            .into_iter()
+            .filter(|(_, ids)| ids.len() > 1)
+            .collect();
+        let expected: Vec<(&str, Vec<String>)> = SHARED
+            .iter()
+            .map(|(code, ids)| (*code, ids.iter().map(ToString::to_string).collect()))
+            .collect();
+        assert_eq!(
+            shared, expected,
+            "a diagnostic code is shared by ids this test does not list; give the new id its own code"
+        );
     }
 }

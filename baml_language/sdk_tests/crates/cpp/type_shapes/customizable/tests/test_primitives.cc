@@ -33,6 +33,11 @@ BAML_TEST(primitives_return_bool) {
   BAML_ASSERT(primitives::return_bool() == true);
 }
 
+BAML_TEST(primitives_return_bigint) {
+  BAML_ASSERT_EQ(primitives::return_bigint(),
+                 baml::bigint("12345678901234567890"));
+}
+
 BAML_TEST(primitives_return_null) { (void)primitives::return_null(); }
 
 BAML_TEST(primitives_round_trip_int) {
@@ -53,6 +58,13 @@ BAML_TEST(primitives_round_trip_string) {
 
 BAML_TEST(primitives_round_trip_bool) {
   BAML_ASSERT(primitives::round_trip_bool(false) == false);
+}
+
+BAML_TEST(primitives_round_trip_bigint) {
+  BAML_ASSERT_EQ(primitives::round_trip_bigint(baml::bigint("10")),
+                 baml::bigint("10"));
+  const baml::bigint large("123456789012345678901234567890");
+  BAML_ASSERT_EQ(primitives::round_trip_bigint(large), large);
 }
 
 BAML_TEST(primitives_round_trip_null) {

@@ -40,15 +40,3 @@ source: crates/baml_tests/src/generated_tests.rs
     ·   ───┬──
     ·      ╰── also serialized as `Shared` here
     ╰────
-
-  [hir] E0149
-
-  × duplicate serialized key `q` in enum
-    ╭─[duplicate_variant_alias.baml:31:3]
- 30 │   A @alias("q")
-    ·   ┬
-    ·   ╰── key `q` first serialized here
- 31 │   B @alias(#"q"#)
-    ·   ┬
-    ·   ╰── also serialized as `q` here
-    ╰────

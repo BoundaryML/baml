@@ -14,7 +14,7 @@ function server_roundtrip() -> string {
     let greeting = "you said: ";
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
-        server.serve((req: baml.http.Request) -> baml.http.Response {
+        server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
             baml.http.Response.new(200, { "x-echo-method": req.method }, (greeting + req.body).to_utf8())
         })
     };
@@ -37,7 +37,7 @@ test "server_roundtrip" {
 function server_status_code() -> int {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
-        server.serve((req: baml.http.Request) -> baml.http.Response {
+        server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
             baml.http.Response.new(503, { }, "down".to_utf8())
         })
     };
@@ -55,7 +55,7 @@ test "server_status_code" {
 function server_response_headers() -> string? {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
-        server.serve((req: baml.http.Request) -> baml.http.Response {
+        server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
             baml.http.Response.new(200, { "x-custom": "from-handler" }, "".to_utf8())
         })
     };
@@ -75,7 +75,7 @@ test "server_response_headers" {
 function server_strips_framing_headers() -> string {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
-        server.serve((req: baml.http.Request) -> baml.http.Response {
+        server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
             baml.http.Response.new(
                 200,
                 { "content-length": "99999", "connection": "close" },
@@ -99,7 +99,7 @@ function server_rejects_oversized_body() -> int {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
         server.serve(
-            (req: baml.http.Request) -> baml.http.Response {
+            (req: baml.http.ServerRequest) -> baml.http.Response {
                 baml.http.Response.new(200, { }, "ok".to_utf8())
             },
             max_body_size = 8,
@@ -124,7 +124,7 @@ test "server_rejects_oversized_body" {
 function server_isolates_handler_panic() -> bool {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
-        server.serve((req: baml.http.Request) -> baml.http.Response {
+        server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
             if (req.url == "/boom") {
                 baml.sys.panic("handler exploded")
             } else {
@@ -161,7 +161,7 @@ test "server_bind_resolves_ephemeral_port" {
 function server_reserve_after_cancel() -> string {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let firstTask = spawn {
-        server.serve((req: baml.http.Request) -> baml.http.Response {
+        server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
             baml.http.Response.new(200, { }, "first".to_utf8())
         })
     };
@@ -171,7 +171,7 @@ function server_reserve_after_cancel() -> string {
     baml.sys.sleep(baml.time.Duration.from_milliseconds(100n));  // let the cancelled serve release the "serving" flag
 
     let secondTask = spawn {
-        server.serve((req: baml.http.Request) -> baml.http.Response {
+        server.serve((req: baml.http.ServerRequest) -> baml.http.Response {
             baml.http.Response.new(200, { }, "second".to_utf8())
         })
     };
@@ -189,7 +189,7 @@ test "server_reserve_after_cancel" {
 // callable path injects the receiver as `self` (so `self.prefix` is visible).
 class Greeter {
     prefix: string
-    function handle(self, req: baml.http.Request) -> baml.http.Response {
+    function handle(self, req: baml.http.ServerRequest) -> baml.http.Response {
         baml.http.Response.new(200, { }, (self.prefix + req.body).to_utf8())
     }
 }
@@ -237,7 +237,7 @@ function server_custom_config() -> int {
     let server = baml.http.Server.bind("127.0.0.1:0");
     let task = spawn {
         server.serve(
-            (req: baml.http.Request) -> baml.http.Response {
+            (req: baml.http.ServerRequest) -> baml.http.Response {
                 baml.http.Response.new(200, { }, "ok".to_utf8())
             },
             max_connections = 4,

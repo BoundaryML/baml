@@ -1,0 +1,5 @@
+name = "substring slice long 100k"
+description = "100,000 slices of a long string"
+expect = "30000000"
+jobs = 32
+warmup = 2

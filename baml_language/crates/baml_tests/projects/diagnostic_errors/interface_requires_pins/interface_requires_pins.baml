@@ -1,0 +1,39 @@
+// A `requires` edge discharges an expectation only if it also carries every
+// associated-type pin that expectation demands. Matching the interface HEAD
+// alone is not enough: `requires HasKey<Key = string>` promises `string`, so
+// it cannot stand in where `HasKey<Key = int>` is expected, and an unpinned
+// `requires HasKey` promises nothing about `Key` and cannot stand in for any
+// pin at all. Pinning MORE than is asked is still fine — a stronger promise
+// discharges a weaker one — which is what `pinned_exact` relies on.
+
+interface HasKey {
+    type Key
+    key: Self.Key
+}
+
+interface Entity requires HasKey<Key = string> {
+}
+
+interface Loose requires HasKey {
+}
+
+function wants_int_key(e: HasKey<Key = int>) -> void throws never {
+}
+
+function wants_string_key(e: HasKey<Key = string>) -> void throws never {
+}
+
+/// E0001: `Entity` pins `Key = string`, so it is not a `HasKey<Key = int>`.
+function wrong_pin(e: Entity) -> void throws never {
+    wants_int_key(e)
+}
+
+/// E0001: `Loose` leaves `Key` unpinned, so it satisfies no pin.
+function missing_pin(l: Loose) -> void throws never {
+    wants_int_key(l)
+}
+
+/// Accepted: the pins agree.
+function pinned_exact(e: Entity) -> void throws never {
+    wants_string_key(e)
+}

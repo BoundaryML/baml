@@ -1,6 +1,6 @@
 //! Core types used throughout the compiler.
 
-use std::fmt;
+use std::{borrow::Cow, fmt};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use smol_str::SmolStr;
@@ -154,57 +154,146 @@ impl Span {
 /// An interned string - used for identifiers, keywords, etc.
 pub type Name = SmolStr;
 
-/// A possibly-qualified type-path identifier as written in source
-/// (e.g., `MyClass`, `baml.errors.DevOther`, `root.http.Response`).
+/// Who wrote a path, which decides how its first segment is read.
 ///
-/// Stored as a `Vec<Name>` so consumers (TIR resolution, MIR field-order
-/// lookup) can read the segments directly, rather than re-splitting a dotted
-/// `Name`. A bare name is `vec![n]` — `is_qualified` is the structural
-/// `len() > 1` check, not a substring scan.
+/// A path's first segment is ordinarily a NAME of the scope it is written in
+/// — a binding, a package the writer's package reaches, an item of its
+/// namespace — and resolution looks it up there. Syntax the compiler lowers
+/// to library calls (`spawn { .. }`, `env.X`, an LLM function's body) writes
+/// paths into a language package, and those must mean that package whatever
+/// the surrounding scope binds: a parameter called `ai` must not capture the
+/// lowering of the function it belongs to. The compiler marks such a path
+/// `Compiler`; HIR reads its first segment as the language package BY
+/// IDENTITY (rustc's `$crate`), and no name in any scope shadows it. The AST
+/// itself knows nothing of which packages those are.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PathOrigin {
+    /// Source wrote it; its first segment is a name of the surrounding scope.
+    Written,
+    /// The compiler wrote it: its first segment is a language package's fixed
+    /// name, read by identity, or an item of the writer's own namespace —
+    /// never a name of the surrounding scope.
+    Compiler,
+}
+
+/// A dotted path as the AST carries it — a value path (`x`, `user.name`,
+/// `Status.Active`), a type path (`baml.http.Request`), a constructor's type
+/// (`root.http.Response { .. }`) — with who wrote it ([`PathOrigin`]).
+///
+/// Stored as segments so consumers (TIR resolution, MIR field-order lookup)
+/// read them directly, rather than re-splitting a dotted `Name`; it derefs to
+/// the segment slice. A bare name is one segment — `is_qualified` is the
+/// structural `len() > 1` check, not a substring scan.
 ///
 /// `Display` joins with `.` for diagnostics and for places that key off the
 /// dotted form (the bytecode emitter's class registry, debug snapshots).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TypePath(pub Vec<Name>);
+pub struct Path {
+    /// Borrowed for a path the compiler writes (a constant, see
+    /// [`compiler_path!`](crate::compiler_path)); owned for one source wrote.
+    segments: Cow<'static, [Name]>,
+    origin: PathOrigin,
+}
 
-impl TypePath {
+impl std::ops::Deref for Path {
+    type Target = [Name];
+
+    fn deref(&self) -> &[Name] {
+        &self.segments
+    }
+}
+
+impl Path {
+    /// A path source wrote.
     pub fn new(segments: Vec<Name>) -> Self {
+        debug_assert!(!segments.is_empty(), "Path must have at least one segment");
+        Self {
+            segments: Cow::Owned(segments),
+            origin: PathOrigin::Written,
+        }
+    }
+
+    /// A bare name source wrote.
+    pub fn bare(name: Name) -> Self {
+        Self::new(vec![name])
+    }
+
+    /// A path the compiler writes into a language package: its first segment
+    /// is that package, by identity. Spelled once as a constant —
+    /// [`compiler_path!`](crate::compiler_path) builds the segments from
+    /// identifiers — so the lowering never parses its own text.
+    pub const fn compiler(segments: &'static [Name]) -> Self {
+        assert!(
+            segments.len() > 1,
+            "a compiler-written path names a package and an item"
+        );
+        Self {
+            segments: Cow::Borrowed(segments),
+            origin: PathOrigin::Compiler,
+        }
+    }
+
+    /// A path the compiler writes to an item of the writer's own namespace
+    /// (`Owner.Method@spec`): its first segment is that item, whatever the
+    /// surrounding scope binds.
+    pub fn compiler_item(segments: Vec<Name>) -> Self {
         debug_assert!(
             !segments.is_empty(),
-            "TypePath must have at least one segment"
+            "a compiler-written path names an item"
         );
-        Self(segments)
-    }
-
-    pub fn bare(name: Name) -> Self {
-        Self(vec![name])
-    }
-
-    /// Build a `TypePath` from a compile-time dotted literal like `"ai.Prompt"`.
-    /// Use only at synthetic construction sites; runtime input should come from
-    /// already-segmented data (e.g., parser tokens).
-    pub fn from_dotted(s: &str) -> Self {
-        Self(s.split('.').map(Name::new).collect())
+        Self {
+            segments: Cow::Owned(segments),
+            origin: PathOrigin::Compiler,
+        }
     }
 
     pub fn segments(&self) -> &[Name] {
-        &self.0
+        &self.segments
+    }
+
+    pub fn origin(&self) -> PathOrigin {
+        self.origin
     }
 
     pub fn is_qualified(&self) -> bool {
-        self.0.len() > 1
+        self.segments.len() > 1
     }
 
     /// The unqualified leaf (e.g., `Response` for `root.http.Response`).
     pub fn leaf(&self) -> &Name {
-        self.0.last().expect("TypePath is non-empty")
+        self.segments.last().expect("Path is non-empty")
     }
 }
 
-impl fmt::Display for TypePath {
+/// A dotted path as a constant slice of names: `static_path!(baml.json.json)`
+/// is `&[Name; 3]` with `'static` names. The segments are identifiers, so a
+/// misspelling is a compile error, never a string parse.
+#[macro_export]
+macro_rules! static_path {
+    ($($segment:ident).+) => {{
+        const SEGMENTS: &[$crate::Name] = &[$($crate::Name::new_static(stringify!($segment))),+];
+        SEGMENTS
+    }};
+}
+
+/// A path the compiler writes into a language package, as a constant:
+/// `compiler_path!(ai.Prompt)` is the [`Path`] of `ai.Prompt` with
+/// [`PathOrigin::Compiler`].
+#[macro_export]
+macro_rules! compiler_path {
+    ($package:ident $(. $segment:ident)+) => {{
+        const _: () = assert!(
+            $crate::LangPackage::is_manifest_name(stringify!($package)),
+            "a compiler-written path names a language package by its manifest name"
+        );
+        $crate::Path::compiler($crate::static_path!($package $(. $segment)+))
+    }};
+}
+
+impl fmt::Display for Path {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut first = true;
-        for seg in &self.0 {
+        for seg in self.segments.iter() {
             if !first {
                 f.write_str(".")?;
             }
@@ -228,6 +317,15 @@ pub enum MediaKind {
 }
 
 impl MediaKind {
+    /// Every kind, in declaration order.
+    pub const ALL: [Self; 5] = [
+        Self::Image,
+        Self::Audio,
+        Self::Video,
+        Self::Pdf,
+        Self::Generic,
+    ];
+
     /// Tag value used in the BEP-038 `{ kind, source, value, mime }` JSON
     /// shape. `Generic` collapses to `"media"` (any media subtype).
     pub fn tag_str(self) -> &'static str {
@@ -241,11 +339,23 @@ impl MediaKind {
     }
 
     /// The stdlib wrapper class (`baml.media.*`) that carries this media kind
-    /// as a nominal value; `None` for `Generic`, which has no wrapper class.
-    ///
-    /// Single source of truth for the kind ↔ wrapper-class mapping, together
-    /// with [`MediaKind::from_wrapper_class_name`]. Consumers must resolve
-    /// wrapper class names through these instead of local string matches.
+    /// as a nominal value, by identity; `None` for `Generic`, which has no
+    /// wrapper class. What the runtime reaches the class by.
+    pub const fn wrapper_class(self) -> Option<crate::LangItem> {
+        match self {
+            MediaKind::Image => Some(crate::lang_item!(Baml: media.Image)),
+            MediaKind::Audio => Some(crate::lang_item!(Baml: media.Audio)),
+            MediaKind::Video => Some(crate::lang_item!(Baml: media.Video)),
+            MediaKind::Pdf => Some(crate::lang_item!(Baml: media.Pdf)),
+            MediaKind::Generic => None,
+        }
+    }
+
+    /// [`Self::wrapper_class`] as a wire name (`baml.media.Image`): how a
+    /// host spells the class. Single source of truth for the kind ↔
+    /// wrapper-class-name mapping, together with
+    /// [`MediaKind::from_wrapper_class_name`]. Consumers must resolve wrapper
+    /// class names through these instead of local string matches.
     pub const fn wrapper_class_name(self) -> Option<&'static str> {
         match self {
             MediaKind::Image => Some("baml.media.Image"),
@@ -285,8 +395,16 @@ mod media_kind_wrapper_tests {
                 .wrapper_class_name()
                 .expect("concrete kind has a wrapper");
             assert_eq!(MediaKind::from_wrapper_class_name(name), Some(kind));
+            // The identity and the wire name spell one declaration.
+            assert_eq!(
+                kind.wrapper_class()
+                    .expect("concrete kind has a wrapper")
+                    .to_string(),
+                name
+            );
         }
         assert_eq!(MediaKind::Generic.wrapper_class_name(), None);
+        assert_eq!(MediaKind::Generic.wrapper_class(), None);
         assert_eq!(MediaKind::from_wrapper_class_name("baml.media.File"), None);
         assert_eq!(MediaKind::from_wrapper_class_name("user.Image"), None);
     }

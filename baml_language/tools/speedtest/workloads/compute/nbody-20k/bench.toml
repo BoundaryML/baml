@@ -1,0 +1,6 @@
+name = "nbody 20k"
+description = "20,000 steps of the five-body Jovian simulation in floats"
+origin = "Benchmarks Game n-body"
+expect = "-338164425"
+jobs = 1
+warmup = 1

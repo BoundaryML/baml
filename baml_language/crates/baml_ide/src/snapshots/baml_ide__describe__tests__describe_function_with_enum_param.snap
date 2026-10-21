@@ -1,0 +1,8 @@
+---
+source: crates/baml_ide/src/describe.rs
+assertion_line: 2028
+expression: "project.format_description(&descs[0])"
+---
+function use_color  funcs.baml:12
+shape: function use_color(c: Color) -> string throws never
+deps: Color

@@ -10,26 +10,40 @@
 //!
 //! The instructions that the VM runs are defined in [`bex_vm_types::bytecode::Instruction`] enum.
 
+#![warn(clippy::disallowed_methods)]
+
 pub(crate) mod array_index;
+mod call_specialize;
+pub mod compile_artifact;
 pub mod debug;
+pub mod definitions;
 pub mod errors;
 pub mod indexable;
 pub mod kperf;
+pub mod lang_items;
+mod model_usage;
 pub mod package_ai;
 pub mod package_baml;
-pub mod package_boundary;
 pub mod package_load;
 pub mod package_reflect;
+pub mod package_testing;
+pub mod package_trace;
+pub mod reachable;
+pub mod telemetry;
 mod type_context;
 mod type_match;
 pub mod types;
+mod vec_ext;
 pub mod vm;
 
+pub use compile_artifact::{
+    ArtifactKind, PinnedArtifact, RuntimeCompileArtifact, RuntimeCompileArtifactSlot,
+    RuntimeSessionCompileArtifact, RuntimeSessionStep, RuntimeSessionStepKind,
+};
 pub use errors::{StackFrame, VmPanic, format_traceback};
 pub use indexable::EvalStack;
 pub use package_baml::NativeFunction;
 pub use vm::{
-    BexVm, BytecodeFrame, BytecodeProgram, Frame, VmCallCaptureEvent, VmCallCaptureKind,
-    VmCallInputCapture, VmCallInputCaptureHook, VmCaptureMask, VmEventSourceLocation, VmExecState,
-    convert_program,
+    BexVm, BytecodeFrame, BytecodeProgram, Frame, VmEventSourceLocation, VmExecState,
+    convert_program, prepare_compact_code,
 };

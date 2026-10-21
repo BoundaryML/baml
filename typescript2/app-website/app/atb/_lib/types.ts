@@ -244,18 +244,3 @@ export type AtbState = {
   builds: Build[];
   workers: Worker[];
 };
-
-export type ChangelogEntry = QueueFields & {
-  version: string;
-  channel: string;
-  tag?: string;
-  date?: string | null;
-  title?: string | null;
-  body?: string | null;
-  authors?: string[];
-  meta?: {
-    final_verdict?: string;
-    compared_against?: string;
-    scores?: Record<string, string>;
-  } | null;
-};

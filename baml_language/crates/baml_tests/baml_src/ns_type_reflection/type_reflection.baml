@@ -1,39 +1,42 @@
-// Tests for `Object::Type` structural equality via `baml.prompt.get_return_type`.
+// Tests for `Object::Type` structural equality via `ai.internal.get_return_type`.
 //
 // Converted from crates/baml_tests/tests/type_reflection.rs.
 //
-// `baml.prompt.get_return_type(name)` is a pure static lookup — it does NOT
+// `ai.internal.get_return_type(name)` is a pure static lookup — it does NOT
 // make an actual LLM network call. The client declaration is required by the
 // compiler (LLM functions must declare a client) but no request is sent.
 //
-// Each test body is lifted into a top-level helper function to avoid the
-// test-block local-boxing VM bug (locals holding `type` values misbehave
-// when compared inside a test block).
+// The direct test-block comparisons below also guard the local-boxing fix.
 
-client TestClient = openai.OpenAiClient.new(
+client TestClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
     api_key = "test-key",
     base_url = "http://localhost:1234",
 );
 
-class Foo { x int }
-class Bar { y string }
+class Foo {
+    x: int,
+}
+
+class Bar {
+    y: string,
+}
 
 function GetFoo() -> Foo {
-    client TestClient
-    prompt `hi`
+    client: TestClient
+    prompt: `hi`
 }
 
 function GetBar() -> Bar {
-    client TestClient
-    prompt `hi`
+    client: TestClient
+    prompt: `hi`
 }
 
 // ─── Equality / inequality tests ─────────────────────────────────────────────
 
 function eq_type_values_same_fn() -> bool {
-    let a = baml.prompt.get_return_type("GetFoo");
-    let b = baml.prompt.get_return_type("GetFoo");
+    let a = ai.internal.get_return_type("GetFoo");
+    let b = ai.internal.get_return_type("GetFoo");
     a == b
 }
 
@@ -42,8 +45,8 @@ test "eq_type_values_same" {
 }
 
 function eq_type_values_different_fn() -> bool {
-    let a = baml.prompt.get_return_type("GetFoo");
-    let b = baml.prompt.get_return_type("GetBar");
+    let a = ai.internal.get_return_type("GetFoo");
+    let b = ai.internal.get_return_type("GetBar");
     a == b
 }
 
@@ -52,8 +55,8 @@ test "eq_type_values_different" {
 }
 
 function neq_type_values_same_fn() -> bool {
-    let a = baml.prompt.get_return_type("GetFoo");
-    let b = baml.prompt.get_return_type("GetFoo");
+    let a = ai.internal.get_return_type("GetFoo");
+    let b = ai.internal.get_return_type("GetFoo");
     a != b
 }
 
@@ -62,11 +65,49 @@ test "neq_type_values_same" {
 }
 
 function neq_type_values_different_fn() -> bool {
-    let a = baml.prompt.get_return_type("GetFoo");
-    let b = baml.prompt.get_return_type("GetBar");
+    let a = ai.internal.get_return_type("GetFoo");
+    let b = ai.internal.get_return_type("GetBar");
     a != b
 }
 
 test "neq_type_values_different" {
     assert.is_true(neq_type_values_different_fn())
+}
+
+// Type equality is equivalence of canonical forms, so union order is
+// irrelevant in both function and test-block contexts.
+function union_order_eq_fn() -> bool {
+    reflect.Type.of<int | string>() == reflect.Type.of<string | int>()
+}
+
+test "union_order_eq_canonical_in_function" {
+    assert.is_true(union_order_eq_fn())
+}
+
+test "union_order_eq_canonical_in_test_block" {
+    let a = reflect.Type.of<int | string>();
+    let b = reflect.Type.of<string | int>();
+    assert.is_true(a == b)
+}
+
+test "permuted union equality operators agree" {
+    let a = reflect.Type.of<int | string>();
+    let b = reflect.Type.of<string | int>();
+    assert.is_true(a == b && !(a != b))
+}
+
+function foo_type() -> reflect.Type {
+    Foo.type()
+}
+
+test "static declaration identity survives evaluation and a helper boundary" {
+    assert.is_true(
+        Foo.type() == Foo.type()
+            && Foo.type() == foo_type()
+            && foo_type() == foo_type(),
+    )
+}
+
+test "optional and explicit null union share a static identity" {
+    assert.is_true(reflect.Type.of<string?>() == reflect.Type.of<string | null>())
 }

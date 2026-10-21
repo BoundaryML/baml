@@ -8,10 +8,10 @@ use crate::{
     wire::{self, baml_outbound_value::Value as Out, inbound_map_entry::Key},
 };
 
-struct FunctionHandle {
-    key: u64,
+pub(crate) struct FunctionHandle {
+    pub(crate) key: u64,
     #[cfg(test)]
-    release: Option<Arc<dyn Fn(u64) + Send + Sync>>,
+    pub(crate) release: Option<Arc<dyn Fn(u64) + Send + Sync>>,
 }
 
 impl Drop for FunctionHandle {
@@ -37,7 +37,7 @@ impl Drop for FunctionHandle {
 /// types on stable Rust, so invocation is exposed as [`call`](Self::call)
 /// and [`call_async`](Self::call_async).
 pub struct BamlFunction<Args, Ret, Throws> {
-    handle: Arc<FunctionHandle>,
+    pub(crate) handle: Arc<FunctionHandle>,
     parameter_names: Arc<[String]>,
     marker: PhantomData<fn(Args) -> Result<Ret, Throws>>,
 }
@@ -69,18 +69,37 @@ where
 {
     /// Invoke the closure synchronously.
     pub fn call(&self, args: Args) -> Result<Ret, Error<Throws>> {
-        let kwargs = args
-            .into_kwargs(&self.parameter_names)
-            .map_err(Error::Sdk)?;
-        crate::runtime::invoke_handle_sync(self.handle.key, kwargs)
+        self.call_with_options(args, crate::invocation::InvocationOptions::default())
+    }
+
+    pub fn call_with_options(
+        &self,
+        args: Args,
+        baml: impl Into<crate::invocation::InvocationOptions>,
+    ) -> Result<Ret, Error<Throws>> {
+        crate::runtime::invoke_handle_sync_with_options(
+            self.handle.key,
+            || args.into_kwargs(&self.parameter_names),
+            baml.into(),
+        )
+    }
+    pub async fn call_async_with_options(
+        &self,
+        args: Args,
+        baml: impl Into<crate::invocation::InvocationOptions>,
+    ) -> Result<Ret, Error<Throws>> {
+        crate::runtime::invoke_handle_with_options(
+            self.handle.key,
+            || args.into_kwargs(&self.parameter_names),
+            baml.into(),
+        )
+        .await
     }
 
     /// Invoke the closure asynchronously.
     pub async fn call_async(&self, args: Args) -> Result<Ret, Error<Throws>> {
-        let kwargs = args
-            .into_kwargs(&self.parameter_names)
-            .map_err(Error::Sdk)?;
-        crate::runtime::invoke_handle(self.handle.key, kwargs).await
+        self.call_async_with_options(args, crate::invocation::InvocationOptions::default())
+            .await
     }
 }
 

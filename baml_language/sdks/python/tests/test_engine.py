@@ -20,7 +20,6 @@ import pytest
 from baml_bridge import (
     BamlRuntime,
     FunctionResult,
-    HostSpanManager,
     get_bridge_runtime_version,
     get_toolchain_version,
     get_version,
@@ -135,6 +134,85 @@ raise SystemExit(42)
     assert "boom" in result.stderr
 
 
+# A call whose cleanup outlasts it: cancelled, it unwinds into a `defer` that
+# runs shielded for a minute.
+SLOW_CLEANUP_SCRIPT = """\
+import threading
+from baml_bridge import BamlRuntime, call_function_sync
+
+source = '''
+function slow_cleanup() -> int {
+    defer {
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
+    }
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(60000n));
+    0
+}
+'''
+runtime = BamlRuntime.initialize_runtime(".", {"main.baml": source})
+threading.Thread(
+    target=lambda: call_function_sync(runtime, "slow_cleanup", {}),
+    daemon=True,
+).start()
+"""
+
+
+def test_shutdown_timeout_bounds_an_in_flight_call():
+    script = (
+        SLOW_CLEANUP_SCRIPT
+        + """\
+import time
+from baml_bridge import shutdown_runtime
+
+time.sleep(0.5)
+started = time.monotonic()
+shutdown_runtime(timeout=0.3)
+print(f"shutdown took {time.monotonic() - started:.1f}s")
+"""
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=60,
+    )
+
+    assert result.returncode == 0, result.stderr
+    took = float(result.stdout.strip().removeprefix("shutdown took ").removesuffix("s"))
+    # The timeout plus one bounded settle window, not the cleanup's minute.
+    assert took < 20
+
+
+def test_shutdown_timeout_is_validated():
+    from baml_bridge import shutdown_runtime
+
+    for bad in (-1.0, float("nan"), float("inf")):
+        with pytest.raises(ValueError):
+            shutdown_runtime(timeout=bad)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="SIGINT delivery to a child is POSIX-only")
+def test_exit_wait_ends_on_ctrl_c():
+    # Exit waits for the call with no bound, as Python waits for non-daemon
+    # threads; Ctrl+C ends that wait.
+    process = subprocess.Popen(
+        [sys.executable, "-c", SLOW_CLEANUP_SCRIPT + "import time\ntime.sleep(0.5)\n"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        # Past the script's own sleep, so the process is waiting at exit.
+        with pytest.raises(subprocess.TimeoutExpired):
+            process.wait(timeout=3)
+        process.send_signal(signal.SIGINT)
+        _, stderr = process.communicate(timeout=10)
+    finally:
+        process.kill()
+    assert "KeyboardInterrupt" in stderr, stderr
+
+
 # ============================================================================
 # TEST: Basics — initialization and version
 # ============================================================================
@@ -185,7 +263,7 @@ version = "{generated_toolchain}"
 """
 
         with pytest.raises(RuntimeError) as exc_info:
-            BamlRuntime.initialize_runtime_from_bytecode(
+            BamlRuntime.initialize_runtime_from_blob(
                 b"\x00", embedded_baml_toml
             )
 
@@ -330,23 +408,3 @@ class TestCallFunctionAsync:
         rt = make_runtime(EXPR_FUNCS_BAML)
         result = await call_function(rt,"Identity", {"s": "async hello"})
         assert result.result() == "async hello"
-
-
-# ============================================================================
-# TEST: HostSpanManager (stub — all should pass since they're no-ops)
-# ============================================================================
-
-
-class TestHostSpanManager:
-    def test_create_host_span_manager(self):
-        hsm = HostSpanManager()
-        assert isinstance(hsm, HostSpanManager)
-
-    def test_deep_clone(self):
-        hsm = HostSpanManager()
-        cloned = hsm.deep_clone()
-        assert isinstance(cloned, HostSpanManager)
-
-    def test_context_depth_is_zero(self):
-        hsm = HostSpanManager()
-        assert hsm.context_depth() == 0

@@ -91,10 +91,10 @@ describe("builtin typemap decoding", () => {
     expect(raw.releaseHandle(bigintFromWireKey(wireHandle.key))).toBe(true);
     expect(raw._testHandleTableEntryCount()).toBe(initialCount + 1);
 
-    const clonedHandle = (stream as BamlStream<unknown, unknown>)._toHandle().clone();
+    const clonedHandle = (stream as BamlStream<unknown>)._toHandle().clone();
     const clonedStream = BamlStream._fromHandle(clonedHandle, "ai.stream.Stream");
     expect(raw._testHandleTableEntryCount()).toBe(initialCount + 2);
-    expect((stream as BamlStream<unknown, unknown>)._toHandle()._releaseForTest()).toBe(true);
+    expect((stream as BamlStream<unknown>)._toHandle()._releaseForTest()).toBe(true);
     expect(raw._testHandleTableEntryCount()).toBe(initialCount + 1);
 
     const cloneBytes = encodeCallArgs({ self: clonedStream }, { callId: 2n });
@@ -116,7 +116,7 @@ describe("builtin typemap decoding", () => {
           ty: { classTy: { name: "test.stream.Custom" } },
         },
       },
-    }) as BamlStream<unknown, unknown>;
+    }) as BamlStream<unknown>;
 
     expect((stream as unknown as { _classFqn: string })._classFqn).toBe("test.stream.Custom");
     expect(stream._toHandle()._releaseForTest()).toBe(true);
@@ -139,7 +139,7 @@ describe("builtin typemap decoding", () => {
           ty: { classTy: { name: "ai.stream.Stream" } },
         },
       },
-    }) as BamlStream<unknown, unknown>;
+    }) as BamlStream<unknown>;
 
     expect(() => stream.next()).toThrow(/nextAsync|finalAsync/);
     expect(() => stream.final()).toThrow(/nextAsync|finalAsync/);

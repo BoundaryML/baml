@@ -1,0 +1,6 @@
+disallowed-methods = [
+    { path = "std::env::var", reason = "read the environment through baml_env" },
+    { path = "std::env::var_os", reason = "read the environment through baml_env" },
+    { path = "std::env::vars", reason = "read the environment through baml_env" },
+    { path = "std::env::vars_os", reason = "read the environment through baml_env" },
+]

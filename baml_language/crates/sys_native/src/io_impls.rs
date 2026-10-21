@@ -4,12 +4,20 @@
 //! `sys_types::io`. They coexist with the legacy `SysOp*` trait impls in
 //! `lib.rs` during the transition.
 
-use std::sync::{Arc, OnceLock};
+use std::{
+    any::TypeId,
+    sync::{Arc, OnceLock},
+};
 
 use bex_heap::{BexExternalValue, BexHeap};
 use sys_ops::io::{
     self, CallId, SysOpContext, SysOpOutput, VmBamlError, VmPanic, VmRustFnError, owned,
 };
+#[cfg(feature = "bundle-http")]
+use sys_ops::io::{ObjectType, Type};
+use sys_types::{BexRustData, RustDataArc as _, VmInternalError};
+
+const MAX_READ_CHUNK: usize = 64 * 1024;
 
 // Process-level shared BufReader for stdin, preventing data loss when
 // BufReader over-reads into its internal buffer across multiple io.input() calls.
@@ -21,7 +29,45 @@ fn shared_stdin() -> &'static tokio::sync::Mutex<tokio::io::BufReader<tokio::io:
         .get_or_init(|| tokio::sync::Mutex::new(tokio::io::BufReader::new(tokio::io::stdin())))
 }
 
-use crate::NativeSysOps;
+use crate::{NativeSysOps, WorkingDir};
+
+// Runtime compilation is intercepted by BexEngine and delegated to the
+// compiler trait injected by bex_project. This provider implementation is the
+// closed fallback required by the generated IO trait hierarchy.
+impl io::IoClassReflectPackage for NativeSysOps {
+    fn _compile(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _files: indexmap::IndexMap<String, String>,
+        _packages: indexmap::IndexMap<String, io::owned::reflect::Package>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::reflect::CompileArtifact> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "runtime-compiler".to_string(),
+            message: "runtime compiler is not installed".to_string(),
+        })
+    }
+}
+
+impl io::IoClassReflectSession for NativeSysOps {
+    fn _compile(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        _session: io::owned::reflect::Session,
+        _source: String,
+        _type_arg_0: ::sys_types::SapTy,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<io::owned::reflect::CompileArtifact> {
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "runtime-compiler".to_string(),
+            message: "runtime compiler is not installed".to_string(),
+        })
+    }
+}
+
+impl io::IoNamespaceReflect for NativeSysOps {}
 
 // ============================================================================
 // Environment
@@ -35,10 +81,10 @@ impl io::IoNamespaceEnv for NativeSysOps {
         key: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Option<String>> {
-        match std::env::var(&key) {
-            Ok(val) => SysOpOutput::ok(Some(val)),
-            Err(std::env::VarError::NotPresent) => SysOpOutput::ok(None),
-            Err(std::env::VarError::NotUnicode(_)) => SysOpOutput::err(VmBamlError::ParseError {
+        match baml_env::os_var(&key).map(std::ffi::OsString::into_string) {
+            Some(Ok(val)) => SysOpOutput::ok(Some(val)),
+            None => SysOpOutput::ok(None),
+            Some(Err(_)) => SysOpOutput::err(VmBamlError::ParseError {
                 message: format!("Environment variable '{key}' is not valid UTF-8"),
             }),
         }
@@ -222,6 +268,21 @@ impl io::IoNamespaceRandom for NativeSysOps {}
 // IO (stdin input)
 // ============================================================================
 
+/// A write to stdout/stderr failed.
+///
+/// `baml.io.print`/`println`/`eprint`/`eprintln` declare `throws never`, so a
+/// dead output stream is not something they can report as an error value.
+/// Following Rust — whose `println!` panics on write failure — a broken pipe
+/// or closed console panics with `baml.panics.HostUnavailable` naming the
+/// stream. `baml.io.input` is the deliberate exception: reading input is an
+/// operation callers want to handle, so it declares `throws root.errors.Io`.
+fn output_stream_unavailable(stream: &'static str, context: &str, e: &std::io::Error) -> VmPanic {
+    VmPanic::HostUnavailable {
+        resource: stream.to_string(),
+        message: format!("{context}: {e}"),
+    }
+}
+
 impl io::IoNamespaceIo for NativeSysOps {
     fn input(
         &self,
@@ -278,12 +339,11 @@ impl io::IoNamespaceIo for NativeSysOps {
             stdout
                 .write_all(s.as_bytes())
                 .await
-                .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to write stdout: {e}"),
-                })?;
-            stdout.flush().await.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to flush stdout: {e}"),
-            })?;
+                .map_err(|e| output_stream_unavailable("stdout", "failed to write stdout", &e))?;
+            stdout
+                .flush()
+                .await
+                .map_err(|e| output_stream_unavailable("stdout", "failed to flush stdout", &e))?;
             Ok(())
         })
     }
@@ -302,12 +362,14 @@ impl io::IoNamespaceIo for NativeSysOps {
             // interleave on a line boundary.
             let mut buf = s.into_bytes();
             buf.push(b'\n');
-            stdout.write_all(&buf).await.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to write stdout: {e}"),
-            })?;
-            stdout.flush().await.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to flush stdout: {e}"),
-            })?;
+            stdout
+                .write_all(&buf)
+                .await
+                .map_err(|e| output_stream_unavailable("stdout", "failed to write stdout", &e))?;
+            stdout
+                .flush()
+                .await
+                .map_err(|e| output_stream_unavailable("stdout", "failed to flush stdout", &e))?;
             Ok(())
         })
     }
@@ -325,12 +387,11 @@ impl io::IoNamespaceIo for NativeSysOps {
             stderr
                 .write_all(s.as_bytes())
                 .await
-                .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to write stderr: {e}"),
-                })?;
-            stderr.flush().await.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to flush stderr: {e}"),
-            })?;
+                .map_err(|e| output_stream_unavailable("stderr", "failed to write stderr", &e))?;
+            stderr
+                .flush()
+                .await
+                .map_err(|e| output_stream_unavailable("stderr", "failed to flush stderr", &e))?;
             Ok(())
         })
     }
@@ -347,12 +408,14 @@ impl io::IoNamespaceIo for NativeSysOps {
             let mut stderr = tokio::io::stderr();
             let mut buf = s.into_bytes();
             buf.push(b'\n');
-            stderr.write_all(&buf).await.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to write stderr: {e}"),
-            })?;
-            stderr.flush().await.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to flush stderr: {e}"),
-            })?;
+            stderr
+                .write_all(&buf)
+                .await
+                .map_err(|e| output_stream_unavailable("stderr", "failed to write stderr", &e))?;
+            stderr
+                .flush()
+                .await
+                .map_err(|e| output_stream_unavailable("stderr", "failed to flush stderr", &e))?;
             Ok(())
         })
     }
@@ -362,44 +425,76 @@ impl io::IoNamespaceIo for NativeSysOps {
 // File System
 // ============================================================================
 
-type FsFileHandle = tokio::sync::Mutex<Option<tokio::fs::File>>;
+/// An open file as `$rust_type` data.
+struct FsFileHandle(tokio::sync::Mutex<Option<tokio::fs::File>>);
 
-fn downcast_handle(file: &owned::fs::File) -> Result<Arc<FsFileHandle>, VmBamlError> {
+impl BexRustData for FsFileHandle {
+    fn measure(&self, _: &mut sys_types::Meter) {}
+}
+
+impl std::ops::Deref for FsFileHandle {
+    type Target = tokio::sync::Mutex<Option<tokio::fs::File>>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+fn downcast_handle(file: &owned::fs::File) -> Result<Arc<FsFileHandle>, VmInternalError> {
     file._handle
         .clone()
-        .downcast::<FsFileHandle>()
-        .map_err(|_| VmBamlError::DevOther {
-            message: "Invalid file handle type".into(),
+        .downcast_payload::<FsFileHandle>()
+        .map_err(|_| VmInternalError::RustTypeError {
+            expected: TypeId::of::<FsFileHandle>(),
+            got: file._handle.type_id(),
         })
 }
 
 fn closed_err() -> VmBamlError {
-    VmBamlError::InvalidArgument {
+    VmBamlError::Io {
         message: "File is closed".into(),
     }
 }
 
 impl io::IoClassFsFile for NativeSysOps {
-    fn text(
+    fn read(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         file: owned::fs::File,
+        limit: i64,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        use tokio::io::AsyncReadExt;
-
+    ) -> SysOpOutput<Option<Vec<u8>>> {
+        let limit = match limit {
+            ..=0 => return SysOpOutput::Ready(Ok(Some(Vec::new()))),
+            1.. => usize::try_from(limit)
+                .unwrap_or(MAX_READ_CHUNK)
+                .min(MAX_READ_CHUNK),
+        };
         SysOpOutput::async_op(async move {
+            use tokio::io::AsyncReadExt;
+
+            let mut buf = Vec::new();
+            buf.try_reserve(limit).map_err(|e| VmPanic::AllocFailure {
+                message: e.to_string(),
+            })?;
+            buf.resize(limit, 0);
+
             let handle = downcast_handle(&file)?;
             let mut guard = handle.lock().await;
             let f = guard.as_mut().ok_or_else(closed_err)?;
-            let mut contents = String::new();
-            f.read_to_string(&mut contents)
-                .await
-                .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to read file: {e}"),
-                })?;
-            Ok(contents)
+            let len = f.read(&mut buf).await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to read file: {e}"),
+            })?;
+            match len {
+                0 => Ok(None),
+                // `buf` was sized to `limit` up front; a short read leaves the
+                // tail as the zero fill, so it has to be cut back to what was
+                // actually read.
+                _ => {
+                    buf.truncate(len);
+                    Ok(Some(buf))
+                }
+            }
         })
     }
 
@@ -410,51 +505,18 @@ impl io::IoClassFsFile for NativeSysOps {
         file: owned::fs::File,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<u8>> {
-        use tokio::io::AsyncReadExt;
-
         SysOpOutput::async_op(async move {
+            use tokio::io::AsyncReadExt;
+
             let handle = downcast_handle(&file)?;
             let mut guard = handle.lock().await;
             let f = guard.as_mut().ok_or_else(closed_err)?;
-            let mut contents = Vec::new();
-            f.read_to_end(&mut contents)
-                .await
-                .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to read file: {e}"),
-                })?;
-            Ok(contents)
+            let mut buf = Vec::new();
+            f.read_to_end(&mut buf).await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to read file: {e}"),
+            })?;
+            Ok(buf)
         })
-    }
-
-    fn read(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        file: owned::fs::File,
-        n: i64,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<String> {
-        SysOpOutput::async_op(async move {
-            let bytes = read_up_to(&file, n).await?;
-            String::from_utf8(bytes)
-                .map_err(|e| VmBamlError::ParseError {
-                    message: format!("Invalid UTF-8 in file: {e}"),
-                })
-                .map_err(VmRustFnError::from)
-        })
-    }
-
-    fn read_bytes(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        file: owned::fs::File,
-        n: i64,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
-        SysOpOutput::async_op(
-            async move { read_up_to(&file, n).await.map_err(VmRustFnError::from) },
-        )
     }
 
     fn close(
@@ -519,22 +581,7 @@ impl io::IoClassFsFile for NativeSysOps {
         })
     }
 
-    fn write(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        file: owned::fs::File,
-        data: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<i64> {
-        SysOpOutput::async_op(async move {
-            write_all_bytes(&file, data.into_bytes())
-                .await
-                .map_err(VmRustFnError::from)
-        })
-    }
-
-    fn write_bytes(
+    fn write_some(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
@@ -543,47 +590,48 @@ impl io::IoClassFsFile for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
         SysOpOutput::async_op(async move {
-            write_all_bytes(&file, data)
-                .await
-                .map_err(VmRustFnError::from)
+            use tokio::io::AsyncWriteExt;
+
+            let handle = downcast_handle(&file)?;
+            let mut guard = handle.lock().await;
+            let f = guard.as_mut().ok_or_else(closed_err)?;
+            let len = f.write(&data).await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to write: {e}"),
+            })?;
+            // `tokio::fs::File` buffers: `write` copies into its buffer and
+            // dispatches the real write to the blocking pool, so a rejection
+            // (a read-only handle, a full disk) would otherwise surface on a
+            // *later* call or be lost entirely. Settling it here keeps
+            // `write_some` an unbuffered primitive, matching this interface's
+            // other implementors and every other language's raw file handle.
+            f.flush().await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to write: {e}"),
+            })?;
+            let len = i64::try_from(len)
+                .unwrap_or_else(|_| unreachable!("There are no systems with this much memory"));
+            Ok(len)
         })
     }
-}
 
-async fn read_up_to(file: &owned::fs::File, n: i64) -> Result<Vec<u8>, VmBamlError> {
-    use tokio::io::AsyncReadExt;
+    fn flush(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        file: owned::fs::File,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        use tokio::io::AsyncWriteExt;
 
-    let cap = u64::try_from(n).map_err(|_| VmBamlError::InvalidArgument {
-        message: format!("Negative read length: {n}"),
-    })?;
-    let handle = downcast_handle(file)?;
-    let mut guard = handle.lock().await;
-    let f = guard.as_mut().ok_or_else(closed_err)?;
-    let mut buf = Vec::new();
-    f.take(cap)
-        .read_to_end(&mut buf)
-        .await
-        .map_err(|e| VmBamlError::Io {
-            message: format!("Failed to read file: {e}"),
-        })?;
-    Ok(buf)
-}
-
-async fn write_all_bytes(file: &owned::fs::File, data: Vec<u8>) -> Result<i64, VmBamlError> {
-    use tokio::io::AsyncWriteExt;
-
-    let handle = downcast_handle(file)?;
-    let mut guard = handle.lock().await;
-    let f = guard.as_mut().ok_or_else(closed_err)?;
-    #[allow(clippy::cast_possible_wrap)]
-    let len = data.len() as i64;
-    f.write_all(&data).await.map_err(|e| VmBamlError::Io {
-        message: format!("Failed to write: {e}"),
-    })?;
-    f.flush().await.map_err(|e| VmBamlError::Io {
-        message: format!("Failed to write: {e}"),
-    })?;
-    Ok(len)
+        SysOpOutput::async_op(async move {
+            let handle = downcast_handle(&file)?;
+            let mut guard = handle.lock().await;
+            let f = guard.as_mut().ok_or_else(closed_err)?;
+            f.flush().await.map_err(|e| VmBamlError::Io {
+                message: format!("Failed to flush: {e}"),
+            })?;
+            Ok(())
+        })
+    }
 }
 
 impl io::IoNamespaceFs for NativeSysOps {
@@ -595,6 +643,7 @@ impl io::IoNamespaceFs for NativeSysOps {
         mode: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::fs::File> {
+        let path = self.working_dir.resolve(&path);
         SysOpOutput::async_op(async move {
             let BexExternalValue::String(mode) = mode else {
                 return Err(VmRustFnError::from(VmBamlError::InvalidArgument {
@@ -605,13 +654,14 @@ impl io::IoNamespaceFs for NativeSysOps {
             // matching Bun's `Bun.write` behavior.
             let creates = matches!(mode.as_str(), "w" | "w+" | "a" | "a+");
             if creates {
-                if let Some(parent) = std::path::Path::new(&path).parent() {
+                if let Some(parent) = path.parent() {
                     if !parent.as_os_str().is_empty() {
                         tokio::fs::create_dir_all(parent)
                             .await
                             .map_err(|e| VmBamlError::Io {
                                 message: format!(
-                                    "Failed to create parent directories for '{path}': {e}"
+                                    "Failed to create parent directories for '{}': {e}",
+                                    path.display()
                                 ),
                             })?;
                     }
@@ -667,10 +717,10 @@ impl io::IoNamespaceFs for NativeSysOps {
                 }
             }
             .map_err(|e| VmBamlError::Io {
-                message: format!("Failed to open file '{path}': {e}"),
+                message: format!("Failed to open file '{}': {e}", path.display()),
             })?;
-            let handle: Arc<dyn std::any::Any + Send + Sync> =
-                Arc::new(tokio::sync::Mutex::new(Some(file)));
+            let handle: Arc<dyn BexRustData> =
+                Arc::new(FsFileHandle(tokio::sync::Mutex::new(Some(file))));
             Ok(owned::fs::File { _handle: handle })
         })
     }
@@ -682,11 +732,12 @@ impl io::IoNamespaceFs for NativeSysOps {
         path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<bool> {
+        let path = self.working_dir.resolve(&path);
         SysOpOutput::async_op(async move {
             tokio::fs::try_exists(&path)
                 .await
                 .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to check existence of '{path}': {e}"),
+                    message: format!("Failed to check existence of '{}': {e}", path.display()),
                 })
                 .map_err(VmRustFnError::from)
         })
@@ -699,6 +750,7 @@ impl io::IoNamespaceFs for NativeSysOps {
         path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
+        let path = self.working_dir.resolve(&path);
         SysOpOutput::async_op(async move {
             match tokio::fs::remove_file(&path).await {
                 Ok(()) => Ok(()),
@@ -716,13 +768,13 @@ impl io::IoNamespaceFs for NativeSysOps {
                     {
                         return Err(VmBamlError::Io {
                             message: format!(
-                                "Failed to remove '{path}': it is a directory; use baml.fs.remove_dir or baml.fs.remove_dir_all to delete directories"
+                                "Failed to remove '{}': it is a directory; use baml.fs.remove_dir or baml.fs.remove_dir_all to delete directories", path.display()
                             ),
                         }
                         .into());
                     }
                     Err(VmBamlError::Io {
-                        message: format!("Failed to remove file '{path}': {e}"),
+                        message: format!("Failed to remove file '{}': {e}", path.display()),
                     }
                     .into())
                 }
@@ -737,11 +789,12 @@ impl io::IoNamespaceFs for NativeSysOps {
         path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
+        let path = self.working_dir.resolve(&path);
         SysOpOutput::async_op(async move {
             tokio::fs::remove_dir(&path)
                 .await
                 .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to remove directory '{path}': {e}"),
+                    message: format!("Failed to remove directory '{}': {e}", path.display()),
                 })
                 .map_err(VmRustFnError::from)
         })
@@ -754,13 +807,14 @@ impl io::IoNamespaceFs for NativeSysOps {
         path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
+        let path = self.working_dir.resolve(&path);
         SysOpOutput::async_op(async move {
             match tokio::fs::remove_dir_all(&path).await {
                 Ok(()) => Ok(()),
                 // `force: true` semantics: a missing path is not an error.
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
                 Err(e) => Err(VmBamlError::Io {
-                    message: format!("Failed to remove directory '{path}': {e}"),
+                    message: format!("Failed to remove directory '{}': {e}", path.display()),
                 }
                 .into()),
             }
@@ -774,15 +828,16 @@ impl io::IoNamespaceFs for NativeSysOps {
         path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
+        let path = self.working_dir.resolve(&path);
         SysOpOutput::async_op(async move {
             let metadata = tokio::fs::metadata(&path)
                 .await
                 .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to stat '{path}': {e}"),
+                    message: format!("Failed to stat '{}': {e}", path.display()),
                 })?;
             i64::try_from(metadata.len())
                 .map_err(|_| VmBamlError::Io {
-                    message: format!("File '{path}' size exceeds i64::MAX"),
+                    message: format!("File '{}' size exceeds i64::MAX", path.display()),
                 })
                 .map_err(VmRustFnError::from)
         })
@@ -795,11 +850,12 @@ impl io::IoNamespaceFs for NativeSysOps {
         path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
+        let path = self.working_dir.resolve(&path);
         SysOpOutput::async_op(async move {
             tokio::fs::read_to_string(&path)
                 .await
                 .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to read file '{path}': {e}"),
+                    message: format!("Failed to read file '{}': {e}", path.display()),
                 })
                 .map_err(VmRustFnError::from)
         })
@@ -813,6 +869,7 @@ impl io::IoNamespaceFs for NativeSysOps {
         content: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
+        let path = self.working_dir.resolve(&path);
         SysOpOutput::async_op(async move {
             write_path(&path, content.as_bytes())
                 .await
@@ -828,6 +885,7 @@ impl io::IoNamespaceFs for NativeSysOps {
         content: Vec<u8>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<i64> {
+        let path = self.working_dir.resolve(&path);
         SysOpOutput::async_op(async move {
             write_path(&path, &content)
                 .await
@@ -842,15 +900,19 @@ impl io::IoNamespaceFs for NativeSysOps {
         path: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<owned::fs::DirEntry>> {
+        let path = self.working_dir.resolve(&path);
         SysOpOutput::async_op(async move {
             let mut rd = tokio::fs::read_dir(&path)
                 .await
                 .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to read directory '{path}': {e}"),
+                    message: format!("Failed to read directory '{}': {e}", path.display()),
                 })?;
             let mut entries = Vec::new();
             while let Some(entry) = rd.next_entry().await.map_err(|e| VmBamlError::Io {
-                message: format!("Failed to read directory entry in '{path}': {e}"),
+                message: format!(
+                    "Failed to read directory entry in '{}': {e}",
+                    path.display()
+                ),
             })? {
                 let ft = entry.file_type().await.map_err(|e| VmBamlError::Io {
                     message: format!(
@@ -877,6 +939,7 @@ impl io::IoNamespaceFs for NativeSysOps {
         options: owned::fs::MkdirOptions,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
+        let path = self.working_dir.resolve(&path);
         SysOpOutput::async_op(async move {
             if options.recursive {
                 tokio::fs::create_dir_all(&path).await
@@ -884,28 +947,158 @@ impl io::IoNamespaceFs for NativeSysOps {
                 tokio::fs::create_dir(&path).await
             }
             .map_err(|e| VmBamlError::Io {
-                message: format!("Failed to create directory '{path}': {e}"),
+                message: format!("Failed to create directory '{}': {e}", path.display()),
             })
             .map_err(VmRustFnError::from)
         })
     }
+
+    fn chmod(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        path: String,
+        mode: i64,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        let mode = match permission_bits(mode) {
+            Ok(mode) => mode,
+            Err(err) => return SysOpOutput::err(err),
+        };
+        let path = self.working_dir.resolve(&path);
+        SysOpOutput::async_op(async move { chmod_path(&path, mode).await })
+    }
+
+    fn symlink(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        target: String,
+        path: String,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        let path = self.working_dir.resolve(&path);
+        SysOpOutput::async_op(async move {
+            symlink_path(&target, &path)
+                .await
+                .map_err(|e| VmBamlError::Io {
+                    message: format!(
+                        "Failed to create symlink '{}' -> '{target}': {e}",
+                        path.display()
+                    ),
+                })
+                .map_err(VmRustFnError::from)
+        })
+    }
+}
+
+/// Narrow a BAML `int` mode to the POSIX permission bits.
+///
+/// The accepted range is the permission triple plus the setuid/setgid/sticky
+/// digit. Everything else — negative values, file-type bits from a `stat`
+/// result, anything past `u32` — is rejected rather than masked, because a mode
+/// outside that range is a caller mistake and the kernel would silently drop the
+/// extra bits (`chmod_common` masks with `S_IALLUGO`).
+fn permission_bits(mode: i64) -> Result<u32, VmBamlError> {
+    u32::try_from(mode)
+        .ok()
+        .filter(|mode| *mode <= 0o7777)
+        .ok_or_else(|| VmBamlError::InvalidArgument {
+            // `{:#o}` renders a negative `i64` as its 64-bit two's complement,
+            // which reads as a nonsensically large mode; show those in decimal.
+            message: match mode {
+                0.. => {
+                    format!("Invalid file mode {mode:#o}: expected a permission mask in 0..=0o7777")
+                }
+                _ => format!("Invalid file mode {mode}: expected a permission mask in 0..=0o7777"),
+            },
+        })
+}
+
+#[cfg(unix)]
+async fn chmod_path(path: &std::path::Path, mode: u32) -> Result<(), VmRustFnError> {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    tokio::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
+        .await
+        .map_err(|e| VmBamlError::Io {
+            message: format!("Failed to set permissions on '{}': {e}", path.display()),
+        })
+        .map_err(VmRustFnError::from)
+}
+
+/// Windows has no mode bits — `Permissions` carries a single read-only flag —
+/// so the owner-write bit decides it and the rest of `mode` is ignored. This
+/// matches libuv (and therefore Node's `fs.chmod`), which tests exactly
+/// `_S_IWRITE`.
+///
+/// Reading the current permissions first is what makes a missing `path` fail
+/// here as it does on unix, rather than silently succeeding.
+#[cfg(windows)]
+async fn chmod_path(path: &std::path::Path, mode: u32) -> Result<(), VmRustFnError> {
+    let mut permissions = tokio::fs::metadata(path)
+        .await
+        .map_err(|e| VmBamlError::Io {
+            message: format!("Failed to read permissions of '{}': {e}", path.display()),
+        })?
+        .permissions();
+    permissions.set_readonly((mode & 0o200) == 0);
+    tokio::fs::set_permissions(path, permissions)
+        .await
+        .map_err(|e| VmBamlError::Io {
+            message: format!("Failed to set permissions on '{}': {e}", path.display()),
+        })
+        .map_err(VmRustFnError::from)
+}
+
+#[cfg(unix)]
+async fn symlink_path(target: &str, path: &std::path::Path) -> std::io::Result<()> {
+    tokio::fs::symlink(target, path).await
+}
+
+/// Windows picks the link flavor at creation time and cannot change it later,
+/// so `target` is resolved the way the OS will resolve it — a relative target
+/// hangs off the link's own directory — and a directory link is created only
+/// when that resolves to a directory today. A dangling link becomes a file
+/// link, matching Node's autodetect.
+#[cfg(windows)]
+async fn symlink_path(target: &str, path: &std::path::Path) -> std::io::Result<()> {
+    let target_path = std::path::Path::new(target);
+    let resolved = if target_path.is_absolute() {
+        target_path.to_path_buf()
+    } else {
+        path.parent()
+            .unwrap_or_else(|| std::path::Path::new(""))
+            .join(target_path)
+    };
+    if tokio::fs::metadata(&resolved)
+        .await
+        .is_ok_and(|metadata| metadata.is_dir())
+    {
+        tokio::fs::symlink_dir(target, path).await
+    } else {
+        tokio::fs::symlink_file(target, path).await
+    }
 }
 
 // Auto-creates missing parent dirs, matching Bun's `Bun.write` behavior.
-async fn write_path(path: &str, data: &[u8]) -> Result<i64, VmBamlError> {
-    if let Some(parent) = std::path::Path::new(path).parent() {
+async fn write_path(path: &std::path::Path, data: &[u8]) -> Result<i64, VmBamlError> {
+    if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
             tokio::fs::create_dir_all(parent)
                 .await
                 .map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to create parent directories for '{path}': {e}"),
+                    message: format!(
+                        "Failed to create parent directories for '{}': {e}",
+                        path.display()
+                    ),
                 })?;
         }
     }
     tokio::fs::write(path, data)
         .await
         .map_err(|e| VmBamlError::Io {
-            message: format!("Failed to write file '{path}': {e}"),
+            message: format!("Failed to write file '{}': {e}", path.display()),
         })?;
     i64::try_from(data.len()).map_err(|_| VmBamlError::Io {
         message: format!("Write size {} exceeds i64::MAX", data.len()),
@@ -918,14 +1111,29 @@ async fn write_path(path: &str, data: &[u8]) -> Result<i64, VmBamlError> {
 
 use sys_glob::GlobPattern;
 
-type GlobHandle = GlobPattern;
+/// A compiled pattern as `$rust_type` data.
+struct GlobHandle(GlobPattern);
 
-fn downcast_glob_handle(glob: &owned::glob::Glob) -> Result<Arc<GlobHandle>, VmBamlError> {
+impl BexRustData for GlobHandle {
+    fn measure(&self, _: &mut sys_types::Meter) {
+        // Bounded by the pattern text; the regex crate does not report its size.
+    }
+}
+
+impl std::ops::Deref for GlobHandle {
+    type Target = GlobPattern;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+fn downcast_glob_handle(glob: &owned::glob::Glob) -> Result<Arc<GlobHandle>, VmInternalError> {
     glob._handle
         .clone()
-        .downcast::<GlobHandle>()
-        .map_err(|_| VmBamlError::DevOther {
-            message: "Invalid glob handle type".into(),
+        .downcast_payload::<GlobHandle>()
+        .map_err(|_| VmInternalError::RustTypeError {
+            expected: TypeId::of::<GlobHandle>(),
+            got: glob._handle.type_id(),
         })
 }
 
@@ -939,7 +1147,7 @@ impl io::IoNamespaceGlob for NativeSysOps {
     ) -> SysOpOutput<owned::glob::Glob> {
         match GlobPattern::new(&pattern) {
             Ok(gp) => {
-                let handle: Arc<dyn std::any::Any + Send + Sync> = Arc::new(gp);
+                let handle: Arc<dyn BexRustData> = Arc::new(GlobHandle(gp));
                 SysOpOutput::ok(owned::glob::Glob { _handle: handle })
             }
             Err(e) => SysOpOutput::err(VmBamlError::ParseError { message: e }),
@@ -956,6 +1164,7 @@ impl io::IoClassGlobGlob for NativeSysOps {
         root: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<String>> {
+        let working_dir = self.working_dir.clone();
         SysOpOutput::async_op(async move {
             let handle = downcast_glob_handle(&glob)?;
 
@@ -991,15 +1200,21 @@ impl io::IoClassGlobGlob for NativeSysOps {
                     )
                 }
                 _ => {
-                    return Err(VmRustFnError::from(VmBamlError::InvalidArgument {
-                        message: "scan argument must be a string or ScanOptions".into(),
+                    // `root` is declared `string | ScanOptions`, so a value of
+                    // any other shape means the wire value disagrees with the
+                    // declared parameter type.
+                    return Err(VmRustFnError::from(VmInternalError::BridgeFailure {
+                        message: format!(
+                            "glob scan root is neither a string nor a ScanOptions: {}",
+                            root.type_name()
+                        ),
                     }));
                 }
             };
 
-            let cwd_path = std::path::Path::new(&cwd);
+            let cwd_path = working_dir.resolve(&cwd);
             let abs_cwd = if cwd_path.is_absolute() {
-                cwd_path.to_path_buf()
+                cwd_path
             } else {
                 std::env::current_dir()
                     .map_err(|e| VmBamlError::Io {
@@ -1107,47 +1322,145 @@ impl io::IoClassGlobGlob for NativeSysOps {
 // ============================================================================
 
 type NativeProcessResult = Result<owned::sys::ProcessExit, String>;
-type NativeProcessLineResult = Result<String, String>;
 
 struct LiveProcessHandle {
     kill_tx: tokio::sync::watch::Sender<bool>,
     exit_rx: tokio::sync::watch::Receiver<Option<NativeProcessResult>>,
-    stdin: tokio::sync::Mutex<Option<tokio::process::ChildStdin>>,
     deadline: Option<tokio::time::Instant>,
     timeout_ms: Option<i64>,
     label: String,
 }
 
-struct ProcessLineStreamHandle {
-    lines: tokio::sync::Mutex<tokio::sync::mpsc::Receiver<NativeProcessLineResult>>,
+impl BexRustData for LiveProcessHandle {
+    fn measure(&self, meter: &mut sys_types::Meter) {
+        meter.bytes(self.label.capacity());
+    }
+}
+
+struct ReadPipeHandle {
+    reader: tokio::sync::Mutex<Option<Box<dyn tokio::io::AsyncRead + Send + Unpin>>>,
     close_tx: tokio::sync::watch::Sender<bool>,
-    closed: std::sync::atomic::AtomicBool,
-    deadline: Option<tokio::time::Instant>,
-    timeout_ms: Option<i64>,
     label: String,
+}
+
+impl BexRustData for ReadPipeHandle {
+    fn measure(&self, meter: &mut sys_types::Meter) {
+        meter.bytes(self.label.capacity());
+    }
+}
+
+struct WritePipeHandle {
+    writer: tokio::sync::Mutex<Option<Box<dyn tokio::io::AsyncWrite + Send + Unpin>>>,
+    label: String,
+}
+
+impl BexRustData for WritePipeHandle {
+    fn measure(&self, meter: &mut sys_types::Meter) {
+        meter.bytes(self.label.capacity());
+    }
+}
+
+fn stderr_stdio(
+    mode: Option<&BexExternalValue>,
+) -> Result<(std::process::Stdio, bool), VmInternalError> {
+    use std::process::Stdio;
+
+    let Some(mode) = mode else {
+        return Ok((Stdio::inherit(), false));
+    };
+    // `mode` is the `baml.sys.StderrMode` enum, so neither a non-variant value
+    // nor an unrecognized variant is reachable from well-typed BAML: the first
+    // means the wire value disagrees with the declared type, the second that
+    // the enum grew a variant this match was never taught.
+    let BexExternalValue::Variant { variant_name, .. } = mode else {
+        return Err(VmInternalError::BridgeFailure {
+            message: format!(
+                "stderr mode is not a StderrMode variant: {}",
+                mode.type_name()
+            ),
+        });
+    };
+    match variant_name.as_str() {
+        "Inherit" => Ok((Stdio::inherit(), false)),
+        "Pipe" => Ok((Stdio::piped(), true)),
+        "Discard" => Ok((Stdio::null(), false)),
+        other => Err(VmInternalError::BridgeFailure {
+            message: format!(
+                "unrecognized StderrMode variant '{other}': expected Inherit, Pipe, or Discard"
+            ),
+        }),
+    }
+}
+
+fn downcast_read_pipe(pipe: &owned::sys::ReadPipe) -> Result<Arc<ReadPipeHandle>, VmInternalError> {
+    pipe._pipe
+        .clone()
+        .downcast_payload::<ReadPipeHandle>()
+        .map_err(|_| VmInternalError::RustTypeError {
+            expected: TypeId::of::<ReadPipeHandle>(),
+            got: pipe._pipe.type_id(),
+        })
+}
+
+fn downcast_write_pipe(
+    pipe: &owned::sys::WritePipe,
+) -> Result<Arc<WritePipeHandle>, VmInternalError> {
+    pipe._pipe
+        .clone()
+        .downcast_payload::<WritePipeHandle>()
+        .map_err(|_| VmInternalError::RustTypeError {
+            expected: TypeId::of::<WritePipeHandle>(),
+            got: pipe._pipe.type_id(),
+        })
+}
+
+fn read_pipe(
+    reader: impl tokio::io::AsyncRead + Send + Unpin + 'static,
+    label: String,
+) -> owned::sys::ReadPipe {
+    let (close_tx, _close_rx) = tokio::sync::watch::channel(false);
+    owned::sys::ReadPipe {
+        _pipe: Arc::new(ReadPipeHandle {
+            reader: tokio::sync::Mutex::new(Some(Box::new(reader))),
+            close_tx,
+            label,
+        }),
+    }
+}
+
+fn read_pipe_closed_error(label: &str) -> VmBamlError {
+    VmBamlError::Io {
+        message: format!("Read pipe for '{label}' is closed"),
+    }
+}
+
+async fn close_read_pipe(handle: &ReadPipeHandle) {
+    handle.close_tx.send_replace(true);
+    handle.reader.lock().await.take();
+}
+
+fn write_pipe(
+    writer: impl tokio::io::AsyncWrite + Send + Unpin + 'static,
+    label: String,
+) -> owned::sys::WritePipe {
+    owned::sys::WritePipe {
+        _pipe: Arc::new(WritePipeHandle {
+            writer: tokio::sync::Mutex::new(Some(Box::new(writer))),
+            label,
+        }),
+    }
 }
 
 fn downcast_process_handle(
     process: &owned::sys::Process,
-) -> Result<Arc<LiveProcessHandle>, VmBamlError> {
+) -> Result<Arc<LiveProcessHandle>, VmInternalError> {
     process
         ._handle
         .clone()
-        .downcast::<LiveProcessHandle>()
-        .map_err(|_| VmBamlError::DevOther {
-            message: "Invalid process handle type".into(),
-        })
-}
-
-fn downcast_process_line_stream_handle(
-    stream: &owned::sys::ProcessLineStream,
-) -> Result<Arc<ProcessLineStreamHandle>, VmBamlError> {
-    stream
-        ._handle
-        .clone()
-        .downcast::<ProcessLineStreamHandle>()
-        .map_err(|_| VmBamlError::DevOther {
-            message: "Invalid process stdout stream handle type".into(),
+        .downcast_payload::<LiveProcessHandle>()
+        .map_err(|_| VmInternalError::RustTypeError {
+            expected: TypeId::of::<LiveProcessHandle>(),
+            got: process._handle.type_id(),
         })
 }
 
@@ -1170,7 +1483,10 @@ fn process_timeout_error(label: &str, timeout_ms: Option<i64>) -> VmBamlError {
     let duration_ms = timeout_ms.unwrap_or(0);
     VmBamlError::Timeout {
         message: format!("Command '{label}' timed out after {duration_ms}ms"),
-        duration_ms: Some(duration_ms),
+        duration: Some(std::time::Duration::from_millis(
+            u64::try_from(duration_ms).unwrap_or(0),
+        )),
+        timeout_type: "timeout".to_string(),
     }
 }
 
@@ -1187,103 +1503,51 @@ async fn receive_process_exit(
     }
 }
 
-fn start_stdout_line_reader(
-    stdout: tokio::process::ChildStdout,
-    deadline: Option<tokio::time::Instant>,
-    timeout_ms: Option<i64>,
-    label: String,
-) -> owned::sys::ProcessLineStream {
-    let (lines_tx, lines_rx) = tokio::sync::mpsc::channel(32);
-    let (close_tx, mut close_rx) = tokio::sync::watch::channel(false);
-    let reader_label = label.clone();
-
-    tokio::spawn(async move {
-        use tokio::io::AsyncBufReadExt as _;
-
-        let mut reader = tokio::io::BufReader::new(stdout);
-        let mut bytes = Vec::new();
-        loop {
-            bytes.clear();
-            let read_result = tokio::select! {
-                biased;
-                _ = close_rx.changed() => break,
-                result = reader.read_until(b'\n', &mut bytes) => result,
-            };
-
-            match read_result {
-                Ok(0) => break,
-                Ok(_) => {
-                    if bytes.last() == Some(&b'\n') {
-                        bytes.pop();
-                    }
-                    if bytes.last() == Some(&b'\r') {
-                        bytes.pop();
-                    }
-                    let line = String::from_utf8_lossy(&bytes).into_owned();
-                    tokio::select! {
-                        biased;
-                        _ = close_rx.changed() => break,
-                        result = lines_tx.send(Ok(line)) => {
-                            if result.is_err() {
-                                break;
-                            }
-                        }
-                    }
-                }
-                Err(error) => {
-                    let _ = lines_tx
-                        .send(Err(format!(
-                            "Failed to read stdout from '{reader_label}': {error}"
-                        )))
-                        .await;
-                    break;
-                }
-            }
-        }
-    });
-
-    owned::sys::ProcessLineStream {
-        _handle: Arc::new(ProcessLineStreamHandle {
-            lines: tokio::sync::Mutex::new(lines_rx),
-            close_tx,
-            closed: std::sync::atomic::AtomicBool::new(false),
-            deadline,
-            timeout_ms,
-            label,
-        }),
-    }
-}
-
-impl io::IoClassSysProcessLineStream for NativeSysOps {
-    fn _next(
+impl io::IoClassSysReadPipe for NativeSysOps {
+    fn read(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        processlinestream: owned::sys::ProcessLineStream,
+        readpipe: owned::sys::ReadPipe,
+        limit: i64,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<String>> {
+    ) -> SysOpOutput<Option<Vec<u8>>> {
+        use tokio::io::AsyncReadExt as _;
+
+        let limit = match limit {
+            ..=0 => return SysOpOutput::Ready(Ok(Some(Vec::new()))),
+            1.. => usize::try_from(limit)
+                .unwrap_or(MAX_READ_CHUNK)
+                .min(MAX_READ_CHUNK),
+        };
         SysOpOutput::async_op(async move {
-            let handle = downcast_process_line_stream_handle(&processlinestream)?;
-            if handle.closed.load(std::sync::atomic::Ordering::Acquire) {
+            let handle = downcast_read_pipe(&readpipe)?;
+            let mut close_rx = handle.close_tx.subscribe();
+            if *close_rx.borrow() {
+                return Err(read_pipe_closed_error(&handle.label).into());
+            }
+            let mut guard = handle.reader.lock().await;
+            if *close_rx.borrow() {
+                return Err(read_pipe_closed_error(&handle.label).into());
+            }
+            let reader = guard
+                .as_mut()
+                .ok_or_else(|| read_pipe_closed_error(&handle.label))?;
+            let mut buffer = vec![0u8; limit];
+            let read = tokio::select! {
+                biased;
+                _ = close_rx.changed() => {
+                    return Err(read_pipe_closed_error(&handle.label).into());
+                }
+                result = reader.read(&mut buffer) => result.map_err(|error| VmBamlError::Io {
+                    message: format!("Failed to read from '{}': {error}", handle.label),
+                })?,
+            };
+            if read == 0 {
                 return Ok(None);
             }
-            let mut lines = handle.lines.lock().await;
-            let next_line = if let Some(deadline) = handle.deadline {
-                match tokio::time::timeout_at(deadline, lines.recv()).await {
-                    Ok(line) => line,
-                    Err(_) => {
-                        return Err(process_timeout_error(&handle.label, handle.timeout_ms).into());
-                    }
-                }
-            } else {
-                lines.recv().await
-            };
-
-            match next_line {
-                Some(Ok(line)) => Ok(Some(line)),
-                Some(Err(message)) => Err(VmBamlError::Io { message }.into()),
-                None => Ok(None),
-            }
+            buffer.truncate(read);
+            Ok(Some(buffer))
         })
     }
 
@@ -1291,62 +1555,91 @@ impl io::IoClassSysProcessLineStream for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        processlinestream: owned::sys::ProcessLineStream,
+        readpipe: owned::sys::ReadPipe,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        if let Ok(handle) = downcast_process_line_stream_handle(&processlinestream) {
-            handle
-                .closed
-                .store(true, std::sync::atomic::Ordering::Release);
-            let _ = handle.close_tx.send(true);
-        }
-        SysOpOutput::ok(())
+        SysOpOutput::async_op(async move {
+            let handle = downcast_read_pipe(&readpipe)?;
+            close_read_pipe(&handle).await;
+            Ok(())
+        })
+    }
+}
+
+impl io::IoClassSysWritePipe for NativeSysOps {
+    fn write_some(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        writepipe: owned::sys::WritePipe,
+        data: Vec<u8>,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<i64> {
+        use tokio::io::AsyncWriteExt as _;
+
+        SysOpOutput::async_op(async move {
+            let handle = downcast_write_pipe(&writepipe)?;
+            let mut guard = handle.writer.lock().await;
+            let writer = guard.as_mut().ok_or_else(|| VmBamlError::Io {
+                message: format!("Write pipe for '{}' is closed", handle.label),
+            })?;
+            let written = writer.write(&data).await.map_err(|error| VmBamlError::Io {
+                message: format!("Failed to write to '{}': {error}", handle.label),
+            })?;
+            i64::try_from(written).map_err(|_| {
+                VmRustFnError::from(VmBamlError::Io {
+                    message: "pipe write count exceeds int range".to_string(),
+                })
+            })
+        })
+    }
+
+    fn flush(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        writepipe: owned::sys::WritePipe,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        use tokio::io::AsyncWriteExt as _;
+
+        SysOpOutput::async_op(async move {
+            let handle = downcast_write_pipe(&writepipe)?;
+            let mut guard = handle.writer.lock().await;
+            let writer = guard.as_mut().ok_or_else(|| VmBamlError::Io {
+                message: format!("Write pipe for '{}' is closed", handle.label),
+            })?;
+            writer.flush().await.map_err(|error| VmBamlError::Io {
+                message: format!("Failed to flush '{}': {error}", handle.label),
+            })?;
+            Ok(())
+        })
+    }
+
+    fn close(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        writepipe: owned::sys::WritePipe,
+        _ctx: &SysOpContext,
+    ) -> SysOpOutput<()> {
+        use tokio::io::AsyncWriteExt as _;
+
+        SysOpOutput::async_op(async move {
+            let handle = downcast_write_pipe(&writepipe)?;
+            let mut writer = handle.writer.lock().await;
+            if let Some(writer) = writer.as_mut() {
+                writer.flush().await.map_err(|error| VmBamlError::Io {
+                    message: format!("Failed to flush '{}' before close: {error}", handle.label),
+                })?;
+            }
+            writer.take();
+            Ok(())
+        })
     }
 }
 
 impl io::IoClassSysProcess for NativeSysOps {
-    fn write_stdin(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        process: owned::sys::Process,
-        data: String,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::async_op(async move {
-            use tokio::io::AsyncWriteExt as _;
-
-            let handle = downcast_process_handle(&process)?;
-            let mut stdin = handle.stdin.lock().await;
-            let pipe = stdin.as_mut().ok_or_else(|| VmBamlError::Io {
-                message: format!("Stdin for '{}' is not open", handle.label),
-            })?;
-            pipe.write_all(data.as_bytes())
-                .await
-                .map_err(|error| VmBamlError::Io {
-                    message: format!("Failed to write stdin to '{}': {error}", handle.label),
-                })?;
-            pipe.flush().await.map_err(|error| VmBamlError::Io {
-                message: format!("Failed to flush stdin for '{}': {error}", handle.label),
-            })?;
-            Ok(())
-        })
-    }
-
-    fn close_stdin(
-        &self,
-        _heap: &Arc<BexHeap>,
-        _call_id: CallId,
-        process: owned::sys::Process,
-        _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
-        SysOpOutput::async_op(async move {
-            let handle = downcast_process_handle(&process)?;
-            handle.stdin.lock().await.take();
-            Ok(())
-        })
-    }
-
     fn wait(
         &self,
         _heap: &Arc<BexHeap>,
@@ -1398,16 +1691,23 @@ impl io::IoClassSysProcess for NativeSysOps {
         process: owned::sys::Process,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        if let Ok(handle) = downcast_process_handle(&process) {
-            let _ = handle.kill_tx.send(true);
-        }
-        if let Ok(handle) = downcast_process_line_stream_handle(&process.stdout) {
-            handle
-                .closed
-                .store(true, std::sync::atomic::Ordering::Release);
-            let _ = handle.close_tx.send(true);
-        }
-        SysOpOutput::ok(())
+        SysOpOutput::async_op(async move {
+            if let Ok(handle) = downcast_process_handle(&process) {
+                let _ = handle.kill_tx.send(true);
+            }
+            if let Ok(handle) = downcast_write_pipe(&process.stdin) {
+                handle.writer.lock().await.take();
+            }
+            for pipe in [Some(&process.stdout), process.stderr.as_ref()]
+                .into_iter()
+                .flatten()
+            {
+                if let Ok(handle) = downcast_read_pipe(pipe) {
+                    close_read_pipe(&handle).await;
+                }
+            }
+            Ok(())
+        })
     }
 }
 
@@ -1416,16 +1716,18 @@ impl io::IoClassSysProcess for NativeSysOps {
 async fn run_process(
     cmd: &mut tokio::process::Command,
     options: Option<owned::sys::ProcessOptions>,
+    working_dir: &WorkingDir,
     label: &str,
 ) -> Result<owned::sys::ShellOutput, VmRustFnError> {
     use std::process::Stdio;
 
     use tokio::io::AsyncWriteExt as _;
 
+    if let Some(dir) = working_dir.for_child(options.as_ref().and_then(|opts| opts.cwd.as_deref()))
+    {
+        cmd.current_dir(dir);
+    }
     if let Some(ref opts) = options {
-        if let Some(ref cwd) = opts.cwd {
-            cmd.current_dir(cwd);
-        }
         if let Some(ref env) = opts.env {
             cmd.env_clear();
             cmd.envs(env.iter().map(|(k, v)| (k.as_str(), v.as_str())));
@@ -1473,7 +1775,8 @@ async fn run_process(
                 wait_task.abort();
                 return Err(VmRustFnError::from(VmBamlError::Timeout {
                     message: format!("Command '{label}' timed out after {ms}ms"),
-                    duration_ms: i64::try_from(duration.as_millis()).ok(),
+                    duration: Some(duration),
+                    timeout_type: "timeout".to_string(),
                 }));
             }
         }
@@ -1517,12 +1820,13 @@ impl io::IoNamespaceSys for NativeSysOps {
         options: Option<owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::sys::ShellOutput> {
+        let working_dir = self.working_dir.clone();
         SysOpOutput::async_op(async move {
-            let mut cmd = tokio::process::Command::new(&program);
+            let mut cmd = tokio::process::Command::new(working_dir.resolve_program(&program));
             if let Some(ref a) = args {
                 cmd.args(a);
             }
-            run_process(&mut cmd, options, &program).await
+            run_process(&mut cmd, options, &working_dir, &program).await
         })
     }
 
@@ -1535,19 +1839,22 @@ impl io::IoNamespaceSys for NativeSysOps {
         options: Option<owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::sys::Process> {
+        let working_dir = self.working_dir.clone();
         SysOpOutput::async_op(async move {
             use std::process::Stdio;
 
             use tokio::io::AsyncWriteExt as _;
 
-            let mut cmd = tokio::process::Command::new(&program);
+            let mut cmd = tokio::process::Command::new(working_dir.resolve_program(&program));
             if let Some(ref args) = args {
                 cmd.args(args);
             }
+            if let Some(dir) =
+                working_dir.for_child(options.as_ref().and_then(|options| options.cwd.as_deref()))
+            {
+                cmd.current_dir(dir);
+            }
             if let Some(ref options) = options {
-                if let Some(ref cwd) = options.cwd {
-                    cmd.current_dir(cwd);
-                }
                 if let Some(ref env) = options.env {
                     cmd.env_clear();
                     cmd.envs(
@@ -1555,40 +1862,28 @@ impl io::IoNamespaceSys for NativeSysOps {
                             .map(|(key, value)| (key.as_str(), value.as_str())),
                     );
                 }
-                if options.stdin.is_some() || options.keep_stdin_open == Some(true) {
-                    cmd.stdin(Stdio::piped());
-                }
             }
 
-            cmd.stdout(Stdio::piped())
-                .stderr(Stdio::inherit())
+            let (stderr_stdio, stderr_piped) =
+                stderr_stdio(options.as_ref().and_then(|options| options.stderr.as_ref()))?;
+            cmd.stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(stderr_stdio)
                 .kill_on_drop(true);
 
             let mut child = cmd.spawn().map_err(|error| VmBamlError::Io {
                 message: format!("Failed to spawn '{program}': {error}"),
             })?;
-            let stdout = child.stdout.take().ok_or_else(|| VmBamlError::Io {
-                message: format!("Failed to capture stdout from '{program}'"),
-            })?;
-
-            let keep_stdin_open = options
-                .as_ref()
-                .and_then(|options| options.keep_stdin_open)
-                .unwrap_or(false);
-            let mut stdin = child.stdin.take();
-            if let Some(stdin_data) = options.as_ref().and_then(|options| options.stdin.as_ref()) {
-                if let Some(stdin) = stdin.as_mut() {
-                    stdin
-                        .write_all(stdin_data.as_bytes())
-                        .await
-                        .map_err(|error| VmBamlError::Io {
-                            message: format!("Failed to write stdin to '{program}': {error}"),
-                        })?;
-                }
-            }
-            if !keep_stdin_open {
-                stdin = None;
-            }
+            let missing_pipe = |stream: &str| VmBamlError::Io {
+                message: format!("Failed to capture {stream} from '{program}'"),
+            };
+            let child_stdin = child.stdin.take().ok_or_else(|| missing_pipe("stdin"))?;
+            let child_stdout = child.stdout.take().ok_or_else(|| missing_pipe("stdout"))?;
+            let child_stderr = if stderr_piped {
+                Some(child.stderr.take().ok_or_else(|| missing_pipe("stderr"))?)
+            } else {
+                None
+            };
 
             let timeout_ms = options
                 .as_ref()
@@ -1599,7 +1894,10 @@ impl io::IoNamespaceSys for NativeSysOps {
                     milliseconds.cast_unsigned(),
                 ))
             });
-            let stdout = start_stdout_line_reader(stdout, deadline, timeout_ms, program.clone());
+            let stdin = write_pipe(child_stdin, format!("{program} stdin"));
+            let stdout = read_pipe(child_stdout, format!("{program} stdout"));
+            let stderr = child_stderr
+                .map(|child_stderr| read_pipe(child_stderr, format!("{program} stderr")));
 
             let (kill_tx, mut kill_rx) = tokio::sync::watch::channel(false);
             let (exit_tx, exit_rx) = tokio::sync::watch::channel(None);
@@ -1618,12 +1916,38 @@ impl io::IoNamespaceSys for NativeSysOps {
                 let _ = exit_tx.send(Some(exit));
             });
 
+            if let Some(stdin_data) = options.as_ref().and_then(|options| options.stdin.as_ref()) {
+                let handle = downcast_write_pipe(&stdin)?;
+                let mut writer = handle.writer.lock().await;
+                let write_result = if let Some(writer) = writer.as_mut() {
+                    let write = writer.write_all(stdin_data.as_bytes());
+                    let result =
+                        match deadline {
+                            Some(deadline) => tokio::time::timeout_at(deadline, write)
+                                .await
+                                .map_err(|_| {
+                                    let _ = kill_tx.send(true);
+                                    process_timeout_error(&program, timeout_ms)
+                                })?,
+                            None => write.await,
+                        };
+                    result.map_err(|error| VmBamlError::Io {
+                        message: format!("Failed to write stdin to '{program}': {error}"),
+                    })
+                } else {
+                    Ok(())
+                };
+                writer.take();
+                write_result?;
+            }
+
             Ok(owned::sys::Process {
+                stdin,
                 stdout,
+                stderr,
                 _handle: Arc::new(LiveProcessHandle {
                     kill_tx,
                     exit_rx,
-                    stdin: tokio::sync::Mutex::new(stdin),
                     deadline,
                     timeout_ms,
                     label: program,
@@ -1640,62 +1964,34 @@ impl io::IoNamespaceSys for NativeSysOps {
         options: Option<owned::sys::ProcessOptions>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::sys::ShellOutput> {
+        let working_dir = self.working_dir.clone();
         SysOpOutput::async_op(async move {
             let resolved = crate::shell::default_shell();
             let mut cmd = tokio::process::Command::new(&resolved.path);
             resolved.apply(&mut cmd, &command);
-            run_process(&mut cmd, options, &command).await
+            run_process(&mut cmd, options, &working_dir, &command).await
         })
     }
 
-    fn sleep(
+    fn _sleep(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        delay: BexExternalValue,
+        delay_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        let nanos = match sleep_nanos_from_delay(delay) {
-            Ok(nanos) => nanos,
-            Err(err) => return SysOpOutput::err(err),
-        };
+        // Zero or negative does not wait; past `u64` nanoseconds clamps.
+        let delay = timeout_from_nanos(&delay_nanos).unwrap_or_default();
         SysOpOutput::async_op(async move {
-            tokio::time::sleep(std::time::Duration::from_nanos(nanos)).await;
+            tokio::time::sleep(delay).await;
             Ok(())
         })
     }
-}
 
-fn sleep_nanos_from_delay(delay: BexExternalValue) -> Result<u64, VmRustFnError> {
-    match delay {
-        BexExternalValue::Instance {
-            class_name,
-            mut fields,
-            ..
-        } if class_name == "baml.time.Duration" => {
-            let Some(nanos) = fields.swap_remove("_nanoseconds") else {
-                return Err(VmRustFnError::from(VmBamlError::Io {
-                    message: "sleep delay is missing Duration._nanoseconds".to_string(),
-                }));
-            };
-            let BexExternalValue::Bigint(nanos) = nanos else {
-                return Err(VmRustFnError::from(VmBamlError::Io {
-                    message: "sleep delay Duration._nanoseconds is not a bigint".to_string(),
-                }));
-            };
-            if nanos.sign() == num_bigint::Sign::Plus {
-                Ok(u64::try_from(&nanos).unwrap_or(u64::MAX))
-            } else {
-                Ok(0)
-            }
-        }
-        BexExternalValue::Union { value, .. } => sleep_nanos_from_delay(*value),
-        other => Err(VmRustFnError::from(VmBamlError::Io {
-            message: format!(
-                "sleep delay must be baml.time.Duration, got {}",
-                other.type_name()
-            ),
-        })),
+    fn pid(&self, _heap: &Arc<BexHeap>, _call_id: CallId, _ctx: &SysOpContext) -> SysOpOutput<i64> {
+        // `std::process::id` is a `u32` on every platform this crate builds
+        // for, so the widening into BAML's i63 `int` is always exact.
+        SysOpOutput::ok(i64::from(std::process::id()))
     }
 }
 
@@ -1703,18 +1999,50 @@ fn sleep_nanos_from_delay(delay: BexExternalValue) -> Result<u64, VmRustFnError>
 // Network
 // ============================================================================
 
-// Network handles mirror `FsFileHandle`: the socket lives inside a
-// `Mutex<Option<_>>` so `close()` can `take()` it, after which every other
-// reference to the same handle deterministically observes a closed socket.
+// Network handles keep each socket in an optional slot so `close()` can take
+// it, after which every other reference observes a closed socket.
 //
-// `TcpStream` ops need `&mut` access, so (like `fs::File`) we hold the guard
-// across the await. `TcpListener`/`UdpSocket` ops only need `&self`, so we keep
-// each socket behind an inner `Arc` and clone it out under a brief lock — that
-// way `close()` stays deterministic without serializing concurrent
+// `TcpStream` ops need `&mut` access, so they hold the guard across the await
+// and select against a close notification. `TcpListener`/`UdpSocket` ops only
+// need `&self`, so each socket has an inner `Arc` cloned under a brief lock.
+// This keeps `close()` deterministic without serializing concurrent
 // `accept`/`recv_from`/`send_to` on the same socket.
-type NetTcpStreamHandle = tokio::sync::Mutex<Option<tokio::net::TcpStream>>;
-type NetTcpListenerHandle = tokio::sync::Mutex<Option<Arc<tokio::net::TcpListener>>>;
-type NetUdpSocketHandle = tokio::sync::Mutex<Option<Arc<tokio::net::UdpSocket>>>;
+struct NetTcpStreamHandle {
+    stream: tokio::sync::Mutex<Option<tokio::net::TcpStream>>,
+    close_tx: tokio::sync::watch::Sender<bool>,
+}
+
+impl BexRustData for NetTcpStreamHandle {
+    fn measure(&self, _: &mut sys_types::Meter) {}
+}
+
+/// A bound listener as `$rust_type` data.
+struct NetTcpListenerHandle(tokio::sync::Mutex<Option<Arc<tokio::net::TcpListener>>>);
+
+impl BexRustData for NetTcpListenerHandle {
+    fn measure(&self, _: &mut sys_types::Meter) {}
+}
+
+impl std::ops::Deref for NetTcpListenerHandle {
+    type Target = tokio::sync::Mutex<Option<Arc<tokio::net::TcpListener>>>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+/// A bound socket as `$rust_type` data.
+struct NetUdpSocketHandle(tokio::sync::Mutex<Option<Arc<tokio::net::UdpSocket>>>);
+
+impl BexRustData for NetUdpSocketHandle {
+    fn measure(&self, _: &mut sys_types::Meter) {}
+}
+
+impl std::ops::Deref for NetUdpSocketHandle {
+    type Target = tokio::sync::Mutex<Option<Arc<tokio::net::UdpSocket>>>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 /// Convert a `Duration._nanoseconds` value (carried as a bigint across the
 /// sys-op boundary) into an operation timeout. Zero or negative disables it
@@ -1733,37 +2061,56 @@ pub(crate) fn timeout_from_nanos(nanos: &num_bigint::BigInt) -> Option<std::time
 
 fn downcast_tcpstream(
     stream: &owned::net::TcpStream,
-) -> Result<Arc<NetTcpStreamHandle>, VmBamlError> {
+) -> Result<Arc<NetTcpStreamHandle>, VmInternalError> {
     stream
         ._handle
         .clone()
-        .downcast::<NetTcpStreamHandle>()
-        .map_err(|_| VmBamlError::DevOther {
-            message: "Invalid TcpStream handle type".to_string(),
+        .downcast_payload::<NetTcpStreamHandle>()
+        .map_err(|_| VmInternalError::RustTypeError {
+            expected: TypeId::of::<NetTcpStreamHandle>(),
+            got: stream._handle.type_id(),
         })
+}
+
+fn net_tcp_stream(stream: tokio::net::TcpStream) -> owned::net::TcpStream {
+    let (close_tx, _close_rx) = tokio::sync::watch::channel(false);
+    owned::net::TcpStream {
+        _handle: Arc::new(NetTcpStreamHandle {
+            stream: tokio::sync::Mutex::new(Some(stream)),
+            close_tx,
+        }),
+    }
+}
+
+fn tcp_stream_closed_error() -> VmBamlError {
+    VmBamlError::Io {
+        message: "TcpStream is closed".to_string(),
+    }
 }
 
 fn downcast_tcplistener(
     listener: &owned::net::TcpListener,
-) -> Result<Arc<NetTcpListenerHandle>, VmBamlError> {
+) -> Result<Arc<NetTcpListenerHandle>, VmInternalError> {
     listener
         ._handle
         .clone()
-        .downcast::<NetTcpListenerHandle>()
-        .map_err(|_| VmBamlError::DevOther {
-            message: "Invalid TcpListener handle type".to_string(),
+        .downcast_payload::<NetTcpListenerHandle>()
+        .map_err(|_| VmInternalError::RustTypeError {
+            expected: TypeId::of::<NetTcpListenerHandle>(),
+            got: listener._handle.type_id(),
         })
 }
 
 fn downcast_udpsocket(
     socket: &owned::net::UdpSocket,
-) -> Result<Arc<NetUdpSocketHandle>, VmBamlError> {
+) -> Result<Arc<NetUdpSocketHandle>, VmInternalError> {
     socket
         ._handle
         .clone()
-        .downcast::<NetUdpSocketHandle>()
-        .map_err(|_| VmBamlError::DevOther {
-            message: "Invalid UdpSocket handle type".to_string(),
+        .downcast_payload::<NetUdpSocketHandle>()
+        .map_err(|_| VmInternalError::RustTypeError {
+            expected: TypeId::of::<NetUdpSocketHandle>(),
+            got: socket._handle.type_id(),
         })
 }
 
@@ -1788,7 +2135,8 @@ impl io::IoClassNetTcpStream for NativeSysOps {
                     Err(_elapsed) => {
                         return Err(VmBamlError::Timeout {
                             message: format!("Connecting to '{addr}' timed out"),
-                            duration_ms: i64::try_from(dur.as_millis()).ok(),
+                            duration: Some(dur),
+                            timeout_type: "timeout".to_string(),
                         }
                         .into());
                     }
@@ -1798,94 +2146,90 @@ impl io::IoClassNetTcpStream for NativeSysOps {
             .map_err(|e| VmBamlError::Io {
                 message: format!("Failed to connect to '{addr}': {e}"),
             })?;
-            let handle: Arc<dyn std::any::Any + Send + Sync> =
-                Arc::new(tokio::sync::Mutex::new(Some(stream)));
-            Ok(owned::net::TcpStream { _handle: handle })
+            Ok(net_tcp_stream(stream))
         })
     }
 
-    fn _read(
+    fn read(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         stream: owned::net::TcpStream,
-        timeout_nanos: Arc<num_bigint::BigInt>,
+        limit: i64,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<Vec<u8>> {
+    ) -> SysOpOutput<Option<Vec<u8>>> {
         use tokio::io::AsyncReadExt;
 
-        let timeout = timeout_from_nanos(&timeout_nanos);
+        let limit = match limit {
+            ..=0 => return SysOpOutput::Ready(Ok(Some(Vec::new()))),
+            1.. => usize::try_from(limit)
+                .unwrap_or(MAX_READ_CHUNK)
+                .min(MAX_READ_CHUNK),
+        };
         SysOpOutput::async_op(async move {
             let handle = downcast_tcpstream(&stream)?;
-            let mut guard = handle.lock().await;
-            let stream = guard.as_mut().ok_or_else(|| VmBamlError::Io {
-                message: "TcpStream is closed".to_string(),
-            })?;
-            let mut buffer = vec![0u8; 4096];
-            let read = stream.read(&mut buffer);
-            let n = match timeout {
-                Some(dur) => match tokio::time::timeout(dur, read).await {
-                    Ok(result) => result,
-                    Err(_elapsed) => {
-                        return Err(VmBamlError::Timeout {
-                            message: "Reading from socket timed out".to_string(),
-                            duration_ms: i64::try_from(dur.as_millis()).ok(),
-                        }
-                        .into());
-                    }
-                },
-                None => read.await,
+            let mut close_rx = handle.close_tx.subscribe();
+            if *close_rx.borrow() {
+                return Err(tcp_stream_closed_error().into());
             }
-            .map_err(|e| VmBamlError::Io {
-                message: format!("Failed to read from socket: {e}"),
-            })?;
-            buffer.truncate(n);
-            Ok(buffer)
+            let mut guard = handle.stream.lock().await;
+            if *close_rx.borrow() {
+                return Err(tcp_stream_closed_error().into());
+            }
+            let stream = guard.as_mut().ok_or_else(tcp_stream_closed_error)?;
+            let mut buffer = vec![0u8; limit];
+            let read = tokio::select! {
+                biased;
+                _ = close_rx.changed() => {
+                    return Err(tcp_stream_closed_error().into());
+                }
+                result = stream.read(&mut buffer) => result.map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to read from socket: {e}"),
+                })?,
+            };
+            if read == 0 {
+                return Ok(None);
+            }
+            buffer.truncate(read);
+            Ok(Some(buffer))
         })
     }
 
-    fn _write(
+    fn write_some(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         stream: owned::net::TcpStream,
         data: Vec<u8>,
-        timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<()> {
+    ) -> SysOpOutput<i64> {
         use tokio::io::AsyncWriteExt;
 
-        let timeout = timeout_from_nanos(&timeout_nanos);
         SysOpOutput::async_op(async move {
             let handle = downcast_tcpstream(&stream)?;
-            let mut guard = handle.lock().await;
-            let stream = guard.as_mut().ok_or_else(|| VmBamlError::Io {
-                message: "TcpStream is closed".to_string(),
-            })?;
-            // The whole write (every byte flushed) shares one deadline.
-            let write = async {
-                stream.write_all(&data).await.map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to write to socket: {e}"),
-                })?;
-                stream.flush().await.map_err(|e| VmBamlError::Io {
-                    message: format!("Failed to flush socket: {e}"),
-                })?;
-                Ok::<(), VmBamlError>(())
-            };
-            match timeout {
-                Some(dur) => match tokio::time::timeout(dur, write).await {
-                    Ok(result) => result?,
-                    Err(_elapsed) => {
-                        return Err(VmBamlError::Timeout {
-                            message: "Writing to socket timed out".to_string(),
-                            duration_ms: i64::try_from(dur.as_millis()).ok(),
-                        }
-                        .into());
-                    }
-                },
-                None => write.await?,
+            let mut close_rx = handle.close_tx.subscribe();
+            if *close_rx.borrow() {
+                return Err(tcp_stream_closed_error().into());
             }
-            Ok(())
+            let mut guard = handle.stream.lock().await;
+            if *close_rx.borrow() {
+                return Err(tcp_stream_closed_error().into());
+            }
+            let stream = guard.as_mut().ok_or_else(tcp_stream_closed_error)?;
+            let written = tokio::select! {
+                biased;
+                _ = close_rx.changed() => {
+                    return Err(tcp_stream_closed_error().into());
+                }
+                result = stream.write(&data) => result.map_err(|e| VmBamlError::Io {
+                    message: format!("Failed to write to socket: {e}"),
+                })?,
+            };
+            i64::try_from(written).map_err(|_| {
+                VmRustFnError::from(VmBamlError::Io {
+                    message: "socket write count exceeds int range".to_string(),
+                })
+            })
         })
     }
 
@@ -1900,9 +2244,10 @@ impl io::IoClassNetTcpStream for NativeSysOps {
 
         SysOpOutput::async_op(async move {
             let handle = downcast_tcpstream(&stream)?;
+            handle.close_tx.send_replace(true);
             // Take the stream out of the shared handle so any other reference
             // observes a closed socket on its next op. Already-closed is a no-op.
-            let Some(mut stream) = handle.lock().await.take() else {
+            let Some(mut stream) = handle.stream.lock().await.take() else {
                 return Ok(());
             };
             // shutdown() flushes pending writes and closes the write half, so
@@ -1936,8 +2281,9 @@ impl io::IoClassNetTcpListener for NativeSysOps {
                     .map_err(|e| VmBamlError::Io {
                         message: format!("Failed to bind '{addr}': {e}"),
                     })?;
-            let handle: Arc<dyn std::any::Any + Send + Sync> =
-                Arc::new(tokio::sync::Mutex::new(Some(Arc::new(listener))));
+            let handle: Arc<dyn BexRustData> = Arc::new(NetTcpListenerHandle(
+                tokio::sync::Mutex::new(Some(Arc::new(listener))),
+            ));
             Ok(owned::net::TcpListener { _handle: handle })
         })
     }
@@ -1964,11 +2310,7 @@ impl io::IoClassNetTcpListener for NativeSysOps {
             let (stream, _peer) = inner.accept().await.map_err(|e| VmBamlError::Io {
                 message: format!("Failed to accept connection: {e}"),
             })?;
-            let sock_handle: Arc<dyn std::any::Any + Send + Sync> =
-                Arc::new(tokio::sync::Mutex::new(Some(stream)));
-            Ok(owned::net::TcpStream {
-                _handle: sock_handle,
-            })
+            Ok(net_tcp_stream(stream))
         })
     }
 
@@ -2004,8 +2346,9 @@ impl io::IoClassNetUdpSocket for NativeSysOps {
                 .map_err(|e| VmBamlError::Io {
                     message: format!("Failed to bind UDP '{addr}': {e}"),
                 })?;
-            let handle: Arc<dyn std::any::Any + Send + Sync> =
-                Arc::new(tokio::sync::Mutex::new(Some(Arc::new(socket))));
+            let handle: Arc<dyn BexRustData> = Arc::new(NetUdpSocketHandle(
+                tokio::sync::Mutex::new(Some(Arc::new(socket))),
+            ));
             Ok(owned::net::UdpSocket { _handle: handle })
         })
     }
@@ -2038,7 +2381,8 @@ impl io::IoClassNetUdpSocket for NativeSysOps {
                     Err(_elapsed) => {
                         return Err(VmBamlError::Timeout {
                             message: format!("Sending to '{addr}' timed out"),
-                            duration_ms: i64::try_from(dur.as_millis()).ok(),
+                            duration: Some(dur),
+                            timeout_type: "timeout".to_string(),
                         }
                         .into());
                     }
@@ -2081,7 +2425,8 @@ impl io::IoClassNetUdpSocket for NativeSysOps {
                     Err(_elapsed) => {
                         return Err(VmBamlError::Timeout {
                             message: "Receiving datagram timed out".to_string(),
-                            duration_ms: i64::try_from(dur.as_millis()).ok(),
+                            duration: Some(dur),
+                            timeout_type: "timeout".to_string(),
                         }
                         .into());
                     }
@@ -2132,8 +2477,9 @@ impl io::IoClassHttpResponse for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<String> {
         SysOpOutput::async_op(async move {
+            let network = crate::http_server::network_of(&response._body);
             crate::http_server::downcast_body(&response._body)?
-                .read_text()
+                .read_text(network.as_ref())
                 .await
                 .map_err(VmRustFnError::from)
         })
@@ -2162,8 +2508,9 @@ impl io::IoClassHttpResponse for NativeSysOps {
         _ctx: &SysOpContext,
     ) -> SysOpOutput<Vec<u8>> {
         SysOpOutput::async_op(async move {
+            let network = crate::http_server::network_of(&response._body);
             crate::http_server::downcast_body(&response._body)?
-                .read_bytes()
+                .read_bytes(network.as_ref())
                 .await
                 .map(|b| b.to_vec())
                 .map_err(VmRustFnError::from)
@@ -2315,13 +2662,24 @@ impl io::IoClassHttpResponse for NativeSysOps {
 /// handle network failures instead of them surfacing as an uncatchable host
 /// error.
 #[cfg(feature = "bundle-http")]
-fn http_transport_error(context: &str, e: &reqwest::Error) -> VmBamlError {
+pub(crate) fn http_transport_error(
+    context: &str,
+    e: &reqwest::Error,
+    timeout_options: HttpTimeoutOptions,
+) -> VmBamlError {
     if e.is_timeout() {
+        // reqwest doesn't say which of its deadlines elapsed. Only the connect
+        // deadline fails inside the connector, so a timeout that is also a
+        // connect error is that one; anything else is the total.
+        let (timeout_type, duration) = if e.is_connect() && timeout_options.connect.is_some() {
+            ("connect_timeout", timeout_options.connect)
+        } else {
+            ("timeout", timeout_options.total)
+        };
         VmBamlError::Timeout {
             message: format!("{context}: {e}"),
-            // reqwest doesn't expose the configured timeout on the error, so
-            // the elapsed duration is unknown.
-            duration_ms: None,
+            duration,
+            timeout_type: timeout_type.to_string(),
         }
     } else {
         VmBamlError::Io {
@@ -2330,35 +2688,120 @@ fn http_transport_error(context: &str, e: &reqwest::Error) -> VmBamlError {
     }
 }
 
-/// Applies the optional total-request timeout (carried as bigint nanos across
-/// the sys-op boundary) to a `reqwest` request builder. `0n`/negative means no
-/// deadline (`timeout_from_nanos` returns `None`); a configured deadline that
-/// elapses surfaces as `reqwest::Error::is_timeout`, which `http_transport_error`
-/// maps to `baml.errors.Timeout`.
+/// Parses `Request.method`. A request built with `Request.from_url` has no
+/// method until `set_method` is called, and sending it is an error.
 #[cfg(feature = "bundle-http")]
-fn apply_http_timeout(
-    builder: reqwest::RequestBuilder,
-    timeout_nanos: &num_bigint::BigInt,
-) -> reqwest::RequestBuilder {
-    match timeout_from_nanos(timeout_nanos) {
-        Some(dur) => builder.timeout(dur),
-        None => builder,
+fn http_method(method: &str) -> Result<reqwest::Method, VmBamlError> {
+    if method.is_empty() {
+        return Err(VmBamlError::InvalidArgument {
+            message: "Invalid HTTP method '': the request has no method set".to_string(),
+        });
+    }
+    reqwest::Method::from_bytes(method.as_bytes()).map_err(|e| VmBamlError::InvalidArgument {
+        message: format!("Invalid HTTP method '{method}': {e}"),
+    })
+}
+
+/// The deadlines one outgoing HTTP request runs under, as `baml.http` resolved
+/// them: `total` is `Request.timeout` (end to end, connecting included) and
+/// `connect` is `Request.connect_timeout`. `None` is no limit.
+#[cfg(feature = "bundle-http")]
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct HttpTimeoutOptions {
+    pub(crate) total: Option<std::time::Duration>,
+    pub(crate) connect: Option<std::time::Duration>,
+}
+
+#[cfg(feature = "bundle-http")]
+impl HttpTimeoutOptions {
+    /// Both deadlines cross the sys-op boundary as bigint nanos; `0n`/negative
+    /// means no limit (`timeout_from_nanos` returns `None`).
+    fn from_nanos(
+        timeout_nanos: &num_bigint::BigInt,
+        connect_timeout_nanos: &num_bigint::BigInt,
+    ) -> Self {
+        Self {
+            total: timeout_from_nanos(timeout_nanos),
+            connect: timeout_from_nanos(connect_timeout_nanos),
+        }
+    }
+
+    /// A client that enforces the connect deadline (TCP and TLS).
+    fn client(self) -> Result<reqwest::Client, VmBamlError> {
+        let mut builder = reqwest::Client::builder();
+        if let Some(connect) = self.connect {
+            builder = builder.connect_timeout(connect);
+        }
+        builder
+            .build()
+            .map_err(|e| http_transport_error("HTTP client initialization failed", &e, self))
+    }
+
+    /// Applies the total deadline to a request. One that elapses surfaces as
+    /// `reqwest::Error::is_timeout`, which `http_transport_error` maps to
+    /// `baml.errors.Timeout`.
+    fn apply(self, builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        match self.total {
+            Some(total) => builder.timeout(total),
+            None => builder,
+        }
     }
 }
 
 #[cfg(feature = "bundle-http")]
-fn build_io_http_response(response: reqwest::Response, url: String) -> owned::http::Response {
+fn build_io_http_response(
+    response: reqwest::Response,
+    url: String,
+    timeout_options: HttpTimeoutOptions,
+    network: Option<sys_types::network::NetworkContext>,
+) -> owned::http::Response {
     let status = i64::from(response.status().as_u16());
     let headers: indexmap::IndexMap<String, String> = response
         .headers()
         .iter()
         .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
         .collect();
+    let body = crate::http_server::HttpBody::client(response, timeout_options);
     owned::http::Response {
         status_code: status,
         headers,
         url,
-        _body: crate::http_server::HttpBody::client(response),
+        _body: traced(network, body),
+    }
+}
+
+/// Queue a traced request's status and headers, as they arrived.
+#[cfg(feature = "bundle-http")]
+fn push_connection(
+    network: Option<&sys_types::network::NetworkContext>,
+    response: &reqwest::Response,
+) {
+    if let Some(network) = network {
+        network.push(sys_types::network::NetworkEventKind::Connection {
+            status: response.status().as_u16(),
+            headers: response
+                .headers()
+                .iter()
+                .map(|(name, value)| {
+                    (
+                        name.as_str().to_owned(),
+                        String::from_utf8_lossy(value.as_bytes()).into_owned(),
+                    )
+                })
+                .collect(),
+        });
+    }
+}
+
+/// `data` as `$rust_type` data, behind its request's span when traced.
+#[cfg(feature = "bundle-http")]
+fn traced(
+    network: Option<sys_types::network::NetworkContext>,
+    data: Arc<dyn BexRustData>,
+) -> Arc<dyn BexRustData> {
+    match network {
+        Some(network) => sys_types::network::NetworkTraced::wrap(network, data),
+        None => data,
     }
 }
 
@@ -2415,6 +2858,7 @@ impl io::IoClassHttpServer for NativeSysOps {
         _call_id: CallId,
         server: owned::http::Server,
         handler: bex_external_types::Handle,
+        websocket: bex_external_types::Handle,
         tls_config: Option<owned::http::TlsConfig>,
         allow_http1: bool,
         allow_http2: bool,
@@ -2426,6 +2870,7 @@ impl io::IoClassHttpServer for NativeSysOps {
         crate::http_server::serve(
             server,
             handler,
+            websocket,
             tls_config,
             allow_http1,
             allow_http2,
@@ -2459,6 +2904,7 @@ impl io::IoClassHttpServer for NativeSysOps {
         _call_id: CallId,
         _server: owned::http::Server,
         _handler: bex_external_types::Handle,
+        _websocket: bex_external_types::Handle,
         _tls_config: Option<owned::http::TlsConfig>,
         _allow_http1: bool,
         _allow_http2: bool,
@@ -2486,17 +2932,18 @@ impl io::IoClassHttpSseStream for NativeSysOps {
         use std::sync::atomic::Ordering;
 
         SysOpOutput::async_op(async move {
-            let handle = sse_stream
-                ._handle
-                .downcast::<bex_resource_types::ResourceHandle>()
-                .map_err(|_| VmBamlError::DevOther {
-                    message: "Invalid SSE stream handle type".into(),
+            let handle = sys_types::network::NetworkTraced::inner(sse_stream._handle)
+                .downcast_payload::<bex_resource_types::ResourceHandle>()
+                .map_err(|handle| VmInternalError::RustTypeError {
+                    expected: TypeId::of::<bex_resource_types::ResourceHandle>(),
+                    got: handle.payload_type_id(),
                 })?;
 
             let (buffer, notify, closed) = crate::registry::REGISTRY
                 .get_sse_stream(handle.key())
-                .ok_or_else(|| VmBamlError::DevOther {
-                message: "SSE stream handle is invalid".into(),
+                .ok_or(VmInternalError::UnresolvedResourceHandle {
+                kind: "SSE stream",
+                key: handle.key(),
             })?;
 
             loop {
@@ -2509,7 +2956,9 @@ impl io::IoClassHttpSseStream for NativeSysOps {
                         return Ok(None);
                     }
                     if !buf.events.is_empty() {
-                        let events: Vec<serde_json::Value> = std::mem::take(&mut buf.events)
+                        let taken = std::mem::take(&mut buf.events);
+                        buf.publish_retained();
+                        let events: Vec<serde_json::Value> = taken
                             .into_iter()
                             .map(|e| {
                                 serde_json::json!({
@@ -2520,13 +2969,13 @@ impl io::IoClassHttpSseStream for NativeSysOps {
                             })
                             .collect();
                         return Ok(Some(serde_json::to_string(&events).map_err(|e| {
-                            VmBamlError::DevOther {
-                                message: format!("Failed to serialize SSE events: {e}"),
+                            VmInternalError::BridgeFailure {
+                                message: format!("failed to serialize SSE events: {e}"),
                             }
                         })?));
                     }
                     if let Some(err) = buf.error.take() {
-                        return Err(VmRustFnError::from(VmBamlError::Io { message: err }));
+                        return Err(VmRustFnError::from(err));
                     }
                     if buf.done {
                         return Ok(None);
@@ -2572,17 +3021,28 @@ impl io::IoNamespaceHttp for NativeSysOps {
         _call_id: CallId,
         url: String,
         timeout_nanos: Arc<num_bigint::BigInt>,
-        _ctx: &SysOpContext,
+        connect_timeout_nanos: Arc<num_bigint::BigInt>,
+        ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
+        let network = ctx.network.clone();
         SysOpOutput::async_op(async move {
             crate::ensure_rustls_crypto_provider();
-            let client = reqwest::Client::new();
-            let response = apply_http_timeout(client.get(&url), &timeout_nanos)
+            let timeout_options =
+                HttpTimeoutOptions::from_nanos(&timeout_nanos, &connect_timeout_nanos);
+            let client = timeout_options.client()?;
+            let response = timeout_options
+                .apply(client.get(&url))
                 .send()
                 .await
-                .map_err(|e| http_transport_error("HTTP fetch failed", &e))?;
+                .map_err(|e| http_transport_error("HTTP fetch failed", &e, timeout_options))?;
+            push_connection(network.as_ref(), &response);
             let final_url = response.url().to_string();
-            Ok(build_io_http_response(response, final_url))
+            Ok(build_io_http_response(
+                response,
+                final_url,
+                timeout_options,
+                network,
+            ))
         })
     }
 
@@ -2593,6 +3053,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
         _call_id: CallId,
         _url: String,
         _timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -2608,17 +3069,17 @@ impl io::IoNamespaceHttp for NativeSysOps {
         _call_id: CallId,
         request: owned::http::Request,
         timeout_nanos: Arc<num_bigint::BigInt>,
-        _ctx: &SysOpContext,
+        connect_timeout_nanos: Arc<num_bigint::BigInt>,
+        ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
+        let network = ctx.network.clone();
         SysOpOutput::async_op(async move {
-            let method = reqwest::Method::from_bytes(request.method.as_bytes()).map_err(|e| {
-                VmBamlError::InvalidArgument {
-                    message: format!("Invalid HTTP method '{}': {e}", request.method),
-                }
-            })?;
+            let method = http_method(&request.method)?;
 
             crate::ensure_rustls_crypto_provider();
-            let client = reqwest::Client::new();
+            let timeout_options =
+                HttpTimeoutOptions::from_nanos(&timeout_nanos, &connect_timeout_nanos);
+            let client = timeout_options.client()?;
             let mut builder = client.request(method, &request.url);
 
             for (k, v) in &request.headers {
@@ -2629,12 +3090,19 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 builder = builder.body(request.body);
             }
 
-            let response = apply_http_timeout(builder, &timeout_nanos)
+            let response = timeout_options
+                .apply(builder)
                 .send()
                 .await
-                .map_err(|e| http_transport_error("HTTP send failed", &e))?;
+                .map_err(|e| http_transport_error("HTTP send failed", &e, timeout_options))?;
+            push_connection(network.as_ref(), &response);
             let final_url = response.url().to_string();
-            Ok(build_io_http_response(response, final_url))
+            Ok(build_io_http_response(
+                response,
+                final_url,
+                timeout_options,
+                network,
+            ))
         })
     }
 
@@ -2645,6 +3113,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
         _call_id: CallId,
         _request: owned::http::Request,
         _timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::Response> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -2654,30 +3123,47 @@ impl io::IoNamespaceHttp for NativeSysOps {
     }
 
     #[cfg(feature = "bundle-http")]
-    fn fetch_sse(
+    fn _send_sse(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         request: owned::http::Request,
-        _ctx: &SysOpContext,
+        timeout_nanos: Arc<num_bigint::BigInt>,
+        connect_timeout_nanos: Arc<num_bigint::BigInt>,
+        ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::SseStream> {
         use std::sync::atomic::{AtomicBool, Ordering};
 
         use futures::StreamExt;
-        use sys_types::sse::SseParser;
+        use sys_types::{network::NetworkEventKind, sse::StreamDecoder};
         use tokio::sync::{Mutex as TokioMutex, Notify};
 
         use crate::registry::{REGISTRY, SseBuffer};
 
-        SysOpOutput::async_op(async move {
-            let method = reqwest::Method::from_bytes(request.method.as_bytes()).map_err(|e| {
-                VmBamlError::InvalidArgument {
-                    message: format!("Invalid HTTP method '{}': {e}", request.method),
+        // Each parsed event, queued on the request's span when it is traced.
+        fn push_events(
+            network: Option<&sys_types::network::NetworkContext>,
+            events: &[sys_types::sse::SseEvent],
+        ) {
+            if let Some(network) = network {
+                for event in events {
+                    network.push(NetworkEventKind::SseEvent {
+                        event: (!event.event.is_empty()).then(|| event.event.clone()),
+                        data: event.data.clone(),
+                        id: event.id.clone(),
+                    });
                 }
-            })?;
+            }
+        }
+
+        let network = ctx.network.clone();
+        SysOpOutput::async_op(async move {
+            let method = http_method(&request.method)?;
 
             crate::ensure_rustls_crypto_provider();
-            let client = reqwest::Client::new();
+            let timeout_options =
+                HttpTimeoutOptions::from_nanos(&timeout_nanos, &connect_timeout_nanos);
+            let client = timeout_options.client()?;
             let mut builder = client.request(method, &request.url);
 
             for (key, value) in &request.headers {
@@ -2688,28 +3174,56 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 builder = builder.body(request.body.clone());
             }
 
-            let response = builder
-                .send()
-                .await
-                .map_err(|e| http_transport_error("SSE connection failed", &e))?;
+            let response =
+                timeout_options.apply(builder).send().await.map_err(|e| {
+                    http_transport_error("SSE connection failed", &e, timeout_options)
+                })?;
+            push_connection(network.as_ref(), &response);
 
             if !response.status().is_success() {
                 let status = response.status().as_u16();
-                let body = response
-                    .text()
-                    .await
-                    .unwrap_or_else(|_| "<could not read body>".to_string());
+                // Lossy UTF-8, as `reqwest`'s `text()` without `charset`.
+                let body = match response.bytes().await {
+                    Ok(body) => {
+                        if let Some(network) = &network {
+                            network.push(NetworkEventKind::Body(body.clone()));
+                        }
+                        String::from_utf8_lossy(&body).into_owned()
+                    }
+                    Err(error) if error.is_timeout() => {
+                        return Err(VmRustFnError::from(http_transport_error(
+                            "SSE error response body failed",
+                            &error,
+                            timeout_options,
+                        )));
+                    }
+                    Err(_) => "<could not read body>".to_string(),
+                };
                 return Err(VmRustFnError::from(VmBamlError::Io {
                     message: format!("SSE request failed with status {status}: {body}"),
                 }));
             }
 
             let url = response.url().to_string();
-
+            let status_code = i64::from(response.status().as_u16());
+            let headers: indexmap::IndexMap<String, String> = response
+                .headers()
+                .iter()
+                .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("").to_string()))
+                .collect();
+            // Text SSE, or a binary AWS event stream (Bedrock ConverseStream)
+            // surfaced as the same events.
+            let content_type = response
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_owned);
+            let retained = Arc::new(sys_types::RetainedBytes::new(0));
             let buffer = Arc::new(TokioMutex::new(SseBuffer {
                 events: Vec::new(),
                 done: false,
                 error: None,
+                retained: Arc::clone(&retained),
             }));
             let closed = Arc::new(AtomicBool::new(false));
             let notify = Arc::new(Notify::new());
@@ -2717,6 +3231,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
             let buf_clone = buffer.clone();
             let closed_clone = closed.clone();
             let notify_clone = notify.clone();
+            let consumer_network = network.clone();
             let consumer = tokio::spawn(async move {
                 struct SseDropGuard {
                     buffer: Arc<TokioMutex<SseBuffer>>,
@@ -2731,7 +3246,9 @@ impl io::IoNamespaceHttp for NativeSysOps {
                             if let Ok(mut buf) = self.buffer.try_lock() {
                                 if !buf.done {
                                     if !self.closed.load(Ordering::Acquire) {
-                                        buf.error = Some("SSE stream task was cancelled".into());
+                                        buf.error = Some(VmBamlError::Io {
+                                            message: "SSE stream task was cancelled".into(),
+                                        });
                                     }
                                     buf.done = true;
                                 }
@@ -2741,6 +3258,7 @@ impl io::IoNamespaceHttp for NativeSysOps {
                     }
                 }
 
+                let network = consumer_network.as_ref();
                 let mut guard = SseDropGuard {
                     buffer: buf_clone.clone(),
                     closed: closed_clone.clone(),
@@ -2748,22 +3266,44 @@ impl io::IoNamespaceHttp for NativeSysOps {
                     completed: false,
                 };
 
-                let mut parser = SseParser::new();
+                let mut parser = StreamDecoder::for_content_type(content_type.as_deref());
                 let mut byte_stream = response.bytes_stream();
 
-                while let Some(chunk_result) = byte_stream.next().await {
+                loop {
+                    let next_chunk = byte_stream.next().await;
+                    let Some(chunk_result) = next_chunk else {
+                        break;
+                    };
                     match chunk_result {
                         Ok(bytes) => {
-                            let events = parser.feed(&bytes);
+                            let events = match parser.feed(&bytes) {
+                                Ok(events) => events,
+                                Err(e) => {
+                                    let mut buf = buf_clone.lock().await;
+                                    buf.error = Some(VmBamlError::Io {
+                                        message: e.to_string(),
+                                    });
+                                    buf.done = true;
+                                    notify_clone.notify_waiters();
+                                    guard.completed = true;
+                                    return;
+                                }
+                            };
                             if !events.is_empty() {
+                                push_events(network, &events);
                                 let mut buf = buf_clone.lock().await;
                                 buf.events.extend(events);
+                                buf.publish_retained();
                                 notify_clone.notify_waiters();
                             }
                         }
                         Err(e) => {
                             let mut buf = buf_clone.lock().await;
-                            buf.error = Some(format!("SSE stream error: {e}"));
+                            buf.error = Some(http_transport_error(
+                                "SSE stream failed",
+                                &e,
+                                timeout_options,
+                            ));
                             buf.done = true;
                             notify_clone.notify_waiters();
                             guard.completed = true;
@@ -2774,10 +3314,27 @@ impl io::IoNamespaceHttp for NativeSysOps {
 
                 // Stream ended cleanly — flush any event buffered without a
                 // trailing blank line (some servers omit the final delimiter).
-                let final_events = parser.finish();
+                let final_events = match parser.finish() {
+                    Ok(events) => events,
+                    Err(e) => {
+                        let mut buf = buf_clone.lock().await;
+                        buf.error = Some(VmBamlError::Io {
+                            message: e.to_string(),
+                        });
+                        buf.done = true;
+                        notify_clone.notify_waiters();
+                        guard.completed = true;
+                        return;
+                    }
+                };
+                push_events(network, &final_events);
+                if let Some(network) = network {
+                    network.push(NetworkEventKind::StreamEnd);
+                }
                 let mut buf = buf_clone.lock().await;
                 if !final_events.is_empty() {
                     buf.events.extend(final_events);
+                    buf.publish_retained();
                 }
                 buf.done = true;
                 notify_clone.notify_waiters();
@@ -2790,21 +3347,25 @@ impl io::IoNamespaceHttp for NativeSysOps {
                 notify,
                 consumer.abort_handle(),
                 url.clone(),
+                retained,
             );
-            let handle: Arc<dyn std::any::Any + Send + Sync> = Arc::new(handle);
             Ok(owned::http::SseStream {
                 url,
-                _handle: handle,
+                status_code,
+                headers,
+                _handle: traced(network, Arc::new(handle)),
             })
         })
     }
 
     #[cfg(not(feature = "bundle-http"))]
-    fn fetch_sse(
+    fn _send_sse(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
         _request: owned::http::Request,
+        _timeout_nanos: Arc<num_bigint::BigInt>,
+        _connect_timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<owned::http::SseStream> {
         SysOpOutput::err(VmPanic::HostUnavailable {
@@ -2814,38 +3375,111 @@ impl io::IoNamespaceHttp for NativeSysOps {
     }
 }
 
-impl io::IoClassWsWsStream for NativeSysOps {
+/// The VM [`Type`] an owned sys-op argument denotes.
+///
+/// Arguments reach a sys-op through `as_owned_but_very_slow`, so these are the
+/// shapes it can hand back. The reference-like variants have no VM object type
+/// to name here — a `Handle` needs the heap to resolve, a host value has no VM
+/// object at all — so they report [`ObjectType::Any`], the documented top of
+/// the lattice, rather than a fabricated tag.
+#[cfg(feature = "bundle-http")]
+fn arg_value_type(value: &BexExternalValue) -> Type {
+    match value {
+        // `Type::of` likewise reports the lattice top for null.
+        BexExternalValue::Null => Type::Object(ObjectType::Any),
+        BexExternalValue::Int(_) => Type::Int,
+        BexExternalValue::Float(_) => Type::Float,
+        BexExternalValue::JsNumber(_) => Type::Float,
+        BexExternalValue::Bool(_) => Type::Bool,
+        BexExternalValue::Bigint(_) => Type::Object(ObjectType::Bigint),
+        BexExternalValue::String(_) => Type::Object(ObjectType::String),
+        BexExternalValue::Uint8Array(_) => Type::Object(ObjectType::Uint8Array),
+        BexExternalValue::Array { .. } => Type::Object(ObjectType::Array),
+        BexExternalValue::Map { .. } => Type::Object(ObjectType::Map),
+        BexExternalValue::Instance { .. } => Type::Object(ObjectType::Instance),
+        // `ObjectType::of` folds both enum objects into `Enum`.
+        BexExternalValue::Variant { .. } => Type::Object(ObjectType::Enum),
+        BexExternalValue::RustData(_) => Type::Object(ObjectType::RustData),
+        // A union tag is not itself a runtime type; the payload carries one.
+        BexExternalValue::Union { value, .. } => arg_value_type(value),
+        BexExternalValue::FunctionRef { .. }
+        | BexExternalValue::Handle(_)
+        | BexExternalValue::HostValue(_)
+        | BexExternalValue::Adt(_) => Type::Object(ObjectType::Any),
+    }
+}
+
+/// Resolve the registry resource behind a `baml.ws.WebSocket`'s opaque
+/// `_handle`. Both failure modes are engine bugs — the handle is minted by
+/// `baml.ws._connect` and only ever read back here — so neither is something a
+/// BAML program is expected to catch.
+#[cfg(feature = "bundle-http")]
+fn ws_resource(
+    websocket: &owned::ws::WebSocket,
+) -> Result<Arc<crate::registry::WsStreamResource>, VmInternalError> {
+    let handle = Arc::clone(&websocket._handle)
+        .downcast_payload::<bex_resource_types::ResourceHandle>()
+        .map_err(|handle| VmInternalError::RustTypeError {
+            expected: TypeId::of::<bex_resource_types::ResourceHandle>(),
+            got: handle.payload_type_id(),
+        })?;
+    crate::registry::REGISTRY.get_ws_stream(handle.key()).ok_or(
+        VmInternalError::UnresolvedResourceHandle {
+            kind: "WebSocket",
+            key: handle.key(),
+        },
+    )
+}
+
+/// Build the `baml.ws.CloseEvent` that `next` hands back once the connection
+/// has ended.
+#[cfg(feature = "bundle-http")]
+fn ws_close_event(close: &crate::registry::WsClose) -> BexExternalValue {
+    use sys_ops::io::AsBexExternalValue;
+
+    owned::ws::CloseEvent {
+        code: i64::from(close.code),
+        reason: close.reason.clone(),
+    }
+    .into_bex_external_value()
+}
+
+impl io::IoClassWsWebSocket for NativeSysOps {
     #[cfg(feature = "bundle-http")]
     fn send(
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        stream: owned::ws::WsStream,
-        text: String,
+        websocket: owned::ws::WebSocket,
+        data: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         use futures::SinkExt;
         use tokio_tungstenite::tungstenite::Message;
 
+        // `data: string | uint8array` is enforced by the compiler, so any other
+        // shape here is a VM/codegen fault rather than a caller error. `Type`
+        // has no union form, so `expected` names the string arm.
+        let frame = match data {
+            BexExternalValue::String(text) => Message::text(text.to_string()),
+            BexExternalValue::Uint8Array(bytes) => Message::binary(bytes),
+            other => {
+                return SysOpOutput::err(VmInternalError::TypeError {
+                    expected: Type::Object(ObjectType::String),
+                    got: arg_value_type(&other),
+                });
+            }
+        };
+
         SysOpOutput::async_op(async move {
-            let handle = stream
-                ._handle
-                .downcast::<bex_resource_types::ResourceHandle>()
-                .map_err(|_| VmBamlError::DevOther {
-                    message: "Invalid WebSocket stream handle type".into(),
-                })?;
-            let (sink, _) = crate::registry::REGISTRY
-                .get_ws_stream(handle.key())
-                .ok_or_else(|| VmBamlError::DevOther {
-                    message: "WebSocket stream handle is invalid".into(),
-                })?;
-            sink.lock()
-                .await
-                .send(Message::text(text))
-                .await
-                .map_err(|error| VmBamlError::Io {
-                    message: format!("WebSocket send failed: {error}"),
-                })?;
+            let ws = ws_resource(&websocket)?;
+            let mut sink = ws.sink.lock().await;
+            let sink = sink.as_mut().ok_or_else(|| VmBamlError::Io {
+                message: "WebSocket send failed: the connection is closed".to_string(),
+            })?;
+            sink.send(frame).await.map_err(|error| VmBamlError::Io {
+                message: format!("WebSocket send failed: {error}"),
+            })?;
             Ok(())
         })
     }
@@ -2855,12 +3489,12 @@ impl io::IoClassWsWsStream for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        _stream: owned::ws::WsStream,
-        _text: String,
+        _websocket: owned::ws::WebSocket,
+        _data: BexExternalValue,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
         SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "ws".to_string(),
+            resource: "websocket".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -2870,56 +3504,78 @@ impl io::IoClassWsWsStream for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        stream: owned::ws::WsStream,
+        websocket: owned::ws::WebSocket,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<String>> {
-        use futures::{SinkExt, StreamExt};
+    ) -> SysOpOutput<BexExternalValue> {
+        use futures::StreamExt;
         use tokio_tungstenite::tungstenite::Message;
 
+        use crate::registry::WsClose;
+
         SysOpOutput::async_op(async move {
-            let handle = stream
-                ._handle
-                .downcast::<bex_resource_types::ResourceHandle>()
-                .map_err(|_| VmBamlError::DevOther {
-                    message: "Invalid WebSocket stream handle type".into(),
-                })?;
-            let (sink, source) = crate::registry::REGISTRY
-                .get_ws_stream(handle.key())
-                .ok_or_else(|| VmBamlError::DevOther {
-                    message: "WebSocket stream handle is invalid".into(),
-                })?;
-            let mut source = source.lock().await;
+            let ws = ws_resource(&websocket)?;
+            if let Some(close) = ws.close.get() {
+                return Ok(ws_close_event(close));
+            }
+            let mut source = ws.source.lock().await;
             loop {
-                match source.next().await {
-                    Some(Ok(Message::Text(text))) => {
-                        return Ok(Some(text.as_str().to_string()));
+                // Re-checked under the lock: a concurrent `next` may have ended
+                // the connection, which publishes the close event and drops the
+                // transport in one step.
+                let Some(stream) = source.as_mut() else {
+                    break Ok(ws_close_event(ws.close.get().unwrap_or_else(|| {
+                        unreachable!("WebSocket transport released without a close event")
+                    })));
+                };
+                let frame = match stream.next().await {
+                    Some(Ok(frame)) => frame,
+                    // End of stream with no closing handshake.
+                    None => {
+                        let close = WsClose {
+                            code: 1006,
+                            reason: String::new(),
+                        };
+                        break Ok(ws_close_event(ws.finish(&mut source, close).await));
                     }
-                    Some(Ok(Message::Binary(bytes))) => {
-                        return Err(VmBamlError::Io {
-                            message: format!(
-                                "received unexpected binary WebSocket frame ({} bytes) on a text-oriented stream",
-                                bytes.len()
-                            ),
-                        }
-                        .into());
-                    }
-                    Some(Ok(Message::Close(_))) | None => return Ok(None),
-                    Some(Ok(Message::Ping(payload))) => {
-                        sink.lock()
-                            .await
-                            .send(Message::Pong(payload))
-                            .await
-                            .map_err(|error| VmBamlError::Io {
-                                message: format!("WebSocket pong failed: {error}"),
-                            })?;
-                    }
-                    Some(Ok(Message::Pong(_) | Message::Frame(_))) => {}
+                    // tokio-tungstenite fuses the stream on any read error —
+                    // every later poll is `None` — so the connection is over
+                    // as of this frame. Publish that now, so `send` and
+                    // `hangup` answer from `close`, then report what ended it.
                     Some(Err(error)) => {
+                        let close = WsClose {
+                            code: 1006,
+                            reason: String::new(),
+                        };
+                        ws.finish(&mut source, close).await;
                         return Err(VmBamlError::Io {
                             message: format!("WebSocket receive failed: {error}"),
                         }
                         .into());
                     }
+                };
+                match frame {
+                    Message::Text(text) => {
+                        break Ok(BexExternalValue::String(text.as_str().into()));
+                    }
+                    Message::Binary(bytes) => {
+                        break Ok(BexExternalValue::Uint8Array(bytes.to_vec()));
+                    }
+                    Message::Close(frame) => {
+                        let close = frame.map_or(
+                            WsClose {
+                                code: 1005,
+                                reason: String::new(),
+                            },
+                            |frame| WsClose {
+                                code: u16::from(frame.code),
+                                reason: frame.reason.as_str().to_string(),
+                            },
+                        );
+                        break Ok(ws_close_event(ws.finish(&mut source, close).await));
+                    }
+                    // Tungstenite answers pings itself while reading; neither
+                    // control frame is part of the BAML surface.
+                    Message::Ping(_) | Message::Pong(_) | Message::Frame(_) => {}
                 }
             }
         })
@@ -2930,11 +3586,11 @@ impl io::IoClassWsWsStream for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        _stream: owned::ws::WsStream,
+        _websocket: owned::ws::WebSocket,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<Option<String>> {
+    ) -> SysOpOutput<BexExternalValue> {
         SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "ws".to_string(),
+            resource: "websocket".to_string(),
             message: "Operation not supported on this platform".to_string(),
         })
     }
@@ -2944,22 +3600,57 @@ impl io::IoClassWsWsStream for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        stream: owned::ws::WsStream,
+        websocket: owned::ws::WebSocket,
+        code: i64,
+        reason: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        use bex_resource_types::ResourceRegistryRef;
         use futures::SinkExt;
-        use tokio_tungstenite::tungstenite::Message;
+        use tokio_tungstenite::tungstenite::{
+            Message,
+            protocol::{CloseFrame, frame::coding::CloseCode},
+        };
+
+        // RFC 6455 §7.4: an endpoint may send 1000-1003, 1007-1013, and the
+        // registered (3000-3999) and private (4000-4999) ranges. The undefined
+        // codes and the four a peer may only ever infer (1004/1005/1006/1015)
+        // are caller errors — `is_allowed` draws exactly that line.
+        let close_code = match u16::try_from(code).map(CloseCode::from) {
+            Ok(close_code) if close_code.is_allowed() => close_code,
+            Ok(_) | Err(_) => {
+                return SysOpOutput::err(VmBamlError::InvalidArgument {
+                    message: format!("{code} is not a valid WebSocket close code"),
+                });
+            }
+        };
+
+        // RFC 6455 §5.5: a control frame carries at most 125 payload bytes,
+        // and a close frame spends two on the status code. Tungstenite checks
+        // this only when reading — `Frame::close` neither checks nor
+        // truncates — so an oversized reason would reach the wire as a
+        // protocol violation for the peer to fail the connection over.
+        if reason.len() > 123 {
+            return SysOpOutput::err(VmBamlError::InvalidArgument {
+                message: format!(
+                    "WebSocket close reason is {} bytes; a close frame carries at most 123",
+                    reason.len()
+                ),
+            });
+        }
 
         SysOpOutput::async_op(async move {
-            if let Ok(handle) = stream
-                ._handle
-                .downcast::<bex_resource_types::ResourceHandle>()
-            {
-                if let Some((sink, _)) = crate::registry::REGISTRY.get_ws_stream(handle.key()) {
-                    let _ = sink.lock().await.send(Message::Close(None)).await;
-                }
-                crate::registry::REGISTRY.remove(handle.key());
+            let ws = ws_resource(&websocket)?;
+            // Best effort from here on: `close` declares only
+            // `InvalidArgument`, and a peer that has already gone away is not a
+            // caller error. The socket itself is released by `next` when the
+            // peer's echo (or the end of the stream) arrives.
+            if let Some(sink) = ws.sink.lock().await.as_mut() {
+                let _ = sink
+                    .send(Message::Close(Some(CloseFrame {
+                        code: close_code,
+                        reason: reason.into(),
+                    })))
+                    .await;
             }
             Ok(())
         })
@@ -2970,18 +3661,15 @@ impl io::IoClassWsWsStream for NativeSysOps {
         &self,
         _heap: &Arc<BexHeap>,
         _call_id: CallId,
-        stream: owned::ws::WsStream,
+        _websocket: owned::ws::WebSocket,
+        _code: i64,
+        _reason: String,
         _ctx: &SysOpContext,
     ) -> SysOpOutput<()> {
-        use bex_resource_types::ResourceRegistryRef;
-
-        if let Ok(handle) = stream
-            ._handle
-            .downcast::<bex_resource_types::ResourceHandle>()
-        {
-            crate::registry::REGISTRY.remove(handle.key());
-        }
-        SysOpOutput::ok(())
+        SysOpOutput::err(VmPanic::HostUnavailable {
+            resource: "websocket".to_string(),
+            message: "Operation not supported on this platform".to_string(),
+        })
     }
 }
 
@@ -2995,9 +3683,8 @@ impl io::IoNamespaceWs for NativeSysOps {
         headers: indexmap::IndexMap<String, String>,
         timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<owned::ws::WsStream> {
+    ) -> SysOpOutput<owned::ws::WebSocket> {
         use futures::StreamExt;
-        use tokio::sync::Mutex;
         use tokio_tungstenite::tungstenite::{
             client::IntoClientRequest,
             http::{HeaderName, HeaderValue},
@@ -3031,7 +3718,8 @@ impl io::IoNamespaceWs for NativeSysOps {
                     Err(_) => {
                         return Err(VmBamlError::Timeout {
                             message: format!("Connecting WebSocket to '{url}' timed out"),
-                            duration_ms: i64::try_from(duration.as_millis()).ok(),
+                            duration: Some(duration),
+                            timeout_type: "timeout".to_string(),
                         }
                         .into());
                     }
@@ -3042,12 +3730,9 @@ impl io::IoNamespaceWs for NativeSysOps {
                 message: format!("WebSocket connect failed: {error}"),
             })?;
             let (sink, source) = transport.split();
-            let handle = crate::registry::REGISTRY.register_ws_stream(
-                Arc::new(Mutex::new(sink)),
-                Arc::new(Mutex::new(source)),
-                url,
-            );
-            Ok(owned::ws::WsStream {
+            let handle =
+                crate::registry::REGISTRY.register_ws_stream(Box::new(sink), Box::new(source), url);
+            Ok(owned::ws::WebSocket {
                 _handle: Arc::new(handle),
             })
         })
@@ -3062,10 +3747,174 @@ impl io::IoNamespaceWs for NativeSysOps {
         _headers: indexmap::IndexMap<String, String>,
         _timeout_nanos: Arc<num_bigint::BigInt>,
         _ctx: &SysOpContext,
-    ) -> SysOpOutput<owned::ws::WsStream> {
+    ) -> SysOpOutput<owned::ws::WebSocket> {
         SysOpOutput::err(VmPanic::HostUnavailable {
-            resource: "ws".to_string(),
+            resource: "websocket".to_string(),
             message: "Operation not supported on this platform".to_string(),
+        })
+    }
+}
+
+// ============================================================================
+// Provider auth (GCP OAuth2 tokens, AWS SigV4)
+// ============================================================================
+
+/// Surface a `sys_auth` failure as the matching `baml.errors.*` class: a bad or
+/// missing credential is an `AccessError` (retrying will not help), a transport
+/// failure while resolving one is `Io`.
+fn auth_error(err: sys_auth::AuthError) -> VmBamlError {
+    match err {
+        sys_auth::AuthError::Access(message) => VmBamlError::AccessError { message },
+        sys_auth::AuthError::Io(message) => VmBamlError::Io { message },
+    }
+}
+
+impl io::IoNamespaceAiInternal for NativeSysOps {
+    fn render_output_format(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        return_type: ::sys_types::SapTy,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        sys_ops::render_output_format_op(&return_type, ctx)
+    }
+
+    fn build_output_format(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        return_type: ::sys_types::SapTy,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<owned::ai::OutputFormat> {
+        sys_ops::build_output_format_op(&return_type, ctx)
+    }
+
+    fn get_return_type(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        function_name: String,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<::sys_types::SapTy> {
+        sys_ops::get_return_type_op(&function_name, ctx)
+    }
+
+    fn _gcp_access_token(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        credentials_json: Option<String>,
+        scope: String,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<String> {
+        let runtime_io = ctx.runtime_io.clone();
+        SysOpOutput::async_op(async move {
+            sys_auth::access_token(runtime_io, credentials_json, &scope)
+                .await
+                .map_err(|e| auth_error(e).into())
+        })
+    }
+
+    fn _gcp_project_id(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        credentials_json: Option<String>,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        let runtime_io = ctx.runtime_io.clone();
+        SysOpOutput::async_op(async move {
+            Ok(sys_auth::project_id(runtime_io, credentials_json).await)
+        })
+    }
+
+    fn _gcp_quota_project_id(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        credentials_json: Option<String>,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        let runtime_io = ctx.runtime_io.clone();
+        SysOpOutput::async_op(async move {
+            Ok(sys_auth::quota_project_id(runtime_io, credentials_json).await)
+        })
+    }
+
+    fn _aws_sign_request(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        request: BexExternalValue,
+        service: String,
+        region: Option<String>,
+        profile: Option<String>,
+        access_key_id: Option<String>,
+        secret_access_key: Option<String>,
+        session_token: Option<String>,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<BexExternalValue> {
+        // `baml.http.Request` crosses the sys-op boundary untyped (the
+        // generated marshaller only maps classes from the sysop's own
+        // namespace), so decode it here. The type checker guarantees the shape,
+        // so a failure here is a marshalling bug; it is reported as an
+        // `AccessError` because that is what the op's declared contract allows.
+        let mut request = match owned::http::Request::from_external(request) {
+            Ok(request) => request,
+            Err(e) => {
+                return SysOpOutput::err(VmBamlError::AccessError {
+                    message: format!(
+                        "ai.internal._aws_sign_request: argument is not a baml.http.Request: {e:?}"
+                    ),
+                });
+            }
+        };
+        let runtime_io = ctx.runtime_io.clone();
+        SysOpOutput::async_op(async move {
+            let opts = sys_auth::AwsSignOptions {
+                region,
+                profile,
+                access_key_id,
+                secret_access_key,
+                session_token,
+                service,
+            };
+            let headers: Vec<(String, String)> = request
+                .headers
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            let signed = sys_auth::sign_request(
+                runtime_io,
+                &request.method,
+                &request.url,
+                &headers,
+                request.body.as_bytes(),
+                &opts,
+            )
+            .await
+            .map_err(auth_error)?;
+            for (name, value) in signed {
+                request.headers.insert(name, value);
+            }
+            Ok(sys_ops::io::AsBexExternalValue::into_bex_external_value(
+                request,
+            ))
+        })
+    }
+
+    fn _aws_resolve_region(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        region: Option<String>,
+        profile: Option<String>,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<Option<String>> {
+        let runtime_io = ctx.runtime_io.clone();
+        SysOpOutput::async_op(async move {
+            Ok(sys_auth::resolve_region(runtime_io, region, profile).await)
         })
     }
 }

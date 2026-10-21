@@ -1,0 +1,5 @@
+name = "field access 100k"
+description = "100,000 interface field reads where implementors keep the field at different slots"
+expect = "250000"
+jobs = 16
+warmup = 1

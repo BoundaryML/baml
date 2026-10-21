@@ -1,0 +1,6 @@
+[
+  {"highest_sequence":1,"state":"RUNNING"},
+  {"highest_sequence":3,"state":"DRAINING"},
+  {"highest_sequence":3,"state":"DRAINING"},
+  {"highest_sequence":3,"state":"DRAINING"}
+]

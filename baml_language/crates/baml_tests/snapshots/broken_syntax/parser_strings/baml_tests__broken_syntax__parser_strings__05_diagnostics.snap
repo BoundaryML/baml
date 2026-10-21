@@ -220,17 +220,99 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0003
 
   × unresolved name: `GPT4`
-    ╭─[nested_quotes.baml:12:10]
- 12 │   client GPT4
-    ·          ────
+    ╭─[nested_quotes.baml:12:11]
+ 12 │   client: GPT4
+    ·           ────
+    ╰────
+
+  [hir] E0037
+
+  × `@description` argument must be a string literal, got `#"raw string"#`
+   ╭─[raw_strings.baml:3:30]
+ 3 │   simple string @description(#"raw string"#)
+   ·                              ───────┬──────
+   ·                                     ╰── invalid builtin declaration
+   ╰────
+
+  [parse] E0098
+
+  × removed language feature
+   ╭─[raw_strings.baml:3:30]
+ 3 │   simple string @description(#"raw string"#)
+   ·                              ───────┬──────
+   ·                                     ╰── Hash string literals like `#"..."#` are no longer supported. Use quoted strings or backtick strings instead.
+   ╰────
+
+  [hir] E0037
+
+  × `@description` argument must be a string literal, got `#"contains "quotes" easily"#`
+   ╭─[raw_strings.baml:4:35]
+ 4 │   with_quotes string @description(#"contains "quotes" easily"#)
+   ·                                   ──────────────┬─────────────
+   ·                                                 ╰── invalid builtin declaration
+   ╰────
+
+  [parse] E0098
+
+  × removed language feature
+   ╭─[raw_strings.baml:4:35]
+ 4 │   with_quotes string @description(#"contains "quotes" easily"#)
+   ·                                   ──────────────┬─────────────
+   ·                                                 ╰── Hash string literals like `#"..."#` are no longer supported. Use quoted strings or backtick strings instead.
+   ╰────
+
+  [hir] E0037
+
+  × `@description` argument must be a string literal, got `##"contains #"hash"# inside"##`
+   ╭─[raw_strings.baml:5:34]
+ 5 │   multi_hash string @description(##"contains #"hash"# inside"##)
+   ·                                  ───────────────┬──────────────
+   ·                                                 ╰── invalid builtin declaration
+   ╰────
+
+  [parse] E0098
+
+  × removed language feature
+   ╭─[raw_strings.baml:5:34]
+ 5 │   multi_hash string @description(##"contains #"hash"# inside"##)
+   ·                                  ───────────────┬──────────────
+   ·                                                 ╰── Hash string literals like `#"..."#` are no longer supported. Use quoted strings or backtick strings instead.
+   ╰────
+
+  [hir] E0037
+
+  × `@description` argument must be a string literal, got `###"
+  │     This is a multiline
+  │     raw string with "quotes"
+  │     and #hashes#
+  │   "###`
+    ╭─[raw_strings.baml:6:33]
+  6 │ ╭─▶   multiline string @description(###"
+  7 │ │       This is a multiline
+  8 │ │       raw string with "quotes"
+  9 │ │       and #hashes#
+ 10 │ ├─▶   "###)
+    · ╰──── invalid builtin declaration
+    ╰────
+
+  [parse] E0098
+
+  × removed language feature
+    ╭─[raw_strings.baml:6:33]
+  6 │ ╭─▶   multiline string @description(###"
+  7 │ │       This is a multiline
+  8 │ │       raw string with "quotes"
+  9 │ │       and #hashes#
+ 10 │ ├─▶   "###)
+    · ╰──── Hash string literals like `#"..."#` are no longer supported. Use quoted strings or backtick strings instead.
     ╰────
 
   [type] E0003
 
   × unresolved name: `GPT4`
-    ╭─[raw_strings.baml:14:10]
- 14 │   client GPT4
-    ·          ────
+    ╭─[raw_strings.baml:14:11]
+ 14 │   client: GPT4
+    ·           ────
     ╰────
 
   [hir] E0107
@@ -325,29 +407,57 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0010
 
-  × `client<llm>` config blocks are removed; declare a client value instead: `client GPT4 = openai.OpenAiClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback / ai.RoundRobin)
+  × `client<llm>` config blocks are removed; declare a client value instead: `client MyClient = openai.ResponsesClient.new(model = "...");` (compose reliability with ai.Retry / ai.Fallback /
+  │ ai.RoundRobin)
     ╭─[unicode_strings.baml:26:3]
- 26 │   client GPT4
-    ·   ─────┬─────
-    ·        ╰── replace with `client Name = <expr>;`
+ 26 │   client: GPT4
+    ·   ───┬──
+    ·      ╰── replace with `client Name = <expr>;`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:26:9]
+ 26 │   client: GPT4
+    ·         ┬
+    ·         ╰── expected `client name`, found `':'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:26:11]
+ 26 │   client: GPT4
+    ·           ──┬─
+    ·             ╰── expected `top-level declaration`, found `identifier`
     ╰────
 
   [parse] E0010
 
   × unexpected token
     ╭─[unicode_strings.baml:27:3]
- 27 │   prompt `
+ 27 │   prompt: `
     ·   ───┬──
-    ·      ╰── expected `config block`, found `identifier`
+    ·      ╰── expected `top-level declaration`, found `identifier`
     ╰────
 
   [parse] E0010
 
   × unexpected token
-    ╭─[unicode_strings.baml:27:10]
- 27 │   prompt `
-    ·          ┬
-    ·          ╰── expected `top-level declaration`, found `'`'`
+    ╭─[unicode_strings.baml:27:9]
+ 27 │   prompt: `
+    ·         ┬
+    ·         ╰── expected `top-level declaration`, found `':'`
+    ╰────
+
+  [parse] E0010
+
+  × unexpected token
+    ╭─[unicode_strings.baml:27:11]
+ 27 │   prompt: `
+    ·           ┬
+    ·           ╰── expected `top-level declaration`, found `'`'`
     ╰────
 
   [parse] E0010

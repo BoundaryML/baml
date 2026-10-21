@@ -1,0 +1,199 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0063
+
+  ⚠ unreachable arm
+    ╭─[exceptions.baml:35:14]
+ 35 │         _ => 2
+    ·              ─
+    ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+    ╭─[exceptions.baml:49:19]
+ 49 │         "boom" => 1,
+    ·                   ─
+    ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+    ╭─[exceptions.baml:65:14]
+ 65 │         _ => 2
+    ·              ─
+    ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[exceptions.baml:444:9]
+ 444 │         baml.sys.panic("expected throw")
+     ·         ────────────────────────────────
+     ╰────
+
+  [type] E0146
+
+  ⚠ unreachable code: 1 statement(s) after diverging statement
+     ╭─[exceptions.baml:453:9]
+ 453 │         baml.sys.panic("expected throw")
+     ·         ────────────────────────────────
+     ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+     ╭─[exceptions.baml:979:14]
+ 979 │         _ => 99
+     ·              ──
+     ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+      ╭─[exceptions.baml:1463:16]
+ 1463 │         int => 2,
+      ·                ─
+      ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+      ╭─[exceptions.baml:1464:17]
+ 1464 │         bool => 3,
+      ·                 ─
+      ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+      ╭─[exceptions.baml:1465:17]
+ 1465 │         null => 4,
+      ·                 ─
+      ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+      ╭─[exceptions.baml:1466:14]
+ 1466 │         _ => 0
+      ·              ─
+      ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+      ╭─[exceptions.baml:1517:19]
+ 1517 │         string => 1,
+      ·                   ─
+      ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+      ╭─[exceptions.baml:1518:16]
+ 1518 │         int => 2,
+      ·                ─
+      ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+      ╭─[exceptions.baml:1519:17]
+ 1519 │         bool => 3,
+      ·                 ─
+      ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+      ╭─[exceptions.baml:1520:17]
+ 1520 │         null => 4,
+      ·                 ─
+      ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+      ╭─[exceptions.baml:1536:19]
+ 1536 │         string => 1,
+      ·                   ─
+      ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+      ╭─[exceptions.baml:1537:16]
+ 1537 │         int => 2,
+      ·                ─
+      ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+      ╭─[exceptions.baml:1539:14]
+ 1539 │         _ => 0
+      ·              ─
+      ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+      ╭─[exceptions.baml:1602:14]
+ 1602 │         _ => 0
+      ·              ─
+      ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+      ╭─[exceptions.baml:1635:30]
+ 1635 │         let err2: AuthErr => err2.reason,
+      ·                              ───────────
+      ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+      ╭─[exceptions.baml:1636:34]
+ 1636 │         let err3: NotFoundErr => err3.path,
+      ·                                  ─────────
+      ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+      ╭─[exceptions.baml:1637:25]
+ 1637 │         RateLimitErr => "rate limited",
+      ·                         ──────────────
+      ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+      ╭─[exceptions.baml:1638:14]
+ 1638 │         _ => "unknown"
+      ·              ─────────
+      ╰────
+
+  [type] E0063
+
+  ⚠ unreachable arm
+      ╭─[exceptions.baml:1751:14]
+ 1751 │         _ => 3
+      ·              ─
+      ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: baml.errors.ParseError
+      ╭─[exceptions.baml:1872:89]
+ 1872 │ ╭─▶ function s20_may_throw(n: int) -> string throws baml.errors.Io | baml.errors.ParseError {
+ 1873 │ │       if (n == 42) {
+ 1874 │ │           throw baml.errors.Io { message: "io" }
+ 1875 │ │       }
+ 1876 │ │       "ok"
+ 1877 │ ╰─▶ }
+      ╰────

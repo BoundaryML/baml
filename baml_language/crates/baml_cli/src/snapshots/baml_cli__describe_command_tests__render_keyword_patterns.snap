@@ -27,3 +27,8 @@ narrow), `_` (wildcard); class destructure `T { field: <pattern> }`; array
 `[a, ..]` / `[.., z]`; or-patterns `A | B` (bindings must line up); guards
 `<pattern> if cond`. `match` must be exhaustive — a `_` arm is allowed only
 when earlier arms leave a gap. Same topic: `baml describe match`.
+
+`is` narrows a local binding that no closure captures, also on the right
+side of `&&` / `||`. It does not narrow a field path or an index path:
+use `if let` or `match` for those. The rule and the reason are in
+`baml describe is`.

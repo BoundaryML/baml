@@ -1,0 +1,24 @@
+---
+source: crates/baml_tests/src/compiler2_tir/phase6.rs
+expression: "render_tir(&db, file)"
+---
+function user.image_static_from_url() -> image throws never {
+  { : image
+    image.from_url("example.com/img.png", null) : image
+  }
+}
+function user.pdf_static_from_base64() -> pdf throws never {
+  { : pdf
+    pdf.from_base64("base64data", null) : pdf
+  }
+}
+function user.audio_static_from_file() -> audio throws never {
+  { : audio
+    audio.from_file("song.mp3", null) : audio
+  }
+}
+function user.video_static_from_url() -> video throws never {
+  { : video
+    video.from_url("example.com/v.mp4", null) : video
+  }
+}

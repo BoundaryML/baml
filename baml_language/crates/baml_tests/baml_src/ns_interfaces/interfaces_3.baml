@@ -73,8 +73,8 @@ interface W306Box<T> {
     function get(self) -> T throws never
 }
 function w306_names<U>() -> string {
-    let naked = reflect.type_of<U>().to_string()
-    let wrapped = reflect.type_of<W306Box<U>>().to_string()
+    let naked = reflect.Type.of<U>().to_string()
+    let wrapped = reflect.Type.of<W306Box<U>>().to_string()
     return "naked=" + naked + " wrapped=" + wrapped
 }
 function w306_main() -> string {
@@ -99,10 +99,10 @@ class W307StringBox {
     }
 }
 function w307_box_impls_intbox<T>() -> bool {
-    return reflect.type_of<W307Box<T>>().implemented_by(reflect.type_of<W307IntBox>())
+    return reflect.Type.of<W307Box<T>>().implemented_by(W307IntBox.type())
 }
 function w307_box_impls_stringbox<T>() -> bool {
-    return reflect.type_of<W307Box<T>>().implemented_by(reflect.type_of<W307StringBox>())
+    return reflect.Type.of<W307Box<T>>().implemented_by(W307StringBox.type())
 }
 function w307_main() -> bool {
     return w307_box_impls_intbox<int>()
@@ -166,8 +166,8 @@ implements W315Debuggable for int {
     function debugW315(self) -> string { return "int" }
 }
 function w315_main() -> int {
-    let a = reflect.type_of<int>().implements(reflect.type_of<W315Debuggable>())
-    let b = reflect.type_of<W315Debuggable>().implemented_by(reflect.type_of<int>())
+    let a = int.type().implements(reflect.Type.of<W315Debuggable>())
+    let b = reflect.Type.of<W315Debuggable>().implemented_by(int.type())
     if a && b { return 1001 }
     return 0
 }
@@ -270,7 +270,7 @@ test "wf3_concrete_field_shadows_interface_views_pins" {
 }
 
 // wf3: generic-interface reflection is per-instantiation. A bare generic head
-// (`reflect.type_of<W3bgBox>()`) is an arity error like any other type
+// (`reflect.Type.of<W3bgBox>()`) is an arity error like any other type
 // position (pinned in tests/interfaces.rs); each written instantiation
 // answers membership only for its own implementors.
 interface W3bgBox<T> {
@@ -287,9 +287,9 @@ class W3bgStringBox {
     }
 }
 function w3bg_main() -> bool {
-    let int_box = reflect.type_of<W3bgBox<int>>()
-    return int_box.implemented_by(reflect.type_of<W3bgIntBox>())
-        && !int_box.implemented_by(reflect.type_of<W3bgStringBox>())
+    let int_box = reflect.Type.of<W3bgBox<int>>()
+    return int_box.implemented_by(W3bgIntBox.type())
+        && !int_box.implemented_by(W3bgStringBox.type())
 }
 test "wf3_generic_interface_reflection_is_per_instantiation" {
     assert.is_true(w3bg_main())
@@ -318,9 +318,9 @@ class Ufp2UBox {
     }
 }
 function ufp2_main() -> int {
-    let ub = reflect.type_of<Ufp2UBox>()
-    let fwd = reflect.type_of<Ufp2Box<(int | string)?>>()
-    let rev = reflect.type_of<Ufp2Box<(string | int)?>>()
+    let ub = Ufp2UBox.type()
+    let fwd = reflect.Type.of<Ufp2Box<(int | string)?>>()
+    let rev = reflect.Type.of<Ufp2Box<(string | int)?>>()
     let a = 0
     if ub.implements(fwd) { a = a + 1 }
     if ub.implements(rev) { a = a + 10 }
@@ -363,11 +363,11 @@ class Ufp5UBox {
     implements Ufp5Box<int | int> { function get(self) -> int | int { return self.value } }
 }
 function ufp5_main() -> int {
-    let ub = reflect.type_of<Ufp5UBox>()
+    let ub = Ufp5UBox.type()
     let a = 0
     // UBox implements Box<int | int>, NOT Box<int | string>.
-    if ub.implements(reflect.type_of<Ufp5Box<int | int>>()) { a = a + 1 }
-    if ub.implements(reflect.type_of<Ufp5Box<int | string>>()) { a = a + 10 }
+    if ub.implements(reflect.Type.of<Ufp5Box<int | int>>()) { a = a + 1 }
+    if ub.implements(reflect.Type.of<Ufp5Box<int | string>>()) { a = a + 10 }
     return a
 }
 test "union_fuzz_pr_reflection_duplicate_union_members_not_equivalent" {
@@ -445,9 +445,9 @@ class Uf06UBox {
     }
 }
 function uf06_main() -> int {
-    let ub = reflect.type_of<Uf06UBox>()
-    let fwd = reflect.type_of<Uf06Box<int | string>>()
-    let rev = reflect.type_of<Uf06Box<string | int>>()
+    let ub = Uf06UBox.type()
+    let fwd = reflect.Type.of<Uf06Box<int | string>>()
+    let rev = reflect.Type.of<Uf06Box<string | int>>()
     let d1 = 0
     if ub.implements(fwd) { d1 = 1 }
     let d2 = 0
@@ -541,4 +541,101 @@ function ptu_main() -> string {
 }
 test "positional_typevar_union_interface_args_dispatch" {
     assert.equal(ptu_main(), "multi:x")
+}
+
+// ── Ported from tests/interfaces.rs ──────────────────────────────────────────
+
+// The dispatch cache keys on the *realized* interface arguments, not just the
+// interface's nominal identity: two `Tagged<...>` instantiations on one class
+// must select different implementations from the same fact-poor structural
+// context.
+interface VdcAnimal {}
+
+class VdcDog {
+    implements VdcAnimal {}
+}
+
+interface VdcTagged<T> {
+    function tag(self) -> string throws never
+}
+
+class VdcBoth {
+    implements VdcTagged<VdcAnimal> {
+        function tag(self) -> string { return "animal" }
+    }
+    implements VdcTagged<VdcAnimal | VdcDog> {
+        function tag(self) -> string { return "animal-or-dog" }
+    }
+}
+
+function vdc_read_tag<T>(value: VdcTagged<T>) -> string {
+    return value.tag()
+}
+
+function vdc_dispatch_distinguishes_instantiations() -> string {
+    let value = VdcBoth {};
+    return vdc_read_tag<VdcAnimal>(value) + "|" + vdc_read_tag<VdcAnimal | VdcDog>(value)
+}
+
+test "virtual_dispatch_cache_distinguishes_generic_interface_instantiations" {
+    assert.equal(vdc_dispatch_distinguishes_instantiations(), "animal|animal-or-dog")
+}
+
+interface UfwNamed {
+    name string
+}
+
+class UfwA {
+    name string
+    implements UfwNamed {}
+}
+
+class UfwB {
+    name string
+    implements UfwNamed {}
+}
+
+function ufw_rename(value: UfwA | UfwB) -> string {
+    value.name = "renamed";
+    value.name
+}
+
+test "union_field_write_uses_shared_interface" {
+    assert.equal(ufw_rename(UfwA { name: "original" }), "renamed")
+}
+
+// A rigid var proves a goal from the bounds it carries. Two bounds whose
+// `requires` closures meet reach the same head twice, and a head is not
+// ambiguous with itself: a diamond bound, and a bound restated beside one
+// that already requires it, both prove a generic goal `DbC<X>`.
+interface DbC<X> {
+    function c(self) -> int throws never
+}
+interface DbA<X> requires DbC<X> {
+    function a(self) -> int throws never
+}
+interface DbB<X> requires DbC<X> {
+    function b(self) -> int throws never
+}
+class DbImpl {
+    implements DbC<int> { function c(self) -> int throws never { 7 } }
+    implements DbA<int> { function a(self) -> int throws never { 1 } }
+    implements DbB<int> { function b(self) -> int throws never { 2 } }
+}
+function db_goal<X, U extends DbC<X>>(u: U) -> int throws never {
+    u.c()
+}
+function db_diamond<X, T extends DbA<X> & DbB<X>>(t: T) -> int throws never {
+    db_goal(t)
+}
+function db_restated<X, T extends DbC<X> & DbA<X>>(t: T) -> int throws never {
+    db_goal(t)
+}
+
+test "diamond_bound_proves_a_generic_goal_once" {
+    assert.equal(db_diamond<int, DbImpl>(DbImpl {}), 7)
+}
+
+test "restated_bound_proves_a_generic_goal_once" {
+    assert.equal(db_restated<int, DbImpl>(DbImpl {}), 7)
 }

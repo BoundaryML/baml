@@ -56,14 +56,14 @@ fn test_host_supplied_json_supports_typed_narrowing() {
         "fallback"
     );
 
-    // `json_path_string` declares `throws baml.json.JsonPathError`, so the
+    // `json_path_string` declares `throws baml.json.PathError`, so the
     // missing-field throw surfaces typed like every declared throw; the
     // python port pins the same case as `BamlError` matching
     // "missing field".
     let err = json_path_string(object, ".absent".to_string())
         .expect_err("the missing-field throw must surface to the caller");
     let baml_bridge::Error::Thrown { value, .. } = err else {
-        panic!("expected the typed JsonPathError throw, got {err}");
+        panic!("expected the typed PathError throw, got {err}");
     };
     assert!(value.message.contains("missing field"), "{}", value.message);
 }

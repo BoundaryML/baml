@@ -1,30 +1,28 @@
 import type {
+  RunStoreClient,
+  RunSubscriptionEvent,
+  RunSubscriptionHandle,
+  StartPreviewRunRequest,
+  StartRunRequest,
+  StartTestRunRequest,
+} from './run-store-client';
+import type {
+  BoundaryId,
+  RequestCommandOutcome,
   Run,
   RunCursor,
-  BoundaryId,
   RunListFilter,
   RunPatch,
   RunPatchChange,
-  RequestCommandOutcome,
   RunSummary,
 } from './worker-protocol';
-import type {
-  RunStoreClient,
-  RunSubscriptionHandle,
-  RunSubscriptionEvent,
-  StartPreviewRunRequest,
-  StartTestRunRequest,
-  StartRunRequest,
-} from './run-store-client';
 
 export interface ExecutionStoreSnapshot {
   runs: Run[];
   selectedBoundaryId: BoundaryId | null;
 }
 
-export type ExecutionStoreListener = (
-  snapshot: ExecutionStoreSnapshot,
-) => void;
+export type ExecutionStoreListener = (snapshot: ExecutionStoreSnapshot) => void;
 
 export interface ExecutionStore {
   getSnapshot(): ExecutionStoreSnapshot;
@@ -68,7 +66,10 @@ export function applyRunPatch(run: Run, patch: RunPatch): Run {
 
 export function createExecutionStore(client: RunStoreClient): ExecutionStore {
   const runsById = new Map<BoundaryId, Run>();
-  const subscriptionsByBoundaryId = new Map<BoundaryId, RunSubscriptionHandle>();
+  const subscriptionsByBoundaryId = new Map<
+    BoundaryId,
+    RunSubscriptionHandle
+  >();
   const listeners = new Set<ExecutionStoreListener>();
   let selectedBoundaryId: BoundaryId | null = null;
   let disposed = false;
@@ -144,26 +145,69 @@ export function createExecutionStore(client: RunStoreClient): ExecutionStore {
   }
 
   return {
-    getSnapshot: snapshot,
+    applyPatch,
+    applySnapshot,
 
-    subscribe(listener) {
-      listeners.add(listener);
-      listener(snapshot());
-      return () => {
-        listeners.delete(listener);
-      };
+    async cancelRun(boundaryId) {
+      return client.cancelRun(boundaryId);
     },
 
-    async startRun(request) {
-      const boundaryId = await client.startRun(request);
+    dispose() {
+      disposed = true;
+      for (const handle of subscriptionsByBoundaryId.values()) {
+        void handle.unsubscribe().catch(() => {});
+      }
+      subscriptionsByBoundaryId.clear();
+      listeners.clear();
+      client.dispose();
+    },
+
+    followRun,
+    getSnapshot: snapshot,
+
+    listHistory(filter) {
+      return client.listHistory(filter);
+    },
+
+    listRuns(filter) {
+      return client.listRuns(filter);
+    },
+
+    async openHistory(boundaryId) {
+      const run = await client.openHistory(boundaryId);
+      applySnapshot(run);
+      return run;
+    },
+
+    async respondToEnv(boundaryId, envRequestId, value) {
+      return client.respondToEnv(boundaryId, envRequestId, value);
+    },
+
+    async respondToInput(boundaryId, inputRequestId, value) {
+      return client.respondToInput(boundaryId, inputRequestId, value);
+    },
+
+    selectRun(boundaryId) {
+      selectedBoundaryId = boundaryId;
+      notify();
+    },
+
+    async snapshotRun(boundaryId) {
+      const run = await client.snapshot(boundaryId);
+      applySnapshot(run);
+      return run;
+    },
+
+    async startPreviewRun(request) {
+      const boundaryId = await client.startPreviewRun(request);
       const run = await client.snapshot(boundaryId);
       applySnapshot(run);
       followRun(boundaryId, run.cursor);
       return boundaryId;
     },
 
-    async startPreviewRun(request) {
-      const boundaryId = await client.startPreviewRun(request);
+    async startRun(request) {
+      const boundaryId = await client.startRun(request);
       const run = await client.snapshot(boundaryId);
       applySnapshot(run);
       followRun(boundaryId, run.cursor);
@@ -178,65 +222,18 @@ export function createExecutionStore(client: RunStoreClient): ExecutionStore {
       return boundaryId;
     },
 
-    async cancelRun(boundaryId) {
-      return client.cancelRun(boundaryId);
-    },
-
-    async respondToInput(boundaryId, inputRequestId, value) {
-      return client.respondToInput(boundaryId, inputRequestId, value);
-    },
-
-    async respondToEnv(boundaryId, envRequestId, value) {
-      return client.respondToEnv(boundaryId, envRequestId, value);
-    },
-
-    listRuns(filter) {
-      return client.listRuns(filter);
-    },
-
-    listHistory(filter) {
-      return client.listHistory(filter);
-    },
-
-    async openHistory(boundaryId) {
-      const run = await client.openHistory(boundaryId);
-      applySnapshot(run);
-      return run;
-    },
-
-    async snapshotRun(boundaryId) {
-      const run = await client.snapshot(boundaryId);
-      applySnapshot(run);
-      return run;
-    },
-
-    followRun,
-    applySnapshot,
-    applyPatch,
-
-    selectRun(boundaryId) {
-      selectedBoundaryId = boundaryId;
-      notify();
-    },
-
-    dispose() {
-      disposed = true;
-      for (const handle of subscriptionsByBoundaryId.values()) {
-        void handle.unsubscribe().catch(() => {});
-      }
-      subscriptionsByBoundaryId.clear();
-      listeners.clear();
-      client.dispose();
+    subscribe(listener) {
+      listeners.add(listener);
+      listener(snapshot());
+      return () => {
+        listeners.delete(listener);
+      };
     },
   };
 }
 
 function applyRunPatchChange(run: Run, change: RunPatchChange): Run {
   switch (change.type) {
-    case 'upsertCallNode':
-      return { ...run, calls: upsertById(run.calls, change.call) };
-    case 'upsertThreadNode':
-      return { ...run, threads: upsertById(run.threads, change.thread) };
     case 'upsertPayload':
       return { ...run, payloads: upsertById(run.payloads, change.payload) };
     case 'upsertDiagnostic':
@@ -244,10 +241,6 @@ function applyRunPatchChange(run: Run, change: RunPatchChange): Run {
         ...run,
         diagnostics: upsertDiagnostic(run.diagnostics, change.diagnostic),
       };
-    case 'setRootCallNode':
-      return { ...run, rootCallNodeId: change.callNodeId };
-    case 'setGraphRuntimeOverlay':
-      return { ...run, graphRuntimeOverlay: change.overlay };
     case 'setStatus':
       return { ...run, status: change.status };
     case 'complete':
@@ -266,34 +259,34 @@ function applyCompletion(
     case 'succeeded':
       return {
         ...run,
-        status: 'succeeded',
-        result: outcome.result,
-        error: null,
         cancellation: null,
+        error: null,
+        result: outcome.result,
+        status: 'succeeded',
       };
     case 'failed':
       return {
         ...run,
-        status: 'failed',
-        result: null,
-        error: outcome.error,
         cancellation: null,
+        error: outcome.error,
+        result: null,
+        status: 'failed',
       };
     case 'cancelled':
       return {
         ...run,
-        status: 'cancelled',
-        result: null,
-        error: null,
         cancellation: outcome.cancellation,
+        error: null,
+        result: null,
+        status: 'cancelled',
       };
     case 'panicked':
       return {
         ...run,
-        status: 'panicked',
-        result: null,
-        error: outcome.error,
         cancellation: null,
+        error: outcome.error,
+        result: null,
+        status: 'panicked',
       };
     default:
       outcome satisfies never;
@@ -334,24 +327,19 @@ function diagnosticKey(diagnostic: Run['diagnostics'][number]): string {
 function cloneRun(run: Run): Run {
   return {
     ...run,
-    timeAnchor: { ...run.timeAnchor },
+    cancellation: run.cancellation ? { ...run.cancellation } : null,
+    diagnostics: run.diagnostics.map((diagnostic) => ({ ...diagnostic })),
+    error: run.error ? { ...run.error } : null,
+    payloads: run.payloads.map((payload) => ({ ...payload })),
     request: { ...run.request, target: { ...run.request.target } },
-    target: { ...run.target },
-    visibility: { ...run.visibility },
     result: run.result
       ? {
           ...run.result,
           supportingPayloadIds: [...run.result.supportingPayloadIds],
         }
       : null,
-    error: run.error ? { ...run.error } : null,
-    cancellation: run.cancellation ? { ...run.cancellation } : null,
-    calls: run.calls.map((call) => ({ ...call })),
-    threads: run.threads.map((thread) => ({
-      ...thread,
-      callNodeIds: [...thread.callNodeIds],
-    })),
-    payloads: run.payloads.map((payload) => ({ ...payload })),
-    diagnostics: run.diagnostics.map((diagnostic) => ({ ...diagnostic })),
+    target: { ...run.target },
+    timeAnchor: { ...run.timeAnchor },
+    visibility: { ...run.visibility },
   };
 }

@@ -11,12 +11,14 @@ use std::{
 };
 
 use baml_base::{
-    Literal, MediaKind, Name as BaseName, TyAttr, TyAttrValue,
+    Literal, MediaKind, Name as BaseName,
     qualified_name::{AI_STREAM_DONE, AI_STREAM_STREAM},
 };
-use baml_codegen_types::{
-    CallableParam, Class, ClassProperty, CodegenFunctionParamMode, EnumVariant, Function,
-    FunctionArgument, Name, ParamTy, Symbol, Ty,
+#[cfg(test)]
+use baml_sdkgen_types::FunctionArgument;
+use baml_sdkgen_types::{
+    CallableParam, Class, ClassProperty, CodegenFunctionParamMode, EnumVariant, Function, Name,
+    ParamTy, Symbol, Ty,
 };
 use sha2::{Digest, Sha256};
 
@@ -79,8 +81,8 @@ impl From<PreparationError> for CSharpGenerationError {
     }
 }
 
-struct ArgumentSpec<'a> {
-    argument: &'a FunctionArgument,
+struct ArgumentSpec {
+    wire_name: BaseName,
     ty: Ty,
     optional: bool,
     parameter_request: CSharpNameRequest,
@@ -92,7 +94,6 @@ struct FunctionSpec<'a> {
     wire_identity: String,
     variant: CallableVariant,
     result: Ty,
-    stream_partial: Option<Ty>,
     generic_params: Vec<GenericParamSpec<'a>>,
     namespace_requests: Vec<CSharpNameRequest>,
     holder_request: CSharpNameRequest,
@@ -102,7 +103,7 @@ struct FunctionSpec<'a> {
     cancellation_request: CSharpNameRequest,
     field_request: CSharpNameRequest,
     locals: CallableLocalRequests,
-    arguments: Vec<ArgumentSpec<'a>>,
+    arguments: Vec<ArgumentSpec>,
 }
 
 #[derive(Clone)]
@@ -131,12 +132,11 @@ struct ClassSpec<'a> {
 }
 
 struct MethodSpec<'a> {
-    method: &'a baml_codegen_types::Function,
+    method: &'a baml_sdkgen_types::Function,
     wire_identity: String,
     is_static: bool,
     variant: CallableVariant,
     result: Ty,
-    stream_partial: Option<Ty>,
     type_params: Vec<GenericParamSpec<'a>>,
     method_type_param_count: usize,
     method_request: CSharpNameRequest,
@@ -145,7 +145,7 @@ struct MethodSpec<'a> {
     function_field_request: CSharpNameRequest,
     receiver_field_request: Option<CSharpNameRequest>,
     locals: CallableLocalRequests,
-    arguments: Vec<ArgumentSpec<'a>>,
+    arguments: Vec<ArgumentSpec>,
 }
 
 struct CallableLocalRequests {
@@ -167,10 +167,29 @@ struct VariantSpec<'a> {
 }
 
 fn is_stream_callable_variant(variant: CallableVariant) -> bool {
-    matches!(
-        variant,
-        CallableVariant::Stream | CallableVariant::ParseStream
-    )
+    matches!(variant, CallableVariant::Stream)
+}
+
+fn stream_client_argument(
+    callable_fqn: &BamlFqn,
+    field_request: CSharpNameRequest,
+) -> ArgumentSpec {
+    let wire_name = BaseName::new("client");
+    ArgumentSpec {
+        wire_name: wire_name.clone(),
+        ty: Ty::Unknown,
+        optional: true,
+        parameter_request: CSharpNameRequest::new(
+            callable_fqn.member(&wire_name),
+            BamlWireName::Key(wire_name),
+            "client",
+            CSharpNameKind::Parameter,
+            CSharpVisibility::Public,
+            CSharpNameOrigin::CompilerGenerated,
+            CSharpScope::Callable(callable_fqn.clone()),
+        ),
+        field_request,
+    }
 }
 
 struct EnumSpec<'a> {
@@ -192,25 +211,33 @@ enum BuiltinProjection {
     StructuralClass,
     StructuralEnum,
     Resource,
-    OpaqueHandle,
+    FunctionSpec,
+    Prompt,
     UnsupportedInternal,
 }
 
 fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
     match name.to_string().as_str() {
-        "baml.http.Request"
+        "trace.Capture" | "trace.Settings" | "trace.ContextOptions" | "trace.Context"
+        | "baml.http.Request"
+        | "baml.http.ServerRequest"
         | "baml.glob.ScanOptions"
         | "baml.fs.DirEntry"
         | "baml.fs.MkdirOptions"
         | "baml.net.Datagram"
         | "baml.time.Duration"
         | "baml.iter.Done"
-        | "baml.csv.CsvError"
-        | "baml.csv.CsvPosition"
+        | "baml.csv.Error"
+        | "baml.csv.Position"
         | "baml.csv.ReaderOptions"
-        | "baml.csv.WriterOptions" => Some(BuiltinProjection::StructuralClass),
-        "baml.csv.CsvErrorKind" => Some(BuiltinProjection::StructuralEnum),
-        "baml.spawn.TaskGroup"
+        | "baml.csv.WriterOptions"
+        // A field-less marker a user signature can pass around, like
+        // `baml.iter.Done`.
+        | "baml.spawn.Root"
+        | "baml.ws.CloseEvent" => Some(BuiltinProjection::StructuralClass),
+        "trace.Mode" | "baml.csv.ErrorKind" => Some(BuiltinProjection::StructuralEnum),
+        "trace.SpanId" | "trace.Options" | "trace.ReservedSpan"
+        | "baml.spawn.Limit"
         | "baml.spawn.CancelToken"
         | "baml.http.Response"
         | "baml.http.SseStream"
@@ -218,41 +245,39 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.http.TlsConfig"
         | "baml.glob.Glob"
         | "baml.fs.File"
-        | "boundary.LocalId"
-        | "baml.csv.CsvRecord"
-        | "baml.csv.CsvReader"
-        | "baml.csv.CsvRows"
-        | "baml.csv.CsvWriter"
+        | "baml.csv.Record"
+        | "baml.csv.Reader"
+        | "baml.csv.Rows"
+        | "baml.csv.Writer"
         | "baml.net.TcpStream"
         | "baml.net.TcpListener"
-        | "baml.net.UdpSocket" => Some(BuiltinProjection::Resource),
-        "ai.Prompt" => Some(BuiltinProjection::OpaqueHandle),
-        "baml.csv.CsvNeedData"
-        | "baml.csv.CsvSkip"
-        | "baml.csv.CsvHeaders"
-        | "baml.prompt.OutputFormat"
-        | "baml.sap.ParseCache"
+        | "baml.net.UdpSocket"
+        | "baml.ws.WebSocket" => Some(BuiltinProjection::Resource),
+        "ai.FunctionSpec" => Some(BuiltinProjection::FunctionSpec),
+        "ai.Prompt" => Some(BuiltinProjection::Prompt),
+        // A plan holds a BAML closure: no host can build or run one, so a
+        // signature that mentions it has no host shape.
+        "baml.spawn.Plan"
+        | "baml.csv._NeedData"
+        | "baml.csv._Skip"
+        | "baml.csv._Headers"
+        | "ai.OutputFormat"
+        | "baml.sap._ParseCache"
         | "baml.errors.HostCallable"
         | "ai.PromptMessage"
         | AI_STREAM_STREAM
         | AI_STREAM_DONE
-        | "baml.prompt.Role"
-        | "baml.prompt.ContextClient"
-        | "baml.prompt.Context"
-        | "baml.prompt.MediaUrlHandler"
-        | "baml.prompt.PrimitiveClientOptions"
-        | "baml.prompt.AzureOpenAiOptions"
-        | "baml.prompt.AnthropicOptions"
-        | "baml.prompt.GoogleAiOptions"
-        | "baml.prompt.VertexAiOptions"
-        | "baml.prompt.BedrockOptions" => Some(BuiltinProjection::UnsupportedInternal),
+        | "ai.Role"
+        | "ai.ContextClient"
+        | "ai.Context" => Some(BuiltinProjection::UnsupportedInternal),
         _ => None,
     }
 }
 
 fn builtin_type_source(name: &Name) -> Option<&'static str> {
     match builtin_projection(name)? {
-        BuiltinProjection::OpaqueHandle => Some("global::Baml.BamlHandle"),
+        BuiltinProjection::FunctionSpec => Some("global::Baml.BamlFunctionSpec"),
+        BuiltinProjection::Prompt => Some("global::Baml.BamlPrompt"),
         BuiltinProjection::Resource => None,
         BuiltinProjection::StructuralClass
         | BuiltinProjection::StructuralEnum
@@ -276,34 +301,35 @@ fn is_public_resource_stdlib_function(name: &Name) -> bool {
     if name.name().as_str().starts_with('_') {
         return false;
     }
-    // `spawn.options` returns a VM closure, not a resource. Python and C# both
-    // classify native closure values as unsupported SDK boundaries; keeping it
-    // out here does not omit any resource factory or method.
-    if name.to_string() == "baml.spawn.options" {
-        return false;
+    if name.package().as_str() == "trace" {
+        // A `trace.Span` is driven by a BAML closure (`Span.run`), so a host
+        // has no shape for one.
+        return name.to_string() != "trace.start_span";
     }
-
-    (name.package().as_str() == "baml"
+    name.package().as_str() == "baml"
         && name.namespace().first().is_some_and(|namespace| {
             matches!(
                 namespace.as_str(),
                 "csv" | "fs" | "glob" | "http" | "net" | "spawn"
             )
-        }))
-        || name.to_string() == "boundary.id"
+        })
 }
 
 fn is_runtime_class_projection(name: &Name) -> bool {
     matches!(
         builtin_projection(name),
-        Some(BuiltinProjection::Resource | BuiltinProjection::OpaqueHandle)
+        Some(
+            BuiltinProjection::Resource
+                | BuiltinProjection::FunctionSpec
+                | BuiltinProjection::Prompt
+        )
     )
 }
 
 fn is_host_callable_error(ty: &Ty) -> bool {
     matches!(
         ty,
-        Ty::Class(name, arguments, _)
+        Ty::Class(name, arguments)
             if arguments.is_empty() && name.to_string() == "baml.errors.HostCallable"
     )
 }
@@ -382,6 +408,39 @@ fn generate_program_inner(
     let instance_request = helper_request(&program_fqn, "Instance");
     let deferred_instance_request = helper_request(&program_fqn, "DeferredProgram");
 
+    let facade_owner = BamlFqn::symbol(&Name::new(
+        BaseName::new("user"),
+        vec![],
+        BaseName::new("$invocation_facade"),
+    ));
+    let facade_scope = CSharpScope::Namespace {
+        package: BaseName::new("user"),
+        path: vec![],
+    };
+    let options_request = generated_request(
+        facade_owner.member(&BaseName::new("$options")),
+        "BamlOptions",
+        CSharpNameKind::HelperType,
+        facade_scope.clone(),
+    );
+    let invocation_request = generated_request(
+        facade_owner.member(&BaseName::new("$invocation")),
+        "Invocation",
+        CSharpNameKind::HelperType,
+        facade_scope.clone(),
+    );
+    let selection_request = generated_request(
+        facade_owner.member(&BaseName::new("$selection")),
+        "TraceSelection",
+        CSharpNameKind::HelperType,
+        facade_scope,
+    );
+    let facade_file_request = generated_request(
+        facade_owner.clone(),
+        "BamlInvocation",
+        CSharpNameKind::FileStem,
+        CSharpScope::Type(facade_owner.clone()),
+    );
     let classes = collect_classes(model, runtime_identities)?;
     let enums = collect_enums(model)?;
     let functions = collect_functions(model, &program_fqn)?;
@@ -394,9 +453,6 @@ fn generate_program_inner(
     let mut all_types = BTreeSet::new();
     for function in &functions {
         collect_type_closure(&function.result, model, &mut all_types)?;
-        if let Some(partial) = &function.stream_partial {
-            collect_type_closure(partial, model, &mut all_types)?;
-        }
         for argument in &function.arguments {
             collect_argument_type_closure(&argument.ty, model, &mut all_types)?;
         }
@@ -404,18 +460,11 @@ fn generate_program_inner(
     for class in &classes {
         if !is_resource_projection(class.name) {
             for property in &class.class.properties {
-                collect_type_closure(
-                    &property_codec_type(class, &property.ty),
-                    model,
-                    &mut all_types,
-                )?;
+                collect_type_closure(&codec_type(&property.ty), model, &mut all_types)?;
             }
         }
         for method in &class.methods {
             collect_type_closure(&method.result, model, &mut all_types)?;
-            if let Some(partial) = &method.stream_partial {
-                collect_type_closure(partial, model, &mut all_types)?;
-            }
             for argument in &method.arguments {
                 collect_argument_type_closure(&argument.ty, model, &mut all_types)?;
             }
@@ -441,12 +490,12 @@ fn generate_program_inner(
                 classes
                     .iter()
                     .filter(|class| class.generic_params.is_empty())
-                    .map(|class| Ty::Class(class.name.clone(), vec![], TyAttr::EMPTY)),
+                    .map(|class| Ty::Class(class.name.clone(), Box::new([]))),
             )
             .chain(
                 enums
                     .iter()
-                    .map(|enumeration| Ty::Enum(enumeration.name.clone(), TyAttr::EMPTY)),
+                    .map(|enumeration| Ty::Enum(enumeration.name.clone())),
             )
         {
             collect_type_closure(&ty, model, &mut all_types)?;
@@ -577,7 +626,26 @@ fn generate_program_inner(
                 .map(|variant| variant.request.clone()),
         );
     }
+    requests.extend([
+        options_request.clone(),
+        invocation_request.clone(),
+        selection_request.clone(),
+        facade_file_request.clone(),
+    ]);
+    for ty in &type_specs {
+        if matches!(ty.ty, Ty::Function { .. }) {
+            requests.push(helper_request(
+                &program_fqn,
+                &format!("{}Callable", type_helper_stem(&ty.ty)),
+            ));
+        }
+    }
     let names = CSharpNames::allocate(requests);
+    let facade_route = FileRouteRequest::new(
+        facade_owner,
+        std::iter::empty(),
+        allocated(&names, &facade_file_request).clone(),
+    )?;
 
     let program_route_request = FileRouteRequest::new(
         program_fqn.clone(),
@@ -635,7 +703,8 @@ fn generate_program_inner(
         std::iter::once(program_route_request.clone())
             .chain(function_routes.values().cloned())
             .chain(class_routes.iter().cloned())
-            .chain(enum_routes.iter().cloned()),
+            .chain(enum_routes.iter().cloned())
+            .chain(std::iter::once(facade_route.clone())),
     )?;
     let plan = CSharpRenderPlan::new(model, &names, &routes)?;
     let render = RenderContext {
@@ -644,9 +713,20 @@ fn generate_program_inner(
         type_specs: &type_specs,
         classes: &classes,
         enums: &enums,
+        options_request: &options_request,
+        selection_request: &selection_request,
     };
 
     let mut sources = Vec::<RoutedSource>::new();
+    sources.push(plan.render_source(&facade_route, |_| {
+        render_invocation_facade(
+            &render,
+            &invocation_request,
+            &program_namespace_requests,
+            &program_type_request,
+        )
+        .into_bytes()
+    })?);
     for (namespace, request) in &function_routes {
         let leaf_functions = functions
             .iter()
@@ -702,32 +782,61 @@ struct RenderContext<'a> {
     type_specs: &'a [TypeSpec],
     classes: &'a [ClassSpec<'a>],
     enums: &'a [EnumSpec<'a>],
+    options_request: &'a CSharpNameRequest,
+    selection_request: &'a CSharpNameRequest,
 }
 
 impl RenderContext<'_> {
+    fn returned_callable_name(&self, ty: &Ty) -> String {
+        allocated(
+            self.names,
+            &helper_request(
+                &generated_program_fqn(),
+                &format!("{}Callable", type_helper_stem(ty)),
+            ),
+        )
+        .source()
+        .to_string()
+    }
+    fn returned_callable_source(&self, ty: &Ty, program: &str) -> Option<String> {
+        matches!(ty, Ty::Function { .. })
+            .then(|| format!("{program}.{}", self.returned_callable_name(ty)))
+    }
+    fn selection_source(&self) -> String {
+        let selection = allocated(self.names, self.selection_request).source();
+        self.classes
+            .iter()
+            .find(|class| class.name.to_string() == "trace.Options")
+            .map(|class| {
+                format!(
+                    "global::{}.{selection}",
+                    rendered_namespace(self.names, &class.namespace_requests)
+                )
+            })
+            .unwrap_or_else(|| format!("global::{selection}"))
+    }
+
     fn type_source(&self, ty: &Ty) -> String {
         match ty {
-            Ty::Bool { .. } => "bool".to_string(),
-            Ty::Int { .. } => "long".to_string(),
-            Ty::Bigint { .. } => "global::System.Numerics.BigInteger".to_string(),
-            Ty::Float { .. } => "double".to_string(),
-            Ty::String { .. } => "string".to_string(),
-            Ty::Uint8Array { .. } => "global::System.ReadOnlyMemory<byte>".to_string(),
-            Ty::Media(MediaKind::Image, _) => "global::Baml.BamlImage".to_string(),
-            Ty::Media(MediaKind::Audio, _) => "global::Baml.BamlAudio".to_string(),
-            Ty::Media(MediaKind::Video, _) => "global::Baml.BamlVideo".to_string(),
-            Ty::Media(MediaKind::Pdf, _) => "global::Baml.BamlPdf".to_string(),
-            Ty::Null { .. } | Ty::BuiltinUnknown { .. } | Ty::Void { .. } | Ty::Never { .. } => {
-                "global::Baml.BamlValue".to_string()
-            }
+            Ty::Bool => "bool".to_string(),
+            Ty::Int => "long".to_string(),
+            Ty::Bigint => "global::System.Numerics.BigInteger".to_string(),
+            Ty::Float => "double".to_string(),
+            Ty::String => "string".to_string(),
+            Ty::Uint8Array => "global::System.ReadOnlyMemory<byte>".to_string(),
+            Ty::Media(MediaKind::Image) => "global::Baml.BamlImage".to_string(),
+            Ty::Media(MediaKind::Audio) => "global::Baml.BamlAudio".to_string(),
+            Ty::Media(MediaKind::Video) => "global::Baml.BamlVideo".to_string(),
+            Ty::Media(MediaKind::Pdf) => "global::Baml.BamlPdf".to_string(),
+            Ty::Null | Ty::Unknown | Ty::Never => "global::Baml.BamlValue".to_string(),
             Ty::Literal(literal, ..) => literal_source(literal).to_string(),
-            Ty::TypeAlias(name, _) => self.type_source(self.alias_target(name)),
-            Ty::Class(name, arguments, _) => {
+            Ty::TypeAlias(name) => self.type_source(self.alias_target(name)),
+            Ty::Class(name, arguments) => {
                 let nominal = builtin_type_source(name)
                     .map(str::to_string)
                     .unwrap_or_else(|| self.nominal_source(name, true));
                 if arguments.is_empty()
-                    || builtin_projection(name) == Some(BuiltinProjection::OpaqueHandle)
+                    || builtin_projection(name) == Some(BuiltinProjection::Prompt)
                 {
                     nominal
                 } else {
@@ -741,10 +850,10 @@ impl RenderContext<'_> {
                     )
                 }
             }
-            Ty::Enum(name, _) | Ty::EnumVariant(name, ..) => builtin_type_source(name)
+            Ty::Enum(name) | Ty::EnumVariant(name, ..) => builtin_type_source(name)
                 .map(str::to_string)
                 .unwrap_or_else(|| self.nominal_source(name, false)),
-            Ty::List(item, _) => format!(
+            Ty::List(item) => format!(
                 "global::System.Collections.Generic.IReadOnlyList<{}>",
                 self.type_source(item)
             ),
@@ -753,10 +862,10 @@ impl RenderContext<'_> {
                 self.type_source(key),
                 self.type_source(value)
             ),
-            Ty::Union(members, _) => {
+            Ty::Union(members) => {
                 let non_null = members
                     .iter()
-                    .filter(|member| !matches!(member, Ty::Null { .. }))
+                    .filter(|member| !matches!(member, Ty::Null))
                     .collect::<Vec<_>>();
                 if non_null.len() == 1 && non_null.len() != members.len() {
                     format!("{}?", self.type_source(non_null[0]))
@@ -785,7 +894,7 @@ impl RenderContext<'_> {
 
     fn type_source_for(&self, ty: &Ty, parameters: &[GenericParamSpec<'_>]) -> String {
         match ty {
-            Ty::TypeVar(name, _) => parameters
+            Ty::TypeVar(name) => parameters
                 .iter()
                 .rev()
                 .find(|parameter| parameter.name == name.name())
@@ -795,10 +904,10 @@ impl RenderContext<'_> {
                         .to_string()
                 })
                 .unwrap_or_else(|| panic!("unbound generated type variable {name}")),
-            Ty::TypeAlias(name, _) => self.type_source_for(self.alias_target(name), parameters),
-            Ty::Class(name, arguments, _) if !arguments.is_empty() => {
+            Ty::TypeAlias(name) => self.type_source_for(self.alias_target(name), parameters),
+            Ty::Class(name, arguments) if !arguments.is_empty() => {
                 if let Some(source) = builtin_type_source(name) {
-                    if builtin_projection(name) == Some(BuiltinProjection::OpaqueHandle) {
+                    if builtin_projection(name) == Some(BuiltinProjection::Prompt) {
                         source.to_string()
                     } else {
                         format!(
@@ -822,7 +931,7 @@ impl RenderContext<'_> {
                     )
                 }
             }
-            Ty::List(item, _) => format!(
+            Ty::List(item) => format!(
                 "global::System.Collections.Generic.IReadOnlyList<{}>",
                 self.type_source_for(item, parameters)
             ),
@@ -831,10 +940,10 @@ impl RenderContext<'_> {
                 self.type_source_for(key, parameters),
                 self.type_source_for(value, parameters)
             ),
-            Ty::Union(members, _) => {
+            Ty::Union(members) => {
                 let non_null = members
                     .iter()
-                    .filter(|member| !matches!(member, Ty::Null { .. }))
+                    .filter(|member| !matches!(member, Ty::Null))
                     .collect::<Vec<_>>();
                 if non_null.len() == 1 && non_null.len() != members.len() {
                     let inner = self.type_source_for(non_null[0], parameters);
@@ -917,33 +1026,29 @@ impl RenderContext<'_> {
 
     fn wire_type(&self, ty: &Ty) -> Ty {
         match ty {
-            Ty::TypeAlias(name, _) => self.wire_type(self.alias_target(name)),
-            Ty::Class(name, arguments, attr) => Ty::Class(
+            Ty::TypeAlias(name) => self.wire_type(self.alias_target(name)),
+            Ty::Class(name, arguments) => Ty::Class(
                 name.clone(),
                 arguments
                     .iter()
                     .map(|argument| self.wire_type(argument))
                     .collect(),
-                attr.clone(),
             ),
-            Ty::List(item, attr) => Ty::List(Box::new(self.wire_type(item)), attr.clone()),
-            Ty::Map { key, value, attr } => Ty::Map {
+            Ty::List(item) => Ty::List(Box::new(self.wire_type(item))),
+            Ty::Map { key, value } => Ty::Map {
                 key: Box::new(self.wire_type(key)),
                 value: Box::new(self.wire_type(value)),
-                attr: attr.clone(),
             },
-            Ty::Union(members, attr) => normalize_ty(&Ty::Union(
+            Ty::Union(members) => normalize_ty(&Ty::Union(
                 members
                     .iter()
                     .map(|member| self.wire_type(member))
                     .collect(),
-                attr.clone(),
             )),
             Ty::Function {
                 params,
                 ret,
                 throws,
-                attr,
             } => Ty::Function {
                 params: params
                     .iter()
@@ -955,7 +1060,6 @@ impl RenderContext<'_> {
                     .collect(),
                 ret: Box::new(self.wire_type(ret)),
                 throws: Box::new(self.wire_type(throws)),
-                attr: attr.clone(),
             },
             _ => normalize_ty(ty),
         }
@@ -971,29 +1075,26 @@ impl RenderContext<'_> {
 
     fn is_value_projection(&self, ty: &Ty) -> bool {
         match ty {
-            Ty::TypeAlias(name, _) => self.is_value_projection(self.alias_target(name)),
-            Ty::Bool { .. }
-            | Ty::Int { .. }
-            | Ty::Bigint { .. }
-            | Ty::Float { .. }
-            | Ty::Uint8Array { .. }
+            Ty::TypeAlias(name) => self.is_value_projection(self.alias_target(name)),
+            Ty::Bool
+            | Ty::Int
+            | Ty::Bigint
+            | Ty::Float
+            | Ty::Uint8Array
             | Ty::Enum(..)
             | Ty::EnumVariant(..) => true,
             Ty::Literal(Literal::String(_), ..) => false,
             Ty::Literal(..) => true,
-            Ty::Union(members, _) => !members
-                .iter()
-                .any(|member| matches!(member, Ty::Null { .. })),
-            Ty::String { .. }
-            | Ty::Null { .. }
+            Ty::Union(members) => !members.iter().any(|member| matches!(member, Ty::Null)),
+            Ty::String
+            | Ty::Null
             | Ty::Media(..)
             | Ty::Class(..)
             | Ty::List(..)
             | Ty::Map { .. }
             | Ty::Function { .. }
-            | Ty::BuiltinUnknown { .. }
-            | Ty::Void { .. }
-            | Ty::Never { .. } => false,
+            | Ty::Unknown
+            | Ty::Never => false,
             _ => unreachable!("unsupported type reached projection classification"),
         }
     }
@@ -1015,8 +1116,8 @@ fn function_type_source(
             }
         })
         .collect::<Vec<_>>();
-    arguments.push("global::System.Threading.CancellationToken".to_string());
-    let task = if matches!(ret, Ty::Void { .. }) {
+
+    let task = if ret.is_unit() {
         "global::System.Threading.Tasks.Task".to_string()
     } else {
         format!("global::System.Threading.Tasks.Task<{}>", project(ret))
@@ -1158,25 +1259,30 @@ fn collect_methods<'a>(
         let identity = model.callable(&key).ok_or_else(|| {
             CSharpGenerationError::MissingCallable(format!("{owner}.{}", method.name))
         })?;
-        let (result, stream_partial) = if is_stream_callable_variant(identity.variant) {
-            let Ty::Class(stream_name, stream_types, _) = &method.return_type else {
+        // A stream callable's result is the stream's one type: partials and the
+        // settled value share it.
+        let result = if is_stream_callable_variant(identity.variant) {
+            let Ty::Class(stream_name, stream_types) = &method.return_type else {
                 return Err(CSharpGenerationError::Unsupported(format!(
-                    "C# stream companion `{owner}.{}` must return {AI_STREAM_STREAM}<TPartial, TFinal>",
+                    "C# stream companion `{owner}.{}` must return {AI_STREAM_STREAM}<T>",
                     method.name
                 )));
             };
-            if stream_name.to_string() != AI_STREAM_STREAM || stream_types.len() != 2 {
+            let [stream_type] = &**stream_types else {
                 return Err(CSharpGenerationError::Unsupported(format!(
-                    "C# stream companion `{owner}.{}` must return exact {AI_STREAM_STREAM}<TPartial, TFinal>",
+                    "C# stream companion `{owner}.{}` must return exact {AI_STREAM_STREAM}<T>",
+                    method.name
+                )));
+            };
+            if stream_name.to_string() != AI_STREAM_STREAM {
+                return Err(CSharpGenerationError::Unsupported(format!(
+                    "C# stream companion `{owner}.{}` must return exact {AI_STREAM_STREAM}<T>",
                     method.name
                 )));
             }
-            (stream_types[1].clone(), Some(stream_types[0].clone()))
+            stream_type.clone()
         } else {
-            (
-                project_resource_method_result(owner, class, method, &method.return_type),
-                None,
-            )
+            project_resource_method_result(owner, class, method, &method.return_type)
         };
         let result_support = require_supported_type(
             &result,
@@ -1190,14 +1296,6 @@ fn collect_methods<'a>(
                 model,
                 &format!("result of method `{owner}.{}`", method.name),
             )?;
-        }
-        if let Some(partial) = &stream_partial {
-            let partial_support = require_supported_type(
-                partial,
-                model,
-                &format!("partial result of method `{owner}.{}`", method.name),
-            );
-            partial_support?;
         }
         let argument_support: Result<(), CSharpGenerationError> =
             method.arguments.iter().try_for_each(|argument| {
@@ -1290,7 +1388,7 @@ fn collect_methods<'a>(
         );
         let cancellation_request = generated_request(
             callable_fqn.member(&BaseName::new("$cancellation")),
-            "cancellation_token",
+            "baml",
             CSharpNameKind::Parameter,
             CSharpScope::Callable(callable_fqn.clone()),
         );
@@ -1315,7 +1413,7 @@ fn collect_methods<'a>(
         let mut arguments = Vec::new();
         for argument in &method.arguments {
             arguments.push(ArgumentSpec {
-                argument,
+                wire_name: argument.name.clone(),
                 ty: argument.ty.clone(),
                 optional: argument.default.is_some(),
                 parameter_request: source_request(
@@ -1336,6 +1434,19 @@ fn collect_methods<'a>(
                 ),
             });
         }
+        if is_stream_callable_variant(identity.variant) {
+            arguments.push(stream_client_argument(
+                &callable_fqn,
+                helper_request(
+                    &generated_program_fqn(),
+                    &format!(
+                        "{}_{}_client_argument",
+                        method_helper_owner(owner),
+                        callable_source_identity(identity)
+                    ),
+                ),
+            ));
+        }
         let type_param_count = type_params.len();
         let wire_identity = match runtime_identities {
             Some(runtime) => runtime
@@ -1349,7 +1460,6 @@ fn collect_methods<'a>(
             is_static,
             variant: identity.variant,
             result,
-            stream_partial,
             type_params,
             method_type_param_count: method.generic_params.len(),
             method_request,
@@ -1473,27 +1583,31 @@ fn collect_functions<'a>(
                 "C# generation expected a free function without a receiver for `{name}`"
             )));
         }
-        let (result, stream_partial) = if is_stream_callable_variant(identity.variant) {
-            let Ty::Class(stream_name, stream_types, _) = &function.return_type else {
+        // A stream callable's result is the stream's one type: partials and the
+        // settled value share it.
+        let result = if is_stream_callable_variant(identity.variant) {
+            let Ty::Class(stream_name, stream_types) = &function.return_type else {
                 return Err(CSharpGenerationError::Unsupported(format!(
-                    "C# stream companion `{name}` must return {AI_STREAM_STREAM}<TPartial, TFinal>"
+                    "C# stream companion `{name}` must return {AI_STREAM_STREAM}<T>"
                 )));
             };
-            if stream_name.to_string() != AI_STREAM_STREAM || stream_types.len() != 2 {
+            let [stream_type] = &**stream_types else {
                 return Err(CSharpGenerationError::Unsupported(format!(
-                    "C# stream companion `{name}` must return exact {AI_STREAM_STREAM}<TPartial, TFinal>"
+                    "C# stream companion `{name}` must return exact {AI_STREAM_STREAM}<T>"
+                )));
+            };
+            if stream_name.to_string() != AI_STREAM_STREAM {
+                return Err(CSharpGenerationError::Unsupported(format!(
+                    "C# stream companion `{name}` must return exact {AI_STREAM_STREAM}<T>"
                 )));
             }
-            (stream_types[1].clone(), Some(stream_types[0].clone()))
+            stream_type.clone()
         } else {
-            (function.return_type.clone(), None)
+            function.return_type.clone()
         };
         require_supported_type(&result, model, &format!("result of `{name}`"))?;
         if name.package().as_str() == "user" {
             require_unambiguous_csharp_unions(&result, model, &format!("result of `{name}`"))?;
-        }
-        if let Some(partial) = &stream_partial {
-            require_supported_type(partial, model, &format!("partial result of `{name}`"))?;
         }
         let argument_support: Result<(), CSharpGenerationError> =
             function.arguments.iter().try_for_each(|argument| {
@@ -1550,7 +1664,7 @@ fn collect_functions<'a>(
         );
         let cancellation_request = generated_request(
             callable_fqn.member(&BaseName::new("$cancellation")),
-            "cancellation_token",
+            "baml",
             CSharpNameKind::Parameter,
             CSharpScope::Callable(callable_fqn.clone()),
         );
@@ -1585,7 +1699,7 @@ fn collect_functions<'a>(
         let mut arguments = Vec::new();
         for argument in &function.arguments {
             arguments.push(ArgumentSpec {
-                argument,
+                wire_name: argument.name.clone(),
                 ty: argument.ty.clone(),
                 optional: argument.default.is_some(),
                 parameter_request: source_request(
@@ -1601,13 +1715,18 @@ fn collect_functions<'a>(
                 ),
             });
         }
+        if is_stream_callable_variant(identity.variant) {
+            arguments.push(stream_client_argument(
+                &callable_fqn,
+                helper_request(program_fqn, &format!("{helper_family}_client_argument")),
+            ));
+        }
         let generic_param_count = generic_params.len();
         functions.push(FunctionSpec {
             name,
             wire_identity: name.to_string(),
             variant: identity.variant,
             result,
-            stream_partial,
             generic_params,
             namespace_requests,
             holder_request,
@@ -1651,23 +1770,22 @@ fn require_supported_type_inner(
     allow_generic_host_callable: bool,
 ) -> Result<(), CSharpGenerationError> {
     match ty {
-        Ty::Bool { .. }
-        | Ty::Int { .. }
-        | Ty::Bigint { .. }
-        | Ty::Float { .. }
-        | Ty::String { .. }
-        | Ty::Uint8Array { .. }
-        | Ty::Null { .. }
-        | Ty::BuiltinUnknown { .. }
+        Ty::Bool
+        | Ty::Int
+        | Ty::Bigint
+        | Ty::Float
+        | Ty::String
+        | Ty::Uint8Array
+        | Ty::Null
+        | Ty::Unknown
         | Ty::Literal(..)
         | Ty::TypeVar(..)
-        | Ty::Void { .. }
-        | Ty::Never { .. } => Ok(()),
-        Ty::Media(MediaKind::Image | MediaKind::Audio | MediaKind::Video | MediaKind::Pdf, _) => {
+        | Ty::Never => Ok(()),
+        Ty::Media(MediaKind::Image | MediaKind::Audio | MediaKind::Video | MediaKind::Pdf) => {
             Ok(())
         }
-        Ty::Media(MediaKind::Generic, _) => Err(unsupported(path, &format!("type `{ty}`"))),
-        Ty::Class(name, arguments, _) => {
+        Ty::Media(MediaKind::Generic) => Err(unsupported(path, &format!("type `{ty}`"))),
+        Ty::Class(name, arguments) => {
             if builtin_projection(name) == Some(BuiltinProjection::UnsupportedInternal) {
                 return Err(unsupported(
                     path,
@@ -1689,7 +1807,7 @@ fn require_supported_type_inner(
                 _ => Err(unsupported(path, &format!("class `{name}`"))),
             }
         }
-        Ty::Enum(name, _) | Ty::EnumVariant(name, ..) => match model.symbols.get(name) {
+        Ty::Enum(name) | Ty::EnumVariant(name, ..) => match model.symbols.get(name) {
             Some(Symbol::Enum(_))
                 if name.package().as_str() == "user" || is_structural_enum_projection(name) =>
             {
@@ -1697,15 +1815,15 @@ fn require_supported_type_inner(
             }
             _ => Err(unsupported(path, &format!("enum `{name}`"))),
         },
-        Ty::List(item, _) => require_supported_type(item, model, path),
+        Ty::List(item) => require_supported_type(item, model, path),
         Ty::Map { key, value, .. } => {
             require_supported_map_key(key, model, path)?;
             require_supported_type(value, model, path)
         }
-        Ty::Union(members, _) => {
+        Ty::Union(members) => {
             let null_count = members
                 .iter()
-                .filter(|member| matches!(member, Ty::Null { .. }))
+                .filter(|member| matches!(member, Ty::Null))
                 .count();
             let non_null = members.len() - null_count;
             if null_count > 1 || non_null == 0 || non_null > 32 {
@@ -1719,7 +1837,7 @@ fn require_supported_type_inner(
             }
             members
                 .iter()
-                .filter(|member| !matches!(member, Ty::Null { .. }))
+                .filter(|member| !matches!(member, Ty::Null))
                 .try_for_each(|member| require_supported_type(member, model, path))
         }
         Ty::Function {
@@ -1728,11 +1846,11 @@ fn require_supported_type_inner(
             throws,
             ..
         } => {
-            if params.len() > 15 {
+            if params.len() > 16 {
                 return Err(unsupported(
                     path,
                     &format!(
-                        "host callable with {} BAML parameters; the C# v1 limit is 15 because CancellationToken occupies CLR Func input 16",
+                        "host callable with {} BAML parameters; the C# delegate limit is 16",
                         params.len()
                     ),
                 ));
@@ -1773,17 +1891,15 @@ fn require_supported_type_inner(
                 }
                 require_supported_type(&parameter.ty, model, path)?;
             }
-            if !matches!(ret.as_ref(), Ty::Void { .. }) {
+            if !ret.is_unit() {
                 require_supported_type(ret, model, path)?;
             }
-            if !matches!(throws.as_ref(), Ty::Never { .. } | Ty::Void { .. })
-                && !is_host_callable_error(throws)
-            {
+            if !matches!(throws.as_ref(), Ty::Never) && !is_host_callable_error(throws) {
                 require_supported_type(throws, model, path)?;
             }
             Ok(())
         }
-        Ty::TypeAlias(name, _) => match model.symbols.get(name) {
+        Ty::TypeAlias(name) => match model.symbols.get(name) {
             Some(Symbol::TypeAlias(alias)) if !alias.recursive => {
                 require_supported_type(&alias.resolves_to, model, path)
             }
@@ -1796,11 +1912,6 @@ fn require_supported_type_inner(
 fn contains_type_var(ty: &Ty) -> bool {
     match ty {
         Ty::TypeVar(..) => true,
-        Ty::Class(_, arguments, _) | Ty::Union(arguments, _) => {
-            arguments.iter().any(contains_type_var)
-        }
-        Ty::List(item, _) => contains_type_var(item),
-        Ty::Map { key, value, .. } => contains_type_var(key) || contains_type_var(value),
         Ty::Function {
             params,
             ret,
@@ -1813,14 +1924,14 @@ fn contains_type_var(ty: &Ty) -> bool {
                 || contains_type_var(ret)
                 || (!is_synthetic_effect_type(throws) && contains_type_var(throws))
         }
-        _ => false,
+        _ => baml_sdkgen_types::any_type_child(ty, contains_type_var),
     }
 }
 
 fn is_synthetic_effect_type(ty: &Ty) -> bool {
     matches!(
         ty,
-        Ty::TypeVar(name, _) if name.as_str().starts_with("__effect_param_")
+        Ty::TypeVar(name) if name.as_str().starts_with("__effect_param_")
     )
 }
 
@@ -1830,8 +1941,8 @@ fn require_supported_map_key(
     path: &str,
 ) -> Result<(), CSharpGenerationError> {
     match ty {
-        Ty::String { .. } | Ty::Literal(Literal::String(_), ..) => Ok(()),
-        Ty::TypeAlias(name, _) => match model.symbols.get(name) {
+        Ty::String | Ty::Literal(Literal::String(_), ..) => Ok(()),
+        Ty::TypeAlias(name) => match model.symbols.get(name) {
             Some(Symbol::TypeAlias(alias)) if !alias.recursive => {
                 require_supported_map_key(&alias.resolves_to, model, path)
             }
@@ -1850,12 +1961,9 @@ fn require_unambiguous_csharp_unions(
     path: &str,
 ) -> Result<(), CSharpGenerationError> {
     match ty {
-        Ty::Union(members, _) => {
+        Ty::Union(members) => {
             let mut projections = BTreeSet::new();
-            for member in members
-                .iter()
-                .filter(|member| !matches!(member, Ty::Null { .. }))
-            {
+            for member in members.iter().filter(|member| !matches!(member, Ty::Null)) {
                 let projection = csharp_projection_key(member, model);
                 if !projections.insert(projection.clone()) {
                     return Err(unsupported(
@@ -1867,12 +1975,12 @@ fn require_unambiguous_csharp_unions(
             }
             Ok(())
         }
-        Ty::List(item, _) => require_unambiguous_csharp_unions(item, model, path),
+        Ty::List(item) => require_unambiguous_csharp_unions(item, model, path),
         Ty::Map { key, value, .. } => {
             require_unambiguous_csharp_unions(key, model, path)?;
             require_unambiguous_csharp_unions(value, model, path)
         }
-        Ty::Class(_, arguments, _) => arguments
+        Ty::Class(_, arguments) => arguments
             .iter()
             .try_for_each(|argument| require_unambiguous_csharp_unions(argument, model, path)),
         Ty::Function {
@@ -1887,7 +1995,7 @@ fn require_unambiguous_csharp_unions(
             require_unambiguous_csharp_unions(ret, model, path)?;
             require_unambiguous_csharp_unions(throws, model, path)
         }
-        Ty::TypeAlias(name, _) => match model.symbols.get(name) {
+        Ty::TypeAlias(name) => match model.symbols.get(name) {
             Some(Symbol::TypeAlias(alias)) if !alias.recursive => {
                 require_unambiguous_csharp_unions(&alias.resolves_to, model, path)
             }
@@ -1899,26 +2007,24 @@ fn require_unambiguous_csharp_unions(
 
 fn csharp_projection_key(ty: &Ty, model: &CodegenModel) -> String {
     match ty {
-        Ty::Bool { .. } | Ty::Literal(Literal::Bool(_), ..) => "bool".to_string(),
-        Ty::Int { .. } | Ty::Literal(Literal::Int(_), ..) => "long".to_string(),
-        Ty::Bigint { .. } | Ty::Literal(Literal::Bigint(_), ..) => {
+        Ty::Bool | Ty::Literal(Literal::Bool(_), ..) => "bool".to_string(),
+        Ty::Int | Ty::Literal(Literal::Int(_), ..) => "long".to_string(),
+        Ty::Bigint | Ty::Literal(Literal::Bigint(_), ..) => {
             "System.Numerics.BigInteger".to_string()
         }
-        Ty::Float { .. } | Ty::Literal(Literal::Float(_), ..) => "double".to_string(),
-        Ty::String { .. } | Ty::Literal(Literal::String(_), ..) => "string".to_string(),
-        Ty::Uint8Array { .. } => "System.ReadOnlyMemory<byte>".to_string(),
-        Ty::Null { .. } | Ty::BuiltinUnknown { .. } | Ty::Void { .. } | Ty::Never { .. } => {
-            "Baml.BamlValue".to_string()
-        }
-        Ty::Media(kind, _) => format!("Baml.Media::{kind:?}"),
-        Ty::TypeVar(name, _) => format!("type parameter `{name}`"),
-        Ty::TypeAlias(name, _) => match model.symbols.get(name) {
+        Ty::Float | Ty::Literal(Literal::Float(_), ..) => "double".to_string(),
+        Ty::String | Ty::Literal(Literal::String(_), ..) => "string".to_string(),
+        Ty::Uint8Array => "System.ReadOnlyMemory<byte>".to_string(),
+        Ty::Null | Ty::Unknown | Ty::Never => "Baml.BamlValue".to_string(),
+        Ty::Media(kind) => format!("Baml.Media::{kind:?}"),
+        Ty::TypeVar(name) => format!("type parameter `{name}`"),
+        Ty::TypeAlias(name) => match model.symbols.get(name) {
             Some(Symbol::TypeAlias(alias)) if !alias.recursive => {
                 csharp_projection_key(&alias.resolves_to, model)
             }
             _ => format!("alias `{name}`"),
         },
-        Ty::Class(name, arguments, _) => format!(
+        Ty::Class(name, arguments) => format!(
             "class `{name}`<{}>",
             arguments
                 .iter()
@@ -1926,14 +2032,14 @@ fn csharp_projection_key(ty: &Ty, model: &CodegenModel) -> String {
                 .collect::<Vec<_>>()
                 .join(",")
         ),
-        Ty::Enum(name, _) | Ty::EnumVariant(name, ..) => format!("enum `{name}`"),
-        Ty::List(item, _) => format!("list<{}>", csharp_projection_key(item, model)),
+        Ty::Enum(name) | Ty::EnumVariant(name, ..) => format!("enum `{name}`"),
+        Ty::List(item) => format!("list<{}>", csharp_projection_key(item, model)),
         Ty::Map { key, value, .. } => format!(
             "map<{},{}>",
             csharp_projection_key(key, model),
             csharp_projection_key(value, model)
         ),
-        Ty::Union(members, _) => format!(
+        Ty::Union(members) => format!(
             "union<{}>",
             members
                 .iter()
@@ -1962,31 +2068,17 @@ fn unsupported(path: &str, shape: &str) -> CSharpGenerationError {
 
 fn canonical_generic_primitive_types() -> Vec<Ty> {
     vec![
-        Ty::Bool {
-            attr: TyAttr::EMPTY,
-        },
-        Ty::Int {
-            attr: TyAttr::EMPTY,
-        },
-        Ty::Bigint {
-            attr: TyAttr::EMPTY,
-        },
-        Ty::Float {
-            attr: TyAttr::EMPTY,
-        },
-        Ty::String {
-            attr: TyAttr::EMPTY,
-        },
-        Ty::Uint8Array {
-            attr: TyAttr::EMPTY,
-        },
-        Ty::Media(MediaKind::Image, TyAttr::EMPTY),
-        Ty::Media(MediaKind::Audio, TyAttr::EMPTY),
-        Ty::Media(MediaKind::Video, TyAttr::EMPTY),
-        Ty::Media(MediaKind::Pdf, TyAttr::EMPTY),
-        Ty::BuiltinUnknown {
-            attr: TyAttr::EMPTY,
-        },
+        Ty::Bool,
+        Ty::Int,
+        Ty::Bigint,
+        Ty::Float,
+        Ty::String,
+        Ty::Uint8Array,
+        Ty::Media(MediaKind::Image),
+        Ty::Media(MediaKind::Audio),
+        Ty::Media(MediaKind::Video),
+        Ty::Media(MediaKind::Pdf),
+        Ty::Unknown,
     ]
 }
 
@@ -1999,21 +2091,17 @@ fn class_receiver_type(class: &ClassSpec<'_>) -> Ty {
             .iter()
             .enumerate()
             .map(|(index, parameter)| {
-                Ty::TypeVar(
-                    ParamTy::new(
-                        u32::try_from(index).expect("generic parameter index fits in u32"),
-                        parameter.clone(),
-                    ),
-                    TyAttr::EMPTY,
-                )
+                Ty::TypeVar(ParamTy::new(
+                    u32::try_from(index).expect("generic parameter index fits in u32"),
+                    parameter.clone(),
+                ))
             })
             .collect(),
-        TyAttr::EMPTY,
     )
 }
 
 fn project_resource_method_result(owner: &Name, class: &Class, method: &Function, ty: &Ty) -> Ty {
-    let Ty::Interface(interface, _, _, attr) = ty else {
+    let Ty::Interface(interface, _, _) = ty else {
         return ty.clone();
     };
     if interface.to_string() != "baml.iter.Iterator" {
@@ -2021,38 +2109,33 @@ fn project_resource_method_result(owner: &Name, class: &Class, method: &Function
     }
 
     match (owner.to_string().as_str(), method.name.as_str()) {
-        ("baml.csv.CsvReader", "iter") => Ty::Class(owner.clone(), Vec::new(), attr.clone()),
-        ("baml.csv.CsvReader", "rows") => Ty::Class(
+        ("baml.csv.Reader", "iter") => Ty::Class(owner.clone(), Box::new([])),
+        ("baml.csv.Reader", "rows") => Ty::Class(
             Name::new(
                 owner.package().clone(),
                 owner.namespace().clone(),
-                BaseName::new("CsvRows"),
+                BaseName::new("Rows"),
             ),
             method
                 .generic_params
                 .first()
-                .map(|parameter| Ty::TypeVar(ParamTy::new(0, parameter.clone()), TyAttr::EMPTY))
+                .map(|parameter| Ty::TypeVar(ParamTy::new(0, parameter.clone())))
                 .into_iter()
                 .collect(),
-            attr.clone(),
         ),
-        ("baml.csv.CsvRows", "iter") => Ty::Class(
+        ("baml.csv.Rows", "iter") => Ty::Class(
             owner.clone(),
             class
                 .generic_params
                 .iter()
                 .enumerate()
                 .map(|(index, parameter)| {
-                    Ty::TypeVar(
-                        ParamTy::new(
-                            u32::try_from(index).expect("generic parameter index fits in u32"),
-                            parameter.clone(),
-                        ),
-                        TyAttr::EMPTY,
-                    )
+                    Ty::TypeVar(ParamTy::new(
+                        u32::try_from(index).expect("generic parameter index fits in u32"),
+                        parameter.clone(),
+                    ))
                 })
                 .collect(),
-            attr.clone(),
         ),
         _ => ty.clone(),
     }
@@ -2060,18 +2143,18 @@ fn project_resource_method_result(owner: &Name, class: &Class, method: &Function
 
 fn is_canonical_generic_binding(ty: &Ty) -> bool {
     match ty {
-        Ty::Bool { .. }
-        | Ty::Int { .. }
-        | Ty::Bigint { .. }
-        | Ty::Float { .. }
-        | Ty::String { .. }
-        | Ty::Uint8Array { .. }
-        | Ty::Media(MediaKind::Image | MediaKind::Audio | MediaKind::Video | MediaKind::Pdf, _)
-        | Ty::BuiltinUnknown { .. }
+        Ty::Bool
+        | Ty::Int
+        | Ty::Bigint
+        | Ty::Float
+        | Ty::String
+        | Ty::Uint8Array
+        | Ty::Media(MediaKind::Image | MediaKind::Audio | MediaKind::Video | MediaKind::Pdf)
+        | Ty::Unknown
         | Ty::Enum(..) => true,
-        Ty::Class(name, arguments, _) => {
+        Ty::Class(name, arguments) => {
             (is_resource_projection(name) && !arguments.iter().any(contains_type_var))
-                || (builtin_projection(name) != Some(BuiltinProjection::OpaqueHandle)
+                || (builtin_projection(name) != Some(BuiltinProjection::Prompt)
                     && arguments.is_empty())
         }
         _ => false,
@@ -2080,53 +2163,27 @@ fn is_canonical_generic_binding(ty: &Ty) -> bool {
 
 fn codec_type(ty: &Ty) -> Ty {
     match ty {
-        Ty::Bool { .. } => Ty::Bool {
-            attr: TyAttr::EMPTY,
-        },
-        Ty::Int { .. } => Ty::Int {
-            attr: TyAttr::EMPTY,
-        },
-        Ty::Bigint { .. } => Ty::Bigint {
-            attr: TyAttr::EMPTY,
-        },
-        Ty::Float { .. } => Ty::Float {
-            attr: TyAttr::EMPTY,
-        },
-        Ty::String { .. } => Ty::String {
-            attr: TyAttr::EMPTY,
-        },
-        Ty::Uint8Array { .. } => Ty::Uint8Array {
-            attr: TyAttr::EMPTY,
-        },
-        Ty::Null { .. } => Ty::Null {
-            attr: TyAttr::EMPTY,
-        },
-        Ty::BuiltinUnknown { .. } => Ty::BuiltinUnknown {
-            attr: TyAttr::EMPTY,
-        },
-        Ty::Media(kind, _) => Ty::Media(*kind, TyAttr::EMPTY),
-        Ty::Literal(literal, freshness, _) => {
-            Ty::Literal(literal.clone(), *freshness, TyAttr::EMPTY)
+        Ty::Bool => Ty::Bool,
+        Ty::Int => Ty::Int,
+        Ty::Bigint => Ty::Bigint,
+        Ty::Float => Ty::Float,
+        Ty::String => Ty::String,
+        Ty::Uint8Array => Ty::Uint8Array,
+        Ty::Null => Ty::Null,
+        Ty::Unknown => Ty::Unknown,
+        Ty::Media(kind) => Ty::Media(*kind),
+        Ty::Literal(literal, freshness) => Ty::Literal(literal.clone(), *freshness),
+        Ty::Class(name, arguments) => {
+            Ty::Class(name.clone(), arguments.iter().map(codec_type).collect())
         }
-        Ty::Class(name, arguments, _) => Ty::Class(
-            name.clone(),
-            arguments.iter().map(codec_type).collect(),
-            TyAttr::EMPTY,
-        ),
-        Ty::Enum(name, _) => Ty::Enum(name.clone(), TyAttr::EMPTY),
-        Ty::EnumVariant(name, variant, _) => {
-            Ty::EnumVariant(name.clone(), variant.clone(), TyAttr::EMPTY)
-        }
-        Ty::List(item, _) => Ty::List(Box::new(codec_type(item)), TyAttr::EMPTY),
+        Ty::Enum(name) => Ty::Enum(name.clone()),
+        Ty::EnumVariant(name, variant) => Ty::EnumVariant(name.clone(), variant.clone()),
+        Ty::List(item) => Ty::List(Box::new(codec_type(item))),
         Ty::Map { key, value, .. } => Ty::Map {
             key: Box::new(codec_type(key)),
             value: Box::new(codec_type(value)),
-            attr: TyAttr::EMPTY,
         },
-        Ty::Union(members, _) => normalize_ty(&Ty::Union(
-            members.iter().map(codec_type).collect(),
-            TyAttr::EMPTY,
-        )),
+        Ty::Union(members) => normalize_ty(&Ty::Union(members.iter().map(codec_type).collect())),
         Ty::Function {
             params,
             ret,
@@ -2143,16 +2200,10 @@ fn codec_type(ty: &Ty) -> Ty {
                 .collect(),
             ret: Box::new(codec_type(ret)),
             throws: Box::new(codec_type(throws)),
-            attr: TyAttr::EMPTY,
         },
-        Ty::TypeAlias(name, _) => Ty::TypeAlias(name.clone(), TyAttr::EMPTY),
-        Ty::TypeVar(name, _) => Ty::TypeVar(name.clone(), TyAttr::EMPTY),
-        Ty::Void { .. } => Ty::Void {
-            attr: TyAttr::EMPTY,
-        },
-        Ty::Never { .. } => Ty::Never {
-            attr: TyAttr::EMPTY,
-        },
+        Ty::TypeAlias(name) => Ty::TypeAlias(name.clone()),
+        Ty::TypeVar(name) => Ty::TypeVar(name.clone()),
+        Ty::Never => Ty::Never,
         _ => ty.clone(),
     }
 }
@@ -2174,12 +2225,10 @@ fn collect_argument_type_closure(
         for parameter in params {
             collect_type_closure(&parameter.ty, model, types)?;
         }
-        if !matches!(ret.as_ref(), Ty::Void { .. }) {
+        if !ret.is_unit() {
             collect_type_closure(ret, model, types)?;
         }
-        if !matches!(throws.as_ref(), Ty::Never { .. } | Ty::Void { .. })
-            && !is_host_callable_error(throws)
-        {
+        if !matches!(throws.as_ref(), Ty::Never) && !is_host_callable_error(throws) {
             collect_type_closure(throws, model, types)?;
         }
         return Ok(());
@@ -2201,7 +2250,7 @@ fn collect_type_closure(
         return Ok(());
     }
     match ty {
-        Ty::Class(name, arguments, _) if is_resource_projection(name) => {
+        Ty::Class(name, arguments) if is_resource_projection(name) => {
             let Some(Symbol::Class(class)) = model.symbols.get(name) else {
                 return Err(unsupported(
                     "reachable type graph",
@@ -2215,7 +2264,6 @@ fn collect_type_closure(
             {
                 collect_type_closure(
                     &instantiated_class_property_codec_type(
-                        &class.name,
                         &class.generic_params,
                         arguments,
                         &property.ty,
@@ -2225,8 +2273,12 @@ fn collect_type_closure(
                 )?;
             }
         }
-        Ty::Class(name, _, _) if is_runtime_class_projection(name) => {}
-        Ty::Class(name, arguments, _) => {
+        Ty::Class(name, arguments) if is_runtime_class_projection(name) => {
+            for argument in arguments {
+                collect_type_closure(argument, model, types)?;
+            }
+        }
+        Ty::Class(name, arguments) => {
             let Some(Symbol::Class(class)) = model.symbols.get(name) else {
                 return Err(unsupported(
                     "reachable type graph",
@@ -2236,7 +2288,6 @@ fn collect_type_closure(
             for property in &class.properties {
                 collect_type_closure(
                     &instantiated_class_property_codec_type(
-                        &class.name,
                         &class.generic_params,
                         arguments,
                         &property.ty,
@@ -2246,14 +2297,14 @@ fn collect_type_closure(
                 )?;
             }
         }
-        Ty::List(item, _) => collect_type_closure(item, model, types)?,
+        Ty::List(item) => collect_type_closure(item, model, types)?,
         Ty::Map { key, value, .. } => {
             collect_type_closure(key, model, types)?;
             collect_type_closure(value, model, types)?;
         }
-        Ty::Union(members, _) => {
+        Ty::Union(members) => {
             for member in members {
-                if !matches!(member, Ty::Null { .. }) {
+                if !matches!(member, Ty::Null) {
                     collect_type_closure(member, model, types)?;
                 }
             }
@@ -2267,19 +2318,17 @@ fn collect_type_closure(
             for parameter in params {
                 collect_type_closure(&parameter.ty, model, types)?;
             }
-            if !matches!(ret.as_ref(), Ty::Void { .. }) {
+            if !ret.is_unit() {
                 collect_type_closure(ret, model, types)?;
             }
-            if !matches!(throws.as_ref(), Ty::Never { .. } | Ty::Void { .. })
-                && !is_host_callable_error(throws)
-            {
+            if !matches!(throws.as_ref(), Ty::Never) && !is_host_callable_error(throws) {
                 collect_type_closure(throws, model, types)?;
             }
         }
-        Ty::EnumVariant(name, _, _) => {
-            types.insert(Ty::Enum(name.clone(), TyAttr::EMPTY));
+        Ty::EnumVariant(name, _) => {
+            types.insert(Ty::Enum(name.clone()));
         }
-        Ty::TypeAlias(name, _) => {
+        Ty::TypeAlias(name) => {
             let Some(Symbol::TypeAlias(alias)) = model.symbols.get(name) else {
                 return Err(unsupported(
                     "reachable type graph",
@@ -2360,7 +2409,8 @@ fn render_functions(
             })
             .collect::<Vec<_>>();
         parameters.push(format!(
-            "global::System.Threading.CancellationToken {cancellation} = default"
+            "global::{}? {cancellation} = null",
+            allocated(render.names, render.options_request).source()
         ));
         let parameters = parameters.join(",\n        ");
         let builder = if function.generic_params.is_empty() {
@@ -2368,25 +2418,22 @@ fn render_functions(
         } else {
             render_generic_argument_builder(render, function, &program)
         };
+        let builder = format!(
+            "        _ = {program}.{instance};\n        using var invocationPreparation = global::Baml.Generated.V1.BamlInvocationPreparation.Begin({cancellation});\n{builder}"
+        );
+        if function.name.to_string() == "trace.current_context" {
+            source.push_str(&format!("    public static {result} {method}({parameters}) => {program}.Registry.Decode({program}.{result_token}, global::Baml.Generated.V1.BamlInvocationPreparation.CurrentTraceContext());\n\n    public static global::System.Threading.Tasks.Task<{result}> {async_method}({parameters}) => global::System.Threading.Tasks.Task.FromResult({method}({cancellation}));\n", result_token = render.type_field(&function.result)));
+            continue;
+        }
         if is_stream_callable_variant(function.variant) {
-            let partial = function
-                .stream_partial
-                .as_ref()
-                .expect("stream functions carry their partial result type");
-            let partial_source = render.type_source_for(partial, &function.generic_params);
-            let partial_type = if function.generic_params.is_empty() {
-                format!("{program}.{}", render.type_field(partial))
-            } else {
-                render_generic_type_token(render, function, partial, &program)
-            };
             let callable = if function.generic_params.is_empty() {
                 format!("{program}.{function_field}")
             } else {
                 bound_function.to_string()
             };
             source.push_str(&format!(
-                "    public static global::Baml.BamlStream<{partial_source}, {result}> {method}{type_parameters}(\n        {parameters})\n    {{\n{builder}        return global::Baml.Generated.V1.BamlGeneratedContract.CreateStream(\n            {program}.{deferred_instance},\n            {callable},\n            {partial_type},\n            {arguments}.Build(),\n            {partial_option},\n            {cancellation});\n    }}\n\n",
-                partial_option = csharp_string(&render.wire_option_name(partial)),
+                "    public static global::Baml.BamlStream<{result}> {method}{type_parameters}(\n        {parameters})\n    {{\n{builder}        return global::Baml.Generated.V1.BamlGeneratedContract.CreateStream(\n            {program}.{deferred_instance},\n            {callable},\n            {arguments}.Build(),\n            {partial_option},\n            {cancellation});\n    }}\n\n",
+                partial_option = csharp_string(&render.wire_option_name(&function.result)),
             ));
             continue;
         }
@@ -2408,6 +2455,40 @@ fn render_functions(
         ));
     }
     source.push_str("}\n");
+    for function in functions {
+        if let Some(wrapper) = render.returned_callable_source(&function.result, &program) {
+            let raw = render.type_source_for(&function.result, &function.generic_params);
+            let method = allocated(render.names, &function.method_request).source();
+            let async_method = allocated(render.names, &function.async_request).source();
+            // Restrict edits to this callable's two bodies; other symbols may share a return shape.
+            for (name, asynchronous) in [(method, false), (async_method, true)] {
+                let start = source
+                    .find(&format!(" {name}(\n"))
+                    .or_else(|| source.find(&format!(" {name}<")))
+                    .expect("rendered callable declaration");
+                let declaration_start = source[..start].rfind("    public static").unwrap();
+                let end = source[start..]
+                    .find("    }\n")
+                    .map(|end| start + end + 6)
+                    .unwrap();
+                let mut block = source[declaration_start..end].to_string();
+                if asynchronous {
+                    block = block.replacen(&format!("Task<{raw}>"), &format!("Task<{wrapper}>"), 1);
+                    block = block.replacen("return ", &format!("return {wrapper}.FromAsync("), 1);
+                } else {
+                    block = block.replacen(
+                        &format!("public static {raw}"),
+                        &format!("public static {wrapper}"),
+                        1,
+                    );
+                    block = block.replacen("return ", &format!("return new {wrapper}("), 1);
+                }
+                let tail = block.rfind(");").unwrap();
+                block.insert(tail, ')');
+                source.replace_range(declaration_start..end, &block);
+            }
+        }
+    }
     source
 }
 
@@ -2519,7 +2600,7 @@ fn render_generic_type_token(
     program: &str,
 ) -> String {
     match ty {
-        Ty::TypeVar(name, _) => {
+        Ty::TypeVar(name) => {
             let parameter = function
                 .generic_params
                 .iter()
@@ -2588,12 +2669,12 @@ fn render_generic_host_callable_add(
         })
         .collect::<Vec<_>>()
         .join(", ");
-    let result = if matches!(ret.as_ref(), Ty::Void { .. }) {
+    let result = if ret.is_unit() {
         format!("{context}.VoidResult()")
     } else {
         format!("{context}.Result({})", type_token(ret))
     };
-    let mut invocation = params
+    let invocation = params
         .iter()
         .enumerate()
         .map(|(index, parameter)| {
@@ -2606,7 +2687,6 @@ fn render_generic_host_callable_add(
             format!("({source}){invocation_arguments}[{index}]!")
         })
         .collect::<Vec<_>>();
-    invocation.push(invocation_cancellation.to_string());
 
     format!(
         "{indent}{arguments}.AddHostCallable(\n{indent}    {argument},\n{indent}    {callback_value},\n{indent}    ({context}, {encoded_delegate}) =>\n{indent}        {context}.HostCallable(\n{indent}            {encoded_delegate},\n{indent}            new global::Baml.Generated.V1.BamlGeneratedHostParameter[] {{ {descriptors} }},\n{indent}            {result},\n{indent}            static ({invoked_delegate}, {invocation_arguments}, {invocation_cancellation}) =>\n{indent}                global::Baml.Generated.V1.BamlGeneratedHostCallableRuntime.Await(\n{indent}                    (({delegate_type}){invoked_delegate})({invocation}))));\n",
@@ -2676,13 +2756,27 @@ fn render_class(render: &RenderContext<'_>, class: &ClassSpec<'_>) -> String {
     };
     let resource = is_resource_projection(class.name);
     let implements_disposable = if resource {
-        " : global::System.IDisposable"
+        if matches!(
+            class.name.to_string().as_str(),
+            "trace.Options" | "trace.ReservedSpan"
+        ) {
+            " : TRACE_SELECTION_PLACEHOLDER, global::System.IDisposable"
+        } else {
+            " : global::System.IDisposable"
+        }
     } else {
         ""
     };
     source.push_str(&format!(
         "\npublic sealed partial class {name}{generic_params}{implements_disposable}\n{{\n"
     ));
+    if matches!(
+        class.name.to_string().as_str(),
+        "trace.Options" | "trace.ReservedSpan"
+    ) {
+        source = source.replace("TRACE_SELECTION_PLACEHOLDER", &render.selection_source());
+        source.push_str("    internal override global::Baml.BamlHandle Handle => resource.InvocationHandle;\n\n");
+    }
     if resource {
         let resource_source = format!("{name}{generic_params}");
         let public_properties = class
@@ -2734,15 +2828,8 @@ fn render_class(render: &RenderContext<'_>, class: &ClassSpec<'_>) -> String {
         ));
     } else {
         for property in &class.properties {
-            let required = if !class.name.is_stream()
-                || property.property.ty.attr().sap_pending_never == TyAttrValue::Set
-            {
-                "required "
-            } else {
-                ""
-            };
             source.push_str(&format!(
-                "    public {required}{} {} {{ get; init; }}\n\n",
+                "    public required {} {} {{ get; init; }}\n\n",
                 property_type_source(render, class, &property.property.ty),
                 allocated(render.names, &property.request).source(),
             ));
@@ -2772,35 +2859,10 @@ fn render_class(render: &RenderContext<'_>, class: &ClassSpec<'_>) -> String {
 }
 
 fn property_type_source(render: &RenderContext<'_>, class: &ClassSpec<'_>, ty: &Ty) -> String {
-    render.type_source_for(&property_codec_type(class, ty), &class.generic_params)
-}
-
-fn property_codec_type(class: &ClassSpec<'_>, ty: &Ty) -> Ty {
-    property_codec_type_for_name(class.name, ty)
-}
-
-fn property_codec_type_for_name(class_name: &Name, ty: &Ty) -> Ty {
-    let projected = codec_type(ty);
-    if !class_name.is_stream()
-        || ty.attr().sap_pending_never == TyAttrValue::Set
-        || type_allows_null(&projected)
-    {
-        return projected;
-    }
-
-    normalize_ty(&Ty::Union(
-        vec![
-            projected,
-            Ty::Null {
-                attr: TyAttr::EMPTY,
-            },
-        ],
-        TyAttr::EMPTY,
-    ))
+    render.type_source_for(&codec_type(ty), &class.generic_params)
 }
 
 fn instantiated_class_property_codec_type(
-    class_name: &Name,
     parameters: &[BaseName],
     arguments: &[Ty],
     ty: &Ty,
@@ -2810,85 +2872,41 @@ fn instantiated_class_property_codec_type(
         arguments.len(),
         "supported closed generic classes have one argument per parameter"
     );
-    substitute_type_variables(
-        &property_codec_type_for_name(class_name, ty),
-        parameters,
-        arguments,
-    )
-}
-
-fn closed_stream_nullable_type_var(class: &ClassSpec<'_>, arguments: &[Ty], ty: &Ty) -> Option<Ty> {
-    if arguments.is_empty()
-        || !class.name.is_stream()
-        || ty.attr().sap_pending_never == TyAttrValue::Set
-    {
-        return None;
-    }
-
-    let projected = codec_type(ty);
-    let inner = match &projected {
-        Ty::TypeVar(..) => &projected,
-        Ty::Union(members, _)
-            if members
-                .iter()
-                .filter(|member| !matches!(member, Ty::Null { .. }))
-                .count()
-                == 1
-                && members
-                    .iter()
-                    .any(|member| matches!(member, Ty::Null { .. })) =>
-        {
-            members
-                .iter()
-                .find(|member| !matches!(member, Ty::Null { .. }))
-                .filter(|member| matches!(member, Ty::TypeVar(..)))?
-        }
-        _ => return None,
-    };
-    Some(substitute_type_variables(
-        inner,
-        &class.class.generic_params,
-        arguments,
-    ))
+    substitute_type_variables(&codec_type(ty), parameters, arguments)
 }
 
 fn substitute_type_variables(ty: &Ty, parameters: &[BaseName], arguments: &[Ty]) -> Ty {
     match ty {
-        Ty::TypeVar(name, _) => parameters
+        Ty::TypeVar(name) => parameters
             .iter()
             .position(|parameter| parameter == name.name())
             .and_then(|index| arguments.get(index))
             .cloned()
             .unwrap_or_else(|| ty.clone()),
-        Ty::Class(name, nested, attr) => Ty::Class(
+        Ty::Class(name, nested) => Ty::Class(
             name.clone(),
             nested
                 .iter()
                 .map(|item| substitute_type_variables(item, parameters, arguments))
                 .collect(),
-            attr.clone(),
         ),
-        Ty::List(item, attr) => Ty::List(
-            Box::new(substitute_type_variables(item, parameters, arguments)),
-            attr.clone(),
-        ),
-        Ty::Map { key, value, attr } => Ty::Map {
+        Ty::List(item) => Ty::List(Box::new(substitute_type_variables(
+            item, parameters, arguments,
+        ))),
+        Ty::Map { key, value } => Ty::Map {
             key: Box::new(substitute_type_variables(key, parameters, arguments)),
             value: Box::new(substitute_type_variables(value, parameters, arguments)),
-            attr: attr.clone(),
         },
-        Ty::Union(members, attr) => normalize_ty(&Ty::Union(
+        Ty::Union(members) => normalize_ty(&Ty::Union(
             members
                 .iter()
                 .map(|member| substitute_type_variables(member, parameters, arguments))
                 .collect(),
-            attr.clone(),
         )),
         Ty::Function {
             params,
             ret,
             throws,
-            attr,
         } => Ty::Function {
             params: params
                 .iter()
@@ -2900,19 +2918,9 @@ fn substitute_type_variables(ty: &Ty, parameters: &[BaseName], arguments: &[Ty])
                 .collect(),
             ret: Box::new(substitute_type_variables(ret, parameters, arguments)),
             throws: Box::new(substitute_type_variables(throws, parameters, arguments)),
-            attr: attr.clone(),
         },
         _ => ty.clone(),
     }
-}
-
-fn type_allows_null(ty: &Ty) -> bool {
-    matches!(ty, Ty::Null { .. })
-        || matches!(
-            ty,
-            Ty::Union(members, _)
-                if members.iter().any(|member| matches!(member, Ty::Null { .. }))
-        )
 }
 
 fn render_method(
@@ -2967,30 +2975,28 @@ fn render_method(
         })
         .collect::<Vec<_>>();
     parameters.push(format!(
-        "global::System.Threading.CancellationToken {cancellation} = default"
+        "global::{}? {cancellation} = null",
+        allocated(render.names, render.options_request).source()
     ));
     let parameters = parameters.join(",\n        ");
     if is_resource_iterator_identity_method(class, method) {
         return format!(
-            "    public {result} {method_name}{type_parameters}(\n        {parameters})\n    {{\n        {cancellation}.ThrowIfCancellationRequested();\n        return this;\n    }}\n\n    public global::System.Threading.Tasks.Task<{result}> {async_name}{type_parameters}(\n        {parameters})\n    {{\n        return {cancellation}.IsCancellationRequested\n            ? global::System.Threading.Tasks.Task.FromCanceled<{result}>({cancellation})\n            : global::System.Threading.Tasks.Task.FromResult<{result}>(this);\n    }}\n\n"
+            "    public {result} {method_name}{type_parameters}(\n        {parameters})\n    {{\n        ({cancellation}?.CancellationToken ?? default).ThrowIfCancellationRequested();\n        return this;\n    }}\n\n    public global::System.Threading.Tasks.Task<{result}> {async_name}{type_parameters}(\n        {parameters})\n    {{\n        return ({cancellation}?.CancellationToken ?? default).IsCancellationRequested\n            ? global::System.Threading.Tasks.Task.FromCanceled<{result}>({cancellation}!.CancellationToken)\n            : global::System.Threading.Tasks.Task.FromResult<{result}>(this);\n    }}\n\n"
         );
     }
     let builder = render_method_argument_builder(render, class, method, program);
+    let builder = format!(
+        "        _ = {program}.{instance};\n        using var invocationPreparation = global::Baml.Generated.V1.BamlInvocationPreparation.Begin({cancellation});\n{builder}"
+    );
     if is_stream_callable_variant(method.variant) {
-        let partial = method
-            .stream_partial
-            .as_ref()
-            .expect("stream methods carry their partial result type");
-        let partial_source = render.type_source_for(partial, &method.type_params);
-        let partial_type = render_method_type_token(render, method, partial, program);
         let deferred_instance = allocated(
             render.names,
             &helper_request(&generated_program_fqn(), "DeferredProgram"),
         )
         .source();
         return format!(
-            "    public {modifier}global::Baml.BamlStream<{partial_source}, {result}> {method_name}{type_parameters}(\n        {parameters})\n    {{\n{builder}        return global::Baml.Generated.V1.BamlGeneratedContract.CreateStream(\n            {program}.{deferred_instance},\n            {bound_function},\n            {partial_type},\n            {arguments}.Build(),\n            {partial_option},\n            {cancellation});\n    }}\n\n",
-            partial_option = csharp_string(&render.wire_option_name(partial)),
+            "    public {modifier}global::Baml.BamlStream<{result}> {method_name}{type_parameters}(\n        {parameters})\n    {{\n{builder}        return global::Baml.Generated.V1.BamlGeneratedContract.CreateStream(\n            {program}.{deferred_instance},\n            {bound_function},\n            {arguments}.Build(),\n            {partial_option},\n            {cancellation});\n    }}\n\n",
+            partial_option = csharp_string(&render.wire_option_name(&method.result)),
         );
     }
     format!(
@@ -3004,7 +3010,7 @@ fn is_resource_iterator_identity_method(class: &ClassSpec<'_>, method: &MethodSp
         && method.arguments.is_empty()
         && matches!(
             class.name.to_string().as_str(),
-            "baml.csv.CsvReader" | "baml.csv.CsvRows"
+            "baml.csv.Reader" | "baml.csv.Rows"
         )
 }
 
@@ -3119,7 +3125,7 @@ fn render_method_argument_builder(
 }
 
 fn string_literal_union_members(ty: &Ty) -> Option<Vec<&str>> {
-    let Ty::Union(members, _) = ty else {
+    let Ty::Union(members) = ty else {
         return None;
     };
     if members.len() < 2 {
@@ -3170,7 +3176,7 @@ fn render_method_type_token(
     program: &str,
 ) -> String {
     match ty {
-        Ty::TypeVar(name, _) => {
+        Ty::TypeVar(name) => {
             let index = method
                 .type_params
                 .iter()
@@ -3225,7 +3231,7 @@ fn render_program(
     let instance = allocated(render.names, instance_request).source();
     let deferred_instance = allocated(render.names, deferred_instance_request).source();
     let mut source = format!(
-        "{GENERATED_HEADER}\nnamespace {namespace};\n\ninternal static class {program_type}\n{{\n    private const string Fingerprint = \"{PROGRAM_FINGERPRINT_PLACEHOLDER}\";\n\n    private static readonly byte[] Bytecode =\n    [\n{PROGRAM_BYTES_PLACEHOLDER}    ];\n\n    private static readonly global::System.Lazy<global::Baml.Generated.V1.BamlGeneratedProgram> Program =\n        new(Register, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);\n\n    internal static readonly global::Baml.Generated.V1.BamlGeneratedRegistry {registry};\n"
+        "{GENERATED_HEADER}\nnamespace {namespace};\n\npublic static class {program_type}\n{{\n    private const string Fingerprint = \"{PROGRAM_FINGERPRINT_PLACEHOLDER}\";\n\n    private static readonly byte[] Bytecode = {PROGRAM_BYTES_PLACEHOLDER};\n\n    private static byte[] DecodeBytecode(global::System.ReadOnlySpan<byte> encoded, int length)\n    {{\n        byte[] bytes = new byte[length];\n        var status = global::System.Buffers.Text.Base64.DecodeFromUtf8(\n            encoded, bytes, out int consumed, out int written);\n        if (status != global::System.Buffers.OperationStatus.Done\n            || consumed != encoded.Length || written != bytes.Length)\n            throw new global::System.InvalidOperationException(\"Invalid embedded BAML bytecode\");\n        return bytes;\n    }}\n\n    private static readonly global::System.Lazy<global::Baml.Generated.V1.BamlGeneratedProgram> Program =\n        new(Register, global::System.Threading.LazyThreadSafetyMode.ExecutionAndPublication);\n\n    internal static readonly global::Baml.Generated.V1.BamlGeneratedRegistry {registry};\n"
     );
     for ty in render.type_specs {
         source.push_str(&format!(
@@ -3350,7 +3356,7 @@ fn render_program(
                     "        {argument_field} = builder.DeclareArgument(\n            {function_field},\n            {wire},\n            {type_field},\n            optional: {optional});\n",
                     argument_field = allocated(render.names, &argument.field_request).source(),
                     function_field = allocated(render.names, &function.field_request).source(),
-                    wire = csharp_string(argument.argument.name.as_str()),
+                    wire = csharp_string(argument.wire_name.as_str()),
                     type_field = render.type_field(&argument.ty),
                     optional = argument.optional,
                 ));
@@ -3359,7 +3365,7 @@ fn render_program(
                     "        {argument_field} = builder.DeclareGenericArgument(\n            {function_field},\n            {wire},\n            optional: {optional});\n",
                     argument_field = allocated(render.names, &argument.field_request).source(),
                     function_field = allocated(render.names, &function.field_request).source(),
-                    wire = csharp_string(argument.argument.name.as_str()),
+                    wire = csharp_string(argument.wire_name.as_str()),
                     optional = argument.optional,
                 ));
             }
@@ -3395,7 +3401,7 @@ fn render_program(
                 source.push_str(&format!(
                     "        {argument_field} = builder.DeclareGenericArgument(\n            {function_field},\n            {wire},\n            optional: {optional});\n",
                     argument_field = allocated(render.names, &argument.field_request).source(),
-                    wire = csharp_string(argument.argument.name.as_str()),
+                    wire = csharp_string(argument.wire_name.as_str()),
                     optional = argument.optional,
                 ));
             }
@@ -3442,6 +3448,7 @@ fn render_program(
         }
         source.push('\n');
     }
+    source.push_str(&render_returned_callable_wrappers(render));
     source.push_str("}\n");
     source
 }
@@ -3449,71 +3456,65 @@ fn render_program(
 fn render_codec(render: &RenderContext<'_>, ty: &Ty, codec_name: &str) -> String {
     let source_type = render.type_source(ty);
     let (encode, decode) = match ty {
-        Ty::Bool { .. } => (
+        Ty::Bool => (
             "            return context.Bool(value);\n".to_string(),
             "            return context.ReadBool(value);\n".to_string(),
         ),
-        Ty::Int { .. } => (
+        Ty::Int => (
             "            return context.Int(value);\n".to_string(),
             "            return context.ReadInt(value);\n".to_string(),
         ),
-        Ty::Bigint { .. } => (
+        Ty::Bigint => (
             "            return context.BigInt(value);\n".to_string(),
             "            return context.ReadBigInt(value);\n".to_string(),
         ),
-        Ty::Float { .. } => (
+        Ty::Float => (
             "            return context.Float(value);\n".to_string(),
             "            return context.ReadFloat(value);\n".to_string(),
         ),
-        Ty::String { .. } => (
+        Ty::String => (
             "            return context.String(value);\n".to_string(),
             "            return context.ReadString(value);\n".to_string(),
         ),
-        Ty::Uint8Array { .. } => (
+        Ty::Uint8Array => (
             "            return context.Bytes(value.Span);\n".to_string(),
             "            return new global::System.ReadOnlyMemory<byte>(context.ReadBytes(value));\n"
                 .to_string(),
         ),
-        Ty::Media(MediaKind::Image, _) => (
+        Ty::Media(MediaKind::Image) => (
             "            return context.Media(value);\n".to_string(),
             "            return context.ReadImage(value);\n".to_string(),
         ),
-        Ty::Media(MediaKind::Audio, _) => (
+        Ty::Media(MediaKind::Audio) => (
             "            return context.Media(value);\n".to_string(),
             "            return context.ReadAudio(value);\n".to_string(),
         ),
-        Ty::Media(MediaKind::Video, _) => (
+        Ty::Media(MediaKind::Video) => (
             "            return context.Media(value);\n".to_string(),
             "            return context.ReadVideo(value);\n".to_string(),
         ),
-        Ty::Media(MediaKind::Pdf, _) => (
+        Ty::Media(MediaKind::Pdf) => (
             "            return context.Media(value);\n".to_string(),
             "            return context.ReadPdf(value);\n".to_string(),
         ),
-        Ty::Null { .. } => (
+        Ty::Null => (
             "            if (value is null || value.Kind != global::Baml.BamlValueKind.Null)\n            {\n                return context.Fail<global::Baml.Generated.V1.BamlGeneratedValue>(\n                    \"A generated null codec received a non-null BAML value.\",\n                    \"Standalone BAML null requires BamlValue.Null.\");\n            }\n            return context.Null();\n"
                 .to_string(),
             "            if (!value.IsNull)\n            {\n                return context.Fail<global::Baml.BamlValue>(\n                    \"The native bridge returned a non-null value for a generated null position.\",\n                    \"Standalone BAML null requires BamlValue.Null.\");\n            }\n            return context.ReadValue(value);\n"
                 .to_string(),
         ),
-        Ty::Void { .. } => (
-            "            if (value is null || value.Kind != global::Baml.BamlValueKind.Null)\n            {\n                return context.Fail<global::Baml.Generated.V1.BamlGeneratedValue>(\n                    \"A generated void codec received a non-null BAML value.\",\n                    \"BAML void is represented by the null wire value.\");\n            }\n            return context.Null();\n"
-                .to_string(),
-            "            if (!value.IsNull)\n            {\n                return context.Fail<global::Baml.BamlValue>(\n                    \"The native bridge returned a non-null value for BAML void.\",\n                    \"BAML void is represented by the null wire value.\");\n            }\n            return context.ReadValue(value);\n"
-                .to_string(),
-        ),
-        Ty::Never { .. } => (
+        Ty::Never => (
             "            return context.Fail<global::Baml.Generated.V1.BamlGeneratedValue>(\n                \"A generated never codec cannot encode a value.\",\n                \"A BAML never position is uninhabited.\");\n"
                 .to_string(),
             "            return context.Fail<global::Baml.BamlValue>(\n                \"The native bridge returned from a function declared as never.\",\n                \"A BAML never position is uninhabited.\");\n"
                 .to_string(),
         ),
-        Ty::BuiltinUnknown { .. } => (
+        Ty::Unknown => (
             "            return context.Value(value);\n".to_string(),
             "            return context.ReadValue(value);\n".to_string(),
         ),
         Ty::Literal(literal, ..) => render_literal_codec(literal),
-        Ty::TypeAlias(name, _) => {
+        Ty::TypeAlias(name) => {
             let target = render.alias_target(name);
             let field = render.type_field(target);
             (
@@ -3521,15 +3522,15 @@ fn render_codec(render: &RenderContext<'_>, ty: &Ty, codec_name: &str) -> String
                 format!("            return context.Decode({field}, value);\n"),
             )
         }
-        Ty::Class(name, _, _) if is_runtime_class_projection(name) => {
+        Ty::Class(name, _) if is_runtime_class_projection(name) => {
             render_builtin_codec(render, ty, name)
         }
-        Ty::Class(name, arguments, _) => render_class_codec(render, name, arguments),
-        Ty::Enum(name, _) => render_enum_codec(render, name, None),
-        Ty::EnumVariant(name, variant, _) => render_enum_codec(render, name, Some(variant)),
-        Ty::List(item, _) => render_list_codec(render, item),
+        Ty::Class(name, arguments) => render_class_codec(render, name, arguments),
+        Ty::Enum(name) => render_enum_codec(render, name, None),
+        Ty::EnumVariant(name, variant) => render_enum_codec(render, name, Some(variant)),
+        Ty::List(item) => render_list_codec(render, item),
         Ty::Map { key, value, .. } => render_map_codec(render, key, value),
-        Ty::Union(members, _) => render_union_codec(render, ty, members),
+        Ty::Union(members) => render_union_codec(render, ty, members),
         Ty::Function { params, ret, .. } => render_function_codec(render, params, ret),
         _ => unreachable!("unsupported types are rejected before codec rendering"),
     };
@@ -3564,12 +3565,12 @@ fn render_function_codec(
         })
         .collect::<Vec<_>>()
         .join(", ");
-    let result = if matches!(ret, Ty::Void { .. }) {
+    let result = if ret.is_unit() {
         "context.VoidResult()".to_string()
     } else {
         format!("context.Result({})", render.type_field(ret))
     };
-    let mut invocation_arguments = params
+    let invocation_arguments = params
         .iter()
         .enumerate()
         .map(|(index, parameter)| {
@@ -3582,7 +3583,7 @@ fn render_function_codec(
             format!("({source})arguments[{index}]!")
         })
         .collect::<Vec<_>>();
-    invocation_arguments.push("cancellationToken".to_string());
+
     let encode = format!(
         "            return context.HostCallable(\n                value,\n                new global::Baml.Generated.V1.BamlGeneratedHostParameter[] {{ {descriptors} }},\n                {result},\n                static (callback, arguments, cancellationToken) =>\n                    global::Baml.Generated.V1.BamlGeneratedHostCallableRuntime.Await(\n                        (({delegate_type})callback)({invocation})));\n",
         invocation = invocation_arguments.join(", "),
@@ -3599,9 +3600,6 @@ fn render_function_codec(
             };
             format!("{source} argument{index}")
         })
-        .chain(std::iter::once(
-            "global::System.Threading.CancellationToken cancellationToken".to_string(),
-        ))
         .collect::<Vec<_>>()
         .join(", ");
     let argument_encoding = params
@@ -3630,11 +3628,11 @@ fn render_function_codec(
             }
         })
         .collect::<String>();
-    let decode_result = if matches!(ret, Ty::Void { .. }) {
-        "                _ = await nativeFunction(arguments, cancellationToken).ConfigureAwait(false);\n".to_string()
+    let decode_result = if ret.is_unit() {
+        "                _ = await nativeFunction(arguments, global::Baml.Generated.V1.BamlInvocationPreparation.CurrentOptions?.CancellationToken ?? default).ConfigureAwait(false);\n".to_string()
     } else {
         format!(
-            "                var result = await nativeFunction(arguments, cancellationToken).ConfigureAwait(false);\n                return context.Decode({}, result);\n",
+            "                var result = await nativeFunction(arguments, global::Baml.Generated.V1.BamlInvocationPreparation.CurrentOptions?.CancellationToken ?? default).ConfigureAwait(false);\n                return context.Decode({}, result);\n",
             render.type_field(ret)
         )
     };
@@ -3654,7 +3652,7 @@ fn render_builtin_codec(render: &RenderContext<'_>, ty: &Ty, name: &Name) -> (St
             let identity = csharp_string(&name.to_string());
             let metadata = byte_array_source(&render.wire_metadata(ty));
             let source = render.type_source(ty);
-            let Ty::Class(_, arguments, _) = ty else {
+            let Ty::Class(_, arguments) = ty else {
                 unreachable!("resource projections are nominal classes")
             };
             let class = render.class(name);
@@ -3681,7 +3679,6 @@ fn render_builtin_codec(render: &RenderContext<'_>, ty: &Ty, name: &Name) -> (St
                 .enumerate()
                 .map(|(index, property)| {
                     let property_ty = instantiated_class_property_codec_type(
-                        class.name,
                         &class.class.generic_params,
                         arguments,
                         &property.property.ty,
@@ -3708,14 +3705,29 @@ fn render_builtin_codec(render: &RenderContext<'_>, ty: &Ty, name: &Name) -> (St
                 decode,
             )
         }
-        BuiltinProjection::OpaqueHandle => {
+        BuiltinProjection::FunctionSpec => {
+            let Ty::Class(_, arguments) = ty else {
+                unreachable!("FunctionSpec projection is a nominal class")
+            };
+            let [final_type] = &**arguments else {
+                unreachable!("FunctionSpec projection has one final type argument")
+            };
             let identity = csharp_string(&name.to_string());
             let metadata = byte_array_source(&render.wire_metadata(ty));
             (
-                format!("            return context.Handle(value, {identity}, {metadata});\n"),
-                format!("            return context.ReadHandle(value, {identity}, {metadata});\n"),
+                format!(
+                    "            return context.FunctionSpec(value, {identity}, {metadata});\n"
+                ),
+                format!(
+                    "            return context.ReadFunctionSpec(value, {identity}, {metadata}, {});\n",
+                    render.type_field(final_type),
+                ),
             )
         }
+        BuiltinProjection::Prompt => (
+            "            return context.Prompt(value);\n".to_string(),
+            "            return context.ReadPrompt(value);\n".to_string(),
+        ),
         BuiltinProjection::UnsupportedInternal => {
             unreachable!("unsupported builtins are rejected before rendering")
         }
@@ -3754,7 +3766,7 @@ fn render_generic_resource_support(render: &RenderContext<'_>, class: &ClassSpec
         ));
     }
     for (index, property) in public_properties.iter().enumerate() {
-        let projected = property_codec_type(class, &property.property.ty);
+        let projected = codec_type(&property.property.ty);
         source.push_str(&format!(
             "        global::Baml.Generated.V1.BamlGeneratedType<{}> property_type_{index} =\n            {};\n",
             render.type_source_for(&projected, &class.generic_params),
@@ -3780,7 +3792,7 @@ fn render_generic_resource_support(render: &RenderContext<'_>, class: &ClassSpec
         "    private sealed class {codec}{generic_suffix} :\n        global::Baml.Generated.V1.IBamlGeneratedCodec<{class_source}>\n    {{\n"
     ));
     for (index, property) in public_properties.iter().enumerate() {
-        let projected = property_codec_type(class, &property.property.ty);
+        let projected = codec_type(&property.property.ty);
         source.push_str(&format!(
             "        private readonly global::Baml.Generated.V1.BamlGeneratedType<{}> propertyType{index};\n",
             render.type_source_for(&projected, &class.generic_params),
@@ -3793,7 +3805,7 @@ fn render_generic_resource_support(render: &RenderContext<'_>, class: &ClassSpec
         .iter()
         .enumerate()
         .map(|(index, property)| {
-            let projected = property_codec_type(class, &property.property.ty);
+            let projected = codec_type(&property.property.ty);
             format!(
                 "global::Baml.Generated.V1.BamlGeneratedType<{}> propertyType{index}",
                 render.type_source_for(&projected, &class.generic_params),
@@ -3872,7 +3884,7 @@ fn render_generic_class_support(render: &RenderContext<'_>, class: &ClassSpec<'_
         ));
     }
     for (index, property) in class.properties.iter().enumerate() {
-        let projected = property_codec_type(class, &property.property.ty);
+        let projected = codec_type(&property.property.ty);
         let property_source = render.type_source_for(&projected, &class.generic_params);
         let token = render_generic_class_type_token(render, class, &projected);
         source.push_str(&format!(
@@ -3897,7 +3909,7 @@ fn render_generic_class_support(render: &RenderContext<'_>, class: &ClassSpec<'_
         "    private sealed class {codec}{generic_suffix} :\n        global::Baml.Generated.V1.IBamlGeneratedCodec<{class_source}>\n    {{\n"
     ));
     for (index, property) in class.properties.iter().enumerate() {
-        let projected = property_codec_type(class, &property.property.ty);
+        let projected = codec_type(&property.property.ty);
         source.push_str(&format!(
             "        private readonly global::Baml.Generated.V1.BamlGeneratedType<{}> propertyType{index};\n",
             render.type_source_for(&projected, &class.generic_params),
@@ -3911,7 +3923,7 @@ fn render_generic_class_support(render: &RenderContext<'_>, class: &ClassSpec<'_
         .iter()
         .enumerate()
         .map(|(index, property)| {
-            let projected = property_codec_type(class, &property.property.ty);
+            let projected = codec_type(&property.property.ty);
             format!(
                 "global::Baml.Generated.V1.BamlGeneratedType<{}> propertyType{index}",
                 render.type_source_for(&projected, &class.generic_params),
@@ -3984,7 +3996,7 @@ fn render_generic_class_type_token(
     ty: &Ty,
 ) -> String {
     match ty {
-        Ty::TypeVar(name, _) => {
+        Ty::TypeVar(name) => {
             let parameter = class
                 .generic_params
                 .iter()
@@ -4059,26 +4071,16 @@ fn render_class_codec(
     );
     for property in &class.properties {
         let property_ty = instantiated_class_property_codec_type(
-            class.name,
             &class.class.generic_params,
             arguments,
             &property.property.ty,
         );
         let property_name = allocated(render.names, &property.request).source();
-        let encoded = if let Some(inner) =
-            closed_stream_nullable_type_var(class, arguments, &property.property.ty)
-        {
-            format!(
-                "value.{property_name}.IsNull ? context.Null() : context.Encode({}, value.{property_name}.Value)",
-                render.type_field(&inner),
-            )
-        } else {
-            format!(
-                "context.Encode({}, value.{})",
-                render.type_field(&property_ty),
-                property_name,
-            )
-        };
+        let encoded = format!(
+            "context.Encode({}, value.{})",
+            render.type_field(&property_ty),
+            property_name,
+        );
         encode.push_str(&format!(
             "                    new({}, {encoded}),\n",
             csharp_string(property.property.name.as_str()),
@@ -4092,8 +4094,7 @@ fn render_class_codec(
         encode.push_str("                });\n");
     }
 
-    let class_source =
-        render.type_source(&Ty::Class(name.clone(), arguments.to_vec(), TyAttr::EMPTY));
+    let class_source = render.type_source(&Ty::Class(name.clone(), arguments.into()));
     let read_class = if let Some(type_arguments) = &type_arguments {
         format!("context.ReadClass(value, {identity}, {type_arguments})")
     } else {
@@ -4119,25 +4120,14 @@ fn render_class_codec(
     ));
     for (index, property) in class.properties.iter().enumerate() {
         let property_ty = instantiated_class_property_codec_type(
-            class.name,
             &class.class.generic_params,
             arguments,
             &property.property.ty,
         );
-        let decoded = if let Some(inner) =
-            closed_stream_nullable_type_var(class, arguments, &property.property.ty)
-        {
-            format!(
-                "field{index}.IsNull ? global::Baml.BamlNullable<{}>.Null : global::Baml.BamlNullable.FromValue(context.Decode({}, field{index}))",
-                render.type_source(&inner),
-                render.type_field(&inner),
-            )
-        } else {
-            format!(
-                "context.Decode({}, field{index})",
-                render.type_field(&property_ty)
-            )
-        };
+        let decoded = format!(
+            "context.Decode({}, field{index})",
+            render.type_field(&property_ty)
+        );
         decode.push_str(&format!(
             "                {} = {decoded},\n",
             allocated(render.names, &property.request).source(),
@@ -4222,7 +4212,7 @@ fn render_map_codec(render: &RenderContext<'_>, key: &Ty, value: &Ty) -> (String
 fn render_union_codec(render: &RenderContext<'_>, ty: &Ty, members: &[Ty]) -> (String, String) {
     let non_null = members
         .iter()
-        .filter(|member| !matches!(member, Ty::Null { .. }))
+        .filter(|member| !matches!(member, Ty::Null))
         .collect::<Vec<_>>();
     if non_null.len() == 1 && non_null.len() != members.len() {
         let inner = non_null[0];
@@ -4313,28 +4303,24 @@ fn render_union_codec(render: &RenderContext<'_>, ty: &Ty, members: &[Ty]) -> (S
 
 fn render_map_key_encode(render: &RenderContext<'_>, ty: &Ty, expression: &str) -> String {
     match ty {
-        Ty::String { .. } => expression.to_string(),
+        Ty::String => expression.to_string(),
         Ty::Literal(Literal::String(expected), ..) => format!(
             "global::System.StringComparer.Ordinal.Equals({expression}, {expected})\n                    ? {expression}\n                    : context.Fail<string>(\n                        \"A generated map codec received the wrong literal key.\",\n                        $\"Expected key {expected}, received {{{expression}}}.\")",
             expected = csharp_string(expected),
         ),
-        Ty::TypeAlias(name, _) => {
-            render_map_key_encode(render, render.alias_target(name), expression)
-        }
+        Ty::TypeAlias(name) => render_map_key_encode(render, render.alias_target(name), expression),
         _ => unreachable!("unsupported map keys are rejected before rendering"),
     }
 }
 
 fn render_map_key_decode(render: &RenderContext<'_>, ty: &Ty, expression: &str) -> String {
     match ty {
-        Ty::String { .. } => expression.to_string(),
+        Ty::String => expression.to_string(),
         Ty::Literal(Literal::String(expected), ..) => format!(
             "global::System.StringComparer.Ordinal.Equals({expression}, {expected})\n                    ? {expression}\n                    : context.Fail<string>(\n                        \"The native bridge returned the wrong literal map key.\",\n                        $\"Expected key {expected}, received {{{expression}}}.\")",
             expected = csharp_string(expected),
         ),
-        Ty::TypeAlias(name, _) => {
-            render_map_key_decode(render, render.alias_target(name), expression)
-        }
+        Ty::TypeAlias(name) => render_map_key_decode(render, render.alias_target(name), expression),
         _ => unreachable!("unsupported map keys are rejected before rendering"),
     }
 }
@@ -4416,14 +4402,14 @@ fn write_identity_count(bytes: &mut Vec<u8>, tag: u8, count: usize) {
 fn encode_type_metadata(ty: &Ty) -> Vec<u8> {
     let mut message = Vec::new();
     match ty {
-        Ty::String { .. } => push_message(&mut message, 1, &primitive_metadata(1)),
-        Ty::Int { .. } => push_message(&mut message, 1, &primitive_metadata(2)),
-        Ty::Float { .. } => push_message(&mut message, 1, &primitive_metadata(3)),
-        Ty::Bool { .. } => push_message(&mut message, 1, &primitive_metadata(4)),
-        Ty::Null { .. } => push_message(&mut message, 1, &primitive_metadata(5)),
-        Ty::Uint8Array { .. } => push_message(&mut message, 1, &primitive_metadata(6)),
-        Ty::Bigint { .. } => push_message(&mut message, 1, &primitive_metadata(7)),
-        Ty::Media(kind, _) => {
+        Ty::String => push_message(&mut message, 1, &primitive_metadata(1)),
+        Ty::Int => push_message(&mut message, 1, &primitive_metadata(2)),
+        Ty::Float => push_message(&mut message, 1, &primitive_metadata(3)),
+        Ty::Bool => push_message(&mut message, 1, &primitive_metadata(4)),
+        Ty::Null => push_message(&mut message, 1, &primitive_metadata(5)),
+        Ty::Uint8Array => push_message(&mut message, 1, &primitive_metadata(6)),
+        Ty::Bigint => push_message(&mut message, 1, &primitive_metadata(7)),
+        Ty::Media(kind) => {
             let kind = match kind {
                 MediaKind::Image => 1,
                 MediaKind::Audio => 2,
@@ -4437,8 +4423,8 @@ fn encode_type_metadata(ty: &Ty) -> Vec<u8> {
             push_varint_field(&mut media, 1, kind);
             push_message(&mut message, 11, &media);
         }
-        Ty::BuiltinUnknown { .. } => push_message(&mut message, 10, &[]),
-        Ty::Class(name, arguments, _) => {
+        Ty::Unknown => push_message(&mut message, 10, &[]),
+        Ty::Class(name, arguments) => {
             let mut class = Vec::new();
             push_string(&mut class, 1, &name.to_string());
             for argument in arguments {
@@ -4446,12 +4432,12 @@ fn encode_type_metadata(ty: &Ty) -> Vec<u8> {
             }
             push_message(&mut message, 2, &class);
         }
-        Ty::Enum(name, _) => {
+        Ty::Enum(name) => {
             let mut enumeration = Vec::new();
             push_string(&mut enumeration, 1, &name.to_string());
             push_message(&mut message, 3, &enumeration);
         }
-        Ty::List(item, _) => {
+        Ty::List(item) => {
             let mut list = Vec::new();
             push_message(&mut list, 1, &encode_type_metadata(item));
             push_message(&mut message, 4, &list);
@@ -4462,10 +4448,10 @@ fn encode_type_metadata(ty: &Ty) -> Vec<u8> {
             push_message(&mut map, 2, &encode_type_metadata(value));
             push_message(&mut message, 5, &map);
         }
-        Ty::Union(members, _) => {
+        Ty::Union(members) => {
             let non_null = members
                 .iter()
-                .filter(|member| !matches!(member, Ty::Null { .. }))
+                .filter(|member| !matches!(member, Ty::Null))
                 .collect::<Vec<_>>();
             if non_null.len() == 1 && non_null.len() != members.len() {
                 let mut optional = Vec::new();
@@ -4492,7 +4478,7 @@ fn encode_type_metadata(ty: &Ty) -> Vec<u8> {
             }
             push_message(&mut message, 8, &encoded);
         }
-        Ty::EnumVariant(name, variant, _) => {
+        Ty::EnumVariant(name, variant) => {
             let mut encoded = Vec::new();
             push_string(&mut encoded, 1, &name.to_string());
             push_string(&mut encoded, 2, variant.as_str());
@@ -4522,14 +4508,13 @@ fn encode_type_metadata(ty: &Ty) -> Vec<u8> {
             push_message(&mut function, 5, &encode_type_metadata(throws));
             push_message(&mut message, 14, &function);
         }
-        Ty::Void { .. } => push_message(&mut message, 20, &[]),
-        Ty::TypeVar(name, _) => {
+        Ty::TypeVar(name) => {
             let mut encoded = Vec::new();
             push_string(&mut encoded, 1, name.as_str());
             push_message(&mut message, 22, &encoded);
         }
-        Ty::Never { .. } => push_message(&mut message, 24, &[]),
-        Ty::TypeAlias(name, _) => {
+        Ty::Never => push_message(&mut message, 24, &[]),
+        Ty::TypeAlias(name) => {
             let mut encoded = Vec::new();
             push_string(&mut encoded, 1, &name.to_string());
             push_message(&mut message, 9, &encoded);
@@ -4620,19 +4605,17 @@ fn generated_program_fqn() -> BamlFqn {
 }
 
 fn namespace_requests(name: &Name, origin: CSharpNameOrigin) -> Vec<CSharpNameRequest> {
-    let namespace = if name.package().as_str() == "baml"
+    let namespace = if name.package().as_str() == "trace" {
+        std::iter::once(BaseName::new("Trace"))
+            .chain(name.namespace().iter().cloned())
+            .collect::<Vec<_>>()
+    } else if name.package().as_str() == "baml"
         && (is_structural_class_projection(name)
             || is_structural_enum_projection(name)
             || is_resource_projection(name)
             || is_public_resource_stdlib_function(name))
     {
         std::iter::once(BaseName::new("Baml"))
-            .chain(name.namespace().iter().cloned())
-            .collect::<Vec<_>>()
-    } else if name.package().as_str() == "boundary"
-        && (is_resource_projection(name) || is_public_resource_stdlib_function(name))
-    {
-        std::iter::once(BaseName::new("Boundary"))
             .chain(name.namespace().iter().cloned())
             .collect::<Vec<_>>()
     } else {
@@ -4828,35 +4811,70 @@ fn csharp_string(value: &str) -> String {
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::default_trait_access,
-    reason = "TyAttr is intentionally reached through generator-owned Ty constructors"
-)]
 mod tests {
-    use std::collections::HashMap;
+    use std::collections::{BTreeSet, HashMap};
 
     use super::*;
 
     fn primitive_string() -> Ty {
-        Ty::String {
-            attr: Default::default(),
-        }
+        Ty::String
     }
 
     fn primitive_int() -> Ty {
-        Ty::Int {
-            attr: Default::default(),
-        }
+        Ty::Int
     }
 
     fn primitive_bytes() -> Ty {
-        Ty::Uint8Array {
-            attr: Default::default(),
-        }
+        Ty::Uint8Array
+    }
+
+    #[test]
+    fn function_spec_registers_its_output_codec() {
+        let payload_name = Name::new(
+            BaseName::new("user"),
+            vec![BaseName::new("review")],
+            BaseName::new("Payload"),
+        );
+        let payload_ty = Ty::Class(payload_name.clone(), Box::new([]));
+        let payload = Class {
+            name: payload_name.clone(),
+            generic_params: vec![],
+            docstring: None,
+            properties: vec![ClassProperty {
+                name: BaseName::new("value"),
+                docstring: None,
+                ty: primitive_string(),
+            }],
+            static_methods: vec![],
+            instance_methods: vec![],
+            origin: baml_sdkgen_types::Origin {
+                source_file_path: "review.baml".to_string(),
+                span_start: 0,
+            },
+        };
+        let function_spec_name =
+            Name::new(BaseName::new("ai"), vec![], BaseName::new("FunctionSpec"));
+        let model = CodegenModel {
+            symbols: HashMap::from([
+                (payload_name, Symbol::Class(payload)),
+                (
+                    function_spec_name.clone(),
+                    builtin_class(function_spec_name.clone(), vec![BaseName::new("Out")]),
+                ),
+            ]),
+            callables: HashMap::new(),
+        };
+        let function_spec = Ty::Class(function_spec_name, Box::new([payload_ty.clone()]));
+        let mut types = BTreeSet::new();
+
+        collect_type_closure(&function_spec, &model, &mut types)
+            .expect("FunctionSpec output should be reachable");
+
+        assert!(types.contains(&payload_ty), "registered types: {types:?}");
     }
 
     fn media(kind: MediaKind) -> Ty {
-        Ty::Media(kind, TyAttr::EMPTY)
+        Ty::Media(kind)
     }
 
     fn dynamic_contract_source() -> String {
@@ -4867,12 +4885,13 @@ mod tests {
         );
         let wire_name = BaseName::new("RoundTrip");
         let argument = |name: &str, ty: Ty| FunctionArgument {
+            injected: false,
             name: BaseName::new(name),
             docstring: None,
             ty,
             default: None,
         };
-        let function = baml_codegen_types::Function {
+        let function = baml_sdkgen_types::Function {
             name: wire_name.clone(),
             generic_params: vec![],
             docstring: None,
@@ -4881,25 +4900,13 @@ mod tests {
                 argument("audio", media(MediaKind::Audio)),
                 argument("video", media(MediaKind::Video)),
                 argument("pdf", media(MediaKind::Pdf)),
-                argument(
-                    "explicit_null",
-                    Ty::Null {
-                        attr: TyAttr::EMPTY,
-                    },
-                ),
-                argument(
-                    "dynamic_value",
-                    Ty::BuiltinUnknown {
-                        attr: TyAttr::EMPTY,
-                    },
-                ),
+                argument("explicit_null", Ty::Null),
+                argument("dynamic_value", Ty::Unknown),
             ],
-            return_type: Ty::BuiltinUnknown {
-                attr: TyAttr::EMPTY,
-            },
+            return_type: Ty::Unknown,
             throws: None,
             watchers: vec![],
-            origin: baml_codegen_types::Origin {
+            origin: baml_sdkgen_types::Origin {
                 source_file_path: "dynamic_contract.baml".to_string(),
                 span_start: 0,
             },
@@ -4935,7 +4942,7 @@ mod tests {
         let namespace = vec![BaseName::new("returned_callable_codec")];
         let make_function = |name: &str, ret: Ty| {
             let callable = Ty::Function {
-                params: vec![
+                params: Box::new([
                     CallableParam {
                         name: Some(BaseName::new("value")),
                         ty: primitive_int(),
@@ -4946,14 +4953,11 @@ mod tests {
                         ty: primitive_string(),
                         mode: CodegenFunctionParamMode::Optional,
                     },
-                ],
+                ]),
                 ret: Box::new(ret),
-                throws: Box::new(Ty::Never {
-                    attr: TyAttr::EMPTY,
-                }),
-                attr: TyAttr::EMPTY,
+                throws: Box::new(Ty::Never),
             };
-            baml_codegen_types::Function {
+            baml_sdkgen_types::Function {
                 name: BaseName::new(name),
                 generic_params: vec![],
                 docstring: None,
@@ -4961,7 +4965,7 @@ mod tests {
                 return_type: callable,
                 throws: None,
                 watchers: vec![],
-                origin: baml_codegen_types::Origin {
+                origin: baml_sdkgen_types::Origin {
                     source_file_path: "returned_callable_codec.baml".to_string(),
                     span_start: 0,
                 },
@@ -4980,12 +4984,7 @@ mod tests {
         );
         symbols.insert(
             void_name.clone(),
-            Symbol::Function(make_function(
-                "MakeVoid",
-                Ty::Void {
-                    attr: TyAttr::EMPTY,
-                },
-            )),
+            Symbol::Function(make_function("MakeVoid", Ty::Null)),
         );
         let mut callables = HashMap::new();
         for (name, wire) in [
@@ -5045,7 +5044,7 @@ mod tests {
             BaseName::new("Envelope"),
         );
         let function_name = Name::new(BaseName::new("user"), namespace, BaseName::new("Echo"));
-        let origin = || baml_codegen_types::Origin {
+        let origin = || baml_sdkgen_types::Origin {
             source_file_path: "mixed_closed.baml".to_string(),
             span_start: 0,
         };
@@ -5066,12 +5065,13 @@ mod tests {
             })
         };
         let type_parameter = BaseName::new("T");
-        let envelope_ty = Ty::Class(envelope_name.clone(), vec![], TyAttr::EMPTY);
-        let function = baml_codegen_types::Function {
+        let envelope_ty = Ty::Class(envelope_name.clone(), Box::new([]));
+        let function = baml_sdkgen_types::Function {
             name: BaseName::new("Echo"),
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: envelope_ty.clone(),
@@ -5087,7 +5087,7 @@ mod tests {
         symbols.insert(function_name.clone(), Symbol::Function(function));
         symbols.insert(
             color_name.clone(),
-            Symbol::Enum(baml_codegen_types::Enum {
+            Symbol::Enum(baml_sdkgen_types::Enum {
                 name: color_name.clone(),
                 docstring: None,
                 variants: ["red", "blue"]
@@ -5116,13 +5116,13 @@ mod tests {
                 vec![type_parameter.clone()],
                 vec![property(
                     "value",
-                    Ty::TypeVar(ParamTy::new(0, type_parameter), TyAttr::EMPTY),
+                    Ty::TypeVar(ParamTy::new(0, type_parameter)),
                 )],
             ),
         );
         symbols.insert(
             label_name.clone(),
-            Symbol::TypeAlias(baml_codegen_types::TypeAlias {
+            Symbol::TypeAlias(baml_sdkgen_types::TypeAlias {
                 name: label_name.clone(),
                 resolves_to: primitive_int(),
                 recursive: false,
@@ -5135,26 +5135,19 @@ mod tests {
                 envelope_name,
                 vec![],
                 vec![
-                    property("color", Ty::Enum(color_name, TyAttr::EMPTY)),
-                    property("record", Ty::Class(record_name, vec![], TyAttr::EMPTY)),
-                    property(
-                        "boxed",
-                        Ty::Class(box_name, vec![primitive_int()], TyAttr::EMPTY),
-                    ),
-                    property("label", Ty::TypeAlias(label_name, TyAttr::EMPTY)),
+                    property("color", Ty::Enum(color_name)),
+                    property("record", Ty::Class(record_name, Box::new([]))),
+                    property("boxed", Ty::Class(box_name, Box::new([primitive_int()]))),
+                    property("label", Ty::TypeAlias(label_name)),
                     property(
                         "choice",
-                        Ty::Union(
-                            vec![
-                                primitive_int(),
-                                Ty::Literal(
-                                    Literal::String("fixed".to_string()),
-                                    baml_codegen_types::Freshness::Regular,
-                                    TyAttr::EMPTY,
-                                ),
-                            ],
-                            TyAttr::EMPTY,
-                        )
+                        Ty::Union(Box::new([
+                            primitive_int(),
+                            Ty::Literal(
+                                Literal::String("fixed".to_string()),
+                                baml_sdkgen_types::Freshness::Regular,
+                            ),
+                        ]))
                         .canonicalize(),
                     ),
                 ],
@@ -5195,15 +5188,16 @@ mod tests {
         let stream_name = Name::new(
             BaseName::new("user"),
             namespace,
-            BaseName::new("Echo$stream"),
+            BaseName::new("Echo@stream"),
         );
         let argument = || FunctionArgument {
+            injected: false,
             name: BaseName::new("prompt"),
             docstring: None,
             ty: primitive_string(),
             default: None,
         };
-        let function = |name: BaseName, return_type: Ty| baml_codegen_types::Function {
+        let function = |name: BaseName, return_type: Ty| baml_sdkgen_types::Function {
             name,
             generic_params: vec![],
             docstring: None,
@@ -5211,7 +5205,7 @@ mod tests {
             return_type,
             throws: None,
             watchers: vec![],
-            origin: baml_codegen_types::Origin {
+            origin: baml_sdkgen_types::Origin {
                 source_file_path: "stream_contract.baml".to_string(),
                 span_start: 0,
             },
@@ -5224,15 +5218,14 @@ mod tests {
         symbols.insert(
             stream_name.clone(),
             Symbol::Function(function(
-                BaseName::new("Echo$stream"),
+                BaseName::new("Echo@stream"),
                 Ty::Class(
                     Name::new(
                         BaseName::new("ai"),
                         vec![BaseName::new("stream")],
                         BaseName::new("Stream"),
                     ),
-                    vec![primitive_string(), primitive_string()],
-                    TyAttr::EMPTY,
+                    Box::new([primitive_string()]),
                 ),
             )),
         );
@@ -5250,7 +5243,7 @@ mod tests {
             CallableKey::Free(stream_name),
             CallableIdentity {
                 family_name: BaseName::new("Echo"),
-                wire_name: BaseName::new("Echo$stream"),
+                wire_name: BaseName::new("Echo@stream"),
                 variant: CallableVariant::Stream,
                 receiver: None,
             },
@@ -5278,7 +5271,7 @@ mod tests {
             properties: vec![],
             static_methods: vec![],
             instance_methods: vec![],
-            origin: baml_codegen_types::Origin {
+            origin: baml_sdkgen_types::Origin {
                 source_file_path: "builtin.baml".to_string(),
                 span_start: 0,
             },
@@ -5294,23 +5287,14 @@ mod tests {
     }
 
     fn nullable(ty: Ty) -> Ty {
-        Ty::Union(
-            vec![
-                ty,
-                Ty::Null {
-                    attr: TyAttr::EMPTY,
-                },
-            ],
-            TyAttr::EMPTY,
-        )
-        .canonicalize()
+        Ty::Union(Box::new([ty, Ty::Null])).canonicalize()
     }
 
     fn stdlib_structural_source() -> String {
         let scan_name = stdlib_name("glob", "ScanOptions");
         let datagram_name = stdlib_name("net", "Datagram");
-        let error_kind_name = stdlib_name("csv", "CsvErrorKind");
-        let error_name = stdlib_name("csv", "CsvError");
+        let error_kind_name = stdlib_name("csv", "ErrorKind");
+        let error_name = stdlib_name("csv", "Error");
         let reader_options_name = stdlib_name("csv", "ReaderOptions");
         let property = |name: &str, ty: Ty| ClassProperty {
             name: BaseName::new(name),
@@ -5325,7 +5309,7 @@ mod tests {
                 properties,
                 static_methods: vec![],
                 instance_methods: vec![],
-                origin: baml_codegen_types::Origin {
+                origin: baml_sdkgen_types::Origin {
                     source_file_path: "builtin.baml".to_string(),
                     span_start: 0,
                 },
@@ -5337,28 +5321,30 @@ mod tests {
             vec![BaseName::new("stdlib_contract")],
             BaseName::new("Echo"),
         );
-        let function = baml_codegen_types::Function {
+        let function = baml_sdkgen_types::Function {
             name: BaseName::new("Echo"),
             generic_params: vec![],
             docstring: None,
             arguments: vec![
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("scan"),
                     docstring: None,
-                    ty: Ty::Class(scan_name.clone(), vec![], TyAttr::EMPTY),
+                    ty: Ty::Class(scan_name.clone(), Box::new([])),
                     default: None,
                 },
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("error"),
                     docstring: None,
-                    ty: Ty::Class(error_name.clone(), vec![], TyAttr::EMPTY),
+                    ty: Ty::Class(error_name.clone(), Box::new([])),
                     default: None,
                 },
             ],
-            return_type: Ty::Class(datagram_name.clone(), vec![], TyAttr::EMPTY),
+            return_type: Ty::Class(datagram_name.clone(), Box::new([])),
             throws: None,
             watchers: vec![],
-            origin: baml_codegen_types::Origin {
+            origin: baml_sdkgen_types::Origin {
                 source_file_path: "stdlib_contract.baml".to_string(),
                 span_start: 0,
             },
@@ -5372,12 +5358,7 @@ mod tests {
                 scan_name,
                 vec![
                     property("cwd", nullable(primitive_string())),
-                    property(
-                        "dot",
-                        nullable(Ty::Bool {
-                            attr: TyAttr::EMPTY,
-                        }),
-                    ),
+                    property("dot", nullable(Ty::Bool)),
                 ],
             ),
         );
@@ -5396,7 +5377,7 @@ mod tests {
             class(
                 error_name,
                 vec![
-                    property("kind", Ty::Enum(error_kind_name.clone(), TyAttr::EMPTY)),
+                    property("kind", Ty::Enum(error_kind_name.clone())),
                     property("message", primitive_string()),
                     property("line", nullable(primitive_int())),
                 ],
@@ -5408,31 +5389,24 @@ mod tests {
                 reader_options_name,
                 vec![property(
                     "trim",
-                    Ty::Union(
-                        vec![
-                            Ty::Literal(
-                                Literal::String("none".to_string()),
-                                baml_codegen_types::Freshness::Regular,
-                                TyAttr::EMPTY,
-                            ),
-                            Ty::Literal(
-                                Literal::String("fields".to_string()),
-                                baml_codegen_types::Freshness::Regular,
-                                TyAttr::EMPTY,
-                            ),
-                            Ty::Null {
-                                attr: TyAttr::EMPTY,
-                            },
-                        ],
-                        TyAttr::EMPTY,
-                    )
+                    Ty::Union(Box::new([
+                        Ty::Literal(
+                            Literal::String("none".to_string()),
+                            baml_sdkgen_types::Freshness::Regular,
+                        ),
+                        Ty::Literal(
+                            Literal::String("fields".to_string()),
+                            baml_sdkgen_types::Freshness::Regular,
+                        ),
+                        Ty::Null,
+                    ]))
                     .canonicalize(),
                 )],
             ),
         );
         symbols.insert(
             error_kind_name.clone(),
-            Symbol::Enum(baml_codegen_types::Enum {
+            Symbol::Enum(baml_sdkgen_types::Enum {
                 name: error_kind_name,
                 docstring: None,
                 variants: ["Options", "FieldCount", "Decode"]
@@ -5443,7 +5417,7 @@ mod tests {
                         value: name.to_string(),
                     })
                     .collect(),
-                origin: baml_codegen_types::Origin {
+                origin: baml_sdkgen_types::Origin {
                     source_file_path: "builtin.baml".to_string(),
                     span_start: 0,
                 },
@@ -5476,12 +5450,8 @@ mod tests {
 
     fn modular_companion_source() -> String {
         let namespace = vec![BaseName::new("modular_contract")];
-        let prompt_name = Name::new(BaseName::new("ai"), vec![], BaseName::new("Prompt"));
-        let sse_name = Name::new(
-            BaseName::new("baml"),
-            vec![BaseName::new("http")],
-            BaseName::new("SseStream"),
-        );
+        let function_spec_name =
+            Name::new(BaseName::new("ai"), vec![], BaseName::new("FunctionSpec"));
         let stream_name = Name::new(
             BaseName::new("ai"),
             vec![BaseName::new("stream")],
@@ -5489,26 +5459,16 @@ mod tests {
         );
         let companions = [
             (
-                "$render_prompt",
-                CallableVariant::RenderPrompt,
+                "@spec",
+                CallableVariant::Spec,
                 vec![("input", primitive_string())],
-                Ty::Class(prompt_name.clone(), vec![], TyAttr::EMPTY),
+                Ty::Class(function_spec_name.clone(), Box::new([primitive_string()])),
             ),
             (
-                "$parse",
-                CallableVariant::Parse,
-                vec![("response", primitive_string())],
-                primitive_string(),
-            ),
-            (
-                "$parse_stream",
-                CallableVariant::ParseStream,
-                vec![("sse", Ty::Class(sse_name.clone(), vec![], TyAttr::EMPTY))],
-                Ty::Class(
-                    stream_name,
-                    vec![primitive_string(), primitive_string()],
-                    TyAttr::EMPTY,
-                ),
+                "@stream",
+                CallableVariant::Stream,
+                vec![("input", primitive_string())],
+                Ty::Class(stream_name, Box::new([primitive_string()])),
             ),
         ];
         let mut symbols = HashMap::new();
@@ -5519,13 +5479,14 @@ mod tests {
             let name = Name::new(BaseName::new("user"), namespace.clone(), wire_name.clone());
             symbols.insert(
                 name.clone(),
-                Symbol::Function(baml_codegen_types::Function {
+                Symbol::Function(baml_sdkgen_types::Function {
                     name: wire_name.clone(),
                     generic_params: vec![],
                     docstring: None,
                     arguments: arguments
                         .into_iter()
                         .map(|(name, ty)| FunctionArgument {
+                            injected: false,
                             name: BaseName::new(name),
                             docstring: None,
                             ty,
@@ -5535,7 +5496,7 @@ mod tests {
                     return_type,
                     throws: None,
                     watchers: vec![],
-                    origin: baml_codegen_types::Origin {
+                    origin: baml_sdkgen_types::Origin {
                         source_file_path: "modular_contract.baml".to_string(),
                         span_start: u32::try_from(index)
                             .expect("the fixed companion fixture count fits in u32"),
@@ -5552,8 +5513,10 @@ mod tests {
                 },
             );
         }
-        symbols.insert(prompt_name.clone(), builtin_class(prompt_name, vec![]));
-        symbols.insert(sse_name.clone(), builtin_class(sse_name, vec![]));
+        symbols.insert(
+            function_spec_name.clone(),
+            builtin_class(function_spec_name, vec![BaseName::new("Out")]),
+        );
         let tree = generate_program(
             &CodegenModel { symbols, callables },
             &[1, 2, 3],
@@ -5588,10 +5551,7 @@ mod tests {
         Ty::Function {
             params,
             ret: Box::new(primitive_string()),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::EMPTY,
-            }),
-            attr: TyAttr::EMPTY,
+            throws: Box::new(Ty::Never),
         }
     }
 
@@ -5601,11 +5561,12 @@ mod tests {
             vec![BaseName::new("callback_contract")],
             BaseName::new("UseCallback"),
         );
-        let function = baml_codegen_types::Function {
+        let function = baml_sdkgen_types::Function {
             name: BaseName::new("UseCallback"),
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("callback"),
                 docstring: None,
                 ty: host_callable_type(2),
@@ -5614,7 +5575,7 @@ mod tests {
             return_type: primitive_string(),
             throws: None,
             watchers: vec![],
-            origin: baml_codegen_types::Origin {
+            origin: baml_sdkgen_types::Origin {
                 source_file_path: "callback_contract.baml".to_string(),
                 span_start: 0,
             },
@@ -5654,32 +5615,31 @@ mod tests {
         );
         let parameter_t = BaseName::new("T");
         let parameter_r = BaseName::new("R");
-        let type_t = Ty::TypeVar(ParamTy::new(0, parameter_t.clone()), TyAttr::EMPTY);
-        let type_r = Ty::TypeVar(ParamTy::new(1, parameter_r.clone()), TyAttr::EMPTY);
+        let type_t = Ty::TypeVar(ParamTy::new(0, parameter_t.clone()));
+        let type_r = Ty::TypeVar(ParamTy::new(1, parameter_r.clone()));
         let callback = Ty::Function {
-            params: vec![CallableParam {
+            params: Box::new([CallableParam {
                 name: Some(BaseName::new("value")),
                 ty: type_t.clone(),
                 mode: CodegenFunctionParamMode::Required,
-            }],
+            }]),
             ret: Box::new(type_r.clone()),
-            throws: Box::new(Ty::Never {
-                attr: TyAttr::EMPTY,
-            }),
-            attr: TyAttr::EMPTY,
+            throws: Box::new(Ty::Never),
         };
-        let function = baml_codegen_types::Function {
+        let function = baml_sdkgen_types::Function {
             name: BaseName::new("Apply"),
             generic_params: vec![parameter_t, parameter_r],
             docstring: None,
             arguments: vec![
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("f"),
                     docstring: None,
                     ty: callback,
                     default: None,
                 },
                 FunctionArgument {
+                    injected: false,
                     name: BaseName::new("x"),
                     docstring: None,
                     ty: type_t,
@@ -5689,7 +5649,7 @@ mod tests {
             return_type: type_r,
             throws: None,
             watchers: vec![],
-            origin: baml_codegen_types::Origin {
+            origin: baml_sdkgen_types::Origin {
                 source_file_path: "generic_callback_contract.baml".to_string(),
                 span_start: 0,
             },
@@ -5727,21 +5687,13 @@ mod tests {
             vec![BaseName::new("nullable_bytes_contract")],
             BaseName::new("Echo"),
         );
-        let nullable_bytes = Ty::Union(
-            vec![
-                primitive_bytes(),
-                Ty::Null {
-                    attr: TyAttr::EMPTY,
-                },
-            ],
-            TyAttr::EMPTY,
-        )
-        .canonicalize();
-        let function = baml_codegen_types::Function {
+        let nullable_bytes = Ty::Union(Box::new([primitive_bytes(), Ty::Null])).canonicalize();
+        let function = baml_sdkgen_types::Function {
             name: BaseName::new("Echo"),
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: nullable_bytes.clone(),
@@ -5750,7 +5702,7 @@ mod tests {
             return_type: nullable_bytes,
             throws: None,
             watchers: vec![],
-            origin: baml_codegen_types::Origin {
+            origin: baml_sdkgen_types::Origin {
                 source_file_path: "nullable_bytes_contract.baml".to_string(),
                 span_start: 0,
             },
@@ -5782,113 +5734,6 @@ mod tests {
             .join("\n")
     }
 
-    fn semantic_partial_source() -> String {
-        let namespace = vec![BaseName::new("partial_contract")];
-        let partial_name = Name::new(
-            BaseName::new("user"),
-            namespace.clone(),
-            BaseName::new("Resume$stream"),
-        );
-        let nullable_int = |attr: TyAttr| {
-            Ty::Union(
-                vec![
-                    Ty::Int {
-                        attr: TyAttr::EMPTY,
-                    },
-                    Ty::Null {
-                        attr: TyAttr::EMPTY,
-                    },
-                ],
-                attr,
-            )
-            .canonicalize()
-        };
-        let property = |name: &str, ty: Ty| ClassProperty {
-            name: BaseName::new(name),
-            docstring: None,
-            ty,
-        };
-        let partial = Class {
-            name: partial_name.clone(),
-            generic_params: vec![],
-            docstring: None,
-            properties: vec![
-                property("defaulted", nullable_int(TyAttr::EMPTY)),
-                property(
-                    "required",
-                    Ty::Int {
-                        attr: TyAttr {
-                            sap_pending_never: TyAttrValue::Set,
-                            sap_in_progress_never: TyAttrValue::Set,
-                            ..TyAttr::EMPTY
-                        },
-                    },
-                ),
-                property(
-                    "done",
-                    nullable_int(TyAttr {
-                        sap_in_progress_never: TyAttrValue::Set,
-                        ..TyAttr::EMPTY
-                    }),
-                ),
-                property(
-                    "state",
-                    nullable_int(TyAttr {
-                        sap_in_progress_never: TyAttrValue::Set,
-                        ..TyAttr::EMPTY
-                    }),
-                ),
-            ],
-            static_methods: vec![],
-            instance_methods: vec![],
-            origin: baml_codegen_types::Origin {
-                source_file_path: "partial_contract.baml".to_string(),
-                span_start: 0,
-            },
-        };
-        let partial_type = Ty::Class(partial_name.clone(), vec![], TyAttr::EMPTY);
-        let function_name = Name::new(BaseName::new("user"), namespace, BaseName::new("Ping"));
-        let function = baml_codegen_types::Function {
-            name: BaseName::new("Ping"),
-            generic_params: vec![],
-            docstring: None,
-            arguments: vec![],
-            return_type: partial_type,
-            throws: None,
-            watchers: vec![],
-            origin: baml_codegen_types::Origin {
-                source_file_path: "partial_contract.baml".to_string(),
-                span_start: 1,
-            },
-        };
-        let mut symbols = HashMap::new();
-        symbols.insert(partial_name, Symbol::Class(partial));
-        symbols.insert(function_name.clone(), Symbol::Function(function));
-        let mut callables = HashMap::new();
-        callables.insert(
-            CallableKey::Free(function_name),
-            CallableIdentity {
-                family_name: BaseName::new("Ping"),
-                wire_name: BaseName::new("Ping"),
-                variant: CallableVariant::Execute,
-                receiver: None,
-            },
-        );
-        let tree = generate_program(
-            &CodegenModel { symbols, callables },
-            &[1, 2, 3],
-            "0.0.0-test",
-            "0.0.0-test",
-            "partial-contract",
-        )
-        .expect("semantic partials should generate");
-        tree.files
-            .iter()
-            .map(|file| String::from_utf8_lossy(&file.contents))
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-
     #[test]
     fn enum_discriminant_matches_frozen_identity_grammar() {
         let name = Name::new(BaseName::new("user"), vec![], BaseName::new("Status"));
@@ -5904,10 +5749,7 @@ mod tests {
             encode_type_metadata(&primitive_int()),
             vec![0x0a, 0x02, 0x08, 0x02],
         );
-        let union = normalize_ty(&Ty::Union(
-            vec![primitive_string(), primitive_int()],
-            Default::default(),
-        ));
+        let union = normalize_ty(&Ty::Union(Box::new([primitive_string(), primitive_int()])));
         assert_eq!(
             encode_type_metadata(&union),
             vec![
@@ -5918,13 +5760,7 @@ mod tests {
 
     #[test]
     fn union_discovery_order_cannot_change_any_generated_csharp_layer() {
-        let members = [
-            primitive_string(),
-            primitive_int(),
-            Ty::Bool {
-                attr: TyAttr::EMPTY,
-            },
-        ];
+        let members = [primitive_string(), primitive_int(), Ty::Bool];
         let permutations = [
             [0, 1, 2],
             [0, 2, 1],
@@ -5939,18 +5775,18 @@ mod tests {
                     .into_iter()
                     .map(|index| members[index].clone())
                     .collect(),
-                TyAttr::EMPTY,
             );
             let function_name = Name::new(
                 BaseName::new("user"),
                 vec![BaseName::new("union_order")],
                 BaseName::new("RoundTrip"),
             );
-            let function = baml_codegen_types::Function {
+            let function = baml_sdkgen_types::Function {
                 name: BaseName::new("RoundTrip"),
                 generic_params: vec![],
                 docstring: None,
                 arguments: vec![FunctionArgument {
+                    injected: false,
                     name: BaseName::new("value"),
                     docstring: None,
                     ty: union.clone(),
@@ -5959,7 +5795,7 @@ mod tests {
                 return_type: union,
                 throws: None,
                 watchers: vec![],
-                origin: baml_codegen_types::Origin {
+                origin: baml_sdkgen_types::Origin {
                     source_file_path: "union_order.baml".to_string(),
                     span_start: 0,
                 },
@@ -6003,17 +5839,10 @@ mod tests {
     #[test]
     fn dynamic_and_media_type_metadata_matches_wire_schema() {
         assert_eq!(
-            encode_type_metadata(&Ty::Null {
-                attr: TyAttr::EMPTY,
-            }),
+            encode_type_metadata(&Ty::Null),
             vec![0x0a, 0x02, 0x08, 0x05],
         );
-        assert_eq!(
-            encode_type_metadata(&Ty::BuiltinUnknown {
-                attr: TyAttr::EMPTY,
-            }),
-            vec![0x52, 0x00],
-        );
+        assert_eq!(encode_type_metadata(&Ty::Unknown), vec![0x52, 0x00]);
         for (kind, encoded_kind) in [
             (MediaKind::Image, 0x01),
             (MediaKind::Audio, 0x02),
@@ -6075,41 +5904,40 @@ mod tests {
         let source = stream_contract_source();
         assert_eq!(
             source
-                .matches("public static global::Baml.BamlStream<string, string> EchoStream(")
+                .matches("public static global::Baml.BamlStream<string> EchoStream(")
                 .count(),
             1,
         );
         assert!(!source.contains("EchoStreamAsync"));
         assert!(source.contains("public static string Echo("));
         assert!(source.contains("Task<string> EchoAsync("));
-        assert!(source.contains("\"user.stream_contract.Echo$stream\""));
+        assert!(source.contains("\"user.stream_contract.Echo@stream\""));
         assert!(source.contains("\"stream\""));
         assert!(source.contains("BamlGeneratedContract.CreateStream("));
         assert!(source.contains(".DeferredProgram,"));
-        assert!(source.contains("global::Baml.BamlStream<string, string>"));
+        assert!(source.contains("global::Baml.BamlStream<string>"));
+        assert!(source.contains("BamlOptional<global::Baml.BamlValue> client = default"));
+        assert!(source.contains("optional: true"));
         assert!(!source.contains("BamlGeneratedCodec<global::Baml.BamlStream"));
     }
 
     #[test]
     fn compiler_declared_modular_companions_emit_exact_public_surfaces() {
         let source = modular_companion_source();
-        assert!(source.contains("public static global::Baml.BamlHandle ExtractRenderPrompt("));
-        assert!(source.contains("Task<global::Baml.BamlHandle> ExtractRenderPromptAsync("));
-        assert!(source.contains("public static string ExtractParseResponse("));
-        assert!(source.contains("Task<string> ExtractParseResponseAsync("));
-        assert!(source.contains(
-            "public static global::Baml.BamlStream<string, string> ExtractParseStreamResponse("
-        ));
-        assert!(!source.contains("ExtractParseStreamResponseAsync"));
-        assert!(source.contains("\"user.modular_contract.Extract$render_prompt\""));
-        assert!(source.contains("\"user.modular_contract.Extract$parse\""));
-        assert!(source.contains("\"user.modular_contract.Extract$parse_stream\""));
+        assert!(
+            source.contains("public static global::Baml.BamlFunctionSpec<string> ExtractSpec(")
+        );
+        assert!(source.contains("Task<global::Baml.BamlFunctionSpec<string>> ExtractSpecAsync("));
+        assert!(source.contains("public static global::Baml.BamlStream<string> ExtractStream("));
+        assert!(!source.contains("ExtractStreamAsync"));
+        assert!(source.contains("\"user.modular_contract.Extract@spec\""));
+        assert!(source.contains("\"user.modular_contract.Extract@stream\""));
     }
 
     #[test]
     fn host_callable_projection_is_task_only_and_reflection_free() {
         let source = host_callable_source();
-        let delegate = "global::System.Func<long, global::Baml.BamlOptional<string>, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<string>>";
+        let delegate = "global::System.Func<long, global::Baml.BamlOptional<string>, global::System.Threading.Tasks.Task<string>>";
         assert!(source.contains(delegate));
         assert!(source.contains("context.Required("));
         assert!(source.contains("context.Optional(\"p1\","));
@@ -6124,11 +5952,15 @@ mod tests {
     fn generic_host_callable_uses_closed_generated_type_tokens() {
         let source = generic_host_callable_source();
         assert!(source.contains("Task<R> ApplyAsync<T, R>("));
-        assert!(source.contains("global::System.Func<T, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<R>> f"));
+        assert!(
+            source.contains("global::System.Func<T, global::System.Threading.Tasks.Task<R>> f")
+        );
         assert!(source.contains(".AddHostCallable("));
         assert!(source.contains(".Required(bamlType0)"));
         assert!(source.contains(".Result(bamlType1)"));
-        assert!(source.contains("((global::System.Func<T, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<R>>)"));
+        assert!(
+            source.contains("((global::System.Func<T, global::System.Threading.Tasks.Task<R>>)")
+        );
         assert!(!source.contains("ResolveType<global::System.Func<"));
     }
 
@@ -6148,8 +5980,8 @@ mod tests {
             ("fs", "DirEntry"),
             ("fs", "MkdirOptions"),
             ("net", "Datagram"),
-            ("csv", "CsvError"),
-            ("csv", "CsvPosition"),
+            ("csv", "Error"),
+            ("csv", "Position"),
             ("csv", "ReaderOptions"),
             ("csv", "WriterOptions"),
         ] {
@@ -6160,12 +5992,12 @@ mod tests {
             );
         }
         assert_eq!(
-            builtin_projection(&stdlib_name("csv", "CsvErrorKind")),
+            builtin_projection(&stdlib_name("csv", "ErrorKind")),
             Some(BuiltinProjection::StructuralEnum),
         );
 
         let mut symbols = HashMap::new();
-        for marker in ["CsvNeedData", "CsvSkip", "CsvHeaders"] {
+        for marker in ["_NeedData", "_Skip", "_Headers"] {
             let name = stdlib_name("csv", marker);
             symbols.insert(name.clone(), builtin_class(name, vec![]));
         }
@@ -6178,14 +6010,11 @@ mod tests {
             symbols,
             callables: HashMap::new(),
         };
-        for marker in ["CsvNeedData", "CsvSkip", "CsvHeaders"] {
+        for marker in ["_NeedData", "_Skip", "_Headers"] {
             let name = stdlib_name("csv", marker);
-            let error = require_supported_type(
-                &Ty::Class(name, vec![], TyAttr::EMPTY),
-                &model,
-                "test.location",
-            )
-            .expect_err("internal CSV markers must remain unavailable");
+            let error =
+                require_supported_type(&Ty::Class(name, Box::new([])), &model, "test.location")
+                    .expect_err("internal CSV markers must remain unavailable");
             assert!(
                 error
                     .to_string()
@@ -6193,7 +6022,7 @@ mod tests {
             );
         }
         let error = require_supported_type(
-            &Ty::Class(future_name, vec![], TyAttr::EMPTY),
+            &Ty::Class(future_name, Box::new([])),
             &model,
             "test.location",
         )
@@ -6211,7 +6040,7 @@ mod tests {
         for namespace in ["Baml.Glob", "Baml.Net", "Baml.Csv"] {
             assert!(source.contains(&format!("namespace {namespace};")));
         }
-        for class in ["ScanOptions", "Datagram", "CsvError"] {
+        for class in ["ScanOptions", "Datagram", "Error"] {
             assert!(source.contains(&format!("public sealed partial class {class}")));
         }
         for property in [
@@ -6219,7 +6048,7 @@ mod tests {
             "public required bool? Dot { get; init; }",
             "public required global::System.ReadOnlyMemory<byte> Data { get; init; }",
             "public required string Addr { get; init; }",
-            "public required global::Baml.Csv.CsvErrorKind Kind { get; init; }",
+            "public required global::Baml.Csv.ErrorKind Kind { get; init; }",
             "public required string Message { get; init; }",
             "public required long? Line { get; init; }",
             "public required global::Baml.BamlUnion<string, string>? Trim { get; init; }",
@@ -6229,14 +6058,14 @@ mod tests {
                 "missing exact projection `{property}`"
             );
         }
-        assert!(source.contains("public enum CsvErrorKind : long"));
+        assert!(source.contains("public enum ErrorKind : long"));
         assert!(source.contains("context.Class(\n                \"baml.net.Datagram\""));
         assert!(source.contains("new(\"data\", context.Encode("));
         assert!(source.contains("new(\"addr\", context.Encode("));
-        assert!(source.contains("context.ReadClass(value, \"baml.csv.CsvError\")"));
+        assert!(source.contains("context.ReadClass(value, \"baml.csv.Error\")"));
         assert!(source.contains("fields.TryGetValue(\"kind\""));
-        assert!(source.contains("context.Enum(\"baml.csv.CsvErrorKind\", wire)"));
-        assert!(source.contains("context.ReadEnum(value, \"baml.csv.CsvErrorKind\")"));
+        assert!(source.contains("context.Enum(\"baml.csv.ErrorKind\", wire)"));
+        assert!(source.contains("context.ReadEnum(value, \"baml.csv.ErrorKind\")"));
         assert!(source.contains("if (!value.HasValue)"));
         assert!(source.contains("return value.Value.Match("));
         assert!(source.contains("return default(global::Baml.BamlUnion<string, string>?)"));
@@ -6272,43 +6101,46 @@ mod tests {
             symbols: HashMap::new(),
             callables: HashMap::new(),
         };
-        require_supported_type(&host_callable_type(15), &model, "callback").unwrap();
-        let error = require_supported_type(&host_callable_type(16), &model, "callback")
-            .expect_err("sixteen BAML callback parameters must be rejected");
-        assert!(error.to_string().contains("C# v1 limit is 15"));
+        require_supported_type(&host_callable_type(16), &model, "callback").unwrap();
+        let error = require_supported_type(&host_callable_type(17), &model, "callback")
+            .expect_err("seventeen BAML callback parameters must be rejected");
+        assert!(error.to_string().contains("C# delegate limit is 16"));
         assert!(error.to_string().contains("at callback"));
     }
 
     #[test]
-    fn semantic_partial_properties_preserve_presence() {
-        let source = semantic_partial_source();
-        assert!(source.contains("public long? Defaulted { get; init; }"));
-        assert!(source.contains("public required long Required { get; init; }"));
-        assert!(source.contains("public long? Done { get; init; }"));
-        assert!(source.contains("public long? State { get; init; }"));
-        assert!(!source.contains("context.StreamState("));
-        assert!(!source.contains("context.ReadStreamState("));
-        assert!(!source.contains("BamlOptional<long?>"));
+    fn unit_returning_callback_is_a_plain_task() {
+        // A callback returning the unit type (`null`, also spelled `void`) is
+        // a value-less `Task`, never a `Task<BamlValue>`.
+        let unit = Ty::Null;
+        let source = function_type_source(&[], &unit, |_| {
+            unreachable!("a unit result is never projected")
+        });
+        assert_eq!(
+            source,
+            "global::System.Func<global::System.Threading.Tasks.Task>"
+        );
     }
 
     #[test]
     fn returned_callable_decode_lambdas_preserve_task_shapes_and_optional_presence() {
         let source = returned_callable_codec_source();
+        assert!(source.contains("public static class BamlProgram"));
         assert!(source.contains(
-            "global::System.Func<long, global::Baml.BamlOptional<string>, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task<long>>"
+            "global::System.Func<long, global::Baml.BamlOptional<string>, global::System.Threading.Tasks.Task<long>>"
         ));
         assert!(source.contains(
-            "global::System.Func<long, global::Baml.BamlOptional<string>, global::System.Threading.CancellationToken, global::System.Threading.Tasks.Task>"
+            "global::System.Func<long, global::Baml.BamlOptional<string>, global::System.Threading.Tasks.Task>"
         ));
         assert!(source.contains(
-            "return async (long argument0, global::Baml.BamlOptional<string> argument1, global::System.Threading.CancellationToken cancellationToken) =>"
+            "return async (long argument0, global::Baml.BamlOptional<string> argument1) =>"
         ));
         assert!(source.contains("if (argument1.TryGetValue(out var value1))"));
         assert!(source.contains(
-            "var result = await nativeFunction(arguments, cancellationToken).ConfigureAwait(false);"
+            "var result = await nativeFunction(arguments, global::Baml.Generated.V1.BamlInvocationPreparation.CurrentOptions?.CancellationToken ?? default).ConfigureAwait(false);"
         ));
         assert!(source.contains(
-            "_ = await nativeFunction(arguments, cancellationToken).ConfigureAwait(false);"
+            "_ = await nativeFunction(arguments, global::Baml.Generated.V1.BamlInvocationPreparation.CurrentOptions?.CancellationToken ?? default).ConfigureAwait(false);"
         ));
     }
 
@@ -6325,14 +6157,10 @@ mod tests {
             assert!(canonical.contains(&ty));
             assert!(is_canonical_generic_binding(&ty));
         }
-        let dynamic = Ty::BuiltinUnknown {
-            attr: TyAttr::EMPTY,
-        };
+        let dynamic = Ty::Unknown;
         assert!(canonical.contains(&dynamic));
         assert!(is_canonical_generic_binding(&dynamic));
-        assert!(!is_canonical_generic_binding(&Ty::Null {
-            attr: TyAttr::EMPTY,
-        }));
+        assert!(!is_canonical_generic_binding(&Ty::Null));
         assert!(!is_canonical_generic_binding(&media(MediaKind::Generic)));
     }
 
@@ -6349,14 +6177,7 @@ mod tests {
             generic_media.to_string(),
             "C# generation does not yet support type `image | audio | video | pdf` at test.location",
         );
-        let rust_type = require_supported_type(
-            &Ty::RustType {
-                attr: TyAttr::EMPTY,
-            },
-            &model,
-            "test.location",
-        )
-        .unwrap_err();
+        let rust_type = require_supported_type(&Ty::RustType, &model, "test.location").unwrap_err();
         assert_eq!(
             rust_type.to_string(),
             "C# generation does not yet support type `$rust_type` at test.location",
@@ -6365,7 +6186,7 @@ mod tests {
 
     #[test]
     fn union_above_runtime_family_limit_fails_with_arity() {
-        let union = Ty::Union(vec![primitive_int(); 33], Default::default());
+        let union = Ty::Union(vec![primitive_int(); 33].into());
         let model = CodegenModel {
             symbols: HashMap::new(),
             callables: HashMap::new(),
@@ -6388,11 +6209,11 @@ mod tests {
         let mut symbols = HashMap::new();
         symbols.insert(
             alias_name.clone(),
-            Symbol::TypeAlias(baml_codegen_types::TypeAlias {
+            Symbol::TypeAlias(baml_sdkgen_types::TypeAlias {
                 name: alias_name.clone(),
                 resolves_to: primitive_string(),
                 recursive: false,
-                origin: baml_codegen_types::Origin {
+                origin: baml_sdkgen_types::Origin {
                     source_file_path: "projection.baml".to_string(),
                     span_start: 0,
                 },
@@ -6402,17 +6223,13 @@ mod tests {
             symbols,
             callables: HashMap::new(),
         };
-        let union = Ty::Union(
-            vec![
-                Ty::TypeAlias(alias_name, TyAttr::EMPTY),
-                Ty::Literal(
-                    Literal::String("fixed".to_string()),
-                    baml_codegen_types::Freshness::Regular,
-                    TyAttr::EMPTY,
-                ),
-            ],
-            TyAttr::EMPTY,
-        );
+        let union = Ty::Union(Box::new([
+            Ty::TypeAlias(alias_name),
+            Ty::Literal(
+                Literal::String("fixed".to_string()),
+                baml_sdkgen_types::Freshness::Regular,
+            ),
+        ]));
         let error = require_unambiguous_csharp_unions(&union, &model, "test.location")
             .expect_err("overlapping CLR projections must fail closed");
         assert!(
@@ -6430,30 +6247,32 @@ mod tests {
             BaseName::new("Counter"),
         );
         let method_name = BaseName::new("new");
-        let method = baml_codegen_types::Function {
+        let method = baml_sdkgen_types::Function {
             name: method_name.clone(),
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: primitive_int(),
                 default: None,
             }],
-            return_type: Ty::Class(owner.clone(), vec![], TyAttr::EMPTY),
+            return_type: Ty::Class(owner.clone(), Box::new([])),
             throws: None,
             watchers: vec![],
-            origin: baml_codegen_types::Origin {
+            origin: baml_sdkgen_types::Origin {
                 source_file_path: "only_methods.baml".to_string(),
                 span_start: 20,
             },
         };
-        let stream_method_name = BaseName::new("new$stream");
-        let stream_method = baml_codegen_types::Function {
+        let stream_method_name = BaseName::new("new@stream");
+        let stream_method = baml_sdkgen_types::Function {
             name: stream_method_name.clone(),
             generic_params: vec![],
             docstring: None,
             arguments: vec![FunctionArgument {
+                injected: false,
                 name: BaseName::new("value"),
                 docstring: None,
                 ty: primitive_int(),
@@ -6465,15 +6284,11 @@ mod tests {
                     vec![BaseName::new("stream")],
                     BaseName::new("Stream"),
                 ),
-                vec![
-                    primitive_int(),
-                    Ty::Class(owner.clone(), vec![], TyAttr::EMPTY),
-                ],
-                TyAttr::EMPTY,
+                Box::new([Ty::Class(owner.clone(), Box::new([]))]),
             ),
             throws: None,
             watchers: vec![],
-            origin: baml_codegen_types::Origin {
+            origin: baml_sdkgen_types::Origin {
                 source_file_path: "only_methods.baml".to_string(),
                 span_start: 21,
             },
@@ -6489,7 +6304,7 @@ mod tests {
             }],
             static_methods: vec![method, stream_method],
             instance_methods: vec![],
-            origin: baml_codegen_types::Origin {
+            origin: baml_sdkgen_types::Origin {
                 source_file_path: "only_methods.baml".to_string(),
                 span_start: 0,
             },
@@ -6539,9 +6354,155 @@ mod tests {
         assert!(source.contains("public static global::System.Threading.Tasks.Task<"));
         assert!(source.contains("\"user.only_methods.Counter.new\""));
         assert!(source.contains(
-            "public static global::Baml.BamlStream<long, global::OnlyMethods.Counter> NewStream("
+            "public static global::Baml.BamlStream<global::OnlyMethods.Counter> NewStream("
         ));
+        assert!(source.contains("BamlOptional<global::Baml.BamlValue> client = default"));
         assert!(!source.contains("NewStreamAsync"));
-        assert!(source.contains("\"user.only_methods.Counter.new$stream\""));
+        assert!(source.contains("\"user.only_methods.Counter.new@stream\""));
     }
+}
+
+#[cfg(test)]
+mod shared_traversal_tests {
+    use super::*;
+
+    #[test]
+    fn nested_variables_are_found_but_synthetic_callable_effects_are_not() {
+        let variable = |name: &str| Ty::TypeVar(baml_sdkgen_types::ParamTy::new(0, name.into()));
+        let callable = |throws| Ty::Function {
+            params: Box::new([]),
+            ret: Box::new(Ty::Int),
+            throws: Box::new(throws),
+        };
+        assert!(!contains_type_var(&callable(variable("__effect_param_0"))));
+        assert!(contains_type_var(&callable(variable("E"))));
+        let interface = Ty::Interface(
+            Name::new("user".into(), vec![], "I".into()),
+            Box::new([]),
+            Box::new([("Item".into(), variable("T"))]),
+        );
+        assert!(contains_type_var(&Ty::Future(
+            Box::new(interface),
+            Box::new(Ty::Never)
+        )));
+    }
+}
+
+fn render_invocation_facade(
+    render: &RenderContext<'_>,
+    invocation_request: &CSharpNameRequest,
+    namespace_requests: &[CSharpNameRequest],
+    program_request: &CSharpNameRequest,
+) -> String {
+    let options = allocated(render.names, render.options_request).source();
+    let invocation = allocated(render.names, invocation_request).source();
+    let selection = allocated(render.names, render.selection_request).source();
+    let program = qualified_name(render.names, namespace_requests, program_request);
+    let token = render
+        .classes
+        .iter()
+        .find(|class| class.name.to_string() == "baml.spawn.CancelToken");
+    let (token_source, token_decode, token_encode) = if let Some(token) = token {
+        let ty = Ty::Class(token.name.clone(), Box::new([]));
+        let src = render.type_source(&ty);
+        let field = render.type_field(&ty);
+        (
+            src,
+            format!("{program}.Registry.Decode({program}.{field}, captured.CancelValue)"),
+            "Cancel?.Resource.InvocationValue".to_string(),
+        )
+    } else {
+        (
+            "global::Baml.BamlHandle".into(),
+            "captured.CancelValue.ReadHandle()".into(),
+            "null".into(),
+        )
+    };
+    let selection_source = render.selection_source();
+    let selection_namespace = render
+        .classes
+        .iter()
+        .find(|class| class.name.to_string() == "trace.Options")
+        .map(|class| rendered_namespace(render.names, &class.namespace_requests));
+    let selection_open = selection_namespace
+        .as_ref()
+        .map_or(String::new(), |ns| format!("namespace {ns} {{"));
+    let selection_close = if selection_namespace.is_some() {
+        "}"
+    } else {
+        ""
+    };
+    format!("{GENERATED_HEADER}
+{selection_open}
+public abstract class {selection} {{ internal {selection}() {{}} internal abstract global::Baml.BamlHandle Handle {{ get; }} }}
+{selection_close}
+public sealed record {options} : global::Baml.Generated.V1.IBamlInvocationOptions {{
+    public {selection_source}? Trace {{ get; init; }}
+    public {token_source}? Cancel {{ get; init; }}
+    public global::System.Threading.CancellationToken CancellationToken {{ get; init; }}
+    public long? TimeoutMs {{ get; init; }}
+    global::Baml.BamlHandle? global::Baml.Generated.V1.IBamlInvocationOptions.TraceHandle => Trace?.Handle;
+    global::Baml.Generated.V1.BamlGeneratedValue? global::Baml.Generated.V1.IBamlInvocationOptions.CancelValue => {token_encode};
+}}
+public sealed class {invocation} {{
+    private readonly global::Baml.Generated.V1.BamlInvocationCapture captured;
+    private {invocation}(global::Baml.Generated.V1.BamlInvocationCapture captured) {{ this.captured = captured; }}
+    public static {invocation}? Current => global::Baml.Generated.V1.BamlInvocationCapture.Current is {{}} active ? new(active) : null;
+    public {token_source} Cancel => {token_decode};
+    public global::System.Threading.CancellationToken CancellationToken => captured.CancellationToken;
+}}
+")
+}
+
+fn render_returned_callable_wrappers(render: &RenderContext<'_>) -> String {
+    let mut output = String::new();
+    let options = allocated(render.names, render.options_request).source();
+    for spec in render.type_specs {
+        let Ty::Function { params, ret, .. } = &spec.ty else {
+            continue;
+        };
+        if contains_type_var(&spec.ty) {
+            continue;
+        }
+        let name = render.returned_callable_name(&spec.ty);
+        let delegate = render.type_source(&spec.ty);
+        // Same decision as `function_type_source`: a unit result is a plain `Task`.
+        let returns_unit = ret.is_unit();
+        let (result, task) = if returns_unit {
+            (
+                "void".to_string(),
+                "global::System.Threading.Tasks.Task".to_string(),
+            )
+        } else {
+            let result = render.type_source(ret);
+            let task = format!("global::System.Threading.Tasks.Task<{result}>");
+            (result, task)
+        };
+        let mut parameters = params
+            .iter()
+            .enumerate()
+            .map(|(index, param)| {
+                let ty = render.type_source(&param.ty);
+                if param.mode == CodegenFunctionParamMode::Optional {
+                    format!("global::Baml.BamlOptional<{ty}> argument{index} = default")
+                } else {
+                    format!("{ty} argument{index}")
+                }
+            })
+            .collect::<Vec<_>>();
+        parameters.push(format!("global::{options}? baml = null"));
+        let signature = parameters.join(", ");
+        let arguments = (0..params.len())
+            .map(|index| format!("argument{index}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let sync_arguments = if arguments.is_empty() {
+            "baml".into()
+        } else {
+            format!("{arguments}, baml")
+        };
+        let return_kw = if returns_unit { "" } else { "return " };
+        output.push_str(&format!("    public sealed class {name} {{\n        private readonly {delegate} body;\n        internal {name}({delegate} body) {{ this.body = body; }}\n        internal static async global::System.Threading.Tasks.Task<{name}> FromAsync(global::System.Threading.Tasks.Task<{delegate}> task) => new(await task.ConfigureAwait(false));\n        public {result} Invoke({signature}) {{ {return_kw}InvokeAsync({sync_arguments}).GetAwaiter().GetResult(); }}\n        public {task} InvokeAsync({signature}) {{ using var prepared = global::Baml.Generated.V1.BamlInvocationPreparation.Begin(baml); return body({arguments}); }}\n    }}\n"));
+    }
+    output
 }

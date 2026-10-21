@@ -10,41 +10,36 @@
 //!  - Construct (decode side): `BamlPyHandle::new(key, ht)`. The wire
 //!    encoder is responsible for having inserted under `key`. The Python
 //!    object now owns the row; nobody else may drain it.
-//!  - `__copy__` / `__deepcopy__`: allocate a new row via
-//!    `baml_handle_clone(key, out_key)` and wrap. Sharing the same key
-//!    between two `BamlPyHandle`s would double-release on drop.
-//!  - Drop: `baml_handle_release(key)`. Without this every handle leaks
-//!    one row.
+//!  - `__copy__` / `__deepcopy__`: take one more OWNERSHIP via
+//!    `baml_handle_clone(key, out_key)` and wrap the returned key. For an
+//!    identity-free row (media, function refs) that is a fresh key sharing
+//!    the row's `Arc`; for an engine-heap handle it is the SAME key with its
+//!    refcount bumped (one key per heap object, so host-side key equality is
+//!    object identity). Either way each `BamlPyHandle` owes exactly one
+//!    release — two objects may legitimately share a key.
+//!  - Drop: `baml_handle_release(key)`, exactly once. Without it every
+//!    handle leaks one ownership; a second release on a shared key steals a
+//!    live co-owner's ownership (the table cannot tell owners apart).
 //!
 //! There is no public `handle_type()` method. The wire transmits
 //! `BamlHandle.handle_type`, the Python object stores it on construction,
 //! and Rust-internal callers (media class validation) read the field directly.
 
-use bridge_cffi::{
-    __testonly_seed_function_ref, __testonly_seed_generic_media, BamlCffiStatus, baml_handle_clone,
-    baml_handle_release,
-};
+use bridge_cffi::{BamlCffiStatus, handle_cffi};
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods};
 
 pub(crate) fn status_to_pyerr(context: &str, status: BamlCffiStatus) -> PyErr {
-    let detail = match status {
-        BamlCffiStatus::Ok => "ok",
-        BamlCffiStatus::InvalidHandle => "invalid handle",
-        BamlCffiStatus::TypeMismatch => "handle type mismatch",
-        BamlCffiStatus::UnsupportedHandleType => "unsupported handle type",
-        BamlCffiStatus::InternalError => "internal error",
-        BamlCffiStatus::UnexpectedNullptr => "unexpected null pointer",
-    };
+    let detail = status.description();
     pyo3::exceptions::PyRuntimeError::new_err(format!("{context}: {detail}"))
 }
 
 pub(crate) fn handle_clone(key: u64, context: &str) -> PyResult<u64> {
-    let mut out_key = 0;
-    match unsafe { baml_handle_clone(key, &mut out_key) } {
-        BamlCffiStatus::Ok => Ok(out_key),
-        status => Err(status_to_pyerr(context, status)),
-    }
+    handle_cffi::clone_handle(key).map_err(|error| status_to_pyerr(context, error.into()))
+}
+
+pub(crate) fn release_wire_handle(key: u64, context: &str) -> PyResult<()> {
+    handle_cffi::release_handle(key).map_err(|error| status_to_pyerr(context, error.into()))
 }
 
 #[gen_stub_pyclass]
@@ -83,6 +78,17 @@ impl BamlPyHandle {
     fn _clone_key_for_wire(&self) -> PyResult<(u64, u64)> {
         let new_key = handle_clone(self.handle_key, "BamlPyHandle._clone_key_for_wire")?;
         Ok((new_key, self.handle_type))
+    }
+
+    fn _key_for_invocation(&self) -> PyResult<u64> {
+        if self.handle_type
+            != bridge_ctypes::baml_bridge::cffi::BamlHandleType::InvocationState as u64
+        {
+            return Err(pyo3::exceptions::PyTypeError::new_err(
+                "expected an invocation-state handle",
+            ));
+        }
+        Ok(self.handle_key)
     }
 
     /// Borrow this handle key as a call target without transferring ownership.
@@ -125,7 +131,7 @@ impl Drop for BamlPyHandle {
         let is_host_value = ht_i32 == BamlHandleType::HostValueCallable as i32
             || ht_i32 == BamlHandleType::HostValueOpaque as i32;
         if !is_host_value {
-            let _ = unsafe { baml_handle_release(self.handle_key) };
+            let _ = handle_cffi::release_handle(self.handle_key);
         }
     }
 }
@@ -136,22 +142,49 @@ impl Drop for BamlPyHandle {
 #[gen_stub_pyfunction]
 #[pyfunction]
 pub fn _seed_function_ref_handle(global_index: u64) -> PyResult<(u64, u64)> {
-    let mut key = 0;
-    let mut handle_type = 0;
-    match unsafe { __testonly_seed_function_ref(global_index, &mut key, &mut handle_type) } {
-        BamlCffiStatus::Ok => Ok((key, handle_type as u64)),
-        status => Err(status_to_pyerr("_seed_function_ref_handle", status)),
-    }
+    let parts = handle_cffi::seed_function_ref_handle(global_index);
+    Ok((parts.key, parts.handle_type as u64))
 }
 
 /// Test-only: seed an `Adt(Media(generic))` entry through the shared CFFI API.
 #[gen_stub_pyfunction]
 #[pyfunction]
 pub fn _seed_generic_media_handle() -> PyResult<(u64, u64)> {
-    let mut key = 0;
-    let mut handle_type = 0;
-    match unsafe { __testonly_seed_generic_media(&mut key, &mut handle_type) } {
-        BamlCffiStatus::Ok => Ok((key, handle_type as u64)),
-        status => Err(status_to_pyerr("_seed_generic_media_handle", status)),
-    }
+    let parts = handle_cffi::seed_generic_media_handle();
+    Ok((parts.key, parts.handle_type as u64))
+}
+
+/// Test-only: seed an engine-heap (`BexHeapHandle`) entry through the shared
+/// CFFI API — the identity-bearing, deduplicating arm. Two seeds of one
+/// `slab_key` share a key.
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn _seed_heap_handle(slab_key: u64) -> PyResult<(u64, u64)> {
+    let parts = handle_cffi::seed_heap_handle(slab_key);
+    Ok((parts.key, parts.handle_type as u64))
+}
+
+/// Release a handle cloned for wire ownership when encoding aborts before the
+/// engine can consume it.
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn _release_wire_handle(key: u64) -> PyResult<()> {
+    release_wire_handle(key, "BamlPyHandle wire-encode rollback")
+}
+
+/// Test-only: return the number of live ordinary HANDLE_TABLE rows (a
+/// refcounted engine-heap row counts once however many owners it has).
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn _live_handle_count() -> usize {
+    bridge_cffi::handle_cffi::live_handle_count()
+}
+
+/// Test-only: the outstanding ownership count of a live key — the releases it
+/// still owes — or `None` for a dead/unknown key. Lets an audit see an
+/// exactly-once imbalance on a shared engine-heap key, which row counts hide.
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn _handle_refcount(key: u64) -> Option<u64> {
+    bridge_cffi::handle_cffi::handle_refcount(key)
 }

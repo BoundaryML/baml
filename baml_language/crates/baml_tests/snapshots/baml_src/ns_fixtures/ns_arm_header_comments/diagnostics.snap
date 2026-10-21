@@ -1,0 +1,11 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0063
+
+  ⚠ unreachable arm
+    ╭─[ns_arm_header_comments/main.baml:19:10]
+ 19 │     _ => 0,
+    ·          ─
+    ╰────

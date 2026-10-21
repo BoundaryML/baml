@@ -1,0 +1,50 @@
+client TestClient = openai.ResponsesClient.new(
+    model = "gpt-4o-mini",
+    api_key = "test-key",
+    base_url = "http://localhost:1234",
+);
+
+function RoundTrip<T>() -> T {
+    client: TestClient
+    prompt: `${ctx.output_format()}`
+}
+
+function main() -> bool {
+    let scores_t = reflect.Map.new(string.type(), int.type().optional());
+    let original = reflect.Class.new(
+        "RoundTripRecord",
+        {
+            "kind": reflect.Literal.new("visit").meta(
+                alias = "wire_kind",
+                description = "dispatch key",
+            ),
+            "tags": string.type().array().meta(description = "ordered labels"),
+            "scores": scores_t,
+        },
+    );
+    let source = original.to_baml();
+    let package = reflect.Package.compile({ "round_trip.baml": source });
+    let compiled = package.get_class("root.RoundTripRecord");
+    let document = `
+        {
+                        "wire_kind": "visit",
+                        "tags": ["urgent", "review"],
+                        "scores": {"priority": 7, "followup": null}
+                    }
+    `;
+    let type Original = original;
+    let type Compiled = compiled;
+    let original_value = RoundTrip@parse<Original>(document);
+    let compiled_value = RoundTrip@parse<Compiled>(document);
+
+    return original.as_type() != compiled.as_type()
+        && source == compiled.to_baml()
+        && RoundTrip@render_prompt<Original>().text() == RoundTrip@render_prompt<Compiled>().text()
+        && baml.json.to_string(original_value) == baml.json.to_string(compiled_value)
+        && reflect.Type.of_value(original_value) == original.as_type()
+        && reflect.Type.of_value(compiled_value) == compiled.as_type();
+}
+
+test "constructed_type_to_baml_compiles_to_equivalent_new_identity" {
+    assert.equal(main(), true)
+}

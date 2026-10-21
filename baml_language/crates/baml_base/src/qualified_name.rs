@@ -12,7 +12,7 @@ use crate::Name;
 /// Prefix used for standard library items in qualified names.
 ///
 /// All `Namespace::BamlStd` and standard `Namespace::Builtin` items
-/// are displayed with this prefix (e.g., `baml.prompt.render_output_format`).
+/// are displayed with this prefix (e.g., `baml.media.Image`).
 pub const BAML_STD_PREFIX: &str = "baml.";
 
 /// FQN (as a display string) of the recursive `json` type alias defined in
@@ -26,6 +26,9 @@ pub const BAML_JSON_JSON: &str = "baml.json.json";
 /// lifting, and SDK generators must share this identity rather than carrying
 /// independent string literals.
 pub const AI_STREAM_STREAM: &str = "ai.stream.Stream";
+
+/// Canonical bound LLM function specification capability.
+pub const AI_FUNCTION_SPEC: &str = "ai.FunctionSpec";
 
 /// Canonical nominal end-of-stream marker used by AI streams.
 pub const AI_STREAM_DONE: &str = "ai.stream.Done";
@@ -57,7 +60,7 @@ pub const AI_STREAM_DONE: &str = "ai.stream.Done";
 /// // Builtin method "Array.length"
 /// QualifiedName { namespace: Namespace::Builtin { path: ["Array"] }, name: "length" }
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, salsa::SalsaValue)]
 pub struct QualifiedName {
     /// The namespace this item belongs to.
     pub namespace: Namespace,
@@ -68,7 +71,7 @@ pub struct QualifiedName {
 /// The namespace an item belongs to.
 ///
 /// Namespaces organize items by their origin and resolution rules.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, salsa::Update)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, salsa::SalsaValue)]
 pub enum Namespace {
     /// Compiler builtins that are "magic" - the compiler knows about them specially.
     ///

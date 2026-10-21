@@ -1,0 +1,158 @@
+name: Publish crates.io 0.226.2 (one-off)
+
+run-name: Publish Rust SDK crates 0.226.2 from the verified engine release source
+
+on:
+  push:
+    tags:
+      # Keep this dotless so it cannot match release.yml's engine release tag trigger.
+      - crates-publish-02262
+
+permissions:
+  contents: read
+
+concurrency:
+  group: crates-io-0.226.2-production
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Verify and publish Rust SDK crates
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: release
+    env:
+      VERSION: 0.226.2
+      TRIGGER_TAG: crates-publish-02262
+      RELEASE_SOURCE_SHA: d9c0bc720d813821cdd00c90a774bf6f71e4e572
+      CRATES: baml baml-cli baml-macros baml-sys
+    steps:
+      - name: Checkout one-off release tag
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Guard one-off production release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          actual_sha="$(git rev-parse HEAD)"
+          if [[ "${GITHUB_REF_TYPE}" != "tag" || "${GITHUB_REF_NAME}" != "${TRIGGER_TAG}" ]]; then
+            echo "::error::This workflow runs only for the exact ${TRIGGER_TAG} tag; got ${GITHUB_REF_TYPE} ${GITHUB_REF_NAME}."
+            exit 1
+          fi
+          if [[ "${GITHUB_SHA}" != "${actual_sha}" ]]; then
+            echo "::error::GitHub reported ${GITHUB_SHA}, but checkout resolved to ${actual_sha}."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "${RELEASE_SOURCE_SHA}" "${actual_sha}"; then
+            echo "::error::Trigger commit ${actual_sha} does not descend from release source ${RELEASE_SOURCE_SHA}."
+            exit 1
+          fi
+
+          canary_comparison="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${actual_sha}...canary")"
+          comparison_status="$(jq -r '.status // ""' <<<"${canary_comparison}")"
+          merge_base_sha="$(jq -r '.merge_base_commit.sha // ""' <<<"${canary_comparison}")"
+          if [[ "${merge_base_sha}" != "${actual_sha}" || ( "${comparison_status}" != "ahead" && "${comparison_status}" != "identical" ) ]]; then
+            echo "::error::Trigger commit ${actual_sha} is not on canary; comparison status=${comparison_status}, merge base=${merge_base_sha}."
+            exit 1
+          fi
+
+          for release_tag in "${VERSION}" "v${VERSION}"; do
+            tag_sha="$(git rev-parse "${release_tag}^{}")"
+            if [[ "${tag_sha}" != "${RELEASE_SOURCE_SHA}" ]]; then
+              echo "::error::Release tag ${release_tag} resolves to ${tag_sha}, expected ${RELEASE_SOURCE_SHA}."
+              exit 1
+            fi
+          done
+
+          release_tag="$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${VERSION}" --jq '.tag_name')"
+          if [[ "${release_tag}" != "${VERSION}" ]]; then
+            echo "::error::GitHub Release tag is ${release_tag}, expected ${VERSION}."
+            exit 1
+          fi
+
+          echo "Publishing the missing Rust SDK crates for ${VERSION} from ${RELEASE_SOURCE_SHA}."
+
+      - name: Checkout verified release source
+        run: |
+          set -euo pipefail
+          git checkout --detach "${RELEASE_SOURCE_SHA}"
+          test "$(git rev-parse HEAD)" = "${RELEASE_SOURCE_SHA}"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Verify workspace and refuse existing crate versions
+        working-directory: languages/rust
+        run: |
+          set -euo pipefail
+
+          metadata="$(cargo metadata --no-deps --format-version 1)"
+          actual_crates="$(jq -r --arg version "${VERSION}" '.packages[] | select(.version == $version and (.publish == null or (.publish | length) > 0)) | .name' <<<"${metadata}" | sort)"
+          expected_crates="$(tr ' ' '\n' <<<"${CRATES}" | sort)"
+          if [[ "${actual_crates}" != "${expected_crates}" ]]; then
+            echo "::error::Publishable ${VERSION} workspace crates do not match the expected set."
+            diff -u <(printf '%s\n' "${expected_crates}") <(printf '%s\n' "${actual_crates}") || true
+            exit 1
+          fi
+
+          for crate in ${CRATES}; do
+            response_file="$(mktemp)"
+            status="$(curl --retry 3 --retry-all-errors --silent --show-error --output "${response_file}" --write-out '%{http_code}' -A 'BoundaryML-release-preflight' "https://crates.io/api/v1/crates/${crate}/${VERSION}")"
+            if [[ "${status}" != "404" ]]; then
+              echo "::error::crates.io returned HTTP ${status} for ${crate} ${VERSION}; refusing a duplicate or ambiguous release."
+              cat "${response_file}"
+              exit 1
+            fi
+          done
+
+      - name: Install pinned cargo-release
+        run: cargo install cargo-release --version 1.1.5 --locked
+
+      - name: Plan crates.io publication
+        working-directory: languages/rust
+        run: cargo release "${VERSION}" --allow-branch HEAD --no-tag --no-push --no-confirm
+
+      - name: Publish to crates.io
+        working-directory: languages/rust
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CARGO_REGISTRY_TOKEN:-}" ]]; then
+            echo "::error::CARGO_REGISTRY_TOKEN is empty or unavailable."
+            exit 1
+          fi
+          cargo release "${VERSION}" --allow-branch HEAD --no-tag --no-push --no-confirm --execute
+
+      - name: Verify crates.io publication
+        working-directory: languages/rust
+        run: |
+          set -euo pipefail
+
+          for attempt in $(seq 1 40); do
+            missing=()
+            for crate in ${CRATES}; do
+              response_file="$(mktemp)"
+              status="$(curl --retry 3 --retry-all-errors --silent --show-error --output "${response_file}" --write-out '%{http_code}' -A 'BoundaryML-release-verification' "https://crates.io/api/v1/crates/${crate}/${VERSION}")"
+              if [[ "${status}" == "200" ]] && jq -e --arg crate "${crate}" --arg version "${VERSION}" '.version.crate == $crate and .version.num == $version and .version.yanked == false' "${response_file}" >/dev/null; then
+                continue
+              fi
+              missing+=("${crate}")
+            done
+            if [[ "${#missing[@]}" -eq 0 ]]; then
+              echo "Verified all Rust SDK crates at ${VERSION} on crates.io."
+              exit 0
+            fi
+            if [[ "${attempt}" -eq 40 ]]; then
+              echo "::error::Timed out waiting for crates.io verification: ${missing[*]}."
+              exit 1
+            fi
+            echo "Waiting for crates.io propagation (attempt ${attempt}/40): ${missing[*]}"
+            sleep 15
+          done

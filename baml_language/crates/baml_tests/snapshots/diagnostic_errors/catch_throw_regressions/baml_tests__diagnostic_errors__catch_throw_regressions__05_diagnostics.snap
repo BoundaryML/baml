@@ -32,7 +32,15 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0146
 
   ⚠ unreachable code: 2 statement(s) after diverging statement
-     ╭─[regressions.baml:101:9]
- 101 │         throw "error"
-     ·         ─────────────
+     ╭─[regressions.baml:102:9]
+ 102 │         let x = 123;
+     ·         ────────────
+     ╰────
+
+  [type] E0007
+
+  × type `int` has no member `missing`
+     ╭─[regressions.baml:103:9]
+ 103 │         x.missing
+     ·         ─────────
      ╰────

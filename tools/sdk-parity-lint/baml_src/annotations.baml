@@ -6,7 +6,7 @@ function parse_annotation(ast_match: AstMatch, sdk_test_id: string) -> Annotatio
             .from_utf8(
                 ast_match
                     .text
-                    .substring(marker_index + marker.length(), ast_match.text.length())
+                    .slice(marker_index + marker.length(), ast_match.text.length())
                     .trim()
                     .to_utf8(),
             );
@@ -47,7 +47,7 @@ function validate_annotation_adjacency(
 ) -> void {
     let source_lines = baml.fs.read(`${repo_root}/${ast_match.file}`).lines();
     let comment_line = source_lines[ast_match.range.start.line];
-    let before_comment = comment_line.substring(0, ast_match.range.start.column);
+    let before_comment = comment_line.slice(0, ast_match.range.start.column);
     if (before_comment.trim().length() > 0) {
         throw baml.errors.ParseError {
             message: `SDK_PARITY_LINT(skip) must be a standalone comment at ${ast_match.file}:${ast_match.range.start.line + 1}`,

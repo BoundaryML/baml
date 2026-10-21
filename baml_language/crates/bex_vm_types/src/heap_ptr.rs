@@ -109,6 +109,12 @@ impl HeapPtr {
         self.ptr
     }
 
+    /// Whether this is the inert compile-time/runtime-owner sentinel.
+    #[inline]
+    pub fn is_null(self) -> bool {
+        self.ptr.is_null()
+    }
+
     /// Dereference to get a reference to the object.
     ///
     /// # Safety
@@ -177,6 +183,12 @@ impl PartialEq for HeapPtr {
 }
 
 impl Eq for HeapPtr {}
+
+impl Default for HeapPtr {
+    fn default() -> Self {
+        Self::null()
+    }
+}
 
 impl PartialOrd for HeapPtr {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {

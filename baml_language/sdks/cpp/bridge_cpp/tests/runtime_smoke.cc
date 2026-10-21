@@ -31,7 +31,7 @@ static void TestBytecodeInitRejectsGarbage() {
   bool threw = false;
   try {
     const std::string v = baml::version();
-    baml::initialize_runtime_from_bytecode(garbage, sizeof(garbage), v.c_str());
+    baml::initialize_runtime_from_blob(garbage, sizeof(garbage), v.c_str());
   } catch (const baml::error&) {
     threw = true;
   }
@@ -129,6 +129,143 @@ static void TestOwnedBufferMove() {
   std::printf("owned buffer move ok\n");
 }
 
+static void TestBigintCodec() {
+  Require(baml::codec<baml::bigint>::baml_ty().primitive().kind() ==
+              baml::detail::pb::BAML_TY_PRIMITIVE_BIGINT,
+          "bigint codec reported the wrong BAML type");
+
+  struct Case {
+    const char* decimal;
+    const char* hex;
+  };
+  const Case cases[] = {
+      {"0", "0"},
+      {"10", "a"},
+      {"1000000000", "3b9aca00"},
+      {"4294967295", "ffffffff"},
+      {"4294967296", "100000000"},
+      {"18446744073709551615", "ffffffffffffffff"},
+      {"123456789012345678901234567890", "18ee90ff6c373e0ee4e3f0ad2"},
+      {"-10", "-a"}};
+  for (const auto& test_case : cases) {
+    const baml::bigint value(test_case.decimal);
+    baml::detail::pb::InboundValue encoded;
+    baml::codec<baml::bigint>::encode(encoded, value);
+    Require(
+        encoded.has_bigint_value() && encoded.bigint_value() == test_case.hex,
+        "bigint encode did not convert decimal to wire hexadecimal");
+
+    baml::detail::pb::BamlOutboundValue outbound;
+    outbound.set_bigint_value(test_case.hex);
+    Require(baml::codec<baml::bigint>::decode(outbound) == value,
+            "bigint decode did not convert wire hexadecimal to decimal");
+
+    baml::detail::pb::BamlOutboundValue literal;
+    literal.mutable_literal_value()->set_bigint_value(test_case.hex);
+    Require(baml::codec<baml::bigint>::decode(literal) == value,
+            "literal bigint decode did not convert wire hexadecimal to "
+            "decimal");
+  }
+
+  const char* noncanonical[] = {"+10", "0010", "-0"};
+  for (const char* decimal : noncanonical) {
+    bool threw = false;
+    try {
+      baml::detail::pb::InboundValue encoded;
+      baml::codec<baml::bigint>::encode(encoded, baml::bigint(decimal));
+    } catch (const baml::error&) {
+      threw = true;
+    }
+    Require(threw, "bigint encode accepted noncanonical decimal text");
+  }
+
+  const baml::bigint large_value("1" + std::string(100000, '2'));
+  baml::detail::pb::InboundValue large_encoded;
+  baml::codec<baml::bigint>::encode(large_encoded, large_value);
+  baml::detail::pb::BamlOutboundValue large_outbound;
+  large_outbound.set_bigint_value(large_encoded.bigint_value());
+  Require(baml::codec<baml::bigint>::decode(large_outbound) == large_value,
+          "large bigint radix conversion did not round trip");
+  std::printf("bigint codec ok\n");
+}
+
+static void TestPortableValuesTranscodeWithoutHandles() {
+  baml::detail::pb::BamlOutboundValue media;
+  media.mutable_media_value()->set_media(
+      baml::detail::pb::MediaTypeEnum::IMAGE);
+  media.mutable_media_value()->set_url("https://example.test/cat.png");
+  baml::detail::pb::InboundValue inbound_media;
+  baml::detail::transcode_outbound_to_inbound(inbound_media, media);
+  Require(inbound_media.has_media_value(),
+          "media did not use the portable inbound arm");
+  Require(inbound_media.media_value().url() == "https://example.test/cat.png",
+          "portable media payload changed");
+  Require(!inbound_media.has_handle(), "portable media became a handle");
+
+  baml::detail::pb::BamlOutboundValue prompt;
+  prompt.mutable_prompt_ast_value()->mutable_simple()->set_string("hello");
+  baml::detail::pb::InboundValue inbound_prompt;
+  baml::detail::transcode_outbound_to_inbound(inbound_prompt, prompt);
+  Require(inbound_prompt.has_prompt_ast_value(),
+          "prompt did not use the portable inbound arm");
+  Require(inbound_prompt.prompt_ast_value().simple().string() == "hello",
+          "portable prompt payload changed");
+  Require(!inbound_prompt.has_handle(), "portable prompt became a handle");
+}
+
+static void TestTypedSpecStreamAndPortableValueCodecs() {
+  using Spec = baml::function_spec<std::string>;
+  using Stream = baml::stream<std::string>;
+
+  const auto spec_ty = baml::codec<Spec>::baml_ty();
+  Require(spec_ty.class_ty().name() == "ai.FunctionSpec",
+          "FunctionSpec codec lost nominal identity");
+  Require(spec_ty.class_ty().type_args_size() == 1,
+          "FunctionSpec codec lost its output type argument");
+
+  const auto stream_ty = baml::codec<Stream>::baml_ty();
+  Require(stream_ty.class_ty().name() == "ai.stream.Stream",
+          "Stream codec lost nominal identity");
+  Require(stream_ty.class_ty().type_args_size() == 1,
+          "Stream codec lost its value type argument");
+
+  baml::detail::pb::BamlOutboundValue done;
+  done.mutable_class_value()->set_name("ai.stream.Done");
+  const auto finished =
+      baml::codec<baml::stream_item<std::optional<std::string>>>::decode(done);
+  Require(finished.done(), "stream Done decoded as a partial");
+
+  baml::detail::pb::BamlOutboundValue null_partial;
+  null_partial.mutable_null_value();
+  const auto partial =
+      baml::codec<baml::stream_item<std::optional<std::string>>>::decode(
+          null_partial);
+  Require(!partial.done() && !partial.value().has_value(),
+          "nullable partial was confused with stream Done");
+
+  baml::detail::pb::BamlOutboundValue prompt_value;
+  prompt_value.mutable_prompt_ast_value()->mutable_simple()->set_string(
+      "portable");
+  const baml::prompt prompt = baml::codec<baml::prompt>::decode(prompt_value);
+  const baml::prompt equal_prompt =
+      baml::codec<baml::prompt>::decode(prompt_value);
+  Require(prompt == equal_prompt, "Prompt equality was not structural");
+  baml::detail::pb::InboundValue encoded_prompt;
+  baml::codec<baml::prompt>::encode(encoded_prompt, prompt);
+  Require(encoded_prompt.has_prompt_ast_value() &&
+              encoded_prompt.prompt_ast_value().simple().string() == "portable",
+          "Prompt codec did not preserve portable data");
+
+  const baml::image image = baml::image::from_url(
+      "https://example.test/cat.png", std::string("image/png"));
+  baml::detail::pb::InboundValue encoded_image;
+  baml::codec<baml::image>::encode(encoded_image, image);
+  Require(
+      encoded_image.has_media_value() &&
+          encoded_image.media_value().url() == "https://example.test/cat.png",
+      "Media codec did not preserve portable data");
+}
+
 static void TestUnhandledSpawnErrorUsesHostDefault() {
   bool threw = false;
   try {
@@ -138,6 +275,55 @@ static void TestUnhandledSpawnErrorUsesHostDefault() {
     threw = std::string(exception.what()) == "boom";
   }
   Require(threw, "default unhandled-spawn handler did not rethrow");
+}
+
+static void TestTyDefReportsUnsupportedReflection() {
+  baml::detail::pb::BamlOutboundValue value;
+  value.mutable_ty_def_value();
+
+  bool decode_threw = false;
+  try {
+    (void)baml::codec<int64_t>::decode(value);
+  } catch (const baml::error& exception) {
+    decode_threw =
+        std::string(exception.what())
+            .find("requires BEP-066 reflection support") != std::string::npos;
+  }
+  Require(decode_threw,
+          "runtime type definition decode did not report unsupported "
+          "BEP-066 reflection");
+
+  bool transcode_threw = false;
+  try {
+    baml::detail::pb::InboundValue inbound;
+    baml::detail::transcode_outbound_to_inbound(inbound, value);
+  } catch (const baml::error& exception) {
+    transcode_threw =
+        std::string(exception.what())
+            .find("requires BEP-066 reflection support") != std::string::npos;
+  }
+  Require(transcode_threw,
+          "runtime type definition transcode did not report unsupported "
+          "BEP-066 reflection");
+}
+
+// A media value holds content, never a path. Content that was read from a
+// file keeps the base name of that file.
+static void TestMediaContentReadFromAFileKeepsItsName() {
+  const baml::image named =
+      baml::image::from_file_content("/nowhere/cat.jpg", "aGk=");
+  Require(named.name() == std::optional<std::string>("cat.jpg"),
+          "named content lost its name");
+  Require(named.mime_type() == std::optional<std::string>("image/jpeg"),
+          "named content did not infer its MIME type");
+  Require(named.base64() == std::optional<std::string>("aGk="),
+          "named content lost its content");
+  Require(!named.url(), "named content has a URL");
+  Require(named == baml::image::from_file_content("/elsewhere/cat.jpg", "aGk="),
+          "equal named content compared unequal");
+  Require(named != baml::image::from_base64("aGk=", "image/jpeg"),
+          "content with and without a name compared equal");
+  Require(!baml::image::from_base64("aGk=").name(), "base64 media has a name");
 }
 
 static void RunTest(const char* name, void (*test)()) {
@@ -154,8 +340,17 @@ int main() {
   RunTest("call registry", TestCallRegistryRoundTrip);
   RunTest("argument states", TestArgTwoState);
   RunTest("owned buffer move", TestOwnedBufferMove);
+  RunTest("bigint codec", TestBigintCodec);
+  RunTest("portable prompt and media",
+          TestPortableValuesTranscodeWithoutHandles);
+  RunTest("typed spec, stream, prompt, and media codecs",
+          TestTypedSpecStreamAndPortableValueCodecs);
+  RunTest("media reads files now and keeps their names",
+          TestMediaContentReadFromAFileKeepsItsName);
   RunTest("unhandled_spawn_error_uses_host_default",
           TestUnhandledSpawnErrorUsesHostDefault);
+  RunTest("ty_def_reports_unsupported_reflection",
+          TestTyDefReportsUnsupportedReflection);
   std::printf("bridge core smoke: all ok\n");
   return 0;
 }

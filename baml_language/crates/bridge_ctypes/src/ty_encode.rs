@@ -23,12 +23,90 @@
 use baml_type::{Literal, MediaKind, Name, RuntimeTy, TypeName};
 
 use crate::baml_bridge::cffi::{
-    BamlTy, BamlTyAssociatedBinding, BamlTyAssociatedTypeProjection, BamlTyClass, BamlTyEnum,
+    BamlClassDef, BamlClassFieldDef, BamlEnumDef, BamlEnumVariantDef, BamlTy,
+    BamlTyAssociatedBinding, BamlTyAssociatedTypeProjection, BamlTyClass, BamlTyDef, BamlTyEnum,
     BamlTyEnumVariant, BamlTyFunction, BamlTyFunctionParam, BamlTyFunctionParamMode, BamlTyFuture,
-    BamlTyInterface, BamlTyList, BamlTyLiteral, BamlTyMap, BamlTyMediaKind, BamlTyOptional,
-    BamlTyPrimitive, BamlTyPrimitiveKind, BamlTyTypeAlias, BamlTyTypeVar, BamlTyUnion,
-    baml_ty::Ty as TyVariant, baml_ty_literal::Literal as TyLiteralVariant,
+    BamlTyInterface, BamlTyList, BamlTyLiteral, BamlTyMap, BamlTyMediaKind, BamlTyMetadata,
+    BamlTyOptional, BamlTyPrimitive, BamlTyPrimitiveKind, BamlTyTypeAlias, BamlTyTypeVar,
+    BamlTyUnion, BamlWitnessDef, BamlWitnessFieldLink, baml_ty::Ty as TyVariant,
+    baml_ty_literal::Literal as TyLiteralVariant,
 };
+
+pub fn portable_type_def_to_proto(definition: &bex_project::PortableTypeDef) -> BamlTyDef {
+    let metadata = |value: &bex_project::PortableMetadata| BamlTyMetadata {
+        description: value.description.clone(),
+        alias: value.alias.clone(),
+        docstring: value.docstring.clone(),
+        other: value.other.clone().into_iter().collect(),
+    };
+    BamlTyDef {
+        root: Some(runtime_ty_to_proto_ty(&definition.root)),
+        classes: definition
+            .classes
+            .iter()
+            .map(|class| BamlClassDef {
+                name: class.name.render_dotted(false),
+                fields: class
+                    .fields
+                    .iter()
+                    .map(|field| BamlClassFieldDef {
+                        name: field.name.clone(),
+                        ty: Some(runtime_ty_to_proto_ty(&field.ty)),
+                        metadata: Some(metadata(&field.metadata)),
+                        skip: field.skip,
+                    })
+                    .collect(),
+                metadata: Some(metadata(&class.metadata)),
+                generic_param_count: u32::try_from(class.generic_param_count).unwrap_or(u32::MAX),
+            })
+            .collect(),
+        enums: definition
+            .enums
+            .iter()
+            .map(|enm| BamlEnumDef {
+                name: enm.name.render_dotted(false),
+                variants: enm
+                    .variants
+                    .iter()
+                    .map(|variant| BamlEnumVariantDef {
+                        name: variant.name.clone(),
+                        metadata: Some(metadata(&variant.metadata)),
+                        skip: variant.skip,
+                    })
+                    .collect(),
+                metadata: Some(metadata(&enm.metadata)),
+            })
+            .collect(),
+        witnesses: definition
+            .witnesses
+            .iter()
+            .map(|witness| BamlWitnessDef {
+                interface: witness.interface.render_dotted(false),
+                interface_args: witness
+                    .interface_args
+                    .iter()
+                    .map(|ty| runtime_ty_to_proto_ty(&RuntimeTy::from(ty)))
+                    .collect(),
+                associated_types: witness
+                    .associated_types
+                    .iter()
+                    .map(|(name, ty)| BamlTyAssociatedBinding {
+                        name: name.as_str().to_string(),
+                        ty: Some(runtime_ty_to_proto_ty(&RuntimeTy::from(ty))),
+                    })
+                    .collect(),
+                field_links: witness
+                    .field_links
+                    .iter()
+                    .map(|(interface_field, class_field)| BamlWitnessFieldLink {
+                        interface_field: interface_field.as_str().to_string(),
+                        class_field: class_field.as_str().to_string(),
+                    })
+                    .collect(),
+            })
+            .collect(),
+    }
+}
 
 /// Encode a `RuntimeTy` into a wire `BamlTy`.
 pub fn runtime_ty_to_proto_ty(ty: &RuntimeTy) -> BamlTy {
@@ -66,31 +144,31 @@ fn interface_to_proto(
 
 fn runtime_ty_to_variant(ty: &RuntimeTy) -> TyVariant {
     match ty {
-        RuntimeTy::String { .. } => primitive(BamlTyPrimitiveKind::BamlTyPrimitiveString),
-        RuntimeTy::Int { .. } => primitive(BamlTyPrimitiveKind::BamlTyPrimitiveInt),
-        RuntimeTy::Float { .. } => primitive(BamlTyPrimitiveKind::BamlTyPrimitiveFloat),
-        RuntimeTy::Bool { .. } => primitive(BamlTyPrimitiveKind::BamlTyPrimitiveBool),
-        RuntimeTy::Null { .. } => primitive(BamlTyPrimitiveKind::BamlTyPrimitiveNull),
-        RuntimeTy::Uint8Array { .. } => primitive(BamlTyPrimitiveKind::BamlTyPrimitiveBytes),
-        RuntimeTy::Bigint { .. } => primitive(BamlTyPrimitiveKind::BamlTyPrimitiveBigint),
+        RuntimeTy::String => primitive(BamlTyPrimitiveKind::BamlTyPrimitiveString),
+        RuntimeTy::Int => primitive(BamlTyPrimitiveKind::BamlTyPrimitiveInt),
+        RuntimeTy::Float => primitive(BamlTyPrimitiveKind::BamlTyPrimitiveFloat),
+        RuntimeTy::Bool => primitive(BamlTyPrimitiveKind::BamlTyPrimitiveBool),
+        RuntimeTy::Null => primitive(BamlTyPrimitiveKind::BamlTyPrimitiveNull),
+        RuntimeTy::Uint8Array => primitive(BamlTyPrimitiveKind::BamlTyPrimitiveBytes),
+        RuntimeTy::Bigint => primitive(BamlTyPrimitiveKind::BamlTyPrimitiveBigint),
 
-        RuntimeTy::Class(name, args, _) => TyVariant::ClassTy(BamlTyClass {
+        RuntimeTy::Class(name, args) => TyVariant::ClassTy(BamlTyClass {
             name: name.render_dotted(false),
             type_args: args.iter().map(runtime_ty_to_proto_ty).collect(),
         }),
-        RuntimeTy::TypeAlias(name, _) => TyVariant::TypeAlias(BamlTyTypeAlias {
+        RuntimeTy::TypeAlias(name) => TyVariant::TypeAlias(BamlTyTypeAlias {
             name: name.render_dotted(false),
             type_args: vec![],
         }),
-        RuntimeTy::Enum(name, _) => TyVariant::Enum(BamlTyEnum {
+        RuntimeTy::Enum(name) => TyVariant::Enum(BamlTyEnum {
             name: name.render_dotted(false),
         }),
-        RuntimeTy::EnumVariant(name, variant, _) => TyVariant::EnumVariant(BamlTyEnumVariant {
+        RuntimeTy::EnumVariant(name, variant) => TyVariant::EnumVariant(BamlTyEnumVariant {
             name: name.render_dotted(false),
             variant: variant.as_str().to_string(),
         }),
 
-        RuntimeTy::List(inner, _) => TyVariant::List(Box::new(BamlTyList {
+        RuntimeTy::List(inner) => TyVariant::List(Box::new(BamlTyList {
             item: Some(Box::new(runtime_ty_to_proto_ty(inner))),
         })),
         RuntimeTy::Map { key, value, .. } => TyVariant::Map(Box::new(BamlTyMap {
@@ -104,7 +182,7 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> TyVariant {
         // See plan 02a §5 — the type-position host readers map a structural
         // union to a wildcard, and the members are on the wire if a future
         // reader wants true `Union[...]`.
-        RuntimeTy::Union(members, _) => {
+        RuntimeTy::Union(members) => {
             let has_null = members.iter().any(RuntimeTy::is_null);
             let non_null: Vec<&RuntimeTy> = members.iter().filter(|m| !m.is_null()).collect();
             if has_null && non_null.len() == 1 {
@@ -118,11 +196,11 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> TyVariant {
             }
         }
 
-        RuntimeTy::Literal(lit, _, _) => TyVariant::Literal(literal_to_proto(lit)),
-        RuntimeTy::Media(kind, _) => TyVariant::Media(crate::baml_bridge::cffi::BamlTyMedia {
+        RuntimeTy::Literal(lit, _) => TyVariant::Literal(literal_to_proto(lit)),
+        RuntimeTy::Media(kind) => TyVariant::Media(crate::baml_bridge::cffi::BamlTyMedia {
             kind: media_kind_to_proto(*kind) as i32,
         }),
-        RuntimeTy::Interface(name, args, bindings, _) => {
+        RuntimeTy::Interface(name, args, bindings) => {
             TyVariant::Interface(interface_to_proto(name, args, bindings))
         }
 
@@ -157,11 +235,11 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> TyVariant {
             ret: Some(Box::new(runtime_ty_to_proto_ty(ret))),
             throws: Some(Box::new(runtime_ty_to_proto_ty(throws))),
         })),
-        RuntimeTy::Future(value, error, _) => TyVariant::Future(Box::new(BamlTyFuture {
+        RuntimeTy::Future(value, error) => TyVariant::Future(Box::new(BamlTyFuture {
             value: Some(Box::new(runtime_ty_to_proto_ty(value))),
             error: Some(Box::new(runtime_ty_to_proto_ty(error))),
         })),
-        RuntimeTy::TypeVar(param, _) => TyVariant::TypeVar(BamlTyTypeVar {
+        RuntimeTy::TypeVar(param) => TyVariant::TypeVar(BamlTyTypeVar {
             name: param.as_str().to_string(),
             index: param.index(),
         }),
@@ -184,21 +262,12 @@ fn runtime_ty_to_variant(ty: &RuntimeTy) -> TyVariant {
             member: member.as_str().to_string(),
         })),
 
-        RuntimeTy::RustType { .. } => {
-            TyVariant::RustType(crate::baml_bridge::cffi::BamlTyRustType {})
-        }
-        RuntimeTy::Type { .. } => TyVariant::MetaType(crate::baml_bridge::cffi::BamlTyMetaType {}),
-        RuntimeTy::Resource { .. } => {
-            TyVariant::Resource(crate::baml_bridge::cffi::BamlTyResource {})
-        }
-        RuntimeTy::PromptAst { .. } => {
-            TyVariant::PromptAst(crate::baml_bridge::cffi::BamlTyPromptAst {})
-        }
-        RuntimeTy::Void { .. } => TyVariant::Void(crate::baml_bridge::cffi::BamlTyVoid {}),
-        RuntimeTy::Never { .. } => TyVariant::Never(crate::baml_bridge::cffi::BamlTyNever {}),
-        RuntimeTy::BuiltinUnknown { .. } => {
-            TyVariant::Unknown(crate::baml_bridge::cffi::BamlTyUnknown {})
-        }
+        RuntimeTy::RustType => TyVariant::RustType(crate::baml_bridge::cffi::BamlTyRustType {}),
+        RuntimeTy::Type => TyVariant::MetaType(crate::baml_bridge::cffi::BamlTyMetaType {}),
+        RuntimeTy::Resource => TyVariant::Resource(crate::baml_bridge::cffi::BamlTyResource {}),
+        RuntimeTy::PromptAst => TyVariant::PromptAst(crate::baml_bridge::cffi::BamlTyPromptAst {}),
+        RuntimeTy::Never => TyVariant::Never(crate::baml_bridge::cffi::BamlTyNever {}),
+        RuntimeTy::Unknown => TyVariant::Unknown(crate::baml_bridge::cffi::BamlTyUnknown {}),
     }
 }
 
@@ -236,9 +305,7 @@ fn function_param_mode(mode: baml_type::FunctionParamMode) -> BamlTyFunctionPara
 
 #[cfg(test)]
 mod tests {
-    use baml_type::{
-        Freshness, Literal, Name, ParamTy, RuntimeInterface, RuntimeTy, TyAttr, TypeName,
-    };
+    use baml_type::{Freshness, Literal, Name, ParamTy, RuntimeInterface, RuntimeTy, TypeName};
 
     use super::runtime_ty_to_proto_ty;
     use crate::{
@@ -270,10 +337,7 @@ mod tests {
 
     #[test]
     fn roundtrip_preserves_type_var_index() {
-        assert_roundtrip(&RuntimeTy::TypeVar(
-            ParamTy::new(7, Name::new("T")),
-            TyAttr::default(),
-        ));
+        assert_roundtrip(&RuntimeTy::TypeVar(ParamTy::new(7, Name::new("T"))));
     }
 
     #[test]
@@ -285,11 +349,7 @@ mod tests {
             Literal::Float("1.25".into()),
             Literal::Bool(true),
         ] {
-            assert_roundtrip(&RuntimeTy::Literal(
-                literal,
-                Freshness::Regular,
-                TyAttr::default(),
-            ));
+            assert_roundtrip(&RuntimeTy::Literal(literal, Freshness::Regular));
         }
     }
 
@@ -298,9 +358,8 @@ mod tests {
         // Interface existential with generic args + an associated binding.
         assert_roundtrip(&RuntimeTy::Interface(
             TypeName::from_dotted_path("user.Iterator"),
-            vec![RuntimeTy::int()],
-            vec![(Name::new("Item"), RuntimeTy::string())],
-            TyAttr::default(),
+            Box::new([RuntimeTy::int()]),
+            Box::new([(Name::new("Item"), RuntimeTy::string())]),
         ));
         // Projection carrying a full interface constraint (encoded as a
         // `BamlTy::Interface`, decoded back into a `RuntimeInterface`).
@@ -308,34 +367,29 @@ mod tests {
             base: Box::new(RuntimeTy::int()),
             interface: Box::new(RuntimeInterface {
                 name: TypeName::from_dotted_path("user.Iterator"),
-                generics: vec![RuntimeTy::int()],
-                associated_types: vec![(Name::new("Item"), RuntimeTy::string())],
+                generics: Box::new([RuntimeTy::int()]),
+                associated_types: Box::new([(Name::new("Item"), RuntimeTy::string())]),
             }),
             member: Name::new("Item"),
-            attr: TyAttr::default(),
         });
         // A projection through an unparameterized interface.
         assert_roundtrip(&RuntimeTy::AssociatedTypeProjection {
             base: Box::new(RuntimeTy::string()),
             interface: Box::new(RuntimeInterface {
                 name: TypeName::from_dotted_path("user.HasOutput"),
-                generics: vec![],
-                associated_types: vec![],
+                generics: Box::new([]),
+                associated_types: Box::new([]),
             }),
             member: Name::new("Output"),
-            attr: TyAttr::default(),
         });
     }
 
     #[test]
     fn roundtrip_function() {
         assert_roundtrip(&RuntimeTy::Function {
-            params: vec![],
+            params: Box::new([]),
             ret: Box::new(RuntimeTy::int()),
-            throws: Box::new(RuntimeTy::Never {
-                attr: TyAttr::default(),
-            }),
-            attr: TyAttr::default(),
+            throws: Box::new(RuntimeTy::Never),
         });
     }
 
@@ -361,7 +415,7 @@ mod tests {
                 ],
             })),
         };
-        let RuntimeTy::Interface(_, _, bindings, _) =
+        let RuntimeTy::Interface(_, _, bindings) =
             proto_ty_to_runtime_ty(&unsorted).expect("decode")
         else {
             panic!("expected interface");

@@ -1,13 +1,13 @@
 {
   "name": "@boundaryml/baml",
-  "version": "0.225.0",
+  "version": "0.226.2",
   "description": "BAML v0 — Node.js runtime for baml_client",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/BoundaryML/baml.git",
     "directory": "engine/language_client_typescript"
   },
-  "license": "MIT",
+  "license": "Apache-2.0",
   "keywords": [
     "napi-rs",
     "NAPI",

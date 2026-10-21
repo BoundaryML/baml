@@ -9,13 +9,17 @@
 
 use thiserror::Error;
 
-use crate::{BinOp, CmpOp, SysOpErrorCategory, UnaryOp, Value, types::Type};
+use crate::{
+    BinOp, CmpOp, SysOpErrorCategory, UnaryOp, Value,
+    types::{ObjectType, Type},
+};
 
 /// A catchable BAML panic — maps 1:1 to a `baml.panics.*` class.
 ///
 /// These are user-visible runtime errors (division by zero, index out of
-/// bounds, etc.) that can be caught by `catch` handlers. The handler's
-/// `ThrowIfPanic` instruction filters which panics are caught vs rethrown.
+/// bounds, etc.) that can be caught by `catch` handlers. A panic is caught by
+/// an arm naming its type or by a `catch_all_panics` wildcard arm; other
+/// wildcard arms test for it and let it pass.
 #[derive(Debug, Error, PartialEq, Clone)]
 pub enum VmPanic {
     #[error("division by zero: {left:?} / {right:?}")]
@@ -28,8 +32,8 @@ pub enum VmPanic {
     #[error("integer overflow: {message}")]
     IntegerOverflow { message: String },
 
-    // Raised by array/byte-array subscripting and `string.char_at`, so the
-    // message stays generic ("index", not "array index").
+    // Raised by array and byte-array subscripting, so the message stays generic
+    // ("index", not "array index").
     #[error("index out of bounds: {index} of {length}")]
     IndexOutOfBounds { index: i64, length: usize },
 
@@ -54,7 +58,9 @@ pub enum VmPanic {
     #[error("operation cancelled")]
     Cancelled,
 
-    /// A user-caused panic from `baml.sys.panic`.
+    /// A user-caused panic from `baml.sys.panic`, and the stdlib's panic of
+    /// record for a user-violated native invariant (e.g. a reflection kind
+    /// view's `_ty` field overwritten with a type of a different kind).
     #[error("baml.sys.panic: {message}")]
     UserPanic { message: String },
 
@@ -117,7 +123,11 @@ pub enum VmBamlError {
     #[error("timeout: {message}")]
     Timeout {
         message: String,
-        duration_ms: Option<i64>,
+        /// The limit that elapsed, when it is known.
+        duration: Option<std::time::Duration>,
+        /// Which deadline fired: the name of the field or argument that set
+        /// it (`"timeout"`, `"connect_timeout"`, ...).
+        timeout_type: String,
     },
 
     #[error("unsupported: {message}")]
@@ -129,14 +139,8 @@ pub enum VmBamlError {
     #[error("render prompt: {message}")]
     RenderPrompt { message: String },
 
-    #[error("not implemented: {message}")]
-    NotImplemented { message: String },
-
     #[error("LLM client error: {message}")]
     LlmClient { message: String },
-
-    #[error("developer error: {message}")]
-    DevOther { message: String },
 
     /// An error value from the host language that has no direct BAML
     /// representation. The `handle` is the load-bearing field — it
@@ -183,9 +187,7 @@ impl VmBamlError {
             Self::Unsupported { .. } => SysOpErrorCategory::Unsupported,
             Self::AccessError { .. } => SysOpErrorCategory::AccessError,
             Self::RenderPrompt { .. } => SysOpErrorCategory::RenderPrompt,
-            Self::NotImplemented { .. } => SysOpErrorCategory::NotImplemented,
             Self::LlmClient { .. } => SysOpErrorCategory::LlmClient,
-            Self::DevOther { .. } => SysOpErrorCategory::DevOther,
             Self::HostCallable { .. } => SysOpErrorCategory::HostCallable,
         }
     }
@@ -195,8 +197,19 @@ impl VmBamlError {
 /// These are always fatal: they cannot be caught in BAML code.
 #[derive(Debug, Error, PartialEq, Clone)]
 pub enum VmInternalError {
+    #[error(transparent)]
+    FunctionIdExhausted(#[from] btel_types::FunctionIdExhausted),
+
+    /// The program breaks the executable format's laws; refused before
+    /// anything of it is loaded. See [`crate::Program::validate`].
+    #[error(transparent)]
+    InvalidProgram(#[from] crate::types::InvalidProgram),
+
     #[error("invalid argument count: expected {expected}, got {got}")]
     InvalidArgumentCount { expected: usize, got: usize },
+
+    #[error("invalid structured log envelope: {0}")]
+    InvalidLogEvent(&'static str),
 
     #[error("unexpected empty eval stack")]
     UnexpectedEmptyStack,
@@ -210,7 +223,7 @@ pub enum VmInternalError {
     #[error("type error: expected {expected}, got {got}")]
     TypeError { expected: Type, got: Type },
 
-    /// A Rust type error during downcasting from an `Arc<dyn Any + Send + Sync>`.
+    /// A Rust type error during downcasting from an `Arc<dyn BexRustData>`.
     /// The message currently uses typeids which are not very human-readable.
     #[error("rust type error during downcasting: expected typeid {expected:?}, got typeid {got:?}")]
     RustTypeError {
@@ -232,6 +245,10 @@ pub enum VmInternalError {
 
     #[error("missing native function: {name}")]
     MissingNativeFunction { name: String },
+    /// Schema-aligned parsing produced a value its target's declarations
+    /// cannot hold: the parse model and the heap disagree.
+    #[error("schema-aligned parsing produced a value its target cannot hold: {message}")]
+    SapValue { message: String },
 
     #[error("unexpected constant kind: expected a TyTemplate constant at this index")]
     UnexpectedConstantKind,
@@ -245,6 +262,14 @@ pub enum VmInternalError {
     #[error("StoreGlobal executed outside of $init (globals are frozen post-init)")]
     StoreGlobalAfterInit,
 
+    /// A native resource handle (SSE stream, WebSocket stream, …) did not
+    /// resolve in the registry that owns it. The sysop holds a live
+    /// `ResourceHandle` for the whole call and the registry entry is removed
+    /// only when the last handle drops, so a missing entry is a registry
+    /// invariant violation rather than anything user code can provoke.
+    #[error("resource handle {key} of kind `{kind}` did not resolve in its registry")]
+    UnresolvedResourceHandle { kind: &'static str, key: usize },
+
     /// A bridge-layer fault that prevented a host operation from
     /// proceeding — e.g. `external_to_outbound` could not serialize a
     /// `BexExternalValue` (engine→bridge wire-encoding bug), or the
@@ -256,13 +281,56 @@ pub enum VmInternalError {
     #[error("bridge failure: {message}")]
     BridgeFailure { message: String },
 
-    /// A `VirtualCall` could not resolve an implementation of `method` for the
-    /// receiver's runtime concrete type. The type checker only emits a virtual
-    /// call once it has proved the receiver implements the interface, so the
-    /// baked interface-impl registry being unable to resolve the method is a
-    /// compiler/VM inconsistency, not a user-reachable condition.
+    /// A `VirtualCall` found no `implements` rule for the receiver's runtime
+    /// concrete type and the call's interface. The type checker only emits a
+    /// virtual call once it has proved the receiver implements the interface,
+    /// so the baked interface-impl registry having no rule for the pair is a
+    /// compiler/VM inconsistency, not a user-reachable condition. (Resolving
+    /// the METHOD off a found rule is total; the four variants below are its
+    /// failure kinds.)
     #[error("virtual call could not resolve interface method `{method}`")]
     UnresolvedVirtualCall { method: String },
+
+    /// An impl rule's `interface_head` does not point at an `Object::Interface`.
+    /// The head is bound to the rule's interface declaration at load/graft, so
+    /// any other object kind is a corrupt or stale rule — never "no interface".
+    #[error(
+        "impl rule's interface head is a {found} object, not an interface (resolving `{method}`)"
+    )]
+    ImplRuleHeadNotInterface { found: ObjectType, method: String },
+
+    /// Method resolution off an impl rule was asked for a method the rule's
+    /// interface does not declare. The compiler checks every virtual call
+    /// against the interface's declaration, and the stdlib shims and operators
+    /// name declared methods, so a miss is a mis-targeted lookup — never an
+    /// absent method to fall back from. A reflective "does this impl have
+    /// `m`?" must ask the interface's declaration first, not this resolution.
+    #[error("interface `{interface}` declares no method `{method}`")]
+    UndeclaredInterfaceMethod { interface: String, method: String },
+
+    /// The interface declares `method` as required (no default body) and the
+    /// impl provides no row for it. The compiler rejects such an impl, so a
+    /// rule reaching the VM in this shape is a corrupt or stale table.
+    #[error(
+        "required method `{method}` of `{interface}` is neither provided by the impl nor defaulted"
+    )]
+    UnprovidedRequiredMethod { interface: String, method: String },
+
+    /// The interface declares a default body for `method` (wire `default:
+    /// Some(..)`) but its runtime pointer was never bound at load/graft. A
+    /// binding bug, never "no default": resolution must not read it as an
+    /// absent method and fall through to a structural rendering.
+    #[error("interface default `{interface}.{method}` is declared but was never bound")]
+    UnboundInterfaceDefault { interface: String, method: String },
+
+    /// A value-position shim's two passes disagreed: the allocation-free
+    /// pre-order collection recorded a value as carrying a provided
+    /// `{interface}` method, but the dispatch pass could not resolve one for
+    /// it. The two share one resolver, so this is an invariant break — the
+    /// walker must not render the remaining nodes structurally as if nothing
+    /// had been collected.
+    #[error("value collected as a provided `{interface}` override no longer resolves to one")]
+    OverrideWalkSkew { interface: &'static str },
 
     /// A `VirtualLoadField`/`VirtualStoreField` could not resolve interface field
     /// `field_index` of `interface` for the receiver's runtime concrete type — either
@@ -286,6 +354,52 @@ pub enum VmInternalError {
     /// rather than erased to `unknown`.
     #[error("could not realize type template: {message}")]
     TypeSubstitution { message: String },
+
+    /// A call site's value slots cannot be laid over the callee's parameter
+    /// list. The checker guarantees the fit for every checked call, so this is
+    /// a compiler/VM inconsistency or a native passing the wrong arguments.
+    #[error("call arguments do not fit the callee: {0}")]
+    CallLayout(baml_type::LayoutMismatch),
+}
+
+/// Whether a thrown value is fresh or propagated from an earlier throw.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ThrowKind {
+    Fresh,
+    Rethrow,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct VmThrown {
+    pub value: Value,
+    pub throw_kind: ThrowKind,
+    /// The `baml.errors.Context` this error already has: a caught error raised
+    /// again, or one arriving from another task, travels with the context of
+    /// its original throw. `None` for a new failure, whose context the
+    /// unwinder builds at the throw site.
+    pub context: Option<Value>,
+}
+
+impl VmThrown {
+    #[must_use]
+    pub const fn fresh(value: Value) -> Self {
+        Self {
+            value,
+            throw_kind: ThrowKind::Fresh,
+            context: None,
+        }
+    }
+
+    /// `value` raised again with the `baml.errors.Context` of its original
+    /// throw.
+    #[must_use]
+    pub const fn rethrow(value: Value, context: Value) -> Self {
+        Self {
+            value,
+            throw_kind: ThrowKind::Rethrow,
+            context: Some(context),
+        }
+    }
 }
 
 /// Any kind of virtual machine error.
@@ -293,7 +407,7 @@ pub enum VmInternalError {
 pub enum VmError {
     /// Catchable (panics and error values) — internal signal for exception unwinding.
     #[error("uncaught throw: {0:?}")]
-    Thrown(Value),
+    Thrown(VmThrown),
     /// An exception that escaped all catch handlers, with captured stack trace.
     #[error("uncaught throw: {value:?}")]
     ThrownUnhandled {
@@ -312,6 +426,13 @@ pub enum VmError {
     },
 }
 
+impl VmError {
+    #[must_use]
+    pub const fn thrown_fresh(value: Value) -> Self {
+        Self::Thrown(VmThrown::fresh(value))
+    }
+}
+
 /// An error returned by a Rust function. Will generally be turned into a [`VmError`].
 /// This is separate from [`VmError`] so native Rust functions can return standard errors
 /// without needing to handle heap allocation.
@@ -326,20 +447,56 @@ pub enum VmRustFnError {
     /// A pre-built exception `Value` to throw directly as a catchable error.
     ///
     /// Used by native functions that need to throw user-defined class instances
-    /// (e.g. `baml.json.JsonParseError`) without going through the
+    /// (e.g. `baml.json.ParseError`) without going through the
     /// `VmPanic` / `VmBamlError` enumeration machinery.
     #[error("thrown value")]
-    Thrown(Value),
+    Thrown { value: Value, throw_kind: ThrowKind },
 }
+
+impl VmRustFnError {
+    #[must_use]
+    pub const fn thrown_fresh(value: Value) -> Self {
+        Self::Thrown {
+            value,
+            throw_kind: ThrowKind::Fresh,
+        }
+    }
+
+    #[must_use]
+    pub const fn thrown_rethrow(value: Value) -> Self {
+        Self::Thrown {
+            value,
+            throw_kind: ThrowKind::Rethrow,
+        }
+    }
+}
+
+/// Project-relative path prefix carried by every standard-library source
+/// file. User files never start with it, so it is the one test for "is this
+/// frame / unit part of the stdlib".
+pub const BUILTIN_SOURCE_PREFIX: &str = "<builtin>/";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct StackFrame {
     pub function_name: String,
-    /// Filesystem path of the source file containing this function.
-    /// Empty string for builtins and synthesized functions.
+    /// Project-relative path of the source file containing this function:
+    /// `<builtin>/…` for standard-library functions, empty for synthesized
+    /// functions with no source at all.
     pub file_path: String,
-    pub function_span: baml_type::Span,
     pub error_line: usize,
+}
+
+impl StackFrame {
+    /// Whether this frame executes standard-library code.
+    ///
+    /// A user-facing traceback omits these frames: a `<builtin>/…` line is
+    /// nothing the caller can act on, and it is exactly what a native builtin
+    /// (which pushes no frame at all) never showed. A builtin whose body is
+    /// written in BAML rather than Rust therefore presents identically.
+    #[must_use]
+    pub fn is_builtin(&self) -> bool {
+        self.file_path.starts_with(BUILTIN_SOURCE_PREFIX)
+    }
 }
 
 fn format_internal_error(err: &VmInternalError, trace: &[StackFrame]) -> String {

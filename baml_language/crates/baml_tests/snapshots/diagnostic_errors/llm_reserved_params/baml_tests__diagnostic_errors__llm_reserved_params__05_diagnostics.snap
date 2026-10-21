@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0010
+
+  × LLM function `ReservedPromptContext` cannot declare a parameter named `ctx`; `ctx` is reserved for the compiler-provided prompt context
+   ╭─[main.baml:1:32]
+ 1 │ function ReservedPromptContext(ctx: string, input: string) -> string {
+   ·                                ─┬─
+   ·                                 ╰── reserved LLM parameter name
+   ╰────

@@ -21,8 +21,3 @@ func (h BamlHandle) Clone() (BamlHandle, error) {
 func (h BamlHandle) Release() error {
 	return cffi.ReleaseHandle(h.Key)
 }
-
-// FlushEvents flushes the BAML event sink.
-func FlushEvents() {
-	cffi.FlushEvents()
-}

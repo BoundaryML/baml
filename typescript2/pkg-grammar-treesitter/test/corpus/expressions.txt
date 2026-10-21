@@ -472,12 +472,12 @@ function f() -> json {
                               (identifier))))))))))))))))
 
 ==================
-spawn, await, spawn with options and named arguments
+spawn, await, spawn with a name and several modifiers
 ==================
 
 function f() -> int {
   let fut = spawn { run_turn(history, msg) };
-  let g = spawn with baml.spawn.options(cancel = tok, detach = true) { 42 };
+  let g = spawn "worker" with tok, limiter(cap = 2, strict = true) { 42 };
   (await fut) + (await g)
 }
 
@@ -507,16 +507,14 @@ function f() -> int {
           (type_path
             (identifier)))
         (spawn_expression
+          (string)
+          (identifier)
           (call_expression
-            (member_expression
-              (member_expression
-                (identifier)
-                (property_identifier))
-              (property_identifier))
+            (identifier)
             (arguments
               (assignment_expression
                 (identifier)
-                (identifier))
+                (number))
               (named_argument
                 (identifier)
                 (boolean))))
@@ -700,3 +698,51 @@ function f() -> float {
         (binary_expression
           (number)
           (number))))))
+
+==================
+specialized function value
+==================
+
+function f() -> int {
+  let g = same<int>;
+  let h = UseBody<string> { body: pick<int> };
+  0
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list)
+    (type_path
+      (identifier))
+    (function_body
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (specialized_expression
+          (identifier)
+          (type_arguments
+            (type_path
+              (identifier)))))
+      (let_declaration
+        (type_pattern
+          (type_path
+            (identifier)))
+        (constructor_expression
+          (identifier)
+          (type_arguments
+            (type_path
+              (identifier)))
+          (constructor_body
+            (constructor_field
+              (property_identifier)
+              (specialized_expression
+                (identifier)
+                (type_arguments
+                  (type_path
+                    (identifier))))))))
+      (expression_statement
+        (number)))))

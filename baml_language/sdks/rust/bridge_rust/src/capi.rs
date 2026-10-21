@@ -28,6 +28,8 @@ pub(crate) type HostDispatchFn =
 /// The engine's host-value release callback: the engine dropped its last
 /// reference to a host-owned value.
 pub(crate) type HostReleaseFn = extern "C" fn(host_value_key: u64);
+pub(crate) type HostDispatchV2 = extern "C" fn(*const u8, usize);
+pub(crate) type HostCancelFn = extern "C" fn(u32);
 
 /// Owned byte buffer returned by the engine. Must be released exactly once
 /// with [`Api::free_buffer`]. Layout-identical to `bridge_cffi::Buffer`.
@@ -45,16 +47,22 @@ pub(crate) struct Api {
         unsafe extern "C" fn(*const c_char, *const c_char) -> *const c_void,
     /// Returns a status buffer: empty on success, otherwise a UTF-8 error
     /// message. Read it with [`Api::take_status`].
-    pub(crate) initialize_runtime_from_bytecode: unsafe extern "C" fn(*const u8, usize) -> Buffer,
-    pub(crate) initialize_runtime_from_bytecode_with_metadata:
+    pub(crate) initialize_runtime_from_blob: unsafe extern "C" fn(*const u8, usize) -> Buffer,
+    pub(crate) initialize_runtime_from_blob_with_metadata:
         unsafe extern "C" fn(*const u8, usize, *const c_char) -> Buffer,
     pub(crate) register_callback: unsafe extern "C" fn(CallbackFn),
     pub(crate) new_function_call: unsafe extern "C" fn() -> u64,
+    pub(crate) cancel_function_call: unsafe extern "C" fn(u64) -> i32,
     pub(crate) call_function: unsafe extern "C" fn(*const u8, usize, u32),
     pub(crate) handle_clone: unsafe extern "C" fn(u64, *mut u64) -> u32,
     pub(crate) handle_release: unsafe extern "C" fn(u64) -> u32,
     pub(crate) free_buffer: unsafe extern "C" fn(Buffer),
-    pub(crate) register_host_dispatch_callback: unsafe extern "C" fn(HostDispatchFn),
+    pub(crate) register_host_dispatch_v2: unsafe extern "C" fn(HostDispatchV2),
+    pub(crate) register_host_cancel_callback: unsafe extern "C" fn(HostCancelFn),
+    pub(crate) trace_selection: unsafe extern "C" fn(u64, u64, *mut Buffer, *mut u64) -> u32,
+    pub(crate) invocation_context: unsafe extern "C" fn(u64, *mut Buffer) -> u32,
+    pub(crate) invocation_clock_ns: unsafe extern "C" fn(u64, *mut u64) -> u32,
+    pub(crate) release_function_call: unsafe extern "C" fn(u64) -> i32,
     pub(crate) register_host_release_callback: unsafe extern "C" fn(HostReleaseFn),
     /// Complete one outstanding BAML→host call. `is_error` is 0 or 1;
     /// `content` is a protobuf `InboundValue`, borrowed only for the call.
@@ -76,7 +84,7 @@ impl Api {
     }
 
     /// Copy an engine-owned buffer's bytes out and free it exactly once.
-    fn copy_and_free(&self, buffer: Buffer) -> Vec<u8> {
+    pub(crate) fn copy_and_free(&self, buffer: Buffer) -> Vec<u8> {
         // SAFETY: the engine hands over an owned buffer of `len` bytes that
         // we must free exactly once; the bytes are copied before the free.
         #[expect(unsafe_code)]
@@ -121,9 +129,9 @@ fn load() -> Result<Api, LoaderError> {
             tokio::runtime::RuntimeFlavor::MultiThread
         )
     {
-        return tokio::task::block_in_place(|| load_inner(&loader::LoaderEnv::from_process()));
+        return tokio::task::block_in_place(|| load_inner(&loader::LoaderEnv::from_process()?));
     }
-    load_inner(&loader::LoaderEnv::from_process())
+    load_inner(&loader::LoaderEnv::from_process()?)
 }
 
 /// The `bridge_cffi` versioned `BamlApiV1` table returned by
@@ -139,7 +147,7 @@ struct BamlApiV1 {
     abi_version: u32,
     struct_size: usize,
     version: Option<unsafe extern "C" fn() -> Buffer>,
-    initialize_runtime_from_bytecode: Option<unsafe extern "C" fn(*const u8, usize) -> Buffer>,
+    initialize_runtime_from_blob: Option<unsafe extern "C" fn(*const u8, usize) -> Buffer>,
     free_buffer: Option<unsafe extern "C" fn(Buffer)>,
     register_callback: Option<unsafe extern "C" fn(CallbackFn)>,
     call_function: Option<unsafe extern "C" fn(*const u8, usize, u32)>,
@@ -166,8 +174,26 @@ struct BamlApiV1 {
     register_unhandled_spawn_error_callback:
         Option<unsafe extern "C" fn(extern "C" fn(*const c_char, usize, i32))>,
     shutdown_runtime: Option<unsafe extern "C" fn() -> Buffer>,
-    initialize_runtime_from_bytecode_with_metadata:
+    initialize_runtime_from_blob_with_metadata:
         Option<unsafe extern "C" fn(*const u8, usize, *const c_char) -> Buffer>,
+    invocation_protocol_version: Option<unsafe extern "C" fn() -> u32>,
+    invocation_clock_ns: Option<unsafe extern "C" fn(u64, *mut u64) -> u32>,
+    release_function_call: Option<unsafe extern "C" fn(u64) -> i32>,
+    register_host_dispatch_v2: Option<unsafe extern "C" fn(HostDispatchV2)>,
+    register_host_cancel_callback: Option<unsafe extern "C" fn(HostCancelFn)>,
+    trace_selection: Option<unsafe extern "C" fn(u64, u64, *mut Buffer, *mut u64) -> u32>,
+    invocation_context: Option<unsafe extern "C" fn(u64, *mut Buffer) -> u32>,
+    media_name: Option<unsafe extern "C" fn(u64, i32, *mut Buffer) -> u32>,
+    media_from_file_content: Option<
+        unsafe extern "C" fn(
+            i32,
+            *const c_char,
+            *const c_char,
+            *const c_char,
+            *mut u64,
+            *mut i32,
+        ) -> u32,
+    >,
 }
 
 #[repr(C)]
@@ -229,10 +255,10 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
     // contract returns a process-lifetime table.
     #[expect(unsafe_code)]
     let table = unsafe { &*table_ptr };
-    if table.abi_version != 2 || table.struct_size < std::mem::size_of::<BamlApiV1>() {
+    if table.abi_version != 4 || table.struct_size < std::mem::size_of::<BamlApiV1>() {
         return Err(LoaderError::LoadLibrary(format!(
             "{} exposes an incompatible BAML C API (abi_version {}, {} bytes; \
-             baml_bridge needs ABI revision 2 with at least {} bytes)",
+             baml_bridge needs ABI revision 4 with at least {} bytes)",
             path.display(),
             table.abi_version,
             table.struct_size,
@@ -241,22 +267,23 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
     }
 
     let version = required_slot(table.version, "version", &path)?;
-    let initialize_runtime_from_bytecode = required_slot(
-        table.initialize_runtime_from_bytecode,
-        "initialize_runtime_from_bytecode",
+    let initialize_runtime_from_blob = required_slot(
+        table.initialize_runtime_from_blob,
+        "initialize_runtime_from_blob",
         &path,
     )?;
-    let initialize_runtime_from_bytecode_with_metadata = required_slot(
-        table.initialize_runtime_from_bytecode_with_metadata,
-        "initialize_runtime_from_bytecode_with_metadata",
+    let initialize_runtime_from_blob_with_metadata = required_slot(
+        table.initialize_runtime_from_blob_with_metadata,
+        "initialize_runtime_from_blob_with_metadata",
         &path,
     )?;
     let free_buffer = required_slot(table.free_buffer, "free_buffer", &path)?;
     let register_callback = required_slot(table.register_callback, "register_callback", &path)?;
     let call_function = required_slot(table.call_function, "call_function", &path)?;
     let new_function_call = required_slot(table.new_function_call, "new_function_call", &path)?;
-    required_slot(table.cancel_function_call, "cancel_function_call", &path)?;
-    let register_host_dispatch_callback = required_slot(
+    let cancel_function_call =
+        required_slot(table.cancel_function_call, "cancel_function_call", &path)?;
+    required_slot(
         table.register_host_dispatch_callback,
         "register_host_dispatch_callback",
         &path,
@@ -276,6 +303,12 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
     required_slot(table.media_file, "media_file", &path)?;
     required_slot(table.media_base64, "media_base64", &path)?;
     required_slot(table.media_mime_type, "media_mime_type", &path)?;
+    required_slot(table.media_name, "media_name", &path)?;
+    required_slot(
+        table.media_from_file_content,
+        "media_from_file_content",
+        &path,
+    )?;
     let register_bridge = required_slot(table.register_bridge, "register_bridge", &path)?;
     required_slot(
         table.register_unhandled_spawn_error_callback,
@@ -284,18 +317,47 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
     )?;
     required_slot(table.shutdown_runtime, "shutdown_runtime", &path)?;
 
+    required_slot(
+        table.invocation_protocol_version,
+        "invocation_protocol_version",
+        &path,
+    )?;
+    let invocation_clock_ns =
+        required_slot(table.invocation_clock_ns, "invocation_clock_ns", &path)?;
+    let release_function_call =
+        required_slot(table.release_function_call, "release_function_call", &path)?;
+    let register_host_dispatch_v2 = required_slot(
+        table.register_host_dispatch_v2,
+        "register_host_dispatch_v2",
+        &path,
+    )?;
+    let register_host_cancel_callback = required_slot(
+        table.register_host_cancel_callback,
+        "register_host_cancel_callback",
+        &path,
+    )?;
+
+    let trace_selection = required_slot(table.trace_selection, "trace_selection", &path)?;
+    let invocation_context = required_slot(table.invocation_context, "invocation_context", &path)?;
+
     let api = Api {
         // Not part of BamlApiV1 (a legacy direct export); resolved directly.
         create_baml_runtime: sym(&library, b"create_baml_runtime\0")?,
-        initialize_runtime_from_bytecode,
-        initialize_runtime_from_bytecode_with_metadata,
+        initialize_runtime_from_blob,
+        initialize_runtime_from_blob_with_metadata,
         register_callback,
         new_function_call,
+        cancel_function_call,
         call_function,
         handle_clone,
         handle_release,
         free_buffer,
-        register_host_dispatch_callback,
+        register_host_dispatch_v2,
+        register_host_cancel_callback,
+        trace_selection,
+        invocation_context,
+        invocation_clock_ns,
+        release_function_call,
         register_host_release_callback,
         complete_host_call,
     };
@@ -306,7 +368,11 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
     let version_buffer = unsafe { version() };
     let loaded_version = String::from_utf8_lossy(&api.copy_and_free(version_buffer)).into_owned();
     let expected = crate::get_version();
-    if loaded_version != expected {
+    // DEV_BAML_BRIDGE_SKIP_VERSION_CHECK skips only the toolchain-version
+    // match (this check; the library skips its own inside `register_bridge`
+    // by reading the same variable). The ABI table check above is never
+    // skipped.
+    if !env.skip_version_check && loaded_version != expected {
         // Dropping `library` here unloads it (Go parity).
         return Err(LoaderError::VersionMismatch(format!(
             "baml_bridge expects {expected}, but loaded library {} reports {loaded_version}",
@@ -384,11 +450,10 @@ mod tests {
         let env = LoaderEnv {
             explicit_path: Some(path.clone()),
             env_path: None,
-            cache_dir_override: None,
-            user_cache_dir: None,
+            baml_home: std::env::temp_dir(),
             disable_download: true,
-            download_base: None,
-            system_paths: Vec::new(),
+            skip_version_check: false,
+            manifest_base_url: String::new(),
             version: crate::get_version().to_string(),
         };
         let Err(err) = load_inner(&env) else {

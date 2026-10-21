@@ -8,5 +8,5 @@ enum Status {
 }
 
 function Foo() -> {  // Missing return type
-  client GPT4
+  client: GPT4
 }

@@ -135,6 +135,9 @@ impl TryFrom<(&ClientProperty, &RuntimeContext)> for LLMPrimitiveProvider {
                     OpenAIClientProviderVariant::Responses => {
                         OpenAIClient::dynamic_new_responses(value, ctx).map(Into::into)
                     }
+                    OpenAIClientProviderVariant::Transcriptions => {
+                        OpenAIClient::dynamic_new_transcriptions(value, ctx).map(Into::into)
+                    }
                     OpenAIClientProviderVariant::OpenRouter => {
                         OpenAIClient::dynamic_new_openrouter(value, ctx).map(Into::into)
                     }
@@ -203,6 +206,9 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
                     }
                     OpenAIClientProviderVariant::Responses => {
                         OpenAIClient::new_responses(client, ctx).map(Into::into)
+                    }
+                    OpenAIClientProviderVariant::Transcriptions => {
+                        OpenAIClient::new_transcriptions(client, ctx).map(Into::into)
                     }
                     OpenAIClientProviderVariant::OpenRouter => {
                         OpenAIClient::new_openrouter(client, ctx).map(Into::into)

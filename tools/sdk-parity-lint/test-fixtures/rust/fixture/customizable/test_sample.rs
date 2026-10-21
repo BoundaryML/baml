@@ -9,3 +9,6 @@ async fn test_async_case() {}
 #[test]
 #[ignore = "fixture"]
 fn test_ignored_case() {}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_multithreaded_case() {}

@@ -48,6 +48,7 @@ class BamlPluginTest : BasePlatformTestCase() {
         // This element is added by patchPluginXml, proving this test inspects Gradle's packaged descriptor rather than
         // the source XML.
         assertEquals("242", xpath.evaluate("string(/idea-plugin/idea-version/@since-build)", pluginDescriptor))
+        assertEquals("261.*", xpath.evaluate("string(/idea-plugin/idea-version/@until-build)", pluginDescriptor))
         assertEquals(
             BamlTextMateBundleProvider::class.java.name,
             xpath.evaluate("string(/idea-plugin/extensions/textmate.bundleProvider/@implementation)", pluginDescriptor),

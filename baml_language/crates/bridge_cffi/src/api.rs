@@ -14,8 +14,13 @@ use crate::Buffer;
 /// Revision 2 changes the `call_function` slot from the legacy four-argument
 /// name-plus-payload signature to the unified three-argument payload signature.
 /// Hosts and runtimes built against different revisions must reject one another
-/// before reading that slot.
-pub const BAML_API_V1_ABI_VERSION: u32 = 2;
+/// before reading that slot. Revision 3 requires runtime-bound allocations,
+/// an invocation clock, allocation release and V2 host dispatch/cancellation.
+///
+/// Revision 4: a media value holds content, never a file path.
+/// `media_from_file` always fails and `media_file` is always absent;
+/// `media_name` and `media_from_file_content` are required.
+pub const BAML_API_V1_ABI_VERSION: u32 = 4;
 
 /// Valid `media_kind` values for media constructors.
 ///
@@ -49,11 +54,14 @@ pub enum BamlCffiHandleType {
     MediaPdf = 9,
     MediaGeneric = 10,
     PromptAst = 11,
-    Collector = 12,
     Type = 13,
     TaggedHeapHandle = 14,
     HostValueCallable = 15,
     HostValueOpaque = 16,
+    FunctionSpec = 17,
+    RuntimeValue = 18,
+    InvocationState = 19,
+    TraceReservation = 20,
 }
 
 /// Receives the completed result of `call_function`.
@@ -94,9 +102,9 @@ pub type BamlUnhandledSpawnErrorCallback =
     extern "C" fn(content: *const i8, length: usize, cancelled: i32);
 
 pub type BamlVersionFn = extern "C" fn() -> Buffer;
-pub type BamlInitializeRuntimeFromBytecodeFn =
+pub type BamlInitializeRuntimeFromBlobFn =
     extern "C" fn(bytecode: *const u8, length: usize) -> Buffer;
-pub type BamlInitializeRuntimeFromBytecodeWithMetadataFn =
+pub type BamlInitializeRuntimeFromBlobWithMetadataFn =
     extern "C" fn(bytecode: *const u8, length: usize, baml_toml: *const libc::c_char) -> Buffer;
 pub type BamlFreeBufferFn = extern "C" fn(buffer: Buffer);
 pub type BamlRegisterCallbackFn = extern "C" fn(callback: BamlResultCallback);
@@ -121,11 +129,38 @@ pub type BamlMediaConstructorFn = unsafe extern "C" fn(
     out_key: *mut u64,
     out_handle_type: *mut i32,
 ) -> BamlCffiStatus;
+/// Construct media from base64 content read from a file, using a raw
+/// `BamlCffiMediaKind` value.
+pub type BamlMediaFromFileContentFn = unsafe extern "C" fn(
+    media_kind: i32,
+    file: *const libc::c_char,
+    base64: *const libc::c_char,
+    mime_type_or_null: *const libc::c_char,
+    out_key: *mut u64,
+    out_handle_type: *mut i32,
+) -> BamlCffiStatus;
 /// Read media using a raw `BamlCffiHandleType` value; zero accepts any type.
 pub type BamlMediaAccessorFn =
     unsafe extern "C" fn(key: u64, handle_type: i32, out: *mut Buffer) -> BamlCffiStatus;
 pub type BamlRegisterBridgeFn = unsafe extern "C" fn(info: *const BamlBridgeInfoV1) -> Buffer;
 pub type BamlGetApiV1Fn = extern "C" fn() -> *const BamlApiV1;
+
+pub type BamlHostDispatchV2 = extern "C" fn(request: *const u8, length: usize);
+pub type BamlHostCancel = extern "C" fn(callback_id: u32);
+pub type BamlInvocationProtocolVersionFn = extern "C" fn() -> u32;
+pub type BamlInvocationClockNsFn =
+    unsafe extern "C" fn(call_id: u64, out_now: *mut u64) -> BamlCffiStatus;
+pub type BamlReleaseFunctionCallFn = extern "C" fn(call_id: u64) -> i32;
+pub type BamlRegisterHostDispatchV2Fn = extern "C" fn(callback: BamlHostDispatchV2);
+pub type BamlRegisterHostCancelCallbackFn = extern "C" fn(callback: BamlHostCancel);
+pub type BamlTraceSelectionFn = unsafe extern "C" fn(
+    call_id: u64,
+    key: u64,
+    out_selection: *mut Buffer,
+    out_reservation: *mut u64,
+) -> BamlCffiStatus;
+pub type BamlInvocationContextFn =
+    unsafe extern "C" fn(key: u64, out_context: *mut Buffer) -> BamlCffiStatus;
 
 /// First version of the shared BAML C API.
 ///
@@ -137,7 +172,7 @@ pub type BamlGetApiV1Fn = extern "C" fn() -> *const BamlApiV1;
 ///
 /// A host must not unload the native library while a returned buffer, owned
 /// handle, registered callback, or asynchronous call can still reach it. The
-/// The ABI has no callback-unregistration operation in V1. Hosts must call
+/// ABI has no callback-unregistration operation in V1. Hosts must call
 /// `shutdown_runtime` before unloading the native library.
 ///
 /// No Rust panic may unwind across this ABI. Operations with a diagnostic or
@@ -145,11 +180,12 @@ pub type BamlGetApiV1Fn = extern "C" fn() -> *const BamlApiV1;
 /// An otherwise unexpected panic aborts the process rather than crossing into
 /// foreign frames. Likewise, host callbacks must not unwind or throw into Rust.
 ///
-/// V1 is append-only: existing fields may never be reordered, removed, or
-/// change type or semantics. New fields may only be appended. Before reading a
-/// field, consumers must verify that `struct_size` reaches the end of that
-/// field. `baml_api_v1_is_compatible` performs the check for the original V1
-/// prefix. A larger unknown size is compatible; a truncated prefix is not.
+/// V1 is append-only: existing fields may never be reordered or removed, and
+/// a field changes type or semantics only with a new ABI revision. New fields
+/// may only be appended. Before reading a field, consumers must verify that
+/// `struct_size` reaches the end of that field. `baml_api_v1_is_compatible`
+/// performs the check for the fields this revision requires. A larger unknown
+/// size is compatible; a truncated prefix is not.
 #[repr(C)]
 pub struct BamlApiV1 {
     /// Function-table ABI version. Always `BAML_API_V1_ABI_VERSION`.
@@ -166,7 +202,7 @@ pub struct BamlApiV1 {
     /// failure and must always be passed once to `free_buffer`. Concurrent
     /// calls are serialized only while replacing the global runtime; calls
     /// already in progress retain their previous runtime instance.
-    pub initialize_runtime_from_bytecode: BamlInitializeRuntimeFromBytecodeFn,
+    pub initialize_runtime_from_blob: BamlInitializeRuntimeFromBlobFn,
     /// Release exactly one runtime-owned buffer returned through this table.
     ///
     /// Do not use a different library instance's function, release a copied
@@ -209,10 +245,14 @@ pub struct BamlApiV1 {
     /// an empty error is rejected as a bridge failure. Unknown or cancelled
     /// call IDs are ignored after a diagnostic.
     pub complete_host_call: BamlCompleteHostCallFn,
-    /// Clone an owned engine handle into `out_key`.
+    /// Take one more ownership of an engine handle, writing the key to release
+    /// it through into `out_key`.
     ///
-    /// On `BAML_CFFI_STATUS_OK`, the host owns the new key and must release it
-    /// exactly once with `handle_release`. `out_key` must be writable.
+    /// On `BAML_CFFI_STATUS_OK` the host owns one more release of that key and
+    /// must perform it exactly once with `handle_release`. `out_key` is a
+    /// fresh key for identity-free handles (media, function refs) and the
+    /// SAME key for an engine-heap handle (one key per heap object), so a
+    /// host must not assume the two keys differ. `out_key` must be writable.
     pub handle_clone: BamlHandleCloneFn,
     /// Release one owned engine handle key. Host-value keys are instead
     /// released in response to the host-release callback.
@@ -222,8 +262,11 @@ pub struct BamlApiV1 {
     /// The optional MIME type may be null. On success, both output pointers are
     /// written and the returned key must be released with `handle_release`.
     pub media_from_url: BamlMediaConstructorFn,
-    /// Create an owned media handle from a borrowed NUL-terminated file path.
-    /// Ownership and output rules match `media_from_url`.
+    /// Always `UnsupportedHandleType`: a media value is built from content,
+    /// never from a file path, and this library reads no file. A host reads
+    /// the file itself and calls `media_from_file_content`, or calls
+    /// `baml.media.<Kind>.from_file`. The slot stays because this table is
+    /// append-only.
     pub media_from_file: BamlMediaConstructorFn,
     /// Create an owned media handle from borrowed NUL-terminated base64 data.
     /// Ownership and output rules match `media_from_url`.
@@ -234,7 +277,9 @@ pub struct BamlApiV1 {
     /// represented by a zero-length buffer. Release every successful output
     /// once with `free_buffer`.
     pub media_url: BamlMediaAccessorFn,
-    /// Read a media file path. Ownership rules match `media_url`.
+    /// Always absent: a media value holds content, never a file path. The
+    /// slot stays because this table is append-only. Ownership rules match
+    /// `media_url`.
     pub media_file: BamlMediaAccessorFn,
     /// Read media base64 data. Ownership rules match `media_url`.
     pub media_base64: BamlMediaAccessorFn,
@@ -253,15 +298,39 @@ pub struct BamlApiV1 {
     /// Wait for spawned work, report unreachable errors, and release the runtime.
     pub shutdown_runtime: BamlShutdownRuntimeFn,
     /// Replace the runtime from bytecode after validating embedded generation metadata.
-    pub initialize_runtime_from_bytecode_with_metadata:
-        BamlInitializeRuntimeFromBytecodeWithMetadataFn,
+    pub initialize_runtime_from_blob_with_metadata: BamlInitializeRuntimeFromBlobWithMetadataFn,
+    /// Native invocation contract; protobuf carries no version negotiation.
+    pub invocation_protocol_version: BamlInvocationProtocolVersionFn,
+    /// Read the allocated call's original runtime clock, in nanoseconds.
+    pub invocation_clock_ns: BamlInvocationClockNsFn,
+    /// Release an unsubmitted allocation; zero means success.
+    pub release_function_call: BamlReleaseFunctionCallFn,
+    /// Install the envelope dispatcher. Revision 3 never dispatches through V1.
+    pub register_host_dispatch_v2: BamlRegisterHostDispatchV2Fn,
+    /// Request cooperative cancellation; completion still reports actual exit.
+    pub register_host_cancel_callback: BamlRegisterHostCancelCallbackFn,
+    /// Project generated trace options without admitting another invocation.
+    /// The caller owns the returned buffer and optional reservation handle.
+    pub trace_selection: BamlTraceSelectionFn,
+    /// Read a detached generated trace.Context; key zero reads empty context.
+    /// The caller owns the returned buffer. This never admits an invocation.
+    pub invocation_context: BamlInvocationContextFn,
+    /// Read a media value's name: the base name of the file its content was
+    /// read from, absent otherwise. Ownership rules match `media_url`.
+    pub media_name: BamlMediaAccessorFn,
+    /// Create an owned media handle from borrowed NUL-terminated base64
+    /// content that was read from the file at `file`: the value is named by
+    /// its base name, and its MIME type, when not given, is what the name
+    /// implies. Nothing is read. Ownership and output rules match
+    /// `media_from_url`.
+    pub media_from_file_content: BamlMediaFromFileContentFn,
 }
 
 static BAML_API_V1: BamlApiV1 = BamlApiV1 {
     abi_version: BAML_API_V1_ABI_VERSION,
     struct_size: std::mem::size_of::<BamlApiV1>(),
     version: crate::version,
-    initialize_runtime_from_bytecode: crate::initialize_runtime_from_bytecode_ffi,
+    initialize_runtime_from_blob: crate::initialize_runtime_from_blob_ffi,
     free_buffer: crate::free_buffer,
     register_callback: crate::register_callback,
     call_function: crate::call_function,
@@ -282,8 +351,16 @@ static BAML_API_V1: BamlApiV1 = BamlApiV1 {
     register_bridge: crate::register_bridge_ffi,
     register_unhandled_spawn_error_callback: crate::register_unhandled_spawn_error_callback,
     shutdown_runtime: crate::shutdown_runtime_ffi,
-    initialize_runtime_from_bytecode_with_metadata:
-        crate::initialize_runtime_from_bytecode_with_metadata,
+    initialize_runtime_from_blob_with_metadata: crate::initialize_runtime_from_blob_with_metadata,
+    invocation_protocol_version: crate::invocation_protocol_version,
+    invocation_clock_ns: crate::invocation_clock_ns,
+    release_function_call: crate::release_function_call,
+    register_host_dispatch_v2: crate::register_host_dispatch_v2,
+    register_host_cancel_callback: crate::register_host_cancel_callback,
+    trace_selection: crate::trace_selection_ffi,
+    invocation_context: crate::invocation_context_ffi,
+    media_name: crate::baml_media_name,
+    media_from_file_content: crate::baml_media_from_file_content,
 };
 
 /// Return the immutable version-1 BAML C API function table.
@@ -308,8 +385,8 @@ mod tests {
     }
 
     #[test]
-    fn unified_call_target_uses_a_new_abi_revision() {
-        assert_eq!(BAML_API_V1_ABI_VERSION, 2);
+    fn a_changed_contract_uses_a_new_abi_revision() {
+        assert_eq!(BAML_API_V1_ABI_VERSION, 4);
     }
 
     #[test]
@@ -323,8 +400,8 @@ mod tests {
         let api = unsafe { &*baml_get_api_v1() };
         assert_same_function!(api.version, crate::version);
         assert_same_function!(
-            api.initialize_runtime_from_bytecode,
-            crate::initialize_runtime_from_bytecode_ffi
+            api.initialize_runtime_from_blob,
+            crate::initialize_runtime_from_blob_ffi
         );
         assert_same_function!(api.free_buffer, crate::free_buffer);
         assert_same_function!(api.register_callback, crate::register_callback);
@@ -349,6 +426,11 @@ mod tests {
         assert_same_function!(api.media_file, crate::baml_media_file);
         assert_same_function!(api.media_base64, crate::baml_media_base64);
         assert_same_function!(api.media_mime_type, crate::baml_media_mime_type);
+        assert_same_function!(api.media_name, crate::baml_media_name);
+        assert_same_function!(
+            api.media_from_file_content,
+            crate::baml_media_from_file_content
+        );
         assert_same_function!(api.register_bridge, crate::register_bridge_ffi);
         assert_same_function!(
             api.register_unhandled_spawn_error_callback,
@@ -356,8 +438,8 @@ mod tests {
         );
         assert_same_function!(api.shutdown_runtime, crate::shutdown_runtime_ffi);
         assert_same_function!(
-            api.initialize_runtime_from_bytecode_with_metadata,
-            crate::initialize_runtime_from_bytecode_with_metadata
+            api.initialize_runtime_from_blob_with_metadata,
+            crate::initialize_runtime_from_blob_with_metadata
         );
     }
 
@@ -365,7 +447,7 @@ mod tests {
     fn every_v1_field_retains_its_declared_function_type() {
         let api = unsafe { &*baml_get_api_v1() };
         let _: BamlVersionFn = api.version;
-        let _: BamlInitializeRuntimeFromBytecodeFn = api.initialize_runtime_from_bytecode;
+        let _: BamlInitializeRuntimeFromBlobFn = api.initialize_runtime_from_blob;
         let _: BamlFreeBufferFn = api.free_buffer;
         let _: BamlRegisterCallbackFn = api.register_callback;
         let _: BamlCallFunctionFn = api.call_function;
@@ -383,12 +465,14 @@ mod tests {
         let _: BamlMediaAccessorFn = api.media_file;
         let _: BamlMediaAccessorFn = api.media_base64;
         let _: BamlMediaAccessorFn = api.media_mime_type;
+        let _: BamlMediaAccessorFn = api.media_name;
+        let _: BamlMediaFromFileContentFn = api.media_from_file_content;
         let _: BamlRegisterBridgeFn = api.register_bridge;
         let _: BamlRegisterUnhandledSpawnErrorCallbackFn =
             api.register_unhandled_spawn_error_callback;
         let _: BamlShutdownRuntimeFn = api.shutdown_runtime;
-        let _: BamlInitializeRuntimeFromBytecodeWithMetadataFn =
-            api.initialize_runtime_from_bytecode_with_metadata;
+        let _: BamlInitializeRuntimeFromBlobWithMetadataFn =
+            api.initialize_runtime_from_blob_with_metadata;
         let _: BamlGetApiV1Fn = baml_get_api_v1;
     }
 
@@ -443,7 +527,6 @@ mod tests {
                 BamlHandleType::AdtMediaGeneric,
             ),
             (BamlCffiHandleType::PromptAst, BamlHandleType::AdtPromptAst),
-            (BamlCffiHandleType::Collector, BamlHandleType::AdtCollector),
             (BamlCffiHandleType::Type, BamlHandleType::AdtType),
             (
                 BamlCffiHandleType::TaggedHeapHandle,
@@ -456,6 +539,14 @@ mod tests {
             (
                 BamlCffiHandleType::HostValueOpaque,
                 BamlHandleType::HostValueOpaque,
+            ),
+            (
+                BamlCffiHandleType::FunctionSpec,
+                BamlHandleType::AdtFunctionSpec,
+            ),
+            (
+                BamlCffiHandleType::RuntimeValue,
+                BamlHandleType::AdtRuntimeValue,
             ),
         ];
         for (public, wire) in handle_pairs {

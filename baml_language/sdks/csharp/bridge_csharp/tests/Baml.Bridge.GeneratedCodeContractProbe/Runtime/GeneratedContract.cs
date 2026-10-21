@@ -153,47 +153,6 @@ public readonly struct BamlGeneratedFunction<TResult>
 }
 
 [EditorBrowsable(EditorBrowsableState.Never)]
-public readonly struct BamlGeneratedStreamFunction<TPartial, TFinal>
-{
-    private readonly RegistryOwner? _owner;
-    private readonly FunctionDeclaration? _declaration;
-    private readonly TypeDeclaration<TPartial>? _partialDeclaration;
-    private readonly TypeDeclaration<TFinal>? _finalDeclaration;
-
-    internal BamlGeneratedStreamFunction(
-        RegistryOwner owner,
-        FunctionDeclaration declaration,
-        TypeDeclaration<TPartial> partialDeclaration,
-        TypeDeclaration<TFinal> finalDeclaration)
-    {
-        _owner = owner;
-        _declaration = declaration;
-        _partialDeclaration = partialDeclaration;
-        _finalDeclaration = finalDeclaration;
-    }
-
-    internal RegistryOwner Owner =>
-        _owner
-        ?? throw new InvalidOperationException(
-            "The default generated stream function token is invalid.");
-
-    internal FunctionDeclaration Declaration =>
-        _declaration
-        ?? throw new InvalidOperationException(
-            "The default generated stream function token is invalid.");
-
-    internal TypeDeclaration<TPartial> PartialDeclaration =>
-        _partialDeclaration
-        ?? throw new InvalidOperationException(
-            "The default generated stream function token is invalid.");
-
-    internal TypeDeclaration<TFinal> FinalDeclaration =>
-        _finalDeclaration
-        ?? throw new InvalidOperationException(
-            "The default generated stream function token is invalid.");
-}
-
-[EditorBrowsable(EditorBrowsableState.Never)]
 public readonly struct BamlGeneratedGenericFunction
 {
     private readonly RegistryOwner? _owner;
@@ -326,39 +285,6 @@ public readonly struct BamlGeneratedArgument<TResult, TArgument>
 }
 
 [EditorBrowsable(EditorBrowsableState.Never)]
-public readonly struct BamlGeneratedStreamArgument<TPartial, TFinal, TArgument>
-{
-    private readonly RegistryOwner? _owner;
-    private readonly FunctionDeclaration? _function;
-    private readonly ArgumentDeclaration<TArgument>? _declaration;
-
-    internal BamlGeneratedStreamArgument(
-        RegistryOwner owner,
-        FunctionDeclaration function,
-        ArgumentDeclaration<TArgument> declaration)
-    {
-        _owner = owner;
-        _function = function;
-        _declaration = declaration;
-    }
-
-    internal RegistryOwner Owner =>
-        _owner
-        ?? throw new InvalidOperationException(
-            "The default generated stream argument token is invalid.");
-
-    internal FunctionDeclaration Function =>
-        _function
-        ?? throw new InvalidOperationException(
-            "The default generated stream argument token is invalid.");
-
-    internal ArgumentDeclaration<TArgument> Declaration =>
-        _declaration
-        ?? throw new InvalidOperationException(
-            "The default generated stream argument token is invalid.");
-}
-
-[EditorBrowsable(EditorBrowsableState.Never)]
 public interface IBamlGeneratedCodec<T>
 {
     BamlGeneratedValue Encode(BamlGeneratedCodecContext context, T value);
@@ -425,32 +351,8 @@ public sealed class BamlGeneratedRegistryBuilder
         FunctionDeclaration function = AddFunction(
             bamlIdentity,
             variant,
-            result,
-            null,
-            null);
+            result);
         return new BamlGeneratedFunction<TResult>(_owner, function, result);
-    }
-
-    public BamlGeneratedStreamFunction<TPartial, TFinal> DeclareStreamFunction<TPartial, TFinal>(
-        string bamlIdentity,
-        string variant,
-        BamlGeneratedType<TPartial> partialType,
-        BamlGeneratedType<TFinal> finalType)
-    {
-        EnsureMutable();
-        TypeDeclaration<TPartial> partial = RequireType(partialType);
-        TypeDeclaration<TFinal> final = RequireType(finalType);
-        FunctionDeclaration function = AddFunction(
-            bamlIdentity,
-            variant,
-            null,
-            partial,
-            final);
-        return new BamlGeneratedStreamFunction<TPartial, TFinal>(
-            _owner,
-            function,
-            partial,
-            final);
     }
 
     public BamlGeneratedGenericFunction DeclareResultGenericFunction(
@@ -466,8 +368,6 @@ public sealed class BamlGeneratedRegistryBuilder
         FunctionDeclaration function = AddFunction(
             bamlIdentity,
             variant,
-            null,
-            null,
             null);
         function.ResultTypeParameter = resultParameter;
         parameter = new BamlGeneratedResultTypeParameter(
@@ -499,29 +399,6 @@ public sealed class BamlGeneratedRegistryBuilder
             argument);
     }
 
-    public BamlGeneratedStreamArgument<TPartial, TFinal, TArgument>
-        DeclareStreamArgument<TPartial, TFinal, TArgument>(
-            BamlGeneratedStreamFunction<TPartial, TFinal> function,
-            string wireIdentity,
-            BamlGeneratedType<TArgument> type,
-            bool optional = false,
-            bool isSelf = false)
-    {
-        EnsureMutable();
-        FunctionDeclaration declaration = RequireStreamFunction(function);
-        TypeDeclaration<TArgument> argumentType = RequireType(type);
-        var argument = new ArgumentDeclaration<TArgument>(
-            wireIdentity,
-            argumentType,
-            optional,
-            isSelf);
-        declaration.AddArgument(argument);
-        return new BamlGeneratedStreamArgument<TPartial, TFinal, TArgument>(
-            _owner,
-            declaration,
-            argument);
-    }
-
     public BamlGeneratedRegistry Build()
     {
         EnsureMutable();
@@ -545,9 +422,7 @@ public sealed class BamlGeneratedRegistryBuilder
     private FunctionDeclaration AddFunction(
         string bamlIdentity,
         string variant,
-        TypeDeclaration? result,
-        TypeDeclaration? partial,
-        TypeDeclaration? final)
+        TypeDeclaration? result)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(bamlIdentity);
         ArgumentException.ThrowIfNullOrWhiteSpace(variant);
@@ -563,9 +438,7 @@ public sealed class BamlGeneratedRegistryBuilder
             id,
             bamlIdentity,
             variant,
-            result,
-            partial,
-            final);
+            result);
         _functions.Add(id, function);
         return function;
     }
@@ -597,27 +470,6 @@ public sealed class BamlGeneratedRegistryBuilder
         {
             throw new InvalidOperationException(
                 "The generated function token does not belong to this registry builder.");
-        }
-
-        return stored;
-    }
-
-    private FunctionDeclaration RequireStreamFunction<TPartial, TFinal>(
-        BamlGeneratedStreamFunction<TPartial, TFinal> function)
-    {
-        if (!ReferenceEquals(function.Owner, _owner)
-            || !_functions.TryGetValue(
-                function.Declaration.Id,
-                out FunctionDeclaration? stored)
-            || !ReferenceEquals(
-                stored.PartialDeclaration,
-                function.PartialDeclaration)
-            || !ReferenceEquals(
-                stored.FinalDeclaration,
-                function.FinalDeclaration))
-        {
-            throw new InvalidOperationException(
-                "The generated stream function token does not belong to this registry builder.");
         }
 
         return stored;
@@ -674,11 +526,6 @@ public sealed class BamlGeneratedRegistry
     public BamlGeneratedArgumentsBuilder<TResult> CreateArgumentsBuilder<TResult>(
         BamlGeneratedFunction<TResult> function) =>
         new(this, RequireFunction(function));
-
-    public BamlGeneratedStreamArgumentsBuilder<TPartial, TFinal>
-        CreateArgumentsBuilder<TPartial, TFinal>(
-            BamlGeneratedStreamFunction<TPartial, TFinal> function) =>
-            new(this, RequireStreamFunction(function));
 
     public BamlGeneratedTypeBinding<T> BindResultType<T>(
         BamlGeneratedResultTypeParameter parameter,
@@ -754,30 +601,6 @@ public sealed class BamlGeneratedRegistry
         }
 
         _ = GetCodec(function.ResultDeclaration);
-        return stored;
-    }
-
-    internal FunctionDeclaration RequireStreamFunction<TPartial, TFinal>(
-        BamlGeneratedStreamFunction<TPartial, TFinal> function)
-    {
-        if (!ReferenceEquals(function.Owner, _owner)
-            || !_functions.TryGetValue(
-                function.Declaration.Id,
-                out FunctionDeclaration? stored)
-            || !ReferenceEquals(stored, function.Declaration)
-            || !ReferenceEquals(
-                stored.PartialDeclaration,
-                function.PartialDeclaration)
-            || !ReferenceEquals(
-                stored.FinalDeclaration,
-                function.FinalDeclaration))
-        {
-            throw new InvalidOperationException(
-                "The generated stream function token does not belong to this registry or has contradictory result types.");
-        }
-
-        _ = GetCodec(function.PartialDeclaration);
-        _ = GetCodec(function.FinalDeclaration);
         return stored;
     }
 
@@ -978,65 +801,6 @@ public sealed class BamlGeneratedArgumentsBuilder<TResult>
 }
 
 [EditorBrowsable(EditorBrowsableState.Never)]
-public sealed class BamlGeneratedStreamArgumentsBuilder<TPartial, TFinal>
-{
-    private readonly BamlGeneratedRegistry _registry;
-    private readonly FunctionDeclaration _function;
-    private readonly Dictionary<ArgumentDeclaration, BamlGeneratedValue> _values = [];
-    private bool _built;
-
-    internal BamlGeneratedStreamArgumentsBuilder(
-        BamlGeneratedRegistry registry,
-        FunctionDeclaration function)
-    {
-        _registry = registry;
-        _function = function;
-    }
-
-    public void Set<TArgument>(
-        BamlGeneratedStreamArgument<TPartial, TFinal, TArgument> argument,
-        TArgument value)
-    {
-        EnsureMutable();
-        if (!ReferenceEquals(argument.Function, _function))
-        {
-            throw new InvalidOperationException(
-                "The generated stream argument token belongs to another function.");
-        }
-
-        _ = argument.Owner;
-        _registry.RequireArgument(_function, argument.Declaration);
-        if (!_values.TryAdd(
-                argument.Declaration,
-                _registry.Encode(argument.Declaration.Type, value)))
-        {
-            throw new InvalidOperationException(
-                "The generated stream argument was already supplied.");
-        }
-    }
-
-    public BamlGeneratedStreamArguments<TPartial, TFinal> Build()
-    {
-        EnsureMutable();
-        _function.RequireRequiredArguments(_values);
-        _built = true;
-        return new BamlGeneratedStreamArguments<TPartial, TFinal>(
-            _registry,
-            _function,
-            new Dictionary<ArgumentDeclaration, BamlGeneratedValue>(_values));
-    }
-
-    private void EnsureMutable()
-    {
-        if (_built)
-        {
-            throw new InvalidOperationException(
-                "The generated stream arguments builder is already frozen.");
-        }
-    }
-}
-
-[EditorBrowsable(EditorBrowsableState.Never)]
 public sealed class BamlGeneratedArguments<TResult>
 {
     private readonly IReadOnlyDictionary<ArgumentDeclaration, BamlGeneratedValue> _values;
@@ -1067,36 +831,6 @@ public sealed class BamlGeneratedArguments<TResult>
             ? value!
             : throw new InvalidOperationException(
                 "A required generated argument was not supplied.");
-}
-
-[EditorBrowsable(EditorBrowsableState.Never)]
-public sealed class BamlGeneratedStreamArguments<TPartial, TFinal>
-{
-    private readonly IReadOnlyDictionary<ArgumentDeclaration, BamlGeneratedValue> _values;
-
-    internal BamlGeneratedStreamArguments(
-        BamlGeneratedRegistry registry,
-        FunctionDeclaration function,
-        Dictionary<ArgumentDeclaration, BamlGeneratedValue> values)
-    {
-        Registry = registry;
-        Function = function;
-        _values =
-            new ReadOnlyDictionary<ArgumentDeclaration, BamlGeneratedValue>(values);
-    }
-
-    internal BamlGeneratedRegistry Registry { get; }
-
-    internal FunctionDeclaration Function { get; }
-
-    internal BamlGeneratedValue Required(int index)
-    {
-        ArgumentDeclaration argument = Function.Arguments[index];
-        return _values.TryGetValue(argument, out BamlGeneratedValue? value)
-            ? value
-            : throw new InvalidOperationException(
-                "A required generated stream argument was not supplied.");
-    }
 }
 
 [EditorBrowsable(EditorBrowsableState.Never)]
@@ -1152,56 +886,6 @@ public sealed class BamlGeneratedProgram
         await Task.Yield();
         cancellationToken.ThrowIfCancellationRequested();
         return Call(function, arguments, cancellationToken);
-    }
-
-    public BamlGeneratedStream<TPartial, TFinal> Stream<TPartial, TFinal>(
-        BamlGeneratedStreamFunction<TPartial, TFinal> function,
-        BamlGeneratedStreamArguments<TPartial, TFinal> arguments,
-        CancellationToken cancellationToken = default)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        FunctionDeclaration declaration =
-            _registry.RequireStreamFunction(function);
-        RequireArguments(arguments.Registry, arguments.Function, declaration);
-
-        if (!StringComparer.Ordinal.Equals(
-                declaration.Identity,
-                "probe.stream_person")
-            || !StringComparer.Ordinal.Equals(
-                declaration.Variant,
-                "stream"))
-        {
-            throw new InvalidOperationException(
-                "The evidence runtime does not implement this stream token.");
-        }
-
-        object? decodedPerson = _registry.Decode(
-            function.FinalDeclaration,
-            arguments.Required(0));
-        BamlGeneratedValue finalValue = _registry.Encode(
-            function.FinalDeclaration,
-            decodedPerson);
-        var partials = new[]
-        {
-            _registry.Encode(
-                function.PartialDeclaration,
-                "A"),
-            _registry.Encode(
-                function.PartialDeclaration,
-                "Ad"),
-            _registry.Encode(
-                function.PartialDeclaration,
-                "Ada"),
-        };
-        return new BamlGeneratedStream<TPartial, TFinal>(
-            partials
-                .Select(value => (TPartial)_registry.Decode(
-                    function.PartialDeclaration,
-                    value)!)
-                .ToArray(),
-            (TFinal)_registry.Decode(
-                function.FinalDeclaration,
-                finalValue)!);
     }
 
     private BamlGeneratedValue Dispatch<TResult>(
@@ -1295,31 +979,6 @@ public sealed class BamlGeneratedProgram
             throw new InvalidOperationException(
                 "Generated arguments belong to another function.");
         }
-    }
-}
-
-[EditorBrowsable(EditorBrowsableState.Never)]
-public sealed class BamlGeneratedStream<TPartial, TFinal>
-{
-    private readonly IReadOnlyList<TPartial> _partials;
-    private readonly TFinal _final;
-
-    internal BamlGeneratedStream(
-        IReadOnlyList<TPartial> partials,
-        TFinal final)
-    {
-        _partials = partials;
-        _final = final;
-    }
-
-    public IReadOnlyList<TPartial> Partials => _partials;
-
-    public async Task<TFinal> GetFinalAsync(
-        CancellationToken cancellationToken = default)
-    {
-        await Task.Yield();
-        cancellationToken.ThrowIfCancellationRequested();
-        return _final;
     }
 }
 
@@ -1931,9 +1590,7 @@ internal sealed class FunctionDeclaration(
     int id,
     string identity,
     string variant,
-    TypeDeclaration? resultDeclaration,
-    TypeDeclaration? partialDeclaration,
-    TypeDeclaration? finalDeclaration)
+    TypeDeclaration? resultDeclaration)
 {
     private readonly List<ArgumentDeclaration> _arguments = [];
     private readonly HashSet<string> _argumentIdentities =
@@ -1947,10 +1604,6 @@ internal sealed class FunctionDeclaration(
     internal string Variant { get; } = variant;
 
     internal TypeDeclaration? ResultDeclaration { get; } = resultDeclaration;
-
-    internal TypeDeclaration? PartialDeclaration { get; } = partialDeclaration;
-
-    internal TypeDeclaration? FinalDeclaration { get; } = finalDeclaration;
 
     internal ResultTypeParameterDeclaration? ResultTypeParameter { get; set; }
 

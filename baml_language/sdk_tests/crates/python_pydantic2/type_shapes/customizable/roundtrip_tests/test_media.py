@@ -14,7 +14,11 @@ that fix PyO3 reported `__module__ == "builtins"`, the seed missed, and
 re-encode failed with `Unknown class ``— 35b "Bug B".)
 """
 
+import pytest
+
 import baml_sdk  # noqa: F401  — initializes the BAML runtime
+from baml_sdk.baml import BamlError
+from baml_sdk.baml.errors import Io
 from baml_sdk.media import (
     Media,
     return_image,
@@ -26,9 +30,13 @@ from baml_sdk.media import (
     round_trip_video,
     round_trip_pdf,
     round_trip_media,
+    round_trip_optional_image_list,
+    image_mime_type,
 )
+from baml_sdk.baml.media import Image, Pdf
 
 URL = "https://example.com/asset"
+PNG_B64 = "iVBORw0KGgo="
 
 
 # --- decode path (return_*) works -----------------------------------------
@@ -81,3 +89,43 @@ def test_media_round_trip_media():
         pdf_field=return_pdf(url=URL, mime=None),
     )
     assert round_trip_media(m=m) is not None
+
+
+# SDK_PARITY_LINT(skip): validates Python host-created media wrapper encoding
+def test_host_created_media_round_trips_through_optional_list():
+    image = Image.from_base64(PNG_B64, "image/png")
+
+    # The engine must reconstruct the stdlib Image wrapper, not expose its
+    # private rust-data payload directly, before BAML dispatches this method.
+    assert image_mime_type(x=image) == "image/png"
+
+    nonempty = round_trip_optional_image_list(x=[image])
+    assert nonempty is not None
+    assert len(nonempty) == 1
+    assert nonempty[0].base64() == PNG_B64
+    assert nonempty[0].mime_type() == "image/png"
+
+    assert round_trip_optional_image_list(x=[]) == []
+    assert round_trip_optional_image_list(x=None) is None
+
+
+# SDK_PARITY_LINT(skip): validates the Python media wrapper's from_file, which is BAML's from_file
+def test_host_from_file_reads_now_and_keeps_the_base_name(tmp_path):
+    path = tmp_path / "scan.pdf"
+    path.write_bytes(b"%PDF-1.7")
+    pdf = Pdf.from_file(str(path))
+    # The file can go: the value holds its content.
+    path.unlink()
+    assert pdf.base64() == "JVBERi0xLjc="
+    assert pdf.name() == "scan.pdf"
+    assert pdf.mime_type() == "application/pdf"
+    assert pdf.url() is None
+
+    # The name crosses the call boundary both ways.
+    assert round_trip_pdf(x=pdf).name() == "scan.pdf"
+
+    # A file that cannot be read fails when the value is built, with the
+    # error BAML code would get.
+    with pytest.raises(BamlError) as exc_info:
+        Pdf.from_file(str(path))
+    assert isinstance(exc_info.value.value, Io)

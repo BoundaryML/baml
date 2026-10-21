@@ -16,6 +16,8 @@
 //! failure path in [`BytecodeCache::load`] returns `None` (recompile) and
 //! [`BytecodeCache::store`] is best-effort.
 
+#![warn(clippy::disallowed_methods)]
+
 use std::{
     fs,
     io::{self, Read, Write},
@@ -23,14 +25,15 @@ use std::{
     time::SystemTime,
 };
 
-use bex_vm_types::{CompilationUnit, Program};
+use baml_linker_types::EmittedPackage;
+use bex_vm_types::Program;
 use sha2::{Digest, Sha256};
 
 /// Bump whenever the serialized `Program` layout or the entry header changes.
 /// Part of both the cache key and the entry header.
 ///
 /// This contract also covers auxiliary blobs stored under their own keys: bump
-/// whenever the [`CompilationUnit`] wire format changes, **or** whenever the
+/// whenever the [`EmittedPackage`] wire format changes, **or** whenever the
 /// stdlib-interface blob's wire format changes — i.e. any layout change to
 /// `PackageInterface`/`ExportedType`/`ExportedFunction`/`FunctionThrowSets`/
 /// `BuiltinKind` or a leaf of the `Ty` family. The compiler fingerprint already
@@ -39,8 +42,8 @@ use sha2::{Digest, Sha256};
 ///
 /// Version 1 is the initial shipped format: content-addressed entries with
 /// the 80-byte validated header, independently content-addressed
-/// [`CompilationUnit`] entries referenced by per-file `unit_key` pointers in
-/// the manifest, per-file diagnostics blobs, the layout/signature hash pair,
+/// per-file compilation-unit entries referenced by per-file `unit_key` pointers
+/// in the manifest, per-file diagnostics blobs, the layout/signature hash pair,
 /// `sig_referenced_names`, and the stdlib bytecode + typed-interface blobs.
 /// Any bump turns every older entry into a miss via the header version check —
 /// there is never a hand-written migration.
@@ -50,9 +53,165 @@ use sha2::{Digest, Sha256};
 ///
 /// Version 3: diagnostic cache blobs gained `message_highlights` fields.
 ///
-/// Version 4: `FunctionMeta::Llm` removed the Borsh-serialized
+/// Version 4: `DiagnosticId` dropped the legacy `TypeBuilder` variants
+/// (E0040–E0043, BEP-066 removal), shifting the borsh discriminants of all
+/// later variants.
+///
+/// Version 5: `FunctionMeta::Llm` removed the Borsh-serialized
 /// `prompt_template` field.
-pub const FORMAT_VERSION: u32 = 4;
+///
+/// Version 6: `Enum` and `InterfaceDef` gained a borsh-serialized `type_tag`,
+/// so every declaration that can head a nominal type now carries its identity
+/// (previously only `Class` did). `Class::type_tag` changed from `i64` to the
+/// `TypeTag` newtype, which is wire-identical — that part needed no bump.
+/// Also: type aliases became `Object::TypeAlias` declarations, so `Package` /
+/// `ProgramPackage` replaced the inline `recursive_type_aliases` map with a
+/// `type_aliases` map of references to them. And `InterfaceMethodDef` replaced
+/// the (never-populated) `default_fqn: Option<String>` with `default:
+/// Option<ObjectIndex>` — a default method's pooled body, relocated by the
+/// linker like any other object operand and bound to a pointer at load, so
+/// runtime implementors inherit defaults without naming anything.
+///
+/// Version 7: every type-bearing wire field is head-inline rather than
+/// name-headed, and the bytecode gained `OpCode::Truthy` plus
+/// `ConstValue::Literal`. Both landed while 6 was current — on different
+/// branches — so a 6 image can be either shape and neither can be told from
+/// the other. The bump is what makes the ambiguity unreachable.
+///
+/// Version 8: `Class.name` / `Enum.name` are `DeclarationName` (an enum over
+/// declared and anonymous), so both gained a leading discriminant byte. A 7
+/// image would decode that discriminant out of the old `TypeName` bytes.
+///
+/// Version 9: the bytecode gained `OpCode::MakeVirtualFunction` (appended, so
+/// discriminants did not shift), which landed on canary while 8 was current on
+/// a branch — the same both-sides-of-a-merge ambiguity version 7 records. An
+/// 8 image without the opcode would decode fine, but one version must mean one
+/// format.
+///
+/// Version 10: the `Ty` wire format retired the TIR-era compiler-only variants
+/// — `EvolvingList`/`EvolvingMap` (31/32) and the `Unknown` error-recovery
+/// sentinel (29). The slots are tombstoned rather than reused, so a 9 image
+/// carrying one in a persisted throw fact would now fail to decode instead of
+/// silently landing on whatever occupies the slot later.
+///
+/// Version 11: the interface-dispatch rework, described as one net change
+/// against the format canary shipped (a bump only matters against that;
+/// intermediate shapes that never left the branch are not versions).
+/// Interface bodies became anonymous-but-slotted: `Function` gained
+/// `is_interface_body` + `native_key` (wire fields), and `function_indices` /
+/// `function_global_indices` stopped carrying impl-block methods and
+/// interface default bodies. Impl-rule method tables became PROVIDED-ONLY
+/// (an adopted interface default resolves at dispatch through the
+/// interface's `default_fn`, never through a baked row), rule fragments
+/// moved onto their declaring unit, and `ProgramMethodImplFrag` carries the
+/// body's code-bucket offset in that unit rather than a name. Nothing on the
+/// PROGRAM wire KEYS on a body's spelling any more: it survives as display
+/// data only (`Function::name`, and the per-instruction `OperandMeta` in
+/// `Bytecode::meta`) plus the per-file unit's link-internal
+/// export/import key; compile boundaries read coordinates from the
+/// declaration-keyed placement registry, with a Pass-1 slot replay only at
+/// the stdlib-splice boundary. Two further changes ride this version:
+/// `MethodImpl::frame` follows the `[owner ++ own]` convention with NO
+/// associated-type slots (an adopted default's owner frame is
+/// `[Self, interface args..]`; a body's `Self.Assoc` reduces as a
+/// projection), and the generated `SysOp` enum's variants for in-class impl
+/// methods were respelled (`<Iface>For<Class>`), which reassigns
+/// discriminants — a wire AND host-ABI change for embedders matching on
+/// variant names.
+///
+/// Version 12: appended `PopJumpIfTrue`, `JumpIfFalseOrPop`,
+/// `JumpIfTrueOrPop`, and `JumpIfNotNullOrPop` to the instruction/opcode sets.
+///
+/// Version 13: removed `RuntimeIsType` from the instruction/opcode sets, so
+/// every opcode declared after it renumbers, and dropped the type-argument
+/// count flag bit from call instructions.
+///
+/// Version 14: `Bytecode::call_layouts` records each call site's argument layout.
+///
+/// Version 15: the per-file compilation unit gained `referenced_names` and
+/// `bakes_type_layout` — the incremental reverse-dependency edges, recorded
+/// by codegen at its resolution sites and carried with the unit. Previously
+/// the CLI reconstructed them from compiled operands joined against the
+/// runtime name maps, which silently severed every edge into a name class
+/// that left those maps (version 11 removed interface-machinery bodies from
+/// them, so direct calls to interface bodies stopped dirtying their
+/// callers).
+///
+/// Version 16: `DiagnosticId` dropped `FieldAttributeInTypePosition` (E0106,
+/// BEP-075 removed type attributes), shifting the borsh discriminants of all
+/// later variants.
+///
+/// Version 17: `Bytecode::shield_table` records the PC ranges of `defer`
+/// bodies, which run shielded from cancellation. The `Spawn` opcode yields a
+/// `baml.spawn.Plan` instead of a pre-allocated `UnscheduledFuture`, and moved
+/// to the end of the `Instruction` and `OpCode` enums (after `SetCallTrace`),
+/// changing its serialized discriminant. `Object`/`ObjectType` lost
+/// `UnscheduledFuture` from the middle of the enum, renumbering the Borsh
+/// discriminants after it, and `Rethrow`/`ThrowIfPanic` pop the caught error's
+/// context under its value, with every exception-table entry naming a context
+/// slot. (It is 17, not 16: version 16 is BEP-075's and shipped in 0.20.0, so
+/// reusing it would admit a released cache entry.)
+///
+/// Version 18: the identity-keyed unit format (`baml_linker_types`): one
+/// `CompilationUnit` per package with a dependency table and
+/// `DeclKey`-keyed import/export tables, a `PackageRecord`, and a per-package
+/// `InitTail`, cached together as one [`EmittedPackage`] entry per package
+/// under a key over the package's own sources and its dependencies' interface
+/// digests ([`package_key`]) — the per-file unit entries, their `unit_key`
+/// pointers, and the precompiled stdlib `Program` slice are gone. The
+/// manifest keeps only the check layer's per-file rows (diagnostics, throw
+/// facts, `callable_throws` fragments), served only when the project's
+/// program key is the one the manifest was written for. `Object::Class`
+/// gained `methods` (its inherent methods by name, each an `ObjectIndex`),
+/// `ProgramPackage` gained `globals` (its own function and `let` slots by
+/// declaration path), `init`, and `name`, and `Program::packages` became a
+/// `Vec` — a package's identity in the executable is its position, its name
+/// display metadata — so every serialized `Program` changed shape. Type tags
+/// became the linker's: a head in a unit is its declaration's object operand
+/// (`ImportEntry` lost `baked_tag`) and the linker assigns every declaration
+/// `CLASS_BASE +` its object index; `MatchHashTable` became `SwitchTable`,
+/// which a unit states by its keys (`SwitchKey::{Kind, Declaration}`) and the
+/// linker solves to a perfect hash or the sorted keys; `ImplBodyKey`
+/// carries an `ImplBodyCoherence` whose heads are located by edge path from
+/// the body's own package, as are the manifest's throw facts and
+/// `callable_throws` fragments from their file's; a dependency table is a
+/// list of `Locator`s; and the executable is laid out package-major in
+/// link-set order.
+///
+/// Version 19: BEP-079's unit type. `void` is a spelling of `null`, so
+/// `DiagnosticId` lost `VoidInNonReturnPosition` (E0110) from the middle of
+/// the enum, which renumbers the Borsh discriminant of every diagnostic id
+/// declared after it in the manifest's per-file diagnostics rows. The type
+/// family lost `Void` (Borsh discriminant 22, now reserved) with it: a
+/// cached unit carrying the retired discriminant no longer decodes.
+///
+/// Version 20: `Function::source_file` and the name of a file's `$init_test_…`
+/// function are root-relative for every non-stdlib root — a unit no longer
+/// carries the absolute path of the checkout it was compiled from — and a
+/// pooled `Class`, `Enum`, `Interface` and `TypeAlias` carries its path
+/// inside its package (`path`) where it used to carry a package-qualified
+/// name. `Class::has_cleanup` became `Class::cleanup`, the finalizer's
+/// position in the class's method table. A `ProgramPackage` carries its
+/// `PackageKind` (`Language(LangPackage)` or `Ordinary`) and each edge its
+/// `EdgeKind` (`Dependency` or `ReExported`); a dependency table's prelude
+/// entry is `Locator::Prelude(LangPackage)`, bound by identity through no
+/// edge. A pooled `Function` carries a structural `FunctionIdentity` (its
+/// path, body key, closure parent or initializer role) where it carried a
+/// rendered name (`name`, `declared_name`, `is_interface_body` are gone), and
+/// a `ProgramPackage` carries `objects`, the pool range the linker placed it
+/// as, which owns every function in it.
+///
+/// Version 21: `FunctionMeta` gained the appended `ModelInvoke` variant.
+///
+/// Version 22: the `ThrowIfPanic` instruction is gone. A catch's wildcard
+/// arm that does not trap panics is now entered after an `IsType` test
+/// against the `PANIC` pseudo-tag (`baml_type::typetag::PANIC`), so the
+/// discriminants of every opcode declared after `TypeTag` shifted down by
+/// one.
+///
+/// Version 23: `FunctionMeta::Llm` lost its `client` string and marks every
+/// LLM function, including one whose client is an expression.
+pub const FORMAT_VERSION: u32 = 23;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 
@@ -87,8 +246,6 @@ pub struct KeyInputs<'a> {
     pub compiler_fingerprint: [u8; 32],
     /// `OptLevel` as a stable discriminant.
     pub opt_level: u8,
-    /// `CompileOptions::emit_test_cases`.
-    pub emit_test_cases: bool,
     /// `baml.toml` content, if the project has one.
     pub manifest: Option<&'a str>,
     /// `(project-root-relative path, content)` for every source file,
@@ -141,7 +298,7 @@ pub fn compute_key(inputs: &KeyInputs<'_>) -> CacheKey {
     h.update(MAGIC);
     h.update(FORMAT_VERSION.to_le_bytes());
     h.update(inputs.compiler_fingerprint);
-    h.update([inputs.opt_level, u8::from(inputs.emit_test_cases)]);
+    h.update([inputs.opt_level]);
     hash_opt_str(&mut h, inputs.manifest);
     h.update((inputs.files.len() as u64).to_le_bytes());
     // Sort defensively rather than trusting the documented precondition: an
@@ -159,17 +316,15 @@ pub fn compute_key(inputs: &KeyInputs<'_>) -> CacheKey {
     CacheKey(h.finalize().into())
 }
 
-/// Per-project compile manifest: the invalidation state for per-file
-/// bytecode reuse, describing the *latest* successful compile.
+/// Per-project compile manifest: the check layer's per-file rows from the
+/// *latest* successful compile.
 ///
 /// Unlike Program blobs (content-addressed, immutable), the manifest lives
 /// under a fixed per-project key ([`manifest_key`]) and is overwritten on
-/// every successful compile. It records, per file, everything the next
-/// compile needs to decide which files are dirty: content hash (did it
-/// change at all), signature hash (can the change be observed by other
-/// files), defined symbol names, and referenced symbol names (extracted from
-/// the compiled bytecode, so desugared references — a `for` loop's
-/// `next()` — are included).
+/// every successful compile. Its rows are servable only while the project is
+/// byte-identical to the compile that wrote them — when this compile's program
+/// key equals `program_key` — because a file's diagnostics and throws depend
+/// on every declaration it resolves, not on its own bytes alone.
 #[derive(Debug, borsh::BorshSerialize, borsh::BorshDeserialize)]
 pub struct ProjectManifest {
     /// Cache key of the Program blob this manifest describes.
@@ -182,120 +337,113 @@ pub struct ProjectManifest {
 pub struct ManifestFile {
     /// Project-root-relative path (the `Function::source_file` form).
     pub rel_path: String,
-    /// Hash of the file's full content.
-    pub content_hash: [u8; 32],
-    /// Hash of the file's signature (body regions excluded).
-    pub signature_hash: [u8; 32],
-    /// Hash of the file's type-*layout* surface: its class/enum/interface/alias
-    /// and out-of-body `implements` declarations, with function bodies blanked
-    /// (exactly the surface that can move a field offset, an enum discriminant,
-    /// a type tag, or a vtable slot baked into *other* files' bytecode). A file
-    /// with no such declarations hashes to a fixed constant. Function signatures
-    /// never contribute, so a function-only signature edit in a type-defining
-    /// file leaves this stable — the input the dirty-set pass uses to fire the
-    /// layout sentinel only when a type's layout actually changed.
-    pub layout_hash: [u8; 32],
-    /// Last-segment names of symbols this file defines.
-    pub defined_names: Vec<String>,
-    /// Last-segment names this file's compiled bytecode references.
-    pub referenced_names: Vec<String>,
-    /// Last-segment type names named in this file's *signature* surface only —
-    /// function/method params, returns, `throws`, generic bounds; class/interface
-    /// field types; `implements`/`requires`/`for` targets; type-alias RHS — i.e.
-    /// exactly the bodies-blanked source `signature_hash` hashes. A strict subset
-    /// of `referenced_names` (which also folds in body-level bytecode references).
-    /// The dirty-set pass uses it to cascade a type-identity change through a
-    /// content-unchanged callee whose resolved signature moved: a file whose
-    /// *signature* names a changed type has its own resolved signature meaning
-    /// changed, so its defined names propagate to its callers, whereas a purely
-    /// body-level reference does not (that can only move the file's throws, which
-    /// the transitive throws-taint closure already covers).
-    pub sig_referenced_names: Vec<String>,
     /// Throw-analysis facts for every function the file defines, exactly as
-    /// `baml_compiler2_tir::throw_inference::file_throw_facts` extracted
+    /// `baml_compiler2_hir_ty::throw_facts::file_throw_facts` extracted
     /// them. Re-seeded into the next compile's database so unchanged files
     /// never re-walk their bodies just to answer "what does the package
-    /// throw" — the package-level solve then runs from facts alone.
-    pub throw_facts: Vec<baml_type::throw_facts::FunctionThrowFacts>,
+    /// throw" — the package-level solve then runs from facts alone. Every
+    /// head is located by edge path from the file's own package.
+    pub throw_facts: Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::PathName>>,
     /// Opaque borsh blob of the diagnostics `check_file` produced for this
     /// file on the compile that wrote the manifest (`borsh(Vec<CachedDiagnostic>)`,
     /// the typed form living in the CLI). Kept opaque here so `bex_cache` does
     /// not depend on the diagnostics crate — same pattern as the stdlib
     /// interface blob. Because the manifest is written only after a passing
-    /// error gate, a clean file's blob holds warnings / info only.
+    /// error gate, a file's blob holds warnings / info only.
     pub diagnostics: Vec<u8>,
-    /// Opaque borsh blob of this file's `CallableThrowsFragment` — a verbatim
-    /// copy of the same bytes stored in the file's [`CompilationUnit`]. Kept
-    /// in the manifest so the warm path can seed per-function
-    /// `callable_throws` without reading any unit payloads (the units are
-    /// only needed when bytecode is actually relinked). Empty when the file
-    /// contributes no fragment.
+    /// Opaque borsh blob of this file's `CallableThrowsFragment`, from which
+    /// the warm path seeds per-function `callable_throws`. Empty when the
+    /// file contributes no fragment.
     pub callable_throws_fragment: Vec<u8>,
-    /// Content-addressed cache key of this file's serialized [`CompilationUnit`];
-    /// the manifest is the sole mutable pointer table for the immutable per-file
-    /// unit entries.
-    pub unit_key: [u8; 32],
 }
 
 /// Fixed per-project key for the [`ProjectManifest`].
 ///
-/// Keyed by compiler fingerprint + opt + options + the project root path:
-/// a different compiler build gets a fresh manifest (its previous Program
-/// would not be relink-compatible), and two checkouts of the same project
+/// Keyed by compiler fingerprint + opt level + the project root path:
+/// a different compiler build gets a fresh manifest (its rows describe a
+/// program that build never compiled), and two checkouts of the same project
 /// don't fight over one entry.
 pub fn manifest_key(
     compiler_fingerprint: &[u8; 32],
     opt_level: u8,
-    emit_test_cases: bool,
     project_root: &Path,
     project_manifest_toml: Option<&str>,
 ) -> CacheKey {
     let mut h = keyed_hasher(b"project-manifest");
     h.update(compiler_fingerprint);
-    h.update([opt_level, u8::from(emit_test_cases)]);
+    h.update([opt_level]);
     update_framed(&mut h, project_root.as_os_str().as_encoded_bytes());
     // baml.toml is a compile input of the program key, so it must gate the
-    // manifest too: a config-only change must not let plan_reuse splice
-    // every source file against stale project configuration.
+    // manifest too: a config-only change must not serve rows derived under
+    // stale project configuration.
     hash_opt_str(&mut h, project_manifest_toml);
     CacheKey(h.finalize().into())
 }
 
-/// Content-addressed key for one serialized [`CompilationUnit`].
+/// Every input one package's compiled output ([`EmittedPackage`]) is a
+/// function of: the compiler build, the optimization level, the package's own
+/// sources, and the interface digest of every package it reaches, by the edge
+/// name it reaches it under.
 ///
-/// The payload hash, rather than source inputs, is the identity: cross-file
-/// layout state can change a unit's bytes without changing that file's source.
-/// The manifest owns reuse policy and points to the exact value produced by the
-/// last successful compile.
-pub fn unit_key(payload: &[u8]) -> CacheKey {
-    unit_key_from_digest(&Sha256::digest(payload).into())
+/// Fields are hashed with length-prefixed framing, so concatenation ambiguity
+/// cannot alias two different input sets.
+pub struct PackageKeyInputs<'a> {
+    /// Identity of the compiler build — see [`compiler_fingerprint`].
+    pub compiler_fingerprint: [u8; 32],
+    /// `OptLevel` as a stable discriminant.
+    pub opt_level: u8,
+    /// `(package-root-relative path, content)` for every source file of the
+    /// package, **sorted by path**.
+    pub files: &'a [(String, &'a str)],
+    /// `(edge name, interface digest)` for every DIRECT dependency edge,
+    /// **sorted by edge name**; a transitive root is covered by the direct
+    /// dependency's digest, which embeds its own dependencies' (Merkle). The
+    /// edge name is part of the output — the unit's dependency table binds
+    /// by it — so the same package reached under another name is another
+    /// output.
+    pub dependencies: &'a [(String, [u8; 32])],
 }
 
-/// [`unit_key`] from an already-computed payload digest (the same digest
-/// entry validation produces), skipping the payload hash.
-fn unit_key_from_digest(digest: &[u8; 32]) -> CacheKey {
-    let mut h = keyed_hasher(b"unit");
-    h.update(digest);
+/// Key for one package's [`EmittedPackage`] entry.
+///
+/// Depends on nothing outside [`PackageKeyInputs`] — not on the project the
+/// package is compiled inside — so a package with the same sources and the
+/// same dependency interfaces is one entry however many projects reach it.
+/// A stdlib package's entry, whose inputs are all build constants, therefore
+/// serves every project on the machine (the Go model: the stdlib is compiled
+/// once per toolchain, ever).
+pub fn package_key(inputs: &PackageKeyInputs<'_>) -> CacheKey {
+    let mut h = keyed_hasher(b"package");
+    h.update(inputs.compiler_fingerprint);
+    h.update([inputs.opt_level]);
+    // Sorted defensively rather than trusting the documented precondition:
+    // an unsorted caller would only lose hits, never correctness (the
+    // content is still fully hashed), but with no signal.
+    let mut files: Vec<&(String, &str)> = inputs.files.iter().collect();
+    files.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+    h.update((files.len() as u64).to_le_bytes());
+    for (path, content) in files {
+        update_framed(&mut h, path.as_bytes());
+        update_framed(&mut h, content.as_bytes());
+    }
+    let mut dependencies: Vec<&(String, [u8; 32])> = inputs.dependencies.iter().collect();
+    dependencies.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+    h.update((dependencies.len() as u64).to_le_bytes());
+    for (edge, digest) in dependencies {
+        update_framed(&mut h, edge.as_bytes());
+        h.update(digest);
+    }
     CacheKey(h.finalize().into())
-}
-
-/// Key for the precompiled stdlib `Program` slice.
-///
-/// Depends only on the compiler build, opt level, and cache format — not on
-/// any project. One entry per compiler build serves every project on the
-/// machine (the Go model: the stdlib is compiled once per toolchain, ever).
-pub fn stdlib_key(compiler_fingerprint: &[u8; 32], opt_level: u8) -> CacheKey {
-    fingerprint_opt_key(b"stdlib-slice", compiler_fingerprint, opt_level)
 }
 
 /// Key for the cached stdlib **typed interface** blob ("export data").
 ///
 /// The stored value is `borsh(BTreeMap<package-name, borsh(PackageInterface)>)`
-/// for the six stdlib packages. Like [`stdlib_key`], it depends only on the
-/// compiler build + opt level: the stdlib is a build constant (no user file
-/// contributes to a stdlib package), so one entry per compiler build serves
-/// every project on the machine. The `b"stdlib-interface"` domain separator
-/// prevents collision with the stdlib bytecode slice ([`stdlib_key`]), which
+/// for the six stdlib packages. It depends only on the compiler build + opt
+/// level: the stdlib is a build constant (no user file contributes to a
+/// stdlib package), so one entry per compiler build serves every project on
+/// the machine. The `b"stdlib-interface"` domain separator prevents collision
+/// with the builtin-diagnostics blob ([`stdlib_diagnostics_key`]), which
 /// shares the same `(fingerprint, opt_level)` inputs. `opt_level` is included
 /// for parity even though the interface itself is opt-invariant.
 pub fn stdlib_interface_key(compiler_fingerprint: &[u8; 32], opt_level: u8) -> CacheKey {
@@ -305,16 +453,15 @@ pub fn stdlib_interface_key(compiler_fingerprint: &[u8; 32], opt_level: u8) -> C
 /// Key for the cached stdlib **builtin diagnostics** blob — the diagnostics that
 /// `check_file` produces for the builtin (stdlib) files.
 ///
-/// Like [`stdlib_interface_key`] and [`stdlib_key`], it depends only on the
-/// compiler build + opt level: the builtin diagnostic set is a build constant
+/// Like [`stdlib_interface_key`], it depends only on the compiler build + opt
+/// level: the builtin diagnostic set is a build constant
 /// (no user file contributes to a stdlib package, the same soundness basis as
 /// the typed interface), so one entry per compiler build serves every project
 /// on the machine.
 /// For a valid stdlib the set is empty, but the blob caches whatever the honest
 /// check produces. The `b"stdlib-diagnostics"` domain separator keeps it a
-/// distinct entry from the bytecode slice ([`stdlib_key`]) and the typed
-/// interface ([`stdlib_interface_key`]), which share the same `(fingerprint,
-/// opt_level)` inputs. `opt_level` is included for parity even though the
+/// distinct entry from the typed interface ([`stdlib_interface_key`]), which
+/// shares the same `(fingerprint, opt_level)` inputs. `opt_level` is included for parity even though the
 /// builtin diagnostic set is opt-invariant.
 ///
 /// The stored payload's typed form lives in the CLI (`borsh(Option<Vec<
@@ -336,7 +483,7 @@ pub fn stdlib_diagnostics_key(compiler_fingerprint: &[u8; 32], opt_level: u8) ->
 /// different inputs → different program key → different discovery key → miss).
 /// The `b"test-discovery"` domain separator keeps it a distinct entry from the
 /// Program blob stored under that same program key, mirroring how the other
-/// derived entries ([`unit_key`], [`stdlib_interface_key`]) separate themselves
+/// derived entries ([`package_key`], [`stdlib_interface_key`]) separate themselves
 /// from blobs that share their key inputs. A warm `--list` serves the rendered
 /// list from this entry and skips engine boot + in-VM discovery entirely.
 ///
@@ -491,41 +638,14 @@ impl BytecodeCache {
         Some(payload.to_vec())
     }
 
-    /// Local/remote read-through for a raw content-addressed entry, also
-    /// returning the payload's integrity digest (already computed by entry
-    /// validation) so content-key checks derived from that digest need not
-    /// re-hash the payload.
-    fn load_raw_shared_with_digest(&self, key: &CacheKey) -> Option<(Vec<u8>, [u8; 32])> {
-        let path = self.entry_path(key);
-        if let Ok(data) = fs::read(&path)
-            && let Some((payload, digest)) = check_entry_with_digest(&data, key)
-        {
-            freshen_entry(&path);
-            return Some((payload.to_vec(), digest));
-        }
-        let remote = self.remote.as_ref()?;
-        let entry = remote.get(key)?;
-        let (payload, digest) = check_entry_with_digest(&entry, key)?;
-        let payload = payload.to_vec();
-        self.persist_from_remote(key, &entry);
-        Some((payload, digest))
-    }
-
-    /// Load one content-addressed unit through the local/remote read-through
-    /// path. Both the entry framing and the unit key's payload hash must agree;
-    /// any mismatch is a cache miss.
-    pub fn load_unit_shared(&self, key: &CacheKey) -> Option<CompilationUnit> {
-        // `check_entry` already verified the header's key echo and the payload
-        // integrity digest, and `unit_key` is derived from that same digest —
-        // so the content-key check here reuses the digest instead of hashing
-        // the (potentially large) payload a second time.
-        let (payload, digest) = self.load_raw_shared_with_digest(key)?;
-        if unit_key_from_digest(&digest) != *key {
-            let _ = fs::remove_file(self.entry_path(key));
-            return None;
-        }
+    /// Load one package's output through the local/remote read-through path.
+    /// Any problem — missing entry, torn file, header mismatch, checksum
+    /// failure, undecodable payload — is a `None`, and an undecodable local
+    /// entry is removed so it is not re-read every compile.
+    pub fn load_package_shared(&self, key: &CacheKey) -> Option<EmittedPackage> {
+        let payload = self.load_raw_shared(key)?;
         match borsh::from_slice(&payload) {
-            Ok(unit) => Some(unit),
+            Ok(package) => Some(package),
             Err(_) => {
                 let _ = fs::remove_file(self.entry_path(key));
                 None
@@ -533,21 +653,24 @@ impl BytecodeCache {
         }
     }
 
-    /// Store one immutable unit locally and publish it remotely, but only when
-    /// a valid local entry for the same content key is not already present.
-    /// Returns the key and whether this call wrote a new local entry.
-    pub fn store_unit_shared(&self, unit: &CompilationUnit) -> io::Result<(CacheKey, bool)> {
-        let payload = borsh::to_vec(unit)
+    /// Store one package's output under `key` locally and publish it remotely.
+    pub fn store_package_shared(&self, key: &CacheKey, package: &EmittedPackage) -> io::Result<()> {
+        let payload = borsh::to_vec(package)
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-        let key = unit_key(&payload);
-        // load_raw already returns only a checksum-valid entry whose key echo
-        // matches, so byte equality with the new payload is a sufficient
-        // "already stored" signal — no need to hash the stored bytes again.
-        if self.load_raw(&key).is_some_and(|stored| stored == payload) {
-            return Ok((key, false));
+        self.store_raw_shared(key, &payload)
+    }
+
+    /// Local/remote read-through for a raw entry: a local hit, else a remote
+    /// entry validated exactly like a local one and persisted locally.
+    fn load_raw_shared(&self, key: &CacheKey) -> Option<Vec<u8>> {
+        if let Some(payload) = self.load_raw(key) {
+            return Some(payload);
         }
-        self.store_raw_shared(&key, &payload)?;
-        Ok((key, true))
+        let remote = self.remote.as_ref()?;
+        let entry = remote.get(key)?;
+        let payload = check_entry(&entry, key)?.to_vec();
+        self.persist_from_remote(key, &entry);
+        Some(payload)
     }
 
     /// Store an arbitrary payload under `key` with the standard entry header
@@ -635,13 +758,6 @@ impl BytecodeCache {
 
 /// Validate an entry's header against `key`; return the payload slice.
 fn check_entry<'a>(data: &'a [u8], key: &CacheKey) -> Option<&'a [u8]> {
-    check_entry_with_digest(data, key).map(|(payload, _)| payload)
-}
-
-/// [`check_entry`] that also hands back the payload digest it computed, so
-/// callers whose content keys derive from that digest (see [`unit_key`]) can
-/// avoid a second full pass over the payload.
-fn check_entry_with_digest<'a>(data: &'a [u8], key: &CacheKey) -> Option<(&'a [u8], [u8; 32])> {
     if data.len() < HEADER_LEN || data[..4] != MAGIC {
         return None;
     }
@@ -658,7 +774,7 @@ fn check_entry_with_digest<'a>(data: &'a [u8], key: &CacheKey) -> Option<(&'a [u
     if digest != data[48..80] {
         return None;
     }
-    Some((payload, digest))
+    Some(payload)
 }
 
 /// Write via temp file + atomic rename: readers never observe a torn entry,
@@ -736,12 +852,6 @@ pub fn content_hash(text: &str) -> [u8; 32] {
     Sha256::digest(text.as_bytes()).into()
 }
 
-/// Whether environment variable `name` is set to exactly `"1"` — the shared
-/// spelling of every `BAML_*` cache opt-out flag.
-pub fn env_flag(name: &str) -> bool {
-    std::env::var_os(name).is_some_and(|value| value == "1")
-}
-
 /// `path` relative to `root` as a display string, falling back to the full path
 /// when it is not under `root`. Manifests and cache keys store this
 /// project-root-relative form to stay location-independent; the CLI writer and
@@ -761,7 +871,6 @@ mod tests {
         KeyInputs {
             compiler_fingerprint: [7u8; 32],
             opt_level: 2,
-            emit_test_cases: false,
             manifest: None,
             files,
         }
@@ -781,10 +890,6 @@ mod tests {
         let mut inputs = dummy_inputs(&files);
         inputs.opt_level = 0;
         assert_ne!(base, compute_key(&inputs), "opt level");
-
-        let mut inputs = dummy_inputs(&files);
-        inputs.emit_test_cases = true;
-        assert_ne!(base, compute_key(&inputs), "emit_test_cases");
 
         let mut inputs = dummy_inputs(&files);
         inputs.manifest = Some("[package]\nname = \"x\"");
@@ -847,46 +952,122 @@ mod tests {
     }
 
     #[test]
-    fn unit_entry_round_trip_and_dedup() {
+    fn package_entry_round_trip() {
         let dir = tempfile::tempdir().expect("tempdir");
         let cache = BytecodeCache::open(dir.path().to_path_buf());
-        let unit = CompilationUnit {
-            source_file: "nested/a.baml".to_string(),
-            callable_throws_fragment: vec![1, 2, 3, 4],
-            ..CompilationUnit::default()
-        };
-
-        let (key, wrote) = cache.store_unit_shared(&unit).expect("store unit");
-        assert!(wrote, "first store writes the CAS entry");
-        let serialized = borsh::to_vec(&unit).expect("serialize unit");
-        assert_eq!(key, unit_key(&serialized));
-
-        let path = cache.entry_path(&key);
-        let old = SystemTime::now() - std::time::Duration::from_hours(2);
-        fs::File::options()
-            .append(true)
-            .open(&path)
-            .expect("open unit")
-            .set_modified(old)
-            .expect("age unit");
-        let loaded = cache.load_unit_shared(&key).expect("load unit");
-        assert_eq!(loaded.source_file, unit.source_file);
-        assert_eq!(
-            loaded.callable_throws_fragment,
-            unit.callable_throws_fragment
-        );
+        let files = vec![("a.baml".to_string(), "function a() -> int { 1 }")];
+        let dependencies = vec![("baml".to_string(), [5u8; 32])];
+        let key = package_key(&PackageKeyInputs {
+            compiler_fingerprint: [1u8; 32],
+            opt_level: 2,
+            files: &files,
+            dependencies: &dependencies,
+        });
         assert!(
-            fs::metadata(&path)
-                .expect("unit metadata")
-                .modified()
-                .expect("unit mtime")
-                > old,
-            "loading a live unit freshens it for trim"
+            cache.load_package_shared(&key).is_none(),
+            "miss on empty cache"
         );
 
-        let (same_key, wrote) = cache.store_unit_shared(&unit).expect("store again");
-        assert_eq!(same_key, key);
-        assert!(!wrote, "identical unit is not rewritten");
+        let package = EmittedPackage {
+            unit: baml_linker_types::CompilationUnit::default(),
+            record: baml_linker_types::PackageRecord {
+                interface_blob: vec![1, 2, 3, 4],
+            },
+            tail: None,
+        };
+        cache
+            .store_package_shared(&key, &package)
+            .expect("store package");
+        let loaded = cache.load_package_shared(&key).expect("load package");
+        assert_eq!(loaded.record.interface_blob, package.record.interface_blob);
+        assert!(loaded.tail.is_none());
+
+        // An entry whose payload is not a package is removed, not re-read.
+        cache
+            .store_raw(&key, b"not-a-package")
+            .expect("store garbage under the package key");
+        assert!(cache.load_package_shared(&key).is_none());
+        assert!(
+            !cache.entry_path(&key).exists(),
+            "an undecodable package entry is removed"
+        );
+    }
+
+    #[test]
+    fn package_key_is_project_independent_and_input_sensitive() {
+        let files = vec![("a.baml".to_string(), "function a() -> int { 1 }")];
+        let dependencies = vec![("baml".to_string(), [5u8; 32])];
+        let base = package_key(&PackageKeyInputs {
+            compiler_fingerprint: [1u8; 32],
+            opt_level: 2,
+            files: &files,
+            dependencies: &dependencies,
+        });
+        // Order of presentation is not an input.
+        let two_files = vec![
+            ("b.baml".to_string(), "function b() -> int { 2 }"),
+            ("a.baml".to_string(), "function a() -> int { 1 }"),
+        ];
+        let two_sorted = vec![two_files[1].clone(), two_files[0].clone()];
+        assert_eq!(
+            package_key(&PackageKeyInputs {
+                compiler_fingerprint: [1u8; 32],
+                opt_level: 2,
+                files: &two_files,
+                dependencies: &dependencies,
+            }),
+            package_key(&PackageKeyInputs {
+                compiler_fingerprint: [1u8; 32],
+                opt_level: 2,
+                files: &two_sorted,
+                dependencies: &dependencies,
+            })
+        );
+        // Every input moves the key.
+        let other_fingerprint = package_key(&PackageKeyInputs {
+            compiler_fingerprint: [2u8; 32],
+            opt_level: 2,
+            files: &files,
+            dependencies: &dependencies,
+        });
+        let other_opt = package_key(&PackageKeyInputs {
+            compiler_fingerprint: [1u8; 32],
+            opt_level: 1,
+            files: &files,
+            dependencies: &dependencies,
+        });
+        let other_digest = vec![("baml".to_string(), [6u8; 32])];
+        let other_dependency = package_key(&PackageKeyInputs {
+            compiler_fingerprint: [1u8; 32],
+            opt_level: 2,
+            files: &files,
+            dependencies: &other_digest,
+        });
+        let other_edge = vec![("std".to_string(), [5u8; 32])];
+        let other_edge_name = package_key(&PackageKeyInputs {
+            compiler_fingerprint: [1u8; 32],
+            opt_level: 2,
+            files: &files,
+            dependencies: &other_edge,
+        });
+        for other in [
+            other_fingerprint,
+            other_opt,
+            other_dependency,
+            other_edge_name,
+        ] {
+            assert_ne!(base, other);
+        }
+        // Distinct from a Program entry over the same sources.
+        assert_ne!(
+            base,
+            compute_key(&KeyInputs {
+                compiler_fingerprint: [1u8; 32],
+                opt_level: 2,
+                manifest: None,
+                files: &files,
+            })
+        );
     }
 
     #[test]
@@ -900,7 +1081,7 @@ mod tests {
             defined_names: Vec<String>,
             referenced_names: Vec<String>,
             sig_referenced_names: Vec<String>,
-            throw_facts: Vec<baml_type::throw_facts::FunctionThrowFacts>,
+            throw_facts: Vec<baml_type::throw_facts::FunctionThrowFacts<baml_type::TypeName>>,
             diagnostics: Vec<u8>,
         }
         #[derive(borsh::BorshSerialize)]
@@ -911,7 +1092,7 @@ mod tests {
 
         let dir = tempfile::tempdir().expect("tempdir");
         let cache = BytecodeCache::open(dir.path().to_path_buf());
-        let key = manifest_key(&[7u8; 32], 2, false, Path::new("/project"), None);
+        let key = manifest_key(&[7u8; 32], 2, Path::new("/project"), None);
         let payload = borsh::to_vec(&LegacyManifest {
             program_key: [8u8; 32],
             files: vec![LegacyManifestFile {
@@ -948,12 +1129,12 @@ mod tests {
         let fp = [3u8; 32];
         let base = stdlib_interface_key(&fp, 2);
 
-        // Never collides with the bytecode slice under the same inputs (distinct
+        // Never collides with its sibling under the same inputs (distinct
         // domain separator).
         assert_ne!(
             base,
-            stdlib_key(&fp, 2),
-            "interface key must not collide with the bytecode-slice key"
+            stdlib_diagnostics_key(&fp, 2),
+            "interface key must not collide with the diagnostics-blob key"
         );
         // Sensitive to both keying inputs.
         assert_ne!(base, stdlib_interface_key(&[4u8; 32], 2), "fingerprint");
@@ -965,13 +1146,8 @@ mod tests {
         let fp = [3u8; 32];
         let base = stdlib_diagnostics_key(&fp, 2);
 
-        // Never collides with its two siblings under the same inputs (distinct
+        // Never collides with its sibling under the same inputs (distinct
         // domain separators over the same `(fingerprint, opt_level)`).
-        assert_ne!(
-            base,
-            stdlib_key(&fp, 2),
-            "diagnostics key must not collide with the bytecode-slice key"
-        );
         assert_ne!(
             base,
             stdlib_interface_key(&fp, 2),
@@ -987,16 +1163,11 @@ mod tests {
         let program_key = [5u8; 32];
         let base = test_discovery_key(&program_key);
 
-        // Never collides with the Program blob or a sibling content-addressed
-        // entry keyed off the same bytes (distinct domain separators).
+        // Never collides with the Program blob stored under the program key
+        // itself (a distinct domain separator).
         assert_ne!(
             base.0, program_key,
             "discovery key must not equal the raw program key"
-        );
-        assert_ne!(
-            base,
-            unit_key(&program_key),
-            "discovery key must not collide with a unit key over the same bytes"
         );
         // A different Program yields a different discovery entry.
         assert_ne!(base, test_discovery_key(&[6u8; 32]), "program key");
@@ -1049,11 +1220,11 @@ mod tests {
 /// the cache, developer machines read it. This mirrors Go's `GOCACHEPROG`
 /// split of "cache policy in the tool, storage anywhere".
 ///
-/// Configured via `BAML_CACHE_REMOTE=<base-url>` (entries live at
-/// `<base-url>/<key-hex>`) and optional `BAML_CACHE_REMOTE_TOKEN` (sent as a
-/// bearer token). Only immutable entries — Program blobs, stdlib slices, and
-/// content-addressed compilation units — are shared; the per-project manifest
-/// is a mutable local-latest pointer and deliberately stays local.
+/// Configured via `BAML_BUILD_CACHE_REMOTE=<base-url>` (entries live at
+/// `<base-url>/<key-hex>`) and optional `BAML_BUILD_CACHE_REMOTE_TOKEN` (sent as a
+/// bearer token). Only immutable entries — Program blobs and per-package
+/// outputs — are shared; the per-project manifest is a mutable local-latest
+/// pointer and deliberately stays local.
 ///
 /// The configured origin is a trust boundary because it supplies executable VM
 /// programs. Non-loopback remotes therefore require HTTPS. Failures are bounded
@@ -1078,10 +1249,10 @@ fn remote_url_allowed(url: &reqwest::Url) -> bool {
 }
 
 impl RemoteCache {
-    /// Build from `BAML_CACHE_REMOTE` / `BAML_CACHE_REMOTE_TOKEN`; `None`
+    /// Build from `BAML_BUILD_CACHE_REMOTE` / `BAML_BUILD_CACHE_REMOTE_TOKEN`; `None`
     /// when unset or the HTTP client cannot be constructed.
     pub fn from_env() -> Option<RemoteCache> {
-        let base_url = std::env::var("BAML_CACHE_REMOTE").ok()?;
+        let base_url = baml_env::raw_var("BAML_BUILD_CACHE_REMOTE")?;
         if base_url.is_empty() {
             return None;
         }
@@ -1089,7 +1260,9 @@ impl RemoteCache {
         if !remote_url_allowed(&parsed) {
             #[allow(clippy::print_stderr)]
             {
-                eprintln!("warning: BAML_CACHE_REMOTE ignored — use https or a loopback http URL");
+                eprintln!(
+                    "warning: BAML_BUILD_CACHE_REMOTE ignored — use https or a loopback http URL"
+                );
             }
             return None;
         }
@@ -1102,7 +1275,7 @@ impl RemoteCache {
             .build()
             .ok()?;
         let base_url = base_url.trim_end_matches('/').to_string();
-        let token = std::env::var("BAML_CACHE_REMOTE_TOKEN").ok();
+        let token = baml_env::raw_var("BAML_BUILD_CACHE_REMOTE_TOKEN");
         Some(RemoteCache {
             base_url,
             token,
@@ -1234,7 +1407,7 @@ impl BytecodeCache {
 mod remote_tests {
     use std::{
         collections::HashMap,
-        io::{BufRead, BufReader, Read as _, Write as _},
+        io::{BufRead, BufReader},
         net::TcpListener,
         sync::{Arc, Mutex},
     };
@@ -1328,7 +1501,6 @@ mod remote_tests {
         let key = compute_key(&KeyInputs {
             compiler_fingerprint: [9u8; 32],
             opt_level: 2,
-            emit_test_cases: false,
             manifest: None,
             files: &files,
         });
@@ -1338,17 +1510,26 @@ mod remote_tests {
         let mut cache_a = BytecodeCache::open(dir_a.path().to_path_buf());
         cache_a.remote = Some(remote_for(&url));
         cache_a.store_shared(&key, &program).expect("store");
-        let unit = CompilationUnit {
-            source_file: "a.baml".to_string(),
-            callable_throws_fragment: vec![4, 3, 2, 1],
-            ..CompilationUnit::default()
+        let package = EmittedPackage {
+            unit: baml_linker_types::CompilationUnit::default(),
+            record: baml_linker_types::PackageRecord {
+                interface_blob: vec![4, 3, 2, 1],
+            },
+            tail: None,
         };
-        let (unit_key, wrote) = cache_a.store_unit_shared(&unit).expect("store unit");
-        assert!(wrote);
+        let package_entry = package_key(&PackageKeyInputs {
+            compiler_fingerprint: [9u8; 32],
+            opt_level: 2,
+            files: &files,
+            dependencies: &[],
+        });
+        cache_a
+            .store_package_shared(&package_entry, &package)
+            .expect("store package");
         assert_eq!(
             store.lock().expect("lock").len(),
             2,
-            "program and unit entries published to remote"
+            "program and package entries published to remote"
         );
 
         // Machine B: local miss, remote hit, local populated.
@@ -1361,20 +1542,19 @@ mod remote_tests {
             cache_b.load(&key).is_some(),
             "local cache populated from remote"
         );
-        let loaded_unit = cache_b
-            .load_unit_shared(&unit_key)
-            .expect("unit served from remote");
-        assert_eq!(loaded_unit.source_file, "a.baml");
+        let loaded_package = cache_b
+            .load_package_shared(&package_entry)
+            .expect("package served from remote");
+        assert_eq!(loaded_package.record.interface_blob, vec![4, 3, 2, 1]);
         assert!(
-            cache_b.load_raw(&unit_key).is_some(),
-            "unit persisted locally after remote read-through"
+            cache_b.load_raw(&package_entry).is_some(),
+            "package persisted locally after remote read-through"
         );
 
         // A corrupted remote entry is rejected by validation.
         let key2 = compute_key(&KeyInputs {
             compiler_fingerprint: [10u8; 32],
             opt_level: 2,
-            emit_test_cases: false,
             manifest: None,
             files: &files,
         });

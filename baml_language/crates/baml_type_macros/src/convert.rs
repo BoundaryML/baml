@@ -10,10 +10,11 @@
 //! top-level variant set and the (deep) child type.
 //!
 //! **Deep, equal-size pairs** additionally get zero-cost borrow conversions and
-//! convert by `transmute`: widening is `Sub::as_<super>(&self) -> &Super` and a
-//! pure-move `From`; narrowing adds `TryFrom<&Super> for &Sub` (validate once,
-//! reinterpret the borrow) alongside the owned/clone `TryFrom`s. See
-//! [`gen_widen_transmute`], [`gen_as_upcast`], and [`gen_narrow_transmute`].
+//! convert by reinterpreting the bytes in place: widening is
+//! `Sub::as_<super>(&self) -> &Super` and a pure-move `From`; narrowing adds
+//! `TryFrom<&Super> for &Sub` (validate once, reinterpret the borrow) alongside
+//! the owned/clone `TryFrom`s. See
+//! [`gen_widen_reinterpret`], [`gen_as_upcast`], and [`gen_narrow_reinterpret`].
 //!
 //! **Shallow-involved pairs** (different-sized members) keep the structural
 //! walk. Its owned form is a genuine move — when the two sides share a child
@@ -21,30 +22,42 @@
 //! recursive spine is rebuilt while leaf payloads are moved; the by-reference
 //! form clones.
 //!
+//! ## Reinterpreting under a generic parameter
+//!
+//! The family is generic (`Ty<N>`, `RuntimeTy<N>`, …), which rules out
+//! `mem::transmute` for *owned* values: it demands both sizes be known before
+//! monomorphization, and `Sub<N>` "can vary because of N" (E0512). The owned
+//! conversions therefore reinterpret through a `ManuallyDrop` + `ptr::read`
+//! pair, which defers the size question to the co-located `const` assert that
+//! fires per instantiation. References are unaffected — `&Sub<N>` is a thin
+//! pointer whichever `N` is chosen — so the borrow conversions still spell it
+//! `mem::transmute`.
+//!
 //! ## Layout reliance (the residual `unsafe` assumption)
 //!
-//! The `transmute` conversions are sound only because a member and its sibling
+//! The reinterpreting conversions are sound only because a member and its sibling
 //! are laid out identically wherever they differ. `#[repr(C, u8)]` (enums) and
 //! `#[repr(C)]` (satellites) pin the tag and field order, and the per-site
 //! `const` assert pins total size + align. Beyond that, reinterpreting a nested
-//! position — `Vec<Ty> -> Vec<RuntimeTy>`, `(Name, Ty) -> (Name, RuntimeTy)` —
-//! rests on a *de-facto*, not language-guaranteed, property: `Vec<T>` is a
-//! `(ptr, cap, len)` triple whose layout is independent of `T`, and a
-//! `#[repr(Rust)]` tuple's layout is a deterministic function of its fields'
-//! sizes + aligns (equal here, since `Ty` and its members are equal size +
-//! align). This holds on current `rustc` but is not a stability guarantee; the
-//! unit tests plus a `cargo +nightly miri test -p baml_type` run in CI are what
-//! guard it against a future layout change.
+//! position — `Box<[Ty]> -> Box<[RuntimeTy]>`, `(Name, Ty) -> (Name, RuntimeTy)`
+//! — rests on a *de-facto*, not language-guaranteed, property: `Box<[T]>` is a
+//! `(ptr, len)` fat pointer (and `Vec<T>` a `(ptr, cap, len)` triple) whose
+//! layout is independent of `T`, and a `#[repr(Rust)]` tuple's layout is a
+//! deterministic function of its fields' sizes + aligns (equal here, since `Ty`
+//! and its members are equal size + align). This holds on current `rustc` but
+//! is not a stability guarantee; the unit tests plus a
+//! `cargo +nightly miri test -p baml_type` run in CI are what guard it against
+//! a future layout change.
 
 use std::collections::HashSet;
 
 use proc_macro2::{Ident, TokenStream, TokenTree};
 use quote::{format_ident, quote};
-use syn::{Fields, GenericArgument, Index, PathArguments, Type};
+use syn::{Fields, GenericArgument, Generics, Index, PathArguments, Type, parse_quote};
 
 use crate::{
-    emit::{member_variants, satellite_name_for},
-    parse::{Family, MVariant, Satellite},
+    emit::{member_variants, satellite_name_for, with_clone_bounds},
+    parse::{Child, Family, MVariant, Member, Satellite},
 };
 
 pub(crate) fn emit_conversions(family: &Family) -> TokenStream {
@@ -57,25 +70,27 @@ pub(crate) fn emit_conversions(family: &Family) -> TokenStream {
         if (0..family.members.len()).any(|j| j != i && is_le(family, i, j)) {
             out.extend(gen_error(&member.name));
         }
-        if member.child != i {
-            out.extend(gen_error_bridge(family, member.child, i));
+        if let Child::Member(child_idx) = member.child
+            && child_idx != i
+        {
+            out.extend(gen_error_bridge(family, child_idx, i));
         }
     }
 
     for (sub, sup) in comparable_pairs(family) {
         // A pair of *deep* members that this family builds equal-size (every
-        // deep member includes the largest-payload axis) converts by `transmute`
-        // in both directions: widening is a pure move (every narrower value is a
-        // valid wider one), and narrowing walks *once* to validate then reuses
-        // the same bytes — no rebuild, no reallocation. Shallow-involved pairs
+        // deep member includes the largest-payload axis) reinterprets in both
+        // directions: widening is a pure move (every narrower value is a valid
+        // wider one), and narrowing walks *once* to validate then reuses the
+        // same bytes — no rebuild, no reallocation. Shallow-involved pairs
         // differ in size (a shallow member omits the wider variants), so they
         // keep the structural rebuild. The equal-size premise is enforced, not
-        // assumed: every emitted transmute carries a co-located `const`
+        // assumed: every emitted reinterpretation carries a co-located `const`
         // size+align assert that fails compilation if a future member breaks it.
         if family.members[sub].deep && family.members[sup].deep {
-            out.extend(gen_widen_transmute(family, sub, sup));
+            out.extend(gen_widen_reinterpret(family, sub, sup));
             out.extend(gen_as_upcast(family, sub, sup));
-            out.extend(gen_narrow_transmute(family, sub, sup));
+            out.extend(gen_narrow_reinterpret(family, sub, sup));
         } else {
             out.extend(gen_widen(family, sub, sup));
             // Narrowing to a shallow member walks and rebuilds (sizes differ).
@@ -85,15 +100,11 @@ pub(crate) fn emit_conversions(family: &Family) -> TokenStream {
 
     // Satellite conversions, for the comparable pairs among deep members (the
     // only members that own satellites). Deep satellites are equal-size too, so
-    // their widenings transmute as well.
+    // their widenings reinterpret as well.
     for (sub, sup) in comparable_pairs(family) {
         if family.members[sub].deep && family.members[sup].deep {
             for sat in &family.satellites {
-                let sf = SatFields {
-                    name: sat.name.clone(),
-                    fields: sat.fields.iter().cloned().collect(),
-                };
-                out.extend(gen_sat(family, sub, sup, &sf));
+                out.extend(gen_sat(family, sub, sup, sat));
             }
         }
     }
@@ -101,15 +112,60 @@ pub(crate) fn emit_conversions(family: &Family) -> TokenStream {
     out
 }
 
-/// A `const`-block guard, co-located with every unsafe `transmute` (widening,
-/// narrowing, and satellite), that fails compilation unless `a` and `b` share
-/// size *and* alignment. Size equality is what `transmute` of owned values
-/// already checks, but a *reference* transmute (`&a -> &b`) is pointer-sized
-/// regardless, so without this a size mismatch there would be silent UB;
-/// alignment is never checked by `transmute` at all. It guards *total* size and
-/// align only — per-field layout identity additionally rests on the de-facto
-/// reliance documented at the module level.
-fn layout_assert(a: &Ident, b: &Ident) -> TokenStream {
+/// The named type of family member `idx` at the family's own parameters —
+/// `RuntimeTy<N>`. Every conversion holds `N` fixed, so both sides of a pair are
+/// spelled at the same arguments.
+fn member_ty(family: &Family, idx: usize) -> TokenStream {
+    let name = &family.members[idx].name;
+    let (_, ty_g, _) = family.generics.split_for_impl();
+    quote!(#name #ty_g)
+}
+
+/// The same, for member `idx`'s copy of `sat` — `RuntimeFunctionParamTy<N>`.
+fn sat_ty(family: &Family, idx: usize, sat: &Satellite) -> TokenStream {
+    let name = satellite_name_for(&family.members[idx].name, &sat.name);
+    let (_, ty_g, _) = sat.generics.split_for_impl();
+    quote!(#name #ty_g)
+}
+
+/// `generics` with lifetime `'a` prepended, for the borrow-to-borrow narrowing
+/// (`impl<'a, N> TryFrom<&'a Sup<N>> for &'a Sub<N>`). Lifetimes must lead the
+/// parameter list, hence the insert at the front.
+fn with_lifetime(generics: &Generics) -> Generics {
+    let mut out = generics.clone();
+    out.params.insert(0, parse_quote!('a));
+    out
+}
+
+/// Move `value` (typed `from`) into an equivalently-laid-out `to`.
+///
+/// Stands in for `mem::transmute`, which cannot see that `Sub<N>` and `Sup<N>`
+/// have equal size while `N` is still generic (E0512). `ManuallyDrop` suppresses
+/// the source's destructor — its heap allocations are handed to the result
+/// unchanged — and the read reinterprets those bytes in place.
+fn reinterpret_owned(from: &TokenStream, to: &TokenStream, value: TokenStream) -> TokenStream {
+    quote! {
+        {
+            let __src = ::core::mem::ManuallyDrop::<#from>::new(#value);
+            // SAFETY: guarded by the co-located `const` size + align assert, and
+            // `ManuallyDrop<T>` is `repr(transparent)` over `T`, so `__src` is a
+            // correctly-aligned, initialized `#to` for the read below.
+            unsafe { ::core::ptr::read((&raw const __src).cast::<#to>()) }
+        }
+    }
+}
+
+/// A `const`-block guard, co-located with every unsafe reinterpretation
+/// (widening, narrowing, and satellite), that fails compilation unless `a` and
+/// `b` share size *and* alignment. Nothing else checks it: the owned
+/// conversions read through a pointer (see [`reinterpret_owned`]) and a
+/// *reference* transmute is pointer-sized regardless, so without this a size
+/// mismatch would be silent UB; alignment is never checked by `transmute` at
+/// all. Being an inline `const`, it inherits the enclosing generics and so fires
+/// per instantiation of `N`. It guards *total* size and align only — per-field
+/// layout identity additionally rests on the de-facto reliance documented at the
+/// module level.
+fn layout_assert(a: &TokenStream, b: &TokenStream) -> TokenStream {
     quote! {
         const {
             ::core::assert!(
@@ -146,35 +202,38 @@ fn as_method_name(target: &Ident) -> Ident {
     format_ident!("as_{}", snake_ident(target))
 }
 
-/// Widen `sub` → `sup` (both deep, equal-size) by `transmute`. The owned form is
-/// a genuine zero-cost move of the whole value; the by-reference form widens the
-/// borrow and clones through it (so it composes with the recursion but is not
-/// itself zero-cost — for a zero-cost borrow, the generated `as_<sup>()`
-/// accessor is emitted separately by `gen_as_upcast`).
-fn gen_widen_transmute(family: &Family, sub: usize, sup: usize) -> TokenStream {
-    let sub_name = &family.members[sub].name;
-    let sup_name = &family.members[sup].name;
-    let assert = layout_assert(sub_name, sup_name);
+/// Widen `sub` → `sup` (both deep, equal-size) by reinterpretation. The owned
+/// form is a genuine zero-cost move of the whole value; the by-reference form
+/// widens the borrow and clones through it (so it composes with the recursion
+/// but is not itself zero-cost — for a zero-cost borrow, the generated
+/// `as_<sup>()` accessor is emitted separately by `gen_as_upcast`).
+fn gen_widen_reinterpret(family: &Family, sub: usize, sup: usize) -> TokenStream {
+    let sub_ty = member_ty(family, sub);
+    let sup_ty = member_ty(family, sup);
+    let assert = layout_assert(&sub_ty, &sup_ty);
+    let (impl_g, _, where_c) = family.generics.split_for_impl();
+    let cloneable = with_clone_bounds(&family.generics);
+    let (clone_impl_g, _, clone_where_c) = cloneable.split_for_impl();
+    // SAFETY (for the `reinterpret_owned` below): `sub` ≤ `sup` in the family
+    // order, so every variant of `sub` exists in `sup` at the same
+    // `#[repr(C, u8)]` discriminant. Both are equal size + align (the `const`
+    // assert), and the recursion travels through `Box`/`Vec`/tuple positions
+    // whose in-memory layout depends only on the element's (here equal) size +
+    // align, so nested `sub` children are likewise valid `sup` when read back —
+    // a de-facto layout guarantee, not a language-level one (see the module
+    // docs). Ownership of the heap allocations transfers unchanged; dealloc uses
+    // the identical layout.
+    let widened = reinterpret_owned(&sub_ty, &sup_ty, quote!(value));
     quote! {
-        impl ::core::convert::From<#sub_name> for #sup_name {
-            fn from(value: #sub_name) -> Self {
+        impl #impl_g ::core::convert::From<#sub_ty> for #sup_ty #where_c {
+            fn from(value: #sub_ty) -> Self {
                 #assert
-                // SAFETY: `#sub_name` ≤ `#sup_name` in the family order, so every
-                // variant of `#sub_name` exists in `#sup_name` at the same
-                // `#[repr(C, u8)]` discriminant. Both are equal size + align (the
-                // `const` assert above), and the recursion travels through
-                // `Box`/`Vec`/tuple positions whose in-memory layout depends only
-                // on the element's (here equal) size + align, so nested
-                // `#sub_name` children are likewise valid `#sup_name` when read
-                // back — a de-facto layout guarantee, not a language-level one
-                // (see the module docs). The move transfers ownership of the heap
-                // allocations unchanged; dealloc uses the identical layout.
-                unsafe { ::core::mem::transmute::<#sub_name, #sup_name>(value) }
+                #widened
             }
         }
-        impl ::core::convert::From<&#sub_name> for #sup_name {
-            fn from(value: &#sub_name) -> Self {
-                <#sup_name as ::core::convert::From<#sub_name>>::from(value.clone())
+        impl #clone_impl_g ::core::convert::From<&#sub_ty> for #sup_ty #clone_where_c {
+            fn from(value: &#sub_ty) -> Self {
+                <#sup_ty as ::core::convert::From<#sub_ty>>::from(value.clone())
             }
         }
     }
@@ -186,8 +245,11 @@ fn gen_widen_transmute(family: &Family, sub: usize, sup: usize) -> TokenStream {
 fn gen_as_upcast(family: &Family, sub: usize, sup: usize) -> TokenStream {
     let sub_name = &family.members[sub].name;
     let sup_name = &family.members[sup].name;
+    let sub_ty = member_ty(family, sub);
+    let sup_ty = member_ty(family, sup);
     let method = as_method_name(sup_name);
-    let assert = layout_assert(sub_name, sup_name);
+    let assert = layout_assert(&sub_ty, &sup_ty);
+    let (impl_g, _, where_c) = family.generics.split_for_impl();
     let doc = format!(
         " Reinterpret this `{sub_name}` as a `{sup_name}` without copying.\n\n\
           Every `{sub_name}` is a valid `{sup_name}` and the two share an\n\
@@ -196,15 +258,15 @@ fn gen_as_upcast(family: &Family, sub: usize, sup: usize) -> TokenStream {
           reference suffices."
     );
     quote! {
-        impl #sub_name {
+        impl #impl_g #sub_ty #where_c {
             #[doc = #doc]
             #[must_use]
-            pub fn #method(&self) -> &#sup_name {
+            pub fn #method(&self) -> &#sup_ty {
                 #assert
                 // SAFETY: as in the owned `From` above, but at the reference
                 // level — a shared borrow reinterpreted in place. Sound only
                 // because the two types are equal size + align (asserted).
-                unsafe { ::core::mem::transmute::<&#sub_name, &#sup_name>(self) }
+                unsafe { ::core::mem::transmute::<&#sub_ty, &#sup_ty>(self) }
             }
         }
     }
@@ -227,13 +289,26 @@ fn gen_as_upcast(family: &Family, sub: usize, sup: usize) -> TokenStream {
 /// borrow-to-borrow (`&Sup -> &Sub`, validate then reinterpret the reference in
 /// place). The last recovers the `Not<Sub>` reason on failure — the reason a
 /// plain `Option`-returning accessor cannot.
-fn gen_narrow_transmute(family: &Family, sub: usize, sup: usize) -> TokenStream {
+fn gen_narrow_reinterpret(family: &Family, sub: usize, sup: usize) -> TokenStream {
     let sub_name = &family.members[sub].name;
     let sup_name = &family.members[sup].name;
+    let sub_ty = member_ty(family, sub);
+    let sup_ty = member_ty(family, sup);
     let err = format_ident!("Not{}", sub_name);
     let vfn = enum_validator_name(family, sub, sup);
     let validators = gen_validators(family, sub, sup);
-    let assert = layout_assert(sub_name, sup_name);
+    let assert = layout_assert(&sub_ty, &sup_ty);
+    let (impl_g, _, where_c) = family.generics.split_for_impl();
+    let cloneable = with_clone_bounds(&family.generics);
+    let (clone_impl_g, _, clone_where_c) = cloneable.split_for_impl();
+    let borrowed = with_lifetime(&family.generics);
+    let (borrow_impl_g, _, borrow_where_c) = borrowed.split_for_impl();
+    // SAFETY (both `reinterpret_owned` sites below): the walk proved every node
+    // is a variant `sub` also has, and the two types are equal size + align
+    // (asserted), so the owned tree is bit-valid as `sub`; its heap allocations
+    // are reused unchanged.
+    let narrowed = reinterpret_owned(&sup_ty, &sub_ty, quote!(value));
+    let narrowed_clone = reinterpret_owned(&sup_ty, &sub_ty, quote!(value.clone()));
     let ref_doc = format!(
         " Narrow `&{sup_name}` to `&{sub_name}` without copying, if every nested\n\
           variant is representable in `{sub_name}`.\n\n\
@@ -244,45 +319,37 @@ fn gen_narrow_transmute(family: &Family, sub: usize, sup: usize) -> TokenStream 
     quote! {
         #validators
 
-        impl ::core::convert::TryFrom<#sup_name> for #sub_name {
+        impl #impl_g ::core::convert::TryFrom<#sup_ty> for #sub_ty #where_c {
             type Error = #err;
-            fn try_from(value: #sup_name) -> ::core::result::Result<Self, Self::Error> {
+            fn try_from(value: #sup_ty) -> ::core::result::Result<Self, #err> {
                 #assert
                 #vfn(&value)?;
-                // SAFETY: the walk above proved every node is a valid `#sub_name`
-                // variant, and the two types are equal size + align (asserted),
-                // so the owned tree is bit-valid as `#sub_name`. The move reuses
-                // its heap allocations unchanged.
-                ::core::result::Result::Ok(unsafe {
-                    ::core::mem::transmute::<#sup_name, #sub_name>(value)
-                })
+                ::core::result::Result::Ok(#narrowed)
             }
         }
 
-        impl ::core::convert::TryFrom<&#sup_name> for #sub_name {
+        impl #clone_impl_g ::core::convert::TryFrom<&#sup_ty> for #sub_ty #clone_where_c {
             type Error = #err;
-            fn try_from(value: &#sup_name) -> ::core::result::Result<Self, Self::Error> {
+            fn try_from(value: &#sup_ty) -> ::core::result::Result<Self, #err> {
                 #assert
                 #vfn(value)?;
                 // A borrow can't be moved out, so clone the validated tree and
                 // reinterpret the owned copy.
-                ::core::result::Result::Ok(unsafe {
-                    ::core::mem::transmute::<#sup_name, #sub_name>(value.clone())
-                })
+                ::core::result::Result::Ok(#narrowed_clone)
             }
         }
 
         #[doc = #ref_doc]
-        impl<'a> ::core::convert::TryFrom<&'a #sup_name> for &'a #sub_name {
+        impl #borrow_impl_g ::core::convert::TryFrom<&'a #sup_ty> for &'a #sub_ty #borrow_where_c {
             type Error = #err;
-            fn try_from(value: &'a #sup_name) -> ::core::result::Result<Self, Self::Error> {
+            fn try_from(value: &'a #sup_ty) -> ::core::result::Result<Self, #err> {
                 #assert
                 #vfn(value)?;
                 // SAFETY: the walk proved every node is a valid `#sub_name`, and
                 // the two types are equal size + align (asserted). A shared borrow
                 // reinterpreted in place, lifetime preserved.
                 ::core::result::Result::Ok(unsafe {
-                    ::core::mem::transmute::<&#sup_name, &#sub_name>(value)
+                    ::core::mem::transmute::<&#sup_ty, &#sub_ty>(value)
                 })
             }
         }
@@ -293,18 +360,19 @@ fn gen_narrow_transmute(family: &Family, sub: usize, sup: usize) -> TokenStream 
 /// per satellite. Each returns `Ok(())` iff its argument is representable in
 /// `sub` at every depth; they recurse into one another to cover the whole tree.
 fn gen_validators(family: &Family, sub: usize, sup: usize) -> TokenStream {
-    let sup_name = &family.members[sup].name;
+    let sup_ty = member_ty(family, sup);
     let err = format_ident!("Not{}", &family.members[sub].name);
     let vfn = enum_validator_name(family, sub, sup);
     let body = validate_body(family, sub, sup);
-    let reachable = reachable_satellites(family, sub);
+    let (impl_g, _, where_c) = family.generics.split_for_impl();
+    let reachable = reachable_satellites(family, &family.members[sub]);
     let sats = family
         .satellites
         .iter()
         .filter(|sat| reachable.contains(&sat.name.to_string()))
         .map(|sat| gen_sat_validator(family, sub, sup, sat));
     quote! {
-        fn #vfn(value: &#sup_name) -> ::core::result::Result<(), #err> {
+        fn #vfn #impl_g (value: &#sup_ty) -> ::core::result::Result<(), #err> #where_c {
             #body
         }
         #(#sats)*
@@ -399,7 +467,7 @@ fn validate_expr(
     if !contains_recursion(family, ty) {
         return quote! { ::core::result::Result::Ok(()) };
     }
-    if let Some(id) = single_ident(ty) {
+    if let Some(id) = path_head(ty) {
         if *id == family.master_ident {
             let f = enum_validator_name(family, sub, sup);
             return quote! { #f(#binding) };
@@ -408,6 +476,10 @@ fn validate_expr(
             let f = sat_validator_name(family, sub, sup, sat);
             return quote! { #f(#binding) };
         }
+    }
+    if let Some(inner) = boxed_slice_arg(ty) {
+        let e = validate_expr(family, sub, sup, inner, quote!(__v));
+        return quote! { #binding.iter().try_for_each(|__v| #e) };
     }
     if let Some(inner) = wrapper_arg(ty, "Box") {
         return validate_expr(family, sub, sup, inner, quote!(&**#binding));
@@ -444,9 +516,10 @@ fn validate_expr(
 /// field binding is parenthesized so a `Vec`/`Box` field composes as
 /// `(&value.f).iter()`, not `&(value.f.iter())`.
 fn gen_sat_validator(family: &Family, sub: usize, sup: usize, sat: &Satellite) -> TokenStream {
-    let sup_sat = satellite_name_for(&family.members[sup].name, &sat.name);
+    let sup_sat = sat_ty(family, sup, sat);
     let err = format_ident!("Not{}", &family.members[sub].name);
     let vfn = sat_validator_name(family, sub, sup, sat);
+    let (impl_g, _, where_c) = sat.generics.split_for_impl();
     let checks = sat
         .fields
         .iter()
@@ -456,7 +529,7 @@ fn gen_sat_validator(family: &Family, sub: usize, sup: usize, sat: &Satellite) -
             validate_expr(family, sub, sup, &f.ty, quote!((&value.#fid)))
         });
     quote! {
-        fn #vfn(value: &#sup_sat) -> ::core::result::Result<(), #err> {
+        fn #vfn #impl_g (value: &#sup_sat) -> ::core::result::Result<(), #err> #where_c {
             #(#checks?;)*
             ::core::result::Result::Ok(())
         }
@@ -468,7 +541,7 @@ fn gen_sat_validator(family: &Family, sub: usize, sup: usize, sat: &Satellite) -
 /// excluded variant (e.g. `Interface`, reachable solely via the `typevar`
 /// `AssociatedTypeProjection`) needs no validator. Emitting one anyway would be
 /// dead code — this prunes it.
-fn reachable_satellites(family: &Family, sub: usize) -> HashSet<String> {
+pub(crate) fn reachable_satellites(family: &Family, member: &Member) -> HashSet<String> {
     let sat_names: HashSet<String> = family
         .satellites
         .iter()
@@ -491,7 +564,7 @@ fn reachable_satellites(family: &Family, sub: usize) -> HashSet<String> {
 
     let mut work: Vec<String> = Vec::new();
     for v in &family.variants {
-        if family.members[sub].includes.contains(&v.axis) {
+        if member.includes.contains(&v.axis) {
             collect(&v.fields, &mut work);
         }
     }
@@ -531,19 +604,31 @@ fn sat_validator_name(family: &Family, sub: usize, sup: usize, sat: &Satellite) 
 
 // ── Product order ────────────────────────────────────────────────────────────
 
+/// The child index of a member on a comparable pair's side. Comparable pairs
+/// exist only between plain members ([`is_le`] makes interned members
+/// incomparable), so an interned member cannot reach here.
+fn plain_child(member: &Member) -> usize {
+    member
+        .child_member()
+        .unwrap_or_else(|| unreachable!("comparable pairs exist only between plain members"))
+}
+
 fn subset(a: &[usize], b: &[usize]) -> bool {
     a.iter().all(|x| b.contains(x))
 }
 
 /// `a ≤ b` (a is a sub-member of b): top-level include-sets and child
-/// include-sets are both subsets.
+/// include-sets are both subsets. Interned members are incomparable to
+/// everything — their nested positions hold handles, not member trees, so no
+/// structural widening/narrowing exists; their boundary conversions are
+/// hand-written semantic ones (interning / finalization).
 fn is_le(family: &Family, a: usize, b: usize) -> bool {
     let (ma, mb) = (&family.members[a], &family.members[b]);
+    let (Some(ca), Some(cb)) = (ma.child_member(), mb.child_member()) else {
+        return false;
+    };
     subset(&ma.includes, &mb.includes)
-        && subset(
-            &family.members[ma.child].includes,
-            &family.members[mb.child].includes,
-        )
+        && subset(&family.members[ca].includes, &family.members[cb].includes)
 }
 
 /// All ordered pairs `(sub, super)` with `sub < super`.
@@ -588,16 +673,19 @@ impl Cx<'_> {
 // ── Enum conversions ─────────────────────────────────────────────────────────
 
 fn gen_widen(family: &Family, sub: usize, sup: usize) -> TokenStream {
-    let sub_name = &family.members[sub].name;
-    let sup_name = &family.members[sup].name;
+    let sub_ty = member_ty(family, sub);
+    let sup_ty = member_ty(family, sup);
     let by_ref = widen_body(family, sub, sup, Own::Ref);
     let owned = widen_body(family, sub, sup, Own::Owned);
+    let (impl_g, _, where_c) = family.generics.split_for_impl();
+    let cloneable = with_clone_bounds(&family.generics);
+    let (clone_impl_g, _, clone_where_c) = cloneable.split_for_impl();
     quote! {
-        impl ::core::convert::From<&#sub_name> for #sup_name {
-            fn from(value: &#sub_name) -> Self { #by_ref }
+        impl #clone_impl_g ::core::convert::From<&#sub_ty> for #sup_ty #clone_where_c {
+            fn from(value: &#sub_ty) -> Self { #by_ref }
         }
-        impl ::core::convert::From<#sub_name> for #sup_name {
-            fn from(value: #sub_name) -> Self { #owned }
+        impl #impl_g ::core::convert::From<#sub_ty> for #sup_ty #where_c {
+            fn from(value: #sub_ty) -> Self { #owned }
         }
     }
 }
@@ -607,8 +695,8 @@ fn widen_body(family: &Family, sub: usize, sup: usize, own: Own) -> TokenStream 
     let sup_name = &family.members[sup].name;
     let cx = Cx {
         family,
-        sub_child: family.members[sub].child,
-        sup_child: family.members[sup].child,
+        sub_child: plain_child(&family.members[sub]),
+        sup_child: plain_child(&family.members[sup]),
         own,
     };
     let arms = member_variants(family, &family.members[sub])
@@ -617,19 +705,22 @@ fn widen_body(family: &Family, sub: usize, sup: usize, own: Own) -> TokenStream 
 }
 
 fn gen_narrow(family: &Family, sub: usize, sup: usize) -> TokenStream {
-    let sub_name = &family.members[sub].name;
-    let sup_name = &family.members[sup].name;
-    let err = format_ident!("Not{}", sub_name);
+    let sub_ty = member_ty(family, sub);
+    let sup_ty = member_ty(family, sup);
+    let err = format_ident!("Not{}", &family.members[sub].name);
     let by_ref = narrow_body(family, sub, sup, Own::Ref);
     let owned = narrow_body(family, sub, sup, Own::Owned);
+    let (impl_g, _, where_c) = family.generics.split_for_impl();
+    let cloneable = with_clone_bounds(&family.generics);
+    let (clone_impl_g, _, clone_where_c) = cloneable.split_for_impl();
     quote! {
-        impl ::core::convert::TryFrom<&#sup_name> for #sub_name {
+        impl #clone_impl_g ::core::convert::TryFrom<&#sup_ty> for #sub_ty #clone_where_c {
             type Error = #err;
-            fn try_from(value: &#sup_name) -> ::core::result::Result<Self, Self::Error> { #by_ref }
+            fn try_from(value: &#sup_ty) -> ::core::result::Result<Self, #err> { #by_ref }
         }
-        impl ::core::convert::TryFrom<#sup_name> for #sub_name {
+        impl #impl_g ::core::convert::TryFrom<#sup_ty> for #sub_ty #where_c {
             type Error = #err;
-            fn try_from(value: #sup_name) -> ::core::result::Result<Self, Self::Error> { #owned }
+            fn try_from(value: #sup_ty) -> ::core::result::Result<Self, #err> { #owned }
         }
     }
 }
@@ -641,8 +732,8 @@ fn narrow_body(family: &Family, sub: usize, sup: usize, own: Own) -> TokenStream
     let sub_includes = &family.members[sub].includes;
     let cx = Cx {
         family,
-        sub_child: family.members[sub].child,
-        sup_child: family.members[sup].child,
+        sub_child: plain_child(&family.members[sub]),
+        sup_child: plain_child(&family.members[sup]),
         own,
     };
     let arms = member_variants(family, &family.members[sup]).map(|v| {
@@ -760,6 +851,11 @@ fn widen_expr(cx: &Cx, ty: &Type, binding: TokenStream) -> TokenStream {
     if let Some(target) = terminal_target(cx, ty, cx.sup_child) {
         return quote! { #target::from(#binding) };
     }
+    if let Some(inner) = boxed_slice_arg(ty) {
+        let iter = iter(cx.own);
+        let e = widen_expr(cx, inner, quote!(__v));
+        return quote! { #binding.#iter().map(|__v| #e).collect() };
+    }
     if let Some(inner) = wrapper_arg(ty, "Box") {
         let e = widen_expr(cx, inner, deref(cx.own, &binding));
         return quote! { ::std::boxed::Box::new(#e) };
@@ -792,6 +888,13 @@ fn narrow_expr(cx: &Cx, ty: &Type, binding: TokenStream) -> TokenStream {
     }
     if let Some(target) = terminal_target(cx, ty, cx.sub_child) {
         return quote! { #target::try_from(#binding) };
+    }
+    if let Some(inner) = boxed_slice_arg(ty) {
+        let iter = iter(cx.own);
+        let e = narrow_expr(cx, inner, quote!(__v));
+        return quote! {
+            #binding.#iter().map(|__v| #e).collect::<::core::result::Result<::std::boxed::Box<[_]>, _>>()
+        };
     }
     if let Some(inner) = wrapper_arg(ty, "Box") {
         let e = narrow_expr(cx, inner, deref(cx.own, &binding));
@@ -876,7 +979,7 @@ fn tuple_elem(own: Own, binding: &TokenStream, idx: &Index) -> TokenStream {
 /// If `ty` is exactly the master ident or a satellite name, the terminal
 /// conversion target on `child` (an enum member or its satellite).
 fn terminal_target(cx: &Cx, ty: &Type, child: usize) -> Option<Ident> {
-    let id = single_ident(ty)?;
+    let id = path_head(ty)?;
     let child_name = &cx.family.members[child].name;
     if *id == cx.family.master_ident {
         Some(child_name.clone())
@@ -888,43 +991,41 @@ fn terminal_target(cx: &Cx, ty: &Type, child: usize) -> Option<Ident> {
 
 // ── Satellite conversions ────────────────────────────────────────────────────
 
-/// A satellite reduced to the data the converter needs.
-struct SatFields {
-    name: Ident,
-    fields: Vec<syn::Field>,
-}
-
-fn gen_sat(family: &Family, sub: usize, sup: usize, sat: &SatFields) -> TokenStream {
-    let sub_sat = satellite_name_for(&family.members[sub].name, &sat.name);
-    let sup_sat = satellite_name_for(&family.members[sup].name, &sat.name);
+fn gen_sat(family: &Family, sub: usize, sup: usize, sat: &Satellite) -> TokenStream {
+    let sub_sat = sat_ty(family, sub, sat);
+    let sup_sat = sat_ty(family, sup, sat);
     let err = format_ident!("Not{}", &family.members[sub].name);
     let assert = layout_assert(&sub_sat, &sup_sat);
     let narrow_ref = sat_narrow_body(family, sub, sup, sat, Own::Ref);
     let narrow_owned = sat_narrow_body(family, sub, sup, sat, Own::Owned);
+    let (impl_g, _, where_c) = sat.generics.split_for_impl();
+    let cloneable = with_clone_bounds(&sat.generics);
+    let (clone_impl_g, _, clone_where_c) = cloneable.split_for_impl();
+    // SAFETY (for `reinterpret_owned`): a satellite differs across the family
+    // only in its recursive field's member type (`ty: Ty<N>` vs
+    // `ty: RuntimeTy<N>`, …), which are equal-layout; `#[repr(C)]` pins the
+    // field order identically, and the pair is equal size + align (asserted).
+    // So the bytes of the narrower satellite are a valid wider one.
+    let widened = reinterpret_owned(&sub_sat, &sup_sat, quote!(value));
     quote! {
-        impl ::core::convert::From<&#sub_sat> for #sup_sat {
+        impl #clone_impl_g ::core::convert::From<&#sub_sat> for #sup_sat #clone_where_c {
             fn from(value: &#sub_sat) -> Self {
                 <#sup_sat as ::core::convert::From<#sub_sat>>::from(value.clone())
             }
         }
-        impl ::core::convert::From<#sub_sat> for #sup_sat {
+        impl #impl_g ::core::convert::From<#sub_sat> for #sup_sat #where_c {
             fn from(value: #sub_sat) -> Self {
                 #assert
-                // SAFETY: a satellite differs across the family only in its
-                // recursive field's member type (`ty: Ty` vs `ty: RuntimeTy`,
-                // …), which are equal-layout; `#[repr(C)]` pins the field order
-                // identically, and the pair is equal size + align (asserted). So
-                // the bytes of `#sub_sat` are a valid `#sup_sat`.
-                unsafe { ::core::mem::transmute::<#sub_sat, #sup_sat>(value) }
+                #widened
             }
         }
-        impl ::core::convert::TryFrom<&#sup_sat> for #sub_sat {
+        impl #clone_impl_g ::core::convert::TryFrom<&#sup_sat> for #sub_sat #clone_where_c {
             type Error = #err;
-            fn try_from(value: &#sup_sat) -> ::core::result::Result<Self, Self::Error> { #narrow_ref }
+            fn try_from(value: &#sup_sat) -> ::core::result::Result<Self, #err> { #narrow_ref }
         }
-        impl ::core::convert::TryFrom<#sup_sat> for #sub_sat {
+        impl #impl_g ::core::convert::TryFrom<#sup_sat> for #sub_sat #where_c {
             type Error = #err;
-            fn try_from(value: #sup_sat) -> ::core::result::Result<Self, Self::Error> { #narrow_owned }
+            fn try_from(value: #sup_sat) -> ::core::result::Result<Self, #err> { #narrow_owned }
         }
     }
 }
@@ -934,7 +1035,7 @@ fn sat_narrow_body(
     family: &Family,
     sub: usize,
     sup: usize,
-    sat: &SatFields,
+    sat: &Satellite,
     own: Own,
 ) -> TokenStream {
     let sub_sat = satellite_name_for(&family.members[sub].name, &sat.name);
@@ -1006,18 +1107,37 @@ fn gen_error_bridge(family: &Family, child: usize, member: usize) -> TokenStream
 
 // ── syn helpers ──────────────────────────────────────────────────────────────
 
-/// `ty` as a bare single-segment ident with no generic args.
-fn single_ident(ty: &Type) -> Option<&Ident> {
+/// The head ident of a single-segment path type, ignoring any generic arguments
+/// (`Ty<N>` → `Ty`, `Box<Ty<N>>` → `Box`).
+///
+/// Callers use it only to ask "is this position a family head?", and the answer
+/// turns on the ident alone: a family head's arguments are the family's own
+/// parameters, which every conversion holds fixed across both sides. Should a
+/// head ever be written at some *other* argument (`Ty<Other>`), the emitted
+/// `Target::from(..)` simply infers `Target<Other>` — still the type the
+/// rewritten field holds — so the position stays well-typed rather than
+/// silently converting to the wrong one.
+pub(crate) fn path_head(ty: &Type) -> Option<&Ident> {
     let Type::Path(p) = ty else { return None };
     if p.qself.is_some() || p.path.segments.len() != 1 {
         return None;
     }
-    let seg = &p.path.segments[0];
-    matches!(seg.arguments, PathArguments::None).then_some(&seg.ident)
+    Some(&p.path.segments[0].ident)
+}
+
+/// If `ty` is `Box<[Inner]>` (a boxed slice — the family's frozen-sequence
+/// shape), the `Inner` type. Checked before the plain `Box` wrapper wherever
+/// both could match: `wrapper_arg(_, "Box")` would surface the bare slice
+/// type, which no walker can traverse.
+pub(crate) fn boxed_slice_arg(ty: &Type) -> Option<&Type> {
+    match wrapper_arg(ty, "Box")? {
+        Type::Slice(slice) => Some(&slice.elem),
+        _ => None,
+    }
 }
 
 /// If `ty` is `Wrapper<Inner>` (one type arg), the `Inner` type.
-fn wrapper_arg<'a>(ty: &'a Type, wrapper: &str) -> Option<&'a Type> {
+pub(crate) fn wrapper_arg<'a>(ty: &'a Type, wrapper: &str) -> Option<&'a Type> {
     let Type::Path(p) = ty else { return None };
     let seg = p.path.segments.last()?;
     if seg.ident != wrapper {
@@ -1033,7 +1153,7 @@ fn wrapper_arg<'a>(ty: &'a Type, wrapper: &str) -> Option<&'a Type> {
 }
 
 /// Whether `ty` mentions the master ident or any satellite name.
-fn contains_recursion(family: &Family, ty: &Type) -> bool {
+pub(crate) fn contains_recursion(family: &Family, ty: &Type) -> bool {
     fn walk(ts: TokenStream, names: &HashSet<String>) -> bool {
         ts.into_iter().any(|tt| match tt {
             TokenTree::Ident(id) => names.contains(&id.to_string()),
@@ -1049,7 +1169,7 @@ fn contains_recursion(family: &Family, ty: &Type) -> bool {
     walk(quote!(#ty), &names)
 }
 
-fn unsupported(ty: &Type) -> TokenStream {
+pub(crate) fn unsupported(ty: &Type) -> TokenStream {
     let shown = quote!(#ty).to_string();
     let msg = format!("ty_family: unsupported recursive field shape `{shown}`");
     quote! { ::core::compile_error!(#msg) }

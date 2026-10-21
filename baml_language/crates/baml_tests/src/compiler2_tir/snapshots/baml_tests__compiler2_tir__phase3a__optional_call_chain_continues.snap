@@ -10,6 +10,3 @@ function user.f(callback: (() -> user.User throws never) | null) -> string | nul
     callback?.()?.name : string | null
   }
 }
-class user.User$stream {
-  name: string | null
-}

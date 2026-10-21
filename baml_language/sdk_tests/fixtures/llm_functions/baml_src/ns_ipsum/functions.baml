@@ -2,8 +2,8 @@
 // shorthand. The provider constructor resolves api_key from
 // ANTHROPIC_API_KEY at request time.
 function ClassifySentiment(text: string) -> Sentiment {
-  client "anthropic/claude-3-5-sonnet-20241022"
-  prompt `
+  client: "anthropic/claude-3-5-sonnet-20241022"
+  prompt: `
     Classify the sentiment of the following text.
 
     Respond in JSON with one of: POSITIVE, NEGATIVE, NEUTRAL.

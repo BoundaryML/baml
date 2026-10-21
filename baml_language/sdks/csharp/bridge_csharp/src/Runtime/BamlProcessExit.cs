@@ -7,7 +7,6 @@ internal static class BamlProcessExit
     [DoesNotReturn]
     internal static void Exit(long exitCode)
     {
-        FlushEventsBestEffort();
         int processExitCode = exitCode switch
         {
             > int.MaxValue => int.MaxValue,
@@ -15,13 +14,6 @@ internal static class BamlProcessExit
             _ => (int)exitCode,
         };
         Environment.Exit(processExitCode);
-    }
-
-    private static void FlushEventsBestEffort()
-    {
-        // The canonical v1 function table currently exposes no telemetry flush
-        // operation. Keep this hook strictly bounded until one is appended to the
-        // native ABI; hard exit must never wait indefinitely for telemetry.
     }
 }
 

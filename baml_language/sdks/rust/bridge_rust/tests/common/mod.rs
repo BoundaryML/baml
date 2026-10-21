@@ -5,7 +5,7 @@
 use std::sync::Once;
 
 /// Point the loader at the engine built by `cargo build -p bridge_cffi`,
-/// unless the caller already provided one via `BAML_LIBRARY_PATH`.
+/// unless the caller already provided one via `BAML_BRIDGE_PATH`.
 ///
 /// The test binary lives in `<target>/<profile>/deps/`, so the sibling
 /// `<target>/<profile>/` directory is where cargo put the cdylib —
@@ -13,7 +13,7 @@ use std::sync::Once;
 pub(crate) fn locate_dev_engine() {
     static ONCE: Once = Once::new();
     ONCE.call_once(|| {
-        if std::env::var_os("BAML_LIBRARY_PATH").is_some() {
+        if std::env::var_os("BAML_BRIDGE_PATH").is_some() {
             return;
         }
         let exe = std::env::current_exe().expect("current test binary path");

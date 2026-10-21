@@ -1,10 +1,11 @@
 use std::collections::{HashMap, HashSet};
 
+use baml_compiler2_hir_ty::extern_loc::ClassRef;
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, Constant, Local, MirFunctionBody, Operand, Place, Rvalue, StatementKind,
-    Terminator,
+    AggregateKind, BinOp, CellId, Constant, Local, MirFunctionBody, Operand, Place, RuntimeTy,
+    Rvalue, StatementKind, Terminator, TyTemplate,
 };
-use baml_type::{Literal, RuntimeTy, TyTemplate};
+use baml_type::Literal;
 
 use crate::{
     analysis::{LocalClassification, LocalDefUse, StatementRef, UseLocation},
@@ -39,41 +40,68 @@ impl StackCarryKind {
 /// We first detect structural candidates, then greedily activate only the
 /// candidates whose single use is stack-safe in the current classification map.
 pub(super) fn refine_stack_carry_classifications(
-    body: &MirFunctionBody,
+    body: &MirFunctionBody<'_>,
     def_use: &HashMap<Local, LocalDefUse>,
     candidates: &HashMap<Local, StackCarryKind>,
     classifications: &mut HashMap<Local, LocalClassification>,
+    predecessors: &HashMap<baml_compiler2_mir::BlockId, Vec<baml_compiler2_mir::BlockId>>,
 ) {
     let mut locals: Vec<Local> = candidates.keys().copied().collect();
     // Deterministic greedy order. Aggregate operands are ordered by their use
     // position so earlier stacked values are activated before later ones.
     locals.sort_by_key(|l| stack_carry_sort_key(*l, body, def_use, candidates));
 
-    for local in locals {
+    let fallback = classifications.clone();
+    for &local in &locals {
         let kind = candidates[&local];
-        let is_safe = is_stack_carry_use_safe(local, kind, body, classifications, def_use);
+        let is_safe =
+            is_stack_carry_use_safe(local, kind, body, classifications, def_use, predecessors);
         if is_safe {
             classifications.insert(local, kind.to_classification());
+        }
+    }
+    // Activating a later candidate changes earlier candidates' stack prefixes.
+    // Recheck the final plan, and propagate any rejection to its dependents.
+    loop {
+        let mut changed = false;
+        for &local in &locals {
+            if classifications[&local] == candidates[&local].to_classification()
+                && !is_stack_carry_use_safe(
+                    local,
+                    candidates[&local],
+                    body,
+                    classifications,
+                    def_use,
+                    predecessors,
+                )
+            {
+                classifications.insert(local, fallback[&local]);
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
         }
     }
 }
 
 fn stack_carry_sort_key(
     local: Local,
-    body: &MirFunctionBody,
+    body: &MirFunctionBody<'_>,
     def_use: &HashMap<Local, LocalDefUse>,
     candidates: &HashMap<Local, StackCarryKind>,
 ) -> (usize, usize, usize, usize) {
     if candidates.get(&local) == Some(&StackCarryKind::AggregateOperand)
         && let Some(use_loc) = def_use.get(&local).and_then(|du| du.uses.first())
-        && let StatementRef::Statement(stmt_idx) = use_loc.statement_ref
-        && let Some(StatementKind::Assign { value, .. }) = body
-            .block(use_loc.block)
-            .statements
-            .get(stmt_idx)
-            .map(|stmt| &stmt.kind)
-        && let Some(operand_idx) = aggregate_value_operand_index(value, local)
+        && let Some(operands) = crate::analysis::stack_prefix_operands(body, use_loc)
+        && let Some(operand_idx) = operands
+            .iter()
+            .position(|operand| is_operand_local(operand, local))
     {
+        let stmt_idx = match use_loc.statement_ref {
+            StatementRef::Statement(index) => index,
+            StatementRef::Terminator => body.block(use_loc.block).statements.len(),
+        };
         return (0, use_loc.block.0, stmt_idx, operand_idx);
     }
 
@@ -150,9 +178,10 @@ impl StackCarrySim {
 fn is_stack_carry_use_safe(
     local: Local,
     kind: StackCarryKind,
-    body: &MirFunctionBody,
+    body: &MirFunctionBody<'_>,
     classifications: &HashMap<Local, LocalClassification>,
     def_use: &HashMap<Local, LocalDefUse>,
+    predecessors: &HashMap<baml_compiler2_mir::BlockId, Vec<baml_compiler2_mir::BlockId>>,
 ) -> bool {
     // `analysis::is_return_phi` already proves stack safety for this shape by
     // requiring only stack-neutral statements between def and `Return`.
@@ -161,64 +190,101 @@ fn is_stack_carry_use_safe(
     }
 
     let du = &def_use[&local];
-    if du.uses.len() != 1 {
+    let [raw_use] = du.uses.as_slice() else {
         return false;
-    }
+    };
 
-    let Some(use_loc) = resolve_effective_use_location(&du.uses[0], body, classifications, def_use)
+    let Some(use_loc) = resolve_effective_use_location(raw_use, body, classifications, def_use)
     else {
         return false;
     };
     let mut sim = StackCarrySim::new();
+    let mut start_statement = 0;
     let mut current_block = match kind {
-        StackCarryKind::PhiLike => use_loc.block,
+        // `is_stack_covered_phi` proves the value is on the stack on entry to
+        // the block holding the local's one use. Virtual forwarding may move
+        // the effective use into a later block; the walk below must then cover
+        // every block from that entry to the use, so that a branch, or another
+        // value carried above this one, in between keeps this local in a slot.
+        StackCarryKind::PhiLike => raw_use.block,
         StackCarryKind::CallResultImmediate | StackCarryKind::AggregateOperand => {
             let Some(def) = &du.def else {
                 return false;
             };
             let def_block = body.block(def.block);
-            match &def_block.terminator {
-                Some(Terminator::Call {
-                    destination,
-                    target,
-                    ..
-                }) => {
-                    if !matches!(destination, Place::Local(l) if *l == local) {
-                        return false;
-                    }
-                    *target
+            if let StatementRef::Statement(index) = def.statement_ref {
+                if kind != StackCarryKind::AggregateOperand {
+                    return false;
                 }
-                Some(Terminator::Await {
-                    destination,
-                    target,
-                    ..
-                }) => {
-                    if !matches!(destination, Place::Local(l) if *l == local) {
-                        return false;
+                start_statement = index + 1;
+                def.block
+            } else {
+                match &def_block.terminator {
+                    Some(
+                        Terminator::Call {
+                            destination,
+                            target,
+                            ..
+                        }
+                        | Terminator::VirtualCall {
+                            destination,
+                            target,
+                            ..
+                        },
+                    ) => {
+                        if !matches!(destination, Place::Local(l) if *l == local) {
+                            return false;
+                        }
+                        *target
                     }
-                    *target
-                }
-                Some(Terminator::SysOp {
-                    destination,
-                    target,
-                    ..
-                }) => {
-                    if !matches!(destination, Place::Local(l) if *l == local) {
-                        return false;
+                    Some(Terminator::Await {
+                        destination,
+                        target,
+                        ..
+                    }) => {
+                        if !matches!(destination, Place::Local(l) if *l == local) {
+                            return false;
+                        }
+                        *target
                     }
-                    *target
+                    Some(Terminator::SysOp {
+                        destination,
+                        target,
+                        ..
+                    }) => {
+                        if !matches!(destination, Place::Local(l) if *l == local) {
+                            return false;
+                        }
+                        *target
+                    }
+                    // `AwaitAny` intentionally omitted: its result is never stack-
+                    // carried (it falls through to `return false` here), because
+                    // the opcode rewinds + re-executes across the engine suspend
+                    // and a carried result does not survive that. See the matching
+                    // note in `analysis.rs` (call-result-immediate checks).
+                    _ => return false,
                 }
-                // `AwaitAny` intentionally omitted: its result is never stack-
-                // carried (it falls through to `return false` here), because
-                // the opcode rewinds + re-executes across the engine suspend
-                // and a carried result does not survive that. See the matching
-                // note in `analysis.rs` (call-result-immediate checks).
-                _ => return false,
             }
         }
         StackCarryKind::ReturnPhi => unreachable!("handled above"),
     };
 
+    let single_entry = |from, to| {
+        to != body.entry
+            && !body.is_handler(to)
+            && predecessors
+                .get(&to)
+                .is_some_and(|preds| preds.as_slice() == [from])
+    };
+    if matches!(
+        kind,
+        StackCarryKind::CallResultImmediate | StackCarryKind::AggregateOperand
+    ) && let Some(def) = &du.def
+        && def.statement_ref == StatementRef::Terminator
+        && !single_entry(def.block, current_block)
+    {
+        return false;
+    }
     let mut visited = HashSet::new();
     loop {
         if !visited.insert(current_block) {
@@ -230,7 +296,10 @@ fn is_stack_carry_use_safe(
         if current_block == use_loc.block {
             match use_loc.statement_ref {
                 StatementRef::Statement(stmt_idx) => {
-                    for stmt in &block.statements[..stmt_idx] {
+                    if start_statement > stmt_idx {
+                        return false;
+                    }
+                    for stmt in &block.statements[start_statement..stmt_idx] {
                         if !simulate_statement_stack(
                             &stmt.kind,
                             &mut sim,
@@ -258,7 +327,7 @@ fn is_stack_carry_use_safe(
                     }
                 }
                 StatementRef::Terminator => {
-                    for stmt in &block.statements {
+                    for stmt in &block.statements[start_statement..] {
                         if !simulate_statement_stack(
                             &stmt.kind,
                             &mut sim,
@@ -293,7 +362,7 @@ fn is_stack_carry_use_safe(
         // Intermediate blocks on the carried path must be straight-line. Aggregate
         // operand carry can cross later call-like terminators because their
         // results may become later aggregate operands stacked above this one.
-        for stmt in &block.statements {
+        for stmt in &block.statements[start_statement..] {
             if !simulate_statement_stack(
                 &stmt.kind,
                 &mut sim,
@@ -305,14 +374,16 @@ fn is_stack_carry_use_safe(
                 return false;
             }
         }
+        start_statement = 0;
 
         let Some(term) = block.terminator.as_ref() else {
             return false;
         };
 
-        current_block = match term {
+        let next_block = match term {
             Terminator::Goto { target } => *target,
             Terminator::Call { target, .. }
+            | Terminator::VirtualCall { target, .. }
             | Terminator::SysOp { target, .. }
             | Terminator::Await { target, .. }
             | Terminator::AwaitAny { target, .. }
@@ -326,12 +397,16 @@ fn is_stack_carry_use_safe(
             }
             _ => return false,
         };
+        if !single_entry(current_block, next_block) {
+            return false;
+        }
+        current_block = next_block;
     }
 }
 
 fn resolve_effective_use_location(
     initial_use: &UseLocation,
-    body: &MirFunctionBody,
+    body: &MirFunctionBody<'_>,
     classifications: &HashMap<Local, LocalClassification>,
     def_use: &HashMap<Local, LocalDefUse>,
 ) -> Option<UseLocation> {
@@ -379,11 +454,11 @@ fn resolve_effective_use_location(
     }
 }
 
-fn simulate_statement_stack(
-    kind: &StatementKind,
+fn simulate_statement_stack<'db>(
+    kind: &StatementKind<'db>,
     sim: &mut StackCarrySim,
     carried_local: Local,
-    body: &MirFunctionBody,
+    body: &MirFunctionBody<'db>,
     classifications: &HashMap<Local, LocalClassification>,
     def_use: &HashMap<Local, LocalDefUse>,
 ) -> bool {
@@ -432,8 +507,9 @@ fn simulate_statement_stack(
                     }
                 }
             }
-            Place::Capture(_) => {
-                // StoreCapture: evaluate rvalue (pops 1), no stack-carry interaction.
+            Place::Deref(_) => {
+                // StoreDeref/StoreCapture: evaluate rvalue (pops 1), no
+                // stack-carry interaction.
                 if !simulate_rvalue_pull_stack(
                     value,
                     sim,
@@ -446,6 +522,7 @@ fn simulate_statement_stack(
                 }
                 sim.pop_n(1)
             }
+            Place::Capture(_) => unreachable!("a bare capture is a pointer nothing stores to"),
             Place::Field { .. } | Place::Index { .. } => {
                 let mut sink = StackCarryPullSink {
                     sim,
@@ -469,19 +546,17 @@ fn simulate_statement_stack(
             };
             pull_semantics::walk_drop_statement(&mut sink, place).is_ok()
         }
-        StatementKind::FreshCell(_)
-        | StatementKind::VizEnter(_)
-        | StatementKind::VizExit(_)
-        | StatementKind::Intrinsic { .. }
-        | StatementKind::Nop => true,
+        StatementKind::FreshCell { .. } | StatementKind::Intrinsic { .. } | StatementKind::Nop => {
+            true
+        }
     }
 }
 
-fn simulate_terminator_stack(
-    term: &Terminator,
+fn simulate_terminator_stack<'db>(
+    term: &Terminator<'db>,
     sim: &mut StackCarrySim,
     carried_local: Local,
-    _body: &MirFunctionBody,
+    _body: &MirFunctionBody<'db>,
     classifications: &HashMap<Local, LocalClassification>,
     def_use: &HashMap<Local, LocalDefUse>,
 ) -> bool {
@@ -551,15 +626,44 @@ fn simulate_terminator_stack(
             sim.pop_n(1)
         }
         Terminator::Call {
+            has_trace,
             callee,
             args,
-            runtime_id,
+
             destination,
             ..
         } => {
-            let runtime_id_slots = usize::from(runtime_id.is_some());
+            if *has_trace {
+                return false;
+            }
+            if args.iter().any(|arg| is_operand_local(arg, carried_local)) {
+                let direct = pull_semantics::resolve_constant_function_item(
+                    callee,
+                    classifications,
+                    def_use,
+                )
+                .is_some();
+                let values = args.iter().collect::<Vec<_>>();
+                let mut trailing = Vec::new();
+                if !direct {
+                    trailing.push(callee);
+                }
+
+                return simulate_stack_consuming_aggregate(
+                    AggregateStackShape {
+                        value_operands: &values,
+                        trailing_operands: &trailing,
+                        total_pops: values.len() + trailing.len(),
+                        extra_pushes_before_alloc: 0,
+                    },
+                    sim,
+                    carried_local,
+                    classifications,
+                    def_use,
+                ) && simulate_store_place_stack(destination, sim, classifications);
+            }
             let direct_call =
-                pull_semantics::resolve_constant_function_name(callee, classifications, def_use)
+                pull_semantics::resolve_constant_function_item(callee, classifications, def_use)
                     .is_some();
             if direct_call {
                 let mut sink = StackCarryPullSink {
@@ -571,12 +675,8 @@ fn simulate_terminator_stack(
                 if pull_semantics::walk_call_direct_args(&mut sink, args).is_err() {
                     return false;
                 }
-                if let Some(runtime_id) = runtime_id
-                    && pull_semantics::walk_operand_pull(&mut sink, runtime_id).is_err()
-                {
-                    return false;
-                }
-                if !sim.pop_n(args.len() + runtime_id_slots) {
+
+                if !sim.pop_n(args.len()) {
                     return false;
                 }
             } else {
@@ -586,15 +686,13 @@ fn simulate_terminator_stack(
                     classifications,
                     def_use,
                 };
-                if pull_semantics::walk_call_indirect_operands(&mut sink, callee, args).is_err() {
-                    return false;
-                }
-                if let Some(runtime_id) = runtime_id
-                    && pull_semantics::walk_operand_pull(&mut sink, runtime_id).is_err()
+                if pull_semantics::walk_call_indirect_operands(&mut sink, callee, args, false)
+                    .is_err()
                 {
                     return false;
                 }
-                if !sim.pop_n(args.len() + 1 + runtime_id_slots) {
+
+                if !sim.pop_n(args.len() + 1) {
                     return false;
                 }
             }
@@ -602,11 +700,30 @@ fn simulate_terminator_stack(
             simulate_store_place_stack(destination, sim, classifications)
         }
         Terminator::VirtualCall {
+            has_trace,
             args,
-            runtime_id,
             destination,
             ..
         } => {
+            if *has_trace {
+                return false;
+            }
+            if args.iter().any(|arg| is_operand_local(arg, carried_local)) {
+                let values = args.iter().collect::<Vec<_>>();
+                let trailing = [];
+                return simulate_stack_consuming_aggregate(
+                    AggregateStackShape {
+                        value_operands: &values,
+                        trailing_operands: &trailing,
+                        total_pops: values.len() + trailing.len() + 2,
+                        extra_pushes_before_alloc: 2,
+                    },
+                    sim,
+                    carried_local,
+                    classifications,
+                    def_use,
+                ) && simulate_store_place_stack(destination, sim, classifications);
+            }
             {
                 let mut sink = StackCarryPullSink {
                     sim,
@@ -623,21 +740,8 @@ fn simulate_terminator_stack(
             // plus those two operands and pushes the result.
             sim.push();
             sim.push();
-            let runtime_id_slots = if let Some(runtime_id) = runtime_id {
-                let mut sink = StackCarryPullSink {
-                    sim,
-                    carried_local,
-                    classifications,
-                    def_use,
-                };
-                if pull_semantics::walk_operand_pull(&mut sink, runtime_id).is_err() {
-                    return false;
-                }
-                1
-            } else {
-                0
-            };
-            if !sim.pop_n(args.len() + 2 + runtime_id_slots) {
+
+            if !sim.pop_n(args.len() + 2) {
                 return false;
             }
             sim.push();
@@ -646,11 +750,11 @@ fn simulate_terminator_stack(
         Terminator::SysOp {
             callee,
             args,
-            runtime_id,
+
             destination,
             ..
         } => {
-            if pull_semantics::resolve_constant_function_name(callee, classifications, def_use)
+            if pull_semantics::resolve_constant_function_item(callee, classifications, def_use)
                 .is_none()
             {
                 return false;
@@ -666,50 +770,24 @@ fn simulate_terminator_stack(
                 return false;
             }
 
-            let runtime_id_slots = if let Some(runtime_id) = runtime_id {
-                if pull_semantics::walk_operand_pull(&mut sink, runtime_id).is_err() {
-                    return false;
-                }
-                1
-            } else {
-                0
-            };
-            if !sim.pop_n(args.len() + runtime_id_slots) {
+            if !sim.pop_n(args.len()) {
                 return false;
             }
             sim.push();
             simulate_store_place_stack(destination, sim, classifications)
         }
-        Terminator::Spawn {
-            closure,
-            name,
-            config,
-            future,
-            ..
-        } => {
+        Terminator::Spawn { plan, future, .. } => {
             let mut sink = StackCarryPullSink {
                 sim,
                 carried_local,
                 classifications,
                 def_use,
             };
-            if pull_semantics::walk_operand_pull(&mut sink, closure).is_err() {
+            if pull_semantics::walk_operand_pull(&mut sink, plan).is_err() {
                 return false;
             }
-            if pull_semantics::walk_operand_pull(&mut sink, name).is_err() {
-                return false;
-            }
-            // Config operand is pushed last (null when there is no `with`
-            // clause). Mirror `emit`: always push three, pop three. The
-            // future's `T`/`E` types are pushed after it by `load_type` and
-            // popped again by `Spawn`, so like `alloc_array`'s element type
-            // they leave the net stack effect unchanged.
-            let null_config = Operand::Constant(Constant::Null);
-            let config_op = config.as_deref().unwrap_or(&null_config);
-            if pull_semantics::walk_operand_pull(&mut sink, config_op).is_err() {
-                return false;
-            }
-            if !sim.pop_n(3) {
+            // `Spawn` pops the plan and pushes the future.
+            if !sim.pop_n(1) {
                 return false;
             }
             sim.push();
@@ -757,7 +835,7 @@ fn simulate_terminator_stack(
             sim.push();
             simulate_store_place_stack(destination, sim, classifications)
         }
-        Terminator::Throw { value } | Terminator::Rethrow { value } => {
+        Terminator::Throw { value } => {
             let mut sink = StackCarryPullSink {
                 sim,
                 carried_local,
@@ -770,19 +848,20 @@ fn simulate_terminator_stack(
             // THROW consumes the thrown value from the stack when unwinding.
             sim.pop_n(1)
         }
-        Terminator::ThrowIfPanic { value, .. } => {
+        Terminator::Rethrow { value, context } => {
             let mut sink = StackCarryPullSink {
                 sim,
                 carried_local,
                 classifications,
                 def_use,
             };
-            if pull_semantics::walk_operand_pull(&mut sink, value).is_err() {
+            if pull_semantics::walk_operand_pull(&mut sink, value).is_err()
+                || pull_semantics::walk_operand_pull(&mut sink, context).is_err()
+            {
                 return false;
             }
-            // ThrowIfPanic loads the value, checks it, and either throws (consuming it)
-            // or continues (consuming it). Either way the stack is clean after.
-            sim.pop_n(1)
+            // RETHROW consumes the value and its context when unwinding.
+            sim.pop_n(2)
         }
         Terminator::ShortCircuit { operand, .. } => {
             // ShortCircuit peeks the operand (stays on TOS), then conditionally
@@ -821,14 +900,15 @@ fn simulate_store_place_stack(
                 LocalStoreBehavior::KeepOnStack => true,
             }
         }
-        // Capture stores: pop 1 (same as StoreSlot).
-        Place::Capture(_) => sim.pop_n(1),
+        // Stores through a cell: pop 1 (same as StoreSlot).
+        Place::Deref(_) => sim.pop_n(1),
+        Place::Capture(_) => unreachable!("a bare capture is a pointer nothing stores to"),
         Place::Field { .. } | Place::Index { .. } => false,
     }
 }
 
 fn simulate_operand_pull_stack(
-    operand: &Operand,
+    operand: &Operand<'_>,
     sim: &mut StackCarrySim,
     carried_local: Local,
     classifications: &HashMap<Local, LocalClassification>,
@@ -843,16 +923,16 @@ fn simulate_operand_pull_stack(
     pull_semantics::walk_operand_pull(&mut sink, operand).is_ok()
 }
 
-fn simulate_rvalue_pull_stack(
-    rvalue: &Rvalue,
+fn simulate_rvalue_pull_stack<'db>(
+    rvalue: &Rvalue<'db>,
     sim: &mut StackCarrySim,
     carried_local: Local,
-    body: &MirFunctionBody,
+    body: &MirFunctionBody<'db>,
     classifications: &HashMap<Local, LocalClassification>,
     def_use: &HashMap<Local, LocalDefUse>,
 ) -> bool {
     if let Some(result) =
-        simulate_aggregate_operand_pull_stack(rvalue, sim, carried_local, classifications, def_use)
+        simulate_operand_prefix_pull_stack(rvalue, sim, carried_local, classifications, def_use)
     {
         return result;
     }
@@ -922,7 +1002,9 @@ fn simulate_rvalue_pull_stack(
     // materialized correctly through `emit_rvalue_pull`.
     if matches!(
         rvalue,
-        Rvalue::MakeVirtualBoundMethod { .. } | Rvalue::VirtualFieldAccess { .. }
+        Rvalue::MakeVirtualBoundMethod { .. }
+            | Rvalue::MakeVirtualFunction { .. }
+            | Rvalue::VirtualFieldAccess { .. }
     ) {
         return false;
     }
@@ -935,14 +1017,40 @@ fn simulate_rvalue_pull_stack(
     pull_semantics::walk_rvalue_pull(&mut sink, rvalue).is_ok()
 }
 
-fn simulate_aggregate_operand_pull_stack(
-    rvalue: &Rvalue,
+/// Validate operand prefixes both at direct evaluations and through inlined
+/// locals. Binary operands already stacked in source order need no reordering.
+fn simulate_operand_prefix_pull_stack(
+    rvalue: &Rvalue<'_>,
     sim: &mut StackCarrySim,
     carried_local: Local,
     classifications: &HashMap<Local, LocalClassification>,
     def_use: &HashMap<Local, LocalDefUse>,
 ) -> Option<bool> {
     match rvalue {
+        Rvalue::BinaryOp { left, right, .. }
+            if [left, right].iter().all(|operand| {
+                operand_as_local(operand).is_some_and(|local| {
+                    local == carried_local
+                        || classifications
+                            .get(&local)
+                            .copied()
+                            .is_some_and(is_stack_carried_local)
+                })
+            }) =>
+        {
+            Some(simulate_stack_consuming_aggregate(
+                AggregateStackShape {
+                    value_operands: &[left, right],
+                    trailing_operands: &[],
+                    total_pops: 2,
+                    extra_pushes_before_alloc: 0,
+                },
+                sim,
+                carried_local,
+                classifications,
+                def_use,
+            ))
+        }
         Rvalue::Array(_, elements) => {
             let values = elements.iter().collect::<Vec<_>>();
             Some(simulate_stack_consuming_aggregate(
@@ -1028,8 +1136,8 @@ fn simulate_aggregate_operand_pull_stack(
 
 #[derive(Clone, Copy)]
 struct AggregateStackShape<'a> {
-    value_operands: &'a [&'a Operand],
-    trailing_operands: &'a [&'a Operand],
+    value_operands: &'a [&'a Operand<'a>],
+    trailing_operands: &'a [&'a Operand<'a>],
     total_pops: usize,
     extra_pushes_before_alloc: usize,
 }
@@ -1092,10 +1200,11 @@ fn simulate_stack_consuming_aggregate(
     true
 }
 
-fn aggregate_value_operand_index(rvalue: &Rvalue, local: Local) -> Option<usize> {
-    let operands: Vec<&Operand> = match rvalue {
+#[cfg(test)]
+fn aggregate_value_operand_index<'db>(rvalue: &Rvalue<'db>, local: Local) -> Option<usize> {
+    let operands: Vec<&Operand<'db>> = match rvalue {
         Rvalue::Array(_, elements) => elements.iter().collect(),
-        // See `simulate_aggregate_operand_pull_stack`: only map values are
+        // See `simulate_operand_prefix_pull_stack`: only map values are
         // valid stack-carry prefix operands for the current VM stack layout.
         Rvalue::Map(_, _, entries) => entries.iter().map(|(_key, value)| value).collect(),
         Rvalue::Aggregate {
@@ -1115,14 +1224,14 @@ fn aggregate_value_operand_index(rvalue: &Rvalue, local: Local) -> Option<usize>
         .position(|operand| operand_as_local(operand) == Some(local))
 }
 
-fn operand_as_local(operand: &Operand) -> Option<Local> {
+fn operand_as_local(operand: &Operand<'_>) -> Option<Local> {
     match operand {
         Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => Some(*local),
         _ => None,
     }
 }
 
-fn is_class_field_copy_operand(operand: &Operand) -> bool {
+fn is_class_field_copy_operand(operand: &Operand<'_>) -> bool {
     let place = match operand {
         Operand::Copy(place) | Operand::Move(place) => place,
         Operand::Constant(_) => return false,
@@ -1130,14 +1239,14 @@ fn is_class_field_copy_operand(operand: &Operand) -> bool {
     matches!(place, Place::Field { .. })
 }
 
-fn is_operand_local(operand: &Operand, local: Local) -> bool {
+fn is_operand_local(operand: &Operand<'_>, local: Local) -> bool {
     matches!(
         operand,
         Operand::Copy(Place::Local(l)) | Operand::Move(Place::Local(l)) if *l == local
     )
 }
 
-fn operand_mentions_local(operand: &Operand, local: Local) -> bool {
+fn operand_mentions_local(operand: &Operand<'_>, local: Local) -> bool {
     match operand {
         Operand::Copy(place) | Operand::Move(place) => place_mentions_local(place, local),
         Operand::Constant(_) => false,
@@ -1148,6 +1257,7 @@ fn place_mentions_local(place: &Place, local: Local) -> bool {
     match place {
         Place::Local(l) => *l == local,
         Place::Field { base, .. } => place_mentions_local(base, local),
+        Place::Deref(cell) => cell.local() == Some(local),
         Place::Index { base, index, .. } => *index == local || place_mentions_local(base, local),
         Place::Capture(_) => false,
     }
@@ -1159,11 +1269,11 @@ enum NumericKind {
     Float,
 }
 
-fn is_safe_reversed_commutative_binary(
-    body: &MirFunctionBody,
+fn is_safe_reversed_commutative_binary<'db>(
+    body: &MirFunctionBody<'db>,
     op: BinOp,
-    left: &Operand,
-    right: &Operand,
+    left: &Operand<'db>,
+    right: &Operand<'db>,
 ) -> bool {
     match op {
         BinOp::Add | BinOp::Mul => {
@@ -1179,7 +1289,10 @@ fn is_safe_reversed_commutative_binary(
     }
 }
 
-fn numeric_operand_kind(body: &MirFunctionBody, operand: &Operand) -> Option<NumericKind> {
+fn numeric_operand_kind<'db>(
+    body: &MirFunctionBody<'db>,
+    operand: &Operand<'db>,
+) -> Option<NumericKind> {
     match operand {
         Operand::Constant(Constant::Int(_)) => Some(NumericKind::Int),
         Operand::Constant(Constant::Float(_)) => Some(NumericKind::Float),
@@ -1188,19 +1301,20 @@ fn numeric_operand_kind(body: &MirFunctionBody, operand: &Operand) -> Option<Num
     }
 }
 
-fn numeric_place_kind(body: &MirFunctionBody, place: &Place) -> Option<NumericKind> {
+fn numeric_place_kind(body: &MirFunctionBody<'_>, place: &Place) -> Option<NumericKind> {
     match place {
         Place::Local(local) => numeric_ty_kind(&body.local(*local).ty),
+        // A captured local's declared type is the type of the value in its cell.
+        Place::Deref(CellId::Local(local)) => numeric_ty_kind(&body.local(*local).ty),
+        Place::Deref(CellId::Capture(_)) => None,
         Place::Field { .. } | Place::Index { .. } | Place::Capture(_) => None,
     }
 }
 
 fn numeric_ty_kind(ty: &RuntimeTy) -> Option<NumericKind> {
     match ty {
-        RuntimeTy::Int { .. } | RuntimeTy::Literal(Literal::Int(_), _, _) => Some(NumericKind::Int),
-        RuntimeTy::Float { .. } | RuntimeTy::Literal(Literal::Float(_), _, _) => {
-            Some(NumericKind::Float)
-        }
+        RuntimeTy::Int | RuntimeTy::Literal(Literal::Int(_), _) => Some(NumericKind::Int),
+        RuntimeTy::Float | RuntimeTy::Literal(Literal::Float(_), _) => Some(NumericKind::Float),
         _ => None,
     }
 }
@@ -1209,21 +1323,26 @@ struct StackCarryPullSink<'a> {
     sim: &'a mut StackCarrySim,
     carried_local: Local,
     classifications: &'a HashMap<Local, LocalClassification>,
-    def_use: &'a HashMap<Local, LocalDefUse>,
+    def_use: &'a HashMap<Local, LocalDefUse<'a>>,
 }
 
-impl PullSink for StackCarryPullSink<'_> {
+impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
     type Error = ();
+
+    fn trace_hook_settings(&mut self, _with_settings: bool) -> Result<(), Self::Error> {
+        self.sim.push();
+        Ok(())
+    }
 
     fn pull_constant(
         &mut self,
-        _constant: &baml_compiler2_mir::Constant,
+        _constant: &baml_compiler2_mir::Constant<'a>,
     ) -> Result<(), Self::Error> {
         self.sim.push();
         Ok(())
     }
 
-    fn pull_local(&mut self, local: Local) -> Result<LocalPullAction, Self::Error> {
+    fn pull_local(&mut self, local: Local) -> Result<LocalPullAction<'a>, Self::Error> {
         if local == self.carried_local {
             if self.sim.depth != Some(0) || self.sim.used {
                 return Err(());
@@ -1255,11 +1374,12 @@ impl PullSink for StackCarryPullSink<'_> {
                     def.rvalue,
                     Rvalue::MakeBoundMethod { .. }
                         | Rvalue::MakeVirtualBoundMethod { .. }
+                        | Rvalue::MakeVirtualFunction { .. }
                         | Rvalue::VirtualFieldAccess { .. }
                 ) {
                     return Err(());
                 }
-                if let Some(ok) = simulate_aggregate_operand_pull_stack(
+                if let Some(ok) = simulate_operand_prefix_pull_stack(
                     &def.rvalue,
                     self.sim,
                     self.carried_local,
@@ -1300,7 +1420,12 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
-    fn binary_op(&mut self, _op: baml_compiler2_mir::BinOp) -> Result<(), Self::Error> {
+    fn binary_op(
+        &mut self,
+        _op: baml_compiler2_mir::BinOp,
+        _left: &Operand<'a>,
+        _right: &Operand<'a>,
+    ) -> Result<(), Self::Error> {
         if !self.sim.pop_n(2) {
             return Err(());
         }
@@ -1349,7 +1474,7 @@ impl PullSink for StackCarryPullSink<'_> {
 
     fn alloc_class_instance(
         &mut self,
-        _class_name: &str,
+        _class: ClassRef<'a>,
         ntypeargs: u16,
     ) -> Result<(), Self::Error> {
         // LoadType instructions for type args were already emitted and pushed.
@@ -1365,7 +1490,7 @@ impl PullSink for StackCarryPullSink<'_> {
 
     fn init_class_instance(
         &mut self,
-        _class_name: &str,
+        _class: ClassRef<'a>,
         ntypeargs: u16,
         field_count: usize,
     ) -> Result<(), Self::Error> {
@@ -1381,13 +1506,6 @@ impl PullSink for StackCarryPullSink<'_> {
         if !self.sim.pop_n(1) {
             return Err(());
         }
-        Ok(())
-    }
-
-    fn alloc_enum_variant(&mut self, _enum_name: &str, _variant: &str) -> Result<(), Self::Error> {
-        // Emitter loads variant index constant, then AllocVariant (pop1 push1).
-        // Net stack effect from this aggregate shape is +1.
-        self.sim.push();
         Ok(())
     }
 
@@ -1417,7 +1535,7 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
-    fn is_type(&mut self, _ty: &baml_type::TyTemplate) -> Result<(), Self::Error> {
+    fn is_type(&mut self, _test: &baml_compiler2_mir::TypeTest<'a>) -> Result<(), Self::Error> {
         // Emitter consumes operand and pushes boolean result.
         if !self.sim.pop_n(1) {
             return Err(());
@@ -1435,8 +1553,22 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
-    fn load_type(&mut self, _template: &baml_type::TyTemplate) -> Result<(), Self::Error> {
+    fn load_type(&mut self, _template: &baml_compiler2_mir::TyTemplate) -> Result<(), Self::Error> {
         // LoadType pushes one Object::Type value onto the stack. No operands consumed.
+        self.sim.push();
+        Ok(())
+    }
+
+    fn load_current_package(&mut self) -> Result<(), Self::Error> {
+        self.sim.push();
+        Ok(())
+    }
+
+    fn satisfies_bound(&mut self) -> Result<(), Self::Error> {
+        // Consumes the type and the bound, pushes the bool.
+        if !self.sim.pop_n(2) {
+            return Err(());
+        }
         self.sim.push();
         Ok(())
     }
@@ -1463,7 +1595,7 @@ impl PullSink for StackCarryPullSink<'_> {
 
     fn make_generic_function(
         &mut self,
-        _item: &baml_compiler2_mir::ItemRef,
+        _func: baml_compiler2_hir_ty::extern_loc::FunctionRef<'a>,
         ntypeargs: usize,
     ) -> Result<(), Self::Error> {
         // Pops `ntypeargs` type-arg values, pushes one generic-function object.
@@ -1484,8 +1616,20 @@ impl PullSink for StackCarryPullSink<'_> {
         Ok(())
     }
 
-    fn load_capture(&mut self, _idx: usize) -> Result<(), Self::Error> {
+    fn load_deref_local(&mut self, _local: Local) -> Result<(), Self::Error> {
+        // LoadDeref pushes one value onto the stack.
+        self.sim.push();
+        Ok(())
+    }
+
+    fn load_capture_value(&mut self, _idx: usize) -> Result<(), Self::Error> {
         // LoadCapture pushes one value onto the stack.
+        self.sim.push();
+        Ok(())
+    }
+
+    fn load_capture_ref(&mut self, _idx: usize) -> Result<(), Self::Error> {
+        // CaptureRef pushes one value onto the stack.
         self.sim.push();
         Ok(())
     }
@@ -1494,12 +1638,12 @@ impl PullSink for StackCarryPullSink<'_> {
         format!("{field_idx}")
     }
 
-    fn class_field_name(&self, _class_name: &str, field_idx: usize) -> String {
+    fn class_field_name(&self, _class: ClassRef<'a>, field_idx: usize) -> String {
         format!("{field_idx}")
     }
 }
 
-impl StackEffectSink for StackCarryPullSink<'_> {
+impl<'a> StackEffectSink<'a> for StackCarryPullSink<'a> {
     fn store_field_value(&mut self, _field: usize, _name: &str) -> Result<(), Self::Error> {
         if !self.sim.pop_n(2) {
             return Err(());
@@ -1523,33 +1667,22 @@ impl StackEffectSink for StackCarryPullSink<'_> {
         }
         Ok(())
     }
-
-    fn store_capture_value(&mut self, _idx: usize) -> Result<(), Self::Error> {
-        // StoreCapture pops one value (the value to store into the capture cell).
-        if !self.sim.pop_n(1) {
-            return Err(());
-        }
-        Ok(())
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use baml_compiler2_mir::{AggregateKind, BasicBlock, LocalDecl, Statement};
-    use baml_type::{RealizedTy, TyAttr, TyTemplate};
+    use baml_compiler2_mir::{
+        AggregateKind, BasicBlock, LocalDecl, RealizedTy, Statement, TyTemplate,
+    };
 
     use super::*;
 
     fn int_ty() -> RuntimeTy {
-        RuntimeTy::Int {
-            attr: TyAttr::default(),
-        }
+        RuntimeTy::Int
     }
 
     fn float_ty() -> RuntimeTy {
-        RuntimeTy::Float {
-            attr: TyAttr::default(),
-        }
+        RuntimeTy::Float
     }
 
     fn local_decl(ty: RuntimeTy) -> LocalDecl {
@@ -1562,19 +1695,21 @@ mod tests {
         }
     }
 
-    fn body_with_locals(local_tys: Vec<RuntimeTy>) -> MirFunctionBody {
+    fn body_with_locals(local_tys: Vec<RuntimeTy>) -> MirFunctionBody<'static> {
         MirFunctionBody {
             blocks: vec![BasicBlock {
                 id: baml_compiler2_mir::BlockId(0),
-                statements: Vec::<Statement>::new(),
+                statements: Vec::<Statement<'static>>::new(),
                 terminator: Some(Terminator::Return),
                 span: None,
                 terminator_span: None,
+                unwind: None,
+                handling: None,
+                landing: None,
+                shielded: false,
             }],
             entry: baml_compiler2_mir::BlockId(0),
             locals: local_tys.into_iter().map(local_decl).collect(),
-            catch_regions: vec![],
-            viz_nodes: vec![],
         }
     }
 
@@ -1588,6 +1723,77 @@ mod tests {
     }
 
     #[test]
+    fn inlined_binary_prefix_preserves_both_operand_depths() {
+        use baml_compiler2_mir::BlockId;
+
+        use crate::analysis::{AnalysisResult, OptLevel};
+
+        let left = Local(1);
+        let right = Local(2);
+        let mut body = body_with_locals(vec![int_ty(), int_ty(), int_ty()]);
+        body.blocks[0].statements.push(Statement {
+            kind: StatementKind::Assign {
+                destination: Place::Local(left),
+                value: Rvalue::Use(Operand::Constant(Constant::Int(20))),
+            },
+            span: None,
+        });
+        body.blocks[0].terminator = Some(Terminator::Call {
+            has_trace: false,
+            argument_layout: None,
+            callee: Operand::Constant(Constant::Null),
+            args: vec![],
+            ntypeargs: 0,
+
+            destination: Place::Local(right),
+            target: BlockId(1),
+            unwind: None,
+        });
+        let mut continuation = BasicBlock::new(BlockId(1));
+        continuation.statements.push(Statement {
+            kind: StatementKind::Assign {
+                destination: Place::Local(Local(0)),
+                value: Rvalue::BinaryOp {
+                    op: BinOp::Sub,
+                    left: Operand::copy_local(left),
+                    right: Operand::copy_local(right),
+                },
+            },
+            span: None,
+        });
+        continuation.terminator = Some(Terminator::Return);
+        body.blocks.push(continuation);
+        let analysis = AnalysisResult::analyze(&body, 0, OptLevel::One);
+        assert_eq!(
+            analysis.classifications[&Local(0)],
+            LocalClassification::Virtual
+        );
+        for (local, expected_depth) in [(left, 1), (right, 0)] {
+            assert_eq!(
+                analysis.classifications[&local],
+                LocalClassification::AggregateOperand
+            );
+            for depth in [0, 1] {
+                let mut sim = StackCarrySim {
+                    depth: Some(depth),
+                    used: false,
+                };
+                assert_eq!(
+                    simulate_operand_pull_stack(
+                        &Operand::copy_local(Local(0)),
+                        &mut sim,
+                        local,
+                        &analysis.classifications,
+                        &analysis.def_use,
+                    ),
+                    depth == expected_depth,
+                    "{local:?} at depth {depth}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn aggregate_stack_carry_accepts_array_value_prefix() {
         let carried = Local(1);
         let sibling = Local(2);
@@ -1597,7 +1803,7 @@ mod tests {
             used: false,
         };
 
-        let ok = simulate_aggregate_operand_pull_stack(
+        let ok = simulate_operand_prefix_pull_stack(
             &Rvalue::Array(
                 TyTemplate::from(RealizedTy::unknown()),
                 vec![
@@ -1626,7 +1832,7 @@ mod tests {
             used: false,
         };
 
-        let ok = simulate_aggregate_operand_pull_stack(
+        let ok = simulate_operand_prefix_pull_stack(
             &Rvalue::Aggregate {
                 kind: AggregateKind::Array,
                 fields: vec![Operand::copy_local(sibling), Operand::copy_local(carried)],
@@ -1651,7 +1857,7 @@ mod tests {
             used: false,
         };
 
-        let ok = simulate_aggregate_operand_pull_stack(
+        let ok = simulate_operand_prefix_pull_stack(
             &Rvalue::Map(
                 TyTemplate::from(RealizedTy::string()),
                 TyTemplate::from(RealizedTy::unknown()),
@@ -1699,7 +1905,7 @@ mod tests {
             used: false,
         };
 
-        let ok = simulate_aggregate_operand_pull_stack(
+        let ok = simulate_operand_prefix_pull_stack(
             &Rvalue::Array(
                 TyTemplate::from(RealizedTy::unknown()),
                 vec![
@@ -1727,11 +1933,15 @@ mod tests {
             used: false,
         };
 
-        let ok = simulate_aggregate_operand_pull_stack(
+        let mut db = crate::tests::TestDb::default();
+        let file = db.add_file("t.baml", crate::tests::CLASSES_FOR_TESTS);
+        let ok = simulate_operand_prefix_pull_stack(
             &Rvalue::Aggregate {
                 kind: AggregateKind::Class {
-                    name: "Box".to_string(),
-                    type_arg_templates: vec![TyTemplate::from(baml_type::RealizedTy::int())],
+                    class: crate::tests::class_ref(&db, file, "Box"),
+                    type_arg_templates: vec![TyTemplate::from(
+                        baml_compiler2_mir::RealizedTy::int(),
+                    )],
                 },
                 fields: vec![Operand::copy_local(sibling), Operand::copy_local(carried)],
             },
@@ -1748,9 +1958,11 @@ mod tests {
     #[test]
     fn class_aggregate_with_field_copy_is_not_modeled_as_init_plan() {
         let carried = Local(1);
+        let mut db = crate::tests::TestDb::default();
+        let file = db.add_file("t.baml", crate::tests::CLASSES_FOR_TESTS);
         let rvalue = Rvalue::Aggregate {
             kind: AggregateKind::Class {
-                name: "Box".to_string(),
+                class: crate::tests::class_ref(&db, file, "Box"),
                 type_arg_templates: vec![],
             },
             fields: vec![Operand::Copy(Place::Field {
@@ -1761,7 +1973,7 @@ mod tests {
         let mut sim = StackCarrySim::new();
 
         assert_eq!(
-            simulate_aggregate_operand_pull_stack(
+            simulate_operand_prefix_pull_stack(
                 &rvalue,
                 &mut sim,
                 carried,
@@ -1776,9 +1988,11 @@ mod tests {
     fn class_spread_rejects_call_result_immediate_before_incremental_init() {
         let carried = Local(1);
         let spread_base = Local(2);
+        let mut db = crate::tests::TestDb::default();
+        let file = db.add_file("t.baml", crate::tests::CLASSES_FOR_TESTS);
         let rvalue = Rvalue::Aggregate {
             kind: AggregateKind::Class {
-                name: "GuideHooks".to_string(),
+                class: crate::tests::class_ref(&db, file, "GuideHooks"),
                 type_arg_templates: vec![],
             },
             fields: vec![
@@ -1861,7 +2075,10 @@ mod tests {
             def_use: &def_use,
         };
 
-        sink.init_class_instance("Box", 1, 2).unwrap();
+        let mut db = crate::tests::TestDb::default();
+        let file = db.add_file("t.baml", crate::tests::CLASSES_FOR_TESTS);
+        sink.init_class_instance(crate::tests::class_ref(&db, file, "Box"), 1, 2)
+            .unwrap();
 
         assert_eq!(sim.depth, Some(2));
     }

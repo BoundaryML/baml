@@ -145,9 +145,9 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
       <main className="flex flex-col items-center justify-center min-h-screen w-full">
         {/* Back Button */}
         <section className="w-full px-4 py-8">
-          <div className="mx-auto max-w-4xl">
+          <div className="mx-auto max-w-screen-md">
             <Link href="/blog">
-              <Button className="group lg:mb-8" variant="ghost">
+              <Button className="group" variant="ghost">
                 <ArrowLeft className="mr-2 h-4 w-4 transition-transform group-hover:-translate-x-1" />
                 Back to Blog
               </Button>
@@ -156,8 +156,8 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         </section>
 
         {/* Article Header */}
-        <section className="w-full px-4 lg:py-8">
-          <div className="mx-auto max-w-4xl">
+        <section className="w-full px-4">
+          <div className="mx-auto max-w-screen-md">
             <div className="flex items-center gap-4 text-sm text-muted-foreground mb-6">
               <span
                 className="flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium"
@@ -180,12 +180,10 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
               {post.title}
             </h1>
 
-            <p className="text-xl text-muted-foreground mb-8">
-              {post.description}
-            </p>
+            <p className="text-xl text-muted-foreground">{post.description}</p>
 
             {post.author && (
-              <div className="flex items-center gap-4 pb-8 border-b">
+              <div className="mt-6 flex items-center gap-4 pb-6 border-b">
                 {post.author.imageUrl && (
                   <Image
                     alt={post.author.name}
@@ -220,7 +218,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
 
         {/* Back to Blog CTA */}
         <section className="w-full px-4 py-8">
-          <div className="mx-auto max-w-4xl text-center">
+          <div className="mx-auto max-w-screen-md text-center">
             <Link href="/blog">
               <Button size="lg">
                 <ArrowLeft className="mr-2 h-4 w-4" />

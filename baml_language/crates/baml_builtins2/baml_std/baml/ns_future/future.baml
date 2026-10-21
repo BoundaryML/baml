@@ -1,24 +1,22 @@
-/// BEP-034 — concurrency via `spawn` / `await`.
-///
-/// `Future<T, E>` is the handle returned by `spawn { body }`. Awaiting
-/// a future blocks the current thread until the future settles; on
-/// settle, `await` either yields the value or re-throws the future's
-/// error.
-///
-/// Sys-op calls (e.g. `http.fetch`, `fs.read`) are not futures — they
-/// return their value directly and yield cooperatively under the hood.
-/// To run one concurrently, wrap it in `spawn { ... }`.
-///
-/// The class is opaque to user code — its fields are runtime-managed.
-/// All operations on a future go through the methods declared below.
-///
-/// State transitions: `Pending` → (`Ready` | `Error` | `Cancelled`).
-/// Once settled, a future never changes state again.
+//! Concurrency via `spawn` / `await`.
+//!
+//! `Future<T, E>` is the handle returned by `spawn { body }`. Awaiting
+//! a future blocks the current thread until the future settles; on
+//! settle, `await` either yields the value or re-throws the future's
+//! error.
+//!
+//! Sys-op calls (e.g. `http.fetch`, `fs.read`) are not futures — they
+//! return their value directly and yield cooperatively under the hood.
+//! To run one concurrently, wrap it in `spawn { ... }`.
+//!
+//! The class is opaque to user code — its fields are runtime-managed.
+//! All operations on a future go through the methods declared below.
+//!
+//! State transitions: `Pending` → (`Ready` | `Error` | `Cancelled`).
+//! Once settled, a future never changes state again.
 
-/// Surface enumeration mirroring the runtime's `bex_vm_types::FutureRead`
-/// states. Used by `Future.state(self)` to expose the settle status of
-/// a future to BAML code.
-enum FutureState {
+/// The settle status of a future, as reported by `Future.state`.
+enum State {
     Pending,
     Ready,
     Error,
@@ -26,13 +24,16 @@ enum FutureState {
 }
 
 class Future<T, E> {
-    /// Request cancellation of the future. If the future is already
-    /// settled, this is a no-op and returns `false`. Otherwise the
-    /// future's cancel token fires; the spawned thread will throw
-    /// `baml.panics.Cancelled` at its next `await` point.
+    /// Request cancellation of the future: fires its cancel token. A task that
+    /// has not started yet never starts; a running one throws
+    /// `baml.panics.Cancelled` at its next checkpoint (an `await` or an IO
+    /// call) and at every one after that, outside a `defer`. The task settles
+    /// the future: `Cancelled` once it unwinds or if it never started, `Ready`
+    /// with its value if it had no checkpoint left, or handled the panic and
+    /// completed. Until then the future stays `Pending`.
     ///
-    /// Returns `true` if a transition to the Cancelled state was
-    /// performed, `false` if the future was already settled.
+    /// Returns `true` if this call fired the token, `false` if the future was
+    /// already settled or cancellation was already requested.
     function cancel(self) -> bool throws never {
         $rust_function
     }
@@ -61,39 +62,78 @@ class Future<T, E> {
         $rust_function
     }
 
-    /// Return the current state of the future as a [`FutureState`]
+    /// Return the current state of the future as a [`State`]
     /// variant.
     //baml:mut_vm
-    function state(self) -> FutureState throws never {
+    function state(self) -> State throws never {
         $rust_function
     }
 }
 
-/// BEP-034 combinators over a homogeneous array of futures (all sharing value
-/// type `T` and error type `E`). The inputs are already running, so awaiting
-/// them — even in a loop — runs them concurrently; the combinator just decides
-/// how to combine the results. Each returns a new `Future`, so they compose.
+// BEP-034 combinators over a homogeneous array of futures (all sharing value
+// type `T` and error type `E`). The inputs are already running, so awaiting
+// them — even in a loop — runs them concurrently; the combinator just decides
+// how to combine the results. Each returns a new `Future`, so they compose.
 
-/// Await every future and return their values in input order. Like `all`, but
-/// the losers KEEP RUNNING on a failure (they are not cancelled). Throws the
-/// first error encountered in input order.
-function all_complete<T, E>(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T[], E> {
+/// A task returned a value.
+class Success<T> {
+    value: T,
+}
+
+/// A task threw a typed error.
+class Failure<E> {
+    error: E,
+}
+
+/// A task panicked, including cancellation (`baml.panics.Cancelled`).
+class Panicked {
+    panic: root.panics.Panic,
+    context: root.errors.Context,
+}
+
+/// Wait for every input and return one outcome per input, in input order.
+/// Typed errors become `Failure`; panics, including input cancellation, become
+/// `Panicked`. No input is cancelled because another input failed or panicked.
+/// An empty input returns an empty array.
+///
+/// Cancelling the collector stops the wait; it is not an input outcome. Inputs
+/// remain governed by their own cancellation tokens and task groups.
+function all_settled<T, E>(
+    futures: root.future.Future<T, E>[],
+) -> root.future.Future<(root.future.Success<T> | root.future.Failure<E> | root.future.Panicked)[], never> {
     spawn {
-        futures.map((f) -> {
-            await f
-        })
+        let outcomes: (root.future.Success<T> | root.future.Failure<E> | root.future.Panicked)[] = [];
+        for (let f in futures) {
+            // Wait for `f` to settle. Only the collector's own cancellation
+            // ends this wait early, and it propagates, stopping the collection.
+            let _ = root.future.__await_any([f]);
+            // `f` has settled, so awaiting it only reads its outcome: a panic
+            // caught here, `Cancelled` included, is the input's.
+            let value = (await f) catch_all_panics (e, context) {
+                let panic: root.panics.Panic => {
+                    outcomes.push(root.future.Panicked { panic: panic, context: context });
+                    continue;
+                },
+                let error => {
+                    let failure: root.future.Failure<E> = root.future.Failure { error: error };
+                    outcomes.push(failure);
+                    continue;
+                },
+            };
+            let success: root.future.Success<T> = root.future.Success { value: value };
+            outcomes.push(success);
+        }
+        outcomes
     }
 }
 
-/// Await every future and return their values in input order, like
-/// `all_complete`, but on the FIRST failure the remaining futures are
-/// cancelled before the error is re-thrown (JS `Promise.all`). Use
-/// `all_complete` instead when losers have side effects that must finish.
+/// Await every future and return their values in input order. On the first
+/// observed typed error, cancel the remaining futures and rethrow that error.
+/// Use `all_settled` to let every input settle and inspect each outcome.
 ///
-/// Note: failures are observed in input order (not strictly first-to-fail in
-/// wall-clock time); the value contract — every value, or one error — is the
-/// same either way.
-function all<T, E>(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T[], E> {
+/// Failures are observed in input order, not strictly first-to-fail in
+/// wall-clock time. Panics propagate normally.
+function all<T, E>(futures: root.future.Future<T, E>[]) -> root.future.Future<T[], E> {
     spawn {
         futures.map((f) -> {
             // `(await f)` is parenthesized so `catch` binds to the await (not to the
@@ -136,13 +176,13 @@ class AllFailed<E> {
     errors: E[],
 }
 
-/// BEP-034 internal primitive: suspend until the FIRST of `futures` settles —
+/// (internal) BEP-034 internal primitive: suspend until the FIRST of `futures` settles —
 /// whether it succeeds, fails, or is cancelled — and return its index in input
 /// order. Compiles to a dedicated `AwaitAny` suspend point (it is `await` over
 /// many futures), and is the building block for `race` and `any`. The inputs
 /// are already running, so this only decides *which* settled first; it never
 /// re-throws (callers `await futures[i]` to observe the value or error).
-function __await_any<T, E>(futures: baml.future.Future<T, E>[]) -> int throws never {
+function __await_any<T, E>(futures: root.future.Future<T, E>[]) -> int throws never {
     $await_any
 }
 
@@ -150,9 +190,9 @@ function __await_any<T, E>(futures: baml.future.Future<T, E>[]) -> int throws ne
 /// remaining futures are cancelled (JS `Promise.race`). A fast failure from
 /// one input therefore wins the race — use `any` when you want the first
 /// SUCCESS. Racing an empty array never settles (matching JS).
-function race<T, E>(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T, E> {
+function race<T, E>(futures: root.future.Future<T, E>[]) -> root.future.Future<T, E> {
     spawn {
-        let i = baml.future.__await_any(futures);
+        let i = root.future.__await_any(futures);
         // The winner is already settled; cancelling it is a no-op, so a blanket
         // cancel cleanly stops just the losers.
         futures.map((f) -> {
@@ -167,8 +207,8 @@ function race<T, E>(futures: baml.future.Future<T, E>[]) -> baml.future.Future<T
 /// carrying all the errors in input order. Cancelled inputs are skipped (they
 /// neither win nor contribute an error).
 function any<T, Err>(
-    futures: baml.future.Future<T, Err>[],
-) -> baml.future.Future<T, baml.future.AllFailed<Err>> {
+    futures: root.future.Future<T, Err>[],
+) -> root.future.Future<T, root.future.AllFailed<Err>> {
     spawn {
         // `winners` holds the first success (0 or 1 element — an array stands in
         // for an optional so we avoid a nullable local). `remaining` shrinks as
@@ -177,7 +217,7 @@ function any<T, Err>(
         let winners: T[] = [];
         let remaining = futures;
         while (remaining.length() > 0) {
-            let i = baml.future.__await_any(remaining);
+            let i = root.future.__await_any(remaining);
             let f = remaining[i];
             if (f.is_result()) {
                 // `f` succeeded; record its value and stop. The catch is unreachable
@@ -185,7 +225,7 @@ function any<T, Err>(
                 winners.push(
                     (await f) catch (e) {
                         let e => {
-                            let failure: baml.future.AllFailed<Err> = baml.future.AllFailed { errors: [e] };
+                            let failure: root.future.AllFailed<Err> = root.future.AllFailed { errors: [e] };
                             throw failure
                         }
                     },
@@ -228,7 +268,7 @@ function any<T, Err>(
             // fields), but checking it against the annotation records
             // `AllFailed<Err>`, which MIR threads to the runtime instance — typed
             // arms like `let e: AllFailed<string>` compare them.
-            let failure: baml.future.AllFailed<Err> = baml.future.AllFailed { errors: errors };
+            let failure: root.future.AllFailed<Err> = root.future.AllFailed { errors: errors };
             throw failure;
         }
         // A success was recorded; cancel the losers and return it.
@@ -236,5 +276,48 @@ function any<T, Err>(
             g.cancel()
         });
         winners[0]
+    }
+}
+
+/// Run `body` under a deadline.
+///
+/// # Throws
+///
+/// - `baml.errors.Timeout` if `limit` elapses first, with `duration` set to
+///   `limit` and `timeout_type` set to `"limit"`.
+/// - whatever `body` throws.
+///
+/// # Panics
+///
+/// - `baml.panics.Cancelled` re-raised, when the cancellation came from
+///   somewhere other than this deadline.
+function with_timeout<T, E>(
+    limit: root.time.Duration,
+    body: () -> T throws E,
+) -> T throws E | root.errors.Timeout {
+    let token = root.spawn.CancelToken.new();
+    let work = spawn with token { body() };
+    let deadline = spawn {
+        root.sys.sleep(limit);
+        token.cancel()
+    };
+    defer {
+        deadline.cancel()
+    }
+    // Wait for `work` to settle. Only the caller's own cancellation ends this
+    // wait early, and it propagates as itself, never as a timeout.
+    let _ = root.future.__await_any([work]);
+    // `work` has settled, so awaiting it only reads its outcome.
+    (await work) catch (e) {
+        root.panics.Cancelled => {
+            if (!token.is_cancelled()) {
+                throw e;
+            }
+            throw root.errors.Timeout {
+                message: `operation timed out after ${limit.to_milliseconds()}ms`,
+                duration: limit,
+                timeout_type: "limit",
+            }
+        },
     }
 }

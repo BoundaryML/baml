@@ -1,0 +1,5 @@
+name = "concat loop 10k"
+description = "build a string by 10,000 concatenations"
+expect = "10000"
+jobs = 200
+warmup = 12

@@ -59,6 +59,7 @@ class BamlTypeTest {
     @Test
     void primitives_round_trip() {
         assertRoundTrips(BamlType.INT);
+        assertRoundTrips(BamlType.BIGINT);
         assertRoundTrips(BamlType.STRING);
         assertRoundTrips(BamlType.BOOL);
         assertRoundTrips(BamlType.FLOAT);

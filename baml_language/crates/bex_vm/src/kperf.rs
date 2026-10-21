@@ -1,7 +1,7 @@
 //! In-process Apple-Silicon performance-counter probe (cycles + instructions
 //! retired) for the VM dispatch loop, plus a deterministic VM-op counter.
 //!
-//! Enabled only when `BAML_KPERF=1`. Reads the per-thread FIXED PMCs
+//! Enabled only when `DEV_BAML_VM_KPERF=1`. Reads the per-thread FIXED PMCs
 //! (cycles, instructions) around each `exec()` call on whatever worker thread
 //! runs it, accumulates the deltas process-globally, and prints a summary at
 //! exit (cyc/op, instr/op, IPC) so we can compare the VM against a reference
@@ -67,8 +67,13 @@ mod imp {
 
     /// One-time setup; returns whether counters are live.
     fn init() -> bool {
-        if std::env::var("BAML_KPERF").as_deref() != Ok("1") {
-            return false;
+        match baml_env::bool_var("DEV_BAML_VM_KPERF") {
+            Ok(Some(true)) => {}
+            Ok(_) => return false,
+            Err(error) => {
+                eprintln!("[kperf] {error}; disabled");
+                return false;
+            }
         }
         unsafe {
             let path =

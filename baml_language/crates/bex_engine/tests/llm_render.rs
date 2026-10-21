@@ -1,10 +1,11 @@
 //! Integration tests for LLM prompt rendering.
 //!
-//! Tests drive the compiler-generated `<Fn>$render_prompt` companion, which
-//! renders the spec's prompt (with the return type's output format) as a
-//! structural `ai.Prompt`.
+//! Tests drive `Fn@spec(...).prompt()`, which calls the private ordinary spec
+//! companion and renders its recipe (with the return type's output format) as
+//! a structural `ai.Prompt`.
 
 use bex_engine::FunctionCallContextBuilder;
+use bex_external_types::BexExternalAdt;
 use bex_heap::BexExternalValue;
 
 mod common;
@@ -12,47 +13,60 @@ mod common;
 use common::{EngineProgram, assert_engine_executes};
 
 #[tokio::test]
+async fn portable_prompt_ast_reconstructs_a_reusable_prompt_wrapper() {
+    use std::sync::Arc;
+
+    use bex_engine::BexEngine;
+    use bex_vm_types::{PromptAst, PromptAstSimple};
+    use sys_native::SysOpsExt;
+
+    let snapshot = common::compile_for_engine(
+        r#"
+function ReadPrompt(value: ai.Prompt) -> string {
+    value.text()
+}
+"#,
+    );
+    let engine = Arc::new(
+        BexEngine::new(snapshot, sys_native::SysOps::native().into(), Vec::new())
+            .expect("engine should initialize"),
+    );
+    let prompt = BexExternalValue::Adt(BexExternalAdt::PromptAst(Arc::new(PromptAst::Message {
+        role: "user".to_string(),
+        content: Arc::new(PromptAstSimple::String("hello".to_string())),
+        metadata: serde_json::Value::Null,
+    })));
+
+    for _ in 0..2 {
+        let result = engine
+            .call_function(
+                "ReadPrompt",
+                vec![prompt.clone()],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await
+            .expect("portable prompt should reconstruct as ai.Prompt");
+        assert_eq!(result, BexExternalValue::from("[user]\nhello"));
+    }
+}
+
+#[tokio::test]
 async fn backtick_prompt_interpolates_arguments() -> anyhow::Result<()> {
     assert_engine_executes(EngineProgram {
         source: r#"
 function Greet(name: string, age: int) -> string {
-    client "openai/gpt-4o"
-    prompt `Hello, ${name}! You are ${age} years old.`
+    client: "openai/gpt-4o"
+    prompt: `Hello, ${name}! You are ${age} years old.`
 }
 
 function main() -> string {
-    Greet$render_prompt("Alice", 30).text()
+    Greet@spec("Alice", 30).prompt().text()
 }
 "#,
         entry: "main",
         expected: Ok(BexExternalValue::from(
-            "Hello, Alice! You are 30 years old.",
-        )),
-        ..Default::default()
-    })
-    .await
-}
-
-#[tokio::test]
-async fn backtick_prompt_builds_chat_roles() -> anyhow::Result<()> {
-    assert_engine_executes(EngineProgram {
-        source: r#"
-function Answer(question: string) -> string {
-    client "openai/gpt-4o"
-    prompt `${role("system")}You are a helpful assistant.${role("user")}${question}`
-}
-
-function main() -> string {
-    let out = ""
-    for (let message in Answer$render_prompt("What is 2+2?").messages()) {
-        out += message.role + "=" + message.content + ";"
-    }
-    out
-}
-"#,
-        entry: "main",
-        expected: Ok(BexExternalValue::from(
-            "system=You are a helpful assistant.;user=What is 2+2?;",
+            "[system]\nHello, Alice! You are 30 years old.",
         )),
         ..Default::default()
     })
@@ -69,16 +83,16 @@ enum Category {
 }
 
 function Categorize(category: Category) -> string {
-    client "openai/gpt-4o"
-    prompt `Category: ${category}`
+    client: "openai/gpt-4o"
+    prompt: `Category: ${category}`
 }
 
 function main() -> string {
-    Categorize$render_prompt(Category.SPORTS).text()
+    Categorize@spec(Category.SPORTS).prompt().text()
 }
 "#,
         entry: "main",
-        expected: Ok(BexExternalValue::from("Category: SPORTS")),
+        expected: Ok(BexExternalValue::from("[system]\nCategory: SPORTS")),
         ..Default::default()
     })
     .await
@@ -111,6 +125,33 @@ class Sentiment {
 }
 
 #[tokio::test]
+async fn test_output_format_keeps_generic_class_instantiations_distinct() {
+    let rendered = common::render_output_format(
+        r#"
+class Box<T> {
+    value T
+}
+
+class Combined {
+    int_box Box<int>
+    string_box Box<string>
+}
+"#,
+        "Combined",
+    )
+    .await;
+
+    assert!(
+        rendered.contains("int_box: {\n    value: int,"),
+        "{rendered}"
+    );
+    assert!(
+        rendered.contains("string_box: {\n    value: string,"),
+        "{rendered}"
+    );
+}
+
+#[tokio::test]
 async fn test_output_format_can_render_null_as_omit() {
     let rendered = common::render_output_format_with_opts(
         r#"
@@ -134,7 +175,7 @@ class Person {
     );
 }
 
-/// The `$render_prompt` companion renders the prompt offline as an `ai.Prompt`.
+/// `FunctionSpec.prompt` renders the prompt offline as an `ai.Prompt`.
 /// Provider construction is pure in the ai world (credentials
 /// resolve from the environment at request time), so rendering never needs
 /// an `api_key` env var — the B-626 guarantee, now structural.
@@ -146,18 +187,18 @@ async fn test_render_prompt_offline_without_api_key_env() {
     let source = r##"
 class C { x: string }
 
-client Fast = openai.OpenAiClient.new(model = "gpt-4o-mini");
+client Fast = openai.ResponsesClient.new(model = "gpt-4o-mini");
 
 function Extract(raw: string) -> C {
-    client Fast
-    prompt `
+    client: Fast
+    prompt: `
         Extract from ${raw}.
-        ${ctx.output_format}
+        ${ctx.output_format()}
     `
 }
 
 function get_prompt() -> string {
-    Extract$render_prompt("hello").text()
+    Extract@spec("hello").prompt().text()
 }
 "##;
 
@@ -178,7 +219,7 @@ function get_prompt() -> string {
         .expect("render_prompt must succeed offline without any api_key env var");
 
     let BexExternalValue::String(rendered) = result else {
-        panic!("expected $render_prompt to return a string, got {result:?}");
+        panic!("expected spec prompt rendering to return a string, got {result:?}");
     };
     assert!(
         rendered.contains("Extract from hello."),
@@ -191,7 +232,7 @@ function get_prompt() -> string {
 }
 
 /// An inline `"provider/model"` shorthand client renders through
-/// `$render_prompt` exactly like a declared client value.
+/// `FunctionSpec.prompt` exactly like a declared client value.
 #[tokio::test]
 async fn test_render_prompt_with_inline_client_shorthand() {
     use bex_engine::BexEngine;
@@ -199,12 +240,12 @@ async fn test_render_prompt_with_inline_client_shorthand() {
 
     let source = r##"
 function Greet(name: string) -> string {
-    client "openai/gpt-4o-mini"
-    prompt `Hello, ${name}!`
+    client: "openai/gpt-4o-mini"
+    prompt: `Hello, ${name}!`
 }
 
 function get_prompt() -> string {
-    Greet$render_prompt("World").text()
+    Greet@spec("World").prompt().text()
 }
 "##;
 
@@ -222,10 +263,10 @@ function get_prompt() -> string {
             true,
         )
         .await
-        .expect("shorthand-client $render_prompt should succeed offline");
+        .expect("shorthand-client spec prompt should succeed offline");
 
     let BexExternalValue::String(rendered) = result else {
-        panic!("expected $render_prompt to return a string, got {result:?}");
+        panic!("expected spec prompt rendering to return a string, got {result:?}");
     };
     assert!(
         rendered.contains("Hello, World!"),
@@ -248,16 +289,16 @@ async fn test_json_return_type_renders_valid_json_literal() {
 
     let source = r##"
 function ExtractAny() -> json {
-    client "openai/gpt-4o"
-    prompt `
+    client: "openai/gpt-4o"
+    prompt: `
         Return whatever JSON you like.
 
-        ${ctx.output_format}
+        ${ctx.output_format()}
     `
 }
 
 function get_prompt() -> string {
-    ExtractAny$render_prompt().text()
+    ExtractAny@spec().prompt().text()
 }
 "##;
 
@@ -278,7 +319,7 @@ function get_prompt() -> string {
         .expect("failed to render prompt for json return type");
 
     let BexExternalValue::String(rendered) = result else {
-        panic!("expected $render_prompt to return a string, got {result:?}");
+        panic!("expected spec prompt rendering to return a string, got {result:?}");
     };
     assert!(
         rendered.contains("Respond with valid JSON."),

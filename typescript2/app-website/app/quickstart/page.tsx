@@ -33,8 +33,6 @@ const CSS = `
 /* the install unit spans the column so it lines up with the cards below */
 .qs-try > div { max-width: none; }
 .qs-ctas { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.qs-wrap :not(pre) > code { background: rgba(0,0,0,0.06); border-radius: 4px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.86em; padding: 2px 5px; }
 .qs-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
 .qs-card { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 13px 16px;
   border: 1px solid #e7e2d6; border-radius: 11px; background: #fffdf7; text-decoration: none;
@@ -86,10 +84,6 @@ export default function QuickstartPage() {
             <a className="qs-card" href="/explore">
               <span className="qs-card-t">Explore BAML</span>
               <span className="qs-card-v">see the language and code</span>
-            </a>
-            <a className="qs-card" href="https://boundaryml.com/changelog">
-              <span className="qs-card-t">Changelog</span>
-              <span className="qs-card-v">boundaryml.com/changelog</span>
             </a>
             <a
               className="qs-card"

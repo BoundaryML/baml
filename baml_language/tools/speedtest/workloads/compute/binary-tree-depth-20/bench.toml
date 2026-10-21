@@ -1,0 +1,5 @@
+name = "binary tree depth 20"
+description = "doubly recursive call tree of depth 20, no allocation"
+expect = "1048576"
+jobs = 5
+warmup = 1

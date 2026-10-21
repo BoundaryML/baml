@@ -57,6 +57,16 @@ pub extern "C" fn register_host_dispatch_callback(cb: HostDispatchFn) {
     host_dispatch::set_dispatch_fn(cb);
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn register_host_dispatch_v2(cb: crate::api::BamlHostDispatchV2) {
+    host_dispatch::set_dispatch_v2(cb);
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn register_host_cancel_callback(cb: crate::api::BamlHostCancel) {
+    host_dispatch::set_cancel_fn(cb);
+}
+
 /// Register the host release callback. First call wins; subsequent calls
 /// log a diagnostic and are ignored.
 ///

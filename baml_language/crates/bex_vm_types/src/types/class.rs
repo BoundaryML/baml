@@ -1,7 +1,9 @@
-use baml_type::RuntimeTy;
 use borsh::{BorshDeserialize, BorshSerialize};
+use indexmap::IndexMap;
 
-use crate::{AtomicValueSlot, CleanupLatch, HeapPtr, Value};
+use crate::{
+    AtomicValueSlot, CleanupLatch, HeapPtr, ObjectIndex, RuntimeTy, Value, types::TypeValue,
+};
 
 /// A field within a runtime class, carrying type and schema metadata.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
@@ -17,18 +19,34 @@ pub struct ClassField {
     ///
     /// Populated by emit using the enclosing class's `generic_params`.  For
     /// non-generic classes this is a fully-realized template (no `TypeArgRef`).
-    pub field_template: baml_type::TyTemplate,
+    pub field_template: crate::TyTemplate,
     pub description: Option<String>,
     pub alias: Option<String>,
+    pub docstring: Option<String>,
+    pub other: IndexMap<String, String>,
     pub skip: bool,
+    /// `@stream.done`: while streaming, the field holds its default until its
+    /// value is complete — an incomplete value is never surfaced.
+    pub stream_done: bool,
+    /// `@stream.must_exist`: the field has no default, so its class has no
+    /// partial parse until the field is present.
+    pub must_exist: bool,
+
+    /// The exact `type` operand a runtime-constructed field was built from, so
+    /// reflection reads back the definitions it carried, not just its shape.
+    #[borsh(skip)]
+    pub runtime_type: Option<TypeValue>,
 }
 
 /// Runtime class representation.
 #[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
 pub struct Class {
-    /// Type identity: carries short name, module path, and display name.
-    /// Use `name.display_name` for the display string (e.g. "ai.PromptMessage" or "Person").
-    pub name: baml_type::TypeName,
+    /// Where this class is declared inside its package: its namespace path
+    /// and item name (a class minted through `reflect` has only the item
+    /// name). Its own coordinates, and all of its name it carries — see
+    /// [`Self::name`]. Never an identity: that is `type_tag` and the
+    /// declaration object itself.
+    pub path: super::LocalName,
 
     /// Class fields with type and schema metadata.
     pub fields: Vec<ClassField>,
@@ -39,18 +57,27 @@ pub struct Class {
     /// Class-level serialization alias.
     pub alias: Option<String>,
 
-    /// Type tag for this class, used by `TypeTag` instruction for jump table dispatch.
-    /// Assigned during codegen as `CLASS_BASE + class_index`.
-    pub type_tag: i64,
+    /// Class-level source documentation and custom annotations.
+    pub docstring: Option<String>,
+    pub other: IndexMap<String, String>,
 
-    /// Class-level type attribute (e.g., from @@stream.done).
-    pub ty_attr: baml_type::TyAttr,
+    /// `@@stream.done`: while streaming, an instance is never surfaced until
+    /// the whole object is complete.
+    pub stream_done: bool,
 
-    /// BEP-042: `true` if this class defines a magic `cleanup(self) -> void`
-    /// finalizer. Set at emit time. The GC checks this bit to decide whether an
-    /// instance is finalizable — so the common case (no `cleanup`) is a single
-    /// flag read and never enters finalization.
-    pub has_cleanup: bool,
+    /// This class's head identity: assigned by the linker (`CLASS_BASE +` the
+    /// class's object index in the image) or, for a runtime-created class,
+    /// minted fresh by the grafter; in a unit it holds the class's own object
+    /// operand. Both the `TypeTag` instruction's jump-table dispatch value and
+    /// the identity a `TypeHead` referring to this class compares by.
+    pub type_tag: baml_type::typetag::TypeTag,
+
+    /// The class's finalizer (BEP-042), as its position in [`methods`](Self::methods),
+    /// or `None` for a class without one. The checker decides which method is
+    /// the finalizer; emit records where it placed that method. The position
+    /// is validated against the table at load (`Program::validate`), so reading
+    /// it needs no name and cannot miss.
+    pub cleanup: Option<usize>,
 
     /// Number of generic params the class itself declares (`GenericBox<T>` ⇒ 1,
     /// non-generic ⇒ 0). A method's `display_type_params` are De Bruijn-ordered
@@ -59,11 +86,62 @@ pub struct Class {
     /// generic params (which Gate A must demand) from the inherited class params
     /// (bound by the receiver, never by name). Set at emit time.
     pub generic_param_count: usize,
+
+    /// What this declaration belongs to: its package (a static package's is
+    /// assigned at load), or nothing — a class minted through `reflect`,
+    /// which then holds its own witness rules. See [`Owner`](super::Owner).
+    #[borsh(skip)]
+    pub owner: super::Owner,
+
+    /// The class's inherent methods (static and instance, natives included),
+    /// by name, in declaration order. Impl-provided methods are not here:
+    /// they are reached through the impl rules. A class created at run time
+    /// through `reflect` has an empty table.
+    ///
+    /// This is the class's method surface by identity — how a package's
+    /// export table names a method (`FnPath::Method`), and how a consumer
+    /// binds one without a rendered spelling.
+    pub methods: IndexMap<baml_type::Name, ClassMethodDef>,
+}
+
+/// One inherent method of a [`Class`]: the pooled function on the wire, bound
+/// to a pointer at load — exactly as an interface's
+/// [`InterfaceMethodDef::default`](super::InterfaceMethodDef::default) becomes
+/// its `default_fn`.
+#[derive(Clone, Debug, BorshSerialize, BorshDeserialize)]
+pub struct ClassMethodDef {
+    /// The method's function object, relocated by the linker like any other
+    /// cross-object operand (see `relink::visit_object_operands`).
+    pub function: ObjectIndex,
+    /// The loaded function: null until the pool is bound. Never serialized —
+    /// pointers are runtime-only. A GC edge like `default_fn`.
+    #[borsh(skip)]
+    pub function_ptr: HeapPtr,
+}
+
+impl Class {
+    /// How this class is named: its path under its package's display name
+    /// for a class a package declares (`ai.PromptMessage`), the bare path for
+    /// one no package owns (`Person`). Display and boundary spelling only —
+    /// see [`declaration_name`](super::declaration_name).
+    #[must_use]
+    pub fn name(&self) -> crate::DeclarationName {
+        self.owner.name_of(&self.path)
+    }
+
+    /// This class's finalizer, if it declares one: the method at the recorded
+    /// position of its method table. The class is the identity here — nothing
+    /// renders a name to find the function.
+    #[must_use]
+    pub fn cleanup(&self) -> Option<HeapPtr> {
+        self.cleanup
+            .map(|position| self.methods[position].function_ptr)
+    }
 }
 
 impl std::fmt::Display for Class {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<class {}>", self.name)
+        write!(f, "<class {}>", self.name())
     }
 }
 
@@ -80,7 +158,7 @@ pub struct Instance {
     /// Boxed (immutable after construction) rather than a `Vec` so `Instance`
     /// stays within `Object`'s 64-byte budget once the `cleaned` latch is added
     /// — matching the existing `Box<[RuntimeTy]>` convention for type-arg lists.
-    pub class_type_args: Box<[baml_type::RealizedTy]>,
+    pub class_type_args: Box<[crate::RealizedTy]>,
 
     /// Fields are accessed by index. No string lookups. Each slot is atomic so
     /// racing field reads/writes across `spawn` fibers cannot become a Rust
@@ -97,7 +175,7 @@ pub struct Instance {
 impl Instance {
     pub fn new(
         class: HeapPtr,
-        class_type_args: Box<[baml_type::RealizedTy]>,
+        class_type_args: Box<[crate::RealizedTy]>,
         fields: Vec<Value>,
     ) -> Self {
         Self {

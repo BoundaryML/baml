@@ -5,23 +5,15 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0007
 
   × type `int[]` has no member `len`
-    ╭─[main.baml:14:23]
+    ╭─[main.baml:14:13]
  14 │     consume([1, 2, 3].len())
-    ·                       ───
+    ·             ───────────────
     ╰────
 
   [type] E0007
 
   × type `int[]` has no member `len`
-    ╭─[main.baml:25:24]
+    ╭─[main.baml:25:14]
  25 │     identity([1, 2, 3].len())
-    ·                        ───
-    ╰────
-
-  [type] E0002
-
-  × cannot infer type parameter `T`
-    ╭─[main.baml:35:5]
- 35 │     phantom()
-    ·     ─────────
+    ·              ───────────────
     ╰────

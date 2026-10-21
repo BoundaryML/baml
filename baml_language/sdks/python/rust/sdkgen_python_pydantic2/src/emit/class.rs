@@ -1,11 +1,12 @@
 //! `PyClass` — Python class definition.
 //!
-//! Covers user-code classes, stdlib classes (`baml.http.Response`, …),
-//! and `$stream` companion classes. All three render as a
-//! `pydantic.BaseModel` subclass with typed fields; they differ only in
-//! leaf routing.
+//! Covers user-code classes and stdlib classes (`baml.http.Response`, …).
+//! Both render as a `pydantic.BaseModel` subclass with typed fields; they
+//! differ only in leaf routing.
 
-use baml_codegen_types::{Name, Ty};
+use std::collections::BTreeMap;
+
+use baml_sdkgen_types::{Name, Ty};
 
 use crate::emit::method::PyMethodBinding;
 
@@ -13,8 +14,7 @@ use crate::emit::method::PyMethodBinding;
 /// `static_methods` and `instance_methods`; §7 handle-backed
 /// classes are deferred — every `PyClass` renders as vanilla Pydantic.
 pub(crate) struct PyClass {
-    /// Python identifier (bare name). `$stream` suffix is stripped —
-    /// it influenced routing, not the class name.
+    /// Python identifier (bare name).
     pub(crate) py_name: String,
     /// Source pool key, retained for debug / routing.
     #[allow(dead_code)]
@@ -24,6 +24,10 @@ pub(crate) struct PyClass {
     /// `typing.Generic[T, …]` second base and the leaf-level `TypeVar`
     /// declarations include each name.
     pub(crate) generic_params: Vec<String>,
+    /// Raw BAML `TypeVar` names matching `generic_params`.
+    pub(crate) wire_generic_params: Vec<String>,
+    /// Raw `TypeVar` spelling -> projected Python spelling for annotations.
+    pub(crate) type_var_names: BTreeMap<String, String>,
     /// Joined `///` doc-comment lines from the BAML class declaration.
     /// Combined with `PyClassProperty.docstring` from each entry in
     /// `properties` to produce the `"""…"""` Python class docstring;
@@ -43,8 +47,15 @@ pub(crate) struct PyClass {
 }
 
 pub(crate) struct PyClassProperty {
+    /// Projected Python attribute name.
     pub(crate) name: String,
+    /// Raw BAML field name used for validation and wire serialization.
+    pub(crate) wire_name: String,
     pub(crate) ty: Ty,
+    /// Whether the field's top-level BAML type admits `null`. This is kept
+    /// separate from its rendered annotation so generator policy never relies
+    /// on parsing Python type strings.
+    pub(crate) nullable: bool,
     /// Joined `///` doc-comment lines preceding the field. Folded into
     /// the parent `PyClass`'s `"""…"""` docstring under an
     /// `Attributes:` section — never rendered as an inline `# …`
