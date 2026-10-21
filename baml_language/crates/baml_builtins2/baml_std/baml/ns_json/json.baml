@@ -77,22 +77,19 @@ function stringify_pretty(j: json) -> string throws never {
 
 /// Serializes any BAML value to its canonical JSON text.
 ///
-/// Equivalent to `stringify(to_json(value))`: dispatch is on the value's
-/// runtime type, and `baml.ToJson` overrides apply at every depth. The one
-/// walk serializes straight to text rather than building the intermediate
-/// `json` value. Reach for this when you want JSON text, and for `from<T>`
-/// when you want a `json` value to keep working with. Not to be confused with
-/// `string.from`, which renders BAML's own display form rather than JSON.
+/// `stringify` composed with `to_json`: dispatch is on the value's runtime
+/// type, and `baml.ToJson` overrides apply at every depth. Reach for this when
+/// you want JSON text, and for `from<T>` when you want a `json` value to keep
+/// working with. Not to be confused with `string.from`, which renders BAML's
+/// own display form rather than JSON.
 ///
 /// # Throws
 ///
 /// - `baml.json.SerializationError` if any value in the graph has no JSON form
 ///   — a `uint8array` without explicit encoding, a function, a future. See
 ///   `from<T>` for the full rendering rules.
-//baml:mut_vm
-//baml:may_yield
 function to_string(value: unknown) -> string throws SerializationError {
-    $rust_function
+    stringify(to_json(value))
 }
 
 /// Serializes any BAML value to its `json` representation, dispatching on the
@@ -519,23 +516,20 @@ function serialize<T>(v: T) -> string throws SerializationError {
 /// overrides on classes (via `from_json<T>`). Equivalent to
 /// `from_json<T>(parse(s))`.
 ///
-/// When no type reachable from `T` provides a `from_json` override, the
-/// document is decoded straight from the text in one pass, as `from_string<T>`
-/// does, without first building the `json` value `parse` would; the result,
-/// and every error, is the one the composition gives.
-///
 /// For a host that wants to coerce a JSON-shaped input (such as `--json-args`)
 /// into a typed BAML value while respecting class-level `from_json` overrides.
-/// `from_string<T>` is the structural path, which bypasses overrides. This is
-/// also the stable name `baml_exec::dispatch::build_args_from_signature`
-/// resolves to coerce `--json-args` payloads.
+/// `from_string<T>` is the structural path, which bypasses overrides.
 ///
 /// # Throws
 ///
 /// - `baml.json.ParseError` if `s` is not valid JSON.
 /// - `baml.json.DecodeError` if the parsed document does not fit `T`.
-//baml:mut_vm
-//baml:may_yield
 function deserialize<T>(s: string) -> T throws ParseError | DecodeError {
-    $rust_function
+    // HACK: same story as `serialize<T>` — this wrapper exists so
+    // `baml_exec::dispatch::build_args_from_signature` can resolve a single
+    // stable name (`baml.json.deserialize`) to coerce `--json-args` payloads
+    // through `from_json<T>(parse(s))`. Inlining the composition into the Rust
+    // caller would mean threading two generic engine calls and their
+    // throws-types instead of one, so the wrapper pays for itself.
+    from_json<T>(parse(s))
 }
