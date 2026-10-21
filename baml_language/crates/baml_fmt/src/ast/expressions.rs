@@ -1202,28 +1202,64 @@ impl PrintMultiLine for BinaryExpr {
     ///         / dddddddd
     ///     - eeeeeee
     /// ```
+    ///
+    /// A `-` or `<` whose left operand ends in a block-closing `}` stays on
+    /// that `}`'s line instead: the parser ends an expression at a `}`
+    /// followed by a line break when the next line could start a statement,
+    /// so `}` then `- d` on the next line would reparse as two statements.
+    ///
+    /// ```baml
+    /// if (c) {
+    ///     a
+    /// } else {
+    ///     b
+    /// } - d
+    /// ```
     fn print_multi_line(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
         let inner_indent = shape.indent + printer.config.indent_width;
+        // Indentation of the line being printed: where a closing `}` of the
+        // previous operand sits.
+        let mut line_indent = shape.indent;
         let (first, chain_members) = self.get_chaining_members(printer.trivia);
         printer.print(first, shape);
-        printer.print_trivia_all_trailing_for(first.rightmost_token());
+        let (_, mut has_line_comment) =
+            printer.print_trivia_all_trailing_for(first.rightmost_token());
+        let mut left_ends_in_block = &printer.input[first.rightmost_token()] == "}";
         let num_chain_members = chain_members.len();
         for (i, (op, right)) in chain_members.into_iter().enumerate() {
-            printer.print_newline();
-            printer.print_spaces(inner_indent);
+            let same_line = left_ends_in_block && !has_line_comment && op.can_start_expression();
+            if same_line {
+                printer.print_str(" ");
+            } else {
+                printer.print_newline();
+                printer.print_spaces(inner_indent);
+                line_indent = inner_indent;
+            }
             printer.print(op, Shape::unlimited_single_line());
             printer.print_str(" ");
-            let inner_shape = Shape {
-                width: printer
-                    .config
-                    .line_width
-                    .saturating_sub(inner_indent + usize::from(op.span().len()) + 1),
-                indent: inner_indent,
-                first_line_offset: usize::from(op.span().len()) + 1,
+            let inner_shape = if same_line {
+                // The operand continues the `}`'s line, so its own lines
+                // indent like that line rather than like a wrapped operand.
+                Shape {
+                    width: printer.current_line_remaining_width(),
+                    indent: line_indent,
+                    first_line_offset: printer.current_line_len().saturating_sub(line_indent),
+                }
+            } else {
+                Shape {
+                    width: printer
+                        .config
+                        .line_width
+                        .saturating_sub(inner_indent + usize::from(op.span().len()) + 1),
+                    indent: inner_indent,
+                    first_line_offset: usize::from(op.span().len()) + 1,
+                }
             };
-            printer.print(right, inner_shape.clone());
+            printer.print(right, inner_shape);
             if i + 1 < num_chain_members {
-                printer.print_trivia_all_trailing_for(right.rightmost_token());
+                (_, has_line_comment) =
+                    printer.print_trivia_all_trailing_for(right.rightmost_token());
+                left_ends_in_block = &printer.input[right.rightmost_token()] == "}";
             }
         }
         PrintInfo::default_multi_lined()

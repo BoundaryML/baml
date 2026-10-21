@@ -1200,6 +1200,67 @@ mod backtick_format_tests {
 }
 
 #[cfg(test)]
+mod block_operand_binary_format_tests {
+    use super::*;
+
+    /// The parser ends an expression at a block-closing `}` followed by a line
+    /// break when the next line could start a statement (B-1831), so a `-` or
+    /// `<` after a multi-line block operand stays on the `}`'s line; other
+    /// operators still wrap onto their own line.
+    #[test]
+    fn minus_and_less_after_block_operand_stay_on_the_closing_brace_line() {
+        let source = "function f(c: bool, aaaaaaaaaaaaaaaaaaaa: int, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: int) -> bool {
+    let v = if (c) { let t = aaaaaaaaaaaaaaaaaaaa; t } else { bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb } - aaaaaaaaaaaaaaaaaaaa
+    let w = aaaaaaaaaaaaaaaaaaaa - match (v) { 0 => { let q = 1; q }, _ => 200 } - match (v) { 0 => { let q = 1; q }, _ => 2 }
+    let y = if (c) { let t = aaaaaaaaaaaaaaaaaaaa; t } else { bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb } + aaaaaaaaaaaaaaaaaaaa
+    if (c) { let t = aaaaaaaaaaaaaaaaaaaa; t } else { bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb } < v + w + y
+}
+";
+        let expected = "function f(c: bool, aaaaaaaaaaaaaaaaaaaa: int, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: int) -> bool {
+    let v = if (c) {
+        let t = aaaaaaaaaaaaaaaaaaaa;
+        t
+    } else {
+        bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    } - aaaaaaaaaaaaaaaaaaaa;
+    let w = aaaaaaaaaaaaaaaaaaaa
+        - match (v) {
+            0 => {
+                let q = 1;
+                q
+            },
+            _ => 200,
+        } - match (v) {
+            0 => {
+                let q = 1;
+                q
+            },
+            _ => 2,
+        };
+    let y = if (c) {
+        let t = aaaaaaaaaaaaaaaaaaaa;
+        t
+    } else {
+        bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    }
+        + aaaaaaaaaaaaaaaaaaaa;
+    if (c) {
+        let t = aaaaaaaaaaaaaaaaaaaa;
+        t
+    } else {
+        bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    } < v + w + y
+}
+";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, expected);
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+}
+
+#[cfg(test)]
 mod linear_formatter_regression_tests {
     use super::*;
 

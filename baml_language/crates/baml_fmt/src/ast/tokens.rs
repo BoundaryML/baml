@@ -275,6 +275,14 @@ pub enum BinaryOp {
 }
 
 impl BinaryOp {
+    /// Whether this operator's token can also begin an expression (`-x`,
+    /// `<T>(x: T) => x`). The parser does not read such a token on the line
+    /// after a block-closing `}` as a continuation of the block's expression.
+    #[must_use]
+    pub fn can_start_expression(&self) -> bool {
+        matches!(self, BinaryOp::Minus(_) | BinaryOp::Less(_))
+    }
+
     #[must_use]
     pub fn span(&self) -> TextRange {
         match self {

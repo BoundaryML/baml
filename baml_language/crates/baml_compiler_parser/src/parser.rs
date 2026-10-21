@@ -754,22 +754,33 @@ impl<'a> Parser<'a> {
             .is_some_and(|t| Self::kind_is_member_name(t.kind))
     }
 
-    /// True when a postfix `(` must NOT be glued onto the expression parsed so
-    /// far as a call, because that expression is *block-terminated* (its last
-    /// real token is `}` — an `if`/`match`/block/loop body) and the `(` opens a
-    /// fresh line.
+    /// True when the expression parsed so far is *block-terminated* (its last
+    /// real token is the `}` closing an `if`/`match`/block/loop/lambda body or
+    /// a literal) and a line break separates it from the next token.
     ///
-    /// This is the guard-`if` early-return case (B-622):
+    /// BAML separates statements by newlines, and a block-closing `}` at the
+    /// end of a line is where a statement most naturally ends. So in this
+    /// position the expression is complete for every continuation token that
+    /// could also *begin* a new statement — `(`, `[`, `-`, `<`, … — and the
+    /// Pratt loop must stop instead of reading the next line as a call, an
+    /// index, or a binary operand (B-622, B-1831):
     ///   if (x < 0) { throw ... }
-    ///   (x * 2)
-    /// Without it the parser glues `{ ... }(x * 2)` into a call on the void
-    /// `if` result. Keying on a block-terminating `}` (rather than any callee)
-    /// keeps ordinary multi-line calls — a method chain whose `(` lands on a
-    /// later line than an identifier/`)` callee — parsing as calls, matching
-    /// the deliberately-tested `foo()`-then-`(1)` chained-call behavior. The
-    /// newline requirement keeps same-line `<block>(…)` forms (e.g. an
-    /// immediately-invoked block) untouched.
-    fn newline_separates_block_expr_from_paren(&self) -> bool {
+    ///   (x * 2)          // a new statement, not `{ ... }(x * 2)`
+    ///   if (c) { [7] } else { [4] }
+    ///   [0]              // a new statement, not `{ ... }[0]`
+    ///   if (x != null) { return x; }
+    ///   -1               // a new statement, not `{ ... } - 1`
+    /// This mirrors Rust, where a block-like expression statement ends at its
+    /// closing brace; with no `;` to end a `let`, the rule applies in every
+    /// expression position (`let xs = if … { … }` then `[0]` is two
+    /// statements too). Tokens that cannot start an expression (`.`, `?.`, `+`,
+    /// `&&`, `catch`, …) still continue onto the next line, since reading them
+    /// as a fresh statement could only be an error. Keying on the `}` keeps
+    /// ordinary multi-line forms such as `foo()` then `(1)` on the next line
+    /// (a chained call) or `a` then `- b` (a subtraction) unchanged, and the
+    /// newline requirement keeps same-line forms like `if (c) {[1]} else
+    /// {[2]}[0]` untouched.
+    fn at_line_break_after_block_expr(&self) -> bool {
         self.has_newline_ahead() && self.last_significant_emitted_token_is_block_close()
     }
 
@@ -6522,6 +6533,13 @@ impl<'a> Parser<'a> {
             };
             let op = token.kind;
 
+            // A block-terminated expression followed by a line break ends
+            // here when the next line could start a new statement; see
+            // `at_line_break_after_block_expr`.
+            if Self::is_start_of_expression(op) && self.at_line_break_after_block_expr() {
+                break;
+            }
+
             // Check for special cases first
             if self.suppress_catch_depth == 0 && self.at_catch_clause_start() {
                 self.parse_catch_expr(expr_start);
@@ -6551,22 +6569,8 @@ impl<'a> Parser<'a> {
                 self.parse_expr_bp(5); // right_bp = 5 (left associative)
                 self.wrap_events_in_node(lhs_start, SyntaxKind::BINARY_EXPR);
                 self.finish_node();
-            } else if op == TokenKind::LParen && !self.newline_separates_block_expr_from_paren() {
-                // Function call.
-                //
-                // The `newline_separates_block_expr_from_paren()` guard fixes a
-                // guard-style early return (B-622): a block-terminated
-                // statement whose value is discarded, followed on the *next
-                // line* by a parenthesized expression, must not glue into a
-                // call on that value. For example
-                //   if (x < 0) { throw ... }
-                //   (x * 2)
-                // would otherwise parse as `{ ... }(x * 2)`, invoking the void
-                // `if` result (E0006 "`void` is not a function"). Only the
-                // block-terminated + newline shape is separated (mirroring
-                // Rust's expression-statement rule); ordinary calls whose `(`
-                // sits on a later line than a non-`}` callee — e.g. a method
-                // chain broken across lines by comments — still parse as calls.
+            } else if op == TokenKind::LParen {
+                // Function call
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::CALL_EXPR);
                 self.parse_call_args();
@@ -14106,6 +14110,97 @@ function f() -> int {
             call_exprs, 2,
             "a non-block callee followed by `(` on the next line must still chain as a call"
         );
+    }
+
+    fn count_kind(root: &SyntaxNode, kind: SyntaxKind) -> usize {
+        root.descendants().filter(|n| n.kind() == kind).count()
+    }
+
+    #[test]
+    fn bracket_line_after_block_expr_is_a_new_statement() {
+        // Regression (B-1831): a `[` opening the line after a block-terminated
+        // `if` starts a new statement (an array literal), not an index into the
+        // `if` result. Before the fix `pick(true)` silently returned `7`.
+        let source = r#"function pick(c: bool) -> int[] {
+    if (c) { [7, 8, 9] } else { [4, 5, 6] }
+    [0]
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_kind(&root, SyntaxKind::INDEX_EXPR), 0);
+    }
+
+    #[test]
+    fn minus_line_after_block_expr_is_a_new_statement() {
+        // Regression (B-1831): a `-` opening the line after a block-terminated
+        // statement is a prefix negation on a new statement, not a subtraction
+        // whose left operand is the `void` guard `if`.
+        let source = r#"function f(x: int?) -> int {
+    if (x != null) { return x; }
+    -1
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 1, "only `x != null`");
+        assert_eq!(count_kind(&root, SyntaxKind::UNARY_EXPR), 1);
+    }
+
+    #[test]
+    fn line_after_block_initializer_is_a_new_statement() {
+        // With no `;` to end a `let`, a block-terminated initializer ends at
+        // its line break too: `-y` is the tail expression, not part of the
+        // initializer (which would reference `y` before it is bound).
+        let source = r#"function g(x: int) -> int {
+    let y = match (x) {
+        0 => 10,
+        _ => 20,
+    }
+    -y
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 0);
+        assert_eq!(count_kind(&root, SyntaxKind::UNARY_EXPR), 1);
+    }
+
+    #[test]
+    fn same_line_continuation_after_block_expr_is_unchanged() {
+        // The line break is what ends the expression: on the same line, `[`,
+        // `(` and `-` still continue a block-terminated expression.
+        let source = r#"function f(c: bool) -> int {
+    let a = if (c) { [1, 2] } else { [3, 4] }[0]
+    let b = if (c) { 1 } else { 2 } - 1
+    a + b
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_kind(&root, SyntaxKind::INDEX_EXPR), 1);
+        assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 2);
+    }
+
+    #[test]
+    fn non_expression_start_line_after_block_expr_still_continues() {
+        // Tokens that cannot begin a statement (`.`, `+`, `catch`) still
+        // continue a block-terminated expression from the next line, and a
+        // non-block left operand still continues across a line break.
+        let source = r#"function f(c: bool, a: int, b: int) -> int {
+    let s = if (c) { "x" } else { "y" }
+        .length()
+    let n = if (c) { 1 } else { 2 }
+        + 3
+    let m = a
+        - b
+    s + n + m
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_kind(&root, SyntaxKind::CALL_EXPR), 1);
+        assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 4);
     }
 
     #[test]
