@@ -807,10 +807,7 @@ fn write_constant(f: &mut impl Write, db: &dyn crate::Db, constant: &Constant<'_
             write!(
                 f,
                 "const item {}",
-                crate::lower::definition_display_name(
-                    db,
-                    baml_compiler2_hir::contributions::Definition::Let(*binding)
-                )
+                crate::lower::global_display_name(db, *binding)
             )
         }
         Constant::GenericFunction { func, type_args } => {

@@ -159,7 +159,7 @@ test "top-level runtime type binding is rejected" {
                 function main() -> string { "unreachable" }
             `,
         },
-        "top-level `let` bindings are not supported",
+        "`let type` binds a type for the rest of a block, so it is only allowed inside a body",
     )
 }
 

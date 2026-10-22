@@ -433,6 +433,27 @@ pub enum DiagnosticId {
     /// `baml.spawn.__spawn`, ...) was referenced as a value: it has no
     /// function value, so it may only be called directly.
     CallSiteBuiltinValue,
+    /// An assignment (`=`, `+=`, ...) targeted a top-level binding: a global
+    /// variable, a client, or a Session binding. Globals are set once, by
+    /// `$init`, and every request shares them, so the binding itself is
+    /// immutable; what it holds can still be changed through its fields or
+    /// elements.
+    AssignmentToGlobal,
+    /// A `return` at the top level of a global variable's initializer. The
+    /// initializer is an expression, not a function body: its value is its
+    /// last expression.
+    ReturnInGlobalInitializer,
+    /// Global variables whose initializers depend on each other, directly or
+    /// through the functions they call, so no initialization order exists.
+    GlobalInitializationCycle,
+    /// A top-level initializer reaches `spawn` or `await`. `$init` runs while
+    /// the engine is being created, where nothing can be scheduled or waited
+    /// on.
+    InitSuspendNotAllowed,
+    /// A global variable's initializer can throw, and nothing catches it
+    /// (a warning). An uncaught throw in `$init` stops the engine from being
+    /// created at all.
+    InitThrowNotHandled,
 }
 
 impl DiagnosticId {
@@ -647,6 +668,11 @@ impl DiagnosticId {
             DiagnosticId::RootIsReserved => "E0176",
             DiagnosticId::ServedInterfaceExportsFunctionsOnly => "E0178",
             DiagnosticId::CallSiteBuiltinValue => "E0177",
+            DiagnosticId::AssignmentToGlobal => "E0179",
+            DiagnosticId::ReturnInGlobalInitializer => "E0180",
+            DiagnosticId::GlobalInitializationCycle => "E0181",
+            DiagnosticId::InitSuspendNotAllowed => "E0182",
+            DiagnosticId::InitThrowNotHandled => "E0183",
         }
     }
 }

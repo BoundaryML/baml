@@ -298,6 +298,18 @@ fn plain(ty: SemanticTokenType) -> Class {
     (ty, ModifierSet::empty())
 }
 
+/// Whether a `BINDING_PATTERN` names a global variable: the pattern of a
+/// file-scope `const`.
+fn declares_global(binding: &SyntaxNode) -> bool {
+    binding
+        .parent()
+        .filter(|pattern| pattern.kind() == SyntaxKind::PATTERN)
+        .and_then(|pattern| pattern.parent())
+        .filter(|statement| statement.kind() == SyntaxKind::LET_STMT)
+        .and_then(|statement| statement.parent())
+        .is_some_and(|file| file.kind() == SyntaxKind::SOURCE_FILE)
+}
+
 /// Whether a `FUNCTION_DEF` / `METHOD_SIG` node is declared inside a class,
 /// interface, or implements block — i.e. it is a method, not a free function.
 fn in_method_context(node: &SyntaxNode) -> bool {
@@ -992,8 +1004,16 @@ fn classify_token(token: &SyntaxToken) -> Option<Class> {
             word.then_some(decl(SemanticTokenType::Property))
         }
         SyntaxKind::PARAMETER => word.then_some(decl(SemanticTokenType::Parameter)),
-        // `let x`, match-arm bindings, etc.: the bound name is a declaration.
-        SyntaxKind::BINDING_PATTERN => word.then_some(decl(SemanticTokenType::Variable)),
+        // `let x`, match-arm bindings, etc.: the bound name is a declaration —
+        // a `readonly` one for a global variable, which cannot be reassigned.
+        SyntaxKind::BINDING_PATTERN => word.then(|| {
+            let (ty, modifiers) = decl(SemanticTokenType::Variable);
+            if declares_global(&parent) {
+                (ty, modifiers | ModifierSet::READONLY)
+            } else {
+                (ty, modifiers)
+            }
+        }),
         // The catch binding(s) `catch (e, stack) { … }` — parameter-like locals
         // bound by the clause and scoped to its body (consistent with uses,
         // which resolve via DefinitionSite::CatchBinding -> parameter).

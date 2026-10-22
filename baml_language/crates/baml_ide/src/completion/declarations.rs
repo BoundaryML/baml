@@ -25,7 +25,7 @@ const TOP_LEVEL: &[(&str, &str)] = &[
         "implement ${1:Interface} for ${2:Type} {\n\t$0\n}",
     ),
     ("type", "type ${1:Name} = $0"),
-    ("let", "let ${1:name} = $0;"),
+    ("const", "const ${1:name} = $0;"),
     ("client", "client ${1:Name} = $0"),
     ("generator", "generator ${1:name} {\n\t$0\n}"),
     ("test", "test \"${1:name}\" {\n\t$0\n}"),

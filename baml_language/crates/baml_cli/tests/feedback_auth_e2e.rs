@@ -72,9 +72,13 @@ fn spawn_mock(state: Arc<MockState>) -> String {
                     .to_string();
                 let body = req.split("\r\n\r\n").nth(1).unwrap_or("").to_string();
                 let (status, response) = respond(&state, &base, &path, &body, &req);
+                // This thread closes the socket after one response, so say so.
+                // Otherwise the client pools the connection and may send its
+                // next request (e.g. refresh right after API-key verification)
+                // before seeing the close, failing it with a connection reset.
                 let _ = stream.write_all(
                     format!(
-                        "HTTP/1.1 {status}\r\ncontent-type: application/json\r\ncontent-length: {}\r\n\r\n{response}",
+                        "HTTP/1.1 {status}\r\nconnection: close\r\ncontent-type: application/json\r\ncontent-length: {}\r\n\r\n{response}",
                         response.len()
                     )
                     .as_bytes(),

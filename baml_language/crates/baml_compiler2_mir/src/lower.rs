@@ -1052,6 +1052,26 @@ pub fn definition_display_name<'db>(db: &'db dyn crate::Db, def: Definition<'db>
     )
 }
 
+/// The display name of a top-level binding, wherever it is declared: a source
+/// `let` by its declaration, an exported row of a served package by its head
+/// (the same `package.namespace….name` spelling).
+pub fn global_display_name<'db>(
+    db: &'db dyn crate::Db,
+    global: baml_compiler2_hir_ty::extern_loc::GlobalRef<'db>,
+) -> String {
+    match global {
+        DeclRef::Source(binding) => definition_display_name(db, Definition::Let(binding)),
+        DeclRef::External(binding) => {
+            let head = binding.head(db);
+            dotted_name(
+                &Viewpoint::canonical(db).display_label(head.root()),
+                head.namespace(),
+                &[head.name().as_str()],
+            )
+        }
+    }
+}
+
 /// The owner-qualified tail of a declaration's display name — everything after
 /// the package and namespace segments: `f` for a free function, `Class.m`
 /// for a class-inherent method, `Interface.m` for an interface's default
@@ -2339,6 +2359,7 @@ impl<'db> LoweringContext<'db> {
         // --- Inference: the body's and parameter defaults' results ---
         // Lookups dispatch through the `tir_*` accessors.
         let tables = crate::inference_provider::InferenceTables::for_function(db, func_loc);
+        let expr_body = with_bare_global_paths(expr_body, tables.of(InferenceRoot::Body));
 
         // --- The package's alias environment and interface pre-filter ---
         let pkg_info = file_package(db, file);
@@ -2431,6 +2452,7 @@ impl<'db> LoweringContext<'db> {
         // --- Inference: the initializer's results ---
         // Lookups dispatch through the `tir_*` accessors.
         let tables = crate::inference_provider::InferenceTables::for_let(db, let_loc);
+        let expr_body = with_bare_global_paths(expr_body, tables.of(InferenceRoot::Body));
 
         // --- The package's alias environment and interface pre-filter ---
         let pkg_id = file_package(db, file).root;
@@ -2693,6 +2715,13 @@ impl<'db> LoweringContext<'db> {
     }
 
     fn binding_id_for_path(&self, expr_id: AstExprId, name: &Name) -> Option<BindingId> {
+        // A path the checker resolved to a global names no local: TIR records
+        // a global root only where nothing shadows it. Its bare form can still
+        // spell one — `root.ns.name` lowers as `name` (`with_bare_global_paths`)
+        // — so the name lookups below must not see it.
+        if self.tir_global_root(expr_id).is_some() {
+            return None;
+        }
         let hir_binding = self.hir_binding_id_for_path(expr_id);
         let Some(&tagged_binding) = self.tagged_body_param_bindings.get(name) else {
             return hir_binding;
@@ -2997,6 +3026,15 @@ impl<'db> LoweringContext<'db> {
             .segments
             .first()
             .map(|segment| &segment.ty)
+    }
+
+    /// The top-level `let` TIR resolved this path expression's leading
+    /// segments to, with how many segments name it.
+    fn tir_global_root(
+        &self,
+        expr: AstExprId,
+    ) -> Option<crate::inference_provider::GlobalRoot<'db>> {
+        self.tir_tables()?.global_roots.get(&expr).copied()
     }
 
     fn tir_path_segment_type(&self, expr: AstExprId, seg_idx: usize) -> Option<&'db Tir2Ty> {
@@ -4380,31 +4418,23 @@ impl<'db> LoweringContext<'db> {
             .map(|ty| self.convert_tir_ty_for_runtime(ty))
     }
 
-    /// The **top-level `let`** `name` denotes at this expression's position, if
-    /// any. Session submissions persist their root bindings as such items, and
-    /// compiler-generated `client` declarations are the same shape.
-    fn top_level_let_at(&self, expr_id: AstExprId, name: &Name) -> Option<Definition<'db>> {
-        let span_start = self
-            .source_map
-            .as_ref()
-            .map(|source_map| source_map.expr_span(expr_id).start())
-            .unwrap_or_default();
-        match resolve_name_at_in_scope(
-            self.db,
-            self.file,
-            span_start,
-            name,
-            self.scope_func_name.as_ref(),
-        ) {
-            ResolvedName::Item(definition @ Definition::Let(_)) => Some(definition),
-            _ => None,
-        }
+    /// The **top-level `let`** this path expression's root names, if any: a
+    /// global variable, a `client` declaration, or a Session submission's
+    /// persisted root binding — all the same item. The checker records every
+    /// such root (`InferenceResult::global_roots`), qualified (`root.ns.x`,
+    /// lowered here as the bare `x` it names — see `with_bare_global_paths`)
+    /// or bare.
+    fn top_level_let_at(
+        &self,
+        expr_id: AstExprId,
+    ) -> Option<baml_compiler2_hir_ty::extern_loc::GlobalRef<'db>> {
+        self.tir_global_root(expr_id).map(|root| root.binding)
     }
 
     /// Whether a path expression's root names a top-level `let` — i.e. whether
     /// it denotes a runtime **value** even though it is not a lexical binding.
-    fn path_root_is_top_level_let(&self, expr_id: AstExprId, name: &Name) -> bool {
-        self.top_level_let_at(expr_id, name).is_some()
+    fn path_root_is_top_level_let(&self, expr_id: AstExprId) -> bool {
+        self.top_level_let_at(expr_id).is_some()
     }
 
     /// Materialize a **top-level `let`**'s current value into a temp, when
@@ -4422,19 +4452,16 @@ impl<'db> LoweringContext<'db> {
     /// call's callee path is typed by the callee road, which does not record a
     /// root, so `unknown` is the honest fallback there — the receiver is passed
     /// as an ordinary argument and the callee's own signature governs it.
-    fn load_top_level_let_root(
-        &mut self,
-        expr_id: AstExprId,
-        name: &Name,
-    ) -> Lowered<Option<Local>> {
-        let Some(definition) = self.top_level_let_at(expr_id, name) else {
-            return Ok(None);
-        };
+    fn load_top_level_let_root(&mut self, expr_id: AstExprId) -> Option<Local> {
+        let global = self.top_level_let_at(expr_id)?;
         let root_ty = self.path_root_ty(expr_id).unwrap_or(RuntimeTy::Unknown);
         let root_local = self.builder.temp(root_ty.clone());
-        self.lower_item_ref(expr_id, definition, Place::local(root_local))?;
+        self.builder.assign(
+            Place::local(root_local),
+            Rvalue::Use(Operand::Constant(Constant::GlobalItem(global))),
+        );
         // Hand out a *materialized* copy rather than the global-read local.
-        // `lower_item_ref` defines the first temp as `Use(Constant::GlobalItem)`,
+        // The first temp is defined as `Use(Constant::GlobalItem)`,
         // which emit's analysis classifies as a pure constant and virtualizes —
         // it is re-emitted at each use instead of being stored. Every consumer
         // that takes an `Operand` is fine with that, which is why `v.join(…)`,
@@ -4448,7 +4475,7 @@ impl<'db> LoweringContext<'db> {
             Place::local(materialized),
             Rvalue::Use(Operand::Copy(Place::local(root_local))),
         );
-        Ok(Some(materialized))
+        Some(materialized)
     }
 
     /// Get the TIR-inferred type of `segments[..=seg_idx]` for a multi-segment
@@ -4864,7 +4891,13 @@ impl<'db> LoweringContext<'db> {
         defaults: &baml_compiler2_ast::FunctionDefaults,
         dest: Place,
     ) -> Lowered<()> {
-        let saved_body = std::mem::replace(&mut self.body, defaults.exprs.clone());
+        let saved_body = std::mem::replace(
+            &mut self.body,
+            with_bare_global_paths(
+                defaults.exprs.clone(),
+                self.tables.of(InferenceRoot::ParameterDefaults),
+            ),
+        );
         let saved_source_map = self.source_map.replace(defaults.source_map.clone());
         let saved_metadata_scope = self.current_metadata_scope;
         self.current_metadata_scope = MetadataScope::ParameterDefault(self.current_scope);
@@ -4885,10 +4918,20 @@ impl<'db> LoweringContext<'db> {
     /// This is used by `compile_init_function` to compile let initializers into bytecode
     /// that can then be called and have their result stored via `StoreGlobal`.
     fn lower_let_body_inner(&mut self) -> Lowered<MirFunctionBody<'db>> {
-        // Return place _0 (type unknown — let bodies don't have type annotations)
+        // Return place _0: an annotated global's declared type; an unannotated
+        // one's value is whatever its initializer produces.
+        let ret_ty = match self.builder.owner() {
+            FunctionOwner::Let(binding) => {
+                baml_compiler2_hir_ty::lower::let_declared_type(self.db, *binding)
+                    .as_ref()
+                    .map(|declared| self.convert_tir_ty_for_runtime(declared))
+            }
+            _ => None,
+        }
+        .unwrap_or(RuntimeTy::Null);
         let ret = self
             .builder
-            .declare_local(Some(Name::new("_0")), RuntimeTy::Null, None);
+            .declare_local(Some(Name::new("_0")), ret_ty, None);
 
         // Entry and exit blocks
         let entry = self.builder.create_block();
@@ -6358,7 +6401,7 @@ impl<'db> LoweringContext<'db> {
                             }
                             let receiver_segments = &segments[..segments.len() - 1];
                             let receiver_op = if receiver_segments.len() == 1 {
-                                self.path_receiver_root(expr_id, &segments[0])?.map_or_else(
+                                self.path_receiver_root(expr_id, &segments[0]).map_or_else(
                                     || Operand::Constant(Constant::Null),
                                     Operand::Copy,
                                 )
@@ -6465,7 +6508,7 @@ impl<'db> LoweringContext<'db> {
                         if let Some(item) = resolution.callable(self.db) {
                             let receiver_segments = &segments[..segments.len() - 1];
                             let receiver_op = if receiver_segments.len() == 1 {
-                                self.path_receiver_root(expr_id, &segments[0])?.map_or_else(
+                                self.path_receiver_root(expr_id, &segments[0]).map_or_else(
                                     || Operand::Constant(Constant::Null),
                                     Operand::Copy,
                                 )
@@ -6549,7 +6592,7 @@ impl<'db> LoweringContext<'db> {
             // receiver is always `segments[..len-1]`.
             if segments.len() >= 2
                 && self.allows_interface_method_dispatch(expr_id)
-                && let Some(recv_root) = self.path_receiver_root(expr_id, &segments[0])?
+                && let Some(recv_root) = self.path_receiver_root(expr_id, &segments[0])
             {
                 let method_name = segments.last().unwrap().clone();
                 let recv_seg_idx = if segments.len() == 2 {
@@ -6613,6 +6656,15 @@ impl<'db> LoweringContext<'db> {
         }
         if self.binding_id_for_path(expr_id, name).is_some() {
             return Err(self.internal_error(&format!("unresolved local: {name}"), expr_id));
+        }
+        // A global the checker resolved — bare, or qualified and rewritten
+        // to its bare name, in this package or a served one — reads its slot.
+        if let Some(root) = self.tir_global_root(expr_id) {
+            self.builder.assign(
+                dest,
+                Rvalue::Use(Operand::Constant(Constant::GlobalItem(root.binding))),
+            );
+            return Ok(());
         }
 
         let span_start = self
@@ -6679,7 +6731,7 @@ impl<'db> LoweringContext<'db> {
                 }
             };
             (place, ty)
-        } else if let Some(root_local) = self.load_top_level_let_root(expr_id, &segments[0])? {
+        } else if let Some(root_local) = self.load_top_level_let_root(expr_id) {
             let ty = self.builder.local_ty(root_local);
             (Place::Local(root_local), ty)
         } else if self.is_default_receiver_root(expr_id, segments)
@@ -6844,7 +6896,7 @@ impl<'db> LoweringContext<'db> {
         // global slot `$init` filled.
         let constant = match def {
             Definition::Function(func) => Constant::Function(DeclRef::Source(func)),
-            Definition::Let(binding) => Constant::GlobalItem(binding),
+            Definition::Let(binding) => Constant::GlobalItem(DeclRef::Source(binding)),
             Definition::Class(_)
             | Definition::Enum(_)
             | Definition::Interface(_)
@@ -8264,7 +8316,7 @@ impl<'db> LoweringContext<'db> {
             // second use, and these can land in different blocks.
             if segments.len() >= 2
                 && self.allows_interface_method_dispatch(callee)
-                && let Some(recv_root) = self.path_receiver_root(callee, &segments[0])?
+                && let Some(recv_root) = self.path_receiver_root(callee, &segments[0])
             {
                 let method_name = segments.last().unwrap().clone();
                 let prefix_idx = segments.len() - 2;
@@ -8433,7 +8485,7 @@ impl<'db> LoweringContext<'db> {
                     // was dropped from the call entirely.
                     AstExpr::Path(segments) if !segments.is_empty() => {
                         self.binding_id_for_path(*base, &segments[0]).is_some()
-                            || self.path_root_is_top_level_let(*base, &segments[0])
+                            || self.path_root_is_top_level_let(*base)
                     }
                     _ => self.tir_expr_type(*base).is_some(),
                 };
@@ -8607,7 +8659,7 @@ impl<'db> LoweringContext<'db> {
                     (callee_op, self.lower_call_arg_operands(expr_id, args)?)
                 } else {
                     let receiver_op = if receiver_segments.len() == 1 {
-                        self.path_receiver_root(callee, &receiver_segments[0])?
+                        self.path_receiver_root(callee, &receiver_segments[0])
                             .map_or_else(|| Operand::Constant(Constant::Null), Operand::Copy)
                     } else {
                         // Multi-segment receiver (e.g. `user.profile.items`): lower as field chain.
@@ -8646,7 +8698,7 @@ impl<'db> LoweringContext<'db> {
                     None => self.lower_to_operand(callee)?,
                 };
                 let receiver_op = self
-                    .path_receiver_root(callee, &segments[0])?
+                    .path_receiver_root(callee, &segments[0])
                     .map(Operand::Copy);
                 if let Some(receiver_op) = receiver_op {
                     let prefix_idx = segments.len() - 2;
@@ -11177,12 +11229,10 @@ impl<'db> LoweringContext<'db> {
         );
     }
 
-    fn path_receiver_root(&mut self, expr_id: AstExprId, name: &Name) -> Lowered<Option<Place>> {
+    fn path_receiver_root(&mut self, expr_id: AstExprId, name: &Name) -> Option<Place> {
         match self.place_for_path(expr_id, name) {
-            Some(place) => Ok(Some(place)),
-            None => Ok(self
-                .load_top_level_let_root(expr_id, name)?
-                .map(Place::local)),
+            Some(place) => Some(place),
+            None => self.load_top_level_let_root(expr_id).map(Place::local),
         }
     }
 
@@ -11505,7 +11555,7 @@ impl<'db> LoweringContext<'db> {
                 else {
                     return Ok(None);
                 };
-                let Some(root) = self.path_receiver_root(target, &segments[0])? else {
+                let Some(root) = self.path_receiver_root(target, &segments[0]) else {
                     return Ok(None);
                 };
                 let receiver = self.lower_path_receiver_to_local(
@@ -12331,9 +12381,23 @@ impl LoweringContext<'_> {
                             }
                         };
                         (place, ty)
+                    } else if let Some(root_local) = self.load_top_level_let_root(expr_id) {
+                        // `g.f = v` on a global: the binding is immutable
+                        // (the checker refuses `g = v`), but what it holds is
+                        // an ordinary heap object. Load the global's value and
+                        // store through it, so the write lands in the shared
+                        // object every reader sees.
+                        let ty = self.builder.local_ty(root_local);
+                        (Place::Local(root_local), ty)
                     } else {
-                        let tmp = self.builder.temp(RuntimeTy::Null);
-                        (Place::Local(tmp), RuntimeTy::Null)
+                        return Err(self.internal_error(
+                            &format!(
+                                "MIR failed to resolve the root `{}` of an assignment target \
+                                 (TIR should have rejected this program)",
+                                segments[0]
+                            ),
+                            expr_id,
+                        ));
                     };
 
                 for (offset, seg) in segments[1..].iter().enumerate() {
@@ -14958,6 +15022,37 @@ pub fn lower_let_body<'db>(
 
 /// A `let` initializer's body with the lambdas lowered inside it.
 pub type LoweredLetBody<'db> = (MirFunctionBody<'db>, Vec<MirFunction<'db>>);
+
+/// `body` with every qualified global path (`root.ns.x.rest`) rewritten to
+/// the bare form `[x, rest…]`.
+///
+/// The checker resolved those paths (`InferenceResult::global_roots`) and
+/// recorded their ladders root-first, exactly as for a bare global; with the
+/// qualifiers dropped, every lowering road — field chains, method receivers,
+/// bound methods, calls, stores — handles the path as the bare global it
+/// names, reading the checker's tables by the same keys. Expression ids,
+/// spans, and every other node are unchanged.
+fn with_bare_global_paths(
+    mut body: AstExprBody,
+    tables: Option<&crate::inference_provider::InferenceResult<'_>>,
+) -> AstExprBody {
+    let Some(tables) = tables else {
+        return body;
+    };
+    for (&expr, root) in &tables.global_roots {
+        if root.segments > 1
+            && let AstExpr::Path(path) = &mut body.exprs[expr]
+            && path.len() >= root.segments
+        {
+            let bare = path[root.segments - 1..].to_vec();
+            *path = match path.origin() {
+                baml_base::PathOrigin::Written => baml_base::Path::new(bare),
+                baml_base::PathOrigin::Compiler => baml_base::Path::compiler_item(bare),
+            };
+        }
+    }
+    body
+}
 
 fn lower_let_body_impl<'db>(
     db: &'db dyn crate::Db,

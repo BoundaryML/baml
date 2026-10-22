@@ -40,11 +40,9 @@ use baml_base::{Name, SourceFile};
 use baml_compiler_syntax::SyntaxKind;
 use baml_compiler2_ast::{Expr, ExprBody};
 use baml_compiler2_hir::{
-    body::FunctionBody,
     contributions::Definition,
     item_data,
-    loc::{DeclRef, FunctionLoc},
-    resolve::{ResolvedName, resolve_name_at},
+    loc::DeclRef,
     scope::{FileScopeId, ScopeKind},
     semantic_index::{
         BindingId, ExprMetadataKey, ExprMetadataScope, FileSemanticIndex, PathResolution,
@@ -85,10 +83,10 @@ pub(crate) fn usages_of<'db>(
     match target {
         SymbolTarget::Item(def) => find_item_usages(db, anchor, def),
         SymbolTarget::Local {
-            func,
-            func_scope,
+            owner,
+            owner_scope,
             binding,
-        } => find_local_usages(db, func, func_scope, binding),
+        } => find_local_usages(db, owner, owner_scope, binding),
         SymbolTarget::Field { .. }
         | SymbolTarget::Variant { .. }
         | SymbolTarget::Method { .. }
@@ -151,24 +149,14 @@ fn find_item_usages(
                 continue;
             }
 
-            // Confirm this token resolves to the same definition.
-            // BUG: by its bare name only — a token inside a qualified path
-            // (`root.Dog`) is confirmed as the reader's own `Dog` and a use
-            // of another namespace's item is missed, so rename rewrites the
-            // wrong tokens and skips the right ones.
-            let same = match def {
-                DeclRef::Source(def) => {
-                    match resolve_name_at(db, sf, tok.text_range().start(), &name) {
-                        ResolvedName::Item(here) | ResolvedName::Builtin(here) => here == def,
-                        ResolvedName::Local { .. } | ResolvedName::Unknown => false,
-                    }
-                }
-                // A row is named through a package path or a recorded member
-                // resolution — the roads `symbol_at` walks.
-                DeclRef::External(_) => {
-                    symbol_at(db, sf, tok.text_range().start()) == Some(SymbolTarget::Item(def))
-                }
-            };
+            // Confirm this token resolves to the same definition — through
+            // the same road goto-definition takes from it, which also names a
+            // served package's exported row. A bare-name lookup at the token
+            // is not enough: it cannot see a qualified spelling
+            // (`root.settings.TIMEOUT`), and at the name of a local `let`
+            // that shadows the item it still sees the item, because the local
+            // only comes into scope after its own statement.
+            let same = symbol_at(db, sf, tok.text_range().start()) == Some(SymbolTarget::Item(def));
             if same {
                 results.push(Location {
                     file: sf,
@@ -198,22 +186,22 @@ fn definition_name(db: &dyn baml_compiler2_hir::Db, def: Definition<'_>) -> Opti
 /// nested lambda bodies and parameter-default arenas).
 fn find_local_usages(
     db: &dyn baml_compiler2_hir::Db,
-    func: FunctionLoc<'_>,
+    owner: baml_compiler2_hir::body::BodyOwnerId<'_>,
     func_scope: FileScopeId,
     target_binding: BindingId,
 ) -> Vec<Location> {
-    let file = func.file(db);
+    let file = owner.file(db);
     let index = baml_compiler2_hir::file_semantic_index(db, file);
 
-    let body = baml_compiler2_hir::body::function_body(db, func);
-    let FunctionBody::Expr(expr_body) = body.as_ref() else {
+    let body = baml_compiler2_hir::body::body(db, owner);
+    let Some(expr_body) = body.expr_body() else {
         return Vec::new();
     };
-    let Some(source_map) = baml_compiler2_hir::body::function_body_source_map(db, func) else {
+    let Some(source_map) = baml_compiler2_hir::body::body_source_map(db, owner) else {
         return Vec::new();
     };
 
-    let name = binding_name(index, target_binding, db, func);
+    let name = binding_name(index, target_binding, db, owner);
     let Some(name) = name else {
         return Vec::new();
     };
@@ -235,7 +223,10 @@ fn find_local_usages(
 
     // A defaults arena is a *forest* — one root per defaulted parameter, and
     // `root_expr` is always `None` for it. Walk each parameter's default
-    // separately.
+    // separately. A global initializer has no parameters.
+    let baml_compiler2_hir::body::BodyOwnerId::Function(func) = owner else {
+        return collector.results;
+    };
     let defaults = baml_compiler2_hir::signature::function_parameter_defaults(db, func);
     for default in defaults.params.iter().flatten() {
         collector.collect(
@@ -255,7 +246,7 @@ fn binding_name(
     index: &FileSemanticIndex<'_>,
     binding: BindingId,
     db: &dyn baml_compiler2_hir::Db,
-    func: FunctionLoc<'_>,
+    owner: baml_compiler2_hir::body::BodyOwnerId<'_>,
 ) -> Option<Name> {
     use baml_compiler2_hir::semantic_index::BindingKind;
     let scope_bindings = &index.scope_bindings[binding.scope.index() as usize];
@@ -272,6 +263,9 @@ fn binding_name(
             .or_else(|| {
                 // Lambda parameter scopes record params positionally; fall
                 // back to the function signature for the outer function.
+                let baml_compiler2_hir::body::BodyOwnerId::Function(func) = owner else {
+                    return None;
+                };
                 item_data::function_data(db, func)
                     .params
                     .get(idx)
@@ -391,23 +385,27 @@ fn find_member_usages(
 
         let sf_index = baml_compiler2_hir::file_semantic_index(db, sf);
         for (scope_idx, scope) in sf_index.scopes.iter().enumerate() {
-            if !matches!(scope.kind, ScopeKind::Function) {
+            // Every body: a function's, and a global variable's initializer.
+            if !matches!(scope.kind, ScopeKind::Function | ScopeKind::Let) {
                 continue;
             }
             // The recorded item↔scope link (template-string scopes have a
             // non-Function owner → skipped).
             let owner_scope = sf_index.scope_ids[scope_idx];
-            let Some(item_data::ScopeOwner::Function(func_loc)) =
-                item_data::scope_owner(db, owner_scope)
-            else {
+            let Some(owner) = crate::resolve::scope_body_owner(
+                db,
+                sf_index,
+                baml_compiler2_hir::scope::FileScopeId::new(
+                    u32::try_from(scope_idx).expect("a file's scope count fits u32"),
+                ),
+            ) else {
                 continue;
             };
-            let body = baml_compiler2_hir::body::function_body(db, func_loc);
-            let FunctionBody::Expr(expr_body) = body.as_ref() else {
+            let body = baml_compiler2_hir::body::body(db, owner);
+            let Some(expr_body) = body.expr_body() else {
                 continue;
             };
-            let Some(source_map) = baml_compiler2_hir::body::function_body_source_map(db, func_loc)
-            else {
+            let Some(source_map) = baml_compiler2_hir::body::body_source_map(db, owner) else {
                 continue;
             };
             let Some(inference) = baml_compiler2_hir_ty::ide::infer_for_scope(db, owner_scope)
@@ -454,12 +452,16 @@ fn find_member_usages(
 
             // Non-root segments of multi-segment `Path`s.
             for (expr_id, resolved_path) in &inference.path_resolutions {
+                // Ladder entry `i` is written segment `i + qualifiers`: a
+                // qualified global's qualifiers have no entry of their own.
+                let written_offset = inference.path_root_qualifiers(*expr_id);
                 for (seg_idx, step) in resolved_path.segments.iter().enumerate().skip(1) {
                     let Some(resolution) = step.resolution.as_ref() else {
                         continue;
                     };
                     if member_resolution_target(db, resolution) == Some(target) {
-                        let range = source_map.path_segment_span(*expr_id, seg_idx);
+                        let range =
+                            source_map.path_segment_span(*expr_id, seg_idx + written_offset);
                         if !range.is_empty() {
                             results.push(Location { file: sf, range });
                         }

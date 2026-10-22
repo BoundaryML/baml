@@ -386,8 +386,10 @@ impl ItemTreeBuilder {
             id,
             Let {
                 name: l.name.clone(),
+                type_annotation: l.type_annotation.clone(),
                 initializer: l.initializer.clone(),
                 origin: l.origin,
+                docstring: l.docstring.clone(),
                 span: l.span,
                 name_span: l.name_span,
             },

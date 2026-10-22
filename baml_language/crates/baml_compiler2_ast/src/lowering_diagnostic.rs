@@ -139,12 +139,25 @@ pub enum LoweringDiagnostic {
         span: TextRange,
     },
 
-    /// A source-authored `let` appeared at file scope. Only compiler-synthesized
-    /// globals (such as clients and retry policies) are supported.
-    TopLevelLetNotSupported { span: TextRange },
+    /// A file-scope binding that does not bind exactly one name: a
+    /// destructure, a wildcard, an alias chain, or a `const … else`. A global
+    /// variable is one named binding (optionally annotated with `: T`);
+    /// `reason` says which rule the declaration broke.
+    InvalidTopLevelLet {
+        reason: &'static str,
+        span: TextRange,
+    },
+
+    /// A `let type` binding at file scope. It binds a runtime type for the
+    /// rest of a block, and a file has no block for it to bind in.
+    TopLevelLetType { span: TextRange },
 
     /// `const` currently parses as a non-immutable alias for `let`.
     ConstBindingIntroducer { span: TextRange },
+
+    /// `let` introducing a global variable. A global is declared with `const`;
+    /// `let` declares a reassignable binding, which only a body has.
+    TopLevelLetIntroducer { span: TextRange },
 
     /// `const` is reserved as future language surface and cannot be used as a
     /// binding name.
@@ -543,10 +556,18 @@ impl LoweringDiagnostic {
                 *span,
                 "type ascription not allowed here",
             ),
-            LoweringDiagnostic::TopLevelLetNotSupported { span } => (
+            LoweringDiagnostic::InvalidTopLevelLet { reason, span } => (
                 DiagnosticId::InvalidSyntax,
                 Severity::Error,
-                "top-level `let` bindings are not supported".to_string(),
+                format!("invalid top-level `const`: {reason}"),
+                *span,
+                "a global variable binds one name: `const NAME = value;` or `const NAME: Type = value;`",
+            ),
+            LoweringDiagnostic::TopLevelLetType { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "`let type` binds a type for the rest of a block, so it is only allowed inside a body"
+                    .to_string(),
                 *span,
                 "move this binding into a function body",
             ),
@@ -556,6 +577,13 @@ impl LoweringDiagnostic {
                 "`const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.".to_string(),
                 *span,
                 "`const` behaves like `let` for now",
+            ),
+            LoweringDiagnostic::TopLevelLetIntroducer { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "global variables are declared with `const`: `const NAME = value;`".to_string(),
+                *span,
+                "write `const` here; `let` is only allowed inside a body",
             ),
             LoweringDiagnostic::ReservedConstBindingName { span } => (
                 DiagnosticId::InvalidSyntax,

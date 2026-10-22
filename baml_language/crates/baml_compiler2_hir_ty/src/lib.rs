@@ -32,6 +32,7 @@ pub mod diagnostics;
 pub mod exhaustiveness;
 pub mod extern_loc;
 pub mod facts;
+pub mod globals;
 pub mod ide;
 pub mod impls;
 pub mod infer;

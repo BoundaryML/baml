@@ -511,18 +511,22 @@ while:
     }
 
 let:
-  summary: "Binds a value to a name. Use `let` for all variable declarations."
+  summary: "Binds a value to a local name. Use `let` for variable declarations inside a body."
   syntax: |
     let name = "Alice"
     let count = items.length()
     let type T = runtime_type;
   details: |
-    `let type T = t;` binds the runtime type value `t` as the block-scoped type `T`; see `type`.
+    A `let` binding can be reassigned (`count = count + 1`). `let` is only allowed inside a body; a global variable is declared with `const`. `let type T = t;` binds the runtime type value `t` as the block-scoped type `T`; see `type`.
 
 const:
-  summary: "Declares a compile-time constant binding."
+  summary: "Declares a global variable at file scope; inside a body it currently behaves like `let`."
   syntax: |
     const DEFAULT_LIMIT = 100
+  details: |
+    At file scope, `const` declares a global variable: `const MAX_RETRIES = 3;` or `const MAX_RETRIES: int = 3;`. A global is evaluated once, when the program starts, in dependency order, and is visible from every body in its namespace (elsewhere, write it in full like any item: `root.namespace.NAME`). The binding cannot be reassigned, but what it holds is shared by every call: changing a global's fields or elements is visible to every reader. Its initializer cannot perform io, `spawn`, `await`, or `return`. A top-level `let` is an error.
+
+    Inside a body, `const` currently behaves like `let`: immutability is not enforced yet, so prefer `let` for locals.
 
 in:
   summary: "Used with `for` loops to iterate over a collection."

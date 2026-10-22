@@ -1,0 +1,39 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0179
+
+  × cannot assign to global variable `LIMIT` — top-level bindings are set once, at startup, and shared by every call, so they cannot be reassigned; declare a local (`let x = LIMIT;`) to work with a
+  │ copy of the binding, or change what it holds through its fields or elements
+    ╭─[assignment.baml:20:5]
+ 20 │     LIMIT = 4;
+    ·     ─────
+    ╰────
+
+  [type] E0179
+
+  × cannot assign to global variable `LIMIT` — top-level bindings are set once, at startup, and shared by every call, so they cannot be reassigned; declare a local (`let x = LIMIT;`) to work with a
+  │ copy of the binding, or change what it holds through its fields or elements
+    ╭─[assignment.baml:21:5]
+ 21 │     LIMIT += 1;
+    ·     ─────
+    ╰────
+
+  [type] E0179
+
+  × cannot assign to global variable `LIMIT` — top-level bindings are set once, at startup, and shared by every call, so they cannot be reassigned; declare a local (`let x = LIMIT;`) to work with a
+  │ copy of the binding, or change what it holds through its fields or elements
+    ╭─[assignment.baml:26:5]
+ 26 │     root.LIMIT = 5;
+    ·     ──────────
+    ╰────
+
+  [type] E0179
+
+  × cannot assign to client `Model` — top-level bindings are set once, at startup, and shared by every call, so they cannot be reassigned; declare a local (`let x = Model;`) to work with a copy of
+  │ the binding, or change what it holds through its fields or elements
+    ╭─[assignment.baml:31:5]
+ 31 │     Model = openai.ChatClient.new(model = "gpt-4o");
+    ·     ─────
+    ╰────
