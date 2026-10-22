@@ -899,8 +899,6 @@ impl BcsDelivery {
                         .enable_all()
                         .build()
                         .map_err(|_| DeliveryError::Worker)?;
-                    // Proxies come from HTTPS_PROXY, HTTP_PROXY, ALL_PROXY and
-                    // NO_PROXY, as for BAML's other HTTP clients.
                     let client = Client::builder()
                         .redirect(reqwest::redirect::Policy::none())
                         .retry(reqwest::retry::never())
