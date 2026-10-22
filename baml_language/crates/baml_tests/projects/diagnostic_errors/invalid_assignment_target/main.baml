@@ -29,44 +29,9 @@ function assign_to_array_literal() -> string {
     x.to_string() + y.to_string()
 }
 
-// The diagnostic suggests the same destructure as a `let` pattern, which
-// binds (or rebinds) the same names. Renames and nesting carry over; a leaf that is
-// a field or an index has no pattern equivalent, so there is no suggestion.
-class Pair {
-    left: P,
-    right: int,
-}
-
-function assign_to_nested_literal() -> int {
-    let n = 0;
-    let s = "";
-    let r = 0;
-    Pair { left: P { a: n, b: s }, right: r } = Pair { left: mk(), right: 1 };
-    n + r
-}
-
-// A leaf named differently from its field becomes `field: let name`, a `_`
-// leaf stays a wildcard, and a long right-hand side is elided to `…`.
-function assign_to_renamed_fields() -> int {
-    let x = 0;
-    let y = "";
-    P { a: x, b: y } = mk();
-    x
-}
-
-function assign_to_array_with_wildcard() -> int {
-    let x = 0;
-    [x, _] = [1, 2];
-    x
-}
-
-function assign_to_literal_with_long_value() -> int {
-    let n = 0;
-    let s = "";
-    P { a: n, b: s } = P { a: 100000, b: "a fairly long string value" };
-    n
-}
-
+// A plain `=` into a class or array literal reads as a destructure, so the
+// diagnostic links to the book's destructuring section; any other target,
+// including a compound `+=` into a literal, gets the plain message.
 function assign_to_literal_with_field_leaf(p: P) -> int {
     let y = 0;
     [p.a, y] = [1, 2];

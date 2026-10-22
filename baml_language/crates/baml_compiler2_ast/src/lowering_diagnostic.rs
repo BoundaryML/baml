@@ -7,6 +7,11 @@ use baml_base::{ClientOptionsValidationError, FileId, Span};
 use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity};
 use text_size::TextRange;
 
+/// The book section on destructuring into existing variables, linked from
+/// [`LoweringDiagnostic::InvalidAssignmentTarget`].
+pub const DESTRUCTURING_DOCS_URL: &str =
+    "https://developer.boundaryml.com/baml/book/patterns#destructure-into-existing-variables";
+
 /// Diagnostic emitted during CST → AST lowering.
 ///
 /// These are structural problems ("missing name token", "unparseable type")
@@ -175,12 +180,10 @@ pub enum LoweringDiagnostic {
     /// v;`); the left-hand side of an assignment is an expression, so these
     /// are a class or array *literal*, not a pattern. Without this diagnostic
     /// the store went into a temporary and the statement silently did
-    /// nothing. `suggestion` is the equivalent `let` destructure when the
-    /// target is a class or array literal of plain names.
-    InvalidAssignmentTarget {
-        span: TextRange,
-        suggestion: Option<String>,
-    },
+    /// nothing. `destructure` is set for a plain `=` into a class or array
+    /// literal, which reads as a destructure; the message then links to
+    /// [`DESTRUCTURING_DOCS_URL`].
+    InvalidAssignmentTarget { span: TextRange, destructure: bool },
 
     /// Parser recovery produced an object-literal node without a constructor
     /// identifier. The AST cannot represent a constructor-less object, so the
@@ -613,18 +616,19 @@ impl LoweringDiagnostic {
                 *span,
                 "assignment not allowed here",
             ),
-            LoweringDiagnostic::InvalidAssignmentTarget { span, suggestion } => (
+            LoweringDiagnostic::InvalidAssignmentTarget { span, destructure } => (
                 DiagnosticId::InvalidSyntax,
                 Severity::Error,
-                match suggestion {
-                    Some(suggestion) => format!(
-                        "invalid assignment target; to destructure, use a `let` pattern: \
-                         `{suggestion}` (this binds the names, rebinding any that already \
-                         exist)"
-                    ),
-                    None => "invalid assignment target; only a variable, a field, or an \
-                             index can be assigned to"
-                        .to_string(),
+                if *destructure {
+                    format!(
+                        "invalid assignment target; the left side of `=` is an expression, \
+                         not a pattern. To destructure, use a `let` pattern: see \
+                         {DESTRUCTURING_DOCS_URL}"
+                    )
+                } else {
+                    "invalid assignment target; only a variable, a field, or an index can be \
+                     assigned to"
+                        .to_string()
                 },
                 *span,
                 "cannot assign to this expression",
