@@ -43,6 +43,7 @@ use sys_types::{OpError, SapTy as RuntimeTy, SysOp, SysOpResult, VmInternalError
 use crate::{NativeSysOps, host_dispatch};
 
 impl io::IoNamespaceHost for NativeSysOps {
+    /// Dispatch a host callback; the engine checks its result through the shared inbound boundary.
     fn call_host_value(
         &self,
         _heap: &Arc<BexHeap>,
