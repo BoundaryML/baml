@@ -78,16 +78,23 @@ pub struct DeliveryConfig {
     /// Initial-failure policy applies after bounded initial connection retries.
     pub terminal_initial_connection: bool,
     pub max_pending_plans: usize,
-    /// At most 32 captures. A capture spanning plans counts once per plan.
-    /// Captures held here no longer count against the VM's capture budget.
+    /// Captures held by admitted plans until their bodies are built: enough
+    /// for `max_pending_plans` plans of `max_candidates` captures each, so
+    /// that admission never holds a prepare back for the ones in flight. A
+    /// capture spanning plans counts once per plan. Captures held here no
+    /// longer count against the VM's capture budget.
     pub max_pending_snapshots: usize,
     pub recording_reserved_bytes: usize,
     /// Memory for what the admitted plans hold: their captures until their
     /// bodies are built, and each CAS body until it is uploaded.
     pub cas_reserved_bytes: usize,
     /// CAS bodies uploaded at once, so that one long upload does not hold
-    /// the others back. Recordings upload one at a time.
+    /// the others back.
     pub max_cas_uploads: usize,
+    /// Recordings uploaded at once. Their URLs' lifetimes are still reserved
+    /// as if they went one by one, which refuses a URL sooner than the lanes
+    /// strictly require.
+    pub max_recording_uploads: usize,
     pub max_request_bytes: usize,
     pub max_response_bytes: usize,
     /// Blobs per plan.
@@ -120,11 +127,12 @@ impl DeliveryConfig {
             authorization: None,
             initial_recording_id: None,
             terminal_initial_connection: false,
-            max_pending_plans: 4,
-            max_pending_snapshots: 32,
-            recording_reserved_bytes: 128 * 1024 * 1024,
+            max_pending_plans: 16,
+            max_pending_snapshots: 512,
+            recording_reserved_bytes: 256 * 1024 * 1024,
             cas_reserved_bytes: 256 * 1024 * 1024,
             max_cas_uploads: 2,
+            max_recording_uploads: 8,
             max_request_bytes: 64 * 1024,
             max_response_bytes: 64 * 1024,
             max_candidates: 32,
@@ -201,9 +209,11 @@ impl DeliveryConfig {
             || self.max_pending_plans == 0
             || self.max_pending_plans > 32
             || self.max_pending_snapshots == 0
-            || self.max_pending_snapshots > 32
+            || self.max_pending_snapshots > 1024
             || self.max_cas_uploads == 0
             || self.max_cas_uploads > 32
+            || self.max_recording_uploads == 0
+            || self.max_recording_uploads > 32
             || self.max_candidates == 0
             || self.max_targets == 0
             || self.max_targets > self.max_candidates + 1
@@ -404,7 +414,7 @@ impl Shared {
 }
 
 /// What a plan holds until its recording is uploaded. Its captures, and the
-/// storage slots they hold, are given back sooner: once its bodies are built.
+/// storage they hold, are given back sooner: once its bodies are built.
 struct Reservation {
     shared: Arc<Shared>,
     recording: usize,
@@ -595,6 +605,19 @@ impl BcsDeliveryHandle {
     /// each of which made every stream carry its groups again.
     pub fn carried_resets(&self) -> u64 {
         self.shared.state.lock().unwrap().carried_resets
+    }
+
+    /// The highest recording file sequence stored; zero before any. Every
+    /// staged file carries the metadata retained when it was sealed, so a
+    /// stored file acknowledges every segment through its sequence whatever
+    /// became of the files before it.
+    pub fn recording_acked_through(&self) -> u64 {
+        self.shared
+            .state
+            .lock()
+            .unwrap()
+            .progress
+            .recording_acked_through
     }
 
     /// Saturating count of definition segments evicted from bounded replay retention.
@@ -1474,16 +1497,25 @@ async fn assemble(
     })
 }
 
-/// Upload a plan's recording, in its turn. The plan is pending until then.
+/// Upload a plan's recording when one of the recording slots is free. The
+/// plan is pending until then. Its CAS bodies have been taken; they upload
+/// on their own. Recordings upload several at a time, in whatever order
+/// their uploads end: a stored file acknowledges the metadata it carries,
+/// which is everything retained when it was sealed.
 async fn upload_recording(
     client: &Client,
     config: &DeliveryConfig,
-    recording: Option<(UploadTarget, Body)>,
-    recording_sequence: u64,
-    expiry: u64,
-    reservation: Reservation,
+    prepared: Prepared,
     slots: Arc<Semaphore>,
 ) {
+    let Prepared {
+        recording,
+        recording_sequence,
+        cas,
+        expiry,
+        reservation,
+    } = prepared;
+    debug_assert!(cas.is_empty(), "CAS bodies upload on their own");
     let shared = &reservation.shared;
     if let Some((target, body)) = recording {
         let _slot = slots.acquire().await.expect("recording lane open");
@@ -1636,15 +1668,23 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
             Err(error) => shared.lose(error, false),
         }
     }
-    let recording_slots = Arc::new(Semaphore::new(1));
+    let recording_slots = Arc::new(Semaphore::new(shared.config.max_recording_uploads));
     let cas_slots = Arc::new(Semaphore::new(shared.config.max_cas_uploads));
-    // One task per plan, for its recording, and one per CAS body.
+    // One task per plan for its prepare, then one for its recording, and one
+    // per CAS body. Prepares run together, as many as admission lets in;
+    // recordings and bodies upload as their slots allow, in any order.
+    let mut prepares: tokio::task::JoinSet<Result<Prepared, DeliveryError>> =
+        tokio::task::JoinSet::new();
     let mut recordings = tokio::task::JoinSet::new();
     let mut bodies = tokio::task::JoinSet::new();
     let mut heartbeats = tokio::task::JoinSet::new();
     let mut heartbeat_started = false;
+    let mut open = true;
     loop {
         if shared.state.lock().unwrap().failure.is_some() {
+            break;
+        }
+        if !open && prepares.is_empty() {
             break;
         }
         tokio::select! {
@@ -1658,8 +1698,41 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
                     shared.fail(DeliveryError::Worker);
                 }
             }
-            work = receiver.recv(), if recordings.len() < shared.config.max_pending_plans => {
-                let Some(work) = work else { break };
+            prepared = prepares.join_next(), if !prepares.is_empty() => {
+                match prepared {
+                    Some(Ok(Ok(mut prepared))) => {
+                        let expiry = prepared.expiry;
+                        for (target, body, hold) in std::mem::take(&mut prepared.cas) {
+                            let client = client.clone();
+                            let shared = shared.clone();
+                            let slots = cas_slots.clone();
+                            bodies.spawn(async move {
+                                upload_body(
+                                    &client, &shared.config, target, body, hold, expiry, slots,
+                                ).await;
+                            });
+                        }
+                        let client = client.clone();
+                        let shared = shared.clone();
+                        let slots = recording_slots.clone();
+                        recordings.spawn(async move {
+                            upload_recording(&client, &shared.config, prepared, slots).await;
+                        });
+                    }
+                    Some(Ok(Err(error))) => match error {
+                        error @ (DeliveryError::Unauthorized | DeliveryError::InitialAuthorization(_)) => shared.fail(error),
+                        DeliveryError::Api(failure) if matches!(failure.status.as_u16(), 401 | 403) => shared.fail(DeliveryError::Api(failure)),
+                        error => shared.lose(error, true),
+                    },
+                    Some(Err(_)) => shared.fail(DeliveryError::Worker),
+                    None => {}
+                }
+            }
+            work = receiver.recv(), if open && prepares.len() + recordings.len() < shared.config.max_pending_plans => {
+                let Some(work) = work else {
+                    open = false;
+                    continue;
+                };
                 if !heartbeat_started {
                     heartbeat_started = true;
                     match shared.config.endpoint(&work.request.recording.recording_id, "heartbeat") {
@@ -1684,35 +1757,9 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
                         Err(_) => shared.heartbeat.observe_error(HeartbeatError::InvalidEndpoint),
                     }
                 }
-                match assemble(&client, &shared.config, work).await {
-                    Ok(prepared) => {
-                        let Prepared { recording, recording_sequence, cas, expiry, reservation } = prepared;
-                        for (target, body, hold) in cas {
-                            let client = client.clone();
-                            let shared = shared.clone();
-                            let slots = cas_slots.clone();
-                            bodies.spawn(async move {
-                                upload_body(
-                                    &client, &shared.config, target, body, hold, expiry, slots,
-                                ).await;
-                            });
-                        }
-                        let client = client.clone();
-                        let shared = shared.clone();
-                        let slots = recording_slots.clone();
-                        recordings.spawn(async move {
-                            upload_recording(
-                                &client, &shared.config, recording, recording_sequence, expiry,
-                                reservation, slots,
-                            ).await;
-                        });
-                    }
-                    Err(error @ (DeliveryError::Unauthorized | DeliveryError::InitialAuthorization(_))) => shared.fail(error),
-                    Err(DeliveryError::Api(failure)) if matches!(failure.status.as_u16(), 401 | 403) => shared.fail(DeliveryError::Api(failure)),
-                    Err(error) => {
-                        shared.lose(error, true);
-                    }
-                }
+                let client = client.clone();
+                let shared = shared.clone();
+                prepares.spawn(async move { assemble(&client, &shared.config, work).await });
             }
         }
     }
@@ -1720,10 +1767,12 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
     // Drain what was admitted, unless delivery failed.
     loop {
         if shared.state.lock().unwrap().failure.is_some() {
+            prepares.abort_all();
             recordings.abort_all();
             bodies.abort_all();
         }
         let result = tokio::select! {
+            Some(result) = prepares.join_next() => result.map(|_| ()),
             Some(result) = recordings.join_next() => result,
             Some(result) = bodies.join_next() => result,
             else => break,

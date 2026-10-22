@@ -23,7 +23,9 @@ pub struct CloudPublisherConfig {
     pub max_offered_ids: usize,
     /// Soft per-file targets: blobs waiting for a file, and the retained
     /// memory of the captures they belong to. A single capture may exceed
-    /// either.
+    /// either. A plan's worth of blobs (`max_candidates`) by default: every
+    /// file costs a prepare, so a file is not sealed for fewer blobs than a
+    /// plan takes unless the deadline or the byte targets say so.
     pub candidate_target: usize,
     pub retained_bytes_target: usize,
     /// Hard count of captures held across the queue and staged files, not
@@ -43,9 +45,9 @@ impl Default for CloudPublisherConfig {
     fn default() -> Self {
         Self {
             max_offered_ids: 65_536,
-            candidate_target: 16,
+            candidate_target: 32,
             retained_bytes_target: 4 * 1024 * 1024,
-            max_pending_snapshots: 32,
+            max_pending_snapshots: 128,
             max_retained_bytes: 8 * 1024 * 1024,
             inline_target_bytes: 16 * 1024,
             batch_target_bytes: 256 * 1024,
@@ -1704,7 +1706,11 @@ mod tests {
                 target_bytes: NonZeroUsize::new(128).unwrap(),
                 ..RecordingConfig::default()
             },
-            CloudPublisherConfig::default(),
+            CloudPublisherConfig {
+                // Sixteen captures seal the file this test watches.
+                candidate_target: 16,
+                ..CloudPublisherConfig::default()
+            },
             delivery.handle(),
         )
         .unwrap();
@@ -1827,7 +1833,11 @@ mod tests {
                 target_bytes: NonZeroUsize::new(128).unwrap(),
                 ..RecordingConfig::default()
             },
-            CloudPublisherConfig::default(),
+            CloudPublisherConfig {
+                // Sixteen captures seal the file this test watches.
+                candidate_target: 16,
+                ..CloudPublisherConfig::default()
+            },
             delivery.handle(),
         )
         .unwrap();
@@ -1901,7 +1911,11 @@ mod tests {
                     target_bytes: NonZeroUsize::new(512).unwrap(),
                     ..RecordingConfig::default()
                 },
-                CloudPublisherConfig::default(),
+                CloudPublisherConfig {
+                    // Sixteen captures seal the file the "body" case watches.
+                    candidate_target: 16,
+                    ..CloudPublisherConfig::default()
+                },
                 delivery.handle(),
             )
             .unwrap();

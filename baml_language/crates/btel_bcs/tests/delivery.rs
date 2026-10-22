@@ -1,9 +1,9 @@
 use std::{
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use btel_bcs::{
@@ -1423,7 +1423,9 @@ async fn disabling_cancels_a_blocked_prepare_and_releases_queued_owners_promptly
             observed.store(true, Ordering::SeqCst);
             ResponseTemplate::new(200).set_delay(Duration::from_secs(30))
         })
-        .expect(1)
+        // Prepares run together: every admitted plan's goes out and blocks,
+        // unless the disable below lands before a later one is sent.
+        .expect(1..=3)
         .mount(&server)
         .await;
     let mut settings = config(&server);
@@ -1835,4 +1837,140 @@ async fn a_short_part_of_a_long_string_goes_with_its_recording() {
         .map(|(_, blob)| blob)
         .collect();
     assert_eq!(uploaded, sent);
+}
+
+#[tokio::test]
+async fn prepares_run_together_and_recordings_upload_together() {
+    let server = MockServer::start().await;
+    let base = server.uri();
+    // The first file's prepare is the slowest, so serial prepares would take
+    // the sum of the delays.
+    Mock::given(method("POST"))
+        .respond_with(move |request: &Request| {
+            let sequence = support::prepare(request).recording.recording_file_sequence;
+            let delay = Duration::from_millis(if sequence == 1 { 400 } else { 150 });
+            ResponseTemplate::new(200)
+                .set_body_json(response(request, &base, &[]))
+                .set_delay(delay)
+        })
+        .expect(4)
+        .mount(&server)
+        .await;
+    let stored = Arc::new(Mutex::new(Vec::new()));
+    let order = stored.clone();
+    Mock::given(method("PUT"))
+        .respond_with(move |request: &Request| {
+            order
+                .lock()
+                .unwrap()
+                .push((Instant::now(), request.url.path().to_owned()));
+            ResponseTemplate::new(200).set_delay(Duration::from_millis(150))
+        })
+        .expect(4)
+        .mount(&server)
+        .await;
+    let mut settings = config(&server);
+    settings.request_timeout = Duration::from_secs(2);
+    let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
+    let handle = delivery.handle();
+    let pool = SnapshotPool::unbounded(Limits::default());
+    let started = Instant::now();
+    for (index, file) in files(4).into_iter().enumerate() {
+        handle
+            .try_submit(
+                file,
+                vec![scalar(&pool, i64::try_from(index).unwrap())],
+                vec![proposed(0, UploadKind::Recording, &[0])],
+            )
+            .unwrap();
+    }
+    assert_eq!(finish(delivery).await, Ok(()));
+    // The slowest prepare and one PUT, at least.
+    assert!(started.elapsed() >= Duration::from_millis(550));
+    let stored = stored.lock().unwrap();
+    // Files 2, 3 and 4 were prepared together, so their PUTs began together:
+    // one at a time they would begin a PUT's length apart.
+    let mut arrivals: Vec<Instant> = stored.iter().map(|(at, _)| *at).collect();
+    arrivals.sort_unstable();
+    let closest = arrivals
+        .windows(2)
+        .map(|pair| pair[1].duration_since(pair[0]))
+        .min()
+        .unwrap();
+    assert!(
+        closest < Duration::from_millis(100),
+        "recording uploads did not overlap: {closest:?} apart"
+    );
+    // Upload IDs are `{sequence}-{target}`: every recording was stored, in
+    // whatever order the uploads ended.
+    let mut sequences: Vec<u64> = stored
+        .iter()
+        .map(|(_, path)| {
+            path.rsplit('/')
+                .next()
+                .and_then(|id| id.split('-').next())
+                .and_then(|sequence| sequence.parse().ok())
+                .expect("a recording upload path")
+        })
+        .collect();
+    sequences.sort_unstable();
+    assert_eq!(sequences, [1, 2, 3, 4]);
+    assert_eq!(handle.loss_count(), 0);
+    assert_eq!(handle.recording_acked_through(), 4);
+}
+
+#[tokio::test]
+async fn a_stored_file_is_acknowledged_while_an_earlier_one_is_still_uploading() {
+    let server = MockServer::start().await;
+    let base = server.uri();
+    Mock::given(method("POST"))
+        .respond_with(move |request: &Request| {
+            ResponseTemplate::new(200).set_body_json(response(request, &base, &[]))
+        })
+        .expect(3)
+        .mount(&server)
+        .await;
+    // File 1's upload is the slowest; files 2 and 3 are stored while it is
+    // still on its way.
+    Mock::given(method("PUT"))
+        .respond_with(move |request: &Request| {
+            let first = request.url.path().ends_with("/1-0");
+            ResponseTemplate::new(200).set_delay(Duration::from_millis(if first {
+                2000
+            } else {
+                0
+            }))
+        })
+        .expect(3)
+        .mount(&server)
+        .await;
+    let mut settings = config(&server);
+    settings.request_timeout = Duration::from_secs(5);
+    let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
+    let handle = delivery.handle();
+    let pool = SnapshotPool::unbounded(Limits::default());
+    let started = Instant::now();
+    for (index, file) in files(3).into_iter().enumerate() {
+        handle
+            .try_submit(
+                file,
+                vec![scalar(&pool, i64::try_from(index).unwrap())],
+                vec![proposed(0, UploadKind::Recording, &[0])],
+            )
+            .unwrap();
+    }
+    // Each staged file carried the metadata retained when it was sealed, so
+    // file 3 being stored acknowledges everything through it: nothing waits
+    // for file 1.
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while handle.recording_acked_through() < 3 {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .expect("files 2 and 3 are acknowledged while file 1 uploads");
+    assert!(started.elapsed() < Duration::from_millis(2000));
+    assert_eq!(finish(delivery).await, Ok(()));
+    assert_eq!(handle.recording_acked_through(), 3);
+    assert_eq!(handle.loss_count(), 0);
 }

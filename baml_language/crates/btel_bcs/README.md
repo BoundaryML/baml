@@ -109,11 +109,16 @@ A PUT is given `request_timeout` (10 s) plus its body's length at
 `min_upload_bytes_per_second` (1 MiB/s): a large body is not lost for taking
 long, only for uploading slower than that. A body's retry window is every
 attempt at that timeout and the delays between them: 40.6 s for a small body,
-about 73 s for 8 MiB, about 69 minutes for 1 GiB. Recordings upload one at a
-time and CAS bodies `max_cas_uploads` (2) at a time, each when its turn comes,
-so BCS must issue each URL a lifetime that covers the windows of every body of
-its kind admitted before it, counted as if they went one by one. A URL that
-does not is refused before anything is sent to it. The prepare request does
+about 73 s for 8 MiB, about 69 minutes for 1 GiB. Recordings upload
+`max_recording_uploads` (8) at a time and CAS bodies `max_cas_uploads` (2) at
+a time, each when a slot is free, so BCS must issue each URL a lifetime that
+covers the windows of every body of its kind admitted before it, counted as if
+they went one by one, which refuses a URL sooner than the lanes strictly
+require. A URL that does not is refused before anything is sent to it.
+Prepares run together, as many as `max_pending_plans` (16) admits. Every
+staged file carries the metadata retained when it was sealed, so a stored file
+acknowledges every segment through its sequence, whatever order the uploads
+end in and whatever becomes of the files before it. The prepare request does
 not carry blob lengths, only `size_class: LARGE` for a blob uploaded on its
 own.
 
@@ -168,11 +173,11 @@ with local recording, and `DeliveryConfig` controls cloud transport.
 The publisher accumulates recording events and queues the blobs of captured
 values across processor batches; a blob offered recently is not queued again,
 and a capture with nothing new to offer is released at once. A window seals at
-a record boundary when it reaches the recording-byte target, 16 queued blobs,
+a record boundary when it reaches the recording-byte target, a plan's worth of queued blobs (32),
 or 4 MiB of retained capture storage. A single capture may exceed a soft
 target. Each sealed file takes the head of the queue: at most one plan's worth
 of blobs, cut short where the bytes their upload bodies buffer pass a quarter
-of delivery's CAS reservation, and always at least one blob. While 16 or more blobs still wait,
+of delivery's CAS reservation, and always at least one blob. While a plan's worth or more still waits,
 or more than one file takes, further files are sealed to carry them, and at
 the end the last file takes what remains. The non-sliding timer starts at the
 first event, using `RecordingConfig::flush_interval_duration`, and starts
@@ -191,8 +196,8 @@ it, and that string is let go when its upload ends. The window cut and the
 CAS reservation count only what is buffered.
 
 Sealed windows are staged until processor input chunks have been recycled.
-The queue and staged windows together retain at most 32 captures and 8 MiB of
-capture storage by default. A blob that is one string holds its own content:
+The queue and staged windows together retain at most 128 captures and 8 MiB
+of capture storage by default. A blob that is one string holds its own content:
 it is let go as soon as the server reports it stored, or else when its upload
 ends (a short one, once it has been copied into its body), whatever becomes of
 the rest of its capture. The rest of a capture is
@@ -209,8 +214,8 @@ runs on the processor. Admission waits occur only after recycling.
 
 Delivery separately limits pending captures, plans, recording bytes, and CAS
 bytes; a capture spanning plans counts once per plan. A plan is pending until
-its recording is uploaded. Its captures, and the storage slots they hold, are
-given back sooner, once its upload bodies are built. Each CAS body is uploaded
+its recording is uploaded. Its captures, and the storage they hold, are given
+back sooner, once its upload bodies are built. Each CAS body is uploaded
 on its own, whatever becomes of the plan it came with, and holds its part of
 the CAS reservation (what it buffers, and the strings it sends from where they
 are held) until its upload ends. So one long upload keeps neither later plans
