@@ -576,7 +576,6 @@ doctest = false
 [dependencies]
 baml_bridge = {runtime_dep}
 serde = {{ version = "1", features = ["derive"], optional = true }}
-serde_json = {{ version = "1", optional = true }}
 
 [features]
 # `serde::Serialize` and `serde::Deserialize` for the generated classes,
@@ -587,7 +586,7 @@ serde_json = {{ version = "1", optional = true }}
 # applied. BAML standard-library classes, and any class holding a `bigint`,
 # `uint8array`, function or handle, directly or nested, get no impls; the
 # class docs name the field.
-serde = ["dep:serde", "dep:serde_json"]
+serde = ["dep:serde"]
 "#
     );
     if let Some(extra) = manifest_extra {
@@ -2103,14 +2102,12 @@ mod tests {
         let manifest = render_manifest(&options());
         assert!(
             manifest.contains(
-                "serde = { version = \"1\", features = [\"derive\"], optional = true }\n\
-                 serde_json = { version = \"1\", optional = true }\n"
+                "serde = { version = \"1\", features = [\"derive\"], optional = true }\n\n"
             ),
             "{manifest}"
         );
         assert!(
-            manifest.contains("[features]\n#")
-                && manifest.contains("\nserde = [\"dep:serde\", \"dep:serde_json\"]\n"),
+            manifest.contains("[features]\n#") && manifest.contains("\nserde = [\"dep:serde\"]\n"),
             "{manifest}"
         );
     }

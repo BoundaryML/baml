@@ -17,9 +17,10 @@
 //! fits. The impls are written out rather than derived with
 //! `#[serde(untagged)]`: serde's untagged buffer cannot read a float while
 //! `serde_json`'s `arbitrary_precision` feature is on, and `baml_bridge`
-//! turns it on. Values are buffered as a `serde_json::Value` instead, and
-//! each arm reads an owned copy, so a type parameter needs only the
-//! `Deserialize<'de>` bound serde's derive puts on an enclosing class.
+//! turns it on. Values are buffered as a `serde_json::Value` (the bridge's
+//! re-exported `serde_json`) instead, and each arm reads an owned copy, so
+//! a type parameter needs only the `Deserialize<'de>` bound serde's derive
+//! puts on an enclosing class.
 
 use baml_sdkgen_types::Ty;
 use proc_macro2::TokenStream;
@@ -218,7 +219,9 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
                 fn deserialize<__D: ::serde::Deserializer<'de>>(
                     deserializer: __D,
                 ) -> ::std::result::Result<Self, __D::Error> {
-                    let json = <::serde_json::Value as ::serde::Deserialize>::deserialize(deserializer)?;
+                    let json = <::baml_bridge::serde_json::Value as ::serde::Deserialize>::deserialize(
+                        deserializer,
+                    )?;
                     #(#deserialize_trials)*
                     ::std::result::Result::Err(<__D::Error as ::serde::de::Error>::custom(#no_arm))
                 }

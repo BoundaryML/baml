@@ -7,12 +7,14 @@
 
 use std::fmt::Debug;
 
-use baml_bridge::{BamlValue, Map};
+use baml_bridge::{
+    BamlValue, Map,
+    serde_json::{self, json},
+};
 use baml_sdk::json_interchange::{
     FastOrSlow, IntOrFloat, IntOrLabel, JsonDoc, JsonFields, Label, Shade, from_json, to_json,
 };
 use serde::{Serialize, de::DeserializeOwned};
-use serde_json::json;
 
 fn label(text: &str, note: Option<&str>) -> Label {
     Label {
