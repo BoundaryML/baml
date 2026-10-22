@@ -1276,6 +1276,67 @@ mod minus_chain_format_tests {
         let second = format(&formatted, &options).expect("formatter should be idempotent");
         assert_eq!(formatted, second, "formatter should be idempotent");
     }
+
+    /// The parentheses the formatter adds around an unparenthesized `if`
+    /// condition print like a real `PAREN_EXPR`, so a wide condition gets one
+    /// pair (not `if ((…))` around a `-` chain) and reformats to itself.
+    #[test]
+    fn unparenthesized_if_condition_gets_one_pair_of_parens() {
+        let source = "function f(aaaaaaaaaaaaaaaaaaaa: int, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: int) -> int {
+    if aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb > 0 { 1 } else { 2 }
+    if aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa { 1 } else { 2 }
+    if aaaaaaaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb + aaaaaaaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb > 0 { 1 } else { 2 }
+    if aaaaaaaaaaaaaaaaaaaa > 0 { 1 } else { 2 }
+}
+";
+        let expected =
+            "function f(aaaaaaaaaaaaaaaaaaaa: int, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: int) -> int {
+    if (
+        aaaaaaaaaaaaaaaaaaaa
+            - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            - aaaaaaaaaaaaaaaaaaaa
+            - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            > 0
+    ) {
+        1
+    } else {
+        2
+    }
+    if (
+        aaaaaaaaaaaaaaaaaaaa
+            - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            - aaaaaaaaaaaaaaaaaaaa
+            - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            - aaaaaaaaaaaaaaaaaaaa
+    ) {
+        1
+    } else {
+        2
+    }
+    if (
+        aaaaaaaaaaaaaaaaaaaa
+            + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            + aaaaaaaaaaaaaaaaaaaa
+            + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            > 0
+    ) {
+        1
+    } else {
+        2
+    }
+    if (aaaaaaaaaaaaaaaaaaaa > 0) {
+        1
+    } else {
+        2
+    }
+}
+";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, expected);
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
 }
 
 #[cfg(test)]

@@ -895,6 +895,30 @@ impl Printable for ParenExpr {
     }
 }
 
+/// Prints `inner` inside parentheses the formatter adds itself, in
+/// [`ParenExpr`]'s multi-line layout, so reformatting the output (which then
+/// holds a real `PAREN_EXPR`) is idempotent. Inside the parentheses line
+/// breaks are whitespace.
+fn print_in_added_parens_multi_line(
+    inner: &impl Printable,
+    shape: &Shape,
+    printer: &mut Printer,
+) -> PrintInfo {
+    let inner_shape = Shape {
+        width: shape.width.saturating_sub(printer.config.indent_width),
+        indent: shape.indent + printer.config.indent_width,
+        first_line_offset: 0,
+    };
+    printer.print_str("(");
+    printer.print_newline();
+    printer.print_spaces(inner_shape.indent);
+    printer.with_line_separated(false, |p| p.print(inner, inner_shape));
+    printer.print_newline();
+    printer.print_spaces(shape.indent);
+    printer.print_str(")");
+    PrintInfo::default_multi_lined()
+}
+
 impl Expression {
     /// Strips nested [`ParenExpr`] wrappers that are transparent (no comments
     /// attached to the parens or the inner expression's boundary), returning
@@ -1242,34 +1266,6 @@ impl BinaryExpr {
             .any(|(op, _)| op.begins_statement_at_line_start())
     }
 
-    /// Multi-line layout wrapped in parentheses, for where line breaks
-    /// separate statements: there `a` then `- b` on the next line would parse
-    /// as two statements, but inside parentheses line breaks are whitespace.
-    /// Mirrors [`ParenExpr`]'s multi-line layout so reformatting the output
-    /// (which then holds a real `PAREN_EXPR`) is idempotent.
-    ///
-    /// ```baml
-    /// let t = (
-    ///     aaaaaaaaa
-    ///         - bbbbbbbbb
-    /// );
-    /// ```
-    fn print_parenthesized(&self, shape: &Shape, printer: &mut Printer) -> PrintInfo {
-        let inner_shape = Shape {
-            width: shape.width.saturating_sub(printer.config.indent_width),
-            indent: shape.indent + printer.config.indent_width,
-            first_line_offset: 0,
-        };
-        printer.print_str("(");
-        printer.print_newline();
-        printer.print_spaces(inner_shape.indent);
-        printer.with_line_separated(false, |p| p.print(self, inner_shape));
-        printer.print_newline();
-        printer.print_spaces(shape.indent);
-        printer.print_str(")");
-        PrintInfo::default_multi_lined()
-    }
-
     /// Should be passed a sub-printer to avoid printing trivia in the outer printer
     /// in the event that the printer is unable to fit the binary expression on a single line.
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
@@ -1321,7 +1317,15 @@ impl Printable for BinaryExpr {
             return info;
         }
         if printer.line_separated && self.has_minus_in_chain(printer.trivia) {
-            return self.print_parenthesized(&shape, printer);
+            // `a` then `- b` on the next line would parse as two statements.
+            //
+            // ```baml
+            // let t = (
+            //     aaaaaaaaa
+            //         - bbbbbbbbb
+            // );
+            // ```
+            return print_in_added_parens_multi_line(self, &shape, printer);
         }
         self.print_multi_line(shape, printer)
     }
@@ -1635,23 +1639,26 @@ impl Printable for IfExpr {
         // Always print parens around the condition. Source may omit them
         // (Baml allows `if cond { ... }`), but emitting them keeps formatter
         // output consistent with the canonical form.
-        let needs_parens = !matches!(*self.condition, Expression::Paren(_));
-        let cond_shape = if needs_parens {
-            // Reserve room for the synthetic `( )` so a barely-fitting
-            // condition doesn't push the line past the width budget once
-            // we wrap parens around it.
-            let mut s = shape.clone();
-            s.width = s.width.saturating_sub(2);
-            s
-        } else {
-            shape.clone()
-        };
-        if needs_parens {
-            printer.print_str("(");
-        }
-        printer.print(&*self.condition, cond_shape);
-        if needs_parens {
-            printer.print_str(")");
+        // Added parens print exactly like a real `PAREN_EXPR` so the output
+        // reformats to itself.
+        if matches!(*self.condition, Expression::Paren(_)) {
+            printer.print(&*self.condition, shape.clone());
+        } else if printer
+            .try_sub_printer(|p| {
+                p.print_str("(");
+                if p.with_line_separated(false, |p| {
+                    p.print(&*self.condition, Shape::unlimited_single_line())
+                })
+                .multi_lined
+                {
+                    return None;
+                }
+                p.print_str(")");
+                (p.output.len() <= shape.width).then(PrintInfo::default_single_line)
+            })
+            .is_none()
+        {
+            print_in_added_parens_multi_line(&*self.condition, &shape, printer);
         }
         printer.print_str(" ");
         printer.print(&self.block, shape.clone());
