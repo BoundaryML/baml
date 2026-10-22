@@ -6362,6 +6362,11 @@ impl BexEngine {
                                         thread,
                                         external,
                                         host_ret_ty.as_ref(),
+                                        crate::conversion::InboundRuntimeOverlay::new(
+                                            &runtime_type_overlay.class_handles_by_name(),
+                                            &runtime_type_overlay.enum_handles_by_name(),
+                                            None,
+                                        ),
                                     )
                                 } else if let Some(overlay) = runtime_schema_overlay.as_ref() {
                                     self.convert_external_to_vm_value_with_runtime_schema(
@@ -8105,6 +8110,74 @@ mod type_identity_tests {
             runtime_class.type_tag.is_dynamic(),
             "runtime-created declarations mint counter tags"
         );
+
+        // A callback result must land on this runtime declaration, even though
+        // a static class has the same display name. A schema-free/static-only
+        // lookup either loses the declaration or silently changes its identity.
+        let expected_class = head.ptr();
+        let expected = crate::conversion::overlay_wire_ty_under_permit(
+            type_value.ty.as_runtime_ty(),
+            thread.proof(),
+        );
+        let reflected = thread.vm.alloc_type(type_value);
+        let runtime_overlay =
+            engine.runtime_type_overlay(&thread.vm, &[bex_vm_types::Value::object(reflected)]);
+        let classes = runtime_overlay.class_handles_by_name();
+        let enums = runtime_overlay.enum_handles_by_name();
+        let overlay = crate::conversion::InboundRuntimeOverlay::new(&classes, &enums, None);
+        let returned = engine
+            .convert_host_return_to_vm_value_with_ty(
+                &mut thread,
+                bex_external_types::BexExternalValue::instance(
+                    "user.Foo",
+                    indexmap::IndexMap::from_iter([(
+                        "value",
+                        bex_external_types::BexExternalValue::Int(7),
+                    )]),
+                ),
+                Some(&expected),
+                overlay,
+            )
+            .expect("a host return should resolve the runtime class");
+        let Object::Instance(instance) = thread.vm.get_object(returned.as_object_ptr().unwrap())
+        else {
+            panic!("expected a runtime class instance");
+        };
+        assert_eq!(instance.class, expected_class);
+
+        let invalid = engine.convert_host_return_to_vm_value_with_ty(
+            &mut thread,
+            bex_external_types::BexExternalValue::instance(
+                "user.Foo",
+                indexmap::IndexMap::from_iter([(
+                    "value",
+                    bex_external_types::BexExternalValue::String("bad".into()),
+                )]),
+            ),
+            Some(&expected),
+            overlay,
+        );
+        assert!(matches!(
+            invalid,
+            Err(super::EngineError::TypeMismatch { .. })
+        ));
+
+        let missing = baml_type::RuntimeTy::Class(
+            baml_type::TypeName::from_dotted_path("user.Missing"),
+            Box::new([]),
+        );
+        let unresolved = engine.convert_host_return_to_vm_value_with_ty(
+            &mut thread,
+            bex_external_types::BexExternalValue::Null,
+            Some(&missing),
+            overlay,
+        );
+        assert!(matches!(
+            unresolved,
+            Err(super::EngineError::VmInternalError(
+                bex_vm::errors::VmInternalError::BridgeFailure { .. }
+            ))
+        ));
     }
 
     /// A `type` value that leaves this engine and comes straight back is the

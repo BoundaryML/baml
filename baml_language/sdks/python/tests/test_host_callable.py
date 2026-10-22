@@ -51,7 +51,7 @@ function ConsumeUnknownCb(callback: (int) -> unknown, x: int) -> int {
 
 @pytest.fixture(autouse=True)
 def _diagnostic_typemap():
-    # These bridge tests have no generated SDK to register builtin errors.
+    """Supply builtin diagnostic mappings normally registered by a generated SDK."""
     from baml_bridge.typemap import BamlTypeMap, get_type_map, set_type_map
 
     previous = get_type_map()
