@@ -7,10 +7,9 @@ use baml_base::{ClientOptionsValidationError, FileId, Span};
 use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity};
 use text_size::TextRange;
 
-/// The book section on destructuring into existing variables, linked from
+/// The book chapter on patterns and destructuring, linked from
 /// [`LoweringDiagnostic::InvalidAssignmentTarget`].
-pub const DESTRUCTURING_DOCS_URL: &str =
-    "https://developer.boundaryml.com/baml/book/patterns#destructure-into-existing-variables";
+pub const DESTRUCTURING_DOCS_URL: &str = "https://developer.boundaryml.com/baml/book/patterns";
 
 /// Diagnostic emitted during CST → AST lowering.
 ///
