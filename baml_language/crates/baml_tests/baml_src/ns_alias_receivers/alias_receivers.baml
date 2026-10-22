@@ -145,3 +145,22 @@ test "impl_method_through_a_pinning_alias" {
 test "impl_method_own_generics_follow_the_alias_pinned_impl_frame" {
     assert.equal(int_box_tag(Box { item: 3 }), "int+string")
 }
+
+const GLOBAL_KEY: Key = ["g", "h"];
+
+test "join_through_an_alias_typed_global" {
+    assert.equal(GLOBAL_KEY.join("."), "g.h")
+}
+
+// A map method taken as a value curries the map's `[K, V]`. `keys` and
+// `values` are native and never read their frame, so this guards the
+// bind-and-call path rather than the frame's contents.
+function map_methods_taken_as_values(m: map<string, int>) -> string {
+    let keys = m.keys;
+    let values = m.values;
+    keys()[0] + values()[0].to_string()
+}
+
+test "map_methods_taken_as_values" {
+    assert.equal(map_methods_taken_as_values({ "a": 1 }), "a1")
+}
