@@ -1204,40 +1204,63 @@ mod minus_chain_format_tests {
     use super::*;
 
     /// Where line breaks separate statements, a line starting with `-` begins
-    /// a new one, so a multi-line chain containing `-` puts its operators at
-    /// the ends of lines. Chains without `-` keep leading operators, and `<`
-    /// stays leading because the parser reads it as a continuation.
+    /// a new one, so a multi-line chain containing `-` is wrapped in
+    /// parentheses, where line breaks are whitespace. Inside call arguments
+    /// it needs no parentheses; a block nested there needs them again. Chains
+    /// without `-` are unchanged, and `<` stays leading because the parser
+    /// reads it as a continuation.
     #[test]
-    fn chains_with_minus_put_operators_at_line_ends() {
+    fn chains_with_minus_are_parenthesized_where_lines_separate_statements() {
         let source = "function f(c: bool, aaaaaaaaaaaaaaaaaaaa: int, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: int) -> bool {
     let v = if (c) { let t = aaaaaaaaaaaaaaaaaaaa; t } else { bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb } - aaaaaaaaaaaaaaaaaaaa
     let w = aaaaaaaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa * bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
     let y = aaaaaaaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb + aaaaaaaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
     let z = g(aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb)
+    let l = g((x: int) -> int { aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb })
+    let e = aaaaaaaaaaaaaaaaaaaa == bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa
     if (c) { let t = aaaaaaaaaaaaaaaaaaaa; t } else { bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb } < v + w + y + z
 }
 ";
         let expected = "function f(c: bool, aaaaaaaaaaaaaaaaaaaa: int, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: int) -> bool {
-    let v = if (c) {
-        let t = aaaaaaaaaaaaaaaaaaaa;
-        t
-    } else {
-        bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-    } -
-        aaaaaaaaaaaaaaaaaaaa;
-    let w = aaaaaaaaaaaaaaaaaaaa +
-        bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb -
-        aaaaaaaaaaaaaaaaaaaa * bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;
+    let v = (
+        if (c) {
+            let t = aaaaaaaaaaaaaaaaaaaa;
+            t
+        } else {
+            bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+        }
+            - aaaaaaaaaaaaaaaaaaaa
+    );
+    let w = (
+        aaaaaaaaaaaaaaaaaaaa
+            + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            - aaaaaaaaaaaaaaaaaaaa * bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    );
     let y = aaaaaaaaaaaaaaaaaaaa
         + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
         + aaaaaaaaaaaaaaaaaaaa
         + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;
     let z = g(
-        aaaaaaaaaaaaaaaaaaaa -
-            bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb -
-            aaaaaaaaaaaaaaaaaaaa -
-            bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,
+        aaaaaaaaaaaaaaaaaaaa
+            - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            - aaaaaaaaaaaaaaaaaaaa
+            - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,
     );
+    let l = g((x: int) -> int {
+        (
+            aaaaaaaaaaaaaaaaaaaa
+                - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+                - aaaaaaaaaaaaaaaaaaaa
+                - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+        )
+    });
+    let e = aaaaaaaaaaaaaaaaaaaa
+        == (
+            bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+                - aaaaaaaaaaaaaaaaaaaa
+                - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+                - aaaaaaaaaaaaaaaaaaaa
+        );
     if (c) {
         let t = aaaaaaaaaaaaaaaaaaaa;
         t
