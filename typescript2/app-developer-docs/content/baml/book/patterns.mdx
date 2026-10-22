@@ -1,0 +1,135 @@
+---
+title: Patterns, matching, and destructuring
+description: Chapter 22 · Take values apart with patterns in `let`, `match`, `if let`, and loops.
+breadcrumbs:
+  - href: /baml
+    label: BAML
+  - href: /baml/book
+    label: Book
+  - label: "22. Patterns, matching, and destructuring"
+---
+
+A pattern describes the shape of a value and names the parts you need. Use one to read the token counts out of a model reply, check that a command has the arguments a tool expects, or choose a branch for each kind of agent event.
+
+BAML uses the same patterns in `let`, `match`, `if let`, `while let`, and `for`. The examples assume you know classes, enums, unions, and arrays, and that you have seen a `match` expression. For variables and reassignment, see [Common programming concepts](/baml/book/common-programming-concepts).
+
+## Run the examples
+
+Create a project and put each example in `baml_src/main.baml`, replacing the previous one:
+
+```sh
+baml new book-patterns
+cd book-patterns
+baml check
+```
+
+Each example includes the test shown in its listing. Run it with `baml test`.
+
+## Destructure a class
+
+Every `let` statement already uses a pattern: `let total = 0;` binds the whole value to one name. A class pattern names the fields to read:
+
+<BamlProject id="listing-22-01" file="baml_src/main.baml" regions={["all"]} />
+
+The pattern in `cost` has three parts:
+
+- `Reply { usage: … }` matches a `Reply` and reads its `usage` field. A field you don't mention, such as `text`, is ignored.
+- `Usage { input, output: let completion }` matches the nested `Usage`. `input` is shorthand for `input: let input`, so it binds a variable with the field's name.
+- `output: let completion` binds the `output` field to a different name.
+
+The pattern can't fail: every `Reply` has a `usage`, and every `Usage` has both fields. A pattern that always matches is *irrefutable*.
+
+## Destructure an array
+
+An array pattern lists the elements by position. Use `..` to match any number of remaining elements and `_` to skip one element without naming it:
+
+<BamlProject id="listing-22-02" file="baml_src/main.baml" regions={["all"]} />
+
+`[let tool, let argument, ..]` matches an array with at least two elements. An array can be shorter than its pattern, so the pattern is *refutable*: it can fail to match. A refutable pattern in a `let` needs an `else` block, and the block must leave the function, for example with `return` or `throw`. `["search"]` takes the `else` branch.
+
+`let … else` works for any refutable pattern. With a `Usage | null` value, `let Usage { input } = value else { return 0; };` reads `input` and handles `null` in one statement.
+
+## Destructure into existing variables
+
+The left side of `=` is an expression, not a pattern. You can assign to a variable, a field, or an index, but `=` can't take a value apart. This example tries to fill two existing variables from an array literal:
+
+<BamlProject id="no-listing-22-01-assign-into-array-literal" file="baml_src/main.baml" regions={["all"]} />
+
+This example intentionally fails `baml check` with `E0010`: `[tool, argument]` is an array literal, and a literal isn't a place to store a value. To destructure, use `let`.
+
+A `let` binds new variables. When it's in the same block as the variables it names, the new bindings replace the old ones for the rest of the block. `advance` returns the next position and a label:
+
+<BamlProject id="listing-22-03" file="baml_src/main.baml" regions={["all", "same-scope"]} />
+
+The second `let` rebinds `position` and binds `label`. Code after it reads the new values.
+
+A `let` inside a nested block, such as a loop body, binds variables that end with that block. The variables outside it keep their values. To update an outer variable, destructure into a new name and assign it:
+
+<BamlProject id="listing-22-03" file="baml_src/main.baml" regions={["loop"]} />
+
+`position: let next` binds the new position as `next`, and `position = next` stores it in the variable the loop condition reads. Writing `let Step { position, label } = …` inside the loop would bind a new `position` that disappears at the end of each iteration, and the loop would never end.
+
+## Choose a branch with `match`
+
+A `match` tries each arm's pattern in order and runs the first one that matches. Patterns in `match` arms can test values as well as bind them:
+
+<BamlProject id="listing-22-04" file="baml_src/main.baml" regions={["all"]} />
+
+The arms use these patterns:
+
+| Pattern | Matches |
+| --- | --- |
+| `name: "search" \| "lookup"` | A `name` field equal to either string. `\|` separates alternatives. |
+| `args: [let query, ..]` | An `args` array with at least one element, binding the first. |
+| `args: []` | An empty `args` array. |
+| `ToolCall { name }` | Any remaining `ToolCall`. |
+| `Outcome.Done` | One enum variant. |
+| `let tokens: int if tokens > 1_000` | An `int`, bound as `tokens`, for which the guard after `if` is true. |
+| `int` | Any remaining `int`. |
+
+Order matters. `ToolCall { name }` matches every `ToolCall`, so it must come after the more specific `ToolCall` arms.
+
+A `match` must handle every value its input can hold. If you remove an arm that nothing else covers, `baml check` reports the missing case:
+
+<BamlProject id="no-listing-22-02-non-exhaustive-match" file="baml_src/main.baml" regions={["all"]} />
+
+This example intentionally fails with `E0062`: no arm matches `Outcome.Cancelled`. A guarded arm doesn't count toward this check, because its guard can be false. That is why the example keeps an unguarded `int` arm after the guarded one.
+
+## Test one pattern with `if let`
+
+Use `if let` when you care about one shape and want a fallback for everything else:
+
+<BamlProject id="listing-22-05" file="baml_src/main.baml" regions={["all"]} />
+
+The pattern matches only a `search` call with exactly one argument and binds that argument as `query`. `query` is available only in the first branch. Any other call, including a `search` with two arguments, takes the `else` branch.
+
+## Loop with patterns
+
+A `for` loop's variable is a pattern, so you can destructure each element:
+
+<BamlProject id="listing-22-06" file="baml_src/main.baml" regions={["for"]} />
+
+The pattern in a `for` loop must match every element. To skip elements that don't match, test them with `if let` or `match` inside the loop.
+
+`while let` repeats while its pattern matches. It's useful for following a chain of optional values:
+
+<BamlProject id="listing-22-06" file="baml_src/main.baml" regions={["while"]} />
+
+Each iteration binds `name` and `next` from `current`. When `current` becomes `null`, the pattern no longer matches and the loop ends. `current` is declared outside the loop, so `current = next` updates it for the next test.
+
+## Pattern reference
+
+| Pattern | Matches | Binds |
+| --- | --- | --- |
+| `let x` | Any value | `x` |
+| `let x: T` | A value of type `T` | `x`, as `T` |
+| `_` | Any value | Nothing |
+| `42`, `"search"`, `true`, `null` | That value | Nothing |
+| `Outcome.Done` | That enum variant | Nothing |
+| `int`, `ToolCall` | A value of that type | Nothing |
+| `ToolCall { name, args: p }` | A `ToolCall` whose `args` match `p` | `name`, plus what `p` binds |
+| `[p1, p2]` | An array of exactly two elements | What `p1` and `p2` bind |
+| `[p1, ..]`, `[.., p1]` | An array with at least one element | What `p1` binds |
+| `p1 \| p2` | A value that matches either pattern | The names both alternatives bind |
+
+In a `match` arm, add `if condition` after the pattern to require a condition as well.
