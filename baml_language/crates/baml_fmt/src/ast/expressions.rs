@@ -881,9 +881,11 @@ impl ParenExpr {
 
 impl Printable for ParenExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer
-            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
-            .unwrap_or_else(|| self.print_multi_line(shape, printer))
+        printer.with_line_separated(false, |printer| {
+            printer
+                .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+                .unwrap_or_else(|| self.print_multi_line(shape, printer))
+        })
     }
     fn leftmost_token(&self) -> TextRange {
         self.open_paren.span()
@@ -891,6 +893,30 @@ impl Printable for ParenExpr {
     fn rightmost_token(&self) -> TextRange {
         self.close_paren.span()
     }
+}
+
+/// Prints `inner` inside parentheses the formatter adds itself, in
+/// [`ParenExpr`]'s multi-line layout, so reformatting the output (which then
+/// holds a real `PAREN_EXPR`) is idempotent. Inside the parentheses line
+/// breaks are whitespace.
+fn print_in_added_parens_multi_line(
+    inner: &impl Printable,
+    shape: &Shape,
+    printer: &mut Printer,
+) -> PrintInfo {
+    let inner_shape = Shape {
+        width: shape.width.saturating_sub(printer.config.indent_width),
+        indent: shape.indent + printer.config.indent_width,
+        first_line_offset: 0,
+    };
+    printer.print_str("(");
+    printer.print_newline();
+    printer.print_spaces(inner_shape.indent);
+    printer.with_line_separated(false, |p| p.print(inner, inner_shape));
+    printer.print_newline();
+    printer.print_spaces(shape.indent);
+    printer.print_str(")");
+    PrintInfo::default_multi_lined()
 }
 
 impl Expression {
@@ -1231,6 +1257,15 @@ impl PrintMultiLine for BinaryExpr {
 }
 
 impl BinaryExpr {
+    /// Whether this chain has a `-` operator, which the multi-line layout
+    /// would put at the start of a line.
+    fn has_minus_in_chain(&self, trivia: &TriviaInfo) -> bool {
+        let (_, chain_members) = self.get_chaining_members(trivia);
+        chain_members
+            .iter()
+            .any(|(op, _)| op.begins_statement_at_line_start())
+    }
+
     /// Should be passed a sub-printer to avoid printing trivia in the outer printer
     /// in the event that the printer is unable to fit the binary expression on a single line.
     fn try_print_single_line(&self, shape: &Shape, printer: &mut Printer) -> Option<PrintInfo> {
@@ -1278,9 +1313,21 @@ impl BinaryExpr {
 
 impl Printable for BinaryExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer
-            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
-            .unwrap_or_else(|| self.print_multi_line(shape, printer))
+        if let Some(info) = printer.try_sub_printer(|p| self.try_print_single_line(&shape, p)) {
+            return info;
+        }
+        if printer.line_separated && self.has_minus_in_chain(printer.trivia) {
+            // `a` then `- b` on the next line would parse as two statements.
+            //
+            // ```baml
+            // let t = (
+            //     aaaaaaaaa
+            //         - bbbbbbbbb
+            // );
+            // ```
+            return print_in_added_parens_multi_line(self, &shape, printer);
+        }
+        self.print_multi_line(shape, printer)
     }
     fn leftmost_token(&self) -> TextRange {
         self.sides.0.leftmost_token()
@@ -1592,23 +1639,26 @@ impl Printable for IfExpr {
         // Always print parens around the condition. Source may omit them
         // (Baml allows `if cond { ... }`), but emitting them keeps formatter
         // output consistent with the canonical form.
-        let needs_parens = !matches!(*self.condition, Expression::Paren(_));
-        let cond_shape = if needs_parens {
-            // Reserve room for the synthetic `( )` so a barely-fitting
-            // condition doesn't push the line past the width budget once
-            // we wrap parens around it.
-            let mut s = shape.clone();
-            s.width = s.width.saturating_sub(2);
-            s
-        } else {
-            shape.clone()
-        };
-        if needs_parens {
-            printer.print_str("(");
-        }
-        printer.print(&*self.condition, cond_shape);
-        if needs_parens {
-            printer.print_str(")");
+        // Added parens print exactly like a real `PAREN_EXPR` so the output
+        // reformats to itself.
+        if matches!(*self.condition, Expression::Paren(_)) {
+            printer.print(&*self.condition, shape.clone());
+        } else if printer
+            .try_sub_printer(|p| {
+                p.print_str("(");
+                if p.with_line_separated(false, |p| {
+                    p.print(&*self.condition, Shape::unlimited_single_line())
+                })
+                .multi_lined
+                {
+                    return None;
+                }
+                p.print_str(")");
+                (p.output.len() <= shape.width).then(PrintInfo::default_single_line)
+            })
+            .is_none()
+        {
+            print_in_added_parens_multi_line(&*self.condition, &shape, printer);
         }
         printer.print_str(" ");
         printer.print(&self.block, shape.clone());
@@ -1964,13 +2014,16 @@ impl Printable for MatchExpr {
         printer.print_raw_token(&self.keyword);
         printer.print_str(" ");
 
-        // Print scrutinee: try single-line, fall back to multi-line
-        if printer
-            .try_sub_printer(|p| self.try_print_scrutinee_single_line(&shape, p))
-            .is_none()
-        {
-            self.print_scrutinee_multi_line(&shape, printer);
-        }
+        // Print scrutinee: try single-line, fall back to multi-line. It sits in
+        // the match's own parentheses.
+        printer.with_line_separated(false, |printer| {
+            if printer
+                .try_sub_printer(|p| self.try_print_scrutinee_single_line(&shape, p))
+                .is_none()
+            {
+                self.print_scrutinee_multi_line(&shape, printer);
+            }
+        });
 
         // Print body with block container pattern
         printer.print_str(" ");
@@ -2151,94 +2204,96 @@ fn print_wrapped_arm_body(printer: &mut Printer, body: &Expression, arm_indent: 
 
 impl Printable for MatchArm {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        let condition_info = self.print_condition(&shape, printer);
-        let condition_multi_lined = condition_info.multi_lined;
+        printer.with_line_separated(true, |printer| {
+            let condition_info = self.print_condition(&shape, printer);
+            let condition_multi_lined = condition_info.multi_lined;
 
-        if condition_multi_lined {
-            // the body goes in a block expression on a new line
-            printer.print_newline();
+            if condition_multi_lined {
+                // the body goes in a block expression on a new line
+                printer.print_newline();
 
-            printer.print_spaces(shape.indent);
+                printer.print_spaces(shape.indent);
+                if let Expression::Block(block) = &self.body {
+                    // body is already a block expression
+                    let body_shape = Shape {
+                        width: printer.config.line_width.saturating_sub(shape.indent),
+                        indent: shape.indent,
+                        first_line_offset: 0,
+                    };
+                    printer.print(block, body_shape);
+                    printer.print_str(",");
+                } else {
+                    // put the body in a block expression
+                    printer.print_str("{");
+                    printer.print_newline();
+                    print_wrapped_arm_body(printer, &self.body, shape.indent);
+                    printer.print_newline();
+                    printer.print_spaces(shape.indent);
+                    printer.print_str("},");
+                }
+                return PrintInfo::default_multi_lined();
+            }
+
+            // condition is single line, see if we can fit the body with it
+            // TODO: if the body is a block with only a tail expression, we might be able to un-nest it
+
+            printer.print_spaces(1);
+            let line_len_remaining = printer.current_line_remaining_width();
             if let Expression::Block(block) = &self.body {
-                // body is already a block expression
+                // If it is a block expression, we print it directly in front of the ` => `.
+                // Since the condition was single-line, the preceding line had no extra indent
+                // so we don't need to put the `{` on a new line.
                 let body_shape = Shape {
-                    width: printer.config.line_width.saturating_sub(shape.indent),
+                    width: line_len_remaining,
                     indent: shape.indent,
-                    first_line_offset: 0,
+                    first_line_offset: printer
+                        .config
+                        .line_width
+                        .saturating_sub(shape.indent + line_len_remaining),
                 };
-                printer.print(block, body_shape);
+                let info = printer.print(block, body_shape);
                 printer.print_str(",");
-            } else {
-                // put the body in a block expression
+                return info;
+            } else if let Expression::Match(match_expr) = &self.body
+                && let Some(match_scrutinee_len) = match_expr.scrutinee.single_line_width(printer)
+                && const { "match () {".len() } + match_scrutinee_len <= line_len_remaining
+            {
+                // Match expressions also may go directly on the same line if
+                // `match (...) {` fits. The arms can be multi-line.
+                let match_shape = Shape {
+                    width: line_len_remaining,
+                    indent: shape.indent,
+                    first_line_offset: printer
+                        .config
+                        .line_width
+                        .saturating_sub(shape.indent + line_len_remaining),
+                };
+                let info = match_expr.print(match_shape, printer);
+                printer.print_str(",");
+                return info;
+            }
+
+            // try and print the body single-line
+            let mut try_body = printer.sub_printer();
+            let try_body_info = self
+                .body
+                .print(Shape::unlimited_single_line(), &mut try_body);
+
+            if try_body_info.multi_lined || try_body.len() > line_len_remaining {
+                // create a block expression around it
                 printer.print_str("{");
                 printer.print_newline();
                 print_wrapped_arm_body(printer, &self.body, shape.indent);
                 printer.print_newline();
                 printer.print_spaces(shape.indent);
                 printer.print_str("},");
+                PrintInfo::default_multi_lined()
+            } else {
+                printer.append_from_printer(try_body);
+                printer.print_str(",");
+                PrintInfo::default_single_line()
             }
-            return PrintInfo::default_multi_lined();
-        }
-
-        // condition is single line, see if we can fit the body with it
-        // TODO: if the body is a block with only a tail expression, we might be able to un-nest it
-
-        printer.print_spaces(1);
-        let line_len_remaining = printer.current_line_remaining_width();
-        if let Expression::Block(block) = &self.body {
-            // If it is a block expression, we print it directly in front of the ` => `.
-            // Since the condition was single-line, the preceding line had no extra indent
-            // so we don't need to put the `{` on a new line.
-            let body_shape = Shape {
-                width: line_len_remaining,
-                indent: shape.indent,
-                first_line_offset: printer
-                    .config
-                    .line_width
-                    .saturating_sub(shape.indent + line_len_remaining),
-            };
-            let info = printer.print(block, body_shape);
-            printer.print_str(",");
-            return info;
-        } else if let Expression::Match(match_expr) = &self.body
-            && let Some(match_scrutinee_len) = match_expr.scrutinee.single_line_width(printer)
-            && const { "match () {".len() } + match_scrutinee_len <= line_len_remaining
-        {
-            // Match expressions also may go directly on the same line if
-            // `match (...) {` fits. The arms can be multi-line.
-            let match_shape = Shape {
-                width: line_len_remaining,
-                indent: shape.indent,
-                first_line_offset: printer
-                    .config
-                    .line_width
-                    .saturating_sub(shape.indent + line_len_remaining),
-            };
-            let info = match_expr.print(match_shape, printer);
-            printer.print_str(",");
-            return info;
-        }
-
-        // try and print the body single-line
-        let mut try_body = printer.sub_printer();
-        let try_body_info = self
-            .body
-            .print(Shape::unlimited_single_line(), &mut try_body);
-
-        if try_body_info.multi_lined || try_body.len() > line_len_remaining {
-            // create a block expression around it
-            printer.print_str("{");
-            printer.print_newline();
-            print_wrapped_arm_body(printer, &self.body, shape.indent);
-            printer.print_newline();
-            printer.print_spaces(shape.indent);
-            printer.print_str("},");
-            PrintInfo::default_multi_lined()
-        } else {
-            printer.append_from_printer(try_body);
-            printer.print_str(",");
-            PrintInfo::default_single_line()
-        }
+        })
     }
     fn leftmost_token(&self) -> TextRange {
         self.pattern.leftmost_token()
@@ -2593,51 +2648,53 @@ impl KnownKind for CatchArm {
 
 impl Printable for CatchArm {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer.print(&self.pattern, shape.clone());
-        printer.print_str(" ");
-        printer.print_raw_token(&self.fat_arrow);
-        printer.print_str(" ");
+        printer.with_line_separated(true, |printer| {
+            printer.print(&self.pattern, shape.clone());
+            printer.print_str(" ");
+            printer.print_raw_token(&self.fat_arrow);
+            printer.print_str(" ");
 
-        let line_len_remaining = printer.current_line_remaining_width();
-        if let Expression::Block(block) = &self.body {
-            let body_shape = Shape {
-                width: line_len_remaining,
-                indent: shape.indent,
-                first_line_offset: printer
-                    .config
-                    .line_width
-                    .saturating_sub(shape.indent + line_len_remaining),
-            };
-            let info = printer.print(block, body_shape);
-            if self.comma.is_some() {
-                printer.print_str(",");
+            let line_len_remaining = printer.current_line_remaining_width();
+            if let Expression::Block(block) = &self.body {
+                let body_shape = Shape {
+                    width: line_len_remaining,
+                    indent: shape.indent,
+                    first_line_offset: printer
+                        .config
+                        .line_width
+                        .saturating_sub(shape.indent + line_len_remaining),
+                };
+                let info = printer.print(block, body_shape);
+                if self.comma.is_some() {
+                    printer.print_str(",");
+                }
+                return info;
             }
-            return info;
-        }
 
-        let mut try_body = printer.sub_printer();
-        let try_body_info = self
-            .body
-            .print(Shape::unlimited_single_line(), &mut try_body);
+            let mut try_body = printer.sub_printer();
+            let try_body_info = self
+                .body
+                .print(Shape::unlimited_single_line(), &mut try_body);
 
-        if try_body_info.multi_lined || try_body.len() > line_len_remaining {
-            printer.print_str("{");
-            printer.print_newline();
-            print_wrapped_arm_body(printer, &self.body, shape.indent);
-            printer.print_newline();
-            printer.print_spaces(shape.indent);
-            printer.print_str("}");
-            if self.comma.is_some() {
-                printer.print_str(",");
+            if try_body_info.multi_lined || try_body.len() > line_len_remaining {
+                printer.print_str("{");
+                printer.print_newline();
+                print_wrapped_arm_body(printer, &self.body, shape.indent);
+                printer.print_newline();
+                printer.print_spaces(shape.indent);
+                printer.print_str("}");
+                if self.comma.is_some() {
+                    printer.print_str(",");
+                }
+                PrintInfo::default_multi_lined()
+            } else {
+                printer.append_from_printer(try_body);
+                if self.comma.is_some() {
+                    printer.print_str(",");
+                }
+                PrintInfo::default_single_line()
             }
-            PrintInfo::default_multi_lined()
-        } else {
-            printer.append_from_printer(try_body);
-            if self.comma.is_some() {
-                printer.print_str(",");
-            }
-            PrintInfo::default_single_line()
-        }
+        })
     }
 
     fn leftmost_token(&self) -> TextRange {
@@ -3119,10 +3176,12 @@ impl CallArgs {
 
 impl Printable for CallArgs {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer
-            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
-            .or_else(|| printer.try_sub_printer(|p| self.try_print_hug(&shape, p)))
-            .unwrap_or_else(|| self.print_multi_line(shape, printer))
+        printer.with_line_separated(false, |printer| {
+            printer
+                .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+                .or_else(|| printer.try_sub_printer(|p| self.try_print_hug(&shape, p)))
+                .unwrap_or_else(|| self.print_multi_line(shape, printer))
+        })
     }
     fn leftmost_token(&self) -> TextRange {
         self.open_paren.span()
@@ -3212,9 +3271,11 @@ impl PrintMultiLine for IndexArgs<'_> {
 
 impl Printable for IndexArgs<'_> {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer
-            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
-            .unwrap_or_else(|| self.print_multi_line(shape, printer))
+        printer.with_line_separated(false, |printer| {
+            printer
+                .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+                .unwrap_or_else(|| self.print_multi_line(shape, printer))
+        })
     }
     fn leftmost_token(&self) -> TextRange {
         self.open_bracket.span()
@@ -3726,56 +3787,63 @@ impl KnownKind for BlockExpr {
 
 impl Printable for BlockExpr {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        if self.stmts.is_empty()
-            && self.expr.is_none()
-            && printer.try_print_empty_braces(&self.open_brace, &self.close_brace)
-        {
-            return PrintInfo::default_single_line();
-        }
+        printer.with_line_separated(true, |printer| {
+            if self.stmts.is_empty()
+                && self.expr.is_none()
+                && printer.try_print_empty_braces(&self.open_brace, &self.close_brace)
+            {
+                return PrintInfo::default_single_line();
+            }
 
-        printer.print_raw_token(&self.open_brace);
-        printer.print_trivia_all_trailing_for(self.open_brace.span());
-        printer.print_newline();
-
-        // body statements
-        let inner_indent = shape.indent + printer.config.indent_width;
-        if let Some((first, rest)) = self.stmts.split_first() {
-            let (first_leading, first_trailing) = printer.trivia.get_for_element(first);
-            printer.print_trivia_with_newline(first_leading.trim_leading_blanks(), inner_indent);
-            printer.print_spaces(inner_indent);
-            let inner_shape = Shape::standalone(printer.config.line_width, inner_indent);
-            printer.print(first, inner_shape);
-            printer.print_trivia_trailing(first_trailing);
+            printer.print_raw_token(&self.open_brace);
+            printer.print_trivia_all_trailing_for(self.open_brace.span());
             printer.print_newline();
 
-            for stmt in rest {
-                printer.print_standalone_with_trivia(stmt, inner_indent);
+            // body statements
+            let inner_indent = shape.indent + printer.config.indent_width;
+            if let Some((first, rest)) = self.stmts.split_first() {
+                let (first_leading, first_trailing) = printer.trivia.get_for_element(first);
+                printer
+                    .print_trivia_with_newline(first_leading.trim_leading_blanks(), inner_indent);
+                printer.print_spaces(inner_indent);
+                let inner_shape = Shape::standalone(printer.config.line_width, inner_indent);
+                printer.print(first, inner_shape);
+                printer.print_trivia_trailing(first_trailing);
+                printer.print_newline();
+
+                for stmt in rest {
+                    printer.print_standalone_with_trivia(stmt, inner_indent);
+                    printer.print_newline();
+                }
+            }
+
+            // tail expression
+            if let Some(expr) = self.expr.as_deref() {
+                let (expr_leading, expr_trailing) = printer.trivia.get_for_element(expr);
+                let expr_leading = if self.stmts.is_empty() {
+                    expr_leading.trim_leading_blanks()
+                } else {
+                    expr_leading
+                };
+                printer.print_trivia_with_newline(expr_leading, inner_indent);
+                printer.print_spaces(inner_indent);
+                let inner_shape = Shape::standalone(printer.config.line_width, inner_indent);
+                printer.print(expr, inner_shape);
+                printer.print_trivia_trailing(expr_trailing);
                 printer.print_newline();
             }
-        }
 
-        // tail expression
-        if let Some(expr) = self.expr.as_deref() {
-            let (expr_leading, expr_trailing) = printer.trivia.get_for_element(expr);
-            let expr_leading = if self.stmts.is_empty() {
-                expr_leading.trim_leading_blanks()
-            } else {
-                expr_leading
-            };
-            printer.print_trivia_with_newline(expr_leading, inner_indent);
-            printer.print_spaces(inner_indent);
-            let inner_shape = Shape::standalone(printer.config.line_width, inner_indent);
-            printer.print(expr, inner_shape);
-            printer.print_trivia_trailing(expr_trailing);
-            printer.print_newline();
-        }
+            let (close_brace_leading, _) =
+                printer.trivia.get_for_range_split(self.close_brace.span());
+            printer.print_trivia_with_newline(
+                close_brace_leading.trim_trailing_blanks(),
+                inner_indent,
+            );
+            printer.print_spaces(shape.indent);
+            printer.print_raw_token(&self.close_brace);
 
-        let (close_brace_leading, _) = printer.trivia.get_for_range_split(self.close_brace.span());
-        printer.print_trivia_with_newline(close_brace_leading.trim_trailing_blanks(), inner_indent);
-        printer.print_spaces(shape.indent);
-        printer.print_raw_token(&self.close_brace);
-
-        PrintInfo { multi_lined: true }
+            PrintInfo { multi_lined: true }
+        })
     }
     fn leftmost_token(&self) -> TextRange {
         self.open_brace.span()
@@ -3983,9 +4051,11 @@ impl ArrayInitializer {
 
 impl Printable for ArrayInitializer {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer
-            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
-            .unwrap_or_else(|| self.print_multi_line(shape, printer))
+        printer.with_line_separated(false, |printer| {
+            printer
+                .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+                .unwrap_or_else(|| self.print_multi_line(shape, printer))
+        })
     }
     fn leftmost_token(&self) -> TextRange {
         self.open_bracket.span()
@@ -4232,9 +4302,11 @@ impl ObjectInitializer {
 
 impl Printable for ObjectInitializer {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer
-            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
-            .unwrap_or_else(|| self.print_multi_line(shape, printer))
+        printer.with_line_separated(false, |printer| {
+            printer
+                .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+                .unwrap_or_else(|| self.print_multi_line(shape, printer))
+        })
     }
     fn leftmost_token(&self) -> TextRange {
         self.name.leftmost_token()
@@ -4524,9 +4596,11 @@ impl MapLiteral {
 
 impl Printable for MapLiteral {
     fn print(&self, shape: Shape, printer: &mut Printer) -> PrintInfo {
-        printer
-            .try_sub_printer(|p| self.try_print_single_line(&shape, p))
-            .unwrap_or_else(|| self.print_multi_line(shape, printer))
+        printer.with_line_separated(false, |printer| {
+            printer
+                .try_sub_printer(|p| self.try_print_single_line(&shape, p))
+                .unwrap_or_else(|| self.print_multi_line(shape, printer))
+        })
     }
     fn leftmost_token(&self) -> TextRange {
         self.prefix

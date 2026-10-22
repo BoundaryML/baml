@@ -9,6 +9,13 @@ pub struct Printer<'a> {
     pub output: String,
     pub trivia: &'a TriviaInfo,
     pub warnings: Vec<PrinterWarning>,
+    /// Whether the code being printed sits where line breaks separate items
+    /// (block statements, `match`/`catch` arms, the top level) rather than
+    /// inside `( … )`, `[ … ]` or a literal's `{ … }`. There, the parser ends
+    /// an expression at a line break before a token that can start one, so
+    /// a line must not begin with a binary `-`. Managed by
+    /// [`Self::with_line_separated`].
+    pub line_separated: bool,
 }
 impl<'a> Printer<'a> {
     #[inline]
@@ -20,7 +27,20 @@ impl<'a> Printer<'a> {
             output: String::new(),
             trivia,
             warnings: Vec::new(),
+            line_separated: true,
         }
+    }
+
+    /// Runs `f` with [`Self::line_separated`] set to `line_separated`.
+    pub fn with_line_separated<R>(
+        &mut self,
+        line_separated: bool,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let saved = std::mem::replace(&mut self.line_separated, line_separated);
+        let result = f(self);
+        self.line_separated = saved;
+        result
     }
 
     /// Prints some number of spaces. Useful for indentation.
@@ -368,7 +388,10 @@ impl<'a> Printer<'a> {
     where
         'a: 's,
     {
-        Printer::new_empty(self.input, self.config, self.trivia)
+        Printer {
+            line_separated: self.line_separated,
+            ..Printer::new_empty(self.input, self.config, self.trivia)
+        }
     }
 
     /// Runs the function on a sub-printer  (a copy of the current printer but with an empty output).
@@ -396,7 +419,7 @@ impl<'a> Printer<'a> {
         &self,
         f: impl FnOnce(&mut Printer<'a>) -> Option<PrintInfo>,
     ) -> Option<(Printer<'a>, PrintInfo)> {
-        let mut sub_printer = Printer::new_empty(self.input, self.config, self.trivia);
+        let mut sub_printer = self.sub_printer();
         f(&mut sub_printer).map(|info| (sub_printer, info))
     }
 

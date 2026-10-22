@@ -72,32 +72,36 @@ function let_mixed_semicolons() -> int {
   return a + b + c + d
 }
 
-// Edge case: call followed by parens on next line - parses as foo()(1) (chained call)
+// Edge case: call followed by parens on next line - the line break ends the
+// expression, so this is `foo()`, then `(1)`, not the chained call `foo()(1)`
 function edge_call_then_parens(foo: () -> ((int) -> int throws never)) -> int {
   foo()
   (1)
   2
 }
 
-// Edge case: call followed by bracket on next line - parses as foo()[0] (index into result)
+// Edge case: call followed by bracket on next line - `foo()`, then the array
+// literal `[0]`, not an index into the result
 function edge_call_then_index(foo: () -> int[]) -> int {
   foo()
   [0]
   1
 }
 
-// Edge case: identifier followed by object literal - parses as EdgeFoo{x:1} (constructor)
+// Edge case: constructor name and object literal on separate lines - inside
+// parentheses line breaks are whitespace, so this is `EdgeFoo {x: 1}`
 class EdgeFoo {
   x: int,
 }
 
 function edge_type_then_object() -> int {
-  EdgeFoo
-  {x: 1}.x
+  (EdgeFoo
+  {x: 1}).x
 }
 
-// Edge case: let with function call, then index on next line - parses as bar()[0]
-function edge_let_call_then_index(bar: () -> int[]) -> int {
+// Edge case: let with function call, then index on next line - `let x = bar()`,
+// then the array literal `[0]`
+function edge_let_call_then_index(bar: () -> int[]) -> int[] {
   let x = bar()
   [0]
   x

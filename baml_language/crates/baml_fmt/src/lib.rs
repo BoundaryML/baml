@@ -1200,6 +1200,146 @@ mod backtick_format_tests {
 }
 
 #[cfg(test)]
+mod minus_chain_format_tests {
+    use super::*;
+
+    /// Where line breaks separate statements, a line starting with `-` begins
+    /// a new one, so a multi-line chain containing `-` is wrapped in
+    /// parentheses, where line breaks are whitespace. Inside call arguments
+    /// it needs no parentheses; a block nested there needs them again. Chains
+    /// without `-` are unchanged, and `<` stays leading because the parser
+    /// reads it as a continuation.
+    #[test]
+    fn chains_with_minus_are_parenthesized_where_lines_separate_statements() {
+        let source = "function f(c: bool, aaaaaaaaaaaaaaaaaaaa: int, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: int) -> bool {
+    let v = if (c) { let t = aaaaaaaaaaaaaaaaaaaa; t } else { bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb } - aaaaaaaaaaaaaaaaaaaa
+    let w = aaaaaaaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa * bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    let y = aaaaaaaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb + aaaaaaaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    let z = g(aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb)
+    let l = g((x: int) -> int { aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb })
+    let e = aaaaaaaaaaaaaaaaaaaa == bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa
+    if (c) { let t = aaaaaaaaaaaaaaaaaaaa; t } else { bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb } < v + w + y + z
+}
+";
+        let expected = "function f(c: bool, aaaaaaaaaaaaaaaaaaaa: int, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: int) -> bool {
+    let v = (
+        if (c) {
+            let t = aaaaaaaaaaaaaaaaaaaa;
+            t
+        } else {
+            bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+        }
+            - aaaaaaaaaaaaaaaaaaaa
+    );
+    let w = (
+        aaaaaaaaaaaaaaaaaaaa
+            + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            - aaaaaaaaaaaaaaaaaaaa * bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    );
+    let y = aaaaaaaaaaaaaaaaaaaa
+        + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+        + aaaaaaaaaaaaaaaaaaaa
+        + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;
+    let z = g(
+        aaaaaaaaaaaaaaaaaaaa
+            - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            - aaaaaaaaaaaaaaaaaaaa
+            - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,
+    );
+    let l = g((x: int) -> int {
+        (
+            aaaaaaaaaaaaaaaaaaaa
+                - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+                - aaaaaaaaaaaaaaaaaaaa
+                - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+        )
+    });
+    let e = aaaaaaaaaaaaaaaaaaaa
+        == (
+            bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+                - aaaaaaaaaaaaaaaaaaaa
+                - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+                - aaaaaaaaaaaaaaaaaaaa
+        );
+    if (c) {
+        let t = aaaaaaaaaaaaaaaaaaaa;
+        t
+    } else {
+        bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    }
+        < v + w + y + z
+}
+";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, expected);
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// The parentheses the formatter adds around an unparenthesized `if`
+    /// condition print like a real `PAREN_EXPR`, so a wide condition gets one
+    /// pair (not `if ((…))` around a `-` chain) and reformats to itself.
+    #[test]
+    fn unparenthesized_if_condition_gets_one_pair_of_parens() {
+        let source = "function f(aaaaaaaaaaaaaaaaaaaa: int, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: int) -> int {
+    if aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb > 0 { 1 } else { 2 }
+    if aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa { 1 } else { 2 }
+    if aaaaaaaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb + aaaaaaaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb > 0 { 1 } else { 2 }
+    if aaaaaaaaaaaaaaaaaaaa > 0 { 1 } else { 2 }
+}
+";
+        let expected =
+            "function f(aaaaaaaaaaaaaaaaaaaa: int, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: int) -> int {
+    if (
+        aaaaaaaaaaaaaaaaaaaa
+            - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            - aaaaaaaaaaaaaaaaaaaa
+            - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            > 0
+    ) {
+        1
+    } else {
+        2
+    }
+    if (
+        aaaaaaaaaaaaaaaaaaaa
+            - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            - aaaaaaaaaaaaaaaaaaaa
+            - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            - aaaaaaaaaaaaaaaaaaaa
+    ) {
+        1
+    } else {
+        2
+    }
+    if (
+        aaaaaaaaaaaaaaaaaaaa
+            + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            + aaaaaaaaaaaaaaaaaaaa
+            + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            > 0
+    ) {
+        1
+    } else {
+        2
+    }
+    if (aaaaaaaaaaaaaaaaaaaa > 0) {
+        1
+    } else {
+        2
+    }
+}
+";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, expected);
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+}
+
+#[cfg(test)]
 mod linear_formatter_regression_tests {
     use super::*;
 

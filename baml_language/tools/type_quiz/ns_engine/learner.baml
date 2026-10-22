@@ -652,9 +652,11 @@ function knobs_fault(knobs: Knobs) -> string? throws never {
 
 /// The lowest strength we would bet on for `skill`.
 function floor_of(profile: Profile, knobs: Knobs, skill: Skill) -> float throws never {
-    profile.ability
-        + skill.offset
-        - rule_z(profile, knobs) * baml.Float.sqrt(profile.variance + skill.variance)
+    (
+        profile.ability
+            + skill.offset
+            - rule_z(profile, knobs) * baml.Float.sqrt(profile.variance + skill.variance)
+    )
 }
 
 /// The highest order at which we would bet on the learner for `skill`, among
