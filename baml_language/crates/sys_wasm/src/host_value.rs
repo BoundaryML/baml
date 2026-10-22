@@ -794,6 +794,7 @@ impl WasmHost {
 }
 
 impl io::IoNamespaceHost for WasmHost {
+    /// Dispatch a host callback; the engine checks its result through the shared inbound boundary.
     fn call_host_value(
         &self,
         _heap: &Arc<BexHeap>,
