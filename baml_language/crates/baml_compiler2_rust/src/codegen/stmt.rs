@@ -258,8 +258,10 @@ impl<'db> Generator<'_, 'db> {
                         ));
                     };
                     let result = self.value_operand(id, result)?;
-                    let code =
-                        self.fallible(id, &format!("vm.finish_trace_hook(depth, {result})"))?;
+                    let code = self.fallible(
+                        id,
+                        &format!("vm.compiled_finish_trace_hook(depth, {result})"),
+                    )?;
                     self.emit_statement(&format!("{code};"));
                 }
                 IntrinsicOp::BindType(_) | IntrinsicOp::Log(_) => {

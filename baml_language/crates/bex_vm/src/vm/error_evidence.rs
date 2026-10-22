@@ -213,17 +213,6 @@ impl BexVm {
         }
     }
 
-    fn compiled_raise_kind(&self, thrown: &VmThrown) -> RaiseKind {
-        if thrown.throw_kind == ThrowKind::Rethrow {
-            return RaiseKind::Rethrow;
-        }
-        if self.is_panic(thrown.value) {
-            RaiseKind::Runtime
-        } else {
-            RaiseKind::Throw
-        }
-    }
-
     /// The raise a rethrow continues, found by the `baml.errors.Context` it
     /// carries: the landing whose context slot, in a live frame, still holds
     /// that object. `None` when the unwinder did not carry a context, which

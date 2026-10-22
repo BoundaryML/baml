@@ -1,4 +1,9 @@
-use crate::vm::*;
+use btel_records::RaiseKind;
+
+use crate::{
+    errors::ThrowKind,
+    vm::{error_evidence::UnwindEvidence, *},
+};
 
 /// Compiled entry points for one program.
 pub struct CompiledBodyTable {
@@ -489,3 +494,122 @@ impl BexVm {
         );
     }
 }
+
+// Call-site type arguments follow those carried by the callee.
+pub(in crate::vm) fn append_passed_type_args(
+    frame: &mut BytecodeFrame,
+    type_args: &[bex_vm_types::RealizedTy],
+    type_values: &[Option<TypeValue>],
+) {
+    let initial_type_arg_count = frame.type_args.len();
+    frame.type_args.extend_from_slice(type_args);
+    if !type_values.is_empty() {
+        let metadata = frame
+            .type_metadata
+            .get_or_insert_with(|| Box::new(FrameTypeMetadata::default()));
+        metadata.values.resize(initial_type_arg_count, None);
+        metadata
+            .values
+            .extend((0..type_args.len()).map(|slot| type_values.get(slot).cloned().flatten()));
+    }
+}
+
+impl BexVm {
+    pub(in crate::vm) fn compiled_raise_kind(&self, thrown: &VmThrown) -> RaiseKind {
+        if thrown.throw_kind == ThrowKind::Rethrow {
+            return RaiseKind::Rethrow;
+        }
+        if self.is_panic(thrown.value) {
+            RaiseKind::Runtime
+        } else {
+            RaiseKind::Throw
+        }
+    }
+}
+
+pub(in crate::vm) fn validate_compiled_program(
+    program: &bex_vm_types::Program,
+    compiled_bodies: Option<CompiledBodies>,
+) -> Result<Vec<Option<String>>, VmInternalError> {
+    if let Some(bodies) = compiled_bodies
+        && bodies.table.fingerprint != bodies.artifact_fingerprint
+    {
+        return Err(VmInternalError::CompiledBody {
+            message: "compiled bodies were compiled from another program: fingerprint mismatch"
+                .into(),
+        });
+    }
+    // Function names as the loader renders them; pooled functions have no owner yet.
+    let body_names: Vec<Option<String>> = compiled_bodies.map_or_else(Vec::new, |bodies| {
+        bodies
+            .table
+            .entries
+            .iter()
+            .map(|entry| {
+                let index = entry.object as usize;
+                (index < program.objects.len())
+                    .then(|| program.function_name(bex_vm_types::ObjectIndex::from_raw(index)))
+                    .flatten()
+            })
+            .collect()
+    });
+    Ok(body_names)
+}
+
+impl BexVm {
+    pub(in crate::vm) fn unwind_suspended_compiled(
+        &mut self,
+        depth: usize,
+        frame_locals_offset: StackIndex,
+        exception_value: Value,
+        context: &InFlightContext,
+        evidence: &mut Option<UnwindEvidence>,
+    ) -> Result<&'static Function, VmError> {
+        // SAFETY: see `load_function`.
+        let frame_function = unsafe { self.load_function(depth)? };
+        let (slots, stub) = frame_function
+            .compiled_body
+            .zip(crate::compiled_rt::stub_start(frame_function))
+            .map(|(body, stub)| (body.slots() as usize, stub))
+            .expect("a suspended compiled frame has a compiled body");
+        // A recoverable hook failure answers the hook call with null,
+        // so the body lands at its decision boundary as bytecode does
+        // below. Task cancellation keeps unwinding normally.
+        if self
+            .pending_trace_hooks
+            .last()
+            .is_some_and(|hook| hook.frame == depth && hook.evaluating)
+            && !self.as_instance(&exception_value).is_ok_and(|instance| {
+                instance.class == self.panic_class_ptrs[PanicClass::Cancelled as usize]
+            })
+        {
+            self.stack.truncate(frame_locals_offset.raw() + slots);
+            self.stack.push(Value::NULL);
+            if let Some(evidence) = evidence.take() {
+                self.error_hook_fallback(evidence);
+            }
+            self.restore_caller_context(depth);
+            return Ok(frame_function);
+        }
+        let context = match context {
+            InFlightContext::Carried(context) => *context,
+            InFlightContext::Fresh { trace, cause } => {
+                self.alloc_error_context(exception_value, trace, *cause)
+            }
+        };
+        self.compiled.delivery = Some(Box::new(VmError::Thrown(VmThrown::rethrow(
+            exception_value,
+            context,
+        ))));
+        if let Frame::Bytecode(frame) = &mut self.frames[depth] {
+            frame.instruction_ptr = stub + crate::compiled_rt::stub::AFTER_CALL;
+        }
+        self.stack.truncate(frame_locals_offset.raw() + slots);
+        let _ = evidence.take();
+        // SAFETY: see `load_function`.
+        unsafe { self.load_function(depth) }.map_err(Into::into)
+    }
+}
+
+#[cfg(all(target_pointer_width = "64", not(feature = "heap_debug")))]
+const _: () = assert!(std::mem::size_of::<BytecodeFrame>() == 112);

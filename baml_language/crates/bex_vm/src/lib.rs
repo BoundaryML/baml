@@ -48,5 +48,5 @@ pub use vm::compiled_rt;
 pub use vm::{
     BexVm, BytecodeFrame, BytecodeProgram, Frame, VmEventSourceLocation, VmExecState,
     compiled_rt::{CompiledBodies, CompiledBodyTable},
-    convert_program, convert_program_with_compiled_bodies, prepare_compact_code,
+    convert_program, prepare_compact_code,
 };

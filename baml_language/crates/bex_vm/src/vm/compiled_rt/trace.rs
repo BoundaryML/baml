@@ -8,9 +8,8 @@
 //! entry points, which do what the corresponding opcodes do.
 //!
 //! A pending hook exists only when the VM's call path entered the frame; a
-//! compiled caller that runs a compiled callee in place does so with
-//! telemetry off, where bytecode's prologue has been disabled as well. Each
-//! entry point therefore acts only on the frame's own pending hook.
+//! compiled caller can also run an unhooked callee in place with telemetry on.
+//! Each entry point therefore acts only on the frame's own pending hook.
 
 use bex_vm_types::Value;
 use btel_types::InvocationMode;
@@ -98,7 +97,7 @@ impl BexVm {
     /// does: the hook's settings (or `true` when it takes none), or null when
     /// the hook is not to run.
     #[inline]
-    pub fn begin_trace_hook(
+    pub fn compiled_begin_trace_hook(
         &mut self,
         depth: usize,
         with_settings: bool,
@@ -116,7 +115,7 @@ impl BexVm {
         depth: usize,
         with_settings: bool,
     ) -> Result<Value, Box<VmError>> {
-        self.begin_trace_hook_in(depth - 1, with_settings)
+        self.begin_trace_hook(depth - 1, with_settings)
             .map_err(Box::new)
     }
 
@@ -124,8 +123,11 @@ impl BexVm {
     /// `EndTraceHook` does.
     #[cold]
     #[inline(never)]
-    pub fn finish_trace_hook(&mut self, depth: usize, result: Value) -> Result<(), Box<VmError>> {
-        self.finish_trace_hook_in(depth - 1, result)
-            .map_err(Box::new)
+    pub fn compiled_finish_trace_hook(
+        &mut self,
+        depth: usize,
+        result: Value,
+    ) -> Result<(), Box<VmError>> {
+        self.finish_trace_hook(depth - 1, result).map_err(Box::new)
     }
 }

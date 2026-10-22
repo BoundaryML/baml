@@ -4772,7 +4772,7 @@ impl BexEngine {
         if i_am_checking {
             let checking = GcCheckGuard(&self.checking_gc);
             // We won the CAS, so we own the GC check.
-            if let Some(level) = self.collection_due() {
+            if let Some(level) = bex_vm::compiled_rt::collection_due(&self.heap) {
                 let inactive = permit.release();
                 self.collect_garbage_with_reason(level, "automatic").await;
                 permit = inactive.acquire().await;
@@ -4787,15 +4787,6 @@ impl BexEngine {
         }
     }
 
-    /// The heap's own heuristic, or a major collection at every safepoint under
-    /// `BAML_GC_STRESS=1`.
-    fn collection_due(&self) -> Option<bex_heap::CollectionLevel> {
-        if bex_vm::compiled_rt::gc_stress() {
-            return Some(bex_heap::CollectionLevel::Major);
-        }
-        self.heap.should_collect()
-    }
-
     /// Heuristic-driven GC check that does **not** require the caller to
     /// hold an active heap permit. Use this when the caller is already in a
     /// permit-released state (e.g., the engine's `Await` branch waiting on
@@ -4808,7 +4799,7 @@ impl BexEngine {
             .is_ok();
         if i_am_checking {
             let _checking = GcCheckGuard(&self.checking_gc);
-            if let Some(level) = self.collection_due() {
+            if let Some(level) = bex_vm::compiled_rt::collection_due(&self.heap) {
                 self.collect_garbage_with_reason(level, "automatic").await;
             }
         }

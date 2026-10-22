@@ -144,7 +144,7 @@ impl<'db> Generator<'_, 'db> {
             // VM's call path (see `analysis::hook_call`).
             Rvalue::TraceHookSettings { with_settings } => self.fallible_expr(
                 block,
-                &format!("vm.begin_trace_hook(depth, {with_settings})"),
+                &format!("vm.compiled_begin_trace_hook(depth, {with_settings})"),
                 Repr::Value,
             ),
             Rvalue::SatisfiesBound { ty, bound } => {

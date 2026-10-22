@@ -21,7 +21,7 @@ use btel_types::context::{Context, ContextPatch};
 use smallvec::SmallVec;
 
 use crate::{
-    compiled_rt::{CompiledBodies, Step},
+    compiled_rt::{CompiledBodies, Step, append_passed_type_args},
     telemetry::{
         CallTypeArgs, ClockDuration, ClockInstant, FrameTelemetry, InvocationOutcome,
         TelemetryState,
@@ -205,27 +205,8 @@ fn append_virtual_method_type_args(
     values
 }
 
-// Call-site type arguments follow those carried by the callee.
-fn append_passed_type_args(
-    frame: &mut BytecodeFrame,
-    type_args: &[bex_vm_types::RealizedTy],
-    type_values: &[Option<TypeValue>],
-) {
-    let initial_type_arg_count = frame.type_args.len();
-    frame.type_args.extend_from_slice(type_args);
-    if !type_values.is_empty() {
-        let metadata = frame
-            .type_metadata
-            .get_or_insert_with(|| Box::new(FrameTypeMetadata::default()));
-        metadata.values.resize(initial_type_arg_count, None);
-        metadata
-            .values
-            .extend((0..type_args.len()).map(|slot| type_values.get(slot).cloned().flatten()));
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(crate) struct StaticVirtualCallKey {
+struct StaticVirtualCallKey {
     caller_function_addr: usize,
     call_pc: usize,
     receiver: StaticVirtualReceiverKey,
@@ -243,7 +224,7 @@ pub(crate) struct StaticVirtualCallKey {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(crate) enum StaticVirtualReceiverKey {
+enum StaticVirtualReceiverKey {
     /// Static program classes have immutable, program-unique tags. Generic
     /// arguments remain part of identity; the overwhelmingly common
     /// non-generic case clones an empty box without allocating.
@@ -257,7 +238,7 @@ pub(crate) enum StaticVirtualReceiverKey {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct StaticVirtualCallTarget {
+struct StaticVirtualCallTarget {
     callee: HeapPtr,
     frame_type_args: Vec<bex_vm_types::RealizedTy>,
 }
@@ -298,23 +279,12 @@ pub struct BytecodeFrame {
     context: Context,
 }
 
-#[cfg(all(target_pointer_width = "64", not(feature = "heap_debug")))]
-const _: () = assert!(std::mem::size_of::<BytecodeFrame>() == 112);
-
-/// A type-value site, with disjoint bytecode and compiled namespaces.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum TypeValueSite {
-    Constant(usize),
-    Compiled(usize),
-}
-
 struct ManualActivation {
     frame: usize,
     telemetry: Option<crate::telemetry::manual::ManualScope>,
     context: Context,
 }
 
-/// Owned tracing configuration contains no GC heap pointers.
 #[derive(Clone, Default)]
 pub(crate) struct CallTrace {
     pub(crate) telemetry: crate::telemetry::TraceConfig,
@@ -1781,7 +1751,7 @@ pub struct BexVm {
     /// constants in static functions. The compact numeric key keeps the
     /// per-iteration lookup cheaper than re-hashing the full realized type.
     /// Entries are explicit VM GC roots.
-    static_load_type_cache: HashMap<(usize, TypeValueSite), HeapPtr>,
+    static_load_type_cache: HashMap<(usize, usize), HeapPtr>,
     /// Monomorphic static virtual-call results keyed by caller site and the
     /// receiver/interface instantiation observed there. Only immutable
     /// program-image rules enter this cache, so runtime package loading and
@@ -1966,29 +1936,8 @@ pub fn convert_program_with_compiled_bodies(
     // checked against the format's laws here, and everything after — the
     // rendered views, the loader — indexes into a program that keeps them.
     program.validate()?;
-    if let Some(bodies) = compiled_bodies
-        && bodies.table.fingerprint != bodies.artifact_fingerprint
-    {
-        return Err(VmInternalError::CompiledBody {
-            message: "compiled bodies were compiled from another program: fingerprint mismatch"
-                .into(),
-        });
-    }
+    let body_names = compiled_rt::validate_compiled_program(&program, compiled_bodies)?;
     let callables = program.rendered_callables();
-    // Function names as the loader renders them; pooled functions have no owner yet.
-    let body_names: Vec<Option<String>> = compiled_bodies.map_or_else(Vec::new, |bodies| {
-        bodies
-            .table
-            .entries
-            .iter()
-            .map(|entry| {
-                let index = entry.object as usize;
-                (index < program.objects.len())
-                    .then(|| program.function_name(ObjectIndex::from_raw(index)))
-                    .flatten()
-            })
-            .collect()
-    });
     // Convert objects, attaching native functions
     let mut objects: Vec<Object> = program
         .objects
@@ -2669,9 +2618,9 @@ impl BexVm {
         self.inherited_hook_suppression = suppressed;
     }
 
-    fn begin_trace_hook_in(&mut self, frame: usize, with_settings: bool) -> Result<Value, VmError> {
+    fn begin_trace_hook(&mut self, frame: usize, with_settings: bool) -> Result<Value, VmError> {
         if self.telemetry.is_none() || self.hooks_suppressed() {
-            self.finish_trace_hook_in(frame, Value::NULL)?;
+            self.finish_trace_hook(frame, Value::NULL)?;
             return Ok(Value::NULL);
         }
         let pending = self.pending_trace_hooks.last_mut().expect("hooked entry");
@@ -2693,7 +2642,7 @@ impl BexVm {
         Ok(crate::package_trace::alloc_settings(self, &options))
     }
 
-    fn finish_trace_hook_in(&mut self, frame_idx: usize, result: Value) -> Result<(), VmError> {
+    fn finish_trace_hook(&mut self, frame_idx: usize, result: Value) -> Result<(), VmError> {
         let returned = if result.is_null() {
             None
         } else {
@@ -4618,7 +4567,7 @@ impl BexVm {
         frame_idx: usize,
         template: &bex_vm_types::TyTemplate,
         constant: usize,
-    ) -> Option<(usize, TypeValueSite)> {
+    ) -> Option<(usize, usize)> {
         if <&bex_vm_types::RealizedTy>::try_from(template).is_err()
             || !matches!(&self.frames[frame_idx],
                 Frame::Bytecode(frame)
@@ -4629,7 +4578,7 @@ impl BexVm {
         }
         Some((
             self.runtime_cache_function_addr(self.frames[frame_idx].function())?,
-            TypeValueSite::Constant(constant),
+            constant,
         ))
     }
 
@@ -6595,52 +6544,14 @@ impl BexVm {
             let compiled = self.compiled_at(depth);
             // Suspended bodies receive errors through the resume stub.
             if compiled == Some(crate::compiled_rt::CompiledAt::Suspended) {
-                // SAFETY: see `load_function`.
-                let frame_function = unsafe { self.load_function(depth)? };
-                let (slots, stub) = frame_function
-                    .compiled_body
-                    .zip(crate::compiled_rt::stub_start(frame_function))
-                    .map(|(body, stub)| (body.slots() as usize, stub))
-                    .expect("a suspended compiled frame has a compiled body");
-                // A recoverable hook failure answers the hook call with null,
-                // so the body lands at its decision boundary as bytecode does
-                // below. Task cancellation keeps unwinding normally.
-                if self
-                    .pending_trace_hooks
-                    .last()
-                    .is_some_and(|hook| hook.frame == depth && hook.evaluating)
-                    && !self.as_instance(&exception_value).is_ok_and(|instance| {
-                        instance.class == self.panic_class_ptrs[PanicClass::Cancelled as usize]
-                    })
-                {
-                    self.stack.truncate(frame_locals_offset.raw() + slots);
-                    self.stack.push(Value::NULL);
-                    if let Some(evidence) = evidence.take() {
-                        self.error_hook_fallback(evidence);
-                    }
-                    self.restore_caller_context(depth);
-                    *frame_idx = depth;
-                    *function = frame_function;
-                    return Ok(());
-                }
-                let context = match &context {
-                    InFlightContext::Carried(context) => *context,
-                    InFlightContext::Fresh { trace, cause } => {
-                        self.alloc_error_context(exception_value, trace, *cause)
-                    }
-                };
-                self.compiled.delivery = Some(Box::new(VmError::Thrown(VmThrown::rethrow(
+                *function = self.unwind_suspended_compiled(
+                    depth,
+                    frame_locals_offset,
                     exception_value,
-                    context,
-                ))));
-                if let Frame::Bytecode(frame) = &mut self.frames[depth] {
-                    frame.instruction_ptr = stub + crate::compiled_rt::stub::AFTER_CALL;
-                }
-                self.stack.truncate(frame_locals_offset.raw() + slots);
-                let _ = evidence.take();
+                    &context,
+                    &mut evidence,
+                )?;
                 *frame_idx = depth;
-                // SAFETY: see `load_function`.
-                *function = unsafe { self.load_function(depth)? };
                 return Ok(());
             }
 
@@ -7759,25 +7670,6 @@ impl BexVm {
                 context: None,
             }),
         }
-    }
-
-    fn save_call_types(&mut self) {
-        self.compiled
-            .saved_call_types
-            .push(compiled_rt::SavedCallTypes {
-                args: std::mem::take(&mut self.pending_call_type_args),
-                values: std::mem::take(&mut self.pending_call_type_values),
-            });
-    }
-
-    fn restore_call_types(&mut self) -> Vec<bex_vm_types::RealizedTy> {
-        let previous = self
-            .compiled
-            .saved_call_types
-            .pop()
-            .expect("saved call types");
-        self.pending_call_type_values = previous.values;
-        std::mem::replace(&mut self.pending_call_type_args, previous.args)
     }
 
     fn execute_call_from_locals_offset_with_type_args(
@@ -9696,7 +9588,7 @@ impl BexVm {
                     // ── Call ──────────────────────────────────────────────────────
                     OpCode::BeginTraceHook => {
                         let with_settings = read_i8_unchecked(code, pc) != 0;
-                        let value = self.begin_trace_hook_in(*frame_idx, with_settings)?;
+                        let value = self.begin_trace_hook(*frame_idx, with_settings)?;
                         self.stack.push(value);
                     }
                     OpCode::TraceHookHidden
@@ -9746,7 +9638,7 @@ impl BexVm {
                     }
                     OpCode::EndTraceHook => {
                         let result = self.stack.ensure_pop();
-                        self.finish_trace_hook_in(*frame_idx, result)?;
+                        self.finish_trace_hook(*frame_idx, result)?;
                     }
                     // Passing `pc` to an outlined call prevents register allocation
                     // across dispatch, so recover it from the parked frame.
@@ -10699,10 +10591,7 @@ impl BexVm {
                                         if frame.type_metadata.as_ref()
                                             .is_none_or(|metadata| !metadata.binds_runtime_declaration(&self.heap))) =>
                             {
-                                Some((
-                                    std::ptr::from_ref(*function) as usize,
-                                    TypeValueSite::Constant(idx),
-                                ))
+                                Some((std::ptr::from_ref(*function) as usize, idx))
                             }
                             ConstValue::Type(template) if !runtime_package.is_null() => {
                                 self.runtime_load_type_cache_key(*frame_idx, template, idx)

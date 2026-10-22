@@ -3,11 +3,12 @@ use std::collections::HashMap;
 use bex_vm_types::{HeapPtr, RealizedTy, RootHaver, Value, types::TypeValue};
 
 use super::{Fiber, fiber::YielderPtr};
-use crate::errors::VmError;
+use crate::{errors::VmError, vm::BexVm};
 
 /// VM state that only compiled code uses.
 #[derive(Default)]
 pub(crate) struct CompiledState {
+    pub(crate) static_type_cache: HashMap<(usize, usize), HeapPtr>,
     /// The stack compiled bodies run on, mapped on first use.
     pub(crate) fiber: Option<Fiber>,
     /// The fiber's [`Fiber::floor`], kept here so `stack_room` reads it while
@@ -64,6 +65,7 @@ impl CompiledState {
 
 impl RootHaver for CompiledState {
     fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
+        roots.extend(self.static_type_cache.values().copied());
         for ty in self.types() {
             ty.visit_heads(&mut |head| {
                 if head.is_resolved() {
@@ -78,6 +80,9 @@ impl RootHaver for CompiledState {
     }
 
     fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+        for ptr in self.static_type_cache.values_mut() {
+            *ptr = roots.get(ptr).copied().unwrap_or(*ptr);
+        }
         let forward_ty = |ty: &mut RealizedTy| {
             ty.visit_heads_mut(&mut |head| {
                 if head.is_resolved()
@@ -104,5 +109,24 @@ impl RootHaver for CompiledState {
                 *value = Value::object(moved);
             }
         }
+    }
+}
+
+impl BexVm {
+    pub(in crate::vm) fn save_call_types(&mut self) {
+        self.compiled.saved_call_types.push(SavedCallTypes {
+            args: std::mem::take(&mut self.pending_call_type_args),
+            values: std::mem::take(&mut self.pending_call_type_values),
+        });
+    }
+
+    pub(in crate::vm) fn restore_call_types(&mut self) -> Vec<bex_vm_types::RealizedTy> {
+        let previous = self
+            .compiled
+            .saved_call_types
+            .pop()
+            .expect("saved call types");
+        self.pending_call_type_values = previous.values;
+        std::mem::replace(&mut self.pending_call_type_args, previous.args)
     }
 }

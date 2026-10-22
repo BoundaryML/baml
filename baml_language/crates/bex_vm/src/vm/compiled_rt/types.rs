@@ -58,19 +58,17 @@ impl BexVm {
             Object::Function(function)
                 if cacheable && self.runtime_package_of(function).is_null() =>
             {
-                Some((
-                    std::ptr::from_ref(function.as_ref()) as usize,
-                    crate::vm::TypeValueSite::Compiled(ordinal),
-                ))
+                Some((std::ptr::from_ref(function.as_ref()) as usize, ordinal))
             }
             _ => None,
         };
-        if let Some(cached) = key.and_then(|key| self.static_load_type_cache.get(&key).copied()) {
+        if let Some(cached) = key.and_then(|key| self.compiled.static_type_cache.get(&key).copied())
+        {
             return Value::object(cached);
         }
         let ptr = self.tlab.alloc_type(TypeValue::new(ty));
         if let Some(key) = key {
-            self.static_load_type_cache.insert(key, ptr);
+            self.compiled.static_type_cache.insert(key, ptr);
         }
         Value::object(ptr)
     }

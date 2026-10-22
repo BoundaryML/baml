@@ -9,7 +9,8 @@ mod fiber;
 mod frame;
 pub(crate) use frame::attach_compiled_bodies;
 pub use frame::{CompiledBodies, CompiledBodyTable};
-pub(crate) use state::{CompiledState, SavedCallTypes};
+pub(in crate::vm) use frame::{append_passed_type_args, validate_compiled_program};
+pub(crate) use state::CompiledState;
 mod heap;
 mod program;
 mod state;
@@ -26,6 +27,17 @@ pub(crate) mod tests;
 pub fn gc_stress() -> bool {
     static STRESS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *STRESS.get_or_init(|| baml_env::os_var("BAML_GC_STRESS").is_some_and(|value| value == "1"))
+}
+
+/// The heap's own heuristic, or a major collection at every safepoint under
+/// `BAML_GC_STRESS=1`.
+#[inline]
+#[must_use]
+pub fn collection_due(heap: &bex_heap::BexHeap) -> Option<bex_heap::CollectionLevel> {
+    if gc_stress() {
+        return Some(bex_heap::CollectionLevel::Major);
+    }
+    heap.should_collect()
 }
 
 /// The literal in a `RealizedTy::Literal` built by generated code.
