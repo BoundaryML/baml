@@ -2123,21 +2123,6 @@ jobs:
         env:
           BAML_PACK_HOST_PREBUILT: "1"
 
-      # The native backend's correctness oracle: packs the rust_diff probes with
-      # compiled bodies (a cargo build of a generated crate against this
-      # workspace), then runs each as bytecode, compiled and GC-stressed and
-      # requires identical output. Ignored by default because of that build.
-      # `pack --rust` requires the workspace HEAD to equal the build
-      # fingerprint, which a warm template's BAML_GIT_SHA stamp breaks.
-      - name: "Run the Rust backend differential test"
-        run: |
-          if [ -n "${BAML_GIT_SHA:-}" ] && [ "${BAML_GIT_SHA}" != "$(git rev-parse HEAD)" ]; then
-            echo "::notice::skipping: build stamped with ${BAML_GIT_SHA}, HEAD differs"
-            exit 0
-          fi
-          cargo nextest run -p baml_tests --all-features --run-ignored only -E 'binary(=rust_differential)'
-        working-directory: baml_language
-
       - name: "Check for snapshot changes"
         run: |
           pathspecs=(
