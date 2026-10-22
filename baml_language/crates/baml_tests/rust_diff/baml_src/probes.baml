@@ -142,6 +142,55 @@ function Cancellation() -> void {
     baml.io.println(`${state.length()}:${state[0]}:${state[1]}`);
 }
 
+function Fibonacci(n: int) -> int {
+    if (n < 2) {
+        return n;
+    }
+    Fibonacci(n - 1) + Fibonacci(n - 2)
+}
+
+function RecursiveWork() -> int {
+    Fibonacci(25) + RecursiveWork()
+}
+
+// Recursive calls must yield to cancellation even without a loop backedge.
+// Keep computing until cancellation so scheduler speed cannot win the race.
+function RecursiveCancellation() -> void {
+    let state: string[] = [];
+    let child = spawn {
+        defer { state.push("cleanup"); }
+        state.push("ready");
+        RecursiveWork()
+    };
+    while (state.length() == 0) {
+        baml.sys.sleep(baml.time.Duration.from_milliseconds(1));
+    }
+    baml.sys.sleep(baml.time.Duration.from_milliseconds(1));
+    child.cancel();
+    let result = (await child) catch_all_panics (e) {
+        let cancelled: baml.panics.Cancelled => -1,
+    };
+    baml.io.println(`${result}:${state.length()}:${state[0]}:${state[1]}`);
+}
+
+// The handler's allocation loop needs a safepoint even with no try-body call.
+function CatchAllocation() -> void {
+    let values: Point[] = [];
+    let count = {
+        throw "allocate";
+    } catch (e) {
+        _ => {
+            let i = 0;
+            while (i < 2000) {
+                values.push(Point { x: i });
+                i += 1;
+            }
+            values.length()
+        },
+    };
+    baml.io.println(`${count}:${values[0].x}:${values[1999].x}`);
+}
+
 function Recurse(n: int) -> int {
     1 + Recurse(n + 1)
 }
