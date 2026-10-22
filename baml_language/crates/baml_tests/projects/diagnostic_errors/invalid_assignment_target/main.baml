@@ -85,6 +85,19 @@ function assign_to_enum_variant() -> Shape {
     Shape.Circle
 }
 
+// A global's contents are a place (its binding is not, which is reported
+// separately as an assignment to a global).
+class Settings {
+    retries: int,
+}
+
+const SETTINGS = Settings { retries: 1 };
+
+function assign_through_global() -> int {
+    SETTINGS.retries = 2;
+    SETTINGS.retries
+}
+
 // Places remain assignable, including through `?.` and parentheses.
 function valid_targets(p: P, xs: int[], q: P?) -> int {
     let n = 0;

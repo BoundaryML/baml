@@ -4261,16 +4261,22 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    /// A path target (`x`, `x.f.g`) writes through the local its root names.
-    /// AST lowering admits any path syntactically; a root that resolves to
-    /// something else - a function, an enum variant - has no storage, and MIR
-    /// would otherwise either fail to find a place or store into a
-    /// temporary that is thrown away. An unresolved root already reported
-    /// `unresolved name` (its type is the error sentinel) and is skipped.
+    /// A path target (`x`, `x.f.g`) writes through the local or global its
+    /// root names. AST lowering admits any path syntactically; a root that
+    /// resolves to something else - a function, an enum variant - has no
+    /// storage, and MIR would otherwise either fail to find a place or store
+    /// into a temporary that is thrown away. A global root is not this
+    /// check's concern: `x.f = v` through a global is a real store, and
+    /// `x = v` already reports `AssignmentToGlobal`. An unresolved root
+    /// already reported `unresolved name` (its type is the error sentinel)
+    /// and is skipped.
     fn check_path_assignment_target(&mut self, body: &ExprBody, target: ExprId) {
         let Expr::Path(segments) = &body.exprs[target] else {
             return;
         };
+        if self.result.global_roots.contains_key(&target) {
+            return;
+        }
         let resolves_to_local = self
             .metadata_key(target)
             .and_then(|key| self.index.path_resolution(key))
