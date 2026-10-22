@@ -12,10 +12,10 @@ use baml_compiler2_hir::{
     contributions::Definition,
     file_package::file_package,
     item_data::let_data,
-    loc::{FunctionLoc, LetLoc},
+    loc::{DeclRef, FunctionLoc},
     package::edge_table,
 };
-use baml_compiler2_hir_ty::extern_loc::{ClassRef, EnumRef, FunctionRef};
+use baml_compiler2_hir_ty::extern_loc::{ClassRef, EnumRef, FunctionRef, GlobalRef};
 use baml_compiler2_mir::{FunctionOwner, MirFunctionId};
 use baml_type::{DeclName, typetag::TypeTag};
 use bex_vm_types::{
@@ -451,15 +451,17 @@ impl ProgramIndex {
     pub(crate) fn let_slot<'db>(
         &self,
         db: &'db dyn baml_compiler2_mir::Db,
-        binding: LetLoc<'db>,
+        binding: GlobalRef<'db>,
     ) -> Option<usize> {
-        let head = baml_compiler2_hir_ty::lower::qualify_def(
-            db,
-            Definition::Let(binding),
-            &let_data(db, binding).name,
-        );
-        let root = file_package(db, binding.file(db)).root;
-        self.lookup(&self.lets, (root, DeclPath::Let(item_path(&head))))
+        let head = match binding {
+            DeclRef::Source(binding) => baml_compiler2_hir_ty::lower::qualify_def(
+                db,
+                Definition::Let(binding),
+                &let_data(db, binding).name,
+            ),
+            DeclRef::External(binding) => binding.head(db).clone(),
+        };
+        self.lookup(&self.lets, (head.root(), DeclPath::Let(item_path(&head))))
     }
 
     /// Ordinal of the package that owns the function.
