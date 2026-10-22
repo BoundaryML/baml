@@ -30,7 +30,7 @@ from baml_bridge.baml_py import (
     _live_handle_count,
     _seed_generic_media_handle,
 )
-from baml_bridge.errors import BamlError
+from baml_bridge.errors import BamlError, BamlPanic
 
 
 CALLBACK_BAML = """\
@@ -63,6 +63,7 @@ def _diagnostic_typemap():
                     "baml.errors.HostCallable",
                     "baml.errors.TypeMismatch",
                     "baml.panics.SdkPanic",
+                    "baml.panics.HostContractViolation",
                 )
             },
             enums={},
@@ -256,10 +257,10 @@ def test_host_result_successful_encode_transfers_capability_clone_to_engine():
     handle = BamlPyHandle(key, handle_type)
     before = _live_handle_count()
 
-    with pytest.raises(Exception, match="TypeMismatch"):
+    with pytest.raises(BamlPanic, match="HostContractViolation"):
         call_function_sync(
             rt,
-            "ConsumeUnknownCb",
+            "CallIntCb",
             {"callback": lambda _x: handle, "x": 7},
         )
 
