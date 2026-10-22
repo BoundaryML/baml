@@ -17,12 +17,8 @@ pub mod check;
 pub mod db;
 pub mod discovery;
 pub mod manifest;
-/// The BAML-to-Rust backend (`baml_compiler2_rust`), reachable through the
-/// database crate like the rest of the compiler. Behind the `rust_backend` feature.
 #[cfg(feature = "rust_backend")]
-pub mod rust_backend {
-    pub use baml_compiler2_rust::{CompiledFunction, Rejection, RustModule, compile_program};
-}
+pub use baml_compiler2_rust as rust_backend;
 pub mod program;
 pub mod project_resolution;
 pub mod stdlib_prefix;

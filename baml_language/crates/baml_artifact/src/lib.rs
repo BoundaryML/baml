@@ -302,7 +302,7 @@ pub fn encode_with_digest<T: BorshSerialize>(
         kind,
         message: error.to_string(),
     })?;
-    encode_payload_with_metadata_and_digest(FORMAT_VERSION, BUILD_FINGERPRINT, kind, &payload)
+    encode_payload_with_metadata(FORMAT_VERSION, BUILD_FINGERPRINT, kind, &payload)
 }
 
 /// Encode a value with an explicit artifact format for cross-crate skew tests.
@@ -318,24 +318,16 @@ pub fn encode_with_format_for_test<T: BorshSerialize>(
         message: error.to_string(),
     })?;
     encode_payload_with_metadata(artifact_format, BUILD_FINGERPRINT, kind, &payload)
+        .map(|(artifact, _)| artifact)
 }
 
 /// Wrap an already-serialized payload in a versioned artifact envelope.
 pub fn encode_payload(kind: ArtifactKind, payload: &[u8]) -> Result<Vec<u8>, Error> {
     encode_payload_with_metadata(FORMAT_VERSION, BUILD_FINGERPRINT, kind, payload)
-}
-
-fn encode_payload_with_metadata(
-    artifact_format: u32,
-    build_fingerprint: &str,
-    kind: ArtifactKind,
-    payload: &[u8],
-) -> Result<Vec<u8>, Error> {
-    encode_payload_with_metadata_and_digest(artifact_format, build_fingerprint, kind, payload)
         .map(|(artifact, _)| artifact)
 }
 
-fn encode_payload_with_metadata_and_digest(
+fn encode_payload_with_metadata(
     artifact_format: u32,
     build_fingerprint: &str,
     kind: ArtifactKind,
@@ -603,7 +595,7 @@ mod tests {
     #[test]
     fn version_skew_has_actionable_message() {
         let payload = borsh::to_vec(&7_u32).unwrap();
-        let artifact = encode_payload_with_metadata(
+        let (artifact, _) = encode_payload_with_metadata(
             FORMAT_VERSION + 1,
             BUILD_FINGERPRINT,
             ArtifactKind::Program,
@@ -624,7 +616,7 @@ mod tests {
     #[test]
     fn build_skew_follows_the_channel_policy() {
         let payload = borsh::to_vec(&7_u32).unwrap();
-        let artifact = encode_payload_with_metadata(
+        let (artifact, _) = encode_payload_with_metadata(
             FORMAT_VERSION,
             "different-build-fingerprint",
             ArtifactKind::Program,
