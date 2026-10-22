@@ -1,8 +1,11 @@
 //! Packs the probe programs once with compiled bodies, then runs each as
 //! bytecode, compiled, compiled under GC stress, and compiled with a VM frame
 //! for every call (`BAML_COMPILED_FRAMES=1`, as before frame records), at the
-//! default telemetry level and with telemetry off. All must agree.
-//! Run with `cargo test -p baml_tests --test rust_differential -- --ignored`.
+//! default telemetry level, with telemetry off and at `high`. Each must agree
+//! with bytecode at the same telemetry level.
+//! Run with `cargo test -p baml_tests --test rust_differential -- --ignored`;
+//! `BAML_RUST_DIFF_PROBES=A,B` selects probes and `BAML_RUST_DIFF_DUMP=1`
+//! prints every run's output.
 use std::{
     io::{self, Read},
     path::Path,
@@ -42,11 +45,31 @@ const PROBES: &[&str] = &[
     "CancelDeep",
     "Shielded",
     "GenericClosures",
+    "SpawnPanicCaught",
+    "SpawnPanicUncaught",
+    "SpawnThrowUncaught",
+    "SpawnPanicDetached",
+    "SpawnChains",
+    "AwaitErrors",
+    "DeferUnwind",
+    "DeferUnwindUncaught",
+    "NoLeaks",
+    "CallbackDepth",
+    "InterfaceErrors",
+    "GenericChains",
+    "HookedDeep",
+    "LogsDeep",
+    "CancelDuringUnwind",
+    "TaskOverflow",
+    "CauseChains",
+    "AnyWithFailure",
+    "SpawnedClosures",
+    "ManualSpan",
 ];
 
 /// Name, `BAML_COMPILED_BODIES`, `BAML_GC_STRESS`, `BAML_COMPILED_FRAMES`,
-/// and `BAML_TELEMETRY` (`None` for the default level). The first is the
-/// reference.
+/// and `BAML_TELEMETRY` (`None` for the default level). Bytecode at each
+/// telemetry level is the reference for that level.
 type Mode = (
     &'static str,
     &'static str,
@@ -64,6 +87,10 @@ const MODES: &[Mode] = &[
     ("compiled-telemetry-off", "1", "0", "0", Some("off")),
     ("gc-stress-telemetry-off", "1", "1", "0", Some("off")),
     ("vm-frames-telemetry-off", "1", "0", "1", Some("off")),
+    ("bytecode-telemetry-high", "0", "0", "0", Some("high")),
+    ("compiled-telemetry-high", "1", "0", "0", Some("high")),
+    ("gc-stress-telemetry-high", "1", "1", "0", Some("high")),
+    ("vm-frames-telemetry-high", "1", "0", "1", Some("high")),
 ];
 
 const OUTPUT_LIMIT: usize = 1024 * 1024;
@@ -163,6 +190,10 @@ fn rust_differential() {
         .unwrap_or(120);
     assert!(timeout > 0, "BAML_RUST_DIFF_TIMEOUT_SECS must be positive");
     let timeout = Duration::from_secs(timeout);
+    #[allow(clippy::disallowed_methods, reason = "test harness configuration")]
+    let only = std::env::var("BAML_RUST_DIFF_PROBES").ok();
+    #[allow(clippy::disallowed_methods, reason = "test harness configuration")]
+    let dump = std::env::var("BAML_RUST_DIFF_DUMP").is_ok_and(|value| value == "1");
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let workspace = manifest.parent().unwrap().parent().unwrap();
     let build = Path::new(env!("CARGO_TARGET_TMPDIR")).join("rust-differential");
@@ -194,7 +225,11 @@ fn rust_differential() {
     eprintln!("compiled pack wall time: {:?}", started.elapsed());
     let started = Instant::now();
     let mut failures = Vec::new();
-    for probe in PROBES {
+    let selected = PROBES.iter().filter(|probe| {
+        only.as_deref()
+            .is_none_or(|only| only.split(',').any(|o| o == **probe))
+    });
+    for probe in selected {
         let mut outputs = Vec::new();
         for (mode, bodies, stress, frames, telemetry) in MODES {
             let start = Instant::now();
@@ -220,10 +255,26 @@ fn rust_differential() {
                     failures.push(failure);
                 }
             }
+            if dump && let Ok(output) = &output {
+                eprintln!(
+                    "--- {probe}/{mode} stdout:\n{}--- stderr:\n{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
             outputs.push(output.ok());
         }
-        for ((mode, ..), actual) in MODES.iter().zip(&outputs).skip(1) {
-            let (Some(expected), Some(actual)) = (&outputs[0], actual) else {
+        for ((mode, bodies, _, _, telemetry), actual) in MODES.iter().zip(&outputs) {
+            // Each mode against bytecode at its own telemetry level: hooks and
+            // spans legitimately differ between levels.
+            if *bodies == "0" {
+                continue;
+            }
+            let reference = MODES
+                .iter()
+                .position(|(_, bodies, _, _, level)| *bodies == "0" && level == telemetry)
+                .expect("each telemetry level has a bytecode reference");
+            let (Some(expected), Some(actual)) = (&outputs[reference], actual) else {
                 continue;
             };
             if expected.status != actual.status
