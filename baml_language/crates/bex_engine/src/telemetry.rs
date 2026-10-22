@@ -1,5 +1,6 @@
 //! Engine integration for the chunk processor and recording publisher.
 use std::{
+    io::Write as _,
     path::{Path, PathBuf},
     sync::{
         Arc, OnceLock,
@@ -146,7 +147,6 @@ impl RecordingDelivery {
     /// After [`Self::finish`], say once per process how many cloud recording
     /// files were discarded undelivered. A failed first connection is left to
     /// its initial-failure policy, which already warned, aborted or ignored it.
-    #[allow(clippy::print_stderr)]
     pub(crate) fn warn_undelivered(&self) {
         static WARNED: AtomicBool = AtomicBool::new(false);
         let Self::Cloud { delivery, .. } = self else {
@@ -162,7 +162,10 @@ impl RecordingDelivery {
         let handle = delivery.handle();
         let count = handle.undelivered_files();
         if count > 0 && !WARNED.swap(true, Ordering::Relaxed) {
-            eprintln!(
+            // Not `eprintln!`: it panics when stderr is a closed pipe, and a
+            // panic here would skip completing the engine's shutdown.
+            let _ = writeln!(
+                std::io::stderr(),
                 "warning: {}",
                 undelivered_message(count, handle.last_error())
             );
