@@ -14,7 +14,7 @@ import {
     BamlInvalidArgumentError,
     BamlPanic,
     BamlPrompt,
-    _seedFunctionRefHandle,
+    _seedGenericMediaHandle,
 } from '../dist/index.js';
 
 const { BamlOutboundResult, BamlOutboundValue } = baml_bridge.cffi.v1;
@@ -40,7 +40,7 @@ describe('decodeCallResult — portable prompt AST', () => {
 
 describe('decodeCallResult — FunctionSpec capability', () => {
     test('the dedicated handle tag decodes to BamlFunctionSpec', () => {
-        const [key] = _seedFunctionRefHandle(41);
+        const [key] = _seedGenericMediaHandle();
         const spec = decodeCallResult(encodeResult({
             ok: { handleValue: { key, handleType: 17 } },
         }));

@@ -22,11 +22,11 @@
 //! ```
 
 mod bex_external_value;
+mod bounded;
 mod handle;
 mod host_outcome;
 mod json_alias;
 mod runtime_ty_identity;
-
 pub use baml_type::MediaKind;
 pub use bex_external_value::{
     AnnotationTy, AsBexExternalValue, BexExternalAdt, BexExternalValue, MEDIA_WRAPPER_DATA_FIELD,
@@ -38,6 +38,7 @@ pub use bex_resource_types::{
 };
 pub use bex_str::BexStr;
 pub use bex_vm_types::{BexRustData, Meter, RetainedBytes, RustDataArc};
+pub use bounded::Bounded;
 pub use handle::{Handle, HandleInner, WeakHeapRef};
 pub use host_outcome::{HostCallCompletion, HostException, HostOutcome};
 pub use json_alias::{is_canonical_json_alias, value_satisfies_json};

@@ -515,7 +515,6 @@ fn owned_inner(
                     .ok_or(AccessError::InvalidHandle { expected: "handle" })?;
                 owned_inner(BexValue::HeapPtr(&heap_ptr), heap, lossy)
             }
-            BexExternalValue::FunctionRef { .. } => unconvertible("function"),
             BexExternalValue::Null => Ok(BexExternalValue::Null),
             BexExternalValue::Int(i) => Ok(BexExternalValue::Int(*i)),
             BexExternalValue::Bigint(b) => Ok(BexExternalValue::Bigint(b.clone())),
@@ -807,7 +806,7 @@ mod tests {
     use bex_str::BexStr;
     use bex_vm_types::RootHaver;
 
-    use crate::{BexHeap, BexValue, HeapPermit as _, HeapPermitManager, Tlab, TlabHolder};
+    use crate::{BexHeap, HeapPermit as _, HeapPermitManager, Tlab, TlabHolder};
 
     struct EmptyRoots {
         tlab: Tlab,
@@ -910,25 +909,5 @@ mod tests {
                 assert_eq!(key_type, expected);
             }
         }
-    }
-
-    #[tokio::test]
-    async fn trace_owned_function_refs_become_string_placeholders() {
-        let heap = BexHeap::new(Vec::new());
-        let manager = HeapPermitManager::new();
-        let permit = manager
-            .new_permit(EmptyRoots {
-                tlab: Tlab::new(Arc::clone(&heap)),
-            })
-            .await
-            .acquire()
-            .await;
-        let value = BexExternalValue::FunctionRef { global_index: 7 };
-
-        let owned = BexValue::ExternalValue(&value)
-            .as_owned_for_trace(&heap, permit.proof())
-            .unwrap();
-
-        assert_eq!(owned, BexExternalValue::String(BexStr::from("<function>")));
     }
 }

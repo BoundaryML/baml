@@ -59,7 +59,7 @@ fn handle_arg(key: u64) -> InboundMapEntry {
         value: Some(InboundValue {
             value: Some(Value::Handle(BamlHandle {
                 key,
-                handle_type: BamlHandleType::FunctionRef as i32,
+                handle_type: BamlHandleType::UntaggedRustData as i32,
             })),
             ..Default::default()
         }),
@@ -92,7 +92,9 @@ async fn raw_invocation_and_callback_lifecycles() {
     // Rejected legacy/control envelopes retire allocation and wire owners.
     let mut legacy = request("identity");
     legacy.invocation = None;
-    let key = HANDLE_TABLE.insert(CffiHandleTableEntry::FunctionRef { global_index: 0 });
+    let key = HANDLE_TABLE.insert(CffiHandleTableEntry::RustData(std::sync::Arc::new(
+        bex_project::TraceOptionsData::default(),
+    )));
     legacy.kwargs.push(handle_arg(key.get()));
     assert!(bridge_cffi::decode_invocation_request(&legacy.encode_to_vec()).is_err());
     assert!(HANDLE_TABLE.resolve(key).is_none());
@@ -105,7 +107,9 @@ async fn raw_invocation_and_callback_lifecycles() {
     assert!(!bridge_cffi::cancel_function_call_by_id(unknown.call_id));
 
     let mut malformed = request("identity");
-    let key = HANDLE_TABLE.insert(CffiHandleTableEntry::FunctionRef { global_index: 0 });
+    let key = HANDLE_TABLE.insert(CffiHandleTableEntry::RustData(std::sync::Arc::new(
+        bex_project::TraceOptionsData::default(),
+    )));
     malformed.kwargs.push(handle_arg(key.get()));
     let mut bytes = malformed.encode_to_vec();
     bytes.push(0xff); // Invalid trailing protobuf key after the allocation and owner.
@@ -114,7 +118,9 @@ async fn raw_invocation_and_callback_lifecycles() {
     assert!(!bridge_cffi::cancel_function_call_by_id(malformed.call_id));
 
     // Both control capability kinds reject ordinary, stale and foreign keys.
-    let wrong = HANDLE_TABLE.insert(CffiHandleTableEntry::FunctionRef { global_index: 0 });
+    let wrong = HANDLE_TABLE.insert(CffiHandleTableEntry::RustData(std::sync::Arc::new(
+        bex_project::TraceOptionsData::default(),
+    )));
     let mut call = request("identity");
     call.invocation.as_mut().unwrap().inherited_state = wrong.get();
     assert!(bridge_cffi::decode_invocation_request(&call.encode_to_vec()).is_err());
@@ -307,14 +313,16 @@ async fn raw_invocation_and_callback_lifecycles() {
     HANDLE_TABLE.release(reservation_key);
 
     // Late completion reports actual exit and releases its transferred value.
-    let key = HANDLE_TABLE.insert(CffiHandleTableEntry::FunctionRef { global_index: 0 });
+    let key = HANDLE_TABLE.insert(CffiHandleTableEntry::RustData(std::sync::Arc::new(
+        bex_project::TraceOptionsData::default(),
+    )));
     let late = bridge_ctypes::baml_bridge::cffi::HostCallCompletion {
         outcome: Some(
             bridge_ctypes::baml_bridge::cffi::host_call_completion::Outcome::Returned(
                 InboundValue {
                     value: Some(Value::Handle(BamlHandle {
                         key: key.get(),
-                        handle_type: BamlHandleType::FunctionRef as i32,
+                        handle_type: BamlHandleType::UntaggedRustData as i32,
                     })),
                     ..Default::default()
                 },

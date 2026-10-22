@@ -693,8 +693,8 @@ fn is_callable_param(ty: &BamlType, class_ns_map: &BTreeMap<String, String>) -> 
 /// heap [`Handle`](bex_external_types::Handle) (extracted via `as_callable_handle`)
 /// that the op later invokes with `VmSpawner::spawn_with_callable`. An optional
 /// callable (`((…) -> …)?`) becomes `Option<Handle>`. (A `function`-typed
-/// *return*, by contrast, is a `FunctionRef` and stays `BexExternalValue` — so
-/// this only diverges on the parameter side.)
+/// *return*, by contrast, stays `BexExternalValue` — so this only diverges on
+/// the parameter side.)
 fn clean_param_type(
     ty: &BamlType,
     class_ns_map: &BTreeMap<String, String>,

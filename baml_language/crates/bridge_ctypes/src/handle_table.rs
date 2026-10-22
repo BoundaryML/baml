@@ -94,7 +94,6 @@ impl bex_project::BexRustData for TraceReservationHandle {
 #[derive(Clone, Debug)]
 pub enum CffiHandleTableEntry {
     BexHeapHandle(Handle),
-    FunctionRef { global_index: usize },
     Adt(BexExternalAdt),
     RustData(Arc<dyn bex_project::BexRustData>),
     InvocationState(InvocationStateHandle),
@@ -130,7 +129,6 @@ impl CffiHandleTableEntry {
     pub fn handle_type(&self) -> BamlHandleType {
         match self {
             Self::BexHeapHandle(_) => BamlHandleType::UntaggedBexHeap,
-            Self::FunctionRef { .. } => BamlHandleType::FunctionRef,
             Self::RustData(_) => BamlHandleType::UntaggedRustData,
             Self::InvocationState(_) => BamlHandleType::InvocationState,
             Self::TraceReservation(_) => BamlHandleType::TraceReservation,
@@ -167,9 +165,6 @@ impl TryFrom<BexExternalValue> for CffiHandleTableEntry {
     fn try_from(value: BexExternalValue) -> Result<Self, Self::Error> {
         match value {
             BexExternalValue::Handle(h) => Ok(Self::BexHeapHandle(h)),
-            BexExternalValue::FunctionRef { global_index } => {
-                Ok(Self::FunctionRef { global_index })
-            }
             BexExternalValue::Adt(a) => Ok(Self::Adt(a)),
             BexExternalValue::RustData(arc) => Ok(Self::RustData(arc)),
             // Host values use a separate per-bridge registry, not HANDLE_TABLE.
@@ -197,9 +192,6 @@ impl From<CffiHandleTableEntry> for BexExternalValue {
     fn from(value: CffiHandleTableEntry) -> Self {
         match value {
             CffiHandleTableEntry::BexHeapHandle(h) => BexExternalValue::Handle(h),
-            CffiHandleTableEntry::FunctionRef { global_index } => {
-                BexExternalValue::FunctionRef { global_index }
-            }
             CffiHandleTableEntry::Adt(a) => BexExternalValue::Adt(a),
             CffiHandleTableEntry::RustData(arc) => BexExternalValue::RustData(arc),
             CffiHandleTableEntry::InvocationState(state) => {
@@ -427,23 +419,28 @@ pub static HANDLE_TABLE: LazyLock<CffiHandleTable> = LazyLock::new(CffiHandleTab
 
 #[cfg(test)]
 mod tests {
-    use bex_project::{BexExternalValue, HostValueArc, HostValueKind};
+    use bex_project::{BexExternalValue, HostValueArc, HostValueKind, MediaValue};
 
     use super::*;
     use crate::{baml_bridge::cffi::baml_outbound_value::Value as BamlValueVariant, value_encode};
 
-    fn make_function_ref() -> CffiHandleTableEntry {
-        CffiHandleTableEntry::FunctionRef { global_index: 42 }
+    /// Any engine row a test can mint without a heap: a media value.
+    fn media_row() -> CffiHandleTableEntry {
+        CffiHandleTableEntry::Adt(BexExternalAdt::Media(MediaValue::from_url(
+            MediaKind::Generic,
+            "https://example.com/",
+            None,
+        )))
     }
 
     #[test]
     fn insert_and_resolve() {
         let table = CffiHandleTable::new();
-        let key = table.insert(make_function_ref());
+        let key = table.insert(media_row());
         let resolved = table.resolve(key).unwrap();
         assert!(matches!(
             &*resolved,
-            CffiHandleTableEntry::FunctionRef { global_index: 42 }
+            CffiHandleTableEntry::Adt(BexExternalAdt::Media(_))
         ));
     }
 
@@ -456,7 +453,7 @@ mod tests {
     #[test]
     fn clone_handle_produces_new_key() {
         let table = CffiHandleTable::new();
-        let key1 = table.insert(make_function_ref());
+        let key1 = table.insert(media_row());
         let key2 = table.clone_handle(key1).unwrap();
         assert_ne!(key1, key2);
         // Both resolve to something
@@ -467,7 +464,7 @@ mod tests {
     #[test]
     fn clone_handle_shares_same_arc() {
         let table = CffiHandleTable::new();
-        let key1 = table.insert(make_function_ref());
+        let key1 = table.insert(media_row());
         let key2 = table.clone_handle(key1).unwrap();
         let arc1 = table.resolve(key1).unwrap();
         let arc2 = table.resolve(key2).unwrap();
@@ -478,7 +475,7 @@ mod tests {
     #[test]
     fn release_original_clone_still_resolves() {
         let table = CffiHandleTable::new();
-        let key1 = table.insert(make_function_ref());
+        let key1 = table.insert(media_row());
         let key2 = table.clone_handle(key1).unwrap();
         assert!(table.release(key1));
         assert!(table.resolve(key1).is_none());
@@ -488,7 +485,7 @@ mod tests {
     #[test]
     fn release_both_clones() {
         let table = CffiHandleTable::new();
-        let key1 = table.insert(make_function_ref());
+        let key1 = table.insert(media_row());
         let key2 = table.clone_handle(key1).unwrap();
         assert!(table.release(key1));
         assert!(table.release(key2));
@@ -499,7 +496,7 @@ mod tests {
     #[test]
     fn double_release_returns_false() {
         let table = CffiHandleTable::new();
-        let key = table.insert(make_function_ref());
+        let key = table.insert(media_row());
         assert!(table.release(key));
         assert!(!table.release(key)); // second release returns false
     }
@@ -507,11 +504,11 @@ mod tests {
     #[test]
     fn drain_removes_entry() {
         let table = CffiHandleTable::new();
-        let key = table.insert(make_function_ref());
+        let key = table.insert(media_row());
         let drained = table.drain(key).expect("drain should return entry");
         assert!(matches!(
             &*drained,
-            CffiHandleTableEntry::FunctionRef { global_index: 42 }
+            CffiHandleTableEntry::Adt(BexExternalAdt::Media(_))
         ));
         assert!(table.resolve(key).is_none());
         assert!(table.drain(key).is_none());
@@ -527,36 +524,19 @@ mod tests {
     }
 
     #[test]
-    fn try_from_accepts_function_ref() {
-        let val = BexExternalValue::FunctionRef { global_index: 7 };
-        let htv = CffiHandleTableEntry::try_from(val).unwrap();
-        assert!(matches!(
-            htv,
-            CffiHandleTableEntry::FunctionRef { global_index: 7 }
-        ));
-    }
-
-    #[test]
-    fn handle_type_function_ref() {
-        let htv = CffiHandleTableEntry::FunctionRef { global_index: 0 };
-        assert_eq!(htv.handle_type() as i32, BamlHandleType::FunctionRef as i32);
-    }
-
-    #[test]
     fn roundtrip_to_bex_external_value() {
-        let original = CffiHandleTableEntry::FunctionRef { global_index: 99 };
-        let bex: BexExternalValue = original.into();
+        let bex: BexExternalValue = media_row().into();
         let back = CffiHandleTableEntry::try_from(bex).unwrap();
         assert!(matches!(
             back,
-            CffiHandleTableEntry::FunctionRef { global_index: 99 }
+            CffiHandleTableEntry::Adt(BexExternalAdt::Media(_))
         ));
     }
 
     #[test]
     fn key_starts_at_one() {
         let table = CffiHandleTable::new();
-        let key = table.insert(make_function_ref());
+        let key = table.insert(media_row());
         assert_eq!(
             key.get(),
             1,
@@ -567,9 +547,9 @@ mod tests {
     #[test]
     fn keys_are_monotonically_increasing() {
         let table = CffiHandleTable::new();
-        let key1 = table.insert(make_function_ref());
-        let key2 = table.insert(make_function_ref());
-        let key3 = table.insert(make_function_ref());
+        let key1 = table.insert(media_row());
+        let key2 = table.insert(media_row());
+        let key3 = table.insert(media_row());
         assert!(key1 < key2);
         assert!(key2 < key3);
     }

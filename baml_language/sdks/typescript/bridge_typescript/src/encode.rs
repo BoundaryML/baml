@@ -30,7 +30,7 @@ use bridge_ctypes::{
 use bridge_encode::{
     Completion, Error, Facts, FunctionSig, Host, LeafKind, LeafWire, Owner, Owners, Param, Root,
     SlotTy, StatedTy, encode, encode_arguments,
-    js::{Js, JsKind, JsView},
+    js::{Js, JsElements, JsEntries, JsKind, JsView},
     state_type_args,
 };
 use napi::{
@@ -311,8 +311,6 @@ struct Cx<'env> {
     /// `Object.entries`, for own enumerable entries in insertion order.
     object_entries: Function<'env, Unknown<'env>, Unknown<'env>>,
     /// `Object.getPrototypeOf`, to tell a plain object from an instance.
-    get_prototype_of: Function<'env, Unknown<'env>, Unknown<'env>>,
-    object_prototype: Unknown<'env>,
     /// `Array.isArray`: true for a Proxy of an array too, as on the Web.
     array_is_array: Function<'env, Unknown<'env>, bool>,
     uint8_array: Function<'env, (), ()>,
@@ -341,8 +339,6 @@ impl<'env> Cx<'env> {
             env,
             adapter,
             object_entries: object_constructor.get_named_property("entries")?,
-            get_prototype_of: object_constructor.get_named_property("getPrototypeOf")?,
-            object_prototype: object_constructor.get_named_property("prototype")?,
             array_is_array: array_constructor.get_named_property("isArray")?,
             uint8_array: global.get_named_property("Uint8Array")?,
             sync,
@@ -380,11 +376,11 @@ impl<'env> Cx<'env> {
         Ok(entries)
     }
 
-    /// Is `value` a plain object: prototype `Object.prototype` or none?
+    /// Is `value` a plain object? A realm question (another realm's
+    /// `Object.prototype` is not this one's), so the runtime's adapter
+    /// answers it in JavaScript.
     fn is_plain_object(&self, value: Unknown<'env>) -> napi::Result<bool> {
-        let prototype = self.get_prototype_of.call(value)?;
-        Ok(matches!(prototype.get_type()?, ValueType::Null)
-            || self.env.strict_equals(prototype, self.object_prototype)?)
+        bool::from_unknown(self.adapter_call("isPlainObject", value)?)
     }
 
     /// The leaf kind the adapter answers for `value`, if it is one.
@@ -609,33 +605,32 @@ impl<'env> JsView for View<'_, 'env> {
         })
     }
 
-    fn elements(&self) -> napi::Result<Vec<Self>> {
+    fn elements(&self) -> napi::Result<JsElements<'_, Self>> {
         // Through the object protocol, so a Proxy of an array reads as the
-        // array it stands for.
+        // array it stands for. Elements are read as the walker pulls them:
+        // `length` sizes nothing, so a sparse array of any length costs only
+        // what the walker's budget lets it read.
         let array = Object::from_unknown(self.value)?;
         let len: u32 = array.get_named_property("length")?;
-        let mut items = Vec::with_capacity(len as usize);
-        for index in 0..len {
+        let cx = self.cx;
+        Ok(Box::new((0..len).map(move |index| {
             // A hole in a sparse array reads as `undefined`.
             let item = match array.get_element::<Option<Unknown>>(index)? {
                 Some(item) => item,
-                None => undefined(self.cx.env)?,
+                None => undefined(cx.env)?,
             };
-            items.push(View {
-                value: item,
-                cx: self.cx,
-            });
-        }
-        Ok(items)
+            Ok(View { value: item, cx })
+        })))
     }
 
-    fn entries(&self) -> napi::Result<Vec<(String, Self)>> {
-        Ok(self
-            .cx
-            .entries_of(self.value)?
-            .into_iter()
-            .map(|(name, value)| (name, View { value, cx: self.cx }))
-            .collect())
+    fn entries(&self) -> napi::Result<JsEntries<'_, Self>> {
+        let cx = self.cx;
+        Ok(Box::new(
+            self.cx
+                .entries_of(self.value)?
+                .into_iter()
+                .map(move |(name, value)| Ok((name, View { value, cx }))),
+        ))
     }
 
     fn type_args(&self) -> napi::Result<Option<Vec<StatedTy>>> {

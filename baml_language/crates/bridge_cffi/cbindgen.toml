@@ -116,7 +116,6 @@ exclude = [
   "register_callback",
   "baml_handle_clone",
   "baml_handle_release",
-  "__testonly_seed_function_ref",
   "__testonly_seed_generic_media",
   "baml_media_from_url",
   "baml_media_from_file",

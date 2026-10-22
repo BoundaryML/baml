@@ -115,6 +115,13 @@ interface HostLeaf {
  * (`registerHostAdapter`); the bridge calls back into it while encoding.
  */
 export declare const hostAdapter: {
+    /**
+     * Is `value` a plain object: one whose prototype is `Object.prototype` or
+     * null? Answered here, in JavaScript, because the question is about realms:
+     * an object from another realm (a `vm` context, an iframe) has that realm's
+     * `Object.prototype`, which only JavaScript can recognise as one.
+     */
+    isPlainObject(value: unknown): boolean;
     /** The BAML class a generated-class instance is an instance of, or undefined. */
     classOf(value: unknown): string | undefined;
     /** A generic instance's `$types`, lowered to wire `BamlTy` bytes, when every parameter is present. */

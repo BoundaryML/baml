@@ -45,8 +45,10 @@ pub trait HostValue: Sized {
 
     /// What the value is, one level deep, in the language's terms. Asked
     /// exactly once per value: this is where host code runs (iteration,
-    /// attribute access, getters).
-    fn shape(&self) -> Result<Shape<Self>, Self::Error>;
+    /// attribute access, getters). A container's children come one at a
+    /// time, as the walker pulls them, so no length the host reports is
+    /// trusted before the walker's budget sees each child.
+    fn shape(&self) -> Result<HostShape<'_, Self>, Self::Error>;
 
     /// The text of a [`Scalar::String`] value. Borrowed where the host object
     /// is immutable UTF-8 (a Python `str`), owned where the API or the
@@ -63,9 +65,47 @@ pub trait HostValue: Sized {
     fn describe(&self) -> String;
 }
 
-/// What a host value is. Exactly one answer per value; `C` is the type of
-/// its children (the host's own value type when the host answers, the read
-/// snapshot once the walker holds it).
+/// A host value's children, one at a time: a host yields each as the walker
+/// pulls it, and a child the host fails to produce is the host's own error.
+pub type Children<'a, V> = Box<dyn Iterator<Item = Result<V, <V as HostValue>::Error>> + 'a>;
+
+/// A host value's map entries, one at a time: keys are host values too.
+pub type Entries<'a, V> = Box<dyn Iterator<Item = Result<(V, V), <V as HostValue>::Error>> + 'a>;
+
+/// A host value's fields under their declared (wire) names, one at a time.
+pub type Fields<'a, V> =
+    Box<dyn Iterator<Item = Result<(String, V), <V as HostValue>::Error>> + 'a>;
+
+/// What a host value is, as the host answers it: one level deep, its
+/// children still unread. The walker reads them under its budget into a
+/// [`Shape`] of read children.
+pub enum HostShape<'a, V: HostValue> {
+    Null,
+    Scalar(Scalar),
+    /// A member of an enum the language represents as a value of its own.
+    EnumMember {
+        enumeration: Head,
+        variant: String,
+    },
+    List(Children<'a, V>),
+    /// Entries in the host's order; keys are host values too.
+    Map(Entries<'a, V>),
+    /// An instance of a named class; see [`Shape::Instance`].
+    Instance {
+        class: Head,
+        type_args: Option<Vec<StatedTy>>,
+        fields: Fields<'a, V>,
+    },
+    /// A function the engine could invoke.
+    Callable,
+    /// A value the host already knows how to put on the wire exactly.
+    Leaf(LeafKind),
+    /// No BAML counterpart: a symbol, a set, an arbitrary object.
+    Other,
+}
+
+/// What a host value is, with its children read; `C` is the type of its
+/// children (the read snapshot the walker holds).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Shape<C> {
     Null,

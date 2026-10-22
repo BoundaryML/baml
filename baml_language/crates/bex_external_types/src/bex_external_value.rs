@@ -241,15 +241,6 @@ pub enum BexExternalValue {
     /// Engine converts to `Object::RustData` on the VM heap.
     RustData(std::sync::Arc<dyn bex_vm_types::BexRustData>),
 
-    /// Reference to a function by its global index.
-    ///
-    /// Used to return callable function references from SysOps.
-    /// The global_index corresponds to the function's position in the VM's globals array.
-    FunctionRef {
-        /// Global index of the function.
-        global_index: usize,
-    },
-
     Handle(crate::Handle),
 
     // This is a tagged union.
@@ -335,10 +326,6 @@ impl std::fmt::Debug for BexExternalValue {
                 .finish(),
             Self::Uint8Array(v) => f.debug_tuple("Uint8Array").field(v).finish(),
             Self::RustData(_) => write!(f, "RustData(...)"),
-            Self::FunctionRef { global_index } => f
-                .debug_struct("FunctionRef")
-                .field("global_index", global_index)
-                .finish(),
             Self::Handle(v) => f.debug_tuple("Handle").field(v).finish(),
             Self::Adt(v) => f.debug_tuple("Adt").field(v).finish(),
             Self::HostValue(v) => f
@@ -427,9 +414,6 @@ impl PartialEq for BexExternalValue {
             ) => v1 == v2 && m1 == m2,
             (Self::Uint8Array(a), Self::Uint8Array(b)) => a == b,
             (Self::RustData(a), Self::RustData(b)) => std::sync::Arc::ptr_eq(a, b),
-            (Self::FunctionRef { global_index: a }, Self::FunctionRef { global_index: b }) => {
-                a == b
-            }
             (Self::Handle(a), Self::Handle(b)) => a == b,
             (Self::Adt(a), Self::Adt(b)) => a == b,
             (Self::HostValue(a), Self::HostValue(b)) => a.key == b.key && a.kind == b.kind,
@@ -545,7 +529,6 @@ impl BexExternalValue {
             BexExternalValue::Uint8Array(_) => "uint8array",
             BexExternalValue::RustData(_) => "rust_data",
             BexExternalValue::Adt(adt) => adt.type_name(),
-            BexExternalValue::FunctionRef { .. } => "function",
             BexExternalValue::Handle(_) => "handle",
             BexExternalValue::HostValue(_) => "host_value",
             BexExternalValue::HostCallable { .. } => "host_callable",
@@ -602,7 +585,6 @@ impl BexExternalValue {
             | BexExternalValue::Variant { .. }
             | BexExternalValue::Uint8Array(_)
             | BexExternalValue::RustData(_)
-            | BexExternalValue::FunctionRef { .. }
             | BexExternalValue::Handle(_)
             | BexExternalValue::Adt(_)
             | BexExternalValue::HostValue(_)

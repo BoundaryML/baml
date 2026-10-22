@@ -692,3 +692,56 @@ async fn a_literal_field_is_checked_per_value_not_per_primitive() {
         BexExternalValue::Int(0)
     );
 }
+
+/// A slot that mentions literal types is asked per value, restricted to what
+/// a value of its primitive can inhabit: an int is tried against the int
+/// literals alone, a string against the string ones, and a float or a bool
+/// against nothing (there is no float literal type, and the slot names no
+/// `bool`), so each is decided without the whole union.
+#[tokio::test]
+async fn a_literal_slot_admits_a_value_by_its_primitives_literals() {
+    let source = r#"
+        function count(xs: (1 | 2 | "a")[]) -> int { xs.length() }
+    "#;
+    let literal =
+        |literal: baml_type::Literal| WireTy::Literal(literal, baml_type::Freshness::Regular);
+    let element = WireTy::Union(
+        vec![
+            literal(baml_type::Literal::Int(1)),
+            literal(baml_type::Literal::Int(2)),
+            literal(baml_type::Literal::String("a".to_string())),
+        ]
+        .into(),
+    );
+    let list = |items: Vec<BexExternalValue>| BexExternalValue::Array {
+        element_type: element.clone(),
+        items,
+    };
+    assert_eq!(
+        call(
+            source,
+            "count",
+            vec![list(vec![
+                BexExternalValue::Int(1),
+                BexExternalValue::Int(2),
+                BexExternalValue::String("a".into()),
+                BexExternalValue::Int(1),
+            ])],
+        )
+        .await
+        .unwrap(),
+        BexExternalValue::Int(4)
+    );
+    for outsider in [
+        BexExternalValue::Int(3),
+        BexExternalValue::String("b".into()),
+        BexExternalValue::Float(1.5),
+        BexExternalValue::Bool(true),
+    ] {
+        let message = refusal(call(source, "count", vec![list(vec![outsider.clone()])]).await);
+        assert!(
+            message.contains("does not match the declared type"),
+            "{outsider:?}: {message}"
+        );
+    }
+}

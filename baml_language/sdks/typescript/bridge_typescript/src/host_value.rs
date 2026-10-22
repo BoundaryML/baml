@@ -50,10 +50,7 @@ use std::{
 
 use bridge_ctypes::{
     HostKey,
-    baml_bridge::cffi::{
-        BamlHandleType, BamlOutboundValue, BamlToHostCall, HostCallCompletion,
-        baml_outbound_value::Value as OutboundValue,
-    },
+    baml_bridge::cffi::{BamlHandleType, BamlToHostCall, HostCallCompletion},
 };
 use bridge_encode::{Completion, Encoded};
 use napi::{
@@ -177,46 +174,10 @@ pub fn finish_host_call_execution(execution: &External<HostExecutionLease>) {
 /// Release wire owners of a queued callback cancelled before JS execution.
 /// Borrowed host keys belong to HostValueArc, not the native handle table.
 fn discard_host_call_args(args: &[u8]) {
-    fn discard(value: BamlOutboundValue) {
-        match value.value {
-            Some(OutboundValue::HandleValue(handle)) => {
-                if handle.handle_type != BamlHandleType::HostValueCallable as i32
-                    && handle.handle_type != BamlHandleType::HostValueOpaque as i32
-                {
-                    let _ = bridge_cffi::handle_cffi::release_handle(handle.key);
-                }
-            }
-            Some(OutboundValue::ListValue(list)) => {
-                for value in list.items {
-                    discard(value);
-                }
-            }
-            Some(OutboundValue::MapValue(map)) => {
-                for entry in map.entries {
-                    if let Some(value) = entry.value {
-                        discard(value);
-                    }
-                }
-            }
-            Some(OutboundValue::ClassValue(class)) => {
-                for field in class.fields {
-                    if let Some(value) = field.value {
-                        discard(value);
-                    }
-                }
-            }
-            Some(OutboundValue::UnionVariantValue(union)) => {
-                if let Some(value) = union.value {
-                    discard(*value);
-                }
-            }
-            _ => {}
-        }
-    }
     if let Ok(call) = BamlToHostCall::decode(args) {
         for arg in call.args {
             if let Some(value) = arg.value {
-                discard(value);
+                bridge_ctypes::release_outbound_references(value);
             }
         }
     }

@@ -23,8 +23,8 @@ use std::{
 };
 
 use bex_project::{
-    BexExternalAdt, BexExternalValue, HostKey, HostValueArc, HostValueKind, MediaKind, MediaValue,
-    PromptAst, PromptAstSimple, WireHead, WireTy,
+    BexExternalAdt, BexExternalValue, Bounded, HostKey, HostValueArc, HostValueKind, MediaKind,
+    MediaValue, PromptAst, PromptAstSimple, WireHead, WireTy,
 };
 use indexmap::IndexMap;
 
@@ -302,7 +302,7 @@ impl<'a> InboundOwners<'a> {
                 .transpose()?
                 .unwrap_or(BexExternalValue::Null);
             if result.insert(key.clone(), value).is_some() {
-                return Err(CtypesError::DuplicateKey(bounded(key)));
+                return Err(CtypesError::DuplicateKey(Bounded::text(key)));
             }
         }
         Ok(result)
@@ -535,23 +535,12 @@ fn shape(node: &'static str, expected: &'static str, stated: &WireTy) -> CtypesE
     CtypesError::ValueTypeShape {
         node,
         expected,
-        stated: bounded(stated.to_string()),
+        stated: Bounded::ty(stated.to_string()),
     }
 }
 
 /// A type as a message carries it: the host's text, cut to a length a message
 /// can hold.
-/// A rendering for a refusal, cut so no host-chosen text is echoed in full.
-fn bounded(text: String) -> String {
-    const LIMIT: usize = 200;
-    if text.chars().count() <= LIMIT {
-        text
-    } else {
-        let head: String = text.chars().take(LIMIT).collect();
-        format!("{head}…")
-    }
-}
-
 fn proto_media_to_bex_media(media: BamlValueMedia) -> Result<Arc<MediaValue>, CtypesError> {
     let kind = match MediaTypeEnum::try_from(media.media) {
         Ok(MediaTypeEnum::Image) => MediaKind::Image,
@@ -674,7 +663,7 @@ fn convert_map(
             .transpose()?
             .unwrap_or(BexExternalValue::Null);
         if entries.insert(key.clone(), value).is_some() {
-            return Err(CtypesError::DuplicateKey(bounded(key)));
+            return Err(CtypesError::DuplicateKey(Bounded::text(key)));
         }
     }
     Ok(BexExternalValue::Map {
@@ -708,7 +697,7 @@ fn convert_class(
             .transpose()?
             .unwrap_or(BexExternalValue::Null);
         if fields.insert(key.clone(), value).is_some() {
-            return Err(CtypesError::DuplicateKey(bounded(key)));
+            return Err(CtypesError::DuplicateKey(Bounded::text(key)));
         }
     }
     Ok(BexExternalValue::Instance {
@@ -777,10 +766,19 @@ mod tests {
         InboundValue {
             value: Some(InboundValueVariant::Handle(BamlHandle {
                 key: key.get(),
-                handle_type: BamlHandleType::FunctionRef as i32,
+                handle_type: BamlHandleType::AdtMediaGeneric as i32,
             })),
             ..Default::default()
         }
+    }
+
+    /// Any engine row a test can mint without a heap: a media value.
+    fn media_row() -> CffiHandleTableEntry {
+        CffiHandleTableEntry::Adt(BexExternalAdt::Media(MediaValue::from_url(
+            MediaKind::Generic,
+            "https://example.com/",
+            None,
+        )))
     }
 
     /// A no-op heap for minting real engine-heap handles without a VM.
@@ -821,7 +819,7 @@ mod tests {
     #[test]
     fn an_engine_reference_and_a_host_registration_may_share_a_number() {
         let table = CffiHandleTable::new();
-        let engine = table.insert(CffiHandleTableEntry::FunctionRef { global_index: 3 });
+        let engine = table.insert(media_row());
         let input = typed_input(
             &WireTy::list(WireTy::unknown()),
             InboundValueVariant::ListValue(InboundListValue {
@@ -837,7 +835,7 @@ mod tests {
         };
         assert!(matches!(
             items[0],
-            BexExternalValue::FunctionRef { global_index: 3 }
+            BexExternalValue::Adt(BexExternalAdt::Media(_))
         ));
         let BexExternalValue::HostCallable { handle, .. } = &items[1] else {
             panic!("expected a host callable, got {:?}", items[1])
@@ -933,7 +931,7 @@ mod tests {
         let engine = InboundValue {
             value: Some(InboundValueVariant::Handle(BamlHandle {
                 key: 0,
-                handle_type: BamlHandleType::FunctionRef as i32,
+                handle_type: BamlHandleType::AdtMediaGeneric as i32,
             })),
             ..Default::default()
         };
@@ -969,7 +967,7 @@ mod tests {
         );
         assert!(matches!(
             inbound_to_external(map, &table),
-            Err(CtypesError::DuplicateKey(key)) if key == "a"
+            Err(CtypesError::DuplicateKey(key)) if key.as_str() == "a"
         ));
         let class = typed_input(
             &WireTy::Class(
@@ -982,11 +980,11 @@ mod tests {
         );
         assert!(matches!(
             inbound_to_external(class, &table),
-            Err(CtypesError::DuplicateKey(key)) if key == "x"
+            Err(CtypesError::DuplicateKey(key)) if key.as_str() == "x"
         ));
         assert!(matches!(
             kwargs_to_bex_values(vec![entry("n", int(1)), entry("n", int(2))], &table),
-            Err(CtypesError::DuplicateKey(key)) if key == "n"
+            Err(CtypesError::DuplicateKey(key)) if key.as_str() == "n"
         ));
     }
 
@@ -1023,8 +1021,8 @@ mod tests {
     #[test]
     fn malformed_list_releases_owners_before_and_after_bad_sibling() {
         let table = CffiHandleTable::new();
-        let first = table.insert(CffiHandleTableEntry::FunctionRef { global_index: 1 });
-        let last = table.insert(CffiHandleTableEntry::FunctionRef { global_index: 2 });
+        let first = table.insert(media_row());
+        let last = table.insert(media_row());
         let input = typed_input(
             &WireTy::list(WireTy::unknown()),
             InboundValueVariant::ListValue(InboundListValue {
@@ -1045,7 +1043,7 @@ mod tests {
     #[test]
     fn invalid_annotation_releases_nested_wire_owners() {
         let table = CffiHandleTable::new();
-        let key = table.insert(CffiHandleTableEntry::FunctionRef { global_index: 1 });
+        let key = table.insert(media_row());
         let input = typed_input(
             &WireTy::Union(vec![WireTy::int(), WireTy::Null].into()),
             InboundValueVariant::ListValue(InboundListValue {
@@ -1059,7 +1057,7 @@ mod tests {
     #[test]
     fn invalid_kwarg_releases_later_argument_owners() {
         let table = CffiHandleTable::new();
-        let key = table.insert(CffiHandleTableEntry::FunctionRef { global_index: 1 });
+        let key = table.insert(media_row());
         let inputs = vec![
             InboundMapEntry {
                 key: None,
@@ -1579,7 +1577,7 @@ mod tests {
     #[test]
     fn inbound_handle_drains_table_entry() {
         let table = CffiHandleTable::new();
-        let key = table.insert(CffiHandleTableEntry::FunctionRef { global_index: 7 });
+        let key = table.insert(media_row());
         let inbound = InboundValue {
             value_type: None,
             value: Some(InboundValueVariant::Handle(BamlHandle {
@@ -1590,7 +1588,7 @@ mod tests {
         let result = inbound_to_external(inbound, &table).expect("decode succeeds");
         assert!(matches!(
             result,
-            BexExternalValue::FunctionRef { global_index: 7 }
+            BexExternalValue::Adt(BexExternalAdt::Media(_))
         ));
         assert!(
             table.resolve(key).is_none(),

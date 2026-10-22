@@ -1,7 +1,7 @@
 // test_decode_handle.test.ts — mirrors bridge_python/tests/test_decode_handle.py.
 // Exercises the handle-table free functions added in Phase 1.1.
 
-import { BamlHandle, _seedFunctionRefHandle, _seedGenericMediaHandle } from '../dist/index.js';
+import { BamlHandle, _seedGenericMediaHandle } from '../dist/index.js';
 // The handle-table probes are deliberately NOT on the package root: the bridge
 // surface is contracted to be identical in node, browsers and workers, and the
 // web bridge has no wasm binding for them. They stay reachable here through the
@@ -10,13 +10,6 @@ import { BamlHandle, _seedFunctionRefHandle, _seedGenericMediaHandle } from '../
 import { _handleRefcount, _liveHandleCount, _seedHeapHandle } from '../dist/native.js';
 
 describe('handle table dispatch', () => {
-    test('function ref handle wraps from raw key', () => {
-        const [key, ht] = _seedFunctionRefHandle(123);
-        const h = new BamlHandle(key, ht);
-        expect(h).toBeInstanceOf(BamlHandle);
-        expect(h.handleType).toBe(ht);
-    });
-
     test('generic media handle wraps from raw key', () => {
         const [key, ht] = _seedGenericMediaHandle();
         const h = new BamlHandle(key, ht);
@@ -25,7 +18,7 @@ describe('handle table dispatch', () => {
     });
 
     test('_cloneKeyForWire returns a fresh key for an existing handle', () => {
-        const [key, ht] = _seedFunctionRefHandle(7);
+        const [key, ht] = _seedGenericMediaHandle();
         const h = new BamlHandle(key, ht);
         const newKey = h._cloneKeyForWire();
         // The cloned key shares the same Arc; it must still resolve.

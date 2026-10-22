@@ -330,13 +330,6 @@ def _release_wire_handle(key: builtins.int) -> None:
     engine can consume it.
     """
 
-def _seed_function_ref_handle(global_index: builtins.int) -> tuple[builtins.int, builtins.int]:
-    r"""
-    Test-only: seed a `FunctionRef` entry through the shared CFFI API,
-    returning `(key, handle_type)` so test code can construct a
-    `BamlPyHandle` or stage a wire `BamlHandle`.
-    """
-
 def _seed_generic_media_handle() -> tuple[builtins.int, builtins.int]:
     r"""
     Test-only: seed an `Adt(Media(generic))` entry through the shared CFFI API.

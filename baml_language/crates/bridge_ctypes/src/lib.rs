@@ -36,7 +36,7 @@ pub mod baml_bridge {
 /// The engine's reference to a host object, the dual of a [`TableKey`].
 pub use bex_project::HostKey;
 /// The engine's handle and the type it states with, for hosts in its process.
-pub use bex_project::{Handle, HeapPtr, WeakHeapRef, WireTy};
+pub use bex_project::{Bounded, Handle, HeapPtr, WeakHeapRef, WireTy};
 pub use error::CtypesError;
 pub use handle_table::{
     CffiHandleTable, CffiHandleTableEntry, CffiHandleTableOptions, HANDLE_TABLE,

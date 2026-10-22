@@ -3401,8 +3401,7 @@ fn arg_value_type(value: &BexExternalValue) -> Type {
         BexExternalValue::RustData(_) => Type::Object(ObjectType::RustData),
         // A union tag is not itself a runtime type; the payload carries one.
         BexExternalValue::Union { value, .. } => arg_value_type(value),
-        BexExternalValue::FunctionRef { .. }
-        | BexExternalValue::Handle(_)
+        BexExternalValue::Handle(_)
         | BexExternalValue::HostValue(_)
         | BexExternalValue::HostCallable { .. }
         | BexExternalValue::Adt(_) => Type::Object(ObjectType::Any),

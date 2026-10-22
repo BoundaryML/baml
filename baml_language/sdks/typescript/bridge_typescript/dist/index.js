@@ -20,7 +20,7 @@ import { attachInvocation } from './call_context.js';
 // Adds `fromFile` to the native media classes.
 import './media.js';
 export { BamlRuntime, BamlHandle, getRuntime, getBridgeRuntimeVersion, getToolchainVersion, getVersion, } from './native.js';
-export { _seedFunctionRefHandle, _seedGenericMediaHandle } from './native.js';
+export { _seedGenericMediaHandle } from './native.js';
 // Runtime-owned stdlib value classes. Exported under their `Baml*` names only;
 // codegen aliases them as Image/Audio/Video/Pdf on re-export.
 export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';

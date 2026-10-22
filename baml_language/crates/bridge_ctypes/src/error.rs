@@ -22,7 +22,7 @@ pub enum CtypesError {
     MapKeyNotString(&'static str),
 
     #[error("key `{0}` occurs more than once")]
-    DuplicateKey(String),
+    DuplicateKey(bex_project::Bounded),
 
     #[error("{field} is not supported and must be empty")]
     UnsupportedTypeField { field: &'static str },
@@ -58,7 +58,7 @@ pub enum CtypesError {
     ValueTypeShape {
         node: &'static str,
         expected: &'static str,
-        stated: String,
+        stated: bex_project::Bounded,
     },
 
     /// A wire type is realized: a type variable or an associated-type

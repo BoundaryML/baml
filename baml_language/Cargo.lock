@@ -1802,6 +1802,7 @@ dependencies = [
  "baml_sdkgen_types",
  "baml_type",
  "bridge_ctypes",
+ "indexmap",
  "num-bigint",
  "num-traits",
  "thiserror 2.0.18",

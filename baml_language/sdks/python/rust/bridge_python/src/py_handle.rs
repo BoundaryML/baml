@@ -143,16 +143,6 @@ impl Drop for BamlPyHandle {
     }
 }
 
-/// Test-only: seed a `FunctionRef` entry through the shared CFFI API,
-/// returning `(key, handle_type)` so test code can construct a
-/// `BamlPyHandle` or stage a wire `BamlHandle`.
-#[gen_stub_pyfunction]
-#[pyfunction]
-pub fn _seed_function_ref_handle(global_index: u64) -> PyResult<(u64, u64)> {
-    let parts = handle_cffi::seed_function_ref_handle(global_index);
-    Ok((parts.key, parts.handle_type as u64))
-}
-
 /// Test-only: seed an `Adt(Media(generic))` entry through the shared CFFI API.
 #[gen_stub_pyfunction]
 #[pyfunction]

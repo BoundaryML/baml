@@ -54,7 +54,10 @@ pub use error::{
     EncodeError, EncodeErrorKind, Error, FactsError, FaultKind, PathSegment, Root, UnfitKind,
 };
 pub use facts::{ClassFacts, EnumFacts, Facts, FunctionSig, Param};
-pub use host::{Head, Host, HostValue, LeafKind, LeafWire, Owner, Scalar, Shape, SlotTy, StatedTy};
+pub use host::{
+    Children, Entries, Fields, Head, Host, HostShape, HostValue, LeafKind, LeafWire, Owner, Scalar,
+    Shape, SlotTy, StatedTy,
+};
 pub use rules::Rules;
 
 use crate::{

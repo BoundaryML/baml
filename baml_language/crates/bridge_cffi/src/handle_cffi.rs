@@ -112,13 +112,6 @@ pub fn handle_refcount(key: u64) -> Option<u64> {
     HANDLE_TABLE.refcount(TableKey::new(key)?)
 }
 
-/// Seed a function-reference handle for focused bridge tests.
-pub fn seed_function_ref_handle(global_index: u64) -> HandleParts {
-    insert_entry(CffiHandleTableEntry::FunctionRef {
-        global_index: global_index as usize,
-    })
-}
-
 /// Seed a generic-media handle for focused bridge tests.
 pub fn seed_generic_media_handle() -> HandleParts {
     insert_entry(CffiHandleTableEntry::Adt(BexExternalAdt::Media(
@@ -270,13 +263,15 @@ mod tests {
 
     #[test]
     fn resolve_media_rejects_unsupported_handle_type() {
-        let parts = seed_function_ref_handle(7);
+        let parts = insert_entry(CffiHandleTableEntry::RustData(std::sync::Arc::new(
+            bex_project::TraceOptionsData::default(),
+        )));
 
         assert_eq!(
             resolve_media(parts.key, parts.handle_type),
             Err(HandleError::UnsupportedHandleType)
         );
-        release_handle(parts.key).expect("function handle should be released");
+        release_handle(parts.key).expect("the row should be released");
     }
 
     #[test]

@@ -855,38 +855,6 @@ impl EngineSysOpContext {
 }
 
 // ============================================================================
-// FunctionRef<T> -- Typed wrapper for VM function references
-// ============================================================================
-
-/// Typed wrapper for VM function references.
-///
-/// The phantom type parameter `T` represents the return type of the referenced
-/// function. It provides no runtime checking, but ensures the impl author
-/// declares what kind of function they're returning — preventing accidental
-/// misuse of the `BexExternalValue` escape hatch.
-pub struct FunctionRef<T> {
-    /// The global index into the VM's globals array.
-    pub global_index: usize,
-    _phantom: std::marker::PhantomData<T>,
-}
-
-impl<T> FunctionRef<T> {
-    /// Create a new function reference with the given global index.
-    pub fn new(global_index: usize) -> Self {
-        Self {
-            global_index,
-            _phantom: std::marker::PhantomData,
-        }
-    }
-
-    /// Convert to `BexExternalValue::FunctionRef`.
-    pub fn into_external(self) -> BexExternalValue {
-        BexExternalValue::FunctionRef {
-            global_index: self.global_index,
-        }
-    }
-}
-// ============================================================================
 // Async Completion Utilities
 // ============================================================================
 

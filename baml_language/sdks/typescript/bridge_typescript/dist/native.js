@@ -596,7 +596,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { _HostExecution, HostExecution, BamlAudio, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, _beginHostInvocation, _defineHostMarker, _discardHostCallArgs, _encodeInbound, _finishHostCallExecution, _getHostCallOrigin, _handleRefcount, _hostCaptureRequested, _hostInvocationFrame, _invocationContext, _isInvocationCancelled, _liveHandleCount, _recordHostCallResult, _releaseWireHandle, _seedFunctionRefHandle, _seedGenericMediaHandle, _seedHeapHandle, _startHostCallExecution, _traceSelection, _validateHostOptions, _watchInvocationCancellation, cancelFunctionCall, completeHostCallBridgeFailure, completeHostCallRaised, completeHostCallThrow, completeHostCallValue, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, invocationClockNs, mintHostValueKey, newFunctionCall, registerHostAdapter, registerHostValueReleaseCallback, registerProgramDescriptor, registerUnhandledSpawnErrorCallback, releaseFunctionCall, shutdownRuntime } = nativeBinding
+const { _HostExecution, HostExecution, BamlAudio, BamlHandle, BamlImage, BamlPdf, BamlRuntime, BamlVideo, _beginHostInvocation, _defineHostMarker, _discardHostCallArgs, _encodeInbound, _finishHostCallExecution, _getHostCallOrigin, _handleRefcount, _hostCaptureRequested, _hostInvocationFrame, _invocationContext, _isInvocationCancelled, _liveHandleCount, _recordHostCallResult, _releaseWireHandle, _seedGenericMediaHandle, _seedHeapHandle, _startHostCallExecution, _traceSelection, _validateHostOptions, _watchInvocationCancellation, cancelFunctionCall, completeHostCallBridgeFailure, completeHostCallRaised, completeHostCallThrow, completeHostCallValue, getBridgeRuntimeVersion, getRuntime, getToolchainVersion, getVersion, invocationClockNs, mintHostValueKey, newFunctionCall, registerHostAdapter, registerHostValueReleaseCallback, registerProgramDescriptor, registerUnhandledSpawnErrorCallback, releaseFunctionCall, shutdownRuntime } = nativeBinding
 export { _HostExecution }
 export { HostExecution }
 export { BamlAudio }
@@ -619,7 +619,6 @@ export { _isInvocationCancelled }
 export { _liveHandleCount }
 export { _recordHostCallResult }
 export { _releaseWireHandle }
-export { _seedFunctionRefHandle }
 export { _seedGenericMediaHandle }
 export { _seedHeapHandle }
 export { _startHostCallExecution }

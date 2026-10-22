@@ -39,8 +39,9 @@ use bridge_ctypes::{
     },
 };
 use bridge_encode::{
-    Completion, Error, Facts, FunctionSig, Host, HostValue, LeafKind, LeafWire, Owner, Owners,
-    Param, Root, Rules, Scalar, Shape, SlotTy, StatedTy, encode, encode_arguments, state_type_args,
+    Completion, Error, Facts, FunctionSig, Host, HostShape, HostValue, LeafKind, LeafWire, Owner,
+    Owners, Param, Root, Rules, Scalar, SlotTy, StatedTy, encode, encode_arguments,
+    state_type_args,
 };
 use num_bigint::BigInt;
 use prost::Message;
@@ -573,9 +574,9 @@ impl<'py> PyValue<'_, 'py> {
 
     /// A pydantic instance of a class the typemap knows, with the type
     /// arguments pydantic's generic metadata gives it.
-    fn model_shape(&self) -> PyResult<Shape<Self>> {
+    fn model_shape(&self) -> PyResult<HostShape<'_, Self>> {
         let Some(class) = self.cx.baml_name(&self.obj.get_type().into_any())? else {
-            return Ok(Shape::Other);
+            return Ok(HostShape::Other);
         };
         let args: Vec<Bound<'py, PyAny>> = self
             .cx
@@ -603,22 +604,22 @@ impl<'py> PyValue<'_, 'py> {
                     .collect::<PyResult<Vec<_>>>()?,
             )
         };
+        let cx = self.cx;
         let fields = self
             .model_fields()?
             .into_iter()
-            .map(|(name, value)| (name, self.cx.value(value)))
-            .collect();
-        Ok(Shape::Instance {
+            .map(move |(name, value)| Ok((name, cx.value(value))));
+        Ok(HostShape::Instance {
             class,
             type_args,
-            fields,
+            fields: Box::new(fields),
         })
     }
 
     /// An `Enum` member of an enum the typemap knows, by its variant.
-    fn enum_shape(&self) -> PyResult<Shape<Self>> {
+    fn enum_shape(&self) -> PyResult<HostShape<'_, Self>> {
         let Some(enumeration) = self.cx.baml_name(&self.obj.get_type().into_any())? else {
-            return Ok(Shape::Other);
+            return Ok(HostShape::Other);
         };
         let value = self.obj.getattr("value")?;
         let Ok(variant) = value.extract::<String>() else {
@@ -627,7 +628,7 @@ impl<'py> PyValue<'_, 'py> {
                 self.describe()
             )));
         };
-        Ok(Shape::EnumMember {
+        Ok(HostShape::EnumMember {
             enumeration,
             variant,
         })
@@ -660,85 +661,81 @@ impl<'py> HostValue for PyValue<'_, 'py> {
 
     const RULES: Rules = Rules::Python;
 
-    fn shape(&self) -> PyResult<Shape<Self>> {
+    fn shape(&self) -> PyResult<HostShape<'_, Self>> {
         let obj = &self.obj;
         if obj.is_none() {
-            return Ok(Shape::Null);
+            return Ok(HostShape::Null);
         }
         if let Some(kind) = self.leaf_kind()? {
-            return Ok(Shape::Leaf(kind));
+            return Ok(HostShape::Leaf(kind));
         }
         // An enum member is a variant, whatever it mixes in.
         if self.cx.is_enum(obj) {
             return self.enum_shape();
         }
         if let Ok(bool) = obj.cast::<PyBool>() {
-            return Ok(Shape::Scalar(Scalar::Bool(bool.is_true())));
+            return Ok(HostShape::Scalar(Scalar::Bool(bool.is_true())));
         }
         if obj.is_instance_of::<PyInt>() {
-            return self.int_scalar().map(Shape::Scalar);
+            return self.int_scalar().map(HostShape::Scalar);
         }
         if let Ok(float) = obj.cast::<PyFloat>() {
-            return Ok(Shape::Scalar(Scalar::Float(float.value())));
+            return Ok(HostShape::Scalar(Scalar::Float(float.value())));
         }
         if obj.is_instance_of::<PyString>() {
-            return Ok(Shape::Scalar(Scalar::String));
+            return Ok(HostShape::Scalar(Scalar::String));
         }
         if obj.is_instance_of::<PyBytes>() || obj.is_instance_of::<PyByteArray>() {
-            return Ok(Shape::Scalar(Scalar::Bytes));
+            return Ok(HostShape::Scalar(Scalar::Bytes));
         }
+        let cx = self.cx;
         if obj.is_instance_of::<PyList>() || obj.is_instance_of::<PyTuple>() {
             // Through the protocol, not the C-level items, so a subclass that
-            // overrides `__iter__` is read the way Python reads it.
-            let items = obj
-                .try_iter()?
-                .map(|item| Ok(self.cx.value(item?)))
-                .collect::<PyResult<Vec<_>>>()?;
-            return Ok(Shape::List(items));
+            // overrides `__iter__` is read the way Python reads it, and one
+            // item at a time, so an endless `__iter__` yields only what the
+            // walker's budget lets it read.
+            let items = obj.try_iter()?.map(move |item| Ok(cx.value(item?)));
+            return Ok(HostShape::List(Box::new(items)));
         }
         if let Ok(dict) = obj.cast::<PyDict>() {
-            return Ok(Shape::Map(
-                dict.iter()
-                    .map(|(key, value)| (self.cx.value(key), self.cx.value(value)))
-                    .collect(),
-            ));
+            let entries = dict
+                .iter()
+                .map(move |(key, value)| Ok((cx.value(key), cx.value(value))));
+            return Ok(HostShape::Map(Box::new(entries)));
         }
         // A type metadata row is a plain record of five attributes.
         if self.is_a(&self.cx.metadata_row) {
             let py = self.cx.py;
             let entries = ["ty", "alias", "description", "docstring", "other"]
                 .iter()
-                .map(|name| {
+                .map(move |name| {
                     Ok((
-                        self.cx.value(PyString::new(py, name).into_any()),
-                        self.cx.value(obj.getattr(*name)?),
+                        cx.value(PyString::new(py, name).into_any()),
+                        cx.value(obj.getattr(*name)?),
                     ))
-                })
-                .collect::<PyResult<Vec<_>>>()?;
-            return Ok(Shape::Map(entries));
+                });
+            return Ok(HostShape::Map(Box::new(entries)));
         }
         if self.cx.is_model(obj) {
             return self.model_shape();
         }
         if obj.is_instance(&self.cx.class_instance)? {
             let class: String = obj.getattr("class_name")?.extract()?;
-            let fields = obj.getattr("fields")?;
+            let fields = obj.getattr("fields")?.cast_into::<PyDict>()?;
             let fields = fields
-                .cast::<PyDict>()?
                 .iter()
-                .map(|(name, value)| Ok((name.extract::<String>()?, self.cx.value(value))))
-                .collect::<PyResult<Vec<_>>>()?;
-            return Ok(Shape::Instance {
+                .map(move |(name, value)| Ok((name.extract::<String>()?, cx.value(value))));
+            return Ok(HostShape::Instance {
                 class: TypeName::from_dotted_path(&class),
                 type_args: None,
-                fields,
+                fields: Box::new(fields),
             });
         }
         // Classes are callable but are types, not functions.
         if obj.is_callable() && !obj.is_instance_of::<PyType>() {
-            return Ok(Shape::Callable);
+            return Ok(HostShape::Callable);
         }
-        Ok(Shape::Other)
+        Ok(HostShape::Other)
     }
 
     fn text(&self) -> PyResult<Cow<'_, str>> {

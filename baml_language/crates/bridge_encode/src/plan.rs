@@ -12,9 +12,11 @@
 use std::{collections::HashMap, rc::Rc};
 
 use baml_type::{Literal, MediaKind, Name, ParamTy, WireHead};
+use bridge_ctypes::Bounded;
+use indexmap::IndexMap;
 
 use crate::{
-    error::{EncodeError, EncodeErrorKind, FaultKind, PathSegment, UnfitKind, bounded},
+    error::{EncodeError, EncodeErrorKind, FaultKind, PathSegment, UnfitKind},
     facts::{Facts, first_type_var, mentions_type_var, substitute},
     host::{Head, HostValue, LeafKind, Scalar, Shape, SlotTy, StatedTy},
     read::Tree,
@@ -186,10 +188,10 @@ impl<'t, V: HostValue> Failure<'t, V> {
         let mut path = vec![root];
         for step in self.steps.into_iter().rev() {
             path.push(match step {
-                Step::Field(name) => PathSegment::Field(bounded(name)),
+                Step::Field(name) => PathSegment::Field(Bounded::text(name)),
                 Step::Index(index) => PathSegment::Index(index),
-                Step::Key(key) => PathSegment::Key(bounded(key.value.describe())),
-                Step::Entry(key) => PathSegment::Field(bounded(
+                Step::Key(key) => PathSegment::Key(Bounded::text(key.value.describe())),
+                Step::Entry(key) => PathSegment::Field(Bounded::text(
                     key.value
                         .text()
                         .map_or_else(|_| key.value.describe(), std::borrow::Cow::into_owned),
@@ -201,7 +203,7 @@ impl<'t, V: HostValue> Failure<'t, V> {
             FailKind::Unfit(kind) => crate::error::Error::Value(EncodeError {
                 path,
                 kind: Box::new(EncodeErrorKind::Unfit(
-                    kind.map_found(|tree| bounded(tree.value.describe())),
+                    kind.map_found(|tree| Bounded::text(tree.value.describe())),
                 )),
             }),
             FailKind::Fault(kind) => crate::error::Error::Value(EncodeError {
@@ -295,7 +297,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
         let state = |ty: &SlotTy| {
             let ty = self.facts.stated_form(ty.clone());
             StatedTy::try_from(&ty).map_err(|_| FaultKind::Undecided {
-                ty: bounded(ty.to_string()),
+                ty: Bounded::ty(ty.to_string()),
             })
         };
         Ok(Rc::new(match node {
@@ -344,11 +346,20 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
     /// [`opaque`] where `slot` mentions a type variable nothing in the value
     /// binds; a consumer solving that variable fills a hole from the value's
     /// siblings, and the root refuses what stays open.
-    fn plan(&mut self, tree: &'t Tree<V>, slot: &SlotTy) -> Planned<'t, V> {
-        match self.fuel.checked_sub(1) {
-            Some(left) => self.fuel = left,
-            None => return Err(Failure::fault(FaultKind::TooMuchPlanning { budget: FUEL })),
+    /// Spend `steps` of the request's planning fuel: one per node planned, one
+    /// per element joined into a container's type.
+    fn spend(&mut self, steps: usize) -> Result<(), Box<Failure<'t, V>>> {
+        match self.fuel.checked_sub(steps) {
+            Some(left) => {
+                self.fuel = left;
+                Ok(())
+            }
+            None => Err(Failure::fault(FaultKind::TooMuchPlanning { budget: FUEL })),
         }
+    }
+
+    fn plan(&mut self, tree: &'t Tree<V>, slot: &SlotTy) -> Planned<'t, V> {
+        self.spend(1)?;
         let key = (std::ptr::from_ref(tree) as usize, slot.clone());
         match self.memo.get(&key) {
             Some(Memo::Fit(node)) => return Ok(Rc::clone(node)),
@@ -464,7 +475,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                 {
                     return Err(Failure::unfit(UnfitKind::UnknownVariant {
                         enumeration: enumeration.clone(),
-                        variant: bounded(variant.clone()),
+                        variant: Bounded::text(variant),
                     }));
                 }
                 Node::EnumVariant {
@@ -480,6 +491,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                             .map_err(|failure| failure.at(Step::Index(index)))?,
                     );
                 }
+                self.spend(nodes.len())?;
                 let element = join(&mut nodes);
                 Node::List {
                     ty: SlotTy::List(Box::new(element)),
@@ -496,6 +508,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                             .map_err(|failure| failure.at(Step::Entry(key)))?,
                     );
                 }
+                self.spend(nodes.len())?;
                 let value = join(&mut nodes);
                 Node::Map {
                     ty: SlotTy::Map {
@@ -881,7 +894,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
         if !facts.variants.contains(&variant) {
             return Err(Failure::unfit(UnfitKind::UnknownVariant {
                 enumeration: name.clone(),
-                variant: bounded(variant),
+                variant: Bounded::text(variant),
             }));
         }
         if only.is_some_and(|only| only != variant) {
@@ -906,16 +919,17 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
             // The slot leaves the element type open: solve what the elements
             // say, then plan them against the solution. A variable no element
             // binds is a hole, for the container above to fill.
-            let mut found = Vec::with_capacity(items.len());
+            let mut found = Distinct::default();
             for (index, item) in items.iter().enumerate() {
                 let ty = self
                     .plan(item, inner)
                     .map_err(|failure| failure.at(Step::Index(index)))?
                     .ty();
-                push_distinct(&mut found, ty);
+                found.push(ty);
             }
+            self.spend(items.len())?;
             let mut solved = Solution::for_template(inner);
-            solved.learn(inner, &evidence(&found));
+            solved.learn(inner, &evidence(found));
             holes_for_vars(&solved.apply(inner))
         } else {
             inner.clone()
@@ -944,16 +958,17 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
             return Err(mismatch(tree, slot));
         };
         let value_slot = if mentions_type_var(value_slot) {
-            let mut found = Vec::with_capacity(entries.len());
+            let mut found = Distinct::default();
             for (key, item) in entries {
                 let ty = self
                     .plan(item, value_slot)
                     .map_err(|failure| failure.at(Step::Entry(key)))?
                     .ty();
-                push_distinct(&mut found, ty);
+                found.push(ty);
             }
+            self.spend(entries.len())?;
             let mut solved = Solution::for_template(value_slot);
-            solved.learn(value_slot, &evidence(&found));
+            solved.learn(value_slot, &evidence(found));
             holes_for_vars(&solved.apply(value_slot))
         } else {
             value_slot.clone()
@@ -1081,7 +1096,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
         {
             return Err(Failure::unfit(UnfitKind::UnknownField {
                 class: class.name.clone(),
-                field: bounded(unknown.clone()),
+                field: Bounded::text(unknown),
             }));
         }
         let args: Vec<SlotTy> = if fixed.iter().all(Option::is_some) {
@@ -1597,17 +1612,34 @@ fn join<V>(nodes: &mut [Rc<Node<'_, V>>]) -> SlotTy {
 /// for the slot's variables: the one type they share, their union otherwise
 /// (`[1, "a"]` under `T[]` binds `T = int | string`, as the compiler types the
 /// literal). An element with a hole adds nothing the others already say.
-fn evidence(found: &[SlotTy]) -> SlotTy {
-    merge(found).0
+fn evidence(found: Distinct) -> SlotTy {
+    merge(&found.into_vec()).0
+}
+
+/// Types kept distinct by identity, in first-seen order: two spellings of
+/// one type (a union's members in another order) are one entry. Keyed by the
+/// canonical form, so adding is linear in the number of types, however many
+/// are already held.
+#[derive(Default)]
+struct Distinct(IndexMap<SlotTy, SlotTy>);
+
+impl Distinct {
+    fn push(&mut self, ty: SlotTy) {
+        self.0.entry(canonical(&ty)).or_insert(ty);
+    }
+
+    fn into_vec(self) -> Vec<SlotTy> {
+        self.0.into_values().collect()
+    }
 }
 
 /// The one type `tys` make together, and for each of them the type it is
 /// restated to when a sibling fills its holes.
 fn merge(tys: &[SlotTy]) -> (SlotTy, Vec<Option<SlotTy>>) {
-    let mut members: Vec<SlotTy> = Vec::new();
+    let mut members = Distinct::default();
     for ty in tys {
         if !has_open(ty) {
-            push_distinct(&mut members, ty.clone());
+            members.push(ty.clone());
         }
     }
     let mut restated = vec![None; tys.len()];
@@ -1615,14 +1647,15 @@ fn merge(tys: &[SlotTy]) -> (SlotTy, Vec<Option<SlotTy>>) {
         if !has_open(ty) {
             continue;
         }
-        match members.iter().find(|target| fills(ty, target)) {
+        match members.0.values().find(|target| fills(ty, target)) {
             Some(target) => restated[index] = Some(target.clone()),
-            None => push_distinct(&mut members, ty.clone()),
+            None => members.push(ty.clone()),
         }
     }
-    let element = if members.contains(&SlotTy::Unknown) {
+    let element = if members.0.contains_key(&SlotTy::Unknown) {
         SlotTy::Unknown
     } else {
+        let mut members = members.into_vec();
         match members.len() {
             0 => hole(),
             1 => members.pop().expect("one element"),
@@ -1659,12 +1692,6 @@ fn canonical(ty: &SlotTy) -> SlotTy {
 /// Are `a` and `b` the same type?
 fn equivalent(a: &SlotTy, b: &SlotTy) -> bool {
     a == b || canonical(a) == canonical(b)
-}
-
-fn push_distinct(tys: &mut Vec<SlotTy>, ty: SlotTy) {
-    if !tys.iter().any(|seen| equivalent(seen, &ty)) {
-        tys.push(ty);
-    }
 }
 
 fn mismatch<'t, V: HostValue>(tree: &'t Tree<V>, slot: &SlotTy) -> Box<Failure<'t, V>> {

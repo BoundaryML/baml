@@ -18,7 +18,7 @@ typedef void (*RegisterCallbackFn)(CallbackFn cb);
 
 typedef BamlCffiStatus (*BamlHandleCloneFn)(uint64_t key, uint64_t *out_key);
 typedef BamlCffiStatus (*BamlHandleReleaseFn)(uint64_t key);
-typedef BamlCffiStatus (*TestonlySeedFunctionRefFn)(uint64_t global_index, uint64_t *out_key, int32_t *out_handle_type);
+typedef BamlCffiStatus (*TestonlySeedGenericMediaFn)(uint64_t *out_key, int32_t *out_handle_type);
 typedef int32_t (*CancelFunctionCallFn)(uint64_t id);
 // Host-value callable support
 typedef void (*HostDispatchFn)(uint64_t host_value_key, uint32_t call_id, const uint8_t *args, size_t length);
@@ -36,7 +36,7 @@ static void *callFunctionFnPtr = NULL;
 static void *registerCallbackFnPtr = NULL;
 static void *bamlHandleCloneFnPtr = NULL;
 static void *bamlHandleReleaseFnPtr = NULL;
-static void *testonlySeedFunctionRefFnPtr = NULL;
+static void *testonlySeedGenericMediaFnPtr = NULL;
 static void *cancelFunctionCallFnPtr = NULL;
 // Host-value callable function pointers
 static void *registerHostDispatchCallbackFnPtr = NULL;
@@ -52,7 +52,7 @@ static void setCallFunctionFn(void *fn) { callFunctionFnPtr = fn; }
 static void setRegisterCallbackFn(void *fn) { registerCallbackFnPtr = fn; }
 static void setBamlHandleCloneFn(void *fn) { bamlHandleCloneFnPtr = fn; }
 static void setBamlHandleReleaseFn(void *fn) { bamlHandleReleaseFnPtr = fn; }
-static void setTestonlySeedFunctionRefFn(void *fn) { testonlySeedFunctionRefFnPtr = fn; }
+static void setTestonlySeedGenericMediaFn(void *fn) { testonlySeedGenericMediaFnPtr = fn; }
 static void setCancelFunctionCallFn(void *fn) { cancelFunctionCallFnPtr = fn; }
 // Host-value callable setters
 static void setRegisterHostDispatchCallbackFn(void *fn) { registerHostDispatchCallbackFnPtr = fn; }
@@ -91,8 +91,8 @@ static BamlCffiStatus wrapBamlHandleRelease(uint64_t key) {
     if (bamlHandleReleaseFnPtr) return ((BamlHandleReleaseFn)bamlHandleReleaseFnPtr)(key);
     return 4;
 }
-static BamlCffiStatus wrapTestonlySeedFunctionRef(uint64_t global_index, uint64_t *out_key, int32_t *out_handle_type) {
-    if (testonlySeedFunctionRefFnPtr) return ((TestonlySeedFunctionRefFn)testonlySeedFunctionRefFnPtr)(global_index, out_key, out_handle_type);
+static BamlCffiStatus wrapTestonlySeedGenericMedia(uint64_t *out_key, int32_t *out_handle_type) {
+    if (testonlySeedGenericMediaFnPtr) return ((TestonlySeedGenericMediaFn)testonlySeedGenericMediaFnPtr)(out_key, out_handle_type);
     return 4;
 }
 static int32_t wrapCancelFunctionCall(uint64_t id) {

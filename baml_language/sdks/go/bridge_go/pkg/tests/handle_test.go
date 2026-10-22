@@ -8,9 +8,9 @@ import (
 )
 
 func TestCloneAndReleaseHandle(t *testing.T) {
-	key, handleType, err := cffi.TestonlySeedFunctionRef(42)
+	key, handleType, err := cffi.TestonlySeedGenericMedia()
 	if err != nil {
-		t.Fatalf("seed function ref: %v", err)
+		t.Fatalf("seed generic media: %v", err)
 	}
 
 	h := pkg.BamlHandle{Key: key, HandleType: handleType}

@@ -247,6 +247,22 @@ function handleOf(value) {
  * (`registerHostAdapter`); the bridge calls back into it while encoding.
  */
 export const hostAdapter = {
+    /**
+     * Is `value` a plain object: one whose prototype is `Object.prototype` or
+     * null? Answered here, in JavaScript, because the question is about realms:
+     * an object from another realm (a `vm` context, an iframe) has that realm's
+     * `Object.prototype`, which only JavaScript can recognise as one.
+     */
+    isPlainObject(value) {
+        if (value === null || typeof value !== 'object')
+            return false;
+        const proto = Object.getPrototypeOf(value);
+        if (proto === null || proto === Object.prototype)
+            return true;
+        // Another realm's `Object.prototype`: the root of its chain, whose
+        // constructor is that realm's `Object`.
+        return Object.getPrototypeOf(proto) === null && typeof proto.constructor === 'function' && proto.constructor.name === 'Object';
+    },
     /** The BAML class a generated-class instance is an instance of, or undefined. */
     classOf(value) {
         if (value === null || typeof value !== 'object')

@@ -27,7 +27,7 @@ use baml_type::TypeName;
 use num_bigint::BigInt;
 
 use crate::{
-    host::{HostValue, LeafKind, Scalar, Shape, StatedTy},
+    host::{HostShape, HostValue, LeafKind, Scalar, StatedTy},
     rules::Rules,
 };
 
@@ -55,6 +55,13 @@ pub enum JsKind {
     Other,
 }
 
+/// The elements of a JavaScript array, one at a time as the walker pulls them.
+pub type JsElements<'a, J> = Box<dyn Iterator<Item = Result<J, <J as JsView>::Error>> + 'a>;
+
+/// The own enumerable entries of a JavaScript object, one at a time.
+pub type JsEntries<'a, J> =
+    Box<dyn Iterator<Item = Result<(String, J), <J as JsView>::Error>> + 'a>;
+
 /// A JavaScript value as one bridge's API exposes it. Every method reads;
 /// the effects of shipping a value (registering a function, cloning a handle,
 /// serializing a leaf's payload) belong to the bridge's [`Host`](crate::Host).
@@ -64,12 +71,13 @@ pub trait JsView: Sized {
 
     fn kind(&self) -> Result<JsKind, Self::Error>;
 
-    /// The elements of an `Array`.
-    fn elements(&self) -> Result<Vec<Self>, Self::Error>;
+    /// The elements of an `Array`, one at a time as the walker pulls them: a
+    /// sparse array's `length` is never trusted to size anything.
+    fn elements(&self) -> Result<JsElements<'_, Self>, Self::Error>;
 
     /// The own enumerable string-keyed entries of an object, in insertion
     /// order, as `Object.entries` gives them.
-    fn entries(&self) -> Result<Vec<(String, Self)>, Self::Error>;
+    fn entries(&self) -> Result<JsEntries<'_, Self>, Self::Error>;
 
     /// The concrete type arguments a generic instance carries in `$types`,
     /// when it carries all of them.
@@ -98,22 +106,20 @@ impl<J: JsView> HostValue for Js<J> {
 
     const RULES: Rules = Rules::JavaScript;
 
-    fn shape(&self) -> Result<Shape<Self>, J::Error> {
+    fn shape(&self) -> Result<HostShape<'_, Self>, J::Error> {
         Ok(match self.0.kind()? {
-            JsKind::Null => Shape::Null,
-            JsKind::Bool(bool) => Shape::Scalar(Scalar::Bool(bool)),
-            JsKind::Number(number) => Shape::Scalar(Scalar::Float(number)),
-            JsKind::BigInt(big) => Shape::Scalar(Scalar::BigInt(big)),
-            JsKind::String => Shape::Scalar(Scalar::String),
-            JsKind::Bytes => Shape::Scalar(Scalar::Bytes),
-            JsKind::Array => Shape::List(self.0.elements()?.into_iter().map(Js).collect()),
-            JsKind::PlainObject => Shape::Map(
-                self.0
-                    .entries()?
-                    .into_iter()
-                    .map(|(key, value)| (Js(self.0.string(key)), Js(value)))
-                    .collect(),
-            ),
+            JsKind::Null => HostShape::Null,
+            JsKind::Bool(bool) => HostShape::Scalar(Scalar::Bool(bool)),
+            JsKind::Number(number) => HostShape::Scalar(Scalar::Float(number)),
+            JsKind::BigInt(big) => HostShape::Scalar(Scalar::BigInt(big)),
+            JsKind::String => HostShape::Scalar(Scalar::String),
+            JsKind::Bytes => HostShape::Scalar(Scalar::Bytes),
+            JsKind::Array => HostShape::List(Box::new(self.0.elements()?.map(|item| item.map(Js)))),
+            JsKind::PlainObject => {
+                HostShape::Map(Box::new(self.0.entries()?.map(|entry| {
+                    entry.map(|(key, value)| (Js(self.0.string(key)), Js(value)))
+                })))
+            }
             JsKind::Instance(class) => {
                 let type_args = self.0.type_args()?;
                 // Own enumerable entries are the instance's fields (methods
@@ -121,19 +127,17 @@ impl<J: JsView> HostValue for Js<J> {
                 let fields = self
                     .0
                     .entries()?
-                    .into_iter()
-                    .filter(|(name, _)| name != "$types")
-                    .map(|(name, value)| (name, Js(value)))
-                    .collect();
-                Shape::Instance {
+                    .filter(|entry| !matches!(entry, Ok((name, _)) if name == "$types"))
+                    .map(|entry| entry.map(|(name, value)| (name, Js(value))));
+                HostShape::Instance {
                     class,
                     type_args,
-                    fields,
+                    fields: Box::new(fields),
                 }
             }
-            JsKind::Function => Shape::Callable,
-            JsKind::Leaf(kind) => Shape::Leaf(kind),
-            JsKind::Other => Shape::Other,
+            JsKind::Function => HostShape::Callable,
+            JsKind::Leaf(kind) => HostShape::Leaf(kind),
+            JsKind::Other => HostShape::Other,
         })
     }
 

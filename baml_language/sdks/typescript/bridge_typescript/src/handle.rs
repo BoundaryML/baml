@@ -149,14 +149,6 @@ pub fn release_wire_handle(key: HandleKey) -> napi::Result<()> {
         .map_err(|error| status_to_napi("host-call decode rollback", error.into()))
 }
 
-/// Test-only: seed a `FunctionRef` entry into `HANDLE_TABLE`, returning
-/// `[key, handleType]` so test code can construct a `BamlHandle`.
-#[napi(js_name = "_seedFunctionRefHandle")]
-pub fn seed_function_ref_handle(global_index: u32) -> napi::Result<(HandleKey, i32)> {
-    let parts = handle_cffi::seed_function_ref_handle(u64::from(global_index));
-    Ok((HandleKey::from_u64(parts.key), parts.handle_type))
-}
-
 /// Test-only: seed an `Adt(Media(generic))` entry into `HANDLE_TABLE`.
 #[napi(js_name = "_seedGenericMediaHandle")]
 pub fn seed_generic_media_handle() -> napi::Result<(HandleKey, i32)> {

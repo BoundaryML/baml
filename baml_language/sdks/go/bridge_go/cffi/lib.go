@@ -48,8 +48,8 @@ func Init(libraryPath string) error {
 		"cancel_function_call": func(p unsafe.Pointer) { C.setCancelFunctionCallFn(p) },
 		"baml_handle_clone":    func(p unsafe.Pointer) { C.setBamlHandleCloneFn(p) },
 		"baml_handle_release":  func(p unsafe.Pointer) { C.setBamlHandleReleaseFn(p) },
-		"__testonly_seed_function_ref": func(p unsafe.Pointer) {
-			C.setTestonlySeedFunctionRefFn(p)
+		"__testonly_seed_generic_media": func(p unsafe.Pointer) {
+			C.setTestonlySeedGenericMediaFn(p)
 		},
 		// Host-value callable C symbols.
 		"register_host_dispatch_callback": func(p unsafe.Pointer) { C.setRegisterHostDispatchCallbackFn(p) },
@@ -221,12 +221,13 @@ func ReleaseHandle(key uint64) error {
 	return statusError("baml_handle_release", status)
 }
 
-// TestonlySeedFunctionRef creates a real FunctionRef handle for bridge tests.
-func TestonlySeedFunctionRef(globalIndex uint64) (uint64, int32, error) {
+// TestonlySeedGenericMedia creates a real engine handle (a generic media row)
+// for bridge tests.
+func TestonlySeedGenericMedia() (uint64, int32, error) {
 	var key C.uint64_t
 	var handleType C.int32_t
-	status := BamlCffiStatus(C.wrapTestonlySeedFunctionRef(C.uint64_t(globalIndex), &key, &handleType))
-	if err := statusError("__testonly_seed_function_ref", status); err != nil {
+	status := BamlCffiStatus(C.wrapTestonlySeedGenericMedia(&key, &handleType))
+	if err := statusError("__testonly_seed_generic_media", status); err != nil {
 		return 0, 0, err
 	}
 	return uint64(key), int32(handleType), nil

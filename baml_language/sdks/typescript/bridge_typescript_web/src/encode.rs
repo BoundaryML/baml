@@ -30,7 +30,7 @@ use bridge_ctypes::{
 use bridge_encode::{
     Completion, Encoded, Error, Facts, FunctionSig, Host, LeafKind, LeafWire, Owner, Owners, Param,
     Root, SlotTy, StatedTy, encode, encode_arguments,
-    js::{Js, JsKind, JsView},
+    js::{Js, JsElements, JsEntries, JsKind, JsView},
     state_type_args,
 };
 use js_sys::{Array, Function, Object, Reflect, Uint8Array};
@@ -358,11 +358,9 @@ fn entries_of(value: &JsValue) -> Result<Vec<(String, JsValue)>, JsValue> {
         .collect()
 }
 
-/// What one encode shares across every value it visits: the adapter, and
-/// `Object.prototype` to tell a plain object from an instance.
+/// What one encode shares across every value it visits: the adapter.
 struct Cx {
     adapter: Object,
-    object_prototype: JsValue,
     sync: bool,
 }
 
@@ -374,13 +372,7 @@ impl Cx {
                 "the BAML runtime's host adapter is not registered; import the runtime package first",
             )
         })?;
-        let object_constructor = Reflect::get(&js_sys::global(), &JsValue::from_str("Object"))?;
-        let object_prototype = Reflect::get(&object_constructor, &JsValue::from_str("prototype"))?;
-        Ok(Self {
-            adapter,
-            object_prototype,
-            sync,
-        })
+        Ok(Self { adapter, sync })
     }
 
     fn value(&self, value: JsValue) -> Js<View<'_>> {
@@ -395,10 +387,13 @@ impl Cx {
         method.call1(&self.adapter, value)
     }
 
-    /// Is `value` a plain object: prototype `Object.prototype` or none?
+    /// Is `value` a plain object? A realm question (another realm's
+    /// `Object.prototype` is not this one's), so the runtime's adapter
+    /// answers it in JavaScript.
     fn is_plain_object(&self, value: &JsValue) -> Result<bool, JsValue> {
-        let prototype = Reflect::get_prototype_of(value)?;
-        Ok(prototype.is_null() || JsValue::from(prototype) == self.object_prototype)
+        self.adapter_call("isPlainObject", value)?
+            .as_bool()
+            .ok_or_else(|| JsValue::from_str("isPlainObject did not answer a boolean"))
     }
 
     /// The leaf kind the adapter answers for `value`, if it is one.
@@ -596,18 +591,27 @@ impl JsView for View<'_> {
         Ok(JsKind::Other)
     }
 
-    fn elements(&self) -> Result<Vec<Self>, JsValue> {
-        Ok(Array::from(&self.value)
-            .iter()
-            .map(|value| View { value, cx: self.cx })
-            .collect())
+    fn elements(&self) -> Result<JsElements<'_, Self>, JsValue> {
+        // Elements are read as the walker pulls them: `length` sizes nothing,
+        // so a sparse array of any length costs only what the walker's budget
+        // lets it read. A hole reads as `undefined`.
+        let array = Array::from(&self.value);
+        let cx = self.cx;
+        Ok(Box::new((0..array.length()).map(move |index| {
+            Ok(View {
+                value: array.get(index),
+                cx,
+            })
+        })))
     }
 
-    fn entries(&self) -> Result<Vec<(String, Self)>, JsValue> {
-        Ok(entries_of(&self.value)?
-            .into_iter()
-            .map(|(name, value)| (name, View { value, cx: self.cx }))
-            .collect())
+    fn entries(&self) -> Result<JsEntries<'_, Self>, JsValue> {
+        let cx = self.cx;
+        Ok(Box::new(
+            entries_of(&self.value)?
+                .into_iter()
+                .map(move |(name, value)| Ok((name, View { value, cx }))),
+        ))
     }
 
     fn type_args(&self) -> Result<Option<Vec<StatedTy>>, JsValue> {

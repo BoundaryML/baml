@@ -9,6 +9,8 @@
 
 use std::fmt;
 
+use bridge_ctypes::Bounded;
+
 use crate::host::{Head, SlotTy};
 
 /// One step from an argument down to the node an error is about.
@@ -19,11 +21,11 @@ pub enum PathSegment {
     /// A callback's result.
     Result,
     /// A class field or map entry, by key.
-    Field(String),
+    Field(Bounded),
     /// A list element.
     Index(usize),
     /// A map key (as opposed to the value under it).
-    Key(String),
+    Key(Bounded),
 }
 
 /// Where an encode starts: a named argument of a call, or a callback's result.
@@ -78,7 +80,7 @@ pub struct EncodeError {
 pub enum EncodeErrorKind {
     /// The value is not a member of the slot's type.
     #[error(transparent)]
-    Unfit(UnfitKind<String>),
+    Unfit(UnfitKind<Bounded>),
     /// A fault in the facts or the host.
     #[error(transparent)]
     Fault(FaultKind),
@@ -121,7 +123,7 @@ pub enum UnfitKind<F> {
     )]
     UntypedCallable { found: F },
     #[error("class {class} has no field `{field}`")]
-    UnknownField { class: Head, field: String },
+    UnknownField { class: Head, field: Bounded },
     /// An instance of a class the engine alone builds (one holding runtime
     /// data, a capability) is passed back as the reference it was received
     /// as, never built from fields.
@@ -130,7 +132,7 @@ pub enum UnfitKind<F> {
     #[error("class {class} requires field `{field}`")]
     MissingField { class: Head, field: String },
     #[error("enum {enumeration} has no variant `{variant}`")]
-    UnknownVariant { enumeration: Head, variant: String },
+    UnknownVariant { enumeration: Head, variant: Bounded },
     #[error("the fields of this {0} do not determine its type arguments; give them explicitly")]
     MissingTypeArgs(Head),
     #[error("the fields of this {class} disagree about its type argument `{param}`")]
@@ -226,7 +228,7 @@ pub enum FaultKind {
     /// refuses an open slot variable at the root, so this is a bug in the
     /// walker, reported rather than sent.
     #[error("the walker left the type `{ty}` undecided")]
-    Undecided { ty: String },
+    Undecided { ty: Bounded },
 }
 
 /// The facts a descriptor describes could not be read.
@@ -236,20 +238,6 @@ pub enum FactsError {
     UnknownAlias(Head),
     #[error("type alias {0} expands to itself")]
     AliasCycle(Head),
-}
-
-/// How much of a host's text an error shows.
-const SHOWN: usize = 80;
-
-/// `text` cut to what an error shows, with an ellipsis where it was cut:
-/// no error carries an unbounded piece of the host's value.
-pub(crate) fn bounded(text: String) -> String {
-    if text.chars().count() <= SHOWN {
-        return text;
-    }
-    let mut shown: String = text.chars().take(SHOWN).collect();
-    shown.push('…');
-    shown
 }
 
 fn render_path(path: &[PathSegment]) -> String {
@@ -264,7 +252,7 @@ fn render_path(path: &[PathSegment]) -> String {
             PathSegment::Result => out.push_str("result"),
             PathSegment::Field(name) => {
                 out.push('.');
-                out.push_str(name);
+                out.push_str(name.as_str());
             }
             PathSegment::Index(index) => {
                 out.push('[');
@@ -273,7 +261,7 @@ fn render_path(path: &[PathSegment]) -> String {
             }
             PathSegment::Key(key) => {
                 out.push_str("[key ");
-                out.push_str(key);
+                out.push_str(key.as_str());
                 out.push(']');
             }
         }

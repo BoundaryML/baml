@@ -172,8 +172,9 @@ what the walk decides:
   ambiguous (`[]` under `string[] | int[]`). Member order is never consulted.
   A host-side wrapper naming the member is planned; until it exists such a
   value cannot be sent.
-- A dynamic host reads at most 1,048,576 nodes per argument (a shared or cyclic
-  value expands to a tree on the wire) and refuses a value that would nest
+- A dynamic host reads at most 1,048,576 nodes per call, shared by all of the
+  call's arguments (a shared or cyclic value expands to a tree on the wire), and
+  refuses a value that would nest
   deeper than the wire's 100 protobuf messages, before anything is created.
 
 This contract is not additive. A list, map, class or callable node without a

@@ -48,6 +48,9 @@ enum Mock {
     Media(MediaKind),
     /// A value whose `shape` raises.
     Raising,
+    /// A list whose items never end: a host whose iteration lies about its
+    /// length, or does not end at all.
+    Endless,
 }
 
 thread_local! {
@@ -72,39 +75,41 @@ impl HostValue for Mock {
 
     const RULES: Rules = Rules::Python;
 
-    fn shape(&self) -> Result<Shape<Self>, String> {
+    fn shape(&self) -> Result<HostShape<'_, Self>, String> {
         Ok(match self {
-            Mock::Null => Shape::Null,
-            Mock::Int(int) => Shape::Scalar(match Int63::new(*int) {
+            Mock::Null => HostShape::Null,
+            Mock::Int(int) => HostShape::Scalar(match Int63::new(*int) {
                 Some(int) => Scalar::Int(int),
                 None => Scalar::BigInt(BigInt::from(*int)),
             }),
-            Mock::Float(float) => Shape::Scalar(Scalar::Float(*float)),
-            Mock::Bool(bool) => Shape::Scalar(Scalar::Bool(*bool)),
-            Mock::Str(_) => Shape::Scalar(Scalar::String),
-            Mock::Bytes(_) => Shape::Scalar(Scalar::Bytes),
-            Mock::List(items) => Shape::List(items.clone()),
-            Mock::Map(entries) => Shape::Map(entries.clone()),
+            Mock::Float(float) => HostShape::Scalar(Scalar::Float(*float)),
+            Mock::Bool(bool) => HostShape::Scalar(Scalar::Bool(*bool)),
+            Mock::Str(_) => HostShape::Scalar(Scalar::String),
+            Mock::Bytes(_) => HostShape::Scalar(Scalar::Bytes),
+            Mock::List(items) => HostShape::List(Box::new(items.iter().cloned().map(Ok))),
+            Mock::Map(entries) => HostShape::Map(Box::new(entries.iter().cloned().map(Ok))),
             Mock::Instance {
                 class,
                 args,
                 fields,
-            } => Shape::Instance {
+            } => HostShape::Instance {
                 class: tn(class),
                 type_args: args.clone(),
-                fields: fields
-                    .iter()
-                    .map(|(name, value)| ((*name).to_string(), value.clone()))
-                    .collect(),
+                fields: Box::new(
+                    fields
+                        .iter()
+                        .map(|(name, value)| Ok(((*name).to_string(), value.clone()))),
+                ),
             },
-            Mock::Member(enumeration, variant) => Shape::EnumMember {
+            Mock::Member(enumeration, variant) => HostShape::EnumMember {
                 enumeration: tn(enumeration),
                 variant: (*variant).to_string(),
             },
-            Mock::Callable => Shape::Callable,
-            Mock::Handle => Shape::Leaf(LeafKind::Handle),
-            Mock::Media(kind) => Shape::Leaf(LeafKind::Media(*kind)),
+            Mock::Callable => HostShape::Callable,
+            Mock::Handle => HostShape::Leaf(LeafKind::Handle),
+            Mock::Media(kind) => HostShape::Leaf(LeafKind::Media(*kind)),
             Mock::Raising => return Err("the host raised".to_string()),
+            Mock::Endless => HostShape::List(Box::new(std::iter::repeat_with(|| Ok(Mock::Int(1))))),
         })
     }
 
@@ -1654,4 +1659,16 @@ fn a_by_reference_class_takes_only_a_handle() {
             "a host-built Native is refused"
         );
     }
+}
+
+/// Children are read one at a time under the call's node budget, so a host
+/// whose iteration never ends is refused at the budget, never materialized.
+#[test]
+fn an_endless_container_is_refused_at_the_node_budget() {
+    let f = Fixture::new();
+    let message = refusal(f.encode_in(Mock::Endless, SlotTy::List(Box::new(SlotTy::Int))));
+    assert!(
+        message.contains("more than 1048576 nodes"),
+        "the budget, not the host's length, bounds the read: {message}"
+    );
 }

@@ -25,7 +25,9 @@
 use std::collections::HashMap;
 
 use baml_type::{ClassCrossing, normalize};
-use bex_external_types::{BexExternalAdt, BexExternalValue, Handle, HostValueKind, WireHead};
+use bex_external_types::{
+    BexExternalAdt, BexExternalValue, Bounded, Handle, HostValueKind, WireHead,
+};
 use bex_heap::{HeapPermit, TlabHolder};
 use bex_vm::BexVm;
 use bex_vm_types::{HeapPtr, Object, RealizedTy, RuntimeTy, Ty, TypeHead, Value};
@@ -44,11 +46,6 @@ pub(crate) type WireTy = bex_external_types::WireTy;
 /// tree, so this bounds the stack a hostile or runaway producer can ask for.
 const MAX_DEPTH: usize = 512;
 
-/// A host's own text in a message, cut to a length a message can carry.
-const TEXT_LIMIT: usize = 80;
-/// The longest type rendering a refusal echoes.
-const TYPE_LIMIT: usize = 200;
-
 /// Why a host value was not taken: it could not be built as it was sent, or
 /// the value it builds is not a member of its slot.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,8 +58,8 @@ pub(crate) struct Refusal {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Segment {
     Item(usize),
-    Entry(String),
-    Field(String),
+    Entry(Bounded),
+    Field(Bounded),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,7 +68,7 @@ enum RefusalKind {
     /// own) where `expected` is declared.
     NotAMember {
         found: Option<String>,
-        expected: String,
+        expected: Bounded,
     },
     /// The value says something the program cannot hold.
     Malformed(String),
@@ -84,8 +81,8 @@ impl std::fmt::Display for Refusal {
             for segment in &self.path {
                 match segment {
                     Segment::Item(index) => write!(f, "[{index}]")?,
-                    Segment::Entry(key) => write!(f, "[{:?}]", bounded(key))?,
-                    Segment::Field(name) => write!(f, ".{}", bounded(name))?,
+                    Segment::Entry(key) => write!(f, "[{:?}]", key.as_str())?,
+                    Segment::Field(name) => write!(f, ".{name}")?,
                 }
             }
             f.write_str("`: ")?;
@@ -115,25 +112,6 @@ impl From<Refusal> for EngineError {
         EngineError::TypeMismatch {
             message: refusal.to_string(),
         }
-    }
-}
-
-pub(crate) fn bounded(text: &str) -> String {
-    cut(text, TEXT_LIMIT)
-}
-
-/// A type's rendering for a refusal: longer than a name, as a type carries
-/// structure, but never a host-stated union echoed in full.
-pub(crate) fn bounded_type(text: &str) -> String {
-    cut(text, TYPE_LIMIT)
-}
-
-fn cut(text: &str, limit: usize) -> String {
-    if text.chars().count() <= limit {
-        text.to_string()
-    } else {
-        let head: String = text.chars().take(limit).collect();
-        format!("{head}…")
     }
 }
 
@@ -173,11 +151,123 @@ struct Hydrator<'a, H: HeapPermit<BexThread>> {
 
 /// What a hydration remembers about one slot's membership of primitives.
 enum SlotMembership {
-    /// The slot mentions a literal type (through aliases too): the answer is
-    /// the value's, never memoized.
-    PerValue,
+    /// The slot mentions a literal type, so the answer depends on the value:
+    /// per primitive, the part of the slot a value of that primitive can
+    /// inhabit, worked out once (`1 | 2 | "a" | Foo` asks an int only
+    /// `1 | 2`).
+    PerValue(Box<[Option<Restricted>; bex_vm::Primitive::COUNT]>),
     /// The answer per primitive, filled in the first time each is asked.
     ByPrimitive([Option<bool>; bex_vm::Primitive::COUNT]),
+}
+
+/// The part of a slot's type a value of one primitive can inhabit.
+#[derive(Clone)]
+enum Restricted {
+    /// The slot names the primitive itself: every value of it is a member.
+    Always,
+    /// Nothing in the slot can hold a value of the primitive.
+    Never,
+    /// The slot's literal types of the primitive: the value decides.
+    Literals(Ty),
+    /// The slot has a member the primitive may inhabit in a way only the
+    /// algebra can tell (an interface, an alias): ask it of the whole slot.
+    Whole(Ty),
+}
+
+impl Restricted {
+    /// `ty`, normalized, restricted to what a value of `primitive` can
+    /// inhabit.
+    fn of(vm: &BexVm, ty: &Ty, primitive: bex_vm::Primitive) -> Self {
+        let normal = normalize::normalize(ty, vm);
+        let members: Vec<Ty> = match &normal {
+            Ty::Union(members) => members.to_vec(),
+            other => vec![other.clone()],
+        };
+        let mut literals = Vec::new();
+        for member in &members {
+            match member {
+                Ty::Unknown => return Self::Always,
+                Ty::Int
+                | Ty::Bigint
+                | Ty::Float
+                | Ty::String
+                | Ty::Bool
+                | Ty::Null
+                | Ty::Uint8Array
+                    if Self::primitive_of(member) == Some(primitive) =>
+                {
+                    return Self::Always;
+                }
+                Ty::Literal(literal, _) => {
+                    // A float literal is a value, never a type (TYPE_SYSTEM.md
+                    // "Literal Types"); one here admits nothing.
+                    let of = match literal {
+                        baml_type::Literal::Int(_) => Some(bex_vm::Primitive::Int),
+                        baml_type::Literal::Bigint(_) => Some(bex_vm::Primitive::Bigint),
+                        baml_type::Literal::String(_) => Some(bex_vm::Primitive::String),
+                        baml_type::Literal::Bool(_) => Some(bex_vm::Primitive::Bool),
+                        baml_type::Literal::Float(_) => None,
+                    };
+                    if of == Some(primitive) {
+                        literals.push(member.clone());
+                    }
+                }
+                // A member the algebra alone can relate a primitive to.
+                Ty::Interface(..) | Ty::TypeAlias(_) | Ty::TypeVar(_) => {
+                    return Self::Whole(normal);
+                }
+                Ty::Int
+                | Ty::Bigint
+                | Ty::Float
+                | Ty::String
+                | Ty::Bool
+                | Ty::Null
+                | Ty::Uint8Array
+                | Ty::Media(_)
+                | Ty::Class(..)
+                | Ty::Enum(_)
+                | Ty::EnumVariant(..)
+                | Ty::List(_)
+                | Ty::Map { .. }
+                | Ty::Union(_)
+                | Ty::Function { .. }
+                | Ty::Future(..)
+                | Ty::RustType
+                | Ty::Type
+                | Ty::Resource
+                | Ty::PromptAst
+                | Ty::AssociatedTypeProjection { .. }
+                | Ty::Never
+                | Ty::Error => {}
+            }
+        }
+        match literals.len() {
+            0 => Self::Never,
+            1 => Self::Literals(literals.pop().expect("one literal")),
+            _ => Self::Literals(Ty::Union(literals.into())),
+        }
+    }
+
+    fn primitive_of(ty: &Ty) -> Option<bex_vm::Primitive> {
+        Some(match ty {
+            Ty::Int => bex_vm::Primitive::Int,
+            Ty::Bigint => bex_vm::Primitive::Bigint,
+            Ty::Float => bex_vm::Primitive::Float,
+            Ty::String => bex_vm::Primitive::String,
+            Ty::Bool => bex_vm::Primitive::Bool,
+            Ty::Null => bex_vm::Primitive::Null,
+            Ty::Uint8Array => bex_vm::Primitive::Uint8Array,
+            _ => return None,
+        })
+    }
+
+    fn admits(&self, vm: &BexVm, value: Value) -> bool {
+        match self {
+            Self::Always => true,
+            Self::Never => false,
+            Self::Literals(ty) | Self::Whole(ty) => is_member(vm, value, ty),
+        }
+    }
 }
 
 /// Does `ty` mention a literal type anywhere, with recursive aliases
@@ -271,13 +361,17 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                 let vm = &self.holder.holder().vm;
                 let slot = self.members.entry(ty.clone()).or_insert_with(|| {
                     if mentions_literal(vm, ty.as_ty(), &mut Vec::new()) {
-                        SlotMembership::PerValue
+                        SlotMembership::PerValue(Box::new(
+                            [const { None }; bex_vm::Primitive::COUNT],
+                        ))
                     } else {
                         SlotMembership::ByPrimitive([None; bex_vm::Primitive::COUNT])
                     }
                 });
                 match slot {
-                    SlotMembership::PerValue => is_member(vm, value, ty.as_ty()),
+                    SlotMembership::PerValue(restricted) => restricted[primitive.index()]
+                        .get_or_insert_with(|| Restricted::of(vm, ty.as_ty(), primitive))
+                        .admits(vm, value),
                     SlotMembership::ByPrimitive(answers) => match answers[primitive.index()] {
                         Some(is) => is,
                         None => {
@@ -295,7 +389,7 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
         } else {
             Err(self.refuse(RefusalKind::NotAMember {
                 found: concrete_ty_name(self.vm(), value),
-                expected: bounded_type(&ty.to_string()),
+                expected: Bounded::ty(ty.to_string()),
             }))
         }
     }
@@ -400,10 +494,10 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                     if !normalize::is_subtype(&literal, key.as_ty(), self.vm()) {
                         return Err(self.malformed(format!(
                             "map key {:?} is not a member of the stated key type `{key}`",
-                            bounded(name)
+                            Bounded::text(name).as_str()
                         )));
                     }
-                    let built = self.within(Segment::Entry(name.clone()), |this| {
+                    let built = self.within(Segment::Entry(Bounded::text(name)), |this| {
                         let built = this.value(entry)?;
                         this.member(built, &value_ty)?;
                         Ok(built)
@@ -430,10 +524,12 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                     .engine
                     .resolve_static_declaration(self.vm(), enum_name, InboundDeclarationKind::Enum)
                     .ok_or_else(|| {
-                        self.malformed(format!("unknown enum `{}`", bounded(enum_name)))
+                        self.malformed(format!("unknown enum `{}`", Bounded::text(enum_name)))
                     })?;
                 let Object::Enum(declared) = self.vm().get_object(ptr) else {
-                    return Err(self.malformed(format!("`{}` is not an enum", bounded(enum_name))));
+                    return Err(
+                        self.malformed(format!("`{}` is not an enum", Bounded::text(enum_name)))
+                    );
                 };
                 let index = declared
                     .variants
@@ -443,7 +539,7 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                         self.malformed(format!(
                             "enum `{}` has no variant `{}`",
                             declared.name(),
-                            bounded(variant_name)
+                            Bounded::text(variant_name)
                         ))
                     })?;
                 Value::object(
@@ -466,16 +562,6 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                     .tlab_mut()
                     .alloc_rust_data(data.clone()),
             ),
-            BexExternalValue::FunctionRef { global_index } => {
-                let proof = self.holder.proof();
-                let len = self.engine.globals.len(proof);
-                if *global_index >= len {
-                    return Err(self.malformed(format!(
-                        "FunctionRef global_index {global_index} out of bounds (globals len {len})"
-                    )));
-                }
-                self.engine.globals.as_slice(proof)[*global_index]
-            }
             BexExternalValue::Handle(handle)
             | BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
                 heap_handle: handle,
@@ -609,7 +695,9 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
         let class_ptr = self
             .engine
             .resolve_static_declaration(self.vm(), class_name, InboundDeclarationKind::Class)
-            .ok_or_else(|| self.malformed(format!("unknown class `{}`", bounded(class_name))))?;
+            .ok_or_else(|| {
+                self.malformed(format!("unknown class `{}`", Bounded::text(class_name)))
+            })?;
         let type_args = type_args
             .iter()
             .map(|arg| self.realized(arg))
@@ -619,7 +707,9 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
         let (declared_name, declared) = {
             let vm = self.vm();
             let Object::Class(class) = vm.get_object(class_ptr) else {
-                return Err(self.malformed(format!("`{}` is not a class", bounded(class_name))));
+                return Err(
+                    self.malformed(format!("`{}` is not a class", Bounded::text(class_name)))
+                );
             };
             if type_args.len() != class.generic_param_count {
                 return Err(self.malformed(format!(
@@ -676,7 +766,7 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
         {
             return Err(self.malformed(format!(
                 "class `{declared_name}` has no field `{}`",
-                bounded(unknown)
+                Bounded::text(unknown)
             )));
         }
         let mut values = Vec::with_capacity(declared.len());
@@ -686,7 +776,7 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                     "Missing field `{field}` in external Instance for class `{declared_name}`"
                 ))
             })?;
-            values.push(self.within(Segment::Field(field.clone()), |this| {
+            values.push(self.within(Segment::Field(Bounded::text(field)), |this| {
                 let built = this.value(sent)?;
                 this.member(built, field_ty)?;
                 Ok(built)
@@ -804,7 +894,7 @@ impl BexEngine {
                 path: Vec::new(),
                 kind: RefusalKind::NotAMember {
                     found: concrete_ty_name(vm, value),
-                    expected: bounded_type(&slot.to_string()),
+                    expected: Bounded::ty(slot.to_string()),
                 },
             })
         }

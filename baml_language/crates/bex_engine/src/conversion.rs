@@ -100,7 +100,7 @@ impl BexEngine {
                     .ok_or_else(|| EngineError::TypeMismatch {
                         message: format!(
                             "host-supplied type names unknown declaration `{}`",
-                            crate::hydrate::bounded(&name.to_string())
+                            bex_external_types::Bounded::text(name.to_string())
                         ),
                     })?,
                 WireHead::Live(handle) => self.resolve_handle(permit, handle).ok_or_else(|| {
@@ -115,7 +115,7 @@ impl BexEngine {
                         message: format!(
                             "host-supplied type names `{}` by label only; a runtime declaration \
                              is passed as it was received",
-                            crate::hydrate::bounded(label.as_str())
+                            bex_external_types::Bounded::text(label.as_str())
                         ),
                     });
                 }
@@ -1580,7 +1580,6 @@ fn value_matches_type(value: &BexExternalValue, ty: &WireTy) -> bool {
         (BexExternalValue::HostValue(value), WireTy::RustType) => {
             value.kind == bex_external_types::HostValueKind::Opaque
         }
-        (BexExternalValue::FunctionRef { .. }, WireTy::Function { .. }) => true,
         (
             BexExternalValue::Adt(BexExternalAdt::Type(_) | BexExternalAdt::WireType(_)),
             WireTy::Type,

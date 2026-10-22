@@ -223,12 +223,6 @@ export declare function _recordHostCallResult(execution: object, outcome: string
 /** Release one owned wire reference that never reached a host wrapper. */
 export declare function _releaseWireHandle(key: HandleKey): void
 
-/**
- * Test-only: seed a `FunctionRef` entry into `HANDLE_TABLE`, returning
- * `[key, handleType]` so test code can construct a `BamlHandle`.
- */
-export declare function _seedFunctionRefHandle(globalIndex: number): [HandleKey, number]
-
 /** Test-only: seed an `Adt(Media(generic))` entry into `HANDLE_TABLE`. */
 export declare function _seedGenericMediaHandle(): [HandleKey, number]
 

@@ -34,7 +34,6 @@ import initWasm, {
   registerWebHostCallable,
   registerWebHostValueReleaseCallback,
   releaseHandle as releaseWasmHandle,
-  seedFunctionRefHandle as seedWasmFunctionRefHandle,
   seedGenericMediaHandle as seedWasmGenericMediaHandle,
   stageRuntimeBytecode,
   stageRuntimeSources,
@@ -547,9 +546,6 @@ export function completeHostCallThrow(callId: number, value: unknown): void {
     try { completeWebHostCallThrow(callId, value); completed = true; }
     catch (error) { throw wrapNativeError(error); }
     finally { if (completed) finishHostCall(callId); }
-}
-export function _seedFunctionRefHandle(globalIndex: number): [HandleKey, number] {
-  return [keyFromBigint(seedWasmFunctionRefHandle(globalIndex)), HANDLE_FUNCTION_REF];
 }
 export function _seedGenericMediaHandle(): [HandleKey, number] {
   return [keyFromBigint(seedWasmGenericMediaHandle()), HANDLE_MEDIA_GENERIC];

@@ -15,7 +15,7 @@ use crate::{
 
 /// Convert `BexExternalValue` to `BamlOutboundValue` for FFI return.
 ///
-/// Opaque types (Handle, Resource, `FunctionRef`, Adt) are inserted into `handle_table`
+/// Opaque types (Handle, Resource, Adt) are inserted into `handle_table`
 /// and encoded as `BamlOutboundHandle` messages so the host can round-trip them back.
 /// For `BexExternalAdt::TaggedHeapHandle { ty, .. }` the underlying type is encoded
 /// as a full `BamlTy` on the handle's `ty` field so the host sees the class FQN +
@@ -201,9 +201,7 @@ pub fn external_to_outbound(
         }
 
         // All opaque types → insert into handle table, encode as BamlOutboundHandle.
-        BexExternalValue::Handle(_)
-        | BexExternalValue::FunctionRef { .. }
-        | BexExternalValue::Adt(_) => {
+        BexExternalValue::Handle(_) | BexExternalValue::Adt(_) => {
             // A tagged capability's trusted `handle_type` selects the host
             // wrapper. Its `ty` rides along only for annotations and
             // diagnostics; live declaration identity and generic substitution
@@ -365,9 +363,7 @@ pub(crate) fn artifact_safe_external_to_outbound(
                 },
             ))
         }
-        BexExternalValue::Handle(_)
-        | BexExternalValue::FunctionRef { .. }
-        | BexExternalValue::Adt(_) => Some(artifact_safe_omission(
+        BexExternalValue::Handle(_) | BexExternalValue::Adt(_) => Some(artifact_safe_omission(
             "unsupportedValue",
             "process-local handle",
         )),
@@ -866,16 +862,6 @@ mod tests {
     fn artifact_safe_unknown_rust_data_omits_without_inserting_handle() {
         let unknown: Arc<dyn bex_project::BexRustData> = Arc::new(bex_project::TestRustData(42));
         let value = BexExternalValue::RustData(unknown);
-        let encoded =
-            artifact_safe_external_to_outbound(&value).expect("artifact-safe encode succeeds");
-
-        let omission = extract_omission(encoded);
-        assert_eq!(omission.name, "baml.trace.OmittedValue");
-    }
-
-    #[test]
-    fn artifact_safe_function_ref_omits_without_handle_value() {
-        let value = BexExternalValue::FunctionRef { global_index: 7 };
         let encoded =
             artifact_safe_external_to_outbound(&value).expect("artifact-safe encode succeeds");
 
