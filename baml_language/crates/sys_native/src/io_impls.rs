@@ -2702,6 +2702,24 @@ fn http_method(method: &str) -> Result<reqwest::Method, VmBamlError> {
     })
 }
 
+/// The environment variables reqwest reads when it builds a client: the proxy
+/// settings (`REQUEST_METHOD` marks a CGI process, where `HTTP_PROXY` is
+/// ignored) and, on Linux, where the CA certificates are.
+#[cfg(feature = "bundle-http")]
+const HTTP_CLIENT_ENV: [&str; 11] = [
+    "ALL_PROXY",
+    "all_proxy",
+    "HTTPS_PROXY",
+    "https_proxy",
+    "HTTP_PROXY",
+    "http_proxy",
+    "NO_PROXY",
+    "no_proxy",
+    "REQUEST_METHOD",
+    "SSL_CERT_FILE",
+    "SSL_CERT_DIR",
+];
+
 /// The deadlines one outgoing HTTP request runs under, as `baml.http` resolved
 /// them: `total` is `Request.timeout` (end to end, connecting included) and
 /// `connect` is `Request.connect_timeout`. `None` is no limit.
@@ -2727,14 +2745,45 @@ impl HttpTimeoutOptions {
     }
 
     /// A client that enforces the connect deadline (TCP and TLS).
+    ///
+    /// A client owns its connection pool, so one is shared per connect
+    /// deadline: requests reuse open connections instead of connecting (and
+    /// handshaking TLS) every time. reqwest reads `HTTP_CLIENT_ENV` when it
+    /// builds a client, so those values are part of the key: setting a proxy
+    /// between requests applies to the next one.
     fn client(self) -> Result<reqwest::Client, VmBamlError> {
+        use std::{
+            collections::HashMap,
+            sync::{LazyLock, Mutex, PoisonError},
+        };
+
+        type Key = (
+            Option<std::time::Duration>,
+            [Option<std::ffi::OsString>; HTTP_CLIENT_ENV.len()],
+        );
+        // Keys rarely vary. A program that derives a new connect deadline for
+        // every request starts the cache over rather than growing it forever.
+        const MAX_CLIENTS: usize = 32;
+        static CLIENTS: LazyLock<Mutex<HashMap<Key, reqwest::Client>>> =
+            LazyLock::new(Default::default);
+
+        let key = (self.connect, HTTP_CLIENT_ENV.map(baml_env::os_var));
+        let mut clients = CLIENTS.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(client) = clients.get(&key) {
+            return Ok(client.clone());
+        }
         let mut builder = reqwest::Client::builder();
         if let Some(connect) = self.connect {
             builder = builder.connect_timeout(connect);
         }
-        builder
+        let client = builder
             .build()
-            .map_err(|e| http_transport_error("HTTP client initialization failed", &e, self))
+            .map_err(|e| http_transport_error("HTTP client initialization failed", &e, self))?;
+        if clients.len() >= MAX_CLIENTS {
+            clients.clear();
+        }
+        clients.insert(key, client.clone());
+        Ok(client)
     }
 
     /// Applies the total deadline to a request. One that elapses surfaces as

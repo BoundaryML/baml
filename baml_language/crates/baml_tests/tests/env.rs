@@ -187,3 +187,41 @@ async fn anthropic_clients_default_api_key_from_env_at_runtime() {
     let expected = BexExternalValue::String("sk-ant-from-env".into());
     assert_eq!(headers.get("runtime"), Some(&expected));
 }
+
+// ─── HTTP proxy variables ─────────────────────────────────────────────────────
+
+/// The runtime shares HTTP clients across requests, and reqwest reads the
+/// proxy variables when it builds one. Setting or clearing a proxy between
+/// requests must still apply to the next request.
+#[tokio::test]
+async fn http_proxy_change_applies_to_next_request() {
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::any};
+
+    async fn answering(body: &str) -> MockServer {
+        let server = MockServer::start().await;
+        Mock::given(any())
+            .respond_with(ResponseTemplate::new(200).set_body_string(body))
+            .mount(&server)
+            .await;
+        server
+    }
+    let origin = answering("origin").await;
+    // A plain-HTTP proxy receives the request itself; this one answers it.
+    let proxy = answering("proxy").await;
+    let program = format!(
+        r#"function main() -> string {{ baml.http.fetch("{}/").text() }}"#,
+        origin.uri()
+    );
+    let body = |text: &str| BexExternalValue::String(text.to_string().into());
+
+    // An inherited NO_PROXY that covers 127.0.0.1 would bypass the proxy.
+    unsafe {
+        std::env::remove_var("NO_PROXY");
+        std::env::remove_var("no_proxy");
+    }
+    assert_eq!(baml_test!(&program).result, Ok(body("origin")));
+    unsafe { std::env::set_var("HTTP_PROXY", proxy.uri()) };
+    assert_eq!(baml_test!(&program).result, Ok(body("proxy")));
+    unsafe { std::env::remove_var("HTTP_PROXY") };
+    assert_eq!(baml_test!(&program).result, Ok(body("origin")));
+}
