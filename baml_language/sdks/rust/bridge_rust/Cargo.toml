@@ -33,7 +33,6 @@ doctest = false
 # are baked into the shared library when *it* is built.
 [dependencies]
 hex = { workspace = true }
-# `serde`: a generated SDK's `serde` feature serializes `baml_bridge::Map`.
 indexmap = { workspace = true, features = [ "serde" ] }
 libc = { workspace = true }
 libloading = { workspace = true }
