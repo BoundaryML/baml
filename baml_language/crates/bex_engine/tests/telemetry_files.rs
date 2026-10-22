@@ -187,6 +187,48 @@ async fn shutdown_reports_disk_errors_even_without_another_invocation() {
     assert_eq!(engine.telemetry_result(), Some(Err(error)));
 }
 
+/// Every reading is reported, and a file of rows is one JSON object per line.
+#[cfg(feature = "telemetry_diagnostics")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn diagnostics_report_every_pool_and_append_one_line_per_engine() {
+    let root = tempfile::tempdir().unwrap();
+    let engine = engine(
+        baml_test_support::compile_source("function main() -> int { 1 }"),
+        TelemetryRecording::local_files_in(root.path(), RecordingConfig::default()),
+    );
+    engine
+        .call_function("main", vec![], context(), true)
+        .await
+        .unwrap();
+    let diagnostics = engine.telemetry_diagnostics().unwrap();
+    assert_eq!(diagnostics["pid"], u64::from(std::process::id()));
+    assert!(diagnostics["recording_id"].is_string());
+    assert_eq!(diagnostics["delivery"]["kind"], "local");
+    assert!(diagnostics["captures"]["budget_bytes"].as_u64().unwrap() > 0);
+    assert!(diagnostics["chunks"]["sealed_records"].as_u64().unwrap() > 0);
+    assert_eq!(diagnostics["chunks"]["overage_allocations"], 0);
+    assert_eq!(diagnostics["overage_warned"], false);
+    let file = root.path().join("diagnostics.jsonl");
+    bex_engine::append_diagnostics_line(&file, &diagnostics).unwrap();
+    engine.shutdown().await;
+    bex_engine::append_diagnostics_line(&file, &engine.telemetry_diagnostics().unwrap()).unwrap();
+    let rows: Vec<serde_json::Value> = std::fs::read_to_string(&file)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0], diagnostics);
+    // After shutdown nothing is held, and the counts only grew: shutdown
+    // seals the records that end the recording.
+    assert_eq!(rows[1]["chunks"]["active_producers"], 0);
+    assert_eq!(rows[1]["captures"]["in_use"], 0);
+    assert!(
+        rows[1]["chunks"]["sealed_records"].as_u64()
+            >= rows[0]["chunks"]["sealed_records"].as_u64()
+    );
+}
+
 #[test]
 fn off_does_not_create_local_files() {
     const CHILD: &str = "BAML_FILE_SINK_OFF_TEST_CHILD";

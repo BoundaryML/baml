@@ -438,6 +438,13 @@ mod runtime;
 pub use runtime::{
     ExecutionScope, FutureErrorLinks, RecordingControl, RuntimeError, SpanOwner, TelemetryRuntime,
 };
+/// What [`TelemetryRuntime::diagnostics`] reads, and the transport readings
+/// it is made of, so a reader need not name the transport crate.
+#[cfg(all(not(target_arch = "wasm32"), feature = "diagnostics"))]
+pub use {
+    bex_chunkedringbuffer::{PoolDiagnostics as LaneDiagnostics, Stats as TransportStats},
+    runtime::Diagnostics,
+};
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum ProcessorError {

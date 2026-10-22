@@ -112,6 +112,63 @@ pub struct CloudPublisher {
     preflight_size: Option<(CasId, usize)>,
     failure: Option<DeliveryError>,
     delivery: BcsDeliveryHandle,
+    /// Where this publisher reports what it holds, after each batch.
+    #[cfg(feature = "diagnostics")]
+    gauges: Option<Arc<PublisherGauges>>,
+}
+
+/// What the publisher holds, published after each batch for a reader on
+/// another thread: the publisher itself lives on the processor's.
+/// Measurement only, under the `diagnostics` feature.
+#[cfg(feature = "diagnostics")]
+#[derive(Default)]
+pub struct PublisherGauges {
+    retained_captures: std::sync::atomic::AtomicUsize,
+    retained_bytes: std::sync::atomic::AtomicUsize,
+    queued_blobs: std::sync::atomic::AtomicUsize,
+    queued_bytes: std::sync::atomic::AtomicUsize,
+    staged_files: std::sync::atomic::AtomicUsize,
+    staged_bytes: std::sync::atomic::AtomicUsize,
+    open_file_bytes: std::sync::atomic::AtomicUsize,
+    offered_ids: std::sync::atomic::AtomicUsize,
+}
+
+/// A reading of [`PublisherGauges`].
+#[cfg(feature = "diagnostics")]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct PublisherDiagnostics {
+    /// Captures held across the queue and staged files.
+    pub retained_captures: usize,
+    /// Their retained memory, and the queued strings'.
+    pub retained_bytes: usize,
+    /// Blobs waiting for a file.
+    pub queued_blobs: usize,
+    pub queued_bytes: usize,
+    /// Sealed files the last service found staged, and their bytes: staging
+    /// is emptied by every service, so this is what it held going in.
+    pub staged_files: usize,
+    pub staged_bytes: usize,
+    /// The open recording file's encoded size so far.
+    pub open_file_bytes: usize,
+    /// Blob IDs remembered as recently offered.
+    pub offered_ids: usize,
+}
+
+#[cfg(feature = "diagnostics")]
+impl PublisherGauges {
+    pub fn read(&self) -> PublisherDiagnostics {
+        use std::sync::atomic::Ordering::Relaxed;
+        PublisherDiagnostics {
+            retained_captures: self.retained_captures.load(Relaxed),
+            retained_bytes: self.retained_bytes.load(Relaxed),
+            queued_blobs: self.queued_blobs.load(Relaxed),
+            queued_bytes: self.queued_bytes.load(Relaxed),
+            staged_files: self.staged_files.load(Relaxed),
+            staged_bytes: self.staged_bytes.load(Relaxed),
+            open_file_bytes: self.open_file_bytes.load(Relaxed),
+            offered_ids: self.offered_ids.load(Relaxed),
+        }
+    }
 }
 
 /// A capture that blobs still queued are written from.
@@ -206,7 +263,35 @@ impl CloudPublisher {
             preflight_size: None,
             failure: None,
             delivery,
+            #[cfg(feature = "diagnostics")]
+            gauges: None,
         })
+    }
+
+    /// Report what this publisher holds to `gauges` after each batch.
+    #[cfg(feature = "diagnostics")]
+    #[must_use]
+    pub fn with_gauges(mut self, gauges: Arc<PublisherGauges>) -> Self {
+        self.gauges = Some(gauges);
+        self
+    }
+
+    #[cfg(feature = "diagnostics")]
+    fn publish_gauges(&self) {
+        use std::sync::atomic::Ordering::Relaxed;
+        let Some(gauges) = &self.gauges else {
+            return;
+        };
+        gauges
+            .retained_captures
+            .store(self.retained_snapshots, Relaxed);
+        gauges.retained_bytes.store(self.retained_bytes, Relaxed);
+        gauges.queued_blobs.store(self.queue.len(), Relaxed);
+        gauges.queued_bytes.store(self.queued_bytes, Relaxed);
+        gauges
+            .open_file_bytes
+            .store(self.recording.encoded_size_hint(), Relaxed);
+        gauges.offered_ids.store(self.offered.len(), Relaxed);
     }
 
     #[must_use]
@@ -619,6 +704,15 @@ impl CloudPublisher {
             }
         }
         if self.failure.is_none() {
+            // Staging is emptied here: what it held is read before it is.
+            #[cfg(feature = "diagnostics")]
+            if let Some(gauges) = &self.gauges {
+                use std::sync::atomic::Ordering::Relaxed;
+                gauges.staged_files.store(self.staged.len(), Relaxed);
+                gauges
+                    .staged_bytes
+                    .store(self.staged_recording_bytes, Relaxed);
+            }
             let staged = std::mem::take(&mut self.staged);
             self.staged_recording_bytes = 0;
             for PendingFile { file, window } in staged {
@@ -731,6 +825,8 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
 
     fn after_batch(&mut self, _records: usize) {
         self.tick(Instant::now());
+        #[cfg(feature = "diagnostics")]
+        self.publish_gauges();
     }
 
     fn max_chunks_per_batch(&self) -> usize {
@@ -771,6 +867,8 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
             }
         }
         self.service(Instant::now(), Seal::End);
+        #[cfg(feature = "diagnostics")]
+        self.publish_gauges();
     }
 }
 

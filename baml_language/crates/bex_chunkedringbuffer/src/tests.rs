@@ -172,6 +172,16 @@ fn a_lane_held_beyond_its_size_grows_then_shrinks_as_chunks_return_idle() {
         assert_eq!(stats.allocations, 2);
         assert_eq!(stats.overage_allocations, 1);
         assert_eq!(stats.exhausted_waits, 1);
+        #[cfg(feature = "diagnostics")]
+        assert_eq!(
+            pool.diagnostics(),
+            super::PoolDiagnostics {
+                exhausted_waits: 1,
+                overage_allocations: 1,
+                // One chunk over: the one just allocated.
+                peak_overage_chunks: 1,
+            }
+        );
         assert_eq!(pool.stats().allocated_span_chunks, 2);
         assert_eq!(pool.stats().free_chunks, 0);
         reader.drain_chunks(nz(1), |_, _| unreachable!(), |_, c| held.push(c));

@@ -92,6 +92,12 @@ pub struct PoolStats {
     pub held_bytes: usize,
     /// The budget those charges are admitted under.
     pub budget_bytes: usize,
+    /// The most `held_bytes` has been.
+    #[cfg(any(test, feature = "stats"))]
+    pub peak_held_bytes: usize,
+    /// Storages taken beyond the budget.
+    #[cfg(any(test, feature = "stats"))]
+    pub overage_acquisitions: usize,
     /// Structural capacity of every storage, idle or checked out.
     #[cfg(any(test, feature = "stats"))]
     pub allocated_bytes: usize,
@@ -123,6 +129,10 @@ pub(crate) struct Pool {
     /// its own: producers charge it while the processor and the pool's lock
     /// holders uncharge.
     held: Padded<AtomicUsize>,
+    #[cfg(any(test, feature = "stats"))]
+    peak_held: AtomicUsize,
+    #[cfg(any(test, feature = "stats"))]
+    overage_acquisitions: AtomicUsize,
     limits: Limits,
     config: PoolConfig,
     #[cfg(any(test, feature = "stats"))]
@@ -161,7 +171,11 @@ impl Storage {
         let before = self.charged.swap(now, Ordering::Relaxed);
         if let Some(pool) = self.home.upgrade() {
             if now >= before {
-                pool.held.0.fetch_add(now - before, Ordering::Relaxed);
+                let added = now - before;
+                #[cfg_attr(not(any(test, feature = "stats")), expect(unused_variables))]
+                let held = pool.held.0.fetch_add(added, Ordering::Relaxed);
+                #[cfg(any(test, feature = "stats"))]
+                pool.peak_held.fetch_max(held + added, Ordering::Relaxed);
             } else {
                 pool.held.0.fetch_sub(before - now, Ordering::Relaxed);
             }
@@ -233,6 +247,10 @@ impl SnapshotPool {
             }),
             budget: budget_bytes,
             held: Padded(AtomicUsize::new(0)),
+            #[cfg(any(test, feature = "stats"))]
+            peak_held: AtomicUsize::new(0),
+            #[cfg(any(test, feature = "stats"))]
+            overage_acquisitions: AtomicUsize::new(0),
             limits,
             config,
             #[cfg(any(test, feature = "stats"))]
@@ -259,6 +277,8 @@ impl SnapshotPool {
     /// probing for the budget to open ([`btel_settings::overage`]). Waits
     /// only for the pool itself, which is as brief as returning a storage.
     pub fn acquire_beyond_budget(&self) -> Builder {
+        #[cfg(any(test, feature = "stats"))]
+        self.0.overage_acquisitions.fetch_add(1, Ordering::Relaxed);
         let state = self
             .0
             .state
@@ -322,6 +342,10 @@ impl SnapshotPool {
             idle_bytes: s.idle_bytes,
             held_bytes: self.0.held.0.load(Ordering::Relaxed),
             budget_bytes: self.0.budget,
+            #[cfg(any(test, feature = "stats"))]
+            peak_held_bytes: self.0.peak_held.load(Ordering::Relaxed),
+            #[cfg(any(test, feature = "stats"))]
+            overage_acquisitions: self.0.overage_acquisitions.load(Ordering::Relaxed),
             #[cfg(any(test, feature = "stats"))]
             allocated_bytes: self.0.counters.bytes.load(Ordering::Relaxed),
             #[cfg(any(test, feature = "stats"))]

@@ -1917,6 +1917,21 @@ async fn prepares_run_together_and_recordings_upload_together() {
     assert_eq!(sequences, [1, 2, 3, 4]);
     assert_eq!(handle.loss_count(), 0);
     assert_eq!(handle.recording_acked_through(), 4);
+    #[cfg(feature = "diagnostics")]
+    {
+        let diagnostics = handle.diagnostics();
+        assert_eq!(
+            (diagnostics.pending_plans, diagnostics.pending_captures),
+            (0, 0)
+        );
+        assert_eq!((diagnostics.prepares.count, diagnostics.puts.count), (4, 4));
+        // The slowest prepare was answered after 400 ms; a prepare is not
+        // answered until its plan is read.
+        assert!(diagnostics.prepares.max_nanos >= 400_000_000);
+        assert!(diagnostics.prepares.total_nanos >= diagnostics.prepares.max_nanos);
+        assert!(diagnostics.puts.max_nanos >= 150_000_000);
+        assert!(diagnostics.prepares.bytes > 0 && diagnostics.puts.bytes > 0);
+    }
 }
 
 #[tokio::test]

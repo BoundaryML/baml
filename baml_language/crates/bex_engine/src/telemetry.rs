@@ -55,6 +55,8 @@ pub(crate) enum RecordingDelivery {
         initial_auth_error: Arc<OnceLock<EngineError>>,
         initial_failure: InitialFailurePolicy,
         recording_override: RecordingOverride,
+        #[cfg(feature = "telemetry_diagnostics")]
+        gauges: Arc<btel_bcs::PublisherGauges>,
     },
 }
 
@@ -623,6 +625,8 @@ impl TelemetryRecording {
                 Ok(publisher)
             })
             .map_err(|error| EngineError::Other(format!("telemetry processor startup: {error}")))?;
+        #[cfg(feature = "telemetry_diagnostics")]
+        runtime.on_overage(warn_host);
         Ok((runtime, delivery.map(RecordingDelivery::Local)))
     }
 
@@ -655,6 +659,8 @@ impl TelemetryRecording {
         let initial_failure = initial_failure.cloned().unwrap_or_default();
         let initial_auth_cancel = crate::CancellationToken::new();
         let mut delivery = None;
+        #[cfg(feature = "telemetry_diagnostics")]
+        let gauges = Arc::new(btel_bcs::PublisherGauges::default());
         let runtime =
             btel_processor::TelemetryRuntime::with_publisher_factory(transport, |control| {
                 let failure = control.clone();
@@ -702,6 +708,8 @@ impl TelemetryRecording {
                             initial_auth_error: Arc::new(OnceLock::new()),
                             initial_failure: initial_failure.clone(),
                             recording_override: recording_override.clone(),
+                            #[cfg(feature = "telemetry_diagnostics")]
+                            gauges: Arc::clone(&gauges),
                         });
                         handle
                     }
@@ -710,16 +718,21 @@ impl TelemetryRecording {
                         btel_bcs::delivery::BcsDeliveryHandle::disabled(error, delivery_config)
                     }
                 };
-                btel_bcs::CloudPublisher::new(id, config, publisher_config, handle)
+                let publisher = btel_bcs::CloudPublisher::new(id, config, publisher_config, handle)
                     .map(|publisher| {
                         publisher
                             .with_source_snapshot(source_snapshot)
                             .with_function_metadata(functions)
                             .with_process(process)
                     })
-                    .map_err(std::io::Error::other)
+                    .map_err(std::io::Error::other)?;
+                #[cfg(feature = "telemetry_diagnostics")]
+                let publisher = publisher.with_gauges(Arc::clone(&gauges));
+                Ok(publisher)
             })
             .map_err(|error| EngineError::Other(format!("telemetry processor startup: {error}")))?;
+        #[cfg(feature = "telemetry_diagnostics")]
+        runtime.on_overage(warn_host);
         Ok((runtime, delivery))
     }
 }
@@ -758,7 +771,13 @@ fn artifact_configuration_error(
     EngineError::CloudAuthorization(Box::new(diagnostic))
 }
 
-#[allow(clippy::print_stderr)]
+/// A warning the host must see, on stderr: SDK hosts install no `tracing`
+/// subscriber. A closed or broken stderr is not worth a panic.
+fn warn_host(message: &str) {
+    use std::io::Write as _;
+    let _ = writeln!(std::io::stderr().lock(), "warning: {message}");
+}
+
 fn emit_initial_warning(
     policy: &InitialFailurePolicy,
     context: &AuthorizationContext,
@@ -770,7 +789,33 @@ fn emit_initial_warning(
             .with_recording_override(recording_override.clone())
             .to_string()
     });
-    eprintln!("warning: {message}");
+    warn_host(&message);
+}
+
+/// Append `diagnostics` to `path` as one JSON line, in one write: processes
+/// sharing the file append concurrently, and a line written in pieces would
+/// interleave with theirs.
+#[cfg(feature = "telemetry_diagnostics")]
+pub fn append_diagnostics_line(
+    path: &std::path::Path,
+    diagnostics: &serde_json::Value,
+) -> std::io::Result<()> {
+    use std::io::Write as _;
+    let line = format!("{diagnostics}\n");
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .and_then(|mut file| file.write_all(line.as_bytes()))
+}
+
+/// The file `DEV_BAML_TELEMETRY_DIAGNOSTICS_FILE` names, read once at engine
+/// construction. A dev-only, feature-gated knob: an invalid value (a relative
+/// path, or not unicode) panics with a clear message instead of being ignored.
+#[cfg(feature = "telemetry_diagnostics")]
+pub(crate) fn diagnostics_file() -> Option<std::path::PathBuf> {
+    baml_env::path_var("DEV_BAML_TELEMETRY_DIAGNOSTICS_FILE")
+        .unwrap_or_else(|error| panic!("{error}"))
 }
 
 fn initial_diagnostic(
@@ -939,6 +984,179 @@ impl BexEngine {
                 delivery.handle().metadata_replay_evictions()
             }
             _ => 0,
+        }
+    }
+
+    /// Everything the `telemetry_diagnostics` feature counts, as JSON: the
+    /// producers' pools and cold paths, and cloud delivery's progress and
+    /// losses. `None` when telemetry is off. Readable at any time; shutdown
+    /// logs it and appends it to `DEV_BAML_TELEMETRY_DIAGNOSTICS_FILE` when set.
+    #[cfg(feature = "telemetry_diagnostics")]
+    pub fn telemetry_diagnostics(&self) -> Option<serde_json::Value> {
+        // Every field of every reading is named here, so a field added to
+        // one of them is a compile error until it is reported or dismissed.
+        let telemetry = self.telemetry.as_ref()?;
+        let btel_processor::Diagnostics {
+            captures:
+                btel_snapshot::PoolStats {
+                    allocated,
+                    in_use,
+                    allocation_misses,
+                    idle_bytes,
+                    held_bytes,
+                    budget_bytes,
+                    peak_held_bytes,
+                    overage_acquisitions,
+                    allocated_bytes,
+                    peak_accounted_bytes,
+                    growths,
+                },
+            transport:
+                btel_processor::TransportStats {
+                    allocated_timing_chunks,
+                    allocated_span_chunks,
+                    free_chunks,
+                    ready_chunks,
+                    active_producers,
+                    sealed_chunks,
+                    sealed_records,
+                    wakeups,
+                },
+            lanes:
+                btel_processor::LaneDiagnostics {
+                    exhausted_waits,
+                    overage_allocations,
+                    peak_overage_chunks,
+                },
+            snapshot_wait_nanos,
+            overage_warned,
+        } = telemetry.runtime.diagnostics();
+        let delivery = match telemetry.delivery.as_ref() {
+            Some(RecordingDelivery::Cloud {
+                delivery, gauges, ..
+            }) => {
+                let handle = delivery.handle();
+                let btel_bcs::delivery::DeliveryDiagnostics {
+                    pending_plans,
+                    pending_captures,
+                    recording_reserved_used,
+                    cas_reserved_used,
+                    prepares,
+                    puts,
+                } = handle.diagnostics();
+                let btel_bcs::PublisherDiagnostics {
+                    retained_captures,
+                    retained_bytes,
+                    queued_blobs,
+                    queued_bytes,
+                    staged_files,
+                    staged_bytes,
+                    open_file_bytes,
+                    offered_ids,
+                } = gauges.read();
+                let request = |btel_bcs::delivery::RequestDiagnostics {
+                                   count,
+                                   total_nanos,
+                                   max_nanos,
+                                   bytes,
+                               }| {
+                    serde_json::json!({
+                        "count": count,
+                        "total_nanos": total_nanos,
+                        "mean_nanos": total_nanos.checked_div(count).unwrap_or(0),
+                        "max_nanos": max_nanos,
+                        "bytes": bytes,
+                    })
+                };
+                serde_json::json!({
+                    "kind": "cloud",
+                    "loss_count": handle.loss_count(),
+                    "recording_acked_through": handle.recording_acked_through(),
+                    "metadata_replay_evictions": handle.metadata_replay_evictions(),
+                    "disabled": handle.is_disabled(),
+                    "pending_plans": pending_plans,
+                    "pending_captures": pending_captures,
+                    "recording_reserved_used": recording_reserved_used,
+                    "cas_reserved_used": cas_reserved_used,
+                    "prepare": request(prepares),
+                    "put": request(puts),
+                    "publisher": {
+                        "retained_captures": retained_captures,
+                        "retained_bytes": retained_bytes,
+                        "queued_blobs": queued_blobs,
+                        "queued_bytes": queued_bytes,
+                        "staged_files": staged_files,
+                        "staged_bytes": staged_bytes,
+                        "open_file_bytes": open_file_bytes,
+                        "offered_ids": offered_ids,
+                    },
+                })
+            }
+            Some(RecordingDelivery::Local(_)) => serde_json::json!({ "kind": "local" }),
+            None => serde_json::Value::Null,
+        };
+        Some(serde_json::json!({
+            "pid": std::process::id(),
+            "recording_id": telemetry.recording_id.map(|id| {
+                use std::fmt::Write as _;
+                id.as_bytes().iter().fold(String::with_capacity(32), |mut hex, byte| {
+                    write!(hex, "{byte:02x}").expect("writing to a String cannot fail");
+                    hex
+                })
+            }),
+            "captures": {
+                "budget_bytes": budget_bytes,
+                "held_bytes": held_bytes,
+                "peak_held_bytes": peak_held_bytes,
+                "overage_acquisitions": overage_acquisitions,
+                "allocated": allocated,
+                "in_use": in_use,
+                "allocation_misses": allocation_misses,
+                "growths": growths,
+                "idle_bytes": idle_bytes,
+                "allocated_bytes": allocated_bytes,
+                "peak_accounted_bytes": peak_accounted_bytes,
+                "wait_nanos": snapshot_wait_nanos,
+            },
+            "chunks": {
+                "allocated_timing": allocated_timing_chunks,
+                "allocated_span": allocated_span_chunks,
+                "free": free_chunks,
+                "ready": ready_chunks,
+                "active_producers": active_producers,
+                "sealed_chunks": sealed_chunks,
+                "sealed_records": sealed_records,
+                "wakeups": wakeups,
+                "exhausted_waits": exhausted_waits,
+                "overage_allocations": overage_allocations,
+                "peak_overage_chunks": peak_overage_chunks,
+            },
+            "overage_warned": overage_warned,
+            "delivery": delivery,
+        }))
+    }
+
+    /// At shutdown: log the diagnostics, and append them as one JSON line to
+    /// the file `DEV_BAML_TELEMETRY_DIAGNOSTICS_FILE` named at construction,
+    /// so every engine of a load test leaves its row.
+    #[cfg(feature = "telemetry_diagnostics")]
+    pub(crate) fn report_telemetry_diagnostics(&self) {
+        let Some(diagnostics) = self.telemetry_diagnostics() else {
+            return;
+        };
+        tracing::info!(target: "baml.telemetry.diagnostics", diagnostics = %diagnostics);
+        let Some(path) = self
+            .telemetry
+            .as_ref()
+            .and_then(|telemetry| telemetry.diagnostics_file.as_deref())
+        else {
+            return;
+        };
+        if let Err(error) = append_diagnostics_line(path, &diagnostics) {
+            warn_host(&format!(
+                "telemetry diagnostics were not written to {}: {error}",
+                path.display()
+            ));
         }
     }
 

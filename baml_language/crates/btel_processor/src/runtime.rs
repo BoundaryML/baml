@@ -119,7 +119,19 @@ pub struct TelemetryRuntime {
     finished: AtomicBool,
     deferred_spans: super::DeferredSpans<Snapshot, Snapshot>,
     span_owners: Mutex<Vec<std::sync::Weak<dyn SpanOwner>>>,
+    /// Whether the first allocation beyond a budget or a lane has been
+    /// warned about.
+    #[cfg(feature = "diagnostics")]
+    overage_warned: AtomicBool,
+    /// Where that warning goes, when the host wants it somewhere `tracing`
+    /// does not reach.
+    #[cfg(feature = "diagnostics")]
+    overage_hook: Mutex<Option<OverageHook>>,
 }
+
+/// Where [`TelemetryRuntime::on_overage`] sends the warning.
+#[cfg(feature = "diagnostics")]
+type OverageHook = Box<dyn Fn(&str) + Send + Sync>;
 
 /// Bounded, engine-scoped map from a failed future to the raise that failed
 /// it. Written before the future wakes its awaiters; reading never removes
@@ -312,6 +324,10 @@ impl TelemetryRuntime {
             finished: AtomicBool::new(false),
             deferred_spans,
             span_owners: Mutex::new(Vec::new()),
+            #[cfg(feature = "diagnostics")]
+            overage_warned: AtomicBool::new(false),
+            #[cfg(feature = "diagnostics")]
+            overage_hook: Mutex::new(None),
         }))
     }
 
@@ -517,6 +533,8 @@ impl TelemetryRuntime {
                 std::panic::panic_any(TransportFailed);
             }
             result = Some(self.snapshots.acquire_beyond_budget());
+            #[cfg(feature = "diagnostics")]
+            self.warn_overage("capture storage beyond its budget");
         }
         self.snapshot_wait_nanos.fetch_add(
             u64::try_from(start.elapsed().as_nanos()).unwrap_or(u64::MAX),
@@ -529,6 +547,46 @@ impl TelemetryRuntime {
     }
     pub fn snapshot_wait_nanos(&self) -> u64 {
         self.snapshot_wait_nanos.load(Ordering::Relaxed)
+    }
+
+    /// Everything the `diagnostics` feature counts about this runtime's
+    /// producers and pools.
+    #[cfg(feature = "diagnostics")]
+    pub fn diagnostics(&self) -> Diagnostics {
+        Diagnostics {
+            captures: self.snapshots.stats(),
+            transport: self.pool.stats(),
+            lanes: self.pool.diagnostics(),
+            snapshot_wait_nanos: self.snapshot_wait_nanos(),
+            overage_warned: self.overage_warned.load(Ordering::Relaxed),
+        }
+    }
+
+    /// Send the once-per-runtime overage warning to `hook` as well as to
+    /// `tracing`: a host without a subscriber would otherwise never see it.
+    #[cfg(feature = "diagnostics")]
+    pub fn on_overage(&self, hook: impl Fn(&str) + Send + Sync + 'static) {
+        *self
+            .overage_hook
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Box::new(hook));
+    }
+
+    /// Once per runtime: producers have begun taking more than their pools'
+    /// sizes, which is the processor falling behind.
+    #[cfg(feature = "diagnostics")]
+    fn warn_overage(&self, what: &str) {
+        if !self.overage_warned.swap(true, Ordering::Relaxed) {
+            let message = format!("telemetry producers are taking {what}: the processor is behind");
+            tracing::warn!(runtime = self.id, "{message}");
+            if let Some(hook) = &*self
+                .overage_hook
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+            {
+                hook(&message);
+            }
+        }
     }
 
     /// Recording was abandoned, or `finish` has started and a task is late.
@@ -724,6 +782,18 @@ impl TelemetryRuntime {
     }
 }
 
+/// What the `diagnostics` feature counts about a runtime; see
+/// [`TelemetryRuntime::diagnostics`].
+#[cfg(feature = "diagnostics")]
+#[derive(Clone, Copy, Debug)]
+pub struct Diagnostics {
+    pub captures: btel_snapshot::PoolStats,
+    pub transport: Stats,
+    pub lanes: bex_chunkedringbuffer::PoolDiagnostics,
+    pub snapshot_wait_nanos: u64,
+    pub overage_warned: bool,
+}
+
 /// Synchronous ownership boundary; stores no references into a VM or its heap.
 pub struct ExecutionScope {
     active: bool,
@@ -746,6 +816,13 @@ impl Drop for ExecutionScope {
                 .then(|| bindings[index].producer.take())
                 .flatten()
         });
+        #[cfg(feature = "diagnostics")]
+        if released
+            .as_ref()
+            .is_some_and(|producer| producer.stats().overage_allocations > 0)
+        {
+            self.runtime.warn_overage("chunks beyond a lane's size");
+        }
         // Release outside the TLS borrow. Producer drop publishes partial chunks
         // and deactivates before shutdown can wait. Its worker slot stays bound.
         drop(released);
@@ -804,6 +881,10 @@ mod tests {
             deferred_spans: Arc::new(Mutex::new(Vec::new())),
             span_owners: Mutex::new(Vec::new()),
             finished: AtomicBool::new(false),
+            #[cfg(feature = "diagnostics")]
+            overage_warned: AtomicBool::new(false),
+            #[cfg(feature = "diagnostics")]
+            overage_hook: Mutex::new(None),
         });
         (runtime, pool)
     }
@@ -947,6 +1028,38 @@ mod tests {
         drop(held);
         assert_eq!(runtime.snapshots.overage_bytes(), 0);
         assert!(!pool.is_failed());
+    }
+
+    #[cfg(feature = "diagnostics")]
+    #[test]
+    fn diagnostics_count_overage_and_warn_once() {
+        let (mut runtime, _pool) = manual_runtime();
+        Arc::get_mut(&mut runtime).unwrap().snapshots =
+            btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+        let warnings = Arc::new(Mutex::new(Vec::new()));
+        let seen = Arc::clone(&warnings);
+        runtime.on_overage(move |message| seen.lock().unwrap().push(message.to_owned()));
+        let held = no_arguments(runtime.acquire_snapshot().unwrap());
+        let before = runtime.diagnostics();
+        assert_eq!(before.captures.overage_acquisitions, 0);
+        assert!(!before.overage_warned);
+        assert!(warnings.lock().unwrap().is_empty());
+        let _scope = runtime.enter();
+        let beyond = no_arguments(runtime.acquire_snapshot().unwrap());
+        let after = runtime.diagnostics();
+        assert_eq!(after.captures.overage_acquisitions, 1);
+        assert!(after.captures.peak_held_bytes >= after.captures.held_bytes);
+        assert!(after.snapshot_wait_nanos > 0);
+        assert!(after.overage_warned);
+        // A second overage is counted, but the host is warned only once.
+        let further = no_arguments(runtime.acquire_snapshot().unwrap());
+        assert_eq!(runtime.diagnostics().captures.overage_acquisitions, 2);
+        let warnings = warnings.lock().unwrap();
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("capture storage beyond its budget"));
+        drop(further);
+        drop(beyond);
+        drop(held);
     }
 
     #[test]

@@ -325,6 +325,68 @@ struct Shared {
     /// Set once shutdown starts; the shutdown timeout runs from then.
     draining: watch::Sender<bool>,
     on_failure: Box<dyn Fn(DeliveryError) + Send + Sync>,
+    #[cfg(feature = "diagnostics")]
+    prepares: RequestTiming,
+    #[cfg(feature = "diagnostics")]
+    puts: RequestTiming,
+}
+
+/// Every attempt of one kind of request: how many, how long they took in
+/// all and at most, and the bytes they carried. Measurement only, under the
+/// `diagnostics` feature.
+#[cfg(feature = "diagnostics")]
+#[derive(Default)]
+struct RequestTiming {
+    count: std::sync::atomic::AtomicU64,
+    nanos: std::sync::atomic::AtomicU64,
+    max_nanos: std::sync::atomic::AtomicU64,
+    bytes: std::sync::atomic::AtomicU64,
+}
+
+#[cfg(feature = "diagnostics")]
+impl RequestTiming {
+    fn record(&self, elapsed: Duration, bytes: usize) {
+        use std::sync::atomic::Ordering;
+        let nanos = u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX);
+        self.count.fetch_add(1, Ordering::Relaxed);
+        self.nanos.fetch_add(nanos, Ordering::Relaxed);
+        self.max_nanos.fetch_max(nanos, Ordering::Relaxed);
+        self.bytes.fetch_add(bytes as u64, Ordering::Relaxed);
+    }
+    fn read(&self) -> RequestDiagnostics {
+        use std::sync::atomic::Ordering;
+        RequestDiagnostics {
+            count: self.count.load(Ordering::Relaxed),
+            total_nanos: self.nanos.load(Ordering::Relaxed),
+            max_nanos: self.max_nanos.load(Ordering::Relaxed),
+            bytes: self.bytes.load(Ordering::Relaxed),
+        }
+    }
+}
+
+/// What the `diagnostics` feature counted about one kind of request.
+#[cfg(feature = "diagnostics")]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct RequestDiagnostics {
+    /// Attempts, retries included.
+    pub count: u64,
+    pub total_nanos: u64,
+    pub max_nanos: u64,
+    pub bytes: u64,
+}
+
+/// What delivery holds and has done; see [`BcsDeliveryHandle::diagnostics`].
+#[cfg(feature = "diagnostics")]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct DeliveryDiagnostics {
+    /// Plans admitted whose recording is not yet uploaded.
+    pub pending_plans: usize,
+    /// Captures held by admitted plans until their bodies are built.
+    pub pending_captures: usize,
+    pub recording_reserved_used: usize,
+    pub cas_reserved_used: usize,
+    pub prepares: RequestDiagnostics,
+    pub puts: RequestDiagnostics,
 }
 
 impl Shared {
@@ -585,6 +647,10 @@ impl BcsDeliveryHandle {
                 draining: watch::channel(true).0,
                 heartbeat: Heartbeat::new(),
                 on_failure: Box::new(|_| {}),
+                #[cfg(feature = "diagnostics")]
+                prepares: RequestTiming::default(),
+                #[cfg(feature = "diagnostics")]
+                puts: RequestTiming::default(),
             }),
         }
     }
@@ -605,6 +671,20 @@ impl BcsDeliveryHandle {
     /// each of which made every stream carry its groups again.
     pub fn carried_resets(&self) -> u64 {
         self.shared.state.lock().unwrap().carried_resets
+    }
+
+    /// What delivery holds now and what its requests have cost so far.
+    #[cfg(feature = "diagnostics")]
+    pub fn diagnostics(&self) -> DeliveryDiagnostics {
+        let state = self.shared.state.lock().unwrap();
+        DeliveryDiagnostics {
+            pending_plans: state.plans,
+            pending_captures: state.snapshots,
+            recording_reserved_used: state.recording_bytes,
+            cas_reserved_used: state.cas.used,
+            prepares: self.shared.prepares.read(),
+            puts: self.shared.puts.read(),
+        }
     }
 
     /// The highest recording file sequence stored; zero before any. Every
@@ -975,6 +1055,10 @@ impl BcsDelivery {
             draining: watch::channel(false).0,
             heartbeat: Heartbeat::new(),
             on_failure: Box::new(on_failure),
+            #[cfg(feature = "diagnostics")]
+            prepares: RequestTiming::default(),
+            #[cfg(feature = "diagnostics")]
+            puts: RequestTiming::default(),
         });
         let worker_shared = shared.clone();
         let worker = thread::Builder::new()
@@ -1208,7 +1292,9 @@ async fn prepare(
         )
         .map_err(|_| DeliveryError::Capacity)?;
         let body = Bytes::from(writer.bytes);
-        match bcs_api::telemetry::prepare(
+        #[cfg(feature = "diagnostics")]
+        let (started, sent) = (std::time::Instant::now(), body.len());
+        let answer = bcs_api::telemetry::prepare(
             client,
             &url,
             config.bearer_token.as_deref(),
@@ -1216,22 +1302,28 @@ async fn prepare(
             &key,
             body,
         )
-        .await
-        {
+        .await;
+        // A prepare is answered once its plan has been read, not at its
+        // response headers.
+        let answer = match answer {
             Ok(response) => {
                 shared.authorized();
-                match read_response(response, config.max_response_bytes).await {
-                    Ok(bytes) => {
-                        heartbeat.mark_control_success();
-                        let response: PrepareUploadsResponse = serde_json::from_slice(&bytes)
-                            .map_err(|_| DeliveryError::InvalidPlan)?;
-                        let _ = heartbeat.configure(response.heartbeat);
-                        return Ok(response);
-                    }
-                    Err(DeliveryError::Http) => {}
-                    Err(error) => return Err(error),
-                }
+                Ok(read_response(response, config.max_response_bytes).await)
             }
+            Err(error) => Err(error),
+        };
+        #[cfg(feature = "diagnostics")]
+        shared.prepares.record(started.elapsed(), sent);
+        match answer {
+            Ok(Ok(bytes)) => {
+                heartbeat.mark_control_success();
+                let response: PrepareUploadsResponse =
+                    serde_json::from_slice(&bytes).map_err(|_| DeliveryError::InvalidPlan)?;
+                let _ = heartbeat.configure(response.heartbeat);
+                return Ok(response);
+            }
+            Ok(Err(DeliveryError::Http)) => {}
+            Ok(Err(error)) => return Err(error),
             Err(error)
                 if matches!(
                     error.status(),
@@ -1285,6 +1377,7 @@ async fn read_response(
 async fn put(
     client: &Client,
     config: &DeliveryConfig,
+    #[cfg_attr(not(feature = "diagnostics"), expect(unused_variables))] shared: &Shared,
     target: UploadTarget,
     body: Body,
     plan_expiry: u64,
@@ -1309,7 +1402,9 @@ async fn put(
                 .into_iter()
                 .map(Ok::<Bytes, std::convert::Infallible>),
         ));
-        match bcs_api::telemetry::upload(
+        #[cfg(feature = "diagnostics")]
+        let started = std::time::Instant::now();
+        let answer = bcs_api::telemetry::upload(
             client,
             &target.presigned_put_url,
             headers.clone(),
@@ -1319,8 +1414,10 @@ async fn put(
                 .put_timeout(body.len())
                 .min(Duration::from_millis(remaining)),
         )
-        .await
-        {
+        .await;
+        #[cfg(feature = "diagnostics")]
+        shared.puts.record(started.elapsed(), body.len());
+        match answer {
             Ok(response) if response.status().is_success() => return Ok(()),
             Ok(response) if !retryable(response.status()) => return Err(DeliveryError::Http),
             _ => {}
@@ -1520,7 +1617,7 @@ async fn upload_recording(
     if let Some((target, body)) = recording {
         let _slot = slots.acquire().await.expect("recording lane open");
         let reset_cas = !target.candidate_indices.is_empty();
-        match put(client, config, target, body, expiry).await {
+        match put(client, config, shared, target, body, expiry).await {
             Ok(()) => {
                 let mut state = shared.state.lock().unwrap();
                 state.progress.recording_acked_through = state
@@ -1545,7 +1642,7 @@ async fn upload_body(
     slots: Arc<Semaphore>,
 ) {
     let _slot = slots.acquire().await.expect("CAS lane open");
-    if let Err(error) = put(client, config, target, body, expiry).await {
+    if let Err(error) = put(client, config, &hold.shared, target, body, expiry).await {
         hold.shared.lose(error, true);
     }
 }

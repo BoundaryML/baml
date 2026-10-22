@@ -86,3 +86,4 @@ wasm-bindgen-futures = { workspace = true }
 default = [ "aws-crypto" ]
 aws-crypto = [ "bex_engine/aws-crypto", "bex_cache/aws-crypto" ]
 ring-crypto = [ "bex_engine/ring-crypto", "bex_cache/ring-crypto" ]
+telemetry_diagnostics = [ "bex_engine/telemetry_diagnostics" ]

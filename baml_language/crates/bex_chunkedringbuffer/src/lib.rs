@@ -86,6 +86,42 @@ pub struct Stats {
     pub sealed_records: usize,
     pub wakeups: usize,
 }
+/// Pool-wide counts of what producers met on their cold paths, summed over
+/// every producer. Measurement only: counted under the `diagnostics` feature
+/// and read by nothing in production.
+#[cfg(feature = "diagnostics")]
+#[derive(Default)]
+struct Diagnostics {
+    exhausted_waits: AtomicUsize,
+    overage_allocations: AtomicUsize,
+    /// The most chunks a lane was over its size when a producer allocated
+    /// beyond it.
+    peak_overage_chunks: AtomicUsize,
+}
+
+#[cfg(feature = "diagnostics")]
+impl Diagnostics {
+    /// One more chunk allocated beyond a lane's size, the lane now `overage`
+    /// over it (that chunk included).
+    fn overage_allocation(&self, overage: usize) {
+        self.overage_allocations.fetch_add(1, Ordering::Relaxed);
+        self.peak_overage_chunks
+            .fetch_max(overage, Ordering::Relaxed);
+    }
+}
+
+/// What the `diagnostics` feature counted; see [`ChunkPool::diagnostics`].
+#[cfg(feature = "diagnostics")]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct PoolDiagnostics {
+    /// Times a producer found its lane empty and probed, over every producer.
+    pub exhausted_waits: usize,
+    /// Chunks allocated beyond a lane's size, over every producer.
+    pub overage_allocations: usize,
+    /// The most chunks a lane was over its size.
+    pub peak_overage_chunks: usize,
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ProducerStats {
     pub allocations: usize,
@@ -184,6 +220,8 @@ struct Shared<T, S> {
     // Advisory copies of each lane's overage, for the probe threshold.
     timing_overage: Padded<AtomicUsize>,
     span_overage: Padded<AtomicUsize>,
+    #[cfg(feature = "diagnostics")]
+    diagnostics: Diagnostics,
     config: Config,
 }
 
@@ -259,7 +297,8 @@ impl<T, S> Shared<T, S> {
                 // Reserved allocations also count: two writers cannot both
                 // allocate the last slot while allocation runs outside the lock.
                 lane.allocated += 1;
-                overage.store(lane.overage(), Ordering::Relaxed);
+                let over = lane.overage();
+                overage.store(over, Ordering::Relaxed);
                 if !within {
                     // The ready queue was sized for the lanes: every chunk
                     // beyond them needs its descriptor slot too, so sealing
@@ -274,6 +313,8 @@ impl<T, S> Shared<T, S> {
                 stats.allocations += 1;
                 if !within {
                     stats.overage_allocations += 1;
+                    #[cfg(feature = "diagnostics")]
+                    self.diagnostics.overage_allocation(over);
                 }
                 let mut guard = FailureGuard {
                     shared: self,
@@ -298,6 +339,10 @@ impl<T, S> Shared<T, S> {
             if !exhausted {
                 stats.exhausted_waits += 1;
                 exhausted = true;
+                #[cfg(feature = "diagnostics")]
+                self.diagnostics
+                    .exhausted_waits
+                    .fetch_add(1, Ordering::Relaxed);
             }
             // Do not fight the recycler for its mutex while the pool is empty.
             // The consumer publishes availability after returning the allocation.
@@ -415,6 +460,8 @@ impl<T: Send, S: Send> ChunkPool<T, S> {
                 span_free: Padded(AtomicUsize::new(if config.preallocate { span } else { 0 })),
                 timing_overage: Padded(AtomicUsize::new(0)),
                 span_overage: Padded(AtomicUsize::new(0)),
+                #[cfg(feature = "diagnostics")]
+                diagnostics: Diagnostics::default(),
                 config,
             }),
         })
@@ -573,6 +620,16 @@ impl<T: Send, S: Send> ChunkPool<T, S> {
     }
     pub fn is_failed(&self) -> bool {
         self.shared.status.load(Ordering::Acquire) == FAILED
+    }
+    /// What producers met on their cold paths, summed over all of them.
+    #[cfg(feature = "diagnostics")]
+    pub fn diagnostics(&self) -> PoolDiagnostics {
+        let d = &self.shared.diagnostics;
+        PoolDiagnostics {
+            exhausted_waits: d.exhausted_waits.load(Ordering::Relaxed),
+            overage_allocations: d.overage_allocations.load(Ordering::Relaxed),
+            peak_overage_chunks: d.peak_overage_chunks.load(Ordering::Relaxed),
+        }
     }
     pub fn stats(&self) -> Stats {
         let s = self.shared.lock();
