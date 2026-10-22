@@ -265,13 +265,13 @@ fn admission_fixpoint(
             let mut generator = Generator::new(&program, &mut builtins, object, unit);
             match generator.function(&symbols[&object]) {
                 Ok(code) => {
-                    if generator.slots > u32::MAX as usize {
+                    let Ok(slots) = u32::try_from(generator.slots) else {
                         failed.push((
                             object,
                             Rejection::Unsupported("compiled frame slot count exceeds u32".into()),
                         ));
                         continue;
-                    }
+                    };
                     bodies.push_str(&code);
                     functions.push(CompiledFunction {
                         name: index.name(object).to_owned(),
@@ -279,7 +279,7 @@ fn admission_fixpoint(
                         symbol: symbols[&object].clone(),
                         object,
                         arity: index.info(object).arity,
-                        slots: generator.slots as u32,
+                        slots,
                         cause_slot: generator
                             .cause_slot
                             .map(|slot| u32::try_from(slot).expect("bounded MIR slots")),
