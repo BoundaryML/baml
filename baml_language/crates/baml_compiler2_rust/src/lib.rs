@@ -4,6 +4,8 @@
 mod admit;
 mod analysis;
 mod codegen;
+mod coords;
+mod index;
 mod reach;
 mod render;
 mod structure;
