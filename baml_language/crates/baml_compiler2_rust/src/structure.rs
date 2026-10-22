@@ -1,7 +1,7 @@
 //! Stackifier control-flow structuring for reducible graphs, including unwind edges.
 //! Each reachable block is emitted once, within its immediate dominator's region.
 
-use std::{cell::RefCell, fmt};
+use std::{cell::RefCell, collections::BTreeSet, fmt};
 
 /// Terminator edges; computations belong to the block's leaf.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,6 +60,33 @@ impl Cfg {
         let mut out = self.flows[block].successors();
         out.extend(self.unwinds[block]);
         out
+    }
+
+    pub(crate) fn loop_headers(&self) -> BTreeSet<usize> {
+        let successors = |block| self.successors(block);
+        let n = self.flows.len();
+        let mut headers = BTreeSet::new();
+        let mut on_path = vec![false; n];
+        let mut seen = vec![false; n];
+        let mut stack = vec![(self.entry, successors(self.entry), 0)];
+        seen[self.entry] = true;
+        on_path[self.entry] = true;
+        while let Some((block, succs, next)) = stack.last_mut() {
+            let Some(&succ) = succs.get(*next) else {
+                on_path[*block] = false;
+                stack.pop();
+                continue;
+            };
+            *next += 1;
+            if on_path[succ] {
+                headers.insert(succ);
+            } else if !seen[succ] {
+                seen[succ] = true;
+                on_path[succ] = true;
+                stack.push((succ, successors(succ), 0));
+            }
+        }
+        headers
     }
 
     fn distinct_successors(&self, block: usize) -> Vec<usize> {
@@ -279,7 +306,7 @@ impl<'a> Analysis<'a> {
             b = idom[b].expect("reachable blocks have a dominator");
         };
         let mut is_merge = vec![false; n];
-        let mut is_loop_header = vec![false; n];
+        let loop_headers = cfg.loop_headers();
         let mut forward_in = vec![0usize; n];
         for &block in &by_rpo {
             for succ in cfg.distinct_successors(block) {
@@ -290,7 +317,6 @@ impl<'a> Analysis<'a> {
                             to: succ,
                         });
                     }
-                    is_loop_header[succ] = true;
                 } else {
                     forward_in[succ] += 1;
                 }
@@ -318,7 +344,7 @@ impl<'a> Analysis<'a> {
         let mut loop_members: Vec<Option<Vec<bool>>> = vec![None; n];
         let mut natural_exit_of: Vec<Option<usize>> = vec![None; n];
         for &header in &by_rpo {
-            if !is_loop_header[header] {
+            if !loop_headers.contains(&header) {
                 continue;
             }
             let mut members = vec![false; n];
@@ -1029,6 +1055,16 @@ mod tests {
         labels(&structured.stmts, &mut blocks, &mut loops);
         assert_eq!(loops, vec![1]);
         assert_eq!(blocks, vec![3], "the handler's block opens inside the loop");
+    }
+
+    #[test]
+    fn unwind_only_handler_loop_has_a_header() {
+        let mut g = cfg(0, vec![Flow::Exit, branch(2, 3), Flow::Goto(1), Flow::Exit]);
+        g.unwinds[0] = Some(1);
+        assert_eq!(g.loop_headers(), BTreeSet::from([1]));
+        let structured = super::structurize(&g).unwrap();
+        assert_each_block_once(&structured.stmts, &[0, 1, 2, 3]);
+        assert!(find_loop(&structured.stmts, 1).is_some());
     }
 
     #[test]
