@@ -169,6 +169,7 @@ function RecursiveCancellation() -> void {
     child.cancel();
     let result = (await child) catch_all_panics (e) {
         let cancelled: baml.panics.Cancelled => -1,
+        _ => -2,
     };
     baml.io.println(`${result}:${state.length()}:${state[0]}:${state[1]}`);
 }
