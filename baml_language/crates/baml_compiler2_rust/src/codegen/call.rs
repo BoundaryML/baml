@@ -286,7 +286,12 @@ impl<'db> Generator<'_, 'db> {
         Ok(Some(Expr::new(format!("{value}.is_null()"), Repr::Bool)))
     }
 
-    pub(super) fn callee_ptr(&mut self, block: BlockId, callee: &Operand<'db>) -> Gen<()> {
+    pub(super) fn callee_ptr(
+        &mut self,
+        block: BlockId,
+        callee: &Operand<'db>,
+        trace: Option<&Operand<'db>>,
+    ) -> Gen<()> {
         let code = match callee {
             Operand::Constant(Constant::Function(func)) => {
                 let Some((object, _)) = self.index.function(self.db, *func) else {
@@ -295,12 +300,18 @@ impl<'db> Generator<'_, 'db> {
                 };
                 format!("vm.record_object(fr, ObjectIndex::from_raw({object}))")
             }
+            Operand::Constant(Constant::GlobalItem(_)) | Operand::Copy(_) | Operand::Move(_) => {
+                let value = self.value_operand(block, callee)?;
+                if let Some(trace) = trace {
+                    // SetCallTrace precedes CallIndirect's callable check.
+                    let trace = self.value_operand(block, trace)?;
+                    let set_trace = self.fallible(block, &format!("vm.set_call_trace({trace})"))?;
+                    self.emit_statement(&format!("{set_trace};"));
+                }
+                self.fallible(block, &format!("vm.indirect_callee({value})"))?
+            }
             Operand::Constant(_) => {
                 return unsupported("call of a constant that is not a function");
-            }
-            Operand::Copy(_) | Operand::Move(_) => {
-                let value = self.value_operand(block, callee)?;
-                format!("bex_vm::compiled_rt::callee_ptr({value})?")
             }
         };
         self.emit_statement(&format!("let callee = {code};"));

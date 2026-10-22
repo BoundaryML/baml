@@ -7,7 +7,10 @@
 //! pointers from `idx_to_ptr` or from values it has just loaded or reloaded
 //! from its frame slots after a suspension.
 
-use bex_vm_types::{HeapPtr, Object, RealizedTy, StackIndex, Value, types::Function};
+use bex_vm_types::{
+    HeapPtr, Object, RealizedTy, StackIndex, Value,
+    types::{Function, FunctionType},
+};
 
 use super::{CompiledFn, FrameRecord, Step};
 use crate::{
@@ -27,6 +30,12 @@ thread_local! {
 }
 
 impl BexVm {
+    /// Convert an indirect callee as `CallIndirect` does, including scalar type errors.
+    pub fn indirect_callee(&self, value: Value) -> Result<HeapPtr, Box<VmError>> {
+        self.as_object_ptr(value, FunctionType::Callable.into())
+            .map_err(|error| Box::new(error.into()))
+    }
+
     /// Call a builtin that the compiler guarantees will not yield.
     pub fn call_builtin(
         &mut self,

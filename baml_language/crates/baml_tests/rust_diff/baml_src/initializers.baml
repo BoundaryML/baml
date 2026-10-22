@@ -57,6 +57,12 @@ class InitReadsLate {
     }
 }
 
+class InitCallsLate {
+    implements InitSource {
+        function value(self) -> int throws never { INIT_LATE_CALLBACK(1) }
+    }
+}
+
 function InitReadPending(source: InitSource) -> int {
     source.value()
 }
@@ -72,12 +78,15 @@ const INIT_GATE = {
         INIT_POINTS[1000].x
     } else if (INIT_FAILURE == "pending") {
         InitReadPending(InitReadsLate {})
+    } else if (INIT_FAILURE == "pending-call") {
+        InitReadPending(InitCallsLate {})
     } else {
         InitRecord("gate", value)
     }
 };
 const INIT_AFTER = InitRecord("after", INIT_GATE + 1);
 const INIT_LATE = 99;
+const INIT_LATE_CALLBACK = (value: int) -> int { value + 99 };
 
 function Initializers() -> void {
     baml.io.println(`${INIT_FIRST}:${INIT_SECOND}:${INIT_INDIRECT}:${INIT_AFTER}`);
@@ -92,7 +101,7 @@ function InitializerClosures() -> void {
 }
 
 function InitializerErrors() -> void {
-    baml.io.println(INIT_ERROR);
+    baml.io.println(`${INIT_ERROR}`);
 }
 
 // These entries must never run: startup fails before INIT_AFTER is stored.

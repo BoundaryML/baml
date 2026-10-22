@@ -1560,6 +1560,101 @@ fn compiled_bodies_call_bound_method_values() {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn global_callee_errors_match_bytecode_at_every_opt_level() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use baml_test_support::OptLevel;
+    use bex_vm_types::{DeclPath, GlobalIndex};
+
+    static SLOT: AtomicUsize = AtomicUsize::new(0);
+    static CALL_PC: AtomicUsize = AtomicUsize::new(0);
+
+    fn main(vm: &mut BexVm, fr: &FrameRecord, _: &[Value]) -> Result<Value, Box<VmError>> {
+        let value = vm.load_global_checked(fr.function(), SLOT.load(Ordering::Relaxed))?;
+        fr.note_pc(u32::try_from(CALL_PC.load(Ordering::Relaxed)).unwrap());
+        let callee = vm.indirect_callee(value)?;
+        vm.suspend(super::Step::Call { callee, argc: 0 })
+    }
+
+    const SOURCE: &str = r#"
+const CALLBACK = () -> int { 42 };
+function Main() -> int { CALLBACK() }
+"#;
+    for opt in [OptLevel::Zero, OptLevel::One, OptLevel::Two] {
+        for case in 0..5 {
+            let mut errors = Vec::new();
+            for compiled in [false, true] {
+                let mut program = baml_test_support::compile_source_with_opt(SOURCE, opt);
+                let package = &program.packages[program.root as usize];
+                let slot = package
+                    .globals
+                    .iter()
+                    .find_map(|(path, cell)| {
+                        matches!(path, DeclPath::Let(name) if name.name.as_str() == "CALLBACK")
+                            .then_some(package.slot_base.raw() + *cell as usize)
+                    })
+                    .unwrap();
+                SLOT.store(slot, Ordering::Relaxed);
+                let entry = program.rendered_callables()["user.Main"].object;
+                let Object::Function(function) = &mut program.objects[entry] else {
+                    unreachable!()
+                };
+                CALL_PC.store(
+                    function
+                        .bytecode
+                        .instructions
+                        .iter()
+                        .position(|instruction| {
+                            matches!(instruction, bex_vm_types::Instruction::CallIndirect)
+                        })
+                        .unwrap(),
+                    Ordering::Relaxed,
+                );
+                if compiled {
+                    function.compiled_body = Some(test_body(main, 0));
+                }
+                let globals = program.globals.len();
+                let mut vm =
+                    BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
+                vm.telemetry = None;
+                let value = match case {
+                    0 => Value::int(7),
+                    1 => Value::NULL,
+                    2 => Value::bool(false),
+                    3 => vm.string_value("not callable"),
+                    _ => Value::NULL,
+                };
+                let function = vm.idx_to_ptr(entry);
+                vm.store_global(function, slot, value).unwrap();
+                if case == 4 {
+                    let mut pending = vec![false; globals];
+                    pending[slot] = true;
+                    vm.pending_globals = Some(pending.into_boxed_slice());
+                    assert!(vm.global_is_pending(GlobalIndex::from_raw(slot)));
+                }
+                vm.set_entry_point(function, &[]);
+                let error = loop {
+                    match vm.exec() {
+                        Ok(VmExecState::EarlyYield) => {}
+                        Err(error) => break error,
+                        other => panic!("expected a callee error, got {other:?}"),
+                    }
+                };
+                errors.push(format!("{error:?}"));
+            }
+            assert_eq!(errors[0], errors[1], "{opt:?}, case {case}");
+            let kind = if case == 4 {
+                "GlobalReadBeforeInit"
+            } else {
+                "TypeError"
+            };
+            assert!(errors[0].contains(kind), "{}", errors[0]);
+        }
+    }
+}
+
 // Compiled frames must never use exception handlers from their replaced bytecode.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]

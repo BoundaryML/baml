@@ -544,7 +544,7 @@ impl<'db> Generator<'_, 'db> {
         Ok(match terminator {
             Terminator::Call { .. } => self.call_request(block, terminator)?,
             Terminator::SysOp { callee, args, .. } => {
-                self.callee_ptr(block, callee)?;
+                self.callee_ptr(block, callee, None)?;
                 let args = self.arg_values(block, args)?;
                 let step = format!("Step::Call {{ callee, argc: {} }}", args.len());
                 self.suspend_expr(block, &step, &args)
@@ -608,15 +608,15 @@ impl<'db> Generator<'_, 'db> {
             unreachable!("call request requires a call terminator");
         };
         let (type_args, args) = args.split_at((*ntypeargs).min(args.len()));
-        let args = self.trace_attachment(block, args, *has_trace)?;
         let types = self.type_operands("call", type_args)?;
         let plain = types.is_empty() && !*has_trace;
         self.call_types = types;
-        self.callee_ptr(block, callee)?;
         let named = argument_layout
             .as_ref()
             .is_some_and(|layout| layout.0.iter().any(Option::is_some));
         if let Operand::Constant(Constant::Function(func)) = callee {
+            let args = self.trace_attachment(block, args, *has_trace)?;
+            self.callee_ptr(block, callee, None)?;
             let name = function_display_name(self.db, *func);
             let Some((_, info)) = self.index.function(self.db, *func) else {
                 return unsupported(format!("callee `{name}` not found in the program"));
@@ -625,7 +625,19 @@ impl<'db> Generator<'_, 'db> {
             let step = format!("Step::Call {{ callee, argc: {} }}", values.len());
             return Ok(self.suspend_expr(block, &step, &values));
         }
+        let (args, trace) = if *has_trace {
+            let Some((trace, args)) = args.split_last() else {
+                return Err(Rejection::Invalid(
+                    "a traced call without its attachment".into(),
+                ));
+            };
+            (args, Some(trace))
+        } else {
+            (args, None)
+        };
+        // Bytecode pushes the arguments before loading an indirect callee.
         let values = self.arg_values(block, args)?;
+        self.callee_ptr(block, callee, trace)?;
         // Function values need their named arguments mapped at runtime.
         if named {
             let layout = argument_layout.as_ref().expect("checked");

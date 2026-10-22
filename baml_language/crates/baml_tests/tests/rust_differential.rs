@@ -6,6 +6,7 @@
 //! Run with `cargo test -p baml_tests --test rust_differential -- --ignored`;
 //! `BAML_RUST_DIFF_PROBES=A,B` selects probes and `BAML_RUST_DIFF_DUMP=1`
 //! prints every run's output.
+//! `BAML_RUST_DIFF_OPT_LEVEL=0|1|2` selects the emitted optimization level (default 2).
 use std::{
     io::{self, Read},
     path::Path,
@@ -90,6 +91,8 @@ const PROBES: &[&str] = &[
     "InitializerPending",
     "InitializerTests",
     "InitializerTestErrors",
+    "GlobalCalls",
+    "GlobalCallPending",
 ];
 
 fn is_test_initializer_probe(probe: &str) -> bool {
@@ -150,15 +153,16 @@ fn main() -> std::process::ExitCode {
         .join(format!("initializer-tests{}", std::env::consts::EXE_SUFFIX))
 }
 
-fn build_startup_probe(
+fn build_probe_variant(
     build: &Path,
     workspace: &Path,
     manifest: &Path,
     template: &baml_exec::PackEnvelope,
     mode: &str,
+    opt: baml_compiler2_emit::OptLevel,
 ) -> std::path::PathBuf {
-    // `baml pack` creates an engine for signature resolution, so a program
-    // whose startup fails must be emitted directly, before any engine exists.
+    // `baml pack` uses O2 and creates an engine for signature resolution.
+    // Other levels and failing startups need direct emission instead.
     let mut sources: Vec<_> = std::fs::read_dir(manifest.join("rust_diff/baml_src"))
         .unwrap()
         .map(|entry| {
@@ -179,7 +183,6 @@ fn build_startup_probe(
         .collect();
     let db = baml_test_support::setup_multi_file_db(&files);
     let root = db.workspace_root().unwrap();
-    let opt = baml_compiler2_emit::OptLevel::Two;
     let mut envelope = template.clone();
     envelope.program = baml_db::compile_program(&db, root, opt).unwrap();
     let package = &envelope.program.packages[envelope.program.root as usize].name;
@@ -206,6 +209,14 @@ fn build_startup_probe(
         Some(&entries),
     )
     .unwrap();
+    for name in ["GlobalCalls", "GlobalCallPending"] {
+        let object = callables[&format!("{package}.{name}")].object.raw();
+        assert!(
+            module.functions.iter().any(|f| f.object == object),
+            "{name} at {opt:?}: {:?}",
+            module.rejected
+        );
+    }
     std::fs::write(build.join("src/program.bexa"), artifact).unwrap();
     std::fs::write(build.join("src/lib.rs"), module.source).unwrap();
     let status = Command::new("cargo")
@@ -216,9 +227,12 @@ fn build_startup_probe(
         .arg(build.join("target"))
         .current_dir(workspace)
         .status()
-        .expect("build startup-failure probe");
-    assert!(status.success(), "startup-failure probe must compile");
-    let executable = build.join(format!("probes-{mode}{}", std::env::consts::EXE_SUFFIX));
+        .expect("build probe variant");
+    assert!(status.success(), "probe variant must compile");
+    let executable = build.join(format!(
+        "probes-{mode}-{opt:?}{}",
+        std::env::consts::EXE_SUFFIX
+    ));
     std::fs::copy(
         build
             .join("target/release")
@@ -342,6 +356,15 @@ fn probe_timeout_kills_and_reaps() {
 #[test]
 #[ignore = "builds a generated Rust crate with cargo"]
 fn rust_differential() {
+    use baml_compiler2_emit::OptLevel;
+
+    #[allow(clippy::disallowed_methods, reason = "test harness configuration")]
+    let opt = match std::env::var("BAML_RUST_DIFF_OPT_LEVEL").as_deref() {
+        Err(std::env::VarError::NotPresent) | Ok("2") => OptLevel::Two,
+        Ok("0") => OptLevel::Zero,
+        Ok("1") => OptLevel::One,
+        _ => panic!("BAML_RUST_DIFF_OPT_LEVEL must be 0, 1, or 2"),
+    };
     #[allow(clippy::disallowed_methods, reason = "test harness configuration")]
     let timeout = std::env::var("BAML_RUST_DIFF_TIMEOUT_SECS")
         .map(|value| {
@@ -388,15 +411,21 @@ fn rust_differential() {
     let started = Instant::now();
     let result = baml_cli::run_cli(argv).expect("compiled pack must succeed");
     assert!(matches!(result, baml_cli::ExitCode::Success), "{result:?}");
-    let test_initializer_executable = build_test_initializer_probe(&build, workspace);
     let template = std::fs::read(build.join("src/program.bexa")).unwrap();
     let template: baml_exec::PackEnvelope =
         baml_artifact::decode(baml_artifact::ArtifactKind::PackedProgram, &template).unwrap();
+    let executable = if opt == OptLevel::Two {
+        executable
+    } else {
+        build_probe_variant(&build, workspace, manifest, &template, "none", opt)
+    };
+    let test_initializer_executable = build_test_initializer_probe(&build, workspace);
     let mut startup_executables = std::collections::BTreeMap::new();
     for (probe, mode) in [
         ("InitializerUncaught", "throw"),
         ("InitializerPanic", "panic"),
         ("InitializerPending", "pending"),
+        ("GlobalCallPending", "pending-call"),
     ] {
         if only
             .as_deref()
@@ -404,7 +433,7 @@ fn rust_differential() {
         {
             continue;
         }
-        let executable = build_startup_probe(&build, workspace, manifest, &template, mode);
+        let executable = build_probe_variant(&build, workspace, manifest, &template, mode, opt);
         startup_executables.insert(probe, executable);
     }
     eprintln!("compiled pack wall time: {:?}", started.elapsed());
@@ -461,12 +490,26 @@ fn rust_differential() {
             }
             outputs.push(output.ok());
         }
+        if *probe == "GlobalCalls" {
+            for output in outputs.iter().flatten() {
+                assert!(
+                    output.status.success(),
+                    "{}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for expected in ["6:9", "8:10:15", "global-call:9"] {
+                    assert!(stdout.contains(expected), "{probe}: {stdout}");
+                }
+            }
+        }
         if matches!(
             *probe,
             "InitializerUncaught"
                 | "InitializerPanic"
                 | "InitializerPending"
                 | "InitializerTestErrors"
+                | "GlobalCallPending"
         ) {
             for output in outputs.iter().flatten() {
                 assert!(
@@ -476,6 +519,7 @@ fn rust_differential() {
                 let error = String::from_utf8_lossy(&output.stderr);
                 let evidence = match *probe {
                     "InitializerPending" => "INIT_LATE",
+                    "GlobalCallPending" => "INIT_LATE_CALLBACK",
                     "InitializerPanic" => "INIT_GATE",
                     _ => "initializer-error",
                 };

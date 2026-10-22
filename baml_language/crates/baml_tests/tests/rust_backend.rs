@@ -174,6 +174,86 @@ test "registered initializer" { assert.equal(only_from_test(), 9) }
 }
 
 #[test]
+fn global_function_values_are_indirect_callees_at_every_opt_level() {
+    let db =
+        baml_test_support::setup_test_db(include_str!("../rust_diff/baml_src/global_calls.baml"));
+    let root = db.workspace_root().unwrap();
+    for opt in [OptLevel::Zero, OptLevel::One, OptLevel::Two] {
+        let program = baml_db::compile_program(&db, root, opt).unwrap();
+        let module = compile_program(
+            &db,
+            root,
+            &program,
+            opt,
+            "program.bexa",
+            fingerprint(&program),
+            None,
+        )
+        .unwrap();
+        assert_admitted(&module, &["user.GlobalCalls", "user.GlobalCallPending"]);
+        let body = body_of(&module, "user.GlobalCalls");
+        assert!(body.contains("vm.load_global_checked("), "{opt:?}: {body}");
+        assert!(body.contains("vm.indirect_callee("), "{opt:?}: {body}");
+        syn::parse_file(&module.source).unwrap();
+    }
+}
+
+#[test]
+fn indirect_global_call_load_order_matches_bytecode() {
+    let db = baml_test_support::setup_test_db(
+        r#"
+const CALLBACK = (value: int) -> int { value };
+const ARGUMENT = 7;
+function invoke() -> int { CALLBACK(ARGUMENT) }
+"#,
+    );
+    let root = db.workspace_root().unwrap();
+    for opt in [OptLevel::Zero, OptLevel::One, OptLevel::Two] {
+        let program = baml_db::compile_program(&db, root, opt).unwrap();
+        let module = compile_program(
+            &db,
+            root,
+            &program,
+            opt,
+            "program.bexa",
+            fingerprint(&program),
+            None,
+        )
+        .unwrap();
+        let compiled = module
+            .functions
+            .iter()
+            .find(|f| f.name == "user.invoke")
+            .unwrap();
+        let Object::Function(function) = &program.objects[ObjectIndex::from_raw(compiled.object)]
+        else {
+            unreachable!()
+        };
+        let bytecode: Vec<_> = function
+            .bytecode
+            .instructions
+            .iter()
+            .filter_map(|instruction| match instruction {
+                Instruction::LoadGlobal(slot) => Some(slot.raw()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(bytecode.len(), 2);
+        let body = body_of(&module, "user.invoke");
+        let mut native: Vec<_> = bytecode.iter().map(|slot| {
+            let load = format!("vm.load_global_checked(vm.record_object(fr, ObjectIndex::from_raw({})), {slot})", compiled.object);
+            (body.find(&load).expect("global is loaded"), *slot)
+        }).collect();
+        native.sort_unstable();
+        assert_eq!(
+            native.iter().map(|(_, slot)| *slot).collect::<Vec<_>>(),
+            bytecode,
+            "{opt:?}: {body}"
+        );
+    }
+}
+
+#[test]
 fn initializer_chainers_validate_the_bytecode_shape() {
     let db = baml_test_support::setup_test_db("const VALUE = 42; function main() -> int { VALUE }");
     let root = db.workspace_root().unwrap();
