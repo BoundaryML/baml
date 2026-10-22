@@ -85,16 +85,21 @@ fn full_chunk_handoff_wakeup_and_recycling() {
         let mut p = pool.register_producer().unwrap();
         p.write_timing(0);
         p.write_timing(1);
-        assert_eq!(p.stats().allocations, 1);
+        // One allocation within the lane; the second write either reused it
+        // after the consumer recycled it or went beyond the lane.
+        let stats = p.stats();
+        assert_eq!(stats.allocations - stats.overage_allocations, 1);
         drop(p);
         pool.close_admission();
         worker.join().unwrap();
+        // A chunk beyond the lane is freed once it returns beside an idle one.
         assert_eq!(pool.stats().free_chunks, 1);
+        assert_eq!(pool.stats().allocated_timing_chunks, 1);
     });
 }
 
 #[test]
-fn retained_span_recycling_unblocks_a_different_producer() {
+fn retained_span_recycling_serves_a_different_producer_or_it_allocates_beyond_the_lane() {
     model(|| {
         let pool = ChunkPool::<usize, usize>::new(config(1, 1)).unwrap();
         let mut reader = pool.bind_consumer().unwrap();
@@ -107,7 +112,10 @@ fn retained_span_recycling_unblocks_a_different_producer() {
         let writer = thread::spawn(move || {
             let mut writer = copy.register_producer().unwrap();
             writer.write_span(2);
-            assert_eq!(writer.stats().allocations, 0);
+            let stats = writer.stats();
+            // Whichever came first: the recycled chunk, or the probes running out.
+            assert_eq!(stats.allocations, stats.overage_allocations);
+            assert!(stats.allocations <= 1);
         });
         drop(held);
         writer.join().unwrap();
@@ -117,8 +125,74 @@ fn retained_span_recycling_unblocks_a_different_producer() {
                 .drain(nz(8), |_, _| unreachable!(), |_, v| assert_eq!(v, 2))
                 .complete
         );
+        // An overage chunk returning beside an idle one is freed: the lane is
+        // back at its size either way.
         assert_eq!(pool.stats().allocated_span_chunks, 1);
         assert_eq!(pool.stats().free_chunks, 1);
+    });
+}
+
+/// Over its size, a lane keeps one chunk for every writer waiting and one
+/// idle one, and hands the rest back to be freed.
+#[test]
+fn a_lane_keeps_returning_chunks_for_its_waiters_and_one_idle() {
+    let mut lane = super::Lane::<usize>::new(1, 1, false);
+    lane.allocated = 5;
+    lane.waiting = 2;
+    let returned: Vec<_> = (0..4).map(|_| lane.give_back(Vec::new())).collect();
+    assert_eq!(returned.iter().filter(|r| r.is_some()).count(), 1);
+    assert!(
+        returned[3].is_some(),
+        "the fourth found two waiters and an idle one"
+    );
+    assert_eq!((lane.allocated, lane.free.len()), (4, 3));
+    lane.waiting = 0;
+    assert!(lane.give_back(Vec::new()).is_some());
+    assert_eq!((lane.allocated, lane.free.len()), (3, 3));
+    // At its size, everything is kept.
+    lane.max = 3;
+    lane.allocated = 3;
+    assert!(lane.give_back(Vec::new()).is_none());
+    assert_eq!((lane.allocated, lane.free.len()), (3, 4));
+}
+
+#[test]
+fn a_lane_held_beyond_its_size_grows_then_shrinks_as_chunks_return_idle() {
+    model(|| {
+        let pool = ChunkPool::<usize, usize>::new(config(1, 1)).unwrap();
+        let mut reader = pool.bind_consumer().unwrap();
+        let mut writer = pool.register_producer().unwrap();
+        writer.write_span(1);
+        let mut held = Vec::new();
+        reader.drain_chunks(nz(1), |_, _| unreachable!(), |_, c| held.push(c));
+        // The lane's one chunk is held downstream: the writer probes, then
+        // allocates beyond the size rather than waiting for it.
+        writer.write_span(2);
+        let stats = writer.stats();
+        assert_eq!(stats.allocations, 2);
+        assert_eq!(stats.overage_allocations, 1);
+        assert_eq!(stats.exhausted_waits, 1);
+        assert_eq!(pool.stats().allocated_span_chunks, 2);
+        assert_eq!(pool.stats().free_chunks, 0);
+        reader.drain_chunks(nz(1), |_, _| unreachable!(), |_, c| held.push(c));
+        assert_eq!(held.len(), 2);
+        // The first return is kept: nothing idle, so it is what the next
+        // write would take. The second finds it idle and is freed.
+        drop(held.remove(0));
+        assert_eq!(pool.stats().allocated_span_chunks, 2);
+        assert_eq!(pool.stats().free_chunks, 1);
+        drop(held.remove(0));
+        assert_eq!(pool.stats().allocated_span_chunks, 1);
+        assert_eq!(pool.stats().free_chunks, 1);
+        pool.close_admission();
+        drop(writer);
+        assert!(
+            reader
+                .drain(nz(8), |_, _| unreachable!(), |_, _| unreachable!())
+                .complete
+        );
+        assert_eq!(pool.stats().allocated_span_chunks, 1);
+        assert!(!pool.is_failed());
     });
 }
 
@@ -280,7 +354,7 @@ mod native {
         assert_eq!(drops.load(Order::SeqCst), 4);
     }
     #[test]
-    fn publisher_owned_span_exhausts_quota_until_lease_returns() {
+    fn a_publisher_owned_lease_does_not_hold_up_a_writer_and_outlives_the_pool() {
         checked(|| {
             let pool = ChunkPool::<usize, usize>::new(config(1, 1)).unwrap();
             let mut reader = pool.bind_consumer().unwrap();
@@ -289,36 +363,37 @@ mod native {
             drop(writer);
             let mut held = None;
             reader.drain_chunks(nz(1), |_, _| unreachable!(), |_, c| held = Some(c));
-            let (started_tx, started_rx) = mpsc::channel();
-            let (done_tx, done_rx) = mpsc::channel();
             let copy = pool.clone();
-            let writer = thread::spawn(move || {
+            // The lane's one chunk stays with the publisher throughout: the
+            // writer finishes anyway, beyond the lane's size.
+            let stats = thread::spawn(move || {
                 let mut writer = copy.register_producer().unwrap();
-                started_tx.send(()).unwrap();
                 writer.write_span(2);
-                done_tx.send(()).unwrap();
                 writer.stats()
-            });
-            started_rx.recv().unwrap();
-            thread::sleep(Duration::from_millis(2));
-            assert!(done_rx.try_recv().is_err());
-            assert_eq!(pool.stats().allocated_span_chunks, 1);
+            })
+            .join()
+            .unwrap();
+            assert_eq!(stats.overage_allocations, 1);
+            assert_eq!(pool.stats().allocated_span_chunks, 2);
             assert_eq!(pool.stats().free_chunks, 0);
-            drop(held);
-            assert_eq!(writer.join().unwrap().allocations, 0);
             pool.close_admission();
-            let mut held = None;
+            let mut second = None;
             assert!(
                 reader
-                    .drain_chunks(nz(8), |_, _| unreachable!(), |_, c| held = Some(c))
+                    .drain_chunks(nz(8), |_, _| unreachable!(), |_, c| second = Some(c))
                     .complete
             );
             drop(reader); // Input completion does not require publisher release.
             assert!(!pool.is_failed());
-            let held = held.unwrap();
-            assert_eq!(held.as_slice(), [2]);
+            let second = second.unwrap();
+            assert_eq!(second.as_slice(), [2]);
+            // The first lease back finds nothing idle and is kept; the second
+            // finds it and is freed, so the lane ends at its size.
+            drop(held);
+            assert_eq!(pool.stats().allocated_span_chunks, 2);
+            assert_eq!(pool.stats().free_chunks, 1);
             drop(pool); // Lease keeps its pool alive, independently of endpoints.
-            thread::spawn(move || drop(held)).join().unwrap();
+            thread::spawn(move || drop(second)).join().unwrap();
         });
     }
 
@@ -356,7 +431,7 @@ mod native {
         }
     }
     #[test]
-    fn processor_owned_chunk_counts_toward_limit() {
+    fn a_processor_held_chunk_does_not_hold_up_a_writer() {
         checked(|| {
             let pool = ChunkPool::<usize, usize>::new(config(1, 1)).unwrap();
             let mut p = pool.register_producer().unwrap();
@@ -397,15 +472,19 @@ mod native {
                 done_tx.send(()).unwrap();
                 p.stats()
             });
-            thread::sleep(Duration::from_millis(2));
-            assert!(done_rx.try_recv().is_err());
-            assert_eq!(pool.stats().allocated_timing_chunks, 1);
-            release_tx.send(()).unwrap();
+            // The consumer holds the lane's one chunk: the writer is not held
+            // up by it, it goes beyond the lane.
+            done_rx.recv().unwrap();
             let stats = writer.join().unwrap();
-            assert_eq!(stats.allocations, 0);
+            assert_eq!(stats.allocations, 1);
+            assert_eq!(stats.overage_allocations, 1);
+            assert_eq!(pool.stats().allocated_timing_chunks, 2);
+            release_tx.send(()).unwrap();
             pool.close_admission();
             consumer.join().unwrap();
+            // The second chunk back found the first idle and was freed.
             assert_eq!(pool.stats().free_chunks, 1);
+            assert_eq!(pool.stats().allocated_timing_chunks, 1);
         });
     }
     #[test]
@@ -490,7 +569,9 @@ mod native {
                                 p.seal();
                             }
                         }
-                        assert_eq!(p.stats().allocations, 0);
+                        // Preallocated lanes: only the backstop ever allocates.
+                        let stats = p.stats();
+                        assert_eq!(stats.allocations, stats.overage_allocations);
                     })
                 })
                 .collect();
@@ -499,6 +580,7 @@ mod native {
             }
             pool.close_admission();
             consumer.join().unwrap();
+            // Whatever the backstop allocated was freed as it returned idle.
             let s = pool.stats();
             assert_eq!(s.allocated_timing_chunks + s.allocated_span_chunks, 4);
             assert_eq!(s.free_chunks, 4);
@@ -506,28 +588,79 @@ mod native {
         });
     }
     #[test]
-    fn consumer_failure_stops_an_exhausted_writer() {
+    fn consumer_failure_stops_a_writer_before_it_looks_for_a_chunk() {
         checked(|| {
             let pool = ChunkPool::<usize, usize>::new(config(1, 1)).unwrap();
             let consumer = pool.bind_consumer().unwrap();
             let copy = pool.clone();
             let (ready, received) = mpsc::channel();
+            let (failed, failure) = mpsc::channel();
             let writer = thread::spawn(move || {
                 let mut writer = copy.register_producer().unwrap();
                 writer.write_timing(1);
                 ready.send(()).unwrap();
+                failure.recv().unwrap();
                 let error = catch_unwind(AssertUnwindSafe(|| writer.write_timing(2))).unwrap_err();
                 assert!(error.is::<TransportFailed>());
             });
             received.recv().unwrap();
             drop(consumer);
+            failed.send(()).unwrap();
             writer.join().unwrap();
             assert!(pool.is_failed());
             assert_eq!(pool.stats().ready_chunks, 1);
             assert_eq!(pool.stats().active_producers, 0);
         });
     }
-
+    /// The failure lands while the writer is probing for a chunk, and the
+    /// writer's next probe sees it.
+    #[test]
+    fn consumer_failure_stops_a_writer_waiting_for_a_chunk() {
+        checked(|| {
+            let pool = ChunkPool::<usize, usize>::new(config(1, 1)).unwrap();
+            let mut writer = pool.register_producer().unwrap();
+            let (held_all, all_held) = mpsc::channel();
+            let (writing, writes) = mpsc::channel();
+            let copy = pool.clone();
+            let reader = thread::spawn(move || {
+                let mut consumer = copy.bind_consumer().unwrap();
+                // Hold the span lane far over its size, so the writer's next
+                // probe threshold is many milliseconds: long enough for the
+                // failure below to land while it probes.
+                let mut held = Vec::new();
+                while held.len() < 321 {
+                    let progress = consumer.drain_chunks(
+                        nz(8),
+                        |_, _| unreachable!(),
+                        |_, chunk| {
+                            held.push(chunk);
+                        },
+                    );
+                    if progress.chunks == 0 {
+                        consumer.wait();
+                    }
+                }
+                assert_eq!(copy.stats().free_chunks, 0);
+                held_all.send(()).unwrap();
+                writes.recv().unwrap();
+                thread::sleep(Duration::from_millis(2));
+                drop(consumer);
+                assert!(copy.is_failed());
+                drop(held);
+            });
+            for record in 0..321 {
+                writer.write_span(record);
+                writer.seal();
+            }
+            all_held.recv().unwrap();
+            writing.send(()).unwrap();
+            let error = catch_unwind(AssertUnwindSafe(|| writer.write_span(321))).unwrap_err();
+            assert!(error.is::<TransportFailed>());
+            reader.join().unwrap();
+            assert_eq!(writer.stats().overage_allocations, 320);
+            assert!(pool.is_failed());
+        });
+    }
     #[test]
     fn unsafe_pool_size_and_duplicate_ownership_are_rejected() {
         let mut cfg = config(2, 1);

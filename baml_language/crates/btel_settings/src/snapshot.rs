@@ -28,6 +28,21 @@ pub fn capture_budget_bytes(producers: usize) -> usize {
 }
 const _: () = assert!(CAPTURE_BUDGET_BASE_BYTES > 0);
 
+/// **Backstop; tune first under sustained backpressure.** Probes a producer
+/// makes for the budget to open, when it is full but not yet exceeded,
+/// before taking storage beyond it. One probe is one spin.
+pub const OVERAGE_PROBES_BASE: usize = 256;
+/// **Backstop.** Bytes of overage per step of the probe curve; see
+/// [`crate::overage`].
+pub const OVERAGE_UNIT_BYTES: usize = 1024 * 1024;
+
+/// Probes before a producer takes storage beyond the budget, with the
+/// producers already `overage_bytes` over it.
+pub fn overage_probes(overage_bytes: usize) -> usize {
+    crate::overage::probes(OVERAGE_PROBES_BASE, overage_bytes / OVERAGE_UNIT_BYTES)
+}
+const _: () = assert!(OVERAGE_PROBES_BASE > 0 && OVERAGE_UNIT_BYTES > 0);
+
 /// Hash and copy mutable bytes in cache-sized batches during capture.
 pub const COPY_HASH_BATCH_BYTES: usize = 16 * 1024;
 /// Hash input a blob ID gathers before it streams the rest: a small blob is

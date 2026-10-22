@@ -1,7 +1,9 @@
 //! Chunk-backed processing: combine all function completions and forward spans.
 //! Captures must be independently owned before publication; this crate never
 //! accesses VM heaps. One bound worker scans original storage, with no event
-//! cloning or dynamic dispatch. Producers keep spin-only backpressure.
+//! cloning or dynamic dispatch. Producers never park and never wait forever:
+//! out of storage, they probe for some to come back and then take more
+//! ([`btel_settings::overage`]).
 //!
 //! The default publisher has zero sinks: it merges bounded aggregate windows and
 //! releases spans. It neither exports nor retains telemetry beyond those windows.

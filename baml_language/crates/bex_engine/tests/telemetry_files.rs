@@ -340,16 +340,26 @@ async fn telemetry_disabled_inside_an_owned_span_does_not_stop_execution() {
             .unwrap()
             .unwrap()
             .path();
-        // The recorder keeps writing into it, so a file it adds mid-removal
-        // can fail the removal (DirectoryNotEmpty): try again. A rename
+        // The writer is still adding files: a removal can find the directory
+        // refilled (DirectoryNotEmpty), and a replacement can find it
+        // recreated. Keep at it until the replacement is in place. A rename
         // can't stand in, since Windows refuses one while files are open.
         let mut attempts = 0;
-        while let Err(error) = std::fs::remove_dir_all(&dir) {
+        loop {
+            let broken = std::fs::remove_dir_all(&dir)
+                .and_then(|()| std::fs::write(&dir, b"not a directory"))
+                .is_ok()
+                && dir.is_file();
+            if broken {
+                break;
+            }
             attempts += 1;
-            assert!(attempts < 100, "removing {}: {error}", dir.display());
-            tokio::time::sleep(Duration::from_millis(5)).await;
+            assert!(
+                attempts < 1000,
+                "the recording directory could not be broken"
+            );
+            tokio::time::sleep(Duration::from_millis(1)).await;
         }
-        std::fs::write(&dir, b"not a directory").unwrap();
     });
     assert_eq!(
         engine

@@ -6,11 +6,15 @@
 //! reaches a seal boundary can delay visibility indefinitely. No processor may
 //! take its actively mutated allocation.
 //!
-//! One pool has one consumer, a FIFO of sealed chunks, and separate typed storage
-//! quotas. Every allocation counts toward its quota while free, producer-owned,
-//! ready, processor-owned, or publisher-owned. Producers spin on exhaustion and metadata contention;
-//! only the idle consumer parks. Explicit recording disable abandons queued data
-//! and makes writes return without storing; invariant failures remain terminal.
+//! One pool has one consumer, a FIFO of sealed chunks, and separate typed lanes,
+//! each of a size. Every allocation counts toward its lane while free,
+//! producer-owned, ready, processor-owned, or publisher-owned. A producer that
+//! finds its lane out of free chunks probes for one to come back, longer the
+//! further the lane already is over its size, then allocates beyond it
+//! ([`btel_settings::overage`]); a lane over its size frees chunks as they
+//! return idle. Producers spin on metadata contention; only the idle consumer
+//! parks. Explicit recording disable abandons queued data and makes writes
+//! return without storing; invariant failures remain terminal.
 #![allow(
     clippy::inline_always,
     reason = "ordinary append must inline to private Vec writes"
@@ -86,6 +90,8 @@ pub struct Stats {
 pub struct ProducerStats {
     pub allocations: usize,
     pub exhausted_waits: usize,
+    /// Allocations made beyond a lane's size, after probing in vain.
+    pub overage_allocations: usize,
 }
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct DrainStatus {
@@ -99,7 +105,13 @@ pub struct DrainStatus {
 struct Lane<T> {
     free: Vec<Vec<T>>,
     allocated: usize,
+    /// The lane's size: what it keeps for reuse. `allocated` passes it only
+    /// by overage allocation.
     max: usize,
+    /// Writers that found the lane empty and are probing for a chunk to come
+    /// back. A terminal exit (disable, failure) leaves a writer counted; by
+    /// then nothing is given back, so the count is never read again.
+    waiting: usize,
 }
 impl<T> Lane<T> {
     fn new(cap: usize, max: usize, preallocate: bool) -> Self {
@@ -113,6 +125,26 @@ impl<T> Lane<T> {
             free,
             allocated: if preallocate { max } else { 0 },
             max,
+            waiting: 0,
+        }
+    }
+    /// Chunks in use beyond the lane's size: the demand it could not meet.
+    fn overage(&self) -> usize {
+        (self.allocated - self.free.len()).saturating_sub(self.max)
+    }
+    /// A chunk comes back. It is kept while a writer waits for it or none
+    /// yet sits idle; otherwise, over the lane's size, nobody wants it, and
+    /// it is returned to the caller to free outside the lock, which brings
+    /// the lane back toward its size without churning a chunk that the next
+    /// write would take.
+    #[must_use]
+    fn give_back(&mut self, chunk: Vec<T>) -> Option<Vec<T>> {
+        if self.allocated > self.max && self.free.len() > self.waiting {
+            self.allocated -= 1;
+            Some(chunk)
+        } else {
+            self.free.push(chunk);
+            None
         }
     }
 }
@@ -149,6 +181,9 @@ struct Shared<T, S> {
     ready_hint: Padded<AtomicBool>,
     timing_free: Padded<AtomicUsize>,
     span_free: Padded<AtomicUsize>,
+    // Advisory copies of each lane's overage, for the probe threshold.
+    timing_overage: Padded<AtomicUsize>,
+    span_overage: Padded<AtomicUsize>,
     config: Config,
 }
 
@@ -187,12 +222,21 @@ impl<T, S> Shared<T, S> {
         self.wake.notify_all();
     }
     #[cold]
+    /// Probes spent waiting are held against the threshold for the lane's
+    /// overage *as it is now*, read again at every probe. So a writer that
+    /// began waiting when the lane was far over its size is let go as soon
+    /// as it comes back down, and since the threshold is the same for every
+    /// waiter and the longest waiter has spent the most, no later writer
+    /// allocates beyond the size ahead of it.
     fn take<R>(
         &self,
         lane: impl Fn(&mut State<T, S>) -> &mut Lane<R>,
         stats: &mut ProducerStats,
         available: &AtomicUsize,
+        overage: &AtomicUsize,
     ) -> Option<Vec<R>> {
+        use btel_settings::transport::overage_probes;
+        let mut spent = 0_usize;
         let mut exhausted = false;
         loop {
             if !self.check() {
@@ -200,18 +244,37 @@ impl<T, S> Shared<T, S> {
             }
             let mut state = self.lock();
             let lane = lane(&mut state);
+            if exhausted {
+                lane.waiting -= 1;
+            }
             if let Some(chunk) = lane.free.pop() {
                 // All free-list mutations are serialized by state. Publish its
                 // exact length; no read-modify-write is needed.
                 available.store(lane.free.len(), Ordering::Release);
+                overage.store(lane.overage(), Ordering::Relaxed);
                 return Some(chunk);
             }
-            if lane.allocated < lane.max {
+            let within = lane.allocated < lane.max;
+            if within || spent >= overage_probes(lane.overage()) {
                 // Reserved allocations also count: two writers cannot both
                 // allocate the last slot while allocation runs outside the lock.
                 lane.allocated += 1;
+                overage.store(lane.overage(), Ordering::Relaxed);
+                if !within {
+                    // The ready queue was sized for the lanes: every chunk
+                    // beyond them needs its descriptor slot too, so sealing
+                    // never allocates. The lanes' own chunks may not all be
+                    // allocated yet; their slots stay reserved.
+                    let chunks = state.timing.max.max(state.timing.allocated)
+                        + state.span.max.max(state.span.allocated);
+                    let additional = chunks.saturating_sub(state.ready.len());
+                    state.ready.reserve(additional);
+                }
                 drop(state);
                 stats.allocations += 1;
+                if !within {
+                    stats.overage_allocations += 1;
+                }
                 let mut guard = FailureGuard {
                     shared: self,
                     armed: true,
@@ -220,6 +283,9 @@ impl<T, S> Shared<T, S> {
                 guard.armed = false;
                 return Some(chunk);
             }
+            // Counted until the next locked look, so a chunk coming back
+            // meanwhile is kept for this writer.
+            lane.waiting += 1;
             let notify = state.sleeping;
             if notify {
                 state.sleeping = false;
@@ -235,11 +301,17 @@ impl<T, S> Shared<T, S> {
             }
             // Do not fight the recycler for its mutex while the pool is empty.
             // The consumer publishes availability after returning the allocation.
-            // Another writer may win it first; the locked recheck above decides.
+            // Another writer may win it first; the locked recheck above decides,
+            // and allocates beyond the size once the probes spent reach the
+            // threshold, which it reads exactly where this loop reads a copy.
             while available.load(Ordering::Acquire) == 0 {
                 if !self.check() {
                     return None;
                 }
+                if spent >= overage_probes(overage.load(Ordering::Relaxed)) {
+                    break;
+                }
+                spent += 1;
                 sync::spin();
             }
         }
@@ -310,6 +382,9 @@ impl<T: Send, S: Send> ChunkPool<T, S> {
         {
             return Err(SetupError::InvalidCapacity);
         }
+        // A sizing rule, not a safety check: a lane smaller than the producer
+        // table would be over its size as soon as every producer held a
+        // chunk, so every write would pay the overage wait.
         if timing < config.max_producers.get() || span < config.max_producers.get() {
             return Err(SetupError::InsufficientChunks);
         }
@@ -338,6 +413,8 @@ impl<T: Send, S: Send> ChunkPool<T, S> {
                     0
                 })),
                 span_free: Padded(AtomicUsize::new(if config.preallocate { span } else { 0 })),
+                timing_overage: Padded(AtomicUsize::new(0)),
+                span_overage: Padded(AtomicUsize::new(0)),
                 config,
             }),
         })
@@ -560,6 +637,7 @@ impl<T, S> Producer<T, S> {
                 |s| &mut s.timing,
                 &mut self.stats,
                 &self.shared.timing_free.0,
+                &self.shared.timing_overage.0,
             );
         }
         let Some(chunk) = self.timing.as_mut() else {
@@ -576,9 +654,12 @@ impl<T, S> Producer<T, S> {
             return;
         }
         if self.span.is_none() {
-            self.span =
-                self.shared
-                    .take(|s| &mut s.span, &mut self.stats, &self.shared.span_free.0);
+            self.span = self.shared.take(
+                |s| &mut s.span,
+                &mut self.stats,
+                &self.shared.span_free.0,
+                &self.shared.span_overage.0,
+            );
         }
         let Some(chunk) = self.span.as_mut() else {
             return;
@@ -637,10 +718,11 @@ impl<T, S> Drop for Producer<T, S> {
 
 /// Exclusive ownership of a sealed span allocation. Moving this lease never
 /// copies its records. It may outlive the consumer and cross threads when its
-/// record types are Send. It continues to count against the pool's span quota.
+/// record types are Send. It continues to count toward the span lane's size.
 ///
 /// Drop destroys remaining payloads and returns the allocation without zeroing
-/// storage. Forgetting a lease permanently withholds its capacity from producers.
+/// storage. Forgetting a lease leaves the span lane one chunk short for good:
+/// every later wait beyond it is longer.
 pub struct SpanChunk<T, S> {
     shared: Arc<Shared<T, S>>,
     records: Vec<S>,
@@ -672,13 +754,23 @@ impl<T, S> Drop for SpanChunk<T, S> {
         // the pool terminal rather than silently losing a counted allocation.
         self.records.clear();
         let mut state = self.shared.lock();
-        if self.shared.status.load(Ordering::Acquire) == ACTIVE {
-            state.span.free.push(std::mem::take(&mut self.records));
-        }
+        let surplus = if self.shared.status.load(Ordering::Acquire) == ACTIVE {
+            state.span.give_back(std::mem::take(&mut self.records))
+        } else {
+            None
+        };
         self.shared
             .span_free
             .0
             .store(state.span.free.len(), Ordering::Release);
+        self.shared
+            .span_overage
+            .0
+            .store(state.span.overage(), Ordering::Relaxed);
+        drop(state);
+        // A chunk the lane did not keep is freed outside the lock, like the
+        // records above and the private chunk of a non-active pool below.
+        drop(surplus);
         guard.armed = false;
     }
 }
@@ -816,16 +908,25 @@ impl<T, S> Consumer<T, S> {
                 .state
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let active = self.shared.status.load(Ordering::Acquire) == ACTIVE;
             for slot in &mut batch[..count] {
                 if let Some(Chunk {
+                    producer,
                     records: Records::Timing(v),
-                    ..
                 }) = slot.take()
                 {
                     debug_assert!(v.is_empty());
-                    if self.shared.status.load(Ordering::Acquire) == ACTIVE {
-                        state.timing.free.push(v);
-                    }
+                    // What the lane does not keep goes back in its slot, to
+                    // be freed once the lock is released.
+                    let surplus = if active {
+                        state.timing.give_back(v)
+                    } else {
+                        Some(v)
+                    };
+                    *slot = surplus.map(|records| Chunk {
+                        producer,
+                        records: Records::Timing(records),
+                    });
                 }
             }
             // Serialized exact counts, published once per recycled batch.
@@ -833,6 +934,14 @@ impl<T, S> Consumer<T, S> {
                 .timing_free
                 .0
                 .store(state.timing.free.len(), Ordering::Release);
+            self.shared
+                .timing_overage
+                .0
+                .store(state.timing.overage(), Ordering::Relaxed);
+            drop(state);
+            for slot in &mut batch[..count] {
+                *slot = None;
+            }
         }
         if !self.shared.check() {
             self.finished = true;

@@ -53,6 +53,26 @@ fn the_budget_charges_captures_until_the_processor_takes_them() {
     assert_eq!(pool.stats().held_bytes, 0);
 }
 #[test]
+fn storage_beyond_the_budget_is_charged_and_counts_as_overage() {
+    let pool = SnapshotPool::new(1, Limits::default());
+    assert_eq!(pool.overage_bytes(), 0);
+    let a = scalar(&pool, 1);
+    assert!(pool.try_acquire().is_none());
+    let held = pool.stats().held_bytes;
+    assert_eq!(pool.overage_bytes(), held - 1);
+    // The backstop takes storage regardless, and charges it like any other.
+    let b = pool
+        .acquire_beyond_budget()
+        .finish(SnapshotValue::Int(2), &mut Shaper::default());
+    assert!(pool.stats().held_bytes > held);
+    assert_eq!(pool.overage_bytes(), pool.stats().held_bytes - 1);
+    assert_eq!(pool.stats().in_use, 2);
+    drop(a);
+    drop(b);
+    assert_eq!(pool.overage_bytes(), 0);
+    assert_eq!(pool.stats().in_use, 0);
+}
+#[test]
 fn capacity_counts_owners_across_threads_and_reuse_has_no_stale_values() {
     // A budget of one byte admits one capture at a time.
     let pool = SnapshotPool::new(1, Limits::default());

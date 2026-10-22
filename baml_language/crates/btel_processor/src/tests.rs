@@ -322,7 +322,9 @@ fn run_recycles_tiny_pools_under_multiple_producers() {
                         producer.write_timing(timing());
                         producer.write_span(span(Capture(drops.clone())));
                     }
-                    assert_eq!(producer.stats().allocations, 0);
+                    // Preallocated lanes: only the backstop ever allocates.
+                    let stats = producer.stats();
+                    assert_eq!(stats.allocations, stats.overage_allocations);
                     // Drop seals the final partial chunks of both lanes.
                 })
             })

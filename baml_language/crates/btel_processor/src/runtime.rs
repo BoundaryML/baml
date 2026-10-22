@@ -463,8 +463,10 @@ impl TelemetryRuntime {
         }
     }
 
-    /// Capture-only admission. Publish private records before waiting: they may
-    /// own every available snapshot. Never hold a TLS borrow while spinning.
+    /// Capture-only admission. `None` only once recording is disabled: a full
+    /// budget is probed for a while, then exceeded ([`btel_settings::overage`]).
+    /// Publish private records before probing: they may own every charged
+    /// capture. Never hold a TLS borrow while spinning.
     pub fn acquire_snapshot(&self) -> Option<btel_snapshot::Builder> {
         if self.is_disabled() {
             return None;
@@ -484,18 +486,38 @@ impl TelemetryRuntime {
                 }
             }
         });
-        let result = loop {
+        // Probes spent are held against the threshold for the overage as it
+        // is now, read again at every probe: the further over the budget the
+        // producers are, the longer the processor is given to lift charges
+        // before this capture adds to it; and a capture that began waiting
+        // far over is let go as soon as the overage comes down, ahead of any
+        // that began waiting later.
+        let mut spent = 0_usize;
+        let mut result = None;
+        loop {
             if self.is_disabled() {
-                break None;
+                break;
             }
             if self.pool.is_failed() {
                 std::panic::panic_any(TransportFailed);
             }
             if let Some(builder) = self.snapshots.try_acquire() {
-                break Some(builder);
+                result = Some(builder);
+                break;
             }
+            if spent >= btel_settings::snapshot::overage_probes(self.snapshots.overage_bytes()) {
+                break;
+            }
+            spent += 1;
             std::hint::spin_loop();
-        };
+        }
+        if result.is_none() && !self.is_disabled() {
+            // The failure may have landed since the last probe.
+            if self.pool.is_failed() {
+                std::panic::panic_any(TransportFailed);
+            }
+            result = Some(self.snapshots.acquire_beyond_budget());
+        }
         self.snapshot_wait_nanos.fetch_add(
             u64::try_from(start.elapsed().as_nanos()).unwrap_or(u64::MAX),
             Ordering::Relaxed,
@@ -841,7 +863,7 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_exhaustion_publishes_private_records_before_waiting() {
+    fn snapshot_exhaustion_publishes_private_records_before_probing() {
         let (mut runtime, pool) = manual_runtime();
         Arc::get_mut(&mut runtime).unwrap().snapshots =
             btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
@@ -884,7 +906,14 @@ mod tests {
             });
             let next = runtime
                 .acquire_snapshot()
-                .expect("consumer must release capacity");
+                .expect("recording is not disabled");
+            // Sealed by the slow path itself, before it probed: not by the
+            // scope ending below.
+            assert_ne!(
+                pool.stats().sealed_records,
+                0,
+                "private records were published"
+            );
             drop(next);
             drop(execution);
             pool.close_admission();
@@ -892,11 +921,36 @@ mod tests {
             consumer.join().unwrap();
         });
         assert_eq!(runtime.snapshot_pool_stats().in_use, 0);
-        assert_eq!(runtime.snapshot_pool_stats().allocation_misses, 1);
+        // Reused the storage the consumer gave back, or took one beyond the
+        // budget when the probes ran out first: either is right, and nothing
+        // else is allocated.
+        assert!(matches!(
+            runtime.snapshot_pool_stats().allocation_misses,
+            1 | 2
+        ));
     }
 
     #[test]
-    fn recording_disable_releases_snapshot_admission_without_cancelling_work() {
+    fn a_full_budget_is_exceeded_after_probing_rather_than_waited_on() {
+        let (mut runtime, pool) = manual_runtime();
+        Arc::get_mut(&mut runtime).unwrap().snapshots =
+            btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+        let held = no_arguments(runtime.acquire_snapshot().unwrap());
+        assert!(runtime.snapshots.overage_bytes() > 0);
+        let _scope = runtime.enter();
+        // Nothing consumes, so nothing will lift the charge: the capture is
+        // admitted anyway, once the probes are spent.
+        let beyond = no_arguments(runtime.acquire_snapshot().expect("the backstop admits"));
+        assert!(runtime.snapshot_wait_nanos() > 0);
+        assert_eq!(runtime.snapshot_pool_stats().in_use, 2);
+        drop(beyond);
+        drop(held);
+        assert_eq!(runtime.snapshots.overage_bytes(), 0);
+        assert!(!pool.is_failed());
+    }
+
+    #[test]
+    fn a_disabled_recording_admits_no_capture_without_cancelling_work() {
         let (mut runtime, pool) = manual_runtime();
         Arc::get_mut(&mut runtime).unwrap().snapshots =
             btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
@@ -914,20 +968,13 @@ mod tests {
                 captured_type_args: None,
             },
         );
-        std::thread::scope(|scope| {
-            scope.spawn(|| {
-                // Publication proves acquire_snapshot entered its slow path.
-                while pool.stats().sealed_records == 0 {
-                    std::hint::spin_loop();
-                }
-                RecordingControl {
-                    pool: pool.clone(),
-                    result: Arc::clone(&runtime.result),
-                }
-                .disable(RuntimeError("disk full".into()));
-            });
-            assert!(runtime.acquire_snapshot().is_none());
-        });
+        RecordingControl {
+            pool,
+            result: Arc::clone(&runtime.result),
+        }
+        .disable(RuntimeError("disk full".into()));
+        // Neither the budget's probes nor its backstop apply once disabled.
+        assert!(runtime.acquire_snapshot().is_none());
         drop(held);
         assert_eq!(runtime.snapshot_pool_stats().in_use, 0);
         assert!(runtime.is_disabled());

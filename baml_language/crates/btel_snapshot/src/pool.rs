@@ -239,17 +239,43 @@ impl SnapshotPool {
             counters: Arc::default(),
         }))
     }
-    /// `None` while the captures with the producers hold the budget, so a
-    /// capture is never refused for its own size; and while another thread
-    /// has the pool, which is as brief as taking a storage. Admission can
-    /// wait for the processor, but growth never waits for anything. Publish
-    /// private records before retrying an exhausted pool.
+    /// `None` only while the captures with the producers hold the budget, so
+    /// a capture is never refused for its own size. Waits for the pool itself
+    /// when another thread has it, which is as brief as returning a storage.
+    /// Admission can wait for the processor, but growth never waits for
+    /// anything. Publish private records before retrying an exhausted pool.
     pub fn try_acquire(&self) -> Option<Builder> {
         let pool = &self.0;
         if pool.held.0.load(Ordering::Relaxed) >= pool.budget {
             return None;
         }
-        let mut state = pool.state.try_lock().ok()?;
+        let state = pool
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Some(self.take(state))
+    }
+    /// Take storage whatever the budget says: the producers' backstop, after
+    /// probing for the budget to open ([`btel_settings::overage`]). Waits
+    /// only for the pool itself, which is as brief as returning a storage.
+    pub fn acquire_beyond_budget(&self) -> Builder {
+        let state = self
+            .0
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        self.take(state)
+    }
+    /// What the captures with the producers hold beyond the budget.
+    pub fn overage_bytes(&self) -> usize {
+        self.0
+            .held
+            .0
+            .load(Ordering::Relaxed)
+            .saturating_sub(self.0.budget)
+    }
+    fn take(&self, mut state: std::sync::MutexGuard<'_, State>) -> Builder {
+        let pool = &self.0;
         let storage = if let Some(idle) = state.free.pop() {
             state.idle_bytes -= idle.bytes;
             idle.storage
@@ -281,7 +307,7 @@ impl SnapshotPool {
         graph.bytes.reserve(pool.config.initial_bytes, meter);
         // Charged for what it starts with; finishing charges what it grew to.
         lease.recharge();
-        Some(Builder::new(lease))
+        Builder::new(lease)
     }
     pub fn stats(&self) -> PoolStats {
         let s = self
