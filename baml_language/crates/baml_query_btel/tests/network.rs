@@ -62,7 +62,7 @@ impl Recording {
 
     /// Store `value` in the CAS, as a recording does, and return its ID.
     fn cas(&self, value: &Json) -> proto::CasId {
-        let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+        let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
         let mut builder = pool.try_acquire().unwrap();
         let root = build(&mut builder, value);
         let snapshot = builder.finish(root, &mut btel_snapshot::Shaper::default());

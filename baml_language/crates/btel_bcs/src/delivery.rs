@@ -78,8 +78,8 @@ pub struct DeliveryConfig {
     /// Initial-failure policy applies after bounded initial connection retries.
     pub terminal_initial_connection: bool,
     pub max_pending_plans: usize,
-    /// At most 32 captures, leaving default snapshot-pool headroom for VM
-    /// capture. A capture spanning plans counts once per plan.
+    /// At most 32 captures. A capture spanning plans counts once per plan.
+    /// Captures held here no longer count against the VM's capture budget.
     pub max_pending_snapshots: usize,
     pub recording_reserved_bytes: usize,
     /// Memory for what the admitted plans hold: their captures until their

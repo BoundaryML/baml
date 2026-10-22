@@ -97,7 +97,7 @@ mod tests {
 
     #[test]
     fn context_uses_the_existing_snapshot_codec() {
-        let pool = SnapshotPool::new(2, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let snapshot = capture(&context(), &pool).unwrap();
         let mut bytes = Vec::new();
         snapshot
@@ -143,7 +143,7 @@ mod tests {
 
     #[test]
     fn equal_contexts_have_equal_ids_regardless_of_patch_history() {
-        let pool = SnapshotPool::new(2, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let context = context();
         let mut rebuilt = Context::default();
         for (key, value) in context.metadata().iter().rev() {
@@ -160,6 +160,7 @@ mod tests {
     #[test]
     fn admission_failure_does_not_change_context() {
         let context = context();
+        // A budget of one byte admits one capture at a time.
         let pool = SnapshotPool::new(1, Limits::default());
         let held = capture(&context, &pool).unwrap();
         assert!(capture(&context, &pool).is_none());
@@ -185,7 +186,7 @@ mod tests {
                 ..Limits::default()
             },
         ] {
-            let pool = SnapshotPool::new(1, limits);
+            let pool = SnapshotPool::unbounded(limits);
             assert!(capture(&context(), &pool).is_none());
             assert!(pool.try_acquire().is_some());
         }
@@ -193,13 +194,10 @@ mod tests {
 
     #[test]
     fn a_string_over_the_leaf_limit_declines_the_context() {
-        let pool = SnapshotPool::new(
-            1,
-            Limits {
-                max_leaf_bytes: 16,
-                ..Limits::default()
-            },
-        );
+        let pool = SnapshotPool::unbounded(Limits {
+            max_leaf_bytes: 16,
+            ..Limits::default()
+        });
         assert!(capture(&context(), &pool).is_some());
         let long = "x".repeat(17);
         // As a metadata value, as a metadata key, and as the identity.

@@ -54,7 +54,7 @@ fn context_runs_reach_local_recordings_and_verified_cas_through_the_span_buffer(
         metadata: [("order_id".into(), Some(ContextValue::String("123".into())))].into(),
         distinct_id: Some("user-42".into()),
     });
-    let snapshots = SnapshotPool::new(1, Limits::default());
+    let snapshots = SnapshotPool::unbounded(Limits::default());
     let snapshot = btel_snapshot::context::capture(&context, &snapshots).unwrap();
     let id = snapshot.root_id();
     producer.write_span(SpanRecord::ThreadSelected { thread_id: thread });

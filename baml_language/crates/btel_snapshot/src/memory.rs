@@ -208,7 +208,7 @@ mod tests {
 
     #[test]
     fn accounts_unused_arena_capacity() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let mut snapshot = scalar(&pool);
         let before = snapshot.retained_bytes();
         let Storage { graph, meter, .. } = &mut *snapshot.0;
@@ -221,7 +221,7 @@ mod tests {
 
     #[test]
     fn accounts_full_shared_slice_parents_for_values_and_keys() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let source = bex_str::BexStr::from("a".repeat(100_000));
         let slice = source.byte_slice(0..100);
         let mut snapshot = scalar(&pool);
@@ -246,7 +246,7 @@ mod tests {
 
     #[test]
     fn a_bigint_is_charged_its_limbs_as_a_value_and_as_a_type_literal() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let before = scalar(&pool).retained_bytes();
         // 200 bits: four limbs of eight bytes.
         let big = num_bigint::BigInt::from(1) << 199_u32;
@@ -300,7 +300,7 @@ mod tests {
             Name::new("t".repeat(1000)),
         ));
         assert!(declaration_bytes(&declaration) >= capacity * size_of::<Name>() + 3000);
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let mut snapshot = scalar(&pool);
         let Storage { graph, meter, .. } = &mut *snapshot.0;
         graph.names.reserve(1, meter);

@@ -9,8 +9,24 @@ pub const INITIAL_VALUES: usize = 4;
 pub const RETENTION_BUDGET_BYTES: usize = 8 * 1024 * 1024;
 /// Discard unusually large returned allocations, regardless of remaining budget.
 pub const MAX_RETAINED_ALLOCATION_BYTES: usize = 256 * 1024;
-/// Includes producer-owned, queued, processor-owned and idle descriptors.
-pub const MIN_SNAPSHOT_SLOTS: usize = 128;
+
+/// **Tune first under backpressure.** Structural capture memory one runtime's
+/// producers may hold before a capture waits for the processor: the captures
+/// being built, and those in records the processor has not yet taken. What
+/// the processor, publisher and delivery hold is bounded by their own budgets,
+/// not this one. A single capture is never refused for its size.
+pub const CAPTURE_BUDGET_BASE_BYTES: usize = 64 * 1024 * 1024;
+/// **Tune with the transport.** The budget grows with admitted producers as
+/// the chunk lanes do, so a wide host pool is not starved by its own width.
+pub const CAPTURE_BUDGET_BYTES_PER_PRODUCER: usize = 1024 * 1024;
+
+/// The capture budget of a runtime admitting `producers` OS threads.
+pub fn capture_budget_bytes(producers: usize) -> usize {
+    producers
+        .saturating_mul(CAPTURE_BUDGET_BYTES_PER_PRODUCER)
+        .saturating_add(CAPTURE_BUDGET_BASE_BYTES)
+}
+const _: () = assert!(CAPTURE_BUDGET_BASE_BYTES > 0);
 
 /// Hash and copy mutable bytes in cache-sized batches during capture.
 pub const COPY_HASH_BATCH_BYTES: usize = 16 * 1024;

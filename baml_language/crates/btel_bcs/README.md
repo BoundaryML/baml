@@ -202,9 +202,10 @@ Before a capture that does not fit, the publisher sends what it holds,
 waiting on delivery's admission, and a capture larger than the whole byte
 budget is then held alone.
 Staged recording files are separately bounded by delivery's plan/recording-byte
-limits. Construction validates that publisher and delivery capture limits leave
-headroom in the minimum VM pool. No network I/O runs on the processor.
-Admission waits occur only after recycling.
+limits. A capture stops counting against the VM's capture budget when the
+processor takes its chunk, so what the publisher and delivery hold is bounded
+only by their own limits and never keeps the VM from capturing. No network I/O
+runs on the processor. Admission waits occur only after recycling.
 
 Delivery separately limits pending captures, plans, recording bytes, and CAS
 bytes; a capture spanning plans counts once per plan. A plan is pending until
@@ -227,9 +228,10 @@ Callers must recycle input chunks before entering admission.
 Cloud processing moves one chunk into reusable owned storage and recycles its
 source allocation before incremental processing and handoff. Span and timing
 storage each reserve the transport's chunk capacity; only one contains live
-records at a time. Captures are moved, not cloned, and retain their existing
-VM snapshot-pool owners until processed or dropped. Local/no-sink processing
-keeps its original borrowed path without these allocations.
+records at a time. Captures are moved, not cloned, and keep their pooled
+storage until processed or dropped, uncharged from the VM's capture budget.
+Local/no-sink processing keeps its original borrowed path without these
+allocations.
 
 This permits large chunks to make progress through bounded publisher windows
 and delivery backpressure. Snapshot accounting is cached between preflight and

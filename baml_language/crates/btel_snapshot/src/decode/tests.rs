@@ -132,7 +132,7 @@ fn rich_snapshot(pool: &SnapshotPool) -> Snapshot {
 
 #[test]
 fn every_value_kind_round_trips_with_verified_identity_and_preserved_graph() {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let snapshot = rich_snapshot(&pool);
     let decoded = decode(&encode(&snapshot)).unwrap();
     assert_eq!(decoded.id, snapshot.root_id());
@@ -202,7 +202,7 @@ fn every_value_kind_round_trips_with_verified_identity_and_preserved_graph() {
 
 #[test]
 fn value_roots_and_limited_captures_verify() {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let b = pool.try_acquire().unwrap();
     let snapshot = b.finish(V::Truncated(crate::Limit::Bytes), &mut Shaper::default());
     assert!(snapshot.stats().limited);
@@ -221,7 +221,7 @@ fn value_roots_and_limited_captures_verify() {
 
 #[test]
 fn content_changes_are_rejected_even_when_the_header_is_intact() {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let snapshot = rich_snapshot(&pool);
     let bytes = encode(&snapshot);
     // "hello λ" appears in a string leaf; changing one letter keeps a
@@ -241,7 +241,7 @@ fn content_changes_are_rejected_even_when_the_header_is_intact() {
 
 #[test]
 fn malformed_blobs_fail_without_panicking() {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let bytes = encode(&rich_snapshot(&pool));
     for len in 0..bytes.len() {
         assert!(decode(&bytes[..len]).is_err(), "prefix {len} accepted");
@@ -282,7 +282,7 @@ fn out_of_range_references_are_structural_errors() {
 
 #[test]
 fn limits_are_enforced_before_allocation() {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let bytes = encode(&rich_snapshot(&pool));
     let tight = |limits: DecodeLimits| decode_blob(&bytes, &limits);
     assert_eq!(
@@ -332,7 +332,7 @@ fn on_large_stack<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> 
 }
 
 fn type_blob(ty: OwnedType) -> Vec<u8> {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut b = pool.try_acquire().unwrap();
     let id = b.leaves().ty(ty);
     encode(&b.finish(V::Type(id), &mut Shaper::default()))
@@ -462,7 +462,7 @@ fn long_shallow_types_decode_whole() {
 #[test]
 fn one_helper_thread_measures_every_large_description_in_a_blob() {
     let blob = on_large_stack(|| {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let mut b = pool.try_acquire().unwrap();
         let types: Vec<_> = (0..3)
             .map(|extra| b.leaves().ty(nested_list(SHALLOW_TYPE_BYTES + extra)))
@@ -492,7 +492,7 @@ fn one_helper_thread_measures_every_large_description_in_a_blob() {
 #[test]
 fn map_entry_keys_hash_like_the_producer() {
     // Keys and values from separate entry ranges must verify independently.
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut b = pool.try_acquire().unwrap();
     let key = b.leaves().ty(int_type());
     let value = b.leaves().ty(int_type());
@@ -652,7 +652,7 @@ fn references_to_other_blobs_follow_first_use_and_never_replace_a_root() {
 
 #[test]
 fn media_round_trips_each_source_with_its_content() {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut b = pool.try_acquire().unwrap();
     let label = |b: &mut crate::Builder, text: &str| b.leaves().label(&text.into()).unwrap();
     let (mime, url, path) = (

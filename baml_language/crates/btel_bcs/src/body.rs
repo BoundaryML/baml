@@ -387,7 +387,7 @@ mod tests {
 
     #[test]
     fn a_body_is_the_bytes_of_the_whole_message_and_holds_no_copy_of_a_long_string() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let texts = texts();
         for recording_file in [None, Some(&b"recording bytes"[..]), Some(&[][..])] {
             let expected = encoded_whole(&capture(&pool, &texts), recording_file);
@@ -425,7 +425,7 @@ mod tests {
 
     #[test]
     fn an_empty_cas_value_has_present_zero_logical_bytes() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let snapshot = pool
             .try_acquire()
             .unwrap()
@@ -440,7 +440,7 @@ mod tests {
 
     #[test]
     fn a_string_is_held_until_its_body_is_dropped() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let texts = texts();
         let backing: Vec<_> = texts
             .iter()
@@ -467,7 +467,7 @@ mod tests {
 
     #[test]
     fn a_body_over_its_limit_is_refused_before_anything_is_written_for_it() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let texts = texts();
         let whole = encoded_whole(&capture(&pool, &texts), None).len();
         assert!(body_of(capture(&pool, &texts), None, whole).is_ok());
@@ -491,7 +491,7 @@ mod tests {
 
     #[test]
     fn only_a_long_string_is_left_out_of_the_buffered_length() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let Split { leaves, .. } = capture(&pool, &texts()).split();
         let buffered: Vec<_> = leaves
             .iter()

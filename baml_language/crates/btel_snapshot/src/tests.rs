@@ -20,7 +20,41 @@ fn scalar(pool: &SnapshotPool, n: i64) -> Snapshot {
         .finish(SnapshotValue::Int(n), &mut Shaper::default())
 }
 #[test]
+fn the_budget_charges_captures_until_the_processor_takes_them() {
+    let pool = SnapshotPool::new(1, Limits::default());
+    assert_eq!(pool.stats().budget_bytes, 1);
+    // One capture is admitted however large it is, and charged what it grew to.
+    let mut b = pool.try_acquire().unwrap();
+    let started = pool.stats().held_bytes;
+    assert!(started > 0);
+    let (object, _) = bytes(&mut b, &[1; 4096]);
+    let id = b.leaves().object(object).unwrap();
+    let a = b.finish(SnapshotValue::Object(id), &mut Shaper::default());
+    let charged = pool.stats().held_bytes;
+    assert!(charged > started + 4096);
+    assert!(pool.try_acquire().is_none());
+    // Taken by the processor: the charge is lifted while the storage stays out.
+    a.uncharge();
+    assert_eq!(pool.stats().held_bytes, 0);
+    assert_eq!(pool.stats().in_use, 1);
+    a.uncharge();
+    assert_eq!(pool.stats().held_bytes, 0);
+    let b = scalar(&pool, 2);
+    assert!(pool.stats().held_bytes > 0);
+    assert_eq!(pool.stats().in_use, 2);
+    // Going back lifts a charge; an uncharged storage going back changes nothing.
+    drop(b);
+    assert_eq!(pool.stats().held_bytes, 0);
+    drop(a);
+    assert_eq!(pool.stats().held_bytes, 0);
+    assert_eq!(pool.stats().in_use, 0);
+    // A builder dropped unfinished gives its charge back too.
+    drop(pool.try_acquire().unwrap());
+    assert_eq!(pool.stats().held_bytes, 0);
+}
+#[test]
 fn capacity_counts_owners_across_threads_and_reuse_has_no_stale_values() {
+    // A budget of one byte admits one capture at a time.
     let pool = SnapshotPool::new(1, Limits::default());
     for n in 0..100 {
         let snapshot = scalar(&pool, n);
@@ -40,7 +74,7 @@ fn capacity_counts_owners_across_threads_and_reuse_has_no_stale_values() {
 fn immutable_leaves_and_pool_survive_the_original_owners() {
     let leaf = Arc::new(BigInt::from(123));
     let weak = Arc::downgrade(&leaf);
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut b = pool.try_acquire().unwrap();
     let SnapshotValue::Bigint(id) = b.leaves().bigint(&leaf) else {
         panic!("the bigint is held")
@@ -55,7 +89,7 @@ fn immutable_leaves_and_pool_survive_the_original_owners() {
 }
 #[test]
 fn unwind_releases_builder_and_large_allocations_are_not_retained() {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     assert!(
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let _b = pool.try_acquire().unwrap();
@@ -78,15 +112,12 @@ fn unwind_releases_builder_and_large_allocations_are_not_retained() {
 }
 #[test]
 fn limits_are_explicit_and_what_they_cut_shows_in_the_capture() {
-    let pool = SnapshotPool::new(
-        1,
-        Limits {
-            max_objects: Some(1),
-            max_values: Some(2),
-            max_depth: Some(2),
-            ..Limits::default()
-        },
-    );
+    let pool = SnapshotPool::unbounded(Limits {
+        max_objects: Some(1),
+        max_values: Some(2),
+        max_depth: Some(2),
+        ..Limits::default()
+    });
     let mut b = pool.try_acquire().unwrap();
     let (object, range) = bytes(&mut b, b"abcde");
     let id = b.leaves().object(object).unwrap();
@@ -132,13 +163,10 @@ fn a_leaf_over_the_leaf_limit_is_cut_and_nothing_else_is() {
         (limits.max_values, limits.max_objects, limits.max_depth),
         (None, None, None)
     );
-    let pool = SnapshotPool::new(
-        1,
-        Limits {
-            max_leaf_bytes: 8,
-            ..limits
-        },
-    );
+    let pool = SnapshotPool::unbounded(Limits {
+        max_leaf_bytes: 8,
+        ..limits
+    });
     let mut b = pool.try_acquire().unwrap();
     let ty = b.leaves().ty(baml_type::RealizedTy::Int);
     // Each kind at the limit, then just over it. A bigint is measured as the
@@ -219,7 +247,7 @@ fn a_sliced_string_is_hashed_once_however_often_it_is_captured() {
     let source = BexStr::from("a long string to take a part of: ".repeat(8));
     let part = source.byte_slice(4..204);
     assert!(!hashed(&part));
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut b = pool.try_acquire().unwrap();
     let id = b.leaves().string(&part).unwrap();
     // The caller's handle has the hash now, and so has the capture's.
@@ -232,7 +260,7 @@ fn a_sliced_string_is_hashed_once_however_often_it_is_captured() {
 #[test]
 fn growth_accounts_for_replacement_overlap_and_ignores_idle_budget() {
     let pool = SnapshotPool::with_config(
-        1,
+        usize::MAX,
         Limits::default(),
         PoolConfig {
             retention_budget_bytes: 1,
@@ -260,7 +288,7 @@ fn growth_accounts_for_replacement_overlap_and_ignores_idle_budget() {
 fn idle_budget_is_total_not_per_buffer_and_relocation_preserves_owners() {
     let budget = 4096;
     let pool = SnapshotPool::with_config(
-        3,
+        usize::MAX,
         Limits::default(),
         PoolConfig {
             retention_budget_bytes: budget,
@@ -299,7 +327,7 @@ fn idle_budget_is_total_not_per_buffer_and_relocation_preserves_owners() {
 
 #[test]
 fn content_ids_include_value_kinds_omissions_and_leaf_contents() {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let id = |v| {
         pool.try_acquire()
             .unwrap()
@@ -339,7 +367,7 @@ fn content_ids_include_value_kinds_omissions_and_leaf_contents() {
 
 #[test]
 fn graph_hashes_preserve_cycles_aliases_and_reset_on_reuse() {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let make = |distinct: bool| {
         let mut b = pool.try_acquire().unwrap();
         let slot = b.leaves().reserve().unwrap();
@@ -373,7 +401,7 @@ fn root_blob_bytes(snapshot: &Snapshot) -> Vec<u8> {
 
 #[test]
 fn blobs_ignore_discovery_order_unreachable_objects_and_reused_scratch() {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut reused = Shaper::default();
     // A list of two cells, the second pointing at the first, with its objects
     // reserved in either order and optionally beside an unreachable object.

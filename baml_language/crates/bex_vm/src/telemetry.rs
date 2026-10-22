@@ -341,11 +341,11 @@ impl TelemetryState {
             #[cfg(all(not(test), not(target_arch = "wasm32")))]
             pending_context_snapshot: None,
             capture_scratch: snapshot::Scratch::default(),
+            // Every capture is consumed as it is written, so at most two are
+            // alive at once: the pool needs no budget, and `capture` can
+            // rely on admission never being refused.
             #[cfg(target_arch = "wasm32")]
-            snapshots: btel_snapshot::SnapshotPool::new(
-                btel_settings::snapshot::MIN_SNAPSHOT_SLOTS,
-                btel_snapshot::Limits::default(),
-            ),
+            snapshots: btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default()),
             auto_level: policies.auto_level(),
             thread: ThreadTelemetry {
                 active_id: id,

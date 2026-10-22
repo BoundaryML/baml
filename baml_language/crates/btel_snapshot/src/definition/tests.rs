@@ -415,7 +415,7 @@ fn root_bytes(snapshot: &crate::Snapshot) -> Vec<u8> {
 #[test]
 fn a_stream_carries_a_group_once_and_names_it_after() {
     let _carrying = carrying();
-    let pool = SnapshotPool::new(4, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let person = group(&[class(
         anonymous("Person"),
         vec![field("name", TyTemplate::String)],
@@ -472,7 +472,7 @@ fn carrying() -> std::sync::MutexGuard<'static, ()> {
 #[test]
 fn a_possible_loss_makes_streams_carry_again() {
     let _carrying = carrying();
-    let pool = SnapshotPool::new(4, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let person = group(&[class(
         anonymous("Person"),
         vec![field("name", TyTemplate::String)],
@@ -495,7 +495,7 @@ fn a_possible_loss_makes_streams_carry_again() {
 #[test]
 fn a_possible_loss_waits_for_the_next_capture() {
     let _carrying = carrying();
-    let pool = SnapshotPool::new(4, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let person = group(&[class(
         anonymous("Person"),
         vec![field("name", TyTemplate::String)],
@@ -525,7 +525,7 @@ fn a_possible_loss_waits_for_the_next_capture() {
 /// not repeat an ID.
 #[test]
 fn a_capture_holds_each_group_once() {
-    let pool = SnapshotPool::new(4, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let person = || {
         group(&[class(
             anonymous("Person"),
@@ -552,7 +552,7 @@ fn a_capture_holds_each_group_once() {
 #[test]
 fn definition_groups_count_no_logical_bytes() {
     let _carrying = carrying();
-    let pool = SnapshotPool::new(4, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let person = group(&[class(
         anonymous("Person"),
         vec![field("name", TyTemplate::String)],
@@ -573,7 +573,7 @@ fn definition_groups_count_no_logical_bytes() {
 #[test]
 fn carrying_a_group_carries_what_it_names_first() {
     let _carrying = carrying();
-    let pool = SnapshotPool::new(4, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let resume = group(&[class(
         declared("user.Resume"),
         vec![field("name", TyTemplate::String)],
@@ -619,7 +619,7 @@ fn carrying_a_group_carries_what_it_names_first() {
 /// once they are named by their definitions, and not before.
 #[test]
 fn identical_runtime_classes_capture_identically() {
-    let pool = SnapshotPool::new(4, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let person = group(&[class(
         anonymous("Person"),
         vec![field("name", TyTemplate::String)],

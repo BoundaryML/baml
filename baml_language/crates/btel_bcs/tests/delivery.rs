@@ -237,7 +237,7 @@ async fn failed_physical_target_does_not_cancel_either_lane() {
             .unwrap(),
         );
         let handle = delivery.handle();
-        let pool = SnapshotPool::new(2, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         handle
             .try_submit(
                 files(1).pop().unwrap(),
@@ -279,7 +279,7 @@ async fn expired_target_drops_only_itself_and_later_work_is_accepted() {
             .await;
         let delivery = Arc::new(BcsDelivery::new(config(&server), |_| {}).unwrap());
         let handle = delivery.handle();
-        let pool = SnapshotPool::new(2, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let mut files = files(2).into_iter();
         handle
             .try_submit(
@@ -454,7 +454,7 @@ async fn serialized_snapshots_release_admission_slots_before_put_completion() {
     settings.retry_delay = Duration::from_millis(10);
     let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
     let handle = delivery.handle();
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut files = files(2).into_iter();
     handle
         .try_submit(
@@ -494,7 +494,7 @@ async fn mixed_plan_prunes_without_serializing_and_uploads_canonical_envelopes()
         .expect(3)
         .mount(&server)
         .await;
-    let pool = SnapshotPool::new(8, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let snapshots = vec![
         scalar(&pool, 10),
         scalar(&pool, 11),
@@ -614,7 +614,7 @@ async fn prepare_retries_preserve_identity_and_put_retries_preserve_exact_bytes(
         .expect(2)
         .mount(&server)
         .await;
-    let pool = SnapshotPool::new(2, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let delivery = Arc::new(BcsDelivery::new(config(&server), |_| {}).unwrap());
     delivery
         .handle()
@@ -716,7 +716,7 @@ async fn rejects_malformed_plans_before_any_put_and_releases_every_owner() {
             .unwrap(),
         );
         let handle = delivery.handle();
-        let pool = SnapshotPool::new(3, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         handle
             .try_submit(
                 files(1).pop().unwrap(),
@@ -943,7 +943,7 @@ async fn snapshot_owner_saturation_waits_until_planning_releases_owners() {
     settings.request_timeout = Duration::from_secs(2);
     let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
     let handle = delivery.handle();
-    let pool = SnapshotPool::new(2, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut files = files(2).into_iter();
     handle
         .try_submit(
@@ -1025,7 +1025,7 @@ async fn drain_finishes_multiple_plans_without_cas_blocking_the_recording_lane()
     let delivery = Arc::new(BcsDelivery::new(config(&server), |_| {}).unwrap());
     let handle = delivery.handle();
     let mut files = files(2).into_iter();
-    let pool = SnapshotPool::new(2, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     handle
         .try_submit(
             files.next().unwrap(),
@@ -1076,7 +1076,7 @@ async fn response_and_recording_body_byte_limits_drop_only_affected_work() {
             .mount(&server)
             .await;
         let delivery = Arc::new(BcsDelivery::new(config(&server), |_| {}).unwrap());
-        let pool = SnapshotPool::new(2, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         // A recording body has a limit, and a blob placed in it counts.
         delivery
             .handle()
@@ -1126,7 +1126,7 @@ async fn a_blob_larger_than_every_byte_limit_uploads_whole() {
     // Less than the blob, let alone its capture and both sides of its body.
     settings.cas_reserved_bytes = 4096;
     let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let snapshot = large(&pool);
     let mut expected = Vec::new();
     snapshot
@@ -1218,10 +1218,10 @@ async fn a_plan_over_the_cas_reservation_holds_up_only_another_such_plan() {
     settings.cas_reserved_bytes = 32 * 1024;
     let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
     let handle = delivery.handle();
-    let pool = SnapshotPool::new(2, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     // A storage that held a large capture keeps its capacity, and is
     // charged for it: the small capture takes a storage of its own.
-    let small = SnapshotPool::new(1, Limits::default());
+    let small = SnapshotPool::unbounded(Limits::default());
     let mut files = files(4).into_iter();
     // Nothing else is held: the large plan goes at once, beside the budget.
     let (snapshots, targets) = object(&pool, true);
@@ -1295,7 +1295,7 @@ async fn a_long_cas_upload_does_not_keep_its_plan_pending() {
     settings.max_pending_plans = 1;
     let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
     let handle = delivery.handle();
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut files = files(2).into_iter();
     let (snapshots, targets) = object(&pool, false);
     handle
@@ -1336,7 +1336,7 @@ async fn cas_bodies_upload_side_by_side_up_to_the_slot_count() {
         settings.retry_delay = Duration::from_millis(10);
         settings.max_cas_uploads = slots;
         let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
-        let pool = SnapshotPool::new(2, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         delivery
             .handle()
             .try_submit(
@@ -1393,7 +1393,7 @@ async fn permanent_put_failure_is_not_retried_and_draining_releases_queued_owner
         })
         .unwrap(),
     );
-    let pool = SnapshotPool::new(4, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     for (index, file) in files(3).into_iter().enumerate() {
         let result = delivery.handle().try_submit(
             file,
@@ -1430,7 +1430,7 @@ async fn disabling_cancels_a_blocked_prepare_and_releases_queued_owners_promptly
     settings.request_timeout = Duration::from_secs(10);
     let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
     let handle = delivery.handle();
-    let pool = SnapshotPool::new(4, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     for (index, file) in files(3).into_iter().enumerate() {
         handle
             .try_submit(
@@ -1508,7 +1508,7 @@ async fn the_shutdown_timeout_bounds_waiting_admission_and_drops_what_is_left() 
         BcsDelivery::new(settings, move |error| failed.lock().unwrap().push(error)).unwrap(),
     );
     let handle = delivery.handle();
-    let pool = SnapshotPool::new(4, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut files = files(2).into_iter();
     handle
         .try_submit(
@@ -1635,7 +1635,7 @@ async fn large_upload(
     settings.request_timeout = Duration::from_millis(100);
     settings.min_upload_bytes_per_second = min_upload_bytes_per_second;
     let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     delivery
         .handle()
         .try_submit(
@@ -1724,7 +1724,7 @@ async fn a_long_string_is_held_until_its_upload_ends_and_the_capture_only_until_
     settings.max_attempts = 1000;
     settings.retry_delay = Duration::from_millis(10);
     let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let texts = ["a", "b"].map(|letter| btel_snapshot::BexStr::from(letter.repeat(10_000)));
     let backing = texts.each_ref().map(|text| match text {
         btel_snapshot::BexStr::Flat(flat) => Arc::downgrade(flat),
@@ -1803,7 +1803,7 @@ async fn a_short_part_of_a_long_string_goes_with_its_recording() {
     settings.recording_reserved_bytes = 5 * 1024 * 1024;
     let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
     let handle = delivery.handle();
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let document = btel_snapshot::BexStr::from("d".repeat(8 * 1024 * 1024));
     // One part short enough to be copied into the body, one sent from the
     // document's own memory: each holds all of it.

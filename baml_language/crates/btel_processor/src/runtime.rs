@@ -232,16 +232,13 @@ impl TelemetryRuntime {
         let id = NEXT_RUNTIME
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
             .expect("telemetry runtime identity space exhausted");
-        // A producer can own a function's input and type-argument captures
-        // while acquiring its context capture.
-        let snapshot_slots = config
-            .max_producers
-            .get()
-            .checked_mul(3)
-            .and_then(|slots| slots.checked_add(btel_settings::snapshot::MIN_SNAPSHOT_SLOTS))
-            .ok_or_else(|| std::io::Error::other("snapshot slot count overflow"))?;
-        let snapshots =
-            btel_snapshot::SnapshotPool::new(snapshot_slots, btel_snapshot::Limits::default());
+        // Bounds the captures with the producers only: the processor lifts a
+        // capture's charge as it takes its chunk, so what the publisher and
+        // delivery hold is bounded by their own budgets.
+        let snapshots = btel_snapshot::SnapshotPool::new(
+            btel_settings::snapshot::capture_budget_bytes(config.max_producers.get()),
+            btel_snapshot::Limits::default(),
+        );
         let pool = Pool::new(config).map_err(|e| std::io::Error::other(format!("{e:?}")))?;
         let publisher = make(RecordingControl {
             pool: pool.clone(),
@@ -775,7 +772,7 @@ mod tests {
         let pool = Pool::new(config()).unwrap();
         let runtime = Arc::new(TelemetryRuntime {
             id: NEXT_RUNTIME.fetch_add(1, Ordering::Relaxed),
-            snapshots: btel_snapshot::SnapshotPool::new(16, btel_snapshot::Limits::default()),
+            snapshots: btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default()),
             snapshot_wait_nanos: AtomicU64::new(0),
             pool: pool.clone(),
             worker: Mutex::new(None),

@@ -17,7 +17,7 @@ use std::{
 
 pub use bex_chunkedringbuffer::DrainStatus as Progress;
 use bex_chunkedringbuffer::{Consumer, ProducerId, SpanChunk, TransportFailed};
-use btel_records::{SpanRecord, TimingRecord};
+use btel_records::{Capture, SpanRecord, TimingRecord};
 use btel_types::{
     AwaitDuration, CallPathId, CallPathNodeId, ClockInstant, InvocationOutcome, TelemetryId,
 };
@@ -107,7 +107,7 @@ impl<P> Processing<P> {
         drop(records);
     }
 
-    fn spans<I, V>(
+    fn spans<I: Capture, V: Capture>(
         &mut self,
         producer: ProducerId,
         mut records: SpanChunk<TimingRecord, SpanRecord<I, V>>,
@@ -116,6 +116,12 @@ impl<P> Processing<P> {
         P: Publisher<I, V>,
     {
         self.publisher.before_span_chunk(records.as_slice().len());
+        // The chunk is the processor's now, its captures with it: they stop
+        // counting against the producers' budget before anything downstream
+        // can hold them up.
+        for record in records.as_slice() {
+            record.uncharge_captures();
+        }
         let initial_thread = self.contexts[producer.index()].span;
         let mut thread = initial_thread;
         if P::DETACH_RECORDS {
@@ -464,7 +470,8 @@ pub struct Processor<InputCapture, ValueCapture, P = NoSinkPublisher> {
     max_chunks: NonZeroUsize,
     processing: Processing<P>,
     // Two capacity-sized buffers for opted-in publishers, with one live chunk
-    // at a time. Capture owners still share the existing VM snapshot pool.
+    // at a time. Their captures are the processor's, uncharged from the
+    // producers' budget, until the publisher takes or drops them.
     detached: Vec<SpanRecord<InputCapture, ValueCapture>>,
     detached_timing: Vec<TimingRecord>,
     next_flush: Instant,
@@ -472,7 +479,7 @@ pub struct Processor<InputCapture, ValueCapture, P = NoSinkPublisher> {
     deferred_spans: Option<DeferredSpans<InputCapture, ValueCapture>>,
 }
 
-impl<I, V> Processor<I, V> {
+impl<I: Capture, V: Capture> Processor<I, V> {
     pub fn new(
         consumer: Consumer<TimingRecord, SpanRecord<I, V>>,
         max_chunks: NonZeroUsize,
@@ -481,7 +488,7 @@ impl<I, V> Processor<I, V> {
     }
 }
 
-impl<I, V, P: Publisher<I, V>> Processor<I, V, P> {
+impl<I: Capture, V: Capture, P: Publisher<I, V>> Processor<I, V, P> {
     pub fn with_publisher(
         consumer: Consumer<TimingRecord, SpanRecord<I, V>>,
         max_chunks: NonZeroUsize,
@@ -613,6 +620,8 @@ impl<I, V, P: Publisher<I, V>> Processor<I, V, P> {
                         );
                         for (thread, context, record) in pending {
                             use btel_records::ContextReference;
+                            // Deferred records never went through a chunk.
+                            record.uncharge_captures();
                             let marker = match context {
                                 ContextReference::Empty => SpanRecord::ContextCleared,
                                 ContextReference::Unavailable => SpanRecord::ContextSelected {

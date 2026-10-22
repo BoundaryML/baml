@@ -523,13 +523,13 @@ impl TelemetryRecording {
                 Destination::LocalFiles { .. } | Destination::UserFiles
             ) && !self.sources.is_empty())
             .then(|| {
-                let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+                let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
                 btel_snapshot::string_map(&pool, &self.sources, SOURCES_MAX_BYTES)
             })
             .flatten(),
             context: btel_snapshot::context::capture(
                 launch_context,
-                &btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default()),
+                &btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default()),
             ),
             exit: Arc::clone(&self.exit),
         }
