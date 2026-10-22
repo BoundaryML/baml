@@ -171,9 +171,17 @@ impl BexVm {
 
     /// Set the `$trace` attachment consumed by the next call.
     pub fn set_call_trace(&mut self, value: Value) -> Result<(), Box<VmError>> {
-        let trace = self.trace_config(value).map_err(Box::new)?;
-        self.pending_call_trace = Some(trace);
-        Ok(())
+        match self.trace_config(value) {
+            Ok(trace) => {
+                self.pending_call_trace = Some(trace);
+                Ok(())
+            }
+            Err(error) => {
+                // Discard type arguments for the failed call.
+                self.compiled.call_type_args.clear();
+                Err(Box::new(error))
+            }
+        }
     }
 
     /// Record a log event and suspend until the engine has delivered it.
