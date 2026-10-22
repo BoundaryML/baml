@@ -77,6 +77,7 @@ pub(crate) struct Generator<'a, 'db> {
     /// Whether this body may suspend: it then polls at loop back edges and
     /// keeps live heap values in frame slots across every suspension.
     pub(crate) pauses: bool,
+    pub(crate) recursive: bool,
     /// Builtin keys mapped to stable binding ordinals.
     pub(crate) builtins: &'a mut BTreeMap<String, usize>,
     pub(crate) body: &'a MirFunctionBody<'db>,
@@ -121,6 +122,7 @@ impl<'a, 'db> Generator<'a, 'db> {
             pausing: program.pausing,
             spill_base: 0,
             pauses: program.pausing.contains(&object),
+            recursive: unit.recursive,
             builtins,
             body: crate::admit::body_of(unit.mir),
             lambdas: &unit.mir.lambdas,
@@ -188,6 +190,9 @@ impl<'db> Generator<'_, 'db> {
         }
         if let Some(slot) = self.cause_slot {
             self.emit_line(&format!("vm.set_slot(depth, {slot}, Value::NULL);"));
+        }
+        if self.recursive {
+            self.recursion_check();
         }
         self.stmts(&stmts)?;
         // Every path ends in an `Exit`; this keeps the closure well-typed.
@@ -370,7 +375,23 @@ impl<'db> Generator<'_, 'db> {
             .loop_headers
             .iter()
             .map(|&header| self.header_locals(header).len());
-        self.slots += at_sites.chain(at_headers).max().unwrap_or(0);
+        let at_entry = self
+            .recursive
+            .then(|| self.header_locals(self.body.entry.0).len());
+        self.slots += at_sites
+            .chain(at_headers)
+            .chain(at_entry)
+            .max()
+            .unwrap_or(0);
+    }
+
+    fn recursion_check(&mut self) {
+        let live = self.header_locals(self.body.entry.0);
+        let call = self.rooted(&live, "vm.suspend(Step::Yield)");
+        self.emit_line("std::thread_local! { static CALLS: std::cell::Cell<u32> = const { std::cell::Cell::new(0) }; }");
+        self.emit_line(&format!(
+            "if CALLS.with(|calls| {{ let n = calls.get().wrapping_add(1); calls.set(n); n % {YIELD_EVERY} == 0 }}) && vm.should_yield() {{ {call}?; }}"
+        ));
     }
 
     /// The heap values live across the suspension `block`'s terminator may make.

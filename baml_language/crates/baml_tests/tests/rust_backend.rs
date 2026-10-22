@@ -192,11 +192,9 @@ fn compute_shaped_functions_are_admitted_and_the_rest_stay_bytecode() {
     }
     let uses_closure = body_of(&module, "user.uses_closure");
     assert!(uses_closure.contains("vm.suspend("), "{uses_closure}");
-    for name in ["user.fib", "user.<lambda(uses_closure, 0)>"] {
-        let body = body_of(&module, name);
-        assert!(!body.contains("vm.suspend("), "{body}");
-        assert!(!body.contains("vm.should_yield()"), "{body}");
-    }
+    let body = body_of(&module, "user.<lambda(uses_closure, 0)>");
+    assert!(!body.contains("vm.suspend("), "{body}");
+    assert!(!body.contains("vm.should_yield()"), "{body}");
     // A generic function compiles too: one body for every instantiation.
     assert!(admitted.contains(&"user.generic"), "{admitted:?}");
     assert!(
@@ -1111,3 +1109,40 @@ fn a_derived_type_keeps_its_binding_past_a_sibling_rebinding() {
     let rebound = body.rfind("vm.bind_type(").expect("the slot is rebound");
     assert!(built < rebound, "{body}");
 }
+
+#[test]
+fn recursive_calls_poll_and_root_live_values() {
+    let module = compile(
+        r#"
+function fib(n: int) -> int {
+  if (n < 2) { n } else { fib(n - 1) + fib(n - 2) }
+}
+function left(s: string, n: int) -> string {
+  if (n == 0) { s } else { right(s, n - 1) }
+}
+function right(s: string, n: int) -> string {
+  if (n == 0) { s } else { left(s, n - 1) }
+}
+function caller(s: string, n: int) -> string { left(s, n) + s }
+function plain(n: int) -> int { n + 1 }
+"#,
+    );
+    for name in ["user.fib", "user.left", "user.right"] {
+        let body = body_of(&module, name);
+        assert!(body.contains("CALLS.with("), "{body}");
+        assert!(body.contains("wrapping_add(1)"), "{body}");
+        assert!(body.contains("vm.should_yield()"), "{body}");
+        assert!(body.contains("vm.suspend(Step::Yield)"), "{body}");
+    }
+    for name in ["user.left", "user.right", "user.caller"] {
+        let body = body_of(&module, name);
+        assert!(body.contains("vm.set_slot(depth,"), "{body}");
+        assert!(body.contains("vm.slot(depth,"), "{body}");
+    }
+    for name in ["user.caller", "user.plain"] {
+        let body = body_of(&module, name);
+        assert!(!body.contains("CALLS.with("), "{body}");
+    }
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
+}
+
