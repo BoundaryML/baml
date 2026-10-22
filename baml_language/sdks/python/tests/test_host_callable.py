@@ -49,6 +49,32 @@ function ConsumeUnknownCb(callback: (int) -> unknown, x: int) -> int {
 """
 
 
+@pytest.fixture(autouse=True)
+def _diagnostic_typemap():
+    # These bridge tests have no generated SDK to register builtin errors.
+    from baml_bridge.typemap import BamlTypeMap, get_type_map, set_type_map
+
+    previous = get_type_map()
+    set_type_map(
+        BamlTypeMap.from_lazy_entries(
+            classes={
+                name: ("builtins", "dict")
+                for name in (
+                    "baml.errors.HostCallable",
+                    "baml.errors.TypeMismatch",
+                    "baml.panics.SdkPanic",
+                )
+            },
+            enums={},
+            type_aliases={},
+        )
+    )
+    try:
+        yield
+    finally:
+        set_type_map(previous)
+
+
 def _make_runtime() -> BamlRuntime:
     return BamlRuntime.initialize_runtime(".", {"main.baml": CALLBACK_BAML})
 
@@ -393,7 +419,7 @@ def test_encode_success_does_not_release(monkeypatch):
     # `encode_call_args` registers `cb`, but the bytes are discarded (never sent
     # to the engine) and `release_host_callable` above is a no-op recorder, so
     # nothing would ever release it.
-    monkeypatch.setattr(_proto, "register_host_callable", lambda _value: 999)
+    monkeypatch.setattr(_proto, "register_host_callable", lambda _value, _marker: 999)
 
     def cb(x: int) -> str:
         return str(x)
