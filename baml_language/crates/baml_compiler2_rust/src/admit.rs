@@ -231,11 +231,19 @@ fn admission_fixpoint(
 ) -> (String, Vec<CompiledFunction>, BTreeMap<String, usize>) {
     // Every failed round removes at least one unit.
     loop {
+        let graph: BTreeMap<usize, BTreeSet<usize>> = units
+            .iter()
+            .map(|(&object, unit)| (object, unit.analysis.user_callees.clone()))
+            .collect();
+        let recursive = recursive_functions(&graph);
+        for (&object, unit) in units.iter_mut() {
+            unit.recursive = recursive.contains(&object);
+        }
         // A body suspends if it polls at a loop, suspends directly, or calls a
         // body that does; callers root their live values around such calls.
         let mut pausing: BTreeSet<usize> = units
             .iter()
-            .filter(|(_, unit)| unit.analysis.pauses())
+            .filter(|(_, unit)| unit.recursive || unit.analysis.pauses())
             .map(|(&object, _)| object)
             .collect();
         propagate_pausing(units, &mut pausing);
@@ -315,6 +323,7 @@ fn admit_unit<'db>(
                     mir,
                     analysis,
                     package,
+                    recursive: false,
                 },
             );
         }
@@ -377,10 +386,63 @@ fn symbol_for(name: &str, object: usize) -> String {
 }
 
 pub(crate) struct Unit<'db> {
+    pub(crate) recursive: bool,
     pub(crate) mir: &'db MirFunction<'db>,
     pub(crate) analysis: Analysis,
     /// Ordinal of the package that owns the function.
     pub(crate) package: Option<u32>,
+}
+
+/// Functions in a call cycle, including a one-function cycle.
+fn recursive_functions(graph: &BTreeMap<usize, BTreeSet<usize>>) -> BTreeSet<usize> {
+    let mut reverse: BTreeMap<usize, Vec<usize>> =
+        graph.keys().map(|&object| (object, Vec::new())).collect();
+    for (&caller, callees) in graph {
+        for callee in callees {
+            if let Some(callers) = reverse.get_mut(callee) {
+                callers.push(caller);
+            }
+        }
+    }
+    let mut seen = BTreeSet::new();
+    let mut order = Vec::new();
+    for &root in graph.keys() {
+        if !seen.insert(root) {
+            continue;
+        }
+        let mut stack = vec![(root, graph[&root].iter())];
+        while let Some((object, callees)) = stack.last_mut() {
+            if let Some(&callee) = callees.next() {
+                if graph.contains_key(&callee) && seen.insert(callee) {
+                    stack.push((callee, graph[&callee].iter()));
+                }
+            } else {
+                order.push(*object);
+                stack.pop();
+            }
+        }
+    }
+    seen.clear();
+    let mut recursive = BTreeSet::new();
+    for &root in order.iter().rev() {
+        if !seen.insert(root) {
+            continue;
+        }
+        let mut component = Vec::new();
+        let mut stack = vec![root];
+        while let Some(object) = stack.pop() {
+            component.push(object);
+            for &caller in &reverse[&object] {
+                if seen.insert(caller) {
+                    stack.push(caller);
+                }
+            }
+        }
+        if component.len() > 1 || graph[&root].contains(&root) {
+            recursive.extend(component);
+        }
+    }
+    recursive
 }
 
 /// Propagate a call effect until the set stops growing.
@@ -408,6 +470,19 @@ fn propagate_pausing(units: &BTreeMap<usize, Unit<'_>>, set: &mut BTreeSet<usize
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recursive_components_exclude_callers_and_callees() {
+        let graph = BTreeMap::from([
+            (0, BTreeSet::from([1])),
+            (1, BTreeSet::from([2])),
+            (2, BTreeSet::from([1, 3])),
+            (3, BTreeSet::new()),
+            (4, BTreeSet::from([4])),
+            (5, BTreeSet::from([6])),
+        ]);
+        assert_eq!(recursive_functions(&graph), BTreeSet::from([1, 2, 4]));
+    }
 
     #[test]
     fn symbols_are_identifiers() {
