@@ -92,8 +92,8 @@ URLs and headers are capabilities and must not be logged.
 
 Every request goes through the proxy that `HTTPS_PROXY`, `HTTP_PROXY` or
 `ALL_PROXY` names, unless `NO_PROXY` lists its host, like BAML's other HTTP
-clients. HTTPS requests tunnel through the proxy with `CONNECT`, so it sees
-only the host.
+clients. HTTPS requests tunnel through the proxy with `CONNECT`, so a proxy
+that does not intercept TLS sees only the host.
 
 The supported S3 signing policy uses an unsigned payload, optionally with the
 constant required header `x-amz-content-sha256: UNSIGNED-PAYLOAD`. Exact payload
