@@ -100,3 +100,11 @@ test "array_method_taken_as_a_value" {
 test "array_method_taken_as_a_value_through_an_alias" {
     assert.equal(join_key_through_value(["a", "b"]), "a.b")
 }
+
+test "join_through_an_alias_typed_session_let" {
+    let s = reflect.Session.new();
+    s.eval(`type Key = string[]`);
+    s.eval(`function make_key() -> Key { ["a", "b"] }`);
+    s.eval(`let k = make_key()`);
+    assert.equal(s.eval<string>(`k.join(".")`), "a.b")
+}
