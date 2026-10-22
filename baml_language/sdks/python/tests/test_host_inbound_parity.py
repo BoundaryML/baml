@@ -20,6 +20,8 @@ function HostItemMap(f: () -> map<string, Item>) -> float { f()["a"].value / 2.0
 
 
 class BoundaryDiagnostic(BaseModel):
+    """Decode engine boundary diagnostics without requiring a generated SDK."""
+
     message: str
     class_name: str | None = None
     language: str | None = None
@@ -27,6 +29,7 @@ class BoundaryDiagnostic(BaseModel):
 
 @pytest.fixture(scope="module")
 def runtime():
+    """Initialize the shared fixture runtime and restore its diagnostic typemap."""
     previous = get_type_map()
     set_type_map(
         BamlTypeMap.from_lazy_entries(
@@ -53,17 +56,21 @@ def runtime():
 @pytest.mark.parametrize("field", [612, "bad", None])
 @pytest.mark.asyncio
 async def test_host_inbound_parity(runtime, sync_call, async_callback, name, field):
+    """Compare argument and callback ingress for every supported call mode."""
     item = {} if field is None else {"value": field}
     value = [item] if name == "Items" else {"a": item}
 
     def callback():
+        """Deliver the same payload through synchronous callback completion."""
         return value
 
     async def async_fn():
+        """Deliver the payload after suspending the host callback."""
         await asyncio.sleep(0)
         return value
 
     async def invoke(function, args):
+        """Exercise the selected outer call API without changing the payload."""
         if sync_call:
             return call_function_sync(runtime, function, args).result()
         return (await call_function(runtime, function, args)).result()

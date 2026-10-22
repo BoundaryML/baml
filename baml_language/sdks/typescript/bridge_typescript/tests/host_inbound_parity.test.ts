@@ -4,9 +4,11 @@ import { callFunction, callFunctionSync } from '../dist/index.js';
 import { BamlTypeMap, getTypeMap, setTypeMap } from '../dist/typemap.js';
 
 class Item {
+    /** Exercise the registered class encoder used by the ticket repro. */
     constructor(init: Record<string, unknown>) { Object.assign(this, init); }
 }
 class Box {
+    /** Exercise the ticket control case with a nested class list. */
     constructor(init: Record<string, unknown>) { Object.assign(this, init); }
 }
 
@@ -50,6 +52,7 @@ describe('host return / inbound argument parity', () => {
     });
     afterAll(() => setTypeMap(previous));
 
+    /** Build a fresh registered value for each ingress path. */
     const item = () => new Item({ value: 7 });
     const cases: [string, string, () => unknown, unknown][] = [
         ['primitive list', 'Ints', () => [1, 2], [1, 2]],

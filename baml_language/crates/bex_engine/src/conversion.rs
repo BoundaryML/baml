@@ -1316,23 +1316,42 @@ impl BexEngine {
     /// return type before ordinary VM materialization. That shared path checks
     /// every nested node against its declared type, including class fields and
     /// sparse annotations; no callback-specific validator should precede it.
+    /// Retain call-local declaration handles so runtime types cannot resolve
+    /// to an unrelated static declaration with the same spelling.
     pub(crate) fn convert_host_return_to_vm_value_with_ty(
         &self,
         holder: &mut impl HeapPermit<BexThread>,
         external: BexExternalValue,
         expected_ty: Option<&RuntimeTy>,
+        overlay: InboundRuntimeOverlay<'_>,
     ) -> Result<Value, EngineError> {
         let external = match expected_ty {
-            Some(expected_ty) => self.coerce_inbound_arg(external, expected_ty)?,
+            Some(expected_ty) => {
+                // This type comes from the VM's callable contract, not the
+                // host payload. Losing its declaration is an engine failure;
+                // do not accuse the host of returning the wrong value.
+                self.anchor_wire_ty_with_runtime(
+                    &holder.holder().vm,
+                    holder.proof(),
+                    expected_ty,
+                    overlay,
+                )
+                .map_err(|error| {
+                    EngineError::VmInternalError(bex_vm::errors::VmInternalError::BridgeFailure {
+                        message: format!("cannot resolve host callable return contract: {error}"),
+                    })
+                })?;
+                self.coerce_inbound_arg(external, expected_ty)?
+            }
             None => external,
         };
         self.convert_external_to_vm_value_with_ty_and_runtime(
             holder,
             external,
             expected_ty,
-            &indexmap::IndexMap::new(),
-            &indexmap::IndexMap::new(),
-            None,
+            overlay.dynamic_classes,
+            overlay.dynamic_enums,
+            overlay.runtime_named_objects,
         )
     }
 

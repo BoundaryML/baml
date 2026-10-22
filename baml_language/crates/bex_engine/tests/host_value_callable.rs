@@ -2539,9 +2539,9 @@ async fn explicit_never_host_callback_rejects_native_throw() {
     assert_host_contract_violation_panic(&result);
 }
 
-// Host injection and sparse type annotations are only observable from Rust.
-// Compare callback completion with the canonical argument entry path, rather
-// than specifying a separate return-value coercion/validation contract.
+/// Host injection and sparse type annotations are only observable from Rust.
+/// Compare callback completion with the canonical argument entry path, rather
+/// than specifying a separate return-value coercion/validation contract.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn host_return_uses_the_same_inbound_path_as_arguments() {
     let source = r#"
