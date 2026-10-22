@@ -34,18 +34,13 @@ use baml_exec::{
 use bex_engine::{BexEngine, UserFunctionCatalog, UserFunctionInfo};
 use sys_native::SysOpsExt;
 
-fn extract_envelope() -> Result<PackEnvelope, String> {
-    let section = libsui::find_section(PACK_SECTION_NAME)
+fn extract_artifact() -> Result<&'static [u8], String> {
+    libsui::find_section(PACK_SECTION_NAME)
         .map_err(|e| format!("Failed to read embedded section: {e}"))?
-        .ok_or("No embedded BAML package found. This binary must be built with `baml pack`.")?;
-
-    let envelope: PackEnvelope =
-        baml_artifact::decode(baml_artifact::ArtifactKind::PackedProgram, section)
-            .map_err(|e| format!("Failed to deserialize pack envelope: {e}"))?;
-    envelope
-        .verify_telemetry()
-        .map_err(|error| error.to_string())?;
-    Ok(envelope)
+        .ok_or_else(|| {
+            "No embedded BAML package found. This binary must be built with `baml pack`."
+                .to_string()
+        })
 }
 
 fn compiled_bodies_disabled(value: Option<&str>) -> bool {
@@ -137,8 +132,8 @@ fn target_is_typed(info: &UserFunctionInfo) -> bool {
 const WORKER_STACK: usize = 8 << 20;
 
 pub fn main() -> ExitCode {
-    match extract_envelope() {
-        Ok(envelope) => run_envelope(envelope, None),
+    match extract_artifact() {
+        Ok(artifact) => run_embedded(artifact, None),
         Err(e) => {
             print_error(e);
             ExitCode::FAILURE
@@ -322,6 +317,7 @@ fn launch(
         }
     };
 
+    let has_compiled_bodies = compiled_bodies.is_some();
     let engine = match new_engine(
         envelope.program,
         argv,
@@ -341,6 +337,7 @@ fn launch(
         parsed.cli_values,
         json_args,
         envelope.output_format,
+        has_compiled_bodies,
     )
 }
 
@@ -350,13 +347,14 @@ fn finalize_dispatch(
     cli_values: HashMap<String, bex_engine::BexExternalValue>,
     json_args: Option<serde_json::Value>,
     output_format: baml_exec::OutputFormat,
+    has_compiled_bodies: bool,
 ) -> ExitCode {
-    // Compiled recursion needs an 8 MiB stack on worker threads.
-    let rt = match tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .thread_stack_size(WORKER_STACK)
-        .build()
-    {
+    let mut builder = tokio::runtime::Builder::new_multi_thread();
+    builder.enable_all();
+    if has_compiled_bodies {
+        builder.thread_stack_size(WORKER_STACK);
+    }
+    let rt = match builder.build() {
         Ok(rt) => rt,
         Err(e) => {
             print_error(format_args!("failed to create runtime: {e}"));
