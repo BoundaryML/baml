@@ -124,6 +124,13 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
         Gate::Now,
     ),
     ("type_shapes", "roundtrip_tests/test_generics.rs", Gate::Now),
+    // Rust-only: the optional `serde` impls agree with BAML's own JSON (no
+    // other SDK has a `serde` feature).
+    (
+        "type_shapes",
+        "roundtrip_tests/test_json_interchange.rs",
+        Gate::Now,
+    ),
     (
         "type_shapes",
         "roundtrip_tests/test_handles.rs",

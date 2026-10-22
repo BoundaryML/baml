@@ -83,6 +83,30 @@ pub(crate) fn emit(
     let ident = idents::ident(name.name().as_str());
     let docs = doc_attrs(class.docstring.as_deref());
 
+    // Under the `serde` feature the JSON keys are the BAML field names, as
+    // in BAML's own JSON. A class that cannot derive says why on its docs,
+    // where a user missing the impl looks first.
+    let derives_serde = ctx.analysis.derives_serde(name);
+    let serde_attrs = if derives_serde {
+        quote! { #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))] }
+    } else {
+        let note = match class
+            .properties
+            .iter()
+            .find(|prop| !ctx.analysis.has_serde(&prop.ty))
+        {
+            Some(prop) => format!(
+                " Not serializable with the `serde` feature: field `{}` holds a `bigint`, \
+                 `uint8array`, function, handle or BAML standard-library class.",
+                prop.name
+            ),
+            None => " Not serializable with the `serde` feature: BAML standard-library \
+                     classes have no serde impls."
+                .to_string(),
+        };
+        quote! { #[cfg_attr(feature = "serde", doc = "", doc = #note)] }
+    };
+
     let mut field_defs = Vec::new();
     let mut encode_entries = Vec::new();
     let mut decode_fields = Vec::new();
@@ -97,8 +121,11 @@ pub(crate) fn emit(
             ),
         })?;
         let field_docs = doc_attrs(prop.docstring.as_deref());
+        let serde_rename = (derives_serde && field_ident != field_name)
+            .then(|| quote! { #[cfg_attr(feature = "serde", serde(rename = #field_name))] });
         field_defs.push(quote! {
             #(#field_docs)*
+            #serde_rename
             pub #field_ident: #field_ty
         });
         encode_entries.push(quote! {
@@ -165,6 +192,7 @@ pub(crate) fn emit(
     let tokens = quote! {
         #(#docs)*
         #[derive(Debug, Clone, PartialEq)]
+        #serde_attrs
         pub struct #ident #bounded_generics {
             #(#field_defs,)*
         }
