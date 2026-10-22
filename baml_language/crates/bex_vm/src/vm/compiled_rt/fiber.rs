@@ -71,6 +71,15 @@ pub(crate) enum Request {
     Done(Result<Value, Box<VmError>>),
 }
 
+struct FiberReset<'a>(&'a mut BexVm);
+
+impl Drop for FiberReset<'_> {
+    fn drop(&mut self) {
+        self.0.compiled.on_fiber = false;
+        self.0.compiled.yielder = None;
+    }
+}
+
 impl BexVm {
     /// Drive the fiber with the message `message` builds until it suspends or
     /// its body returns.
@@ -103,9 +112,10 @@ impl BexVm {
                 }
             },
         };
-        let request = fiber.resume(message(NonNull::from(&mut *self)));
+        let reset = FiberReset(self);
+        let request = fiber.resume(message(NonNull::from(&mut *reset.0)));
+        drop(reset);
         self.compiled.fiber = Some(fiber);
-        self.compiled.on_fiber = false;
         request
     }
 
@@ -232,8 +242,8 @@ mod stackful {
     impl Drop for Fiber {
         fn drop(&mut self) {
             // A waiting body keeps frames on the stack: dropping the coroutine
-            // unwinds them. A panic in flight gets the same, with no stack
-            // switch during unwinding. A coroutine that never ran holds nothing.
+            // unwinds them. During a panic, leave any forced unwind to the
+            // coroutine's drop. A coroutine that never ran holds nothing.
             if self.bodies != 0 || std::thread::panicking() || !self.coroutine.started() {
                 return;
             }
@@ -283,36 +293,45 @@ mod stackful {
         /// resumes this body. Heap values held in Rust locals across this call
         /// are stale afterwards: generated code keeps them in frame slots and
         /// reloads them.
+        #[inline(never)]
         #[allow(unsafe_code)]
         pub fn suspend(&mut self, step: Step) -> Result<Value, Box<VmError>> {
             let yielder = self
                 .compiled
                 .yielder
                 .expect("compiled code runs on its VM's fiber");
+            let mut vm = NonNull::from(self);
             let mut request = Request::Step(step);
             loop {
-                self.compiled.on_fiber = false;
+                // SAFETY: only the fiber touches the VM until it suspends.
+                unsafe { vm.as_mut() }.compiled.on_fiber = false;
                 // SAFETY: a yielder lives as long as its fiber, and this body is on it.
                 let message = unsafe { yielder.0.as_ref() }.suspend(request);
-                let vm = match &message {
+                let resumed_vm = match &message {
                     Message::Resume { vm, .. } | Message::Enter { vm, .. } => *vm,
                     Message::Stop => unreachable!("a fiber is stopped only with no body on it"),
                 };
                 // A parked body's `&mut BexVm` must still name the VM driving it.
                 assert_eq!(
+                    resumed_vm.as_ptr(),
                     vm.as_ptr(),
-                    std::ptr::from_mut(self),
                     "a VM moved while a compiled body was parked on its fiber"
                 );
+                // Reborrow from the resumed message across this non-inlined switch,
+                // so the compiler cannot cache VM state across the driver's mutations.
+                vm = resumed_vm;
+                // SAFETY: the driver is parked again and passed this VM back to us.
+                let resumed_vm = unsafe { vm.as_mut() };
                 match message {
                     Message::Resume { outcome, .. } => {
-                        self.compiled.on_fiber = true;
+                        resumed_vm.compiled.yielder = Some(yielder);
+                        resumed_vm.compiled.on_fiber = true;
                         return outcome;
                     }
                     Message::Enter { body, args, .. } => {
                         // SAFETY: see above.
                         let yielder = unsafe { yielder.0.as_ref() };
-                        request = Request::Done(run(self, yielder, body, &args));
+                        request = Request::Done(run(resumed_vm, yielder, body, &args));
                     }
                     Message::Stop => unreachable!("a fiber is stopped only with no body on it"),
                 }
