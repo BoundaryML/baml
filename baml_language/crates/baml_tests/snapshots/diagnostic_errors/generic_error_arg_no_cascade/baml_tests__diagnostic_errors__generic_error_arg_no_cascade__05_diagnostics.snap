@@ -17,3 +17,11 @@ source: crates/baml_tests/src/generated_tests.rs
  25 │     identity([1, 2, 3].len())
     ·              ───────────────
     ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `T`
+    ╭─[main.baml:35:5]
+ 35 │     phantom()
+    ·     ─────────
+    ╰────

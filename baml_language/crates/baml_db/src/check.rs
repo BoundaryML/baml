@@ -2148,8 +2148,8 @@ fn tir_type_error_to_diagnostic_id(
         }
         TirTypeError::ExtraneousThrowsDeclaration { .. }
         | TirTypeError::ImpreciseUnknownThrows { .. } => DiagnosticId::ThrowsContractExtraneous,
-        TirTypeError::CannotInferTypeParameter { .. } => DiagnosticId::UnknownType,
-        TirTypeError::TypeParamShadowed { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::CannotInferTypeParameter { .. }
+        | TirTypeError::ConflictingTypeArguments { .. } => DiagnosticId::UnknownType,
         TirTypeError::CannotInferLambdaParamType { .. } => DiagnosticId::UnknownType,
         TirTypeError::WrongNumberOfTypeArgs { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::TypeIsNotGeneric { .. } => DiagnosticId::TypeMismatch,
@@ -2200,8 +2200,9 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::ReceiverTypeMustBeKnown { .. } => DiagnosticId::TypeMustBeKnown,
         TirTypeError::AmbiguousImplementation { .. } => DiagnosticId::TypeMustBeKnown,
         // Generic-parameter / associated-type declaration hygiene.
-        TirTypeError::TypeParamShadowedImplParam { .. } => DiagnosticId::TypeMismatch,
-        TirTypeError::DuplicateGenericParam { .. }
+        TirTypeError::TypeParamShadowed { .. }
+        | TirTypeError::TypeParamShadowedImplParam { .. }
+        | TirTypeError::DuplicateGenericParam { .. }
         | TirTypeError::DuplicateAssociatedType { .. }
         | TirTypeError::AssociatedTypeConflictsWithGenericParam { .. } => {
             DiagnosticId::DuplicateField

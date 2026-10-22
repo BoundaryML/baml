@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/corpus.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0097
+
+  ⚠ extraneous throws declaration: E
+    ╭─[generics_inference_required.baml:61:45]
+ 61 │ ╭─▶ function raise_nothing<E>() -> int throws E {
+ 62 │ │       3
+ 63 │ ╰─▶ }
+    ╰────

@@ -6416,13 +6416,7 @@ impl<'db> LoweringContext<'db> {
                                 )?;
                                 Operand::Copy(Place::local(recv_local))
                             };
-                            self.builder.assign(
-                                dest,
-                                Rvalue::MakeBoundMethod {
-                                    func: item,
-                                    receiver: receiver_op,
-                                },
-                            );
+                            self.assign_bound_method_value(expr_id, dest, item, receiver_op)?;
                             return Ok(());
                         }
                     }
@@ -6473,10 +6467,8 @@ impl<'db> LoweringContext<'db> {
                         // Unbound inherent method or free function reference —
                         // a plain function constant.
                         if let Some(item) = resolution.callable(self.db) {
-                            self.builder.assign(
-                                dest,
-                                Rvalue::Use(Operand::Constant(Constant::Function(item))),
-                            );
+                            let value = self.function_item_value(expr_id, item);
+                            self.builder.assign(dest, value);
                             return Ok(());
                         }
                     }
@@ -6522,13 +6514,7 @@ impl<'db> LoweringContext<'db> {
                                 )?;
                                 Operand::Copy(Place::local(recv_local))
                             };
-                            self.builder.assign(
-                                dest,
-                                Rvalue::MakeBoundMethod {
-                                    func: item,
-                                    receiver: receiver_op,
-                                },
-                            );
+                            self.assign_bound_method_value(expr_id, dest, item, receiver_op)?;
                             return Ok(());
                         }
                     }
@@ -6557,10 +6543,8 @@ impl<'db> LoweringContext<'db> {
                         // Unbound inherent method or free function reference —
                         // a plain function constant.
                         if let Some(item) = resolution.callable(self.db) {
-                            self.builder.assign(
-                                dest,
-                                Rvalue::Use(Operand::Constant(Constant::Function(item))),
-                            );
+                            let value = self.function_item_value(expr_id, item);
+                            self.builder.assign(dest, value);
                             return Ok(());
                         }
                     }
@@ -6895,7 +6879,11 @@ impl<'db> LoweringContext<'db> {
         // emit; a top-level `let` (a client, ...) is a plain read of the
         // global slot `$init` filled.
         let constant = match def {
-            Definition::Function(func) => Constant::Function(DeclRef::Source(func)),
+            Definition::Function(func) => {
+                let value = self.function_item_value(expr_id, DeclRef::Source(func));
+                self.builder.assign(dest, value);
+                return Ok(());
+            }
             Definition::Let(binding) => Constant::GlobalItem(DeclRef::Source(binding)),
             Definition::Class(_)
             | Definition::Enum(_)
@@ -9846,10 +9834,18 @@ impl<'db> LoweringContext<'db> {
             return Ok(());
         };
         let templates = self.planned_generic_apply_type_arg_templates(expr_id);
+        let value = Self::specialized_function(item, templates);
+        self.builder.assign(dest, value);
+        Ok(())
+    }
+
+    /// A function item specialized at `templates`: a pooled, interned
+    /// constant when every argument is concrete (pointer-stable identity -
+    /// each template narrows to the `RealizedTy` the runtime carries), else
+    /// a value built at runtime, resolving the templates against the
+    /// current frame (`foo<T>` inside a generic function).
+    fn specialized_function(item: FunctionRef<'db>, templates: Vec<TyTemplate>) -> Rvalue<'db> {
         if templates.iter().all(TyTemplate::is_fully_concrete) {
-            // Concrete args → pooled, interned compile-time constant
-            // (pointer-stable identity). Each template is fully concrete, so it
-            // narrows directly to a `RealizedTy` — the value the runtime carries.
             let concrete: Vec<RealizedTy> = templates
                 .iter()
                 .map(|t| {
@@ -9857,25 +9853,80 @@ impl<'db> LoweringContext<'db> {
                         .unwrap_or_else(|e| unreachable!("checked fully concrete: {e}"))
                 })
                 .collect();
-            self.builder.assign(
-                dest,
-                Rvalue::Use(Operand::Constant(Constant::GenericFunction {
-                    func: item,
-                    type_args: concrete,
-                })),
-            );
+            Rvalue::Use(Operand::Constant(Constant::GenericFunction {
+                func: item,
+                type_args: concrete,
+            }))
         } else {
-            // A type arg depends on an enclosing generic param (`foo<T>` inside
-            // a generic fn) → build the value at runtime, resolving the
-            // templates against the current frame's type_args.
-            self.builder.assign(
-                dest,
-                Rvalue::MakeGenericFunction {
-                    func: item,
-                    type_arg_templates: templates,
-                },
-            );
+            Rvalue::MakeGenericFunction {
+                func: item,
+                type_arg_templates: templates,
+            }
         }
+    }
+
+    /// The own type arguments TIR inferred for a generic function referenced
+    /// as a VALUE at `expr_id` (`let f: (int) -> int[] = wrap`, `xs.map(wrap)`,
+    /// `C.make`, `x.make`), as the templates the value carries. A value has
+    /// no call site to seed its frame, so a reference that leaves them off
+    /// runs the function with an empty frame. `None` when the reference
+    /// instantiates nothing of its own; written arguments (`wrap<int>`) ride
+    /// the generic-apply road instead.
+    fn inferred_value_type_arg_templates(&mut self, expr_id: AstExprId) -> Option<Vec<TyTemplate>> {
+        let plan = self.tir_call_plan(expr_id)?.clone();
+        if !plan.slots.is_empty() || plan.explicit {
+            return None;
+        }
+        let own = &plan.type_args[plan.own_offset..];
+        if own.is_empty() {
+            return None;
+        }
+        let generic_params = self.enclosing_generic_params();
+        Some(
+            own.iter()
+                .map(|ty| self.inferred_ty_to_template(&ty.clone().widen_fresh(), &generic_params))
+                .collect(),
+        )
+    }
+
+    /// The value of a function item referenced at `expr_id`: the pooled
+    /// function constant, specialized at the reference's inferred own type
+    /// arguments when it has any.
+    fn function_item_value(&mut self, expr_id: AstExprId, item: FunctionRef<'db>) -> Rvalue<'db> {
+        match self.inferred_value_type_arg_templates(expr_id) {
+            Some(templates) => Self::specialized_function(item, templates),
+            None => Rvalue::Use(Operand::Constant(Constant::Function(item))),
+        }
+    }
+
+    /// `dest = receiver.item` as a bound method value: the receiver
+    /// supplies the owner prefix of the frame, and the reference's inferred
+    /// own type arguments, when it has any, are appended to it.
+    fn assign_bound_method_value(
+        &mut self,
+        expr_id: AstExprId,
+        dest: Place,
+        item: FunctionRef<'db>,
+        receiver: Operand<'db>,
+    ) -> Lowered<()> {
+        let bound = Rvalue::MakeBoundMethod {
+            func: item,
+            receiver,
+        };
+        let Some(type_arg_templates) = self.inferred_value_type_arg_templates(expr_id) else {
+            self.builder.assign(dest, bound);
+            return Ok(());
+        };
+        let bound_ty = self.expr_ty(expr_id)?;
+        let bound_local = self.builder.temp(bound_ty);
+        self.builder.assign(Place::local(bound_local), bound);
+        self.builder.assign(
+            dest,
+            Rvalue::MakeGenericFunctionFromValue {
+                value: Operand::Copy(Place::local(bound_local)),
+                type_arg_templates,
+            },
+        );
         Ok(())
     }
 
@@ -10367,13 +10418,7 @@ impl<'db> LoweringContext<'db> {
                     let item = resolution.callable(self.db);
                     if let Some(item) = item {
                         let receiver_op = self.lower_to_operand(base)?;
-                        self.builder.assign(
-                            dest,
-                            Rvalue::MakeBoundMethod {
-                                func: item,
-                                receiver: receiver_op,
-                            },
-                        );
+                        self.assign_bound_method_value(expr_id, dest, item, receiver_op)?;
                         return Ok(());
                     }
                 }
@@ -10385,10 +10430,8 @@ impl<'db> LoweringContext<'db> {
                     // Unbound method or free function reference: emit a plain function constant.
                     let item = resolution.callable(self.db);
                     if let Some(item) = item {
-                        self.builder.assign(
-                            dest,
-                            Rvalue::Use(Operand::Constant(Constant::Function(item))),
-                        );
+                        let value = self.function_item_value(expr_id, item);
+                        self.builder.assign(dest, value);
                         return Ok(());
                     }
                 }

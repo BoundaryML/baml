@@ -2671,7 +2671,77 @@ pub fn signature_lowering_diagnostics<'db>(
             }
         }
     }
+    for error in method_generic_shadowing(db, function, &func_data.generic_params) {
+        out.push((source_map.name_span, error));
+    }
     out
+}
+
+/// A method's own generic parameter may not reuse the name of a generic
+/// parameter of its owner - the enclosing class, interface, or `implements`
+/// block. Shadowing would make one spelling name two frame slots, so it is
+/// rejected (as rustc's E0403 does) rather than resolved. An associated type
+/// is not a frame slot and has no bare spelling (it is always `Self.X`), so
+/// an own generic sharing its name shadows nothing.
+fn method_generic_shadowing<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    function: FunctionLoc<'db>,
+    own: &[baml_compiler2_hir::item_data::GenericParamData],
+) -> Vec<crate::diagnostics::TirTypeError> {
+    use crate::diagnostics::{ShadowedParamOwner, TirTypeError};
+    let Some(owner) = baml_compiler2_hir::item_data::method_owner(db, function) else {
+        return Vec::new();
+    };
+    let shadowed = |names: &[&Name], param: &Name| names.contains(&param);
+    match owner {
+        MethodOwner::Class(class_loc) => {
+            let data = baml_compiler2_hir::item_data::class_data(db, class_loc);
+            let names: Vec<&Name> = data.generic_params.iter().map(|g| &g.name).collect();
+            own.iter()
+                .filter(|param| shadowed(&names, &param.name))
+                .map(|param| TirTypeError::TypeParamShadowed {
+                    param_name: param.name.clone(),
+                    type_name: data.name.clone(),
+                    owner: ShadowedParamOwner::Class,
+                })
+                .collect()
+        }
+        MethodOwner::Interface(interface_loc) => {
+            let data = baml_compiler2_hir::item_data::interface_data(db, interface_loc);
+            let names: Vec<&Name> = data.generic_params.iter().map(|g| &g.name).collect();
+            own.iter()
+                .filter(|param| shadowed(&names, &param.name))
+                .map(|param| TirTypeError::TypeParamShadowed {
+                    param_name: param.name.clone(),
+                    type_name: data.name.clone(),
+                    owner: ShadowedParamOwner::Interface,
+                })
+                .collect()
+        }
+        MethodOwner::Impl(impl_loc) => {
+            // An in-class `implements` block's frame IS the class's, so the
+            // shadowed parameter is the class's own and is named as such;
+            // a free block's frame is the block's.
+            let in_class = baml_compiler2_hir::item_data::impl_enclosing_class(db, impl_loc);
+            let frame = impl_frame(db, impl_loc);
+            let names: Vec<&Name> = frame.iter().map(ParamTy::name).collect();
+            own.iter()
+                .filter(|param| shadowed(&names, &param.name))
+                .map(|param| match in_class {
+                    Some(class) => TirTypeError::TypeParamShadowed {
+                        param_name: param.name.clone(),
+                        type_name: baml_compiler2_hir::item_data::class_data(db, class)
+                            .name
+                            .clone(),
+                        owner: ShadowedParamOwner::Class,
+                    },
+                    None => TirTypeError::TypeParamShadowedImplParam {
+                        param_name: param.name.clone(),
+                    },
+                })
+                .collect()
+        }
+    }
 }
 
 /// An explicit associated binding written on a generic bound (`P extends

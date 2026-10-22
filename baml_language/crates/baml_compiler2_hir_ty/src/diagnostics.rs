@@ -587,8 +587,13 @@ pub enum TirTypeError {
     },
     /// A type parameter could not be inferred at a call site.
     CannotInferTypeParameter { name: Name },
-    /// A method's generic type parameter shadows a type-level parameter (generic
-    /// parameter or associated type) of the enclosing class or interface.
+    /// A type parameter's arguments give it types with no common candidate
+    /// (`pick(1, "s")` for `pick<T>(a: T, b: T)`), and nothing else - an
+    /// expected type - decides between them. Two of the conflicting types
+    /// are named.
+    ConflictingTypeArguments { name: Name, first: Ty, second: Ty },
+    /// A method's generic type parameter shadows a generic parameter of the
+    /// enclosing class or interface.
     TypeParamShadowed {
         param_name: Name,
         type_name: Name,
@@ -1826,6 +1831,18 @@ impl TirTypeError {
                 },
                 TirTypeError::CannotInferTypeParameter { name } => {
                     write!(f, "cannot infer type parameter `{name}`")
+                }
+                TirTypeError::ConflictingTypeArguments {
+                    name,
+                    first,
+                    second,
+                } => {
+                    write!(
+                        f,
+                        "cannot infer type parameter `{name}`: its arguments give it the conflicting types `{}` and `{}`; write the type argument or annotate the expected type",
+                        first.spell(vp),
+                        second.spell(vp)
+                    )
                 }
                 TirTypeError::WrongNumberOfTypeArgs {
                     type_name,

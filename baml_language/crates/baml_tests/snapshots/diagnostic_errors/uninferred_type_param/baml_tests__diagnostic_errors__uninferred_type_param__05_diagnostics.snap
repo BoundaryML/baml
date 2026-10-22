@@ -1,0 +1,135 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0002
+
+  × cannot infer type parameter `T`
+    ╭─[main.baml:22:5]
+ 22 │     phantom()
+    ·     ─────────
+    ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `U`
+    ╭─[main.baml:27:5]
+ 27 │     p.pick()
+    ·     ────────
+    ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `T`
+    ╭─[main.baml:31:13]
+ 31 │     let t = Tag { name: "x" };
+    ·             ─────────────────
+    ╰────
+
+  [type] E0001
+
+  × generic function `pick` needs concrete type arguments before it can be stored in `f`. Specialize it explicitly, for example `p.pick<int>`. Calling `p.pick(...)` directly works only when that
+  │ call's arguments or expected result determine every type argument
+    ╭─[main.baml:37:13]
+ 37 │     let f = p.pick;
+    ·             ──────
+    ╰────
+
+  [type] E0007
+
+  × type `int[]` has no member `len`
+    ╭─[main.baml:49:13]
+ 49 │     consume([1, 2, 3].len())
+    ·             ───────────────
+    ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `T`: its arguments give it the conflicting types `int` and `string`; write the type argument or annotate the expected type
+    ╭─[main.baml:59:13]
+ 59 │     let r = pick(1, "s");
+    ·             ────────────
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:86:14]
+ 86 │     unholder(1)
+    ·              ┬
+    ·              ╰── expected `Holder<!error>`, found `1`
+    ╰────
+
+  [type] E0005
+
+  × function `two` expects 2 type argument(s), got 1
+    ╭─[main.baml:90:5]
+ 90 │     two<int>()
+    ·     ──────────
+    ╰────
+
+  [type] E0005
+
+  × expected 2 argument(s), got 1
+    ╭─[main.baml:94:5]
+ 94 │     pair(1)
+    ·     ───────
+    ╰────
+
+  [type] E0155
+
+  × type annotations needed: the type of this value must be known before accessing `length`
+    ╭─[main.baml:98:13]
+ 98 │     let x = none()?.length();
+    ·             ──────────────
+    ╰────
+
+  [type] E0155
+
+  × type annotations needed
+  │ full type: `!error[]`
+     ╭─[main.baml:105:14]
+ 105 │     let xs = [];
+     ·              ──
+     ╰────
+
+  [type] E0004
+
+  × operator `+` cannot be applied to `int | string` and `1`
+     ╭─[main.baml:122:5]
+ 122 │     p + 1
+     ·     ─────
+     ╰────
+
+  [type] E0001
+
+  × type argument `int | string` is not concrete; a type parameter bounded by `baml.ops.Compare` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no
+  │ single runtime type to dispatch on)
+     ╭─[main.baml:130:27]
+ 130 │     let r: int | string = pick_compared("s", 1);
+     ·                           ─────────────────────
+     ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `E`
+     ╭─[main.baml:146:5]
+ 146 │     bounded_effect()
+     ·     ────────────────
+     ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `V`
+     ╭─[main.baml:161:5]
+ 161 │     take_effect_box(make_effect_box(), null)
+     ·     ────────────────────────────────────────
+     ╰────
+
+  [type] E0001
+
+  × type `string` does not implement interface `Maker`
+     ╭─[main.baml:171:43]
+ 171 │     let f: (string) -> int throws never = needs_maker;
+     ·                                           ───────────
+     ╰────

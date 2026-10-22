@@ -711,6 +711,20 @@ impl<'db> InferenceContext<'db> {
         true
     }
 
+    /// Marks every open class a goal names - its subject, the interface's
+    /// arguments and pins - as owned by the goal's report
+    /// (`InferenceTable::taint_vars_in`).
+    fn taint_goal_vars(&mut self, subject: &Ty, interface: &InferInterface) {
+        self.table.taint_vars_in(subject);
+        for ty in interface
+            .generics
+            .iter()
+            .chain(interface.associated_types.iter().map(|(_, ty)| ty))
+        {
+            self.table.taint_vars_in(ty);
+        }
+    }
+
     /// Records that `subject` does not implement `interface`: the nominal
     /// verdict, reported as such rather than as a subtyping mismatch (which
     /// the finalize filter would re-judge, and `never <: I` holds
@@ -723,6 +737,10 @@ impl<'db> InferenceContext<'db> {
         interface: &InferInterface,
         required_for: &[RequiredFor],
     ) {
+        // The verdict owns the goal's open classes: a slot the goal would
+        // have determined had it held is a cascade of this report, not a
+        // "cannot infer" of its own.
+        self.taint_goal_vars(&subject, interface);
         let interface = interface.existential();
         let already = self.pending_diags.iter().any(|pending| {
             matches!(
@@ -753,6 +771,26 @@ impl<'db> InferenceContext<'db> {
         for Pending { obligation, stall } in std::mem::take(&mut self.obligations) {
             // An operator stalls only on an unsolved operand, so one pattern
             // covers both kinds: ambiguity is impl selection's outcome alone.
+            // The operand's own undetermined-type report owns a stalled
+            // operator: the operand is an expression whose type is recorded,
+            // so it reports at its origin or through the writeback backstop.
+            // The output is tainted so it does not report a second time -
+            // except where solving merged the output INTO an operand's class
+            // (`xs.push(xs[0] + 1)`): that class is the operand, and its own
+            // report must stand. Settling runs after every solve, so no
+            // later merge can change the split.
+            if let Obligation::Operator { lhs, rhs, out, .. } = &obligation {
+                let mut operand_roots = self.table.open_roots_in(lhs);
+                if let Some(rhs) = rhs {
+                    operand_roots.extend(self.table.open_roots_in(rhs));
+                }
+                for root in self.table.open_roots_in(out) {
+                    if !operand_roots.contains(&root) {
+                        self.table.taint_root(root);
+                    }
+                }
+                continue;
+            }
             let (
                 Obligation::Implements {
                     ty,
@@ -767,7 +805,11 @@ impl<'db> InferenceContext<'db> {
                 continue;
             };
             let ty = self.table.resolve_completely(&ty);
-            let interface = self.resolve_interface_ref(&interface).existential();
+            let interface = self.resolve_interface_ref(&interface);
+            // As for a failed goal: the ambiguity report owns the slots
+            // the selection would have decided.
+            self.taint_goal_vars(&ty, &interface);
+            let interface = interface.existential();
             self.pending_diags
                 .push(super::PendingDiag::AmbiguousImplementation {
                     expr: at,

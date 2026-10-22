@@ -1,0 +1,173 @@
+// A generic parameter's instantiation slot that nothing determines is E0002
+// (cannot infer type parameter) at the use site, whatever the site is: a
+// call, a method call, a construction, a member value. A parameter no
+// argument or field mentions (a phantom) is the plainest case - only a
+// written argument can determine it.
+
+function phantom<T>() -> int {
+    0
+}
+
+class Picker {
+    function pick<U>(self) -> int {
+        0
+    }
+}
+
+class Tag<T> {
+    name string
+}
+
+function call_slot() -> int {
+    phantom()
+}
+
+function method_slot() -> int {
+    let p = Picker {};
+    p.pick()
+}
+
+function ctor_slot() -> string {
+    let t = Tag { name: "x" };
+    t.name
+}
+
+function method_value_slot() -> int {
+    let p = Picker {};
+    let f = p.pick;
+    f()
+}
+
+// Control: a slot whose only evidence was an already-reported error is a
+// cascade of that error and stays silent - the `.len()` miss below is the
+// only diagnostic for this function.
+function consume<T>(x: T) -> int {
+    0
+}
+
+function cascade_control() -> int {
+    consume([1, 2, 3].len())
+}
+
+// Conflicting evidence is not missing evidence: the arguments give `T` two
+// types with no common candidate, and the message names them.
+function pick<T>(a: T, b: T) -> T {
+    a
+}
+
+function conflicting_arguments() -> int {
+    let r = pick(1, "s");
+    0
+}
+
+// Controls: each of these has exactly one diagnostic, the root one. The
+// slots its failure leaves open belong to that report.
+class Holder<T> {
+    v T
+}
+
+function unholder<T>(h: Holder<T>) -> int {
+    0
+}
+
+function two<A, B>() -> int {
+    0
+}
+
+function pair<A, B>(a: A, b: B) -> int {
+    0
+}
+
+function none<T>() -> T? {
+    null
+}
+
+function mismatch_control() -> int {
+    unholder(1)
+}
+
+function type_arity_control() -> int {
+    two<int>()
+}
+
+function missing_argument_control() -> int {
+    pair(1)
+}
+
+function receiver_control() -> int {
+    let x = none()?.length();
+    0
+}
+
+// The operator's operand is reported where its type comes from, even when
+// the operator's result flows back into the same container.
+function operator_flow_back() -> int {
+    let xs = [];
+    let y = xs[0] + 1;
+    xs.push(y);
+    0
+}
+
+// A decision inference makes at quiescence - the expected type picking
+// between conflicting arguments - is still checked by every goal that waited
+// on the class: the operator below is applied to `int | string`, and the
+// `Compare` bound is asked of `int | string`.
+function take_either(x: int | string) -> int {
+    0
+}
+
+function decided_then_operated() -> int {
+    let p = pick(1, "s");
+    take_either(p);
+    p + 1
+}
+
+function pick_compared<T extends baml.ops.Compare>(a: T, b: T) -> T {
+    if (a < b) { a } else { b }
+}
+
+function decided_then_bounded() -> int {
+    let r: int | string = pick_compared("s", 1);
+    0
+}
+
+// A bounded parameter that occurs only in `throws` positions is not an
+// effect: its body may dispatch on the type, which `never` cannot answer,
+// so with no evidence it is uninferable rather than defaulted.
+interface Maker {
+    function make() -> int throws never
+}
+
+function bounded_effect<E extends Maker>(cb: (() -> int throws E)? = null) -> int throws E {
+    if (cb != null) { cb() } else { E.make() }
+}
+
+function bounded_effect_slot() -> int {
+    bounded_effect()
+}
+
+// A value-position parameter tied to an effect through an invariant
+// argument keeps its own rule: with no evidence it is uninferable, never
+// defaulted along with the effect.
+function make_effect_box<E>() -> Holder<() -> int throws E> {
+    Holder { v: () -> { 1 } }
+}
+
+function take_effect_box<V extends Maker>(b: Holder<() -> int throws V>, v: V?) -> int throws never {
+    V.make()
+}
+
+function value_slot_tied_to_an_effect() -> int {
+    take_effect_box(make_effect_box(), null)
+}
+
+// A function VALUE's bounds are judged where the value is taken, as a
+// call's are at the call.
+function needs_maker<V extends Maker>(v: V) -> int throws never {
+    V.make()
+}
+
+function value_with_a_failing_bound() -> int {
+    let f: (string) -> int throws never = needs_maker;
+    f("x")
+}
