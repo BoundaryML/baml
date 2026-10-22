@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = "~=3.8"
 dependencies = [
     "maturin>=1.8.6",
-    "pydantic==1",
+    "pydantic==1.10.13",
     "pytest-asyncio>=0.24.0",
     "pytest>=8.3.5",
 ]
