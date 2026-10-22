@@ -7,7 +7,7 @@ use std::{
 };
 
 use btel_bcs::{
-    delivery::{BcsDelivery, DeliveryConfig, DeliveryError},
+    delivery::{BcsDelivery, DeliveryConfig, DeliveryError, InitialAuthorization},
     proto::CloudUploadEnvelope,
     wire::{Disposition, PrepareUploadsRequest, ProposedUploadTarget, UploadKind},
 };
@@ -1452,6 +1452,91 @@ async fn disabling_cancels_a_blocked_prepare_and_releases_queued_owners_promptly
         .await
         .unwrap();
     assert_eq!(result, Err(DeliveryError::Capacity));
+    assert_eq!(pool.stats().in_use, 0);
+}
+
+#[tokio::test]
+async fn shutdown_gives_a_stalled_first_connection_only_the_shutdown_timeout() {
+    // Accepts connections and never answers them.
+    let stalled = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let failures = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let failed = failures.clone();
+    let delivery = Arc::new(
+        BcsDelivery::new(
+            DeliveryConfig {
+                initial_recording_id: Some(RecordingId::generate()),
+                terminal_initial_connection: true,
+                shutdown_timeout: Duration::from_millis(200),
+                ..DeliveryConfig::new(
+                    format!("http://{}", stalled.local_addr().unwrap())
+                        .parse()
+                        .unwrap(),
+                )
+            },
+            move |error| failed.lock().unwrap().push(error),
+        )
+        .unwrap(),
+    );
+    // Its retry window is 40.6 s.
+    let result = tokio::time::timeout(Duration::from_secs(5), finish(delivery.clone()))
+        .await
+        .unwrap();
+    // The initial-failure policy applies, as at the end of the window.
+    let expected = DeliveryError::InitialConnection(Box::new(DeliveryError::ShutdownTimeout));
+    assert_eq!(result, Err(expected.clone()));
+    assert_eq!(*failures.lock().unwrap(), [expected]);
+    assert_eq!(
+        delivery.initial_authorization(),
+        InitialAuthorization::Failed(DeliveryError::ShutdownTimeout)
+    );
+}
+
+#[tokio::test]
+async fn the_shutdown_timeout_bounds_waiting_admission_and_drops_what_is_left() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(30)))
+        .mount(&server)
+        .await;
+    let mut settings = config(&server);
+    settings.request_timeout = Duration::from_secs(10);
+    settings.max_pending_plans = 1;
+    settings.shutdown_timeout = Duration::from_millis(200);
+    let failures = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let failed = failures.clone();
+    let delivery = Arc::new(
+        BcsDelivery::new(settings, move |error| failed.lock().unwrap().push(error)).unwrap(),
+    );
+    let handle = delivery.handle();
+    let pool = SnapshotPool::new(4, Limits::default());
+    let mut files = files(2).into_iter();
+    handle
+        .try_submit(
+            files.next().unwrap(),
+            vec![scalar(&pool, 0)],
+            vec![proposed(0, UploadKind::Recording, &[0])],
+        )
+        .unwrap();
+    // The stalled plan holds the only slot: the last file waits for it, as
+    // when the processor seals at shutdown.
+    let (producer, last, capture) = (handle.clone(), files.next().unwrap(), scalar(&pool, 1));
+    let waiting = tokio::task::spawn_blocking(move || {
+        producer.try_submit(
+            last,
+            vec![capture],
+            vec![proposed(0, UploadKind::Recording, &[0])],
+        )
+    });
+    delivery.start_draining();
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(5), waiting)
+            .await
+            .unwrap()
+            .unwrap(),
+        Err(DeliveryError::ShutdownTimeout)
+    );
+    assert_eq!(finish(delivery).await, Err(DeliveryError::ShutdownTimeout));
+    assert_eq!(*failures.lock().unwrap(), [DeliveryError::ShutdownTimeout]);
     assert_eq!(pool.stats().in_use, 0);
 }
 

@@ -18,6 +18,10 @@ fn engine(server: &MockServer, policy: ArtifactTelemetry) -> Arc<BexEngine> {
     delivery.max_attempts = 2;
     delivery.retry_delay = Duration::from_millis(1);
     delivery.request_timeout = Duration::from_secs(1);
+    engine_with(delivery, policy)
+}
+
+fn engine_with(delivery: DeliveryConfig, policy: ArtifactTelemetry) -> Arc<BexEngine> {
     Arc::new(
         BexEngine::new_with_config(
             baml_test_support::compile_source("function main() -> int { 7 }"),
@@ -92,6 +96,35 @@ async fn initial_rejections_follow_the_artifact_policy_and_join_even_short_progr
             }
         }
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_short_program_waits_for_an_unanswered_endpoint_only_the_shutdown_timeout() {
+    // Accepts connections and never answers them, like a firewall that drops
+    // replies. The default retry window for the first connection is 40.6 s.
+    let stalled = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let mut delivery = DeliveryConfig::new(
+        format!("http://{}", stalled.local_addr().unwrap())
+            .parse()
+            .unwrap(),
+    );
+    delivery.shutdown_timeout = Duration::from_millis(300);
+    let engine = engine_with(
+        delivery,
+        ArtifactTelemetry {
+            initial_failure: InitialFailurePolicy {
+                action: InitialFailureAction::Warn,
+                warning_message: Some("Telemetry unavailable; continuing.".into()),
+            },
+            ..Default::default()
+        },
+    );
+    let started = std::time::Instant::now();
+    assert!(execute(&engine).await);
+    assert!(started.elapsed() < Duration::from_secs(5));
+    // The policy handled it as an initial failure: it warned, then gave up.
+    assert!(engine.initial_telemetry_failure_handled());
+    assert!(engine.telemetry_result().unwrap().is_err());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
