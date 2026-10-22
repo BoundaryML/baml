@@ -309,9 +309,12 @@ fn body_of(module: &RustModule, name: &str) -> String {
         .source
         .find(&format!("pub fn {symbol}("))
         .expect("body is emitted");
-    let end = module.source[start..]
-        .find("\n}\n")
-        .map_or(module.source.len(), |end| start + end);
+    // Generated code is unindented, so a body ends where the next item starts.
+    let end = ["\npub fn ", "\nfn ", "\nstatic ", "\nconst "]
+        .iter()
+        .filter_map(|item| module.source[start + 1..].find(item))
+        .min()
+        .map_or(module.source.len(), |end| start + 1 + end);
     module.source[start..end].to_string()
 }
 
