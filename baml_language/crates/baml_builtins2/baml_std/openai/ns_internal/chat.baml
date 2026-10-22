@@ -238,6 +238,10 @@ class ChatParams {
     headers: map<string, string>?,
     query_params: map<string, string>?,
     request_body: baml.json.json?,
+    // Send OpenAI Structured Outputs (`response_format` with a strict JSON
+    // Schema of the output type) and read the answer strictly instead of with
+    // SAP. See `openai/ns_internal/structured.baml`.
+    structured_output: bool,
 
     function new(
         model: string,
@@ -251,6 +255,7 @@ class ChatParams {
         headers: map<string, string>? = null,
         query_params: map<string, string>? = null,
         request_body: baml.json.json? = null,
+        structured_output: bool = false,
     ) -> ChatParams {
         ChatParams {
             model: model,
@@ -264,6 +269,7 @@ class ChatParams {
             headers: headers,
             query_params: query_params,
             request_body: request_body,
+            structured_output: structured_output,
         }
     }
 }
@@ -411,6 +417,20 @@ class ChatStreamOptions {
     include_usage: bool,
 }
 
+/// `response_format.json_schema`.
+class ChatJsonSchema {
+    name: string,
+    strict: bool,
+    // The strict JSON Schema of the output type (`StructuredOutput.schema`).
+    schema: baml.json.json,
+}
+
+/// `{"type": "json_schema", "json_schema": {…}}`.
+class ChatResponseFormat {
+    type: string,
+    json_schema: ChatJsonSchema,
+}
+
 /// The complete request body. Null-valued fields are pruned before the body is
 /// serialized, so an unset option never reaches the wire as `"temperature": null`.
 class ChatRequest {
@@ -426,6 +446,7 @@ class ChatRequest {
     tool_choice: string?,
     stream: bool?,
     stream_options: ChatStreamOptions?,
+    response_format: ChatResponseFormat?,
 }
 
 // ---------------------------------------------------------------------------
@@ -1006,14 +1027,16 @@ function chat_lower_journal(
 ///   * `parameters` — a tool's JSON Schema, where `{"default": null}` and
 ///     `{"type": ["string", "null"]}` sibling nulls are meaningful, and where a
 ///     strict-schema server validates what it was given.
+///   * `schema` — the output type's JSON Schema under
+///     `response_format.json_schema`, for the same reasons.
 ///
 /// The `request_body` passthrough needs no entry here: it is merged AFTER the
 /// prune (`chat_render_body`), so it is never walked.
 function _chat_is_opaque_key(key: string) -> bool {
-    // `parameters` is a caller-authored tool schema; the directives subtree is
-    // caller-authored too, and both mean exactly what they say — including a
-    // deliberate `null`.
-    key == "parameters" || key == _chat_directives_key()
+    // `parameters` is a caller-authored tool schema and `schema` the output
+    // type's; the directives subtree is caller-authored too, and all of them
+    // mean exactly what they say — including a deliberate `null`.
+    key == "parameters" || key == "schema" || key == _chat_directives_key()
 }
 
 /// (internal) Splice each parked directives object back onto the content part that carries
@@ -1203,6 +1226,7 @@ function chat_build_request(
     compat: ChatCompat,
     params: ChatParams,
     input: ai.ModelTurnInput,
+    structured: StructuredOutput?,
     stream: bool,
     preview: bool = false,
 ) -> ChatRequest {
@@ -1278,6 +1302,29 @@ function chat_build_request(
         tool_choice: tool_choice,
         stream: stream_flag,
         stream_options: stream_options,
+        response_format: match (structured) {
+            let plan: StructuredOutput => {
+                ChatResponseFormat {
+                    type: "json_schema",
+                    json_schema: ChatJsonSchema { name: plan.name(), strict: true, schema: plan.schema },
+                }
+            },
+            null => null,
+        },
+    }
+}
+
+/// (internal) The structured output a chat request carries: null unless the client
+/// turned structured outputs on.
+function chat_structured_output(
+    compat: ChatCompat,
+    params: ChatParams,
+    input: ai.ModelTurnInput,
+) -> StructuredOutput? {
+    if (params.structured_output) {
+        structured_output(input.output_type, compat.provider)
+    } else {
+        null
     }
 }
 
@@ -1293,9 +1340,10 @@ function chat_render(
     compat: ChatCompat,
     params: ChatParams,
     input: ai.ModelTurnInput,
+    structured: StructuredOutput?,
     stream: bool,
 ) -> baml.http.Request {
-    let request = chat_build_request(compat, params, input, stream, preview = false);
+    let request = chat_build_request(compat, params, input, structured, stream, preview = false);
     baml.http.Request {
         method: "POST",
         url: _chat_url(compat, params),
@@ -1311,7 +1359,7 @@ function chat_preview(
     params: ChatParams,
     input: ai.ModelTurnInput,
 ) -> baml.http.Request {
-    let request = chat_build_request(compat, params, input, false, preview = true);
+    let request = chat_build_request(compat, params, input, chat_structured_output(compat, params, input), false, preview = true);
     baml.http.Request {
         method: "POST",
         url: _chat_url(compat, params),
@@ -1615,14 +1663,19 @@ function chat_invoke(
     timeout_options: ai.LlmTimeoutOptions? = null,
 ) -> ai.ModelTurn {
     let limits = timeout_options ?? ai.LlmTimeoutOptions._resolve(null);
-    let request = limits._apply(chat_render(compat, params, input, false));
-    _chat_send(
+    let structured = chat_structured_output(compat, params, input);
+    let request = limits._apply(chat_render(compat, params, input, structured, false));
+    let turn = _chat_send(
         request,
         compat.provider,
         params.model,
         capture_wire = capture_wire,
         audio_mime = _chat_audio_output_mime(params.request_body),
-    )
+    );
+    match (structured) {
+        let plan: StructuredOutput => with_structured_output(turn, plan, compat.provider),
+        null => turn,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1849,8 +1902,11 @@ function chat_invoke_stream(
     capture_wire: bool = true,
     timeout_options: ai.LlmTimeoutOptions? = null,
 ) -> ai.stream.TurnStream {
+    if (params.structured_output) {
+        throw _reject(compat.provider, "structured outputs do not stream yet; call the function without streaming, or use a client without structured_output")
+    }
     let limits = timeout_options ?? ai.LlmTimeoutOptions._resolve(null);
-    let request = limits._apply(chat_render(compat, params, input, true));
+    let request = limits._apply(chat_render(compat, params, input, null, true));
     let decoder = ChatStreamDecoder.new(provider = compat.provider);
     let started = baml.time.Instant.now();
     let sse = baml.http.send_sse(request) catch_all (e) {

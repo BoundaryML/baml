@@ -301,6 +301,82 @@ mod schema {
         Ok(root)
     }
 
+    /// Whether a value of `ty` can hold media anywhere a model's JSON answer
+    /// fills: in a union member, a list element, a map value, a class field
+    /// that is not `@skip` (generic arguments included) or behind a recursive
+    /// alias. A `@skip` field is not in the JSON, so its value never comes from
+    /// the model. Backs `ai.internal.reaches_media`.
+    pub(super) fn reaches_media(ty: &SapTy, ctx: &SysOpContext) -> Result<bool, String> {
+        fn walk(ty: &SapTy, ctx: &SysOpContext, seen: &mut HashSet<DefId>) -> Result<bool, String> {
+            Ok(match ty {
+                SapTy::Media(_) => true,
+                SapTy::Union(members) => {
+                    for member in members {
+                        if walk(member, ctx, seen)? {
+                            return Ok(true);
+                        }
+                    }
+                    false
+                }
+                SapTy::List(inner) => walk(inner, ctx, seen)?,
+                SapTy::Map { key, value } => walk(key, ctx, seen)? || walk(value, ctx, seen)?,
+                SapTy::Class(head, args) => {
+                    for arg in args {
+                        if walk(arg, ctx, seen)? {
+                            return Ok(true);
+                        }
+                    }
+                    if !seen.insert(DefId::Class(head.clone())) {
+                        return Ok(false);
+                    }
+                    let class_def = find_class_definition(ctx, head).ok_or_else(|| {
+                        format!("reaches_media: unknown class `{}`", head.display_name())
+                    })?;
+                    for field in class_def.fields.iter().filter(|field| !field.skip) {
+                        if walk(&field.field_type, ctx, seen)? {
+                            return Ok(true);
+                        }
+                    }
+                    false
+                }
+                SapTy::TypeAlias(head) => {
+                    if !seen.insert(DefId::Alias(head.clone())) {
+                        return Ok(false);
+                    }
+                    let target = find_type_alias_definition(ctx, head).ok_or_else(|| {
+                        format!(
+                            "reaches_media: unknown type alias `{}`",
+                            head.display_name()
+                        )
+                    })?;
+                    walk(target, ctx, seen)?
+                }
+                SapTy::Int
+                | SapTy::Bigint
+                | SapTy::Float
+                | SapTy::String
+                | SapTy::Bool
+                | SapTy::Null
+                | SapTy::Uint8Array
+                | SapTy::Literal(..)
+                | SapTy::Enum(_)
+                | SapTy::EnumVariant(..)
+                | SapTy::Interface(..)
+                | SapTy::Function { .. }
+                | SapTy::Future(..)
+                | SapTy::RustType
+                | SapTy::Type
+                | SapTy::Resource
+                | SapTy::PromptAst
+                | SapTy::TypeVar(..)
+                | SapTy::AssociatedTypeProjection { .. }
+                | SapTy::Unknown
+                | SapTy::Never => false,
+            })
+        }
+        walk(ty, ctx, &mut HashSet::new())
+    }
+
     /// The decimal form a `bigint` takes in JSON: a string, because a JSON
     /// number past 2^53 loses precision in most parsers. The decoder also
     /// takes a leading `+`, leading zeros, and a JSON number; the schema asks
@@ -1718,6 +1794,14 @@ pub fn render_output_format_op(
     SysOpOutput::ok(crate::output_format::render_output_format(return_type, ctx))
 }
 
+/// `ai.internal.reaches_media`: whether a value of `t` can hold media anywhere.
+pub fn reaches_media_op(t: &::sys_types::SapTy, ctx: &SysOpContext) -> SysOpOutput<bool> {
+    match schema::reaches_media(t, ctx) {
+        Ok(reaches) => SysOpOutput::ok(reaches),
+        Err(message) => SysOpOutput::err(VmBamlError::Unsupported { message }),
+    }
+}
+
 /// BEP-049 section 10 (M5b.2): build the opaque schema handle `Context._output_format`
 /// carries; `output_format(...)` renders it with caller options.
 pub fn build_output_format_op(
@@ -3061,6 +3145,15 @@ impl io::IoNamespaceAiInternal for DefaultIoOps {
         ctx: &SysOpContext,
     ) -> SysOpOutput<io::owned::ai::OutputFormat> {
         build_output_format_op(&return_type, ctx)
+    }
+    fn reaches_media(
+        &self,
+        _h: &Arc<BexHeap>,
+        _c: CallId,
+        t: ::sys_types::SapTy,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        reaches_media_op(&t, ctx)
     }
     fn get_return_type(
         &self,
