@@ -125,6 +125,14 @@ impl BexVm {
         super::gc_stress() || self.should_early_yield()
     }
 
+    /// Whether a recursive body should suspend with [`Step::Yield`] on entry:
+    /// when the interpreter's countdown, which it ticks after every call, runs
+    /// out. Under `BAML_GC_STRESS=1` every time it runs out.
+    #[inline]
+    pub fn should_yield_at_call(&mut self) -> bool {
+        self.early_yield.tick() && (super::gc_stress() || self.poll_for_yield())
+    }
+
     /// Return the frame depth to pass to [`Self::catch`].
     #[inline]
     #[must_use]

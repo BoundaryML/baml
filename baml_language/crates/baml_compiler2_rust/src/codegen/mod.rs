@@ -391,8 +391,7 @@ impl<'db> Generator<'_, 'db> {
     fn recursion_check(&mut self) {
         let live = self.header_locals(self.body.entry.0);
         let call = self.rooted(&live, "vm.suspend(Step::Yield)");
-        // The interpreter's own countdown, as it polls after every call.
-        self.emit_line(&format!("if vm.should_yield() {{ {call}?; }}"));
+        self.emit_line(&format!("if vm.should_yield_at_call() {{ {call}?; }}"));
     }
 
     /// The heap values live across the suspension `block`'s terminator may make.
