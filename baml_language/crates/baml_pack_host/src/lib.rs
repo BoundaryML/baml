@@ -317,7 +317,8 @@ fn launch(
         }
     };
 
-    let has_compiled_bodies = compiled_bodies.is_some();
+    let has_compiled_bodies =
+        compiled_bodies.is_some_and(|bodies| !bodies.table.entries.is_empty());
     let engine = match new_engine(
         envelope.program,
         argv,
