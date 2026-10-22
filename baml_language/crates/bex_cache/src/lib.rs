@@ -211,7 +211,11 @@ use sha2::{Digest, Sha256};
 ///
 /// Version 23: `FunctionMeta::Llm` lost its `client` string and marks every
 /// LLM function, including one whose client is an expression.
-pub const FORMAT_VERSION: u32 = 23;
+///
+/// Version 24: appended `MakeGenericBoundMethod` to the instruction/opcode
+/// sets — a bound method whose frame type arguments the reference site
+/// supplies (`default.m` as a value inside an `implements` block).
+pub const FORMAT_VERSION: u32 = 24;
 
 const MAGIC: [u8; 4] = *b"BEXC";
 

@@ -528,7 +528,7 @@ Three `Ty` variants are easy to confuse. Only two of them are failure states:
 | `Error` | The error-recovery sentinel: a hard type error was already reported here, so downstream checks suppress rather than cascade. Compiler-only — it has no `RuntimeTy`, and reaching runtime lowering with one is a compiler bug. |
 | `Infer` | An inference hole (written `_`) or an inference variable. Compiler-only; every one must be filled or reported before finalize. |
 
-**Debugging heuristic:** in snapshot output, `Unknown` renders as `unknown` and so does a genuine user-written `unknown`, so the two are indistinguishable on sight. If the source has no compile errors, every `unknown` should be a real top type. An unexpected one is worth tracing — `Error` is laundered to the top type at the MIR boundary today (see the `// BUG:` on `erase_compiler_only_ty`), so an `unknown` that should have been a diagnostic can appear here.
+**Debugging heuristic:** a program with no compile errors carries no `Error`: the checked world is the only road to emit, code generation probes what it lowers in debug builds, and the runtime conversion refuses the sentinel, so an `Error` past the checker is a checker bug surfacing loudly, never a silent `unknown`. Every `unknown` in a clean program's MIR is a real top type, or a callback's implicit effect parameter, which MIR still erases to `unknown` (`runtime_ready_ty`).
 
 ---
 

@@ -1936,7 +1936,7 @@ impl<'db> InferenceContext<'db> {
 /// holes — which the finalized plain `Ty` cannot represent. An open column
 /// poisons as `Ty::Error`, the same suppression `check_match` applies before
 /// usefulness (`has_infer()` gate) and the vocabulary the exhaustiveness
-/// machinery already keys on (`contains_error_recovery`): verdicts over an
+/// machinery already keys on (`contains_error`): verdicts over an
 /// open column are noise. Coarser than the retired lossy materialization
 /// (which kept the closed spine around per-node holes), in the conservative
 /// direction — fewer verdicts, never wrong ones. Recorded pattern FACTS are

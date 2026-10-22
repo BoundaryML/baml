@@ -232,11 +232,6 @@ pub fn contains_error<N: Clone>(ty: &Ty<N>) -> bool {
     contains_ty_where(ty, &|t| matches!(t, Ty::Error))
 }
 
-/// Does `ty` carry `Ty::Error` or `Ty::Unknown` anywhere in its structure?
-pub fn contains_error_recovery<N: Clone>(ty: &Ty<N>) -> bool {
-    contains_ty_where(ty, &|t| matches!(t, Ty::Error | Ty::Unknown))
-}
-
 impl<N: Clone + PartialEq> Ty<N> {
     /// The bottom type with default attributes.
     pub fn never() -> Self {
@@ -327,7 +322,7 @@ impl<N: Clone + PartialEq> Ty<N> {
     ///     concreteness, when required, is a separate *inductive* obligation on their
     ///     own bound, not a property of the type as written here;
     ///   - `TypeAlias` — callers resolve aliases first, so a survivor is unresolved;
-    ///   - the recovery sentinels `Unknown` / `Error` / `Infer`.
+    ///   - the compiler-only `Error` sentinel and `Infer` hole.
     ///
     /// Distinct from [`Self::is_valid_impl_subject`]: that asks whether a type may be a
     /// *written impl's* for-type (rejecting `Function`/`Future`/`RustType` — see there

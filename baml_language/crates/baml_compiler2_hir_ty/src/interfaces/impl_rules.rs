@@ -1163,7 +1163,7 @@ pub fn validate_impl_signatures<'db>(
                     crate::impls::REQUIRES_CLOSURE_FUEL,
                 ) {
                     let required_ty = baml_type::normalize::normalize(&required.to_ty(), &ctx);
-                    if baml_type_runtime::contains_error_recovery(&required_ty) {
+                    if baml_type::contains_error(&required_ty) {
                         continue;
                     }
                     let Some(required) = required_ty.as_interface() else {
@@ -1561,10 +1561,10 @@ pub fn validate_impl_signatures<'db>(
             let Ty::Interface(qtn, generics, assoc) = &required else {
                 continue;
             };
-            // An ill-formed clause realizes to an obligation carrying a recovery
-            // sentinel — a cascade off an error already reported at the
+            // An ill-formed clause realizes to an obligation carrying the
+            // error sentinel — a cascade off an error already reported at the
             // interface declaration.
-            if baml_type_runtime::contains_error_recovery(&required) {
+            if baml_type::contains_error(&required) {
                 continue;
             }
             let required_iface = baml_type::Interface {

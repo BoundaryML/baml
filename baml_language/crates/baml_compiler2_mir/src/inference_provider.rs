@@ -109,7 +109,10 @@ fn assert_signature_checked(
     function: FunctionLoc<'_>,
     owner: &dyn Fn() -> String,
 ) {
+    // The throws checked is the one emit consumes (`callable_throws`, which
+    // for a closed clause IS the signature's).
     let signature = baml_compiler2_hir_ty::lower::function_signature(db, function);
+    let throws = baml_compiler2_hir_ty::callable::callable_throws(db, function).0;
     let erroneous = signature
         .params
         .iter()
@@ -119,10 +122,7 @@ fn assert_signature_checked(
             baml_type::contains_error(&signature.ret)
                 .then(|| format!("return type {:?}", signature.ret))
         })
-        .or_else(|| {
-            baml_type::contains_error(&signature.throws)
-                .then(|| format!("throws {:?}", signature.throws))
-        });
+        .or_else(|| baml_type::contains_error(&throws).then(|| format!("throws {throws:?}")));
     if let Some(part) = erroneous {
         panic!(
             "the error sentinel survived to code generation in the signature of {}: {part}",

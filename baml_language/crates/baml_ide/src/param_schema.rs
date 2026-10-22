@@ -348,9 +348,10 @@ impl SchemaCx<'_, '_> {
                     }
                 }
             }
-            // Everything non-data: functions, interfaces, type variables,
-            // opaque runtime types, and the TIR sentinels (`Unknown`/`Error`/…)
-            // that reliably appear while the user is mid-edit.
+            // Everything without a data schema: functions, interfaces, type
+            // variables, opaque runtime types, the top type `unknown`, and the
+            // compiler's `Error` sentinel that appears while the user is
+            // mid-edit.
             _ => self.unsupported(ty),
         }
     }

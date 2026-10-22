@@ -1732,10 +1732,9 @@ fn infer_body_impl<'db>(
     // The owner's generic frame makes `T` in body annotations resolve; the
     // signature gives parameter references their types and the body its
     // return expectation.
-    let (frame, param_tys, return_ty, declared_throws_ref) = match owner {
+    let (frame, param_tys, return_ty, declared) = match owner {
         BodyOwnerId::Function(function) => {
             let signature = function_signature(db, function);
-            let data = baml_compiler2_hir::item_data::elaborated_function_data(db, function);
             // A malformed `cleanup` is reported at its signature (E0144).
             // Its body, run-once guard included, is written for the
             // finalizer's unit return and owes the declared one nothing.
@@ -1753,11 +1752,11 @@ fn infer_body_impl<'db>(
                     .map(|param| crate::impls::interned_ty(&param.ty))
                     .collect(),
                 Some(return_ty),
-                // The owner checks its throw sites against the RAW written
-                // clause (holes preserved - a partial clause opens the
-                // contract), never the caller-facing surface, which for a
-                // partial clause is derived FROM those sites.
-                data.throws.map(|throws| (&data.type_refs, throws)),
+                // The owner checks its throw sites against the WRITTEN
+                // clause (a partial clause opens the contract), never the
+                // caller-facing surface, which for a partial clause is
+                // derived FROM those sites.
+                Some(crate::lower::declared_throws(db, function)),
             )
         }
         // Defaults type in the FUNCTION's environment (its frame makes
@@ -1823,17 +1822,17 @@ fn infer_body_impl<'db>(
         .with_impl_target(impl_target);
     let type_refs = baml_compiler2_hir::body_type_refs::body_type_refs(db, owner);
     let plain_bounds = owner_declared_bounds(db, owner);
-    // Split the declared clause into its named part and openness (spec
-    // rule 3: `throws T | _` names T and opens the remainder to
-    // inference); nested holes in named members stay ruling-4 errors.
-    let (declared_throws, declared_throws_open) =
-        match declared_throws_ref.map(|(store, throws)| lower.lower_type_ref(store, throws)) {
-            Some(raw) => {
-                let (named, open) = crate::lower::throws_clause_parts(&raw);
-                (Some(Ty::from_plain(&named)), open)
-            }
-            None => (None, false),
-        };
+    // The declared clause's named part and openness (spec rule 3:
+    // `throws T | _` names T and opens the remainder to inference).
+    let (declared_throws, declared_throws_open) = match declared {
+        Some(crate::lower::DeclaredThrows::Closed(declared)) => {
+            (Some(Ty::from_plain(declared)), false)
+        }
+        Some(crate::lower::DeclaredThrows::Partial { named }) => {
+            (Some(Ty::from_plain(named)), true)
+        }
+        Some(crate::lower::DeclaredThrows::Omitted) | None => (None, false),
+    };
     let mut ctx = InferenceContext::new(
         db,
         index,
@@ -10628,9 +10627,17 @@ impl<'db> InferenceContext<'db> {
                 .iter()
                 .map(|param| self.fresh_generic_arg(param))
                 .collect();
+            let owner_count = prefix.len();
+            let has_own = !own.is_empty();
             let mut instantiation = prefix;
             instantiation.extend(own);
             self.register_callable_instantiation(callable, &instantiation, at);
+            if has_own && self.member_probe_depth == 0 {
+                // The bound value carries its own instantiation, as the
+                // inherent method value road records it: the receiver (or
+                // `default`'s adopted frame) supplies the owner prefix.
+                self.write_call_type_args(at, &instantiation, owner_count);
+            }
             return bind_receiver(instantiate_callable_signature(
                 self.db,
                 callable,
@@ -12294,14 +12301,10 @@ impl<'db> InferenceContext<'db> {
             .iter()
             .map(|(_, expected, actual)| (expected.clone(), actual.clone()))
             .collect();
-        let sentinel = |ty: &Ty| ty.has_error() && matches!(ty.kind(), InferTy::Error);
         for (expected, actual) in direct {
             let finalized_expected = self.finalize_ty(&expected).into_ty();
             let finalized_actual = self.finalize_ty(&actual).into_ty();
-            if sentinel(&finalized_expected)
-                || sentinel(&finalized_actual)
-                || self.cached_subtype(&finalized_actual, &finalized_expected)
-            {
+            if !self.direct_mismatch_holds(&finalized_expected, &finalized_actual) {
                 continue;
             }
             self.table.taint_vars_in(&expected);
@@ -12319,6 +12322,18 @@ impl<'db> InferenceContext<'db> {
             self.table.taint_vars_in(&expected);
             self.table.taint_vars_in(&actual);
         }
+    }
+
+    /// Whether a recorded mismatch, judged on its finalized sides, is a
+    /// report of its own: neither side IS the error sentinel (that is a
+    /// cascade of a reported failure - rustc's `tainted_by_errors`; an
+    /// `Error` leaf inside a structural head is still a real head
+    /// mismatch), and the relation fails in the finalized world (a check
+    /// can fail mid-inference on variables later resolution satisfies).
+    fn direct_mismatch_holds(&self, expected: &Ty, actual: &Ty) -> bool {
+        !matches!(expected.kind(), InferTy::Error)
+            && !matches!(actual.kind(), InferTy::Error)
+            && !self.cached_subtype(actual, expected)
     }
 
     /// A generic function VALUE whose own arguments stay open is reported
@@ -12716,10 +12731,12 @@ impl<'db> InferenceContext<'db> {
                 // Every block has closed: a contribution still typed by a
                 // scoped binding would be published as the owner's surface.
                 let contributions = self.drop_escaping_effects(contributions, declared.as_ref());
+                // A contribution typed by the sentinel stays in the set: the
+                // body's throw set is not determined, and `never` would claim
+                // it throws nothing.
                 let mut resolved: Vec<Ty> = contributions
                     .iter()
                     .map(|(_, ty)| self.finalize_ty(ty).into_ty())
-                    .filter(|ty| !ty.has_error())
                     .collect();
                 if let Some(named) = declared {
                     resolved.push(named);
@@ -12841,27 +12858,12 @@ impl<'db> InferenceContext<'db> {
                 })
                 .collect();
             for (&expr, (expected, actual)) in &result.type_mismatches {
-                // rustc's tainted_by_errors discipline: a mismatch whose
-                // operand IS the error sentinel is a CASCADE of a reported
-                // failure. Error LEAVES inside a structural head are a
-                // different case - `list<!e>` against `map<...>` is a real
-                // head mismatch (unsolved container vars finalize their
-                // elements to the sentinel without erasing the finding).
-                let tainted = |ty: &Ty| {
-                    ty.has_error() && matches!(ty.kind(), InferTy::Error | InferTy::Unknown)
-                };
-                if tainted(expected) || tainted(actual) {
+                if !self.direct_mismatch_holds(expected, actual) {
                     continue;
                 }
                 if let InferTy::Interface(name, ..) = expected.kind()
                     && not_implemented_at.contains(&(expr, name.clone()))
                 {
-                    continue;
-                }
-                // A check can fail MID-INFERENCE on still-open variables
-                // that later resolution satisfies; only a mismatch that
-                // HOLDS in the finalized world reports.
-                if self.cached_subtype(actual, expected) {
                     continue;
                 }
                 // A value where only the unit type is admitted reports at

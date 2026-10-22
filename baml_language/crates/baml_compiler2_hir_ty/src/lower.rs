@@ -15,12 +15,9 @@
 //! for `T | null`; enum variants read as literal types via the
 //! path-resolution fallback; generic arity is enforced by truncate/pad-with-
 //! `Error`; `baml.future.Future<V, E>` lowers to the dedicated `Future`
-//! kind. Diagnostics are not emitted yet (S17); every failure lowers to the
-//! `Error` sentinel.
-//!
-//! Not yet mirrored (later slices): free-impl method frames (their
-//! bodies as inference roots), map-key validation and other diagnostics
-//! (S17).
+//! kind. Every failure lowers to the `Error` sentinel and records its
+//! diagnostic in the context's sink; a sink-less lowering re-reads only
+//! what a checked world already reported on.
 
 use baml_base::LangRoots;
 use baml_compiler2_hir::{
@@ -609,9 +606,8 @@ impl<'db> LowerCtx<'db> {
                     LoweringTy::error()
                 }
             },
-            // `Missing` is an omitted annotation (a signature must be
-            // explicit; the diagnostic arrives with S17), `Error` was
-            // already diagnosed at parse time.
+            // `Missing` is an omitted annotation and `Error` an unparsable
+            // one: the parse reported both.
             TypeRefKind::Error | TypeRefKind::Missing => LoweringTy::error(),
         }
     }
@@ -680,7 +676,7 @@ impl<'db> LowerCtx<'db> {
 
     /// The interface a bare projection (`T.Output`) resolves through: for
     /// a type-var base, the UNIQUE bound in its conjunction whose
-    /// interface declares `member` (0 or ambiguity is Error - S17's
+    /// interface declares `member` (none, or several, is `Error` with its
     /// diagnostic); for an interface-existential base, itself.
     fn projection_interface_for(
         &self,
@@ -1665,7 +1661,7 @@ pub fn substitute_params(ty: &baml_type::interned::Ty, args: &[baml_type::intern
     )
 }
 
-/// Generic-arity recovery (S17): extras truncated, missing padded with
+/// Generic-arity recovery: extras truncated, missing padded with
 /// `Error`. The arity report is `record_arity`'s, made before this runs;
 /// a sink-less re-lowering (MIR, emit) only sees signatures the checked
 /// world already reported on.
@@ -2070,7 +2066,7 @@ pub struct SignatureParam {
 /// hole node uniformly; this is the signature-side policy fold that rejects
 /// survivors, producing the FINALIZED type (the inference side instead
 /// instantiates holes as fresh vars). Every hole becomes the `Error`
-/// sentinel — its rejection diagnostic is the position's own (S17 / E0147),
+/// sentinel — its rejection diagnostic is the position's own (E0147),
 /// not this fold's — with the closed spine around it preserved.
 pub fn reject_holes(ty: &LoweringTy) -> baml_type::Ty {
     baml_type::Ty::try_from(ty).unwrap_or_else(|_| fill_holes_as_errors(ty))
@@ -2883,7 +2879,7 @@ pub fn class_lowering_diagnostics<'db>(
         .with_bounds(class_generic_bounds(db, class));
     let mut out = Vec::new();
     // Field annotations: every written field type re-lowers with the sink
-    // (unresolved names, wrong arg counts - the pre-S17 structural walk)
+    // (unresolved names, wrong arg counts)
     // and is judged for generic-argument well-formedness.
     let scope_env = class_generic_bounds(db, class);
     for field in &data.fields {
@@ -3250,6 +3246,59 @@ pub fn function_signature_with_diagnostics<'db>(
     lower_function_signature(db, function, ThrowsSource::Lowered)
 }
 
+/// A function's written `throws` clause, read in its signature's
+/// environment.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DeclaredThrows {
+    /// No clause: `throws _`, the body's inferred effect alone.
+    Omitted,
+    /// A clause with a `_` member (spec Functions rule 3): the members it
+    /// names, and beside them the body's inferred remainder.
+    Partial { named: baml_type::Ty },
+    /// A clause with no `_` member: exactly what it names.
+    Closed(baml_type::Ty),
+}
+
+/// The written `throws` clause, lowered once in the signature's environment
+/// (frame, bounds, `Self`, impl target): the one reading the signature, the
+/// effect query, and the body's own throw-site check share. It reads no
+/// body, so it stands outside their fixpoint. An interface contract's clause
+/// is the signature's own, lowered under the contract's hole policy.
+#[salsa::tracked(returns(ref))]
+pub fn declared_throws<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    function: FunctionLoc<'db>,
+) -> DeclaredThrows {
+    let data = baml_compiler2_hir::item_data::elaborated_function_data(db, function);
+    let Some(throws) = data.throws else {
+        return DeclaredThrows::Omitted;
+    };
+    let lowered = signature_lower_ctx(db, function).lower_type_ref(&data.type_refs, throws);
+    let (named, open) = throws_clause_parts(&lowered);
+    if open {
+        DeclaredThrows::Partial { named }
+    } else {
+        DeclaredThrows::Closed(reject_holes(&lowered))
+    }
+}
+
+/// The context a function's signature lowers in: its frame and bounds, the
+/// owner's concrete `Self` (r-a's resolver-provided self type) and impl
+/// target. Interface owners provide no `Self` - theirs is the frame's
+/// universal slot 0, resolved as a param.
+fn signature_lower_ctx<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    function: FunctionLoc<'db>,
+) -> LowerCtx<'db> {
+    let frame = function_generic_frame(db, function);
+    let impl_target = owner_impl_target(db, function, &frame);
+    lower_ctx_for_file(db, function.file(db))
+        .with_frame(frame)
+        .with_bounds(function_generic_bounds(db, function))
+        .with_self_ty(owner_self_ty(db, function))
+        .with_impl_target(impl_target)
+}
+
 fn lower_function_signature<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     function: FunctionLoc<'db>,
@@ -3257,26 +3306,18 @@ fn lower_function_signature<'db>(
 ) -> FunctionSignatureResult {
     let data = baml_compiler2_hir::item_data::elaborated_function_data(db, function);
     let frame = function_generic_frame(db, function);
-    let bounds = function_generic_bounds(db, function);
-    // The owner's concrete `Self` (r-a's resolver-provided self type)
-    // serves BOTH jobs at once: written `Self` in any signature
-    // position resolves through the ctx, and an unannotated `self`
-    // receiver (elaboration leaves its slot `Missing`) takes it
-    // directly. Interface owners provide none - their `Self` is the
-    // frame's universal slot 0, resolved as a param.
+    // The owner's concrete `Self` serves BOTH jobs at once: written `Self`
+    // in any signature position resolves through the ctx, and an
+    // unannotated `self` receiver (elaboration leaves its slot `Missing`)
+    // takes it directly.
     let concrete_self = owner_self_ty(db, function);
-    let impl_target = owner_impl_target(db, function, &frame);
     let owner = baml_compiler2_hir::item_data::method_owner(db, function);
     // An interface method's signature is a dispatch contract, so NO part of
     // it may be inferred - there is no body to infer from that binds any
     // implementor. The context enforces that at each hole; generated
     // declarations are exempt, as they are from the diagnostic.
     let interface_owner = signature_is_interface_contract(db, function);
-    let ctx = lower_ctx_for_file(db, function.file(db))
-        .with_frame(frame.clone())
-        .with_bounds(bounds)
-        .with_self_ty(concrete_self.clone())
-        .with_impl_target(impl_target);
+    let ctx = signature_lower_ctx(db, function);
     let ctx = if interface_owner {
         ctx.with_holes_forbidden(NoInferReason::InterfaceSignature)
     } else {
@@ -3342,19 +3383,14 @@ fn lower_function_signature<'db>(
             diagnostics.push(SignatureDiag::MissingThrows);
             baml_type::Ty::error()
         }
-        (Some(throws), false) => {
-            let lowered = ctx.lower_type_ref(&data.type_refs, throws);
-            if throws_clause_parts(&lowered).1 {
-                // Open: the named members join the body-inferred remainder
-                // (what `callable_throws` computes through the body run).
-                body_throws(db)
-            } else {
-                reject_holes(&lowered)
-            }
-        }
-        // Omitted = `throws _`: entirely body-inferred, fixpoint over
-        // mutual recursion (S12's callable_throws).
-        (None, false) => body_throws(db),
+        // A closed clause is taken verbatim; a partial or omitted one
+        // (`throws _`) fills from the body's inferred effect - what
+        // `callable_throws` computes through the body run, a fixpoint over
+        // mutual recursion.
+        (_, false) => match declared_throws(db, function) {
+            DeclaredThrows::Closed(declared) => declared.clone(),
+            DeclaredThrows::Partial { .. } | DeclaredThrows::Omitted => body_throws(db),
+        },
     };
     FunctionSignatureResult {
         signature: FunctionSignature {
@@ -3471,7 +3507,7 @@ fn lower_assoc_type_ref<'db>(
 /// declares the named types AND opens the remainder to inference. The
 /// hole is only meaningful as a top-level member; nested holes stay
 /// ruling-4 rejections through `reject_holes` on the named part.
-pub fn throws_clause_parts(ty: &LoweringTy) -> (baml_type::Ty, bool) {
+fn throws_clause_parts(ty: &LoweringTy) -> (baml_type::Ty, bool) {
     let members: Vec<&LoweringTy> = match ty {
         LoweringTy::Union(members) => members.iter().collect(),
         _ => vec![ty],

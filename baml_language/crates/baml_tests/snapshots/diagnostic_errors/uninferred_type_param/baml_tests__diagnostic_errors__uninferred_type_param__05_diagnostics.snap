@@ -96,8 +96,8 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0004
 
   × operator `+` cannot be applied to `int | string` and `1`
-     ╭─[main.baml:122:5]
- 122 │     p + 1
+     ╭─[main.baml:123:5]
+ 123 │     p + 1
      ·     ─────
      ╰────
 
@@ -105,31 +105,31 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × type argument `int | string` is not concrete; a type parameter bounded by `baml.ops.Compare` requires a concrete type that implements it (a union, an interface, `unknown` or `never` has no
   │ single runtime type to dispatch on)
-     ╭─[main.baml:130:27]
- 130 │     let r: int | string = pick_compared("s", 1);
+     ╭─[main.baml:131:27]
+ 131 │     let r: int | string = pick_compared("s", 1);
      ·                           ─────────────────────
      ╰────
 
   [type] E0002
 
   × cannot infer type parameter `E`
-     ╭─[main.baml:146:5]
- 146 │     bounded_effect()
+     ╭─[main.baml:147:5]
+ 147 │     bounded_effect()
      ·     ────────────────
      ╰────
 
   [type] E0002
 
   × cannot infer type parameter `V`
-     ╭─[main.baml:161:5]
- 161 │     take_effect_box(make_effect_box(), null)
+     ╭─[main.baml:162:5]
+ 162 │     take_effect_box(make_effect_box(), null)
      ·     ────────────────────────────────────────
      ╰────
 
   [type] E0001
 
   × type `string` does not implement interface `Maker`
-     ╭─[main.baml:171:43]
- 171 │     let f: (string) -> int throws never = needs_maker;
+     ╭─[main.baml:172:43]
+ 172 │     let f: (string) -> int throws never = needs_maker;
      ·                                           ───────────
      ╰────

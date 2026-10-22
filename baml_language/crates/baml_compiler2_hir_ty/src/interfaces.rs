@@ -1844,9 +1844,10 @@ pub enum Determination {
 }
 
 /// Whether `ty` already carries an upstream error, so a projection over it
-/// must not emit a fresh diagnostic.
+/// must not emit a fresh diagnostic. `unknown` is a real type and no
+/// interface: a qualifier spelling it is reported like any other.
 fn projection_poisoned(ty: &Ty) -> bool {
-    matches!(ty, Ty::Error | Ty::Unknown)
+    matches!(ty, Ty::Error)
 }
 
 /// Determine which interface declares `member` for `base`, in `ns` - the

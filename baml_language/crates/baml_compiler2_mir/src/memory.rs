@@ -248,9 +248,16 @@ pub fn walk_rvalue_type_slots(rvalue: &Rvalue<'_>, f: &mut impl FnMut(u32)) {
         | Rvalue::Discriminant(_)
         | Rvalue::TypeTag(_)
         | Rvalue::IsTypeTag { .. }
-        | Rvalue::MakeBoundMethod { .. }
         | Rvalue::TraceHookSettings { .. }
         | Rvalue::CurrentPackage => {}
+        Rvalue::MakeBoundMethod { frame, .. } => match frame {
+            crate::BoundFrame::Receiver => {}
+            crate::BoundFrame::Explicit(type_arg_templates) => {
+                for template in type_arg_templates {
+                    template.for_each_type_arg_ref(f);
+                }
+            }
+        },
     }
 }
 

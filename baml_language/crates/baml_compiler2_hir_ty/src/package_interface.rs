@@ -2374,8 +2374,7 @@ pub fn function_throw_sets(
             let data = baml_compiler2_hir::item_data::function_data(db, *func_loc);
             let key = throw_set_key(ns_path, &data.name);
             // The runtime boundary's shape: literals widen to their
-            // primitives, `void` drops, and error-recovery sentinels
-            // degrade to the top type (RuntimeTy has no Error).
+            // primitives and `void` drops.
             let facts: BTreeSet<ThrowFact> = crate::throw_facts::flatten_declared_ty_to_facts(
                 &crate::callable::callable_throws(db, *func_loc).0,
             )
@@ -2391,11 +2390,7 @@ pub fn function_throw_sets(
                 if matches!(fact, Ty::TypeVar(..)) {
                     return None;
                 }
-                Some(if baml_type_runtime::contains_error_recovery(&fact) {
-                    Ty::Unknown
-                } else {
-                    fact
-                })
+                Some(fact)
             })
             .collect();
             sets.direct.insert(key.clone(), facts.clone());

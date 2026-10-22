@@ -5,7 +5,7 @@
 //! The BLOB path compiles `app` independently into its check artifact (borsh of
 //! `PackageInterface`) and run artifact (its `EmittedPackage`), then mounts the
 //! former in a fresh source-less consumer database and links the latter through
-//! `compile_program_with`, served for the mount.
+//! `CheckedWorld::compile_with`, served for the mount.
 //!
 //! The oracle pins four boundaries:
 //!
