@@ -1,0 +1,90 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0010
+
+  × invalid assignment target; the left side of `=` is an expression, not a pattern. To destructure, use a `let` pattern: see https://developer.boundaryml.com/baml/book/patterns
+    ╭─[main.baml:21:5]
+ 21 │     P { a: a, b: b } = mk();
+    ·     ────────┬───────
+    ·             ╰── cannot assign to this expression
+    ╰────
+
+  [hir] E0010
+
+  × invalid assignment target; the left side of `=` is an expression, not a pattern. To destructure, use a `let` pattern: see https://developer.boundaryml.com/baml/book/patterns
+    ╭─[main.baml:28:5]
+ 28 │     [x, y] = [1, 2];
+    ·     ───┬──
+    ·        ╰── cannot assign to this expression
+    ╰────
+
+  [hir] E0010
+
+  × invalid assignment target; the left side of `=` is an expression, not a pattern. To destructure, use a `let` pattern: see https://developer.boundaryml.com/baml/book/patterns
+    ╭─[main.baml:37:5]
+ 37 │     [p.a, y] = [1, 2];
+    ·     ────┬───
+    ·         ╰── cannot assign to this expression
+    ╰────
+
+  [hir] E0010
+
+  × invalid assignment target; only a variable, a field, or an index can be assigned to
+    ╭─[main.baml:43:5]
+ 43 │     [x] += [1];
+    ·     ─┬─
+    ·      ╰── cannot assign to this expression
+    ╰────
+
+  [type] E0004
+
+  × operator `+` cannot be applied to `int[]` and `int[]`
+    ╭─[main.baml:43:12]
+ 43 │     [x] += [1];
+    ·            ───
+    ╰────
+
+  [hir] E0010
+
+  × invalid assignment target; only a variable, a field, or an index can be assigned to
+    ╭─[main.baml:48:5]
+ 48 │     mk() = mk();
+    ·     ──┬─
+    ·       ╰── cannot assign to this expression
+    ╰────
+
+  [hir] E0010
+
+  × invalid assignment target; only a variable, a field, or an index can be assigned to
+    ╭─[main.baml:53:5]
+ 53 │     1 = 2;
+    ·     ┬
+    ·     ╰── cannot assign to this expression
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:53:9]
+ 53 │     1 = 2;
+    ·         ┬
+    ·         ╰── expected `1`, found `2`
+    ╰────
+
+  [type] E0010
+
+  × invalid assignment target; `mk` is not a variable, so it cannot be assigned to
+    ╭─[main.baml:66:5]
+ 66 │     mk = mk;
+    ·     ──
+    ╰────
+
+  [type] E0010
+
+  × invalid assignment target; `Shape.Circle` is not a variable, so it cannot be assigned to
+    ╭─[main.baml:71:5]
+ 71 │     Shape.Circle = Shape.Circle;
+    ·     ────────────
+    ╰────

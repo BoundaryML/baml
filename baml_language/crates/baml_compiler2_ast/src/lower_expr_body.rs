@@ -2487,12 +2487,43 @@ impl LoweringContext {
         let target = lhs.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
         let value = rhs.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
 
+        // Only a place (a variable, a field, or an index, optionally through
+        // `?.`) can be assigned to. Anything else - a class or array literal
+        // (`[x, y] = [1, 2]`, a destructure written without `let`), a call, a
+        // literal - would otherwise be materialized into a temporary by MIR
+        // and the store would silently go nowhere.
+        if !self.is_assignable_place(target) {
+            let destructure = assign_op.is_none()
+                && matches!(self.exprs[target], Expr::Array { .. } | Expr::Object { .. });
+            self.diags
+                .push(LoweringDiagnostic::InvalidAssignmentTarget {
+                    span: self.source_map.expr_span(target),
+                    destructure,
+                });
+        }
+
         let stmt = match assign_op {
             None => Stmt::Assign { target, value },
             Some(op) => Stmt::AssignOp { target, op, value },
         };
 
         Some(self.alloc_stmt(stmt, node.span_range()))
+    }
+
+    /// Whether `expr` denotes a storage location an assignment can write
+    /// through. `Missing` counts as assignable so a syntax error already
+    /// reported for the target does not cascade into a second diagnostic.
+    fn is_assignable_place(&self, expr: ExprId) -> bool {
+        match &self.exprs[expr] {
+            Expr::Path(_)
+            | Expr::MemberAccess { .. }
+            | Expr::Index { .. }
+            | Expr::OptionalMemberAccess { .. }
+            | Expr::OptionalIndex { .. }
+            | Expr::Missing => true,
+            Expr::OptionalChain { expr } => self.is_assignable_place(*expr),
+            _ => false,
+        }
     }
 
     fn lower_unary_expr(&mut self, node: &SyntaxNode) -> ExprId {
