@@ -118,7 +118,7 @@ function InitializerPending() -> void {
 }
 
 function InitTestName() -> string {
-    if (baml.env.get("BAML_RUST_DIFF_INIT_FAILURE") == "registration") {
+    if (INIT_FAILURE == "registration") {
         let _ = InitThrow(2);
     }
     "initialized globals and captured closures"

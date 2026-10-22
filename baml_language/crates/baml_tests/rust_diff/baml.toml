@@ -1,7 +1,6 @@
 [package]
 name = "rust-diff"
 
-# The differential runs the probes at the default telemetry level, off and high.
+# The differential runs the probes at the default telemetry level and off.
 [pack.env_var_names]
 BAML_TELEMETRY = "BAML_TELEMETRY"
-BAML_RUST_DIFF_INIT_FAILURE = "BAML_RUST_DIFF_INIT_FAILURE"
