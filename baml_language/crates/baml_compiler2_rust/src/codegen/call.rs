@@ -5,8 +5,9 @@ use bex_vm_types::FunctionKind;
 
 use super::{Expr, Gen, Generator, unsupported};
 use crate::{
-    admit::{FunctionInfo, Rejection},
+    admit::Rejection,
     analysis::{EQUALS_EQUALS, Repr, builtin_is_callable, call_shape, operand_ty},
+    index::FunctionInfo,
 };
 
 impl<'db> Generator<'_, 'db> {

@@ -20,11 +20,12 @@ use baml_compiler2_mir::{
 };
 
 use crate::{
-    admit::{Positions, ProgramIndex, Rejection},
+    admit::Rejection,
     analysis::{
         Analysis, Repr, array_iter_walk, array_next_call, reads_frame, suspends_directly,
         user_callee,
     },
+    index::{Positions, ProgramIndex},
     render::coerce,
     structure::{Structured, structurize},
 };

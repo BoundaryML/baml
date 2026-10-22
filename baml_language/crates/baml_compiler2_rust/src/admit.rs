@@ -1,4 +1,4 @@
-//! Admission, reachability, and program metadata for Rust emission.
+//! Admission and reachability for Rust emission.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -13,11 +13,10 @@ use baml_compiler2_mir::{
 };
 use bex_vm_types::{FunctionKind, Program};
 
-pub(crate) use crate::index::{FunctionInfo, Positions, ProgramIndex};
-
 use crate::{
     analysis::{Analysis, Repr, capture_reprs, value_reprs},
     codegen::{Generator, ProgramContext},
+    index::ProgramIndex,
     reach::{reachable, references},
     render::render_module,
 };

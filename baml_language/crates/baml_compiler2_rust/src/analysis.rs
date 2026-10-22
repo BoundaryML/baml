@@ -15,8 +15,9 @@ use baml_type::{Literal, TyTemplate};
 use bex_vm_types::FunctionKind;
 
 use crate::{
-    admit::{ProgramIndex, Rejection},
+    admit::Rejection,
     codegen::types::realized_expr,
+    index::ProgramIndex,
     structure::{Cfg, Flow},
 };
 

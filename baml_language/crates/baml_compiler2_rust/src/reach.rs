@@ -8,7 +8,7 @@ use baml_compiler2_mir::{
     Terminator,
 };
 
-use crate::admit::ProgramIndex;
+use crate::index::ProgramIndex;
 
 /// The function objects `body` (and the lambdas lowered inside it) refer to.
 pub(crate) fn references<'db>(
