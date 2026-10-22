@@ -329,11 +329,23 @@ fn a_body_paused_at_a_yield_survives_a_moving_collection() {
         let depth = vm.frame_depth();
         vm.reserve_slots(depth, 1);
         let mut live = vm.string_value("still live");
+        let mut cached = vm.static_type_value(depth, 0, bex_vm_types::RealizedTy::unknown());
         for _ in 0..3 {
             let before = live;
             vm.set_slot(depth, 0, live);
             vm.suspend(Step::Yield)?;
             live = vm.slot(depth, 0);
+            let forwarded = vm.static_type_value(depth, 0, bex_vm_types::RealizedTy::unknown());
+            assert_ne!(
+                forwarded, cached,
+                "the collection forwards the compiled cache"
+            );
+            assert_eq!(
+                forwarded,
+                vm.static_type_value(depth, 0, bex_vm_types::RealizedTy::unknown()),
+                "the forwarded value remains cached"
+            );
+            cached = forwarded;
             assert_ne!(live, before, "the collection moves the value");
             assert_eq!(vm.as_string(&live).unwrap().as_str(), "still live");
         }
@@ -364,6 +376,27 @@ fn a_body_paused_at_a_yield_survives_a_moving_collection() {
         }
     };
     assert_eq!(vm.as_string(&out).unwrap().as_str(), "still live");
+}
+
+#[cfg(not(any(target_arch = "wasm32", all(windows, target_arch = "aarch64"))))]
+#[test]
+fn a_panicking_compiled_body_clears_fiber_state() {
+    fn body(_: &mut BexVm, _: &[Value]) -> Result<Value, Box<VmError>> {
+        panic!("compiled body panic");
+    }
+    let mut program = baml_test_support::compile_source("function Main() -> int { 0 }");
+    let entry = program.rendered_callables()["user.Main"].object;
+    let Object::Function(function) = &mut program.objects[entry] else {
+        unreachable!()
+    };
+    function.compiled_body = Some(test_body(body, 0));
+    let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
+    vm.set_entry_point(vm.heap.compile_time_ptr(entry.raw()), &[]);
+    let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| vm.exec()));
+    assert!(panic.is_err());
+    assert!(!vm.compiled.on_fiber);
+    assert!(vm.compiled.yielder.is_none());
+    assert!(vm.compiled.fiber.is_none());
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -852,6 +885,7 @@ fn inline_observed_model_invokes_charge_usage_before_completion() {
     use crate::compiled_rt::FORCE_CALL_FUNNEL;
 
     static INVOKE: AtomicU32 = AtomicU32::new(0);
+    #[allow(clippy::unnecessary_wraps)]
     fn invoke(_: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
         Ok(args[0])
     }
