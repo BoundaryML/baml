@@ -4,8 +4,8 @@ use baml_base::Name;
 use baml_compiler2_hir::loc::DeclRef;
 use baml_compiler2_hir_ty::{
     callable::{
-        SelfDispatch, callable_display_name, callable_owner_type, callable_self_dispatch,
-        callable_takes_self, lang_class_method, lang_function,
+        SelfDispatch, callable_display_name, callable_generic_frame, callable_owner_type,
+        callable_self_dispatch, callable_takes_self, lang_class_method, lang_function,
     },
     extern_loc::{
         ClassRef, EnumRef, ExternFunctionLoc, FunctionRef, InterfaceRef, extern_function_row,
@@ -8457,17 +8457,6 @@ impl<'db> LoweringContext<'db> {
         // Check if callee is a method call (MemberAccess or multi-segment Path with a
         // MemberResolution::Method/Free). Field and Variant resolutions are not callable.
         // If the base is a real value (not a package namespace), prepend it as self.
-        // Whether the callee is reached through a value — the call plan's
-        // owner prefix is then the receiver's class arguments.
-        let mut has_value_receiver = false;
-        // The owner frame a statically-resolved impl-method callee expects,
-        // carried by the resolution (impl generic bindings for an override,
-        // `[Self, iface args..]` for an adopted default). When present, the
-        // shared type-arg prepend below emits it as the owner prefix INSTEAD
-        // of the receiver's class args — the callee is an impl body, not a
-        // class method, and the two conventions only coincide for in-class
-        // impls of non-generic interfaces.
-        let mut carried_owner_frame: Option<Vec<Tir2Ty>> = None;
         let (callee_operand, arg_operands) = if let AstExpr::MemberAccess { base, .. } = callee_expr
         {
             if self.tir_resolution(callee).is_some_and(|r| {
@@ -8524,19 +8513,8 @@ impl<'db> LoweringContext<'db> {
                     // For immediate calls, emit the callee as a plain function constant
                     // (not MakeBoundMethod) since the receiver is passed explicitly as self.
                     let receiver_op = self.lower_to_operand(*base)?;
-                    has_value_receiver = true;
                     let callee_op = {
                         let resolution = self.tir_resolution(callee).cloned();
-                        if let Some(MemberResolution::Method {
-                            callee:
-                                MethodCallee::Concrete {
-                                    frame_type_args, ..
-                                },
-                            ..
-                        }) = resolution.as_ref()
-                        {
-                            carried_owner_frame = Some(frame_type_args.clone());
-                        }
                         match resolution.as_ref().and_then(|r| r.callable(self.db)) {
                             Some(item) => Operand::Constant(Constant::Function(item)),
                             None => self.lower_normalized_callee_operand(callee, callee_expr)?,
@@ -8555,23 +8533,11 @@ impl<'db> LoweringContext<'db> {
                     //
                     // A CLASS-road `self`-less method through a VALUE receiver
                     // (`b.build(9)` on `Box<int>`): the receiver expression is
-                    // skipped, but its STATIC type must still fill the callee
-                    // frame — the shared prepend below reads it from here.
-                    if base_is_value {
-                        has_value_receiver = true;
-                    }
+                    // skipped; the call plan still carries the class arguments
+                    // its static type pins, and the shared prepend below
+                    // emits them.
                     let callee_op = {
                         let resolution = self.tir_resolution(callee).cloned();
-                        if let Some(MemberResolution::Method {
-                            callee:
-                                MethodCallee::Concrete {
-                                    frame_type_args, ..
-                                },
-                            ..
-                        }) = resolution.as_ref()
-                        {
-                            carried_owner_frame = Some(frame_type_args.clone());
-                        }
                         match resolution.as_ref().and_then(|r| r.callable(self.db)) {
                             Some(item) => Operand::Constant(Constant::Function(item)),
                             None => self.lower_normalized_callee_operand(callee, callee_expr)?,
@@ -8618,16 +8584,6 @@ impl<'db> LoweringContext<'db> {
                 // (not MakeBoundMethod) since the receiver is passed explicitly as self.
                 let receiver_segments = &segments[..segments.len() - 1];
                 let method_resolution = self.tir_path_final_resolution(callee).cloned();
-                if let Some(MemberResolution::Method {
-                    callee:
-                        MethodCallee::Concrete {
-                            frame_type_args, ..
-                        },
-                    ..
-                }) = method_resolution.as_ref()
-                {
-                    carried_owner_frame = Some(frame_type_args.clone());
-                }
                 let callee_op = match method_resolution.as_ref().and_then(|r| r.callable(self.db)) {
                     Some(item) => Operand::Constant(Constant::Function(item)),
                     None => self.lower_to_operand(callee)?,
@@ -8654,9 +8610,7 @@ impl<'db> LoweringContext<'db> {
                 });
                 if !method_takes_self {
                     // Same class-frame rule as the MemberAccess spelling: the
-                    // receiver prefix's static type fills the callee frame.
-                    let prefix_idx = segments.len() - 2;
-                    has_value_receiver = self.tir_path_segment_type(callee, prefix_idx).is_some();
+                    // call plan carries the receiver's class arguments.
                     (callee_op, self.lower_call_arg_operands(expr_id, args)?)
                 } else {
                     let receiver_op = if receiver_segments.len() == 1 {
@@ -8673,8 +8627,6 @@ impl<'db> LoweringContext<'db> {
                         )?;
                         Operand::Copy(Place::local(recv_local))
                     };
-                    let prefix_idx = segments.len() - 2;
-                    has_value_receiver = self.tir_path_segment_type(callee, prefix_idx).is_some();
                     let mut all_args = vec![receiver_op];
                     all_args.extend(self.lower_call_arg_operands(expr_id, args)?);
                     (callee_op, all_args)
@@ -8684,16 +8636,6 @@ impl<'db> LoweringContext<'db> {
                 // For immediate calls, emit the callee as a plain function constant
                 // (not MakeBoundMethod) since the receiver is passed explicitly as self.
                 let flat_resolution = self.tir_resolution(callee).cloned();
-                if let Some(MemberResolution::Method {
-                    callee:
-                        MethodCallee::Concrete {
-                            frame_type_args, ..
-                        },
-                    ..
-                }) = flat_resolution.as_ref()
-                {
-                    carried_owner_frame = Some(frame_type_args.clone());
-                }
                 let callee_op = match flat_resolution.as_ref().and_then(|r| r.callable(self.db)) {
                     Some(item) => Operand::Constant(Constant::Function(item)),
                     None => self.lower_to_operand(callee)?,
@@ -8702,8 +8644,6 @@ impl<'db> LoweringContext<'db> {
                     .path_receiver_root(callee, &segments[0])
                     .map(Operand::Copy);
                 if let Some(receiver_op) = receiver_op {
-                    let prefix_idx = segments.len() - 2;
-                    has_value_receiver = self.tir_path_segment_type(callee, prefix_idx).is_some();
                     let mut all_args = vec![receiver_op];
                     all_args.extend(self.lower_call_arg_operands(expr_id, args)?);
                     (callee_op, all_args)
@@ -8811,9 +8751,7 @@ impl<'db> LoweringContext<'db> {
         // the method's own type args. This preserves De Bruijn ordering:
         //   frame.type_args = [class_T, class_U, ..., fn_A, fn_B, ...]
         // matching `enclosing_generic_params()` = class_params ++ fn_params.
-        #[expect(deprecated)]
-        let owner_prefix_tys =
-            self.callee_owner_prefix(expr_id, callee, carried_owner_frame, has_value_receiver);
+        let owner_prefix_tys = self.call_plan_owner_prefix(expr_id, callee, &callee_operand)?;
         let receiver_class_type_arg_operands: Vec<Operand<'db>> = if !owner_prefix_tys.is_empty() {
             let generic_params = self.enclosing_generic_params();
             owner_prefix_tys
@@ -9747,70 +9685,58 @@ impl<'db> LoweringContext<'db> {
     }
 
     /// The owner frame a statically resolved callee expects ahead of its own
-    /// type arguments, from whichever of two places knows it. Exactly one
-    /// applies to a call:
+    /// type arguments: the call plan's owner prefix. The checker records the
+    /// whole frame of every statically resolved call on its plan, so this
+    /// reads that answer instead of re-deriving any part of it:
     ///
-    /// 1. a matched impl's method carries its frame on the resolution (the
-    ///    impl's generic bindings for a provided method, `[Self, iface args..]`
-    ///    for an adopted default) — an impl body's frame is not its receiver
-    ///    class's, and the two only coincide for in-class impls of non-generic
-    ///    interfaces;
-    /// 2. any other method takes the call plan's owner prefix: for a method
-    ///    reached through a value, the receiver's class arguments as the
-    ///    checker solved them; for a static reached through no value, what its
-    ///    qualifier pins (`type IntBox = Box<int>`, then `IntBox.of(7)`),
-    ///    empty when the qualifier pins nothing and the whole frame rides as
-    ///    the call's own arguments.
+    /// - a method reached through a value: the receiver's class arguments,
+    ///   seen through whatever spelling the receiver's static type has (an
+    ///   alias, `type Key = string[]`, then `k.join(".")`; a `Future<V, E>`);
+    /// - a static reached through no value: what its qualifier pins (`type
+    ///   IntBox = Box<int>`, then `IntBox.of(7)`), empty when the qualifier
+    ///   pins nothing and the whole frame rides as the call's own arguments;
+    /// - a matched impl's method: the impl's generic bindings, or `[Self,
+    ///   iface args..]` for an adopted default — an impl body's frame is not
+    ///   its receiver class's.
     ///
-    /// (2) must not re-derive the prefix from the receiver's static type: that
-    /// type can be spelled through an alias (`type Key = string[]`, then
-    /// `k.join(".")`), or be a `Future<V, E>`, and a receiver whose head is
-    /// not literally a class, list or map then seeded no frame at all — the
-    /// callee's first read of its `T` failed in the VM. The checker already
-    /// saw through the spelling when it solved the frame.
-    #[deprecated(
-        note = "two partial sources of one fact. Superseded once the call plan carries the \
-                whole frame of every statically resolved callee and call lowering reads it"
-    )]
-    fn callee_owner_prefix(
+    /// A virtual call takes no prefix: its dispatcher supplies the frame of
+    /// the impl it selects at run time.
+    ///
+    /// A plan whose frame is narrower or wider than the callee's declared one
+    /// is an internal inconsistency, reported here rather than left for the
+    /// VM to discover as an unrealizable template inside the callee.
+    fn call_plan_owner_prefix(
         &self,
         call: AstExprId,
         callee: AstExprId,
-        carried_owner_frame: Option<Vec<Tir2Ty>>,
-        has_value_receiver: bool,
-    ) -> Vec<Tir2Ty> {
+        callee_operand: &Operand<'db>,
+    ) -> Lowered<Vec<Tir2Ty>> {
         use crate::inference_provider::MemberResolution;
-        if let Some(frame) = carried_owner_frame {
-            return frame;
-        }
-        let plan_owner_prefix = || {
-            self.tir_call_plan(call)
-                .map_or_else(Vec::new, |plan| plan.type_args[..plan.own_offset].to_vec())
-        };
-        if has_value_receiver {
-            return plan_owner_prefix();
-        }
-        match self.tir_resolution(callee) {
+        if matches!(
+            self.tir_resolution(callee),
             Some(MemberResolution::Method {
-                callee: MethodCallee::Inherent(_),
-                receiver: Receiver::Unbound,
-            }) => plan_owner_prefix(),
-            Some(
-                MemberResolution::Method {
-                    callee: MethodCallee::Inherent(_),
-                    receiver: Receiver::Bound,
-                }
-                | MemberResolution::Method {
-                    callee: MethodCallee::Virtual { .. } | MethodCallee::Concrete { .. },
-                    receiver: Receiver::Bound | Receiver::Unbound,
-                }
-                | MemberResolution::Free { .. }
-                | MemberResolution::Field { .. }
-                | MemberResolution::Variant { .. }
-                | MemberResolution::InterfaceVirtualField { .. },
-            )
-            | None => Vec::new(),
+                callee: MethodCallee::Virtual { .. },
+                ..
+            })
+        ) {
+            return Ok(Vec::new());
         }
+        let plan = self.tir_call_plan(call);
+        if let Operand::Constant(Constant::Function(func)) = callee_operand {
+            let frame_len = callable_generic_frame(self.db, *func).params.len();
+            let plan_len = plan.map_or(0, |plan| plan.type_args.len());
+            if plan_len != frame_len {
+                return Err(self.internal_error(
+                    &format!(
+                        "the call plan of `{}` instantiates {plan_len} frame slot(s), but its \
+                         frame has {frame_len}",
+                        callable_display_name(self.db, *func),
+                    ),
+                    call,
+                ));
+            }
+        }
+        Ok(plan.map_or_else(Vec::new, |plan| plan.type_args[..plan.own_offset].to_vec()))
     }
 
     fn lower_call_type_args(
