@@ -459,11 +459,37 @@ function path_or<T>(j: json, selector: string, default: T) -> T throws never {
 ///
 /// Optional fields are omitted from `required`, maps use schema-valued
 /// `additionalProperties`, and unions use `anyOf`. Enums lower to a string
-/// `enum` of their variant names, `uint8array` to `string`, and `unknown` to
-/// the empty schema `{}`. A nullable type becomes a `["T", "null"]` type list
-/// where it can, and `anyOf` otherwise. A nullable enum also lists `null` in
-/// its `enum`, and a nullable literal uses `anyOf`, because `enum` and `const`
-/// restrict the value whatever `type` says.
+/// `enum` of their variant names. A nullable type becomes a `["T", "null"]`
+/// type list where it can, and `anyOf` otherwise. A nullable enum also lists
+/// `null` in its `enum`, and a nullable literal uses `anyOf`, because `enum`
+/// and `const` restrict the value whatever `type` says.
+///
+/// An `int` carries its range as `minimum` and `maximum`. A `bigint` is a
+/// decimal string (`"-12"`), because a JSON number that large loses precision
+/// in most parsers; a bigint literal is that string as a `const`. A media value
+/// is the tagged object `{ kind, source, value, mime, name? }`, where `source`
+/// is `"url"` or `"base64"`. A map's key type must be `string`, or string
+/// literals, which become `propertyNames`.
+///
+/// Some types have values but no JSON form: `uint8array`, functions, futures,
+/// `reflect.Type`, a class that requires one of those, and a class whose every
+/// value is cyclic (JSON holds only finite values). Others have no values at
+/// all: `never`, an enum with no variants, and a class that requires one of
+/// those. Both kinds are dropped from a union, so `uint8array | int | string`
+/// lowers as `int | string`, and an optional field of either kind is only
+/// `null`. They differ inside a list or map:
+///
+///     never[]                 // only []: { "type": "array", "maxItems": 0 }
+///     map<string, never>      // only {}
+///     uint8array[]            // no JSON form: the list is dropped like its items
+///     map<string, uint8array> // no JSON form
+///
+/// A list of a type with no values is still a list, the empty one. A list of
+/// `uint8array` is not reduced to `[]`: that would describe only the lists the
+/// type can hold when they happen to be empty.
+///
+/// A type whose values all lack a JSON form, or that has no values, is
+/// rejected rather than lowered to a schema nothing can satisfy.
 ///
 /// This pass *does* respect `@alias` and `@skip`, where the value conversions
 /// do not — a schema is read by something outside BAML, so it must describe
@@ -479,12 +505,19 @@ function path_or<T>(j: json, selector: string, default: T) -> T throws never {
 /// The root type is emitted inline, and every class and named alias beneath it
 /// goes into `$defs` to be reached by `$ref`. That is what lets a recursive
 /// graph terminate: a recursive root is emitted both inline and into `$defs`,
-/// so the `$ref` back to itself resolves.
+/// so the `$ref` back to itself resolves. Definitions are keyed by name; when
+/// two share one, the later gets a `_2` (then `_3`, ...) suffix.
 ///
 /// # Throws
 ///
-/// - `baml.errors.Unsupported` for a type with no JSON Schema form, and for a
-///   class, enum, or alias the reflection context cannot resolve.
+/// - `baml.errors.Unsupported` when no value of `t` has a JSON form, or `t` has
+///   no values.
+/// - `baml.errors.Unsupported` for a type no schema describes exactly:
+///   `unknown`, an interface type, media that does not name its kind, a map
+///   whose key is not `string` or string literals, and a generic class
+///   instance.
+/// - `baml.errors.Unsupported` for a class, enum, or alias the reflection
+///   context cannot resolve.
 function schema(t: reflect.Type) -> json throws root.errors.Unsupported {
     $rust_io_function
 }

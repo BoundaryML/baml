@@ -3,6 +3,11 @@
 /// (internal) One JSON Schema object for a function's parameters, derived from the
 /// signature: every parameter typed via baml.json.schema.
 ///
+/// An `unknown` parameter receives its argument as the model sent it, which is
+/// parsed JSON (`ai.tools._typed_arguments`), so its schema is that of
+/// `baml.json.json`. `baml.json.schema` rejects `unknown` itself: everywhere
+/// else, `unknown` holds values no schema describes.
+///
 /// `baml.json.schema` puts the classes and aliases a type reaches in `$defs`
 /// at the root of the schema it returns, and its `$ref`s point there
 /// (`#/$defs/Name`). A parameter's schema is a property of this object, so
@@ -16,7 +21,12 @@ function _schema_for_signature(handler: reflect.AnyFunction) -> map<string, unkn
     let definitions: map<string, unknown> = {};
     for (let a in sig.args) {
         let prefix = a.name + ".";
-        let lowered = _scope_schema_refs(baml.json.schema(a.type), prefix);
+        let accepted = if (a.type == reflect.Type.of<unknown>()) {
+            reflect.Type.of<baml.json.json>()
+        } else {
+            a.type
+        };
+        let lowered = _scope_schema_refs(baml.json.schema(accepted), prefix);
         let property = baml.json.from_json<map<string, unknown>>(lowered);
         let reached = baml.json.path_or<map<string, unknown>>(lowered, ".$defs", {});
         for (let name in reached.keys()) {
