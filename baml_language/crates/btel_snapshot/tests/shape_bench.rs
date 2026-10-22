@@ -65,7 +65,7 @@ fn map(b: &mut Builder, entries: &[(String, V)]) -> V {
 
 fn declaration(b: &mut Builder) -> ObjectId {
     let name = DeclarationName::Declared(TypeName::from_dotted_path("user.Customer"));
-    let declaration = b.declaration(&name, TypeTag::from_i64(42), false);
+    let declaration = b.declaration(&name, TypeTag::from_i64(42), false, None);
     b.leaves().object(declaration).unwrap()
 }
 

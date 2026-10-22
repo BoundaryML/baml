@@ -383,7 +383,14 @@ fn value_inspection_functions_take_values() {
         t.sql
     );
     assert!(t.sql.contains("__btel_kind(output_value)"), "{}", t.sql);
+    let t = ok("SELECT baml_code(type_args['T']) FROM spans");
+    assert!(
+        t.sql.contains("__btel_code(__btel_nav(type_args, 'T'))"),
+        "{}",
+        t.sql
+    );
     assert!(fails("SELECT baml_kind(span_name) FROM spans").contains("takes a BAML value"));
+    assert!(fails("SELECT baml_code(span_name) FROM spans").contains("takes a BAML value"));
     assert!(
         fails("SELECT baml_value_state(input_args, output_value) FROM spans")
             .contains("one BAML value")

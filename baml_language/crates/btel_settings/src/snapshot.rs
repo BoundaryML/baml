@@ -14,6 +14,9 @@ pub const MIN_SNAPSHOT_SLOTS: usize = 128;
 
 /// Hash and copy mutable bytes in cache-sized batches during capture.
 pub const COPY_HASH_BATCH_BYTES: usize = 16 * 1024;
+/// Hash input a blob ID gathers before it streams the rest: a small blob is
+/// hashed in one call. Speed and scratch memory only; the ID is the same.
+pub const GATHERED_HASH_BYTES: usize = 64 * 1024;
 
 /// Where captures are cut into CAS blobs. These decide blob IDs, never whether
 /// a blob can be read: changing them costs dedup against blobs cut the old
@@ -37,6 +40,10 @@ pub const MAX_LEAF_BYTES: usize = 1 << 30;
 /// Bounded processor-local whole-snapshot combining window, not a delivery ledger.
 pub const RECENT_CAPTURE_IDS: usize = 4096;
 
+/// Definition groups one stream of captures remembers carrying. Past this the
+/// stream forgets them all and carries each again once.
+pub const CARRIED_GROUPS: usize = 4096;
+
 /// CAS blob envelope. Change with the binary codec, never as a tuning knob.
 ///
 /// One narrowing was made in place, under no version of its own: a blob no
@@ -45,6 +52,6 @@ pub const RECENT_CAPTURE_IDS: usize = 4096;
 /// reads under either codec, but a blob of either readable version written
 /// before that and naming a `void` type no longer decodes.
 pub const BLOB_MAGIC: [u8; 8] = *b"BTELCAS\0";
-pub const BLOB_VERSION: u32 = 4;
+pub const BLOB_VERSION: u32 = 5;
 /// Supported read formats, newest first, for decoding and on-disk lookup.
-pub const READABLE_BLOB_VERSIONS: &[u32] = &[BLOB_VERSION, 3];
+pub const READABLE_BLOB_VERSIONS: &[u32] = &[BLOB_VERSION, 4, 3];

@@ -163,6 +163,8 @@ fn add<'a>(
                     declaration.identity.name(),
                     declaration.identity.tag(),
                     false,
+                    // A host value has no recorded definition at hand: named by tag.
+                    None,
                 );
                 let Some(declaration) = builder.leaves().object(declaration) else {
                     return SnapshotValue::Truncated(Limit::Objects);
@@ -202,6 +204,8 @@ fn add<'a>(
                 declaration.identity.name(),
                 declaration.identity.tag(),
                 true,
+                // A host value has no recorded definition at hand: named by tag.
+                None,
             );
             let Some(declaration) = builder.leaves().object(declared) else {
                 return SnapshotValue::Truncated(Limit::Objects);
@@ -345,7 +349,7 @@ mod tests {
         };
         assert_eq!(type_arguments[0].decoded.as_deref(), Some(&OwnedType::Int));
         assert!(
-            matches!(decoded.object(*declaration), crate::DecodedObject::Declaration { tag, .. } if *tag == class.identity.tag())
+            matches!(decoded.object(*declaration), crate::DecodedObject::Declaration { tag, .. } if *tag == Some(class.identity.tag()))
         );
         drop(snapshot);
         let mut deep = HostType::Int;

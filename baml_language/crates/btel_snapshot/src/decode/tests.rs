@@ -46,7 +46,7 @@ fn decode(bytes: &[u8]) -> Result<DecodedSnapshot, BlobError> {
 /// tests of its own.
 fn rich_snapshot(pool: &SnapshotPool) -> Snapshot {
     let mut b = pool.try_acquire().unwrap();
-    let declaration = b.declaration(&customer(), TypeTag::from_i64(42), false);
+    let declaration = b.declaration(&customer(), TypeTag::from_i64(42), false, None);
     let declaration = b.leaves().object(declaration).unwrap();
 
     // The list contains itself: a cycle through a container.
@@ -179,7 +179,7 @@ fn every_value_kind_round_trips_with_verified_identity_and_preserved_graph() {
     };
     assert!(matches!(
         decoded.object(*declaration),
-        DecodedObject::Declaration { tag, .. } if *tag == TypeTag::from_i64(42)
+        DecodedObject::Declaration { tag, .. } if *tag == Some(TypeTag::from_i64(42))
     ));
     let field = |name: &str| &fields.iter().find(|(key, _)| &**key == name).unwrap().1;
     assert_eq!(field("name"), &DecodedValue::String("hello λ".into()));
@@ -401,6 +401,62 @@ fn type_descriptions_are_bounded_and_large_ones_never_recurse_on_the_caller() {
     assert!(deep.encoded.len() > SHALLOW_TYPE_BYTES);
     assert!(deep.decoded.is_none(), "deep descriptions stay encoded");
     assert_eq!(too_deep, Err(BlobError::Limit("type description bytes")));
+}
+
+/// A long but shallow type, such as a union of classes named by their
+/// definitions, decodes whole, on a 2 MiB stack too; the groups it names
+/// are the blob's children, in order.
+#[test]
+fn long_shallow_types_decode_whole() {
+    use crate::{Carried, TypeIdentity, definition};
+    let definitions: Vec<_> = (0..8)
+        .map(|n| {
+            let name = DeclarationName::Declared(TypeName::from_dotted_path(&format!("user.C{n}")));
+            definition::group(&[definition::Declaration::Class(definition::Class {
+                name,
+                type_params: 0,
+                meta: definition::Meta::<String>::default(),
+                stream_done: false,
+                fields: vec![],
+            })])
+            .remove(0)
+        })
+        .collect();
+    let pool = SnapshotPool::new(1, Limits::default());
+    let mut b = pool.try_acquire().unwrap();
+    let mut carried = Carried::default();
+    let members: Box<[OwnedType]> = definitions
+        .iter()
+        .map(|defined| {
+            let definition = b.leaves().define(defined, &mut carried);
+            RealizedTy::Class(TypeIdentity::Defined(definition), Box::new([]))
+        })
+        .collect();
+    let ty = RealizedTy::Union(members);
+    assert!(borsh::to_vec(&ty).unwrap().len() > SHALLOW_TYPE_BYTES);
+    let id = b.leaves().ty(ty.clone());
+    let snapshot = b.finish(V::Type(id), &mut Shaper::default());
+    let mut bytes = Vec::new();
+    snapshot
+        .root_blob()
+        .write(&mut BlobScratch::default(), &mut bytes)
+        .unwrap();
+    let decoded = std::thread::Builder::new()
+        .stack_size(2 << 20)
+        .spawn(move || decode(&bytes))
+        .unwrap()
+        .join()
+        .unwrap()
+        .unwrap();
+    let DecodedRoot::Value(DecodedValue::Type(description)) = &decoded.root else {
+        panic!("type root: {:?}", decoded.root);
+    };
+    assert_eq!(description.decoded.as_deref(), Some(&ty));
+    let groups: Vec<_> = definitions
+        .iter()
+        .map(|defined| CasId::from_bytes(defined.group.id()))
+        .collect();
+    assert_eq!(decoded.children, groups);
 }
 
 #[test]

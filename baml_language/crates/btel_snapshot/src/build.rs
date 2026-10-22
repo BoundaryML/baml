@@ -12,19 +12,32 @@
 //! Limits are applied here, not by the caller, and what they cut shows in the
 //! capture: a container records how long its source was, and a value that
 //! could not be held is a truncation marker.
-use std::sync::Arc;
+//!
+//! A recorded class or enum definition is not captured content: it is a blob
+//! made once and shared. [`Leaves::define`] returns the reference a type head
+//! or declaration holds, which names the definition's group by ID. The first
+//! capture of a stream to name a group also carries it to the writers (see
+//! [`Carried`]); limits do not apply to it.
+use std::sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
+};
 
 use baml_type::{DeclarationName, typetag::TypeTag};
 use bex_str::BexStr;
+use btel_settings::snapshot::CARRIED_GROUPS;
+use btel_types::{Definition, DefinitionBlob};
 use num_bigint::BigInt;
+use rustc_hash::FxHashSet;
 
 use crate::{
-    Shaper, Snapshot, SnapshotPool,
+    Shaper, Snapshot, SnapshotPool, TypeIdentity,
     arena::{Arena, Meter},
+    definition::DefinitionRef,
     graph::{
-        Bigint, FieldEntry, FunctionArgs, Graph, LabelId, Limit, MapEntry, NameId, ObjectId,
-        OwnedType, Range, SnapshotObject, SnapshotRoot, SnapshotValue, StringId, Type, TypeId,
-        Uint8ArrayData,
+        Bigint, Declared, FieldEntry, FunctionArgs, Graph, LabelId, Limit, MapEntry, NameId,
+        ObjectId, OwnedType, Range, SnapshotObject, SnapshotRoot, SnapshotValue, StringId, Type,
+        TypeId, Uint8ArrayData,
     },
     hash::{self, Absorb as _},
     pool::{Lease, Limits, Storage},
@@ -46,8 +59,94 @@ pub struct Leaves<'b> {
     labels: &'b mut Arena<BexStr>,
     bigints: &'b mut Arena<Bigint>,
     types: &'b mut Arena<Type>,
+    definitions: &'b mut Arena<Arc<DefinitionBlob>>,
     meter: &'b Meter,
     limits: Limits,
+}
+
+/// The definition groups one stream of captures has carried to its writers.
+///
+/// A capture names a group by ID and carries it only the first time its
+/// stream names it, so a group reaches the writers ahead of every later
+/// capture that names it, as long as the stream's captures are delivered in
+/// the order they are made. Keep one per such stream, and never share one
+/// between streams that go to different writers. Forgetting a group, as a
+/// full set does, only carries it again: the writers store it once.
+///
+/// A writer that may have lost a group a capture carried (a capture whose
+/// blobs include one: [`crate::Blob::is_definition`]) calls
+/// [`forget_carried`], and every stream carries its groups again from its
+/// next capture ([`Self::begin`]). Losing a capture that carried none needs
+/// nothing.
+/// Captures that named a lost group in the meantime read it once a later
+/// capture carries it again.
+pub struct Carried {
+    /// This stream's number, unique in the process. A stream that forgets
+    /// what it carried takes a new one, so no group's marker names it.
+    stream: u64,
+    /// [`LOSSES`] when this stream last started carrying from scratch.
+    losses: u64,
+    groups: FxHashSet<[u8; 16]>,
+}
+
+/// Stream numbers: unique in the process, never 0.
+static STREAMS: AtomicU64 = AtomicU64::new(1);
+/// How many times a writer may have lost a capture.
+static LOSSES: AtomicU64 = AtomicU64::new(0);
+
+/// Make every stream carry its groups again, because a writer may have lost
+/// a capture that carried one. Each stream notices when its next capture
+/// begins.
+pub fn forget_carried() {
+    LOSSES.fetch_add(1, Ordering::Relaxed);
+}
+
+impl Default for Carried {
+    fn default() -> Self {
+        Self {
+            stream: STREAMS.fetch_add(1, Ordering::Relaxed),
+            losses: LOSSES.load(Ordering::Relaxed),
+            groups: FxHashSet::default(),
+        }
+    }
+}
+impl Carried {
+    /// Start a capture: after a possible loss, carry from scratch. Once per
+    /// capture, never during one, so a capture carries each group once.
+    #[inline]
+    pub fn begin(&mut self) {
+        if LOSSES.load(Ordering::Relaxed) != self.losses {
+            self.restart();
+        }
+    }
+    #[cold]
+    #[inline(never)]
+    fn restart(&mut self) {
+        self.stream = STREAMS.fetch_add(1, Ordering::Relaxed);
+        self.losses = LOSSES.load(Ordering::Relaxed);
+        self.groups.clear();
+    }
+    /// Whether `group` is carried already; otherwise mark it carried.
+    #[inline]
+    fn carries(&mut self, group: &DefinitionBlob) -> bool {
+        // The group remembers its last carrier: one load when it is this
+        // stream, the usual case.
+        group.carried_by(self.stream) || self.carries_slow(group)
+    }
+    #[inline(never)]
+    fn carries_slow(&mut self, group: &DefinitionBlob) -> bool {
+        // Another stream carried it last; this one may have too. Not marking
+        // it back keeps streams that share groups from writing it in turn.
+        if self.groups.contains(&group.id()) {
+            return true;
+        }
+        if self.groups.len() >= CARRIED_GROUPS {
+            self.groups.clear();
+        }
+        self.groups.insert(group.id());
+        group.mark_carried(self.stream);
+        false
+    }
 }
 
 /// An object's identity, before its content. It is filled once, by
@@ -114,16 +213,40 @@ impl Leaves<'_> {
         );
         SnapshotValue::Bigint(id)
     }
+    /// A type description. A head that names a definition must name one
+    /// [`Self::define`] added.
     pub fn ty(&mut self, ty: OwnedType) -> TypeId {
+        let defined = names_definition(&ty);
+        self.described(ty, defined)
+    }
+    /// [`Self::ty`] for a caller that knows whether a head of `ty` names a
+    /// definition.
+    pub fn described(&mut self, ty: OwnedType, defined: bool) -> TypeId {
+        debug_assert_eq!(
+            defined,
+            names_definition(&ty),
+            "the caller knows whether a head is defined"
+        );
         let id = TypeId(u32::try_from(self.types.len()).expect("type arena exhausted"));
         self.types.push(
             Type {
                 leaf: hash::ty(&ty),
                 ty,
+                defined,
             },
             self.meter,
         );
         id
+    }
+    /// How a type head or declaration names `definition`. The capture
+    /// carries its group, and every group that names which `carried` lacks,
+    /// when `carried` lacks it.
+    #[inline]
+    pub fn define(&mut self, definition: &Definition, carried: &mut Carried) -> DefinitionRef {
+        if !carried.carries(&definition.group) {
+            carry(self.definitions, carried, self.meter, &definition.group);
+        }
+        DefinitionRef::of(definition)
     }
     /// An object's identity, for what will hold it to name before its
     /// content is known. `None` once the object limit is reached.
@@ -147,6 +270,41 @@ impl Leaves<'_> {
         let id = ObjectId(u32::try_from(self.objects.len()).expect("bounded objects"));
         self.objects.push(object, self.meter);
         Some(id)
+    }
+}
+
+/// Whether a head of `ty` names a recorded definition.
+fn names_definition(ty: &OwnedType) -> bool {
+    let mut defined = false;
+    ty.visit_heads(&mut |head| defined |= matches!(head, TypeIdentity::Defined(_)));
+    defined
+}
+
+/// Carry `group`, newly marked carried, after the groups it names that
+/// `carried` lacks, marking each. Iterative: a chain of groups can be as long
+/// as a program's declarations.
+#[cold]
+fn carry(
+    definitions: &mut Arena<Arc<DefinitionBlob>>,
+    carried: &mut Carried,
+    meter: &Meter,
+    group: &Arc<DefinitionBlob>,
+) {
+    // A group and the next of its children to look at.
+    let mut path = vec![(Arc::clone(group), 0)];
+    while let Some((top, next)) = path.last_mut() {
+        if let Some(child) = top.children().get(*next) {
+            *next += 1;
+            if !carried.carries(child) {
+                let child = Arc::clone(child);
+                path.push((child, 0));
+            }
+            continue;
+        }
+        let (done, _) = path
+            .pop()
+            .unwrap_or_else(|| unreachable!("a group on the path"));
+        definitions.push(done, meter);
     }
 }
 
@@ -185,6 +343,7 @@ impl Builder {
             bigints,
             types,
             names: _,
+            definitions,
         } = graph;
         Parts {
             leaves: Leaves {
@@ -193,6 +352,7 @@ impl Builder {
                 labels,
                 bigints,
                 types,
+                definitions,
                 meter,
                 limits: *limits,
             },
@@ -322,10 +482,25 @@ impl Builder {
         source: impl ExactSizeIterator<Item = T>,
         convert: impl FnMut(&mut Leaves<'_>, T) -> (BexStr, SnapshotValue),
     ) -> SnapshotObject {
+        let type_arguments = type_arguments.into_iter().map(|ty| {
+            let defined = names_definition(&ty);
+            (ty, defined)
+        });
+        self.described_instance(declaration, type_arguments, source, convert)
+    }
+    /// [`Self::instance`] for a caller that knows, of each type argument,
+    /// whether a head names a definition (as [`Leaves::described`]).
+    pub fn described_instance<T>(
+        &mut self,
+        declaration: ObjectId,
+        type_arguments: impl IntoIterator<Item = (OwnedType, bool)>,
+        source: impl ExactSizeIterator<Item = T>,
+        convert: impl FnMut(&mut Leaves<'_>, T) -> (BexStr, SnapshotValue),
+    ) -> SnapshotObject {
         let mut leaves = self.leaves();
         let start = leaves.types.len();
-        for ty in type_arguments {
-            leaves.ty(ty);
+        for (ty, defined) in type_arguments {
+            leaves.described(ty, defined);
         }
         let type_arguments = Range::new(start, leaves.types.len() - start);
         let original_len = source.len();
@@ -367,16 +542,34 @@ impl Builder {
             },
         }
     }
+    /// [`Leaves::define`], outside any container.
+    #[inline]
+    pub fn define(&mut self, definition: &Definition, carried: &mut Carried) -> DefinitionRef {
+        if !carried.carries(&definition.group) {
+            let Storage { graph, meter, .. } = &mut *self.0;
+            carry(&mut graph.definitions, carried, meter, &definition.group);
+        }
+        DefinitionRef::of(definition)
+    }
     /// A class or enum declaration. Its name is held beside the objects.
+    /// With its recorded definition (from [`Leaves::define`]), the
+    /// declaration is identified by it rather than by its runtime tag.
     pub fn declaration(
         &mut self,
         name: &DeclarationName,
         tag: TypeTag,
         is_enum: bool,
+        definition: Option<DefinitionRef>,
     ) -> SnapshotObject {
         let Storage { graph, meter, .. } = &mut *self.0;
         let id = NameId(u32::try_from(graph.names.len()).expect("a name per object"));
-        graph.names.push(name.clone(), meter);
+        graph.names.push(
+            Declared {
+                name: name.clone(),
+                definition,
+            },
+            meter,
+        );
         SnapshotObject::Declaration {
             name: id,
             tag,
