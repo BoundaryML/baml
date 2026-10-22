@@ -1,5 +1,6 @@
 // Roundtrip coverage for baml_sdk/optional — ported from test_optional.py.
 import "./baml_sdk/index.js";
+import { BamlError } from "@boundaryml/baml-bridge";
 import { describe, it, expect } from "vitest";
 import {
   Resume,
@@ -37,5 +38,43 @@ describe("roundtrip optional", () => {
       optional_union: "y",
     });
     expect(round_trip_optional_container(c)).toEqual(c);
+  });
+  // SDK_PARITY_LINT(skip): TypeScript object literals and constructor inits may leave nullable keys out
+  it("optional_omitted_nullable_keys_read_as_null", () => {
+    const allNull = new OptionalContainer({
+      optional_int: null,
+      optional_class: null,
+      optional_union: null,
+    });
+    // A plain object and a constructor init both type-check without the
+    // nullable keys, and the runtime reads each omitted key as `null`.
+    expect(round_trip_optional_container({})).toEqual(allNull);
+    expect(round_trip_optional_container(new OptionalContainer({}))).toEqual(allNull);
+    expect(round_trip_optional_container({ optional_class: { name: "x" } })).toEqual(
+      new OptionalContainer({
+        optional_int: null,
+        optional_class: new Resume({ name: "x" }),
+        optional_union: null,
+      }),
+    );
+  });
+  // SDK_PARITY_LINT(skip): only TypeScript has a type-level check that a required key is present
+  it("optional_omitted_required_key_is_rejected", () => {
+    // `tsc` fails if either `@ts-expect-error` stops being needed, so a
+    // required key cannot silently become optional.
+    let thrown: unknown;
+    try {
+      // @ts-expect-error `name` is required
+      round_trip_resume({});
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(BamlError);
+    expect((thrown as BamlError).className).toBe("baml.errors.TypeMismatch");
+    expect((thrown as BamlError).value).toMatchObject({
+      message: expect.stringContaining("Missing field `name`"),
+    });
+    // @ts-expect-error `name` is required
+    expect(() => round_trip_resume(new Resume({}))).toThrow(BamlError);
   });
 });
