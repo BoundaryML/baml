@@ -214,7 +214,7 @@ enum Event {
 /// ([`Parser::nesting`]); the innermost entry decides whether a line break can
 /// end an expression (see [`Parser::line_break_ends_expr`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Nesting {
+enum ParseContext {
     /// A block's statements: `{ … }` bodies and `${ … }` interpolations.
     Statements,
     /// The arms of a `match` or `catch`.
@@ -229,12 +229,15 @@ enum Nesting {
     TemplateTag,
 }
 
-impl Nesting {
+impl ParseContext {
     /// Whether the items this delimiter holds are separated by line breaks.
     fn separates_items_by_line(self) -> bool {
         match self {
-            Nesting::Statements | Nesting::Arms => true,
-            Nesting::Parens | Nesting::Brackets | Nesting::Fields | Nesting::TemplateTag => false,
+            ParseContext::Statements | ParseContext::Arms => true,
+            ParseContext::Parens
+            | ParseContext::Brackets
+            | ParseContext::Fields
+            | ParseContext::TemplateTag => false,
         }
     }
 }
@@ -291,7 +294,7 @@ pub(crate) struct Parser<'a> {
     /// The delimiters enclosing the current position, innermost last. Empty
     /// at the top level, whose items are line-separated like statements.
     /// Managed by [`Self::nested`].
-    nesting: Vec<Nesting>,
+    nesting: Vec<ParseContext>,
 }
 
 impl<'a> Parser<'a> {
@@ -789,7 +792,7 @@ impl<'a> Parser<'a> {
     }
 
     /// Run `f` inside a delimiter holding `nesting`.
-    fn nested<R>(&mut self, nesting: Nesting, f: impl FnOnce(&mut Self) -> R) -> R {
+    fn nested<R>(&mut self, nesting: ParseContext, f: impl FnOnce(&mut Self) -> R) -> R {
         self.nesting.push(nesting);
         let result = f(self);
         self.nesting.pop();
@@ -2819,7 +2822,7 @@ impl<'a> Parser<'a> {
     /// until a matching `${endfor}`.
     fn parse_backtick_for_open(&mut self) {
         self.with_node(SyntaxKind::BACKTICK_FOR_OPEN, |p| {
-            p.nested(Nesting::TemplateTag, |p| {
+            p.nested(ParseContext::TemplateTag, |p| {
                 p.bump_raw(); // $
                 p.bump_raw(); // {
                 p.expect(TokenKind::For);
@@ -2834,7 +2837,7 @@ impl<'a> Parser<'a> {
     /// Parse `${if (cond)}` or `${if cond}` (block-tag opener).
     fn parse_backtick_if_open(&mut self) {
         self.with_node(SyntaxKind::BACKTICK_IF_OPEN, |p| {
-            p.nested(Nesting::TemplateTag, |p| {
+            p.nested(ParseContext::TemplateTag, |p| {
                 p.bump_raw(); // $
                 p.bump_raw(); // {
                 p.expect(TokenKind::If);
@@ -2849,7 +2852,7 @@ impl<'a> Parser<'a> {
     /// Parse `${else if (cond)}` (continuation of an open `${if}` block-tag).
     fn parse_backtick_else_if(&mut self) {
         self.with_node(SyntaxKind::BACKTICK_ELSE_IF, |p| {
-            p.nested(Nesting::TemplateTag, |p| {
+            p.nested(ParseContext::TemplateTag, |p| {
                 p.bump_raw(); // $
                 p.bump_raw(); // {
                 p.expect(TokenKind::Else);
@@ -3026,7 +3029,7 @@ impl<'a> Parser<'a> {
 
     fn parse_attribute_args(&mut self) {
         self.with_node(SyntaxKind::ATTRIBUTE_ARGS, |p| {
-            p.nested(Nesting::Parens, |p| {
+            p.nested(ParseContext::Parens, |p| {
                 p.expect(TokenKind::LParen);
 
                 // Parse first argument
@@ -3180,7 +3183,7 @@ impl<'a> Parser<'a> {
             }
             self.with_node(SyntaxKind::UNREFLECT_TYPE, |p| {
                 p.bump();
-                p.nested(Nesting::Parens, |p| {
+                p.nested(ParseContext::Parens, |p| {
                     p.expect(TokenKind::LParen);
                     if p.at(TokenKind::RParen) {
                         p.error_here("`unreflect` requires an operand".to_string());
@@ -4464,7 +4467,7 @@ impl<'a> Parser<'a> {
 
     fn parse_parameter_list(&mut self) {
         self.with_node(SyntaxKind::PARAMETER_LIST, |p| {
-            p.nested(Nesting::Parens, |p| {
+            p.nested(ParseContext::Parens, |p| {
                 p.expect(TokenKind::LParen);
 
                 if !p.at(TokenKind::RParen) {
@@ -4758,7 +4761,7 @@ impl<'a> Parser<'a> {
     /// Parse a lambda parameter list where type annotations are optional.
     fn parse_lambda_parameter_list(&mut self) {
         self.with_node(SyntaxKind::PARAMETER_LIST, |p| {
-            p.nested(Nesting::Parens, |p| {
+            p.nested(ParseContext::Parens, |p| {
                 p.expect(TokenKind::LParen);
 
                 if !p.at(TokenKind::RParen) {
@@ -4806,7 +4809,7 @@ impl<'a> Parser<'a> {
 
             // Parse statements until closing brace. Inspect raw headers before `at(RBrace)`,
             // because ordinary lookahead treats headers as invisible line-comment trivia.
-            p.nested(Nesting::Statements, |p| {
+            p.nested(ParseContext::Statements, |p| {
                 loop {
                     // Handle MDX-style header comments (//#...) as structural statements only in
                     // executable block expressions.
@@ -5300,7 +5303,7 @@ impl<'a> Parser<'a> {
             // the `{` of the match body, so `match x: Type { ... }` would
             // be ambiguous with a type-ascribed binding).
             if p.at(TokenKind::LParen) {
-                p.nested(Nesting::Parens, |p| {
+                p.nested(ParseContext::Parens, |p| {
                     p.bump(); // (
                     p.parse_expr();
                     if p.eat(TokenKind::Colon) {
@@ -5324,7 +5327,7 @@ impl<'a> Parser<'a> {
                 p.bump(); // {
 
                 let mut parsed_any_arm = false;
-                p.nested(Nesting::Arms, |p| {
+                p.nested(ParseContext::Arms, |p| {
                     loop {
                         // Inspect raw headers before `at(RBrace)`, whose normal lookahead skips them.
                         if p.at_header_comment_start() {
@@ -6112,7 +6115,7 @@ impl<'a> Parser<'a> {
             p.bump(); // {
 
             let mut parsed_any_arm = false;
-            p.nested(Nesting::Arms, |p| {
+            p.nested(ParseContext::Arms, |p| {
                 loop {
                     // Inspect raw headers before `at(RBrace)`, whose normal lookahead skips them.
                     if p.at_header_comment_start() {
@@ -6319,7 +6322,7 @@ impl<'a> Parser<'a> {
 
             // Check for parenthesized form: for (...) { }
             if p.at(TokenKind::LParen) {
-                p.nested(Nesting::Parens, |p| {
+                p.nested(ParseContext::Parens, |p| {
                     p.bump(); // (
 
                     // Check if this is iterator-style: for (let var in expr) or C-style: for (init; cond; update)
@@ -6663,7 +6666,7 @@ impl<'a> Parser<'a> {
                 // Index expression
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::INDEX_EXPR);
-                self.nested(Nesting::Brackets, |p| {
+                self.nested(ParseContext::Brackets, |p| {
                     p.bump(); // [
                     p.parse_expr();
                     p.expect(TokenKind::RBracket);
@@ -6682,7 +6685,7 @@ impl<'a> Parser<'a> {
                     // obj?.[expr] — optional index
                     self.wrap_events_in_node(lhs_start, SyntaxKind::OPTIONAL_INDEX_EXPR);
                     self.bump(); // ?.
-                    self.nested(Nesting::Brackets, |p| {
+                    self.nested(ParseContext::Brackets, |p| {
                         p.bump(); // [
                         p.parse_expr();
                         p.expect(TokenKind::RBracket);
@@ -7253,7 +7256,7 @@ impl<'a> Parser<'a> {
 
     fn parse_call_args(&mut self) {
         self.with_node(SyntaxKind::CALL_ARGS, |p| {
-            p.nested(Nesting::Parens, |p| {
+            p.nested(ParseContext::Parens, |p| {
                 p.expect(TokenKind::LParen);
 
                 if !p.at(TokenKind::RParen) {
@@ -7286,7 +7289,7 @@ impl<'a> Parser<'a> {
 
     fn parse_array_literal(&mut self) {
         self.with_node(SyntaxKind::ARRAY_LITERAL, |p| {
-            p.nested(Nesting::Brackets, |p| {
+            p.nested(ParseContext::Brackets, |p| {
                 p.expect(TokenKind::LBracket);
 
                 if !p.at(TokenKind::RBracket) {
@@ -7851,7 +7854,7 @@ impl<'a> Parser<'a> {
 
     fn parse_parenthesized_expr(&mut self) {
         self.with_node(SyntaxKind::PAREN_EXPR, |p| {
-            p.nested(Nesting::Parens, |p| {
+            p.nested(ParseContext::Parens, |p| {
                 p.expect(TokenKind::LParen);
                 // Parentheses opt back into syntax suppressed in condition position.
                 let saved_destructure = std::mem::take(&mut p.suppress_destructure_pattern_depth);
@@ -7869,7 +7872,7 @@ impl<'a> Parser<'a> {
     /// following token unambiguously starts another key.
     fn parse_map_literal(&mut self) {
         self.with_node(SyntaxKind::MAP_LITERAL, |p| {
-            p.nested(Nesting::Fields, |p| {
+            p.nested(ParseContext::Fields, |p| {
                 if p.at(TokenKind::Word) {
                     p.bump(); // map
                 }
@@ -8049,7 +8052,7 @@ impl<'a> Parser<'a> {
 
     /// Parse the body of an object literal/constructor: { field: value, ...spread }
     fn parse_object_literal_body(&mut self) {
-        self.nested(Nesting::Fields, Self::parse_object_literal_fields);
+        self.nested(ParseContext::Fields, Self::parse_object_literal_fields);
     }
 
     fn parse_object_literal_fields(&mut self) {
