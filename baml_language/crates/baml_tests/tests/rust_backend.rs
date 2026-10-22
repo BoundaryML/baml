@@ -1124,6 +1124,26 @@ fn a_derived_type_keeps_its_binding_past_a_sibling_rebinding() {
 }
 
 #[test]
+fn catch_wildcards_test_panic_membership() {
+    let module = compile(
+        r#"
+function wildcard(n: int) -> int {
+  (1 / n) catch (e) { _ => -1 }
+}
+function all_panics(n: int) -> int {
+  (1 / n) catch_all_panics (e) { _ => -1 }
+}
+"#,
+    );
+    let wildcard = body_of(&module, "user.wildcard");
+    assert!(wildcard.contains("vm.is_panic("), "{wildcard}");
+    assert!(!wildcard.contains("== -2i64"), "{wildcard}");
+    let all_panics = body_of(&module, "user.all_panics");
+    assert!(!all_panics.contains("vm.is_panic("), "{all_panics}");
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
+}
+
+#[test]
 fn unwind_only_handler_loops_poll() {
     let module = compile(
         r#"
