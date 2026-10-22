@@ -48,6 +48,28 @@ function assign_to_nested_literal() -> int {
     n + r
 }
 
+// A leaf named differently from its field becomes `field: let name`, a `_`
+// leaf stays a wildcard, and a long right-hand side is elided to `…`.
+function assign_to_renamed_fields() -> int {
+    let x = 0;
+    let y = "";
+    P { a: x, b: y } = mk();
+    x
+}
+
+function assign_to_array_with_wildcard() -> int {
+    let x = 0;
+    [x, _] = [1, 2];
+    x
+}
+
+function assign_to_literal_with_long_value() -> int {
+    let n = 0;
+    let s = "";
+    P { a: n, b: s } = P { a: 100000, b: "a fairly long string value" };
+    n
+}
+
 function assign_to_literal_with_field_leaf(p: P) -> int {
     let y = 0;
     [p.a, y] = [1, 2];
