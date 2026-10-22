@@ -933,7 +933,8 @@ impl BcsDelivery {
                         .map_err(|_| DeliveryError::Http)?;
                     runtime.block_on(run_cancellable(client, worker_shared.clone(), receiver));
                     // Dropping the runtime would wait for its blocking tasks, so
-                    // a hung DNS lookup would hold shutdown past its timeout.
+                    // a hung DNS lookup would hold shutdown past its timeout. Its
+                    // thread still ends by itself when the system resolver returns.
                     runtime.shutdown_background();
                     Ok::<(), DeliveryError>(())
                 }));
