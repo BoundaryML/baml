@@ -44,6 +44,7 @@ syn = { workspace = true }
 walkdir = { workspace = true }
 
 [dev-dependencies]
+baml_exec = { workspace = true }
 baml_builtins2 = { workspace = true }
 baml_cli = { workspace = true }
 baml_compiler2_emit = { workspace = true }

@@ -14,6 +14,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[path = "../rust_diff/collect_tests.rs"]
+mod collect_tests;
+
 const PROBES: &[&str] = &[
     "Scalars",
     "Overflow",
@@ -79,7 +82,152 @@ const PROBES: &[&str] = &[
     "CatchOrPanics",
     "CatchNonstreamCancellation",
     "CatchStreamingCancellation",
+    "Initializers",
+    "InitializerClosures",
+    "InitializerErrors",
+    "InitializerUncaught",
+    "InitializerPanic",
+    "InitializerPending",
+    "InitializerTests",
+    "InitializerTestErrors",
 ];
+
+fn is_test_initializer_probe(probe: &str) -> bool {
+    matches!(probe, "InitializerTests" | "InitializerTestErrors")
+}
+
+fn build_test_initializer_probe(build: &Path, workspace: &Path) -> std::path::PathBuf {
+    // The included module is also compiled as part of this test target.
+    let _ = collect_tests::main;
+    std::fs::write(
+        build.join("src/collect_tests.rs"),
+        include_str!("../rust_diff/collect_tests.rs"),
+    )
+    .unwrap();
+    std::fs::write(
+        build.join("src/initializer_tests.rs"),
+        r#"mod collect_tests;
+
+fn main() -> std::process::ExitCode {
+    collect_tests::main(
+        baml_rust_program::PROGRAM_ARTIFACT,
+        &baml_rust_program::COMPILED_BODIES,
+    )
+}
+
+"#,
+    )
+    .unwrap();
+    let manifest_path = build.join("Cargo.toml");
+    let mut manifest = std::fs::read_to_string(&manifest_path).unwrap();
+    for dependency in ["baml_artifact", "baml_exec", "bex_engine", "sys_native"] {
+        manifest.push_str(&format!(
+            "\n[dependencies.{dependency}]\npath = {:?}\n",
+            workspace
+                .join("crates")
+                .join(dependency)
+                .display()
+                .to_string()
+        ));
+    }
+    manifest.push_str(
+        "\n[dependencies.tokio]\nversion = \"1.36\"\nfeatures = [\"rt-multi-thread\"]\n\
+         \n[[bin]]\nname = \"initializer-tests\"\npath = \"src/initializer_tests.rs\"\n",
+    );
+    std::fs::write(&manifest_path, manifest).unwrap();
+    let status = Command::new("cargo")
+        .args(["build", "--release", "--bin", "initializer-tests"])
+        .arg("--manifest-path")
+        .arg(manifest_path)
+        .arg("--target-dir")
+        .arg(build.join("target"))
+        .current_dir(workspace)
+        .status()
+        .expect("build test-initializer probe");
+    assert!(status.success(), "test-initializer probe must compile");
+    build
+        .join("target/release")
+        .join(format!("initializer-tests{}", std::env::consts::EXE_SUFFIX))
+}
+
+fn build_startup_probe(
+    build: &Path,
+    workspace: &Path,
+    manifest: &Path,
+    template: &baml_exec::PackEnvelope,
+    mode: &str,
+) -> std::path::PathBuf {
+    // `baml pack` creates an engine for signature resolution, so a program
+    // whose startup fails must be emitted directly, before any engine exists.
+    let mut sources: Vec<_> = std::fs::read_dir(manifest.join("rust_diff/baml_src"))
+        .unwrap()
+        .map(|entry| {
+            let entry = entry.unwrap();
+            (
+                entry.file_name().into_string().unwrap(),
+                std::fs::read_to_string(entry.path()).unwrap().replace(
+                    "const INIT_FAILURE = \"none\";",
+                    &format!("const INIT_FAILURE = {mode:?};"),
+                ),
+            )
+        })
+        .collect();
+    sources.sort_by(|a, b| a.0.cmp(&b.0));
+    let files: Vec<_> = sources
+        .iter()
+        .map(|(name, source)| (name.as_str(), source.as_str()))
+        .collect();
+    let db = baml_test_support::setup_multi_file_db(&files);
+    let root = db.workspace_root().unwrap();
+    let opt = baml_compiler2_emit::OptLevel::Two;
+    let mut envelope = template.clone();
+    envelope.program = baml_db::compile_program(&db, root, opt).unwrap();
+    let package = &envelope.program.packages[envelope.program.root as usize].name;
+    for target in &mut envelope.targets {
+        let name = target.qualified_name.rsplit('.').next().unwrap();
+        target.qualified_name = format!("{package}.{name}");
+    }
+    let callables = envelope.program.rendered_callables();
+    let entries: Vec<_> = envelope
+        .targets
+        .iter()
+        .map(|target| callables[&target.qualified_name].object.raw())
+        .collect();
+    let (artifact, fingerprint) =
+        baml_artifact::encode_with_digest(baml_artifact::ArtifactKind::PackedProgram, &envelope)
+            .unwrap();
+    let module = baml_db::rust_backend::compile_program(
+        &db,
+        root,
+        &envelope.program,
+        opt,
+        "program.bexa",
+        fingerprint,
+        Some(&entries),
+    )
+    .unwrap();
+    std::fs::write(build.join("src/program.bexa"), artifact).unwrap();
+    std::fs::write(build.join("src/lib.rs"), module.source).unwrap();
+    let status = Command::new("cargo")
+        .args(["build", "--release", "--bin", "baml_rust_program"])
+        .arg("--manifest-path")
+        .arg(build.join("Cargo.toml"))
+        .arg("--target-dir")
+        .arg(build.join("target"))
+        .current_dir(workspace)
+        .status()
+        .expect("build startup-failure probe");
+    assert!(status.success(), "startup-failure probe must compile");
+    let executable = build.join(format!("probes-{mode}{}", std::env::consts::EXE_SUFFIX));
+    std::fs::copy(
+        build
+            .join("target/release")
+            .join(format!("baml_rust_program{}", std::env::consts::EXE_SUFFIX)),
+        &executable,
+    )
+    .unwrap();
+    executable
+}
 
 /// Name, `BAML_COMPILED_BODIES`, `BAML_GC_STRESS`, `BAML_COMPILED_FRAMES`,
 /// and `BAML_TELEMETRY` (`None` for the default level). Bytecode at each
@@ -230,12 +378,35 @@ fn rust_differential() {
         "-o".into(),
         executable.display().to_string(),
     ];
-    for probe in PROBES {
+    for probe in PROBES
+        .iter()
+        .filter(|probe| !is_test_initializer_probe(probe))
+    {
         argv.extend(["--function".into(), (*probe).into()]);
     }
+    argv.extend(["--function".into(), "InitializerTestSummary".into()]);
     let started = Instant::now();
     let result = baml_cli::run_cli(argv).expect("compiled pack must succeed");
     assert!(matches!(result, baml_cli::ExitCode::Success), "{result:?}");
+    let test_initializer_executable = build_test_initializer_probe(&build, workspace);
+    let template = std::fs::read(build.join("src/program.bexa")).unwrap();
+    let template: baml_exec::PackEnvelope =
+        baml_artifact::decode(baml_artifact::ArtifactKind::PackedProgram, &template).unwrap();
+    let mut startup_executables = std::collections::BTreeMap::new();
+    for (probe, mode) in [
+        ("InitializerUncaught", "throw"),
+        ("InitializerPanic", "panic"),
+        ("InitializerPending", "pending"),
+    ] {
+        if only
+            .as_deref()
+            .is_some_and(|only| !only.split(',').any(|o| o == probe))
+        {
+            continue;
+        }
+        let executable = build_startup_probe(&build, workspace, manifest, &template, mode);
+        startup_executables.insert(probe, executable);
+    }
     eprintln!("compiled pack wall time: {:?}", started.elapsed());
     let started = Instant::now();
     let mut failures = Vec::new();
@@ -247,13 +418,25 @@ fn rust_differential() {
         let mut outputs = Vec::new();
         for (mode, bodies, stress, frames, telemetry) in MODES {
             let start = Instant::now();
-            let mut command = Command::new(&executable);
+            let mut command = if is_test_initializer_probe(probe) {
+                Command::new(&test_initializer_executable)
+            } else {
+                let mut command =
+                    Command::new(startup_executables.get(probe).unwrap_or(&executable));
+                command.arg(probe);
+                command
+            };
             command
-                .arg(probe)
                 .env("BAML_COMPILED_BODIES", bodies)
                 .env("BAML_GC_STRESS", stress)
                 .env("BAML_COMPILED_FRAMES", frames)
                 .env("NO_COLOR", "1");
+            match *probe {
+                "InitializerTestErrors" => {
+                    command.env("BAML_RUST_DIFF_INIT_FAILURE", "registration")
+                }
+                _ => command.env_remove("BAML_RUST_DIFF_INIT_FAILURE"),
+            };
             match telemetry {
                 Some(level) => command.env("BAML_TELEMETRY", level),
                 None => command.env_remove("BAML_TELEMETRY"),
@@ -277,6 +460,28 @@ fn rust_differential() {
                 );
             }
             outputs.push(output.ok());
+        }
+        if matches!(
+            *probe,
+            "InitializerUncaught"
+                | "InitializerPanic"
+                | "InitializerPending"
+                | "InitializerTestErrors"
+        ) {
+            for output in outputs.iter().flatten() {
+                assert!(
+                    !output.status.success(),
+                    "{probe} must fail during initialization"
+                );
+                let error = String::from_utf8_lossy(&output.stderr);
+                let evidence = match *probe {
+                    "InitializerPending" => "INIT_LATE",
+                    "InitializerPanic" => "INIT_GATE",
+                    _ => "initializer-error",
+                };
+                assert!(error.contains(evidence), "{probe}: {error}");
+                assert!(!String::from_utf8_lossy(&output.stdout).contains("unreachable:"));
+            }
         }
         for ((mode, bodies, _, _, telemetry), actual) in MODES.iter().zip(&outputs) {
             // Each mode against bytecode at its own telemetry level: hooks and

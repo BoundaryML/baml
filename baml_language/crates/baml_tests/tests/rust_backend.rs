@@ -36,6 +36,226 @@ fn compile_with_program(source: &str) -> (RustModule, Program) {
     (module, program)
 }
 
+#[test]
+fn global_initializers_and_their_closures_are_admitted_with_mir_positions() {
+    let db = baml_test_support::setup_multi_file_db(&[
+        (
+            "globals.baml",
+            r#"
+const FORWARD = LATER + 1;
+let LATER = 41;
+const CAPTURED = {
+    let offset = FORWARD;
+    (n: int) -> int { n + offset }
+};
+function fail() -> int throws string { throw "initializer" }
+const RECOVERED = fail() catch (e) { string => 7 };
+function main() -> int { CAPTURED(RECOVERED) }
+test "initializer value" { assert.equal(main(), 49) }
+"#,
+        ),
+        (
+            "ns_other/globals.baml",
+            r#"
+const LATER = [1, 2, 3];
+test "other initializer" { assert.equal(LATER.length(), 3) }
+"#,
+        ),
+    ]);
+    let root = db.workspace_root().unwrap();
+    for opt in [OptLevel::Zero, OptLevel::One, OptLevel::Two] {
+        let program = baml_db::compile_program(&db, root, opt).unwrap();
+        let module = compile_program(
+            &db,
+            root,
+            &program,
+            opt,
+            "program.bexa",
+            fingerprint(&program),
+            None,
+        )
+        .unwrap();
+        let mut helpers = 0;
+        let mut chainers = 0;
+        for (object, item) in program.objects.iter().enumerate() {
+            let Object::Function(function) = item else {
+                continue;
+            };
+            if !program.packages[program.root as usize]
+                .objects
+                .contains(&(object as u32))
+                || !matches!(function.kind, bex_vm_types::FunctionKind::Bytecode)
+            {
+                continue;
+            }
+            assert!(
+                module.functions.iter().any(|f| f.object == object),
+                "{:?} should compile at {opt:?}: {:?}",
+                function.identity,
+                module.rejected
+            );
+            match function.identity {
+                bex_vm_types::types::FunctionIdentity::InitLet(_) => {
+                    helpers += 1;
+                    assert!(
+                        !function.bytecode.block_pcs.is_empty(),
+                        "initializer helpers carry the same MIR positions as ordinary functions"
+                    );
+                }
+                bex_vm_types::types::FunctionIdentity::Init
+                | bex_vm_types::types::FunctionIdentity::InitTest => {
+                    chainers += 1;
+                }
+                _ => {}
+            }
+        }
+        assert_eq!(helpers, 5);
+        assert_eq!(chainers, 2);
+        syn::parse_file(&module.source).expect("generated initializers parse as Rust");
+    }
+}
+
+#[test]
+fn entry_points_keep_initializer_helpers_and_their_lambda_callees() {
+    let db = baml_test_support::setup_test_db(
+        r#"
+function only_from_initializer(n: int) -> int { n + 1 }
+const CALLBACK = (n: int) -> int { only_from_initializer(n) };
+const UNUSED = only_from_initializer(8);
+function main() -> int { 42 }
+function dead() -> int { 0 }
+function only_from_test() -> int { 9 }
+test "registered initializer" { assert.equal(only_from_test(), 9) }
+"#,
+    );
+    let root = db.workspace_root().unwrap();
+    let program = baml_db::compile_program(&db, root, OptLevel::Two).unwrap();
+    let entries = [program.rendered_callables()["user.main"].object.raw()];
+    let module = compile_program(
+        &db,
+        root,
+        &program,
+        OptLevel::Two,
+        "program.bexa",
+        fingerprint(&program),
+        Some(&entries),
+    )
+    .unwrap();
+    assert_admitted(
+        &module,
+        &[
+            "user.main",
+            "user.only_from_initializer",
+            "user.only_from_test",
+        ],
+    );
+    for (object, item) in program.objects.iter().enumerate() {
+        let Object::Function(function) = item else {
+            continue;
+        };
+        if program.packages[program.root as usize]
+            .objects
+            .contains(&(object as u32))
+            && matches!(
+                function.identity,
+                bex_vm_types::types::FunctionIdentity::Init
+                    | bex_vm_types::types::FunctionIdentity::InitTest
+                    | bex_vm_types::types::FunctionIdentity::InitLet(_)
+                    | bex_vm_types::types::FunctionIdentity::Synthetic { .. }
+            )
+        {
+            assert!(module.functions.iter().any(|f| f.object == object));
+        }
+    }
+    assert!(matches!(
+        rejection(&module, "user.dead"),
+        Rejection::Unreached
+    ));
+}
+
+#[test]
+fn initializer_chainers_validate_the_bytecode_shape() {
+    let db = baml_test_support::setup_test_db("const VALUE = 42; function main() -> int { VALUE }");
+    let root = db.workspace_root().unwrap();
+    let mut program = baml_db::compile_program(&db, root, OptLevel::Two).unwrap();
+    let object = program.packages[program.root as usize].init.unwrap();
+    let Object::Function(function) = &mut program.objects[object] else {
+        panic!("the initializer is a function")
+    };
+    function.bytecode.instructions[1] = Instruction::Pop(1);
+    let module = compile_program(
+        &db,
+        root,
+        &program,
+        OptLevel::Two,
+        "program.bexa",
+        fingerprint(&program),
+        None,
+    )
+    .unwrap();
+    assert!(!module.functions.iter().any(|f| f.object == object.raw()));
+    let name = program.function_name(object).unwrap();
+    assert!(matches!(
+        rejection(&module, &name),
+        Rejection::Unsupported(reason) if reason.contains("initializer bytecode")
+    ));
+}
+
+#[test]
+#[ignore = "explicit full-corpus admission check"]
+fn corpus_bytecode_functions_are_all_admitted() {
+    use baml_tests::engine::TestDbExt as _;
+
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("baml_src");
+    let mut files = baml_db::discover_baml_files(&path);
+    files.sort();
+    assert!(!files.is_empty());
+    let mut db = baml_db::ProjectDatabase::new();
+    let root = db.workspace(&path);
+    for file in files {
+        db.file(
+            &file,
+            &std::fs::read_to_string(&file)
+                .unwrap()
+                .replace("\r\n", "\n"),
+        );
+    }
+    let program = baml_db::compile_program(&db, root, OptLevel::Two).unwrap();
+    let module = compile_program(
+        &db,
+        root,
+        &program,
+        OptLevel::Two,
+        "program.bexa",
+        fingerprint(&program),
+        None,
+    )
+    .unwrap();
+    assert!(module.rejected.is_empty(), "{:?}", module.rejected);
+    let admitted: std::collections::BTreeSet<_> =
+        module.functions.iter().map(|f| f.object).collect();
+    assert_eq!(
+        admitted.len(),
+        module.functions.len(),
+        "no duplicate entries"
+    );
+    let mut bytecode = 0;
+    for (object, item) in program.objects.iter().enumerate() {
+        if let Object::Function(function) = item
+            && matches!(function.kind, bex_vm_types::FunctionKind::Bytecode)
+        {
+            bytecode += 1;
+            assert!(
+                admitted.contains(&object),
+                "{:?} was not attempted",
+                function.identity
+            );
+        }
+    }
+    assert_eq!(admitted.len(), bytecode);
+    eprintln!("{bytecode}/{bytecode} bytecode functions admitted");
+}
+
 /// Cached/artifact programs lack the compile-time MIR-to-PC map. The
 /// existing MIR shape guard must refuse to generate compiled bodies for them.
 #[test]
