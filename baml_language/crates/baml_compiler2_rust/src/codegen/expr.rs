@@ -50,6 +50,11 @@ impl<'db> Generator<'_, 'db> {
             }
             Rvalue::IsTypeTag { operand, tag } => {
                 let value = self.value_operand(block, operand)?;
+                // PANIC is a membership pseudo-tag, never a value's own tag.
+                // Match the bytecode IsType check so catch wildcards skip panics.
+                if *tag == typetag::PANIC {
+                    return Ok(Expr::new(format!("vm.is_panic({value})"), Repr::Bool));
+                }
                 Ok(Expr::new(
                     format!("(bex_vm::compiled_rt::type_tag({value}) == {tag}i64)"),
                     Repr::Bool,
