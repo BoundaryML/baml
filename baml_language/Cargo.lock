@@ -706,6 +706,7 @@ dependencies = [
  "clap",
  "console",
  "ctrlc",
+ "dunce",
  "hex",
  "indicatif",
  "insta",

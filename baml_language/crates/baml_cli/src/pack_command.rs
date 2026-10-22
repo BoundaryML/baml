@@ -27,6 +27,7 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     sync::Arc,
+    time::{Duration, Instant},
 };
 
 use anyhow::{Context, Result, anyhow};
@@ -333,7 +334,7 @@ impl PackArgs {
             .unwrap_or_else(|| default_output_path(&basename, target_triple));
 
         if let Some(module) = compiled {
-            self.build_rust(&module, &serialized, &output_path, target_triple, reporter)?;
+            self.build_rust(&module, &serialized, &output_path, reporter)?;
         } else {
             let mut output_file = std::fs::File::create(&output_path)
                 .with_context(|| format!("failed to create {}", output_path.display()))?;
@@ -397,6 +398,9 @@ impl PackArgs {
                  `-f <NAME>` flags to pack a subcommand binary."
             );
         }
+        if self.rust && self.resolved_target_triple()? != release_host_target_triple()? {
+            anyhow::bail!("`--rust` builds for this machine only; drop `--target`");
+        }
         Ok(())
     }
 
@@ -429,7 +433,6 @@ impl PackArgs {
         module: &baml_db::rust_backend::RustModule,
         serialized: &[u8],
         output_path: &Path,
-        target_triple: &str,
         reporter: &Reporter,
     ) -> Result<()> {
         let Some(workspace) = self.rust_workspace.as_deref() else {
@@ -438,8 +441,7 @@ impl PackArgs {
                  whose `crates/bex_vm` the compiled bodies link against"
             );
         };
-        let workspace = workspace
-            .canonicalize()
+        let workspace = dunce::canonicalize(workspace)
             .with_context(|| format!("failed to resolve {}", workspace.display()))?;
         for crate_dir in [
             "crates/bex_vm",
@@ -453,14 +455,12 @@ impl PackArgs {
                 );
             }
         }
-        if target_triple != release_host_target_triple()? {
-            anyhow::bail!("`--rust` builds for this machine only; drop `--target`");
-        }
-
-        let build_dir = self
-            .rust_build_dir
-            .clone()
-            .unwrap_or_else(|| PathBuf::from("target").join("baml-rust"));
+        let build_dir = std::path::absolute(
+            self.rust_build_dir
+                .as_deref()
+                .unwrap_or_else(|| Path::new("target/baml-rust")),
+        )
+        .context("failed to resolve the Rust build directory")?;
         let src_dir = build_dir.join("src");
         std::fs::create_dir_all(&src_dir)
             .with_context(|| format!("failed to create {}", src_dir.display()))?;
@@ -492,14 +492,7 @@ impl PackArgs {
         // then derives the same fingerprint from its own checkout.
         if baml_artifact::ENFORCE_BUILD_FINGERPRINT {
             let fingerprint = baml_artifact::BUILD_FINGERPRINT;
-            let head = std::process::Command::new("git")
-                .arg("-C")
-                .arg(&workspace)
-                .args(["rev-parse", "HEAD"])
-                .output()
-                .ok()
-                .filter(|output| output.status.success())
-                .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned());
+            let head = workspace_head(&workspace)?;
             if head.as_deref() != Some(fingerprint) {
                 anyhow::bail!(
                     "`--rust-workspace` {} is at {}, but this CLI was built from {fingerprint}; \
@@ -531,7 +524,25 @@ impl PackArgs {
                 // From the workspace, so rustup selects the toolchain its
                 // `rust-toolchain.toml` pins (the one the runtime was tested
                 // with), not the machine's default.
-                .current_dir(&workspace);
+                .current_dir(&workspace)
+                .stdout(std::process::Stdio::inherit())
+                .stderr(std::process::Stdio::inherit());
+            // Inherited Cargo overrides can move the binary, change its profile,
+            // or bypass the workspace's pinned toolchain.
+            #[allow(
+                clippy::disallowed_methods,
+                reason = "baml_env has no iterator for removing inherited Cargo profile overrides"
+            )]
+            for (key, _) in std::env::vars_os() {
+                let name = key.to_string_lossy().to_ascii_uppercase();
+                if matches!(
+                    name.as_str(),
+                    "CARGO_BUILD_TARGET" | "RUSTUP_TOOLCHAIN" | "CARGO_TARGET_DIR"
+                ) || name.starts_with("CARGO_PROFILE_")
+                {
+                    cargo.env_remove(key);
+                }
+            }
             // A BAML function with thousands of locals becomes one Rust
             // function as large, and rustc's default stack can overflow
             // generating its debug info; give it room unless the caller chose.
@@ -850,6 +861,40 @@ fn canonicalize_function_name(engine: &BexEngine, name: &str) -> String {
         .find_user_function(name)
         .map(|info| info.qualified_name)
         .unwrap_or_else(|| name.to_string())
+}
+
+fn workspace_head(workspace: &Path) -> Result<Option<String>> {
+    let Ok(mut git) = std::process::Command::new("git")
+        .args(["-c", "safe.directory=*", "-C"])
+        .arg(workspace)
+        .args(["rev-parse", "HEAD"])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+    else {
+        return Ok(None);
+    };
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        match git.try_wait() {
+            Ok(Some(_)) => {
+                let output = git.wait_with_output().context("failed to read git HEAD")?;
+                return Ok(output
+                    .status
+                    .success()
+                    .then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned()));
+            }
+            Ok(None) if Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            result => {
+                let _ = git.kill();
+                let _ = git.wait();
+                result.context("failed to wait for git HEAD")?;
+                anyhow::bail!("git rev-parse HEAD timed out after 10 seconds");
+            }
+        }
+    }
 }
 
 fn rust_manifest(workspace: &Path, profile: RustProfile) -> String {
@@ -1364,6 +1409,31 @@ mod tests {
         }
         let parsed = Wrapper::try_parse_from(["baml-pack"]).unwrap();
         assert!(matches!(parsed.args.output_format, OutputFormat::Json));
+    }
+
+    #[test]
+    fn test_rust_pack_rejects_cross_target_before_loading_project() {
+        let host = release_host_target_triple().unwrap();
+        let cross = baml_release::SUPPORTED_RELEASE_TARGETS
+            .iter()
+            .find(|target| **target != host)
+            .unwrap();
+        let mut args = pack_args();
+        args.target = Some("main".into());
+        args.rust = true;
+        args.target_triple = Some((*cross).into());
+        args.from = Some(PathBuf::from("/nonexistent/project"));
+        let error = args.run().unwrap_err();
+        assert!(error.to_string().contains("builds for this machine only"));
+    }
+
+    #[test]
+    fn test_rust_pack_accepts_explicit_host_target() {
+        let mut args = pack_args();
+        args.target = Some("main".into());
+        args.rust = true;
+        args.target_triple = Some(release_host_target_triple().unwrap().into());
+        args.validate_flags().unwrap();
     }
 
     #[test]
