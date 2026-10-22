@@ -844,6 +844,126 @@ fn telemetry_records(vm: &BexVm) -> (Vec<(NamedPath, InvocationOutcome, bool)>, 
 
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
+fn inline_observed_model_invokes_charge_usage_before_completion() {
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    use btel_settings::mode::AutoTelemetryLevel;
+
+    use crate::compiled_rt::FORCE_CALL_FUNNEL;
+
+    static INVOKE: AtomicU32 = AtomicU32::new(0);
+    fn invoke(_: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+        Ok(args[0])
+    }
+    fn caller(vm: &mut BexVm, args: &[Value]) -> Result<Value, Box<VmError>> {
+        let callee = vm.idx_to_ptr(ObjectIndex::from_raw(
+            INVOKE.load(Ordering::Relaxed) as usize
+        ));
+        vm.call_compiled(callee, invoke, &[], args, 0)
+    }
+
+    const SOURCE: &str = r#"
+        class Usage {
+            input_tokens int
+            output_tokens int
+        }
+        class Model {
+            provider string
+            model string
+        }
+        class Call {
+            usage Usage
+            resolved_model Model
+        }
+        class Turn { calls Call[] }
+        function Invoke(turn: Turn) -> Turn { turn }
+        function Caller(turn: Turn) -> Turn { Invoke(turn) }
+        function Main() -> string {
+            let turn = Turn {
+                calls: [Call {
+                    usage: Usage { input_tokens: 17, output_tokens: 5 },
+                    resolved_model: Model { provider: "test", model: "model" }
+                }]
+            };
+            `${Caller(turn).calls.length()}`
+        }
+    "#;
+
+    for level in [AutoTelemetryLevel::Medium, AutoTelemetryLevel::High] {
+        let mut runs = Vec::new();
+        for funnel in [true, false] {
+            let mut program = baml_test_support::compile_source(SOURCE);
+            let entry = program.rendered_callables()["user.Main"].object.raw();
+            let invoke_index = program.rendered_callables()["user.Invoke"].object.raw();
+            INVOKE.store(u32::try_from(invoke_index).unwrap(), Ordering::Relaxed);
+            for (name, body) in [
+                ("user.Invoke", invoke as crate::compiled_rt::CompiledFn),
+                ("user.Caller", caller),
+            ] {
+                let index = program.rendered_callables()[name].object;
+                let Object::Function(function) = &mut program.objects[index] else {
+                    unreachable!()
+                };
+                function.compiled_body = Some(test_body(body, 1));
+                if name == "user.Invoke" {
+                    function.body_meta = Some(bex_vm_types::FunctionMeta::ModelInvoke);
+                }
+            }
+            let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
+            vm.telemetry = Some(TelemetryState::new_root(
+                Arc::new(TelemetryPolicies::with_auto_level(level)),
+                btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
+                crate::telemetry::test_runtime(),
+            ));
+            vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
+            FORCE_CALL_FUNNEL.with(|force| force.set(funnel));
+            loop {
+                match vm.exec().unwrap() {
+                    VmExecState::EarlyYield => {}
+                    VmExecState::Complete(value) => {
+                        assert_eq!(vm.as_string(&value).unwrap().as_str(), "1");
+                        break;
+                    }
+                    other => panic!("unexpected execution state: {other:?}"),
+                }
+            }
+            FORCE_CALL_FUNNEL.with(|force| force.set(false));
+            vm.finish_telemetry(InvocationOutcome::Ok);
+            let usages: Vec<_> = vm
+                .telemetry
+                .as_ref()
+                .unwrap()
+                .span_records()
+                .iter()
+                .filter_map(|record| {
+                    if let SpanRecord::SpanUsage(usage) = record {
+                        Some(&usage.entries)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            assert_eq!(
+                usages,
+                vec![&vec![btel_records::ModelUsage {
+                    provider: "test".into(),
+                    model: Some("model".into()),
+                    calls: 1,
+                    input_tokens: Some(17),
+                    output_tokens: Some(5),
+                    cache_read_tokens: None,
+                    cache_write_tokens: None,
+                    reasoning_tokens: None,
+                }]]
+            );
+            runs.push(telemetry_records(&vm));
+        }
+        assert_eq!(runs[0], runs[1], "level: {level:?}");
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
 fn inline_observed_compiled_calls_record_as_the_call_path_does() {
     use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -1426,13 +1546,13 @@ fn compiled_trace_hooks_record_as_bytecode_does() {
         add: i64,
     ) -> Result<Value, Box<VmError>> {
         let depth = vm.frame_depth();
-        let settings = vm.begin_trace_hook(depth, true)?;
+        let settings = vm.compiled_begin_trace_hook(depth, true)?;
         if !settings.is_null() {
             let callee = object(vm, hook);
             vm.push_arg(n);
             vm.push_arg(settings);
             let result = vm.suspend(Step::Call { callee, argc: 2 })?;
-            vm.finish_trace_hook(depth, result)?;
+            vm.compiled_finish_trace_hook(depth, result)?;
         }
         Ok(Value::int(test_int(n) + add))
     }

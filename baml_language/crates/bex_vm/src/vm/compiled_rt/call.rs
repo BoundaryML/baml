@@ -392,6 +392,12 @@ impl BexVm {
         )));
         let result = body(self, args);
         if let Ok(value) = result {
+            if matches!(
+                function.body_meta,
+                Some(bex_vm_types::FunctionMeta::ModelInvoke)
+            ) {
+                self.charge_model_usage(value);
+            }
             let Some(Frame::Bytecode(frame)) = self.frames.pop() else {
                 unreachable!("a compiled callee has a bytecode frame");
             };
@@ -444,8 +450,8 @@ impl BexVm {
             &mut function,
         );
         match outcome {
-            // The call path leaves the result on the stack and any early yield
-            // pending for the enclosing loop.
+            // The call path leaves the result on the stack. An early yield is
+            // delayed until the compiled caller next yields.
             Ok(None | Some(VmExecState::EarlyYield)) if frame_idx == top => {
                 Ok(self.stack.ensure_pop())
             }
