@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 
 /**
  * The generated SDK's type map: BAML fully-qualified name (FQN) &harr; generated
@@ -63,6 +65,11 @@ public final class TypeRegistry {
     // host object's type without ever loading it via Class.forName.
     private static final ConcurrentHashMap<String, ClassEntry> classesByJavaName = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, EnumEntry> enumsByJavaName = new ConcurrentHashMap<>();
+
+    // Classes that cross as an opaque reference ({@link BamlOpaque}): BAML FQN ->
+    // entry (decode), and generated Java binary name -> BAML FQN (type tokens).
+    private static final ConcurrentHashMap<String, OpaqueEntry> opaquesByFqn = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, String> opaqueFqnsByJavaName = new ConcurrentHashMap<>();
 
     // Unions. Forward index (decode): keyed structurally by the union's arm set
     // normalized to a sorted, distinct {@code List<BamlType>} ({@code List.equals}
@@ -174,6 +181,33 @@ public final class TypeRegistry {
         if (enumsByFqn.putIfAbsent(bamlFqn, entry) == null) {
             enumsByJavaName.putIfAbsent(javaClassName, entry);
         }
+    }
+
+    /**
+     * Register a generated class that crosses as an opaque reference
+     * ({@link BamlOpaque}): it has no fields to register, and decodes from its
+     * handle through the factory its own static initializer binds
+     * ({@link #bindOpaqueFactory}). Idempotent: the first registration of
+     * {@code bamlFqn} wins.
+     */
+    public static void registerOpaqueClass(String bamlFqn, String javaClassName) {
+        if (opaquesByFqn.putIfAbsent(bamlFqn, new OpaqueEntry(javaClassName)) == null) {
+            opaqueFqnsByJavaName.putIfAbsent(javaClassName, bamlFqn);
+        }
+    }
+
+    /**
+     * Bind the private constructor of the registered opaque class
+     * {@code bamlFqn} as its decode factory. Called once from the generated
+     * class's static initializer, the only code that can reach that constructor.
+     */
+    public static void bindOpaqueFactory(
+            String bamlFqn, Function<BamlHandle, ? extends BamlOpaque> factory) {
+        OpaqueEntry entry = opaquesByFqn.get(bamlFqn);
+        if (entry == null) {
+            throw new IllegalStateException(bamlFqn + " is not a registered opaque class");
+        }
+        entry.factory.compareAndSet(null, factory);
     }
 
     /**
@@ -307,6 +341,24 @@ public final class TypeRegistry {
     public static Object constructClass(String bamlFqn, Map<String, Object> fields) {
         ClassEntry entry = classesByFqn.get(bamlFqn);
         return entry == null ? null : entry.instantiate(fields);
+    }
+
+    /** Whether {@code bamlFqn} names a registered class that crosses as an opaque reference. */
+    public static boolean isOpaqueClass(String bamlFqn) {
+        return opaquesByFqn.containsKey(bamlFqn);
+    }
+
+    /**
+     * Wrap {@code handle}, the engine's reference to an instance of the
+     * registered opaque class {@code bamlFqn}, in that class's generated
+     * wrapper. Loading the wrapper class binds its factory.
+     */
+    public static BamlOpaque constructOpaque(String bamlFqn, BamlHandle handle) {
+        OpaqueEntry entry = opaquesByFqn.get(bamlFqn);
+        if (entry == null) {
+            throw new IllegalStateException(bamlFqn + " is not a registered opaque class");
+        }
+        return entry.construct(bamlFqn, handle);
     }
 
     /** Whether {@code bamlFqn} resolves to a registered generated class. */
@@ -479,7 +531,7 @@ public final class TypeRegistry {
      */
     public static String classFqnForJavaClass(Class<?> javaClass) {
         ClassEntry entry = classesByJavaName.get(javaClass.getName());
-        return entry == null ? null : entry.bamlFqn;
+        return entry == null ? opaqueFqnsByJavaName.get(javaClass.getName()) : entry.bamlFqn;
     }
 
     /**
@@ -626,6 +678,35 @@ public final class TypeRegistry {
     }
 
     // -- entries -------------------------------------------------------------
+
+    private static final class OpaqueEntry {
+        final String javaClassName;
+        final AtomicReference<Function<BamlHandle, ? extends BamlOpaque>> factory =
+                new AtomicReference<>();
+
+        OpaqueEntry(String javaClassName) {
+            this.javaClassName = javaClassName;
+        }
+
+        BamlOpaque construct(String bamlFqn, BamlHandle handle) {
+            if (factory.get() == null) {
+                try {
+                    // Initializing the generated class runs its static block,
+                    // which binds the factory.
+                    Class.forName(javaClassName);
+                } catch (ClassNotFoundException e) {
+                    throw new IllegalStateException(
+                            "generated class not found on the classpath: " + javaClassName, e);
+                }
+            }
+            Function<BamlHandle, ? extends BamlOpaque> bound = factory.get();
+            if (bound == null) {
+                throw new IllegalStateException(
+                        javaClassName + " did not bind its factory for " + bamlFqn);
+            }
+            return bound.apply(handle);
+        }
+    }
 
     private static final class ClassEntry {
         final String bamlFqn;

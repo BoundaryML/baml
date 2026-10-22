@@ -1,26 +1,31 @@
 //! Class emission: a plain struct with public fields plus the value
 //! conversions — an owned tree, so a Rust host can never build the
-//! self-referencing values the engine's boundary cannot carry.
+//! self-referencing values the engine's boundary cannot carry — or, for a
+//! class crossing by reference, an opaque wrapper around the engine's
+//! instance.
 //!
-//! The impl shape is pinned by the hand-written executable spec in
+//! The impl shapes are pinned by the hand-written executable spec in
 //! `bridge_rust/tests/conversions.rs`.
 
-use baml_sdkgen_types::{Class, Name};
+use baml_sdkgen_types::{Class, ClassProperty, Name};
 use proc_macro2::TokenStream;
 use quote::quote;
 
 use super::function::{Receiver, doc_attrs, emit_method};
 use crate::{
-    SkipWarning, idents,
+    SkipWarning,
+    analyze::ClassShape,
+    idents,
     translate_ty::{self, TyCtx},
     wire_ty,
 };
 
-/// Emit the struct + conversion impls for a class the analysis marked
-/// emitted, plus an `impl` block with its method bindings. Also returns
-/// non-fatal warnings: a method whose signature is not representable
-/// skips individually — it never poisons the class or its sibling
-/// methods (methods play no part in the analysis fixpoint).
+/// Emit the type + conversion impls for a class the analysis marked
+/// emitted, shaped by its [`ClassShape`], plus an `impl` block with its
+/// method bindings. Also returns non-fatal warnings: a method whose
+/// signature is not representable skips individually — it never poisons
+/// the class or its sibling methods (methods play no part in the analysis
+/// fixpoint).
 ///
 /// A field-translation failure here means the analysis and the
 /// translator disagree on the supported subset — a generator bug; the
@@ -30,7 +35,6 @@ pub(crate) fn emit(
     class: &Class,
     ctx: &TyCtx<'_>,
 ) -> Result<(TokenStream, Vec<SkipWarning>), SkipWarning> {
-    let fqn = name.to_string();
     let mut warnings = Vec::new();
 
     // The class's own `<...>` params come into scope for translating its
@@ -81,6 +85,87 @@ pub(crate) fn emit(
         }
     }
 
+    let tokens = match ClassShape::of(class) {
+        ClassShape::Fields(properties) => fields_struct(
+            name,
+            class,
+            properties,
+            &field_ctx,
+            &class_params,
+            &method_tokens,
+        )?,
+        ClassShape::Opaque => {
+            debug_assert!(
+                class_params.is_empty(),
+                "the analysis skips a generic opaque class: `{name}`"
+            );
+            opaque_instance(name, class, &method_tokens)
+        }
+    };
+    Ok((tokens, warnings))
+}
+
+/// A class crossing by reference: a private engine handle, no public
+/// constructor and no fields, methods that send the handle as their
+/// receiver, encoding that sends the handle, and equality by key.
+fn opaque_instance(name: &Name, class: &Class, method_tokens: &[TokenStream]) -> TokenStream {
+    let fqn = name.to_string();
+    let class_name = name.name().as_str();
+    let ident = idents::ident(class_name);
+    let note = format!(
+        "A `{class_name}` is the runtime's own instance, held by reference: the \
+         runtime returns one and receives it back as itself. It has no \
+         constructor, and two values are equal when one is a clone of the other."
+    );
+    let docs = doc_attrs(Some(&match class.docstring.as_deref() {
+        Some(docstring) => format!("{docstring}\n\n{note}"),
+        None => note,
+    }));
+    let methods_impl = if method_tokens.is_empty() {
+        TokenStream::new()
+    } else {
+        quote! {
+            impl #ident {
+                #(#method_tokens)*
+            }
+        }
+    };
+    quote! {
+        #(#docs)*
+        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+        pub struct #ident(::baml_bridge::baml_value::internal::RuntimeInstance);
+
+        #methods_impl
+
+        impl ::baml_bridge::baml_value::internal::__BamlValuePrivate for #ident {
+            fn to_baml(&self) -> ::baml_bridge::wire::InboundValue {
+                self.0.to_baml()
+            }
+
+            fn from_baml(
+                v: ::baml_bridge::wire::BamlOutboundValue,
+            ) -> ::std::result::Result<Self, ::baml_bridge::DecodeError> {
+                ::baml_bridge::baml_value::internal::RuntimeInstance::decode(v, #fqn).map(Self)
+            }
+
+            fn baml_ty() -> ::baml_bridge::wire::BamlTy {
+                ::baml_bridge::baml_value::internal::class_ty(#fqn, ::std::vec![])
+            }
+        }
+    }
+}
+
+/// A class crossing by its fields: a struct with public fields, structural
+/// equality, and a field-by-field `class_value` codec.
+fn fields_struct(
+    name: &Name,
+    class: &Class,
+    properties: &[ClassProperty],
+    field_ctx: &TyCtx<'_>,
+    class_params: &[String],
+    method_tokens: &[TokenStream],
+) -> Result<TokenStream, SkipWarning> {
+    let fqn = name.to_string();
     let ident = idents::ident(name.name().as_str());
     let docs = doc_attrs(class.docstring.as_deref());
 
@@ -99,10 +184,10 @@ pub(crate) fn emit(
     let mut field_defs = Vec::new();
     let mut encode_entries = Vec::new();
     let mut decode_fields = Vec::new();
-    for prop in &class.properties {
+    for prop in properties {
         let field_name = prop.name.as_str();
         let field_ident = idents::ident(field_name);
-        let field_ty = translate_ty::translate(&prop.ty, &field_ctx).map_err(|u| SkipWarning {
+        let field_ty = translate_ty::translate(&prop.ty, field_ctx).map_err(|u| SkipWarning {
             fqn: fqn.clone(),
             reason: format!(
                 "generator bug: analysis accepted field `{field_name}` but translation failed: {}",
@@ -110,7 +195,7 @@ pub(crate) fn emit(
             ),
         })?;
         let field_slot =
-            wire_ty::wire_ty(&prop.ty, &field_ctx, &instance_type_var).map_err(|u| SkipWarning {
+            wire_ty::wire_ty(&prop.ty, field_ctx, &instance_type_var).map_err(|u| SkipWarning {
                 fqn: fqn.clone(),
                 reason: format!(
                     "generator bug: analysis accepted field `{field_name}` but its type has no wire spelling: {}",
@@ -138,7 +223,7 @@ pub(crate) fn emit(
 
     // A field-less class still verifies the wire FQN on decode; it just
     // has nothing to take from the accessor afterwards.
-    let decode_body = if class.properties.is_empty() {
+    let decode_body = if properties.is_empty() {
         quote! {
             ::baml_bridge::decode::ClassFields::new(v, #fqn)?;
             ::std::result::Result::Ok(Self {})
@@ -221,7 +306,7 @@ pub(crate) fn emit(
         }
     };
 
-    let tokens = quote! {
+    Ok(quote! {
         #(#docs)*
         #[derive(Debug, Clone, PartialEq)]
         pub struct #ident #bounded_generics {
@@ -249,6 +334,5 @@ pub(crate) fn emit(
                 ::baml_bridge::baml_value::internal::class_ty(#fqn, #wire_type_args)
             }
         }
-    };
-    Ok((tokens, warnings))
+    })
 }

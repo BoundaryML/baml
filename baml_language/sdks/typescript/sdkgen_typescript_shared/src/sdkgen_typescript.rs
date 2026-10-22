@@ -67,6 +67,7 @@ mod tests {
             pool.insert(
                 name.clone(),
                 Symbol::Class(Class {
+                    crossing: baml_sdkgen_types::ClassCrossing::Fields,
                     name,
                     generic_params: Vec::new(),
                     docstring: None,

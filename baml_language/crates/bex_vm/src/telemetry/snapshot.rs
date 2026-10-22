@@ -759,6 +759,7 @@ mod tests {
     fn maps_instances_and_variants_keep_identity_and_fields_after_gc() {
         let mut vm = crate::vm::tests::test_vm(Vec::new());
         let class_ptr = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
+            declared_crossing: baml_type::ClassCrossing::Fields,
             path: bex_vm_types::types::LocalName::new(
                 Vec::new(),
                 baml_type::Name::new("TestClass"),

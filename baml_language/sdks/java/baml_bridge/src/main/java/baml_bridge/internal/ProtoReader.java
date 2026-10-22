@@ -1245,6 +1245,9 @@ public final class ProtoReader {
      * minted nominal records); an enum (or an unresolved FQN) decodes wire-driven.
      */
     private static Object decodeFqnWithDesc(byte[] valueBytes, String fqn, boolean lenient) {
+        if (TypeRegistry.isOpaqueClass(fqn)) {
+            return decodeOpaque(valueBytes, fqn, lenient);
+        }
         if (TypeRegistry.isClass(fqn)) {
             byte[] classBytes = outboundSub(valueBytes, OV_CLASS);
             if (classBytes == null) {
@@ -1277,6 +1280,35 @@ public final class ProtoReader {
         }
         // Enum or unresolved FQN: the wire form is self-describing.
         return decodeValue(new WireReader(valueBytes), lenient);
+    }
+
+    /**
+     * Decode a value at a position typed as {@code fqn}, a class that crosses as
+     * an opaque reference: the engine sends its instance as an
+     * {@code ADT_RUNTIME_VALUE} handle whose {@code ty} names the class, and the
+     * handle decodes into that class's generated wrapper. Anything else at such
+     * a position is the engine breaking its contract.
+     */
+    private static Object decodeOpaque(byte[] valueBytes, String fqn, boolean lenient) {
+        Object decoded = decodeValue(new WireReader(valueBytes), lenient);
+        if (decoded == null) {
+            return null;
+        }
+        if (decoded instanceof BamlHandle handle
+                && handle.handleType() == BamlHandle.ADT_RUNTIME_VALUE
+                && fqn.equals(handle.classFqn())) {
+            return TypeRegistry.constructOpaque(fqn, handle);
+        }
+        if (lenient) {
+            return decoded;
+        }
+        throw new BamlError(
+                "expected a " + fqn + " instance as a runtime-value handle, received "
+                        + (decoded instanceof BamlHandle handle
+                                ? "a handle of type " + handle.handleType() + " to " + handle.classFqn()
+                                : "a " + decoded.getClass().getName()),
+                List.of(),
+                null);
     }
 
     /**
@@ -1627,6 +1659,9 @@ public final class ProtoReader {
     }
 
     /** The set {@code BamlOutboundValue} oneof arm field number (last-wins), or 0. */
+    // BUG: handle_value and media_value are not arms here, so a union member
+    // carried as one (a media value, a stream, an opaque instance such as
+    // reflect.Package) reads as absent and decodeUnionWithDesc returns null.
     private static int outboundArm(byte[] valueBytes) {
         WireReader r = new WireReader(valueBytes);
         int arm = 0;

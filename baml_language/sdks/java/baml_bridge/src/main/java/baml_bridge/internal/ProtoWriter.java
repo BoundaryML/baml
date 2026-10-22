@@ -369,6 +369,10 @@ public final class ProtoWriter {
             // clones the key per the drain contract; the inner handle already
             // carries handle_type = ADT_TAGGED_HEAP_HANDLE.
             return encodeInboundValue(stream.bamlHandle(), contextualType);
+        } else if (value instanceof baml_bridge.BamlOpaque opaque) {
+            // An opaque instance (reflect.Package, …) goes back as the
+            // ADT_RUNTIME_VALUE handle it arrived as, never by fields.
+            return encodeInboundValue(opaque.bamlHandle(), contextualType);
         } else if (value instanceof baml_bridge.BamlHandle handle) {
             // A bare engine handle (a $rust_type shell's private field, e.g.
             // baml.fs.File `_handle` / baml.http.Response `_body`): an

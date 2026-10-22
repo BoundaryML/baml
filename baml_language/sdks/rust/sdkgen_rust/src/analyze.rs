@@ -4,7 +4,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use baml_sdkgen_types::{Name, Symbol, SymbolPool, Ty};
+use baml_sdkgen_types::{Class, ClassCrossing, ClassProperty, Name, Symbol, SymbolPool, Ty};
 
 use crate::{SkipWarning, routing};
 
@@ -68,6 +68,41 @@ impl Analysis {
     }
 }
 
+/// How a class's instances appear to a Rust host, decided by the class's
+/// [`ClassCrossing`].
+pub(crate) enum ClassShape<'a> {
+    /// Plain data: a struct the host reads and builds by these fields.
+    Fields(&'a [ClassProperty]),
+    /// The engine's instance, held by reference: its declared fields are the
+    /// runtime's own internals and never reach the host.
+    Opaque,
+}
+
+impl<'a> ClassShape<'a> {
+    pub(crate) fn of(class: &'a Class) -> Self {
+        match class.crossing {
+            ClassCrossing::Opaque => Self::Opaque,
+            // `ai.stream.Stream`, `ai.FunctionSpec` and `ai.Prompt` map to the
+            // runtime's own types where a type names them (`translate_ty`),
+            // and media wrappers are not representable yet: none of them
+            // changes shape here.
+            ClassCrossing::Fields
+            | ClassCrossing::Stream
+            | ClassCrossing::FunctionSpec
+            | ClassCrossing::Media(_)
+            | ClassCrossing::Prompt => Self::Fields(&class.properties),
+        }
+    }
+
+    /// The fields a host sees: none for an opaque instance.
+    pub(crate) fn properties(&self) -> &'a [ClassProperty] {
+        match self {
+            Self::Fields(properties) => properties,
+            Self::Opaque => &[],
+        }
+    }
+}
+
 /// Analyze the pool. Returns the analysis plus one warning per skipped
 /// class or type alias (functions warn separately at emission time).
 pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
@@ -121,8 +156,9 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             .iter()
             .map(baml_base::Name::as_str)
             .collect();
+        let properties = ClassShape::of(class).properties();
         let mut class_deps = Vec::new();
-        let unsupported = class.properties.iter().find_map(|prop| {
+        let unsupported = properties.iter().find_map(|prop| {
             field_deps(&prop.ty, &class_params, &mut class_deps)
                 .err()
                 .map(|reason| (prop.name.as_str(), reason))
@@ -142,7 +178,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
                 // not compile, and PhantomData would leak into the public
                 // struct literal, so skip (fail closed).
                 let mut used = HashSet::new();
-                for prop in &class.properties {
+                for prop in properties {
                     collect_non_recursive_type_vars(&prop.ty, name, &mut used);
                 }
                 if let Some(unused) = class_params.iter().find(|param| !used.contains(**param)) {
@@ -237,7 +273,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
         .filter(|(name, _)| emitted.contains(*name))
         .map(|(name, class)| {
             let mut targets = Vec::new();
-            for prop in &class.properties {
+            for prop in ClassShape::of(class).properties() {
                 non_heap_class_refs(&prop.ty, &emitted, &enums, &mut targets);
             }
             (*name, targets)

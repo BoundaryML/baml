@@ -31,8 +31,8 @@ use std::{
 };
 
 use baml_sdkgen_types::{
-    CallableParam, Class, CodegenFunctionParamMode, Enum, Function, Name, Symbol, SymbolPool, Ty,
-    is_synthetic_effect_param,
+    CallableParam, Class, ClassCrossing, ClassProperty, CodegenFunctionParamMode, Enum, Function,
+    Name, Symbol, SymbolPool, Ty, is_synthetic_effect_param,
 };
 
 use crate::naming::{BamlFqn, CppName, CppNameKind, CppNames, GeneratorIdent, NameRequest};
@@ -249,7 +249,7 @@ fn to_source_code_with_optional_metadata(
             complete_types.insert(alias.pool_name.clone());
             continue;
         };
-        if class.alias_wrapper {
+        if let EmittedShape::AliasWrapper(_) = class.shape {
             complete_types.insert(class.pool_name.clone());
             continue;
         }
@@ -568,11 +568,16 @@ fn collect_requests(pool: &SymbolPool) -> BTreeSet<NameRequest> {
                 }
                 request_namespace_segments(&mut requests, name);
                 requests.insert(NameRequest::new(BamlFqn::symbol(name), CppNameKind::Class));
-                for prop in &class_def.properties {
-                    requests.insert(NameRequest::new(
-                        BamlFqn::member(name, prop.name.as_str()),
-                        CppNameKind::Field,
-                    ));
+                match class_form(class_def) {
+                    ClassForm::Fields(properties) => {
+                        for prop in properties {
+                            requests.insert(NameRequest::new(
+                                BamlFqn::member(name, prop.name.as_str()),
+                                CppNameKind::Field,
+                            ));
+                        }
+                    }
+                    ClassForm::Opaque => {}
                 }
                 for method in class_def
                     .static_methods
@@ -955,9 +960,49 @@ fn emit_enum(names: &CppNames, name: &Name, enum_def: &Enum) -> EmittedEnum {
 // Classes
 // ---------------------------------------------------------------------------
 
+/// How a class's instances appear to a host, decided by the class's
+/// [`ClassCrossing`].
+enum ClassForm<'a> {
+    /// Plain data, read and built by these fields.
+    Fields(&'a [ClassProperty]),
+    /// The engine's instance, held by reference: the declared fields are the
+    /// runtime's own internals and never reach the host.
+    Opaque,
+}
+
+fn class_form(class_def: &Class) -> ClassForm<'_> {
+    match class_def.crossing {
+        ClassCrossing::Opaque => ClassForm::Opaque,
+        // `ai.stream.Stream` and `ai.FunctionSpec` are generic (never
+        // emitted as structs; `translate_ty` maps them to the runtime's
+        // proxies), and media wrappers and `ai.Prompt` keep their struct
+        // emission: only `Opaque` changes shape here.
+        ClassCrossing::Fields
+        | ClassCrossing::Stream
+        | ClassCrossing::FunctionSpec
+        | ClassCrossing::Media(_)
+        | ClassCrossing::Prompt => ClassForm::Fields(&class_def.properties),
+    }
+}
+
 struct EmittedField {
     name: CppName,
     ty: String,
+}
+
+/// What an emitted struct holds, which decides its equality and its codec.
+enum EmittedShape {
+    /// A class crossing by its fields: public fields, structural equality,
+    /// and a field-by-field `class_value` codec.
+    Fields(Vec<EmittedField>),
+    /// A recursive-alias wrapper struct: one `value` field holding the
+    /// alias's resolved type, structural codec (aliases have no wire
+    /// identity), no methods.
+    AliasWrapper(EmittedField),
+    /// The engine's instance, held by reference: a private engine handle, no
+    /// public constructor and no fields, equality by key, and a codec that
+    /// carries the handle (`ADT_RUNTIME_VALUE`).
+    Opaque,
 }
 
 struct EmittedClass {
@@ -967,13 +1012,9 @@ struct EmittedClass {
     ns: Vec<String>,
     name: CppName,
     doc: Option<String>,
-    fields: Vec<EmittedField>,
+    shape: EmittedShape,
     static_methods: Vec<EmittedFn>,
     instance_methods: Vec<EmittedFn>,
-    /// A recursive-alias wrapper struct: one `value` field holding the
-    /// alias's resolved type, structural codec (aliases have no wire
-    /// identity), no methods.
-    alias_wrapper: bool,
 }
 
 impl EmittedClass {
@@ -981,6 +1022,15 @@ impl EmittedClass {
     /// slice, so just the bare class name).
     fn self_type(&self) -> &str {
         self.name.declared()
+    }
+
+    /// The struct's public data members, in declaration order.
+    fn fields(&self) -> &[EmittedField] {
+        match &self.shape {
+            EmittedShape::Fields(fields) => fields,
+            EmittedShape::AliasWrapper(value) => std::slice::from_ref(value),
+            EmittedShape::Opaque => &[],
+        }
     }
 }
 
@@ -994,26 +1044,33 @@ fn emit_class(
     emitted_types: &BTreeSet<Name>,
     boxed: &BTreeSet<Name>,
 ) -> Result<Option<EmittedClass>, String> {
-    let mut fields = Vec::new();
-    for prop in &class_def.properties {
-        match translate_ty(pool, names, &prop.ty, emitted_types, boxed) {
-            Translated::Cpp(ty) => {
-                fields.push(EmittedField {
-                    name: names
-                        .get(&NameRequest::new(
-                            BamlFqn::member(name, prop.name.as_str()),
-                            CppNameKind::Field,
-                        ))
-                        .clone(),
-                    ty,
-                });
+    // The properties a host sees, which are also the ones documented.
+    let (shape, properties) = match class_form(class_def) {
+        ClassForm::Fields(properties) => {
+            let mut fields = Vec::new();
+            for prop in properties {
+                match translate_ty(pool, names, &prop.ty, emitted_types, boxed) {
+                    Translated::Cpp(ty) => {
+                        fields.push(EmittedField {
+                            name: names
+                                .get(&NameRequest::new(
+                                    BamlFqn::member(name, prop.name.as_str()),
+                                    CppNameKind::Field,
+                                ))
+                                .clone(),
+                            ty,
+                        });
+                    }
+                    Translated::NotYet => return Ok(None),
+                    Translated::Unsupported(reason) => {
+                        return Err(format!("field `{}`: {reason}", prop.name));
+                    }
+                }
             }
-            Translated::NotYet => return Ok(None),
-            Translated::Unsupported(reason) => {
-                return Err(format!("field `{}`: {reason}", prop.name));
-            }
+            (EmittedShape::Fields(fields), properties)
         }
-    }
+        ClassForm::Opaque => (EmittedShape::Opaque, &[][..]),
+    };
     // Method optional params become arg<T> fields on opts structs nested in
     // this class's body, so their types must be complete (= defined
     // earlier) too. Delay the class while such a dep is merely
@@ -1043,16 +1100,14 @@ fn emit_class(
         doc: compose_doc(
             class_def.docstring.as_ref(),
             "Attributes:",
-            &class_def
-                .properties
+            &properties
                 .iter()
                 .map(|p| (p.name.to_string(), p.docstring.clone()))
                 .collect::<Vec<_>>(),
         ),
-        fields,
+        shape,
         static_methods: Vec::new(),
         instance_methods: Vec::new(),
-        alias_wrapper: false,
     }))
 }
 
@@ -1084,13 +1139,12 @@ fn emit_alias_wrapper(
             .get(&NameRequest::new(BamlFqn::symbol(name), CppNameKind::Class))
             .clone(),
         doc: None,
-        fields: vec![EmittedField {
+        shape: EmittedShape::AliasWrapper(EmittedField {
             name: names.get(&alias_value_field_request(name)).clone(),
             ty: inner,
-        }],
+        }),
         static_methods: Vec::new(),
         instance_methods: Vec::new(),
-        alias_wrapper: true,
     }))
 }
 
@@ -2128,7 +2182,7 @@ fn render_header(
         open_namespaces(&mut buf, &c.ns);
         push_doc(&mut buf, "", c.doc.as_ref(), &[]);
         let _ = writeln!(buf, "struct {} {{", c.name.declared());
-        for field in &c.fields {
+        for field in c.fields() {
             let _ = writeln!(buf, "  {} {};", field.ty, field.name.declared());
         }
         for f in c.static_methods.iter().chain(&c.instance_methods) {
@@ -2146,18 +2200,24 @@ fn render_header(
                 }
             }
         }
-        let eq_terms: Vec<String> = c
-            .fields
-            .iter()
-            .map(|field| {
-                let n = field.name.identifier();
-                format!("a.{n} == b.{n}")
-            })
-            .collect();
-        let eq_expr = if eq_terms.is_empty() {
-            "true".to_string()
-        } else {
-            eq_terms.join(" && ")
+        let state = GeneratorIdent::OpaqueState.token();
+        let eq_expr = match &c.shape {
+            EmittedShape::Fields(_) | EmittedShape::AliasWrapper(_) => {
+                let eq_terms: Vec<String> = c
+                    .fields()
+                    .iter()
+                    .map(|field| {
+                        let n = field.name.identifier();
+                        format!("a.{n} == b.{n}")
+                    })
+                    .collect();
+                if eq_terms.is_empty() {
+                    "true".to_string()
+                } else {
+                    eq_terms.join(" && ")
+                }
+            }
+            EmittedShape::Opaque => format!("a.{state}->key == b.{state}->key"),
         };
         let _ = writeln!(
             buf,
@@ -2166,6 +2226,22 @@ fn render_header(
              friend bool operator!=(const {n}& a, const {n}& b) {{ return !(a == b); }}",
             n = c.name.declared()
         );
+        match &c.shape {
+            EmittedShape::Fields(_) | EmittedShape::AliasWrapper(_) => {}
+            // Only the engine mints an instance: the codec, decoding the
+            // handle it was sent, is the sole constructor.
+            EmittedShape::Opaque => {
+                let _ = writeln!(
+                    buf,
+                    " private:\n  \
+                     explicit {n}(std::shared_ptr<::baml::detail::capability_state> {state}) \
+                     : {state}(std::move({state})) {{}}\n  \
+                     std::shared_ptr<::baml::detail::capability_state> {state};\n  \
+                     friend struct ::baml::codec<{n}>;",
+                    n = c.name.declared()
+                );
+            }
+        }
         buf.push_str("};\n");
         close_namespaces(&mut buf, &c.ns);
     }
@@ -2231,7 +2307,7 @@ fn render_invocation_definitions(buf: &mut String, classes: &[&EmittedClass]) {
         return;
     };
     let trace_handle = options
-        .fields
+        .fields()
         .iter()
         .find(|field| field.name.wire().to_string() == "_handle")
         .unwrap()
@@ -2308,29 +2384,52 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
     for c in classes {
         let q = c.name.identifier();
 
-        if c.alias_wrapper {
-            // Structural codec: aliases have no wire identity, so the
-            // wrapper encodes/decodes its resolved type directly, wrapping
-            // and unwrapping `value`. No Ty<> specialization (an alias is
-            // not a nominal type the engine can bind a TypeVar to).
-            let inner = &c.fields[0].ty;
-            let field = c.fields[0].name.identifier();
-            let fqn = c.name.wire();
-            buf.push_str("\ntemplate <>\n");
-            let _ = writeln!(
-                buf,
-                "struct codec<{q}> {{\n  \
-                 static detail::pb::BamlTy baml_ty() {{\n    \
-                   detail::pb::BamlTy ty;\n    \
-                   ty.mutable_type_alias()->set_name(\"{fqn}\");\n    \
-                   return ty;\n  }}\n  \
-                 static void encode(detail::pb::InboundValue& value_msg, const {q}& v) {{\n    \
-                 codec<{inner}>::encode(value_msg, v.{field});\n  }}\n  \
-                 static {q} decode(const detail::pb::BamlOutboundValue& v) {{\n    \
-                 return {q}{{codec<{inner}>::decode(v)}};\n  }}\n}};"
-            );
-            continue;
-        }
+        let fields = match &c.shape {
+            EmittedShape::Fields(fields) => fields,
+            EmittedShape::AliasWrapper(value) => {
+                // Structural codec: aliases have no wire identity, so the
+                // wrapper encodes/decodes its resolved type directly, wrapping
+                // and unwrapping `value`. No Ty<> specialization (an alias is
+                // not a nominal type the engine can bind a TypeVar to).
+                let inner = &value.ty;
+                let field = value.name.identifier();
+                let fqn = c.name.wire();
+                buf.push_str("\ntemplate <>\n");
+                let _ = writeln!(
+                    buf,
+                    "struct codec<{q}> {{\n  \
+                     static detail::pb::BamlTy baml_ty() {{\n    \
+                       detail::pb::BamlTy ty;\n    \
+                       ty.mutable_type_alias()->set_name(\"{fqn}\");\n    \
+                       return ty;\n  }}\n  \
+                     static void encode(detail::pb::InboundValue& value_msg, const {q}& v) {{\n    \
+                     codec<{inner}>::encode(value_msg, v.{field});\n  }}\n  \
+                     static {q} decode(const detail::pb::BamlOutboundValue& v) {{\n    \
+                     return {q}{{codec<{inner}>::decode(v)}};\n  }}\n}};"
+                );
+                continue;
+            }
+            // The instance crosses as the engine's handle both ways: decoded
+            // from the `ADT_RUNTIME_VALUE` handle the engine sends, sent back
+            // as a clone of it.
+            EmittedShape::Opaque => {
+                let fqn = c.name.wire();
+                let state = GeneratorIdent::OpaqueState.token();
+                let _ = writeln!(
+                    buf,
+                    "\ntemplate <>\nstruct codec<{q}> {{\n  \
+                     static detail::pb::BamlTy baml_ty() {{\n    \
+                     detail::pb::BamlTy ty;\n    \
+                     ty.mutable_class_ty()->set_name(\"{fqn}\");\n    \
+                     return ty;\n  }}\n  \
+                     static void encode(detail::pb::InboundValue& value_msg, const {q}& v) {{\n    \
+                     detail::encode_capability(value_msg, *v.{state});\n  }}\n  \
+                     static {q} decode(const detail::pb::BamlOutboundValue& raw) {{\n    \
+                     return {q}(detail::decode_runtime_value(raw, \"{fqn}\"));\n  }}\n}};"
+                );
+                continue;
+            }
+        };
 
         let fqn = c.name.wire();
 
@@ -2348,7 +2447,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
             "  static void encode(detail::pb::InboundValue& value_msg, const {q}& v) {{\n    \
              auto* cls = value_msg.mutable_class_value();"
         );
-        for field in &c.fields {
+        for field in fields {
             let _ = writeln!(
                 buf,
                 "    {{\n      auto* entry = cls->add_fields();\n      \
@@ -2376,7 +2475,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
              v.class_value().name() != \"{fqn}\")) {{\n      \
              detail::kind_mismatch(\"class {fqn}\", v);\n    }}",
         );
-        for field in &c.fields {
+        for field in fields {
             let _ = writeln!(
                 buf,
                 "    std::optional<{ty}> field_{name};",
@@ -2386,7 +2485,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
         }
         buf.push_str("    for (const auto& field : v.class_value().fields()) {\n");
         let mut first = true;
-        for field in &c.fields {
+        for field in fields {
             let kw = if first { "if" } else { "} else if" };
             first = false;
             let _ = writeln!(
@@ -2398,7 +2497,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
                 name = field.name.declared()
             );
         }
-        if !c.fields.is_empty() {
+        if !fields.is_empty() {
             buf.push_str("      } else {\n");
         } else {
             buf.push_str("      {\n");
@@ -2408,7 +2507,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
             "        throw error(\"unexpected field '\" + field.key() + \"' on {fqn}\");\n      \
              }}\n    }}",
         );
-        for field in &c.fields {
+        for field in fields {
             let _ = writeln!(
                 buf,
                 "    if (!field_{name}.has_value()) {{\n      \
@@ -2417,8 +2516,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
                 wire = field.name.wire()
             );
         }
-        let ctor_args: Vec<String> = c
-            .fields
+        let ctor_args: Vec<String> = fields
             .iter()
             .map(|field| format!("std::move(*field_{})", field.name.declared()))
             .collect();
@@ -2739,5 +2837,144 @@ mod declaration_safety_tests {
 
         complete.insert(alias);
         assert!(undeclared_alias_issue(&pool, &alias_ty, &complete).is_none());
+    }
+}
+
+#[cfg(test)]
+mod opaque_class_tests {
+    use baml_base::Name as BaseName;
+    use baml_sdkgen_types::{ClassProperty, FunctionArgument, Origin};
+
+    use super::*;
+
+    fn origin() -> Origin {
+        Origin {
+            source_file_path: "reflect.baml".to_string(),
+            span_start: 0,
+        }
+    }
+
+    fn function(name: &str, arguments: Vec<FunctionArgument>, return_type: Ty) -> Function {
+        Function {
+            name: BaseName::new(name),
+            generic_params: vec![],
+            docstring: None,
+            arguments,
+            return_type,
+            throws: None,
+            watchers: vec![],
+            origin: origin(),
+        }
+    }
+
+    /// A pool holding `reflect.Package` (declared with the runtime's
+    /// `_inner: unknown` field and one instance method) under `crossing`,
+    /// plus a free function that takes and returns one.
+    fn generate(crossing: ClassCrossing) -> (String, String) {
+        let package = Name::new(
+            BaseName::new("user"),
+            vec![BaseName::new("reflect")],
+            BaseName::new("Package"),
+        );
+        let package_ty = Ty::Class(package.clone(), Box::new([]));
+        let class = Class {
+            name: package.clone(),
+            generic_params: vec![],
+            docstring: Some("An isolated runtime-compiled package.".to_string()),
+            properties: vec![ClassProperty {
+                name: BaseName::new("_inner"),
+                docstring: Some("The runtime's own state.".to_string()),
+                ty: Ty::Unknown,
+            }],
+            crossing,
+            static_methods: vec![],
+            instance_methods: vec![function("name", vec![], Ty::String)],
+            origin: origin(),
+        };
+        let echo = Name::new(BaseName::new("user"), vec![], BaseName::new("echo"));
+        let echo_fn = function(
+            "echo",
+            vec![FunctionArgument {
+                name: BaseName::new("package"),
+                docstring: None,
+                ty: package_ty.clone(),
+                default: None,
+                injected: false,
+            }],
+            package_ty,
+        );
+        let mut files = to_source_code_with_bytecode(
+            &SymbolPool::from([
+                (package, Symbol::Class(class)),
+                (echo, Symbol::Function(echo_fn)),
+            ]),
+            &[],
+            &[],
+        );
+        (
+            files.remove(&PathBuf::from("include/baml_sdk.h")).unwrap(),
+            files.remove(&PathBuf::from("src/bindings.cc")).unwrap(),
+        )
+    }
+
+    #[test]
+    fn opaque_class_is_a_private_engine_handle() {
+        let (header, bindings) = generate(ClassCrossing::Opaque);
+
+        // No fields, not even in the docs: they are the runtime's internals.
+        assert!(!header.contains("_inner"), "{header}");
+        // The engine handle is private, and the codec, decoding the handle the
+        // engine sent, is the only constructor.
+        assert!(
+            header.contains(
+                " private:\n  explicit Package(std::shared_ptr<::baml::detail::capability_state> \
+                 state_) : state_(std::move(state_)) {}\n  \
+                 std::shared_ptr<::baml::detail::capability_state> state_;\n  \
+                 friend struct ::baml::codec<Package>;\n};"
+            ),
+            "{header}"
+        );
+        assert!(
+            header.contains("return a.state_->key == b.state_->key;"),
+            "{header}"
+        );
+        // It crosses as the handle both ways, never as a `class_value`.
+        assert!(
+            header.contains("detail::encode_capability(value_msg, *v.state_);"),
+            "{header}"
+        );
+        assert!(
+            header.contains(
+                "return ::baml_sdk::reflect::Package(detail::decode_runtime_value(raw, \
+                 \"user.reflect.Package\"));"
+            ),
+            "{header}"
+        );
+        assert!(!header.contains("mutable_class_value"), "{header}");
+        // Methods send it as the receiver; typed positions take and return it.
+        assert!(
+            bindings.contains("::baml::codec<Package>::encode(w, *this);"),
+            "{bindings}"
+        );
+        assert!(
+            header.contains(
+                "::baml_sdk::reflect::Package echo(const ::baml_sdk::reflect::Package& package"
+            ),
+            "{header}"
+        );
+    }
+
+    /// Negative control: the same declaration crossing by its fields is a
+    /// plain struct, so the crossing alone selects the opaque shape.
+    #[test]
+    fn the_crossing_selects_the_opaque_shape() {
+        let (header, _) = generate(ClassCrossing::Fields);
+
+        assert!(!header.contains("decode_runtime_value"), "{header}");
+        assert!(!header.contains("capability_state"), "{header}");
+        assert!(
+            header.contains("user.reflect.Package: field `_inner`: type unknown"),
+            "{header}"
+        );
     }
 }

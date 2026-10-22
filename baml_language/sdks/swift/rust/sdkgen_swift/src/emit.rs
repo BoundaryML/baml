@@ -303,6 +303,48 @@ pub(crate) fn render_class(
     out
 }
 
+/// An opaque class (`reflect.Package`, …): the engine's instance, held by
+/// reference. The Swift type stores only the handle it arrived as and sends
+/// that back as itself; a host never builds one (no public initializer) nor
+/// reads its declared fields, which are the runtime's own. Equal values are
+/// the same instance.
+pub(crate) fn render_opaque_class(class: &Class, key: &Name, methods: &[String]) -> String {
+    let fqn = key.to_string();
+    // A generic opaque class would have to state its type arguments, which
+    // the handle alone does not carry; no standard-library class is one.
+    debug_assert!(
+        class.generic_params.is_empty(),
+        "opaque class `{fqn}` is generic"
+    );
+    let name = escape_ident(key.name().as_str());
+    let doc = class
+        .docstring
+        .as_deref()
+        .map(render_docstring)
+        .unwrap_or_default();
+    let mut out = format!(
+        "{doc}public struct {name}: Equatable, Sendable, BamlTyped, BamlLeafEncodable, BamlDecodable {{\n\
+         \tprivate let _bamlHandle: BamlHandle\n\n\
+         \tprivate nonisolated init(_bamlHandle: BamlHandle) {{\n\
+         \t\tself._bamlHandle = _bamlHandle\n\
+         \t}}\n\n\
+         \tpublic nonisolated static var _bamlArmIdentity: Swift.String? {{ \"{fqn}\" }}\n\n\
+         \tpublic nonisolated static var _bamlSlot: BamlSlot<Self> {{ ._leaf(.classType(\"{fqn}\")) }}\n\n\
+         \tpublic nonisolated func _bamlEncode(as slot: BamlSlot<Self>) -> BamlInboundValue {{\n\
+         \t\t_bamlHandle._bamlEncode(as: ._leaf(slot.type))\n\
+         \t}}\n\n\
+         \tpublic nonisolated static func _bamlDecode(_ v: BamlOutboundValue) throws -> Self {{\n\
+         \t\tSelf(_bamlHandle: try BamlHandle._bamlDecodeOpaque(v, of: \"{fqn}\"))\n\
+         \t}}\n"
+    );
+    for method in methods {
+        out.push('\n');
+        out.push_str(&indent_lines(method, 1));
+    }
+    out.push_str("}\n");
+    out
+}
+
 /// How a callable is bound: a free function in a namespace, a static
 /// method on a class, or an instance method (whose receiver rides as
 /// required kwarg 0 under the name `self`, the cross-bridge

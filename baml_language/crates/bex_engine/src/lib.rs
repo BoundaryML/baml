@@ -75,7 +75,6 @@ mod function_call_context;
 mod future;
 mod hydrate;
 pub use future::LeakedFuture;
-use hydrate::ValueOrigin;
 #[cfg(not(target_arch = "wasm32"))]
 mod host_instrumentation;
 mod invocation;
@@ -1166,9 +1165,17 @@ fn host_call_type_arg(
 /// VM heap permit is held. These types drive the operation-specific outbound
 /// conversion for callback arguments; in particular, a union-typed parameter
 /// must become `BexExternalValue::Union` before the shared wire encoder runs.
-fn host_call_params(
+/// The host callable a `call_host_value` sys-op calls, read off its closure:
+/// the host's own reference to it and the parameters it declares.
+fn host_callee(
     handle: Option<Value>,
-) -> Result<Vec<bex_vm_types::RealizedFunctionParamTy>, bex_vm::errors::VmInternalError> {
+) -> Result<
+    (
+        std::sync::Arc<bex_external_types::HostValueArc>,
+        Vec<bex_vm_types::RealizedFunctionParamTy>,
+    ),
+    bex_vm::errors::VmInternalError,
+> {
     let malformed = || bex_vm::errors::VmInternalError::BridgeFailure {
         message: "call_host_value: missing or non-HostClosure handle in sysop arg slot 0"
             .to_string(),
@@ -1180,7 +1187,10 @@ fn host_call_params(
     // SAFETY: the caller invokes this while holding the active VM heap permit,
     // before the sys-op await can allow a moving collection.
     match unsafe { ptr.get() } {
-        Object::HostClosure(closure) => Ok(closure.params.as_ref().clone()),
+        Object::HostClosure(closure) => Ok((
+            std::sync::Arc::clone(&closure.handle),
+            closure.params.as_ref().clone(),
+        )),
         _ => Err(malformed()),
     }
 }
@@ -2828,8 +2838,11 @@ impl BexEngine {
         if pending.is_empty() {
             return;
         }
+        // The values leave for the host as any value does, through the one
+        // converter, which reads the program through a VM.
         let permit = self.heap_permit_manager.new_permit(()).await;
         let active = permit.acquire().await;
+        let vm = self.new_vm(None);
         let errors: Vec<_> = pending
             .into_iter()
             .map(|error| {
@@ -2842,9 +2855,19 @@ impl BexEngine {
                         Value::object(ptr)
                     }
                 };
+                // A report names what was thrown; a value no host can hold
+                // (a future) is reported by what the converter says of it.
+                let value = self
+                    .convert_vm_value_to_external_with_type(
+                        value,
+                        &bex_vm_types::RealizedTy::Unknown,
+                        &vm,
+                        active.proof(),
+                    )
+                    .unwrap_or_else(|error| BexExternalValue::String(format!("<{error}>").into()));
                 UnhandledSpawnError {
                     report_id: error.report_id,
-                    value: self.vm_value_to_owned(active.proof(), value),
+                    value,
                     trace: error.trace,
                     cancelled: error.cancelled,
                 }
@@ -3161,6 +3184,7 @@ impl BexEngine {
             deadline_ns: _,
             deadline,
             bound_runtime: _,
+            peer,
 
             type_args,
         }: FunctionCallContext,
@@ -3222,6 +3246,12 @@ impl BexEngine {
                     .map(|anchored| (name, bex_vm_types::RuntimeTy::from(anchored)))
             })
             .collect::<Result<_, _>>()?;
+        // An argument that is a reference to a live object binds the
+        // variables its declared type mentions from the object's own type: a
+        // generic instance method called by name leaves the class's
+        // variables in its signature (`Stream.next`'s `T | Done`), and the
+        // receiver carries them concretely. Explicit bindings win, since
+        // `collect_live_type_var_bindings` only fills unbound keys.
         for (declared, arg) in declared_param_types.iter().zip(&args) {
             let BexCallArg::Provided(value) = arg else {
                 continue;
@@ -3240,24 +3270,6 @@ impl BexEngine {
                 crate::conversion::collect_live_type_var_bindings(declared, &live, &mut type_args);
             }
         }
-        // Whether the receiver (a generic instance method called by name) is a
-        // live object whose class type arguments bind the class's type vars.
-        // A generic instance method called by name leaves its declared types
-        // with the class's type vars unsubstituted (e.g. `Stream.next`'s
-        // `T | Done`); the inbound `self` carries them concretely, so zipping
-        // the declared `self` against the actual recovers the bindings. See
-        // bridge-generics/streaming/04. `collect_live_type_var_bindings` only fills
-        // keys not already bound, so the explicit `_types=` bindings win on
-        // conflict.
-        let receiver_is_live = matches!(
-            args.first(),
-            Some(BexCallArg::Provided(value))
-                if matches!(
-                    value.as_ref(),
-                    BexExternalValue::Adt(bex_external_types::BexExternalAdt::TaggedHeapHandle { .. })
-                )
-        );
-
         // Every provided argument is built on the heap as the value it is,
         // before any question of its slot (`hydrate`): hydration reads nothing
         // from the declared types, so a value's type is settled by the time it
@@ -3267,7 +3279,7 @@ impl BexEngine {
         for (idx, arg) in args.iter().enumerate() {
             landed.push(match arg {
                 BexCallArg::Provided(value) => Some(
-                    self.hydrate(&mut thread, value, ValueOrigin::Host)
+                    self.hydrate_from(peer, &mut thread, value)
                         .map_err(|refusal| {
                             argument_refused(function_name, &params, idx, &refusal)
                         })?,
@@ -3276,17 +3288,6 @@ impl BexEngine {
             });
         }
 
-        if receiver_is_live
-            && let (Some(self_declared), Some(Some(receiver))) =
-                (declared_param_types.first(), landed.first())
-            && let Some(self_actual) = Self::landed_ty(&thread.vm, *receiver)
-        {
-            crate::conversion::collect_live_type_var_bindings(
-                self_declared,
-                &self_actual,
-                &mut type_args,
-            );
-        }
         // A call is generic iff the callee declares any generic params, OR a
         // TypeVar appears in a parameter / the return type. The declared-params
         // list also catches type params used only in the body (e.g.
@@ -3483,8 +3484,25 @@ impl BexEngine {
         cancel: CancellationToken,
         inherited: Option<&InheritedInvocationState>,
     ) -> ActiveHeapPermit<BexThread> {
+        let mut vm = self.new_vm(match inherited.and_then(|state| state.ancestry.as_ref()) {
+            Some(ancestry) => EngineTelemetry::new_child(self.telemetry.as_ref(), Some(ancestry)),
+            None => EngineTelemetry::new_root(self.telemetry.as_ref()),
+        });
+        // BEP-034: wrap the root VM in a `BexThread` from the outset so the
+        // permit's `RootHaver` is the thread (delegating to the inner VM).
+        // Spawned children build their own `BexThread`s in `spawn_thread`.
+        vm.set_root_context(self.launch_context.clone());
+        vm.thread_id = self.next_bex_thread_id().0;
+        let root_thread = BexThread::new_root(vm, TaskCancel::root(cancel));
+        let inactive = self.heap_permit_manager.new_permit(root_thread).await;
+        inactive.acquire().await
+    }
+
+    /// A VM over this engine's heap and program, running nothing, recording
+    /// into `telemetry`.
+    fn new_vm(&self, telemetry: Option<bex_vm::telemetry::TelemetryState>) -> BexVm {
         // Globals are shared as a frozen `Arc<[Value]>` — cloning is a refcount bump.
-        let vm = BexVm::new(
+        BexVm::new(
             Arc::clone(&self.heap),
             VmGlobals::Shared(self.globals.clone()),
             #[cfg(not(target_arch = "wasm32"))]
@@ -3495,23 +3513,9 @@ impl BexEngine {
             Arc::clone(&self.error_class_ptrs),
             Arc::clone(&self.panic_class_ptrs),
             Arc::clone(&self.stdlib_heads),
-            match inherited.and_then(|state| state.ancestry.as_ref()) {
-                Some(ancestry) => {
-                    EngineTelemetry::new_child(self.telemetry.as_ref(), Some(ancestry))
-                }
-                None => EngineTelemetry::new_root(self.telemetry.as_ref()),
-            },
+            telemetry,
             self.trace_scope,
-        );
-        // BEP-034: wrap the root VM in a `BexThread` from the outset so the
-        // permit's `RootHaver` is the thread (delegating to the inner VM).
-        // Spawned children build their own `BexThread`s in `spawn_thread`.
-        let mut vm = vm;
-        vm.set_root_context(self.launch_context.clone());
-        vm.thread_id = self.next_bex_thread_id().0;
-        let root_thread = BexThread::new_root(vm, TaskCancel::root(cancel));
-        let inactive = self.heap_permit_manager.new_permit(root_thread).await;
-        inactive.acquire().await
+        )
     }
 
     /// Bind a generic call's type variables from the concrete types of its
@@ -3817,6 +3821,7 @@ impl BexEngine {
             deadline_ns: _,
             deadline,
             bound_runtime: _,
+            peer,
 
             type_args,
         } = call_ctx;
@@ -4108,7 +4113,7 @@ impl BexEngine {
         for (idx, arg) in args.iter().enumerate() {
             landed.push(match arg {
                 BexCallArg::Provided(value) => Some(
-                    self.hydrate(&mut thread, value, ValueOrigin::Host)
+                    self.hydrate_from(peer, &mut thread, value)
                         .map_err(|refusal| callable_argument_refused(idx, &refusal))?,
                 ),
                 BexCallArg::OmittedDefault => None,
@@ -4350,7 +4355,7 @@ impl BexEngine {
             let token_ty = bex_vm_types::RealizedTy::Class(class, Box::new([]));
             for token in tokens {
                 let value = self
-                    .hydrate_into(thread, token, &token_ty, ValueOrigin::Host)
+                    .hydrate_host_value_into(thread, token, &token_ty)
                     .map_err(|refusal| EngineError::TypeMismatch {
                         message: format!(
                             "cancel token must be a generated {CANCEL_TOKEN_CLASS}: {refusal}"
@@ -4838,7 +4843,9 @@ impl BexEngine {
             })
             .collect();
         for (instance, cleanup) in pending {
-            let ctx = FunctionCallContextBuilder::new(sys_types::CallId::next()).build();
+            let ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
+                .for_runtime()
+                .build();
             // The finalizer is called as the function it is: the collector
             // read it off the instance's class, so no name is resolved — a
             // class no host name reaches is finalized like any other.
@@ -5005,20 +5012,22 @@ impl BexEngine {
         thread.escaped_outcome = Some(thread.vm.telemetry_outcome_for_exception(value));
         // A panic escaping all in-BAML catches to the host is an
         // engine-level failure mode, not a value the function opted into
-        // via `throws` — so it must bypass the declared-throws re-typing and
-        // route through `vm_value_to_owned` (the same branch used when there
-        // is no `throws` clause). Re-typing it against a 2+-member throws
-        // union would call `find_matching_member`, which never matches a
-        // `baml.panics.*` instance and would surface an internal
-        // `TypeMismatch` leak instead of the clean panic. This mirrors the
-        // panic bypass in `land_host_throw`.
+        // via `throws` — so it crosses at `unknown`, as a value thrown by a
+        // function with no `throws` clause does. Re-typing it against a
+        // 2+-member throws union would select no member: no `baml.panics.*`
+        // instance is one.
         let value_is_panic = thread.vm.is_panic(value);
         let external = match throws_type {
             Some(held) if !value_is_panic => {
                 let ty = self.release_ty(thread.proof(), held.clone())?;
                 self.convert_vm_value_to_external_with_type(value, &ty, &thread.vm, thread.proof())?
             }
-            _ => self.vm_value_to_owned(thread.proof(), value),
+            _ => self.convert_vm_value_to_external_with_type(
+                value,
+                &bex_vm_types::RealizedTy::Unknown,
+                &thread.vm,
+                thread.proof(),
+            )?,
         };
         // `baml.panics.Exit { code }` escaping all handlers is the clean-
         // termination path — surface as Exit so the host maps it to a
@@ -5073,7 +5082,7 @@ impl BexEngine {
         };
         match outcome {
             bex_external_types::HostOutcome::Thrown(thrown) => {
-                let landed = match self.hydrate(thread, &thrown, ValueOrigin::Host) {
+                let landed = match self.hydrate_host_value(thread, &thrown) {
                     Ok(landed) => landed,
                     Err(refusal) => return violation(thread, refusal.to_string(), None, None),
                 };
@@ -5145,7 +5154,7 @@ impl BexEngine {
             ),
             sys_types::OpErrorPayload::Engine(thrown) => {
                 let landed = self
-                    .hydrate(thread, &thrown, ValueOrigin::Runtime)
+                    .land_op_result(thread, &thrown)
                     .map_err(|refusal| undeclared(refusal.to_string()))?;
                 Self::check_member(thread, landed, declared_throws)
                     .map_err(|refusal| undeclared(refusal.to_string()))?;
@@ -5923,7 +5932,7 @@ impl BexEngine {
                         let bex_args: Vec<BexExternalValue> = if operation
                             == SysOp::BamlHostCallHostValue
                         {
-                            let params = host_call_params(args.first().copied())
+                            let (callee, params) = host_callee(args.first().copied())
                                 .map_err(EngineError::VmInternalError)?;
                             if args.len() != 4 {
                                 return Err(EngineError::VmInternalError(
@@ -5935,12 +5944,8 @@ impl BexEngine {
                                     },
                                 ));
                             }
-                            let host_handle = self.vm_arg_to_bex_value(args[0]);
-                            let host_value = bex_heap::BexValue::from(&host_handle)
-                                .as_owned_with_package_handles(self.heap(), thread.proof())
-                                .map_err(|error| EngineError::Other(error.to_string()))?;
                             vec![
-                                host_value,
+                                BexExternalValue::HostValue(callee),
                                 self.convert_host_call_args_pack(
                                     args[1],
                                     &params,
@@ -6047,29 +6052,22 @@ impl BexEngine {
                             }
                             let cancel_projection = if operation == SysOp::BamlHostCallHostValue {
                                 let state = invocation.cancellation.clone();
-                                let projection = bex_vm::package_baml::alloc_projected_cancel_token(
+                                let token = bex_vm::package_baml::alloc_projected_cancel_token(
                                     &mut thread.vm,
                                     state.own().clone(),
                                     vec![bex_vm_types::cancellation::CancellationSource::Observer(
                                         Arc::new(state),
                                     )],
                                 );
-                                // Export the same generated CancelToken value
-                                // as a normal return, not an untyped heap shell.
-                                // Dispatch adapters must expose its existing
-                                // methods without inventing another token type.
-                                let value = self.vm_arg_to_bex_value(projection);
-                                Some(
-                                    bex_heap::BexValue::from(&value)
-                                        .as_owned_with_package_handles(self.heap(), thread.proof())
-                                        .map_err(|error| {
-                                            EngineError::VmInternalError(
-                                                bex_vm::errors::VmInternalError::BridgeFailure {
-                                                    message: error.to_string(),
-                                                },
-                                            )
-                                        })?,
-                                )
+                                // The token crosses as any `CancelToken` value
+                                // does, by its fields, its state a payload row
+                                // the bridge reads.
+                                Some(self.convert_vm_value_to_external_with_type(
+                                    token,
+                                    &bex_vm_types::RealizedTy::Unknown,
+                                    &thread.vm,
+                                    thread.proof(),
+                                )?)
                             } else {
                                 None
                             };
@@ -6162,17 +6160,14 @@ impl BexEngine {
                                 // parameter. A host callback's return that does
                                 // not inhabit it is a breach of the callback's
                                 // contract; any other op's is a fault of the op.
-                                let origin = if operation == SysOp::BamlHostCallHostValue {
-                                    ValueOrigin::Host
+                                // A host callback's return is a value the
+                                // host built; any other op's, the runtime's.
+                                let landed = if operation == SysOp::BamlHostCallHostValue {
+                                    self.hydrate_host_value_into(thread, &external, &declared_ret)
                                 } else {
-                                    ValueOrigin::Runtime
+                                    self.land_op_result_into(thread, &external, &declared_ret)
                                 };
-                                let landed = match self.hydrate_into(
-                                    thread,
-                                    &external,
-                                    &declared_ret,
-                                    origin,
-                                ) {
+                                let landed = match landed {
                                     Ok(landed) => Ok(landed),
                                     Err(refusal) if operation == SysOp::BamlHostCallHostValue => {
                                         Err(format!(
@@ -7481,6 +7476,7 @@ impl sys_types::VmSpawner for BexEngine {
             args,
             FunctionCallContextBuilder::new(sys_types::CallId::next())
                 .with_cancel_token(cancel)
+                .for_runtime()
                 .build(),
             true,
         )
@@ -7499,6 +7495,7 @@ impl sys_types::VmSpawner for BexEngine {
             args,
             FunctionCallContextBuilder::new(sys_types::CallId::next())
                 .with_cancel_token(cancel)
+                .for_runtime()
                 .build(),
             true,
         )
@@ -7530,6 +7527,7 @@ impl sys_types::VmSpawner for InvocationSpawner {
                 args,
                 FunctionCallContextBuilder::new(sys_types::CallId::next())
                     .with_cancel_token(cancel)
+                    .for_runtime()
                     .with_inherited_state(self.capture.state.clone())
                     .build(),
                 true,
@@ -7551,6 +7549,7 @@ impl sys_types::VmSpawner for InvocationSpawner {
                 args,
                 FunctionCallContextBuilder::new(sys_types::CallId::next())
                     .with_cancel_token(cancel)
+                    .for_runtime()
                     .with_inherited_state(self.capture.state.clone())
                     .build(),
                 true,
@@ -7822,6 +7821,7 @@ mod type_identity_tests {
         let class = thread
             .tlab_mut()
             .alloc(Object::Class(Box::new(bex_vm_types::types::Class {
+                declared_crossing: baml_type::ClassCrossing::Fields,
                 path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("Foo")),
                 fields: Vec::new(),
                 description: None,
@@ -7866,12 +7866,7 @@ mod type_identity_tests {
         );
 
         let landed = engine
-            .hydrate_into(
-                &mut thread,
-                &exported,
-                &bex_vm_types::RealizedTy::Type,
-                crate::hydrate::ValueOrigin::Host,
-            )
+            .hydrate_host_value_into(&mut thread, &exported, &bex_vm_types::RealizedTy::Type)
             .expect("the engine accepts its own reference");
         let Object::Type(landed) = thread.vm.get_object(landed.as_object_ptr().unwrap()) else {
             panic!("a statement lands as a type value")
@@ -7893,12 +7888,7 @@ mod type_identity_tests {
             )),
         );
         let refused = engine
-            .hydrate_into(
-                &mut thread,
-                &labelled,
-                &bex_vm_types::RealizedTy::Type,
-                crate::hydrate::ValueOrigin::Host,
-            )
+            .hydrate_host_value_into(&mut thread, &labelled, &bex_vm_types::RealizedTy::Type)
             .expect_err("a label states no declaration");
         assert!(refused.to_string().contains("by label only"), "{refused}");
     }
@@ -7932,12 +7922,7 @@ mod type_identity_tests {
         );
 
         let landed = engine
-            .hydrate_into(
-                &mut thread,
-                &exported,
-                &bex_vm_types::RealizedTy::Type,
-                crate::hydrate::ValueOrigin::Host,
-            )
+            .hydrate_host_value_into(&mut thread, &exported, &bex_vm_types::RealizedTy::Type)
             .expect("the same engine accepts its own statement");
         let Object::Type(landed) = thread.vm.get_object(landed.as_object_ptr().unwrap()) else {
             panic!("a statement lands as a type value")
@@ -7957,6 +7942,7 @@ mod type_identity_tests {
             source_thread
                 .tlab_mut()
                 .alloc(Object::Class(Box::new(bex_vm_types::types::Class {
+                    declared_crossing: baml_type::ClassCrossing::Fields,
                     path: bex_vm_types::types::LocalName::new(
                         Vec::new(),
                         baml_type::Name::new("Foo"),
@@ -8024,11 +8010,10 @@ mod type_identity_tests {
         }
 
         let refused = other
-            .hydrate_into(
+            .hydrate_host_value_into(
                 &mut other_thread,
                 &exported,
                 &bex_vm_types::RealizedTy::Type,
-                crate::hydrate::ValueOrigin::Host,
             )
             .expect_err("a foreign live reference is refused");
         assert!(

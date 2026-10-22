@@ -453,6 +453,7 @@ fn synthetic_class_with_methods(
     static_methods: Vec<Function>,
 ) -> (Name, Symbol) {
     let class = Class {
+        crossing: baml_sdkgen_types::ClassCrossing::Fields,
         name: name.clone(),
         generic_params: vec![],
         docstring: None,

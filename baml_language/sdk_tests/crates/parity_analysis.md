@@ -2,26 +2,26 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 931. IDs with complete required parity: 190. Required gaps: 5133.
+Distinct exact test IDs: 933. IDs with complete required parity: 191. Required gaps: 5139.
 
-Baseline ratchet: WORSE. Required gaps: 5133 (baseline: 5072). Present declarations: 2491 (baseline: 2481). Newly missing required pairs: 65. Resolved baseline gaps: 4. Weakened requirements: 0.
+Baseline ratchet: WORSE. Required gaps: 5139 (baseline: 5133). Present declarations: 2495 (baseline: 2491). Newly missing required pairs: 6. Resolved baseline gaps: 0. Weakened requirements: 0.
 
 ## Python-baselined parity
 
-Parity is the share of the 448 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
+Parity is the share of the 449 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
 
 | SDK environment | Matching Python test IDs | Parity |
 | --- | ---: | ---: |
-| python_pydantic2 | 448 / 448 | 100.0% |
-| typescript_node | 185 / 448 | 41.3% |
-| typescript_web_chromium | 161 / 448 | 35.9% |
-| typescript_web_cloudflare_workers | 161 / 448 | 35.9% |
-| cpp | 131 / 448 | 29.2% |
-| csharp | 0 / 448 | 0.0% |
-| rust | 230 / 448 | 51.3% |
-| go | 14 / 448 | 3.1% |
-| java | 300 / 448 | 67.0% |
-| swift | 185 / 448 | 41.3% |
+| python_pydantic2 | 449 / 449 | 100.0% |
+| typescript_node | 185 / 449 | 41.2% |
+| typescript_web_chromium | 161 / 449 | 35.9% |
+| typescript_web_cloudflare_workers | 161 / 449 | 35.9% |
+| cpp | 131 / 449 | 29.2% |
+| csharp | 0 / 449 | 0.0% |
+| rust | 230 / 449 | 51.2% |
+| go | 13 / 449 | 2.9% |
+| java | 300 / 449 | 66.8% |
+| swift | 185 / 449 | 41.2% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -435,6 +435,7 @@ Parity is the share of the 448 test IDs declared in `python_pydantic2` that are 
 | function_calls/legacy_controls_rejected | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/live_token_cancels_after_admission | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/main_hello_world_returns_literal | y | - | - | - | y | - | y | - | y | y | all |  |
+| function_calls/main_rejects_mistyped_int_argument | y | y | y | y | - | - | - | - | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | statically typed SDKs cannot pass a mistyped argument |
 | function_calls/main_returns_the_literal_async | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/main_returns_the_literal_sync | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/main_round_trips_a_single_positional_argument | - | y | y | y | - | - | - | - | - | - | all |  |
@@ -585,6 +586,7 @@ Parity is the share of the 448 test IDs declared in `python_pydantic2` that are 
 | function_calls/web_sysops_trampolines_baml_http_fetch_to_global_fetch_and_buffers_the_response | - | - | y | y | - | - | - | - | - | - | python_pydantic2, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, csharp, rust, go, java, swift |  |
 | function_calls/web_sysops_trampolines_baml_http_send_with_method_headers_and_body | - | - | y | y | - | - | - | - | - | - | python_pydantic2, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, csharp, rust, go, java, swift |  |
 | function_calls/zero_timeout_does_not_enter_callback | y | y | y | y | - | - | y | - | y | - | all |  |
+| host_reflect/a_runtime_type_is_one_declaration_and_rejects_serialization | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go |
 | host_reflect/compiled_package_returns_class_graph | y | y | y | y | - | - | - | y | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, go | BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go |
 | host_reflect/generated_class_subclasses_resolve_to_declared_type | y | y | y | y | - | - | - | - | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | Python and TypeScript have generated-class subclass tokens; Go has no subclass construct |
 | host_reflect/host_handles_expose_composition_only | y | y | y | y | - | - | - | y | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, go | BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go |
@@ -592,7 +594,7 @@ Parity is the share of the 448 test IDs declared in `python_pydantic2` that are 
 | host_reflect/reflection_compile_errors_are_typed | y | y | y | y | - | - | - | y | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, go | BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go |
 | host_reflect/runtime_class_definition_preserves_nested_metadata | y | y | y | y | - | - | - | y | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, go | BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go |
 | host_reflect/runtime_enum_definition_decodes_alias | y | y | y | y | - | - | - | y | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, go | BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go |
-| host_reflect/wire_occurrences_are_fresh_and_handles_reject_serialization | y | y | y | y | - | - | - | y | - | - | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, go | BEP-066 host reflection is currently exposed only by Python, TypeScript, and Go |
+| host_reflect/wire_occurrences_are_fresh_and_handles_reject_serialization | - | y | y | y | - | - | - | y | - | - | all |  |
 | integration/baml_closures_execute_host_arguments_structured_returns_and_mutable_captures | - | - | - | - | - | y | - | - | - | - | csharp | C# canonical coverage executes through its native integration harness |
 | integration/basic_calls_executes_sync_and_async | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | integration/cancel_token_any_propagates_native_cancellation | - | - | - | - | - | y | - | - | - | - | csharp | isolates the flaky native cancellation propagation check |
@@ -961,76 +963,10 @@ Parity is the share of the 448 test IDs declared in `python_pydantic2` that are 
 
 ### Newly missing required pairs
 
-- `function_calls/generic_calls_identity_explicit_class_cannot_restate_an_instance` in `cpp`
-- `function_calls/generic_calls_identity_explicit_class_cannot_restate_an_instance` in `csharp`
-- `function_calls/generic_calls_identity_explicit_class_cannot_restate_an_instance` in `go`
-- `function_calls/generic_calls_identity_explicit_class_cannot_restate_an_instance` in `python_pydantic2`
-- `function_calls/generic_calls_identity_explicit_class_cannot_restate_an_instance` in `rust`
-- `function_calls/generic_calls_identity_explicit_class_cannot_restate_an_instance` in `swift`
-- `function_calls/generic_calls_identity_explicit_class_cannot_restate_an_instance` in `typescript_node`
-- `function_calls/generic_calls_identity_explicit_class_cannot_restate_an_instance` in `typescript_web_chromium`
-- `function_calls/generic_calls_identity_explicit_class_cannot_restate_an_instance` in `typescript_web_cloudflare_workers`
-- `function_calls/generic_calls_optional_only_unset_names_its_type_arg` in `cpp`
-- `function_calls/generic_calls_optional_only_unset_names_its_type_arg` in `csharp`
-- `function_calls/generic_calls_optional_only_unset_names_its_type_arg` in `go`
-- `function_calls/generic_calls_optional_only_unset_names_its_type_arg` in `java`
-- `function_calls/generic_calls_optional_only_unset_names_its_type_arg` in `python_pydantic2`
-- `function_calls/generic_calls_optional_only_unset_names_its_type_arg` in `rust`
-- `function_calls/generic_calls_optional_only_unset_names_its_type_arg` in `typescript_node`
-- `function_calls/generic_calls_optional_only_unset_names_its_type_arg` in `typescript_web_chromium`
-- `function_calls/generic_calls_optional_only_unset_names_its_type_arg` in `typescript_web_cloudflare_workers`
-- `function_calls/generic_class_instantiated_at_int` in `cpp`
-- `function_calls/generic_class_instantiated_at_int` in `csharp`
-- `function_calls/generic_class_instantiated_at_int` in `java`
-- `function_calls/generic_class_instantiated_at_int` in `python_pydantic2`
-- `function_calls/generic_class_instantiated_at_int` in `rust`
-- `function_calls/generic_class_instantiated_at_int` in `swift`
-- `function_calls/generic_class_instantiated_at_int` in `typescript_node`
-- `function_calls/generic_class_instantiated_at_int` in `typescript_web_chromium`
-- `function_calls/generic_class_instantiated_at_int` in `typescript_web_cloudflare_workers`
-- `function_calls/generic_class_with_a_json_field_round_trips` in `cpp`
-- `function_calls/generic_class_with_a_json_field_round_trips` in `csharp`
-- `function_calls/generic_class_with_a_json_field_round_trips` in `java`
-- `function_calls/generic_class_with_a_json_field_round_trips` in `python_pydantic2`
-- `function_calls/generic_class_with_a_json_field_round_trips` in `rust`
-- `function_calls/generic_class_with_a_json_field_round_trips` in `swift`
-- `function_calls/generic_class_with_a_json_field_round_trips` in `typescript_node`
-- `function_calls/generic_class_with_a_json_field_round_trips` in `typescript_web_chromium`
-- `function_calls/generic_class_with_a_json_field_round_trips` in `typescript_web_cloudflare_workers`
-- `function_calls/generic_inference_union_concrete_sibling_absorbs_value_binds_never` in `swift`
-- `function_calls/generic_inference_union_concrete_sibling_keeps_the_static_type_arg` in `cpp`
-- `function_calls/generic_inference_union_concrete_sibling_keeps_the_static_type_arg` in `csharp`
-- `function_calls/generic_inference_union_concrete_sibling_keeps_the_static_type_arg` in `go`
-- `function_calls/generic_inference_union_concrete_sibling_keeps_the_static_type_arg` in `java`
-- `function_calls/generic_inference_union_concrete_sibling_keeps_the_static_type_arg` in `python_pydantic2`
-- `function_calls/generic_inference_union_concrete_sibling_keeps_the_static_type_arg` in `rust`
-- `function_calls/generic_inference_union_concrete_sibling_keeps_the_static_type_arg` in `typescript_node`
-- `function_calls/generic_inference_union_concrete_sibling_keeps_the_static_type_arg` in `typescript_web_chromium`
-- `function_calls/generic_inference_union_concrete_sibling_keeps_the_static_type_arg` in `typescript_web_cloudflare_workers`
-- `function_calls/generic_inference_union_null_actual_binds_null` in `swift`
-- `function_calls/generic_inference_union_null_actual_keeps_the_static_type_arg` in `cpp`
-- `function_calls/generic_inference_union_null_actual_keeps_the_static_type_arg` in `csharp`
-- `function_calls/generic_inference_union_null_actual_keeps_the_static_type_arg` in `go`
-- `function_calls/generic_inference_union_null_actual_keeps_the_static_type_arg` in `java`
-- `function_calls/generic_inference_union_null_actual_keeps_the_static_type_arg` in `python_pydantic2`
-- `function_calls/generic_inference_union_null_actual_keeps_the_static_type_arg` in `rust`
-- `function_calls/generic_inference_union_null_actual_keeps_the_static_type_arg` in `typescript_node`
-- `function_calls/generic_inference_union_null_actual_keeps_the_static_type_arg` in `typescript_web_chromium`
-- `function_calls/generic_inference_union_null_actual_keeps_the_static_type_arg` in `typescript_web_cloudflare_workers`
-- `function_calls/returned_function_is_accepted_as_an_argument` in `cpp`
-- `function_calls/returned_function_is_accepted_as_an_argument` in `csharp`
-- `function_calls/returned_function_is_accepted_as_an_argument` in `go`
-- `function_calls/returned_function_is_accepted_as_an_argument` in `java`
-- `function_calls/returned_function_is_accepted_as_an_argument` in `python_pydantic2`
-- `function_calls/returned_function_is_accepted_as_an_argument` in `swift`
-- `function_calls/returned_function_is_accepted_as_an_argument` in `typescript_node`
-- `function_calls/returned_function_is_accepted_as_an_argument` in `typescript_web_chromium`
-- `function_calls/returned_function_is_accepted_as_an_argument` in `typescript_web_cloudflare_workers`
-
-### Resolved baseline gaps
-
-- `function_calls/generic_calls_generic_free_fn_requires_binding` in `swift`
-- `function_calls/generic_calls_one_type_arg_explicit` in `swift`
-- `function_calls/generic_calls_parse_as_explicit` in `swift`
-- `function_calls/generic_calls_two_type_args_explicit` in `swift`
+- `host_reflect/wire_occurrences_are_fresh_and_handles_reject_serialization` in `cpp`
+- `host_reflect/wire_occurrences_are_fresh_and_handles_reject_serialization` in `csharp`
+- `host_reflect/wire_occurrences_are_fresh_and_handles_reject_serialization` in `java`
+- `host_reflect/wire_occurrences_are_fresh_and_handles_reject_serialization` in `python_pydantic2`
+- `host_reflect/wire_occurrences_are_fresh_and_handles_reject_serialization` in `rust`
+- `host_reflect/wire_occurrences_are_fresh_and_handles_reject_serialization` in `swift`
 

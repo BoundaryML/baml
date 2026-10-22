@@ -186,6 +186,7 @@ mod tests {
     fn class(package: &str) -> (SymbolName, Symbol) {
         let name = SymbolName::new(Name::new(package), vec![], Name::new("Thing"));
         let symbol = Symbol::Class(Class {
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             name: name.clone(),
             generic_params: vec![],
             docstring: None,

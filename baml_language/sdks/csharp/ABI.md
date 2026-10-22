@@ -61,6 +61,20 @@ and keeps the kind it first arrived under: a key under two host kinds in one
 request, or under a kind other than the one the engine already holds for it,
 is refused. A host never clones or releases a host key through the handle API.
 
+How an instance of a class crosses is decided once per declaration. A class
+crosses by its fields, a host reads and builds it as plain data, and a field of
+`$rust_type` (a cipher's state, a cancel token, an HTTP body) is an
+`UNTAGGED_RUST_DATA` handle to the engine's own payload, which the host passes
+back as it received it. A standard-library capability whose fields are the
+runtime's internals (`reflect.Package`, `reflect.Session`,
+`reflect.CompileArtifact`), and an instance of any class or enum declared at
+run time, cross instead as an `ADT_RUNTIME_VALUE` handle to the engine's own
+instance, with `ty` naming the class: a host holds it, passes it back as the
+handle it received, and never builds one from fields; a `class_value` naming
+such a class is refused. A handle a host sends lands only a value: a handle to
+a declaration or to a raw package is refused. Media and `ai.Prompt` cross as
+the media and the prompt themselves.
+
 A type names each declaration by its head. A declaration compiled with the
 program is spelled by `name`, its qualified name, and resolved against the
 program's own tables only. A declaration the runtime created (`reflect.Class.new`,

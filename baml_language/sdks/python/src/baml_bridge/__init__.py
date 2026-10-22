@@ -37,7 +37,7 @@ from .errors import (
 )
 from ._stream import BamlStream
 from ._function_spec import BamlFunctionSpec
-from ._runtime_value import BamlRuntimeValue
+from ._runtime_value import BamlOpaque, BamlRuntimeValue
 from .proto import (
     BamlType,
     decode_call_result,
@@ -586,6 +586,7 @@ __all__ = [
     "BamlStream",
     "BamlFunctionSpec",
     "BamlRuntimeValue",
+    "BamlOpaque",
     "FunctionResult",
     "UNSET",
     "BamlCancelledError",

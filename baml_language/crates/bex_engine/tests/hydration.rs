@@ -312,9 +312,8 @@ async fn an_opaque_host_value_is_rust_data() {
 
 #[tokio::test]
 async fn a_class_holding_native_data_cannot_be_built_by_a_host() {
-    // `baml.media.Image` keeps its payload in a `$rust_type` field. A stated
-    // instance may hand back only what the runtime issued; a value of the
-    // host's own there is refused.
+    // `baml.media.Image` keeps its payload in a `$rust_type` field: a host
+    // sends the media itself, never the wrapper by its fields.
     let source = r#"
         function width(x: image) -> int { 1 }
     "#;
@@ -331,8 +330,7 @@ async fn a_class_holding_native_data_cannot_be_built_by_a_host() {
     );
     let message = refusal(call(source, "width", vec![forged]).await);
     assert!(
-        message
-            .contains("holds native runtime data; a host passes back only what the runtime issued"),
+        message.contains("is a media value; send the media itself"),
         "{message}"
     );
 }

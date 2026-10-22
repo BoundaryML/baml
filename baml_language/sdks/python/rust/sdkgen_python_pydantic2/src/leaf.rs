@@ -18,6 +18,7 @@ use indexmap::IndexMap;
 use crate::{
     emit::{
         EmittedSymbol, SortKey,
+        class::PyClassBody,
         function::{PyFunction, SyncAsync},
         method::{MethodKind, PyMethodBinding},
     },
@@ -105,9 +106,17 @@ impl LeafBody {
     }
 
     pub(crate) fn needs_pydantic(&self) -> bool {
-        self.symbols
-            .iter()
-            .any(|(s, _)| matches!(s, EmittedSymbol::Class(_)))
+        self.symbols.iter().any(|(s, _)| {
+            matches!(s, EmittedSymbol::Class(c) if matches!(c.body, PyClassBody::Fields(_)))
+        })
+    }
+
+    /// True when an opaque class here needs the
+    /// `from baml_bridge import BamlOpaque as _BamlOpaque` line.
+    pub(crate) fn needs_baml_opaque(&self) -> bool {
+        self.symbols.iter().any(
+            |(s, _)| matches!(s, EmittedSymbol::Class(c) if matches!(c.body, PyClassBody::Opaque)),
+        )
     }
 
     /// True when this leaf needs the `_define_function` factory import —
@@ -156,7 +165,7 @@ impl LeafBody {
         }
         self.symbols.iter().any(|(s, _)| match s {
             EmittedSymbol::Class(c) => {
-                c.properties.iter().any(|p| ty_uses_rust_type(&p.ty))
+                c.properties().iter().any(|p| ty_uses_rust_type(&p.ty))
                     || c.static_methods.iter().any(|m| {
                         m.required_args.iter().any(|arg| ty_uses_rust_type(&arg.ty))
                             || m.optional_args.iter().any(|arg| ty_uses_rust_type(&arg.ty))
@@ -238,7 +247,7 @@ impl LeafBody {
         for (sym, _) in &self.symbols {
             match sym {
                 EmittedSymbol::Class(c) => {
-                    for prop in &c.properties {
+                    for prop in c.properties() {
                         let base = format!("_{}__{}", c.py_name, prop.name);
                         found.collect(&prop.ty, Host, &base);
                     }
@@ -302,7 +311,7 @@ impl LeafBody {
         for (sym, _) in &self.symbols {
             match sym {
                 EmittedSymbol::Class(c) => {
-                    for prop in &c.properties {
+                    for prop in c.properties() {
                         collect_root_imports(&prop.ty, current, &mut acc, self.names.as_deref());
                     }
                     for m in &c.static_methods {
@@ -369,7 +378,7 @@ impl LeafBody {
         for (sym, _) in &self.symbols {
             match sym {
                 EmittedSymbol::Class(c) => {
-                    for prop in &c.properties {
+                    for prop in c.properties() {
                         collect_root_imports(&prop.ty, current, &mut acc, self.names.as_deref());
                     }
                 }
@@ -398,7 +407,7 @@ impl LeafBody {
         for (sym, _) in &self.symbols {
             match sym {
                 EmittedSymbol::Class(c) => {
-                    for prop in &c.properties {
+                    for prop in c.properties() {
                         collect_root_imports(&prop.ty, current, &mut acc, self.names.as_deref());
                     }
                     for m in &c.static_methods {
@@ -1096,16 +1105,17 @@ fn collect_alias_dependencies(
     }
 }
 
-/// Non-generic: `pydantic.BaseModel`.
-/// Generic: `pydantic.BaseModel, typing.Generic[T, …]`.
-fn render_class_bases(generic_params: &[String]) -> String {
-    if generic_params.is_empty() {
-        "pydantic.BaseModel".to_string()
+/// A class of fields: `pydantic.BaseModel`. An opaque class: `_BamlOpaque`.
+/// Generic: that base, then `typing.Generic[T, …]`.
+fn render_class_bases(c: &crate::emit::class::PyClass) -> String {
+    let base = match c.body {
+        PyClassBody::Fields(_) => "pydantic.BaseModel",
+        PyClassBody::Opaque => "_BamlOpaque",
+    };
+    if c.generic_params.is_empty() {
+        base.to_string()
     } else {
-        format!(
-            "pydantic.BaseModel, typing.Generic[{}]",
-            generic_params.join(", ")
-        )
+        format!("{base}, typing.Generic[{}]", c.generic_params.join(", "))
     }
 }
 
@@ -1156,11 +1166,15 @@ fn is_function_spec_reexport(s: &EmittedSymbol) -> bool {
 {%- if let Some(doc) = docstring %}
     {{ doc }}
 {%- endif %}
+{%- if model %}
     model_config = pydantic.ConfigDict(
         arbitrary_types_allowed=True,
         extra="ignore",
         populate_by_name=True,
     )
+{%- else %}
+    __slots__ = ()
+{%- endif %}
 {%- for prop in properties %}
     {{ prop.name }}: {{ prop.ty_py }}{{ prop.default_expr }}
 {%- endfor %}
@@ -1188,6 +1202,9 @@ fn is_function_spec_reexport(s: &EmittedSymbol) -> bool {
 struct ClassBodyPy {
     py_name: String,
     bases: String,
+    /// A `pydantic.BaseModel` (with its `model_config`), rather than an
+    /// opaque reference (with empty `__slots__`).
+    model: bool,
     /// Pre-rendered `"""…"""` body docstring (class summary plus a
     /// folded `Attributes:` section listing each `///`-documented
     /// field). `None` when neither the class nor any field carries a
@@ -1347,7 +1364,7 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath, names: Option<Rc<PythonName
                 );
             }
             let properties = c
-                .properties
+                .properties()
                 .iter()
                 .map(|prop| ClassPropertyView {
                     name: prop.name.clone(),
@@ -1356,7 +1373,7 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath, names: Option<Rc<PythonName
                 })
                 .collect();
             let attrs: Vec<(String, Option<String>)> = c
-                .properties
+                .properties()
                 .iter()
                 .map(|p| (p.name.clone(), p.docstring.clone()))
                 .collect();
@@ -1368,7 +1385,11 @@ fn render_symbol(s: &EmittedSymbol, leaf: &LeafPath, names: Option<Rc<PythonName
             );
             let mut out = ClassBodyPy {
                 py_name: c.py_name.clone(),
-                bases: render_class_bases(&c.generic_params),
+                bases: render_class_bases(c),
+                model: match c.body {
+                    PyClassBody::Fields(_) => true,
+                    PyClassBody::Opaque => false,
+                },
                 docstring,
                 properties,
                 static_methods: build_method_line_views(
@@ -1803,6 +1824,9 @@ pub(crate) fn render_leaf_body(body: &LeafBody, callable_child_names: &BTreeSet<
     // installed runtime package.
     let needs_pyhandle = body.needs_baml_pyhandle();
     let mut runtime_imports: Vec<(&'static str, &'static str)> = Vec::new();
+    if body.needs_baml_opaque() {
+        runtime_imports.push(("BamlOpaque", "_BamlOpaque"));
+    }
     if needs_pyhandle {
         runtime_imports.push(("BamlPyHandle", "_BamlPyHandle"));
     }
@@ -2253,7 +2277,7 @@ fn render_symbol_pyi(
                 );
             }
             let properties = c
-                .properties
+                .properties()
                 .iter()
                 .map(|prop| ClassPropertyView {
                     name: prop.name.clone(),
@@ -2263,7 +2287,7 @@ fn render_symbol_pyi(
                 .collect();
             let mut out = ClassBodyPyi {
                 py_name: c.py_name.clone(),
-                bases: render_class_bases(&c.generic_params),
+                bases: render_class_bases(c),
                 properties,
                 static_methods: build_method_block_views(&c.static_methods, &class_ctx),
                 instance_methods: build_method_block_views(&c.instance_methods, &class_ctx),
@@ -2696,8 +2720,13 @@ pub(crate) fn render_leaf_body_pyi(
     )
     .unwrap();
 
-    // `_BamlPyHandle` alias mirrors the `.py` import so type checkers
-    // can resolve `$rust_type` field annotations.
+    // `_BamlOpaque` and `_BamlPyHandle` aliases mirror the `.py` imports so
+    // type checkers can resolve opaque bases and `$rust_type` field
+    // annotations.
+    if body.needs_baml_opaque() {
+        out.push('\n');
+        out.push_str("from baml_bridge import BamlOpaque as _BamlOpaque\n");
+    }
     if body.needs_baml_pyhandle() || !body.returned_protocols().is_empty() {
         out.push('\n');
         out.push_str("from baml_bridge import BamlPyHandle as _BamlPyHandle\n");

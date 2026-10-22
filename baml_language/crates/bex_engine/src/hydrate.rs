@@ -24,13 +24,17 @@
 
 use std::collections::HashMap;
 
-use baml_type::normalize;
+use baml_type::{ClassCrossing, normalize};
 use bex_external_types::{BexExternalAdt, BexExternalValue, Handle, HostValueKind, WireHead};
 use bex_heap::{HeapPermit, TlabHolder};
 use bex_vm::BexVm;
 use bex_vm_types::{HeapPtr, Object, RealizedTy, RuntimeTy, Ty, TypeHead, Value};
 
-use crate::{BexEngine, EngineError, conversion::InboundDeclarationKind, thread::BexThread};
+use crate::{
+    BexEngine, EngineError,
+    conversion::{InboundDeclarationKind, Peer},
+    thread::BexThread,
+};
 
 /// A type as a host states it: compiled declarations by name, runtime
 /// declarations by handle.
@@ -146,23 +150,15 @@ fn concrete_ty_name(vm: &BexVm, value: Value) -> Option<String> {
     BexEngine::landed_ty(vm, value).map(|ty| ty.to_string())
 }
 
-/// Who built an external value: a host across the boundary, or the runtime
-/// itself (a sys-op's result). Both are built and checked the same way; what
-/// differs is what each may create. Only the runtime creates native data, so
-/// a host's instance of a class that holds some is refused where the
-/// runtime's own is the data it says.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ValueOrigin {
-    Host,
-    Runtime,
-}
-
 /// One hydration: the heap it builds on, the program it reads, who built the
-/// value, and where in the value it is.
+/// value, and where in the value it is. A host's value and the runtime's own
+/// (a sys-op's result) are built and checked the same way; what differs is
+/// what each may hand over: a host builds plain data only, and hands back
+/// references to values it received.
 struct Hydrator<'a, H: HeapPermit<BexThread>> {
     engine: &'a BexEngine,
     holder: &'a mut H,
-    origin: ValueOrigin,
+    peer: Peer,
     path: Vec<Segment>,
     /// Membership answers for primitive values under slots the algebra has to
     /// decide (a union, a recursive alias): a list of a thousand ints under
@@ -182,14 +178,6 @@ enum SlotMembership {
     PerValue,
     /// The answer per primitive, filled in the first time each is asked.
     ByPrimitive([Option<bool>; bex_vm::Primitive::COUNT]),
-}
-
-/// Does `ty` mention `$rust_type` anywhere? Only the runtime creates values of
-/// it, so no host-built instance has a field of it.
-fn holds_native_data(ty: &RealizedTy) -> bool {
-    let mut found = matches!(ty, RealizedTy::RustType);
-    ty.visit_children(&mut |child| found = found || holds_native_data(child));
-    found
 }
 
 /// Does `ty` mention a literal type anywhere, with recursive aliases
@@ -658,20 +646,30 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                     Ok((field.name.clone(), ty))
                 })
                 .collect::<Result<Vec<(String, RealizedTy)>, Refusal>>()?;
+            // A class that crosses as its own kind of thing is built by the
+            // runtime alone: a host sends that thing, or passes back the
+            // instance it received.
+            let crossing = class.crossing();
+            if self.peer == Peer::Host && !crossing.host_builds() {
+                return Err(self.malformed(match crossing {
+                    ClassCrossing::Media(_) => {
+                        format!("`{}` is a media value; send the media itself", class.name())
+                    }
+                    ClassCrossing::Prompt => format!(
+                        "`{}` is a rendered prompt; send the prompt itself",
+                        class.name()
+                    ),
+                    ClassCrossing::Opaque | ClassCrossing::Stream | ClassCrossing::FunctionSpec => {
+                        format!(
+                            "`{}` is the runtime's own; pass the instance you received",
+                            class.name()
+                        )
+                    }
+                    ClassCrossing::Fields => unreachable!("a host builds a `Fields` class"),
+                }));
+            }
             (class.name().to_string(), declared)
         };
-        // A field of `$rust_type` holds native data only the runtime creates
-        // (a media wrapper's payload, a cipher's state, a cancel token). A
-        // host passes such an instance back as it received it, the field
-        // holding the runtime's own data; a value of the host's own there
-        // would inhabit the field as any `$rust_type` does and reach an
-        // accessor that expects the runtime's data. The one exception is the
-        // host's own error class, whose payload is the host's handle to the
-        // exception it raised: the runtime only carries it back to the host.
-        let host_error_class = self
-            .vm()
-            .error_class_ptr(bex_vm_types::types::ErrorClass::HostCallable);
-        let guards_native_data = self.origin == ValueOrigin::Host && class_ptr != host_error_class;
         if let Some(unknown) = fields
             .keys()
             .find(|key| !declared.iter().any(|(field, _)| field == *key))
@@ -689,15 +687,6 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
                 ))
             })?;
             values.push(self.within(Segment::Field(field.clone()), |this| {
-                if guards_native_data
-                    && holds_native_data(field_ty)
-                    && !this.runtime_issued(sent)?
-                {
-                    return Err(this.malformed(format!(
-                        "field `{field}` of `{declared_name}` holds native runtime data; a host \
-                         passes back only what the runtime issued"
-                    )));
-                }
                 let built = this.value(sent)?;
                 this.member(built, field_ty)?;
                 Ok(built)
@@ -711,44 +700,22 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
         ))
     }
 
-    /// Is `sent` data the runtime issued (its own native data handed back by
-    /// reference, or nothing), as opposed to a value of the host's own? A
-    /// host's opaque value lands as native data too, so the question is asked
-    /// of the external value, before it is built.
-    fn runtime_issued(&self, sent: &BexExternalValue) -> Result<bool, Refusal> {
-        Ok(match sent {
-            BexExternalValue::Null | BexExternalValue::RustData(_) => true,
-            BexExternalValue::Handle(handle) => {
-                let live = self.live(handle)?;
-                live.as_object_ptr()
-                    .is_some_and(|ptr| matches!(self.vm().get_object(ptr), Object::RustData(_)))
-            }
-            BexExternalValue::HostValue(_)
-            | BexExternalValue::HostCallable { .. }
-            | BexExternalValue::Int(_)
-            | BexExternalValue::Bigint(_)
-            | BexExternalValue::Float(_)
-            | BexExternalValue::String(_)
-            | BexExternalValue::Bool(_)
-            | BexExternalValue::Uint8Array(_)
-            | BexExternalValue::Array { .. }
-            | BexExternalValue::Map { .. }
-            | BexExternalValue::Instance { .. }
-            | BexExternalValue::Variant { .. }
-            | BexExternalValue::Union { .. }
-            | BexExternalValue::Adt(_)
-            | BexExternalValue::FunctionRef { .. } => false,
-        })
+    /// The object `handle` refers to on this engine's heap, if it reaches one.
+    fn resolve(&self, handle: &Handle) -> Option<HeapPtr> {
+        self.engine.resolve_handle(self.holder.proof(), handle)
     }
 
-    /// The object a live reference refers to.
+    /// The object a live reference refers to. A host hands back values it
+    /// received, never the runtime's internals (a declaration, a package);
+    /// the runtime's own results may hold either.
     fn live(&self, handle: &Handle) -> Result<Value, Refusal> {
-        self.engine
-            .resolve_handle(self.holder.proof(), handle)
-            .map(Value::object)
-            .ok_or_else(|| {
-                self.malformed("a handle is stale or belongs to a different BAML runtime")
-            })
+        let ptr = self.resolve(handle).ok_or_else(|| {
+            self.malformed("a handle is stale or belongs to a different BAML runtime")
+        })?;
+        if self.peer == Peer::Host && !self.vm().get_object(ptr).is_first_class_value() {
+            return Err(self.malformed("a handle refers to runtime internals, not a value"));
+        }
+        Ok(Value::object(ptr))
     }
 
     /// An instance of the standard library's wrapper class `class` around
@@ -782,19 +749,40 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
 }
 
 impl BexEngine {
-    /// Build an external value on the heap as the value it says it is.
-    /// `origin` is who built the value. The slot the value is bound for plays
-    /// no part; see [`Self::hydrate_into`].
-    pub(crate) fn hydrate(
+    /// Build a value a host sent on the heap as the value it says it is: an
+    /// argument, a callback's outcome, a cancel token. A host builds plain
+    /// data only and hands back references to values it received. The slot
+    /// the value is bound for plays no part; see [`Self::check_member`].
+    pub(crate) fn hydrate_host_value(
         &self,
         holder: &mut impl HeapPermit<BexThread>,
         value: &BexExternalValue,
-        origin: ValueOrigin,
+    ) -> Result<Value, Refusal> {
+        self.hydrate_from(Peer::Host, holder, value)
+    }
+
+    /// Build a runtime operation's result on the heap as the value it says it
+    /// is: the runtime builds instances that hold its own data by their
+    /// fields.
+    pub(crate) fn land_op_result(
+        &self,
+        holder: &mut impl HeapPermit<BexThread>,
+        value: &BexExternalValue,
+    ) -> Result<Value, Refusal> {
+        self.hydrate_from(Peer::Runtime, holder, value)
+    }
+
+    /// The entry point for values `peer` sent: a host's, or the runtime's.
+    pub(crate) fn hydrate_from(
+        &self,
+        peer: Peer,
+        holder: &mut impl HeapPermit<BexThread>,
+        value: &BexExternalValue,
     ) -> Result<Value, Refusal> {
         let mut hydrator = Hydrator {
             engine: self,
             holder,
-            origin,
+            peer,
             path: Vec::new(),
             members: HashMap::new(),
         };
@@ -822,15 +810,27 @@ impl BexEngine {
         }
     }
 
-    /// [`Self::hydrate`], then [`Self::check_member`] against `slot`.
-    pub(crate) fn hydrate_into(
+    /// [`Self::hydrate_host_value`], then [`Self::check_member`] against
+    /// `slot`.
+    pub(crate) fn hydrate_host_value_into(
         &self,
         holder: &mut impl HeapPermit<BexThread>,
         value: &BexExternalValue,
         slot: &RealizedTy,
-        origin: ValueOrigin,
     ) -> Result<Value, Refusal> {
-        let built = self.hydrate(holder, value, origin)?;
+        let built = self.hydrate_host_value(holder, value)?;
+        Self::check_member(holder, built, slot)?;
+        Ok(built)
+    }
+
+    /// [`Self::land_op_result`], then [`Self::check_member`] against `slot`.
+    pub(crate) fn land_op_result_into(
+        &self,
+        holder: &mut impl HeapPermit<BexThread>,
+        value: &BexExternalValue,
+        slot: &RealizedTy,
+    ) -> Result<Value, Refusal> {
+        let built = self.land_op_result(holder, value)?;
         Self::check_member(holder, built, slot)?;
         Ok(built)
     }

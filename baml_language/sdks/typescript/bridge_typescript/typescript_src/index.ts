@@ -36,7 +36,7 @@ export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';
 export { BamlStream } from './stream.js';
 export { BamlFunctionSpec } from './function_spec.js';
 export type { BamlFunctionSpecBuildRequestOptions, BamlFunctionSpecCallOptions } from './function_spec.js';
-export { BamlPrompt, encodeCallArgs, decodeCallResult } from './proto.js';
+export { BamlPrompt, BamlReference, encodeCallArgs, decodeCallResult } from './proto.js';
 export type { BamlPromptCallOptions, BamlPromptMessage } from './proto.js';
 // Codegen support: typemap + placeholder sentinel + free runtime initializer.
 export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap.js';

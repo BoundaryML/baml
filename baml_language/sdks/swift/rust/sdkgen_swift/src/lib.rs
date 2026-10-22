@@ -35,11 +35,13 @@ use std::{
 };
 
 use baml_base::qualified_name::AI_STREAM_STREAM;
-use baml_sdkgen_types::{Class, Name, ParamTy, Symbol, SymbolPool, Ty, TypeAlias};
+use baml_sdkgen_types::{
+    Class, ClassCrossing, ClassProperty, Name, ParamTy, Symbol, SymbolPool, Ty, TypeAlias,
+};
 pub use baml_sdkgen_types::{NamingConvention, OutputType};
 use emit::{
     FnKind, RenderedField, indent_lines, render_callable, render_class, render_enum,
-    render_type_alias, sort_key,
+    render_opaque_class, render_type_alias, sort_key,
 };
 use translate_ty::{TranslateCtx, generic_param_slot, normalize_union, slot_expr, translate_ty};
 
@@ -263,8 +265,7 @@ fn build_translate_ctx(pool: &SymbolPool) -> TranslateCtx {
             match symbol {
                 Symbol::Class(class) => {
                     if supported_classes.contains(&fqn)
-                        && class
-                            .properties
+                        && stored_fields(class)
                             .iter()
                             .any(|p| translate_ty(&p.ty, &ctx).is_none())
                     {
@@ -340,7 +341,7 @@ fn compute_boxed_fields(pool: &SymbolPool, ctx: &TranslateCtx) -> BTreeSet<(Stri
         if !ctx.supported_classes.contains(&fqn) {
             continue;
         }
-        for prop in &class.properties {
+        for prop in stored_fields(class) {
             let mut targets = Vec::new();
             direct_class_targets(&prop.ty, pool, &mut targets);
             targets.retain(|t| ctx.supported_classes.contains(t));
@@ -404,7 +405,7 @@ fn render_supported_class(
         index.map_or_else(|| generic_param_slot(param), emit::class_argument_local)
     };
     let mut fields = Vec::new();
-    for prop in &class.properties {
+    for prop in stored_fields(class) {
         fields.push(RenderedField {
             name: escape_ident(prop.name.as_str()),
             ty: translate_ty(&prop.ty, ctx)?,
@@ -469,7 +470,28 @@ fn render_supported_class(
         }
     }
 
-    Some(render_class(class, key, &fields, &methods))
+    Some(match class.crossing {
+        ClassCrossing::Opaque => render_opaque_class(class, key, &methods),
+        ClassCrossing::Fields
+        | ClassCrossing::Stream
+        | ClassCrossing::FunctionSpec
+        | ClassCrossing::Media(_)
+        | ClassCrossing::Prompt => render_class(class, key, &fields, &methods),
+    })
+}
+
+/// The declared fields the generated Swift type of `class` stores, which
+/// decide whether the class is emitted. An opaque class stores none: it holds
+/// the engine's instance, whose fields are the runtime's own.
+fn stored_fields(class: &Class) -> &[ClassProperty] {
+    match class.crossing {
+        ClassCrossing::Opaque => &[],
+        ClassCrossing::Fields
+        | ClassCrossing::Stream
+        | ClassCrossing::FunctionSpec
+        | ClassCrossing::Media(_)
+        | ClassCrossing::Prompt => &class.properties,
+    }
 }
 
 fn allocate_free_callable_names(pool: &SymbolPool) -> HashMap<String, String> {
@@ -893,6 +915,7 @@ mod tests {
         // Swift spells a literal by its base type; the slot still carries the
         // literal, in a list's element type and in a class's type argument.
         let box_class = Symbol::Class(baml_sdkgen_types::Class {
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             name: user("Box"),
             generic_params: vec!["T".into()],
             docstring: None,
@@ -944,6 +967,101 @@ mod tests {
         assert!(
             emitted
                 .contains("BamlField(\"items\", self.items, as: BamlSlots.list(_bamlArgument0))"),
+            "{emitted}"
+        );
+    }
+
+    #[test]
+    fn opaque_classes_are_engine_handles() {
+        let package = || Name::new("reflect".into(), Vec::new(), "Package".into());
+        let package_ty = || Ty::Class(package(), Box::new([]));
+        let Symbol::Function(current) = function("current", Vec::new(), package_ty()) else {
+            unreachable!("`function` builds a function symbol");
+        };
+        let Symbol::Function(name) = function("name", Vec::new(), string()) else {
+            unreachable!("`function` builds a function symbol");
+        };
+        let class = Symbol::Class(baml_sdkgen_types::Class {
+            crossing: ClassCrossing::Opaque,
+            name: package(),
+            generic_params: Vec::new(),
+            docstring: None,
+            // Not representable in Swift, and the runtime's own either way.
+            properties: vec![baml_sdkgen_types::ClassProperty {
+                name: "_inner".into(),
+                docstring: None,
+                ty: Ty::Unknown,
+            }],
+            static_methods: vec![current],
+            instance_methods: vec![name],
+            origin: origin(),
+        });
+        let pool = SymbolPool::from([
+            (package(), class),
+            (
+                user("reload"),
+                function("reload", vec![("package", package_ty())], package_ty()),
+            ),
+        ]);
+        let emitted = emit(&pool);
+        let opaque = emitted
+            .split_once("public struct Package: ")
+            .and_then(|(_, rest)| rest.split_once("\n\t\t}\n\t}\n"))
+            .map(|(body, _)| body)
+            .unwrap_or_else(|| panic!("`reflect.Package` is emitted\n{emitted}"));
+        assert!(
+            opaque
+                .starts_with("Equatable, Sendable, BamlTyped, BamlLeafEncodable, BamlDecodable {"),
+            "{opaque}"
+        );
+        // The handle is the whole value: no field, no public initializer.
+        assert!(
+            opaque.contains("private let _bamlHandle: BamlHandle"),
+            "{opaque}"
+        );
+        assert!(!opaque.contains("_inner"), "{opaque}");
+        assert!(!opaque.contains("public var"), "{opaque}");
+        assert!(!opaque.contains("public nonisolated init"), "{opaque}");
+        assert!(!opaque.contains("public init"), "{opaque}");
+        // It decodes from the handle of an instance of the class, and encodes
+        // as that handle, also as a method's receiver.
+        assert!(
+            opaque.contains(
+                "Self(_bamlHandle: try BamlHandle._bamlDecodeOpaque(v, of: \"reflect.Package\"))"
+            ),
+            "{opaque}"
+        );
+        assert!(
+            opaque.contains("_bamlHandle._bamlEncode(as: ._leaf(slot.type))"),
+            "{opaque}"
+        );
+        assert!(
+            opaque.contains("._leaf(.classType(\"reflect.Package\"))"),
+            "{opaque}"
+        );
+        assert!(
+            emitted.contains(
+                "callSync(\"reflect.Package.name\", args: [BamlArgument(\"self\", self, as: BamlSlot<Self>.own)]"
+            ),
+            "{emitted}"
+        );
+        assert!(
+            emitted.contains(
+                "public static func current(baml: Baml.BamlOptions = .init()) throws -> Baml.vendor.reflect.Package"
+            ),
+            "{emitted}"
+        );
+        // Typed positions elsewhere use it like any class.
+        assert!(
+            emitted.contains(
+                "public static func reload(package: Baml.vendor.reflect.Package, baml: Baml.BamlOptions = .init()) throws -> Baml.vendor.reflect.Package"
+            ),
+            "{emitted}"
+        );
+        assert!(
+            emitted.contains(
+                "BamlArgument(\"package\", package, as: BamlSlot<Baml.vendor.reflect.Package>.own)"
+            ),
             "{emitted}"
         );
     }

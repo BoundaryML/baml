@@ -40,6 +40,16 @@ impl CapabilityHandle {
         expected: wire::BamlHandleType,
         expected_name: &'static str,
     ) -> Result<Arc<Self>, DecodeError> {
+        Self::live_handle(value, expected, expected_name).map(|handle| Self::own(&handle, expected))
+    }
+
+    /// The live handle of kind `expected` that `value` carries, not yet
+    /// owned: a caller checks what else it needs before taking ownership.
+    fn live_handle(
+        value: wire::BamlOutboundValue,
+        expected: wire::BamlHandleType,
+        expected_name: &'static str,
+    ) -> Result<wire::BamlOutboundHandle, DecodeError> {
         let value = crate::decode::unwrap(value);
         let got = crate::baml_value::wire_variant_kind(&value);
         let Some(Out::HandleValue(handle)) = value.value else {
@@ -54,12 +64,18 @@ impl CapabilityHandle {
                 got: "handle",
             });
         }
-        Ok(Arc::new(Self {
+        Ok(handle)
+    }
+
+    /// Take ownership of a handle [`Self::live_handle`] accepted as `kind`.
+    fn own(handle: &wire::BamlOutboundHandle, kind: wire::BamlHandleType) -> Arc<Self> {
+        debug_assert_eq!(handle.handle_type, kind as i32);
+        Arc::new(Self {
             key: handle.key,
-            handle_type: expected,
+            handle_type: kind,
             #[cfg(test)]
             release: None,
-        }))
+        })
     }
 
     fn to_baml(&self) -> wire::InboundValue {
@@ -75,6 +91,80 @@ impl CapabilityHandle {
                 handle_type: self.handle_type as i32,
             })),
         }
+    }
+}
+
+/// The engine's own instance of a class that crosses by reference
+/// (`reflect.Package`, `reflect.Session`, `reflect.CompileArtifact`): the
+/// private state of the generated wrapper for such a class. It arrives as an
+/// `ADT_RUNTIME_VALUE` handle whose type names the class, goes back as that
+/// handle, and is owned once and shared by clones. Two instances are equal
+/// when they hold the same key.
+#[doc(hidden)]
+#[derive(Clone)]
+pub struct RuntimeInstance(Arc<CapabilityHandle>);
+
+impl RuntimeInstance {
+    const KIND: wire::BamlHandleType = wire::BamlHandleType::AdtRuntimeValue;
+
+    /// Decode the instance of `class` (its FQN) that `value` carries.
+    pub fn decode(
+        value: wire::BamlOutboundValue,
+        class: &'static str,
+    ) -> Result<Self, DecodeError> {
+        use wire::{baml_ty::Ty, baml_ty_class::Head};
+        let handle = CapabilityHandle::live_handle(value, Self::KIND, class)?;
+        // `ADT_RUNTIME_VALUE` also carries run-time-declared class and enum
+        // instances; only the type beside the handle says which class this
+        // one is.
+        match handle.ty.as_ref().and_then(|ty| ty.ty.as_ref()) {
+            Some(Ty::ClassTy(wire::BamlTyClass {
+                head: Some(Head::Name(name)),
+                type_args,
+            })) if type_args.is_empty() => {
+                if name != class {
+                    return Err(DecodeError::FqnMismatch {
+                        expected: class,
+                        got: name.clone(),
+                    });
+                }
+            }
+            _ => {
+                return Err(DecodeError::WrongType {
+                    expected: class,
+                    got: "handle",
+                });
+            }
+        }
+        Ok(Self(CapabilityHandle::own(&handle, Self::KIND)))
+    }
+
+    /// The instance as an inbound value: a fresh clone of its handle.
+    pub fn to_baml(&self) -> wire::InboundValue {
+        self.0.to_baml()
+    }
+}
+
+impl PartialEq for RuntimeInstance {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.key == other.0.key
+    }
+}
+
+impl Eq for RuntimeInstance {}
+
+impl std::hash::Hash for RuntimeInstance {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.key.hash(state);
+    }
+}
+
+impl std::fmt::Debug for RuntimeInstance {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_tuple("RuntimeInstance")
+            .field(&self.0.key)
+            .finish()
     }
 }
 
@@ -793,6 +883,99 @@ mod tests {
         assert_eq!(released.load(Ordering::SeqCst), 0);
         drop(clone);
         assert_eq!(released.load(Ordering::SeqCst), 91);
+    }
+
+    /// An outbound handle of `kind` whose type names the class `head`.
+    fn instance_handle(
+        key: u64,
+        kind: wire::BamlHandleType,
+        head: &str,
+    ) -> wire::BamlOutboundValue {
+        wire::BamlOutboundValue {
+            value: Some(Out::HandleValue(wire::BamlOutboundHandle {
+                key,
+                handle_type: kind as i32,
+                ty: Some(crate::baml_value::internal::class_ty(head, Vec::new())),
+            })),
+        }
+    }
+
+    /// Decode a `reflect.Package` instance whose release this test observes
+    /// instead of the engine.
+    fn decode_package(key: u64) -> Result<RuntimeInstance, DecodeError> {
+        let mut instance = RuntimeInstance::decode(
+            instance_handle(
+                key,
+                wire::BamlHandleType::AdtRuntimeValue,
+                "reflect.Package",
+            ),
+            "reflect.Package",
+        )?;
+        Arc::get_mut(&mut instance.0)
+            .expect("a freshly decoded instance has one owner")
+            .release = Some(Arc::new(|_| {}));
+        Ok(instance)
+    }
+
+    #[test]
+    fn runtime_instances_decode_from_the_handle_naming_their_class() {
+        let package = decode_package(7).unwrap();
+        assert_eq!(package.0.key, 7);
+        assert_eq!(package.0.handle_type, wire::BamlHandleType::AdtRuntimeValue);
+
+        // The kind is shared with run-time-declared instances: the type
+        // beside the handle decides the class.
+        assert_eq!(
+            RuntimeInstance::decode(
+                instance_handle(8, wire::BamlHandleType::AdtRuntimeValue, "reflect.Session"),
+                "reflect.Package",
+            )
+            .unwrap_err(),
+            DecodeError::FqnMismatch {
+                expected: "reflect.Package",
+                got: "reflect.Session".to_string(),
+            }
+        );
+        // Any other handle kind, and the fields of a class value, are not
+        // the instance.
+        assert_eq!(
+            RuntimeInstance::decode(
+                instance_handle(9, wire::BamlHandleType::UntaggedBexHeap, "reflect.Package"),
+                "reflect.Package",
+            )
+            .unwrap_err(),
+            DecodeError::WrongType {
+                expected: "reflect.Package",
+                got: "handle",
+            }
+        );
+        let by_fields = wire::BamlOutboundValue {
+            value: Some(Out::ClassValue(wire::BamlValueClass {
+                name: "reflect.Package".to_string(),
+                type_args: Vec::new(),
+                fields: Vec::new(),
+            })),
+        };
+        assert_eq!(
+            RuntimeInstance::decode(by_fields, "reflect.Package").unwrap_err(),
+            DecodeError::WrongType {
+                expected: "reflect.Package",
+                got: "class",
+            }
+        );
+    }
+
+    #[test]
+    fn runtime_instances_are_equal_by_key() {
+        use std::hash::{BuildHasher, RandomState};
+
+        let package = decode_package(7).unwrap();
+        let clone = package.clone();
+        let other = decode_package(8).unwrap();
+        assert_eq!(package, clone);
+        assert_ne!(package, other);
+        let hasher = RandomState::new();
+        assert_eq!(hasher.hash_one(&package), hasher.hash_one(&clone));
     }
 
     #[test]

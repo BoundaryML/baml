@@ -16,7 +16,7 @@ export { Never, lowerTypeToWireTy } from "./shared/wire_ty.js";
 export { BamlType, reflectType } from "./shared/wire_ty.js";
 export type { BamlClassCtor, BamlInterfaceToken, BamlPrimitiveToken, BamlTypeMetadata, BamlTypeToken } from "./shared/wire_ty.js";
 export { BamlAbortError, BamlCancelledError, BamlClientError, BamlError, BamlInvalidArgumentError, BamlPanic, wrapNativeError } from "./shared/errors.js";
-export { BamlPrompt, decodeCallResult, encodeCallArgs } from "./shared/proto.js";
+export { BamlPrompt, BamlReference, decodeCallResult, encodeCallArgs } from "./shared/proto.js";
 export type { BamlPromptCallOptions, BamlPromptMessage } from "./shared/proto.js";
 
 export function initializeRuntimeFromBlob(bytecode: string | Uint8Array, embeddedBamlToml?: string): void {

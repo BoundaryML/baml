@@ -294,16 +294,19 @@ fn descriptor() -> ProgramDescriptor {
         }],
         classes: vec![
             ClassDescriptor {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: tn("Box"),
                 generic_params: vec![Name::new("T")],
                 fields: vec![field("item", var(0, "T"))],
             },
             ClassDescriptor {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: tn("A"),
                 generic_params: vec![],
                 fields: vec![field("x", Ty::Int)],
             },
             ClassDescriptor {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: tn("B"),
                 generic_params: vec![],
                 fields: vec![
@@ -312,6 +315,7 @@ fn descriptor() -> ProgramDescriptor {
                 ],
             },
             ClassDescriptor {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: tn("OptList"),
                 generic_params: vec![Name::new("T")],
                 fields: vec![field(
@@ -320,6 +324,7 @@ fn descriptor() -> ProgramDescriptor {
                 )],
             },
             ClassDescriptor {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: tn("P2"),
                 generic_params: vec![Name::new("T")],
                 fields: vec![
@@ -328,19 +333,28 @@ fn descriptor() -> ProgramDescriptor {
                 ],
             },
             ClassDescriptor {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: tn("Pair"),
                 generic_params: vec![Name::new("A"), Name::new("B")],
                 fields: vec![field("a", var(0, "A")), field("b", var(1, "B"))],
             },
             ClassDescriptor {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: tn("Holder"),
                 generic_params: vec![],
                 fields: vec![field("f", int_fn())],
             },
             ClassDescriptor {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: tn("Node"),
                 generic_params: vec![],
                 fields: vec![field("c", Ty::TypeAlias(tn("Tree2")))],
+            },
+            ClassDescriptor {
+                crossing: baml_sdkgen_types::ClassCrossing::Opaque,
+                name: tn("Native"),
+                generic_params: vec![],
+                fields: vec![field("label", Ty::String)],
             },
         ],
         enums: vec![EnumDescriptor {
@@ -1622,4 +1636,22 @@ fn a_runtime_declarations_value_is_passed_as_received() {
         ))
         .contains("as a value of a runtime declaration")
     );
+}
+
+/// An opaque class is the engine's: a host passes back the reference it
+/// received and never builds one, by instance or by mapping.
+#[test]
+fn a_by_reference_class_takes_only_a_handle() {
+    let f = Fixture::new();
+    let slot = SlotTy::Class(sh("Native"), Box::new([]));
+    assert!(f.encode_in(Mock::Handle, slot.clone()).is_ok());
+    for built in [
+        inst("Native", vec![("label", Mock::Str("x"))]),
+        Mock::Map(vec![(Mock::Str("label"), Mock::Str("x"))]),
+    ] {
+        assert!(
+            refusal(f.encode_in(built, slot.clone())).contains("built only by BAML"),
+            "a host-built Native is refused"
+        );
+    }
 }

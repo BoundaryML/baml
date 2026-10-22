@@ -6,7 +6,7 @@
  * Build:  cd baml_language/sdks/typescript/bridge_typescript && pnpm build:debug
  */
 import { baml_bridge } from './proto/baml_cffi.js';
-import { HandleKey } from './native.js';
+import { BamlHandle, HandleKey } from './native.js';
 import type { InvocationOptions, InvokeOptions } from './invocation.js';
 import { BamlType } from './wire_ty.js';
 export interface EncodeCallArgsOptions {
@@ -60,6 +60,26 @@ export declare class BamlPrompt {
     private _callSync;
     private _callAsync;
     private static cloneWire;
+}
+/** Only the decoder mints a {@link BamlReference}. */
+declare const REFERENCE_TOKEN: unique symbol;
+/**
+ * An instance of a standard-library class the engine keeps for itself
+ * (`reflect.Package`, `reflect.Session`, …). A host holds it and passes it
+ * back, as receiver or argument, but never reads into it or builds one: the
+ * generated class extends this one with the class's methods alone, and the
+ * decoder makes it from the reference the instance crosses as.
+ *
+ * Each instance owns its reference outright, so two are the same instance
+ * exactly when they are the same object.
+ */
+export declare class BamlReference {
+    private readonly _handle;
+    constructor(token: typeof REFERENCE_TOKEN, handle: BamlHandle);
+    /** Internal: wrap a decoded `ADT_RUNTIME_VALUE` handle. Used by proto decode. */
+    static _fromHandle(handle: BamlHandle): BamlReference;
+    /** Internal: expose the inner handle for inbound encoding. */
+    _toHandle(): BamlHandle;
 }
 /**
  * The control part of a call as `CallFunctionArgs` bytes, with the values the

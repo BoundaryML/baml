@@ -621,8 +621,8 @@ pub enum TimeClass {
 }
 
 /// The stdlib declarations the runtime recognizes structurally — the CSV
-/// cell classes, the JSON media wrappers, the `json` alias, the classes whose
-/// instances it reads by shape, and the live capabilities a host proxies —
+/// cell classes, the JSON media wrappers, the `json` alias and the classes
+/// whose instances it reads by shape —
 /// resolved to heads once from the loaded packages and shared by every VM
 /// the engine spawns, like the error and panic class tables.
 ///
@@ -634,7 +634,6 @@ pub struct StdlibHeads {
     media: Vec<(MediaKind, TypeHead)>,
     json: Option<TypeHead>,
     classes: Vec<(StdlibClass, TypeHead)>,
-    capabilities: Vec<(StdlibCapability, TypeHead)>,
 }
 
 /// A stdlib class the runtime reads by shape: native code knows an
@@ -685,16 +684,6 @@ impl StdlibClass {
     }
 }
 
-/// A live stdlib capability a host reaches through a proxy rather than a
-/// value: an instance stays on the heap behind a handle.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum StdlibCapability {
-    /// `ai.FunctionSpec`.
-    FunctionSpec,
-    /// `ai.stream.Stream`.
-    Stream,
-}
-
 impl StdlibHeads {
     /// Every head by identity, once, at load: the language package by what it
     /// is and the item by its path there; nothing here is ever derived from a
@@ -721,19 +710,6 @@ impl StdlibHeads {
             .into_iter()
             .filter_map(|kind| Some((kind, head(kind.wrapper_class()?)?)))
             .collect();
-        let capabilities = [
-            (
-                StdlibCapability::FunctionSpec,
-                crate::lang_items::AI_FUNCTION_SPEC,
-            ),
-            (
-                StdlibCapability::Stream,
-                crate::lang_items::AI_STREAM_STREAM,
-            ),
-        ]
-        .into_iter()
-        .filter_map(|(capability, item)| Some((capability, head(item)?)))
-        .collect();
         let classes = StdlibClass::ALL
             .into_iter()
             .filter_map(|class| Some((class, head(class.item())?)))
@@ -743,17 +719,7 @@ impl StdlibHeads {
             media,
             json: head(crate::lang_items::BAML_JSON_JSON),
             classes,
-            capabilities,
         }
-    }
-
-    /// Which live stdlib capability the declaration tagged `tag` is, if any:
-    /// the stdlib's own declaration, by identity, never a same-spelled one.
-    pub fn capability(&self, tag: baml_type::typetag::TypeTag) -> Option<StdlibCapability> {
-        self.capabilities
-            .iter()
-            .find(|(_, head)| head.tag() == tag)
-            .map(|(capability, _)| *capability)
     }
 
     /// Which stdlib time class `head` is, if any.

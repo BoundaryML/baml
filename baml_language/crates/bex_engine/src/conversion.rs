@@ -6,7 +6,7 @@
 
 use ::bex_heap::{BexValue, PermitProof};
 use ::bex_vm_types::{HeapPtr, Object, Value, ValueKind, float_order};
-use baml_type::Literal;
+use baml_type::{ClassCrossing, Literal};
 use bex_external_types::{
     BexExternalAdt, BexExternalValue, Handle, UnionMetadata, WireHead, WireTy,
     is_canonical_json_alias, runtime_ty_structurally_equal, selected_arm_equal,
@@ -39,23 +39,14 @@ pub(crate) enum InboundDeclarationKind {
     Enum,
 }
 
-/// The host proxy kind for a live stdlib capability: the class IS the
-/// stdlib's own declaration, by identity. A declaration's display name is
-/// never an identity — a user package spelled `ai`, or a runtime package
-/// compiling the same local spelling under a fresh head, renders the same
-/// name — so nothing here reads one.
-fn trusted_stdlib_capability_kind(
-    stdlib_heads: &bex_vm::package_load::StdlibHeads,
-    class: &bex_vm_types::Class,
-) -> Option<bex_external_types::TaggedHeapHandleKind> {
-    Some(match stdlib_heads.capability(class.type_tag)? {
-        bex_vm::package_load::StdlibCapability::FunctionSpec => {
-            bex_external_types::TaggedHeapHandleKind::FunctionSpec
-        }
-        bex_vm::package_load::StdlibCapability::Stream => {
-            bex_external_types::TaggedHeapHandleKind::Stream
-        }
-    })
+/// Who a call's values cross to and from: a host across the boundary, or the
+/// runtime's own code (a sys-op calling back into BAML: an HTTP server's
+/// handler, a finalizer). What differs is what each may hand the engine; see
+/// the hydrator.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Peer {
+    Host,
+    Runtime,
 }
 
 impl BexEngine {
@@ -513,47 +504,9 @@ impl BexEngine {
             }
 
             Object::Instance(instance) => {
-                // Get class name and fields from the Class object
-                let class_obj = unsafe { instance.class.get() };
-                let Object::Class(class) = class_obj else {
+                let Object::Class(class) = (unsafe { instance.class.get() }) else {
                     panic!("Instance.class should point to a Class object")
                 };
-
-                // Only a *statically compiled* declaration is addressable by
-                // a host: codegen emitted a host type for its FQN, so the
-                // structural form is well-typed on arrival. Every runtime
-                // declaration crosses as an opaque handle instead (BEP-066:
-                // dynamic types never leave the heap). The line is the tag,
-                // not the name: a runtime-compiled package member is
-                // `Declared` and may collide with a static or stdlib name, but
-                // its freshly minted dynamic tag cannot impersonate either.
-                let own_class_type = || {
-                    bex_vm_types::RealizedTy::Class(
-                        bex_vm_types::TypeHead::new(instance.class, class.type_tag),
-                        instance.class_type_args.clone(),
-                    )
-                };
-                if class.type_tag.is_dynamic() {
-                    return Ok(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
-                        kind: bex_external_types::TaggedHeapHandleKind::RuntimeValue,
-                        ty: to_annotation(&own_class_type())?,
-                        heap_handle: self.heap.create_handle(ptr),
-                    }));
-                }
-
-                // Live stdlib capabilities stay on the heap. The trusted kind
-                // selects the host proxy; the wire `ty` is annotation-only.
-                // Method generic substitution must recover the instance's
-                // TypeHead/class_type_args after resolving this handle.
-                let capability_kind = trusted_stdlib_capability_kind(&self.stdlib_heads, class);
-                if let Some(kind) = capability_kind {
-                    return Ok(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
-                        kind,
-                        ty: to_annotation(&own_class_type())?,
-                        heap_handle: self.heap.create_handle(ptr),
-                    }));
-                }
-
                 debug_assert_eq!(
                     class.fields.len(),
                     instance.fields.len(),
@@ -562,80 +515,90 @@ impl BexEngine {
                     class.fields.len(),
                     instance.fields.len(),
                 );
-
-                // Read field types directly from the Class object on the heap
-                let fields: Result<indexmap::IndexMap<String, BexExternalValue>, EngineError> =
-                    class
-                        .fields
-                        .iter()
-                        .zip(instance.fields.iter())
-                        .map(|(class_field, slot)| {
-                            let value = slot.load();
-                            // An instance is fully bound, so its field types are
-                            // realized.
-                            let field_type = class_field
-                                .field_template
-                                .substitute(&instance.class_type_args, vm)
-                                .map_err(|error| {
-                                    EngineError::VmInternalError(
-                                        bex_vm::errors::VmInternalError::TypeSubstitution {
-                                            message: format!(
-                                                "field `{}` of an instance is not realized: {error}",
-                                                class_field.name
-                                            ),
-                                        },
-                                    )
-                                })?;
-                            Ok((
-                                class_field.name.clone(),
-                                self.convert_vm_value_to_external_with_type(
-                                    value,
-                                    &field_type,
-                                    vm,
-                                    permit,
-                                )?,
-                            ))
-                        })
-                        .collect();
-
-                let mut fields = fields?;
-
-                // Rust-backed value wrappers flatten to their canonical ADTs
-                // on the wire. Hosts reconstruct fresh wrapper objects from
-                // these portable payloads; neither media nor a rendered prompt
-                // is a live engine capability.
-                if self
-                    .stdlib_heads
-                    .is_class(bex_vm::package_load::StdlibClass::Prompt, class.type_tag)
-                {
-                    if let Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(arc))) =
-                        fields.shift_remove(bex_external_types::MEDIA_WRAPPER_DATA_FIELD)
-                    {
-                        return Ok(BexExternalValue::Adt(BexExternalAdt::PromptAst(arc)));
+                let ty = || {
+                    to_annotation(&bex_vm_types::RealizedTy::Class(
+                        bex_vm_types::TypeHead::new(instance.class, class.type_tag),
+                        instance.class_type_args.clone(),
+                    ))
+                };
+                match class.crossing() {
+                    ClassCrossing::Fields => Ok(BexExternalValue::Instance {
+                        class_name: class.name().to_string(),
+                        type_args: instance
+                            .class_type_args
+                            .iter()
+                            .map(to_annotation)
+                            .collect::<Result<Vec<_>, _>>()?,
+                        fields: self.instance_fields(instance, class, vm, permit)?,
+                    }),
+                    // An instance no host reads into stays on the heap and
+                    // crosses as a rooted reference: a standard-library
+                    // capability, or an instance of a declaration made at
+                    // run time, which no host has a type for. The engine's
+                    // proxy kinds select the host wrapper; the wire `ty` is
+                    // annotation-only, and method generic substitution
+                    // recovers the instance's head and class type arguments
+                    // after resolving the handle.
+                    ClassCrossing::Opaque => {
+                        Ok(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+                            kind: bex_external_types::TaggedHeapHandleKind::RuntimeValue,
+                            ty: ty()?,
+                            heap_handle: self.heap.create_handle(ptr),
+                        }))
+                    }
+                    ClassCrossing::Stream => {
+                        Ok(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+                            kind: bex_external_types::TaggedHeapHandleKind::Stream,
+                            ty: ty()?,
+                            heap_handle: self.heap.create_handle(ptr),
+                        }))
+                    }
+                    ClassCrossing::FunctionSpec => {
+                        Ok(BexExternalValue::Adt(BexExternalAdt::TaggedHeapHandle {
+                            kind: bex_external_types::TaggedHeapHandleKind::FunctionSpec,
+                            ty: ty()?,
+                            heap_handle: self.heap.create_handle(ptr),
+                        }))
+                    }
+                    // A media value and a rendered prompt cross as the
+                    // payload their wrapper holds; a host builds a fresh
+                    // wrapper around it.
+                    form @ (ClassCrossing::Media(_) | ClassCrossing::Prompt) => {
+                        let payload = class
+                            .fields
+                            .iter()
+                            .position(|field| {
+                                field.name == bex_external_types::MEDIA_WRAPPER_DATA_FIELD
+                            })
+                            .and_then(|slot| instance.fields[slot].load().as_object_ptr())
+                            .and_then(|data| match unsafe { data.get() } {
+                                Object::RustData(arc) => {
+                                    bex_external_types::try_convert_rust_data(arc)
+                                }
+                                _ => None,
+                            });
+                        match (form, payload) {
+                            (
+                                ClassCrossing::Media(kind),
+                                Some(BexExternalValue::Adt(BexExternalAdt::Media(media))),
+                            ) if media.kind == kind => {
+                                Ok(BexExternalValue::Adt(BexExternalAdt::Media(media)))
+                            }
+                            (
+                                ClassCrossing::Prompt,
+                                Some(BexExternalValue::Adt(BexExternalAdt::PromptAst(prompt))),
+                            ) => Ok(BexExternalValue::Adt(BexExternalAdt::PromptAst(prompt))),
+                            _ => Err(EngineError::VmInternalError(
+                                bex_vm::errors::VmInternalError::BridgeFailure {
+                                    message: format!(
+                                        "an instance of `{}` does not hold its payload",
+                                        class.name()
+                                    ),
+                                },
+                            )),
+                        }
                     }
                 }
-
-                if self
-                    .stdlib_heads
-                    .media_kind(bex_vm_types::TypeHead::new(instance.class, class.type_tag))
-                    .is_some()
-                {
-                    if let Some(BexExternalValue::Adt(BexExternalAdt::Media(arc))) =
-                        fields.shift_remove(bex_external_types::MEDIA_WRAPPER_DATA_FIELD)
-                    {
-                        return Ok(BexExternalValue::Adt(BexExternalAdt::Media(arc)));
-                    }
-                }
-
-                Ok(BexExternalValue::Instance {
-                    class_name: class.name().to_string(),
-                    type_args: instance
-                        .class_type_args
-                        .iter()
-                        .map(to_annotation)
-                        .collect::<Result<Vec<_>, _>>()?,
-                    fields,
-                })
             }
 
             Object::Variant(variant) => {
@@ -700,7 +663,11 @@ impl BexEngine {
             Object::Interface(_) => Err(EngineError::CannotConvert {
                 type_name: "interface".to_string(),
             }),
-            Object::Package(_) => Ok(BexExternalValue::Handle(self.heap.create_handle(ptr))),
+            // A compiled package reaches a host only inside the
+            // `reflect.Package` that holds it, which crosses by reference.
+            Object::Package(_) => Err(EngineError::CannotConvert {
+                type_name: "package".to_string(),
+            }),
             Object::ImplRule(_) => Err(EngineError::CannotConvert {
                 type_name: "impl_rule".to_string(),
             }),
@@ -739,6 +706,49 @@ impl BexEngine {
                 type_name: "sentinel".to_string(),
             }),
         }
+    }
+}
+
+impl BexEngine {
+    /// An instance's fields, each at its type under the instance's type
+    /// arguments.
+    fn instance_fields(
+        &self,
+        instance: &bex_vm_types::Instance,
+        class: &bex_vm_types::Class,
+        vm: &BexVm,
+        permit: PermitProof<'_>,
+    ) -> Result<indexmap::IndexMap<String, BexExternalValue>, EngineError> {
+        class
+            .fields
+            .iter()
+            .zip(instance.fields.iter())
+            .map(|(field, slot)| {
+                // An instance is fully bound, so its field types are realized.
+                let field_type = field
+                    .field_template
+                    .substitute(&instance.class_type_args, vm)
+                    .map_err(|error| {
+                        EngineError::VmInternalError(
+                            bex_vm::errors::VmInternalError::TypeSubstitution {
+                                message: format!(
+                                    "field `{}` of an instance is not realized: {error}",
+                                    field.name
+                                ),
+                            },
+                        )
+                    })?;
+                Ok((
+                    field.name.clone(),
+                    self.convert_vm_value_to_external_with_type(
+                        slot.load(),
+                        &field_type,
+                        vm,
+                        permit,
+                    )?,
+                ))
+            })
+            .collect()
     }
 }
 
@@ -2069,6 +2079,7 @@ mod outbound_selection_tests {
             type_tag: baml_type::typetag::TypeTag,
         ) -> bex_vm_types::HeapPtr {
             tlab.alloc(Object::Class(Box::new(Class {
+                declared_crossing: baml_type::ClassCrossing::Fields,
                 path,
                 fields: Vec::new(),
                 description: None,

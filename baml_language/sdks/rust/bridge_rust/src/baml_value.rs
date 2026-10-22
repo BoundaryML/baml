@@ -31,6 +31,7 @@ impl<T: internal::__BamlValuePrivate> BamlValue for T {}
 pub mod internal {
     use std::borrow::Cow;
 
+    pub use crate::spec::RuntimeInstance;
     use crate::{DecodeError, wire};
 
     /// Public only to allow generated SDK to reference it.

@@ -122,6 +122,11 @@ pub enum UnfitKind<F> {
     UntypedCallable { found: F },
     #[error("class {class} has no field `{field}`")]
     UnknownField { class: Head, field: String },
+    /// An instance of a class the engine alone builds (one holding runtime
+    /// data, a capability) is passed back as the reference it was received
+    /// as, never built from fields.
+    #[error("{class} is built only by BAML; pass the instance you received")]
+    ByReference { class: Head },
     #[error("class {class} requires field `{field}`")]
     MissingField { class: Head, field: String },
     #[error("enum {enumeration} has no variant `{variant}`")]
@@ -170,6 +175,7 @@ impl<F> UnfitKind<F> {
             }
             UnfitKind::UntypedCallable { found } => UnfitKind::UntypedCallable { found: f(found) },
             UnfitKind::UnknownField { class, field } => UnfitKind::UnknownField { class, field },
+            UnfitKind::ByReference { class } => UnfitKind::ByReference { class },
             UnfitKind::MissingField { class, field } => UnfitKind::MissingField { class, field },
             UnfitKind::UnknownVariant {
                 enumeration,

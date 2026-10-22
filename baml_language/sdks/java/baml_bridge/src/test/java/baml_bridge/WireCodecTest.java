@@ -1668,6 +1668,54 @@ class WireCodecTest {
         assertEquals(FUNCTION_REF, h.handleType());
     }
 
+    private static final int ADT_RUNTIME_VALUE = 18;
+    private static final String PKG_FQN = "reflect.Package";
+
+    /** An opaque class as the generator emits it: a private constructor bound as the factory. */
+    static final class Pkg extends BamlOpaque {
+        static {
+            TypeRegistry.bindOpaqueFactory(PKG_FQN, Pkg::new);
+        }
+
+        private Pkg(BamlHandle handle) {
+            super(handle);
+        }
+    }
+
+    /** At a position typed as an opaque class, its runtime-value handle decodes into the wrapper. */
+    @Test
+    void decode_opaque_handle_at_typed_position_constructs_wrapper() {
+        TypeRegistry.registerOpaqueClass(PKG_FQN, Pkg.class.getName());
+        byte[] wire = okEnvelope(ovHandle(31L, ADT_RUNTIME_VALUE, tyClass(PKG_FQN)));
+        Pkg pkg = assertInstanceOf(
+                Pkg.class, ProtoReader.decodeOutboundResult(wire, BamlType.classByFqn(PKG_FQN)));
+        assertEquals(31L, pkg.bamlHandle().key());
+        assertEquals(PKG_FQN, BamlType.of(Pkg.class).fqn());
+        // Equality is by handle-table row.
+        Pkg same = assertInstanceOf(
+                Pkg.class, ProtoReader.decodeOutboundResult(wire, BamlType.optional(BamlType.classByFqn(PKG_FQN))));
+        assertEquals(pkg, same);
+        assertEquals(pkg.hashCode(), same.hashCode());
+        Object other = ProtoReader.decodeOutboundResult(
+                okEnvelope(ovHandle(32L, ADT_RUNTIME_VALUE, tyClass(PKG_FQN))),
+                BamlType.classByFqn(PKG_FQN));
+        assertNotEquals(pkg, other);
+        // An open position keeps the bare runtime-value handle.
+        BamlHandle bare = assertInstanceOf(BamlHandle.class, ProtoReader.decodeOutboundResult(wire));
+        assertEquals(ADT_RUNTIME_VALUE, bare.handleType());
+    }
+
+    /** Anything but its runtime-value handle at an opaque class's position is refused. */
+    @Test
+    void decode_opaque_position_refuses_other_values() {
+        TypeRegistry.registerOpaqueClass(PKG_FQN, Pkg.class.getName());
+        assertThrows(BamlError.class, () -> ProtoReader.decodeOutboundResult(
+                okEnvelope(ovInt(1)), BamlType.classByFqn(PKG_FQN)));
+        assertThrows(BamlError.class, () -> ProtoReader.decodeOutboundResult(
+                okEnvelope(ovHandle(33L, ADT_RUNTIME_VALUE, tyClass("reflect.Session"))),
+                BamlType.classByFqn(PKG_FQN)));
+    }
+
     // -- explicit generics: BamlType / BamlTypes tokens ----------------------
     // The runtime substrate for explicit generics. BamlType is a value token;
     // BamlTypes an ordered bag; the encoder threads a bag into

@@ -340,6 +340,12 @@ async fn telemetry_disabled_inside_an_owned_span_does_not_stop_execution() {
             .unwrap()
             .unwrap()
             .path();
+        // BUG: the recorder flushes into this directory every millisecond,
+        // so `remove_dir_all` races a file landing mid-removal and fails
+        // with `ENOTEMPTY` on a loaded machine (seen 2026-10-21 in a full
+        // workspace run; passes in isolation). The breaker should retry the
+        // removal, or stop the recorder's writer before breaking its
+        // directory.
         std::fs::remove_dir_all(&dir).unwrap();
         std::fs::write(&dir, b"not a directory").unwrap();
     });

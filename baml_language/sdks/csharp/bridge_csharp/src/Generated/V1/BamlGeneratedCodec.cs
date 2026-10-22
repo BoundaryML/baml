@@ -106,8 +106,32 @@ public readonly partial struct BamlGeneratedCodecContext
         string expectedIdentity,
         ReadOnlySpan<byte> expectedTypeMetadata)
     {
-        RequireHandleType(value, expectedIdentity, expectedTypeMetadata, inbound: true);
+        RequireHandleType(
+            value,
+            expectedIdentity,
+            expectedTypeMetadata,
+            NamedHandleType(expectedIdentity),
+            inbound: true);
         return BamlGeneratedValue.CreateHandle(value);
+    }
+
+    /// <summary>
+    /// Encode an instance of a class that crosses by reference: the engine
+    /// reference it holds.
+    /// </summary>
+    public BamlGeneratedValue Opaque(
+        BamlGeneratedOpaque value,
+        string expectedIdentity,
+        ReadOnlySpan<byte> expectedTypeMetadata)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        RequireHandleType(
+            value.Handle,
+            expectedIdentity,
+            expectedTypeMetadata,
+            BamlHandleType.AdtRuntimeValue,
+            inbound: true);
+        return BamlGeneratedValue.CreateHandle(value.Handle);
     }
 
     public BamlGeneratedValue Handle(
@@ -420,8 +444,32 @@ public readonly partial struct BamlGeneratedCodecContext
         ReadOnlySpan<byte> expectedTypeMetadata)
     {
         global::Baml.BamlHandle handle = Require(value).ReadHandle();
-        RequireHandleType(handle, expectedIdentity, expectedTypeMetadata, inbound: false);
+        RequireHandleType(
+            handle,
+            expectedIdentity,
+            expectedTypeMetadata,
+            NamedHandleType(expectedIdentity),
+            inbound: false);
         return handle;
+    }
+
+    /// <summary>
+    /// Decode an instance of a class that crosses by reference: the engine
+    /// reference the bridge returned for it.
+    /// </summary>
+    public BamlGeneratedOpaque ReadOpaque(
+        BamlGeneratedValue value,
+        string expectedIdentity,
+        ReadOnlySpan<byte> expectedTypeMetadata)
+    {
+        global::Baml.BamlHandle handle = Require(value).ReadHandle();
+        RequireHandleType(
+            handle,
+            expectedIdentity,
+            expectedTypeMetadata,
+            BamlHandleType.AdtRuntimeValue,
+            inbound: false);
+        return new BamlGeneratedOpaque(handle);
     }
 
     public global::Baml.BamlHandle ReadHandle(
@@ -579,10 +627,19 @@ public readonly partial struct BamlGeneratedCodecContext
             .AsReadOnly();
     }
 
+    private static BamlHandleType NamedHandleType(string expectedIdentity) =>
+        expectedIdentity switch
+        {
+            "baml.llm.PromptAst" => BamlHandleType.AdtPromptAst,
+            "ai.FunctionSpec" => BamlHandleType.AdtFunctionSpec,
+            _ => BamlHandleType.AdtTaggedHeapHandle,
+        };
+
     private static void RequireHandleType(
         global::Baml.BamlHandle value,
         string expectedIdentity,
         ReadOnlySpan<byte> expectedTypeMetadata,
+        BamlHandleType expectedHandleType,
         bool inbound)
     {
         ArgumentNullException.ThrowIfNull(value);
@@ -599,12 +656,6 @@ public readonly partial struct BamlGeneratedCodecContext
             && StringComparer.Ordinal.Equals(expected.Fqn, expectedIdentity)
             && StringComparer.Ordinal.Equals(value.Type.Fqn, expectedIdentity)
             && value.Type.Arguments.SequenceEqual(expected.Arguments);
-        BamlHandleType expectedHandleType = expectedIdentity switch
-        {
-            "baml.llm.PromptAst" => BamlHandleType.AdtPromptAst,
-            "ai.FunctionSpec" => BamlHandleType.AdtFunctionSpec,
-            _ => BamlHandleType.AdtTaggedHeapHandle,
-        };
         if (descriptorMatches && value.HandleType == expectedHandleType)
         {
             return;
@@ -991,6 +1042,34 @@ public readonly struct BamlGeneratedUnionValue
     public int CaseIndex { get; }
 
     public BamlGeneratedValue Value { get; }
+}
+
+/// <summary>
+/// The engine reference an instance of a class that crosses by reference
+/// holds. Equal to another when it is the same engine reference.
+/// </summary>
+[EditorBrowsable(EditorBrowsableState.Never)]
+public sealed class BamlGeneratedOpaque : IDisposable, IEquatable<BamlGeneratedOpaque>
+{
+    internal BamlGeneratedOpaque(global::Baml.BamlHandle handle)
+    {
+        Handle = handle ?? throw new ArgumentNullException(nameof(handle));
+    }
+
+    internal global::Baml.BamlHandle Handle { get; }
+
+    public bool IsClosed => Handle.IsClosed;
+
+    public BamlGeneratedOpaque Clone() => new(Handle.Clone());
+
+    public void Dispose() => Handle.Dispose();
+
+    public bool Equals(BamlGeneratedOpaque? other) =>
+        other is not null && Handle.Key == other.Handle.Key;
+
+    public override bool Equals(object? obj) => Equals(obj as BamlGeneratedOpaque);
+
+    public override int GetHashCode() => Handle.Key.GetHashCode();
 }
 
 [EditorBrowsable(EditorBrowsableState.Never)]

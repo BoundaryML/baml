@@ -510,6 +510,11 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                 type_args,
                 fields,
             } => match self.facts.class(class) {
+                Some(facts) if !facts.crossing.host_builds() => {
+                    return Err(Failure::unfit(UnfitKind::ByReference {
+                        class: class.clone(),
+                    }));
+                }
                 Some(facts) => {
                     let facts = facts.clone();
                     // The arguments the value knows, or none: the fields decide.
@@ -986,6 +991,13 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
         let Some(facts) = self.facts.class(name) else {
             return Err(Failure::fault(FaultKind::UnknownClass(name.clone())));
         };
+        // A handle was taken as a leaf before this: what reaches here is a
+        // value the host built, which only a `Fields` class admits.
+        if !facts.crossing.host_builds() {
+            return Err(Failure::unfit(UnfitKind::ByReference {
+                class: name.clone(),
+            }));
+        }
         let facts = facts.clone();
         if slot_args.len() != facts.generic_params.len() {
             return Err(Failure::fault(FaultKind::ClassArity {

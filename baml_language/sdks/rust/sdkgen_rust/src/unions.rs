@@ -20,7 +20,10 @@ use std::collections::{BTreeMap, HashSet};
 
 use baml_sdkgen_types::{Symbol, SymbolPool, Ty};
 
-use crate::{analyze::Analysis, routing};
+use crate::{
+    analyze::{Analysis, ClassShape},
+    routing,
+};
 
 /// The synthesized enums for one generation run, keyed by the leaf they
 /// are emitted in (renamed module path) and their null-stripped arms.
@@ -119,7 +122,7 @@ pub(crate) fn collect(pool: &SymbolPool, analysis: &Analysis) -> UnionRegistry {
                 if !analysis.is_emitted(name) {
                     continue;
                 }
-                tys.extend(class.properties.iter().map(|p| &p.ty));
+                tys.extend(ClassShape::of(class).properties().iter().map(|p| &p.ty));
                 // Method signatures surface unions too: the bindings in
                 // the class's `impl` block translate against this same
                 // leaf's registry.

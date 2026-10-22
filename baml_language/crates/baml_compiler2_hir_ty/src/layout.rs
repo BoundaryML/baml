@@ -309,6 +309,18 @@ pub fn class_fields<'db>(
     }
 }
 
+/// How an instance of `class` crosses the host boundary: decided here once
+/// for the engine, the code generators and the host-side walker.
+pub fn class_crossing<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    class: ClassRef<'db>,
+) -> baml_type::ClassCrossing {
+    baml_type::ClassCrossing::of_declaration(
+        baml_compiler2_hir::package::lang_roots(db),
+        &class_head(db, class),
+    )
+}
+
 /// How many slots an instance of `class` has.
 pub fn class_field_count<'db>(db: &'db dyn baml_compiler2_hir::Db, class: ClassRef<'db>) -> usize {
     match class {

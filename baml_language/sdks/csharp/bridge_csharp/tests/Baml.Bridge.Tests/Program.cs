@@ -2713,7 +2713,7 @@ internal static unsafe class Program
                         HandleValue = new BamlOutboundHandle
                         {
                             Key = 802,
-                            HandleType = BamlHandleType.AdtTaggedHeapHandle,
+                            HandleType = BamlHandleType.AdtRuntimeValue,
                             Ty = new BamlTy
                             {
                                 ClassTy = new BamlTyClass { AnonymousLabel = "Widget" },

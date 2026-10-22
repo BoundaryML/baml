@@ -27,7 +27,9 @@ use crate::{Function, Name as TypeName, ParamTy, Symbol, SymbolPool, Ty};
 
 /// Bumped whenever the shape of [`ProgramDescriptor`] changes. A bridge
 /// refuses a descriptor written by a generator at another version.
-pub const DESCRIPTOR_FORMAT_VERSION: u32 = 1;
+///
+/// Version 2: a class carries its `crossing`.
+pub const DESCRIPTOR_FORMAT_VERSION: u32 = 2;
 
 /// Every callable and every declaration a generated SDK can mention.
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
@@ -78,6 +80,8 @@ pub struct ClassDescriptor {
     /// In declaration order. A field's type may mention `generic_params` as
     /// `TypeVar`s; the reader substitutes the instance's arguments.
     pub fields: Vec<FieldDescriptor>,
+    /// How an instance crosses the host boundary.
+    pub crossing: baml_type::ClassCrossing,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
@@ -172,6 +176,7 @@ impl ProgramDescriptor {
                                 ty: property.ty.clone(),
                             })
                             .collect(),
+                        crossing: class.crossing,
                     });
                 }
                 Symbol::Enum(enumeration) => enums.push(EnumDescriptor {
@@ -378,6 +383,7 @@ mod tests {
         pool.insert(
             type_name("Box"),
             Symbol::Class(Class {
+                crossing: crate::ClassCrossing::Fields,
                 name: type_name("Box"),
                 generic_params: vec![BaseName::new("T")],
                 docstring: None,

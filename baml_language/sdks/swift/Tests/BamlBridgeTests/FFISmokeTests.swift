@@ -109,6 +109,34 @@ final class FFISmokeTests: XCTestCase {
         XCTAssertEqual(stream.finalFQN, "ai.stream.Stream.final")
     }
 
+    func testOpaqueInstanceIsARuntimeValueOfItsClass() throws {
+        func outbound(_ fqn: String, _ handleType: BamlBridge_Cffi_V1_BamlHandleType) -> BamlOutboundValue {
+            var classType = BamlBridge_Cffi_V1_BamlTyClass()
+            classType.name = fqn
+            var handle = BamlBridge_Cffi_V1_BamlOutboundHandle()
+            handle.key = 103
+            handle.handleType = handleType
+            handle.ty.classTy = classType
+            var raw = BamlBridge_Cffi_V1_BamlOutboundValue()
+            raw.handleValue = handle
+            return BamlOutboundValue(raw)
+        }
+
+        let package = try BamlHandle._bamlDecodeOpaque(
+            outbound("reflect.Package", .adtRuntimeValue),
+            of: "reflect.Package"
+        )
+        XCTAssertEqual(package.key, 103)
+        XCTAssertThrowsError(try BamlHandle._bamlDecodeOpaque(
+            outbound("reflect.Session", .adtRuntimeValue),
+            of: "reflect.Package"
+        ))
+        XCTAssertThrowsError(try BamlHandle._bamlDecodeOpaque(
+            outbound("reflect.Package", .untaggedBexHeap),
+            of: "reflect.Package"
+        ))
+    }
+
     func testStreamHandleRequiresCarriedClassIdentity() {
         var handle = BamlBridge_Cffi_V1_BamlOutboundHandle()
         handle.key = 102

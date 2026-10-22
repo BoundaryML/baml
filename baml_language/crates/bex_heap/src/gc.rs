@@ -1888,6 +1888,7 @@ mod tests {
         use crate::{HeapDebuggerConfig, heap_debugger::HeapVerifyMode};
 
         let compile_time = vec![Object::Class(Box::new(bex_vm_types::Class {
+            declared_crossing: baml_type::ClassCrossing::Fields,
             path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new("C")),
             fields: vec![bex_vm_types::ClassField {
                 name: "x".to_string(),
@@ -2560,6 +2561,7 @@ mod tests {
             docstring: None,
             other: Default::default(),
             stream_done: false,
+            declared_crossing: baml_type::ClassCrossing::Fields,
             type_tag: baml_type::typetag::TypeTag::from_i64(0),
             cleanup: None,
             methods: indexmap::IndexMap::new(),
@@ -2809,6 +2811,7 @@ mod tests {
             docstring: None,
             other: Default::default(),
             stream_done: false,
+            declared_crossing: baml_type::ClassCrossing::Fields,
             type_tag: baml_type::typetag::TypeTag::from_i64(42),
             cleanup: None,
             methods: indexmap::IndexMap::new(),
@@ -2952,6 +2955,7 @@ mod tests {
             docstring: None,
             other: Default::default(),
             stream_done: false,
+            declared_crossing: baml_type::ClassCrossing::Fields,
             type_tag,
             cleanup: None,
             methods: indexmap::IndexMap::new(),
@@ -3381,6 +3385,7 @@ mod tests {
             docstring: None,
             other: Default::default(),
             stream_done: false,
+            declared_crossing: baml_type::ClassCrossing::Fields,
             type_tag: baml_type::typetag::TypeTag::from_i64(0),
             cleanup: None,
             methods: indexmap::IndexMap::new(),

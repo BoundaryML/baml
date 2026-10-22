@@ -470,19 +470,7 @@ impl<'a> BexValue<'a> {
         // `_permit` is a zero-sized witness that GC exclusion is held; we don't
         // need to thread it through the recursion since the proof only has to
         // exist at the API boundary.
-        owned_inner(self, heap, None, /* lossy */ false)
-    }
-
-    /// Deep-copy values that can stand alone and preserve package objects as
-    /// rooted handles. Package is intentionally the one opaque VM object that
-    /// the host reflection API exposes; its methods must continue to execute
-    /// against the originating heap.
-    pub fn as_owned_with_package_handles(
-        self,
-        heap: &std::sync::Arc<BexHeap>,
-        _permit: PermitProof<'_>,
-    ) -> Result<BexExternalValue, AccessError> {
-        owned_inner(self, heap, Some(heap), /* lossy */ false)
+        owned_inner(self, heap, /* lossy */ false)
     }
 
     /// Like `as_owned_but_very_slow`, but substitutes non-convertible leaves
@@ -498,14 +486,13 @@ impl<'a> BexValue<'a> {
         heap: &BexHeap,
         _permit: PermitProof<'_>,
     ) -> Result<BexExternalValue, AccessError> {
-        owned_inner(self, heap, None, /* lossy */ true)
+        owned_inner(self, heap, /* lossy */ true)
     }
 }
 
 fn owned_inner(
     value: BexValue<'_>,
     heap: &BexHeap,
-    handle_heap: Option<&std::sync::Arc<BexHeap>>,
     lossy: bool,
 ) -> Result<BexExternalValue, AccessError> {
     let unconvertible = |reason: &str| -> Result<BexExternalValue, AccessError> {
@@ -526,7 +513,7 @@ fn owned_inner(
                 let heap_ptr = heap
                     .resolve_handle_ptr(handle.slab_key())
                     .ok_or(AccessError::InvalidHandle { expected: "handle" })?;
-                owned_inner(BexValue::HeapPtr(&heap_ptr), heap, handle_heap, lossy)
+                owned_inner(BexValue::HeapPtr(&heap_ptr), heap, lossy)
             }
             BexExternalValue::FunctionRef { .. } => unconvertible("function"),
             BexExternalValue::Null => Ok(BexExternalValue::Null),
@@ -542,9 +529,7 @@ fn owned_inner(
                 element_type: element_type.clone(),
                 items: items
                     .iter()
-                    .map(|item| {
-                        owned_inner(BexValue::ExternalValue(item), heap, handle_heap, lossy)
-                    })
+                    .map(|item| owned_inner(BexValue::ExternalValue(item), heap, lossy))
                     .collect::<Result<_, _>>()?,
             }),
             BexExternalValue::Map {
@@ -559,7 +544,7 @@ fn owned_inner(
                     .map(|(k, v)| {
                         Ok((
                             k.clone(),
-                            owned_inner(BexValue::ExternalValue(v), heap, handle_heap, lossy)?,
+                            owned_inner(BexValue::ExternalValue(v), heap, lossy)?,
                         ))
                     })
                     .collect::<Result<_, _>>()?,
@@ -576,7 +561,7 @@ fn owned_inner(
                     .map(|(k, v)| {
                         Ok((
                             k.clone(),
-                            owned_inner(BexValue::ExternalValue(v), heap, handle_heap, lossy)?,
+                            owned_inner(BexValue::ExternalValue(v), heap, lossy)?,
                         ))
                     })
                     .collect::<Result<_, _>>()?,
@@ -589,12 +574,7 @@ fn owned_inner(
                 variant_name: variant_name.clone(),
             }),
             BexExternalValue::Union { value, metadata } => Ok(BexExternalValue::Union {
-                value: Box::new(owned_inner(
-                    BexValue::ExternalValue(value),
-                    heap,
-                    handle_heap,
-                    lossy,
-                )?),
+                value: Box::new(owned_inner(BexValue::ExternalValue(value), heap, lossy)?),
                 metadata: metadata.clone(),
             }),
             BexExternalValue::Uint8Array(bytes) => Ok(BexExternalValue::Uint8Array(bytes.clone())),
@@ -621,10 +601,10 @@ fn owned_inner(
         // is an object pointer. The two cases share a single object deep-
         // copy via `convert_object`; scalar-typed `Value`s fall through to
         // a separate `ValueKind` match.
-        BexValue::HeapPtr(ptr) => convert_object(*ptr, heap, handle_heap, lossy),
+        BexValue::HeapPtr(ptr) => convert_object(*ptr, heap, lossy),
         BexValue::Value(v) => {
             if let Some(ptr) = v.as_object_ptr() {
-                convert_object(ptr, heap, handle_heap, lossy)
+                convert_object(ptr, heap, lossy)
             } else {
                 match v.kind() {
                     bex_vm_types::ValueKind::OmittedArg => unconvertible("omitted argument"),
@@ -637,14 +617,13 @@ fn owned_inner(
                 }
             }
         }
-        BexValue::OwnedValue(v) => owned_inner(BexValue::Value(&v), heap, handle_heap, lossy),
+        BexValue::OwnedValue(v) => owned_inner(BexValue::Value(&v), heap, lossy),
     }
 }
 
 fn convert_object(
     heap_ptr: HeapPtr,
     heap: &BexHeap,
-    handle_heap: Option<&std::sync::Arc<BexHeap>>,
     lossy: bool,
 ) -> Result<BexExternalValue, AccessError> {
     let unconvertible = |type_name: &str| -> Result<BexExternalValue, AccessError> {
@@ -662,10 +641,7 @@ fn convert_object(
     match obj {
         Object::Function(..) => unconvertible("function"),
         Object::Interface(..) => unconvertible("interface"),
-        Object::Package(..) => match handle_heap {
-            Some(heap) => Ok(BexExternalValue::Handle(heap.create_handle(heap_ptr))),
-            None => unconvertible("package"),
-        },
+        Object::Package(..) => unconvertible("package"),
         Object::ImplRule(..) => unconvertible("impl_rule"),
         Object::Class(..) => unconvertible("class"),
         Object::Enum(..) => unconvertible("enum"),
@@ -680,7 +656,7 @@ fn convert_object(
             items: array
                 .to_vec()
                 .into_iter()
-                .map(|item| owned_inner(BexValue::OwnedValue(item), heap, handle_heap, lossy))
+                .map(|item| owned_inner(BexValue::OwnedValue(item), heap, lossy))
                 .collect::<Result<_, _>>()?,
         }),
         Object::Map(map) => {
@@ -711,10 +687,7 @@ fn convert_object(
                                 });
                             }
                         };
-                        Ok((
-                            key,
-                            owned_inner(BexValue::OwnedValue(v), heap, handle_heap, lossy)?,
-                        ))
+                        Ok((key, owned_inner(BexValue::OwnedValue(v), heap, lossy)?))
                     })
                     .collect::<Result<_, _>>()?,
             })
@@ -734,7 +707,7 @@ fn convert_object(
                 .map(|(field, slot)| {
                     Ok((
                         field.name.clone(),
-                        owned_inner(BexValue::OwnedValue(slot.load()), heap, handle_heap, lossy)?,
+                        owned_inner(BexValue::OwnedValue(slot.load()), heap, lossy)?,
                     ))
                 })
                 .collect::<Result<_, _>>()?;
@@ -889,7 +862,7 @@ mod tests {
                 data,
             )));
             for lossy in [false, true] {
-                let error = super::convert_object(ptr, &heap, None, lossy).unwrap_err();
+                let error = super::convert_object(ptr, &heap, lossy).unwrap_err();
                 assert!(error.to_string().contains("string keys"), "{error}");
             }
         }
@@ -930,7 +903,7 @@ mod tests {
                         .holder_mut()
                         .tlab
                         .alloc_map(key_ty.clone(), RealizedTy::Int, entries);
-                let owned = super::convert_object(ptr, &heap, None, false).unwrap();
+                let owned = super::convert_object(ptr, &heap, false).unwrap();
                 let BexExternalValue::Map { key_type, .. } = owned else {
                     panic!("expected map");
                 };

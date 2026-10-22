@@ -1014,11 +1014,13 @@ internal static class PrimitiveProtocol
                 path);
         }
 
-        if (wire.HandleType == BamlHandleType.AdtTaggedHeapHandle
-            && wire.Ty?.TyCase == BamlTy.TyOneofCase.ClassTy
-            && wire.Ty.ClassTy.HeadCase == BamlTyClass.HeadOneofCase.AnonymousLabel)
+        if (wire.HandleType == BamlHandleType.AdtRuntimeValue
+            && ((wire.Ty?.TyCase == BamlTy.TyOneofCase.ClassTy
+                    && wire.Ty.ClassTy.HeadCase == BamlTyClass.HeadOneofCase.AnonymousLabel)
+                || (wire.Ty?.TyCase == BamlTy.TyOneofCase.Enum
+                    && wire.Ty.Enum.HeadCase == BamlTyEnum.HeadOneofCase.AnonymousLabel)))
         {
-            // An instance of a runtime declaration: its class has no name, so
+            // An instance of a runtime declaration: its type has no name, so
             // the handle is held by its label and never matches a named type.
             byte[] annotation = wire.Ty.ToByteArray();
             return BamlGeneratedValue.CreateHandle(
@@ -1037,7 +1039,8 @@ internal static class PrimitiveProtocol
             BamlHandleType.UntaggedBexHeap => "baml.internal.HeapValue",
             BamlHandleType.AdtPromptAst => "baml.llm.PromptAst",
             BamlHandleType.AdtFunctionSpec => "ai.FunctionSpec",
-            BamlHandleType.AdtTaggedHeapHandle => TaggedHandleIdentity(wire, path),
+            BamlHandleType.AdtTaggedHeapHandle or BamlHandleType.AdtRuntimeValue =>
+                TaggedHandleIdentity(wire, path),
             _ => throw new BamlProtocolException(
                 "The native bridge returned an unsupported BAML handle.",
                 $"Handle type {wire.HandleType} at {path} has no public managed projection."),
@@ -1048,7 +1051,8 @@ internal static class PrimitiveProtocol
         global::Baml.BamlTypeDescriptor descriptor =
             global::Baml.BamlTypeDescriptor.CreateHandle(fqn);
         if (wire.HandleType is BamlHandleType.AdtTaggedHeapHandle
-            or BamlHandleType.AdtFunctionSpec)
+            or BamlHandleType.AdtFunctionSpec
+            or BamlHandleType.AdtRuntimeValue)
         {
             global::Baml.BamlTypeDescriptor encodedType =
                 global::Baml.BamlTypeDescriptor.FromMetadata(metadata);

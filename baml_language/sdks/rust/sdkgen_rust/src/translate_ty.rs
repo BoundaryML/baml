@@ -335,6 +335,7 @@ mod tests {
 
     fn class(n: &Name, fields: Vec<(&str, Ty)>) -> Symbol {
         Symbol::Class(Class {
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             name: n.clone(),
             generic_params: Vec::new(),
             docstring: None,

@@ -656,6 +656,7 @@ mod tests {
         instance_methods: Vec<Function>,
     ) -> Symbol {
         Symbol::Class(baml_sdkgen_types::Class {
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             name: n.clone(),
             generic_params: Vec::new(),
             docstring: None,
@@ -673,6 +674,7 @@ mod tests {
     /// methods).
     fn generic_class(n: &Name, params: &[&str], properties: Vec<(&str, Ty)>) -> Symbol {
         Symbol::Class(baml_sdkgen_types::Class {
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             name: n.clone(),
             generic_params: params.iter().map(|p| baml_base::Name::new(*p)).collect(),
             docstring: None,
@@ -766,6 +768,7 @@ mod tests {
         let pool = SymbolPool::from([(
             a.clone(),
             Symbol::Class(baml_sdkgen_types::Class {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: a,
                 generic_params: Vec::new(),
                 docstring: None,
@@ -1593,6 +1596,106 @@ mod tests {
             lib.contains("/// Arguments are passed to the BAML runtime by value:"),
             "{lib}"
         );
+    }
+
+    /// A `reflect.Package`-shaped pool under `crossing`: the declared
+    /// `_inner: unknown` field, a static factory, an instance method, and a
+    /// user function taking and returning the class.
+    fn package_pool(crossing: baml_sdkgen_types::ClassCrossing) -> SymbolPool {
+        let package = name("reflect", &[], "Package");
+        let package_ty = Ty::Class(package.clone(), Box::new([]));
+        let mut current = nullary_string_fn(&name("reflect", &[], "current"));
+        current.return_type = package_ty.clone();
+        let diagnostics = nullary_string_fn(&name("reflect", &[], "diagnostics"));
+        let Symbol::Class(class) = class_symbol(
+            &package,
+            vec![baml_sdkgen_types::ClassProperty {
+                name: baml_base::Name::new("_inner"),
+                docstring: None,
+                ty: Ty::Unknown,
+            }],
+            vec![current],
+            vec![diagnostics],
+        ) else {
+            unreachable!("class_symbol builds a class")
+        };
+        let rt = name("user", &[], "rt");
+        SymbolPool::from([
+            (
+                package,
+                Symbol::Class(baml_sdkgen_types::Class { crossing, ..class }),
+            ),
+            (
+                rt.clone(),
+                Symbol::Function(unary_fn(&rt, package_ty.clone(), package_ty)),
+            ),
+        ])
+    }
+
+    #[test]
+    fn opaque_classes_emit_a_handle_wrapper_without_fields() {
+        let generated = to_source_code_with_bytecode(
+            &package_pool(baml_sdkgen_types::ClassCrossing::Opaque),
+            &[],
+            &options(),
+        );
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let reflect = text(&generated, "src/reflect/mod.rs");
+        let flat_reflect = flat(reflect);
+        // A private engine handle: no public constructor, no fields (the
+        // declared `_inner` is the runtime's own).
+        assert!(
+            flat_reflect.contains(
+                "#[derive(Debug,Clone,PartialEq,Eq,Hash)]pubstructPackage(::baml_bridge::baml_value::internal::RuntimeInstance);"
+            ),
+            "{reflect}"
+        );
+        assert!(!reflect.contains("_inner"), "{reflect}");
+        // Decodes the `ADT_RUNTIME_VALUE` handle naming the class, encodes
+        // as the handle.
+        assert!(
+            flat_reflect.contains(
+                r#"::baml_bridge::baml_value::internal::RuntimeInstance::decode(v,"reflect.Package","#
+            ),
+            "{reflect}"
+        );
+        assert!(
+            flat_reflect
+                .contains("fnto_baml(&self)->::baml_bridge::wire::InboundValue{self.0.to_baml()}"),
+            "{reflect}"
+        );
+        assert!(!reflect.contains("encode::class"), "{reflect}");
+        assert!(!reflect.contains("ClassFields"), "{reflect}");
+        // Methods bind as on any class; the receiver is sent as the handle.
+        assert!(flat_reflect.contains("pubfncurrent()"), "{reflect}");
+        assert!(flat_reflect.contains("pubfndiagnostics(&self"), "{reflect}");
+        assert!(flat_reflect.contains("to_baml(self)"), "{reflect}");
+        // A typed position names the wrapper.
+        let lib = flat(text(&generated, "src/lib.rs"));
+        assert!(lib.contains("u:crate::reflect::Package"), "{lib}");
+    }
+
+    /// Negative control: the same declaration crossing by its fields keeps
+    /// the field-by-field shape, so the crossing alone selects the opaque
+    /// one (here its `unknown` field is unrepresentable, which skips it).
+    #[test]
+    fn the_crossing_selects_the_opaque_shape() {
+        let generated = to_source_code_with_bytecode(
+            &package_pool(baml_sdkgen_types::ClassCrossing::Fields),
+            &[],
+            &options(),
+        );
+        assert!(
+            generated
+                .warnings
+                .iter()
+                .any(|warning| warning.fqn == "reflect.Package"
+                    && warning.reason.contains("field `_inner`")),
+            "{:?}",
+            generated.warnings
+        );
+        let reflect = text(&generated, "src/reflect/mod.rs");
+        assert!(!reflect.contains("RuntimeInstance"), "{reflect}");
     }
 
     #[test]

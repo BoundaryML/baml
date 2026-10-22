@@ -21,7 +21,7 @@ use std::{
 };
 
 use baml_base::qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_STREAM};
-use baml_sdkgen_types::FunctionArgumentDefault;
+use baml_sdkgen_types::{ClassCrossing, FunctionArgumentDefault};
 
 use crate::{
     emit::{
@@ -202,6 +202,9 @@ struct RenderState {
     uses_baml_type: bool,
     /// Set when a BAML `type` appears in a public signature.
     uses_baml_type_handle: bool,
+    /// Set when the leaf declares a class the engine keeps for itself, which
+    /// extends the runtime's `BamlReference`.
+    uses_baml_reference: bool,
 }
 
 impl RenderState {
@@ -607,6 +610,12 @@ fn write_preamble_ts(
             "import type {{ BamlHandle as _BamlHandle }} from \"{runtime_package}\";"
         );
     }
+    if state.uses_baml_reference {
+        let _ = writeln!(
+            out,
+            "import {{ BamlReference as _BamlReference }} from \"{runtime_package}\";"
+        );
+    }
     if is_root {
         out.push_str(&runtime_import_line(
             state,
@@ -641,13 +650,20 @@ fn render_symbol_ts(
     runtime_package: &str,
 ) {
     match sym {
-        EmittedSymbol::Class(c) => {
-            if let Some(rust_name) = runtime_owned_reexport_name(c) {
-                render_media_reexport_ts(out, &c.name, rust_name, runtime_package);
-            } else {
-                render_class_ts(out, c, ctx, state);
+        EmittedSymbol::Class(c) => match c.crossing {
+            ClassCrossing::Opaque => render_reference_class_ts(out, c, ctx, state),
+            ClassCrossing::Fields
+            | ClassCrossing::Stream
+            | ClassCrossing::FunctionSpec
+            | ClassCrossing::Media(_)
+            | ClassCrossing::Prompt => {
+                if let Some(rust_name) = runtime_owned_reexport_name(c) {
+                    render_media_reexport_ts(out, &c.name, rust_name, runtime_package);
+                } else {
+                    render_class_ts(out, c, ctx, state);
+                }
             }
-        }
+        },
         EmittedSymbol::Enum(e) => render_enum(out, e),
         EmittedSymbol::TypeAlias(a) => render_type_alias(out, a, ctx, state),
         EmittedSymbol::Function(f) => render_function_ts(
@@ -776,6 +792,33 @@ fn render_class_ts(
         render_method_binding_ts(out, m, &c.generic_params, ctx, state);
     }
 
+    out.push_str("}\n");
+}
+
+/// A class the engine keeps for itself (`reflect.Package`, …): an instance
+/// crosses as a reference to the engine's own, which the runtime's decoder
+/// wraps in this class. So it has no public constructor and no fields (its
+/// declared fields are the runtime's internals), only its methods, which send
+/// the reference as the receiver.
+fn render_reference_class_ts(
+    out: &mut String,
+    c: &TypeScriptClass,
+    ctx: &TranslateCtx,
+    state: &mut RenderState,
+) {
+    // A reference carries no `$types`, so nothing could bind a class
+    // parameter for an instance method.
+    debug_assert!(
+        c.generic_params.is_empty(),
+        "a class that crosses by reference is not generic: {}",
+        c.source
+    );
+    state.uses_baml_reference = true;
+    write_doc_with_raises(out, c.docstring.as_deref(), &[]);
+    let _ = writeln!(out, "export class {} extends _BamlReference {{", c.name);
+    for m in c.static_methods.iter().chain(&c.instance_methods) {
+        render_method_binding_ts(out, m, &[], ctx, state);
+    }
     out.push_str("}\n");
 }
 
@@ -1078,6 +1121,7 @@ mod tests {
             source,
             generic_params: Vec::new(),
             docstring: None,
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             properties: props
                 .into_iter()
                 .map(|(pn, ty)| crate::emit::class::TypeScriptClassProperty {

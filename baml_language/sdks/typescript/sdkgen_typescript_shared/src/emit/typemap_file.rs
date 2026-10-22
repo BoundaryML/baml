@@ -165,6 +165,7 @@ mod tests {
             source,
             generic_params: Vec::new(),
             docstring: None,
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             properties: Vec::new(),
             static_methods: Vec::new(),
             instance_methods: Vec::new(),

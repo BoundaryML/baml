@@ -58,6 +58,9 @@ pub struct ClassFacts {
     /// Field types mention the class's parameters as `TypeVar`s indexed by
     /// position in `generic_params`.
     pub fields: Vec<(String, SlotTy)>,
+    /// How an instance crosses: a host builds only a `Fields` class, and
+    /// passes any other back as the reference it received.
+    pub crossing: baml_type::ClassCrossing,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -124,6 +127,7 @@ impl Facts {
                     name: class.name.clone(),
                     generic_params: class.generic_params.clone(),
                     fields,
+                    crossing: class.crossing,
                 },
             );
         }

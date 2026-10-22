@@ -12,8 +12,8 @@ mod common;
 use baml_bridge::{
     BamlValue, DecodeError, Error, Map,
     baml_value::internal::{
-        __BamlValuePrivate, class_slot_args, class_ty, enum_ty, enum_variant_ty, function_param,
-        function_ty, list_ty, literal_string_ty, literal_ty, union_ty,
+        __BamlValuePrivate, RuntimeInstance, class_slot_args, class_ty, enum_ty, enum_variant_ty,
+        function_param, function_ty, list_ty, literal_string_ty, literal_ty, union_ty,
     },
     decode, encode, runtime, wire,
 };
@@ -86,6 +86,8 @@ function hc_catches(callback: (int) -> string throws baml.errors.HostCallable, x
         _ => "caught:" + e.class_name
     }
 }
+function current_package() -> reflect.Package { reflect.Package.current() }
+function package_has_point(p: reflect.Package) -> bool { p.find_class("Point") != null }
 "#;
 
 fn ensure_runtime() {
@@ -111,6 +113,25 @@ fn call<R: BamlValue>(fqn: &str, kwargs: Vec<(&str, wire::InboundValue)>) -> R {
 // ---------------------------------------------------------------------------
 // Hand-written impls in the exact shape the generator emits.
 // ---------------------------------------------------------------------------
+
+/// A class crossing by reference (`reflect.Package`): the engine's instance
+/// behind a private handle.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct Package(RuntimeInstance);
+
+impl __BamlValuePrivate for Package {
+    fn to_baml(&self) -> wire::InboundValue {
+        self.0.to_baml()
+    }
+
+    fn from_baml(v: wire::BamlOutboundValue) -> Result<Self, DecodeError> {
+        RuntimeInstance::decode(v, "reflect.Package").map(Self)
+    }
+
+    fn baml_ty() -> wire::BamlTy {
+        class_ty("reflect.Package", vec![])
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum Color {
@@ -477,6 +498,31 @@ impl __BamlValuePrivate for DraftOrSent {
 // ---------------------------------------------------------------------------
 // Round trips through the live engine.
 // ---------------------------------------------------------------------------
+
+#[test]
+fn runtime_instances_cross_as_their_handle() {
+    let package: Package = call("user.current_package", vec![]);
+    let clone = package.clone();
+    assert_eq!(package, clone);
+    // Sent back, the handle is the engine's own instance again.
+    let has_point: bool = call("user.package_has_point", vec![("p", package.to_baml())]);
+    assert!(has_point);
+
+    // Built from its fields, it is refused: the instance is the runtime's.
+    let by_fields = encode::class("reflect.Package", vec![], vec![("_inner", 1i64.to_baml())]);
+    let refused = runtime::invoke_sync::<bool, Infallible>(
+        "user.package_has_point",
+        encode::kwargs(vec![("p", Some(by_fields))]),
+        vec![],
+    );
+    let refused = refused.expect_err("a by-fields instance is refused");
+    assert!(
+        refused
+            .to_string()
+            .contains("pass the instance you received"),
+        "{refused}"
+    );
+}
 
 #[test]
 fn round_trips_union_arms() {

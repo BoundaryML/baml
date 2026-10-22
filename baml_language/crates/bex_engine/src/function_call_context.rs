@@ -133,6 +133,9 @@ pub struct FunctionCallContext {
     pub(crate) deadline_ns: Option<u64>,
     pub(crate) deadline: Option<InvocationDeadline>,
     pub(crate) bound_runtime: Option<bex_events::ids::EngineId>,
+    /// Who the call answers to: a host, unless the engine calls back into
+    /// BAML for the runtime's own code.
+    pub(crate) peer: crate::conversion::Peer,
 
     /// Named `TypeVar` bindings for a generic call. Each entry is
     /// `TypeVar name -> concrete type`; insertion order is the callee's De
@@ -158,6 +161,7 @@ pub struct FunctionCallContextBuilder {
     host_environment: u64,
     timeout: Option<std::time::Duration>,
     deadline_ns: Option<u64>,
+    peer: crate::conversion::Peer,
 
     type_args: Option<IndexMap<String, bex_external_types::WireTy>>,
 }
@@ -177,8 +181,18 @@ impl FunctionCallContextBuilder {
             host_environment: 0,
             timeout: None,
             deadline_ns: None,
+            peer: crate::conversion::Peer::Host,
             type_args: None,
         }
+    }
+
+    /// A call the engine makes for the runtime's own code (a sys-op calling
+    /// back into BAML): its arguments are the runtime's values, and its
+    /// result goes back to the runtime by its fields.
+    #[must_use]
+    pub(crate) fn for_runtime(mut self) -> Self {
+        self.peer = crate::conversion::Peer::Runtime;
+        self
     }
 
     #[must_use]
@@ -197,6 +211,7 @@ impl FunctionCallContextBuilder {
             deadline_ns: self.deadline_ns,
             deadline: None,
             bound_runtime: None,
+            peer: self.peer,
 
             type_args: self.type_args.unwrap_or_default(),
         }

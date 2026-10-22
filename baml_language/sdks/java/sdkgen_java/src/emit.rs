@@ -355,6 +355,10 @@ pub(crate) fn render_class(
     ctx: &TranslateCtx<'_>,
     sink: &mut UnionSink,
 ) -> String {
+    debug_assert!(
+        !matches!(class.crossing, baml_sdkgen_types::ClassCrossing::Opaque),
+        "{class_fqn} crosses as an opaque reference, not by its fields"
+    );
     // Field `///` docs fold into the class Javadoc's `Attributes:` section
     // (Python parity — see [`format_rolled_docstring`]); fields carry no
     // per-member Javadoc block.
@@ -489,6 +493,117 @@ pub(crate) fn render_class(
         out.push_str(&render_baml_type_args_readback(&fields));
     }
 
+    out.push_str(&render_method_bindings(class, class_fqn, ctx, sink));
+
+    // Deep value equality. `instanceof` narrowing keeps this correct
+    // for generic classes (erasure makes a parameterized check
+    // impossible anyway).
+    out.push_str(&format!(
+        "\n    @Override\n    public boolean equals(java.lang.Object o) {{\n        if (this == o) {{\n            return true;\n        }}\n        if (!(o instanceof {ident})) {{\n            return false;\n        }}\n        {ident}{wild} other = ({ident}{wild}) o;\n",
+        ident = ident,
+        wild = if class.generic_params.is_empty() {
+            String::new()
+        } else {
+            format!("<{}>", vec!["?"; class.generic_params.len()].join(", "))
+        },
+    ));
+    if fields.is_empty() {
+        out.push_str("        return true;\n");
+    } else {
+        let clauses: Vec<String> = fields
+            .iter()
+            .map(|(f_ident, f_ty)| match field_eq(f_ty) {
+                FieldEq::Primitive => format!("this.{f_ident} == other.{f_ident}"),
+                FieldEq::Double => {
+                    format!("java.lang.Double.compare(this.{f_ident}, other.{f_ident}) == 0")
+                }
+                FieldEq::ByteArray => {
+                    format!("java.util.Arrays.equals(this.{f_ident}, other.{f_ident})")
+                }
+                FieldEq::Reference => {
+                    format!("java.util.Objects.equals(this.{f_ident}, other.{f_ident})")
+                }
+            })
+            .collect();
+        out.push_str(&format!(
+            "        return {};\n",
+            clauses.join("\n            && ")
+        ));
+    }
+    out.push_str("    }\n");
+
+    // hashCode consistent with equals.
+    let hash_members: Vec<String> = fields
+        .iter()
+        .map(|(f_ident, f_ty)| match field_eq(f_ty) {
+            FieldEq::ByteArray => format!("java.util.Arrays.hashCode(this.{f_ident})"),
+            FieldEq::Double => format!("java.lang.Double.hashCode(this.{f_ident})"),
+            _ => format!("this.{f_ident}"),
+        })
+        .collect();
+    out.push_str(&format!(
+        "\n    @Override\n    public int hashCode() {{\n        return java.util.Objects.hash({});\n    }}\n",
+        hash_members.join(", ")
+    ));
+
+    out.push_str("}\n");
+    out
+}
+
+/// The body of a class that crosses as a reference to the engine's own
+/// instance ([`ClassCrossing::Opaque`](baml_sdkgen_types::ClassCrossing)):
+/// a `baml_bridge.BamlOpaque` holding the engine handle, with a private
+/// constructor and no fields (its declared fields are the runtime's
+/// internals). Its static initializer boots the runtime and binds the
+/// constructor as the decoder's factory for `class_fqn`; `baml_bridge`
+/// encodes an instance as its handle and compares two by key. A host gets
+/// one only from the engine and passes it back as it received it.
+pub(crate) fn render_opaque_class(
+    class: &Class,
+    class_fqn: &str,
+    anchor_fqn: &str,
+    ctx: &TranslateCtx<'_>,
+    sink: &mut UnionSink,
+) -> String {
+    debug_assert!(
+        matches!(class.crossing, baml_sdkgen_types::ClassCrossing::Opaque),
+        "{class_fqn} does not cross as an opaque reference"
+    );
+    let mut out = render_javadoc(class.docstring.as_deref(), "");
+    let ident = java_identifier(class.name.name().as_str());
+    let generics = if class.generic_params.is_empty() {
+        String::new()
+    } else {
+        let params: Vec<String> = class
+            .generic_params
+            .iter()
+            .map(|p| java_identifier(p.as_str()))
+            .collect();
+        format!("<{}>", params.join(", "))
+    };
+    out.push_str(&format!(
+        "public final class {ident}{generics} extends baml_bridge.BamlOpaque {{\n    static {{\n        {anchor_fqn}.ensure();\n        baml_bridge.TypeRegistry.bindOpaqueFactory({class_fqn:?}, {ident}::new);\n    }}\n\n    private {ident}(baml_bridge.BamlHandle handle) {{\n        super(handle);\n    }}\n"
+    ));
+    let bindings = render_method_bindings(class, class_fqn, ctx, sink);
+    if !bindings.is_empty() {
+        out.push('\n');
+        out.push_str(&bindings);
+    }
+    out.push_str("}\n");
+    out
+}
+
+/// A class's static and instance method bindings, preceded by the
+/// return-descriptor constants they pool. Static methods (like free
+/// functions) render as `static` bindings; instance methods are non-static
+/// and prepend the receiver (`self` / `this`) to the runtime call. Each
+/// method binds to `<class_fqn>.<method name>`.
+fn render_method_bindings(
+    class: &Class,
+    class_fqn: &str,
+    ctx: &TranslateCtx<'_>,
+    sink: &mut UnionSink,
+) -> String {
     // The declared-callable ident set for this class (static + instance method
     // names) — used to escape a synthetic `_async` sibling that would collide
     // with a user method literally named `{ident}_async`.
@@ -547,61 +662,8 @@ pub(crate) fn render_class(
             sink,
         ));
     }
-    out.push_str(&pool.constants());
+    let mut out = pool.constants();
     out.push_str(&methods);
-
-    // Deep value equality. `instanceof` narrowing keeps this correct
-    // for generic classes (erasure makes a parameterized check
-    // impossible anyway).
-    out.push_str(&format!(
-        "\n    @Override\n    public boolean equals(java.lang.Object o) {{\n        if (this == o) {{\n            return true;\n        }}\n        if (!(o instanceof {ident})) {{\n            return false;\n        }}\n        {ident}{wild} other = ({ident}{wild}) o;\n",
-        ident = ident,
-        wild = if class.generic_params.is_empty() {
-            String::new()
-        } else {
-            format!("<{}>", vec!["?"; class.generic_params.len()].join(", "))
-        },
-    ));
-    if fields.is_empty() {
-        out.push_str("        return true;\n");
-    } else {
-        let clauses: Vec<String> = fields
-            .iter()
-            .map(|(f_ident, f_ty)| match field_eq(f_ty) {
-                FieldEq::Primitive => format!("this.{f_ident} == other.{f_ident}"),
-                FieldEq::Double => {
-                    format!("java.lang.Double.compare(this.{f_ident}, other.{f_ident}) == 0")
-                }
-                FieldEq::ByteArray => {
-                    format!("java.util.Arrays.equals(this.{f_ident}, other.{f_ident})")
-                }
-                FieldEq::Reference => {
-                    format!("java.util.Objects.equals(this.{f_ident}, other.{f_ident})")
-                }
-            })
-            .collect();
-        out.push_str(&format!(
-            "        return {};\n",
-            clauses.join("\n            && ")
-        ));
-    }
-    out.push_str("    }\n");
-
-    // hashCode consistent with equals.
-    let hash_members: Vec<String> = fields
-        .iter()
-        .map(|(f_ident, f_ty)| match field_eq(f_ty) {
-            FieldEq::ByteArray => format!("java.util.Arrays.hashCode(this.{f_ident})"),
-            FieldEq::Double => format!("java.lang.Double.hashCode(this.{f_ident})"),
-            _ => format!("this.{f_ident}"),
-        })
-        .collect();
-    out.push_str(&format!(
-        "\n    @Override\n    public int hashCode() {{\n        return java.util.Objects.hash({});\n    }}\n",
-        hash_members.join(", ")
-    ));
-
-    out.push_str("}\n");
     out
 }
 

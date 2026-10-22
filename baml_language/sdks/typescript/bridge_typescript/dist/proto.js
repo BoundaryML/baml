@@ -104,6 +104,37 @@ export class BamlPrompt {
         return BamlValuePromptAst.decode(BamlValuePromptAst.encode(wire).finish());
     }
 }
+/** Only the decoder mints a {@link BamlReference}. */
+const REFERENCE_TOKEN = Symbol('baml.reference');
+/**
+ * An instance of a standard-library class the engine keeps for itself
+ * (`reflect.Package`, `reflect.Session`, …). A host holds it and passes it
+ * back, as receiver or argument, but never reads into it or builds one: the
+ * generated class extends this one with the class's methods alone, and the
+ * decoder makes it from the reference the instance crosses as.
+ *
+ * Each instance owns its reference outright, so two are the same instance
+ * exactly when they are the same object.
+ */
+export class BamlReference {
+    _handle;
+    // Public only so the class stays a type token (`$types: { T: Package }`):
+    // no caller outside this module can name the token, and a forged one throws.
+    constructor(token, handle) {
+        if (token !== REFERENCE_TOKEN) {
+            throw new TypeError(`${new.target.name} is the runtime's own; pass the instance you received`);
+        }
+        this._handle = handle;
+    }
+    /** Internal: wrap a decoded `ADT_RUNTIME_VALUE` handle. Used by proto decode. */
+    static _fromHandle(handle) {
+        return new this(REFERENCE_TOKEN, handle);
+    }
+    /** Internal: expose the inner handle for inbound encoding. */
+    _toHandle() {
+        return this._handle;
+    }
+}
 function wireMedia(value) {
     const media = value instanceof BamlImage ? 1
         : value instanceof BamlAudio ? 2
@@ -204,7 +235,7 @@ function handleLeaf(handle) {
 function handleOf(value) {
     if (value instanceof BamlHandle)
         return value;
-    if (value instanceof BamlStream || value instanceof BamlFunctionSpec)
+    if (value instanceof BamlStream || value instanceof BamlFunctionSpec || value instanceof BamlReference)
         return value._toHandle();
     if (typeof value === 'function')
         return bamlClosureHandles.get(value);
@@ -502,6 +533,9 @@ function decodeValueHolder(holder, typeMap, ownership) {
             const Cls = typeMap.getClass(fqn);
             return Cls._fromHandle(handle, fqn);
         }
+        if (ht === BamlHandleType.ADT_RUNTIME_VALUE) {
+            return decodeRuntimeValue(handle, holder.handleValue.ty, typeMap);
+        }
         // ADT_MEDIA_GENERIC has no typed wrapper — stays a bare BamlHandle.
         return handle;
     }
@@ -533,6 +567,28 @@ function decodeValueHolder(holder, typeMap, ownership) {
     // Any remaining unset oneof is a legitimate null: an all-default holder is a
     // null BAML result.
     return null;
+}
+/**
+ * An `ADT_RUNTIME_VALUE` handle. An instance of a class the engine keeps for
+ * itself names that class, and becomes its generated wrapper; any other (an
+ * instance of a class declared at run time, or one the typemap does not map)
+ * stays a bare handle.
+ */
+function decodeRuntimeValue(handle, ty, typeMap) {
+    const fqn = ty?.classTy?.name;
+    if (!fqn)
+        return handle;
+    let Cls;
+    try {
+        Cls = typeMap.getClass(fqn);
+    }
+    catch {
+        return handle;
+    }
+    if (typeof Cls === 'function' && Cls.prototype instanceof BamlReference) {
+        return Cls._fromHandle(handle);
+    }
+    throw new BamlError(`a runtime value of the class ${fqn} has no reference wrapper`);
 }
 function decodeBamlClosure(handle, functionTy) {
     const params = functionTy?.params ?? [];

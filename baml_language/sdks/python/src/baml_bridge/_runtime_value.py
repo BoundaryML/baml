@@ -1,4 +1,4 @@
-"""Host proxy for a runtime-created nominal BAML value."""
+"""Host proxies for engine-held nominal BAML values."""
 
 from __future__ import annotations
 
@@ -66,3 +66,49 @@ class BamlRuntimeValue:
 
     def __repr__(self) -> str:
         return "<BamlRuntimeValue>"
+
+
+class BamlOpaque:
+    """An instance of a standard-library class the runtime keeps to itself,
+    such as a compiled `reflect.Package`: a reference to the engine's
+    instance, with no fields to read and no public constructor.
+
+    Pass it back to BAML as you received it. Two references are equal when
+    they hold the same engine handle.
+    """
+
+    __slots__ = ("_handle", "_key")
+
+    def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+        raise TypeError(
+            f"{type(self).__qualname__} is the runtime's own; "
+            "pass the instance you received"
+        )
+
+    @classmethod
+    def _from_wire(cls, handle: BamlPyHandle, key: int) -> Any:
+        """Wrap `handle`, the engine reference keyed `key` on the wire."""
+        instance = object.__new__(cls)
+        instance._handle = handle
+        instance._key = key
+        return instance
+
+    def _to_pyhandle(self) -> BamlPyHandle:
+        return self._handle
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, BamlOpaque):
+            return NotImplemented
+        return self._key == other._key
+
+    def __hash__(self) -> int:
+        return hash(self._key)
+
+    @classmethod
+    def __get_pydantic_core_schema__(cls, _source_type: Any, _handler: Any) -> Any:
+        from pydantic_core import core_schema  # type: ignore[import-untyped]
+
+        return core_schema.is_instance_schema(cls)
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__qualname__}>"

@@ -171,6 +171,7 @@ mod tests {
     #[test]
     fn class_definition_keeps_skipped_fields_flagged() {
         let class = Class {
+            declared_crossing: baml_type::ClassCrossing::Fields,
             path: LocalName::new(Vec::new(), Name::new("Person")),
             fields: vec![
                 field("name", RuntimeTy::String, TyTemplate::String, false),

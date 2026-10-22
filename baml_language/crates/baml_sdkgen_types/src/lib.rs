@@ -12,6 +12,7 @@ mod string_literal;
 mod symbols;
 mod ty;
 mod type_queries;
+pub use baml_type::ClassCrossing;
 pub use descriptor::*;
 pub use embedded_bytecode::embedded_bytecode_base64;
 pub use errors::*;

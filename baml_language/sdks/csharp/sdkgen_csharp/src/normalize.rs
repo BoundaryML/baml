@@ -24,6 +24,7 @@ fn normalize_symbol(symbol: &Symbol) -> Symbol {
     match symbol {
         Symbol::Function(function) => Symbol::Function(normalize_function(function)),
         Symbol::Class(class) => Symbol::Class(Class {
+            crossing: class.crossing,
             name: class.name.clone(),
             generic_params: class.generic_params.clone(),
             docstring: class.docstring.clone(),

@@ -409,6 +409,7 @@ fn mint_class(
         docstring: None,
         other: IndexMap::new(),
         stream_done: false,
+        declared_crossing: baml_type::ClassCrossing::Fields,
         type_tag,
         cleanup: None,
         methods: IndexMap::new(),

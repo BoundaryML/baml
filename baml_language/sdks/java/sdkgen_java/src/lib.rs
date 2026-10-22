@@ -33,11 +33,11 @@ use std::{
 };
 
 use baml_base::qualified_name::{AI_FUNCTION_SPEC, AI_STREAM_DONE, AI_STREAM_STREAM};
-use baml_sdkgen_types::{Function, Symbol, SymbolPool, Ty};
+use baml_sdkgen_types::{ClassCrossing, Function, Symbol, SymbolPool, Ty};
 pub use baml_sdkgen_types::{NamingConvention, OutputType};
 
 use crate::{
-    emit::{render_class, render_enum, render_fns_holder, render_union},
+    emit::{render_class, render_enum, render_fns_holder, render_opaque_class, render_union},
     routing::{PackagePath, java_identifier, route},
     translate_ty::{
         AliasTable, TranslateCtx, UnionSink, descriptor_expr, descriptor_expr_opt,
@@ -173,6 +173,9 @@ fn to_source_code_internal(
     // per-field decode-descriptor array (same order as the field idents).
     let mut class_registry: Vec<ClassRegistration> = Vec::new();
     let mut enum_registry: Vec<EnumRegistration> = Vec::new();
+    // (BAML FQN, Java binary name) per class that crosses as an opaque
+    // reference: decoded from its handle, never built from fields.
+    let mut opaque_registry: Vec<(String, String)> = Vec::new();
     let mut fns_per_package: BTreeMap<PackagePath, Vec<(u32, String, &Function)>> = BTreeMap::new();
     let mut type_idents_per_package: BTreeMap<PackagePath, BTreeSet<String>> = BTreeMap::new();
     let mut type_files: Vec<(PackagePath, String, String)> = Vec::new(); // (pkg, ident, body)
@@ -212,6 +215,26 @@ fn to_source_code_internal(
                     .entry(pkg.clone())
                     .or_default()
                     .insert(ident.clone());
+                match class.crossing {
+                    ClassCrossing::Opaque => {
+                        opaque_registry.push((
+                            symbol_fqn.clone(),
+                            format!("{}.{}", pkg.java_package(), ident),
+                        ));
+                        type_files.push((
+                            pkg,
+                            ident,
+                            render_opaque_class(class, &symbol_fqn, &anchor_fqn, &ctx, &mut sink),
+                        ));
+                        continue;
+                    }
+                    // The runtime-owned crossings are skipped by name above.
+                    ClassCrossing::Fields
+                    | ClassCrossing::Stream
+                    | ClassCrossing::FunctionSpec
+                    | ClassCrossing::Media(_)
+                    | ClassCrossing::Prompt => {}
+                }
                 class_registry.push(ClassRegistration {
                     fqn: symbol_fqn.clone(),
                     java_name: format!("{}.{}", pkg.java_package(), ident),
@@ -387,6 +410,7 @@ fn to_source_code_internal(
         segments: Vec::new(),
     };
     class_registry.sort();
+    opaque_registry.sort();
     enum_registry.sort();
     union_registry.sort();
     union_registry.dedup();
@@ -446,6 +470,11 @@ fn to_source_code_internal(
             "        baml_bridge.TypeRegistry.registerClass({fqn:?}, {java_name:?}, new java.lang.String[] {{{}}}, new baml_bridge.BamlType[] {{{}}}{type_param_list});\n",
             field_list.join(", "),
             descriptors.join(", ")
+        ));
+    }
+    for (fqn, java_name) in &opaque_registry {
+        registrations.push_str(&format!(
+            "        baml_bridge.TypeRegistry.registerOpaqueClass({fqn:?}, {java_name:?});\n"
         ));
     }
     for (fqn, java_name, variants) in &enum_registry {
@@ -825,6 +854,7 @@ mod tests {
         span: u32,
     ) -> Symbol {
         Symbol::Class(Class {
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             name: n.clone(),
             generic_params: generic_params.iter().map(|p| BaseName::new(*p)).collect(),
             docstring: None,
@@ -914,6 +944,7 @@ mod tests {
         span: u32,
     ) -> Symbol {
         Symbol::Class(Class {
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             name: n.clone(),
             generic_params: Vec::new(),
             docstring: None,
@@ -1279,6 +1310,73 @@ mod tests {
         assert!(file.contains(
             "return (java.lang.String) baml_bridge.BamlFfi.callSync(\"user.methods_on_classes.Greeter.greet\", new java.lang.String[] {\"self\", \"greeting\"}, new java.lang.Object[] {this, greeting}, $RET0, baml);"
         ), "{file}");
+    }
+
+    #[test]
+    fn opaque_class_is_a_handle_wrapper_without_fields_or_constructor() {
+        let mut pool = SymbolPool::new();
+        let n = name("reflect", &[], "Package");
+        let Symbol::Class(mut class) = class_sym_with_methods(
+            &n,
+            vec![method_fn(
+                "compile",
+                ("source", t_string()),
+                t_class(n.clone()),
+                1,
+            )],
+            vec![method_fn(
+                "merge",
+                ("other", t_class(n.clone())),
+                t_class(n.clone()),
+                2,
+            )],
+            0,
+        ) else {
+            unreachable!("class_sym_with_methods builds a class");
+        };
+        class.crossing = baml_sdkgen_types::ClassCrossing::Opaque;
+        class.properties = vec![ClassProperty {
+            name: BaseName::new("_inner"),
+            docstring: None,
+            ty: Ty::RustType,
+        }];
+        pool.insert(n, Symbol::Class(class));
+        let out = emit_sdk(&pool);
+        let file = &out[&PathBuf::from("reflect/Package.java")];
+
+        // A handle wrapper: binds its private constructor as the decode factory,
+        // has no public constructor and none of the declared fields.
+        assert!(
+            file.contains("public final class Package extends baml_bridge.BamlOpaque {"),
+            "{file}"
+        );
+        assert!(file.contains(
+            "baml_bridge.TypeRegistry.bindOpaqueFactory(\"reflect.Package\", Package::new);"
+        ));
+        assert!(file.contains(
+            "    private Package(baml_bridge.BamlHandle handle) {\n        super(handle);\n    }\n"
+        ));
+        assert!(!file.contains("public Package("), "{file}");
+        assert!(!file.contains("_inner"), "{file}");
+        assert!(!file.contains("equals("), "{file}");
+        // Methods send the instance itself as the receiver; a position typed as
+        // the class decodes through its descriptor.
+        assert!(file.contains(
+            "baml_bridge.BamlFfi.callSync(\"reflect.Package.merge\", new java.lang.String[] {\"self\", \"other\"}, new java.lang.Object[] {this, other}, $RET0);"
+        ), "{file}");
+        assert!(file.contains(
+            "private static final baml_bridge.BamlType $RET0 = baml_bridge.BamlType.classByFqn(\"reflect.Package\");"
+        ), "{file}");
+
+        // Registered by name alone, never as a by-fields class.
+        let anchor = &out[&PathBuf::from("Baml.java")];
+        assert!(anchor.contains(
+            "baml_bridge.TypeRegistry.registerOpaqueClass(\"reflect.Package\", \"baml_sdk.reflect.Package\");"
+        ), "{anchor}");
+        assert!(
+            !anchor.contains("registerClass(\"reflect.Package\""),
+            "{anchor}"
+        );
     }
 
     #[test]
@@ -2061,6 +2159,7 @@ mod tests {
         pool.insert(
             n.clone(),
             Symbol::Class(Class {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: n,
                 generic_params: vec![BaseName::new("T")],
                 docstring: None,
@@ -2113,6 +2212,7 @@ mod tests {
         pool.insert(
             n.clone(),
             Symbol::Class(Class {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: n,
                 generic_params: vec![BaseName::new("T")],
                 docstring: None,

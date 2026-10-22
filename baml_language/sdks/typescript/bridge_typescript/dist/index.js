@@ -27,7 +27,7 @@ export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';
 // Stream wrapper. Exported as `BamlStream`; codegen aliases it as `Stream`.
 export { BamlStream } from './stream.js';
 export { BamlFunctionSpec } from './function_spec.js';
-export { BamlPrompt, encodeCallArgs, decodeCallResult } from './proto.js';
+export { BamlPrompt, BamlReference, encodeCallArgs, decodeCallResult } from './proto.js';
 // Codegen support: typemap + placeholder sentinel + free runtime initializer.
 export { BamlTypeMap, setTypeMap, getTypeMap } from './typemap.js';
 // Callable factories the generated SDK emits for every BAML function/method.

@@ -865,6 +865,7 @@ mod tests {
 
     fn class_at(name: Name, file: &str, span: u32) -> Symbol {
         Symbol::Class(Class {
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             generic_params: Vec::new(),
             name,
             docstring: None,
@@ -1064,6 +1065,7 @@ mod tests {
         pool.insert(
             consumer_name.clone(),
             Symbol::Class(Class {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 generic_params: Vec::new(),
                 name: consumer_name,
                 docstring: None,
@@ -1186,6 +1188,7 @@ mod tests {
         properties: Vec<ClassProperty>,
     ) -> Symbol {
         Symbol::Class(Class {
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             generic_params: Vec::new(),
             name,
             docstring: docstring.map(String::from),
@@ -1533,6 +1536,7 @@ mod tests {
         pool.insert(
             n.clone(),
             Symbol::Class(Class {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 generic_params: Vec::new(),
                 name: n,
                 docstring: None,
@@ -1877,6 +1881,7 @@ mod tests {
 
     fn class_with_props(name: Name, props: Vec<(&str, Ty)>, file: &str, span: u32) -> Symbol {
         Symbol::Class(Class {
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             generic_params: Vec::new(),
             name,
             docstring: None,
@@ -2480,6 +2485,7 @@ mod tests {
         span: u32,
     ) -> Symbol {
         Symbol::Class(Class {
+            crossing: baml_sdkgen_types::ClassCrossing::Fields,
             generic_params: Vec::new(),
             name,
             docstring: None,
@@ -3373,6 +3379,7 @@ mod tests {
         pool.insert(
             box_name.clone(),
             Symbol::Class(Class {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: box_name,
                 generic_params: vec![BaseName::new("T")],
                 docstring: None,
@@ -3389,6 +3396,7 @@ mod tests {
         pool.insert(
             crate_name.clone(),
             Symbol::Class(Class {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: crate_name,
                 generic_params: vec![BaseName::new("T")],
                 docstring: None,
@@ -3835,6 +3843,7 @@ mod tests {
         pool.insert(
             box_name.clone(),
             Symbol::Class(Class {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: box_name,
                 generic_params: vec![BaseName::new("T")],
                 docstring: None,
@@ -3942,6 +3951,7 @@ mod tests {
         pool.insert(
             keyword_name.clone(),
             Symbol::Class(Class {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: keyword_name.clone(),
                 generic_params: Vec::new(),
                 docstring: None,
@@ -3969,6 +3979,7 @@ mod tests {
         pool.insert(
             collision_name.clone(),
             Symbol::Class(Class {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: collision_name,
                 generic_params: Vec::new(),
                 docstring: None,

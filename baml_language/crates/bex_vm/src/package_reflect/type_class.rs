@@ -1474,6 +1474,7 @@ mod renderability_tests {
     ) -> (bex_vm_types::HeapPtr, baml_type::typetag::TypeTag) {
         let type_tag = baml_type::typetag::TypeTag::fresh_dynamic();
         let ptr = vm.tlab.alloc(Object::Class(Box::new(bex_vm_types::Class {
+            declared_crossing: baml_type::ClassCrossing::Fields,
             path: bex_vm_types::types::LocalName::new(Vec::new(), baml_type::Name::new(name)),
             fields: Vec::new(),
             description: description.map(str::to_string),

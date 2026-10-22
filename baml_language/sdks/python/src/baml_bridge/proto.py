@@ -38,7 +38,7 @@ from .baml_py import (
 )
 from ._stream import BamlStream
 from ._function_spec import BamlFunctionSpec
-from ._runtime_value import BamlRuntimeValue
+from ._runtime_value import BamlOpaque, BamlRuntimeValue
 from .errors import BamlCancelledError, BamlError, BamlPanic, attach_baml_traceback
 from .typemap import BamlClassInstance, TypeLookup, get_type_map
 
@@ -728,6 +728,26 @@ def _decode_enum(enum_value, type_map: TypeLookup) -> Any:
         ) from exc
 
 
+def _opaque_class(handle, type_map: TypeLookup) -> Optional[type]:
+    """The generated class of a runtime value the engine keeps to itself
+    (`reflect.Package`, ...), from the compiled class its `ty` names; `None`
+    for any other runtime value, which keeps the `BamlRuntimeValue` proxy."""
+    ty = getattr(handle, "ty", None)
+    if (
+        ty is None
+        or ty.WhichOneof("ty") != "class_ty"
+        or ty.class_ty.WhichOneof("head") != "name"
+    ):
+        return None
+    try:
+        cls = type_map.get_class(ty.class_ty.name)
+    except BamlError:
+        return None
+    if isinstance(cls, type) and issubclass(cls, BamlOpaque):
+        return cls
+    return None
+
+
 def _decode_handle(
     handle, type_map: TypeLookup, ownership: Optional[Counter[int]] = None
 ) -> Any:
@@ -768,6 +788,9 @@ def _decode_handle(
     if ht == HT.ADT_FUNCTION_SPEC:
         return BamlFunctionSpec._from_pyhandle(pyhandle)
     if ht == HT.ADT_RUNTIME_VALUE:
+        opaque = _opaque_class(handle, type_map)
+        if opaque is not None:
+            return opaque._from_wire(pyhandle, handle.key)
         return BamlRuntimeValue._from_pyhandle(pyhandle)
     if ht == HT.FUNCTION_REF:
         ty = getattr(handle, "ty", None)

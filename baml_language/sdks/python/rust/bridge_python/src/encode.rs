@@ -283,9 +283,10 @@ pub(crate) struct Cx<'py> {
     baml_type: Bound<'py, PyAny>,
     /// `baml_bridge.proto._BamlTypeMetadataRow`, a record of five attributes.
     metadata_row: Bound<'py, PyAny>,
-    /// Streams, function specs, runtime values and BAML closures: Python
-    /// wrappers around an engine handle, reached through `_to_pyhandle`.
-    handle_wrappers: [Bound<'py, PyAny>; 4],
+    /// Streams, function specs, runtime values, opaque standard-library
+    /// instances and BAML closures: Python wrappers around an engine handle,
+    /// reached through `_to_pyhandle`.
+    handle_wrappers: [Bound<'py, PyAny>; 5],
 }
 
 impl<'py> Cx<'py> {
@@ -307,6 +308,7 @@ impl<'py> Cx<'py> {
                 proto.getattr("BamlStream")?,
                 proto.getattr("BamlFunctionSpec")?,
                 proto.getattr("BamlRuntimeValue")?,
+                proto.getattr("BamlOpaque")?,
                 proto.getattr("BamlClosure")?,
             ],
             proto,
