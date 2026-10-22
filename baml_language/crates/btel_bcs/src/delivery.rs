@@ -565,6 +565,9 @@ impl BcsDeliveryHandle {
     }
 
     /// Saturating count of dropped plans and physical targets, not HTTP attempts.
+    /// Work dropped once delivery is disabled, including by the shutdown
+    /// timeout, is not counted: the disabling error ([`Self::last_error`])
+    /// reports it.
     pub fn loss_count(&self) -> u64 {
         self.shared.state.lock().unwrap().loss_count
     }

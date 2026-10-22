@@ -912,7 +912,9 @@ impl BexEngine {
     }
 
     /// Number of discarded cloud prepare groups or upload targets, not events or
-    /// retry attempts. Zero for local recording or when telemetry is off.
+    /// retry attempts. Zero for local recording or when telemetry is off. Work
+    /// dropped once delivery is disabled, including by the shutdown timeout, is
+    /// not counted: `telemetry_result` reports the disabling error.
     pub fn telemetry_delivery_loss_count(&self) -> u64 {
         match self
             .telemetry

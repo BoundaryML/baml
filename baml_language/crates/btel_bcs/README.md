@@ -135,7 +135,8 @@ Temporary admission saturation still applies bounded backpressure.
 
 There is no circuit breaker, cooldown, probe loop, or durable retry spool.
 Only fatal worker failures, explicit cancellation, or the shutdown timeout
-disable cloud recording.
+disable cloud recording. What is dropped then is reported by that error, not
+counted as a loss.
 `BexEngine::telemetry_delivery_loss_count` counts discarded groups/targets, not
 events or retry attempts. `telemetry_result` retains an error after loss even
 when later uploads succeed. Delivered recording sequences may have gaps.
