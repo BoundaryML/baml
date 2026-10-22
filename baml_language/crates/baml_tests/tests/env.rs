@@ -214,10 +214,23 @@ async fn http_proxy_change_applies_to_next_request() {
     );
     let body = |text: &str| BexExternalValue::String(text.to_string().into());
 
-    // An inherited NO_PROXY that covers 127.0.0.1 would bypass the proxy.
+    // Start from no proxy configuration: an inherited HTTP_PROXY or ALL_PROXY
+    // would send the first request elsewhere, an inherited NO_PROXY covering
+    // 127.0.0.1 would bypass the proxy, and REQUEST_METHOD makes reqwest
+    // ignore HTTP_PROXY. nextest runs each test in its own process, so
+    // nothing is restored.
     unsafe {
-        std::env::remove_var("NO_PROXY");
-        std::env::remove_var("no_proxy");
+        for var in [
+            "HTTP_PROXY",
+            "http_proxy",
+            "ALL_PROXY",
+            "all_proxy",
+            "NO_PROXY",
+            "no_proxy",
+            "REQUEST_METHOD",
+        ] {
+            std::env::remove_var(var);
+        }
     }
     assert_eq!(baml_test!(&program).result, Ok(body("origin")));
     unsafe { std::env::set_var("HTTP_PROXY", proxy.uri()) };
