@@ -188,39 +188,6 @@ pub fn walk_rvalue_places<'a>(rvalue: &'a Rvalue<'_>, f: &mut impl FnMut(&'a Pla
     }
 }
 
-/// Walk every place a terminator reads, calling `f` for each: its operands
-/// and the future an `Await` reads. The places it writes are not walked.
-pub fn walk_terminator_places<'a>(terminator: &'a Terminator<'_>, f: &mut impl FnMut(&'a Place)) {
-    match terminator {
-        Terminator::Branch { condition: x, .. }
-        | Terminator::NarrowBind { source: x, .. }
-        | Terminator::Switch {
-            discriminant: x, ..
-        }
-        | Terminator::Spawn { plan: x, .. }
-        | Terminator::AwaitAny { futures: x, .. }
-        | Terminator::Throw { value: x }
-        | Terminator::ShortCircuit { operand: x, .. } => walk_operand_places(x, f),
-        Terminator::Rethrow { value, context } => {
-            walk_operand_places(value, f);
-            walk_operand_places(context, f);
-        }
-        Terminator::Call { callee, args, .. } | Terminator::SysOp { callee, args, .. } => {
-            walk_operand_places(callee, f);
-            for arg in args {
-                walk_operand_places(arg, f);
-            }
-        }
-        Terminator::VirtualCall { args, .. } => {
-            for arg in args {
-                walk_operand_places(arg, f);
-            }
-        }
-        Terminator::Await { future, .. } => f(future),
-        Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
-    }
-}
-
 /// Walk every frame type-arg slot an rvalue reads — the `TypeArgRef` leaves of
 /// each template it carries — calling `f` for each.
 ///

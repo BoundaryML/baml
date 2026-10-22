@@ -55,10 +55,7 @@ use crate::{
 /// The body kind is read from the span-free `function_body` firewall query,
 /// not from `lower_function(..).kind`: fully lowering every function just to
 /// inspect that one field would double the lowering work.
-pub(crate) fn owns_no_slot<'db>(
-    db: &'db dyn baml_compiler2_hir::Db,
-    func: FunctionLoc<'db>,
-) -> bool {
+pub fn owns_no_slot<'db>(db: &'db dyn baml_compiler2_hir::Db, func: FunctionLoc<'db>) -> bool {
     is_required_interface_method(db, func)
         || matches!(
             function_body(db, func).as_ref(),
