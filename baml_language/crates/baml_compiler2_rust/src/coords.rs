@@ -3,12 +3,12 @@ use baml_compiler2_emit::{function_path, owns_no_slot};
 use baml_compiler2_hir::{
     contributions::Definition,
     file_package::file_package,
-    item_data::{class_data, enum_data},
+    item_data::{class_data, enum_data, let_data},
     loc::{DeclRef, FunctionLoc},
 };
 use baml_compiler2_hir_ty::{
     callable::ExternalCallTarget,
-    extern_loc::{ClassRef, EnumRef, ExternFunctionLoc, ExternRowAddr, FunctionRef},
+    extern_loc::{ClassRef, EnumRef, ExternFunctionLoc, ExternRowAddr, FunctionRef, GlobalRef},
     lower::qualify_def,
 };
 use baml_type::DeclName;
@@ -143,4 +143,18 @@ pub(crate) fn enum_coords<'db>(
 ) -> DeclCoords {
     let head = enum_head(db, enum_ref);
     (head.root(), DeclPath::Enum(item_path(&head)))
+}
+
+/// The coordinates of a top-level `let` or `const`.
+pub(crate) fn let_coords<'db>(
+    db: &'db dyn baml_compiler2_mir::Db,
+    binding: GlobalRef<'db>,
+) -> DeclCoords {
+    let head = match binding {
+        DeclRef::Source(binding) => {
+            qualify_def(db, Definition::Let(binding), &let_data(db, binding).name)
+        }
+        DeclRef::External(binding) => binding.head(db).clone(),
+    };
+    (head.root(), DeclPath::Let(item_path(&head)))
 }

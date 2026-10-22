@@ -7,8 +7,8 @@ use std::{
 };
 
 use baml_compiler2_mir::{
-    CellId, Constant, IntrinsicOp, Local, MirFunction, MirFunctionBody, Operand, Place, RuntimeTy,
-    Rvalue, StatementKind, Terminator, UnaryOp,
+    CellId, Constant, IntrinsicOp, Local, MirFunctionBody, Operand, Place, RuntimeTy, Rvalue,
+    StatementKind, Terminator, UnaryOp,
     memory::{Resources, place_reads, walk_operand_places, walk_rvalue_places},
 };
 use baml_type::{Literal, TyTemplate};
@@ -123,11 +123,11 @@ impl Analysis {
     pub(crate) fn new<'db>(
         db: &'db dyn baml_compiler2_mir::Db,
         index: &ProgramIndex,
-        mir: &MirFunction<'db>,
+        arity: usize,
         body: &MirFunctionBody<'db>,
         captures: Vec<Repr>,
     ) -> Result<Self, Rejection> {
-        if mir.arity + 1 > body.locals.len() {
+        if arity + 1 > body.locals.len() {
             return Err(Rejection::Invalid("fewer locals than parameters".into()));
         }
         if body.blocks.len() > 512 {
@@ -137,7 +137,7 @@ impl Analysis {
         let reprs = slot_reprs(body, &values);
         let intrinsics = Intrinsics::of(body);
         let (static_types, deferred_types) = type_locals(index, body, intrinsics.binds_types);
-        let array_iters = array_iterators(body, mir.arity);
+        let array_iters = array_iterators(body, arity);
         let BodyFlow {
             cfg,
             user_callees,
@@ -146,7 +146,7 @@ impl Analysis {
             db,
             index,
             body,
-            mir.arity,
+            arity,
             &static_types,
             &array_iters,
             &intrinsics.hook_results,
@@ -156,7 +156,7 @@ impl Analysis {
             return Err(Rejection::Unsupported("more than 128 MIR loops".into()));
         }
         Ok(Self {
-            arity: mir.arity,
+            arity,
             reprs,
             values,
             captures,

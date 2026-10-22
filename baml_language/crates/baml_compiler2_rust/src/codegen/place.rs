@@ -10,7 +10,7 @@ impl<'db> Generator<'_, 'db> {
     pub(super) fn operand(&mut self, block: BlockId, operand: &Operand<'db>) -> Gen<Expr> {
         let expr = match operand {
             Operand::Copy(place) | Operand::Move(place) => self.load(block, place)?,
-            Operand::Constant(constant) => self.constant(constant)?,
+            Operand::Constant(constant) => self.constant(block, constant)?,
         };
         Ok(self.hoist(expr))
     }

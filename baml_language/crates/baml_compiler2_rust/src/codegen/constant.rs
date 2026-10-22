@@ -1,12 +1,12 @@
 //! Generates constant expressions and resolves pooled objects.
 
-use baml_compiler2_mir::{Constant, enum_display_name, function_display_name};
+use baml_compiler2_mir::{BlockId, Constant, enum_display_name, function_display_name};
 
 use super::{Expr, Gen, Generator, unsupported};
 use crate::{admit::Rejection, analysis::Repr, render::float_literal};
 
 impl<'db> Generator<'_, 'db> {
-    pub(super) fn constant(&self, constant: &Constant<'db>) -> Gen<Expr> {
+    pub(super) fn constant(&mut self, block: BlockId, constant: &Constant<'db>) -> Gen<Expr> {
         Ok(match constant {
             Constant::Int(n) => Expr::atom(format!("{n}i64"), Repr::Int),
             Constant::Float(f) => Expr::atom(float_literal(*f), Repr::Float),
@@ -65,13 +65,14 @@ impl<'db> Generator<'_, 'db> {
                 let Some(slot) = self.index.let_slot(self.db, *binding) else {
                     return unsupported("top-level let not found in the program");
                 };
-                Expr::new(
-                    format!(
-                        "vm.load_global(vm.record_object(fr, ObjectIndex::from_raw({})), {slot})",
+                self.fallible_expr(
+                    block,
+                    &format!(
+                        "vm.load_global_checked(vm.record_object(fr, ObjectIndex::from_raw({})), {slot})",
                         self.object
                     ),
                     Repr::Value,
-                )
+                )?
             }
             Constant::EnumVariant { enum_ref, index } => {
                 let Some(object) = self.index.enum_(self.db, *enum_ref) else {

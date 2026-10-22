@@ -106,10 +106,34 @@ pub fn compile_program(
     let index = ProgramIndex::new(db, root, program);
     let mut lowered = lower_program(db, root, &index, opt, entries);
     if entries.is_some() {
+        // Chainers run outside the selected entry points. Keep their callees
+        // and the closures those bodies register reachable as well.
+        for package in &program.packages {
+            for object in [package.init, package.test_init].into_iter().flatten() {
+                let bex_vm_types::Object::Function(function) = &program.objects[object] else {
+                    continue;
+                };
+                for instruction in &function.bytecode.instructions {
+                    if let bex_vm_types::Instruction::Call { callee, .. } = instruction
+                        && let Some(bex_vm_types::ConstValue::Object(callee)) =
+                            program.globals.get(callee.raw())
+                    {
+                        lowered.seeds.insert(callee.raw());
+                    }
+                }
+            }
+        }
         retain_reachable(&index, &mut lowered);
     }
-    let (bodies, functions, builtins) =
+    let (mut bodies, mut functions, builtins) =
         admission_fixpoint(db, &index, &mut lowered.units, &mut lowered.rejected);
+    crate::init::compile_chainers(
+        program,
+        &index,
+        &mut bodies,
+        &mut functions,
+        &mut lowered.rejected,
+    );
 
     let source = render_module(&bodies, &functions, &builtins, artifact_path, fingerprint);
     Ok(RustModule {
@@ -161,7 +185,16 @@ fn lower_program<'db>(
                 continue;
             };
             // Lambdas are admitted independently of their parent.
-            admit_lambdas(db, index, &mut units, &mut rejected, mir, &[], package);
+            admit_lambdas(
+                db,
+                index,
+                &mut units,
+                &mut rejected,
+                body,
+                &mir.lambdas,
+                &[],
+                package,
+            );
             let Some(object) = index.declared(db, function) else {
                 reject(
                     &mut rejected,
@@ -179,18 +212,64 @@ fn lower_program<'db>(
                 &mut units,
                 &mut rejected,
                 object,
-                mir,
+                mir.arity,
                 body,
+                &mir.lambdas,
                 Vec::new(),
                 package,
             );
         }
-        if entries.is_some() {
-            for &binding in file_lets(db, file) {
-                if let Ok(Some((body, lambdas))) = lower_let_body(db, binding, opt) {
-                    seeds.extend(references(db, index, &body, &lambdas));
+        for &binding in file_lets(db, file) {
+            let name = baml_compiler2_mir::definition_display_name(
+                db,
+                baml_compiler2_hir::contributions::Definition::Let(binding),
+            );
+            let (body, lambdas) = match lower_let_body(db, binding, opt) {
+                Ok(Some(lowered)) => lowered,
+                Ok(None) => continue,
+                Err(error) => {
+                    reject(
+                        &mut rejected,
+                        bex_vm_types::init_let_helper_name(&name),
+                        Rejection::Invalid(format!("lowering failed: {error:?}")),
+                    );
+                    continue;
                 }
+            };
+            let Some(object) = index.let_helper(db, binding) else {
+                reject(
+                    &mut rejected,
+                    bex_vm_types::init_let_helper_name(&name),
+                    Rejection::Invalid("no initializer of this identity in the program".into()),
+                );
+                continue;
+            };
+            if entries.is_some() {
+                seeds.insert(object);
+                refs.insert(object, references(db, index, &body, &lambdas));
             }
+            admit_lambdas(
+                db,
+                index,
+                &mut units,
+                &mut rejected,
+                &body,
+                &lambdas,
+                &[],
+                package,
+            );
+            admit_unit(
+                db,
+                index,
+                &mut units,
+                &mut rejected,
+                object,
+                0,
+                &body,
+                &lambdas,
+                Vec::new(),
+                package,
+            );
         }
     }
 
@@ -264,7 +343,7 @@ fn admission_fixpoint(
             .collect();
         let signatures: HashMap<usize, Signature> = units
             .iter()
-            .map(|(&object, unit)| (object, unit.analysis.signature(body_of(unit.mir))))
+            .map(|(&object, unit)| (object, unit.analysis.signature(&unit.body)))
             .collect();
         let symbols: HashMap<usize, String> = units
             .keys()
@@ -327,8 +406,9 @@ fn admit_unit<'db>(
     units: &mut BTreeMap<usize, Unit<'db>>,
     rejected: &mut Vec<(String, Rejection)>,
     object: usize,
-    mir: &'db MirFunction<'db>,
-    body: &'db MirFunctionBody<'db>,
+    arity: usize,
+    body: &MirFunctionBody<'db>,
+    lambdas: &[MirFunction<'db>],
     captures: Vec<Repr>,
     package: Option<u32>,
 ) {
@@ -337,12 +417,13 @@ fn admit_unit<'db>(
     if !matches!(info.kind, FunctionKind::Bytecode) {
         return;
     }
-    match Analysis::new(db, index, mir, body, captures) {
+    match Analysis::new(db, index, arity, body, captures) {
         Ok(analysis) => {
             units.insert(
                 object,
                 Unit {
-                    mir,
+                    body: body.clone(),
+                    lambdas: lambdas.to_vec(),
                     analysis,
                     package,
                     recursive: false,
@@ -354,20 +435,19 @@ fn admit_unit<'db>(
 }
 
 /// Admit nested lambdas with their enclosing capture representations.
+#[allow(clippy::too_many_arguments)]
 fn admit_lambdas<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     index: &ProgramIndex,
     units: &mut BTreeMap<usize, Unit<'db>>,
     rejected: &mut Vec<(String, Rejection)>,
-    parent: &'db MirFunction<'db>,
+    parent_body: &MirFunctionBody<'db>,
+    lambdas: &[MirFunction<'db>],
     captures: &[Repr],
     package: Option<u32>,
 ) {
-    let MirFunctionKind::Bytecode(parent_body) = &parent.kind else {
-        return;
-    };
     let values = value_reprs(parent_body);
-    for (lambda_idx, lambda) in parent.lambdas.iter().enumerate() {
+    for (lambda_idx, lambda) in lambdas.iter().enumerate() {
         let MirFunctionKind::Bytecode(body) = &lambda.kind else {
             continue;
         };
@@ -380,17 +460,28 @@ fn admit_lambdas<'db>(
             );
             continue;
         };
-        admit_lambdas(db, index, units, rejected, lambda, &captures, package);
-        admit_unit(
-            db, index, units, rejected, object, lambda, body, captures, package,
+        admit_lambdas(
+            db,
+            index,
+            units,
+            rejected,
+            body,
+            &lambda.lambdas,
+            &captures,
+            package,
         );
-    }
-}
-
-pub(crate) fn body_of<'a, 'db>(mir: &'a MirFunction<'db>) -> &'a MirFunctionBody<'db> {
-    match &mir.kind {
-        MirFunctionKind::Bytecode(body) => body,
-        MirFunctionKind::Builtin(_) => unreachable!("units hold bytecode bodies only"),
+        admit_unit(
+            db,
+            index,
+            units,
+            rejected,
+            object,
+            lambda.arity,
+            body,
+            &lambda.lambdas,
+            captures,
+            package,
+        );
     }
 }
 
@@ -409,7 +500,8 @@ fn symbol_for(name: &str, object: usize) -> String {
 
 pub(crate) struct Unit<'db> {
     pub(crate) recursive: bool,
-    pub(crate) mir: &'db MirFunction<'db>,
+    pub(crate) body: MirFunctionBody<'db>,
+    pub(crate) lambdas: Vec<MirFunction<'db>>,
     pub(crate) analysis: Analysis,
     /// Ordinal of the package that owns the function.
     pub(crate) package: Option<u32>,

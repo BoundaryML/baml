@@ -4,15 +4,13 @@ use std::collections::{HashMap, VecDeque, hash_map::Entry};
 
 use crate::coords::{
     DeclCoords, class_coords, class_head_coords, declared_function_coords, enum_coords,
-    enum_head_coords, function_coords, interface_head_coords,
+    enum_head_coords, function_coords, interface_head_coords, let_coords,
 };
 use baml_base::SourceRoot;
 use baml_compiler2_emit::function_identity;
 use baml_compiler2_hir::{
-    contributions::Definition,
     file_package::file_package,
-    item_data::let_data,
-    loc::{DeclRef, FunctionLoc},
+    loc::{DeclRef, FunctionLoc, LetLoc},
     package::edge_table,
 };
 use baml_compiler2_hir_ty::extern_loc::{ClassRef, EnumRef, FunctionRef, GlobalRef};
@@ -78,6 +76,8 @@ pub(crate) struct ProgramIndex {
     aliases: HashMap<DeclKey, usize>,
     /// The global slot of each top-level `let`, by identity.
     lets: HashMap<DeclKey, usize>,
+    /// The zero-argument initializer helper of each top-level binding.
+    let_helpers: HashMap<DeclKey, usize>,
     /// Lambda (closure body) object by identity; `None` for an identity
     /// more than one object claims, which then stays bytecode.
     lambdas: HashMap<LambdaKey, Option<usize>>,
@@ -195,6 +195,17 @@ impl ProgramIndex {
                                 occupied.insert(None);
                             }
                         }
+                    }
+                    if let (FunctionIdentity::InitLet(path), Some((package, _))) =
+                        (&function.identity, &placing)
+                    {
+                        self.let_helpers.insert(
+                            DeclKey {
+                                package: *package,
+                                path: DeclPath::Let(path.clone()),
+                            },
+                            object,
+                        );
                     }
                     self.objects[object].name = name;
                     let method = match &function.identity {
@@ -453,15 +464,16 @@ impl ProgramIndex {
         db: &'db dyn baml_compiler2_mir::Db,
         binding: GlobalRef<'db>,
     ) -> Option<usize> {
-        let head = match binding {
-            DeclRef::Source(binding) => baml_compiler2_hir_ty::lower::qualify_def(
-                db,
-                Definition::Let(binding),
-                &let_data(db, binding).name,
-            ),
-            DeclRef::External(binding) => binding.head(db).clone(),
-        };
-        self.lookup(&self.lets, (head.root(), DeclPath::Let(item_path(&head))))
+        self.lookup(&self.lets, let_coords(db, binding))
+    }
+
+    /// The linked initializer helper of the top-level binding.
+    pub(crate) fn let_helper<'db>(
+        &self,
+        db: &'db dyn baml_compiler2_mir::Db,
+        binding: LetLoc<'db>,
+    ) -> Option<usize> {
+        self.lookup(&self.let_helpers, let_coords(db, DeclRef::Source(binding)))
     }
 
     /// Ordinal of the package that owns the function.

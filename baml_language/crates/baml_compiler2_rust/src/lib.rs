@@ -6,6 +6,7 @@ mod analysis;
 mod codegen;
 mod coords;
 mod index;
+mod init;
 mod reach;
 mod render;
 mod structure;
