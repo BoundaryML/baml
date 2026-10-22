@@ -5,6 +5,9 @@ mod constant;
 mod expr;
 mod place;
 mod stmt;
+pub(crate) mod types;
+
+use types::{realized_expr, template_blocker};
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -19,8 +22,8 @@ use baml_compiler2_mir::{
 use crate::{
     admit::{Positions, ProgramIndex, Rejection},
     analysis::{
-        Analysis, Repr, array_iter_walk, array_next_call, reads_frame, realized_expr,
-        suspends_directly, template_blocker, user_callee,
+        Analysis, Repr, array_iter_walk, array_next_call, reads_frame, suspends_directly,
+        user_callee,
     },
     render::coerce,
     structure::{Structured, structurize},
@@ -141,10 +144,6 @@ impl<'a, 'db> Generator<'a, 'db> {
 /// Loop iterations between polls for a yield; see `Generator::loop_check`.
 const YIELD_EVERY: u32 = 16;
 
-/// What is live across a suspension: locals, then array iterators with the
-/// slot their position would take.
-type Saved = (Vec<usize>, Vec<(usize, usize)>);
-
 /// A PC argument of generated code: the position's own, or the last one the
 /// body set (`pc`) for a position the bytecode emitted nothing for.
 fn pc_arg(pc: Option<usize>) -> String {
@@ -236,7 +235,7 @@ impl<'db> Generator<'_, 'db> {
             };
             self.emit_line(&format!("let mut l{i}: {ty} = {init};"));
         }
-        for iter in analysis.array_iters.keys() {
+        for iter in &analysis.array_iters {
             self.emit_line(&format!("let mut i{iter}: i64 = 0;"));
         }
         if iterations {
@@ -320,10 +319,10 @@ impl<'db> Generator<'_, 'db> {
         Ok(format!("&{}", self.bind_type(&owned)))
     }
 
-    /// Realize one type operand of `what`, and whether it is static. A type
+    /// Realize one type operand of `what`. A type
     /// local is built from its template where the operand is used; any other
     /// local holds a `reflect.Type` value, read there.
-    fn type_operand(&mut self, what: &str, operand: &Operand<'db>) -> Gen<(String, bool)> {
+    fn type_operand(&mut self, what: &str, operand: &Operand<'db>) -> Gen<String> {
         let local = match operand {
             Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => *local,
             Operand::Constant(_) | Operand::Copy(_) | Operand::Move(_) => {
@@ -331,16 +330,16 @@ impl<'db> Generator<'_, 'db> {
             }
         };
         if let Some(ty) = self.analysis.static_types.get(&local.0) {
-            return Ok((ty.code.clone(), true));
+            return Ok(ty.code.clone());
         }
         if let Some(template) = self.analysis.deferred_types.get(&local.0).cloned() {
-            return Ok((self.realized(&template)?, false));
+            return self.realized(&template);
         }
-        if self.analysis.array_iters.contains_key(&local.0) {
+        if self.analysis.array_iters.contains(&local.0) {
             return unsupported(format!("{what} with an array iterator as a type argument"));
         }
         let value = coerce(&format!("l{}", local.0), self.repr(local), Repr::Value);
-        Ok((self.bind_type(&format!("vm.type_operand({value})?")), false))
+        Ok(self.bind_type(&format!("vm.type_operand({value})?")))
     }
 
     fn prepare(&mut self) {
@@ -376,13 +375,13 @@ impl<'db> Generator<'_, 'db> {
 
     /// The heap values live across the suspension `block`'s terminator may make.
     fn rooted_locals(&self, block: BlockId) -> Gen<Vec<usize>> {
-        let (locals, _) = self.saved_at(block)?;
+        let locals = self.saved_at(block)?;
         Ok(self.heap_locals(locals))
     }
 
     /// The heap values live at a loop header's poll.
     fn header_locals(&self, header: usize) -> Vec<usize> {
-        let (locals, _) = self.saved(|i| self.live_in[header][i]);
+        let locals = self.saved(|i| self.live_in[header][i]);
         self.heap_locals(locals)
     }
 
@@ -420,7 +419,7 @@ impl<'db> Generator<'_, 'db> {
 
     /// Keep what the continuation reads except the result, plus what the
     /// handler reads.
-    fn saved_at(&self, block: BlockId) -> Gen<Saved> {
+    fn saved_at(&self, block: BlockId) -> Gen<Vec<usize>> {
         let (destination, target) = self.continuation(block)?;
         let overwritten = match destination {
             Place::Local(local) => Some(local.0),
@@ -434,7 +433,7 @@ impl<'db> Generator<'_, 'db> {
     }
 
     /// Handler contexts stay live so leaving a nested handler can restore its cause.
-    fn saved(&self, live: impl Fn(usize) -> bool) -> Saved {
+    fn saved(&self, live: impl Fn(usize) -> bool) -> Vec<usize> {
         let kept = |i| {
             live(i)
                 || (self.cause_slot.is_some()
@@ -445,18 +444,9 @@ impl<'db> Generator<'_, 'db> {
                         .filter_map(|block| block.landing)
                         .any(|landing| landing.context_local.0 == i))
         };
-        let locals = (0..self.analysis.reprs.len())
+        (0..self.analysis.reprs.len())
             .filter(|&i| kept(i) && !self.analysis.is_type_local(i))
-            .collect();
-        let base = self.analysis.reprs.len().max(self.arity());
-        let iters = self
-            .iters()
-            .into_iter()
-            .enumerate()
-            .filter(|&(_, iter)| kept(iter))
-            .map(|(j, iter)| (iter, base + j))
-            .collect();
-        (locals, iters)
+            .collect()
     }
 
     /// Store what the block's suspending terminator produces: an answer the
@@ -560,7 +550,7 @@ impl<'db> Generator<'_, 'db> {
         };
         let (type_args, args) = args.split_at((*ntypeargs).min(args.len()));
         let args = self.trace_attachment(block, args, *has_trace)?;
-        let (types, _) = self.type_operands("call", type_args)?;
+        let types = self.type_operands("call", type_args)?;
         let plain = types.is_empty() && !*has_trace;
         self.call_types = types;
         self.callee_ptr(block, callee)?;
@@ -580,17 +570,10 @@ impl<'db> Generator<'_, 'db> {
         // Function values need their named arguments mapped at runtime.
         if named {
             let layout = argument_layout.as_ref().expect("checked");
-            let slots: Vec<String> = layout
-                .0
-                .iter()
-                .map(|slot| match slot {
-                    Some(name) => format!("Some({:?})", name.as_str()),
-                    None => "None".to_string(),
-                })
-                .collect();
+            let slots = call::named_arg_slots(layout);
             self.emit_statement(&format!(
                 "let argc = vm.push_indirect_args(callee, &[{}], &[{}])?;",
-                slots.join(", "),
+                slots,
                 values.join(", ")
             ));
             return Ok(self.suspend_expr(block, "Step::Call { callee, argc }", &[]));
@@ -635,44 +618,12 @@ impl<'db> Generator<'_, 'db> {
 
     /// Where a suspending terminator stores its result and continues.
     fn continuation(&self, block: BlockId) -> Gen<(Place, BlockId)> {
-        match self.body.blocks[block.0].terminator.as_ref() {
-            Some(
-                Terminator::Call {
-                    destination,
-                    target,
-                    ..
-                }
-                | Terminator::SysOp {
-                    destination,
-                    target,
-                    ..
-                }
-                | Terminator::Await {
-                    destination,
-                    target,
-                    ..
-                }
-                | Terminator::AwaitAny {
-                    destination,
-                    target,
-                    ..
-                }
-                | Terminator::VirtualCall {
-                    destination,
-                    target,
-                    ..
-                },
-            ) => Ok((destination.clone(), *target)),
-            Some(Terminator::Spawn { future, resume, .. }) => Ok((future.clone(), *resume)),
-            _ => Err(Rejection::Invalid(
-                "continuation of a non-suspending block".into(),
-            )),
-        }
-    }
-
-    /// Iterator positions take slots in this order after the locals.
-    fn iters(&self) -> Vec<usize> {
-        self.analysis.array_iters.keys().copied().collect()
+        self.body.blocks[block.0]
+            .terminator
+            .as_ref()
+            .and_then(crate::analysis::continuation)
+            .map(|(destination, target)| (destination.clone(), target))
+            .ok_or_else(|| Rejection::Invalid("continuation of a non-suspending block".into()))
     }
 
     fn cause_changes_at(&self, block: usize) -> bool {

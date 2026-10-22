@@ -293,11 +293,8 @@ pub(super) fn eliminate_dead_stores(body: &mut MirFunctionBody<'_>, arity: usize
     }
 }
 
-/// Liveness with each terminator's destination counted as its definition
-/// on its normal edges (not its unwind edge, where it was not assigned). A
-/// local is then live only where it holds a value that will be read: what a
-/// consumer that saves and restores live locals needs, since a local live
-/// before its first assignment would be read back unassigned.
+/// Liveness for spilling locals across suspensions: terminator destinations
+/// are definitions only on normal edges, where they were assigned.
 pub fn live_in_precise(body: &MirFunctionBody<'_>) -> Vec<Vec<bool>> {
     let n = body.locals.len();
     let mut live_in = vec![vec![false; n]; body.blocks.len()];

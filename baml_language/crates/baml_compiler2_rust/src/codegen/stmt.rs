@@ -275,7 +275,7 @@ impl<'db> Generator<'_, 'db> {
                 value,
                 ..
             } => {
-                let (iface, iface_args, _) = self.interface_operands(iface)?;
+                let (iface, iface_args) = self.interface_operands(iface)?;
                 let receiver = self.value_operand(id, receiver)?;
                 let value = self.value_operand(id, value)?;
                 let code = self.fallible(

@@ -2,22 +2,21 @@
 //! block, and what the function calls or suspends on.
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     sync::OnceLock,
 };
 
 use baml_compiler2_mir::{
     CellId, Constant, IntrinsicOp, Local, MirFunction, MirFunctionBody, Operand, Place, RuntimeTy,
     Rvalue, StatementKind, Terminator, UnaryOp,
-    memory::{
-        Resources, place_reads, walk_operand_places, walk_rvalue_places, walk_terminator_places,
-    },
+    memory::{Resources, place_reads, walk_operand_places, walk_rvalue_places},
 };
 use baml_type::{Literal, TyTemplate};
 use bex_vm_types::FunctionKind;
 
 use crate::{
     admit::{ProgramIndex, Rejection},
+    codegen::types::realized_expr,
     structure::{Cfg, Flow},
 };
 
@@ -78,8 +77,8 @@ pub(crate) struct Analysis {
     pub(crate) deferred_types: HashMap<usize, baml_compiler2_mir::TyTemplate>,
     /// Direct suspension; admission propagates it through user calls.
     pub(crate) suspends: bool,
-    /// Iterator local to array local for iteration compiled as an index walk.
-    pub(crate) array_iters: BTreeMap<usize, usize>,
+    /// Iterator locals for iteration compiled as an index walk.
+    pub(crate) array_iters: BTreeSet<usize>,
     /// Loop headers, which poll for a yield at their back edge.
     pub(crate) loop_headers: BTreeSet<usize>,
     /// The body runs a declaration trace hook prologue.
@@ -99,6 +98,9 @@ impl Analysis {
         if mir.arity + 1 > body.locals.len() {
             return Err(Rejection::Invalid("fewer locals than parameters".into()));
         }
+        if body.blocks.len() > 512 {
+            return Err(Rejection::Unsupported("more than 512 MIR blocks".into()));
+        }
         let values = value_reprs(body);
         let reprs = slot_reprs(body, &values);
         let intrinsics = Intrinsics::of(body);
@@ -117,6 +119,10 @@ impl Analysis {
             &array_iters,
             &intrinsics.hook_results,
         )?;
+        let loop_headers = cfg.loop_headers();
+        if loop_headers.len() > 128 {
+            return Err(Rejection::Unsupported("more than 128 MIR loops".into()));
+        }
         Ok(Self {
             arity: mir.arity,
             reprs,
@@ -128,7 +134,7 @@ impl Analysis {
             deferred_types,
             suspends,
             array_iters,
-            loop_headers: loop_headers(body),
+            loop_headers,
             hooked: intrinsics.hooked,
             hook_results: intrinsics.hook_results,
         })
@@ -252,17 +258,43 @@ fn type_locals(
 
 /// The place a terminator writes, if any.
 fn destination<'a>(terminator: &'a Terminator<'_>) -> Option<&'a Place> {
+    if let Terminator::ShortCircuit { destination, .. } = terminator {
+        Some(destination)
+    } else {
+        continuation(terminator).map(|(place, _)| place)
+    }
+}
+
+pub(crate) fn continuation<'a>(
+    terminator: &'a Terminator<'_>,
+) -> Option<(&'a Place, baml_compiler2_mir::BlockId)> {
     match terminator {
-        Terminator::Call { destination, .. }
-        | Terminator::VirtualCall { destination, .. }
-        | Terminator::SysOp { destination, .. }
-        | Terminator::Await { destination, .. }
-        | Terminator::AwaitAny { destination, .. }
-        | Terminator::ShortCircuit { destination, .. }
-        | Terminator::Spawn {
-            future: destination,
+        Terminator::Call {
+            destination,
+            target,
             ..
-        } => Some(destination),
+        }
+        | Terminator::VirtualCall {
+            destination,
+            target,
+            ..
+        }
+        | Terminator::SysOp {
+            destination,
+            target,
+            ..
+        }
+        | Terminator::Await {
+            destination,
+            target,
+            ..
+        }
+        | Terminator::AwaitAny {
+            destination,
+            target,
+            ..
+        } => Some((destination, *target)),
+        Terminator::Spawn { future, resume, .. } => Some((future, *resume)),
         _ => None,
     }
 }
@@ -343,23 +375,22 @@ fn read_only_after_load(
     true
 }
 
-/// Array iterators a loop consumes in place, as iterator local to array
-/// local. The index walk stands in for the `ArrayIterator` only while the
+/// Array iterator locals a loop consumes in place. The index walk stands in
+/// for the `ArrayIterator` only while the
 /// iterator local is nothing but the loop's `next` receiver: one that
 /// escapes (passed on, adapted, copied, captured, stored, reassigned) is the
 /// real object the dispatch builds, and its `iter` and `next` calls go
 /// through the VM like any other virtual call.
-fn array_iterators(body: &MirFunctionBody<'_>, arity: usize) -> BTreeMap<usize, usize> {
-    let mut array_iters = BTreeMap::new();
+fn array_iterators(body: &MirFunctionBody<'_>, arity: usize) -> BTreeSet<usize> {
+    let mut array_iters = BTreeSet::new();
     for block in &body.blocks {
         if let Some(terminator) = &block.terminator
-            && let Some((iter, array)) = array_iter_call(body, arity, terminator)
+            && let Some((iter, _)) = array_iter_call(body, arity, terminator)
         {
-            array_iters.insert(iter, array);
+            array_iters.insert(iter);
         }
     }
-    array_iters
-        .retain(|&iter, _| !body.locals[iter].is_captured && !iter_escapes(body, arity, iter));
+    array_iters.retain(|&iter| !body.locals[iter].is_captured && !iter_escapes(body, arity, iter));
     array_iters
 }
 
@@ -394,7 +425,7 @@ fn body_flow<'db>(
     body: &MirFunctionBody<'db>,
     arity: usize,
     static_types: &HashMap<usize, StaticTy>,
-    array_iters: &BTreeMap<usize, usize>,
+    array_iters: &BTreeSet<usize>,
     hook_results: &BTreeSet<usize>,
 ) -> Result<BodyFlow, Rejection> {
     let mut flows = Vec::with_capacity(body.blocks.len());
@@ -558,9 +589,9 @@ pub(crate) fn array_iter_walk(
     body: &MirFunctionBody<'_>,
     arity: usize,
     terminator: &Terminator<'_>,
-    array_iters: &BTreeMap<usize, usize>,
+    array_iters: &BTreeSet<usize>,
 ) -> Option<(usize, usize)> {
-    array_iter_call(body, arity, terminator).filter(|(iter, _)| array_iters.contains_key(iter))
+    array_iter_call(body, arity, terminator).filter(|(iter, _)| array_iters.contains(iter))
 }
 
 /// `it.next()` on a local, as that local.
@@ -587,9 +618,9 @@ fn array_next_shape(terminator: &Terminator<'_>) -> Option<usize> {
 /// iterator local.
 pub(crate) fn array_next_call(
     terminator: &Terminator<'_>,
-    array_iters: &BTreeMap<usize, usize>,
+    array_iters: &BTreeSet<usize>,
 ) -> Option<usize> {
-    array_next_shape(terminator).filter(|iter| array_iters.contains_key(iter))
+    array_next_shape(terminator).filter(|iter| array_iters.contains(iter))
 }
 
 fn flow_of(terminator: &Terminator<'_>) -> Flow {
@@ -693,41 +724,6 @@ pub(crate) fn user_callee<'db>(
     };
     let (object, info) = index.function(db, *func)?;
     matches!(info.kind, FunctionKind::Bytecode).then_some(object)
-}
-
-/// The targets of the body's back edges.
-fn loop_headers(body: &MirFunctionBody<'_>) -> BTreeSet<usize> {
-    let successors = |block: usize| {
-        body.blocks[block]
-            .terminator
-            .iter()
-            .flat_map(Terminator::successors)
-            .map(|id| id.0)
-            .collect::<Vec<_>>()
-    };
-    let n = body.blocks.len();
-    let mut headers = BTreeSet::new();
-    let mut on_path = vec![false; n];
-    let mut seen = vec![false; n];
-    let mut stack = vec![(body.entry.0, successors(body.entry.0), 0)];
-    seen[body.entry.0] = true;
-    on_path[body.entry.0] = true;
-    while let Some((block, succs, next)) = stack.last_mut() {
-        let Some(&succ) = succs.get(*next) else {
-            on_path[*block] = false;
-            stack.pop();
-            continue;
-        };
-        *next += 1;
-        if on_path[succ] {
-            headers.insert(succ);
-        } else if !seen[succ] {
-            seen[succ] = true;
-            on_path[succ] = true;
-            stack.push((succ, successors(succ), 0));
-        }
-    }
-    headers
 }
 
 /// Static constraints that can rule out builtin callbacks.
@@ -911,138 +907,37 @@ pub(crate) fn reads_frame(template: &baml_compiler2_mir::TyTemplate) -> bool {
     reads
 }
 
-/// Frame references require a running function; unsupported templates return `None`.
-pub(crate) fn realized_expr(
-    index: &ProgramIndex,
-    template: &baml_compiler2_mir::TyTemplate,
-    frame: bool,
-) -> Option<String> {
-    let part = |part: &baml_compiler2_mir::TyTemplate| realized_expr(index, part, frame);
-    let parts = |parts: &[baml_compiler2_mir::TyTemplate]| {
-        parts
-            .iter()
-            .map(part)
-            .collect::<Option<Vec<_>>>()
-            .map(|parts| parts.join(", "))
-    };
-    Some(match template {
-        TyTemplate::Int => "RealizedTy::Int".to_string(),
-        TyTemplate::Float => "RealizedTy::Float".to_string(),
-        TyTemplate::Bool => "RealizedTy::Bool".to_string(),
-        TyTemplate::String => "RealizedTy::String".to_string(),
-        TyTemplate::Null => "RealizedTy::Null".to_string(),
-        TyTemplate::Unknown => "RealizedTy::unknown()".to_string(),
-        TyTemplate::Never => "RealizedTy::Never".to_string(),
-        TyTemplate::TypeArgRef(slot) => {
-            if !frame {
-                return None;
-            }
-            format!("vm.frame_type_arg(depth, {slot})?")
+/// Walk every place a terminator reads, calling `f` for each: its operands
+/// and the future an `Await` reads. The places it writes are not walked.
+fn walk_terminator_places<'a>(terminator: &'a Terminator<'_>, f: &mut impl FnMut(&'a Place)) {
+    match terminator {
+        Terminator::Branch { condition: x, .. }
+        | Terminator::NarrowBind { source: x, .. }
+        | Terminator::Switch {
+            discriminant: x, ..
         }
-        TyTemplate::List(element) => format!("RealizedTy::List(Box::new({}))", part(element)?),
-        TyTemplate::Map { key, value } => format!(
-            "RealizedTy::Map {{ key: Box::new({}), value: Box::new({}) }}",
-            part(key)?,
-            part(value)?
-        ),
-        TyTemplate::Union(members) => format!("RealizedTy::Union(Box::new([{}]))", parts(members)?),
-        TyTemplate::Class(name, args) => {
-            let (object, _) = index.class_at(name)?;
-            if args.is_empty() {
-                format!("vm.class_type(vm.idx_to_ptr(ObjectIndex::from_raw({object})))")
-            } else {
-                format!(
-                    "vm.class_type_at(vm.idx_to_ptr(ObjectIndex::from_raw({object})), Box::new([{}]))",
-                    parts(args)?
-                )
+        | Terminator::Spawn { plan: x, .. }
+        | Terminator::AwaitAny { futures: x, .. }
+        | Terminator::Throw { value: x }
+        | Terminator::ShortCircuit { operand: x, .. } => walk_operand_places(x, f),
+        Terminator::Rethrow { value, context } => {
+            walk_operand_places(value, f);
+            walk_operand_places(context, f);
+        }
+        Terminator::Call { callee, args, .. } | Terminator::SysOp { callee, args, .. } => {
+            walk_operand_places(callee, f);
+            for arg in args {
+                walk_operand_places(arg, f);
             }
         }
-        TyTemplate::Enum(name) => {
-            let object = index.enum_at(name)?;
-            format!("vm.enum_type(vm.idx_to_ptr(ObjectIndex::from_raw({object})))")
+        Terminator::VirtualCall { args, .. } => {
+            for arg in args {
+                walk_operand_places(arg, f);
+            }
         }
-        TyTemplate::Interface(name, args, assoc) => {
-            let object = index.interface_at(name)?;
-            let assoc = assoc
-                .iter()
-                .map(|(member, ty)| Some(format!("({:?}, {})", member.as_str(), part(ty)?)))
-                .collect::<Option<Vec<_>>>()?
-                .join(", ");
-            format!(
-                "vm.interface_type_at(vm.idx_to_ptr(ObjectIndex::from_raw({object})), Box::new([{}]), &[{assoc}])",
-                parts(args)?
-            )
-        }
-        // The runtime boundary normalizes a literal's freshness to `Regular`.
-        TyTemplate::Literal(literal, _) => {
-            let literal = match literal {
-                Literal::Int(n) => format!("Literal::Int({n}i64)"),
-                Literal::Bool(b) => format!("Literal::Bool({b})"),
-                Literal::String(s) => format!("Literal::String(String::from({s:?}))"),
-                Literal::Float(f) => format!("Literal::Float(String::from({f:?}))"),
-                Literal::Bigint(_) => return None,
-            };
-            format!(
-                "RealizedTy::Literal(bex_vm::compiled_rt::{literal}, bex_vm::compiled_rt::Freshness::Regular)"
-            )
-        }
-        _ => return None,
-    })
-}
-
-pub(crate) fn template_blocker(
-    index: &ProgramIndex,
-    template: &baml_compiler2_mir::TyTemplate,
-) -> &'static str {
-    fn blocker_of(
-        index: &ProgramIndex,
-        template: &baml_compiler2_mir::TyTemplate,
-    ) -> Option<&'static str> {
-        let parts = |parts: &[baml_compiler2_mir::TyTemplate]| {
-            parts.iter().find_map(|part| blocker_of(index, part))
-        };
-        Some(match template {
-            TyTemplate::List(element) => return blocker_of(index, element),
-            TyTemplate::Map { key, value } => {
-                return blocker_of(index, key).or_else(|| blocker_of(index, value));
-            }
-            TyTemplate::Union(members) => return parts(members),
-            TyTemplate::Class(name, args) => {
-                if index.class_at(name).is_none() {
-                    return Some("a class not in the program");
-                }
-                return parts(args);
-            }
-            TyTemplate::Enum(name) => {
-                if index.enum_at(name).is_none() {
-                    return Some("an enum not in the program");
-                }
-                return None;
-            }
-            TyTemplate::Interface(name, args, assoc) => {
-                if index.interface_at(name).is_none() {
-                    return Some("an interface not in the program");
-                }
-                return parts(args)
-                    .or_else(|| assoc.iter().find_map(|(_, ty)| blocker_of(index, ty)));
-            }
-            TyTemplate::Function { .. } => "a function type",
-            TyTemplate::Future(..) => "a future type",
-            TyTemplate::AssociatedTypeProjection { .. } => "a projection",
-            TyTemplate::TypeAlias(_) => "a recursive alias",
-            TyTemplate::EnumVariant(..) => "an enum variant type",
-            TyTemplate::Literal(Literal::Bigint(_), _) => "a bigint literal type",
-            TyTemplate::Bigint
-            | TyTemplate::Uint8Array
-            | TyTemplate::Media(_)
-            | TyTemplate::RustType
-            | TyTemplate::Type
-            | TyTemplate::Resource
-            | TyTemplate::PromptAst => "an opaque type",
-            _ => return None,
-        })
+        Terminator::Await { future, .. } => f(future),
+        Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
     }
-    blocker_of(index, template).unwrap_or("a type this backend does not build")
 }
 
 #[cfg(test)]
