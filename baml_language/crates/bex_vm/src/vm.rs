@@ -280,7 +280,12 @@ pub struct BytecodeFrame {
 }
 
 struct ManualActivation {
+    /// The VM frame whose context the activation replaced.
     frame: usize,
+    /// The level of the frame record the activation is scoped to, when the
+    /// innermost frame was a directly called compiled body; `None` for a VM
+    /// frame. A level is stable for its frame's lifetime; see `stack_view`.
+    record: Option<usize>,
     telemetry: Option<crate::telemetry::manual::ManualScope>,
     context: Context,
 }
@@ -2521,24 +2526,38 @@ impl BexVm {
         if span.scope != self.trace_scope || span.is_closed() {
             return Err("span is closed or belongs to another runtime");
         }
-        let frame_idx = self.frames.len().saturating_sub(1);
-        let Some(Frame::Bytecode(frame)) = self.frames.last_mut() else {
-            return Err("span activation requires a bytecode scope");
+        // The activation belongs to the innermost frame. A directly called
+        // compiled body has no VM frame of its own: it replaces the context of
+        // the VM frame it runs above, which its callees inherit, and its
+        // record restores that context when the body returns.
+        let (frame_idx, record) = match self.top_frame() {
+            Some(FrameAt::Record(record)) => {
+                (compiled_rt::record_ref(record).anchor() - 1, Some(record))
+            }
+            _ => (self.frames.len().saturating_sub(1), None),
         };
+        let level = record.map(|record| compiled_rt::record_ref(record).level());
         if self
             .manual_activations
             .last()
-            .is_some_and(|active| active.frame == frame_idx)
+            .is_some_and(|active| active.frame == frame_idx && active.record == level)
         {
             return Err("span scope is already active");
         }
+        let Some(Frame::Bytecode(frame)) = self.frames.get_mut(frame_idx) else {
+            return Err("span activation requires a bytecode scope");
+        };
         let context = std::mem::replace(&mut frame.context, span.context.clone());
         self.manual_activations.push(ManualActivation {
             frame: frame_idx,
+            record: level,
             context,
             telemetry: self.telemetry.as_mut().and_then(|state| span.enter(state)),
         });
-        self.trace_scope_frame = frame_idx;
+        match record {
+            Some(record) => compiled_rt::record_ref(record).set_scoped(true),
+            None => self.trace_scope_frame = frame_idx,
+        }
         Ok(())
     }
 
@@ -2570,21 +2589,57 @@ impl BexVm {
         }
         if let Some(previous) = self
             .manual_activations
-            .pop_if(|active| active.frame == frame_idx)
+            .pop_if(|active| active.frame == frame_idx && active.record.is_none())
         {
-            if let (Some(saved), Some(state)) = (previous.telemetry, &mut self.telemetry) {
-                saved.restore(state);
-            }
-            if let Some(Frame::Bytecode(frame)) = self.frames.get_mut(frame_idx) {
-                frame.context = previous.context;
+            self.restore_activation(previous);
+        }
+        self.reset_trace_scope_frame();
+    }
+
+    /// End the manual span activation scoped to the record `record`, whose
+    /// body is returning or being unwound.
+    #[cold]
+    #[inline(never)]
+    pub(crate) fn end_record_activation(&mut self, record: *const compiled_rt::FrameRecord) {
+        let record = compiled_rt::record_ref(record);
+        record.set_scoped(false);
+        let level = Some(record.level());
+        if let Some(previous) = self
+            .manual_activations
+            .pop_if(|active| active.record == level)
+        {
+            self.restore_activation(previous);
+            let context = self.current_context().clone();
+            if let Some(telemetry) = &mut self.telemetry {
+                telemetry.set_context(context);
             }
         }
+    }
+
+    fn restore_activation(&mut self, previous: ManualActivation) {
+        if let (Some(saved), Some(state)) = (previous.telemetry, &mut self.telemetry) {
+            saved.restore(state);
+        }
+        if let Some(Frame::Bytecode(frame)) = self.frames.get_mut(previous.frame) {
+            frame.context = previous.context;
+        }
+    }
+
+    /// The nearest VM frame with held configuration or a manual activation
+    /// of its own. Activations scoped to records end with their records.
+    fn reset_trace_scope_frame(&mut self) {
         self.trace_scope_frame = self
             .held_traces
             .last()
             .map(|(frame, _)| *frame)
             .into_iter()
-            .chain(self.manual_activations.last().map(|scope| scope.frame))
+            .chain(
+                self.manual_activations
+                    .iter()
+                    .rev()
+                    .find(|scope| scope.record.is_none())
+                    .map(|scope| scope.frame),
+            )
             .max()
             .unwrap_or(usize::MAX);
     }
@@ -2820,11 +2875,11 @@ impl BexVm {
     }
 
     pub(crate) fn passthrough_trace(&self) -> Result<CallTrace, &'static str> {
-        let frame = self
-            .frames
-            .len()
-            .checked_sub(1)
-            .ok_or("trace._passthrough requires a pass-through invocation")?;
+        // A pass-through body always runs in a VM frame; a directly called
+        // compiled body above one is a different invocation.
+        let Some(FrameAt::Vm(frame)) = self.top_frame() else {
+            return Err("trace._passthrough requires a pass-through invocation");
+        };
         // Only this exact invocation can access its held config. Never search ancestors.
         self.held_traces
             .last()
@@ -8084,8 +8139,13 @@ impl BexVm {
         value: Value,
         evidence: Option<&mut error_evidence::UnwindEvidence>,
     ) {
-        if let FrameAt::Vm(frame_idx) = frame {
-            self.end_manual_activation(frame_idx);
+        match frame {
+            FrameAt::Vm(frame_idx) => self.end_manual_activation(frame_idx),
+            FrameAt::Record(record) => {
+                if compiled_rt::record_ref(record).scoped() {
+                    self.end_record_activation(record);
+                }
+            }
         }
         let telemetry = self.with_frame_receipt(frame, Option::take);
         let Some(telemetry) = telemetry else {
@@ -9767,8 +9827,11 @@ impl BexVm {
                             .as_object_ptr()
                             .unwrap_or_else(|| unreachable!("an instance is an object"));
                         let telemetry = if self.telemetry.is_some() {
-                            let actual_caller = self.frame_function_identity(*frame_idx);
-                            let caller_pc = u32::try_from(self.cur_pc).unwrap_or(u32::MAX);
+                            // A compiled body that spawns may be a frame record
+                            // above this frame; see `begin_telemetry_wait`.
+                            let caller = self.bytecode_caller(*frame_idx);
+                            let actual_caller = self.frame_identity(caller);
+                            let caller_pc = self.caller_pc(caller, *frame_idx, self.cur_pc);
                             let body = crate::package_baml::plan_body(self, plan_value)?;
                             let callee = self.callable_function_identity(body);
                             self.telemetry.as_mut().map(|telemetry| match callee {
@@ -9913,7 +9976,8 @@ impl BexVm {
                                         || VmInternalError::NotEnoughItemsOnStack(callee.arity),
                                     )?,
                                 );
-                                if self.frames.len() >= MAX_FRAMES {
+                                // Frame records below count, as on the call path.
+                                if self.level_count() >= MAX_FRAMES {
                                     return Err(VmError::thrown_fresh(
                                         self.panic_to_exception_value(VmPanic::StackOverflow),
                                     ));

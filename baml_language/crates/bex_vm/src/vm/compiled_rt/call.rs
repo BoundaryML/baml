@@ -292,6 +292,8 @@ impl BexVm {
         let locals_offset = self.push_compiled_frame(callee, type_args, type_metadata, None);
         let result = self.run_entry(body, args);
         if result.is_ok() {
+            // As a bytecode return does: a span the body activated ends.
+            self.end_manual_activation(self.frames.len() - 1);
             self.frames.pop();
             self.stack.truncate(locals_offset.raw());
         }
@@ -348,6 +350,7 @@ impl BexVm {
             ) {
                 self.charge_model_usage(value);
             }
+            self.end_manual_activation(self.frames.len() - 1);
             let Some(Frame::Bytecode(frame)) = self.frames.pop() else {
                 unreachable!("a compiled callee has a bytecode frame");
             };

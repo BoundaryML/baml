@@ -319,6 +319,8 @@ fn exec_with_compiled_bodies(
             Ok(VmExecState::EarlyYield) => {}
             // The engine answers a log with a null.
             Ok(VmExecState::Log { .. }) => vm.stack.push(Value::NULL),
+            // Tests that spawn ignore the task; the body gets a null future.
+            Ok(VmExecState::Spawn { .. }) => vm.stack.push(Value::NULL),
             Ok(VmExecState::Complete(value)) => {
                 break vm.as_string(&value).unwrap().to_string();
             }
@@ -1243,6 +1245,98 @@ fn inline_observed_compiled_calls_record_as_the_call_path_does() {
                 assert_eq!(completions("Reentry"), 5);
             }
             AutoTelemetryLevel::Low => unreachable!(),
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_spawn_below_a_frame_record_is_attributed_to_its_body() {
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    use btel_settings::mode::AutoTelemetryLevel;
+
+    use btel_types::CallPathEdge;
+
+    use crate::compiled_rt::{FORCE_CALL_FUNNEL, FORCE_VM_FRAMES, Step};
+
+    static INNER: AtomicU32 = AtomicU32::new(0);
+    // Spawns the plan it is passed, below `Outer`.
+    fn inner(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+        fr.note_pc(0);
+        vm.suspend(Step::Spawn(args[0]))?;
+        Ok(Value::int(1))
+    }
+    fn outer(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+        let callee = vm.idx_to_ptr(ObjectIndex::from_raw(INNER.load(Ordering::Relaxed) as usize));
+        let below = if vm.direct_calls() {
+            vm.call_record(
+                fr,
+                callee,
+                0,
+                |_: &mut BexVm| [args[0]],
+                |vm, fr| inner(vm, fr, &[args[0]]),
+            )?
+        } else {
+            vm.call_compiled(fr, callee, inner, &[], &[args[0]], 0)?
+        };
+        Ok(Value::int(test_int(below) + 1))
+    }
+    const SOURCE: &str = r#"
+        function Work() -> int { 1 }
+        function Inner(p: baml.spawn.Plan<int, never>) -> int { 1 }
+        function Outer(p: baml.spawn.Plan<int, never>) -> int { Inner(p) + 1 }
+        function Main() -> string {
+            let p = baml.spawn.Plan.new(() -> int { Work() });
+            `${Outer(p)}`
+        }
+    "#;
+
+    let modes = [
+        ("call path", true, false),
+        ("vm frames", false, true),
+        ("records", false, false),
+    ];
+    for level in [AutoTelemetryLevel::Medium, AutoTelemetryLevel::High] {
+        let mut runs = Vec::new();
+        for (mode, funnel, frames) in modes {
+            FORCE_CALL_FUNNEL.with(|force| force.set(funnel));
+            FORCE_VM_FRAMES.with(|force| force.set(frames));
+            let (out, vm) = exec_with_compiled_bodies(
+                SOURCE,
+                &[("user.Inner", inner), ("user.Outer", outer)],
+                &[("user.Inner", &INNER)],
+                Some(level),
+            );
+            FORCE_CALL_FUNNEL.with(|force| force.set(false));
+            FORCE_VM_FRAMES.with(|force| force.set(false));
+            assert_eq!(out, "2", "level {level:?}, {mode}");
+            // The spawn's call path: the spawned lambda and its visible caller.
+            let telemetry = vm.telemetry.as_ref().unwrap();
+            let spawned: Vec<Option<String>> = telemetry
+                .span_records()
+                .iter()
+                .filter_map(|event| match event {
+                    SpanRecord::CallPathDefined {
+                        visible_caller,
+                        edge: CallPathEdge::Spawn,
+                        ..
+                    } => Some(
+                        visible_caller
+                            .map(|id| vm.heap.function_metadata(vm.proof(), id).unwrap().fqn),
+                    ),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(
+                spawned,
+                [Some("user.Inner".to_string())],
+                "spawn caller at {level:?}, {mode}"
+            );
+            runs.push(telemetry_records(&vm));
+        }
+        for ((mode, _, _), run) in modes.iter().zip(&runs).skip(1) {
+            assert_eq!(run.1, runs[0].1, "span records at {level:?}, {mode}");
         }
     }
 }

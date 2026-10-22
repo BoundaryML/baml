@@ -52,6 +52,9 @@ pub struct FrameRecord {
     /// The record's level; an entry record has its VM frame's.
     level: u32,
     entry: bool,
+    /// Whether a manual span activation is scoped to this record; see
+    /// [`BexVm::activate_manual_span`].
+    scoped: Cell<bool>,
     receipt: Cell<Option<FrameTelemetry>>,
     /// Type arguments in the callee's De Bruijn order; `None` for none. An
     /// entry record's are its VM frame's.
@@ -111,6 +114,16 @@ impl FrameRecord {
         unsafe {
             (*self.receipt.as_ptr()).is_some()
         }
+    }
+
+    #[inline]
+    pub(crate) fn scoped(&self) -> bool {
+        self.scoped.get()
+    }
+
+    #[inline]
+    pub(crate) fn set_scoped(&self, scoped: bool) {
+        self.scoped.set(scoped);
     }
 
     #[inline]
@@ -443,6 +456,7 @@ impl BexVm {
             base: base as u32,
             level: level as u32,
             entry: false,
+            scoped: Cell::new(false),
             receipt: Cell::new(None),
             type_args: UnsafeCell::new(type_args),
         };
@@ -465,6 +479,9 @@ impl BexVm {
             Ok(value) => {
                 self.stack.truncate(base);
                 drop(pop);
+                if record.scoped.get() {
+                    self.end_record_activation(&raw const record);
+                }
                 if record.has_receipt() {
                     self.complete_record(&record, value);
                 }
@@ -604,6 +621,7 @@ impl BexVm {
             base: base as u32,
             level: (idx + links.count.get() as usize) as u32,
             entry: true,
+            scoped: Cell::new(false),
             receipt: Cell::new(None),
             type_args: UnsafeCell::new(None),
         };
