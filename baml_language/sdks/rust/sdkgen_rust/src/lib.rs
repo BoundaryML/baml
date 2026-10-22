@@ -2335,4 +2335,59 @@ mod tests {
             "{lib}"
         );
     }
+
+    #[test]
+    fn json_values_have_serde_impls() {
+        // `baml_bridge::Json` is `serde_json::Value`. The stdlib alias item's
+        // expansion has a `bigint` arm, which must not count against it.
+        let json_alias = Name::from_dotted_path(baml_base::qualified_name::BAML_JSON_JSON);
+        let payload = name("user", &[], "Payload");
+        let event = name("user", &[], "Event");
+        let pool = SymbolPool::from([
+            (json_alias.clone(), json_shaped_alias(&json_alias)),
+            (
+                payload.clone(),
+                Symbol::TypeAlias(baml_sdkgen_types::TypeAlias {
+                    name: payload.clone(),
+                    resolves_to: json_ref(),
+                    recursive: false,
+                    origin: Origin {
+                        source_file_path: "main.baml".to_string(),
+                        span_start: 0,
+                    },
+                }),
+            ),
+            (
+                event.clone(),
+                class_symbol(
+                    &event,
+                    vec![
+                        property("payload", json_ref()),
+                        property("maybe", Ty::Union(Box::new([json_ref(), Ty::Null]))),
+                        property(
+                            "items",
+                            Ty::Union(Box::new([Ty::List(Box::new(json_ref())), Ty::String])),
+                        ),
+                        property("aliased", Ty::TypeAlias(payload)),
+                    ],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+        ]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        let flat = flat(lib);
+        assert!(
+            flat.contains(
+                "#[cfg_attr(feature=\"serde\",derive(::serde::Serialize,::serde::Deserialize))]pubstructEvent"
+            ),
+            "{lib}"
+        );
+        assert!(
+            flat.contains("#[cfg(feature=\"serde\")]impl::serde::SerializeforjsonListOrString"),
+            "{lib}"
+        );
+    }
 }

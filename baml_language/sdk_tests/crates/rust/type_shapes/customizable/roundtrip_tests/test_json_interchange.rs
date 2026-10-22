@@ -9,9 +9,10 @@ use std::fmt::Debug;
 
 use baml_bridge::{BamlValue, Map};
 use baml_sdk::json_interchange::{
-    FastOrSlow, IntOrFloat, IntOrLabel, JsonDoc, Label, Shade, from_json, to_json,
+    FastOrSlow, IntOrFloat, IntOrLabel, JsonDoc, JsonFields, Label, Shade, from_json, to_json,
 };
 use serde::{Serialize, de::DeserializeOwned};
+use serde_json::json;
 
 fn label(text: &str, note: Option<&str>) -> Label {
     Label {
@@ -171,6 +172,44 @@ fn test_json_interchange_unions_take_the_first_arm_that_fits() {
         assert_deserialize_agrees::<FastOrSlow>(r#""slow""#),
         FastOrSlow::Slow
     );
+}
+
+// SDK_PARITY_LINT(skip): validates the Rust SDK's optional serde impls
+#[test]
+fn test_json_interchange_json_fields_match_baml() {
+    // Object keys are written sorted: `serde_json::Map` sorts them unless
+    // `serde_json`'s `preserve_order` feature is on, and BAML keeps the
+    // order it received.
+    let value = JsonFields {
+        payload: json!({
+            "a": [null, true, -3, 2.5, 2.0, "s"],
+            "b": {"c": {}},
+            "wide": [i64::MIN, u64::MAX],
+        }),
+        extra: None,
+        items: vec![json!(1), json!("x"), json!([])],
+    };
+    assert_eq!(
+        assert_serialize_agrees(&value),
+        r#"{"payload":{"a":[null,true,-3,2.5,2.0,"s"],"b":{"c":{}},"wide":[-9223372036854775808,18446744073709551615]},"extra":null,"items":[1,"x",[]]}"#
+    );
+    assert_serialize_agrees(&JsonFields {
+        extra: Some(json!({"k": "v"})),
+        ..value
+    });
+
+    // A `json?` field reads `null` and an absent key as `None`.
+    for text in [
+        r#"{"payload":7,"items":[]}"#,
+        r#"{"payload":7,"extra":null,"items":[]}"#,
+    ] {
+        let read = assert_deserialize_agrees::<JsonFields>(text);
+        assert_eq!(read.extra, None);
+    }
+    // A `json` field is required even though `null` is a json value.
+    let missing = r#"{"items":[]}"#;
+    assert!(from_json::<JsonFields>(missing.to_string()).is_err());
+    assert!(serde_json::from_str::<JsonFields>(missing).is_err());
 }
 
 // SDK_PARITY_LINT(skip): validates the Rust SDK's optional serde impls

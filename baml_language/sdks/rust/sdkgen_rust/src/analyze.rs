@@ -454,6 +454,9 @@ fn has_serde(ty: &Ty, serde: &HashSet<Name>) -> bool {
         Ty::Class(name, args) => {
             serde.contains(name) && args.iter().all(|arg| has_serde(arg, serde))
         }
+        // `baml_bridge::Json` is `serde_json::Value`: its serde form is the
+        // JSON value itself.
+        Ty::TypeAlias(name) if crate::translate_ty::is_canonical_json(name) => true,
         Ty::TypeAlias(name) => serde.contains(name),
         // Functions, handles and opaque values have no JSON form.
         Ty::Media(_)

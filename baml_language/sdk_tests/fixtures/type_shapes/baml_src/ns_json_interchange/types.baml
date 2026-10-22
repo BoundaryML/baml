@@ -33,6 +33,13 @@ class JsonDoc {
     crate: int,
 }
 
+// `json` fields hold untyped JSON (`serde_json::Value` in Rust).
+class JsonFields {
+    payload: json,
+    extra: json?,
+    items: json[],
+}
+
 function to_json<T>(value: T) -> string throws baml.json.SerializationError {
     baml.json.to_string(value)
 }
