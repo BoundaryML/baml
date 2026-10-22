@@ -310,11 +310,19 @@ fn body_of(module: &RustModule, name: &str) -> String {
         .find(&format!("pub fn {symbol}("))
         .expect("body is emitted");
     // Generated code is unindented, so a body ends where the next item starts.
-    let end = ["\npub fn ", "\nfn ", "\nstatic ", "\nconst "]
-        .iter()
-        .filter_map(|item| module.source[start + 1..].find(item))
-        .min()
-        .map_or(module.source.len(), |end| start + 1 + end);
+    let mut end = module.source.len();
+    let mut at = start + module.source[start..].find('\n').map_or(0, |line| line + 1);
+    while at < end {
+        let line = &module.source[at..];
+        if ["pub ", "fn ", "static ", "const ", "#[", "use ", "type "]
+            .iter()
+            .any(|item| line.starts_with(item))
+        {
+            end = at;
+        } else {
+            at += line.find('\n').map_or(line.len(), |next| next + 1);
+        }
+    }
     module.source[start..end].to_string()
 }
 
@@ -1153,7 +1161,7 @@ function plain(n: int) -> int { n + 1 }
     );
     for name in ["user.fib", "user.left", "user.right"] {
         let body = body_of(&module, name);
-        assert!(body.contains("vm.should_yield()"), "{body}");
+        assert!(body.contains("vm.should_yield_at_call()"), "{body}");
         assert!(body.contains("vm.suspend(Step::Yield)"), "{body}");
     }
     for name in ["user.left", "user.right", "user.caller"] {
@@ -1163,7 +1171,7 @@ function plain(n: int) -> int { n + 1 }
     }
     for name in ["user.caller", "user.plain"] {
         let body = body_of(&module, name);
-        assert!(!body.contains("vm.should_yield()"), "{body}");
+        assert!(!body.contains("vm.should_yield_at_call()"), "{body}");
     }
     syn::parse_file(&module.source).expect("generated module parses as Rust");
 }
