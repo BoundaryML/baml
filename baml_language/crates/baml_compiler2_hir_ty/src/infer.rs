@@ -7056,13 +7056,19 @@ impl<'db> InferenceContext<'db> {
                 bound,
             );
         }
-        if matches!(
+        // A matched impl's method with no generics of its own still runs in
+        // the impl's frame, and the plan carries every statically resolved
+        // callee's whole frame: the impl's bindings are its owner prefix.
+        if let crate::method_resolution::MemberDeclarer::ImplMethod {
+            frame_type_args, ..
+        } = &interface_member.declarer
+        {
+            let frame_type_args = frame_type_args.clone();
+            self.write_call_type_args(call, &frame_type_args, frame_type_args.len());
+        } else if matches!(
             &interface_member.declarer,
             crate::method_resolution::MemberDeclarer::VirtualMethod {
                 method: DeclRef::External(_),
-                ..
-            } | crate::method_resolution::MemberDeclarer::ImplMethod {
-                func: DeclRef::External(_),
                 ..
             }
         ) {
