@@ -391,10 +391,8 @@ impl<'db> Generator<'_, 'db> {
     fn recursion_check(&mut self) {
         let live = self.header_locals(self.body.entry.0);
         let call = self.rooted(&live, "vm.suspend(Step::Yield)");
-        self.emit_line("std::thread_local! { static CALLS: std::cell::Cell<u32> = const { std::cell::Cell::new(0) }; }");
-        self.emit_line(&format!(
-            "if CALLS.with(|calls| {{ let n = calls.get().wrapping_add(1); calls.set(n); n % {YIELD_EVERY} == 0 }}) && vm.should_yield() {{ {call}?; }}"
-        ));
+        // The interpreter's own countdown, as it polls after every call.
+        self.emit_line(&format!("if vm.should_yield() {{ {call}?; }}"));
     }
 
     /// The heap values live across the suspension `block`'s terminator may make.

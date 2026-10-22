@@ -1150,8 +1150,6 @@ function plain(n: int) -> int { n + 1 }
     );
     for name in ["user.fib", "user.left", "user.right"] {
         let body = body_of(&module, name);
-        assert!(body.contains("CALLS.with("), "{body}");
-        assert!(body.contains("wrapping_add(1)"), "{body}");
         assert!(body.contains("vm.should_yield()"), "{body}");
         assert!(body.contains("vm.suspend(Step::Yield)"), "{body}");
     }
@@ -1162,7 +1160,7 @@ function plain(n: int) -> int { n + 1 }
     }
     for name in ["user.caller", "user.plain"] {
         let body = body_of(&module, name);
-        assert!(!body.contains("CALLS.with("), "{body}");
+        assert!(!body.contains("vm.should_yield()"), "{body}");
     }
     syn::parse_file(&module.source).expect("generated module parses as Rust");
 }
