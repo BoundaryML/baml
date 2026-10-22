@@ -3790,6 +3790,16 @@ impl io::IoNamespaceAiInternal for NativeSysOps {
         sys_ops::build_output_format_op(&return_type, ctx)
     }
 
+    fn reaches_media(
+        &self,
+        _heap: &Arc<BexHeap>,
+        _call_id: CallId,
+        t: ::sys_types::SapTy,
+        ctx: &SysOpContext,
+    ) -> SysOpOutput<bool> {
+        sys_ops::reaches_media_op(&t, ctx)
+    }
+
     fn get_return_type(
         &self,
         _heap: &Arc<BexHeap>,

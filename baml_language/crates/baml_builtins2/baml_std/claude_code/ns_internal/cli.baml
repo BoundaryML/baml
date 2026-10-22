@@ -52,7 +52,9 @@ function transcript_text(j: ai.Journal) -> string {
 /// lets one CLI run return either the final result or BAML tool calls. T's
 /// $defs lift to the envelope root so its $refs stay valid.
 function envelope_schema(output_type: reflect.Type) -> map<string, unknown> {
-    let final_root = baml.json.from_json<map<string, unknown>>(baml.json.schema(output_type));
+    let final_root = baml.json.from_json<map<string, unknown>>(
+        baml.json.schema(output_type, naming = baml.json.Naming.Aliased),
+    );
     let definitions = final_root.delete("$defs");
     let call_props: map<string, unknown> = {};
     let _ = call_props.set("id", _type_schema("string"));
@@ -265,7 +267,8 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     let schema = if (has_tools) {
         baml.json.to_json(envelope_schema(input.output_type))
     } else {
-        baml.json.schema(input.output_type)
+        // The runner parses the answer with SAP, which reads aliased names.
+        baml.json.schema(input.output_type, naming = baml.json.Naming.Aliased)
     };
     let suffix = if (has_tools) {
         `${transcript_text(input.journal)}${tool_protocol(input.toolbox)}`

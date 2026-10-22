@@ -193,6 +193,7 @@ function _stream_recording_request<T>(spec: ai.FunctionSpec<T>) -> baml.http.Req
       toolbox: spec.tools(),
       output_type: spec.output_type(),
     },
+    null,
     true,
   )
 }

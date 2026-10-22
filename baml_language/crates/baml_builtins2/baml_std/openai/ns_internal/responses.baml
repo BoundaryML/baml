@@ -116,9 +116,20 @@ class OaReasoningParams {
     summary: string?,
 }
 
-/// `text` carries `verbosity` only: `text.format` stays unset by design (G15).
+/// `text.verbosity`, and `text.format` when the client sends Structured
+/// Outputs (`ResponsesClient.structured_output`).
 class OaTextParams {
     verbosity: string?,
+    format: OaTextFormat?,
+}
+
+/// `text.format`: `{"type": "json_schema", "name", "strict", "schema"}`.
+class OaTextFormat {
+    type: string,
+    name: string,
+    strict: bool,
+    // The strict JSON Schema of the output type (`StructuredOutput.schema`).
+    schema: baml.json.json,
 }
 
 class OaResponsesRequest {
@@ -733,11 +744,53 @@ function _reasoning(c: root.ResponsesClient) -> OaReasoningParams? {
     }
 }
 
-function _text(c: root.ResponsesClient) -> OaTextParams? {
-    if (c.verbosity == null) {
+function _text(c: root.ResponsesClient, structured: StructuredOutput?) -> OaTextParams? {
+    let format: OaTextFormat? = match (structured) {
+        let plan: StructuredOutput => {
+            OaTextFormat {
+                type: "json_schema",
+                name: plan.name(),
+                strict: true,
+                schema: plan.schema,
+            }
+        },
+        null => null,
+    };
+    if (c.verbosity == null && format == null) {
         null
     } else {
-        OaTextParams { verbosity: c.verbosity }
+        OaTextParams { verbosity: c.verbosity, format: format }
+    }
+}
+
+/// (internal) Put the output type's schema back over the pruned body, verbatim: the
+/// prune treats a `null` in it as an unset option, which it is not.
+function _restore_format_schema(
+    body: baml.json.json,
+    structured: StructuredOutput?,
+) -> baml.json.json {
+    if let plan: StructuredOutput = structured {
+        if let object: map<string, baml.json.json> = body {
+            if let text: map<string, baml.json.json> = object.get("text") {
+                if let format: map<string, baml.json.json> = text.get("format") {
+                    let _ = format.set("schema", plan.schema);
+                }
+            }
+        }
+    }
+    body
+}
+
+/// (internal) The structured output a request carries: null unless the client turned
+/// structured outputs on.
+function _structured_output(
+    c: root.ResponsesClient,
+    input: ai.ModelTurnInput,
+) -> StructuredOutput? {
+    if (c.structured_output) {
+        structured_output(input.output_type, c.provider())
+    } else {
+        null
     }
 }
 
@@ -778,13 +831,13 @@ function _url(c: root.ResponsesClient) -> string {
 
 /// ai.ModelTurnInput -> one Responses API request.
 function render(c: root.ResponsesClient, input: ai.ModelTurnInput) -> baml.http.Request {
-    _request(c, input, false, preview = false)
+    _request(c, input, _structured_output(c, input), false, preview = false)
 }
 
 /// The request one `render` would send. This path never downloads URLs;
 /// provider-unsupported URL forms return PreviewUnsupported.
 function preview(c: root.ResponsesClient, input: ai.ModelTurnInput) -> baml.http.Request {
-    _request(c, input, false, preview = true)
+    _request(c, input, _structured_output(c, input), false, preview = true)
 }
 
 /// (internal) The shared request builder: identical body for both paths, plus the
@@ -792,6 +845,7 @@ function preview(c: root.ResponsesClient, input: ai.ModelTurnInput) -> baml.http
 function _request(
     c: root.ResponsesClient,
     input: ai.ModelTurnInput,
+    structured: StructuredOutput?,
     stream: bool,
     preview: bool = false,
 ) -> baml.http.Request {
@@ -822,15 +876,15 @@ function _request(
         top_p: c.top_p,
         max_output_tokens: c.max_output_tokens,
         reasoning: _reasoning(c),
-        text: _text(c),
+        text: _text(c, structured),
         parallel_tool_calls: c.parallel_tool_calls,
         tools: tools,
         tool_choice: _tool_choice(tools, wants_image),
     };
-    // typed request -> json -> drop unset optionals -> put the caller's own
-    // open-ended JSON back (tool schemas, then the cache breakpoints that ride
-    // on a content part) -> user passthrough LAST.
-    let pruned = _restore_tool_schemas(_prune_nulls(baml.json.to_json(request)), tools);
+    // typed request -> json -> drop unset optionals -> put the open-ended JSON
+    // back (tool schemas, the output type's schema, then the cache breakpoints
+    // that ride on a content part) -> user passthrough LAST.
+    let pruned = _restore_format_schema(_restore_tool_schemas(_prune_nulls(baml.json.to_json(request)), tools), structured);
     let body = ai.wire.merge_request_body(_apply_cache_breakpoints(pruned, breakpoints), c.request_body);
     baml.http.Request {
         method: "POST",
@@ -1073,20 +1127,29 @@ function _commentary_output(resp: OaResponse, output_type: reflect.Type) -> ai.P
 }
 
 function invoke(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.ModelTurn {
-    let req = ai.LlmTimeoutOptions._resolve(c.timeout)._apply(render(c, input));
+    let structured = _structured_output(c, input);
+    let req = ai.LlmTimeoutOptions._resolve(c.timeout)._apply(
+        _request(c, input, structured, false, preview = false),
+    );
     let sent = ai.wire.send_as_with_wire<OaResponse>(
         req,
         ai.events.ModelKey { provider: c.provider(), model: c.model },
         capture_wire = c.capture_wire,
     );
     let turn = parse(sent.value);
-    ai.internal.with_own_call(
-        ai.ModelTurn { ...turn, parsed_output: _commentary_output(sent.value, input.output_type) },
-        sent.call,
-        usage(sent.value),
-        c.model,
-        sent.value.model,
-    )
+    // A structured answer is the JSON in the turn's last text, read strictly.
+    // Without one, a `commentary` message may hold the output (see
+    // `_commentary_output`).
+    let answered = match (structured) {
+        let plan: StructuredOutput => with_structured_output(turn, plan, c.provider()),
+        null => {
+            ai.ModelTurn {
+                ...turn,
+                parsed_output: _commentary_output(sent.value, input.output_type),
+            }
+        },
+    };
+    ai.internal.with_own_call(answered, sent.call, usage(sent.value), c.model, sent.value.model)
 }
 
 // ---------------------------------------------------------------------------
@@ -1334,8 +1397,11 @@ function _stream_open_failure(error: unknown) -> never {
 /// The streaming entry point: the same request as `invoke` with `stream: true`,
 /// wrapped in an ai.TurnStream over the SSE connection.
 function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.stream.TurnStream {
+    if (c.structured_output) {
+        throw _reject(c.provider(), "structured outputs do not stream yet; call the function without streaming, or use a client without structured_output")
+    }
     let limits = ai.LlmTimeoutOptions._resolve(c.timeout);
-    let req = limits._apply(_request(c, input, true, preview = false));
+    let req = limits._apply(_request(c, input, null, true, preview = false));
     let started = baml.time.Instant.now();
     let sse = baml.http.send_sse(req) catch_all (e) {
         _ => _stream_open_failure(e),

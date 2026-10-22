@@ -430,8 +430,7 @@ impl TypeCtx {
         enum_def: &'a ::sys_types::EnumDefinition,
     ) -> EnumTy<'a, NamedTy> {
         let variants = enum_def
-            .variants
-            .iter()
+            .variants()
             .map(|variant| AnnotatedEnumVariant {
                 name: variant.name.as_str().into(),
                 aliases: variant.alias.iter().map(|a| a.as_str().into()).collect(),
@@ -555,8 +554,7 @@ impl TypeCtx {
                     .get(type_name)
                     .ok_or_else(|| ConvertError::UnknownEnum(type_name.clone()))?;
                 let variant_def = enum_def
-                    .variants
-                    .iter()
+                    .variants()
                     .find(|v| v.name == AsRef::<str>::as_ref(variant))
                     .ok_or(ConvertError::InternalError(
                         "enum variant not found in enum definition",

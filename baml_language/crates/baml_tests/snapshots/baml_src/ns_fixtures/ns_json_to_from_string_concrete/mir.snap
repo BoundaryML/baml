@@ -24,7 +24,7 @@ fn user.fixtures.json_to_from_string_concrete.deserialize_user(s: string) -> use
 
     bb0: {
         _2 = load_type(user.fixtures.json_to_from_string_concrete.User);
-        _0 = call const fn baml.json.from_string<copy _2>(copy _1) -> [bb1];
+        _0 = call const fn baml.json.from_string<copy _2>(copy _1, const <omitted>) -> [bb1];
     }
 
     bb1: {

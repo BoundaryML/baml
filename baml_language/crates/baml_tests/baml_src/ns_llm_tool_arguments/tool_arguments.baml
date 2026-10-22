@@ -342,18 +342,26 @@ test "coerce throws for a type the parser cannot model" {
     assert.equal(tool_arg_coerce_unmodelled(), "ParseError,ParseError,ParseError,ParseError")
 }
 
-// So a tool with such a parameter fails as an `InvalidArgument` when a model
-// calls it, and does not panic.
+// A tool with such a parameter is rejected when it is built, before a model
+// is offered it: its schema has no JSON form, because the `@skip` field has no
+// empty value to hold.
 
 function tool_arg_skips_image(item: ToolArgSkipsImage) -> string {
     item.label
 }
 
-test "an argument of a type the parser cannot model is an InvalidArgument, not a panic" {
-    assert.is_true(
-        tool_arg_model_call(tool_arg_skips_image, `{"item": {"label": "x"}}`)
-            .starts_with("InvalidArgument: invalid arguments for tool_arg_skips_image: "),
-    )
+function tool_arg_build_skips_image() -> string {
+    {
+        ai.tools.tool(tool_arg_skips_image);
+        "built"
+    } catch_all (e) {
+        let unsupported: baml.errors.Unsupported => unsupported.message,
+        _ => "another error",
+    }
+}
+
+test "a tool whose argument has no JSON form is rejected when it is built" {
+    assert.contains(tool_arg_build_skips_image(), "ToolArgSkipsImage.picture` is `@skip`")
 }
 
 // The parser's integer is wider than an `int`: a number that fits the one and

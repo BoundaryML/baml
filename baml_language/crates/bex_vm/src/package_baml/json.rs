@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use baml_type::MediaKind;
 use bex_vm_types::{RealizedTy, TyTemplate};
+use sys_types::JsonNaming;
 
 /// The runtime type of an untyped `json` value: the recursive `baml.json.json`
 /// alias (`null | bool | int | bigint | float | string | json[] | map<string, json>`).
@@ -477,7 +478,11 @@ impl BamlNamespaceJson for PackageBamlImpl {
         bex_str::BexStr::from(s)
     }
 
-    fn from_string(vm: &mut BexVm, s: &bex_str::BexStr) -> Result<Value, VmRustFnError> {
+    fn _from_string(
+        vm: &mut BexVm,
+        s: &bex_str::BexStr,
+        aliased: bool,
+    ) -> Result<Value, VmRustFnError> {
         let ty = vm
             .current_call_type_args()
             .first()
@@ -487,7 +492,7 @@ impl BamlNamespaceJson for PackageBamlImpl {
                     name: "baml.json.from_string: missing type argument".to_string(),
                 })
             })?;
-        json_from_string_typed(vm, s.as_str(), &ty)
+        json_from_string_typed(vm, s.as_str(), &ty, JsonNaming::new(aliased))
     }
 
     fn to_json(vm: &mut BexVm, v: &Value) -> NativeCallResult {
@@ -1162,7 +1167,7 @@ pub(crate) fn read_media_value(vm: &BexVm, value: Value) -> Option<Arc<bex_vm_ty
 // ─── Typed JSON deserialize ──────────────────────────────────────────────────
 
 /// Parse a JSON string and coerce it to a VM `Value` of the given runtime
-/// `RealizedTy`.
+/// `RealizedTy`, reading field and variant names by `naming`.
 ///
 /// Throws `ParseError` for invalid JSON and `DecodeError` when the
 /// parsed JSON does not match the target type.
@@ -1170,6 +1175,7 @@ pub fn json_from_string_typed(
     vm: &mut BexVm,
     s: &str,
     ty: &RealizedTy,
+    naming: JsonNaming,
 ) -> Result<Value, VmRustFnError> {
     let parsed: serde_json::Value = serde_json::from_str(s).map_err(|e| {
         let msg = e.to_string();
@@ -1177,7 +1183,7 @@ pub fn json_from_string_typed(
     })?;
     validate_json_bigint_bounds(&parsed).map_err(|message| raise_decode(vm, message, ""))?;
     let mut path = String::new();
-    ty_serde_to_value(vm, &parsed, ty, &mut path)
+    ty_serde_to_value(vm, &parsed, ty, naming, &mut path)
 }
 
 /// Convert a bigint to the arbitrary-precision JSON number representation used
@@ -1263,6 +1269,7 @@ fn ty_serde_to_value(
     vm: &mut BexVm,
     json: &serde_json::Value,
     ty: &RealizedTy,
+    naming: JsonNaming,
     path: &mut String,
 ) -> Result<Value, VmRustFnError> {
     match ty {
@@ -1315,7 +1322,7 @@ fn ty_serde_to_value(
                 let mut items = Vec::with_capacity(arr.len());
                 for (i, item) in arr.iter().enumerate() {
                     let v = with_path_segment(path, format_args!("[{i}]"), |p| {
-                        ty_serde_to_value(vm, item, elem, p)
+                        ty_serde_to_value(vm, item, elem, naming, p)
                     })?;
                     items.push(v);
                 }
@@ -1350,7 +1357,7 @@ fn ty_serde_to_value(
                         ));
                     }
                     let v = with_path_segment(path, format_args!("[{k:?}]"), |p| {
-                        ty_serde_to_value(vm, val, vty, p)
+                        ty_serde_to_value(vm, val, vty, naming, p)
                     })?;
                     entries.insert(bex_vm_types::BexStr::from(k.as_str()), v);
                 }
@@ -1368,36 +1375,75 @@ fn ty_serde_to_value(
         }
 
         RealizedTy::TypeAlias(_) => {
-            // Unknown / cross-package recursive aliases: fall back to untyped.
-            Ok(serde_to_value(vm, json))
+            // A recursive alias decodes as its definition. Unfolding it takes
+            // no JSON, so the members are gathered once, here.
+            let mut members = Vec::new();
+            alias_members(vm, ty, &mut Vec::new(), &mut members);
+            match members.len() {
+                0 => Err(raise_decode(vm, format!("no value has type `{ty}`"), path)),
+                1 => ty_serde_to_value(vm, json, &members[0], naming, path),
+                _ => ty_serde_to_value(
+                    vm,
+                    json,
+                    &RealizedTy::Union(members.into_boxed_slice()),
+                    naming,
+                    path,
+                ),
+            }
         }
 
         RealizedTy::Class(head, type_args) => {
             if let Some(kind) = vm.stdlib_heads().media_kind(*head) {
                 return deserialize_media(vm, json, kind, *head, path);
             }
-            deserialize_class_instance(vm, json, *head, type_args, path)
+            deserialize_class_instance(vm, json, *head, type_args, naming, path)
         }
 
         RealizedTy::Interface(head, type_args, _) => {
-            deserialize_class_instance(vm, json, *head, type_args, path)
+            deserialize_class_instance(vm, json, *head, type_args, naming, path)
         }
 
         RealizedTy::Enum(head) => match json {
-            serde_json::Value::String(s) => deserialize_enum_variant(vm, *head, s, path),
+            serde_json::Value::String(s) => deserialize_enum_variant(vm, *head, s, naming, path),
             _ => Err(raise_decode(vm, "expected enum variant string", path)),
         },
 
-        RealizedTy::EnumVariant(head, name) => match json {
-            serde_json::Value::String(s) if s == name.as_str() => {
-                deserialize_enum_variant(vm, *head, s, path)
+        RealizedTy::EnumVariant(head, name) => {
+            let named = baml_type::HeadDisplay::head_display_name(head);
+            let expected = match vm.get_object(head.ptr()) {
+                Object::Enum(e) => e
+                    .variants
+                    .iter()
+                    .find(|v| v.name == name.as_str())
+                    .map(|v| {
+                        (
+                            naming.shows(v.skip),
+                            naming.key(&v.name, v.alias.as_deref()).to_owned(),
+                        )
+                    }),
+                _ => return Err(raise_decode(vm, format!("`{named}` is not an enum"), path)),
+            };
+            match (expected, json) {
+                (Some((true, expected)), serde_json::Value::String(s)) if *s == expected => {
+                    deserialize_enum_variant(vm, *head, s, naming, path)
+                }
+                (Some((true, expected)), _) => Err(raise_decode(
+                    vm,
+                    format!("expected enum variant `{expected}`"),
+                    path,
+                )),
+                (Some((false, _)), _) => Err(raise_decode(
+                    vm,
+                    format!("enum variant `{named}.{name}` is `@skip`, so JSON has no name for it"),
+                    path,
+                )),
+                (None, _) => Err(raise_decode(
+                    vm,
+                    format!("enum `{named}` has no variant `{name}`"),
+                    path,
+                )),
             }
-            _ => Err(raise_decode(
-                vm,
-                format!("expected enum variant `{name}`"),
-                path,
-            )),
-        },
+        }
 
         RealizedTy::Media(kind) => deserialize_media_by_kind(vm, json, *kind, path),
 
@@ -1411,7 +1457,7 @@ fn ty_serde_to_value(
             // Try each member structurally; first match wins.
             for member in members {
                 let mut tmp_path = path.clone();
-                if let Ok(v) = ty_serde_to_value(vm, json, member, &mut tmp_path) {
+                if let Ok(v) = ty_serde_to_value(vm, json, member, naming, &mut tmp_path) {
                     return Ok(v);
                 }
             }
@@ -1457,12 +1503,14 @@ fn ty_serde_to_value(
             Err(raise_decode(vm, "cannot deserialize opaque type", path))
         }
 
-        RealizedTy::Function { .. } | RealizedTy::Future(_, _) | RealizedTy::Unknown => {
-            // These variants do not provide a concrete JSON schema to validate
-            // against here. Preserve structural JSON conversion for values
-            // whose shape is already JSON-representable.
-            Ok(serde_to_value(vm, json))
-        }
+        // Every JSON value is a value of `unknown`.
+        RealizedTy::Unknown => Ok(serde_to_value(vm, json)),
+
+        RealizedTy::Function { .. } | RealizedTy::Future(_, _) => Err(raise_decode(
+            vm,
+            format!("no value of `{ty}` is decoded from JSON"),
+            path,
+        )),
 
         // Type-level and opaque types are not valid decode targets: reflection
         // types (`Type`), opaque Rust state (`RustType`), and the bottom type
@@ -1478,6 +1526,7 @@ fn deserialize_class_instance(
     json: &serde_json::Value,
     head: bex_vm_types::TypeHead,
     type_args: &[RealizedTy],
+    naming: JsonNaming,
     path: &mut String,
 ) -> Result<Value, VmRustFnError> {
     let named = baml_type::HeadDisplay::head_display_name(&head);
@@ -1500,32 +1549,49 @@ fn deserialize_class_instance(
         }
     };
 
-    // Per BEP-038: JSON interchange uses raw field names — `@alias` /
-    // `@skip` are ignored on the from_string path the same way they are on
-    // to_string.  Every declared field must be provided (or, for
-    // `Optional<T>`, may be absent).
+    // `naming` decides each field's key, and whether JSON carries the field
+    // at all. A field JSON leaves out (`@skip` under aliased names) holds its
+    // type's empty value, as it does when SAP reads a model's answer. A field
+    // that can be `null` may be absent and decodes to `null`; every other
+    // field must be present.
     let mut field_values: Vec<Value> = Vec::with_capacity(class_fields.len());
     for cf in &class_fields {
         // Substitute class-level type-args into the field's template so a
         // `Container<User>::item` field decodes against `User` rather than
         // erased runtime metadata.
         let field_ty = vm.realize_field_ty(&cf.field_template, type_args);
-        let v = with_path_segment(path, format_args!(".{}", cf.name), |p| {
+        if !naming.shows(cf.skip) {
+            let Some(empty) = super::sap::empty_value(vm, &field_ty, &mut Vec::new())? else {
+                return Err(raise_decode(
+                    vm,
+                    format!(
+                        "field `{named}.{}` is `@skip`, so JSON leaves it out, and its type has \
+                         no empty value to hold",
+                        cf.name
+                    ),
+                    path,
+                ));
+            };
+            field_values.push(empty);
+            continue;
+        }
+        let may_be_absent = field_ty.is_nullable_union() || field_ty.is_null();
+        let key = naming.key(&cf.name, cf.alias.as_deref());
+        let v = with_path_segment(path, format_args!(".{key}"), |p| {
             let field_json_owned;
-            let field_json: &serde_json::Value = if let Some(v) = map.get(cf.name.as_str()) {
+            let field_json: &serde_json::Value = if let Some(v) = map.get(key) {
                 v
-            } else if field_ty.is_nullable_union() {
-                // Optional (`T?` == `T | null`) fields may be absent → null.
+            } else if may_be_absent {
                 field_json_owned = serde_json::Value::Null;
                 &field_json_owned
             } else {
                 return Err(raise_decode(
                     vm,
-                    format!("missing required field `{}`", cf.name),
+                    format!("missing required field `{key}`"),
                     p,
                 ));
             };
-            ty_serde_to_value(vm, field_json, &field_ty, p)
+            ty_serde_to_value(vm, field_json, &field_ty, naming, p)
         })?;
         field_values.push(v);
     }
@@ -1535,16 +1601,20 @@ fn deserialize_class_instance(
     ))))
 }
 
+/// The variant of `head` that JSON names `variant_name` under `naming`.
 fn deserialize_enum_variant(
     vm: &mut BexVm,
     head: bex_vm_types::TypeHead,
     variant_name: &str,
+    naming: JsonNaming,
     path: &mut String,
 ) -> Result<Value, VmRustFnError> {
     let named = baml_type::HeadDisplay::head_display_name(&head);
     let enm_ptr = head.ptr();
     let idx = match vm.get_object(enm_ptr) {
-        Object::Enum(e) => e.variants.iter().position(|v| v.name == variant_name),
+        Object::Enum(e) => e.variants.iter().position(|v| {
+            naming.shows(v.skip) && naming.key(&v.name, v.alias.as_deref()) == variant_name
+        }),
         _ => {
             return Err(raise_decode(vm, format!("`{named}` is not an enum"), path));
         }
@@ -1556,6 +1626,39 @@ fn deserialize_enum_variant(
             format!("unknown variant `{variant_name}` for enum `{named}`"),
             path,
         )),
+    }
+}
+
+/// The members a value of `ty` may decode as at one JSON node: with each
+/// union flattened and each recursive alias other than `json` replaced by its
+/// definition. An alias met again while unfolding contributes nothing: it took
+/// no JSON to reach, so it is an unguarded member, which adds no values.
+fn alias_members(
+    vm: &BexVm,
+    ty: &RealizedTy,
+    unfolding: &mut Vec<HeapPtr>,
+    out: &mut Vec<RealizedTy>,
+) {
+    match ty {
+        RealizedTy::TypeAlias(head) if !vm.stdlib_heads().is_json_alias(*head) => {
+            let alias = head.ptr();
+            if unfolding.contains(&alias) {
+                return;
+            }
+            let Object::TypeAlias(declaration) = vm.get_object(alias) else {
+                unreachable!("a type alias's head is a type alias: {head:?}")
+            };
+            let definition = declaration.definition.clone();
+            unfolding.push(alias);
+            alias_members(vm, &definition, unfolding, out);
+            unfolding.pop();
+        }
+        RealizedTy::Union(members) => {
+            for member in members {
+                alias_members(vm, member, unfolding, out);
+            }
+        }
+        _ => out.push(ty.clone()),
     }
 }
 
@@ -2162,7 +2265,7 @@ fn decode_one(
             let serde = leaf_serde(vm, json, path)?;
             let member = members.iter().find(|member| {
                 let mut probe = path.to_string();
-                ty_serde_to_value(vm, &serde, member, &mut probe).is_ok()
+                ty_serde_to_value(vm, &serde, member, JsonNaming::Declared, &mut probe).is_ok()
             });
             match member {
                 Some(member) => decode_one(vm, json, &member.clone(), Root::Dispatch, path),
@@ -2216,7 +2319,7 @@ fn decode_leaf(
 ) -> Result<Value, VmRustFnError> {
     let serde = leaf_serde(vm, json, path)?;
     let mut path = path.to_string();
-    ty_serde_to_value(vm, &serde, ty, &mut path)
+    ty_serde_to_value(vm, &serde, ty, JsonNaming::Declared, &mut path)
 }
 
 /// The entries of the JSON object `json` at `path`: a string-keyed map and
