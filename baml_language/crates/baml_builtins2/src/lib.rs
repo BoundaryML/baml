@@ -186,6 +186,8 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("baml", "ns_crypto/aes_gcm_siv.baml"),
     builtin!("baml", "ns_crypto/chacha20poly1305.baml"),
     builtin!("baml", "ns_crypto/sha2.baml"),
+    builtin!("baml", "ns_crypto/rsa.baml"),
+    builtin!("baml", "ns_crypto/hmac.baml"),
     // --- reflect package ---
     builtin!("reflect", "reflect.baml"),
     builtin!("reflect", "type.baml"),
