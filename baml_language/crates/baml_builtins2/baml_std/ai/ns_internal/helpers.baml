@@ -1,7 +1,8 @@
 // Internal helpers. Nothing here is part of the public ai surface.
 
 /// (internal) One JSON Schema object for a function's parameters, derived from the
-/// signature: every parameter typed via baml.json.schema.
+/// signature: every parameter typed via baml.json.schema, under the aliased
+/// names `baml.sap.coerce` reads the arguments by (`ai.tools._typed_arguments`).
 ///
 /// An `unknown` parameter receives its argument as the model sent it, which is
 /// parsed JSON (`ai.tools._typed_arguments`), so its schema is that of
@@ -26,7 +27,7 @@ function _schema_for_signature(handler: reflect.AnyFunction) -> map<string, unkn
         } else {
             a.type
         };
-        let lowered = _scope_schema_refs(baml.json.schema(accepted), prefix);
+        let lowered = _scope_schema_refs(baml.json.schema(accepted, naming = baml.json.Naming.Aliased), prefix);
         let property = baml.json.from_json<map<string, unknown>>(lowered);
         let reached = baml.json.path_or<map<string, unknown>>(lowered, ".$defs", {});
         for (let name in reached.keys()) {

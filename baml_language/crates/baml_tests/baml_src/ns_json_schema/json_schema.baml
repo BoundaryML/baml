@@ -195,3 +195,180 @@ test "two classes with one name get distinct definitions" {
     assert.equal(baml.json.path<string>(schema, ".$defs.SchemaTwin.properties.left.type"), "integer")
     assert.equal(baml.json.path<string>(schema, ".$defs.SchemaTwin_2.properties.right.type"), "string")
 }
+
+// ─── Naming ───────────────────────────────────────────────────────────────────
+
+enum SchemaTone {
+    Calm @alias("calm")
+    Loud
+    Hidden @skip
+}
+
+class SchemaNamed {
+    title: string @alias("headline"),
+    tone: SchemaTone,
+    note: string @skip,
+    extra: string? @skip,
+}
+
+class SchemaSkipsImage {
+    label: string,
+    picture: image @skip,
+}
+
+test "declared names ignore alias and skip" {
+    let schema = baml.json.schema(SchemaNamed.type());
+    assert.equal(baml.json.path<map<string, json>>(schema, ".properties").keys(), ["title", "tone", "note", "extra"])
+    assert.equal(baml.json.path<string[]>(schema, ".required"), ["title", "tone", "note"])
+    assert.equal(baml.json.path<string[]>(schema, ".properties.tone.enum"), ["Calm", "Loud", "Hidden"])
+}
+
+test "aliased names follow alias and leave out skip" {
+    let schema = baml.json.schema(SchemaNamed.type(), naming = baml.json.Naming.Aliased);
+    assert.equal(baml.json.path<map<string, json>>(schema, ".properties").keys(), ["headline", "tone"])
+    assert.equal(baml.json.path<string[]>(schema, ".required"), ["headline", "tone"])
+    assert.equal(baml.json.path<string[]>(schema, ".properties.tone.enum"), ["calm", "Loud"])
+}
+
+test "a skipped field with no empty value has no aliased schema" {
+    assert.contains(
+        {
+            baml.json.schema(SchemaSkipsImage.type(), naming = baml.json.Naming.Aliased);
+            "lowered"
+        } catch (e) {
+            let err: baml.errors.Unsupported => err.message,
+        },
+        "field `json_schema.SchemaSkipsImage.picture` is `@skip`",
+    )
+    // Declared names carry the field, so the image is read as JSON.
+    assert.equal(
+        baml.json.path<string>(baml.json.schema(SchemaSkipsImage.type()), ".properties.picture.properties.kind.const"),
+        "image",
+    )
+}
+
+function decode_named_aliased() -> string {
+    let named = baml.json.from_string<SchemaNamed>(
+        `{"headline": "Hi", "tone": "calm", "note": "ignored", "extra": "ignored"}`,
+        naming = baml.json.Naming.Aliased,
+    );
+    `${named.title}|${named.tone}|[${named.note}]|${named.extra ?? "null"}`
+}
+
+test "aliased decoding reads aliases and fills skipped fields with empty values" {
+    assert.equal(decode_named_aliased(), "Hi|Calm|[]|null")
+}
+
+function decode_named_declared() -> string {
+    let named = baml.json.from_string<SchemaNamed>(
+        `{"title": "Hi", "tone": "Hidden", "note": "kept", "extra": "kept"}`,
+    );
+    `${named.title}|${named.tone}|${named.note}|${named.extra ?? "null"}`
+}
+
+test "declared decoding reads declared names, skipped members included" {
+    assert.equal(decode_named_declared(), "Hi|Hidden|kept|kept")
+}
+
+function decode_error(text: string, aliased: bool) -> string {
+    let naming = if (aliased) {
+        baml.json.Naming.Aliased
+    } else {
+        baml.json.Naming.Declared
+    };
+    {
+        baml.json.from_string<SchemaNamed>(text, naming = naming);
+        "decoded"
+    } catch (e) {
+        let err: baml.json.DecodeError => err.message,
+        let err: baml.json.ParseError => err.message,
+    }
+}
+
+test "aliased decoding rejects a declared name and a skipped variant" {
+    assert.contains(decode_error(`{"title": "Hi", "tone": "Calm"}`, true), "missing required field `headline`")
+    assert.contains(decode_error(`{"headline": "Hi", "tone": "Hidden"}`, true), "unknown variant `Hidden`")
+    assert.contains(decode_error(`{"headline": "Hi", "tone": "Calm"}`, true), "unknown variant `Calm`")
+}
+
+test "declared decoding rejects an alias" {
+    assert.contains(decode_error(`{"headline": "Hi", "tone": "Calm", "note": ""}`, false), "missing required field `title`")
+}
+
+function decode_skips_image() -> string {
+    {
+        baml.json.from_string<SchemaSkipsImage>(`{"label": "x"}`, naming = baml.json.Naming.Aliased);
+        "decoded"
+    } catch (e) {
+        let err: baml.json.DecodeError => err.message,
+    }
+}
+
+test "aliased decoding rejects a skipped field with no empty value" {
+    assert.contains(decode_skips_image(), "field `json_schema.SchemaSkipsImage.picture` is `@skip`")
+}
+
+// ─── Decoding recursive aliases, functions and null fields ────────────────────
+
+class SchemaLeaf {
+    value: int,
+}
+
+type SchemaTree = SchemaLeaf | SchemaTree[]
+
+function decode_tree_leaf_kind() -> string {
+    let tree = baml.json.from_string<SchemaTree>(`[[{"value": 1}], {"value": 2}]`);
+    match (tree) {
+        let items: SchemaTree[] => {
+            match (items[1]) {
+                let leaf: SchemaLeaf => `leaf ${leaf.value}`,
+                _ => "not a leaf",
+            }
+        },
+        _ => "not a list",
+    }
+}
+
+test "a recursive alias decodes as its definition" {
+    assert.equal(decode_tree_leaf_kind(), "leaf 2")
+}
+
+function decode_tree_mismatch() -> string {
+    {
+        baml.json.from_string<SchemaTree>(`[{"value": "two"}]`);
+        "decoded"
+    } catch (e) {
+        let err: baml.json.DecodeError => "DecodeError",
+    }
+}
+
+test "a recursive alias rejects a value its definition does not admit" {
+    assert.equal(decode_tree_mismatch(), "DecodeError")
+}
+
+type SchemaThunk = () -> int throws never
+
+function decode_thunk_or_string() -> string {
+    match (baml.json.from_string<SchemaThunk | string>(`"x"`)) {
+        let s: string => `string ${s}`,
+        _ => "a function",
+    }
+}
+
+test "a function member does not take a JSON value" {
+    assert.equal(decode_thunk_or_string(), "string x")
+}
+
+class SchemaNullField {
+    nothing: null,
+    name: string,
+}
+
+function decode_null_field() -> string {
+    let value = baml.json.from_string<SchemaNullField>(`{"name": "n"}`);
+    `${value.name}|${value.nothing ?? "absent"}`
+}
+
+test "a null field may be absent" {
+    assert.equal(decode_null_field(), "n|absent")
+}

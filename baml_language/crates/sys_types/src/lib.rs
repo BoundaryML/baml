@@ -764,7 +764,19 @@ pub struct EnumDefinition {
     pub description: Option<String>,
     pub docstring: Option<String>,
     pub alias: Option<String>,
-    pub variants: Vec<EnumVariantDefinition>,
+    /// Every variant in declaration order, `@skip` ones included. Most readers
+    /// want [`Self::variants`], which a model can be shown.
+    pub declared_variants: Vec<EnumVariantDefinition>,
+}
+
+impl EnumDefinition {
+    /// The variants a model can be shown and answer with: every variant but
+    /// the `@skip` ones, in declaration order.
+    pub fn variants(&self) -> impl Iterator<Item = &EnumVariantDefinition> {
+        self.declared_variants
+            .iter()
+            .filter(|variant| !variant.skip)
+    }
 }
 
 /// A variant in a pre-extracted enum definition.
@@ -774,6 +786,49 @@ pub struct EnumVariantDefinition {
     pub description: Option<String>,
     pub docstring: Option<String>,
     pub alias: Option<String>,
+    pub skip: bool,
+}
+
+/// Which names a class's fields and an enum's variants go by in JSON: the
+/// runtime form of `baml.json.Naming`. The JSON Schema `baml.json.schema`
+/// writes and the JSON `baml.json.from_string` reads both follow it, through
+/// [`Self::key`] and [`Self::shows`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum JsonNaming {
+    /// Declared names. `@alias` and `@skip` have no effect: the interchange
+    /// form of BEP-038.
+    Declared,
+    /// The names a model is shown: a member's `@alias` if it has one, and no
+    /// `@skip` member at all.
+    Aliased,
+}
+
+impl JsonNaming {
+    /// `Aliased` when `aliased` holds, else `Declared`.
+    pub fn new(aliased: bool) -> Self {
+        if aliased {
+            JsonNaming::Aliased
+        } else {
+            JsonNaming::Declared
+        }
+    }
+
+    /// The JSON key of a field, or the JSON string of a variant, declared as
+    /// `name` with `alias`.
+    pub fn key<'a>(self, name: &'a str, alias: Option<&'a str>) -> &'a str {
+        match self {
+            JsonNaming::Declared => name,
+            JsonNaming::Aliased => alias.unwrap_or(name),
+        }
+    }
+
+    /// Whether a member with this `@skip` setting appears in JSON at all.
+    pub fn shows(self, skip: bool) -> bool {
+        match self {
+            JsonNaming::Declared => true,
+            JsonNaming::Aliased => !skip,
+        }
+    }
 }
 
 impl EnumVariantDefinition {

@@ -9,6 +9,22 @@
 /// Reach an arm with `match`, or hand the value to `to<T>`.
 type json = null | bool | int | bigint | float | string | json[] | map<string, json>;
 
+/// Which names a class's fields and an enum's variants go by in JSON.
+///
+/// `schema` and `from_string<T>` take one, and agree on every key when given
+/// the same one.
+enum Naming {
+    /// The declared names. `@alias` and `@skip` have no effect: every field
+    /// and variant appears, under the name it is declared with. This is the
+    /// interchange form `to_json` writes.
+    Declared,
+    /// The names a model is shown. A field or variant goes by its `@alias`
+    /// when it has one, and a `@skip` field or variant does not appear. A
+    /// `@skip` field read from JSON holds its type's empty value (`null`, `0`,
+    /// `""`, `[]`, ...), as it does when `baml.sap` parses a model's answer.
+    Aliased,
+}
+
 /// A JSON syntax error.
 ///
 /// Only the entry points that read text raise this: `parse`, `from_string<T>`,
@@ -164,11 +180,19 @@ function from<T>(value: T) -> json throws SerializationError {
 /// it need not be statically known at the call site. The text is parsed first,
 /// then the parsed tree is walked driven by that runtime type.
 ///
-/// Per BEP-038, JSON interchange uses raw field names, so `@alias` and `@skip`
-/// have no effect here. Every declared field must be present, except that an
-/// optional (`T?`) field may be absent and decodes to `null`. Unrecognized
-/// keys in the object are ignored. A union tries its members in declaration
-/// order and takes the first that decodes.
+/// `naming` picks the names fields and variants go by. The default,
+/// `Naming.Declared`, is BEP-038's interchange form: declared names, with
+/// `@alias` and `@skip` having no effect. `Naming.Aliased` reads the names a
+/// model is shown, which `schema(t, naming = Naming.Aliased)` describes: a
+/// member's `@alias`, and no `@skip` member. A `@skip` field then holds its
+/// type's empty value, and is an error when its type has none (media, a
+/// function, a class that contains itself).
+///
+/// Every field JSON carries must be present, except that a field that can be
+/// `null` may be absent and decodes to `null`. Unrecognized keys in the
+/// object are ignored. A union tries its members in declaration order and
+/// takes the first that decodes. A recursive alias decodes as its
+/// definition.
 ///
 /// This is the *structural* text path, and the only one that fills
 /// `DecodeError.path` with a full location. `deserialize<T>` is the same job
@@ -179,8 +203,17 @@ function from<T>(value: T) -> json throws SerializationError {
 ///
 /// - `baml.json.ParseError` if `s` is not valid JSON.
 /// - `baml.json.DecodeError` if the parsed JSON does not fit `T`.
+function from_string<T>(
+    s: string,
+    naming: Naming = Naming.Declared,
+) -> T throws ParseError | DecodeError {
+    _from_string<T>(s, naming == Naming.Aliased)
+}
+
+/// `from_string<T>`, with `naming` as a flag: aliased names when `aliased`
+/// holds.
 //baml:mut_vm
-function from_string<T>(s: string) -> T throws ParseError | DecodeError {
+function _from_string<T>(s: string, aliased: bool) -> T throws ParseError | DecodeError {
     $rust_function
 }
 
@@ -491,9 +524,11 @@ function path_or<T>(j: json, selector: string, default: T) -> T throws never {
 /// A type whose values all lack a JSON form, or that has no values, is
 /// rejected rather than lowered to a schema nothing can satisfy.
 ///
-/// This pass *does* respect `@alias` and `@skip`, where the value conversions
-/// do not — a schema is read by something outside BAML, so it must describe
-/// the wire names. That is also why an enum variant lowers under its alias.
+/// `naming` picks the names fields and variants go by, as it does for
+/// `from_string<T>`, so a schema and the decoder given the same `naming` agree
+/// on every key. With `Naming.Aliased`, a `@skip` field holds its type's
+/// empty value, so a class with a `@skip` field whose type has none (media, a
+/// function, a class that contains itself) has no JSON form.
 ///
 /// Documentation becomes `description`, with the text the output format
 /// shows: a class's or a field's `@description`, then its `///` docstring. A
@@ -518,7 +553,15 @@ function path_or<T>(j: json, selector: string, default: T) -> T throws never {
 ///   instance.
 /// - `baml.errors.Unsupported` for a class, enum, or alias the reflection
 ///   context cannot resolve.
-function schema(t: reflect.Type) -> json throws root.errors.Unsupported {
+function schema(
+    t: reflect.Type,
+    naming: Naming = Naming.Declared,
+) -> json throws root.errors.Unsupported {
+    _schema(t, naming == Naming.Aliased)
+}
+
+/// `schema`, with `naming` as a flag: aliased names when `aliased` holds.
+function _schema(t: reflect.Type, aliased: bool) -> json throws root.errors.Unsupported {
     $rust_io_function
 }
 

@@ -189,14 +189,15 @@ impl<T> io::IoClassAiOutputFormat for T {
 // ============================================================================
 
 impl<T> io::IoNamespaceJson for T {
-    fn schema(
+    fn _schema(
         &self,
         _heap: &std::sync::Arc<BexHeap>,
         _call_id: CallId,
         t: ::sys_types::SapTy,
+        aliased: bool,
         ctx: &SysOpContext,
     ) -> SysOpOutput<BexExternalValue> {
-        match schema::json_schema(&t, ctx) {
+        match schema::json_schema(&t, ctx, ::sys_types::JsonNaming::new(aliased)) {
             Ok(value) => SysOpOutput::ok(schema::json_to_bex(value)),
             Err(message) => SysOpOutput::err(VmBamlError::Unsupported { message }),
         }
@@ -210,7 +211,7 @@ mod schema {
     use bex_external_types::BexExternalValue;
     use indexmap::IndexMap;
     use serde_json::{Value, json};
-    use sys_types::SysOpContext;
+    use sys_types::{JsonNaming, SysOpContext};
 
     /// The stdlib `baml.json.json` alias as value metadata.
     ///
@@ -247,8 +248,12 @@ mod schema {
         }
     }
 
-    pub(super) fn json_schema(ty: &SapTy, ctx: &SysOpContext) -> Result<Value, String> {
-        let analysis = Analysis::of(ty, ctx)?;
+    pub(super) fn json_schema(
+        ty: &SapTy,
+        ctx: &SysOpContext,
+        naming: JsonNaming,
+    ) -> Result<Value, String> {
+        let analysis = Analysis::of(ty, ctx, naming)?;
         match analysis.classify(ty)? {
             Status::Json => {}
             Status::NoJson => {
@@ -347,11 +352,27 @@ mod schema {
         Def(DefId),
     }
 
-    /// The body of a [`DefId`]: the fields the schema shows, or an alias's
-    /// target.
+    /// The body of a [`DefId`]: a class's fields as JSON shows them, or an
+    /// alias's target.
     enum DefBody<'a> {
-        Class(Vec<&'a sys_types::ClassFieldDefinition>),
+        Class(ClassBody<'a>),
         Alias(&'a SapTy),
+    }
+
+    /// A class's fields under the analysis's [`JsonNaming`].
+    struct ClassBody<'a> {
+        /// The fields JSON carries, each with its key, in declaration order.
+        fields: Vec<(&'a str, &'a sys_types::ClassFieldDefinition)>,
+        /// The first field JSON leaves out (`@skip`, under aliased names) whose
+        /// type has no empty value. A field JSON leaves out holds its type's
+        /// empty value, so with none to hold, the class has no JSON form.
+        unfillable: Option<&'a sys_types::ClassFieldDefinition>,
+    }
+
+    /// Whether a field of type `ty` may be absent from a JSON object, as the
+    /// decoder reads it: a `null` stands in for it.
+    fn may_be_absent(ty: &SapTy) -> bool {
+        ty.is_nullable_union() || ty.is_null()
     }
 
     /// The [`Status`] of every class and recursive alias a root type reaches.
@@ -367,6 +388,7 @@ mod schema {
     /// one that has none becomes `NoJson`, which can force others in turn.
     struct Analysis<'a> {
         ctx: &'a SysOpContext,
+        naming: JsonNaming,
         /// Every definition the root reaches, in the order it reaches them.
         status: IndexMap<DefId, Status>,
         /// Whether each definition has a value; final before `status` is
@@ -375,9 +397,10 @@ mod schema {
     }
 
     impl<'a> Analysis<'a> {
-        fn of(root: &SapTy, ctx: &'a SysOpContext) -> Result<Self, String> {
+        fn of(root: &SapTy, ctx: &'a SysOpContext, naming: JsonNaming) -> Result<Self, String> {
             let mut analysis = Analysis {
                 ctx,
+                naming,
                 status: IndexMap::new(),
                 inhabited: HashMap::new(),
             };
@@ -475,9 +498,10 @@ mod schema {
                     // definition is known.
                     self.status.insert(id.clone(), Status::Json);
                     match self.body(&id)? {
-                        DefBody::Class(fields) => fields
+                        DefBody::Class(body) => body
+                            .fields
                             .into_iter()
-                            .try_for_each(|field| self.discover(&field.field_type)),
+                            .try_for_each(|(_, field)| self.discover(&field.field_type)),
                         DefBody::Alias(target) => self.discover(target),
                     }
                 }
@@ -499,22 +523,33 @@ mod schema {
                 SapTy::Literal(lit, _) => Node::Leaf(literal_schema(lit, ty)?),
                 SapTy::Enum(head) => {
                     let enum_def = self.enum_definition(head)?;
-                    if enum_def.variants.is_empty() {
+                    if enum_def.declared_variants.is_empty() {
                         Node::Never
                     } else {
-                        Node::Leaf(enum_schema(enum_def))
+                        // Every variant `@skip` under aliased names: values
+                        // exist, but JSON names none of them.
+                        enum_schema(enum_def, self.naming).map_or(Node::NoJson, Node::Leaf)
                     }
                 }
                 SapTy::EnumVariant(head, name) => {
                     let enum_def = self.enum_definition(head)?;
-                    // A `@skip` variant is not in the definition: no reader
-                    // of the schema can produce it.
-                    match enum_def.variants.iter().find(|v| v.name == name.as_str()) {
-                        Some(variant) => Node::Leaf(json!({
+                    let variant = enum_def
+                        .declared_variants
+                        .iter()
+                        .find(|variant| variant.name == name.as_str())
+                        .ok_or_else(|| {
+                            format!(
+                                "json_schema: enum `{}` has no variant `{name}`",
+                                head.display_name()
+                            )
+                        })?;
+                    if self.naming.shows(variant.skip) {
+                        Node::Leaf(json!({
                             "type": "string",
-                            "const": variant_wire_name(variant),
-                        })),
-                        None => Node::NoJson,
+                            "const": self.naming.key(&variant.name, variant.alias.as_deref()),
+                        }))
+                    } else {
+                        Node::NoJson
                     }
                 }
                 SapTy::Media(kind) => match kind {
@@ -599,15 +634,107 @@ mod schema {
                 .ok_or_else(|| format!("json_schema: unknown type alias `{}`", head.display_name()))
         }
 
+        fn class_body(&self, head: &::sys_types::DefKey) -> Result<ClassBody<'a>, String> {
+            let class_def = self.class_definition(head)?;
+            let mut fields = Vec::new();
+            let mut unfillable = None;
+            for field in &class_def.fields {
+                if self.naming.shows(field.skip) {
+                    let key = self.naming.key(&field.name, field.alias.as_deref());
+                    fields.push((key, field));
+                } else if unfillable.is_none()
+                    && !self.has_empty_value(&field.field_type, &mut Vec::new())?
+                {
+                    unfillable = Some(field);
+                }
+            }
+            Ok(ClassBody { fields, unfillable })
+        }
+
+        /// Whether `ty` has an empty value: the value a `@skip` field holds
+        /// when a model's answer is read under aliased names. The VM builds
+        /// that value (`bex_vm`'s `sap::empty_value`); this is the same rule as
+        /// a predicate: `null` for a nullable type, zeroes, `false`, `""`,
+        /// empty containers, a literal's own value, an enum's first shown
+        /// variant, and a class whose fields all have one. A class or alias
+        /// that needs its own empty value has none.
+        fn has_empty_value(&self, ty: &SapTy, within: &mut Vec<DefId>) -> Result<bool, String> {
+            Ok(match ty {
+                SapTy::Null
+                | SapTy::Unknown
+                | SapTy::Int
+                | SapTy::Bigint
+                | SapTy::Float
+                | SapTy::Bool
+                | SapTy::String
+                | SapTy::Uint8Array
+                | SapTy::Literal(..)
+                | SapTy::List(_)
+                | SapTy::Map { .. } => true,
+                SapTy::Enum(head) => self
+                    .enum_definition(head)?
+                    .declared_variants
+                    .iter()
+                    .any(|variant| !variant.skip),
+                SapTy::EnumVariant(head, name) => self
+                    .enum_definition(head)?
+                    .declared_variants
+                    .iter()
+                    .any(|variant| variant.name == name.as_str()),
+                SapTy::Union(members) => {
+                    if members.iter().any(SapTy::is_null) {
+                        return Ok(true);
+                    }
+                    for member in members {
+                        if self.has_empty_value(member, within)? {
+                            return Ok(true);
+                        }
+                    }
+                    false
+                }
+                SapTy::Class(head, _) => {
+                    let id = DefId::Class(head.clone());
+                    if within.contains(&id) {
+                        return Ok(false);
+                    }
+                    within.push(id);
+                    let mut all = true;
+                    for field in &self.class_definition(head)?.fields {
+                        if !self.has_empty_value(&field.field_type, within)? {
+                            all = false;
+                            break;
+                        }
+                    }
+                    within.pop();
+                    all
+                }
+                SapTy::TypeAlias(head) => {
+                    let id = DefId::Alias(head.clone());
+                    if within.contains(&id) {
+                        return Ok(false);
+                    }
+                    within.push(id);
+                    let has = self.has_empty_value(self.alias_target(head)?, within)?;
+                    within.pop();
+                    has
+                }
+                SapTy::Media(_)
+                | SapTy::Function { .. }
+                | SapTy::Future(..)
+                | SapTy::Interface(..)
+                | SapTy::RustType
+                | SapTy::Type
+                | SapTy::Resource
+                | SapTy::PromptAst
+                | SapTy::Never
+                | SapTy::TypeVar(..)
+                | SapTy::AssociatedTypeProjection { .. } => false,
+            })
+        }
+
         fn body(&self, id: &DefId) -> Result<DefBody<'a>, String> {
             match id {
-                DefId::Class(head) => Ok(DefBody::Class(
-                    self.class_definition(head)?
-                        .fields
-                        .iter()
-                        .filter(|field| !field.skip)
-                        .collect(),
-                )),
+                DefId::Class(head) => self.class_body(head).map(DefBody::Class),
                 DefId::Alias(head) => self.alias_target(head).map(DefBody::Alias),
             }
         }
@@ -631,8 +758,8 @@ mod schema {
 
         fn body_inhabited(&self, id: &DefId) -> Result<bool, String> {
             match self.body(id)? {
-                DefBody::Class(fields) => {
-                    for field in fields {
+                DefBody::Class(body) => {
+                    for (_, field) in body.fields {
                         if !self.inhabited(&field.field_type)? {
                             return Ok(false);
                         }
@@ -669,8 +796,11 @@ mod schema {
 
         fn body_status(&self, id: &DefId) -> Result<Status, String> {
             match self.body(id)? {
-                DefBody::Class(fields) => {
-                    for field in fields {
+                DefBody::Class(body) => {
+                    if body.unfillable.is_some() {
+                        return Ok(Status::NoJson);
+                    }
+                    for (_, field) in body.fields {
                         let status = self.classify(&field.field_type)?;
                         debug_assert!(
                             status != Status::Empty,
@@ -706,8 +836,11 @@ mod schema {
 
         fn body_finite(&self, id: &DefId, finite: &HashSet<DefId>) -> Result<bool, String> {
             match self.body(id)? {
-                DefBody::Class(fields) => {
-                    for field in fields {
+                DefBody::Class(body) => {
+                    if body.unfillable.is_some() {
+                        return Ok(false);
+                    }
+                    for (_, field) in body.fields {
                         if !self.finite(&field.field_type, finite)? {
                             return Ok(false);
                         }
@@ -741,8 +874,15 @@ mod schema {
                         return Ok(format!("every value of `{name}` is cyclic"));
                     }
                     match self.body(&id)? {
-                        DefBody::Class(fields) => {
-                            for field in fields {
+                        DefBody::Class(body) => {
+                            if let Some(field) = body.unfillable {
+                                return Ok(format!(
+                                    "field `{name}.{}` is `@skip`, so JSON leaves it out, and its \
+                                     type has no empty value to hold",
+                                    field.name
+                                ));
+                            }
+                            for (_, field) in body.fields {
                                 if self.classify(&field.field_type)? == Status::NoJson {
                                     let reason = self.no_json_reason(&field.field_type, seen)?;
                                     return Ok(format!("field `{name}.{}`: {reason}", field.name));
@@ -814,15 +954,30 @@ mod schema {
         })
     }
 
-    fn enum_schema(enum_def: &sys_types::EnumDefinition) -> Value {
-        let variants: Vec<Value> = enum_def
-            .variants
-            .iter()
-            .map(|variant| json!(variant_wire_name(variant)))
+    /// The string `enum` of the variants JSON names, or `None` when it names
+    /// none.
+    fn enum_schema(enum_def: &sys_types::EnumDefinition, naming: JsonNaming) -> Option<Value> {
+        let variants: Vec<Value> = shown_variants(enum_def, naming)
+            .map(|(key, _)| json!(key))
             .collect();
+        if variants.is_empty() {
+            return None;
+        }
         let mut schema = json!({ "type": "string", "enum": variants });
-        describe(&mut schema, enum_documentation(enum_def));
-        schema
+        describe(&mut schema, enum_documentation(enum_def, naming));
+        Some(schema)
+    }
+
+    /// The variants JSON names under `naming`, each with its string.
+    fn shown_variants(
+        enum_def: &sys_types::EnumDefinition,
+        naming: JsonNaming,
+    ) -> impl Iterator<Item = (&str, &sys_types::EnumVariantDefinition)> {
+        enum_def
+            .declared_variants
+            .iter()
+            .filter(move |variant| naming.shows(variant.skip))
+            .map(move |variant| (naming.key(&variant.name, variant.alias.as_deref()), variant))
     }
 
     /// The tagged object a media value takes in JSON, as `baml.json` writes
@@ -958,19 +1113,20 @@ mod schema {
 
         fn class_object(&mut self, head: &::sys_types::DefKey) -> Result<Value, String> {
             let class_def = self.analysis.class_definition(head)?;
+            let body = self.analysis.class_body(head)?;
+            debug_assert!(body.unfillable.is_none(), "only a `Json` class is emitted");
 
             let mut properties = serde_json::Map::new();
             let mut required = Vec::new();
-            for field in class_def.fields.iter().filter(|field| !field.skip) {
-                let prop_name = field.alias.clone().unwrap_or_else(|| field.name.clone());
+            for (key, field) in body.fields {
                 let mut property = self.emit(&field.field_type)?;
                 describe(
                     &mut property,
                     documentation(field.description.as_deref(), field.docstring.as_deref()),
                 );
-                properties.insert(prop_name.clone(), property);
-                if !(field.field_type.is_nullable_union() || field.field_type.is_null()) {
-                    required.push(json!(prop_name));
+                properties.insert(key.to_string(), property);
+                if !may_be_absent(&field.field_type) {
+                    required.push(json!(key));
                 }
             }
 
@@ -1025,25 +1181,18 @@ mod schema {
         (!docs.is_empty()).then_some(docs)
     }
 
-    /// The name a variant has on the wire: its `@alias`, else its name.
-    fn variant_wire_name(variant: &sys_types::EnumVariantDefinition) -> String {
-        variant
-            .alias
-            .clone()
-            .unwrap_or_else(|| variant.name.clone())
-    }
-
     /// What an enum's schema says about it: the enum's own documentation, then
     /// one `- <variant>: <documentation>` line per documented variant, the form
     /// the output format lists them in. JSON Schema has no description per
     /// `enum` value, so the variants' documentation goes here.
-    fn enum_documentation(enum_def: &sys_types::EnumDefinition) -> Option<String> {
-        let variants = enum_def
-            .variants
-            .iter()
-            .filter_map(|variant| {
+    fn enum_documentation(
+        enum_def: &sys_types::EnumDefinition,
+        naming: JsonNaming,
+    ) -> Option<String> {
+        let variants = shown_variants(enum_def, naming)
+            .filter_map(|(key, variant)| {
                 let docs = variant.rendered_description()?;
-                Some(format!("- {}: {docs}", variant_wire_name(variant)))
+                Some(format!("- {key}: {docs}"))
             })
             .collect::<Vec<_>>()
             .join("\n");
@@ -1118,7 +1267,7 @@ mod schema {
         use serde_json::json;
         use sys_types::{
             ClassDefinition, ClassFieldDefinition, DefKey, EnumDefinition, EnumVariantDefinition,
-            SapTy as RuntimeTy, SysOpContext,
+            JsonNaming, SapTy as RuntimeTy, SysOpContext,
         };
 
         use super::json_schema;
@@ -1193,7 +1342,8 @@ mod schema {
             let mut ctx = SysOpContext::empty();
             ctx.class_definitions = Arc::new(classes);
 
-            let schema = json_schema(&class_ty(&node), &ctx).expect("schema should lower");
+            let schema = json_schema(&class_ty(&node), &ctx, JsonNaming::Aliased)
+                .expect("schema should lower");
             assert_eq!(schema["type"], "object");
             assert_eq!(
                 schema["properties"]["next"]["anyOf"][0]["$ref"],
@@ -1218,7 +1368,8 @@ mod schema {
             let mut ctx = SysOpContext::empty();
             ctx.class_definitions = Arc::new(classes);
 
-            let schema = json_schema(&class_ty(&a), &ctx).expect("schema should lower");
+            let schema =
+                json_schema(&class_ty(&a), &ctx, JsonNaming::Aliased).expect("schema should lower");
             assert_eq!(schema["properties"]["b"]["$ref"], "#/$defs/pkg.B");
             assert_eq!(
                 schema["$defs"]["pkg.B"]["properties"]["a"]["anyOf"][0]["$ref"],
@@ -1232,6 +1383,7 @@ mod schema {
             let schema = json_schema(
                 &RuntimeTy::optional(RuntimeTy::string()),
                 &SysOpContext::empty(),
+                JsonNaming::Aliased,
             )
             .expect("schema should lower");
             assert_eq!(schema, json!({ "type": ["string", "null"] }));
@@ -1253,7 +1405,8 @@ mod schema {
             let mut ctx = SysOpContext::empty();
             ctx.class_definitions = Arc::new(classes);
 
-            let schema = json_schema(&class_ty(&holder), &ctx).expect("schema should lower");
+            let schema = json_schema(&class_ty(&holder), &ctx, JsonNaming::Aliased)
+                .expect("schema should lower");
             assert_eq!(schema["properties"]["value"]["$ref"], "#/$defs/pkg.A~1B~0C");
             assert_eq!(schema["$defs"]["pkg.A/B~C"]["type"], "object");
         }
@@ -1269,18 +1422,20 @@ mod schema {
                     description: None,
                     docstring: None,
                     alias: None,
-                    variants: vec![
+                    declared_variants: vec![
                         EnumVariantDefinition {
                             name: "Ready".to_string(),
                             description: None,
                             docstring: None,
                             alias: Some("ready-now".to_string()),
+                            skip: false,
                         },
                         EnumVariantDefinition {
                             name: "Done".to_string(),
                             description: None,
                             docstring: None,
                             alias: None,
+                            skip: false,
                         },
                     ],
                 },
@@ -1288,8 +1443,8 @@ mod schema {
             let mut ctx = SysOpContext::empty();
             ctx.enum_definitions = Arc::new(enums);
 
-            let schema =
-                json_schema(&RuntimeTy::Enum(key(&status)), &ctx).expect("schema should lower");
+            let schema = json_schema(&RuntimeTy::Enum(key(&status)), &ctx, JsonNaming::Aliased)
+                .expect("schema should lower");
             assert_eq!(
                 schema,
                 json!({ "type": "string", "enum": ["ready-now", "Done"] })
@@ -1307,6 +1462,7 @@ mod schema {
                 description: description.map(str::to_string),
                 docstring: None,
                 alias: None,
+                skip: false,
             }
         }
 
@@ -1317,7 +1473,7 @@ mod schema {
                 description: Some("The kind of place the user trains in.".to_string()),
                 docstring: None,
                 alias: None,
-                variants: vec![
+                declared_variants: vec![
                     variant("COMMERCIAL", Some("Commercial gym")),
                     EnumVariantDefinition {
                         docstring: Some("A gym at home.".to_string()),
@@ -1362,7 +1518,8 @@ mod schema {
             let mut ctx = SysOpContext::empty();
             ctx.class_definitions = Arc::new(classes);
 
-            let schema = json_schema(&class_ty(&gym), &ctx).expect("schema should lower");
+            let schema = json_schema(&class_ty(&gym), &ctx, JsonNaming::Aliased)
+                .expect("schema should lower");
             assert_eq!(
                 schema["description"],
                 "A gym to save for the user.\nSaved per user."
@@ -1403,7 +1560,8 @@ mod schema {
             let mut ctx = SysOpContext::empty();
             ctx.class_definitions = Arc::new(classes);
 
-            let schema = json_schema(&class_ty(&gym), &ctx).expect("schema should lower");
+            let schema = json_schema(&class_ty(&gym), &ctx, JsonNaming::Aliased)
+                .expect("schema should lower");
             assert_eq!(
                 schema,
                 json!({
@@ -1422,8 +1580,8 @@ mod schema {
             let mut ctx = SysOpContext::empty();
             ctx.enum_definitions = Arc::new(enums);
 
-            let schema =
-                json_schema(&RuntimeTy::Enum(key(&gym_type)), &ctx).expect("schema should lower");
+            let schema = json_schema(&RuntimeTy::Enum(key(&gym_type)), &ctx, JsonNaming::Aliased)
+                .expect("schema should lower");
             assert_eq!(
                 schema,
                 json!({
@@ -1464,7 +1622,8 @@ mod schema {
             ctx.class_definitions = Arc::new(classes);
             ctx.enum_definitions = Arc::new(enums);
 
-            let schema = json_schema(&class_ty(&gym), &ctx).expect("schema should lower");
+            let schema = json_schema(&class_ty(&gym), &ctx, JsonNaming::Aliased)
+                .expect("schema should lower");
             assert_eq!(
                 schema["properties"]["gym_type"],
                 json!({
@@ -1483,9 +1642,12 @@ mod schema {
             let mut ctx = SysOpContext::empty();
             ctx.enum_definitions = Arc::new(enums);
 
-            let nullable_enum =
-                json_schema(&RuntimeTy::optional(RuntimeTy::Enum(key(&gym_type))), &ctx)
-                    .expect("schema should lower");
+            let nullable_enum = json_schema(
+                &RuntimeTy::optional(RuntimeTy::Enum(key(&gym_type))),
+                &ctx,
+                JsonNaming::Aliased,
+            )
+            .expect("schema should lower");
             assert_eq!(nullable_enum["type"], json!(["string", "null"]));
             assert_eq!(
                 nullable_enum["enum"],
@@ -1497,7 +1659,8 @@ mod schema {
                 baml_type::Freshness::Regular,
             );
             let nullable_literal =
-                json_schema(&RuntimeTy::optional(literal), &ctx).expect("schema should lower");
+                json_schema(&RuntimeTy::optional(literal), &ctx, JsonNaming::Aliased)
+                    .expect("schema should lower");
             assert_eq!(
                 nullable_literal,
                 json!({ "anyOf": [{ "type": "string", "const": "auto" }, { "type": "null" }] })
@@ -1522,7 +1685,8 @@ mod schema {
             let mut ctx = SysOpContext::empty();
             ctx.type_alias_definitions = Arc::new(aliases);
 
-            let schema = json_schema(&json_alias, &ctx).expect("schema should lower");
+            let schema =
+                json_schema(&json_alias, &ctx, JsonNaming::Aliased).expect("schema should lower");
             assert_eq!(schema["$ref"], "#/$defs/baml.json.json");
             let definition = &schema["$defs"]["baml.json.json"];
             assert_eq!(
