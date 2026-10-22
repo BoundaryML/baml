@@ -32,6 +32,9 @@ pub(crate) struct FunctionInfo {
     pub(crate) arity: usize,
     /// Whether calls inherit the caller's `$trace` controls.
     pub(crate) trace_passthrough: bool,
+    /// Whether the returned turn is charged as model usage when the call
+    /// completes (`FunctionMeta::ModelInvoke`).
+    pub(crate) model_invoke: bool,
 }
 
 /// Package and declaration path uniquely identify an object; rendered names do not.
@@ -218,6 +221,10 @@ impl ProgramIndex {
                         native_key: function.native_key.as_deref().map(str::to_owned),
                         arity: function.arity,
                         trace_passthrough: function.trace_passthrough,
+                        model_invoke: matches!(
+                            function.body_meta,
+                            Some(bex_vm_types::FunctionMeta::ModelInvoke)
+                        ),
                     });
                 }
                 Object::String(text) => {

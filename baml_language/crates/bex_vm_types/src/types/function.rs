@@ -109,7 +109,8 @@ impl CompiledBody {
     }
 
     /// Whether the body must run with a VM frame: it binds types into its
-    /// frame, resolves a trace hook, or activates a span scope.
+    /// frame, resolves a trace hook, activates a span scope, or returns a
+    /// turn charged as model usage.
     #[must_use]
     pub const fn framed(self) -> bool {
         self.framed

@@ -249,13 +249,16 @@ fn admission_fixpoint(
             .collect();
         propagate_pausing(units, &mut pausing);
         // Bodies that keep VM-frame state: a trace hook prologue, type
-        // bindings, or a pass-through span scope.
+        // bindings, or a pass-through span scope. A model invoke's return
+        // charges model usage, which the VM-frame call paths do.
         let framed: BTreeSet<usize> = units
             .iter()
             .filter(|&(&object, unit)| {
+                let info = index.info(object);
                 unit.analysis.hooked
                     || unit.analysis.binds_types
-                    || index.info(object).trace_passthrough
+                    || info.trace_passthrough
+                    || info.model_invoke
             })
             .map(|(&object, _)| object)
             .collect();
