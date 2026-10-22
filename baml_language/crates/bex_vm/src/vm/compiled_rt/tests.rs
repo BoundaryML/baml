@@ -797,6 +797,23 @@ fn a_compiled_caller_stands_at_its_call_instruction_while_the_callee_runs() {
 type NamedPath = (Option<String>, String);
 
 // Resolve run-specific IDs and discard clock readings before comparison.
+/// `records` with each usage record's span id dropped: ids come from a
+/// per-thread allocator, so two runs number the same spans differently.
+fn without_span_ids(
+    (timings, spans): (Vec<(NamedPath, InvocationOutcome, bool)>, Vec<String>),
+) -> (Vec<(NamedPath, InvocationOutcome, bool)>, Vec<String>) {
+    let spans = spans
+        .into_iter()
+        .map(
+            |span| match (span.find("node: TelemetryId("), span.find("), entries")) {
+                (Some(start), Some(end)) => format!("{}{}", &span[..start], &span[end + 3..]),
+                _ => span,
+            },
+        )
+        .collect();
+    (timings, spans)
+}
+
 fn telemetry_records(vm: &BexVm) -> (Vec<(NamedPath, InvocationOutcome, bool)>, Vec<String>) {
     use std::fmt::Write as _;
 
@@ -990,7 +1007,7 @@ fn inline_observed_model_invokes_charge_usage_before_completion() {
                     reasoning_tokens: None,
                 }]]
             );
-            runs.push(telemetry_records(&vm));
+            runs.push(without_span_ids(telemetry_records(&vm)));
         }
         assert_eq!(runs[0], runs[1], "level: {level:?}");
     }
