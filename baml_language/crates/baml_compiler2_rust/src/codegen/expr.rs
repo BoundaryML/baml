@@ -141,7 +141,7 @@ impl<'db> Generator<'_, 'db> {
                 ))
             }
             // Null when the hook is not to run; the hook call then takes the
-            // VM's call path (see `analysis::hook_call`).
+            // VM's call path.
             Rvalue::TraceHookSettings { with_settings } => self.fallible_expr(
                 block,
                 &format!("vm.compiled_begin_trace_hook(depth, {with_settings})"),
@@ -368,7 +368,7 @@ impl<'db> Generator<'_, 'db> {
         receiver: &Operand<'db>,
         type_args: &[TyTemplate],
     ) -> Gen<Expr> {
-        let (iface, iface_args, _) = self.interface_operands(iface)?;
+        let (iface, iface_args) = self.interface_operands(iface)?;
         let types = self.realized_all(type_args)?;
         let receiver = self.value_operand(block, receiver)?;
         let code = self.fallible(
@@ -390,8 +390,8 @@ impl<'db> Generator<'_, 'db> {
         type_args: &[Operand<'db>],
     ) -> Gen<Expr> {
         let self_ty = self.realized(self_ty)?;
-        let (iface, iface_args, _) = self.interface_operands(iface)?;
-        let (types, _) = self.type_operands("interface function value", type_args)?;
+        let (iface, iface_args) = self.interface_operands(iface)?;
+        let types = self.type_operands("interface function value", type_args)?;
         let code = self.fallible(
             block,
             &format!(
@@ -409,7 +409,7 @@ impl<'db> Generator<'_, 'db> {
         receiver: &Operand<'db>,
         field_index: u32,
     ) -> Gen<Expr> {
-        let (iface, iface_args, _) = self.interface_operands(iface)?;
+        let (iface, iface_args) = self.interface_operands(iface)?;
         let receiver = self.value_operand(block, receiver)?;
         let code = self.fallible(
             block,
