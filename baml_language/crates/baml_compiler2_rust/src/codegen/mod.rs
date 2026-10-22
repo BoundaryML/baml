@@ -98,6 +98,7 @@ pub(crate) struct Generator<'a, 'db> {
     pub(crate) cause_slot: Option<usize>,
     pub(crate) preds: Vec<Vec<usize>>,
     pub(crate) call_types: Vec<String>,
+    pub(crate) call_trace: Option<String>,
     pub(crate) structured: Option<Structured>,
     /// Static type value sites, by their generated expression; each site is
     /// one type object, as bytecode's `LoadType` site is.
@@ -137,6 +138,7 @@ impl<'a, 'db> Generator<'a, 'db> {
             cause_slot: None,
             preds: Vec::new(),
             call_types: Vec::new(),
+            call_trace: None,
             structured: None,
             static_value_sites: Vec::new(),
         }
@@ -498,7 +500,7 @@ impl<'db> Generator<'_, 'db> {
         }
         let site = self.site_pc(block);
         let _ = write!(out, "vm.note_pc(depth, {site}); vm.suspend({step}) }}");
-        out
+        self.attach_trace(&out)
     }
 
     /// An `R<Value>` expression answering the block's suspending terminator.
@@ -632,9 +634,18 @@ impl<'db> Generator<'_, 'db> {
             ));
         };
         let trace = self.value_operand(block, trace)?;
-        let code = self.fallible(block, &format!("vm.set_call_trace({trace})"))?;
-        self.emit_statement(&format!("{code};"));
+        self.call_trace = Some(trace);
         Ok(args)
+    }
+
+    fn attach_trace(&mut self, call: &str) -> String {
+        self.call_trace.take().map_or_else(
+            || call.to_string(),
+            |trace| format!(
+                "match vm.set_call_trace({trace}) {{ Ok(()) => {call}, Err(e) => {{ vm.reserve_slots(depth, {}); Err(e) }} }}",
+                self.slots
+            ),
+        )
     }
 
     /// Where a suspending terminator stores its result and continues.

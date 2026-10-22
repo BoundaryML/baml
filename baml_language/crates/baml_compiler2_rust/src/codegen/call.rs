@@ -254,10 +254,18 @@ impl<'db> Generator<'_, 'db> {
         ));
         let site = self.site_pc(block);
         let values = values.join(", ");
-        let suspend = format!(
-            "{{ let argc = vm.push_virtual_args(callee, {layout}, &[{values}])?; \
-             vm.note_pc(depth, {site}); vm.suspend(Step::Call {{ callee, argc }}) }}"
-        );
+        let suspend = if traced {
+            let call = self.attach_trace("vm.suspend(Step::Call { callee, argc })");
+            format!(
+                "match vm.push_virtual_args(callee, {layout}, &[{values}]) {{ \
+                 Ok(argc) => {{ vm.note_pc(depth, {site}); {call} }}, Err(e) => Err(e) }}"
+            )
+        } else {
+            format!(
+                "{{ let argc = vm.push_virtual_args(callee, {layout}, &[{values}])?; \
+                 vm.note_pc(depth, {site}); vm.suspend(Step::Call {{ callee, argc }}) }}"
+            )
+        };
         // The VM must apply trace attachments, so traced calls cannot run inline.
         if named || traced {
             return Ok(suspend);

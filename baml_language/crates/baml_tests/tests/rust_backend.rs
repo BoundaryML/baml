@@ -1146,3 +1146,36 @@ function plain(n: int) -> int { n + 1 }
     syn::parse_file(&module.source).expect("generated module parses as Rust");
 }
 
+#[test]
+fn trace_attachment_follows_virtual_target_and_argument_layout() {
+    let module = compile(
+        r#"
+interface Reader {
+  function read(self, n: int) -> int throws never
+}
+class Probe {
+  implements Reader {
+    function read(self, n: int) -> int throws never { n }
+  }
+}
+function traced(p: Reader, xs: int[]) -> int {
+  p.read(xs[0], $trace = trace.hidden())
+}
+"#,
+    );
+    let body = body_of(&module, "user.traced");
+    let attached = body.find("vm.set_call_trace(").expect("trace attachment");
+    for operation in [
+        "vm.load_array_element(",
+        "vm.virtual_target(",
+        "vm.push_virtual_args(",
+    ] {
+        assert!(body.find(operation).expect(operation) < attached, "{body}");
+    }
+    assert!(
+        attached < body.rfind("vm.suspend(Step::Call").expect("call"),
+        "{body}"
+    );
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
+}
+
