@@ -73,37 +73,23 @@ impl BexVm {
     #[inline]
     pub fn add_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
         let v = l.wrapping_add(r);
-        if Value::try_int(v).is_some() {
-            Ok(v)
-        } else {
-            Err(Box::new(
-                self.integer_overflow(format!("{l} + {r} overflows int")),
-            ))
-        }
+        self.finish_int(v, l, '+', r).map(|_| v).map_err(Box::new)
     }
 
     /// `l - r` on raw ints, overflow-checked into the i63 range.
     #[inline]
     pub fn sub_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
         let v = l.wrapping_sub(r);
-        if Value::try_int(v).is_some() {
-            Ok(v)
-        } else {
-            Err(Box::new(
-                self.integer_overflow(format!("{l} - {r} overflows int")),
-            ))
-        }
+        self.finish_int(v, l, '-', r).map(|_| v).map_err(Box::new)
     }
 
     /// `l * r` on raw ints, overflow-checked.
     #[inline]
     pub fn mul_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
-        match l.checked_mul(r).filter(|v| Value::try_int(*v).is_some()) {
-            Some(v) => Ok(v),
-            None => Err(Box::new(
-                self.integer_overflow(format!("{l} * {r} overflows int")),
-            )),
-        }
+        let checked = l.checked_mul(r);
+        self.int_arith_result(checked, l, '*', r)
+            .map(|_| checked.expect("int_arith_result checked the product"))
+            .map_err(Box::new)
     }
 
     /// `l / r` on raw ints: `DivisionByZero` for a zero divisor,
@@ -114,13 +100,7 @@ impl BexVm {
             return Err(Box::new(self.division_by_zero(l, r)));
         }
         let v = l / r;
-        if Value::try_int(v).is_some() {
-            Ok(v)
-        } else {
-            Err(Box::new(
-                self.integer_overflow(format!("{l} / {r} overflows int")),
-            ))
-        }
+        self.finish_int(v, l, '/', r).map(|_| v).map_err(Box::new)
     }
 
     /// `l % r` on raw ints: `DivisionByZero` for a zero divisor.

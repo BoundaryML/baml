@@ -33,20 +33,7 @@ impl BexVm {
         function: HeapPtr,
         index: usize,
     ) -> Result<RealizedTy, Box<VmError>> {
-        let Object::Function(function) = self.get_object(function) else {
-            unreachable!("compiled code names its own function object");
-        };
-        let ConstValue::Type(template) = &function.bytecode.constants[index] else {
-            return Err(Box::new(VmInternalError::UnexpectedConstantKind.into()));
-        };
-        template.substitute(&[], self).map_err(|error| {
-            Box::new(
-                VmInternalError::TypeSubstitution {
-                    message: error.to_string(),
-                }
-                .into(),
-            )
-        })
+        self.frame_type_constant(0, function, index)
     }
 
     /// Resolve a type constant using the frame's type arguments at `depth`.
