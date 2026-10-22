@@ -2,8 +2,8 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use baml_db::{
-    ProjectDatabase,
-    baml_compiler_diagnostics::{Diagnostic, Severity, render},
+    CheckedWorld, ProjectDatabase, ProjectDiagnostics, SourceRoot, WorldHasErrors,
+    baml_compiler_diagnostics::{Diagnostic, render},
 };
 use clap::Args;
 
@@ -65,7 +65,7 @@ impl CheckArgs {
                 let incremental = ctx.collect_diagnostics_incremental(db, package, served.as_ref());
                 (incremental.merged, Some(incremental.fresh_by_file))
             }
-            None => (baml_db::collect_diagnostics(db), None),
+            None => (ProjectDiagnostics::collect(db), None),
         };
         if let Some(cache) = cache {
             cache.verify_diagnostics(db, package)?;
@@ -94,14 +94,11 @@ impl CheckArgs {
             });
         }
 
-        let error_count = diagnostics
-            .iter()
-            .filter(|diag| diag.severity == Severity::Error)
-            .count();
-        if error_count > 0 {
+        // Every diagnostic is rendered above; the world's check is the verdict.
+        let Ok(world) = CheckedWorld::check(&diagnostics, package) else {
             reporter.abandon();
             return Ok(crate::ExitCode::Other);
-        }
+        };
 
         // Seed the bytecode cache from this clean check — the same
         // compile-and-store path run/test use — but only when it advances the
@@ -112,7 +109,7 @@ impl CheckArgs {
         // an internal lowering error, which is a compiler bug.
         if let Some(ctx) = cache {
             if served.is_none() {
-                match crate::bytecode_cache::compile_program(db, package, cache.as_ref()) {
+                match crate::bytecode_cache::compile_program(&world, cache.as_ref()) {
                     Ok(program) => {
                         let fresh = fresh_diagnostics
                             .as_ref()
@@ -150,6 +147,38 @@ impl CheckArgs {
         reporter.finish("Finished", format!("checked {file_count} file(s)"));
         Ok(crate::ExitCode::Success)
     }
+}
+
+/// The world `package` heads, admitted by its check
+/// ([`CheckedWorld::check`]); a refused world has its errors rendered and the
+/// command bails with `context`.
+pub(crate) fn checked_world<'db>(
+    diagnostics: &ProjectDiagnostics<'db>,
+    package: SourceRoot,
+    context: &str,
+    reporter: &Reporter,
+) -> Result<CheckedWorld<'db>> {
+    CheckedWorld::check(diagnostics, package)
+        .map_err(|refused| refused_world_error(diagnostics.db(), &refused, context, reporter))
+}
+
+/// Renders a refused world's errors and returns the command's error.
+pub(crate) fn refused_world_error(
+    db: &ProjectDatabase,
+    refused: &WorldHasErrors,
+    context: &str,
+    reporter: &Reporter,
+) -> anyhow::Error {
+    let rendered = render_project_diagnostics(db, refused.errors());
+    reporter.abandon();
+    #[expect(
+        clippy::print_stderr,
+        reason = "a refused compile's diagnostics are the command's error output"
+    )]
+    {
+        eprintln!("{rendered}");
+    }
+    anyhow::anyhow!("{context}")
 }
 
 pub(crate) fn render_project_diagnostics(

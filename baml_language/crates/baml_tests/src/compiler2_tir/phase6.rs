@@ -1721,3 +1721,42 @@ function f() -> int {
         "mixed OR should preserve the informative class branch as a partial expected type for generic return inference, got:\n{output}"
     );
 }
+
+#[test]
+fn projection_typed_field_access_reduces_through_the_class_argument() {
+    // A field typed by a projection on the class's own bounded parameter
+    // (`v T.Out` under `T extends HasOut`) reads back through a realized
+    // instantiation as the projection's reduction, never the error
+    // sentinel: the field's declaring interface comes from the class's
+    // bounds, which every lowering of the field type must carry.
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+interface HasOut {
+    type Out
+}
+class IntOut {
+    implements HasOut {
+        type Out = int
+    }
+}
+class Proj<T extends HasOut> {
+    v T.Out
+}
+function f() -> int {
+    let p: Proj<IntOut> = Proj { v: 3 };
+    p.v
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("p.v : int"),
+        "the projection-typed field reads as `int`; got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("!error"),
+        "no error sentinel in a clean program; got:\n{tir}"
+    );
+}

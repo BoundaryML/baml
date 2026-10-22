@@ -1487,6 +1487,18 @@ impl<'db, T> InferenceResult<'db, T> {
     }
 }
 
+impl InferenceResult<'_, baml_type::Ty> {
+    /// The first recorded type that carries the error sentinel, with where it
+    /// sits - `None` when none does. A body whose program has no error
+    /// diagnostic records none (`erase_infer`'s precondition), and code
+    /// generation probes that before it reads the tables.
+    pub fn first_error_site(&self) -> Option<(RecordedSite, &baml_type::Ty)> {
+        self.recorded_types()
+            .into_iter()
+            .find(|(_, ty)| baml_type::contains_error(ty))
+    }
+}
+
 /// Where a type an [`InferenceResult`] records sits
 /// ([`InferenceResult::recorded_types`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

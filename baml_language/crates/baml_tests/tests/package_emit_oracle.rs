@@ -1,5 +1,5 @@
 //! The per-package emitter's oracle: every package of a program emitted on
-//! its own and linked (`baml_db::compile_program`) carries the executable's
+//! its own and linked (`baml_db::CheckedWorld::compile`) carries the executable's
 //! three identity tables (`Class.methods`, `ProgramPackage::{globals, init}`),
 //! each asserted positively against the view derived from them at load and
 //! the ordinal init order. Beyond identity: emission is deterministic, the
@@ -13,7 +13,7 @@ mod common;
 use std::{cell::RefCell, path::Path};
 
 use baml_compiler2_emit::{OptLevel, emit_package};
-use baml_db::{ProjectDatabase, compile_program, compile_program_with, program::PackageCache};
+use baml_db::{CheckedWorld, ProjectDatabase, program::PackageCache};
 use baml_linker_types::EmittedPackage;
 use baml_tests::engine::TestDbExt;
 use bex_vm_types::{Object, Program};
@@ -47,16 +47,13 @@ function pick(s: Side) -> int {
 }
 "#;
 
-const CLIENT_BAML: &str = r#"client<llm> TestClient {
-  provider openai
-  options {
-    model "unused"
-    api_key "unused"
-  }
-}
+const CLIENT_BAML: &str = r#"client TestClient = openai.ResponsesClient.new(
+  model = "unused",
+  api_key = "unused",
+);
 
-function shout() -> string {
-  TestClient.name
+function the_client() -> openai.ResponsesClient {
+  TestClient
 }
 "#;
 
@@ -138,8 +135,10 @@ fn assert_program_links(label: &str, build: impl Fn() -> ProjectDatabase) {
     let db = build();
     for opt in LEVELS {
         let label = format!("{label}@{opt:?}");
-        let linked = compile_program(&db, package(&db), opt)
-            .unwrap_or_else(|e| panic!("{label}: compile_program: {e}"));
+        let linked = CheckedWorld::collect(&db, package(&db))
+            .expect("the world checks")
+            .compile(opt)
+            .unwrap_or_else(|e| panic!("{label}: compile: {e}"));
         assert_identity_tables(&label, &linked);
     }
 }
@@ -273,8 +272,10 @@ impl PackageCache for RecordingCache {
 /// fresh emission while sharing the package outputs between the assertions.
 fn corpus_emission(db: &ProjectDatabase) -> (Vec<EmittedBytes>, Vec<u8>) {
     let cache = RecordingCache::default();
-    let program =
-        compile_program_with(db, package(db), OptLevel::Two, &cache).expect("compile_program");
+    let program = CheckedWorld::collect(db, package(db))
+        .expect("the world checks")
+        .compile_with(OptLevel::Two, &cache)
+        .expect("the world compiles");
     let program = borsh::to_vec(&program).expect("serialize program");
     let packages = cache.0.into_inner();
     let viewpoint = baml_compiler2_hir_ty::render::Viewpoint::canonical(db);
@@ -591,14 +592,14 @@ fn a_dependency_body_change_that_alters_inferred_throws_changes_the_fingerprint(
 
     // Each world links on its own; the old consumer does not link into the
     // new world — the edge still locates `app`, the fingerprint refuses it.
-    compile_program(&after, package(&after), OptLevel::Two).expect("the new world links");
-    let error = baml_db::compile_program_with(
-        &after,
-        package(&after),
-        OptLevel::Two,
-        &ServedConsumer(&consumer_before),
-    )
-    .expect_err("a consumer of the old interface must not link");
+    CheckedWorld::collect(&after, package(&after))
+        .expect("the world checks")
+        .compile(OptLevel::Two)
+        .expect("the new world links");
+    let error = CheckedWorld::collect(&after, package(&after))
+        .expect("the world checks")
+        .compile_with(OptLevel::Two, &ServedConsumer(&consumer_before))
+        .expect_err("a consumer of the old interface must not link");
     match error {
         baml_db::CompileProgramError::Link(baml_linker::LinkError::InterfaceMismatch {
             package,
@@ -702,14 +703,14 @@ fn a_transitive_layout_change_changes_the_direct_dependency_digest_and_refuses_t
         digest(&before, app_before)
     );
 
-    compile_program(&after, package(&after), OptLevel::Two).expect("the new world links");
-    let error = baml_db::compile_program_with(
-        &after,
-        package(&after),
-        OptLevel::Two,
-        &ServedConsumer(&consumer_before),
-    )
-    .expect_err("a consumer of the old layout must not link");
+    CheckedWorld::collect(&after, package(&after))
+        .expect("the world checks")
+        .compile(OptLevel::Two)
+        .expect("the new world links");
+    let error = CheckedWorld::collect(&after, package(&after))
+        .expect("the world checks")
+        .compile_with(OptLevel::Two, &ServedConsumer(&consumer_before))
+        .expect_err("a consumer of the old layout must not link");
     match error {
         baml_db::CompileProgramError::Link(baml_linker::LinkError::InterfaceMismatch {
             package,

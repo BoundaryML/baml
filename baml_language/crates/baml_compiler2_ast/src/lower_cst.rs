@@ -2124,7 +2124,9 @@ fn synthesize_init_test_function(
         generic_params: vec![],
         params: vec![registry_param],
         defaults: FunctionDefaults::empty(),
-        return_type: None,
+        // Unit, like the `null` tail above: a synthesized signature is a
+        // complete one (a missing return type is a parse error's recovery).
+        return_type: Some(crate::ast::TypeExprKind::Null.at(span)),
         throws: None,
         body: Some(FunctionBodyDef::Expr(body, source_map)),
         declarative_meta: None,

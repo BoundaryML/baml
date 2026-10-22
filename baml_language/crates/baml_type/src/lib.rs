@@ -226,6 +226,12 @@ pub fn contains_ty_where<N: Clone>(ty: &Ty<N>, pred: &dyn Fn(&Ty<N>) -> bool) ->
     }
 }
 
+/// Does `ty` carry the error-recovery sentinel `Ty::Error` anywhere in its
+/// structure?
+pub fn contains_error<N: Clone>(ty: &Ty<N>) -> bool {
+    contains_ty_where(ty, &|t| matches!(t, Ty::Error))
+}
+
 /// Does `ty` carry `Ty::Error` or `Ty::Unknown` anywhere in its structure?
 pub fn contains_error_recovery<N: Clone>(ty: &Ty<N>) -> bool {
     contains_ty_where(ty, &|t| matches!(t, Ty::Error | Ty::Unknown))

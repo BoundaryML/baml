@@ -114,13 +114,16 @@ fn interface_bodies_are_pooled_and_slotted_but_in_no_name_map() {
 #[test]
 fn an_impl_body_is_spelled_once_by_mir_and_the_runtime() {
     use baml_compiler2_hir::{contributions::Definition, item_data};
-    use baml_db::{OptLevel, compile_program};
+    use baml_db::{CheckedWorld, OptLevel};
     use baml_tests::engine::{TestDbExt, db_with_root};
 
     let root_path = std::path::Path::new("/anonymity/spelling");
     let mut db = db_with_root(root_path);
     let file = db.file("/anonymity/spelling/main.baml", SOURCE);
-    let program = compile_program(&db, file.source_root(&db), OptLevel::One).expect("compiles");
+    let program = CheckedWorld::collect(&db, file.source_root(&db))
+        .expect("the world checks")
+        .compile(OptLevel::One)
+        .expect("compiles");
     let runtime_names: Vec<String> = (0..program.objects.len())
         .filter_map(|index| program.function_name(bex_vm_types::ObjectIndex::from_raw(index)))
         .collect();

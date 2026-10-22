@@ -5,24 +5,24 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0002
 
   × cannot infer type parameter `T`
-    ╭─[main.baml:22:5]
- 22 │     phantom()
+    ╭─[main.baml:23:5]
+ 23 │     phantom()
     ·     ─────────
     ╰────
 
   [type] E0002
 
   × cannot infer type parameter `U`
-    ╭─[main.baml:27:5]
- 27 │     p.pick()
+    ╭─[main.baml:28:5]
+ 28 │     p.pick()
     ·     ────────
     ╰────
 
   [type] E0002
 
   × cannot infer type parameter `T`
-    ╭─[main.baml:31:13]
- 31 │     let t = Tag { name: "x" };
+    ╭─[main.baml:32:13]
+ 32 │     let t = Tag { name: "x" };
     ·             ─────────────────
     ╰────
 
@@ -30,32 +30,32 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × generic function `pick` needs concrete type arguments before it can be stored in `f`. Specialize it explicitly, for example `p.pick<int>`. Calling `p.pick(...)` directly works only when that
   │ call's arguments or expected result determine every type argument
-    ╭─[main.baml:37:13]
- 37 │     let f = p.pick;
+    ╭─[main.baml:38:13]
+ 38 │     let f = p.pick;
     ·             ──────
     ╰────
 
   [type] E0007
 
   × type `int[]` has no member `len`
-    ╭─[main.baml:49:13]
- 49 │     consume([1, 2, 3].len())
+    ╭─[main.baml:50:13]
+ 50 │     consume([1, 2, 3].len())
     ·             ───────────────
     ╰────
 
   [type] E0002
 
   × cannot infer type parameter `T`: its arguments give it the conflicting types `int` and `string`; write the type argument or annotate the expected type
-    ╭─[main.baml:59:13]
- 59 │     let r = pick(1, "s");
+    ╭─[main.baml:60:13]
+ 60 │     let r = pick(1, "s");
     ·             ────────────
     ╰────
 
   [type] E0001
 
   × mismatched types
-    ╭─[main.baml:86:14]
- 86 │     unholder(1)
+    ╭─[main.baml:87:14]
+ 87 │     unholder(1)
     ·              ┬
     ·              ╰── expected `Holder<!error>`, found `1`
     ╰────
@@ -63,24 +63,24 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0005
 
   × function `two` expects 2 type argument(s), got 1
-    ╭─[main.baml:90:5]
- 90 │     two<int>()
+    ╭─[main.baml:91:5]
+ 91 │     two<int>()
     ·     ──────────
     ╰────
 
   [type] E0005
 
   × expected 2 argument(s), got 1
-    ╭─[main.baml:94:5]
- 94 │     pair(1)
+    ╭─[main.baml:95:5]
+ 95 │     pair(1)
     ·     ───────
     ╰────
 
   [type] E0155
 
   × type annotations needed: the type of this value must be known before accessing `length`
-    ╭─[main.baml:98:13]
- 98 │     let x = none()?.length();
+    ╭─[main.baml:99:13]
+ 99 │     let x = none()?.length();
     ·             ──────────────
     ╰────
 
@@ -88,8 +88,8 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × type annotations needed
   │ full type: `!error[]`
-     ╭─[main.baml:105:14]
- 105 │     let xs = [];
+     ╭─[main.baml:106:14]
+ 106 │     let xs = [];
      ·              ──
      ╰────
 

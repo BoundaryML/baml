@@ -30,7 +30,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use baml_db::{ProjectDatabase, baml_compiler_diagnostics::Severity};
+use baml_db::{ProjectDatabase, ProjectDiagnostics};
 use baml_exec::{OutputFormat, PACK_SECTION_NAME, PackEnvelope, validate_help_param};
 use bex_engine::BexEngine;
 use bex_vm_types::types::Program;
@@ -296,9 +296,17 @@ impl PackArgs {
             // Standalone `--file` mode has no project root, so there is no
             // cache seam — always a cold compile, same as `baml run --file`.
             let (db, package, needs_format_hint) = self.load_standalone(file)?;
-            check_diagnostics(&db, "cannot pack: compilation errors found", reporter)?;
-            let program = crate::bytecode_cache::compile_program(&db, package, None)
-                .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
+            let program = {
+                let diagnostics = ProjectDiagnostics::collect(&db);
+                let world = crate::check_command::checked_world(
+                    &diagnostics,
+                    package,
+                    "cannot pack: compilation errors found",
+                    reporter,
+                )?;
+                crate::bytecode_cache::compile_program(&world, None)
+                    .map_err(|e| anyhow!("compilation failed: {e}"))?
+            };
             return Ok((db, program, needs_format_hint));
         }
         self.load_and_compile_project(reporter)
@@ -368,22 +376,20 @@ impl PackArgs {
         // serves the check rows of an unchanged project and checks every file
         // otherwise, returning the fresh per-file blobs to persist. Without a
         // cache, run the honest full check (no blobs to store).
-        let fresh_diagnostics = if let Some(ctx) = cache {
+        let (diagnostics, fresh_diagnostics) = if let Some(ctx) = cache {
             let incremental = ctx.collect_diagnostics_incremental(db, package, served.as_ref());
-            bail_on_error_diagnostics(
-                db,
-                &incremental.merged,
-                "cannot pack: compilation errors found",
-                reporter,
-            )?;
-            Some(incremental.fresh_by_file)
+            (incremental.merged, Some(incremental.fresh_by_file))
         } else {
-            check_diagnostics(db, "cannot pack: compilation errors found", reporter)?;
-            None
+            (ProjectDiagnostics::collect(db), None)
         };
-
-        let program = crate::bytecode_cache::compile_program(db, package, cache.as_ref())
-            .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
+        let world = crate::check_command::checked_world(
+            &diagnostics,
+            package,
+            "cannot pack: compilation errors found",
+            reporter,
+        )?;
+        let program = crate::bytecode_cache::compile_program(&world, cache.as_ref())
+            .map_err(|e| anyhow!("compilation failed: {e}"))?;
         if let Some(ctx) = cache {
             let fresh = fresh_diagnostics
                 .as_ref()
@@ -526,40 +532,6 @@ fn label_for(targets: &[ResolvedPackTarget]) -> String {
             .collect::<Vec<_>>()
             .join(","),
     }
-}
-
-/// Collect diagnostics; render errors to stderr and bail with `ctx`.
-fn check_diagnostics(db: &ProjectDatabase, ctx: &str, reporter: &Reporter) -> Result<()> {
-    let diagnostics = baml_db::collect_diagnostics(db);
-    bail_on_error_diagnostics(db, &diagnostics, ctx, reporter)
-}
-
-/// Render any `Error`-severity entries in an already-collected diagnostics
-/// list and bail with `ctx`; no-op when the list is error-free.
-///
-/// When `reporter` has an active spinner, abandon it before printing so
-/// the multi-line diagnostic block lands cleanly instead of getting
-/// interleaved with the tick character.
-fn bail_on_error_diagnostics(
-    db: &ProjectDatabase,
-    diagnostics: &[baml_db::baml_compiler_diagnostics::Diagnostic],
-    ctx: &str,
-    reporter: &Reporter,
-) -> Result<()> {
-    let errors: Vec<_> = diagnostics
-        .iter()
-        .filter(|d| d.severity == Severity::Error)
-        .collect();
-    if errors.is_empty() {
-        return Ok(());
-    }
-    let rendered = crate::check_command::render_project_diagnostics(
-        db,
-        &errors.iter().copied().cloned().collect::<Vec<_>>(),
-    );
-    reporter.abandon();
-    eprintln!("{rendered}");
-    anyhow::bail!("{ctx}");
 }
 
 /// Return the qualified name the engine prefers when both `foo` and

@@ -76,10 +76,15 @@ pub(crate) fn compile_and_store_v1(
     let r1 = resolved(root, files);
     let (db1, pkg1) = project_load::build_db_from_sources(&r1, |_| {});
     let ctx1 = open(&r1).expect("cache opens");
-    let program = compile_program(&db1, pkg1, Some(&ctx1)).expect("v1 compile succeeds");
-    let fresh1 = ctx1
-        .collect_diagnostics_incremental(&db1, pkg1, None)
-        .fresh_by_file;
+    // The cold cached compile run/test/pack take: one incremental collection
+    // gates the compile and supplies the per-file blobs to store.
+    let (program, fresh1) = {
+        let incremental = ctx1.collect_diagnostics_incremental(&db1, pkg1, None);
+        let world =
+            baml_db::CheckedWorld::check(&incremental.merged, pkg1).expect("v1 sources check");
+        let program = compile_program(&world, Some(&ctx1)).expect("v1 compile succeeds");
+        (program, incremental.fresh_by_file)
+    };
     ctx1.store_program_and_manifest(&db1, pkg1, &program, &fresh1, None)
         .expect("v1 manifest stored");
     (db1, ctx1)

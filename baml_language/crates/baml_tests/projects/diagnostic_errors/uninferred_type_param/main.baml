@@ -1,8 +1,9 @@
 // A generic parameter's instantiation slot that nothing determines is E0002
-// (cannot infer type parameter) at the use site, whatever the site is: a
-// call, a method call, a construction, a member value. A parameter no
-// argument or field mentions (a phantom) is the plainest case - only a
-// written argument can determine it.
+// (cannot infer type parameter) at the use site: a call, a method call, a
+// construction. A parameter no argument or field mentions (a phantom) is the
+// plainest case - only a written argument can determine it. A generic VALUE
+// reference whose slots stay open reports once, as the unspecialized value
+// that names its fix.
 
 function phantom<T>() -> int {
     0

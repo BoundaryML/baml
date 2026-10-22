@@ -195,14 +195,60 @@ pub fn check_files_parallel(db: &ProjectDatabase, files: &[SourceFile]) -> Vec<V
     slots.into_iter().map(Option::unwrap_or_default).collect()
 }
 
+/// The project's diagnostics as one of this crate's collectors produced them
+/// ([`Self::collect`], or a narrowed collection's
+/// [`NarrowedDiagnostics::merged`]): the only evidence
+/// [`crate::CheckedWorld::check`] accepts. It borrows the database, so no
+/// edit can land between the collection and the check; nothing outside this
+/// crate can build one from an arbitrary list.
+pub struct ProjectDiagnostics<'db> {
+    db: &'db ProjectDatabase,
+    diagnostics: Vec<Diagnostic>,
+}
+
+impl<'db> ProjectDiagnostics<'db> {
+    /// Every file's diagnostics and the package-level ones
+    /// ([`collect_compiler2_diagnostics`]).
+    pub fn collect(db: &'db ProjectDatabase) -> Self {
+        Self {
+            db,
+            diagnostics: collect_compiler2_diagnostics(db),
+        }
+    }
+
+    /// The database the diagnostics were collected from.
+    pub fn db(&self) -> &'db ProjectDatabase {
+        self.db
+    }
+
+    pub fn into_vec(self) -> Vec<Diagnostic> {
+        self.diagnostics
+    }
+}
+
+impl std::fmt::Debug for ProjectDiagnostics<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(&self.diagnostics).finish()
+    }
+}
+
+impl std::ops::Deref for ProjectDiagnostics<'_> {
+    type Target = [Diagnostic];
+
+    fn deref(&self) -> &[Diagnostic] {
+        &self.diagnostics
+    }
+}
+
 /// The per-checked-file split alongside the merged, honest-ordered set produced
 /// by [`collect_compiler2_diagnostics_narrowed`].
-pub struct NarrowedDiagnostics {
+pub struct NarrowedDiagnostics<'db> {
     /// Merged set: freshly-checked files' diagnostics, the caller-supplied
     /// clean-file `precomputed`, and the always-recomputed package-level
     /// diagnostics — sorted by the same comparator as the honest collector, so
-    /// it renders byte-identically to a full run.
-    pub merged: Vec<Diagnostic>,
+    /// it renders byte-identically to a full run. The `precomputed` rows are
+    /// the caller's to vouch for: a store that serves them answers for them.
+    pub merged: ProjectDiagnostics<'db>,
     /// Only the diagnostics `check_file` freshly produced for the checked
     /// files. Excludes `precomputed` and the package-level set, so it is exactly
     /// what the caller persists per dirty file (the package-level set is never
@@ -218,11 +264,11 @@ pub struct NarrowedDiagnostics {
 /// conflicts/shadows are always recomputed. The final sort re-runs on
 /// current-process `FileId`s, so the merged set renders byte-identically to the
 /// honest collector when `should_check` is all-true and `precomputed` is empty.
-pub fn collect_compiler2_diagnostics_narrowed(
-    db: &ProjectDatabase,
+pub fn collect_compiler2_diagnostics_narrowed<'db>(
+    db: &'db ProjectDatabase,
     should_check: &dyn Fn(SourceFile) -> bool,
     precomputed: Vec<Diagnostic>,
-) -> NarrowedDiagnostics {
+) -> NarrowedDiagnostics<'db> {
     let source_files = baml_compiler2_hir::compiler2_all_files(db);
     // Even a fully-served (zero-checked-files) collection ends in
     // `package_level_diagnostics`, which derives the whole-package aggregates
@@ -257,7 +303,13 @@ pub fn collect_compiler2_diagnostics_narrowed(
     merged.extend(precomputed);
     merged.extend(package_level_diagnostics(db, &source_files));
     sort_diagnostics(&mut merged);
-    NarrowedDiagnostics { merged, fresh }
+    NarrowedDiagnostics {
+        merged: ProjectDiagnostics {
+            db,
+            diagnostics: merged,
+        },
+        fresh,
+    }
 }
 
 /// Public wrapper over the private `package_level_diagnostics` for callers that assemble
@@ -2301,6 +2353,18 @@ pub fn display_ty_for_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile, ty
 }
 
 #[cfg(test)]
+impl<'db> ProjectDiagnostics<'db> {
+    /// A collection with exactly `diagnostics`, for this crate's tests of
+    /// what the check does with them.
+    pub(crate) fn from_parts_for_test(
+        db: &'db ProjectDatabase,
+        diagnostics: Vec<Diagnostic>,
+    ) -> Self {
+        Self { db, diagnostics }
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use std::path::Path;
 
@@ -2951,7 +3015,7 @@ interface Pair<A, B> {
         let honest = collect_compiler2_diagnostics(&db);
         let narrowed = collect_compiler2_diagnostics_narrowed(&db, &|_| true, Vec::new());
         assert_eq!(
-            honest, narrowed.merged,
+            honest, *narrowed.merged,
             "narrowed all-true must equal honest"
         );
         // `fresh` is exactly `merged` minus the always-recomputed package-level
@@ -2968,7 +3032,7 @@ interface Pair<A, B> {
         );
         let mut fresh_sorted = narrowed.fresh;
         sort_diagnostics(&mut fresh_sorted);
-        let mut merged_minus_pkg = narrowed.merged;
+        let mut merged_minus_pkg = narrowed.merged.into_vec();
         for pkg in &package_level {
             let pos = merged_minus_pkg
                 .iter()

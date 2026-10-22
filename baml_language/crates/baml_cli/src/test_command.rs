@@ -9,7 +9,6 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow};
-use baml_db::baml_compiler_diagnostics::Severity;
 use baml_type::RuntimeTy;
 use bex_engine::{
     BexEngine, BexExternalValue, CancellationToken, FunctionCallContext,
@@ -392,27 +391,24 @@ impl TestArgs {
                 let incremental = ctx.collect_diagnostics_incremental(db, package, served.as_ref());
                 (incremental.merged, Some(incremental.fresh_by_file))
             } else {
-                (baml_db::collect_diagnostics(db), None)
+                (baml_db::ProjectDiagnostics::collect(db), None)
             };
-            let errors: Vec<_> = diagnostics
-                .iter()
-                .filter(|d| d.severity == Severity::Error)
-                .cloned()
-                .collect();
-            if !errors.is_empty() {
-                // Render the full diagnostic block so test errors look like
-                // run/pack errors instead of a bullet list of messages. Sources
-                // and paths cover every user file plus builtins — an error in one
-                // file may carry related spans elsewhere.
-                let rendered = crate::check_command::render_project_diagnostics(db, &errors);
-                reporter.abandon();
-                eprintln!("{rendered}");
-                return Ok(crate::ExitCode::Other);
-            }
+            // A refused world renders its errors as run/pack do; `test`
+            // reports the failure through its exit code.
+            let world = match baml_db::CheckedWorld::check(&diagnostics, package) {
+                Ok(world) => world,
+                Err(refused) => {
+                    let rendered =
+                        crate::check_command::render_project_diagnostics(db, refused.errors());
+                    reporter.abandon();
+                    eprintln!("{rendered}");
+                    return Ok(crate::ExitCode::Other);
+                }
+            };
 
             // 3. Compile + engine + runtime
-            let program = crate::bytecode_cache::compile_program(db, package, cache.as_ref())
-                .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
+            let program = crate::bytecode_cache::compile_program(&world, cache.as_ref())
+                .map_err(|e| anyhow!("compilation failed: {e}"))?;
             if let Some(ctx) = cache {
                 let fresh = fresh_diagnostics
                     .as_ref()
