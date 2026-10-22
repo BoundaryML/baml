@@ -4,28 +4,28 @@ source: crates/baml_tests/src/generated_tests.rs
 === COMPILER2 DIAGNOSTICS ===
   [hir] E0010
 
-  × invalid assignment target; a pattern cannot be assigned into. To destructure into new bindings (rebinding any that already exist), write `let P { a, b } = mk();`
-    ╭─[main.baml:20:5]
- 20 │     P { a: a, b: b } = mk();
+  × invalid assignment target; to destructure, use a `let` pattern: `let P { a, b } = mk();` (this binds the names, rebinding any that already exist)
+    ╭─[main.baml:21:5]
+ 21 │     P { a: a, b: b } = mk();
     ·     ────────┬───────
     ·             ╰── cannot assign to this expression
     ╰────
 
   [hir] E0010
 
-  × invalid assignment target; a pattern cannot be assigned into. To destructure into new bindings (rebinding any that already exist), write `let [let x, let y] = [1, 2] else { … };`
-    ╭─[main.baml:27:5]
- 27 │     [x, y] = [1, 2];
+  × invalid assignment target; to destructure, use a `let` pattern: `let [let x, let y] = [1, 2] else { … };` (this binds the names, rebinding any that already exist)
+    ╭─[main.baml:28:5]
+ 28 │     [x, y] = [1, 2];
     ·     ───┬──
     ·        ╰── cannot assign to this expression
     ╰────
 
   [hir] E0010
 
-  × invalid assignment target; a pattern cannot be assigned into. To destructure into new bindings (rebinding any that already exist), write `let Pair { left: P { a: let n, b: let s }, right: let
-  │ r } = Pair { left: mk(), right: 1 };`
-    ╭─[main.baml:43:5]
- 43 │     Pair { left: P { a: n, b: s }, right: r } = Pair { left: mk(), right: 1 };
+  × invalid assignment target; to destructure, use a `let` pattern: `let Pair { left: P { a: let n, b: let s }, right: let r } = Pair { left: mk(), right: 1 };` (this binds the names, rebinding any
+  │ that already exist)
+    ╭─[main.baml:44:5]
+ 44 │     Pair { left: P { a: n, b: s }, right: r } = Pair { left: mk(), right: 1 };
     ·     ────────────────────┬────────────────────
     ·                         ╰── cannot assign to this expression
     ╰────
@@ -33,8 +33,8 @@ source: crates/baml_tests/src/generated_tests.rs
   [hir] E0010
 
   × invalid assignment target; only a variable, a field, or an index can be assigned to
-    ╭─[main.baml:49:5]
- 49 │     [p.a, y] = [1, 2];
+    ╭─[main.baml:50:5]
+ 50 │     [p.a, y] = [1, 2];
     ·     ────┬───
     ·         ╰── cannot assign to this expression
     ╰────
@@ -42,8 +42,8 @@ source: crates/baml_tests/src/generated_tests.rs
   [hir] E0010
 
   × invalid assignment target; only a variable, a field, or an index can be assigned to
-    ╭─[main.baml:55:5]
- 55 │     [x] += [1];
+    ╭─[main.baml:56:5]
+ 56 │     [x] += [1];
     ·     ─┬─
     ·      ╰── cannot assign to this expression
     ╰────
@@ -51,16 +51,16 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0004
 
   × operator `+` cannot be applied to `int[]` and `int[]`
-    ╭─[main.baml:55:12]
- 55 │     [x] += [1];
+    ╭─[main.baml:56:12]
+ 56 │     [x] += [1];
     ·            ───
     ╰────
 
   [hir] E0010
 
   × invalid assignment target; only a variable, a field, or an index can be assigned to
-    ╭─[main.baml:60:5]
- 60 │     mk() = mk();
+    ╭─[main.baml:61:5]
+ 61 │     mk() = mk();
     ·     ──┬─
     ·       ╰── cannot assign to this expression
     ╰────
@@ -68,8 +68,8 @@ source: crates/baml_tests/src/generated_tests.rs
   [hir] E0010
 
   × invalid assignment target; only a variable, a field, or an index can be assigned to
-    ╭─[main.baml:65:5]
- 65 │     1 = 2;
+    ╭─[main.baml:66:5]
+ 66 │     1 = 2;
     ·     ┬
     ·     ╰── cannot assign to this expression
     ╰────
@@ -77,8 +77,8 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × mismatched types
-    ╭─[main.baml:65:9]
- 65 │     1 = 2;
+    ╭─[main.baml:66:9]
+ 66 │     1 = 2;
     ·         ┬
     ·         ╰── expected `1`, found `2`
     ╰────
@@ -86,15 +86,15 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0010
 
   × invalid assignment target; `mk` is not a variable, so it cannot be assigned to
-    ╭─[main.baml:78:5]
- 78 │     mk = mk;
+    ╭─[main.baml:79:5]
+ 79 │     mk = mk;
     ·     ──
     ╰────
 
   [type] E0010
 
   × invalid assignment target; `Shape.Circle` is not a variable, so it cannot be assigned to
-    ╭─[main.baml:83:5]
- 83 │     Shape.Circle = Shape.Circle;
+    ╭─[main.baml:84:5]
+ 84 │     Shape.Circle = Shape.Circle;
     ·     ────────────
     ╰────

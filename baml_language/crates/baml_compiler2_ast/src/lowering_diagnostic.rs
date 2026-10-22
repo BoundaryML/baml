@@ -170,11 +170,13 @@ pub enum LoweringDiagnostic {
     AssignmentInExpressionPosition { span: TextRange },
 
     /// The left-hand side of an assignment (`=`, `+=`, …) is not a place:
-    /// e.g. `[x, y] = [1, 2]` or `P { a: a } = mk()`. BAML has no
-    /// destructuring assignment, and without this diagnostic the store went
-    /// into a temporary and the statement silently did nothing.
-    /// `suggestion` is the closest valid `let` destructure when the target is
-    /// a class or array literal of plain names.
+    /// e.g. `[x, y] = [1, 2]` or `P { a: a } = mk()`. BAML destructures with
+    /// `let` patterns (`let P { a, b } = v;`, `let P { a: let other_a, b } =
+    /// v;`); the left-hand side of an assignment is an expression, so these
+    /// are a class or array *literal*, not a pattern. Without this diagnostic
+    /// the store went into a temporary and the statement silently did
+    /// nothing. `suggestion` is the equivalent `let` destructure when the
+    /// target is a class or array literal of plain names.
     InvalidAssignmentTarget {
         span: TextRange,
         suggestion: Option<String>,
@@ -616,9 +618,9 @@ impl LoweringDiagnostic {
                 Severity::Error,
                 match suggestion {
                     Some(suggestion) => format!(
-                        "invalid assignment target; a pattern cannot be assigned into. \
-                         To destructure into new bindings (rebinding any that already \
-                         exist), write `{suggestion}`"
+                        "invalid assignment target; to destructure, use a `let` pattern: \
+                         `{suggestion}` (this binds the names, rebinding any that already \
+                         exist)"
                     ),
                     None => "invalid assignment target; only a variable, a field, or an \
                              index can be assigned to"

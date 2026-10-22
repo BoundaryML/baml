@@ -1,9 +1,10 @@
-// BAML destructures only through `let` patterns, never into an assignment:
-// the left-hand side of `=` (or a compound `+=`, …) must be a place - a
+// BAML destructures with `let` patterns (`let P { a, b } = v;`,
+// `let P { a: let other_a, b } = v;`). The left-hand side of `=` (or a
+// compound `+=`, …) is an expression, not a pattern, and must be a place - a
 // variable, a field, or an index. Any other expression is rejected at
-// lowering. These previously compiled and
-// silently did nothing: MIR evaluated the target into a temporary and stored
-// the value there, leaving `a`, `b`, `x`, and `y` unchanged.
+// lowering. These previously compiled and silently did nothing: MIR
+// evaluated the target into a temporary and stored the value there, leaving
+// `a`, `b`, `x`, and `y` unchanged.
 
 class P {
     a int
@@ -28,8 +29,8 @@ function assign_to_array_literal() -> string {
     x.to_string() + y.to_string()
 }
 
-// The diagnostic suggests the closest valid `let` destructure, which binds
-// (or rebinds) the same names. Renames and nesting carry over; a leaf that is
+// The diagnostic suggests the same destructure as a `let` pattern, which
+// binds (or rebinds) the same names. Renames and nesting carry over; a leaf that is
 // a field or an index has no pattern equivalent, so there is no suggestion.
 class Pair {
     left: P,

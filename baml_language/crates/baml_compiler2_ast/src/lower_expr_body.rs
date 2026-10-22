@@ -2489,9 +2489,9 @@ impl LoweringContext {
 
         // Only a place (a variable, a field, or an index, optionally through
         // `?.`) can be assigned to. Anything else - a class or array literal
-        // (`[x, y] = [1, 2]`, which reads like destructuring assignment), a
-        // call, a literal - would otherwise be materialized into a temporary
-        // by MIR and the store would silently go nowhere.
+        // (`[x, y] = [1, 2]`, a destructure written without `let`), a call, a
+        // literal - would otherwise be materialized into a temporary by MIR
+        // and the store would silently go nowhere.
         if !self.is_assignable_place(target) {
             let suggestion = assign_op
                 .is_none()
@@ -2528,10 +2528,10 @@ impl LoweringContext {
         }
     }
 
-    /// For `[x, y] = rhs` / `P { a: x } = rhs` - an attempt at destructuring
-    /// assignment - the closest valid spelling: a `let` destructure that
-    /// binds (or rebinds) the same names, e.g.
-    /// `let [let x, let y] = rhs else { … };` or `let P { a: let x } = rhs;`.
+    /// For `[x, y] = rhs` / `P { a: x } = rhs` - a destructure written as an
+    /// assignment - the same destructure as a `let` pattern, which binds (or
+    /// rebinds) the same names, e.g. `let [let x, let y] = rhs else { … };`
+    /// or `let P { a: let x } = rhs;`.
     /// An array pattern has a fixed length, so it is refutable and needs the
     /// `else`. `None` when the target is not a literal whose every leaf is a
     /// plain name (a field or index leaf has no pattern equivalent).
