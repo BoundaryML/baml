@@ -1111,6 +1111,27 @@ fn a_derived_type_keeps_its_binding_past_a_sibling_rebinding() {
 }
 
 #[test]
+fn unwind_only_handler_loops_poll() {
+    let module = compile(
+        r#"
+function caught_loop(n: int) -> int {
+  (1 / n) catch (e) {
+    baml.panics.DivisionByZero => {
+      let i = 0;
+      while (i < n) { i += 1; }
+      i
+    }
+  }
+}
+"#,
+    );
+    let body = body_of(&module, "user.caught_loop");
+    assert!(body.contains("vm.should_yield()"), "{body}");
+    assert!(body.contains("vm.suspend(Step::Yield)"), "{body}");
+    syn::parse_file(&module.source).expect("generated module parses as Rust");
+}
+
+#[test]
 fn recursive_calls_poll_and_root_live_values() {
     let module = compile(
         r#"
@@ -1179,3 +1200,14 @@ function traced(p: Reader, xs: int[]) -> int {
     syn::parse_file(&module.source).expect("generated module parses as Rust");
 }
 
+#[test]
+fn oversized_control_flow_stays_bytecode() {
+    let mut source = String::from("function large(n: int) -> int { let total = 0;\n");
+    for i in 0..600 {
+        source.push_str(&format!("if (n > {i}) {{ total += 1; }}\n"));
+    }
+    source.push_str("total }");
+    let module = compile(&source);
+    assert!(matches!(rejection(&module, "user.large"),
+        Rejection::Unsupported(reason) if reason.contains("MIR blocks")));
+}
