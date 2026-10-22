@@ -1,44 +1,16 @@
-//! Strict, schema-free validation of a host-callable's returned value against
-//! its declared return type.
+//! Strict, schema-free shape predicates for external values.
 //!
-//! When BAML code invokes a host callable (`f(x)` where `f: (A) -> R` was
-//! supplied by the host language), the host's returned value flows back into
-//! the engine and must be type-checked against the declared return type `R`
-//! before it is materialized on the VM heap. Skipping this check lets a buggy
-//! or malicious host inject a value that violates `R` — a string where an
-//! `int` is declared, a `Variant` of the wrong enum, and so on — corrupting
-//! later type-directed VM operations.
+//! These helpers compare scalar tags, literal values, container payloads, and
+//! class/enum names with a `RuntimeTy`. They do not resolve compiled class
+//! fields or aliases, and cannot apply the engine's supported inbound
+//! coercions (such as structural maps to class instances).
 //!
-//! # Layering
-//!
-//! This validator is the **shape-level** guard shared by the native and WASM
-//! bridges (`sys_native::host_impls`, `bridge_wasm::host_value`). It enforces
-//! everything that can be checked from the value tree + the declared [`RuntimeTy`]
-//! alone:
-//!
-//! - scalar discrimination (including contextual resolution of JavaScript
-//!   `number` values to `Int` or `Float`);
-//! - `String` / `Bool` / `Uint8Array` exact tags;
-//! - `Literal` value equality;
-//! - container recursion (`List` element types, `Map` value types);
-//! - `Optional` (null or inner-valid) and `Union` (matches ≥ 1 member);
-//! - **enum identity** — a `Variant` must name the *declared* enum;
-//! - **class-name identity** — an `Instance` must name the *declared* class
-//!   (a bare `Map` does *not* satisfy a class type: a class return must arrive
-//!   as a class value, since a map materializes as `Object::Map` rather than an
-//!   instance of the declared class).
-//!
-//! It deliberately does **not** validate class *field types*: a
-//! [`RuntimeTy::Class`] carries only the class name + generic args, not its field
-//! definitions, so per-field type checking requires the engine's resolved
-//! class schema and is performed engine-side at the result-push site (see
-//! `bex_engine::conversion`). This module is the first, schema-free line of
-//! defense; the engine adds the schema-aware second line.
-//!
-//! `RuntimeTy::TypeVar`-style opaque positions and [`RuntimeTy::Unknown`] accept any
-//! value: at the FFI boundary the declared return type handed to a host call
-//! is always concrete (generic functions are not host entry points), so these
-//! arms are defensive rather than load-bearing.
+//! Host-callable results therefore must not be gated by these predicates
+//! before reaching the engine. Like call arguments, results go through
+//! `bex_engine::conversion`'s canonical inbound coercion and recursive typed
+//! materialization, which checks every node with the compiled schema available.
+//! The engine still uses these predicates for individual scalar checks and
+//! schema-free matching where those semantics are appropriate.
 
 use baml_type::{Literal, RuntimeTy, TypeName};
 
@@ -94,8 +66,9 @@ impl std::error::Error for HostReturnTypeError {}
 /// `expected`.
 ///
 /// Returns `Ok(())` when the value's shape can inhabit `expected`, or a
-/// [`HostReturnTypeError`] describing the mismatch otherwise. See the module
-/// docs for the exact per-`RuntimeTy` contract and the shape-vs-schema layering.
+/// [`HostReturnTypeError`] describing the mismatch otherwise. This is a shape
+/// predicate, not the engine's inbound checking/coercion boundary; see the
+/// module docs.
 pub fn validate_host_return(
     value: &BexExternalValue,
     expected: &RuntimeTy,
@@ -105,8 +78,8 @@ pub fn validate_host_return(
     // selected type is the authoritative node type; the inner payload may be
     // deliberately structural at this layer (an anonymous class payload or a
     // class-shaped media transport shell). Check the annotation against the
-    // host callable's declared return type here. The engine then coerces the
-    // payload with that exact type and performs schema-aware validation.
+    // host callable's declared return type here. Callers needing inbound
+    // coercion and schema-aware validation must use the engine boundary instead.
     if let BexExternalValue::Union { metadata, .. } = value
         && metadata.is_inbound_type_annotation
     {
