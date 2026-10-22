@@ -2965,7 +2965,11 @@ impl BexEngine {
                     let processing = runtime.finish();
                     // Drain delivery even when processing failed. No VM or
                     // heap permit survives here; cancellation cannot skip join.
-                    let delivery = delivery.map_or(Ok(()), |sink| sink.finish());
+                    let delivery = delivery.map_or(Ok(()), |sink| {
+                        let result = sink.finish();
+                        sink.warn_undelivered();
+                        result
+                    });
                     shutdown.complete();
                     delivery.and(processing)
                 })

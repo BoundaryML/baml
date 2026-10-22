@@ -217,6 +217,9 @@ struct State {
     loss_count: u64,
     /// Losses that may have dropped a definition group a capture carried.
     carried_resets: u64,
+    /// Recording files handed to delivery, and those whose upload succeeded.
+    sealed_files: u64,
+    delivered_files: u64,
     metadata_replay_evictions: u64,
     progress: DeliveryProgress,
     recording_bytes: usize,
@@ -570,6 +573,20 @@ impl BcsDeliveryHandle {
         self.shared.state.lock().unwrap().carried_resets
     }
 
+    /// Recording files handed to delivery whose upload has not succeeded.
+    /// After [`BcsDelivery::finish`]: the files that were discarded, whether a
+    /// limit, failed retries or a fatal failure dropped them.
+    pub fn undelivered_files(&self) -> u64 {
+        let state = self.shared.state.lock().unwrap();
+        state.sealed_files.saturating_sub(state.delivered_files)
+    }
+
+    /// A sealed recording file is now delivery's to upload or discard.
+    pub(crate) fn record_sealed_file(&self) {
+        let mut state = self.shared.state.lock().unwrap();
+        state.sealed_files = state.sealed_files.saturating_add(1);
+    }
+
     /// Saturating count of definition segments evicted from bounded replay retention.
     pub fn metadata_replay_evictions(&self) -> u64 {
         self.shared.state.lock().unwrap().metadata_replay_evictions
@@ -627,6 +644,7 @@ impl BcsDeliveryHandle {
         snapshots: Vec<Snapshot>,
         proposed_uploads: Vec<ProposedUploadTarget>,
     ) -> Result<(), DeliveryError> {
+        self.record_sealed_file();
         let window = match Window::whole(snapshots) {
             Ok(window) => window,
             Err(error) => {
@@ -1452,6 +1470,7 @@ async fn upload_recording(
         match put(client, config, target, body, expiry).await {
             Ok(()) => {
                 let mut state = shared.state.lock().unwrap();
+                state.delivered_files = state.delivered_files.saturating_add(1);
                 state.progress.recording_acked_through = state
                     .progress
                     .recording_acked_through

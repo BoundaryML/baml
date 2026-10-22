@@ -132,6 +132,10 @@ Only fatal worker failures or explicit cancellation disable cloud recording.
 `BexEngine::telemetry_delivery_loss_count` counts discarded groups/targets, not
 events or retry attempts. `telemetry_result` retains an error after loss even
 when later uploads succeed. Delivered recording sequences may have gaps.
+At shutdown the engine prints one warning per process to stderr with the
+number of recording files that were never delivered
+(`BcsDeliveryHandle::undelivered_files`). A first connection that failed is
+reported by the initial-failure policy instead.
 
 This deliberately replaces the original cloud contract's permanent-disable and
 offer-once policies. BCS must tolerate missing recordings/captures and repeated

@@ -523,6 +523,8 @@ impl CloudPublisher {
                 return;
             }
         };
+        // Counted here, so a file staging refuses or a failure clears is too.
+        self.delivery.record_sealed_file();
         self.progress();
         let limits = self.delivery.config();
         let remaining_bytes = limits
@@ -1719,6 +1721,8 @@ mod tests {
         // for the body limit, takes every queued blob at once.
         assert_eq!(publisher.failure, None);
         assert_eq!(delivery.handle().loss_count(), 1);
+        // The lost file and the staged carrier: neither is uploaded.
+        assert_eq!(delivery.handle().undelivered_files(), 2);
         assert_eq!(publisher.staged.len(), 1);
         assert_eq!(publisher.staged[0].window.candidates.len(), 16);
         assert!(publisher.staged[0].file.bytes().len() <= 128);

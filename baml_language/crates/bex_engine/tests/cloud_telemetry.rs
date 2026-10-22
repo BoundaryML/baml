@@ -529,3 +529,77 @@ async fn cloud_delivery_failure_does_not_change_execution() {
             .any(|candidate| initial_ids.contains(&candidate.snapshot_id))
     }));
 }
+
+/// Shutdown says once per process, on stderr, how many recording files it
+/// discarded undelivered; nothing when all arrived or telemetry is off.
+#[test]
+fn shutdown_warns_once_about_undelivered_recording_files() {
+    const CASE: &str = "BAML_UNDELIVERED_WARNING_CASE";
+    if let Some(case) = baml_env::raw_var(CASE) {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(two_engines_shut_down(case == "stalled"));
+        return;
+    }
+    let warning = "warning: cloud telemetry: 1 recording file was not delivered and was \
+                   discarded (cloud recording delivery: Http)";
+    for (case, telemetry, expected) in [
+        ("stalled", "medium", vec![warning]),
+        ("delivered", "medium", vec![]),
+        ("stalled", "off", vec![]),
+    ] {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "shutdown_warns_once_about_undelivered_recording_files",
+                "--nocapture",
+            ])
+            .env(CASE, case)
+            .env("BAML_TELEMETRY", telemetry)
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "{case}, {telemetry}: {stderr}");
+        let warnings: Vec<_> = stderr
+            .lines()
+            .filter(|line| line.starts_with("warning:"))
+            .collect();
+        assert_eq!(warnings, expected, "{case}, {telemetry}: {stderr}");
+    }
+}
+
+/// Two engines each run a call and shut down. When `stalled`, the endpoint
+/// answers the first connection but never answers prepare.
+async fn two_engines_shut_down(stalled: bool) {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(wiremock::matchers::path_regex(r"/heartbeat$"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&server)
+        .await;
+    let base = server.uri();
+    Mock::given(method("POST"))
+        .and(wiremock::matchers::path_regex(r"/uploads:prepare$"))
+        .respond_with(move |request: &Request| {
+            let plan = ResponseTemplate::new(200);
+            if stalled {
+                plan.set_delay(Duration::from_secs(30))
+            } else {
+                plan.set_body_json(cloud_protocol::response(request, &base, &[]))
+            }
+        })
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&server)
+        .await;
+    for _ in 0..2 {
+        let engine = engine(&server, Duration::from_secs(3600));
+        execute(&engine).await;
+        engine.shutdown().await;
+        if engine.telemetry_recording_id().is_some() {
+            // When stalled, the second engine loses its file too.
+            assert_eq!(engine.telemetry_result().unwrap().is_ok(), !stalled);
+        }
+    }
+}

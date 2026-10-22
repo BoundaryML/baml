@@ -1,7 +1,10 @@
 //! Engine integration for the chunk processor and recording publisher.
 use std::{
     path::{Path, PathBuf},
-    sync::{Arc, OnceLock},
+    sync::{
+        Arc, OnceLock,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use bcs_api::diagnostics::{
@@ -138,6 +141,32 @@ impl RecordingDelivery {
         matches!(self, Self::Cloud { delivery, initial_failure, .. }
             if initial_failure.action != InitialFailureAction::Abort
                 && matches!(delivery.initial_authorization(), btel_bcs::delivery::InitialAuthorization::Rejected(_) | btel_bcs::delivery::InitialAuthorization::Failed(_)))
+    }
+
+    /// After [`Self::finish`], say once per process how many cloud recording
+    /// files were discarded undelivered. A failed first connection is left to
+    /// its initial-failure policy, which already warned, aborted or ignored it.
+    #[allow(clippy::print_stderr)]
+    pub(crate) fn warn_undelivered(&self) {
+        static WARNED: AtomicBool = AtomicBool::new(false);
+        let Self::Cloud { delivery, .. } = self else {
+            return;
+        };
+        if matches!(
+            delivery.initial_authorization(),
+            btel_bcs::delivery::InitialAuthorization::Rejected(_)
+                | btel_bcs::delivery::InitialAuthorization::Failed(_)
+        ) {
+            return;
+        }
+        let handle = delivery.handle();
+        let count = handle.undelivered_files();
+        if count > 0 && !WARNED.swap(true, Ordering::Relaxed) {
+            eprintln!(
+                "warning: {}",
+                undelivered_message(count, handle.last_error())
+            );
+        }
     }
 
     fn directory(&self) -> Option<&Path> {
@@ -763,6 +792,18 @@ fn emit_initial_warning(
             .to_string()
     });
     eprintln!("warning: {message}");
+}
+
+fn undelivered_message(count: u64, error: Option<btel_bcs::delivery::DeliveryError>) -> String {
+    let (files, were) = if count == 1 {
+        ("file", "was")
+    } else {
+        ("files", "were")
+    };
+    let cause = error.map(|error| format!(" ({error})")).unwrap_or_default();
+    format!(
+        "cloud telemetry: {count} recording {files} {were} not delivered and {were} discarded{cause}"
+    )
 }
 
 fn initial_diagnostic(

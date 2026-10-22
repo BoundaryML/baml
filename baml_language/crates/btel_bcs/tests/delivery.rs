@@ -183,6 +183,7 @@ async fn failed_payload_releases_capacity_and_later_payload_uploads() {
         assert!(!handle.is_disabled());
         assert_eq!(finish(delivery).await, Err(DeliveryError::Http));
         assert_eq!(handle.loss_count(), 1);
+        assert_eq!(handle.undelivered_files(), 1);
         assert_eq!(handle.last_error(), Some(DeliveryError::Http));
         let requests = server.received_requests().await.unwrap();
         for request in requests.iter().filter(|r| r.method == "POST") {
@@ -251,6 +252,8 @@ async fn failed_physical_target_does_not_cancel_either_lane() {
             .unwrap();
         assert_eq!(finish(delivery).await, Err(DeliveryError::Http));
         assert_eq!(handle.loss_count(), 1);
+        // A lost CAS body is a loss, but its recording file was delivered.
+        assert_eq!(handle.undelivered_files(), u64::from(failed_target == 0));
         assert!(!handle.is_disabled());
         assert_eq!(pool.stats().in_use, 0);
     }
@@ -1452,6 +1455,8 @@ async fn disabling_cancels_a_blocked_prepare_and_releases_queued_owners_promptly
         .await
         .unwrap();
     assert_eq!(result, Err(DeliveryError::Capacity));
+    // Every file the failure dropped counts as undelivered.
+    assert_eq!(handle.undelivered_files(), 3);
     assert_eq!(pool.stats().in_use, 0);
 }
 
