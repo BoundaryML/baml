@@ -2009,7 +2009,7 @@ mod tests {
                     &event,
                     vec![
                         property("payload", json_ref()),
-                        property("aliased", Ty::TypeAlias(blob.clone())),
+                        property("aliased", Ty::TypeAlias(blob)),
                         property("maybe", Ty::Union(Box::new([json_ref(), Ty::Null]))),
                         property("count", Ty::Int),
                     ],
