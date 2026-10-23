@@ -5,7 +5,7 @@
 //! The impl shape is pinned by the hand-written executable spec in
 //! `bridge_rust/tests/conversions.rs`.
 
-use baml_sdkgen_types::{Class, Name};
+use baml_sdkgen_types::{Class, Name, Ty};
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -123,9 +123,15 @@ pub(crate) fn emit(
         let field_docs = doc_attrs(prop.docstring.as_deref());
         let serde_rename = (derives_serde && field_ident != field_name)
             .then(|| quote! { #[cfg_attr(feature = "serde", serde(rename = #field_name))] });
+        // BAML reads a missing `json` field as `null` (the type admits it), so
+        // serde must too. `Option` fields already read a missing key as `None`.
+        let serde_default = (derives_serde
+            && matches!(&prop.ty, Ty::TypeAlias(name) if translate_ty::is_canonical_json(name)))
+        .then(|| quote! { #[cfg_attr(feature = "serde", serde(default))] });
         field_defs.push(quote! {
             #(#field_docs)*
             #serde_rename
+            #serde_default
             pub #field_ident: #field_ty
         });
         encode_entries.push(quote! {
