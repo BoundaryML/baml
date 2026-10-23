@@ -12,13 +12,14 @@ class BridgeCallTest < Minitest::Test
   class FakeApi
     attr_reader :callback, :initialize_count, :released_calls, :cancelled_calls
     attr_accessor :dispatch
-    attr_reader :released_handles
+    attr_reader :host_dispatch, :host_release, :host_cancel, :host_completions, :released_handles
 
     def initialize
       @initialize_count = 0
       @engine_id = 2**40
       @released_calls = []
       @cancelled_calls = []
+      @host_completions = Queue.new
       @released_handles = Queue.new
     end
 
@@ -37,6 +38,14 @@ class BridgeCallTest < Minitest::Test
 
     def register_result_callback(callback)
       @callback = callback
+    end
+
+    def register_host_callbacks(dispatch, release, cancel)
+      @host_dispatch, @host_release, @host_cancel = dispatch, release, cancel
+    end
+
+    def complete_host_call(id, is_error, bytes)
+      @host_completions << [id, is_error, Wire::InboundValue.decode(bytes)]
     end
 
     def handle_release(key)
@@ -108,7 +117,7 @@ class BridgeCallTest < Minitest::Test
     api = FakeApi.new
     attempts = Hash.new(0)
     { register_bridge!: nil, register_result_callback: :@result_callback,
-      register_unhandled_spawn_error_callback: :@spawn_callback }.each do |method, owner|
+      register_host_callbacks: :@host_callbacks, register_unhandled_spawn_error_callback: :@spawn_callback }.each do |method, owner|
       api.define_singleton_method(method) do |*args|
         raise "callback was not retained" if owner && !runtime.instance_variable_get(owner)
         attempts[method] += 1
@@ -117,16 +126,59 @@ class BridgeCallTest < Minitest::Test
       end
     end
     Native::Api.stub(:new, api) do
-      3.times { assert_raises(Interrupt) { runtime.initialize! } }
+      4.times { assert_raises(Interrupt) { runtime.initialize! } }
       runtime.initialize!
     end
-    assert_equal [1, 1, 1], attempts.values
+    assert_equal [1, 1, 1, 1], attempts.values
     assert_equal 1, api.initialize_count
     assert_same runtime.instance_variable_get(:@result_callback).function, api.callback
+    refute_nil api.host_dispatch
+    refute_nil api.host_release
+    refute_nil api.host_cancel
+  end
+
+  def test_callback_returns_and_closure_arguments_preserve_bytes
+    Baml::Bridge.define_function("user.bytes_callback", params: [["cb", [:function, [], [:bytes]]]])
+    @api.dispatch = lambda do |args, id|
+      key = args.kwargs.first.value.handle.key
+      frame = Wire::HostInvocation.encode(Wire::HostInvocation.new(
+        host_value_key: key, callback_id: 123,
+        application_args: Wire::BamlToHostCall.encode(Wire::BamlToHostCall.new)
+      ))
+      pointer = FFI::MemoryPointer.from_string(frame)
+      @api.host_dispatch.call(pointer, frame.bytesize)
+      _, is_error, value = Timeout.timeout(5) { @api.host_completions.pop }
+      assert_equal 0, is_error
+      assert_equal :uint8array_value, value.value
+      @api.host_release.call(key)
+      @api.deliver(id, ok: { uint8array_value: value.uint8array_value })
+    end
+    assert_equal "\0bytes".b, @runtime.call_async("user.bytes_callback", { "cb" => -> { "\0bytes".b } }).wait
+
+    @api.dispatch = lambda do |_args, id|
+      @api.deliver(id, ok: { handle_value: { key: 77, handle_type: :FUNCTION_REF, ty: { function: {
+        params: [{ name: "data", mode: :BAML_TY_FUNCTION_PARAM_MODE_REQUIRED,
+                   ty: { primitive: { kind: :BAML_TY_PRIMITIVE_BYTES } } }]
+      } } } })
+    end
+    closure = call
+    @api.dispatch = lambda do |args, id|
+      assert_equal :uint8array_value, args.kwargs.first.value.value
+      @api.deliver(id, ok: { uint8array_value: args.kwargs.first.value.uint8array_value })
+    end
+    Baml::Bridge.stub(:call_async, ->(target, args, **options) { @runtime.call_async(target, args, **options) }) do
+      assert_equal "\0arg".b, closure.call("\0arg".b)
+    end
+  ensure
+    closure&.close
   end
 
   class GenericValue < T::Struct
     const :value, String
+
+    def call
+      raise "a registered class must not be encoded as a callback"
+    end
   end
 
   def test_decoded_generic_preserves_string_literal_and_alias_hints
@@ -179,9 +231,17 @@ class BridgeCallTest < Minitest::Test
   end
 
   def test_dispatch_failure_removes_pending_call
-    @api.dispatch = ->(_args, _id) { raise "dispatch failed" }
-    error = assert_raises(RuntimeError) { call }
+    callback = ->(value) { value }
+    registry = Baml::Bridge.const_get(:HostValues, false)
+    key = nil
+    @api.dispatch = lambda do |args, _id|
+      key = args.kwargs.first.value.handle.key
+      assert_same callback, registry.fetch(key)
+      raise "dispatch failed"
+    end
+    error = assert_raises(RuntimeError) { call("callback" => callback) }
     assert_equal "dispatch failed", error.message
+    assert_raises(Baml::Bridge::Error) { registry.fetch(key) }
     assert_equal [(2**40) + 1], @api.released_calls
     assert_empty pending
   end
@@ -256,6 +316,59 @@ class BridgeCallTest < Minitest::Test
     assert_equal "cached error", error.message
     assert_same error, assert_raises(Baml::Error) { failed.wait }
     assert_empty pending
+  end
+
+  def test_cancelled_host_callback_keeps_resources_until_proc_returns
+    registry = Baml::Bridge.const_get(:HostValues, false)
+    scope = Baml::Bridge.const_get(:EncodingScope, false).new
+    entered = Queue.new
+    unblock = Queue.new
+    exited = Queue.new
+    cb = ->(value) { entered << value; unblock.pop; exited << true; "finished" }
+    key = registry.register(cb, scope)
+    scope.submitted!
+    frame = Wire::HostInvocation.new(
+      host_value_key: key, callback_id: 123, effective_state: 77,
+      application_args: Wire::BamlToHostCall.encode(Wire::BamlToHostCall.new(args: [{ value: { int_value: 5 } }])),
+      cancel: { class_value: { name: "baml.spawn.CancelToken", fields: [
+        { key: "inner", value: { handle_value: { key: 88, handle_type: :ADT_TAGGED_HEAP_HANDLE } } }
+      ] } }
+    )
+    bytes = Wire::HostInvocation.encode(frame)
+    pointer = FFI::MemoryPointer.new(:uint8, bytes.bytesize)
+    pointer.put_bytes(0, bytes)
+    Timeout.timeout(5) do
+      # Dispatch must return while the proc is blocked. Overwrite the borrowed
+      # buffer immediately to prove the invocation owns its request bytes.
+      @api.host_dispatch.call(pointer, bytes.bytesize)
+      pointer.put_bytes(0, "\0" * bytes.bytesize)
+      assert_equal 5, entered.pop
+      @api.host_cancel.call(123)
+      assert_same cb, registry.fetch(key)
+      assert @api.released_handles.empty?
+      assert @api.host_completions.empty?
+      assert exited.empty?
+      unblock << true
+      assert exited.pop
+      id, is_error, value = @api.host_completions.pop
+      assert_equal [123, 0, "finished"], [id, is_error, value.string_value]
+      assert_equal [77, 88], 2.times.map { @api.released_handles.pop }.sort
+      @api.host_cancel.call(123)
+      assert @api.host_completions.empty?, "late cancellation must not complete twice"
+      assert @api.released_handles.empty?, "late cancellation must not release twice"
+      # Host keys in results are borrowed too: pin before engine release,
+      # even when the first waiter does not run until after that release.
+      @api.dispatch = lambda do |_args, id|
+        @api.deliver(id, ok: { handle_value: { key: key, handle_type: :HOST_VALUE_CALLABLE } })
+        @api.host_release.call(key)
+      end
+      result = @runtime.call_async("user.return_callback", {})
+      assert_raises(Baml::Bridge::Error) { registry.fetch(key) }
+      assert_same cb, result.wait
+    end
+  ensure
+    unblock << true if unblock
+    registry&.handle_release(key) if key
   end
 
   private

@@ -63,7 +63,7 @@ module Baml
     end
 
     # Internal: the callback delivers an envelope owning its handle references
-    # (or an error). Waiters build and cache Ruby values.
+    # and pinned host values (or an error). Waiters build and cache Ruby values.
     def complete(outcome)
       @mutex.synchronize do
         return if @state == :settled

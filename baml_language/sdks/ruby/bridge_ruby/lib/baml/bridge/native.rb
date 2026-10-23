@@ -82,6 +82,10 @@ module Baml
         ],
         free_buffer: [:void, [Buffer.by_value]],
         register_callback: [:void, [:pointer]],
+        register_host_dispatch_v2: [:void, [:pointer]],
+        register_host_release_callback: [:void, [:pointer]],
+        register_host_cancel_callback: [:void, [:pointer]],
+        complete_host_call: [:void, %i[uint32 int32 pointer size_t], { blocking: true }],
         new_function_call: [:uint64, []],
         release_function_call: [:int32, [:uint64]],
         cancel_function_call: [:int32, [:uint64]],
@@ -123,6 +127,17 @@ module Baml
         def shutdown_runtime
           diagnostic = read_owned_utf8(function(:shutdown_runtime).call, "shutdown_runtime")
           raise Error, "BAML runtime shutdown failed: #{diagnostic}" unless diagnostic.empty?
+        end
+
+        def register_host_callbacks(dispatch, release, cancel)
+          function(:register_host_dispatch_v2).call(dispatch)
+          function(:register_host_release_callback).call(release)
+          function(:register_host_cancel_callback).call(cancel)
+        end
+
+        def complete_host_call(callback_id, is_error, bytes)
+          pointer = memory_for(bytes)
+          function(:complete_host_call).call(callback_id, is_error, pointer, bytes.bytesize)
         end
 
         def initialize_runtime(bytecode, metadata = nil)

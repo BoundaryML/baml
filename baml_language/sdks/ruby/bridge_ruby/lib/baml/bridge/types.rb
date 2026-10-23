@@ -68,7 +68,7 @@ module Baml
       raise TypeError, "expected #{expected} type argument(s) for #{klass}, got #{actual}"
     end
 
-    # Preserve bytes/string choices through containers.
+    # Preserve bytes/string choices and callable hints through containers.
     # Keep exact protobuf types in instance metadata for re-encoding.
     def descriptor(type)
       case type.ty
@@ -77,6 +77,7 @@ module Baml
       when :literal
         type.literal.literal == :string_value ? [:literal, type.literal.string_value] : [:other]
       when :type_alias then [:alias, type.type_alias.name]
+      when :function then [:function, type.function.params.map { |param| descriptor(param.ty) }, descriptor(type.function.ret)]
       when :list then [:list, descriptor(type.list.item)]
       when :map then [:map, descriptor(type.map.key), descriptor(type.map.value)]
       when :optional then [:union, [descriptor(type.optional.inner), [:null]]]

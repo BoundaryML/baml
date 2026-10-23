@@ -45,6 +45,15 @@ pub(crate) fn descriptor(ty: &Ty) -> String {
         Ty::Union(items) => format!(":union, {}", descriptors(items)),
         Ty::TypeAlias(name) => format!(":alias, {}", quote(&name.to_string())),
         Ty::TypeVar(param) => format!(":param, {}, {}", param.index(), quote(param.as_str())),
+        Ty::Function { params, ret, .. } => format!(
+            ":function, [{}].freeze, {}",
+            params
+                .iter()
+                .map(|p| descriptor(&p.ty))
+                .collect::<Vec<_>>()
+                .join(", "),
+            descriptor(ret)
+        ),
         _ => ":other".into(),
     };
     format!("[{body}].freeze")

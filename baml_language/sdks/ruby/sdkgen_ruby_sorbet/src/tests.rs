@@ -83,6 +83,66 @@ fn ruby_names_and_container_types() {
 }
 
 #[test]
+fn callback_types_use_proc_signatures() {
+    let names = NameTable::default();
+    let callback = Ty::Function {
+        params: Box::new([baml_sdkgen_types::CallableParam::required(None, Ty::Int)]),
+        ret: Box::new(Ty::String),
+        throws: Box::new(Ty::Never),
+    };
+    assert_eq!(
+        ruby_type(&callback, &BTreeSet::new(), &names).as_deref(),
+        Some("::T.any(::T.proc.params(arg0: ::Integer).returns(::String), ::Baml::Closure)")
+    );
+    assert_eq!(
+        crate::descriptors::descriptor(&callback),
+        "[:function, [[:int].freeze].freeze, [:string].freeze].freeze"
+    );
+
+    // Aliases must retain the same callable-object runtime-check exemption.
+    let alias_name = Name::new("user".into(), vec![], "Callback".into());
+    let function_name = Name::new("user".into(), vec![], "apply".into());
+    let origin = baml_sdkgen_types::Origin {
+        source_file_path: "callbacks.baml".into(),
+        span_start: 0,
+    };
+    let pool = SymbolPool::from([
+        (
+            alias_name.clone(),
+            Symbol::TypeAlias(baml_sdkgen_types::TypeAlias {
+                name: alias_name.clone(),
+                resolves_to: callback,
+                recursive: false,
+                origin: origin.clone(),
+            }),
+        ),
+        (
+            function_name,
+            Symbol::Function(baml_sdkgen_types::Function {
+                name: "apply".into(),
+                generic_params: vec![],
+                docstring: None,
+                arguments: vec![baml_sdkgen_types::FunctionArgument {
+                    name: "callback".into(),
+                    docstring: None,
+                    ty: Ty::TypeAlias(alias_name.clone()),
+                    default: None,
+                    injected: false,
+                }],
+                return_type: Ty::TypeAlias(alias_name),
+                throws: None,
+                watchers: vec![],
+                origin,
+            }),
+        ),
+    ]);
+    let files = to_source_code_with_bytecode(&pool, &[], NamingConvention::Language, None);
+    let source = &files[&PathBuf::from("baml_sdk/__root.rb")];
+    assert_eq!(source.matches(".checked(:never)").count(), 2, "{source}");
+    assert!(!files[&PathBuf::from("baml_sdk.rb")].contains("signature_for_method"));
+}
+
+#[test]
 fn colliding_constants_and_namespaces_keep_wire_identities() {
     use baml_sdkgen_types::{Enum, EnumVariant, Origin};
 

@@ -5,6 +5,10 @@ require "baml_sdk"
 ENV["BAML_BRIDGE_PATH"] = ENV.fetch("BAML_RUBY_TEST_REAL_RUNTIME")
 
 class JsonTest < Minitest::Test
+  def test_json_returned_from_host_callback_supports_typed_narrowing
+    assert_equal "object", BamlSdk::GoJsonTests.json_callback_kind(->(value) { { "wrapped" => value } }, "payload")
+  end
+
   def test_host_supplied_json_supports_typed_narrowing
     json = BamlSdk::GoJsonTests
     obj = { "type" => "ok", "nested" => { "list" => [1, { "deep" => "found" }] } }

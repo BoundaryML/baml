@@ -1,7 +1,8 @@
 use std::{collections::BTreeSet, fmt::Write as _};
 
 use baml_sdkgen_types::{
-    Class, Enum, Function, FunctionArgument, Name, NamingConvention, SymbolPool, Ty, TypeAlias,
+    Class, Enum, Function, FunctionArgument, Name, NamingConvention, Symbol, SymbolPool, Ty,
+    TypeAlias,
 };
 
 use crate::{
@@ -320,6 +321,17 @@ impl Emitter<'_> {
             format!("type_parameters({}).", type_params.join(", "))
         };
         let type_bindings = if generic { ", types: _types" } else { "" };
+        let mut has_callable = false;
+        for ty in std::iter::once(&function.return_type).chain(
+            function
+                .arguments
+                .iter()
+                .filter(|arg| !omit_injected_argument(arg, self.supported, &self.names))
+                .map(|arg| &arg.ty),
+        ) {
+            has_callable |= contains_function(ty, self.pool, &mut BTreeSet::new());
+        }
+        let checked = if has_callable { ".checked(:never)" } else { "" };
         for asynchronous in [false, true] {
             let method = format!("{method}{}", if asynchronous { "_async" } else { "" });
             let returns = if asynchronous {
@@ -328,6 +340,11 @@ impl Emitter<'_> {
                 result.clone()
             };
             let target = if receiver.is_some() { "" } else { "self." };
+            if has_callable {
+                body.push_str(
+                    "# BAML accepts any callable object, not only Proc or Closure handles.\n",
+                );
+            }
             let mut doc = function.docstring.clone().unwrap_or_default();
             if let Some(throws) = &function.throws {
                 let mut names = BTreeSet::new();
@@ -345,9 +362,24 @@ impl Emitter<'_> {
                 }
             }
             doc_comment(body, &doc);
-            writeln!(body, "sig {{ {generic_signature}params({}).returns({returns}) }}\ndef {target}{method}({})\n  ::Baml::Bridge.call_async({}, {{{}}}, baml: _baml{type_bindings}){}\nend", params.join(", "), required.join(", "), quote(wire), arguments.join(", "), if asynchronous { "" } else { ".wait" }).unwrap();
+            writeln!(body, "sig {{ {generic_signature}params({}).returns({returns}){checked} }}\ndef {target}{method}({})\n  ::Baml::Bridge.call_async({}, {{{}}}, baml: _baml{type_bindings}){}\nend", params.join(", "), required.join(", "), quote(wire), arguments.join(", "), if asynchronous { "" } else { ".wait" }).unwrap();
         }
     }
+}
+
+fn contains_function(ty: &Ty, pool: &SymbolPool, visiting: &mut BTreeSet<Name>) -> bool {
+    let mut found = false;
+    baml_sdkgen_types::visit_type(ty, &mut |ty| match ty {
+        Ty::Function { .. } => found = true,
+        Ty::TypeAlias(name) if visiting.insert(name.clone()) => {
+            if let Some(Symbol::TypeAlias(alias)) = pool.get(name) {
+                found |= contains_function(&alias.resolves_to, pool, visiting);
+            }
+            visiting.remove(name);
+        }
+        _ => {}
+    });
+    found
 }
 
 fn doc_comment(body: &mut String, doc: &str) {

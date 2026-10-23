@@ -9,6 +9,7 @@ require_relative "bridge/handle"
 require_relative "bridge/types"
 require_relative "value_equality"
 require_relative "bridge/protocol"
+require_relative "bridge/host_callbacks"
 require_relative "bridge/process_runtime"
 
 module Baml
