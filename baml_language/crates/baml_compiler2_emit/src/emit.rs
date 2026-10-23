@@ -1123,7 +1123,11 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
     fn add_constant(&mut self, value: ConstValue) -> usize {
         // Try to find existing constant
         for (i, existing) in self.bytecode.constants.iter().enumerate() {
-            if *existing == value {
+            let same_value = match (existing, &value) {
+                (ConstValue::Float(a), ConstValue::Float(b)) => a.to_bits() == b.to_bits(),
+                _ => existing == &value,
+            };
+            if same_value {
                 return i;
             }
         }
