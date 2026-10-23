@@ -1959,7 +1959,7 @@ mod tests {
             "pubitems:::std::vec::Vec<::baml_bridge::Json>,",
             "pubattrs:::baml_bridge::Map<::std::string::String,::baml_bridge::Json>,",
             "pubmaybe:::std::option::Option<::baml_bridge::Json>,",
-            "pubfnecho(u:crate::Event,)->::std::result::Result<crate::Event,",
+            "pubfnecho(u:impl::std::borrow::Borrow<crate::Event>,)->::std::result::Result<crate::Event,",
             "pubfnrt(u:::baml_bridge::Json,)->::std::result::Result<::baml_bridge::Json,",
             "pubfncount(u:::std::vec::Vec<::baml_bridge::Json>,)->::std::result::Result<::core::primitive::i64,",
         ] {
