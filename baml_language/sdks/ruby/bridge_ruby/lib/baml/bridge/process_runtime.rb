@@ -6,61 +6,156 @@ require "thread"
 module Baml
   module Bridge
     class ProcessRuntime
-      RUNTIME_PATH_ENV = "BAML_RUNTIME_PATH"
+      RUNTIME_PATH_ENV = "BAML_BRIDGE_PATH"
 
       def initialize
         @mutex = Mutex.new
-        @owner_pid = nil
-        @native_load_in_progress = false
         @library = nil
         @api = nil
+        @bridge_registered = false
         @result_callback = nil
-        @result_events = Queue.new
+        @result_registered = false
+        @host_callbacks = nil
+        @host_registered = false
+        @spawn_callback = nil
+        @spawn_registered = false
+        @initialized = false
         @program_bytes = nil
-        @terminal_error = nil
+        @metadata = nil
+        @pending_mutex = Mutex.new
+        @pending = {}
+        @next_callback_id = 1
       end
 
-      def initialize!(compiled_program_bytes)
-        program = owned_program_bytes(compiled_program_bytes)
-        ensure_not_forked!
+      def register_program(bytecode, metadata = nil)
+        @api&.ensure_not_forked!
+        raise TypeError, "compiled BAML program must be a String of bytes" unless bytecode.is_a?(String)
+        raise TypeError, "BAML metadata must be a String or nil" unless metadata.nil? || metadata.is_a?(String)
 
-        candidate_path = nil
-        if @api.nil? && @terminal_error.nil?
-          candidate_path = configured_runtime_path!
-          claim_process!
-        end
-
+        program = bytecode.dup.force_encoding(Encoding::BINARY).freeze
+        metadata = metadata&.dup&.freeze
         @mutex.synchronize do
-          ensure_not_forked!
-          raise @terminal_error if @terminal_error
-
-          if @program_bytes
-            return nil if @program_bytes == program
-
-            raise ProgramConflictError,
-                  "This Ruby process already initialized a different generated BAML program"
+          if @program_bytes && (@program_bytes != program || @metadata != metadata)
+            raise ProgramConflictError, "This Ruby process already registered a different generated BAML program"
           end
 
-          load_api!(candidate_path) unless @api
-          begin
-            @api.initialize_runtime(program)
-          rescue IncompatibleRuntimeError => error
-            @terminal_error = error
-            raise
-          end
           @program_bytes = program
+          @metadata = metadata
+        end
+        nil
+      end
+
+      def initialize!
+        @api&.ensure_not_forked!
+        @mutex.synchronize do
+          return if @initialized
+          raise RuntimeConfigurationError, "No BAML program is registered" unless @program_bytes
+
+          unless @library
+            @runtime_path = configured_runtime_path!
+            flags = FFI::DynamicLibrary::RTLD_NOW | FFI::DynamicLibrary::RTLD_LOCAL
+            begin
+              @library = open_library(@runtime_path, flags)
+            rescue LoadError => error
+              raise RuntimeLoadError, "Unable to open BAML runtime #{@runtime_path.inspect}: #{error.message}"
+            end
+          end
+          @api ||= Native::Api.new(@library, @runtime_path, TOOLCHAIN_VERSION)
+          unless @bridge_registered
+            Thread.handle_interrupt(Exception => :never) do
+              @api.register_bridge!(TOOLCHAIN_VERSION, BRIDGE_RUNTIME_VERSION)
+              @bridge_registered = true
+            end
+          end
+          unless @result_registered
+            @result_callback ||= Native::BorrowedBytesCallback.new(&method(:receive_result))
+            Thread.handle_interrupt(Exception => :never) do
+              @api.register_result_callback(@result_callback.function)
+              @result_registered = true
+            end
+          end
+          unless @host_registered
+            @host_callbacks ||= HostCallbacks.new(@api)
+            Thread.handle_interrupt(Exception => :never) do
+              @host_callbacks.register!
+              @host_registered = true
+            end
+          end
+          unless @spawn_registered
+            @spawn_callback ||= FFI::Function.new(:void, %i[pointer size_t int32]) do |pointer, length, cancelled|
+              begin
+                Protocol.decode_result(pointer.read_bytes(length), @api)
+              rescue Exception => error # rubocop:disable Lint/RescueException -- match Python's spawn-error policy
+                warn error.full_message
+                $stderr.flush
+                Kernel.exit!(1) if cancelled.zero?
+              end
+            end
+            Thread.handle_interrupt(Exception => :never) do
+              @api.register_unhandled_spawn_error_callback(@spawn_callback)
+              @spawn_registered = true
+            end
+          end
+          Thread.handle_interrupt(Exception => :never) do
+            @api.initialize_runtime(@program_bytes, @metadata)
+            @initialized = true
+            at_exit do
+              begin
+                @api.shutdown_runtime
+              rescue ForkSafetyError
+                # A forked child must not shut down the parent's runtime.
+              end
+            end
+          end
           nil
+        end
+      end
+
+      def call_async(function_name, arguments, types: nil, baml: nil)
+        raise TypeError, "_baml must be Baml::Options or nil" unless baml.nil? || baml.is_a?(::Baml::Options)
+        type_args = Protocol.prepare_type_args(function_name, arguments, types)
+
+        call_id = callback_id = nil
+        submitted = false
+        scope = EncodingScope.new
+        initialize!
+        # Retain native ownership before a deferred interrupt can reach Ruby.
+        Thread.handle_interrupt(Exception => :never) { call_id = @api.new_function_call }
+        invocation = Protocol.encode_invocation(call_id, baml, @api, scope: scope)
+        encoded = Protocol.encode_call(call_id, function_name, arguments, scope: scope, invocation: invocation, type_args: type_args)
+        Thread.handle_interrupt(Exception => :never) do
+          call = ::Baml::Call.new(@api, call_id)
+          callback_id = register_call(call)
+          @api.call_function(encoded, callback_id)
+          submitted = true
+          scope.submitted!
+          call
+        end
+      ensure
+        Thread.handle_interrupt(Exception => :never) do
+          unless submitted
+            @pending_mutex.synchronize { @pending.delete(callback_id) } if callback_id
+            begin
+              scope&.close
+            ensure
+              @api.release_function_call(call_id) if call_id
+            end
+          end
         end
       end
 
       private
 
-      def owned_program_bytes(value)
-        unless value.is_a?(String)
-          raise TypeError, "compiled BAML program must be a String of bytes"
-        end
+      def register_call(call)
+        @pending_mutex.synchronize do
+          # Never reuse IDs: a late duplicate must not complete a newer call.
+          raise Error, "BAML callback correlation IDs are exhausted" if @next_callback_id > 0xffff_ffff
 
-        value.dup.force_encoding(Encoding::BINARY).freeze
+          callback_id = @next_callback_id
+          @next_callback_id += 1
+          @pending[callback_id] = call
+          callback_id
+        end
       end
 
       def configured_runtime_path!
@@ -72,102 +167,29 @@ module Baml
 
         path = Pathname.new(value)
         unless path.absolute?
-          raise RuntimeConfigurationError,
-                "#{RUNTIME_PATH_ENV} must be an absolute path: #{value.inspect}"
+          raise RuntimeConfigurationError, "#{RUNTIME_PATH_ENV} must be an absolute path: #{value.inspect}"
         end
         unless path.file?
-          raise RuntimeConfigurationError,
-                "#{RUNTIME_PATH_ENV} does not name a file: #{value.inspect}"
+          raise RuntimeConfigurationError, "#{RUNTIME_PATH_ENV} does not name a file: #{value.inspect}"
         end
 
         path.to_s.freeze
       end
 
-      def claim_process!
-        current_pid = Process.pid
-        owner_pid = @owner_pid
-        if owner_pid && owner_pid != current_pid
-          raise_fork_error(owner_pid, current_pid)
+      def receive_result(callback_id, outcome)
+        call = @pending_mutex.synchronize { @pending.delete(callback_id) }
+        return unless call
+
+        begin
+          outcome = Protocol.capture_result(outcome, @api) unless outcome.is_a?(Exception)
+        rescue Exception => error # rubocop:disable Lint/RescueException -- settle parse/pinning failures inside Ruby
+          outcome = error
         end
-
-        # Assignment occurs before entering @mutex. A child created while a
-        # load is in progress therefore rejects inherited state without ever
-        # touching a mutex that may have been locked by a vanished thread.
-        @owner_pid ||= current_pid
-      end
-
-      def ensure_not_forked!
-        owner_pid = @owner_pid
-        current_pid = Process.pid
-        return unless owner_pid && owner_pid != current_pid
-
-        # Once a failed native open returns, a child has no native state to
-        # inherit. Replace the mutex that may still be locked by a vanished
-        # parent thread, then let the child retry with its own process claim.
-        if @library.nil? && @api.nil? && @terminal_error.nil? && !@native_load_in_progress
-          @mutex = Mutex.new
-          @owner_pid = nil
-          return
-        end
-
-        raise_fork_error(owner_pid, current_pid)
-      end
-
-      def raise_fork_error(owner_pid, current_pid)
-        raise ForkSafetyError,
-              "BAML native state belongs to process #{owner_pid}; forked child " \
-              "#{current_pid} must exec before using BAML"
-      end
-
-      def receive_result(call_id, bytes)
-        @result_events << [call_id, bytes, Thread.current.object_id].freeze
-      end
-
-      # The generated call layer will drain one event for each native result
-      # before result delivery is enabled.
-      def pop_result_event
-        @result_events.pop(true)
-      rescue ThreadError
-        nil
+        call.complete(outcome)
       end
 
       def open_library(path, flags)
         FFI::DynamicLibrary.open(path, flags)
-      end
-
-      def load_api!(path)
-        flags = FFI::DynamicLibrary::RTLD_NOW | FFI::DynamicLibrary::RTLD_LOCAL
-        begin
-          @native_load_in_progress = true
-          @library = open_library(path, flags)
-        rescue LoadError => error
-          raise RuntimeLoadError,
-                "Unable to open BAML runtime #{path.inspect}: #{error.message}"
-        ensure
-          @native_load_in_progress = false
-        end
-
-        begin
-          api = Native::Api.new(
-            @library,
-            path,
-            TOOLCHAIN_VERSION,
-            BRIDGE_RUNTIME_VERSION
-          )
-          callback = Native::BorrowedBytesCallback.new(&method(:receive_result))
-          api.register_result_callback(callback.function)
-          @result_callback = callback
-          @api = api
-        rescue Error => error
-          @terminal_error = error
-          raise
-        rescue LoadError, StandardError => error
-          wrapped = IncompatibleRuntimeError.new(
-            "Unable to use BAML runtime #{path.inspect}: #{error.class}: #{error.message}"
-          )
-          @terminal_error = wrapped
-          raise wrapped
-        end
       end
     end
   end
