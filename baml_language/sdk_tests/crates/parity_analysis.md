@@ -2,9 +2,9 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 908. IDs with complete required parity: 189. Required gaps: 5370.
+Distinct exact test IDs: 908. IDs with complete required parity: 189. Required gaps: 5362.
 
-Baseline ratchet: UNCHANGED. Required gaps: 5370 (baseline: 5370). Present declarations: 2757 (baseline: 2757). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
+Baseline ratchet: UNCHANGED. Required gaps: 5362 (baseline: 5362). Present declarations: 2767 (baseline: 2767). Newly missing required pairs: 0. Resolved baseline gaps: 0. Weakened requirements: 0.
 
 ## Python-baselined parity
 
@@ -22,7 +22,7 @@ Parity is the share of the 448 test IDs declared in `python_pydantic2` that are 
 | go | 14 / 448 | 3.1% |
 | java | 300 / 448 | 67.0% |
 | swift | 184 / 448 | 41.1% |
-| ruby_sorbet | 290 / 448 | 64.7% |
+| ruby_sorbet | 300 / 448 | 67.0% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | ruby_sorbet | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -609,9 +609,9 @@ Parity is the share of the 448 test IDs declared in `python_pydantic2` that are 
 | llm_functions/keeps_a_portable_prompt_reusable_across_engine_reentry | - | y | y | y | - | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | validates TypeScript's portable Prompt and Image wrappers |
 | llm_functions/legacy_function_companion_wire_bindings_are_absent | - | - | - | - | - | - | - | y | - | - | - | go | pins the Go generator's emitted wire-binding names. |
 | llm_functions/main_baml_sdk_lorem_and_baml_sdk_ipsum_are_reachable | - | y | y | y | - | - | - | - | - | - | - | all |  |
-| llm_functions/main_classify_sentiment_factory_bindings | y | - | - | - | - | - | y | - | y | - | - | all |  |
-| llm_functions/main_extract_resume_factory_bindings | y | - | - | - | - | - | y | - | y | - | - | all |  |
-| llm_functions/main_extract_resume_operation_bindings | y | - | - | - | - | - | - | - | y | - | - | python_pydantic2, java | pins Python and Java flat operation binding spellings |
+| llm_functions/main_classify_sentiment_factory_bindings | y | - | - | - | - | - | y | - | y | - | y | all |  |
+| llm_functions/main_extract_resume_factory_bindings | y | - | - | - | - | - | y | - | y | - | y | all |  |
+| llm_functions/main_extract_resume_operation_bindings | y | - | - | - | - | - | - | - | y | - | y | python_pydantic2, java, ruby_sorbet | pins Python and Java flat operation binding spellings |
 | llm_functions/main_extract_resume_spec_and_stream_bindings | - | - | - | - | - | - | y | - | - | - | - | rust | pins Rust generated spec and stream binding spellings |
 | llm_functions/main_flat_stream_controls_live_on_the_stream_options | - | - | - | - | - | - | - | - | y | - | - | all |  |
 | llm_functions/main_function_spec_prompt_is_portable_and_reusable | - | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -626,13 +626,13 @@ Parity is the share of the 448 test IDs declared in `python_pydantic2` that are 
 | llm_functions/main_lorem_streaming_doc_is_reachable | - | y | y | y | - | - | - | - | - | - | - | all |  |
 | llm_functions/main_lorem_streaming_extract_exposes_flat_spec_and_stream_bindings | - | y | y | y | - | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | pins TypeScript's dollar-preserving flat streaming binding names |
 | llm_functions/main_lorem_streaming_extract_sync_plus_async_factories_are_callable | - | y | y | y | - | - | - | - | - | - | - | all |  |
-| llm_functions/main_namespaces_reachable_via_explicit_import | y | - | - | - | - | - | y | - | y | - | - | all |  |
+| llm_functions/main_namespaces_reachable_via_explicit_import | y | - | - | - | - | - | y | - | y | - | y | all |  |
 | llm_functions/main_nullable_model_field_can_be_omitted | y | - | - | - | - | - | - | - | - | - | - | python_pydantic2 | pins the Python generator's nullable-field `= None` default |
 | llm_functions/main_replay_server_namespace_bindings | y | - | - | - | - | - | y | - | y | - | y | all |  |
 | llm_functions/main_root_imports_cleanly | y | y | y | y | - | - | y | - | y | - | y | all |  |
 | llm_functions/main_spec_replaces_prompt_parse_and_request_companions | - | - | - | - | - | - | y | - | - | - | - | rust | validates Rust's generated FunctionSpec prompt, parse, and request surface |
-| llm_functions/main_streaming_extract_factory_bindings | y | - | - | - | - | - | y | - | y | - | - | all |  |
-| llm_functions/main_streaming_extract_operation_bindings | y | - | - | - | - | - | - | - | y | - | - | python_pydantic2, java | pins Python and Java flat streaming operation binding spellings |
+| llm_functions/main_streaming_extract_factory_bindings | y | - | - | - | - | - | y | - | y | - | y | all |  |
+| llm_functions/main_streaming_extract_operation_bindings | y | - | - | - | - | - | - | - | y | - | y | python_pydantic2, java, ruby_sorbet | pins Python and Java flat streaming operation binding spellings |
 | llm_functions/main_streaming_extract_spec_and_stream_bindings | - | - | - | - | - | - | y | - | - | - | - | rust | pins Rust generated streaming spec and stream binding spellings |
 | llm_functions/main_types_and_bindings_reachable | - | - | - | - | - | - | - | - | - | y | - | all |  |
 | llm_functions/on_event_plain_call_delivers_events | y | - | - | - | - | - | - | - | - | - | - | python_pydantic2 | host on_event listener coverage lands Python-first; other SDKs port separately |
@@ -658,11 +658,11 @@ Parity is the share of the 448 test IDs declared in `python_pydantic2` that are 
 | llm_functions/streaming_e2e_baml_driven_collect_returns_the_final_doc | - | y | - | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift, ruby_sorbet |  |
 | llm_functions/streaming_e2e_next_yields_10_doc_partials_final_is_a_typed_streaming_doc | - | y | - | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift, ruby_sorbet |  |
 | llm_functions/streaming_e2e_next_yields_10_partials_and_drains_to_stream_finished | - | y | - | - | - | - | - | - | - | - | - | python_pydantic2, typescript_node, cpp, csharp, rust, go, java, swift, ruby_sorbet |  |
-| llm_functions/streaming_e2e_stream | y | - | - | - | - | - | y | - | y | y | - | all |  |
-| llm_functions/streaming_e2e_stream_async | y | - | - | - | - | - | y | - | y | y | - | all |  |
+| llm_functions/streaming_e2e_stream | y | - | - | - | - | - | y | - | y | y | y | all |  |
+| llm_functions/streaming_e2e_stream_async | y | - | - | - | - | - | y | - | y | y | y | all |  |
 | llm_functions/streaming_e2e_stream_collect_in_baml | y | - | - | - | - | - | y | - | y | y | y | all |  |
-| llm_functions/streaming_e2e_stream_doc | y | - | - | - | - | - | y | - | y | y | - | all |  |
-| llm_functions/streaming_e2e_stream_doc_async | y | - | - | - | - | - | y | - | y | y | - | all |  |
+| llm_functions/streaming_e2e_stream_doc | y | - | - | - | - | - | y | - | y | y | y | all |  |
+| llm_functions/streaming_e2e_stream_doc_async | y | - | - | - | - | - | y | - | y | y | y | all |  |
 | llm_functions/streaming_e2e_stream_doc_collect_in_baml | y | - | - | - | - | - | y | - | y | y | y | all |  |
 | package_edges/compile_cross_package_types_compile | - | - | - | - | - | - | - | y | - | - | - | all |  |
 | package_edges/compile_llm_projection_default_overrides | - | - | - | - | - | - | - | y | - | - | - | go | pins Go generator options for authored Spec and Stream defaults. |

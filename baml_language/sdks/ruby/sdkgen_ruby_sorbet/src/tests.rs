@@ -83,6 +83,40 @@ fn ruby_names_and_container_types() {
 }
 
 #[test]
+fn stream_and_spec_types_use_runtime_handles() {
+    let names = NameTable::default();
+    let supported = BTreeSet::new();
+    let stream = Name::new("ai".into(), vec!["stream".into()], "Stream".into());
+    let spec = Name::new("ai".into(), vec![], "FunctionSpec".into());
+    assert_eq!(
+        ruby_type(
+            &Ty::Class(stream.clone(), Box::new([Ty::String])),
+            &supported,
+            &names
+        ),
+        Some("::Baml::Stream[::String]".into())
+    );
+    assert_eq!(
+        ruby_type(&Ty::Class(spec, Box::new([Ty::String])), &supported, &names),
+        Some("::Baml::FunctionSpec".into())
+    );
+    assert_eq!(
+        ruby_type(
+            &Ty::Class(stream, Box::new([Ty::Unknown])),
+            &supported,
+            &names
+        ),
+        None
+    );
+    // Matching uses the whole BAML name, never just a class's leaf name.
+    let user = Name::new("user".into(), vec![], "Stream".into());
+    assert_eq!(
+        ruby_type(&Ty::Class(user, Box::new([Ty::String])), &supported, &names),
+        None
+    );
+}
+
+#[test]
 fn callback_types_use_proc_signatures() {
     let names = NameTable::default();
     let callback = Ty::Function {

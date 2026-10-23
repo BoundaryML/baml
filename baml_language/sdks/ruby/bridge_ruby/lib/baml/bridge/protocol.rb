@@ -374,6 +374,9 @@ module Baml
                   when :HOST_VALUE_CALLABLE, :HOST_VALUE_OPAQUE
                     return host_values ? host_values.fetch(handle.key) : HostValues.fetch(handle.key)
                   when :FUNCTION_REF then ::Baml::Closure
+                  when :ADT_FUNCTION_SPEC then ::Baml::FunctionSpec
+                  when :ADT_TAGGED_HEAP_HANDLE
+                    handle.ty&.class_ty&.name == "ai.stream.Stream" ? ::Baml::Stream : ::Baml::Handle
                   else ::Baml::Handle
                   end
           build = lambda do

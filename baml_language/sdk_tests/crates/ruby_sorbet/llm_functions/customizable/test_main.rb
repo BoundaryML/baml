@@ -30,10 +30,61 @@ class MainTest < Minitest::Test
     assert_instance_of String, BamlSdk::Ipsum::Sentiment::POSITIVE.serialize
   end
 
+  def test_main_namespaces_reachable_via_explicit_import
+    require "baml_sdk/lorem"
+    require "baml_sdk/ipsum"
+    assert_kind_of Module, BamlSdk::Lorem
+    assert_kind_of Module, BamlSdk::Ipsum
+  end
+
+  def test_main_extract_resume_factory_bindings
+    assert_respond_to BamlSdk::Lorem, :extract_resume
+    assert_respond_to BamlSdk::Lorem, :extract_resume_async
+  end
+
+  def test_main_extract_resume_operation_bindings
+    assert_operation_bindings(:extract_resume)
+    spec = BamlSdk::Lorem.extract_resume_spec("Ada Lovelace")
+    assert_instance_of Baml::FunctionSpec, spec
+    assert_respond_to spec, :build_request
+    assert_respond_to spec, :build_request_async
+    spec.close
+    call = BamlSdk::Lorem.extract_resume_spec_async("Ada Lovelace")
+    assert_instance_of Baml::Call, call
+    assert_instance_of Baml::FunctionSpec, call.wait
+    call.wait.close
+  end
+
+  def test_main_streaming_extract_factory_bindings
+    assert_respond_to BamlSdk::Lorem, :streaming_extract
+    assert_respond_to BamlSdk::Lorem, :streaming_extract_async
+  end
+
+  def test_main_streaming_extract_operation_bindings
+    assert_operation_bindings(:streaming_extract)
+  end
+
+  def test_main_classify_sentiment_factory_bindings
+    assert_respond_to BamlSdk::Ipsum, :classify_sentiment
+    assert_respond_to BamlSdk::Ipsum, :classify_sentiment_async
+  end
+
   def test_main_replay_server_namespace_bindings
     %i[replay_serve_until_shutdown replay_serve_detached].each do |name|
       assert_respond_to BamlSdk::Replay, name
       assert_respond_to BamlSdk::Replay, "#{name}_async"
+    end
+  end
+
+  private
+
+  def assert_operation_bindings(name)
+    %w[spec spec_async stream stream_async].each do |suffix|
+      assert_respond_to BamlSdk::Lorem, "#{name}_#{suffix}"
+    end
+    %w[render_prompt build_request parse].each do |removed|
+      refute_respond_to BamlSdk::Lorem, "#{name}__#{removed}"
+      refute_respond_to BamlSdk::Lorem, "#{name}__#{removed}_async"
     end
   end
 end

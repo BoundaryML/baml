@@ -50,6 +50,50 @@ module Baml
     end
   end
 
+  class Stream < Handle
+    extend T::Generic
+    Value = type_member
+
+    def next(_baml: nil)
+      next_async(_baml: _baml).wait
+    end
+
+    def next_async(_baml: nil)
+      Bridge.call_async("ai.stream.Stream.next", { "self" => self }, baml: _baml)
+    end
+
+    def final(_baml: nil)
+      final_async(_baml: _baml).wait
+    end
+
+    def final_async(_baml: nil)
+      Bridge.call_async("ai.stream.Stream.final", { "self" => self }, baml: _baml)
+    end
+
+    def each
+      return enum_for(:each) unless block_given?
+
+      # Resolve the generated sentinel through the registry, not an SDK namespace.
+      done = Bridge::Protocol.registered_type("ai.stream.Done")
+      loop do
+        partial = self.next
+        break if partial.is_a?(done)
+
+        yield partial unless partial.nil?
+      end
+      self
+    end
+  end
+
+  class FunctionSpec < Handle
+    def build_request(client: nil, _baml: nil)
+      build_request_async(client: client, _baml: _baml).wait
+    end
+
+    def build_request_async(client: nil, _baml: nil)
+      Bridge.call_async("ai.FunctionSpec.build_request", { "self" => self, "client" => client }, baml: _baml)
+    end
+  end
   class Closure < Handle
     attr_reader :parameter_descriptors
 
