@@ -533,6 +533,15 @@ pub(in crate::vm) fn validate_compiled_program(
     program: &bex_vm_types::Program,
     compiled_bodies: Option<CompiledBodies>,
 ) -> Result<Vec<Option<String>>, VmInternalError> {
+    if !super::STACKFUL_FIBERS_SUPPORTED
+        && compiled_bodies.is_some_and(|bodies| !bodies.table.entries.is_empty())
+    {
+        return Err(VmInternalError::CompiledBody {
+            message:
+                "compiled bodies require stackful fibers, which are unsupported on this target"
+                    .into(),
+        });
+    }
     if let Some(bodies) = compiled_bodies
         && bodies.table.fingerprint != bodies.artifact_fingerprint
     {

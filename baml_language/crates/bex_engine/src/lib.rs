@@ -91,7 +91,7 @@ mod telemetry;
 pub use bcs_api::diagnostics::Diagnostic as CloudAuthorizationFailure;
 mod thread;
 /// Compiled bodies supplied through [`EngineConfig::compiled_bodies`].
-pub use bex_vm::{CompiledBodies, CompiledBodyTable};
+pub use bex_vm::{CompiledBodies, CompiledBodyTable, compiled_rt::STACKFUL_FIBERS_SUPPORTED};
 #[cfg(not(target_arch = "wasm32"))]
 pub use btel_types::ProcessStatus;
 #[cfg(not(target_arch = "wasm32"))]

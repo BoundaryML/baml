@@ -132,6 +132,12 @@ impl BexVm {
     }
 }
 
+/// Whether this target supports the fibers required by compiled bodies.
+pub const STACKFUL_FIBERS_SUPPORTED: bool = !cfg!(any(
+    target_arch = "wasm32",
+    all(windows, target_arch = "aarch64")
+));
+
 #[cfg(not(any(target_arch = "wasm32", all(windows, target_arch = "aarch64"))))]
 pub(crate) use stackful::{Fiber, YielderPtr};
 #[cfg(any(target_arch = "wasm32", all(windows, target_arch = "aarch64")))]
