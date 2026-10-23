@@ -22,13 +22,15 @@
 //! contents. Everything the analysis cannot name is shared, so a missed case
 //! costs a lock, never a race.
 
-use baml_base::LangPackage;
+use baml_base::{LangPackage, SourceRoot};
+use baml_compiler2_hir::loc::{DeclRef, FunctionLoc};
 use baml_compiler2_hir_ty::{callable::lang_class_method, extern_loc::FunctionRef};
 use baml_type::Literal;
+use rustc_hash::FxHashMap;
 
 use crate::{
-    Constant, IntrinsicOp, Local, MirFunctionBody, Operand, Place, RuntimeTy, Rvalue,
-    StatementKind, Terminator,
+    Constant, IntrinsicOp, Local, MirFunction, MirFunctionBody, MirFunctionKind, Operand, OptLevel,
+    Place, RuntimeTy, Rvalue, StatementKind, Terminator,
 };
 
 /// The thread-locality of every object a body names.
@@ -87,24 +89,193 @@ impl EscapeFacts {
 }
 
 /// Classify every object `body` names. `arity` is the parameter count;
-/// parameters are `_1..=_arity`.
+/// parameters are `_1..=_arity`. Calls to functions with a summary
+/// ([`escape_summary`]) are seen through, at `opt`.
 pub fn analyze<'db>(
     db: &'db dyn crate::Db,
     body: &MirFunctionBody<'db>,
     arity: usize,
+    opt: OptLevel,
 ) -> EscapeFacts {
+    let mut graph = build(db, body, opt, None);
+    // A parameter's argument may already be shared, as far as this body knows.
+    for local in 1..=arity.min(body.locals.len().saturating_sub(1)) {
+        graph.mark_shared(local);
+    }
+    graph.finish()
+}
+
+/// What calling `function` does with its arguments and result, for callers:
+/// its graph, restricted to what its parameters and return value reach, with
+/// parameters assumed thread-local. `None` when the analysis cannot see the
+/// body (a builtin, or lowering failed), so callers treat the call as opaque.
+#[salsa::tracked(returns(ref), cycle_result = escape_summary_cycle)]
+pub fn escape_summary<'db>(
+    db: &'db dyn crate::Db,
+    function: FunctionLoc<'db>,
+    opt: OptLevel,
+) -> Option<Summary> {
+    let mir = crate::lower_function(db, function, opt).as_ref().ok()?;
+    let MirFunctionKind::Bytecode(body) = &mir.kind else {
+        return None;
+    };
+    Some(build(db, body, opt, Some(function)).summary(mir.arity))
+}
+
+/// A cycle [`recursive_functions`] did not see (a runtime-compiled
+/// submission): opaque, which is always sound.
+fn escape_summary_cycle<'db>(
+    _db: &'db dyn crate::Db,
+    _id: salsa::Id,
+    _function: FunctionLoc<'db>,
+    _opt: OptLevel,
+) -> Option<Summary> {
+    None
+}
+
+/// The functions of `root` that can reach themselves through direct calls,
+/// by strongly connected component. A call within one component is opaque
+/// to [`escape_summary`], so summaries never depend on themselves.
+#[salsa::tracked(returns(ref))]
+pub fn recursive_functions<'db>(
+    db: &'db dyn crate::Db,
+    root: SourceRoot,
+    opt: OptLevel,
+) -> FxHashMap<FunctionLoc<'db>, usize> {
+    let mut functions = Vec::new();
+    for &file in root.files(db) {
+        functions.extend(
+            baml_compiler2_hir::item_data::file_functions(db, file)
+                .iter()
+                .copied(),
+        );
+    }
+    let index: FxHashMap<FunctionLoc<'db>, usize> = functions
+        .iter()
+        .enumerate()
+        .map(|(i, &function)| (function, i))
+        .collect();
+    let edges: Vec<Vec<usize>> = functions
+        .iter()
+        .map(|&function| {
+            let mut callees = Vec::new();
+            if let Ok(mir) = crate::lower_function(db, function, opt) {
+                direct_callees(mir, &mut |callee| {
+                    if let Some(&callee) = index.get(&callee) {
+                        callees.push(callee);
+                    }
+                });
+            }
+            callees
+        })
+        .collect();
+    strongly_connected(&edges)
+        .into_iter()
+        .enumerate()
+        .filter(|(_, component)| component.len() > 1 || edges[component[0]].contains(&component[0]))
+        .flat_map(|(id, component)| {
+            let functions = &functions;
+            component.into_iter().map(move |f| (functions[f], id))
+        })
+        .collect()
+}
+
+/// Every source function `function`'s body or lambdas call directly.
+fn direct_callees<'db>(function: &MirFunction<'db>, visit: &mut impl FnMut(FunctionLoc<'db>)) {
+    if let MirFunctionKind::Bytecode(body) = &function.kind {
+        for block in &body.blocks {
+            if let Some(Terminator::Call { callee, .. }) = &block.terminator
+                && let Some(DeclRef::Source(callee)) = static_callee(callee)
+            {
+                visit(callee);
+            }
+        }
+    }
+    for lambda in &function.lambdas {
+        direct_callees(lambda, visit);
+    }
+}
+
+fn static_callee<'db>(callee: &Operand<'db>) -> Option<FunctionRef<'db>> {
+    match callee {
+        Operand::Constant(Constant::Function(func) | Constant::GenericFunction { func, .. }) => {
+            Some(*func)
+        }
+        _ => None,
+    }
+}
+
+/// Tarjan's algorithm, iteratively: the strongly connected components of
+/// `edges`, each as its node indices.
+fn strongly_connected(edges: &[Vec<usize>]) -> Vec<Vec<usize>> {
+    const UNVISITED: usize = usize::MAX;
+    let mut order = vec![UNVISITED; edges.len()];
+    let mut low = vec![0; edges.len()];
+    let mut on_stack = vec![false; edges.len()];
+    let mut stack = Vec::new();
+    let mut components = Vec::new();
+    let mut next = 0;
+    for start in 0..edges.len() {
+        if order[start] != UNVISITED {
+            continue;
+        }
+        // (node, index of its next edge to explore)
+        let mut work = vec![(start, 0)];
+        while let Some(&mut (node, ref mut edge)) = work.last_mut() {
+            if *edge == 0 && order[node] == UNVISITED {
+                order[node] = next;
+                low[node] = next;
+                next += 1;
+                stack.push(node);
+                on_stack[node] = true;
+            }
+            if let Some(&target) = edges[node].get(*edge) {
+                *edge += 1;
+                if order[target] == UNVISITED {
+                    work.push((target, 0));
+                } else if on_stack[target] {
+                    low[node] = low[node].min(order[target]);
+                }
+                continue;
+            }
+            work.pop();
+            if let Some(&(parent, _)) = work.last() {
+                low[parent] = low[parent].min(low[node]);
+            }
+            if low[node] == order[node] {
+                let mut component = Vec::new();
+                while let Some(member) = stack.pop() {
+                    on_stack[member] = false;
+                    component.push(member);
+                    if member == node {
+                        break;
+                    }
+                }
+                components.push(component);
+            }
+        }
+    }
+    components
+}
+
+/// The constraint graph of one body, before its parameters are classified.
+fn build<'db>(
+    db: &'db dyn crate::Db,
+    body: &MirFunctionBody<'db>,
+    opt: OptLevel,
+    current: Option<FunctionLoc<'db>>,
+) -> Graph {
     let mut graph = Graph::new(body.locals.len());
     let builtins = Builtins::new(db);
     let array_iterators = array_iterators(body);
     let walker = Walker {
+        db,
+        opt,
+        current,
         body,
         builtins: &builtins,
         array_iterators: &array_iterators,
     };
-
-    for local in 1..=arity.min(body.locals.len().saturating_sub(1)) {
-        graph.mark_shared(local);
-    }
     for (index, decl) in body.locals.iter().enumerate() {
         // A captured local's slot holds its cell, which closures share.
         if decl.is_captured {
@@ -124,10 +295,27 @@ pub fn analyze<'db>(
             walker.terminator(&mut graph, terminator);
         }
     }
-    graph.finish()
+    graph
+}
+
+/// A callee's graph as seen from its call sites: the nodes its parameters
+/// and return value reach, with sharing and contents edges.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Summary {
+    /// Per node: whether another thread may reach it, and its contents node.
+    nodes: Vec<(bool, Option<usize>)>,
+    /// The node of each parameter, in declaration order.
+    params: Vec<usize>,
+    /// The node of the return value.
+    ret: usize,
 }
 
 struct Walker<'a, 'db> {
+    db: &'db dyn crate::Db,
+    opt: OptLevel,
+    /// The function whose summary is being built, if any: calls within its
+    /// recursive component are opaque.
+    current: Option<FunctionLoc<'db>>,
     body: &'a MirFunctionBody<'db>,
     builtins: &'a Builtins<'db>,
     array_iterators: &'a [bool],
@@ -167,19 +355,26 @@ impl<'db> Walker<'_, 'db> {
                 destination,
                 ..
             } => {
-                let effect = (!has_trace
+                // Value arguments in parameter order, or the call is opaque.
+                let positional = !has_trace
                     && argument_layout
                         .as_ref()
-                        .is_none_or(|layout| layout.0.iter().all(Option::is_none)))
-                .then(|| self.builtins.effect(callee))
-                .flatten();
+                        .is_none_or(|layout| layout.0.iter().all(Option::is_none));
                 let values = args.get(*ntypeargs..).unwrap_or_default();
-                match effect.filter(|&effect| self.matches_builtin(effect, values)) {
-                    Some(effect) => {
-                        let result = graph.apply_builtin(effect, values);
-                        graph.write(destination, result);
-                    }
-                    None => graph.unknown(args, destination, Some(callee)),
+                if let Some(effect) = self
+                    .builtins
+                    .effect(callee)
+                    .filter(|&effect| positional && self.matches_builtin(effect, values))
+                {
+                    let result = graph.apply_builtin(effect, values);
+                    graph.write(destination, result);
+                } else if let Some(summary) = self
+                    .summary(callee)
+                    .filter(|summary| positional && summary.params.len() == values.len())
+                {
+                    graph.apply_summary(summary, values, destination);
+                } else {
+                    graph.unknown(args, destination, Some(callee));
                 }
             }
             Terminator::VirtualCall {
@@ -229,6 +424,26 @@ impl<'db> Walker<'_, 'db> {
                 graph.leak(context);
             }
         }
+    }
+
+    /// The summary of a call's target, unless it is opaque or in the same
+    /// recursive component as the function being summarized.
+    fn summary(&self, callee: &Operand<'db>) -> Option<&'db Summary> {
+        let DeclRef::Source(callee) = static_callee(callee)? else {
+            return None;
+        };
+        if let Some(current) = self.current {
+            let root = current.file(self.db).source_root(self.db);
+            let components = recursive_functions(self.db, root, self.opt);
+            if callee == current
+                || components
+                    .get(&current)
+                    .is_some_and(|component| components.get(&callee) == Some(component))
+            {
+                return None;
+            }
+        }
+        escape_summary(self.db, callee, self.opt).as_ref()
     }
 
     /// Whether a call's value arguments have the shape `effect` describes:
@@ -445,14 +660,10 @@ impl<'db> Builtins<'db> {
     }
 
     fn effect(&self, callee: &Operand<'db>) -> Option<Effect> {
-        let Operand::Constant(Constant::Function(func) | Constant::GenericFunction { func, .. }) =
-            callee
-        else {
-            return None;
-        };
+        let func = static_callee(callee)?;
         self.0
             .iter()
-            .find(|(builtin, _)| builtin == func)
+            .find(|(builtin, _)| *builtin == func)
             .map(|&(_, effect)| effect)
     }
 }
@@ -709,6 +920,60 @@ impl Graph {
         }
     }
 
+    /// The summary of this graph as a callee with `arity` parameters, before
+    /// its parameters are classified.
+    fn summary(&mut self, arity: usize) -> Summary {
+        let resolved = self.resolve();
+        let roots: Vec<usize> = (0..=arity.min(self.locals.saturating_sub(1)))
+            .map(|local| resolved.roots[local])
+            .collect();
+        let mut compact: FxHashMap<usize, usize> = FxHashMap::default();
+        let mut order = Vec::new();
+        let mut pending = roots.clone();
+        while let Some(node) = pending.pop() {
+            if compact.contains_key(&node) {
+                continue;
+            }
+            compact.insert(node, order.len());
+            order.push(node);
+            pending.extend(resolved.contents[node]);
+        }
+        Summary {
+            nodes: order
+                .iter()
+                .map(|&node| {
+                    (
+                        resolved.shared[node],
+                        resolved.contents[node].map(|contents| compact[&contents]),
+                    )
+                })
+                .collect(),
+            params: roots[1..].iter().map(|root| compact[root]).collect(),
+            ret: compact[&roots[0]],
+        }
+    }
+
+    /// A call to a summarized callee: a fresh copy of its graph, joined to the
+    /// arguments and the destination.
+    fn apply_summary(&mut self, summary: &Summary, args: &[Operand<'_>], destination: &Place) {
+        let copies: Vec<usize> = summary
+            .nodes
+            .iter()
+            .map(|&(shared, _)| if shared { self.shared() } else { self.fresh() })
+            .collect();
+        for (node, &(_, contents)) in summary.nodes.iter().enumerate() {
+            if let Some(contents) = contents {
+                let inner = self.contents_of(Some(copies[node]));
+                self.union(inner, copies[contents]);
+            }
+        }
+        for (arg, &param) in args.iter().zip(&summary.params) {
+            let value = self.operand(arg);
+            self.flow(Some(copies[param]), value);
+        }
+        self.write(destination, Some(copies[summary.ret]));
+    }
+
     /// `value` may now be held wherever `into` is.
     fn flow(&mut self, into: Option<usize>, value: Option<usize>) {
         if let (Some(into), Some(value)) = (into, value) {
@@ -735,6 +1000,17 @@ impl Graph {
 
     /// Resolve every node to its root and push sharing into contents.
     fn finish(mut self) -> EscapeFacts {
+        let resolved = self.resolve();
+        EscapeFacts {
+            local_node: resolved.roots[..self.locals].to_vec(),
+            shared: resolved.shared,
+            contents: resolved.contents,
+        }
+    }
+
+    /// Every node's root, and per root its contents and whether sharing
+    /// reaches it, from itself or from any node whose contents it is.
+    fn resolve(&mut self) -> Resolved {
         let nodes = self.parent.len();
         let roots: Vec<usize> = (0..nodes).map(|node| self.find(node)).collect();
         let mut contents: Vec<Option<usize>> = vec![None; nodes];
@@ -756,10 +1032,17 @@ impl Graph {
                 pending.push(inner);
             }
         }
-        EscapeFacts {
-            local_node: roots[..self.locals].to_vec(),
+        Resolved {
+            roots,
             shared,
             contents,
         }
     }
+}
+
+/// A graph's nodes after union-find, with sharing propagated.
+struct Resolved {
+    roots: Vec<usize>,
+    shared: Vec<bool>,
+    contents: Vec<Option<usize>>,
 }

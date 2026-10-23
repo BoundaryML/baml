@@ -3738,7 +3738,7 @@ pub(crate) fn compile_mir_function<'db: 'mir, 'mir>(
 
     // Compile with stackification
     let escape = (opt != crate::analysis::OptLevel::Zero)
-        .then(|| baml_compiler2_mir::escape::analyze(ctx.db, body, arity));
+        .then(|| baml_compiler2_mir::escape::analyze(ctx.db, body, arity, opt));
     let codegen = StackifyCodegen::new(body, arity, line_starts, ctx, analysis, escape);
     let mut f = codegen.compile(identity);
     if let Some(span) = mir_span {

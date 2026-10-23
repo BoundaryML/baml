@@ -121,6 +121,7 @@ impl Analysis {
 
     pub(crate) fn new<'db>(
         db: &'db dyn baml_compiler2_mir::Db,
+        opt: baml_compiler2_mir::OptLevel,
         index: &ProgramIndex,
         arity: usize,
         body: &MirFunctionBody<'db>,
@@ -184,7 +185,7 @@ impl Analysis {
             hooked: intrinsics.hooked,
             binds_types: intrinsics.binds_types,
             hook_results: intrinsics.hook_results,
-            escape: baml_compiler2_mir::escape::analyze(db, body, arity),
+            escape: baml_compiler2_mir::escape::analyze(db, body, arity, opt),
         })
     }
 

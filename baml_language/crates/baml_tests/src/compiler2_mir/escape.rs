@@ -27,7 +27,7 @@ fn classify(source: &str, function: &str) -> Vec<(String, bool)> {
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         panic!("`{function}` must lower to bytecode")
     };
-    let facts = escape::analyze(&db, body, mir.arity);
+    let facts = escape::analyze(&db, body, mir.arity, OptLevel::Two);
     let mut seen = std::collections::HashSet::new();
     body.locals
         .iter()
@@ -105,17 +105,22 @@ function main(ys: int[]) -> int {
     );
 }
 
+/// Leaks its argument: `reverse` is a builtin the analysis does not know.
+const LEAK: &str = "function keep(xs: int[]) -> int { xs.reverse().length() }";
+
 #[test]
-fn passing_to_an_unknown_call_shares_every_alias() {
+fn passing_to_a_leaking_call_shares_every_alias() {
     assert_locality(
-        r#"
-function keep(xs: int[]) -> int { xs[0] }
-function main() -> int {
+        &format!(
+            r#"
+{LEAK}
+function main() -> int {{
   let xs = [1];
   let alias = xs;
   keep(alias)
-}
-"#,
+}}
+"#
+        ),
         "main",
         &[("xs", false), ("alias", false)],
     );
@@ -160,15 +165,17 @@ function main() -> int {
 #[test]
 fn leaking_a_loaded_element_shares_what_was_stored() {
     assert_locality(
-        r#"
-function keep(xs: int[]) -> int { xs[0] }
-function main() -> int {
+        &format!(
+            r#"
+{LEAK}
+function main() -> int {{
   let inner = [1];
   let outer = [inner];
   let again = outer[0];
   keep(again)
-}
-"#,
+}}
+"#
+        ),
         "main",
         &[("inner", false), ("again", false), ("outer", true)],
     );
@@ -190,7 +197,7 @@ function main(out: int[][]) -> int {
 }
 
 #[test]
-fn method_receivers_are_shared_without_summaries() {
+fn method_receivers_follow_the_method_summary() {
     assert_locality(
         r#"
 class Point {
@@ -205,7 +212,7 @@ function main() -> int {
 }
 "#,
         "main",
-        &[("p", false), ("q", true)],
+        &[("p", true), ("q", true)],
     );
 }
 
@@ -274,14 +281,16 @@ function main() -> int {
 #[test]
 fn map_values_that_leak_share_the_map_contents() {
     assert_locality(
-        r#"
-function keep(xs: int[]) -> int { xs[0] }
-function main() -> int {
+        &format!(
+            r#"
+{LEAK}
+function main() -> int {{
   let xs = [1];
-  let m = {"a": xs};
+  let m = {{"a": xs}};
   keep(m["a"])
-}
-"#,
+}}
+"#
+        ),
         "main",
         &[("xs", false), ("m", true)],
     );
@@ -291,12 +300,116 @@ function main() -> int {
 fn an_iterator_that_leaks_shares_its_array() {
     assert_locality(
         r#"
-function drain<T>(it: T) -> int { 0 }
+function drain<T>(it: T) -> int { [it].reverse().length() }
 function main() -> int {
   let xs = [1, 2];
   drain(xs.iter())
 }
 "#,
+        "main",
+        &[("xs", false)],
+    );
+}
+
+#[test]
+fn a_callee_that_only_reads_keeps_arguments_thread_local() {
+    assert_locality(
+        r#"
+function first(xs: int[]) -> int { xs[0] + xs.length() }
+function main() -> int {
+  let xs = [1];
+  first(xs) + xs[0]
+}
+"#,
+        "main",
+        &[("xs", true)],
+    );
+}
+
+#[test]
+fn a_fresh_return_value_is_thread_local_in_the_caller() {
+    assert_locality(
+        r#"
+function make(n: int) -> int[] { [n, n + 1] }
+function main() -> int {
+  let xs = make(1);
+  xs[0] = 3;
+  xs[1]
+}
+"#,
+        "main",
+        &[("xs", true)],
+    );
+}
+
+#[test]
+fn a_returned_argument_aliases_it_in_the_caller() {
+    assert_locality(
+        &format!(
+            r#"
+{LEAK}
+function same(xs: int[]) -> int[] {{ xs }}
+function main() -> int {{
+  let xs = [1];
+  let ys = same(xs);
+  keep(ys)
+}}
+"#
+        ),
+        "main",
+        &[("xs", false), ("ys", false)],
+    );
+}
+
+#[test]
+fn a_callee_that_stores_one_argument_in_another_links_them() {
+    assert_locality(
+        r#"
+function put(out: int[][], xs: int[]) -> int { out.push(xs) }
+function main(shared: int[][]) -> int {
+  let xs = [1];
+  let fresh: int[][] = [];
+  let ys = [2];
+  put(shared, xs);
+  put(fresh, ys);
+  xs[0] + ys[0]
+}
+"#,
+        "main",
+        &[("xs", false), ("fresh", true), ("ys", true)],
+    );
+}
+
+#[test]
+fn recursive_callees_are_opaque() {
+    assert_locality(
+        r#"
+function walk(xs: int[], n: int) -> int {
+  if (n == 0) { xs[0] } else { walk(xs, n - 1) }
+}
+function main() -> int {
+  let xs = [1];
+  walk(xs, 3)
+}
+"#,
+        "main",
+        &[("xs", false)],
+    );
+}
+
+#[test]
+fn leaks_compose_through_calls() {
+    assert_locality(
+        &format!(
+            r#"
+{LEAK}
+function forward(xs: int[]) -> int {{ keep(xs) }}
+function main() -> int {{
+  let xs = [1];
+  forward(xs)
+}}
+"#
+        ),
         "main",
         &[("xs", false)],
     );
