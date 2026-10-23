@@ -1,0 +1,4 @@
+sxe -c ".echo ===AV===; .exr -1; r; kpn 40; q" av
+bu VCRUNTIME140!__CxxFrameHandler3 ".printf \"HANDLER flags=%x estab=%p pc=%p fe=%p hd=%p\\n\", dwo(@rcx+4), @rdx, poi(@r9), poi(@r9+10), poi(@r9+38); ln poi(@r9); gc"
+g
+q

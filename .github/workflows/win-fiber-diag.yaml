@@ -25,6 +25,7 @@ env:
 jobs:
   # Is corosensei itself broken on this runner and toolchain, independent of bex_vm?
   corosensei-alone:
+    if: ${{ false }}  # answered by earlier runs; only the cdb job is live
     name: "corosensei alone (linker=${{ matrix.linker }}, opt=${{ matrix.opt }})"
     runs-on: blacksmith-8vcpu-windows-2025
     timeout-minutes: 20
@@ -52,6 +53,7 @@ jobs:
   # The failing bex_vm test, varying one suspect per job. CI's Windows job uses
   # rust-lld (baml_language/.cargo/config.toml), /STACK:64MiB and opt-level 1.
   bex-vm:
+    if: ${{ false }}  # answered by earlier runs; only the cdb job is live
     name: "bex_vm (${{ matrix.variant }})"
     runs-on: blacksmith-8vcpu-windows-2025
     timeout-minutes: 50
@@ -137,8 +139,9 @@ jobs:
           for t in a_panicking_compiled_body_clears_fiber_state global_callee_errors_match_bytecode_at_every_opt_level; do
             echo "::group::$t"
             # Break on first-chance access violations, dump state, then quit.
-            "$CDB" -lines -G -y "$(dirname "$exe")" \
-              -c "sxe av; g; .echo ===AV===; .exr -1; r; .ecxr; kpn 60; ub @rip L20; u @rip L8; q" \
+            # Log every C++ frame handler call (which frame, establisher, handler
+            # data), so the last one before the AV names the frame with bad EH data.
+            "$CDB" -lines -G -y "$(dirname "$exe")" -cf ../.github/diag/cdb-handlers.txt \
               "$exe" "vm::compiled_rt::tests::$t" --exact --test-threads=1 --nocapture
             echo "::endgroup::"
           done
