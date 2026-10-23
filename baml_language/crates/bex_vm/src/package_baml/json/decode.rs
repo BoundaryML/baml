@@ -423,34 +423,64 @@ impl Lookups {
         if let Some(&reaches) = self.reaches.get(ty) {
             return reaches;
         }
+        // Most types answer on their own: a provided `from_json`, or nothing
+        // further to follow (a class of scalar fields). Skip the walk then.
+        let (own, edges) = self.reach_edges(vm, ty);
+        if own || edges.is_empty() {
+            self.reaches.insert(ty.clone(), own);
+            return own;
+        }
         let mut walk = ReachWalk::default();
         self.reach_component(vm, ty, &mut walk);
         self.reaches.get(ty).copied().unwrap_or(true)
     }
 
     /// The types the walk follows: the ones that can hold a class or enum.
+    /// A union, list, or map of scalars (`string?`, `int[]`) cannot, so it
+    /// needs no walk, and a class of such fields answers on its own.
     fn can_reach(ty: &RealizedTy) -> bool {
-        matches!(
-            ty,
-            RealizedTy::Union(_)
-                | RealizedTy::List(_)
-                | RealizedTy::Map { .. }
-                | RealizedTy::Class(..)
-                | RealizedTy::Interface(..)
-                | RealizedTy::Enum(_)
-        )
+        match ty {
+            RealizedTy::Union(members) => members.iter().any(Self::can_reach),
+            RealizedTy::List(element) | RealizedTy::Map { value: element, .. } => {
+                Self::can_reach(element)
+            }
+            RealizedTy::Class(..) | RealizedTy::Interface(..) | RealizedTy::Enum(_) => true,
+            _ => false,
+        }
     }
 
-    /// The types decoding `ty` goes on to decode, and whether `ty` itself has
-    /// a provided `from_json`.
+    /// Whether `ty` itself has a provided `from_json`, and the types decoding
+    /// `ty` goes on to decode that can hold a class or enum (the walk ignores
+    /// the rest, so they are not collected).
     fn reach_edges(&mut self, vm: &BexVm, ty: &RealizedTy) -> (bool, Vec<RealizedTy>) {
         match ty {
             RealizedTy::Union(members) if members.iter().any(RealizedTy::is_null) => {
-                (false, vec![ty.strip_null()])
+                let inner = ty.strip_null();
+                (
+                    false,
+                    if Self::can_reach(&inner) {
+                        vec![inner]
+                    } else {
+                        Vec::new()
+                    },
+                )
             }
-            RealizedTy::Union(members) => (false, members.to_vec()),
-            RealizedTy::List(element) => (false, vec![element.as_ref().clone()]),
-            RealizedTy::Map { value, .. } => (false, vec![value.as_ref().clone()]),
+            RealizedTy::Union(members) => (
+                false,
+                members
+                    .iter()
+                    .filter(|member| Self::can_reach(member))
+                    .cloned()
+                    .collect(),
+            ),
+            RealizedTy::List(element) | RealizedTy::Map { value: element, .. } => (
+                false,
+                if Self::can_reach(element) {
+                    vec![element.as_ref().clone()]
+                } else {
+                    Vec::new()
+                },
+            ),
             RealizedTy::Class(head, _) | RealizedTy::Interface(head, _, _)
                 if vm.stdlib_heads().media_kind(*head).is_some() =>
             {
@@ -465,7 +495,7 @@ impl Lookups {
                         false,
                         plan.fields
                             .iter()
-                            .filter(|field| field.shown)
+                            .filter(|field| field.shown && Self::can_reach(&field.ty))
                             .map(|field| field.ty.clone())
                             .collect(),
                     ),
@@ -487,7 +517,7 @@ impl Lookups {
         let (own, edges) = self.reach_edges(vm, ty);
         let mut direct = own;
         let mut low = at;
-        for next in edges.iter().filter(|next| Self::can_reach(next)) {
+        for next in &edges {
             if let Some(&reaches) = self.reaches.get(next) {
                 direct |= reaches;
             } else if let Some(&(order, _)) = walk.order.get(next) {
