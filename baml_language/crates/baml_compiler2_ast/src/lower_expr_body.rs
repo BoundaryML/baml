@@ -3985,7 +3985,7 @@ impl LoweringContext {
         for elem in node.children_with_tokens() {
             match elem {
                 rowan::NodeOrToken::Node(child)
-                    if child.kind() != SyntaxKind::GENERIC_ARGS && base.is_none() =>
+                    if child.kind() != SyntaxKind::UPCAST_TARGET && base.is_none() =>
                 {
                     base = Some(self.lower_expr_in_chain(&child));
                 }
@@ -3999,14 +3999,10 @@ impl LoweringContext {
 
         let target = node
             .children()
-            .find(|child| child.kind() == SyntaxKind::GENERIC_ARGS)
-            .and_then(|args| {
-                args.children()
-                    .find(|child| child.kind() == SyntaxKind::TYPE_EXPR)
-            })
-            .and_then(baml_compiler_syntax::ast::TypeExpr::cast)
+            .find_map(baml_compiler_syntax::ast::UpcastTarget::cast)
+            .and_then(|target| target.ty())
             .map(|te| self.lower_body_type_expr(&te))
-            .unwrap_or_else(|| TypeExprKind::Missing.at(node.span_range()));
+            .unwrap_or_else(|| TypeExprKind::Error.at(node.span_range()));
 
         let id = self.alloc_expr(Expr::Upcast { base, target }, node.span_range());
         if self.needs_chain_wrap.remove(&base) {

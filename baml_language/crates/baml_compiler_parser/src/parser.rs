@@ -3227,67 +3227,26 @@ impl<'a> Parser<'a> {
             return;
         }
 
-        // Check for string literal types: "user" | "assistant"
-        if self.parse_any_string() {
-            return;
-        }
-
-        // Negative numeric literal type: `-42`, `-3.14`. Recognised before
-        // the unary-`-` falls through to the generic error path so literal
-        // unions like `-1 | 0 | 1` and pattern atoms like `match { -42 => ... }`
-        // parse uniformly. Floats still error to match the positive case.
-        if self.at(TokenKind::Minus)
-            && matches!(
-                self.peek(1).map(|t| t.kind),
-                Some(
-                    TokenKind::BigintLiteral | TokenKind::IntegerLiteral | TokenKind::FloatLiteral
-                )
-            )
-        {
-            let next_kind = self.peek(1).map(|t| t.kind);
-            if next_kind == Some(TokenKind::FloatLiteral)
-                && let Some(token) = self.peek(1)
-            {
-                let span = token.span;
-                let text = token.text.clone();
-                self.error(
-                    format!("float literal values are not supported: -{text}"),
-                    span,
+        let literal_start = self.events.len();
+        if self.parse_type_literal() {
+            self.wrap_events_in_node(literal_start, SyntaxKind::LITERAL_TYPE);
+            self.finish_node();
+            if self.at(TokenKind::Less) {
+                self.error_here(
+                    "literal types cannot have type arguments or associated-type bindings"
+                        .to_string(),
                 );
+                self.parse_type_args();
+                // This is an invalid application, not a literal whose arguments
+                // a consumer is free to overlook. Keep the whole atom in recovery.
+                self.wrap_events_in_node(literal_start, SyntaxKind::ERROR);
+                self.finish_node();
             }
-            self.bump(); // -
-            self.bump(); // number
-            return;
-        }
-
-        // Check for bigint literal types: 42n | 0n | 99999999999999999999n
-        if self.at(TokenKind::BigintLiteral) {
-            self.bump();
-            return;
-        }
-
-        // Check for integer literal types: 200 | 201 | 204
-        // Used for exhaustiveness checking on literal unions
-        if self.at(TokenKind::IntegerLiteral) {
-            self.bump();
-            return;
-        }
-
-        // Float literal types are not supported - emit error at parse time
-        if self.at(TokenKind::FloatLiteral) {
-            if let Some(token) = self.current() {
-                self.error(
-                    format!("float literal values are not supported: {}", token.text),
-                    token.span,
-                );
-            }
-            self.bump(); // consume to recover
             return;
         }
 
         if self.at(TokenKind::Word) {
-            // Base type name, generic type, or boolean literal (true/false)
-            // Note: true/false are Word tokens, and they become BoolLiteral types
+            // Named type paths are the only type atoms that accept `<...>`.
             self.bump();
 
             // Consume dot-separated path segments (e.g., baml.http.Request).
@@ -3333,6 +3292,77 @@ impl<'a> Parser<'a> {
         } else {
             self.error_unexpected_token("type".to_string());
         }
+    }
+
+    /// Parse the payload of a literal type, distinct from a named type path.
+    fn parse_type_literal(&mut self) -> bool {
+        // Check for string literal types: "user" | "assistant"
+        if self.parse_any_string() {
+            return true;
+        }
+
+        // Negative numeric literal type: `-42`, `-3.14`. Recognised before
+        // the unary-`-` falls through to the generic error path so literal
+        // unions like `-1 | 0 | 1` and pattern atoms like `match { -42 => ... }`
+        // parse uniformly. Floats still error to match the positive case.
+        if self.at(TokenKind::Minus)
+            && matches!(
+                self.peek(1).map(|t| t.kind),
+                Some(
+                    TokenKind::BigintLiteral | TokenKind::IntegerLiteral | TokenKind::FloatLiteral
+                )
+            )
+        {
+            let next_kind = self.peek(1).map(|t| t.kind);
+            if next_kind == Some(TokenKind::FloatLiteral)
+                && let Some(token) = self.peek(1)
+            {
+                let span = token.span;
+                let text = token.text.clone();
+                self.error(
+                    format!("float literal values are not supported: -{text}"),
+                    span,
+                );
+            }
+            self.bump(); // -
+            self.bump(); // number
+            return true;
+        }
+
+        // Check for bigint literal types: 42n | 0n | 99999999999999999999n
+        if self.at(TokenKind::BigintLiteral) {
+            self.bump();
+            return true;
+        }
+
+        // Check for integer literal types: 200 | 201 | 204
+        // Used for exhaustiveness checking on literal unions
+        if self.at(TokenKind::IntegerLiteral) {
+            self.bump();
+            return true;
+        }
+
+        // Float literal types are not supported - emit error at parse time
+        if self.at(TokenKind::FloatLiteral) {
+            if let Some(token) = self.current() {
+                self.error(
+                    format!("float literal values are not supported: {}", token.text),
+                    token.span,
+                );
+            }
+            self.bump(); // consume to recover
+            return true;
+        }
+
+        if self.at_contextual_kw("true") {
+            self.bump_contextual_kw_as("true", SyntaxKind::KW_TRUE);
+            return true;
+        }
+        if self.at_contextual_kw("false") {
+            self.bump_contextual_kw_as("false", SyntaxKind::KW_FALSE);
+            return true;
+        }
+        false
     }
 
     fn looks_like_named_type_arg_binding(&self) -> bool {
@@ -3453,48 +3483,60 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_paren_or_function_type_inner(&mut self) {
-        // The arrow decides whether the parsed head belongs to a callable.
-        let function_start = self.events.len();
-
-        // Pipes within a parameter list or parenthesized operand do not
-        // compete with the enclosing function's return/throws boundary.
+        let start = self.events.len();
+        let span = self.error_span();
+        // Parse actual types (including quoted delimiters) before deciding
+        // whether the head is grouping or a callable parameter list.
         let enclosing_function_operand = std::mem::replace(&mut self.function_union_operand, false);
         self.bump(); // (
-
-        // Track whether any parameter had a name (which would make it invalid as parenthesized type)
+        let mut operands = Vec::new();
         let mut had_named_param = false;
-
-        // Parse parameters/types inside parens
+        let mut had_comma = false;
         if !self.at(TokenKind::RParen) {
-            had_named_param |= self.parse_function_type_param_inner();
-
-            while self.eat(TokenKind::Comma) {
+            loop {
+                let operand_start = self.events.len();
+                let named = self.parse_paren_type_element();
+                operands.push((operand_start, self.events.len(), named));
+                had_named_param |= named;
+                if !self.eat(TokenKind::Comma) {
+                    break;
+                }
+                had_comma = true;
                 if self.at(TokenKind::RParen) {
                     break;
                 }
-                had_named_param |= self.parse_function_type_param_inner();
             }
         }
-
-        // Error recovery: if we're not at ')' yet, skip tokens until we find ')' or reach a recovery point
-        if !self.at(TokenKind::RParen) {
+        let recovered = !self.at(TokenKind::RParen);
+        if recovered {
             if let Some(token) = self.current() {
-                let message = format!("Unexpected '{}' in type expression", token.text);
-                self.error(message, token.span);
+                self.error(
+                    format!("Unexpected '{}' in type expression", token.text),
+                    token.span,
+                );
             }
             self.skip_to_balanced_paren();
         }
-
-        self.expect(TokenKind::RParen);
+        let closed = self.expect(TokenKind::RParen);
         self.function_union_operand = enclosing_function_operand;
 
-        // Now check for `->` to determine if this is a function type
         if self.at(TokenKind::Arrow) {
-            self.wrap_events_in_node(function_start, SyntaxKind::FUNCTION_TYPE);
+            // Only callable heads own FUNCTION_TYPE_PARAM nodes. An unnamed
+            // operand was parsed directly as TYPE_EXPR; add its parameter
+            // wrapper now, in reverse order so recorded event ranges stay valid.
+            for &(operand_start, operand_end, named) in operands.iter().rev() {
+                if !named {
+                    self.events.insert(operand_end, Event::FinishNode);
+                    self.events.insert(
+                        operand_start,
+                        Event::StartNode {
+                            kind: SyntaxKind::FUNCTION_TYPE_PARAM,
+                        },
+                    );
+                }
+            }
+            self.wrap_events_in_node(start, SyntaxKind::FUNCTION_TYPE);
             self.bump(); // ->
-            // Bare return unions are owned by the function even in pattern
-            // position. A pipe followed by another function head is reported
-            // as ambiguous instead of silently choosing this grouping.
             let enclosing_function_operand =
                 std::mem::replace(&mut self.function_union_operand, true);
             self.parse_return_type();
@@ -3510,38 +3552,43 @@ impl<'a> Parser<'a> {
             }
             self.finish_node(); // FUNCTION_TYPE
         } else {
-            // Not a function type - should be a parenthesized type
+            let invalid =
+                had_named_param || had_comma || operands.is_empty() || recovered || !closed;
             if had_named_param {
-                // Error: named parameters require `->` to form a function type
-                if let Some(token) = self.current() {
-                    self.error(
-                        "Named parameters in type expression require `->` to form a function type"
-                            .to_string(),
-                        token.span,
-                    );
-                }
+                self.error(
+                    "Named parameters in type expression require `->` to form a function type"
+                        .to_string(),
+                    span,
+                );
+            } else if had_comma || operands.is_empty() {
+                self.error("Parenthesized types contain one type; parameter lists require `->` to form a function type".to_string(), span);
             }
-            // Note: We don't emit an error for multiple types without `->` because:
-            // 1. Tuple types might be added in the future
-            // 2. It allows for better error recovery
-            // 3. The type checker will catch invalid types anyway
-            // For single unnamed type, this is just a parenthesized type - that's fine
+            // Invalid comma/parameter syntax is recovery, not a grouping whose
+            // first operand (or an invented union) can be used by lowering.
+            self.wrap_events_in_node(
+                start,
+                if invalid {
+                    SyntaxKind::ERROR
+                } else {
+                    SyntaxKind::PAREN_TYPE
+                },
+            );
+            self.finish_node();
         }
     }
 
-    /// Parse a single function type parameter: either `name: type` or just `type`.
-    ///
-    /// Returns `true` if this parameter had a name.
-    fn parse_function_type_param_inner(&mut self) -> bool {
-        // Check if this is `name: type` by looking ahead
-        // If we see WORD followed by COLON (skipping trivia), it's a named param
-        let is_named = (self.at(TokenKind::Word) || self.at(TokenKind::Client))
+    fn at_named_function_type_param(&self) -> bool {
+        (self.at(TokenKind::Word) || self.at(TokenKind::Client))
             && matches!(
                 (self.peek(1).map(|t| t.kind), self.peek(2).map(|t| t.kind)),
                 (Some(TokenKind::Colon), _) | (Some(TokenKind::Question), Some(TokenKind::Colon))
-            );
+            )
+    }
 
-        if is_named {
+    /// Parse one unresolved paren-list element. Named entries already have
+    /// parameter syntax; unnamed entries remain `TYPE_EXPR` until an arrow follows.
+    fn parse_paren_type_element(&mut self) -> bool {
+        if self.at_named_function_type_param() {
             // Named parameter: `name: type`
             self.with_node(SyntaxKind::FUNCTION_TYPE_PARAM, |p| {
                 p.reject_reserved_trace_parameter();
@@ -3559,10 +3606,7 @@ impl<'a> Parser<'a> {
             });
             true
         } else {
-            // Unnamed parameter: just `type`
-            self.with_node(SyntaxKind::FUNCTION_TYPE_PARAM, |p| {
-                p.parse_type();
-            });
+            self.parse_type();
             false
         }
     }
@@ -6744,7 +6788,7 @@ impl<'a> Parser<'a> {
                 self.wrap_events_in_node(lhs_start, SyntaxKind::UPCAST_EXPR);
                 self.bump(); // .
                 self.bump_contextual_kw_as("as", SyntaxKind::KW_AS);
-                self.parse_generic_args();
+                self.parse_upcast_target();
                 self.finish_node();
             } else if op == TokenKind::Dot || op == TokenKind::Dollar {
                 // Field access on a complex expression.
@@ -7618,26 +7662,7 @@ impl<'a> Parser<'a> {
         self.function_union_operand = enclosing_function_operand;
         self.type_args_depth -= 1;
 
-        // If we just exited the outermost generic and have pending '>', report error.
-        if self.type_args_depth == 0 && self.pending_greaters > 0 {
-            if let Some(span) = self.pending_greater_span {
-                self.error(
-                    format!(
-                        "unmatched `>` in type expression (found {} extra)",
-                        self.pending_greaters
-                    ),
-                    span,
-                );
-            }
-            for _ in 0..self.pending_greaters {
-                self.events.push(Event::Token {
-                    kind: SyntaxKind::GREATER,
-                    text: ">".to_string(),
-                });
-            }
-            self.pending_greaters = 0;
-            self.pending_greater_span = None;
-        }
+        self.report_unmatched_greaters("type expression");
     }
 
     /// Parse generic arguments: <Type1, Type2, ...>
@@ -7663,12 +7688,51 @@ impl<'a> Parser<'a> {
         });
         self.type_args_depth -= 1;
 
-        // If we just exited the outermost generic and have pending '>', report error
+        self.report_unmatched_greaters("generic argument list");
+    }
+
+    /// `.as<T>` has one target type, not a generic argument list. Retain an
+    /// invalid list under `ERROR` so typed CST readers cannot select its first type.
+    fn parse_upcast_target(&mut self) {
+        self.type_args_depth += 1;
+        let enclosing_function_operand = std::mem::replace(&mut self.function_union_operand, false);
+        self.with_node(SyntaxKind::UPCAST_TARGET, |p| {
+            p.expect(TokenKind::Less);
+            let start = p.events.len();
+            let span = p.error_span();
+            let empty = p.at(TokenKind::Greater) || p.at(TokenKind::GreaterGreater);
+            let mut invalid = empty;
+            if !empty {
+                p.parse_type();
+            }
+            while p.pending_greaters == 0 && p.eat(TokenKind::Comma) {
+                if p.at(TokenKind::Greater) || p.at(TokenKind::GreaterGreater) {
+                    break;
+                }
+                invalid = true;
+                p.parse_type();
+            }
+            if invalid {
+                p.error(
+                    "upcast requires one target type: `.as<Interface>`".to_string(),
+                    span,
+                );
+                p.wrap_events_in_node(start, SyntaxKind::ERROR);
+                p.finish_node();
+            }
+            p.expect_greater();
+        });
+        self.function_union_operand = enclosing_function_operand;
+        self.type_args_depth -= 1;
+        self.report_unmatched_greaters("upcast target");
+    }
+
+    fn report_unmatched_greaters(&mut self, context: &str) {
         if self.type_args_depth == 0 && self.pending_greaters > 0 {
             if let Some(span) = self.pending_greater_span {
                 self.error(
                     format!(
-                        "unmatched `>` in generic argument list (found {} extra)",
+                        "unmatched `>` in {context} (found {} extra)",
                         self.pending_greaters
                     ),
                     span,
@@ -9865,15 +9929,15 @@ function read_int<T extends Converter<int>>(m: T) -> int {
     }
 
     #[test]
-    fn extra_generic_argument_closer_uses_argument_list_wording() {
+    fn extra_upcast_target_closer_uses_target_wording() {
         let (_root, errors) = parse_source("function f(x: int) -> int { x.as<int>>() }");
         assert!(
             errors.iter().any(|error| matches!(
                 error,
                 ParseError::InvalidSyntax { message, .. }
-                    if message == "unmatched `>` in generic argument list (found 1 extra)"
+                    if message == "unmatched `>` in upcast target (found 1 extra)"
             )),
-            "expected generic argument list wording, got: {errors:#?}"
+            "expected upcast target wording, got: {errors:#?}"
         );
     }
 

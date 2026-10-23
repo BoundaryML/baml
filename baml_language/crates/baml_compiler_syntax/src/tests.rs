@@ -53,31 +53,31 @@ mod builder_tests {
     #[test]
     fn integer_literal_rejects_double_minus() {
         // `--42` must NOT decode to `+42` — a malformed sign sequence is
-        // invalid, not a noop double-negation. Build a TYPE_EXPR with
+        // invalid, not a noop double-negation. Build a LITERAL_TYPE with
         // [MINUS, MINUS, INTEGER_LITERAL "42"] and assert integer_literal()
         // returns None.
         let mut builder = SyntaxTreeBuilder::new();
-        builder.start_node(SyntaxKind::TYPE_EXPR);
+        builder.start_node(SyntaxKind::LITERAL_TYPE);
         builder.token(SyntaxKind::MINUS, "-");
         builder.token(SyntaxKind::MINUS, "-");
         builder.token(SyntaxKind::INTEGER_LITERAL, "42");
         builder.finish_node();
         let green = builder.finish();
         let root = SyntaxNode::new_root(green);
-        let type_expr = ast::TypeExpr::cast(root).expect("expected TYPE_EXPR");
+        let type_expr = ast::LiteralType::cast(root).expect("expected LITERAL_TYPE");
         assert!(type_expr.integer_literal().is_none());
     }
 
     #[test]
     fn integer_literal_accepts_single_minus() {
         let mut builder = SyntaxTreeBuilder::new();
-        builder.start_node(SyntaxKind::TYPE_EXPR);
+        builder.start_node(SyntaxKind::LITERAL_TYPE);
         builder.token(SyntaxKind::MINUS, "-");
         builder.token(SyntaxKind::INTEGER_LITERAL, "42");
         builder.finish_node();
         let green = builder.finish();
         let root = SyntaxNode::new_root(green);
-        let type_expr = ast::TypeExpr::cast(root).expect("expected TYPE_EXPR");
+        let type_expr = ast::LiteralType::cast(root).expect("expected LITERAL_TYPE");
         let (negated, tok) = type_expr
             .integer_literal()
             .expect("expected signed literal");
@@ -88,14 +88,14 @@ mod builder_tests {
     #[test]
     fn float_literal_rejects_double_minus() {
         let mut builder = SyntaxTreeBuilder::new();
-        builder.start_node(SyntaxKind::TYPE_EXPR);
+        builder.start_node(SyntaxKind::LITERAL_TYPE);
         builder.token(SyntaxKind::MINUS, "-");
         builder.token(SyntaxKind::MINUS, "-");
         builder.token(SyntaxKind::FLOAT_LITERAL, "3.14");
         builder.finish_node();
         let green = builder.finish();
         let root = SyntaxNode::new_root(green);
-        let type_expr = ast::TypeExpr::cast(root).expect("expected TYPE_EXPR");
+        let type_expr = ast::LiteralType::cast(root).expect("expected LITERAL_TYPE");
         assert!(type_expr.float_literal().is_none());
     }
 

@@ -7,8 +7,10 @@
 
 use baml_base::Name;
 use baml_compiler_syntax::{
-    FunctionTypeParam, SyntaxKind, SyntaxNodeExt,
-    ast::{FunctionType as CstFunctionType, TypeExpr as CstTypeExpr},
+    SyntaxKind, SyntaxNodeExt,
+    ast::{
+        FunctionType as CstFunctionType, LiteralType as CstLiteralType, TypeExpr as CstTypeExpr,
+    },
 };
 use rowan::ast::AstNode;
 use text_size::TextRange;
@@ -75,6 +77,15 @@ fn apply_modifiers(
 /// No modifier handling. Unions are handled by `lower_union`.
 fn lower_base(type_expr: &CstTypeExpr, diags: &mut Vec<LoweringDiagnostic>) -> TypeExpr {
     let span = type_expr.syntax().span_range();
+    if type_expr
+        .syntax()
+        .children()
+        .any(|node| node.kind() == SyntaxKind::ERROR)
+    {
+        // The parser represents an invalid type atom as recovery syntax, not
+        // a valid primary with additional tokens for lowering to ignore.
+        return TypeExprKind::Error.at(span);
+    }
     if let Some(unreflect) = type_expr
         .syntax()
         .children()
@@ -105,24 +116,11 @@ fn lower_base(type_expr: &CstTypeExpr, diags: &mut Vec<LoweringDiagnostic>) -> T
         return lower_function_type(&function, diags);
     }
 
-    // Handle parenthesized types like `(int | string)`
-    if let Some(inner) = type_expr.inner_type_expr() {
-        return lower_type_expr_node(&inner, diags);
-    }
-
-    // Handle parenthesized unions: `(A | B)` where the union is inside parens
-    if type_expr.is_parenthesized() && !type_expr.is_function_type() {
-        let params = type_expr.function_type_params();
-        if params.len() > 1 {
-            let members: Vec<TypeExpr> = params
-                .iter()
-                .filter_map(FunctionTypeParam::ty)
-                .map(|t| lower_type_expr_node(&t, diags))
-                .collect();
-            if !members.is_empty() {
-                return TypeExprKind::Union { variants: members }.at(span);
-            }
-        }
+    if let Some(group) = type_expr.paren_type() {
+        return group
+            .ty()
+            .map(|ty| lower_type_expr_node(&ty, diags))
+            .unwrap_or_else(|| TypeExprKind::Error.at(span));
     }
 
     lower_base_type(type_expr, diags)
@@ -165,42 +163,8 @@ fn lower_function_type(
 
 fn lower_base_type(type_expr: &CstTypeExpr, diags: &mut Vec<LoweringDiagnostic>) -> TypeExpr {
     let span = type_expr.syntax().span_range();
-    if let Some(s) = type_expr.string_literal() {
-        return TypeExprKind::Literal {
-            value: baml_base::Literal::String(s),
-        }
-        .at(span);
-    }
-
-    if let Some((negated, tok)) = type_expr.bigint_literal() {
-        let value = crate::lower_bigint_literal(tok.text(), tok.text_range(), diags);
-        return TypeExprKind::Literal {
-            value: baml_base::Literal::Bigint(if negated { -value } else { value }),
-        }
-        .at(span);
-    }
-
-    if let Some((negated, tok)) = type_expr.integer_literal() {
-        let value = crate::lower_int_literal(tok.text(), tok.text_range(), diags);
-        return TypeExprKind::Literal {
-            value: baml_base::Literal::Int(if negated { -value } else { value }),
-        }
-        .at(span);
-    }
-
-    if let Some((negated, tok)) = type_expr.float_literal() {
-        let text = baml_base::num_lit::normalize_float_literal(tok.text());
-        return TypeExprKind::Literal {
-            value: baml_base::Literal::Float(if negated { format!("-{text}") } else { text }),
-        }
-        .at(span);
-    }
-
-    if let Some(b) = type_expr.bool_literal() {
-        return TypeExprKind::Literal {
-            value: baml_base::Literal::Bool(b),
-        }
-        .at(span);
+    if let Some(literal) = type_expr.literal_type() {
+        return lower_literal_type(&literal, span, diags);
     }
 
     // Check for map type with type args
@@ -223,6 +187,52 @@ fn lower_base_type(type_expr: &CstTypeExpr, diags: &mut Vec<LoweringDiagnostic>)
             span,
             diags,
         );
+    }
+
+    TypeExprKind::Missing.at(span)
+}
+
+fn lower_literal_type(
+    literal: &CstLiteralType,
+    span: TextRange,
+    diags: &mut Vec<LoweringDiagnostic>,
+) -> TypeExpr {
+    if let Some(s) = literal.string_literal() {
+        return TypeExprKind::Literal {
+            value: baml_base::Literal::String(s),
+        }
+        .at(span);
+    }
+
+    if let Some((negated, tok)) = literal.bigint_literal() {
+        let value = crate::lower_bigint_literal(tok.text(), tok.text_range(), diags);
+        return TypeExprKind::Literal {
+            value: baml_base::Literal::Bigint(if negated { -value } else { value }),
+        }
+        .at(span);
+    }
+
+    if let Some((negated, tok)) = literal.integer_literal() {
+        let value = crate::lower_int_literal(tok.text(), tok.text_range(), diags);
+        return TypeExprKind::Literal {
+            value: baml_base::Literal::Int(if negated { -value } else { value }),
+        }
+        .at(span);
+    }
+
+    if let Some((negated, tok)) = literal.float_literal() {
+        let text = baml_base::num_lit::normalize_float_literal(tok.text());
+        return TypeExprKind::Literal {
+            value: baml_base::Literal::Float(if negated { format!("-{text}") } else { text }),
+        }
+        .at(span);
+    }
+
+    if let Some(b) = literal.bool_literal() {
+        return TypeExprKind::Literal {
+            value: baml_base::Literal::Bool(b),
+        }
+        .at(span);
     }
 
     TypeExprKind::Missing.at(span)
