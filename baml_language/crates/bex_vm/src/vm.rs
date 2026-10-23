@@ -6603,19 +6603,8 @@ impl BexVm {
         // becomes its cause, unless it throws a conversion of that error
         // (`UnknownError.from`), which takes over the error's own trace and
         // cause.
-        let (mut context, converted) = self.in_flight_context(thrown.context, exception_value)?;
-        // Exception-path telemetry; `None` unless a recording wants raises.
-        let carried = match &context {
-            InFlightContext::Carried(context) => Some(*context),
-            InFlightContext::Fresh { .. } => None,
-        };
-        let mut evidence = self.begin_error_evidence(
-            &thrown,
-            entry,
-            Some((*frame_idx, *function)),
-            carried,
-            converted,
-        );
+        let (mut context, mut evidence) =
+            self.exception_evidence(&thrown, entry, Some((*frame_idx, *function)))?;
 
         // The innermost (first) bytecode frame's faulting PC is the live
         // `cur_pc`; outer frames use the call-site PC they recorded at call time.

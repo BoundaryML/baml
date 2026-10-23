@@ -653,17 +653,54 @@ impl BexVm {
         Ok(base + slots)
     }
 
-    /// The callable and compact pc of every frame that runs BAML code,
-    /// innermost first: what the engine walks to find `defer` shielding.
-    #[must_use]
-    pub fn frame_positions(&self) -> Vec<(HeapPtr, usize)> {
+    /// Test frame positions innermost first, stopping at the first match.
+    /// Used by the engine to find `defer` shielding without allocating.
+    pub fn any_frame_position(&self, mut predicate: impl FnMut(HeapPtr, usize) -> bool) -> bool {
+        if self.compiled.fiber_floor == 0 && self.chain().top.get().is_null() {
+            // No compiled body has run. Keep bytecode-only checks as cheap as
+            // a direct frame scan, without resolving each callable's backend.
+            let live = self
+                .frames
+                .iter()
+                .rposition(|frame| matches!(frame, Frame::Bytecode(_)));
+            return self.frames.iter().enumerate().rev().any(|(idx, frame)| {
+                let Frame::Bytecode(frame) = frame else {
+                    return false;
+                };
+                let pc = if Some(idx) == live {
+                    self.cur_pc
+                } else {
+                    frame.faulting_pc
+                };
+                predicate(frame.function, pc)
+            });
+        }
+
         let live = self.live_bytecode_frame();
-        self.stack_view()
-            .into_iter()
-            .rev()
-            .filter(|frame| self.frame_is_bytecode(*frame))
-            .filter_map(|frame| Some((self.frame_callable(frame), self.frame_at_pc(frame, live)?)))
-            .collect()
+        let mut vm = self.frames.len();
+        let mut records = self.chain().iter().peekable();
+        loop {
+            let frame = match records.peek() {
+                Some(record) if vm <= record.anchor() => {
+                    let record = records.next().expect("the peeked record exists");
+                    if record.entry {
+                        continue;
+                    }
+                    FrameAt::Record(ptr::from_ref(record))
+                }
+                _ if vm > 0 => {
+                    vm -= 1;
+                    FrameAt::Vm(vm)
+                }
+                _ => return false,
+            };
+            if self.frame_is_bytecode(frame)
+                && let Some(pc) = self.frame_at_pc(frame, live)
+                && predicate(self.frame_callable(frame), pc)
+            {
+                return true;
+            }
+        }
     }
 
     pub(crate) fn frame_at_level(&self, level: usize) -> Option<FrameAt> {
@@ -964,5 +1001,98 @@ pub(crate) fn record_ref<'a>(record: *const FrameRecord) -> &'a FrameRecord {
     #[allow(unsafe_code)]
     unsafe {
         &*record
+    }
+}
+
+#[cfg(all(
+    test,
+    not(any(target_arch = "wasm32", all(windows, target_arch = "aarch64")))
+))]
+mod tests {
+    use std::sync::{Arc, atomic::AtomicBool};
+
+    use super::*;
+
+    #[test]
+    fn frame_position_scan_is_lazy_and_matches_merged_stack() {
+        let mut program = baml_test_support::compile_source("function Main() -> int { 7 }");
+        let main = program.rendered_callables()["user.Main"].object.raw();
+        let Object::Function(function) =
+            &mut program.objects[bex_vm_types::ObjectIndex::from_raw(main)]
+        else {
+            unreachable!();
+        };
+        function.compiled_body = Some(
+            super::super::CompiledEntry {
+                object: main.try_into().unwrap(),
+                name: "user.Main",
+                arity: 0,
+                body: |_, _, _| Ok(Value::NULL),
+                slots: 0,
+                cause_slot: None,
+                framed: false,
+            }
+            .erase(),
+        );
+        let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
+        let function = vm.heap.compile_time_ptr(main);
+        vm.set_entry_point(function, &[]);
+        let Frame::Bytecode(outer) = &vm.frames[0] else {
+            unreachable!();
+        };
+        let mut outer = outer.clone();
+        outer.faulting_pc = 0;
+        vm.frames.insert(0, Frame::Bytecode(outer));
+        vm.cur_pc = 5;
+
+        let mut positions = Vec::new();
+        assert!(!vm.any_frame_position(|function, pc| {
+            positions.push((function, pc));
+            false
+        }));
+        assert_eq!(positions, [(function, 5), (function, 0)]);
+        let mut visited = 0;
+        assert!(vm.any_frame_position(|_, _| {
+            visited += 1;
+            true
+        }));
+        assert_eq!(visited, 1);
+
+        // An entry record aliases its VM frame; an ordinary record is a
+        // distinct frame. Both must be merged without eagerly walking outwards.
+        vm.run_entry_with(|vm, entry| {
+            vm.call_record(
+                entry,
+                function,
+                0,
+                |_| [],
+                |vm, _| {
+                    let live = vm.live_bytecode_frame();
+                    let expected: Vec<_> = vm
+                        .stack_view()
+                        .into_iter()
+                        .rev()
+                        .filter_map(|frame| {
+                            Some((vm.frame_callable(frame), vm.frame_at_pc(frame, live)?))
+                        })
+                        .collect();
+                    positions.clear();
+                    assert!(!vm.any_frame_position(|function, pc| {
+                        positions.push((function, pc));
+                        false
+                    }));
+                    assert_eq!(positions, expected);
+                    assert_eq!(positions.len(), 3);
+                    visited = 0;
+                    assert!(vm.any_frame_position(|_, _| {
+                        visited += 1;
+                        true
+                    }));
+                    assert_eq!(visited, 1);
+                    Ok(Value::NULL)
+                },
+            )
+        })
+        .unwrap();
     }
 }

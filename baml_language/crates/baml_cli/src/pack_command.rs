@@ -398,6 +398,11 @@ impl PackArgs {
                  `-f <NAME>` flags to pack a subcommand binary."
             );
         }
+        if self.rust && !bex_engine::STACKFUL_FIBERS_SUPPORTED {
+            anyhow::bail!(
+                "`--rust` requires stackful fibers, which are unsupported on this target"
+            );
+        }
         if self.rust && self.resolved_target_triple()? != release_host_target_triple()? {
             anyhow::bail!("`--rust` builds for this machine only; drop `--target`");
         }
@@ -1424,7 +1429,12 @@ mod tests {
         args.target_triple = Some((*cross).into());
         args.from = Some(PathBuf::from("/nonexistent/project"));
         let error = args.run().unwrap_err();
-        assert!(error.to_string().contains("builds for this machine only"));
+        let expected = if bex_engine::STACKFUL_FIBERS_SUPPORTED {
+            "builds for this machine only"
+        } else {
+            "requires stackful fibers"
+        };
+        assert!(error.to_string().contains(expected));
     }
 
     #[test]
@@ -1433,7 +1443,12 @@ mod tests {
         args.target = Some("main".into());
         args.rust = true;
         args.target_triple = Some(release_host_target_triple().unwrap().into());
-        args.validate_flags().unwrap();
+        if bex_engine::STACKFUL_FIBERS_SUPPORTED {
+            args.validate_flags().unwrap();
+        } else {
+            let error = args.validate_flags().unwrap_err();
+            assert!(error.to_string().contains("requires stackful fibers"));
+        }
     }
 
     #[test]

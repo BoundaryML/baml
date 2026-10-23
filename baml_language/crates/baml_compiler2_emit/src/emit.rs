@@ -2836,6 +2836,9 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         }
         for (start_pc, end_pc, handler) in coalesced {
             let (handler_pc, error_slot, context_slot) = self.landing_slots(mir, handler);
+            // A landing can be an empty redirect block. Native catches need
+            // the same resolved handler address as the exception table.
+            self.bytecode.block_pcs[handler.0].start = Some(handler_pc);
             self.bytecode.exception_table.push(ExceptionTableEntry {
                 start_pc,
                 end_pc,

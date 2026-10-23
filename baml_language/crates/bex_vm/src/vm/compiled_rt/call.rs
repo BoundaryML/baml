@@ -121,7 +121,32 @@ impl BexVm {
         frame: &FrameRecord,
     ) -> Result<(Value, Value), Box<VmError>> {
         let level = self.level_of(Self::record_frame(frame));
-        self.land_compiled_catch(error, level)
+        self.land_compiled_catch(error, level, None)
+    }
+
+    /// Catch at a generated handler, rooting its context for rethrow provenance.
+    #[allow(unsafe_code)]
+    pub fn catch_at(
+        &mut self,
+        error: Box<VmError>,
+        frame: &FrameRecord,
+        context_slot: usize,
+        handler_pc: usize,
+    ) -> Result<(Value, Value), Box<VmError>> {
+        let at = Self::record_frame(frame);
+        // SAFETY: the live frame roots its function under the heap permit.
+        let function = unsafe { self.frame_function(at) }?;
+        let pc = function
+            .bytecode
+            .compact
+            .as_ref()
+            .and_then(|code| code.offset_of(handler_pc))
+            .unwrap_or(handler_pc);
+        self.land_compiled_catch(
+            error,
+            self.level_of(at),
+            Some((frame.base() + context_slot, pc)),
+        )
     }
 
     #[cold]

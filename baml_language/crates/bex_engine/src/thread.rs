@@ -211,7 +211,7 @@ impl BexThread {
     /// A callee is shielded through its caller, so unwinding needs no
     /// bookkeeping.
     pub fn vm_thread_is_shielded(&self) -> bool {
-        self.vm.frame_positions().into_iter().any(|(function, pc)| {
+        self.vm.any_frame_position(|function, pc| {
             let function = self.frame_function(function);
             match &function.bytecode.compact {
                 Some(compact) => compact.pc_is_shielded(pc),

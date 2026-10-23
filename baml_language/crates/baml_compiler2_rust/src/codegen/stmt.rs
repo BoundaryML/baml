@@ -464,7 +464,24 @@ impl<'db> Generator<'_, 'db> {
         )?;
         let saved = std::mem::take(&mut self.out);
         self.emit_line("fr.note_pc(pc);");
-        self.emit_line(&format!("let (thrown, context) = vm.catch({error}, fr)?;"));
+        let slot = self.slot_base()
+            + usize::from(self.cause_slot.is_some())
+            + self
+                .body
+                .blocks
+                .iter()
+                .filter(|block| block.landing.is_some())
+                .position(|block| block.id == handler)
+                .expect("handler has a landing");
+        let handler_pc = self
+            .positions
+            .block_pcs
+            .get(handler.0)
+            .and_then(|pcs| pcs.start)
+            .ok_or_else(|| Rejection::Unsupported("catch handler without a bytecode PC".into()))?;
+        self.emit_line(&format!(
+            "let (thrown, context) = vm.catch_at({error}, fr, {slot}, {handler_pc})?;"
+        ));
         self.emit_line(&value);
         self.emit_line(&context);
         let structured = self

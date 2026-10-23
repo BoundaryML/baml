@@ -1053,6 +1053,23 @@ fn compiled_bodies_require_the_original_program() {
         table,
         artifact_fingerprint: digest,
     };
+    if !super::STACKFUL_FIBERS_SUPPORTED {
+        let error = crate::vm::convert_program_with_compiled_bodies(decoded, true, Some(bodies))
+            .expect_err("unsupported targets must refuse compiled bodies before execution");
+        assert!(error.to_string().contains("require stackful fibers"));
+
+        let empty = Box::leak(Box::new(super::CompiledBodyTable {
+            fingerprint: digest,
+            entries: &[],
+        }));
+        let bodies = super::CompiledBodies {
+            table: empty,
+            artifact_fingerprint: digest,
+        };
+        crate::vm::convert_program_with_compiled_bodies(program, true, Some(bodies))
+            .expect("empty tables remain usable on unsupported targets");
+        return;
+    }
     let loaded =
         crate::vm::convert_program_with_compiled_bodies(decoded, true, Some(bodies)).unwrap();
     let Object::Function(function) = &loaded.objects[object] else {
@@ -1629,3 +1646,6 @@ fn compiled_trace_hooks_record_as_bytecode_does() {
         }
     }
 }
+
+#[cfg(not(any(target_arch = "wasm32", all(windows, target_arch = "aarch64"))))]
+mod error_tests;
