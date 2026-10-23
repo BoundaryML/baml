@@ -207,7 +207,7 @@ impl BexVm {
                 let args = (0..function.arity)
                     .map(|i| self.stack.get_at(StackIndex::from_raw(locals_offset + i)))
                     .collect();
-                self.enter_compiled(body, args)
+                self.fiber_resume(|vm| super::fiber::Message::Enter { vm, body, args })
             }
             stub::AFTER_YIELD => self.resume_body(Ok(Value::NULL)),
             stub::AFTER_LOG => {
@@ -378,19 +378,6 @@ impl BexVm {
         } else {
             frame.faulting_pc
         })
-    }
-
-    pub(crate) fn compiled_cause(&self, idx: usize) -> Option<Value> {
-        let Frame::Bytecode(frame) = &self.frames[idx] else {
-            return None;
-        };
-        let function = self.get_object(frame.function).as_callable().ok()?;
-        let slot = function.compiled_body?.cause_slot()?;
-        let context = *self
-            .stack
-            .0
-            .get(frame.locals_offset.raw() + slot as usize)?;
-        (!context.is_null()).then_some(context)
     }
 
     pub(crate) fn caller_pc(&self, caller: FrameAt, frame_idx: usize, call_site: usize) -> u32 {

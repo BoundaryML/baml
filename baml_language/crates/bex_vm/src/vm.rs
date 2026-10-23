@@ -3344,7 +3344,7 @@ impl BexVm {
             let compiled_cause = match frame {
                 FrameAt::Record(_) => Some(self.frame_cause(frame)),
                 FrameAt::Vm(depth) if self.compiled_at(depth).is_some() => {
-                    Some(self.compiled_cause(depth))
+                    Some(self.frame_cause(FrameAt::Vm(depth)))
                 }
                 FrameAt::Vm(_) => None,
             };

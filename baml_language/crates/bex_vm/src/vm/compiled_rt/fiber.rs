@@ -86,14 +86,6 @@ impl BexVm {
         request
     }
 
-    pub(crate) fn enter_compiled(
-        &mut self,
-        body: CompiledFn,
-        args: SmallVec<[Value; 4]>,
-    ) -> Request {
-        self.fiber_resume(|vm| Message::Enter { vm, body, args })
-    }
-
     pub(crate) fn resume_body(&mut self, outcome: Result<Value, Box<VmError>>) -> Request {
         self.fiber_resume(|vm| Message::Resume { vm, outcome })
     }
