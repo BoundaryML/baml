@@ -795,12 +795,6 @@ enum Receiver {
     This,
 }
 
-struct ReturnedCallable {
-    raw_type: String,
-    parameter_names: String,
-    return_descriptor: String,
-}
-
 /// One sync + one `_async` static binding for a free function. Thin
 /// wrapper over [`render_callable_pair`] with no receiver.
 fn render_function_pair(
@@ -922,10 +916,10 @@ fn render_callable_pair(
         // what the value binds, and refuses one that binds nothing (an empty
         // `List<T>`, a callable) until the caller names the parameter, as the
         // dynamic hosts do.
-        let encoded = if let Some(expr) = typed_callable_expr(&a.ty, &value, pool, ctx) {
+        let encoded = if let Some(expr) = typed_callable_expr(&a.ty, &value, pool, ctx, sink) {
             expr
         } else if !type_vars.is_empty() || needs_inbound_descriptor(&a.ty, ctx) {
-            match crate::translate_ty::descriptor_expr_opt(&a.ty, ctx.aliases) {
+            match crate::translate_ty::descriptor_expr_opt(&a.ty, ctx, sink) {
                 Some(expr) => format!(
                     "new baml_bridge.BamlTypedValue({value}, {})",
                     pool.intern(expr)
@@ -975,52 +969,23 @@ fn render_callable_pair(
         ret_boxed = crate::translate_ty::annotate_nullable(&ret_boxed);
     }
 
-    let returned_callable = match &function.return_type {
-        Ty::Function { params, ret, .. } => {
-            let raw_type = ret_boxed
-                .split_once('<')
-                .map_or_else(|| ret_boxed.clone(), |(raw, _)| raw.to_string());
-            let parameter_names = format!(
-                "new java.lang.String[] {{{}}}",
-                params
-                    .iter()
-                    .enumerate()
-                    .map(|(index, parameter)| {
-                        format!(
-                            "{:?}",
-                            parameter
-                                .name
-                                .as_ref()
-                                .map_or_else(|| format!("arg{index}"), ToString::to_string)
-                        )
-                    })
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            );
-            let return_descriptor = match crate::translate_ty::descriptor_expr_opt(ret, ctx.aliases)
-            {
-                None => "null".to_string(),
-                Some(expr) => pool.intern(expr),
-            };
-            Some(ReturnedCallable {
-                raw_type,
-                parameter_names,
-                return_descriptor,
-            })
-        }
-        _ => None,
-    };
-
     // Type-directed decode descriptor for the declared return type, passed as the
     // LAST runtime-call argument so the decoder resolves union arm order / element
     // types without trusting the wire shape. It is a typed `baml_bridge.BamlType`,
     // pooled into a per-holder `private static final` constant referenced by name;
-    // a wholly wire-driven return passes the literal `null`.
-    let descriptor =
-        match crate::translate_ty::descriptor_expr_opt(&function.return_type, ctx.aliases) {
-            None => "null".to_string(),
-            Some(expr) => pool.intern(expr),
-        };
+    // a wholly wire-driven return passes the literal `null`. A returned callable
+    // decodes into the owning interface its signature names.
+    let descriptor = match &function.return_type {
+        Ty::Function {
+            params,
+            ret,
+            throws,
+        } => Some(crate::translate_ty::function_expr(
+            &ret_boxed, params, ret, throws, ctx, sink,
+        )),
+        ty => crate::translate_ty::descriptor_expr_opt(ty, ctx, sink),
+    }
+    .map_or_else(|| "null".to_string(), |expr| pool.intern(expr));
 
     let names_literal = format!("new java.lang.String[] {{{}}}", param_names_java.join(", "));
     let args_literal = format!("new java.lang.Object[] {{{}}}", arg_exprs.join(", "));
@@ -1082,7 +1047,6 @@ fn render_callable_pair(
         is_generic,
         receiver_guard.as_deref(),
         &taken,
-        returned_callable.as_ref(),
     );
 
     // Optional-argument configurator base: the same overload family over a
@@ -1111,7 +1075,6 @@ fn render_callable_pair(
             ctx,
             sink,
             pool,
-            returned_callable.as_ref(),
             is_stream_companion,
         ));
     }
@@ -1146,7 +1109,6 @@ fn render_overload_family(
     is_generic: bool,
     receiver_guard: Option<&str>,
     taken: &[String],
-    returned_callable: Option<&ReturnedCallable>,
 ) -> String {
     // `types` and `ctx` derive from distinct base names, so their yield-to-user
     // escapes can never collide with each other.
@@ -1169,7 +1131,6 @@ fn render_overload_family(
         descriptor,
         None,
         None,
-        returned_callable,
     );
     out.push_str(&render_method_pair(
         doc,
@@ -1188,7 +1149,6 @@ fn render_overload_family(
         descriptor,
         None,
         Some(&ctx_name),
-        returned_callable,
     ));
 
     if is_generic {
@@ -1216,7 +1176,6 @@ fn render_overload_family(
             descriptor,
             Some(&types_name),
             None,
-            returned_callable,
         ));
         out.push_str(&render_method_pair(
             doc,
@@ -1235,7 +1194,6 @@ fn render_overload_family(
             descriptor,
             Some(&types_name),
             Some(&ctx_name),
-            returned_callable,
         ));
     }
 
@@ -1289,7 +1247,6 @@ fn render_method_pair(
     descriptor: &str,
     types_name: Option<&str>,
     ctx_name: Option<&str>,
-    returned_callable: Option<&ReturnedCallable>,
 ) -> String {
     // Trailing synthetic params in fixed order: `types` (BamlTypes) then `ctx`
     // (BamlCallContext).
@@ -1325,11 +1282,6 @@ fn render_method_pair(
     };
     let sync_body = if ret_top == "void" {
         format!("{prologue}        {sync_call};")
-    } else if let Some(callable) = returned_callable {
-        format!(
-            "{prologue}        return ({ret_boxed}) baml_bridge.BamlFfi.returnedClosure({}.class, {sync_call}, {}, {});",
-            callable.raw_type, callable.parameter_names, callable.return_descriptor
-        )
     } else {
         format!("{prologue}        return ({ret_boxed}) {sync_call};")
     };
@@ -1342,16 +1294,9 @@ fn render_method_pair(
             "(java.util.concurrent.CompletableFuture<java.lang.Object>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.callAsync({fqn:?}, {call_names}, {call_args}, {descriptor}{call_suffix})"
         )
     };
-    let async_body = if let Some(callable) = returned_callable {
-        format!(
-            "{prologue}        return (java.util.concurrent.CompletableFuture<{ret_boxed}>) (java.util.concurrent.CompletableFuture<?>) baml_bridge.BamlFfi.returnedClosureAsync({async_call}, {}.class, {}, {});",
-            callable.raw_type, callable.parameter_names, callable.return_descriptor,
-        )
-    } else {
-        format!(
-            "{prologue}        return (java.util.concurrent.CompletableFuture<{ret_boxed}>) (java.util.concurrent.CompletableFuture<?>) {async_call};"
-        )
-    };
+    let async_body = format!(
+        "{prologue}        return (java.util.concurrent.CompletableFuture<{ret_boxed}>) (java.util.concurrent.CompletableFuture<?>) {async_call};"
+    );
 
     format!(
         "\n{doc}    public {static_kw}{generics_kw}{ret_top} {ident}({sig_params}) {{\n{sync_body}\n    }}\n\n{doc}    @SuppressWarnings(\"unchecked\")\n    public {static_kw}{generics_kw}{async_ret} {async_ident}({sig_params}) {{\n{async_body}\n    }}\n"
@@ -1395,7 +1340,6 @@ fn render_optional_configurator(
     ctx: &TranslateCtx<'_>,
     sink: &mut UnionSink,
     pool: &mut DescriptorPool,
-    returned_callable: Option<&ReturnedCallable>,
     include_stream_client: bool,
 ) -> String {
     // A generic callable's optional arg may reference class/method type
@@ -1453,7 +1397,6 @@ fn render_optional_configurator(
         is_generic,
         receiver_guard,
         &taken_cfg,
-        returned_callable,
     );
 
     // Fluent boxed setters. The wire key is the BAML arg name; the setter
@@ -1476,13 +1419,13 @@ fn render_optional_configurator(
         let setter = java_identifier(wire);
         let mut type_vars = Vec::new();
         crate::translate_ty::collect_type_vars(&a.ty, &mut type_vars);
-        let stored = if let Some(expr) = typed_callable_expr(&a.ty, "v", pool, ctx) {
+        let stored = if let Some(expr) = typed_callable_expr(&a.ty, "v", pool, ctx, sink) {
             // An optional callable argument carries its declared param/return
             // descriptors, same as the required-arg path.
             expr
         } else if !type_vars.is_empty() || needs_inbound_descriptor(&a.ty, ctx) {
             // The bridge binds the call's type bag into the slot's type.
-            match crate::translate_ty::descriptor_expr_opt(&a.ty, ctx.aliases) {
+            match crate::translate_ty::descriptor_expr_opt(&a.ty, ctx, sink) {
                 Some(expr) => format!("new baml_bridge.BamlTypedValue(v, {})", pool.intern(expr)),
                 None => "v".to_string(),
             }
@@ -1515,6 +1458,7 @@ fn typed_callable_expr(
     value: &str,
     pool: &mut DescriptorPool,
     ctx: &TranslateCtx<'_>,
+    sink: &mut UnionSink,
 ) -> Option<String> {
     let mut resolved = ty;
     loop {
@@ -1543,11 +1487,9 @@ fn typed_callable_expr(
     else {
         return None;
     };
+    let host = translate_ty(resolved, TyPosition::Boxed, ctx, sink);
     let function_type = pool.intern(crate::translate_ty::function_expr(
-        params,
-        ret,
-        throws,
-        ctx.aliases,
+        &host, params, ret, throws, ctx, sink,
     ));
     Some(format!(
         "new baml_bridge.BamlTypedCallable({value}, {function_type})"

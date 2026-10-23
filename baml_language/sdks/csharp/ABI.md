@@ -18,6 +18,28 @@ exception: it fixes which nodes carry `value_type`, and malformed or missing
 metadata fails closed. The C# runtime consumes these schemas directly with
 build-time `Grpc.Tools`; it does not maintain a private schema copy.
 
+## The contract at a glance
+
+Every value, type and callable crosses in exactly one form in each direction,
+and one party checks it. The sections that follow give the rules in full.
+
+| What crosses | Engine → host | Host → engine | Checked by | Refused when |
+|---|---|---|---|---|
+| `int`, `float`, `bigint`, `string`, `bool`, `uint8array`, `null` | its scalar arm | the same arm, no `value_type` | decoder (arm), engine (membership in the slot) | a `value_type` is present, or the slot does not admit the type |
+| enum variant | `enum_value` naming enum and variant | the same, no `value_type` | engine | the variant is not one of the enum's, or the slot does not admit it |
+| list, map, class that crosses by fields | `list_value` / `map_value` / `class_value` with its type | the same with `value_type` stating `E[]`, `map<K, V>` or the class with every type argument | decoder (statement well-formed and of the node's shape), engine (every child against the structure its parent states, the root against the slot) | the statement is missing, malformed, unrealized or of another shape; a child is not a member; the class is not one that crosses by fields |
+| `$rust_type` field payload | `UNTAGGED_RUST_DATA` handle | the handle it received | engine (the table row) | a host builds the field from a value of its own |
+| `reflect.Package`, `reflect.Session`, `reflect.CompileArtifact`; an instance of a run-time declaration | `ADT_RUNTIME_VALUE` handle with `ty` naming the class | the handle it received | engine | a `class_value` names such a class; the handle is not a first-class value (a declaration, a raw package) |
+| media, `ai.Prompt` | `media_value`, `prompt_ast_value` | the same | decoder | a slot of another type |
+| BAML callable (closure, bound method, generic instantiation, `ai.FunctionSpec`) | callable handle stating its specialized function type | the handle it received, no `type_args` | engine (the stated type against the slot) | the stated type is not a member of the slot's; an argument the host passes through the handle is not a member of the specialized parameter |
+| host callable | — | `HOST_VALUE_CALLABLE` key with `value_type` stating the function type, open effect as `unknown` | decoder (one kind per key per request), engine | the key arrives under two kinds, or the function type does not inhabit the slot |
+| host opaque value | its own key, back as it arrived | `HOST_VALUE_OPAQUE` key, no `value_type` | decoder | the key arrives under two kinds |
+| type value | `ty_value` tree; compiled heads by name, run-time heads as `live` rows, `anonymous_label` only in annotations | `ty_value` tree; `name` resolved against the program's tables, `live` followed by handle | decoder (realized, no `anonymous_label`), engine (every head resolves) | a `type_var` or projection anywhere; a name that resolves to nothing; an `anonymous_label` |
+| declaration, raw package | never | never | engine | a handle to one is sent |
+| generic call's type arguments | — | `type_args` by name, the rest inferred from the landed values | engine | a variable is left unbound (nothing arrived, or an empty container); a bounded parameter is not one concrete type implementing every bound at the bound's arguments; a variable a sibling absorbed is `never`, not a refusal |
+| callback outcome | `HostCallCompletion` with one of `returned`, `thrown`, `raised`, `contract_violation`, `bridge_failure` | — | engine | `returned`/`thrown` outside the declared types is `HostContractViolation`; a `bridge_failure` or empty completion is `SdkPanic` |
+| size | — | at most 1,048,576 nodes per call across all arguments; at most 100 nested protobuf messages | reader (per pulled node, before anything is built), decoder | the budget is exceeded: a refusal creates nothing |
+
 ## Inbound value contract
 
 An inbound value is the serialization of a concretely typed value graph. The

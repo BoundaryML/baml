@@ -5,7 +5,7 @@ use thiserror::Error;
 /// Errors that can occur during value encoding/decoding for the bridge.
 #[derive(Debug, Error)]
 pub enum CtypesError {
-    #[error("Protobuf decode error: {0}")]
+    #[error("Protobuf decode error: {}", bounded_decode_error(.0))]
     ProtobufDecode(#[from] prost::DecodeError),
 
     #[error("Null buffer pointer")]
@@ -101,4 +101,19 @@ pub enum CtypesError {
 
     #[error("Internal error: {0}")]
     InternalError(String),
+}
+
+/// prost renders a decode error as `failed to decode Protobuf message: <path>:
+/// <reason>`, where the path names every enclosing field and so grows with the
+/// nesting depth of a payload the host controls. The reason is kept whole; the
+/// path is bounded like every other value a diagnostic quotes.
+fn bounded_decode_error(error: &prost::DecodeError) -> String {
+    let rendered = error.to_string();
+    let rendered = rendered
+        .strip_prefix("failed to decode Protobuf message: ")
+        .unwrap_or(&rendered);
+    match rendered.rsplit_once(": ") {
+        Some((path, reason)) => format!("{reason} (at `{}`)", bex_project::Bounded::text(path)),
+        None => rendered.to_string(),
+    }
 }

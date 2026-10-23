@@ -2445,6 +2445,7 @@ fn render_codecs(buf: &mut String, enums: &[EmittedEnum], classes: &[&EmittedCla
         let _ = writeln!(
             buf,
             "  static void encode(detail::pb::InboundValue& value_msg, const {q}& v) {{\n    \
+             const detail::encode_level level;\n    \
              auto* cls = value_msg.mutable_class_value();"
         );
         for field in fields {

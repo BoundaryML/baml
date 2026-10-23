@@ -8,6 +8,13 @@ using Wire = BamlBridge.Cffi.V1;
 
 RequireRegistryIdle("startup");
 
+if (args is ["hof"])
+{
+    await RequireCallbacksReceiveBamlClosures();
+    Console.WriteLine("host_callable_hof_receives_a_baml_closure=ok");
+    return 0;
+}
+
 var addTen = Functions.MakeAdder(10L);
 Require(await addTen.InvokeAsync(5L) == 15L, "returned closure argument or result changed");
 Require(await addTen.InvokeAsync(7L) == 17L, "returned closure was not reusable");
@@ -338,6 +345,35 @@ Console.WriteLine("csharp_host_callables=ok");
 return 0;
 
 static long DoubleValue(long value) => value * 2L;
+
+// A BAML closure handed to a host callback arrives as the callback's declared
+// function type and calls back into BAML, whether it is the argument itself or
+// sits in a list or a class field the callback receives. The host owns the
+// closure it was given: one the callback keeps stays callable after the
+// callback and its BAML caller have returned.
+static async Task RequireCallbacksReceiveBamlClosures()
+{
+    Func<long, Task<long>>? retained = null;
+    long direct = await Functions.HofAsync(async f =>
+    {
+        retained = f;
+        return await f(41L) * 100L + await f(1L);
+    });
+    Require(direct == 4202L, "a callback could not call the BAML closure it received");
+    Require(
+        await retained!(9L) == 10L,
+        "a BAML closure the callback kept was released with its argument");
+    Require(
+        Functions.Hof(async f => await f(41L)) == 42L,
+        "a synchronous call's callback could not call the BAML closure it received");
+    Require(
+        await Functions.HofListAsync(async fs => await fs[0](10L) * 100L + await fs[1](10L)) == 1120L,
+        "a callback could not call the BAML closures it received in a list");
+    Require(
+        await Functions.HofClassAsync(async box => await box.F(4L)) == 7L,
+        "a callback could not call the BAML closure it received in a class field");
+    await RequireDispatchIdleAfterCompletion("callbacks receiving BAML closures");
+}
 
 // The engine states a returned container's item type exactly, including types
 // no CLR value has a canonical projection for: an interface (`Shape[]` holding

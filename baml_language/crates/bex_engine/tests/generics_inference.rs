@@ -457,6 +457,8 @@ async fn a_static_methods_bounds_are_checked_under_an_unbound_class_parameter() 
     );
 }
 
+/// A positive control: an explicit interface type argument is accepted. The
+/// refusals around it are what the bound checks pin.
 #[tokio::test]
 async fn a_generic_interface_parameter_takes_an_explicit_type_argument() {
     let source = r#"
@@ -639,10 +641,7 @@ async fn nested_generic_instances_state_their_arguments_at_every_level() {
     let BEV::String(r) = &out else {
         panic!("expected string, got {out:?}");
     };
-    assert!(
-        r.as_str().matches("GenericBox").count() == 2 && r.as_str().contains("string"),
-        "expected GenericBox<GenericBox<string>>, got {r:?}"
-    );
+    assert_eq!(r.as_str(), "GenericBox<GenericBox<string>>");
 }
 
 // ── §J J13: a closure-typed parameter poisons its TypeVars (must-specify) ────
@@ -1797,11 +1796,7 @@ async fn nested_generic_pair_binds_every_var_from_stated_arguments() {
     let BEV::String(r) = &out else {
         panic!("expected string, got {out:?}");
     };
-    let r = r.as_str();
-    assert!(
-        r.contains("int") && r.contains("string") && r.contains("bool") && r.contains("float"),
-        "expected all four vars bound, got {r:?}"
-    );
+    assert_eq!(r.as_str(), "int | string | bool | float");
 }
 
 #[tokio::test]

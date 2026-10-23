@@ -1605,6 +1605,83 @@ class WireCodecTest {
         return ov.toByteArray();
     }
 
+    // BamlOutboundValue arms carried by runtime-owned values.
+    private static final int OV_MEDIA = 17;
+    private static final int OV_PROMPT_AST = 18;
+    private static final int OV_TY = 21;
+
+    /** A portable media value of {@code MediaTypeEnum} {@code kind} (image=1, audio=2, pdf=3, video=4). */
+    private static byte[] ovMedia(int kind) {
+        WireWriter media = new WireWriter();
+        media.writeInt64(1, kind); // BamlValueMedia.media = 1
+        media.writeString(3, "https://example.com/asset"); // url = 3
+        WireWriter ov = new WireWriter();
+        ov.writeMessage(OV_MEDIA, media.toByteArray());
+        return ov.toByteArray();
+    }
+
+    /** An outbound value whose only field is the empty message {@code field}. */
+    private static byte[] ovEmpty(int field) {
+        WireWriter ov = new WireWriter();
+        ov.writeMessage(field, new byte[0]);
+        return ov.toByteArray();
+    }
+
+    /** A BamlTy function type {@code (x: int) -> int throws never}. */
+    private static byte[] tyIntToInt() {
+        return BamlType.function(
+                        List.of(new BamlType.Param("x", BamlType.INT, false)),
+                        BamlType.INT,
+                        BamlType.NEVER)
+                .toWireTy();
+    }
+
+    /**
+     * A union member carried as a runtime-owned value (media, a handle, a
+     * prompt, a type) matches the option it inhabits and no other.
+     */
+    @Test
+    void union_arm_matching_knows_runtime_owned_values() {
+        BamlType image = BamlType.media(1);
+        BamlType video = BamlType.media(3);
+        BamlType pdf = BamlType.media(4);
+        BamlType anyMedia = BamlType.media(5);
+        // Portable media: MediaTypeEnum PDF is 3, BamlTyMediaKind pdf is 4.
+        assertTrue(ProtoReader.armMatchesValue(pdf, ovMedia(3)));
+        assertTrue(ProtoReader.armMatchesValue(anyMedia, ovMedia(3)));
+        assertFalse(ProtoReader.armMatchesValue(video, ovMedia(3)));
+        assertFalse(ProtoReader.armMatchesValue(BamlType.STRING, ovMedia(3)));
+        // Handle-backed media.
+        assertTrue(ProtoReader.armMatchesValue(pdf, ovHandle(1, ADT_MEDIA_PDF)));
+        assertFalse(ProtoReader.armMatchesValue(image, ovHandle(1, ADT_MEDIA_PDF)));
+
+        BamlType callable = BamlType.function(
+                List.of(new BamlType.Param(null, BamlType.INT, false)), BamlType.INT, BamlType.NEVER);
+        assertTrue(ProtoReader.armMatchesValue(callable, ovHandle(1, FUNCTION_REF, tyIntToInt())));
+        assertFalse(ProtoReader.armMatchesValue(callable, ovString("f")));
+        assertFalse(ProtoReader.armMatchesValue(callable, ovHandle(1, ADT_MEDIA_PDF)));
+
+        byte[] stream = ovHandle(1, ADT_TAGGED_HEAP_HANDLE, tyClass("ai.stream.Stream"));
+        assertTrue(ProtoReader.armMatchesValue(BamlType.classByFqn("ai.stream.Stream"), stream));
+        assertFalse(ProtoReader.armMatchesValue(BamlType.classByFqn("user.Other"), stream));
+
+        assertTrue(ProtoReader.armMatchesValue(BamlType.classByFqn("ai.Prompt"), ovEmpty(OV_PROMPT_AST)));
+        assertFalse(ProtoReader.armMatchesValue(BamlType.classByFqn("reflect.Type"), ovEmpty(OV_PROMPT_AST)));
+        assertTrue(ProtoReader.armMatchesValue(BamlType.classByFqn("reflect.Type"), ovEmpty(OV_TY)));
+
+        WireWriter bytes = new WireWriter();
+        bytes.writeBytes(OV_UINT8ARRAY, new byte[] {1, 2});
+        assertTrue(ProtoReader.armMatchesValue(BamlType.BYTES, bytes.toByteArray()));
+    }
+
+    /** A union value no declared option matches is refused, never decoded to null. */
+    @Test
+    void union_value_no_option_matches_throws() {
+        BamlType declared = BamlType.union(BamlType.INT, BamlType.STRING);
+        byte[] envelope = okEnvelope(ovHandle(1, FUNCTION_REF, tyIntToInt()));
+        assertThrows(BamlError.class, () -> ProtoReader.decodeOutboundResult(envelope, declared));
+    }
+
     /** Tagged handles retain their class identity and derive method FQNs from it. */
     @Test
     void decode_stream_handle_retains_carried_class_fqn() {

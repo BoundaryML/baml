@@ -406,3 +406,15 @@ function call_with_typed_throws_propagating(
 function call_configured_callback(callback: (int) -> int, x: int, options: trace.Options) -> int {
     callback(x, $trace = options)
 }
+
+/// A callback that receives a BAML closure and may call it: the closure
+/// crosses to the host as a callable handle and comes back as one.
+function hof(cb: (f: (x: int) -> int throws never) -> int) -> int {
+    cb((x: int) -> int { x + 1 })
+}
+
+/// Two callback parameters whose names differ only by a `_returns` suffix,
+/// so a generator that derives locals from the bare name must not collide.
+function two_cbs(f: (int) -> int throws never, f_returns: (int) -> int throws never) -> int {
+    f(1) + f_returns(2)
+}

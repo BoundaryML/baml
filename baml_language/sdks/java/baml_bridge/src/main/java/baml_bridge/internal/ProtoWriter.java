@@ -297,7 +297,7 @@ public final class ProtoWriter {
         // pure encoding from initializing BamlFfi, which loads the native library.
         baml_bridge.BamlHandle returnedHandle =
                 value != null && java.lang.reflect.Proxy.isProxyClass(value.getClass())
-                        ? baml_bridge.BamlFfi.returnedClosureHandle(value)
+                        ? baml_bridge.BamlFfi.bamlClosureHandle(value)
                         : null;
         if (returnedHandle != null) {
             return encodeInboundValue(returnedHandle, contextualType);
@@ -416,7 +416,15 @@ public final class ProtoWriter {
                                 + "call's type arguments explicitly");
             }
             w.writeMessage(IV_VALUE_TYPE, functionType.toWireTy());
-            long key = baml_bridge.BamlFfi.registerHostCallable(value);
+            // Registered with its type, so a call back decodes each argument
+            // against its declared parameter (a closure BAML passes becomes the
+            // parameter's functional interface) and encodes the result against
+            // the declared return, whether the generated carrier or the slot
+            // gave the type.
+            long key = baml_bridge.BamlFfi.registerHostCallable(
+                    value instanceof baml_bridge.BamlTypedCallable
+                            ? value
+                            : new baml_bridge.BamlTypedCallable(value, functionType));
             WireWriter handleMsg = new WireWriter();
             handleMsg.writeInt64(HANDLE_KEY, key);
             handleMsg.writeInt64(HANDLE_TYPE, HOST_VALUE_CALLABLE);

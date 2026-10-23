@@ -328,9 +328,13 @@ public final class BamlFfi {
         return result;
     }
 
-    public static BamlHandle returnedClosureHandle(Object callable) {
+    /**
+     * The handle a BAML closure (an instance {@link #bamlClosure} made) calls
+     * through, or {@code null} when {@code callable} is not one.
+     */
+    public static BamlHandle bamlClosureHandle(Object callable) {
         if (callable != null && Proxy.isProxyClass(callable.getClass())
-                && Proxy.getInvocationHandler(callable) instanceof ReturnedClosure owner) {
+                && Proxy.getInvocationHandler(callable) instanceof BamlClosure owner) {
             owner.handle().key();
             return owner.handle();
         }
@@ -338,7 +342,7 @@ public final class BamlFfi {
     }
 
     public static DynamicTarget callableTarget(Object callable) {
-        BamlHandle handle = returnedClosureHandle(callable);
+        BamlHandle handle = bamlClosureHandle(callable);
         if (handle == null) throw new IllegalArgumentException("target must be a live returned BAML callable");
         return DynamicTarget.callable(handle);
     }
@@ -355,11 +359,17 @@ public final class BamlFfi {
         return callAsync(target.name, names, values, null, controls, types);
     }
 
-    private record ReturnedClosure(BamlHandle handle, String[] names, BamlType returnDesc) implements InvocationHandler {
+    /**
+     * A BAML closure seen through a generated functional interface: the
+     * interface's call surfaces ({@code apply} and its kin, plus the generated
+     * {@code call} / {@code callAsync}) call the closure through {@code handle},
+     * passing the arguments by the closure's own parameter {@code names}, and
+     * decode its result against {@code returnDesc}. Every other default method
+     * ({@code andThen}, {@code __bamlDispatch}) is the interface's own behavior
+     * and runs as written.
+     */
+    private record BamlClosure(BamlHandle handle, String[] names, BamlType returnDesc) implements InvocationHandler {
         @Override public Object invoke(Object proxy, java.lang.reflect.Method method, Object[] arguments) throws Throwable {
-                    if (method.getName().equals("__bamlDispatch") && method.isDefault()) {
-                        return InvocationHandler.invokeDefault(proxy, method, arguments);
-                    }
                     if (method.getDeclaringClass() == Object.class) {
                         return switch (method.getName()) {
                             case "toString" -> "BAML closure " + handle.key();
@@ -367,6 +377,12 @@ public final class BamlFfi {
                             case "equals" -> proxy == arguments[0];
                             default -> throw new UnsupportedOperationException(method.toString());
                         };
+                    }
+                    boolean callSurface = !method.isDefault()
+                            || method.getName().equals("call")
+                            || method.getName().equals("callAsync");
+                    if (!callSurface) {
+                        return InvocationHandler.invokeDefault(proxy, method, arguments);
                     }
                     Object[] supplied = arguments == null ? new Object[0] : arguments;
                     InvocationOptions controls = null;
@@ -382,52 +398,31 @@ public final class BamlFfi {
         }
     }
 
-    public static <T> T returnedClosure(
-            Class<T> callableType,
-            Object value,
-            String[] names,
-            BamlType returnDesc) {
+    /**
+     * The BAML closure behind {@code handle} as an instance of the functional
+     * interface {@code callableType}, calling it with arguments bound by its
+     * parameter {@code names} and decoding its result against
+     * {@code returnDesc}. Owns {@code handle}: the closure is released with it.
+     */
+    public static <T> T bamlClosure(
+            Class<T> callableType, BamlHandle handle, String[] names, BamlType returnDesc) {
         Objects.requireNonNull(callableType, "callableType");
-        if (!(value instanceof BamlHandle handle)) {
-            throw new IllegalStateException(
-                    "Expected a returned BAML function handle, received "
-                            + (value == null ? "null" : value.getClass().getName()));
+        Objects.requireNonNull(handle, "handle");
+        Objects.requireNonNull(names, "names");
+        if (handle.handleType() != BamlHandle.FUNCTION_REF) {
+            throw new IllegalArgumentException(
+                    "expected a FUNCTION_REF handle, received " + handle.handleType());
         }
-        InvocationHandler handler = new ReturnedClosure(handle, names, returnDesc);
+        // A java.util.function interface has no class loader of its own to name.
+        ClassLoader loader = callableType.getClassLoader() != null
+                ? callableType.getClassLoader()
+                : BamlFfi.class.getClassLoader();
         Object proxy =
                 Proxy.newProxyInstance(
-                        callableType.getClassLoader(),
+                        loader,
                         new Class<?>[] {callableType},
-                        handler);
+                        new BamlClosure(handle, names, returnDesc));
         return callableType.cast(proxy);
-    }
-
-    public static <T> CompletableFuture<T> returnedClosureAsync(
-            CompletableFuture<Object> source,
-            Class<T> callableType,
-            String[] names,
-            BamlType returnDesc) {
-        Objects.requireNonNull(source, "source");
-        CompletableFuture<T> mapped = new CompletableFuture<>();
-        source.whenComplete(
-                (value, error) -> {
-                    if (error != null) {
-                        mapped.completeExceptionally(error);
-                    } else {
-                        try {
-                            mapped.complete(returnedClosure(callableType, value, names, returnDesc));
-                        } catch (Throwable failure) {
-                            mapped.completeExceptionally(failure);
-                        }
-                    }
-                });
-        mapped.whenComplete(
-                (ignored, error) -> {
-                    if (mapped.isCancelled()) {
-                        source.cancel(true);
-                    }
-                });
-        return mapped;
     }
 
     /**

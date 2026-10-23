@@ -64,10 +64,10 @@ extension BamlUnion2: Sendable where T0: Sendable, T1: Sendable {}
 extension BamlUnion2: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable {
     // A union states nothing itself: the selected arm's value rides
     // bare, as a node of that arm's slot.
-    public func _bamlEncode(as slot: BamlSlot<Self>) -> BamlInboundValue {
+    public func _bamlEncode(as slot: BamlSlot<Self>) throws -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode(as: slot.unionArm(0))
-        case .t1(let v): return v._bamlEncode(as: slot.unionArm(1))
+        case .t0(let v): return try v._bamlEncode(as: slot.unionArm(0))
+        case .t1(let v): return try v._bamlEncode(as: slot.unionArm(1))
         }
     }
 }
@@ -165,11 +165,11 @@ extension BamlUnion3: Sendable where T0: Sendable, T1: Sendable, T2: Sendable {}
 extension BamlUnion3: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, T2: BamlEncodable {
     // A union states nothing itself: the selected arm's value rides
     // bare, as a node of that arm's slot.
-    public func _bamlEncode(as slot: BamlSlot<Self>) -> BamlInboundValue {
+    public func _bamlEncode(as slot: BamlSlot<Self>) throws -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode(as: slot.unionArm(0))
-        case .t1(let v): return v._bamlEncode(as: slot.unionArm(1))
-        case .t2(let v): return v._bamlEncode(as: slot.unionArm(2))
+        case .t0(let v): return try v._bamlEncode(as: slot.unionArm(0))
+        case .t1(let v): return try v._bamlEncode(as: slot.unionArm(1))
+        case .t2(let v): return try v._bamlEncode(as: slot.unionArm(2))
         }
     }
 }
@@ -277,12 +277,12 @@ extension BamlUnion4: Sendable where T0: Sendable, T1: Sendable, T2: Sendable, T
 extension BamlUnion4: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, T2: BamlEncodable, T3: BamlEncodable {
     // A union states nothing itself: the selected arm's value rides
     // bare, as a node of that arm's slot.
-    public func _bamlEncode(as slot: BamlSlot<Self>) -> BamlInboundValue {
+    public func _bamlEncode(as slot: BamlSlot<Self>) throws -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode(as: slot.unionArm(0))
-        case .t1(let v): return v._bamlEncode(as: slot.unionArm(1))
-        case .t2(let v): return v._bamlEncode(as: slot.unionArm(2))
-        case .t3(let v): return v._bamlEncode(as: slot.unionArm(3))
+        case .t0(let v): return try v._bamlEncode(as: slot.unionArm(0))
+        case .t1(let v): return try v._bamlEncode(as: slot.unionArm(1))
+        case .t2(let v): return try v._bamlEncode(as: slot.unionArm(2))
+        case .t3(let v): return try v._bamlEncode(as: slot.unionArm(3))
         }
     }
 }
@@ -400,13 +400,13 @@ extension BamlUnion5: Sendable where T0: Sendable, T1: Sendable, T2: Sendable, T
 extension BamlUnion5: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, T2: BamlEncodable, T3: BamlEncodable, T4: BamlEncodable {
     // A union states nothing itself: the selected arm's value rides
     // bare, as a node of that arm's slot.
-    public func _bamlEncode(as slot: BamlSlot<Self>) -> BamlInboundValue {
+    public func _bamlEncode(as slot: BamlSlot<Self>) throws -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode(as: slot.unionArm(0))
-        case .t1(let v): return v._bamlEncode(as: slot.unionArm(1))
-        case .t2(let v): return v._bamlEncode(as: slot.unionArm(2))
-        case .t3(let v): return v._bamlEncode(as: slot.unionArm(3))
-        case .t4(let v): return v._bamlEncode(as: slot.unionArm(4))
+        case .t0(let v): return try v._bamlEncode(as: slot.unionArm(0))
+        case .t1(let v): return try v._bamlEncode(as: slot.unionArm(1))
+        case .t2(let v): return try v._bamlEncode(as: slot.unionArm(2))
+        case .t3(let v): return try v._bamlEncode(as: slot.unionArm(3))
+        case .t4(let v): return try v._bamlEncode(as: slot.unionArm(4))
         }
     }
 }
@@ -534,14 +534,14 @@ extension BamlUnion6: Sendable where T0: Sendable, T1: Sendable, T2: Sendable, T
 extension BamlUnion6: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, T2: BamlEncodable, T3: BamlEncodable, T4: BamlEncodable, T5: BamlEncodable {
     // A union states nothing itself: the selected arm's value rides
     // bare, as a node of that arm's slot.
-    public func _bamlEncode(as slot: BamlSlot<Self>) -> BamlInboundValue {
+    public func _bamlEncode(as slot: BamlSlot<Self>) throws -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode(as: slot.unionArm(0))
-        case .t1(let v): return v._bamlEncode(as: slot.unionArm(1))
-        case .t2(let v): return v._bamlEncode(as: slot.unionArm(2))
-        case .t3(let v): return v._bamlEncode(as: slot.unionArm(3))
-        case .t4(let v): return v._bamlEncode(as: slot.unionArm(4))
-        case .t5(let v): return v._bamlEncode(as: slot.unionArm(5))
+        case .t0(let v): return try v._bamlEncode(as: slot.unionArm(0))
+        case .t1(let v): return try v._bamlEncode(as: slot.unionArm(1))
+        case .t2(let v): return try v._bamlEncode(as: slot.unionArm(2))
+        case .t3(let v): return try v._bamlEncode(as: slot.unionArm(3))
+        case .t4(let v): return try v._bamlEncode(as: slot.unionArm(4))
+        case .t5(let v): return try v._bamlEncode(as: slot.unionArm(5))
         }
     }
 }
@@ -679,15 +679,15 @@ extension BamlUnion7: Sendable where T0: Sendable, T1: Sendable, T2: Sendable, T
 extension BamlUnion7: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, T2: BamlEncodable, T3: BamlEncodable, T4: BamlEncodable, T5: BamlEncodable, T6: BamlEncodable {
     // A union states nothing itself: the selected arm's value rides
     // bare, as a node of that arm's slot.
-    public func _bamlEncode(as slot: BamlSlot<Self>) -> BamlInboundValue {
+    public func _bamlEncode(as slot: BamlSlot<Self>) throws -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode(as: slot.unionArm(0))
-        case .t1(let v): return v._bamlEncode(as: slot.unionArm(1))
-        case .t2(let v): return v._bamlEncode(as: slot.unionArm(2))
-        case .t3(let v): return v._bamlEncode(as: slot.unionArm(3))
-        case .t4(let v): return v._bamlEncode(as: slot.unionArm(4))
-        case .t5(let v): return v._bamlEncode(as: slot.unionArm(5))
-        case .t6(let v): return v._bamlEncode(as: slot.unionArm(6))
+        case .t0(let v): return try v._bamlEncode(as: slot.unionArm(0))
+        case .t1(let v): return try v._bamlEncode(as: slot.unionArm(1))
+        case .t2(let v): return try v._bamlEncode(as: slot.unionArm(2))
+        case .t3(let v): return try v._bamlEncode(as: slot.unionArm(3))
+        case .t4(let v): return try v._bamlEncode(as: slot.unionArm(4))
+        case .t5(let v): return try v._bamlEncode(as: slot.unionArm(5))
+        case .t6(let v): return try v._bamlEncode(as: slot.unionArm(6))
         }
     }
 }
@@ -835,16 +835,16 @@ extension BamlUnion8: Sendable where T0: Sendable, T1: Sendable, T2: Sendable, T
 extension BamlUnion8: BamlEncodable where T0: BamlEncodable, T1: BamlEncodable, T2: BamlEncodable, T3: BamlEncodable, T4: BamlEncodable, T5: BamlEncodable, T6: BamlEncodable, T7: BamlEncodable {
     // A union states nothing itself: the selected arm's value rides
     // bare, as a node of that arm's slot.
-    public func _bamlEncode(as slot: BamlSlot<Self>) -> BamlInboundValue {
+    public func _bamlEncode(as slot: BamlSlot<Self>) throws -> BamlInboundValue {
         switch self {
-        case .t0(let v): return v._bamlEncode(as: slot.unionArm(0))
-        case .t1(let v): return v._bamlEncode(as: slot.unionArm(1))
-        case .t2(let v): return v._bamlEncode(as: slot.unionArm(2))
-        case .t3(let v): return v._bamlEncode(as: slot.unionArm(3))
-        case .t4(let v): return v._bamlEncode(as: slot.unionArm(4))
-        case .t5(let v): return v._bamlEncode(as: slot.unionArm(5))
-        case .t6(let v): return v._bamlEncode(as: slot.unionArm(6))
-        case .t7(let v): return v._bamlEncode(as: slot.unionArm(7))
+        case .t0(let v): return try v._bamlEncode(as: slot.unionArm(0))
+        case .t1(let v): return try v._bamlEncode(as: slot.unionArm(1))
+        case .t2(let v): return try v._bamlEncode(as: slot.unionArm(2))
+        case .t3(let v): return try v._bamlEncode(as: slot.unionArm(3))
+        case .t4(let v): return try v._bamlEncode(as: slot.unionArm(4))
+        case .t5(let v): return try v._bamlEncode(as: slot.unionArm(5))
+        case .t6(let v): return try v._bamlEncode(as: slot.unionArm(6))
+        case .t7(let v): return try v._bamlEncode(as: slot.unionArm(7))
         }
     }
 }

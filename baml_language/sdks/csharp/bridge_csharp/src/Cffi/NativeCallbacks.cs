@@ -141,6 +141,7 @@ internal static unsafe class NativeCallbacks
         global::BamlBridge.Cffi.V1.HostInvocation? wire = null;
         BamlSafeHandle? state = null;
         OutboundOwnershipScope? controls = null;
+        HostCallArguments? arguments = null;
         HostInvocation? invocation = null;
         try
         {
@@ -149,11 +150,15 @@ internal static unsafe class NativeCallbacks
             wire = global::BamlBridge.Cffi.V1.HostInvocation.Parser.ParseFrom(new ReadOnlySpan<byte>(content, (int)length));
             state = api.OwnHandle(wire.EffectiveState);
             controls = OutboundOwnershipScope.Create(new global::BamlBridge.Cffi.V1.BamlOutboundResult { Ok = wire.Cancel }, api);
+            // The adapter owns the arguments' references from here on, so
+            // every exit below releases them unless an invocation takes them.
+            arguments = HostCallArguments.Parse(wire.ApplicationArgs.Span, api);
             if (wire.CallbackId == 0 || wire.HostValueKey == 0 || wire.Cancel is null)
                 throw new InvalidDataException("Incomplete host invocation controls.");
             invocation = HostValueRegistry.Shared.TryStartInvocation(
-                wire.HostValueKey, wire.CallbackId, wire.ApplicationArgs.ToByteArray(), out string? diagnostic,
+                wire.HostValueKey, wire.CallbackId, arguments, out string? diagnostic,
                 wire.HostEnvironment) ?? throw new InvalidDataException(diagnostic);
+            arguments = null;
             invocation.EffectiveState = state;
             invocation.Controls = controls;
             state = null;
@@ -174,6 +179,7 @@ internal static unsafe class NativeCallbacks
             }
             state?.Dispose();
             controls?.Dispose();
+            arguments?.Dispose();
             if (wire is not null) HostCallDispatcher.QueueBoundaryException(api, wire.CallbackId, wire.HostEnvironment, error);
         }
     }
@@ -224,6 +230,7 @@ internal static unsafe class NativeCallbacks
             return;
         }
 
+        HostCallArguments? arguments = null;
         try
         {
             if (length > int.MaxValue || (length != 0 && content is null))
@@ -232,18 +239,22 @@ internal static unsafe class NativeCallbacks
                     $"Native host dispatch {hostCallId} supplied an invalid borrowed buffer.");
             }
 
-            byte[] copy = length == 0
-                ? []
-                : new ReadOnlySpan<byte>(content, checked((int)length)).ToArray();
+            arguments = HostCallArguments.Parse(
+                length == 0
+                    ? ReadOnlySpan<byte>.Empty
+                    : new ReadOnlySpan<byte>(content, checked((int)length)),
+                api);
             HostInvocation? invocation = HostValueRegistry.Shared.TryStartInvocation(
                 hostKey,
                 hostCallId,
-                copy,
+                arguments,
                 out string? diagnostic);
             if (invocation is null)
             {
                 throw new InvalidDataException(diagnostic);
             }
+
+            arguments = null;
 
             ThreadPool.UnsafeQueueUserWorkItem(
                 static state => _ = HostCallDispatcher.ExecuteAsync(state.Api, state.Invocation),
@@ -252,6 +263,7 @@ internal static unsafe class NativeCallbacks
         }
         catch (Exception error)
         {
+            arguments?.Dispose();
             HostCallDispatcher.QueueBoundaryException(
                 api,
                 hostCallId,

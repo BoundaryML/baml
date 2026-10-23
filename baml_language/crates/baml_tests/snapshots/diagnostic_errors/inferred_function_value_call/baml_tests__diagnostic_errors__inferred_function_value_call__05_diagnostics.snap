@@ -28,3 +28,12 @@ source: crates/baml_tests/src/generated_tests.rs
     ·       ─┬─
     ·        ╰── expected `int`, found `"x"`
     ╰────
+
+  [type] E0001
+
+  × generic function `identity` needs concrete type arguments before it can be stored in `f`. Specialize it explicitly, for example `identity<int>`. Or write the concrete function type after the
+  │ binding name: `let f: (x: int) -> int throws never = identity`. Calling `identity(...)` directly works only when that call's arguments or expected result determine every type argument
+    ╭─[inferred_function_value_call.baml:23:13]
+ 23 │     let f = identity;
+    ·             ────────
+    ╰────

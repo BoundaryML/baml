@@ -1148,16 +1148,59 @@ mod tests {
         // A covariant return is stated as declared, literals and all.
         assert!(
             emitted.contains(
-                "let _baml_pick_returns = BamlSlot<Swift.String>.oneOf(\
+                "let _baml_p1_returns = BamlSlot<Swift.String>.oneOf(\
                  BamlSlot<Swift.String>.literal(\"a\"), BamlSlot<Swift.String>.literal(\"b\"))"
             ),
             "{emitted}"
         );
         assert!(
-            emitted.contains("returns: _baml_pick_returns.type, throws: .unknown)"),
+            emitted.contains("returns: _baml_p1_returns.type, throws: .unknown)"),
             "{emitted}"
         );
         assert!(!emitted.contains("?? .unknown"), "{emitted}");
+    }
+
+    #[test]
+    fn callable_parameter_locals_never_collide() {
+        // `f`'s return slot must not be `f_returns`'s wrapper, and no local
+        // may shadow a parameter spelled like a generated one.
+        let pool = SymbolPool::from([(
+            user("two"),
+            function(
+                "two",
+                vec![
+                    ("f", callback(int(), Ty::Never)),
+                    ("f_returns", callback(int(), Ty::Never)),
+                    ("_baml_p2", int()),
+                    ("g", callback(int(), Ty::Never)),
+                ],
+                int(),
+            ),
+        )]);
+        let emitted = emit(&pool);
+        for local in [
+            "_baml_p_0",
+            "_baml_p_0_returns",
+            "_baml_p_1",
+            "_baml_p_1_returns",
+            "_baml_p_3",
+            "_baml_p_3_returns",
+        ] {
+            // Once per sync/async overload.
+            assert_eq!(
+                emitted.matches(&format!("let {local} = ")).count(),
+                2,
+                "{local}: {emitted}"
+            );
+        }
+        assert!(
+            emitted.contains(
+                "args: [BamlArgument(\"f\", _baml_p_0), BamlArgument(\"f_returns\", _baml_p_1), \
+                 BamlArgument(\"_baml_p2\", _baml_p2, as: BamlSlot<Swift.Int>.own), \
+                 BamlArgument(\"g\", _baml_p_3)]"
+            ),
+            "{emitted}"
+        );
     }
 
     #[test]

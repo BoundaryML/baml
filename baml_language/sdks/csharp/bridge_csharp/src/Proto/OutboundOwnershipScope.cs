@@ -12,11 +12,14 @@ internal sealed class OutboundOwnershipScope : IDisposable
         new(ReferenceEqualityComparer.Instance);
     private bool disposed;
 
-    private OutboundOwnershipScope(BamlOutboundResult envelope, NativeApi? api)
+    private OutboundOwnershipScope(IEnumerable<BamlOutboundValue?> roots, NativeApi? api)
     {
         var handles = new List<BamlOutboundHandle>();
         var types = new List<(BamlTy Type, List<ulong> Keys)>();
-        Collect(envelope, handles, types);
+        foreach (BamlOutboundValue? root in roots)
+        {
+            Collect(root, handles, types);
+        }
         // Every type value is claimed by the decoder, a name-only one with no rows.
         foreach ((BamlTy type, List<ulong> typeKeys) in types)
         {
@@ -68,7 +71,19 @@ internal sealed class OutboundOwnershipScope : IDisposable
     internal static OutboundOwnershipScope Create(
         BamlOutboundResult envelope,
         NativeApi? api) =>
-        new(envelope, api);
+        new(Roots(envelope), api);
+
+    /// <summary>
+    /// The references a host invocation's arguments arrive with. The adapter
+    /// owns them from dispatch on, so they are released whether or not the
+    /// callback ever runs; decoding an argument claims the ones it keeps.
+    /// </summary>
+    internal static OutboundOwnershipScope Create(BamlToHostCall call, NativeApi api)
+    {
+        ArgumentNullException.ThrowIfNull(call);
+        ArgumentNullException.ThrowIfNull(api);
+        return new(call.Args.Select(argument => argument?.Value), api);
+    }
 
     internal BamlSafeHandle Borrow(BamlOutboundHandle wire)
     {
@@ -149,30 +164,16 @@ internal sealed class OutboundOwnershipScope : IDisposable
     private static bool IsHostValue(BamlHandleType handleType) =>
         handleType is BamlHandleType.HostValueCallable or BamlHandleType.HostValueOpaque;
 
-    private static void Collect(
-        BamlOutboundResult envelope,
-        List<BamlOutboundHandle> handles,
-        List<(BamlTy Type, List<ulong> Keys)> types)
+    private static BamlOutboundValue?[] Roots(BamlOutboundResult envelope)
     {
         ArgumentNullException.ThrowIfNull(envelope);
-        switch (envelope.ResultCase)
+        return envelope.ResultCase switch
         {
-            case BamlOutboundResult.ResultOneofCase.Ok:
-                Collect(envelope.Ok, handles, types);
-                break;
-            case BamlOutboundResult.ResultOneofCase.Error:
-                if (envelope.Error.Value is not null)
-                {
-                    Collect(envelope.Error.Value, handles, types);
-                }
-                break;
-            case BamlOutboundResult.ResultOneofCase.Panic:
-                if (envelope.Panic.Value is not null)
-                {
-                    Collect(envelope.Panic.Value, handles, types);
-                }
-                break;
-        }
+            BamlOutboundResult.ResultOneofCase.Ok => [envelope.Ok],
+            BamlOutboundResult.ResultOneofCase.Error => [envelope.Error.Value],
+            BamlOutboundResult.ResultOneofCase.Panic => [envelope.Panic.Value],
+            _ => [],
+        };
     }
 
     private static void Collect(

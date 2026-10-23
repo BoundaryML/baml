@@ -112,6 +112,15 @@ class TestHostCallables {
     }
 
     @Test
+    void test_host_callable_hof_receives_a_baml_closure() {
+        // BAML hands the callback a closure of its own; it arrives as the
+        // callback's declared parameter type and calls back into BAML.
+        Function<Function<Long, Long>, Long> cb =
+                f -> f.apply(41L) * 100 + f.andThen(y -> y * 2).apply(1L);
+        assertEquals(4204L, Fns.hof(cb));
+    }
+
+    @Test
     void test_host_callable_void_signatures() {
         // A unit callable has no result to carry in either direction: a host
         // callback is a `void` method whatever its arity, and so is a BAML

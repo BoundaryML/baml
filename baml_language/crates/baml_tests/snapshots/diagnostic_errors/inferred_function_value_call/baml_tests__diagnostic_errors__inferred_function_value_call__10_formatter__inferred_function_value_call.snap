@@ -28,3 +28,11 @@ function call_let_bound_with_string() -> int {
     let f: (int) -> int throws never = identity;
     f("x")
 }
+
+// An unannotated `let` has nothing to infer the instantiation from, so the
+// reference is refused where it is stored. (The compiler used to accept it
+// and the call failed only at run time.)
+function call_unannotated_let() -> int {
+    let f = identity;
+    f(1)
+}

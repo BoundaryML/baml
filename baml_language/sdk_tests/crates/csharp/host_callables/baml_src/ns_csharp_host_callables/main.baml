@@ -135,3 +135,25 @@ function make_void_forwarder(
         callback(value, label)
     }
 }
+
+/// A callback that receives a BAML closure and may call it: the closure
+/// crosses to the host as a callable handle and comes back as one. Its
+/// parameter is named `value` for the duplicate-helper bug noted on
+/// `make_void_forwarder`: it shares `make_adder`'s returned type.
+function hof(cb: (f: (value: int) -> int throws never) -> int) -> int {
+    cb((value: int) -> int { value + 1 })
+}
+
+/// A callback that receives BAML closures inside a list.
+function hof_list(cb: (fs: ((value: int) -> int throws never)[]) -> int) -> int {
+    cb([(value: int) -> int { value + 1 }, (value: int) -> int { value * 2 }])
+}
+
+class ClosureBox {
+    f (value: int) -> int throws never
+}
+
+/// A callback that receives a BAML closure inside a class field.
+function hof_class(cb: (box: ClosureBox) -> int) -> int {
+    cb(ClosureBox { f: (value: int) -> int { value + 3 } })
+}

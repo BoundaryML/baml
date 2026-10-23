@@ -15,9 +15,20 @@ internal static class HostCallDispatcher
         ArgumentNullException.ThrowIfNull(invocation);
         try
         {
-            IReadOnlyList<object?> arguments = HostCallableProtocol.BindArguments(
-                invocation.Callable.Descriptor,
-                invocation.Arguments);
+            IReadOnlyList<object?> arguments;
+            try
+            {
+                arguments = HostCallableProtocol.BindArguments(
+                    invocation.Callable.Descriptor,
+                    invocation.Arguments);
+            }
+            finally
+            {
+                // The bound arguments own what they kept; release the rest
+                // now rather than when the callback completes.
+                invocation.Arguments.Dispose();
+            }
+
             Task<object?> completion = StartInCapturedContext(invocation, arguments);
             object? result = await completion.ConfigureAwait(false);
             BamlGeneratedValue generated;

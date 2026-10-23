@@ -243,8 +243,8 @@ pub(crate) fn render_class(
         }
         let _ = write!(
             out,
-            "\n\tpublic nonisolated func _bamlEncode(as slot: BamlSlot<Self>) -> BamlInboundValue {{\n\
-             {body}\t\treturn .baml_class(slot, [\n{field_list}\t\t])\n\
+            "\n\tpublic nonisolated func _bamlEncode(as slot: BamlSlot<Self>) throws -> BamlInboundValue {{\n\
+             {body}\t\treturn try .baml_class(slot, [\n{field_list}\t\t])\n\
              \t}}\n"
         );
     }
@@ -380,10 +380,12 @@ pub(crate) fn render_callable(
             inner_slot: String,
         },
         /// A host callable: `ty` is the closure type; `wrapper` is a
-        /// body-prelude statement building the erased `BamlHostCallable`.
+        /// body-prelude statement building the erased `BamlHostCallable`
+        /// into the local `local`.
         Callable {
             name: String,
             ty: String,
+            local: String,
             wrapper: String,
         },
     }
@@ -463,8 +465,23 @@ pub(crate) fn render_callable(
         })
         .collect::<Vec<_>>();
 
+    // A callable parameter's body locals are named by its position under a
+    // prefix no parameter name starts with: no local shadows a parameter,
+    // and two parameters' locals differ whatever their names (`f` and
+    // `f_returns` included).
+    let callable_local_prefix = {
+        let mut prefix = "_baml_p".to_string();
+        while function
+            .arguments
+            .iter()
+            .any(|arg| arg.name.as_str().starts_with(&prefix))
+        {
+            prefix.push('_');
+        }
+        prefix
+    };
     let mut params = Vec::new();
-    for arg in &function.arguments {
+    for (position, arg) in function.arguments.iter().enumerate() {
         let name = escape_ident(arg.name.as_str());
         if arg.default.is_some() {
             params.push(Param::Optional {
@@ -478,8 +495,14 @@ pub(crate) fn render_callable(
             throws,
         } = &arg.ty
         {
-            let (ty, wrapper) = render_callable_param(&name, cparams, ret, throws, ctx)?;
-            params.push(Param::Callable { name, ty, wrapper });
+            let local = format!("{callable_local_prefix}{position}");
+            let (ty, wrapper) = render_callable_param(&name, &local, cparams, ret, throws, ctx)?;
+            params.push(Param::Callable {
+                name,
+                ty,
+                local,
+                wrapper,
+            });
         } else {
             params.push(Param::Required {
                 name,
@@ -563,9 +586,8 @@ pub(crate) fn render_callable(
             "BamlArgument(\"{}\", {name}, as: {slot})",
             name.trim_matches('`')
         )),
-        Param::Callable { name, .. } => Some(format!(
-            "BamlArgument(\"{}\", _baml_{})",
-            name.trim_matches('`'),
+        Param::Callable { name, local, .. } => Some(format!(
+            "BamlArgument(\"{}\", {local})",
             name.trim_matches('`')
         )),
         Param::Optional { .. } => None,
@@ -856,12 +878,12 @@ pub(crate) fn render_recursive_union_alias(
         );
     }
     out.push_str(
-        "\tpublic func _bamlEncode(as _: BamlSlot<Self>) -> BamlInboundValue {\n\t\tswitch self {\n",
+        "\tpublic func _bamlEncode(as _: BamlSlot<Self>) throws -> BamlInboundValue {\n\t\tswitch self {\n",
     );
     for (i, slot) in arm_slots.iter().enumerate() {
         let _ = writeln!(
             out,
-            "\t\tcase .t{i}(let v): return v._bamlEncode(as: {slot})"
+            "\t\tcase .t{i}(let v): return try {slot}._bamlEncode(v)"
         );
     }
     out.push_str("\t\t}\n\t}\n\n");
@@ -931,14 +953,18 @@ fn thrown_leaf_names(ty: &Ty) -> Vec<String> {
 /// return and throws types are covariant, so a wider statement there (an
 /// `unknown` return under `() -> int`) is refused, and a statement that
 /// only narrows a parameter would refuse arguments the declaration admits.
+///
+/// The prelude declares `local` (the wrapper) and `{local}_returns` (its
+/// return slot); the caller picks a `local` that no other local or
+/// parameter of the function can coincide with.
 fn render_callable_param(
     name: &str,
+    local: &str,
     cparams: &[baml_sdkgen_types::CallableParam],
     ret: &Ty,
     throws: &Ty,
     ctx: &TranslateCtx,
 ) -> Option<(String, String)> {
-    let bare = name.trim_matches('`');
     let mut sig_parts: Vec<String> = Vec::new();
     let mut invoke_args: Vec<String> = Vec::new();
     let mut param_descriptors: Vec<String> = Vec::new();
@@ -966,7 +992,7 @@ fn render_callable_param(
         }
     }
     let invoke = invoke_args.join(", ");
-    let returns_local = format!("_baml_{bare}_returns");
+    let returns_local = format!("{local}_returns");
     // (closure result type, stated return type, prelude, wrapper body)
     let (ret_ty, returns, prelude, wrapper_body) = match ret {
         // `never` returns no value: a closure that can only throw (or trap).
@@ -980,7 +1006,7 @@ fn render_callable_param(
             "Swift.Void".to_string(),
             ".null".to_string(),
             String::new(),
-            format!("try await {name}({invoke})\n\t\treturn BamlNull()._bamlEncode()"),
+            format!("try await {name}({invoke})\n\t\treturn try BamlNull()._bamlEncode()"),
         ),
         other => (
             translate_ty(other, ctx)?,
@@ -1009,7 +1035,7 @@ fn render_callable_param(
         param_descriptors.join(", ")
     );
     let wrapper = format!(
-        "{prelude}\tlet _baml_{bare} = BamlHostCallable(functionType: {function_type}) {{ _args in\n\t\t{wrapper_body}\n\t}}\n"
+        "{prelude}\tlet {local} = BamlHostCallable(functionType: {function_type}) {{ _args in\n\t\t{wrapper_body}\n\t}}\n"
     );
     Some((closure_ty, wrapper))
 }

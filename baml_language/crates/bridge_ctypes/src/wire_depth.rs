@@ -250,6 +250,22 @@ mod tests {
             .expect_err("a value past the limit is refused");
     }
 
+    /// The refusal names the reason and a bounded path, however deep the
+    /// payload: prost's own rendering grows by one field per level.
+    #[test]
+    fn a_too_deep_payloads_refusal_is_bounded() {
+        let error = InboundValue::decode(nested_list(400).encode_to_vec().as_slice())
+            .expect_err("400 levels is far past the limit");
+        let prost_rendering = error.to_string();
+        let message = crate::CtypesError::from(error).to_string();
+        assert!(prost_rendering.len() > 1000, "{}", prost_rendering.len());
+        assert!(message.len() < 200, "{message}");
+        assert!(
+            message.starts_with("Protobuf decode error: recursion limit reached (at `"),
+            "{message}"
+        );
+    }
+
     #[test]
     fn statements_and_entries_count() {
         let stated = InboundValue {

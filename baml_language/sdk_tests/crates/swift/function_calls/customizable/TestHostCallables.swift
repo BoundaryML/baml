@@ -344,4 +344,14 @@ final class TestHostCallables: XCTestCase {
         )
         XCTAssertEqual(result, [523])
     }
+
+    func test_host_callable_two_cbs_callbacks_named_f_and_f_returns_both_run() throws {
+        // Two callback parameters whose names differ by a `_returns` suffix
+        // each keep their own closure: `f(1) + f_returns(2)`.
+        let result = try Baml.host_callable_tests.two_cbs(
+            f: { x in x * 10 },
+            f_returns: { x in x * 100 }
+        )
+        XCTAssertEqual(result, 210)
+    }
 }

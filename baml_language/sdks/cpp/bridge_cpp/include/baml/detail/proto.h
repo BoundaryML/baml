@@ -10,6 +10,7 @@
 
 #include <baml/detail/loader.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <limits>
@@ -34,6 +35,45 @@ struct invocation_options {
 namespace detail {
 
 namespace pb = ::baml_bridge::cffi::v1;
+
+// The engine refuses a wire message nested more than this many messages
+// deep: prost's recursion limit, bridge_ctypes' `WIRE_NESTING_LIMIT`.
+inline constexpr std::size_t wire_nesting_limit = 100;
+
+// The most levels an encoded value may nest, where each list, map and class
+// opens one. A level costs the wire at least two messages (a list item is an
+// `InboundListValue` and an `InboundValue`; a map entry or class field adds
+// an `InboundMapEntry`), so a value nested deeper than this can never cross,
+// as an argument or as a callback's result. Refusing it while encoding also
+// bounds the encoder's recursion, which otherwise follows the value down
+// however deep it goes, on whatever stack the encode runs on.
+inline constexpr std::size_t value_nesting_limit = wire_nesting_limit / 2;
+
+// How many levels the encode running on this thread is inside. An encode
+// never leaves the thread it starts on (an argument encodes on the caller's
+// thread, a callback's result on the callback's), so a count per thread is
+// the count per encode.
+inline thread_local std::size_t encode_nesting_depth = 0;
+
+// One level of the value being encoded, open for the guard's lifetime. Every
+// encoder that nests an InboundValue inside another holds one while it
+// writes the children; opening the level past `value_nesting_limit` refuses
+// the value.
+class encode_level {
+ public:
+  encode_level() {
+    if (encode_nesting_depth == value_nesting_limit)
+      throw error("BAML encode error: the value nests more than " +
+                  std::to_string(value_nesting_limit) +
+                  " levels of lists, maps and classes, deeper than the " +
+                  std::to_string(wire_nesting_limit) +
+                  " nested messages the wire carries");
+    ++encode_nesting_depth;
+  }
+  ~encode_level() { --encode_nesting_depth; }
+  encode_level(const encode_level&) = delete;
+  encode_level& operator=(const encode_level&) = delete;
+};
 
 // Calls `visit` on every class, enum, alias, interface and enum-variant
 // message under `ty` (the messages whose `head` names a declaration), once

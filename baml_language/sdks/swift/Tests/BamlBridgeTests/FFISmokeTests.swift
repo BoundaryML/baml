@@ -58,7 +58,7 @@ final class FFISmokeTests: XCTestCase {
 
     func testBigIntPreservesArbitraryPrecisionWireValues() throws {
         let value = try BamlBigInt(hexadecimal: "18ee90ff6c373e0ee4e3f0ad2")
-        let encoded = value._bamlEncode().raw
+        let encoded = try value._bamlEncode().raw
         XCTAssertEqual(encoded.bigintValue, value.hexadecimal)
         XCTAssertFalse(encoded.hasValueType)
         XCTAssertEqual(BamlBigInt._bamlStatedType.raw.primitive.kind, .bamlTyPrimitiveBigint)
@@ -152,9 +152,9 @@ final class FFISmokeTests: XCTestCase {
     /// A static Swift union knows which empty-list arm was constructed. The
     /// selected child carries that exact list type while the payload stays a
     /// bare list value; no recursive scan of runtime entries is needed.
-    func testEmptyListUnionCarriesSelectedArmType() {
+    func testEmptyListUnionCarriesSelectedArmType() throws {
         let value: BamlUnion2<[Int], [String]> = .t1([])
-        let encoded = value._bamlEncode().raw
+        let encoded = try value._bamlEncode().raw
 
         guard case .list(let listType)? = encoded.valueType.ty else {
             return XCTFail("expected a list value_type")
@@ -169,14 +169,14 @@ final class FFISmokeTests: XCTestCase {
     /// A Swift array or dictionary knows its element type statically and
     /// states it, so an empty container or one under an `unknown` or generic
     /// parameter leaves the engine nothing to infer.
-    func testContainersStateTheirStaticElementType() {
-        let list = [Int]()._bamlEncode().raw
+    func testContainersStateTheirStaticElementType() throws {
+        let list = try [Int]()._bamlEncode().raw
         guard case .list(let listType)? = list.valueType.ty else {
             return XCTFail("expected a list value_type")
         }
         XCTAssertEqual(listType.item.primitive.kind, .bamlTyPrimitiveInt)
 
-        let map = ["a": "b"]._bamlEncode().raw
+        let map = try ["a": "b"]._bamlEncode().raw
         guard case .map(let mapType)? = map.valueType.ty else {
             return XCTFail("expected a map value_type")
         }
@@ -184,9 +184,9 @@ final class FFISmokeTests: XCTestCase {
         XCTAssertEqual(mapType.value.primitive.kind, .bamlTyPrimitiveString)
     }
 
-    func testClassIdentityUsesNodeLocalValueType() {
+    func testClassIdentityUsesNodeLocalValueType() throws {
         let slot = BamlSlot<Box<Int>>.own
-        let encoded = Box(value: 1)._bamlEncode(as: slot).raw
+        let encoded = try Box(value: 1)._bamlEncode(as: slot).raw
 
         guard case .classTy(let classType)? = encoded.valueType.ty else {
             return XCTFail("expected a class value_type")
@@ -201,9 +201,9 @@ final class FFISmokeTests: XCTestCase {
 
     /// `("draft" | "sent")[]` is a `[String]` in Swift; the list still states
     /// the literal union its slot declares, never `string[]`.
-    func testLiteralListStatesTheDeclaredLiteralUnion() {
+    func testLiteralListStatesTheDeclaredLiteralUnion() throws {
         let slot = BamlSlots.list(BamlSlot<String>.oneOf(.literal("draft"), .literal("sent")))
-        let encoded = ["draft"]._bamlEncode(as: slot).raw
+        let encoded = try ["draft"]._bamlEncode(as: slot).raw
 
         guard case .list(let listType)? = encoded.valueType.ty,
               case .union(let union)? = listType.item.ty
@@ -219,9 +219,9 @@ final class FFISmokeTests: XCTestCase {
 
     /// `Box<"a">` states its literal type argument, and the field typed by
     /// that argument is encoded under it: a `T[]` field states `"a"[]`.
-    func testClassStatesLiteralTypeArgumentsAndPassesThemToFields() {
+    func testClassStatesLiteralTypeArgumentsAndPassesThemToFields() throws {
         let slot = BamlSlot<ListBox<String>>._classType("user.ListBox", BamlSlot<String>.literal("a"))
-        let encoded = ListBox(items: ["a"])._bamlEncode(as: slot).raw
+        let encoded = try ListBox(items: ["a"])._bamlEncode(as: slot).raw
 
         guard case .classTy(let classType)? = encoded.valueType.ty else {
             return XCTFail("expected a class value_type")
@@ -253,8 +253,8 @@ final class FFISmokeTests: XCTestCase {
     /// A null-bearing recursive alias (`json`) is referenced as `Alias?`; a
     /// list of it states `json[]`, its `nil` elements being the alias's own
     /// null, never `(json | null)[]`.
-    func testNullBearingAliasListStatesTheAlias() {
-        let encoded = [JsonLike?.none, .number(1)]._bamlEncode().raw
+    func testNullBearingAliasListStatesTheAlias() throws {
+        let encoded = try [JsonLike?.none, .number(1)]._bamlEncode().raw
         guard case .list(let listType)? = encoded.valueType.ty,
               case .typeAlias(let alias)? = listType.item.ty
         else {
@@ -264,8 +264,8 @@ final class FFISmokeTests: XCTestCase {
     }
 
     /// `int?[]` states its optional element type.
-    func testOptionalElementsStateTheirNull() {
-        let encoded = [Int?.none, 1]._bamlEncode().raw
+    func testOptionalElementsStateTheirNull() throws {
+        let encoded = try [Int?.none, 1]._bamlEncode().raw
         guard case .list(let listType)? = encoded.valueType.ty,
               case .optional(let optional)? = listType.item.ty
         else {
@@ -341,6 +341,31 @@ final class FFISmokeTests: XCTestCase {
         XCTAssertEqual(liveKeys(ty), [1, 2, 3, 1])
     }
 
+    /// Lists, maps and classes nest at most `BamlValueNesting.maxDepth` deep;
+    /// one level more is refused as the engine refuses an argument it cannot
+    /// read, before the encoder descends into it.
+    func testValueNestedPastTheWireBoundIsRefused() throws {
+        func nested(_ depth: Int) -> Nest {
+            (0..<depth).reduce(Nest.leaf) { inner, _ in .list([inner]) }
+        }
+        XCTAssertEqual(BamlValueNesting.maxDepth, 50)
+        var level = try nested(BamlValueNesting.maxDepth)._bamlEncode().raw
+        for _ in 0..<BamlValueNesting.maxDepth {
+            guard case .listValue(let list)? = level.value, list.values.count == 1 else {
+                return XCTFail("expected a one-item list, got \(level)")
+            }
+            level = list.values[0]
+        }
+        XCTAssertEqual(level.intValue, 0)
+
+        XCTAssertThrowsError(try nested(BamlValueNesting.maxDepth + 1)._bamlEncode()) { error in
+            guard let error = error as? BamlError else {
+                return XCTFail("expected BamlError, got \(error)")
+            }
+            XCTAssertEqual(error.className, "baml.errors.InvalidArgument")
+            XCTAssertTrue(error.message.contains("more than 50 deep"), error.message)
+        }
+    }
 }
 
 /// Hand-written stand-ins for generated models, shaped as sdkgen_swift emits
@@ -350,9 +375,9 @@ private struct Box<T: BamlCodableValue>: BamlTyped {
 
     static var _bamlSlot: BamlSlot<Self> { ._classType("user.Box", BamlSlot<T>.own) }
 
-    func _bamlEncode(as slot: BamlSlot<Self>) -> BamlInboundValue {
+    func _bamlEncode(as slot: BamlSlot<Self>) throws -> BamlInboundValue {
         let argument0: BamlSlot<T> = slot._classArgument(0)
-        return .baml_class(slot, [BamlField("value", self.value, as: argument0)])
+        return try .baml_class(slot, [BamlField("value", self.value, as: argument0)])
     }
 }
 
@@ -361,9 +386,24 @@ private struct ListBox<T: BamlCodableValue>: BamlTyped {
 
     static var _bamlSlot: BamlSlot<Self> { ._classType("user.ListBox", BamlSlot<T>.own) }
 
-    func _bamlEncode(as slot: BamlSlot<Self>) -> BamlInboundValue {
+    func _bamlEncode(as slot: BamlSlot<Self>) throws -> BamlInboundValue {
         let argument0: BamlSlot<T> = slot._classArgument(0)
-        return .baml_class(slot, [BamlField("items", self.items, as: BamlSlots.list(argument0))])
+        return try .baml_class(slot, [BamlField("items", self.items, as: BamlSlots.list(argument0))])
+    }
+}
+
+/// A recursive alias of lists, shaped as sdkgen_swift emits one.
+private indirect enum Nest: BamlTyped, BamlLeafEncodable {
+    case leaf
+    case list([Nest])
+
+    static var _bamlSlot: BamlSlot<Self> { ._leaf(.typeAlias("user.Nest")) }
+
+    func _bamlEncode(as _: BamlSlot<Self>) throws -> BamlInboundValue {
+        switch self {
+        case .leaf: return 0._bamlEncode(as: BamlSlot<Int>.own)
+        case .list(let items): return try items._bamlEncode(as: BamlSlots.list(BamlSlot<Nest>.own))
+        }
     }
 }
 

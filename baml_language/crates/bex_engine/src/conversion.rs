@@ -2463,12 +2463,10 @@ mod inference_unifier_tests {
         );
     }
     #[test]
-    fn infer_nullable_null_actual_binds_null() {
-        // maybe_id(None) ⇒ T = null (TIR-faithful, T33).
-        assert_eq!(
-            infer(&union(vec![tv("T"), null()]), &null()).get("T"),
-            Some(&null())
-        );
+    fn infer_nullable_null_actual_binds_nothing() {
+        // maybe_id(None): the `null` member of `T?` absorbs the actual, so
+        // nothing pins `T`; the caller's union rule then makes it `never`.
+        assert_eq!(infer(&union(vec![tv("T"), null()]), &null()).get("T"), None);
     }
     #[test]
     fn infer_union_with_concrete_sibling_routes_to_typevar() {

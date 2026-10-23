@@ -166,8 +166,13 @@ final class HostCallableRegistry: @unchecked Sendable {
             completeHostCall(callId: callId, outcome: .returned(result.raw))
         } catch let thrown as BamlThrownValue {
             // Typed BAML throw: the real class value, which the engine holds
-            // to the declared throws type (a panic value is a panic).
-            completeHostCall(callId: callId, outcome: .thrown(thrown.value._bamlEncode().raw))
+            // to the declared throws type (a panic value is a panic). A value
+            // that cannot cross is the host's own failure instead.
+            do {
+                completeHostCall(callId: callId, outcome: .thrown(try thrown.value._bamlEncode().raw))
+            } catch {
+                completeHostCall(callId: callId, outcome: .raised(hostException(error)))
+            }
         } catch {
             // Any other Swift error is the host's own exception; the engine
             // builds the baml.errors.HostCallable, and the original object
@@ -193,6 +198,8 @@ private func completeHostCall(
     var completion = BamlBridge_Cffi_V1_HostCallCompletion()
     completion.outcome = outcome
     // A payload that fails to serialize carries no outcome: a bridge failure.
+    // BUG: the outcome's engine handle clones are then never released (see
+    // `releaseInbound`); the engine never receives them.
     let payload = (try? completion.serializedData()) ?? Data()
     payload.withUnsafeBytes { buf in
         BamlApi.completeHostCall(

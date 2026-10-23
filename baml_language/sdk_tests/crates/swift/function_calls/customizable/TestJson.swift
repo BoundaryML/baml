@@ -18,6 +18,27 @@ import BamlBridge
 
 private typealias Json = Baml.baml.json.json
 
+/// A json value whose lists nest `depth` deep around a `1`.
+private func nestedJson(_ depth: Int) -> Json {
+    (0..<depth).reduce(Json(1)) { inner, _ in Json([inner]) }
+}
+
+/// The host refuses a value nested deeper than the wire carries before
+/// sending it, with the error the engine raises for an argument it cannot
+/// read, naming the bound.
+private func assertRefusedAsTooDeep(
+    _ error: any Error,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) {
+    guard let error = error as? BamlError else {
+        return XCTFail("expected BamlError, got \(error)", file: file, line: line)
+    }
+    XCTAssertEqual(error.className, "baml.errors.InvalidArgument", file: file, line: line)
+    let message = (try? error.value(as: Baml.baml.errors.InvalidArgument.self))?.message ?? ""
+    XCTAssertTrue(message.contains("more than 50 deep"), message, file: file, line: line)
+}
+
 private func jsonFixtureObject() -> Json {
     Json([
         "type": Json("ok"),
@@ -90,5 +111,44 @@ final class TestJson: XCTestCase {
         XCTAssertEqual(try Baml.go_json_tests.json_kind(value: Json([String: Json?]())), "object")
         XCTAssertEqual(try Baml.go_json_tests.json_kind(value: Json([nil, Json(1)])), "array")
         XCTAssertEqual(try Baml.go_json_tests.json_kind(value: Json(["absent": nil])), "object")
+    }
+
+    func test_json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument() throws {
+        // Well inside the bound, the value crosses both ways.
+        XCTAssertEqual(try Baml.go_json_tests.round_trip_json(value: nestedJson(30)), nestedJson(30))
+        // Just past it, and far past it: refused before anything is sent,
+        // never by exhausting the stack.
+        for depth in [60, 5000] {
+            XCTAssertThrowsError(try Baml.go_json_tests.round_trip_json(value: nestedJson(depth))) {
+                assertRefusedAsTooDeep($0)
+            }
+        }
+        // The async form encodes on a cooperative thread (512 KiB of stack).
+        let refused = expectation(description: "the async call is refused")
+        Task {
+            do {
+                _ = try await Baml.go_json_tests.round_trip_json_async(value: nestedJson(60))
+                XCTFail("a value nested 60 deep crossed")
+            } catch {
+                assertRefusedAsTooDeep(error)
+            }
+            refused.fulfill()
+        }
+        wait(for: [refused], timeout: 60)
+    }
+
+    func test_json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result() throws {
+        // A callback runs on a cooperative thread (512 KiB of stack); its
+        // result is refused there, and the refusal is what the call raises.
+        for depth in [60, 200] {
+            XCTAssertThrowsError(
+                try Baml.go_json_tests.call_json_callback(
+                    callback: { _ in nestedJson(depth) },
+                    value: Json(1)
+                )
+            ) {
+                assertRefusedAsTooDeep($0)
+            }
+        }
     }
 }

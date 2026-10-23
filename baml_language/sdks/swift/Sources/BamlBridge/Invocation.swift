@@ -4,9 +4,9 @@ import CBamlBridge
 /// Private lowering used by a generated SDK's BamlOptions.
 public struct BamlInvocationOptions: Sendable {
     let trace: BamlHandle?
-    let cancel: (@Sendable () -> BamlInboundValue)?
+    let cancel: (@Sendable () throws -> BamlInboundValue)?
     let timeoutMs: Int64?
-    public init(trace: BamlHandle? = nil, cancel: (@Sendable () -> BamlInboundValue)? = nil, timeoutMs: Int64? = nil) {
+    public init(trace: BamlHandle? = nil, cancel: (@Sendable () throws -> BamlInboundValue)? = nil, timeoutMs: Int64? = nil) {
         self.trace = trace; self.cancel = cancel; self.timeoutMs = timeoutMs
     }
 }

@@ -20,17 +20,12 @@ function get_inferred_reflect() -> (int) -> string throws never { inferred_refle
 
 function get_inferred_empty() -> () -> string[] throws never { inferred_empty }
 
-function apply_int(f: (int) -> int throws never) -> int { f(4) }
+function apply_reflect(f: (int) -> string throws never) -> string { f(4) }
 
-test "an_inferred_function_value_runs" {
-    assert.equal(get_inferred_id()(3), 3)
-}
-
+// The value is a member of exactly its own instantiation: the open generic
+// would be a member of neither.
 test "an_inferred_function_value_has_its_specialized_type" {
-    assert.is_true(get_inferred_id() is (int) -> int throws never)
-}
-
-test "an_inferred_function_value_is_not_a_member_of_another_instantiation" {
+    assert.is_true(get_inferred_id() is (int) -> int throws never);
     assert.is_true(!(get_inferred_id() is (string) -> string throws never))
 }
 
@@ -53,7 +48,7 @@ test "an_annotated_let_infers_the_instantiation" {
 }
 
 test "an_argument_position_infers_the_instantiation" {
-    assert.equal(apply_int(inferred_id), 4)
+    assert.equal(apply_reflect(inferred_reflect), "int")
 }
 
 // The synthetic effect parameter of a callback has no runtime slot, so the
@@ -104,7 +99,8 @@ test "an_inferred_bound_method_value_has_its_specialized_type" {
 test "an_inferred_bound_method_value_equals_the_written_instantiation" {
     let h = InferredHolder {};
     let f: (int) -> int throws never = h.pick;
-    assert.is_true(f == h.pick<int>)
+    assert.is_true(f == h.pick<int>);
+    assert.is_true(!(f == h.pick<string>))
 }
 
 test "an_inferred_bound_method_value_seeds_its_own_type_argument" {

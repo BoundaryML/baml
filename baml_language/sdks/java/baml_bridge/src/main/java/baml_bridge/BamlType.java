@@ -48,6 +48,12 @@ import java.util.stream.Collectors;
  * throws type. A host callable has no type of its own, so the one it is bound
  * to is stated on the wire beside its handle.
  *
+ * <p>{@link #function(Class, List, BamlType, BamlType)} also names the Java
+ * functional interface a generated position spells the type as, so a BAML
+ * closure decoded there becomes that interface. The interface is how one host
+ * position spells the type, not part of the BAML type: it takes no part in
+ * {@link #equals}, {@link #compareTo} or {@link #toWireTy}.
+ *
  * <h2>Decode-only hints</h2>
  * {@link #typeVar} (a bound TypeVar's decode placeholder) exists purely to drive
  * host-side decode and never rides the encode wire: {@link #toWireTy} on it
@@ -219,6 +225,10 @@ public final class BamlType implements Comparable<BamlType> {
     // [ret, throws]. Always non-null.
     private final List<BamlType> children;
     private final List<Param> params; // FUNCTION only
+    // FUNCTION only: the functional interface a generated position spells the
+    // type as, or null for a type no position spells (one read off the wire, or
+    // built by hand).
+    private final Class<?> hostInterface;
     private final int literalArm; // LITERAL only (a BamlTyLiteral oneof arm)
     private final Object literalValue; // LITERAL only: String / Long / Boolean
 
@@ -229,7 +239,7 @@ public final class BamlType implements Comparable<BamlType> {
             List<BamlType> children,
             int literalArm,
             Object literalValue) {
-        this(kind, primitiveKind, fqn, children, List.of(), literalArm, literalValue);
+        this(kind, primitiveKind, fqn, children, List.of(), null, literalArm, literalValue);
     }
 
     private BamlType(
@@ -238,6 +248,7 @@ public final class BamlType implements Comparable<BamlType> {
             String fqn,
             List<BamlType> children,
             List<Param> params,
+            Class<?> hostInterface,
             int literalArm,
             Object literalValue) {
         this.kind = kind;
@@ -245,6 +256,7 @@ public final class BamlType implements Comparable<BamlType> {
         this.fqn = fqn;
         this.children = children;
         this.params = params;
+        this.hostInterface = hostInterface;
         this.literalArm = literalArm;
         this.literalValue = literalValue;
     }
@@ -384,10 +396,15 @@ public final class BamlType implements Comparable<BamlType> {
                     mappedParams.add(
                             new Param(param.name(), param.type().substitute(bindings), param.optional()));
                 }
-                yield function(
-                        mappedParams,
-                        children.get(0).substitute(bindings),
-                        children.get(1).substitute(bindings));
+                yield new BamlType(
+                        Kind.FUNCTION,
+                        0,
+                        null,
+                        List.of(children.get(0).substitute(bindings), children.get(1).substitute(bindings)),
+                        List.copyOf(mappedParams),
+                        hostInterface,
+                        0,
+                        null);
             }
         };
     }
@@ -401,7 +418,34 @@ public final class BamlType implements Comparable<BamlType> {
         Objects.requireNonNull(ret, "ret");
         Objects.requireNonNull(throwsType, "throwsType");
         return new BamlType(
-                Kind.FUNCTION, 0, null, List.of(ret, throwsType), List.copyOf(params), 0, null);
+                Kind.FUNCTION, 0, null, List.of(ret, throwsType), List.copyOf(params), null, 0, null);
+    }
+
+    /**
+     * The type of a callable with {@code params}, returning {@code ret} and
+     * throwing {@code throwsType}, at a position whose Java type is the
+     * functional interface {@code hostInterface}: a BAML closure decoded there
+     * becomes an instance of it that calls back into BAML.
+     */
+    public static BamlType function(
+            Class<?> hostInterface, List<Param> params, BamlType ret, BamlType throwsType) {
+        Objects.requireNonNull(hostInterface, "hostInterface");
+        Objects.requireNonNull(params, "params");
+        Objects.requireNonNull(ret, "ret");
+        Objects.requireNonNull(throwsType, "throwsType");
+        if (!hostInterface.isInterface()) {
+            throw new IllegalArgumentException(
+                    "a callable's host type must be an interface, not " + hostInterface.getName());
+        }
+        return new BamlType(
+                Kind.FUNCTION,
+                0,
+                null,
+                List.of(ret, throwsType),
+                List.copyOf(params),
+                hostInterface,
+                0,
+                null);
     }
 
     /** A list type token {@code T[]} carrying its element token. */
@@ -928,6 +972,8 @@ public final class BamlType implements Comparable<BamlType> {
                 && Objects.equals(literalValue, other.literalValue)
                 && children.equals(other.children)
                 && params.equals(other.params);
+        // hostInterface is deliberately absent: it is how one host position
+        // spells a function type, not part of the type.
     }
 
     @Override
@@ -1168,6 +1214,14 @@ public final class BamlType implements Comparable<BamlType> {
 
     public BamlType functionThrows() {
         return children.get(1);
+    }
+
+    /**
+     * The functional interface a generated position spells this {@link
+     * Kind#FUNCTION} type as, or {@code null} when no position named one.
+     */
+    public Class<?> functionHostInterface() {
+        return hostInterface;
     }
 
     /** The literal base name ({@code string} / {@code int} / {@code bool} / {@code bigint} / {@code float}). */

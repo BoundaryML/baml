@@ -151,10 +151,15 @@ internal sealed class HostValueRegistry
         }
     }
 
+    /// <summary>
+    /// Start a dispatched invocation of the callable registered at
+    /// <paramref name="hostKey"/>. The started invocation owns
+    /// <paramref name="arguments"/>; when none starts, the caller still does.
+    /// </summary>
     internal HostInvocation? TryStartInvocation(
         ulong hostKey,
         uint hostCallId,
-        byte[] arguments,
+        Baml.Proto.HostCallArguments arguments,
         out string? diagnostic,
         ulong? hostEnvironment = null)
     {
@@ -517,7 +522,7 @@ internal sealed class HostInvocation
         ulong hostKey,
         uint hostCallId,
         ulong functionCallId,
-        byte[] arguments,
+        Baml.Proto.HostCallArguments arguments,
         BamlGeneratedHostCallable callable,
         ExecutionContext? executionContext,
         CancellationTokenSource cancellation)
@@ -538,7 +543,8 @@ internal sealed class HostInvocation
 
     internal ulong FunctionCallId { get; }
 
-    internal byte[] Arguments { get; }
+    /// <summary>The invocation's arguments and the engine references they carry, owned until bound or completed.</summary>
+    internal Baml.Proto.HostCallArguments Arguments { get; }
 
     internal BamlGeneratedHostCallable Callable { get; }
 
@@ -562,6 +568,7 @@ internal sealed class HostInvocation
     internal void DisposeCancellation()
     {
         cancellation.Dispose();
+        Arguments.Dispose();
         Controls?.Dispose();
         EffectiveState?.Dispose();
     }

@@ -171,6 +171,15 @@ mod tests {
         }
     }
 
+    // SDK_PARITY_LINT(skip): C# canonical coverage executes through its native integration harness
+    #[test]
+    fn test_host_callable_hof_receives_a_baml_closure() {
+        let manifest = manifest_dir();
+        let project = manifest.join("host_callables").join("HostCallables.csproj");
+        let output = run_project(&project, &["--", "hof"]);
+        assert_stdout_contains(&output, "host_callable_hof_receives_a_baml_closure=ok");
+    }
+
     fn stdlib_resources_output(arguments: &[&str]) -> Output {
         let manifest = manifest_dir();
         let project = manifest

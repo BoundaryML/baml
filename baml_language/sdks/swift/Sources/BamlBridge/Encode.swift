@@ -12,11 +12,26 @@ public struct BamlNull: Equatable, Hashable, Sendable {
 /// Opaque wrapper around the inbound wire value so the protobuf types
 /// stay internal to BamlBridge while generated code (a separate
 /// module) can still conform its types to `BamlEncodable`.
+///
+/// The message is boxed: the encoder recurses once per nesting level and
+/// returns one of these from every frame, and an inline message (over 200
+/// bytes) would be reserved in each of them, several times over in an
+/// unoptimized build, on a thread that may have only 512 KiB of stack.
 public struct BamlInboundValue: Sendable {
-    var raw: BamlBridge_Cffi_V1_InboundValue
+    private final class Box: Sendable {
+        let raw: BamlBridge_Cffi_V1_InboundValue
+
+        init(_ raw: BamlBridge_Cffi_V1_InboundValue) {
+            self.raw = raw
+        }
+    }
+
+    private let box: Box
+
+    var raw: BamlBridge_Cffi_V1_InboundValue { box.raw }
 
     init(_ raw: BamlBridge_Cffi_V1_InboundValue = .init()) {
-        self.raw = raw
+        box = Box(raw)
     }
 }
 
@@ -418,8 +433,103 @@ extension BamlSlot {
 /// A value that can cross the boundary Swift → BAML. A value encodes as a
 /// node of the slot it fills: scalars by their arm, containers, classes and
 /// callables with the slot's exact type stated beside them.
+///
+/// Encoding throws when the value cannot cross: one nested deeper than
+/// [`BamlValueNesting.maxDepth`] is refused before the encoder descends any
+/// further. A leaf never throws, and may say so in its own witness.
 public protocol BamlEncodable {
-    func _bamlEncode(as slot: BamlSlot<Self>) -> BamlInboundValue
+    func _bamlEncode(as slot: BamlSlot<Self>) throws -> BamlInboundValue
+}
+
+/// How deeply the lists, maps and classes of one value may nest.
+///
+/// The engine decodes at most [`wireNestingLimit`] nested protobuf messages
+/// (`WIRE_NESTING_LIMIT` in `bridge_ctypes::wire_depth`). Every list, map or
+/// class costs at least two of them (its own message and each item's
+/// `InboundValue`) and states its type in one more, so a value nested more
+/// than half the limit deep can never cross. The encoder recurses once per
+/// level, on whatever thread encodes (a cooperative thread has 512 KiB of
+/// stack), so it refuses such a value at the level that exceeds the bound
+/// instead of descending further.
+///
+/// Only a list, map or class adds a wire level, and only the three encoders
+/// here build one (`BamlInboundValue` is opaque outside this module), so no
+/// other encoder can nest without being counted. Encoding is synchronous, so
+/// one value's levels are all entered and left on one thread: the count is
+/// per thread, and costs no frame of its own on the recursion.
+enum BamlValueNesting {
+    /// The engine's `WIRE_NESTING_LIMIT`.
+    static let wireNestingLimit = 100
+    /// The deepest a value's lists, maps and classes may nest.
+    static let maxDepth = wireNestingLimit / 2
+
+    private static let depthKey: pthread_key_t = {
+        var key = pthread_key_t()
+        let status = pthread_key_create(&key, nil)
+        precondition(status == 0, "pthread_key_create failed with status \(status)")
+        return key
+    }()
+
+    /// How many lists, maps and classes enclose the node being encoded on
+    /// this thread (stored as the slot's bit pattern: no allocation).
+    private static var depth: Int {
+        get { Int(bitPattern: pthread_getspecific(depthKey)) }
+        set { pthread_setspecific(depthKey, UnsafeRawPointer(bitPattern: newValue)) }
+    }
+
+    /// Enter one more list, map or class, or refuse it with the error the
+    /// engine raises for an argument it cannot read. Every successful
+    /// `enter()` is paired with a `leave()` (a `defer`).
+    static func enter() throws {
+        let level = depth + 1
+        guard level <= maxDepth else {
+            throw BamlError.invalidArgument(
+                "the value nests lists, maps and classes more than \(maxDepth) deep, deeper than "
+                    + "the boundary's \(wireNestingLimit) nested wire messages can carry"
+            )
+        }
+        depth = level
+    }
+
+    static func leave() {
+        assert(depth > 0, "BamlValueNesting.leave() without a matching enter()")
+        depth -= 1
+    }
+}
+
+extension BamlBridge_Cffi_V1_InboundMapEntry {
+    /// A string-keyed entry: a map entry or a class field.
+    init(_ entry: (key: String, value: BamlInboundValue)) {
+        self.init()
+        stringKey = entry.key
+        value = entry.value.raw
+    }
+}
+
+/// Release every engine handle clone `value` holds. Host values (callables
+/// and opaque errors) are this host's own registry keys, not engine handles.
+func releaseInbound(_ value: BamlBridge_Cffi_V1_InboundValue) {
+    switch value.value {
+    case .handle(let handle):
+        if handle.handleType != .hostValueCallable && handle.handleType != .hostValueOpaque {
+            _ = BamlApi.handleRelease(handle.key)
+        }
+    case .classValue(let cls): for field in cls.fields { releaseInbound(field.value) }
+    case .listValue(let list): for item in list.values { releaseInbound(item) }
+    case .mapValue(let map): for entry in map.entries { releaseInbound(entry.value) }
+    case nil, .stringValue, .intValue, .floatValue, .boolValue, .enumValue, .uint8ArrayValue,
+        .bigintValue, .tyValue, .mediaValue, .promptAstValue, .jsNumberValue:
+        break
+    }
+}
+
+extension BamlSlot where Value: BamlEncodable {
+    /// `value` as a node of this slot, through `Value`'s conformance: a
+    /// caller that knows `Value` concretely calls a leaf, which is never
+    /// refused, and a container, which may be, alike.
+    public func _bamlEncode(_ value: Value) throws -> BamlInboundValue {
+        try value._bamlEncode(as: self)
+    }
 }
 
 /// A Swift type that stands for one exact BAML type of its own. This is the
@@ -448,8 +558,8 @@ extension BamlTyped {
     public static var _bamlStatedType: BamlTypeDescriptor { _bamlSlot.type }
 
     /// Encode under this Swift type's own slot.
-    public func _bamlEncode() -> BamlInboundValue {
-        _bamlEncode(as: Self._bamlSlot)
+    public func _bamlEncode() throws -> BamlInboundValue {
+        try _bamlEncode(as: Self._bamlSlot)
     }
 }
 
@@ -531,14 +641,12 @@ extension BamlNull: BamlTyped, BamlLeafEncodable {
 }
 
 extension Optional: BamlEncodable where Wrapped: BamlEncodable {
-    public func _bamlEncode(as slot: BamlSlot<Wrapped?>) -> BamlInboundValue {
+    public func _bamlEncode(as slot: BamlSlot<Wrapped?>) throws -> BamlInboundValue {
         guard case .optional(let wrapped) = slot.node.shape else {
             slot.node.mismatch("an optional")
         }
-        switch self {
-        case .none: return BamlInboundValue() // explicit null
-        case .some(let value): return value._bamlEncode(as: BamlSlot(wrapped))
-        }
+        guard let value = self else { return BamlInboundValue() } // explicit null
+        return try value._bamlEncode(as: BamlSlot(wrapped))
     }
 }
 
@@ -547,18 +655,24 @@ extension Optional: BamlTyped where Wrapped: BamlTyped {
 }
 
 extension Array: BamlEncodable where Element: BamlEncodable {
-    public func _bamlEncode(as slot: BamlSlot<[Element]>) -> BamlInboundValue {
+    public func _bamlEncode(as slot: BamlSlot<[Element]>) throws -> BamlInboundValue {
         guard case .list(let item) = slot.node.shape else { slot.node.mismatch("a list") }
         let itemSlot = BamlSlot<Element>(item)
-        var list = BamlBridge_Cffi_V1_InboundListValue()
-        list.values = map { $0._bamlEncode(as: itemSlot).raw }
-        var v = BamlBridge_Cffi_V1_InboundValue()
-        // Assigning the message sets the oneof case even when the list
-        // is empty — the Swift equivalent of Python's `SetInParent()`,
-        // so `[]` arrives as an empty list, not null.
-        v.listValue = list
-        v.valueType = slot.type.raw
-        return BamlInboundValue(v)
+        try BamlValueNesting.enter()
+        defer { BamlValueNesting.leave() }
+        // The descent keeps no wire message in this frame: the list is
+        // assembled once every item is encoded.
+        var items: [BamlInboundValue] = []
+        items.reserveCapacity(count)
+        do {
+            for element in self {
+                items.append(try element._bamlEncode(as: itemSlot))
+            }
+        } catch {
+            for item in items { releaseInbound(item.raw) }
+            throw error
+        }
+        return .listNode(items, stating: slot.type)
     }
 }
 
@@ -567,20 +681,22 @@ extension Array: BamlTyped where Element: BamlTyped {
 }
 
 extension Dictionary: BamlEncodable where Key == String, Value: BamlEncodable {
-    public func _bamlEncode(as slot: BamlSlot<[String: Value]>) -> BamlInboundValue {
+    public func _bamlEncode(as slot: BamlSlot<[String: Value]>) throws -> BamlInboundValue {
         guard case .map(let value) = slot.node.shape else { slot.node.mismatch("a map") }
         let valueSlot = BamlSlot<Value>(value)
-        var mapValue = BamlBridge_Cffi_V1_InboundMapValue()
-        mapValue.entries = map { key, value in
-            var entry = BamlBridge_Cffi_V1_InboundMapEntry()
-            entry.stringKey = key
-            entry.value = value._bamlEncode(as: valueSlot).raw
-            return entry
+        try BamlValueNesting.enter()
+        defer { BamlValueNesting.leave() }
+        var entries: [(key: String, value: BamlInboundValue)] = []
+        entries.reserveCapacity(count)
+        do {
+            for (key, value) in self {
+                entries.append((key, try value._bamlEncode(as: valueSlot)))
+            }
+        } catch {
+            for entry in entries { releaseInbound(entry.value.raw) }
+            throw error
         }
-        var v = BamlBridge_Cffi_V1_InboundValue()
-        v.mapValue = mapValue // presence even when empty, as above
-        v.valueType = slot.type.raw
-        return BamlInboundValue(v)
+        return .mapNode(entries, stating: slot.type)
     }
 }
 
@@ -591,11 +707,11 @@ extension Dictionary: BamlTyped where Key == String, Value: BamlTyped {
 /// One named value of a class or a call, paired with the slot it fills.
 public struct BamlField {
     let name: String
-    let encode: () -> BamlInboundValue
+    let encode: () throws -> BamlInboundValue
 
     public init<Value: BamlEncodable>(_ name: String, _ value: Value, as slot: BamlSlot<Value>) {
         self.name = name
-        self.encode = { value._bamlEncode(as: slot) }
+        self.encode = { try value._bamlEncode(as: slot) }
     }
 
     /// A prebuilt node, for runtime-owned values with no Swift model.
@@ -611,22 +727,63 @@ extension BamlInboundValue {
     public static func baml_class(
         _ slot: BamlSlot<some BamlEncodable>,
         _ fields: [BamlField]
-    ) -> BamlInboundValue {
+    ) throws -> BamlInboundValue {
         guard case .classType = slot.node.shape else { slot.node.mismatch("a class") }
-        return classValue(stating: slot.type, fields)
+        return try classValue(stating: slot.type, fields)
     }
 
-    static func classValue(stating type: BamlTypeDescriptor, _ fields: [BamlField]) -> BamlInboundValue {
-        var cls = BamlBridge_Cffi_V1_InboundClassValue()
-        cls.fields = fields.map { field in
-            var entry = BamlBridge_Cffi_V1_InboundMapEntry()
-            entry.stringKey = field.name
-            entry.value = field.encode().raw
-            return entry
+    static func classValue(stating type: BamlTypeDescriptor, _ fields: [BamlField]) throws -> BamlInboundValue {
+        try BamlValueNesting.enter()
+        defer { BamlValueNesting.leave() }
+        var entries: [(key: String, value: BamlInboundValue)] = []
+        entries.reserveCapacity(fields.count)
+        do {
+            for field in fields {
+                entries.append((field.name, try field.encode()))
+            }
+        } catch {
+            for entry in entries { releaseInbound(entry.value.raw) }
+            throw error
         }
+        return .classNode(entries, stating: type)
+    }
+
+    /// A class node, assembled from its encoded fields.
+    private static func classNode(
+        _ fields: [(key: String, value: BamlInboundValue)],
+        stating type: BamlTypeDescriptor
+    ) -> BamlInboundValue {
+        var cls = BamlBridge_Cffi_V1_InboundClassValue()
+        cls.fields = fields.map(BamlBridge_Cffi_V1_InboundMapEntry.init)
         var v = BamlBridge_Cffi_V1_InboundValue()
         v.valueType = type.raw
         v.classValue = cls
+        return BamlInboundValue(v)
+    }
+
+    /// A list node, assembled from its encoded items.
+    static func listNode(_ items: [BamlInboundValue], stating type: BamlTypeDescriptor) -> BamlInboundValue {
+        var list = BamlBridge_Cffi_V1_InboundListValue()
+        list.values = items.map(\.raw)
+        var v = BamlBridge_Cffi_V1_InboundValue()
+        // Assigning the message sets the oneof case even when the list is
+        // empty — the Swift equivalent of Python's `SetInParent()`, so `[]`
+        // arrives as an empty list, not null.
+        v.listValue = list
+        v.valueType = type.raw
+        return BamlInboundValue(v)
+    }
+
+    /// A map node, assembled from its encoded entries.
+    static func mapNode(
+        _ entries: [(key: String, value: BamlInboundValue)],
+        stating type: BamlTypeDescriptor
+    ) -> BamlInboundValue {
+        var map = BamlBridge_Cffi_V1_InboundMapValue()
+        map.entries = entries.map(BamlBridge_Cffi_V1_InboundMapEntry.init)
+        var v = BamlBridge_Cffi_V1_InboundValue()
+        v.mapValue = map // presence even when empty, as for a list
+        v.valueType = type.raw
         return BamlInboundValue(v)
     }
 
@@ -653,27 +810,38 @@ extension BamlInboundValue {
 /// One keyword argument of a call: its wire name and how it encodes.
 public struct BamlArgument {
     let name: String
-    let encode: () -> BamlInboundValue
+    let source: Source
 
-    private init(name: String, encode: @escaping () -> BamlInboundValue) {
+    /// What an argument encodes from.
+    enum Source {
+        /// A value, which may be refused.
+        case value(() throws -> BamlInboundValue)
+        /// A host callable (or null), whose encoding registers it. The engine
+        /// releases the registration once it holds the handle, so a call that
+        /// fails before then releases it itself.
+        case callable(BamlHostCallable?)
+    }
+
+    private init(name: String, encode: @escaping () throws -> BamlInboundValue) {
         self.name = name
-        self.encode = encode
+        self.source = .value(encode)
     }
 
     /// `value` as a node of its declared parameter type.
     public init<Value: BamlEncodable>(_ name: String, _ value: Value, as slot: BamlSlot<Value>) {
-        self.init(name: name) { value._bamlEncode(as: slot) }
+        self.init(name: name) { try value._bamlEncode(as: slot) }
     }
 
     /// `value` under its own Swift type's slot, for a parameter whose
     /// declared type no generated code spells (`client` of a function spec).
     public init(_ name: String, _ value: (any BamlTyped)?) {
-        self.init(name: name) { value?._bamlEncode() ?? BamlInboundValue() }
+        self.init(name: name) { try value?._bamlEncode() ?? BamlInboundValue() }
     }
 
     /// A host callable, stated as the function type it was built with.
     public init(_ name: String, _ callable: BamlHostCallable?) {
-        self.init(name: name) { callable?._bamlEncode() ?? BamlInboundValue() }
+        self.name = name
+        self.source = .callable(callable)
     }
 
     /// An explicit BAML null.
@@ -684,6 +852,25 @@ public struct BamlArgument {
     /// An engine handle used as a receiver: its type is the engine's.
     init(_ name: String, handle: BamlHandle) {
         self.init(name: name) { handle._bamlEncode(as: ._leaf(.rustType)) }
+    }
+
+    func encode() throws -> BamlInboundValue {
+        switch source {
+        case .value(let encode): return try encode()
+        case .callable(let callable): return callable?._bamlEncode() ?? BamlInboundValue()
+        }
+    }
+
+    /// Release what `encoded`, this argument's encoding, holds, for a call
+    /// the engine never receives.
+    func release(_ encoded: BamlBridge_Cffi_V1_InboundValue) {
+        switch source {
+        case .value: releaseInbound(encoded)
+        case .callable:
+            if case .handle(let handle)? = encoded.value {
+                HostCallableRegistry.shared.release(handle.key)
+            }
+        }
     }
 }
 
@@ -735,12 +922,14 @@ func encodeCallArgs(
         do { msg.invocation.trace = try BamlBridge_Cffi_V1_TraceSelection(serializedBytes: BamlApi.takeBuffer(buffer)) }
         catch { if owner != 0 { _ = BamlApi.handleRelease(owner) }; throw error }
     }
-    if let cancel = baml.cancel { msg.invocation.cancel = cancel().raw }
-    msg.kwargs = args.map { argument in
+    if let cancel = baml.cancel { msg.invocation.cancel = try cancel().raw }
+    // One argument at a time, so a refusal finds every argument before it
+    // in `msg.kwargs` for the release below.
+    for argument in args {
         var entry = BamlBridge_Cffi_V1_InboundMapEntry()
         entry.stringKey = argument.name
-        entry.value = argument.encode().raw
-        return entry
+        entry.value = try argument.encode().raw
+        msg.kwargs.append(entry)
     }
     msg.typeArgs = typeArgs.map { argument in
         var wire = BamlBridge_Cffi_V1_BamlTyArg()
@@ -750,18 +939,9 @@ func encodeCallArgs(
     }
     return try msg.serializedData()
     } catch {
-        func release(_ value: BamlBridge_Cffi_V1_InboundValue) {
-            switch value.value {
-            case .handle(let handle): if handle.handleType != .hostValueCallable && handle.handleType != .hostValueOpaque { _ = BamlApi.handleRelease(handle.key) }
-            case .classValue(let cls): for field in cls.fields { release(field.value) }
-            case .listValue(let list): for item in list.values { release(item) }
-            case .mapValue(let map): for entry in map.entries { release(entry.value) }
-            default: break
-            }
-        }
         if case .reservation(let owner)? = msg.invocation.trace.selection { _ = BamlApi.handleRelease(owner) }
-        if msg.invocation.hasCancel { release(msg.invocation.cancel) }
-        for entry in msg.kwargs { release(entry.value) }
+        if msg.invocation.hasCancel { releaseInbound(msg.invocation.cancel) }
+        for (argument, entry) in zip(args, msg.kwargs) { argument.release(entry.value) }
         _ = BamlApi.releaseFunctionCall(callId)
         throw error
     }

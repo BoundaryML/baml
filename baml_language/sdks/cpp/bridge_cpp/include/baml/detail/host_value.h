@@ -28,6 +28,7 @@
 #include <array>
 #include <atomic>
 #include <climits>
+#include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <functional>
@@ -35,12 +36,17 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <system_error>
 #include <thread>
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
+#if !defined(_WIN32)
+#include <pthread.h>
+#endif
 
 #if !defined(_MSC_VER)
 #include <cxxabi.h>
@@ -132,6 +138,60 @@ class host_value_registry {
   std::unordered_map<uint64_t, entry> table_;
   uint64_t next_key_ = 1;
 };
+
+// The stack a host callable runs on: the 8 MiB a main thread gets on macOS
+// and Linux. The thread runs the user's callable, encodes its result, and
+// runs the engine's read of that result, which follows it down as deep as
+// the wire lets it nest; std::thread would take the platform's
+// secondary-thread default instead (512 KiB on macOS), too little for that
+// read in a debug build of the runtime.
+inline constexpr std::size_t host_call_stack_bytes = std::size_t{8} << 20;
+
+// Runs `body` on a new detached thread. A Windows thread already gets the
+// executable's stack reservation, the main thread's own; elsewhere the
+// thread gets `host_call_stack_bytes`. Throws std::system_error when the
+// thread cannot start, as std::thread's constructor does. `body` must not
+// throw.
+template <typename Body>
+void spawn_host_call_thread(Body body) {
+#if defined(_WIN32)
+  std::thread(std::move(body)).detach();
+#else
+  pthread_attr_t attributes;
+  if (const int status = pthread_attr_init(&attributes); status != 0)
+    throw std::system_error(status, std::generic_category(),
+                            "host callable thread attributes");
+  struct attributes_guard {
+    pthread_attr_t& attributes;
+    ~attributes_guard() { pthread_attr_destroy(&attributes); }
+  } guard{attributes};
+  if (const int status =
+          pthread_attr_setstacksize(&attributes, host_call_stack_bytes);
+      status != 0)
+    throw std::system_error(status, std::generic_category(),
+                            "host callable thread stack size");
+  if (const int status =
+          pthread_attr_setdetachstate(&attributes, PTHREAD_CREATE_DETACHED);
+      status != 0)
+    throw std::system_error(status, std::generic_category(),
+                            "host callable thread detach state");
+  auto task = std::make_unique<Body>(std::move(body));
+  pthread_t thread;
+  const int status = pthread_create(
+      &thread, &attributes,
+      [](void* raw) -> void* {
+        const std::unique_ptr<Body> owned(static_cast<Body*>(raw));
+        (*owned)();
+        return nullptr;
+      },
+      task.get());
+  if (status != 0)
+    throw std::system_error(status, std::generic_category(),
+                            "host callable thread");
+  // The thread owns the task now.
+  static_cast<void>(task.release());
+#endif
+}
 
 struct callback_frame {
   pb::HostInvocation wire;
@@ -251,6 +311,7 @@ inline void transcode_outbound_to_inbound(pb::InboundValue& out,
       }
     }
     case pb::BamlOutboundValue::kListValue: {
+      const encode_level level;
       pb::InboundListValue* list = out.mutable_list_value();
       for (const pb::BamlOutboundValue& item : v.list_value().items()) {
         transcode_outbound_to_inbound(*list->add_values(), item);
@@ -262,6 +323,7 @@ inline void transcode_outbound_to_inbound(pb::InboundValue& out,
       return;
     }
     case pb::BamlOutboundValue::kMapValue: {
+      const encode_level level;
       pb::InboundMapValue* map = out.mutable_map_value();
       for (const pb::BamlOutboundMapEntry& e : v.map_value().entries()) {
         pb::InboundMapEntry* entry = map->add_entries();
@@ -276,6 +338,7 @@ inline void transcode_outbound_to_inbound(pb::InboundValue& out,
       return;
     }
     case pb::BamlOutboundValue::kClassValue: {
+      const encode_level level;
       pb::InboundClassValue* cls = out.mutable_class_value();
       for (const pb::BamlOutboundMapEntry& e : v.class_value().fields()) {
         pb::InboundMapEntry* field = cls->add_fields();
@@ -587,8 +650,8 @@ extern "C" inline void baml_cpp_host_dispatch_trampoline(const uint8_t* args,
   };
   // No C++ exception may cross the C ABI (bridge contract), and every
   // setup fault must still complete the call or the engine awaits forever:
-  // bytes.assign can throw bad_alloc, the registry lock can throw, and the
-  // std::thread constructor throws system_error under thread exhaustion.
+  // bytes.assign can throw bad_alloc, the registry lock can throw, and
+  // starting the thread throws system_error under thread exhaustion.
   try {
     frame = std::make_shared<baml::detail::callback_frame>();
     frame->wire = std::move(wire);
@@ -615,8 +678,9 @@ extern "C" inline void baml_cpp_host_dispatch_trampoline(const uint8_t* args,
       std::lock_guard<std::mutex> lock(baml::detail::callback_frames_mutex);
       baml::detail::callback_frames.emplace(call_id, frame);
     }
-    std::thread([dispatcher = std::move(dispatcher), bridge_failure, call_id,
-                 frame, bytes = std::move(bytes)]() mutable {
+    baml::detail::spawn_host_call_thread([dispatcher = std::move(dispatcher),
+                                          bridge_failure, call_id, frame,
+                                          bytes = std::move(bytes)]() mutable {
       baml::detail::current_invocation_state = frame->state;
       try {
         if (frame->cancelled.load())
@@ -634,7 +698,7 @@ extern "C" inline void baml_cpp_host_dispatch_trampoline(const uint8_t* args,
       baml::detail::current_invocation_state.reset();
       std::lock_guard<std::mutex> lock(baml::detail::callback_frames_mutex);
       baml::detail::callback_frames.erase(call_id);
-    }).detach();
+    });
   } catch (...) {
     if (!frame) {
       baml::detail::api().handle_release(wire.effective_state());

@@ -3,7 +3,6 @@ using System.Runtime.ExceptionServices;
 using Baml.Cffi;
 using Baml.Generated.V1;
 using BamlBridge.Cffi.V1;
-using Google.Protobuf;
 
 namespace Baml.Proto;
 
@@ -78,22 +77,28 @@ internal static class HostCallableProtocol
         return new BamlTy { Function = function };
     }
 
+    /// <summary>
+    /// Bind a host invocation's arguments to the callable's parameters. Each
+    /// decoded argument claims the engine references it keeps from
+    /// <paramref name="arguments"/>; the caller disposes it afterwards to
+    /// release the rest.
+    /// </summary>
     internal static IReadOnlyList<object?> BindArguments(
         BamlGeneratedHostCallableDescriptor descriptor,
-        ReadOnlySpan<byte> bytes)
+        HostCallArguments arguments)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
-        BamlToHostCall call;
-        try
-        {
-            call = BamlToHostCall.Parser.ParseFrom(bytes);
-        }
-        catch (InvalidProtocolBufferException error)
-        {
-            throw new BamlProtocolException(
-                "The native bridge supplied malformed host callback arguments.",
-                error.Message);
-        }
+        ArgumentNullException.ThrowIfNull(arguments);
+        BamlToHostCall call = arguments.Call;
+        // One budget for the whole call, as for one result envelope.
+        var budget = new BamlDecodeBudget();
+        BamlGeneratedValue Decode(BamlOutboundValue value, BamlGeneratedHostParameter parameter) =>
+            PrimitiveProtocol.DecodeHostArgument(
+                value,
+                $"$args.{parameter.WireIdentity}",
+                arguments.Ownership,
+                arguments.Api,
+                budget);
 
         IReadOnlyList<BamlGeneratedHostParameter> parameters = descriptor.Parameters;
         int requiredCount = parameters.TakeWhile(parameter => !parameter.Optional).Count();
@@ -130,12 +135,8 @@ internal static class HostCallableProtocol
                     throw InvalidArguments("The callback received too many required arguments.");
                 }
 
-                // BUG: decoded without the native API, so an engine handle or a
-                // type value's live rows in a callback argument are refused and
-                // never released; Python and TypeScript own and release them here.
-                // `BindArguments` needs the native API threaded through.
-                BamlGeneratedValue decoded = PrimitiveProtocol.Decode(supplied.Value);
-                bound[requiredIndex] = parameters[requiredIndex].Decode(decoded);
+                BamlGeneratedHostParameter required = parameters[requiredIndex];
+                bound[requiredIndex] = required.Decode(Decode(supplied.Value, required));
                 requiredIndex++;
                 continue;
             }
@@ -157,7 +158,7 @@ internal static class HostCallableProtocol
             }
 
             int index = IndexOf(parameters, parameter);
-            bound[index] = parameter.Decode(PrimitiveProtocol.Decode(supplied.Value));
+            bound[index] = parameter.Decode(Decode(supplied.Value, parameter));
         }
 
         if (requiredIndex != requiredCount)

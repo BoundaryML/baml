@@ -247,7 +247,7 @@ fn to_source_code_internal(
                         .properties
                         .iter()
                         .map(|prop| {
-                            descriptor_expr_opt(&prop.ty, &aliases)
+                            descriptor_expr_opt(&prop.ty, &ctx, &mut sink)
                                 .unwrap_or_else(|| "null".to_string())
                         })
                         .collect(),
@@ -350,7 +350,10 @@ fn to_source_code_internal(
             aliases: &aliases,
             pkg: pkg.clone(),
         };
-        alias_bodies.push((alias_fqn.clone(), descriptor_expr(resolves_to, &aliases)));
+        alias_bodies.push((
+            alias_fqn.clone(),
+            descriptor_expr(resolves_to, &ctx, &mut sink),
+        ));
         let body = if let Ty::Union(items) = resolves_to {
             let arms: Vec<Ty> = items
                 .iter()
@@ -1706,39 +1709,135 @@ mod tests {
         let _ = emit_sdk(&pool);
     }
 
-    #[test]
-    fn unnamed_returned_callable_uses_its_canonical_positional_wire_name() {
+    /// `(x: int) -> int throws never`, the callable type the position tests use.
+    fn t_int_to_int() -> Ty {
         use baml_sdkgen_types::{CallableParam, CodegenFunctionParamMode};
-
-        let returned = Ty::Function {
+        Ty::Function {
             params: Box::new([CallableParam {
-                name: None,
+                name: Some(BaseName::new("x")),
                 ty: t_int(),
                 mode: CodegenFunctionParamMode::Required,
             }]),
             ret: Box::new(t_int()),
             throws: Box::new(Ty::Never),
-        };
+        }
+    }
+
+    /// The descriptor a function-typed position of `(x: int) -> int` decodes
+    /// against when the position is spelled `host`.
+    fn int_to_int_descriptor(host: &str) -> String {
+        format!(
+            "baml_bridge.BamlType.function({host}.class, java.util.List.of(new baml_bridge.BamlType.Param(null, baml_bridge.BamlType.INT, false)), baml_bridge.BamlType.INT, baml_bridge.BamlType.NEVER)"
+        )
+    }
+
+    /// A function with no arguments returning `ret`.
+    fn returning(fn_name: &str, ret: Ty) -> Symbol {
+        Symbol::Function(Function {
+            name: BaseName::new(fn_name),
+            generic_params: Vec::new(),
+            docstring: None,
+            arguments: Vec::new(),
+            return_type: ret,
+            throws: None,
+            watchers: Vec::new(),
+            origin: origin(0),
+        })
+    }
+
+    #[test]
+    fn returned_callable_decodes_into_its_owning_interface() {
         let mut pool = SymbolPool::new();
         pool.insert(
-            name("user", &[], "make_unnamed"),
-            Symbol::Function(Function {
-                name: BaseName::new("make_unnamed"),
-                generic_params: Vec::new(),
-                docstring: None,
-                arguments: Vec::new(),
-                return_type: returned,
-                throws: None,
-                watchers: Vec::new(),
-                origin: origin(0),
-            }),
+            name("user", &[], "make_adder"),
+            returning("make_adder", t_int_to_int()),
         );
         let out = emit_sdk(&pool);
         let fns = &out[&PathBuf::from("Fns.java")];
-        assert!(fns.contains("new java.lang.String[] {\"arg0\"}"), "{fns}");
+        // The owning interface is the method's return type, and the return
+        // descriptor names it: the decoder builds the closure, no wrapper call.
+        let owning = fns
+            .split("public static ")
+            .nth(1)
+            .and_then(|sig| sig.split(' ').next())
+            .expect("a static binding");
+        assert!(owning.starts_with("baml_sdk."), "{fns}");
+        assert!(fns.contains(&int_to_int_descriptor(owning)), "{fns}");
+        assert!(!fns.contains("returnedClosure"), "{fns}");
+    }
+
+    #[test]
+    fn nested_callable_positions_decode_into_their_functional_type() {
+        let mut pool = SymbolPool::new();
+        // `fn_list() -> ((x: int) -> int)[]`: a list element.
+        pool.insert(
+            name("user", &[], "fn_list"),
+            returning("fn_list", t_list(t_int_to_int())),
+        );
+        // `fn_or_string() -> ((x: int) -> int) | string`: a union option.
+        pool.insert(
+            name("user", &[], "fn_or_string"),
+            returning("fn_or_string", t_union(vec![t_int_to_int(), t_string()])),
+        );
+        // `hof(cb: (f: (x: int) -> int) -> int) -> int`: a callback's parameter.
+        let cb = Ty::Function {
+            params: Box::new([baml_sdkgen_types::CallableParam {
+                name: Some(BaseName::new("f")),
+                ty: t_int_to_int(),
+                mode: baml_sdkgen_types::CodegenFunctionParamMode::Required,
+            }]),
+            ret: Box::new(t_int()),
+            throws: Box::new(Ty::Never),
+        };
+        pool.insert(
+            name("user", &[], "hof"),
+            Symbol::Function(Function {
+                name: BaseName::new("hof"),
+                generic_params: Vec::new(),
+                docstring: None,
+                arguments: vec![FunctionArgument {
+                    injected: false,
+                    name: BaseName::new("cb"),
+                    docstring: None,
+                    ty: cb,
+                    default: None,
+                }],
+                return_type: t_int(),
+                throws: None,
+                watchers: Vec::new(),
+                origin: origin(1),
+            }),
+        );
+        // `class Holder { f (x: int) -> int }`: a field.
+        let holder = name("user", &[], "Holder");
+        pool.insert(
+            holder.clone(),
+            class_sym_with_props(&holder, &[], vec![("f", t_int_to_int())], 2),
+        );
+        let out = emit_sdk(&pool);
+        let fns = &out[&PathBuf::from("Fns.java")];
+        let function = int_to_int_descriptor("java.util.function.Function");
         assert!(
-            fns.contains("baml_bridge.BamlFfi.returnedClosure("),
+            fns.contains(&format!("baml_bridge.BamlType.list({function})")),
             "{fns}"
+        );
+        assert!(
+            fns.contains(&format!(
+                "baml_bridge.BamlType.union({function}, baml_bridge.BamlType.STRING)"
+            )),
+            "{fns}"
+        );
+        assert!(
+            fns.contains(&format!(
+                "baml_bridge.BamlType.function(java.util.function.Function.class, java.util.List.of(new baml_bridge.BamlType.Param(null, {function}, false)), baml_bridge.BamlType.INT, baml_bridge.BamlType.NEVER)"
+            )),
+            "{fns}"
+        );
+        assert!(
+            out.values()
+                .any(|file| file.contains(&function)
+                    && file.contains("registerClass(\"user.Holder\"")),
+            "no class registration carries the field's functional type"
         );
     }
 

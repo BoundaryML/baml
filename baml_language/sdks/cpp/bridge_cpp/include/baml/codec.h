@@ -816,6 +816,7 @@ struct codec<std::vector<T>> {
   }
   static void encode(detail::pb::InboundValue& value_msg,
                      const std::vector<T>& v) {
+    const detail::encode_level level;
     detail::pb::InboundListValue* list = value_msg.mutable_list_value();
     for (const T& item : v) {
       codec<T>::encode(*list->add_values(), item);
@@ -847,6 +848,7 @@ struct codec<std::unordered_map<std::string, T>> {
   }
   static void encode(detail::pb::InboundValue& value_msg,
                      const std::unordered_map<std::string, T>& v) {
+    const detail::encode_level level;
     detail::pb::InboundMapValue* map = value_msg.mutable_map_value();
     for (const auto& entry : v) {
       detail::pb::InboundMapEntry* e = map->add_entries();

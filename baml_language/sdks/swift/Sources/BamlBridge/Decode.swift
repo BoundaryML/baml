@@ -487,7 +487,7 @@ func unwrapEnvelope(_ data: Data) throws -> BamlOutboundValue {
     }
 }
 
-private func bamlError(
+func bamlError(
     from value: BamlBridge_Cffi_V1_BamlOutboundValue,
     trace: [String]
 ) -> BamlError {

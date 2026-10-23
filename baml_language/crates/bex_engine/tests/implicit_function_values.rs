@@ -95,7 +95,9 @@ fn callable_handle(value: BexExternalValue) -> bex_external_types::Handle {
 }
 
 /// A host hands the value back to BAML where `(int) -> int` is declared: the
-/// value states that type, so it is admitted and runs.
+/// value states that type, so it is admitted and runs. This is the positive
+/// control for `a_host_call_checks_arguments_against_the_inferred_instantiation`
+/// below, which is where the specialization has teeth.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn an_inferred_instantiation_round_trips_through_the_host() {
     let engine = engine();
@@ -157,10 +159,16 @@ async fn a_host_call_seeds_the_frame_of_an_inferred_instantiation() {
         .call_callable(handle, Vec::new(), context(), true)
         .await
         .expect("the value carries `T = string`");
-    let BexExternalValue::Array { items, .. } = result else {
+    let BexExternalValue::Array {
+        element_type,
+        items,
+    } = result
+    else {
         panic!("expected a list, got {result:?}");
     };
     assert!(items.is_empty());
+    // The element type is the frame's `T`, which only a seeded frame has.
+    assert_eq!(element_type, bex_engine::WireTy::string());
 }
 
 /// A builtin's method value is realized from its receiver: a list's element

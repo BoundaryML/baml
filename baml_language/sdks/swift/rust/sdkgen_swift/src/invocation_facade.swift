@@ -19,8 +19,8 @@ extension Baml {
         public init(trace: Trace.Selection? = nil, cancel: CancelToken? = nil, timeoutMs: Int64? = nil) { self.trace = trace; self.cancel = cancel; self.timeoutMs = timeoutMs }
         internal func lowered() throws -> BamlInvocationOptions {
             if trace != nil && trace?.handle == nil { throw BamlDecodeError.unsupported("trace selection has no live handle") }
-            var encodeCancel: (@Sendable () -> BamlInboundValue)?
-            if let token = cancel { encodeCancel = { token._bamlEncode() } }
+            var encodeCancel: (@Sendable () throws -> BamlInboundValue)?
+            if let token = cancel { encodeCancel = { try token._bamlEncode() } }
             return BamlInvocationOptions(trace: trace?.handle, cancel: encodeCancel, timeoutMs: timeoutMs)
         }
     }

@@ -630,6 +630,19 @@ internal static class PrimitiveProtocol
             depth: 0);
     }
 
+    /// <summary>
+    /// Decode one host-callback argument, claiming the engine references it
+    /// keeps from <paramref name="ownership"/>, the invocation's argument
+    /// inventory.
+    /// </summary>
+    internal static BamlGeneratedValue DecodeHostArgument(
+        BamlOutboundValue value,
+        string path,
+        OutboundOwnershipScope ownership,
+        NativeApi api,
+        BamlDecodeBudget budget) =>
+        Decode(value, path, ownership, api, budget, depth: 0);
+
     private static BamlGeneratedValue Decode(
         BamlOutboundValue value,
         string path,
