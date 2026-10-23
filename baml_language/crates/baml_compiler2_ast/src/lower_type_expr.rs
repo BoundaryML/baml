@@ -8,7 +8,7 @@
 use baml_base::Name;
 use baml_compiler_syntax::{
     FunctionTypeParam, SyntaxElement, SyntaxKind, SyntaxNode, SyntaxNodeExt, SyntaxToken,
-    ast::TypeExpr as CstTypeExpr,
+    ast::{FunctionType as CstFunctionType, TypeExpr as CstTypeExpr},
 };
 use rowan::ast::AstNode;
 use text_size::TextRange;
@@ -47,7 +47,7 @@ pub(crate) fn lower_type_expr_node(
             }
         }
     }
-    if let Some(error) = syntax.report_remaining(type_expr, diags) {
+    if let Some(error) = syntax.report_remaining(type_expr.syntax(), diags) {
         return error;
     }
     apply_modifiers(base, &modifiers)
@@ -75,7 +75,7 @@ fn lower_union(type_expr: &CstTypeExpr, diags: &mut Vec<LoweringDiagnostic>) -> 
     syntax
         .remaining
         .retain(|element| element.kind() != SyntaxKind::PIPE);
-    if let Some(error) = syntax.report_remaining(type_expr, diags) {
+    if let Some(error) = syntax.report_remaining(type_expr.syntax(), diags) {
         return error;
     }
     TypeExprKind::Union { variants }.at(type_expr.syntax().span_range())
@@ -149,48 +149,9 @@ fn lower_base(
     // Handle function types like `(x: int, y: int) -> bool`. A function type
     // cannot declare its own generic parameters (rejected by the parser); any
     // leading `<...>` is left in the CST for recovery and ignored here.
-    if type_expr.is_function_type() {
-        syntax.parens();
-        syntax.token(SyntaxKind::ARROW);
-        for param in type_expr.function_type_params() {
-            syntax.node(param.syntax());
-        }
-        // Commas separate parameters, including an optional trailing comma.
-        syntax
-            .remaining
-            .retain(|element| element.kind() != SyntaxKind::COMMA);
-        if let Some(ret) = type_expr.function_return_type() {
-            syntax.node(ret.syntax());
-        }
-        if let Some(throws) = type_expr.function_throws_clause() {
-            syntax.node(throws.syntax());
-        }
-        let params = type_expr
-            .function_type_params()
-            .iter()
-            .map(|p| {
-                let name = p.name().map(|s| Name::new(&s));
-                let optional = p.is_optional();
-                let ty = p
-                    .ty()
-                    .map(|t| lower_type_expr_node(&t, diags))
-                    .unwrap_or_else(|| TypeExprKind::Missing.at(span));
-                AstFunctionTypeParam { name, optional, ty }
-            })
-            .collect();
-        let ret = type_expr
-            .function_return_type()
-            .map(|t| lower_type_expr_node(&t, diags))
-            .unwrap_or_else(|| TypeExprKind::Missing.at(span));
-        let throws = type_expr
-            .function_throws_type()
-            .map(|t| Box::new(lower_type_expr_node(&t, diags)));
-        return TypeExprKind::Function {
-            params,
-            ret: Box::new(ret),
-            throws,
-        }
-        .at(span);
+    if let Some(function) = type_expr.function_type() {
+        syntax.node(function.syntax());
+        return lower_function_type(&function, diags, is_union_member(type_expr));
     }
 
     // Handle parenthesized types like `(int | string)`
@@ -220,6 +181,68 @@ fn lower_base(
     }
 
     lower_base_type(type_expr, diags, syntax)
+}
+
+fn lower_function_type(
+    function: &CstFunctionType,
+    diags: &mut Vec<LoweringDiagnostic>,
+    check_syntax: bool,
+) -> TypeExpr {
+    let span = function.syntax().span_range();
+    let mut syntax = TypeSyntaxCoverage::new_node(function.syntax(), check_syntax);
+    syntax.parens();
+    syntax.token(SyntaxKind::ARROW);
+    for param in function.params() {
+        syntax.node(param.syntax());
+    }
+    // Commas separate parameters, including an optional trailing comma.
+    syntax
+        .remaining
+        .retain(|element| element.kind() != SyntaxKind::COMMA);
+    if let Some(ret) = function.return_type() {
+        syntax.node(ret.syntax());
+        let mut return_syntax = TypeSyntaxCoverage::new_node(ret.syntax(), check_syntax);
+        if let Some(ty) = ret.ty() {
+            return_syntax.node(ty.syntax());
+        }
+        if let Some(error) = return_syntax.report_remaining(ret.syntax(), diags) {
+            return error;
+        }
+    }
+    if let Some(throws) = function.throws_clause() {
+        syntax.node(throws.syntax());
+    }
+    let params = function
+        .params()
+        .iter()
+        .map(|p| {
+            let name = p.name().map(|s| Name::new(&s));
+            let optional = p.is_optional();
+            let ty = p
+                .ty()
+                .map(|t| lower_type_expr_node(&t, diags))
+                .unwrap_or_else(|| TypeExprKind::Missing.at(span));
+            AstFunctionTypeParam { name, optional, ty }
+        })
+        .collect();
+    let ret = function
+        .return_type()
+        .and_then(|ret| ret.ty())
+        .map(|t| lower_type_expr_node(&t, diags))
+        .unwrap_or_else(|| TypeExprKind::Missing.at(span));
+    let throws = function
+        .throws_clause()
+        .and_then(|throws| throws.type_expr())
+        .map(|t| Box::new(lower_type_expr_node(&t, diags)));
+    if let Some(error) = syntax.report_remaining(function.syntax(), diags) {
+        return error;
+    }
+    TypeExprKind::Function {
+        params,
+        ret: Box::new(ret),
+        throws,
+    }
+    .at(span)
 }
 
 fn lower_base_type(
@@ -324,10 +347,12 @@ struct TypeSyntaxCoverage {
 
 impl TypeSyntaxCoverage {
     fn new(type_expr: &CstTypeExpr, enabled: bool) -> Self {
+        Self::new_node(type_expr.syntax(), enabled)
+    }
+
+    fn new_node(node: &SyntaxNode, enabled: bool) -> Self {
         let remaining = if enabled {
-            type_expr
-                .syntax()
-                .children_with_tokens()
+            node.children_with_tokens()
                 .filter(|element| !element.kind().is_trivia())
                 .collect()
         } else {
@@ -378,18 +403,20 @@ impl TypeSyntaxCoverage {
 
     fn report_remaining(
         &self,
-        type_expr: &CstTypeExpr,
+        node: &SyntaxNode,
         diags: &mut Vec<LoweringDiagnostic>,
     ) -> Option<TypeExpr> {
         let (span, syntax) = self.remaining()?;
         diags.push(LoweringDiagnostic::UnconsumedTypeSyntax { syntax, span });
-        Some(TypeExprKind::Error.at(type_expr.syntax().span_range()))
+        Some(TypeExprKind::Error.at(node.span_range()))
     }
 
     fn remaining(&self) -> Option<(TextRange, String)> {
         let first = self.remaining.first()?;
         Some((
-            first.text_range(),
+            first
+                .as_node()
+                .map_or_else(|| first.text_range(), SyntaxNodeExt::span_range),
             self.remaining
                 .iter()
                 .map(|element| format!("{:?}", element.kind()))

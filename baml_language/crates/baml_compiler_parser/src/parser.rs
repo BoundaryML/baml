@@ -3175,6 +3175,10 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_return_type(&mut self) {
+        self.with_node(SyntaxKind::RETURN_TYPE, Self::parse_type);
+    }
+
     fn parse_type_primary(&mut self) {
         // The removed `unreflect(expr)` still parses as a type atom so it
         // recovers cleanly: it reports E0098 pointing at `let type`, and the
@@ -3449,8 +3453,8 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_paren_or_function_type_inner(&mut self) {
-        // We'll parse the content first, then decide based on whether `->` follows.
-        // For function types, we wrap in FUNCTION_TYPE; for parens, we just have the inner type.
+        // The arrow decides whether the parsed head belongs to a callable.
+        let function_start = self.events.len();
 
         // Pipes within a parameter list or parenthesized operand do not
         // compete with the enclosing function's return/throws boundary.
@@ -3486,15 +3490,14 @@ impl<'a> Parser<'a> {
 
         // Now check for `->` to determine if this is a function type
         if self.at(TokenKind::Arrow) {
-            // This is a function type: wrap everything in FUNCTION_TYPE node
-            // Note: The tokens are already emitted, we just need to parse the return type
+            self.wrap_events_in_node(function_start, SyntaxKind::FUNCTION_TYPE);
             self.bump(); // ->
             // Bare return unions are owned by the function even in pattern
             // position. A pipe followed by another function head is reported
             // as ambiguous instead of silently choosing this grouping.
             let enclosing_function_operand =
                 std::mem::replace(&mut self.function_union_operand, true);
-            self.parse_type(); // return type
+            self.parse_return_type();
             self.function_union_operand = enclosing_function_operand;
             if self.at(TokenKind::Throws) {
                 self.with_node(SyntaxKind::THROWS_CLAUSE, |p| {
@@ -3505,7 +3508,7 @@ impl<'a> Parser<'a> {
                     p.function_union_operand = enclosing_function_operand;
                 });
             }
-        // The caller's with_node(TYPE_EXPR) will wrap this appropriately
+            self.finish_node(); // FUNCTION_TYPE
         } else {
             // Not a function type - should be a parenthesized type
             if had_named_param {
@@ -3934,7 +3937,7 @@ impl<'a> Parser<'a> {
             p.parse_parameter_list();
 
             if p.eat(TokenKind::Arrow) {
-                p.parse_type();
+                p.parse_return_type();
             } else {
                 p.error_unexpected_token("return type (->)".to_string());
             }
@@ -4455,7 +4458,7 @@ impl<'a> Parser<'a> {
                     // directive.
                     allow_llm_body = false;
                 }
-                p.parse_type();
+                p.parse_return_type();
             } else {
                 allow_llm_body = false;
                 p.error_unexpected_token("return type (->)".to_string());
@@ -4751,7 +4754,7 @@ impl<'a> Parser<'a> {
 
             // Optional return type: anything before `throws` or `{`
             if !p.at(TokenKind::LBrace) && !p.at(TokenKind::Throws) {
-                p.parse_type();
+                p.parse_return_type();
             }
 
             // Optional throws clause
@@ -10532,15 +10535,16 @@ function call_llm_function(client: Client, function_name: string) -> unknown {
             .descendants()
             .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
             .expect("expected FUNCTION_DEF");
-        let type_exprs: Vec<_> = func
+        let returns: Vec<_> = func
             .children()
-            .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .filter(|node| node.kind() == SyntaxKind::RETURN_TYPE)
             .collect();
         assert_eq!(
-            type_exprs.len(),
+            returns.len(),
             1,
-            "expected one top-level return TYPE_EXPR on FUNCTION_DEF"
+            "expected one return annotation on FUNCTION_DEF"
         );
+        assert_eq!(child_kinds(&returns[0]), vec![SyntaxKind::TYPE_EXPR]);
         let expr_body = func
             .children()
             .find(|n| n.kind() == SyntaxKind::EXPR_FUNCTION_BODY);
@@ -11244,17 +11248,10 @@ type Callback = (value: int) -> string throws Foo
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
 
-        let function_type =
-            root.descendants()
-                .find(|n| {
-                    n.kind() == SyntaxKind::TYPE_EXPR && n.children_with_tokens().any(|child| {
-                        matches!(
-                            child,
-                            rowan::NodeOrToken::Token(token) if token.kind() == SyntaxKind::ARROW
-                        )
-                    })
-                })
-                .expect("expected function TYPE_EXPR");
+        let function_type = root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::FUNCTION_TYPE)
+            .expect("expected FUNCTION_TYPE");
 
         let throws = function_type
             .children()
@@ -11265,6 +11262,97 @@ type Callback = (value: int) -> string throws Foo
             throws.text().to_string().contains("throws Foo"),
             "expected function type throws clause text, got {:?}",
             throws.text().to_string()
+        );
+    }
+
+    #[test]
+    fn callable_and_return_types_have_dedicated_nodes() {
+        use baml_compiler_syntax::ast::{
+            FunctionDef, FunctionType, MethodSig, ReturnType, TypeExpr,
+        };
+        use rowan::ast::AstNode;
+
+        let source = r#"
+type Handler = int | (arg: () -> bool throws string) -> (() -> string throws never) throws int
+interface Provider { function get() -> Handler throws never; }
+function declared() -> (() -> string throws never) throws never {
+    () -> string throws never { "s" }
+}
+function inferred() -> int throws never {
+    let cb = () -> { 1 };
+    cb()
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(root.text().to_string(), source);
+        for function in root.descendants().filter_map(FunctionType::cast) {
+            let parent = function.syntax().parent().and_then(TypeExpr::cast).unwrap();
+            assert!(parent.is_function_type());
+            let ret = function.return_type().expect("explicit return annotation");
+            assert!(ret.ty().is_some());
+            assert_eq!(child_kinds(ret.syntax()), vec![SyntaxKind::TYPE_EXPR]);
+            assert!(
+                !function
+                    .syntax()
+                    .children()
+                    .any(|node| node.kind() == SyntaxKind::TYPE_EXPR)
+            );
+        }
+        for function in root.descendants().filter_map(FunctionDef::cast) {
+            assert!(function.return_type().is_some());
+            assert!(
+                function
+                    .syntax()
+                    .children()
+                    .any(|node| node.kind() == SyntaxKind::RETURN_TYPE)
+            );
+        }
+        let method = root.descendants().find_map(MethodSig::cast).unwrap();
+        assert!(method.return_type().is_some());
+        let annotations: Vec<_> = root
+            .descendants()
+            .filter(|node| node.kind() == SyntaxKind::LAMBDA_EXPR)
+            .map(|node| {
+                node.children()
+                    .find_map(ReturnType::cast)
+                    .and_then(|ret| ret.ty())
+                    .is_some()
+            })
+            .collect();
+        assert_eq!(annotations, vec![true, false]);
+
+        let (root, errors) = parse_source("type T = int | () -> string throws never\n");
+        assert_no_errors(&errors);
+        let function = root.descendants().find_map(FunctionType::cast).unwrap();
+        let kinds: Vec<_> = function
+            .syntax()
+            .children_with_tokens()
+            .filter(|element| !element.kind().is_trivia())
+            .map(|element| element.kind())
+            .collect();
+        assert_eq!(
+            kinds,
+            vec![
+                SyntaxKind::L_PAREN,
+                SyntaxKind::R_PAREN,
+                SyntaxKind::ARROW,
+                SyntaxKind::RETURN_TYPE,
+                SyntaxKind::THROWS_CLAUSE
+            ]
+        );
+        assert!(function.params().is_empty());
+        assert_eq!(
+            function
+                .return_type()
+                .unwrap()
+                .ty()
+                .unwrap()
+                .syntax()
+                .text()
+                .to_string()
+                .trim(),
+            "string"
         );
     }
 

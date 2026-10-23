@@ -5633,31 +5633,14 @@ impl LoweringContext {
             })
             .unwrap_or_else(|| (Vec::new(), FunctionDefaults::empty()));
 
-        // Lower optional return type: the TYPE_EXPR that is a direct child of the
-        // lambda node, appearing after PARAMETER_LIST but before THROWS_CLAUSE/BLOCK_EXPR.
-        // We scan children in order, skipping items until after PARAMETER_LIST.
-        let return_type = {
-            let mut after_params = false;
-            let mut found: Option<TypeExpr> = None;
-            for child in node.children() {
-                match child.kind() {
-                    SyntaxKind::PARAMETER_LIST | SyntaxKind::GENERIC_PARAM_LIST => {
-                        after_params = true;
-                    }
-                    SyntaxKind::THROWS_CLAUSE | SyntaxKind::BLOCK_EXPR => {
-                        break;
-                    }
-                    SyntaxKind::TYPE_EXPR if after_params && found.is_none() => {
-                        if let Some(te) = ast::TypeExpr::cast(child.clone()) {
-                            found =
-                                Some(self.lower_body_type_expr(&te).with_span(child.span_range()));
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            found
-        };
+        let return_type = node
+            .children()
+            .find_map(ast::ReturnType::cast)
+            .and_then(|ret| ret.ty())
+            .map(|ty| {
+                self.lower_body_type_expr(&ty)
+                    .with_span(ty.syntax().span_range())
+            });
 
         // Lower optional throws clause
         let throws = node

@@ -204,7 +204,7 @@ impl FunctionSignature {
 
         let arrow = it.expect_parse()?;
 
-        let return_type: Type = it.expect_parse()?;
+        let return_type = it.expect_parse::<super::ReturnType>()?.ty;
 
         let throws = if it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::THROWS_CLAUSE) {
             let elem = it.next().expect("peeked");

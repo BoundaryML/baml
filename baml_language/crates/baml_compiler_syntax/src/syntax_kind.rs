@@ -220,8 +220,12 @@ pub enum SyntaxKind {
     MAP_TYPE,
     TYPE_ARGS,
     STRING_LITERAL_TYPE, // "user" | "assistant"
-    FUNCTION_TYPE,       // (x: int, y: int) -> int
+    /// Callable type syntax: parameters, arrow, return annotation, and effects.
+    FUNCTION_TYPE,
     FUNCTION_TYPE_PARAM, // x: int (or just int)
+    /// An explicit return annotation containing one `TYPE_EXPR` child.
+    /// The arrow remains on the containing function, method, or lambda.
+    RETURN_TYPE,
 
     // Attributes
     ATTRIBUTE, // @alias("name")

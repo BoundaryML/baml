@@ -1880,24 +1880,27 @@ function f() -> int {
     fn lossy_union_member_lowering_reports_unconsumed_syntax() {
         // Remove the callable boundary independently of the parser, recreating
         // the structural defect behind B-1722 while preserving every token.
-        fn emit_without_callable_member_wrapper(
+        fn emit_without_wrapper(
             node: &SyntaxNode,
             builder: &mut rowan::GreenNodeBuilder<'_>,
+            wrapper: SyntaxKind,
         ) {
             use rowan::ast::AstNode;
-            let unwrap = baml_compiler_syntax::ast::TypeExpr::cast(node.clone())
-                .is_some_and(|ty| ty.is_function_type())
+            let unwrap = wrapper == SyntaxKind::TYPE_EXPR
+                && baml_compiler_syntax::ast::TypeExpr::cast(node.clone())
+                    .is_some_and(|ty| ty.is_function_type())
                 && node
                     .parent()
                     .and_then(baml_compiler_syntax::ast::TypeExpr::cast)
-                    .is_some_and(|parent| parent.is_union());
+                    .is_some_and(|parent| parent.is_union())
+                || wrapper == SyntaxKind::RETURN_TYPE && node.kind() == SyntaxKind::RETURN_TYPE;
             if !unwrap {
                 builder.start_node(node.kind().into());
             }
             for element in node.children_with_tokens() {
                 match element {
                     rowan::NodeOrToken::Node(child) => {
-                        emit_without_callable_member_wrapper(&child, builder);
+                        emit_without_wrapper(&child, builder, wrapper);
                     }
                     rowan::NodeOrToken::Token(token) => {
                         builder.token(token.kind().into(), token.text());
@@ -1911,7 +1914,7 @@ function f() -> int {
 
         let source = "type Value = int | () -> string throws never\n";
         let mut builder = rowan::GreenNodeBuilder::new();
-        emit_without_callable_member_wrapper(&parse(source), &mut builder);
+        emit_without_wrapper(&parse(source), &mut builder, SyntaxKind::TYPE_EXPR);
         let root = SyntaxNode::new_root(builder.finish());
         assert_eq!(
             root.text().to_string(),
@@ -1923,10 +1926,10 @@ function f() -> int {
         let crate::LoweringDiagnostic::UnconsumedTypeSyntax { syntax, span } = &diags[0] else {
             panic!("expected unconsumed syntax, got {diags:#?}");
         };
-        assert_eq!(syntax, "L_PAREN, R_PAREN, ARROW, THROWS_CLAUSE");
+        assert_eq!(syntax, "FUNCTION_TYPE");
         assert_eq!(
             &source[usize::from(span.start())..usize::from(span.end())],
-            "("
+            "() -> string throws never"
         );
         let diag = diags[0].to_diagnostic(FileId::new(0));
         assert_eq!(
@@ -1941,6 +1944,22 @@ function f() -> int {
             ),
             "a union with unwrapped syntax must not publish a partial type"
         );
+
+        // A callable child must not hide a missing return-annotation boundary.
+        let mut builder = rowan::GreenNodeBuilder::new();
+        emit_without_wrapper(&parse(source), &mut builder, SyntaxKind::RETURN_TYPE);
+        let root = SyntaxNode::new_root(builder.finish());
+        assert_eq!(root.text().to_string(), source);
+        let (items, diags, _) = lower_file(&root);
+        assert!(
+            matches!(&diags[..], [crate::LoweringDiagnostic::UnconsumedTypeSyntax { syntax, .. }] if syntax == "TYPE_EXPR"),
+            "{diags:#?}"
+        );
+        let TypeExprKind::Union { variants } = first_type_alias(items).type_expr.unwrap().kind
+        else {
+            panic!("expected a union with complete operand nodes");
+        };
+        assert!(matches!(variants[1].kind, TypeExprKind::Error));
 
         // This is a consumption check, not a special-case rejection of arrows:
         // the permissive tuple-like CST must not silently select its first type.

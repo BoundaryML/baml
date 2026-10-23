@@ -168,6 +168,8 @@ ast_node!(BacktickText, BACKTICK_TEXT);
 ast_node!(BacktickInterpolation, BACKTICK_INTERPOLATION);
 
 ast_node!(TypeExpr, TYPE_EXPR);
+ast_node!(FunctionType, FUNCTION_TYPE);
+ast_node!(ReturnType, RETURN_TYPE);
 ast_node!(Attribute, ATTRIBUTE);
 ast_node!(ObjectField, OBJECT_FIELD);
 ast_node!(GenericParam, GENERIC_PARAM);
@@ -468,67 +470,60 @@ impl TypeExpr {
         self.syntax.children().filter_map(TypeExpr::cast)
     }
 
-    /// Check if this is a function type: `(x: int, y: int) -> bool` or `(int) -> bool`.
-    ///
-    /// A function type has:
-    /// - An `L_PAREN` token
-    /// - Zero or more `FUNCTION_TYPE_PARAM` children
-    /// - An `R_PAREN` token
-    /// - An `ARROW` token
-    /// - A return type `TYPE_EXPR`
-    pub fn is_function_type(&self) -> bool {
-        // Check for ARROW token at the top level (not inside nested TYPE_EXPR)
-        // The arrow must be a direct child token, not inside a child node
-        self.syntax
-            .children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .any(|t| t.kind() == SyntaxKind::ARROW)
+    /// The callable syntax owned by this type expression, if present.
+    pub fn function_type(&self) -> Option<FunctionType> {
+        self.syntax.children().find_map(FunctionType::cast)
     }
 
-    /// Get the parameters of a function type.
-    ///
-    /// Returns an empty vec if this is not a function type.
-    /// Each parameter is wrapped in a `FunctionTypeParam` which provides
-    /// access to the optional name and the type.
+    pub fn is_function_type(&self) -> bool {
+        self.function_type().is_some()
+    }
+
+    /// Function parameters, or the inner operand of a parenthesized type.
     pub fn function_type_params(&self) -> Vec<FunctionTypeParam> {
+        if let Some(function) = self.function_type() {
+            return function.params();
+        }
         self.syntax
             .children()
-            .filter(|n| n.kind() == SyntaxKind::FUNCTION_TYPE_PARAM)
-            .map(|n| FunctionTypeParam { syntax: n })
+            .filter_map(FunctionTypeParam::cast)
             .collect()
     }
 
-    /// Get the return type of a function type.
-    ///
-    /// For `(x: int) -> string`, returns the `TypeExpr` for `string`.
-    /// Returns None if this is not a function type or if the return type is missing.
     pub fn function_return_type(&self) -> Option<TypeExpr> {
-        if !self.is_function_type() {
-            return None;
-        }
-        // The return type is the TYPE_EXPR that comes after the ARROW
-        // We need to find the TYPE_EXPR that is NOT inside a FUNCTION_TYPE_PARAM
-        // Since FUNCTION_TYPE_PARAMs contain their own TYPE_EXPRs, we look for
-        // the direct child TYPE_EXPR (which is the return type)
-        self.syntax
-            .children()
-            .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
-            .map(|n| TypeExpr { syntax: n })
-            .last() // The return type is typically the last TYPE_EXPR
+        self.function_type()?.return_type()?.ty()
     }
 
-    /// Get the throws clause of a function type, if present.
     pub fn function_throws_clause(&self) -> Option<ThrowsClause> {
-        if !self.is_function_type() {
-            return None;
-        }
-        self.syntax.children().find_map(ThrowsClause::cast)
+        self.function_type()?.throws_clause()
     }
 
-    /// Get the throws type of a function type, if present.
     pub fn function_throws_type(&self) -> Option<TypeExpr> {
         self.function_throws_clause()
             .and_then(|clause| clause.type_expr())
+    }
+}
+
+impl FunctionType {
+    pub fn params(&self) -> Vec<FunctionTypeParam> {
+        self.syntax
+            .children()
+            .filter_map(FunctionTypeParam::cast)
+            .collect()
+    }
+
+    pub fn return_type(&self) -> Option<ReturnType> {
+        self.syntax.children().find_map(ReturnType::cast)
+    }
+
+    pub fn throws_clause(&self) -> Option<ThrowsClause> {
+        self.syntax.children().find_map(ThrowsClause::cast)
+    }
+}
+
+impl ReturnType {
+    pub fn ty(&self) -> Option<TypeExpr> {
+        self.syntax.children().find_map(TypeExpr::cast)
     }
 }
 
@@ -713,9 +708,12 @@ impl FunctionDef {
         self.syntax.children().find_map(ParameterList::cast)
     }
 
-    /// Get the return type.
+    /// Get the explicitly annotated return type.
     pub fn return_type(&self) -> Option<TypeExpr> {
-        self.syntax.children().find_map(TypeExpr::cast)
+        self.syntax
+            .children()
+            .find_map(ReturnType::cast)
+            .and_then(|ret| ret.ty())
     }
 
     /// Get the LLM function body if this is an LLM function.
@@ -1912,9 +1910,12 @@ impl MethodSig {
         self.syntax.children().find_map(ParameterList::cast)
     }
 
-    /// Return type — the first `TypeExpr` child that's not inside a parameter.
+    /// Get the explicitly annotated return type.
     pub fn return_type(&self) -> Option<TypeExpr> {
-        self.syntax.children().find_map(TypeExpr::cast)
+        self.syntax
+            .children()
+            .find_map(ReturnType::cast)
+            .and_then(|ret| ret.ty())
     }
 
     /// Get the throws clause if present.

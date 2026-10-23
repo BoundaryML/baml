@@ -145,6 +145,29 @@ impl Printable for Type {
     }
 }
 
+/// Transparent wrapper for an explicit return annotation.
+#[derive(Debug)]
+pub struct ReturnType {
+    pub ty: Type,
+}
+
+impl FromCST for ReturnType {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::RETURN_TYPE)?;
+        let mut it = SyntaxNodeIter::new(&node);
+        let ty = it.expect_parse()?;
+        it.expect_end()?;
+        Ok(Self { ty })
+    }
+}
+
+impl KnownKind for ReturnType {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::RETURN_TYPE
+    }
+}
+
 #[derive(Debug)]
 pub struct ParenType {
     pub open_paren: t::LParen,
@@ -433,6 +456,9 @@ impl UnionTypeMember {
     fn take_base_type(it: &mut SyntaxNodeIter) -> Result<Self, StrongAstError> {
         let first = it.expect_next("a type")?;
         match first.kind() {
+            SyntaxKind::FUNCTION_TYPE => {
+                Ok(UnionTypeMember::Function(FunctionType::from_cst(first)?))
+            }
             SyntaxKind::MINUS => {
                 let minus = t::Minus::from_cst(first)?;
                 let literal = it.expect_next("numeric literal after '-'")?;
@@ -454,7 +480,7 @@ impl UnionTypeMember {
                 }))
             }
             SyntaxKind::L_PAREN => {
-                // Either a parenthesized type or a function type
+                // A parenthesized type or an associated type projection.
                 let open_paren = t::LParen::from_cst(first)?;
                 if it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::TYPE_EXPR) {
                     let base: Type = it.expect_parse()?;
@@ -506,52 +532,14 @@ impl UnionTypeMember {
                         .iter()
                         .any(|item| item.0.name.is_some() || item.1.is_some());
                 if must_be_func_type {
-                    let arrow = it.expect_parse()?;
-                    let return_ty: Type = it.expect_parse()?;
-                    let throws =
-                        if it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::THROWS_CLAUSE) {
-                            Some(Box::new(it.expect_parse()?))
-                        } else {
-                            None
-                        };
-
-                    Ok(UnionTypeMember::Function(FunctionType {
-                        open_paren,
-                        params,
-                        close_paren,
-                        arrow,
-                        return_type: Box::new(return_ty),
-                        throws,
-                    }))
-                } else if let Some(arrow) = it.next_if_kind(SyntaxKind::ARROW) {
-                    let arrow = t::Arrow::from_cst(arrow)?;
-                    let return_ty: Type = it.expect_parse()?;
-                    let throws =
-                        if it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::THROWS_CLAUSE) {
-                            Some(Box::new(it.expect_parse()?))
-                        } else {
-                            None
-                        };
-
-                    Ok(UnionTypeMember::Function(FunctionType {
-                        open_paren,
-                        params,
-                        close_paren,
-                        arrow,
-                        return_type: Box::new(return_ty),
-                        throws,
-                    }))
-                } else {
-                    // Really a paren type
-                    let (inner, _) = params
-                        .pop()
-                        .unwrap_or_else(|| unreachable!("we checked it has length 1"));
-                    Ok(UnionTypeMember::Paren(ParenType {
-                        open_paren,
-                        ty: Box::new(inner.ty),
-                        close_paren,
-                    }))
+                    return Err(StrongAstError::missing(SyntaxKind::ARROW, it.parent));
                 }
+                let (inner, _) = params.pop().expect("one parenthesized operand");
+                Ok(UnionTypeMember::Paren(ParenType {
+                    open_paren,
+                    ty: Box::new(inner.ty),
+                    close_paren,
+                }))
             }
             SyntaxKind::WORD => {
                 let first = t::Word::from_cst(first)?;
@@ -1115,6 +1103,51 @@ pub struct FunctionType {
     pub throws: Option<Box<crate::ast::ThrowsClause>>,
 }
 
+impl FromCST for FunctionType {
+    fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
+        let node = StrongAstError::assert_is_node(elem)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::FUNCTION_TYPE)?;
+        let mut it = SyntaxNodeIter::new(&node);
+        let open_paren = it.expect_parse()?;
+        let mut params = Vec::new();
+        while it.peek().map(SyntaxElement::kind) == Some(SyntaxKind::FUNCTION_TYPE_PARAM) {
+            let param = it.expect_parse()?;
+            let comma = it
+                .next_if_kind(SyntaxKind::COMMA)
+                .map(t::Comma::from_cst)
+                .transpose()?;
+            let has_comma = comma.is_some();
+            params.push((param, comma));
+            if !has_comma {
+                break;
+            }
+        }
+        let close_paren = it.expect_parse()?;
+        let arrow = it.expect_parse()?;
+        let return_type = Box::new(it.expect_parse::<ReturnType>()?.ty);
+        let throws = it
+            .next_if_kind(SyntaxKind::THROWS_CLAUSE)
+            .map(crate::ast::ThrowsClause::from_cst)
+            .transpose()?
+            .map(Box::new);
+        it.expect_end()?;
+        Ok(Self {
+            open_paren,
+            params,
+            close_paren,
+            arrow,
+            return_type,
+            throws,
+        })
+    }
+}
+
+impl KnownKind for FunctionType {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::FUNCTION_TYPE
+    }
+}
+
 impl PrintMultiLine for FunctionType {
     /// Multi-line layout: each parameter on its own indented line
     /// with trailing comma. Arrow and return type follow the closing paren.
@@ -1264,6 +1297,12 @@ impl Printable for FunctionType {
 pub struct FunctionTypeParam {
     pub name: Option<(t::Word, Option<t::Question>, Option<t::Colon>)>,
     pub ty: Type,
+}
+
+impl KnownKind for FunctionTypeParam {
+    fn kind() -> SyntaxKind {
+        SyntaxKind::FUNCTION_TYPE_PARAM
+    }
 }
 
 impl FromCST for FunctionTypeParam {
