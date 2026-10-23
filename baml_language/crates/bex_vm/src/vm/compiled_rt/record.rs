@@ -647,20 +647,11 @@ impl BexVm {
     /// The runtime package the callable `function` runs in.
     pub(crate) fn frame_package(&self, function: HeapPtr) -> HeapPtr {
         match self.get_object(function) {
-            Object::Function(function) => self.runtime_package_of(function),
             Object::GenericFunction(function) => function.runtime_package,
-            // SAFETY: a closure or bound method roots its function.
-            #[allow(unsafe_code)]
-            Object::Closure(closure) => match unsafe { closure.function.get() } {
-                Object::Function(function) => self.runtime_package_of(function),
-                _ => HeapPtr::null(),
-            },
-            #[allow(unsafe_code)]
-            Object::BoundMethod(method) => match unsafe { method.function.get() } {
-                Object::Function(function) => self.runtime_package_of(function),
-                _ => HeapPtr::null(),
-            },
-            _ => HeapPtr::null(),
+            object => object.as_callable().map_or_else(
+                |_| HeapPtr::null(),
+                |function| self.runtime_package_of(function),
+            ),
         }
     }
 
