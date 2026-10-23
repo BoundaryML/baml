@@ -42,7 +42,7 @@ function ended(standing: Standing, knobs: Knobs, starved: boolean): string {
  */
 function calibrated(standing: Standing, knobs: Knobs): string {
   const answers = standing.commits_unsure;
-  if (answers === null) {
+  if (answers == null) {
     return 'Nothing to judge that on yet.';
   }
   const asked = 1 - knobs.bar;
@@ -67,7 +67,7 @@ export function Readout({
   starved: boolean;
 }) {
   const suspected =
-    standing.suspected === null ? null : describeModel(standing.suspected);
+    standing.suspected == null ? null : describeModel(standing.suspected);
   return (
     <div className="readout">
       <p className="why">{ended(standing, knobs, starved)}</p>
@@ -89,7 +89,7 @@ export function Readout({
       )}
       <h3>Calibration</h3>
       <p>
-        {standing.commits_unsure === null
+        {standing.commits_unsure == null
           ? 'You have answered nothing, so there is nothing to judge.'
           : `When you did not know, you answered anyway ${percent(standing.commits_unsure)} of the time; the bar asks for ${percent(1 - knobs.bar)}. You held back on ${percent(standing.withheld)} of all the cases.`}
       </p>
