@@ -415,14 +415,12 @@ fn read_only_after_load(
 /// real object the dispatch builds, and its `iter` and `next` calls go
 /// through the VM like any other virtual call.
 fn array_iterators(body: &MirFunctionBody<'_>, arity: usize) -> BTreeSet<usize> {
-    let mut array_iters = BTreeSet::new();
-    for block in &body.blocks {
-        if let Some(terminator) = &block.terminator
-            && let Some((iter, _)) = array_iter_call(body, arity, terminator)
-        {
-            array_iters.insert(iter);
-        }
-    }
+    let mut array_iters: BTreeSet<_> = body
+        .blocks
+        .iter()
+        .filter_map(|block| array_iter_call(body, arity, block.terminator.as_ref()?))
+        .map(|(iter, _)| iter)
+        .collect();
     array_iters.retain(|&iter| !body.locals[iter].is_captured && !iter_escapes(body, arity, iter));
     array_iters
 }
@@ -592,28 +590,9 @@ pub(crate) fn array_iter_call(
     arity: usize,
     terminator: &Terminator<'_>,
 ) -> Option<(usize, usize)> {
-    let Terminator::VirtualCall {
-        has_trace: false,
-        method,
-        args,
-        ntypeargs: 0,
-        destination: Place::Local(iter),
-        ..
-    } = terminator
-    else {
-        return None;
-    };
-    let [Operand::Copy(Place::Local(array)) | Operand::Move(Place::Local(array))] = args.as_slice()
-    else {
-        return None;
-    };
-    (method == "iter"
-        && iter.0 > arity
-        && matches!(
-            body.locals[array.0].ty,
-            baml_compiler2_mir::RuntimeTy::List(_)
-        ))
-    .then_some((iter.0, array.0))
+    let (method, array, iter) = unary_virtual_call(terminator)?;
+    (method == "iter" && iter > arity && matches!(body.locals[array].ty, RuntimeTy::List(_)))
+        .then_some((iter, array))
 }
 
 /// An `xs.iter()` call compiled as an index walk: [`array_iter_call`] on an
@@ -629,22 +608,29 @@ pub(crate) fn array_iter_walk(
 
 /// `it.next()` on a local, as that local.
 fn array_next_shape(terminator: &Terminator<'_>) -> Option<usize> {
+    let (method, iter, _) = unary_virtual_call(terminator)?;
+    (method == "next").then_some(iter)
+}
+
+/// A single local receiver and local destination, with no trace or type arguments.
+fn unary_virtual_call<'a>(terminator: &'a Terminator<'_>) -> Option<(&'a str, usize, usize)> {
     let Terminator::VirtualCall {
         has_trace: false,
         method,
         args,
         ntypeargs: 0,
-        destination: Place::Local(_),
+        destination: Place::Local(destination),
         ..
     } = terminator
     else {
         return None;
     };
-    let [Operand::Copy(Place::Local(iter)) | Operand::Move(Place::Local(iter))] = args.as_slice()
+    let [Operand::Copy(Place::Local(receiver)) | Operand::Move(Place::Local(receiver))] =
+        args.as_slice()
     else {
         return None;
     };
-    (method == "next").then_some(iter.0)
+    Some((method, receiver.0, destination.0))
 }
 
 /// `it.next()` on an array iterator compiled as an index walk, as the
@@ -678,15 +664,17 @@ fn flow_of(terminator: &Terminator<'_>) -> Flow {
             arms: arms.iter().map(|(_, target)| target.0).collect(),
             otherwise: otherwise.0,
         },
-        Terminator::Return | Terminator::Unreachable => Flow::Exit,
-        Terminator::Throw { .. } | Terminator::Rethrow { .. } => Flow::Exit,
-        Terminator::Call { target, .. } => Flow::Goto(target.0),
+        Terminator::Return
+        | Terminator::Unreachable
+        | Terminator::Throw { .. }
+        | Terminator::Rethrow { .. } => Flow::Exit,
         Terminator::ShortCircuit { eval_rhs, join, .. } => Flow::Branch {
             then_block: join.0,
             else_block: eval_rhs.0,
         },
-        Terminator::VirtualCall { target, .. } => Flow::Goto(target.0),
-        Terminator::SysOp { target, .. }
+        Terminator::Call { target, .. }
+        | Terminator::VirtualCall { target, .. }
+        | Terminator::SysOp { target, .. }
         | Terminator::Await { target, .. }
         | Terminator::AwaitAny { target, .. } => Flow::Goto(target.0),
         Terminator::Spawn { resume, .. } => Flow::Goto(resume.0),

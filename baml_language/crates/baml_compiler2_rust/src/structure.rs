@@ -31,17 +31,6 @@ impl Flow {
             Self::Exit => Vec::new(),
         }
     }
-
-    fn distinct_successors(&self) -> Vec<usize> {
-        let mut out = self.successors();
-        let mut seen = Vec::with_capacity(out.len());
-        out.retain(|block| {
-            let fresh = !seen.contains(block);
-            seen.push(*block);
-            fresh
-        });
-        out
-    }
 }
 
 /// A control-flow graph by shape: `flows[i]` is block `i`'s terminator and
@@ -63,39 +52,47 @@ impl Cfg {
     }
 
     pub(crate) fn loop_headers(&self) -> BTreeSet<usize> {
-        let successors = |block| self.successors(block);
-        let n = self.flows.len();
+        self.traverse().1
+    }
+
+    /// Terminator-order DFS, collecting postorder and back-edge targets.
+    fn traverse(&self) -> (Vec<usize>, BTreeSet<usize>) {
+        let mut postorder = Vec::with_capacity(self.flows.len());
         let mut headers = BTreeSet::new();
-        let mut on_path = vec![false; n];
-        let mut seen = vec![false; n];
-        let mut stack = vec![(self.entry, successors(self.entry), 0)];
+        let mut on_path = vec![false; self.flows.len()];
+        let mut seen = vec![false; self.flows.len()];
+        let mut stack = vec![(self.entry, self.successors(self.entry).into_iter())];
         seen[self.entry] = true;
         on_path[self.entry] = true;
-        while let Some((block, succs, next)) = stack.last_mut() {
-            let Some(&succ) = succs.get(*next) else {
-                on_path[*block] = false;
-                stack.pop();
-                continue;
-            };
-            *next += 1;
-            if on_path[succ] {
-                headers.insert(succ);
-            } else if !seen[succ] {
-                seen[succ] = true;
-                on_path[succ] = true;
-                stack.push((succ, successors(succ), 0));
+        while let Some((block, successors)) = stack.last_mut() {
+            match successors.next() {
+                Some(next) if on_path[next] => {
+                    headers.insert(next);
+                }
+                Some(next) if !seen[next] => {
+                    seen[next] = true;
+                    on_path[next] = true;
+                    stack.push((next, self.successors(next).into_iter()));
+                }
+                Some(_) => {}
+                None => {
+                    on_path[*block] = false;
+                    postorder.push(*block);
+                    stack.pop();
+                }
             }
         }
-        headers
+        (postorder, headers)
     }
 
     fn distinct_successors(&self, block: usize) -> Vec<usize> {
-        let mut out = self.flows[block].distinct_successors();
-        if let Some(handler) = self.unwinds[block]
-            && !out.contains(&handler)
-        {
-            out.push(handler);
-        }
+        let mut out = self.successors(block);
+        let mut seen = Vec::with_capacity(out.len());
+        out.retain(|block| {
+            let fresh = !seen.contains(block);
+            seen.push(*block);
+            fresh
+        });
         out
     }
 }
@@ -187,8 +184,6 @@ struct Analysis<'a> {
     cfg: &'a Cfg,
     /// Reverse postorder number of each reachable block.
     rpo: Vec<Option<usize>>,
-    /// Immediate dominator of each reachable block (the entry is its own).
-    idom: Vec<Option<usize>>,
     /// Dominator-tree children, each list sorted by descending reverse
     /// postorder so the outermost merge block comes first.
     children: Vec<Vec<usize>>,
@@ -225,25 +220,7 @@ impl<'a> Analysis<'a> {
             }
         }
 
-        // Terminator order preserves the source's branch order in the layout.
-        let mut postorder = Vec::with_capacity(n);
-        let mut visited = vec![false; n];
-        let mut stack: Vec<(usize, std::vec::IntoIter<usize>)> = Vec::new();
-        visited[cfg.entry] = true;
-        stack.push((cfg.entry, cfg.successors(cfg.entry).into_iter()));
-        while let Some((block, successors)) = stack.last_mut() {
-            match successors.next() {
-                Some(next) if !visited[next] => {
-                    visited[next] = true;
-                    stack.push((next, cfg.successors(next).into_iter()));
-                }
-                Some(_) => {}
-                None => {
-                    postorder.push(*block);
-                    stack.pop();
-                }
-            }
-        }
+        let (postorder, loop_headers) = cfg.traverse();
         let reached = postorder.len();
         let mut rpo = vec![None; n];
         let mut by_rpo = vec![0; reached];
@@ -306,7 +283,6 @@ impl<'a> Analysis<'a> {
             b = idom[b].expect("reachable blocks have a dominator");
         };
         let mut is_merge = vec![false; n];
-        let loop_headers = cfg.loop_headers();
         let mut forward_in = vec![0usize; n];
         for &block in &by_rpo {
             for succ in cfg.distinct_successors(block) {
@@ -382,7 +358,6 @@ impl<'a> Analysis<'a> {
         Ok(Self {
             cfg,
             rpo,
-            idom,
             children,
             is_merge,
             loop_members,
@@ -515,36 +490,22 @@ impl<'a> Analysis<'a> {
         target: usize,
         context: &mut Vec<Label>,
     ) -> Result<Vec<Stmt>, StructureError> {
-        if self.rpo[target] <= self.rpo[source] {
-            // A back edge requires an enclosing loop for its target.
-            if !context.contains(&Label::Loop(target)) {
-                return Err(StructureError::Irreducible {
-                    from: source,
-                    to: target,
-                });
-            }
-            return Ok(vec![Stmt::Continue(target)]);
+        let (label, jump) = if self.rpo[target] <= self.rpo[source] {
+            (Label::Loop(target), Stmt::Continue(target))
+        } else if let Some(header) = self.natural_exit_of[target] {
+            (Label::Loop(header), Stmt::BreakLoop(header))
+        } else if self.is_merge[target] {
+            (Label::Block(target), Stmt::Break(target))
+        } else {
+            return self.do_tree(target, context);
+        };
+        if !context.contains(&label) {
+            return Err(StructureError::Irreducible {
+                from: source,
+                to: target,
+            });
         }
-        if let Some(header) = self.natural_exit_of[target] {
-            if !context.contains(&Label::Loop(header)) {
-                return Err(StructureError::Irreducible {
-                    from: source,
-                    to: target,
-                });
-            }
-            return Ok(vec![Stmt::BreakLoop(header)]);
-        }
-        if self.is_merge[target] {
-            if !context.contains(&Label::Block(target)) {
-                return Err(StructureError::Irreducible {
-                    from: source,
-                    to: target,
-                });
-            }
-            return Ok(vec![Stmt::Break(target)]);
-        }
-        debug_assert_eq!(self.idom[target], Some(source));
-        self.do_tree(target, context)
+        Ok(vec![jump])
     }
 }
 
@@ -572,32 +533,40 @@ mod tests {
         }
     }
 
-    fn walk(stmts: &[Stmt], leaves: &mut Vec<usize>, jumps: &mut Vec<Stmt>) {
+    fn visit(stmts: &[Stmt], f: &mut impl FnMut(&Stmt)) {
         for stmt in stmts {
+            f(stmt);
             match stmt {
-                Stmt::Leaf(block) => leaves.push(*block),
-                Stmt::Block { body, .. } | Stmt::Loop { body, .. } => walk(body, leaves, jumps),
+                Stmt::Block { body, .. } | Stmt::Loop { body, .. } => visit(body, f),
                 Stmt::If {
                     then_branch,
                     else_branch,
                     ..
                 } => {
-                    walk(then_branch, leaves, jumps);
-                    walk(else_branch, leaves, jumps);
+                    visit(then_branch, f);
+                    visit(else_branch, f);
                 }
                 Stmt::Switch {
                     arms, otherwise, ..
                 } => {
                     for (_, body) in arms {
-                        walk(body, leaves, jumps);
+                        visit(body, f);
                     }
-                    walk(otherwise, leaves, jumps);
+                    visit(otherwise, f);
                 }
-                Stmt::Break(_) | Stmt::BreakLoop(_) | Stmt::Continue(_) | Stmt::Exit(_) => {
-                    jumps.push(stmt.clone());
-                }
+                _ => {}
             }
         }
+    }
+
+    fn walk(stmts: &[Stmt], leaves: &mut Vec<usize>, jumps: &mut Vec<Stmt>) {
+        visit(stmts, &mut |stmt| match stmt {
+            Stmt::Leaf(block) => leaves.push(*block),
+            Stmt::Break(_) | Stmt::BreakLoop(_) | Stmt::Continue(_) | Stmt::Exit(_) => {
+                jumps.push(stmt.clone());
+            }
+            _ => {}
+        });
     }
 
     fn assert_each_block_once(stmts: &[Stmt], reachable: &[usize]) {
@@ -612,39 +581,11 @@ mod tests {
     }
 
     fn labels(stmts: &[Stmt], blocks: &mut Vec<usize>, loops: &mut Vec<usize>) {
-        for stmt in stmts {
-            match stmt {
-                Stmt::Block { label, body } => {
-                    blocks.push(*label);
-                    labels(body, blocks, loops);
-                }
-                Stmt::Loop { label, body } => {
-                    loops.push(*label);
-                    labels(body, blocks, loops);
-                }
-                Stmt::If {
-                    then_branch,
-                    else_branch,
-                    ..
-                } => {
-                    labels(then_branch, blocks, loops);
-                    labels(else_branch, blocks, loops);
-                }
-                Stmt::Switch {
-                    arms, otherwise, ..
-                } => {
-                    for (_, body) in arms {
-                        labels(body, blocks, loops);
-                    }
-                    labels(otherwise, blocks, loops);
-                }
-                Stmt::Leaf(_)
-                | Stmt::Break(_)
-                | Stmt::BreakLoop(_)
-                | Stmt::Continue(_)
-                | Stmt::Exit(_) => {}
-            }
-        }
+        visit(stmts, &mut |stmt| match stmt {
+            Stmt::Block { label, .. } => blocks.push(*label),
+            Stmt::Loop { label, .. } => loops.push(*label),
+            _ => {}
+        });
     }
 
     #[test]
