@@ -2558,7 +2558,7 @@ impl BexVm {
             telemetry: self.telemetry.as_mut().and_then(|state| span.enter(state)),
         });
         match record {
-            Some(record) => compiled_rt::record_ref(record).set_scoped(true),
+            Some(record) => compiled_rt::record_ref(record).scoped.set(true),
             None => self.trace_scope_frame = frame_idx,
         }
         Ok(())
@@ -2605,7 +2605,7 @@ impl BexVm {
     #[inline(never)]
     pub(crate) fn end_record_activation(&mut self, record: *const compiled_rt::FrameRecord) {
         let record = compiled_rt::record_ref(record);
-        record.set_scoped(false);
+        record.scoped.set(false);
         let level = Some(record.level());
         if let Some(previous) = self
             .manual_activations
@@ -3782,7 +3782,7 @@ impl BexVm {
     pub(crate) fn current_runtime_package(&self) -> HeapPtr {
         // A directly called body runs in its record's package.
         if let Some(FrameAt::Record(record)) = self.top_frame() {
-            return compiled_rt::record_ref(record).package();
+            return compiled_rt::record_ref(record).package.get();
         }
         self.frames
             .iter()
@@ -8101,7 +8101,7 @@ impl BexVm {
         match frame {
             FrameAt::Vm(frame_idx) => self.end_manual_activation(frame_idx),
             FrameAt::Record(record) => {
-                if compiled_rt::record_ref(record).scoped() {
+                if compiled_rt::record_ref(record).scoped.get() {
                     self.end_record_activation(record);
                 }
             }
@@ -8541,7 +8541,7 @@ impl BexVm {
             }
             for frame in self.stack_view() {
                 if let FrameAt::Record(record) = frame {
-                    compiled_rt::record_ref(record).set_receipt(None);
+                    compiled_rt::record_ref(record).receipt.set(None);
                 }
             }
             // An active `Span.run` scope observes through the same state.
