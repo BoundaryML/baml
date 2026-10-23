@@ -48,19 +48,15 @@ impl BexVm {
             match self.get_object(array_ptr) {
                 Object::Array(arr) => {
                     let guard = arr.lock();
-                    let len = guard.len();
-                    match crate::array_index::resolve_index(i, len) {
-                        Some(idx) => Ok(guard[idx]),
-                        None => Err((i, len)),
-                    }
+                    crate::array_index::resolve_index(i, guard.len())
+                        .map(|idx| guard[idx])
+                        .ok_or((i, guard.len()))
                 }
                 Object::Uint8Array(bytes) => {
                     let guard = bytes.lock();
-                    let len = guard.len();
-                    match crate::array_index::resolve_index(i, len) {
-                        Some(idx) => Ok(Value::int(i64::from(guard[idx]))),
-                        None => Err((i, len)),
-                    }
+                    crate::array_index::resolve_index(i, guard.len())
+                        .map(|idx| Value::int(i64::from(guard[idx])))
+                        .ok_or((i, guard.len()))
                 }
                 other => {
                     return Err(VmInternalError::TypeError {
@@ -77,8 +73,6 @@ impl BexVm {
         }
     }
 
-    /// Store an array element with [`Self::load_array_element`] index semantics and a write
-    /// barrier.
     pub fn store_array_element(
         &mut self,
         array: Value,
@@ -98,14 +92,9 @@ impl BexVm {
             match self.get_object(array_ptr) {
                 Object::Array(arr) => {
                     let mut guard = arr.lock_mut(self.tlab.alloc_debt());
-                    let len = guard.len();
-                    match crate::array_index::resolve_index(i, len) {
-                        Some(idx) => {
-                            guard[idx] = new_value;
-                            Ok(())
-                        }
-                        None => Err((i, len)),
-                    }
+                    crate::array_index::resolve_index(i, guard.len())
+                        .ok_or((i, guard.len()))
+                        .map(|idx| guard[idx] = new_value)
                 }
                 Object::Uint8Array(bytes) => {
                     let Some(byte_v) = new_value_u8 else {
@@ -116,14 +105,9 @@ impl BexVm {
                         .into());
                     };
                     let mut guard = bytes.lock_mut(self.tlab.alloc_debt());
-                    let len = guard.len();
-                    match crate::array_index::resolve_index(i, len) {
-                        Some(idx) => {
-                            guard[idx] = byte_v;
-                            Ok(())
-                        }
-                        None => Err((i, len)),
-                    }
+                    crate::array_index::resolve_index(i, guard.len())
+                        .ok_or((i, guard.len()))
+                        .map(|idx| guard[idx] = byte_v)
                 }
                 other => {
                     return Err(VmInternalError::TypeError {
@@ -141,7 +125,6 @@ impl BexVm {
         Ok(())
     }
 
-    /// Build a catchable `baml.panics.IndexOutOfBounds` throw.
     #[cold]
     #[inline(never)]
     pub(crate) fn index_out_of_bounds(&mut self, index: i64, length: usize) -> VmError {
@@ -150,17 +133,9 @@ impl BexVm {
         )
     }
 
-    /// Read field `idx` of a class instance.
     pub fn load_field(&mut self, instance: Value, idx: usize) -> Result<Value, Box<VmError>> {
-        let obj_ptr = self.as_object_ptr(instance, ObjectType::Instance)?;
         let load_result = {
-            let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                return Err(VmInternalError::TypeError {
-                    expected: ObjectType::Instance.into(),
-                    got: ObjectType::of(self.get_object(obj_ptr)).into(),
-                }
-                .into());
-            };
+            let instance = self.as_instance(&instance)?;
             instance
                 .try_load_field(idx)
                 .ok_or_else(|| instance.field_len())
@@ -171,8 +146,6 @@ impl BexVm {
         }
     }
 
-    /// Write field `idx` of a class instance, applying the generational write
-    /// barrier.
     pub fn store_field(
         &mut self,
         instance: Value,
@@ -180,29 +153,16 @@ impl BexVm {
         new_value: Value,
     ) -> Result<(), Box<VmError>> {
         let obj_ptr = self.as_object_ptr(instance, ObjectType::Instance)?;
-        let store_error = {
-            let Object::Instance(instance) = self.get_object(obj_ptr) else {
-                return Err(VmInternalError::TypeError {
-                    expected: ObjectType::Instance.into(),
-                    got: ObjectType::of(self.get_object(obj_ptr)).into(),
-                }
-                .into());
-            };
-            (idx >= instance.field_len()).then_some(instance.field_len())
-        };
+        let instance_ref = self.as_instance(&instance)?;
+        let store_error = (idx >= instance_ref.field_len()).then_some(instance_ref.field_len());
         if let Some(length) = store_error {
             return Err(Box::new(self.invalid_field_access_error(idx, length)));
         }
         self.heap.write_barrier(obj_ptr, new_value);
-        let Object::Instance(instance) = self.get_object(obj_ptr) else {
-            unreachable!("already type-checked above");
-        };
-        instance.store_field(idx, new_value);
+        self.as_instance(&instance)?.store_field(idx, new_value);
         Ok(())
     }
 
-    /// Allocate a closure over `function` with already-evaluated capture cells
-    /// and already-resolved type arguments.
     pub fn make_closure(
         &mut self,
         function: HeapPtr,
@@ -217,7 +177,6 @@ impl BexVm {
         Value::object(self.tlab.alloc(closure))
     }
 
-    /// Bind a receiver and its class type arguments to `function`.
     pub fn make_bound_method(&mut self, function: HeapPtr, receiver: Value) -> Value {
         let type_args = self.bound_method_curried_type_args(receiver);
         let bound = Object::BoundMethod(bex_vm_types::BoundMethod {
@@ -228,7 +187,6 @@ impl BexVm {
         Value::object(self.tlab.alloc(bound))
     }
 
-    /// The variant index of an enum value.
     pub fn discriminant(&self, value: Value) -> Result<i64, Box<VmError>> {
         let ptr = self.as_object_ptr(value, ObjectType::Variant)?;
         match self.get_object(ptr) {
@@ -242,7 +200,6 @@ impl BexVm {
         }
     }
 
-    /// Test instance identity against a non-generic class.
     #[inline]
     #[must_use]
     pub fn is_instance_of(&self, value: Value, class: HeapPtr) -> bool {
@@ -252,7 +209,6 @@ impl BexVm {
         }
     }
 
-    /// `value is E` for an enum `E`.
     #[inline]
     #[must_use]
     pub fn is_variant_of(&self, value: Value, enm: HeapPtr) -> bool {
@@ -262,26 +218,21 @@ impl BexVm {
         }
     }
 
-    /// Return the instance type of a non-generic class.
     #[must_use]
     pub fn class_type(&self, class: HeapPtr) -> RealizedTy {
         self.class_type_at(class, Box::new([]))
     }
 
-    /// Allocate an instance of a non-generic class with its fields in slot
-    /// order.
     #[inline]
     pub fn new_instance(&mut self, class: HeapPtr, fields: Vec<Value>) -> Value {
         Value::object(self.alloc_instance(class, fields))
     }
 
-    /// Allocate an array of `element_ty`.
     #[inline]
     pub fn new_array(&mut self, element_ty: RealizedTy, values: Vec<Value>) -> Value {
         Value::object(self.alloc_array(element_ty, values))
     }
 
-    /// Allocate an empty map with the given key and value types.
     #[inline]
     pub fn new_map(&mut self, key_ty: RealizedTy, value_ty: RealizedTy) -> Value {
         Value::object(
@@ -290,13 +241,11 @@ impl BexVm {
         )
     }
 
-    /// Allocate an enum variant at the compiler-validated `index`.
     #[inline]
     pub fn new_variant(&mut self, enm: HeapPtr, index: usize) -> Value {
         Value::object(self.tlab.alloc_variant(enm, index))
     }
 
-    /// Allocate a string from a literal.
     #[inline]
     pub fn string_value(&mut self, text: &str) -> Value {
         Value::object(self.alloc_string(text))
