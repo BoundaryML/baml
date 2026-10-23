@@ -30,6 +30,8 @@ pub(crate) struct CompiledState {
     pub(crate) saved_call_types: Vec<SavedCallTypes>,
     /// An error the unwinder delivered to a suspended compiled body.
     pub(crate) delivery: Option<Box<VmError>>,
+    /// Evidence of the unwind delivered to (and continued by) a compiled body.
+    pub(in crate::vm) error_evidence: Option<crate::vm::error_evidence::UnwindEvidence>,
     /// Frame records of compiled bodies on the fiber. Declared after `fiber`
     /// so a parked fiber unwinds into it before it is dropped.
     pub(crate) records: Box<super::RecordChain>,
@@ -49,6 +51,7 @@ impl Default for CompiledState {
             call_type_args: Vec::new(),
             saved_call_types: Vec::new(),
             delivery: None,
+            error_evidence: None,
             records: Box::default(),
             static_type_cache: HashMap::new(),
             direct_calls: !super::frames_forced(),

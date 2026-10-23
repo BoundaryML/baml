@@ -399,7 +399,12 @@ impl<'db> Generator<'_, 'db> {
         let catches = blocks.iter().any(|block| block.handling.is_some());
         let base = self.slot_base();
         self.cause_slot = catches.then_some(base);
-        self.slots = base + usize::from(catches);
+        self.slots = base
+            + usize::from(catches)
+            + blocks
+                .iter()
+                .filter(|block| block.landing.is_some())
+                .count();
         self.spill_base = self.slots;
         if !self.pauses {
             return;

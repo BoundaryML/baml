@@ -504,6 +504,26 @@ impl BexVm {
         })
     }
 
+    /// Start an unwind, or continue the same unwind delivered through a compiled body.
+    pub(super) fn exception_evidence(
+        &mut self,
+        thrown: &VmThrown,
+        entry: RaiseEntry,
+        current: Option<(usize, &'static Function)>,
+    ) -> Result<(super::InFlightContext, Option<UnwindEvidence>), super::VmError> {
+        let (context, converted) = self.in_flight_context(thrown.context, thrown.value)?;
+        let carried = match &context {
+            super::InFlightContext::Carried(context) => Some(*context),
+            super::InFlightContext::Fresh { .. } => None,
+        };
+        let evidence = self
+            .compiled
+            .error_evidence
+            .take()
+            .or_else(|| self.begin_error_evidence(thrown, entry, current, carried, converted));
+        Ok((context, evidence))
+    }
+
     /// Write a held raise before a record that must follow it: a retained
     /// call this unwind completes.
     #[cold]
@@ -593,25 +613,42 @@ impl BexVm {
             .compact
             .as_ref()
             .is_some_and(|code| !writes_local(code, context_local));
-        // The same ID a note lookup reads back with `frame_telemetry_function`.
+        self.error_landed(
+            evidence,
+            FrameAt::Vm(depth),
+            Some((context_slot, trusted)),
+            handler_pc,
+        );
+    }
+
+    /// Shared landing bookkeeping for bytecode slots and compiled handler roots.
+    pub(super) fn error_landed(
+        &mut self,
+        evidence: UnwindEvidence,
+        frame: FrameAt,
+        context: Option<(usize, bool)>,
+        handler_pc: usize,
+    ) {
         let handler_function = if evidence.on_path {
-            function.telemetry_function_id
+            self.frame_telemetry_function(frame)
         } else {
-            self.frame_registered_function(FrameAt::Vm(depth))
+            self.frame_registered_function(frame)
         };
-        let level = self.level_of_vm(depth);
+        let level = self.level_of(frame);
         let Some(telemetry) = &mut self.telemetry else {
             return;
         };
-        telemetry.error_book().land(
-            level,
-            handler_function,
-            handler_pc,
-            context_slot,
-            trusted,
-            evidence.raise,
-            evidence.origin,
-        );
+        if let Some((context_slot, trusted)) = context {
+            telemetry.error_book().land(
+                level,
+                handler_function,
+                handler_pc,
+                context_slot,
+                trusted,
+                evidence.raise,
+                evidence.origin,
+            );
+        }
         self.write_unwind_end(
             evidence,
             UnwindResult::Caught,

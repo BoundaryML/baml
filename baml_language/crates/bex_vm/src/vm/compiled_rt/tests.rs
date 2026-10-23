@@ -2036,3 +2036,6 @@ fn compiled_trace_hooks_record_as_bytecode_does() {
         }
     }
 }
+
+#[cfg(not(any(target_arch = "wasm32", all(windows, target_arch = "aarch64"))))]
+mod error_tests;

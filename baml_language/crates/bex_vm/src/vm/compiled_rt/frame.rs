@@ -94,6 +94,7 @@ impl BexVm {
         &mut self,
         error: Box<VmError>,
         level: usize,
+        landing: Option<(usize, usize)>,
     ) -> Result<(Value, Value), Box<VmError>> {
         let VmError::Thrown(thrown) = *error else {
             return Err(error);
@@ -101,8 +102,8 @@ impl BexVm {
         let value = thrown.value;
         let outcome = self.telemetry_outcome_for_exception(value);
         // Capture the trace before removing any frames between the throw and handler.
-        let (mut context, _) = self
-            .in_flight_context(thrown.context, value)
+        let (mut context, mut evidence) = self
+            .exception_evidence(&thrown, RaiseEntry::Vm, None)
             .map_err(Box::new)?;
         while self.level_count() > level + 1 {
             let top = self.top_frame().expect("frames above the handler");
@@ -115,7 +116,10 @@ impl BexVm {
             } else {
                 value
             };
-            self.complete_unwound_frame(top, function, outcome, recorded, None);
+            self.complete_unwound_frame(top, function, outcome, recorded, evidence.as_mut());
+            if let Some(evidence) = &mut evidence {
+                self.error_frame_unwound(evidence, self.level_of(top));
+            }
             match top {
                 FrameAt::Vm(_) => {
                     if let Some(Frame::Bytecode(frame)) = self.frames.pop() {
@@ -134,6 +138,18 @@ impl BexVm {
                 self.alloc_error_context(value, &trace, cause)
             }
         };
+        let frame = self.frame_at_level(level).expect("catching frame is live");
+        if let Some((slot, _)) = landing {
+            self.stack.0[slot] = ctx;
+        }
+        if let Some(evidence) = evidence {
+            self.error_landed(
+                evidence,
+                frame,
+                landing.map(|(slot, _)| (slot, true)),
+                landing.map_or(0, |(_, pc)| pc),
+            );
+        }
         Ok((value, ctx))
     }
 
@@ -617,7 +633,7 @@ impl BexVm {
             frame.instruction_ptr = stub + crate::compiled_rt::stub::AFTER_CALL;
         }
         self.stack.truncate(kept);
-        let _ = evidence.take();
+        self.compiled.error_evidence = evidence.take();
         // SAFETY: see `load_function`.
         unsafe { self.load_function(depth) }.map_err(Into::into)
     }
