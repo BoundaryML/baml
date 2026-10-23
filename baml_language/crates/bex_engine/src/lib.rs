@@ -1876,9 +1876,7 @@ impl BexEngine {
             recording,
         } = config;
         let auto_telemetry_level = match &artifact_telemetry {
-            Some(policy) => policy
-                .resolve_level()
-                .map_err(|error| EngineError::Other(error.to_string()))?,
+            Some(policy) => policy.resolve_level(),
             None => btel_settings::mode::from_env()
                 .map_err(|error| EngineError::Other(error.to_string()))?,
         };

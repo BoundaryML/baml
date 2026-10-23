@@ -11,7 +11,7 @@ async fn generated_bridge_honors_only_the_publishers_recording_variable() {
     const SCENARIO: &str = "BAML_TEST_ARTIFACT_SCENARIO";
     let Some(scenario) = baml_env::raw_var(SCENARIO) else {
         // Separate processes isolate both environment variables and the bridge singleton.
-        for scenario in ["fixed", "custom_off", "custom_invalid"] {
+        for scenario in ["fixed", "custom_off"] {
             let output = std::process::Command::new(std::env::current_exe().unwrap())
                 .args([
                     "--exact",
@@ -21,14 +21,7 @@ async fn generated_bridge_honors_only_the_publishers_recording_variable() {
                 .env(SCENARIO, scenario)
                 .env("BOUNDARY_API_KEY", "local")
                 .env("BAML_TELEMETRY", "invalid")
-                .env(
-                    "ACME_TELEMETRY",
-                    if scenario == "custom_invalid" {
-                        "invalid"
-                    } else {
-                        "off"
-                    },
-                )
+                .env("ACME_TELEMETRY", "off")
                 .output()
                 .unwrap();
             assert!(
@@ -39,6 +32,73 @@ async fn generated_bridge_honors_only_the_publishers_recording_variable() {
         }
         return;
     };
+    run_generated_main((scenario != "fixed").then(|| "ACME_TELEMETRY".into())).await;
+}
+
+/// Telemetry settings never stop a generated SDK from loading, and it prints nothing
+/// about them. An unrecognized level records nothing; an unusable endpoint or an
+/// empty key leaves recording local, as it is without cloud credentials.
+#[tokio::test]
+async fn generated_bridge_loads_silently_with_unusable_telemetry_settings() {
+    const SCENARIO: &str = "BAML_TEST_UNUSABLE_TELEMETRY";
+    if baml_env::raw_var(SCENARIO).is_some() {
+        run_generated_main(Some("ACME_TELEMETRY".into())).await;
+        return;
+    }
+    let server = wiremock::MockServer::start().await;
+    let url = server.uri();
+    let url_with_query = format!("{url}/?not=a-base-url");
+    for (scenario, env, recordings) in [
+        ("level_false", &[("ACME_TELEMETRY", "false")][..], 0),
+        ("level_typo", &[("ACME_TELEMETRY", "hgih")], 0),
+        ("level_empty", &[("ACME_TELEMETRY", "")], 1),
+        (
+            "malformed_url",
+            &[
+                ("BOUNDARY_API_URL", url_with_query.as_str()),
+                ("BOUNDARY_API_KEY", "bdry_secret_test"),
+            ],
+            1,
+        ),
+        (
+            "empty_key",
+            &[("BOUNDARY_API_URL", url.as_str()), ("BOUNDARY_API_KEY", "")],
+            1,
+        ),
+    ] {
+        let home = tempfile::tempdir().unwrap();
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "generated_bridge_loads_silently_with_unusable_telemetry_settings",
+                "--nocapture",
+            ])
+            .env(SCENARIO, scenario)
+            .env("HOME", home.path())
+            .env("USERPROFILE", home.path())
+            .env("BAML_HOME", home.path())
+            .env_remove("ACME_TELEMETRY")
+            .env_remove("BOUNDARY_API_URL")
+            .env_remove("BOUNDARY_API_KEY")
+            .env_remove("BOUNDARY_PROJECT")
+            .envs(env.iter().copied())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{scenario}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&output.stderr), "", "{scenario}");
+        let recorded =
+            std::fs::read_dir(home.path().join("btel/recordings")).map_or(0, Iterator::count);
+        assert_eq!(recorded, recordings, "{scenario}");
+    }
+    assert!(server.received_requests().await.unwrap().is_empty());
+}
+
+/// Load `function main() -> int { 7 }` as a generated SDK does and run it.
+async fn run_generated_main(recording_level_envvar: Option<String>) {
     bridge_cffi::register_bridge(bridge_cffi::BridgeInfo {
         language: bridge_cffi::BridgeLanguage::Python,
         bridge_runtime_name: "baml-bridge-test".into(),
@@ -50,7 +110,7 @@ async fn generated_bridge_honors_only_the_publishers_recording_variable() {
     let artifact = baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program).unwrap();
     let bytecode = baml_artifact::encode_embedded(&artifact);
     let policy = btel_settings::artifact::ArtifactTelemetry {
-        recording_level_envvar: (scenario != "fixed").then(|| "ACME_TELEMETRY".into()),
+        recording_level_envvar,
         ..Default::default()
     };
     let mut metadata = toml::Table::new();
@@ -68,24 +128,8 @@ async fn generated_bridge_honors_only_the_publishers_recording_variable() {
         toml::Value::Table(metadata),
     )]))
     .unwrap();
-    let runtime = bridge_cffi::initialize_runtime_from_blob(bytecode.as_bytes(), Some(&manifest));
-    if scenario == "custom_invalid" {
-        let Err(error) = runtime else {
-            panic!("invalid permitted variable must fail startup")
-        };
-        assert_eq!(
-            error.to_string(),
-            format!(
-                r#"BAML startup failed: generated SDK bytecode could not be loaded.
-
-`baml_sdk` generated using BAML toolchain {}, could not be loaded by baml-bridge-test {}: ACME_TELEMETRY must be off, low, medium, or high."#,
-                baml_version::CANONICAL_VERSION,
-                baml_version::CANONICAL_VERSION,
-            )
-        );
-        return;
-    }
-    let runtime = runtime.unwrap();
+    let runtime =
+        bridge_cffi::initialize_runtime_from_blob(bytecode.as_bytes(), Some(&manifest)).unwrap();
     let args = CallFunctionArgs {
         call_id: bridge_cffi::new_function_call_id(),
         call_target: Some(CallTarget::FunctionName("main".into())),
