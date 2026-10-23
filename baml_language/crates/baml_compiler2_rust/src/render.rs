@@ -1,9 +1,6 @@
 //! Renders the module wrapper and Rust expression syntax.
 
-use std::{
-    collections::BTreeMap,
-    fmt::{self, Write as _},
-};
+use std::{collections::BTreeMap, fmt::Write as _};
 
 use baml_compiler2_mir::BinOp;
 
@@ -28,26 +25,6 @@ pub(crate) fn render_module(
     fingerprint: [u8; 32],
 ) -> String {
     let mut out = String::from(PRELUDE);
-    write_module(
-        &mut out,
-        bodies,
-        functions,
-        builtins,
-        artifact_path,
-        fingerprint,
-    )
-    .expect("formatting into a String cannot fail");
-    out
-}
-
-fn write_module(
-    out: &mut String,
-    bodies: &str,
-    functions: &[CompiledFunction],
-    builtins: &BTreeMap<String, usize>,
-    artifact_path: &str,
-    fingerprint: [u8; 32],
-) -> fmt::Result {
     // A builtin the VM does not bind is an internal error, not a panic.
     for (key, ordinal) in builtins {
         writeln!(
@@ -60,7 +37,8 @@ fn write_module(
                     }}))
                 }})
             }}"
-        )?;
+        )
+        .unwrap();
     }
     out.push_str(bodies);
     writeln!(
@@ -68,7 +46,8 @@ fn write_module(
         "pub static COMPILED_BODIES: CompiledBodyTable = CompiledBodyTable {{
             fingerprint: {fingerprint:?},
             entries: &["
-    )?;
+    )
+    .unwrap();
     for function in functions {
         writeln!(
             out,
@@ -81,13 +60,20 @@ fn write_module(
             function.slots,
             function.cause_slot,
             function.framed,
-        )?;
+        )
+        .unwrap();
     }
-    writeln!(out, "] }};")?;
+    out.push_str("] };\n");
     writeln!(
         out,
         "pub static PROGRAM_ARTIFACT: &[u8] = include_bytes!({artifact_path:?});"
     )
+    .unwrap();
+    out
+}
+
+pub(crate) fn object_value(object: usize) -> String {
+    format!("Value::object(vm.record_object(fr, ObjectIndex::from_raw({object})))")
 }
 
 pub(crate) fn coerce(code: &str, from: Repr, to: Repr) -> String {

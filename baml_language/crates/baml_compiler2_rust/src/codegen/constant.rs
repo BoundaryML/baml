@@ -3,28 +3,26 @@
 use baml_compiler2_mir::{BlockId, Constant, enum_display_name, function_display_name};
 
 use super::{Expr, Gen, Generator, unsupported};
-use crate::{admit::Rejection, analysis::Repr, render::float_literal};
+use crate::{
+    admit::Rejection,
+    analysis::Repr,
+    render::{float_literal, object_value},
+};
 
 impl<'db> Generator<'_, 'db> {
     pub(super) fn constant(&mut self, block: BlockId, constant: &Constant<'db>) -> Gen<Expr> {
-        Ok(match constant {
-            Constant::Int(n) => Expr::atom(format!("{n}i64"), Repr::Int),
-            Constant::Float(f) => Expr::atom(float_literal(*f), Repr::Float),
-            Constant::Bool(b) => Expr::atom(format!("{b}"), Repr::Bool),
-            Constant::Null => Expr::atom("Value::NULL", Repr::Value),
-            Constant::OmittedArg => Expr::atom("Value::OMITTED_ARG", Repr::Value),
+        let code = match constant {
+            Constant::Int(n) => return Ok(Expr::atom(format!("{n}i64"), Repr::Int)),
+            Constant::Float(f) => return Ok(Expr::atom(float_literal(*f), Repr::Float)),
+            Constant::Bool(b) => return Ok(Expr::atom(format!("{b}"), Repr::Bool)),
+            Constant::Null => return Ok(Expr::atom("Value::NULL", Repr::Value)),
+            Constant::OmittedArg => return Ok(Expr::atom("Value::OMITTED_ARG", Repr::Value)),
             Constant::String(s) => match self.index.strings.get(s.as_str()) {
-                Some(object) => Expr::new(
-                    format!("Value::object(vm.record_object(fr, ObjectIndex::from_raw({object})))"),
-                    Repr::Value,
-                ),
-                None => Expr::new(format!("vm.string_value({s:?})"), Repr::Value),
+                Some(&object) => object_value(object),
+                None => format!("vm.string_value({s:?})"),
             },
             Constant::Bigint(value) => match self.index.bigints.get(&value.to_string()) {
-                Some(object) => Expr::new(
-                    format!("Value::object(vm.record_object(fr, ObjectIndex::from_raw({object})))"),
-                    Repr::Value,
-                ),
+                Some(&object) => object_value(object),
                 None => {
                     return Err(Rejection::Invalid(
                         "bigint literal not in the program's pool".into(),
@@ -41,10 +39,7 @@ impl<'db> Generator<'_, 'db> {
                     .index
                     .pooled_generic_function(object, &[])
                     .unwrap_or(object);
-                Expr::new(
-                    format!("Value::object(vm.record_object(fr, ObjectIndex::from_raw({object})))"),
-                    Repr::Value,
-                )
+                object_value(object)
             }
             Constant::GenericFunction { func, type_args } => {
                 let name = function_display_name(self.db, *func);
@@ -56,23 +51,20 @@ impl<'db> Generator<'_, 'db> {
                         "generic function `{name}` used as a value with type arguments the program does not pool"
                     ));
                 };
-                Expr::new(
-                    format!("Value::object(vm.record_object(fr, ObjectIndex::from_raw({object})))"),
-                    Repr::Value,
-                )
+                object_value(object)
             }
             Constant::GlobalItem(binding) => {
                 let Some(slot) = self.index.let_slot(self.db, *binding) else {
                     return unsupported("top-level let not found in the program");
                 };
-                self.fallible_expr(
+                return self.fallible_expr(
                     block,
                     &format!(
                         "vm.load_global_checked(vm.record_object(fr, ObjectIndex::from_raw({})), {slot})",
                         self.object
                     ),
                     Repr::Value,
-                )?
+                );
             }
             Constant::EnumVariant { enum_ref, index } => {
                 let Some(object) = self.index.enum_(self.db, *enum_ref) else {
@@ -85,13 +77,11 @@ impl<'db> Generator<'_, 'db> {
                         "variant #{index} of an enum with {variants} variants"
                     )));
                 }
-                Expr::new(
-                    format!(
-                        "vm.new_variant(vm.record_object(fr, ObjectIndex::from_raw({object})), {index})"
-                    ),
-                    Repr::Value,
+                format!(
+                    "vm.new_variant(vm.record_object(fr, ObjectIndex::from_raw({object})), {index})"
                 )
             }
-        })
+        };
+        Ok(Expr::new(code, Repr::Value))
     }
 }
