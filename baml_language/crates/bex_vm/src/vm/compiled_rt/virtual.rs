@@ -13,10 +13,6 @@ use crate::{
 };
 
 impl BexVm {
-    /// Resolve an interface method for `receiver` and push the
-    /// implementation's then the method's type arguments for the next call.
-    /// `site` is the call's bytecode instruction index, when known; a known
-    /// site shares the interpreter's cache entry for the same `VirtualCall`.
     pub fn virtual_target(
         &mut self,
         receiver: Value,
@@ -67,8 +63,6 @@ impl BexVm {
         Ok(callee)
     }
 
-    /// The interpreter's cache key for the virtual call at bytecode
-    /// instruction `site` of the innermost (compiled) frame.
     fn virtual_call_key(
         &self,
         receiver: Value,
@@ -129,24 +123,18 @@ impl BexVm {
             .map(Some)
     }
 
-    /// Map interface arguments to callee slots and return the argument count.
     pub fn push_virtual_args(
         &mut self,
         callee: HeapPtr,
         layout: Option<&[Option<&str>]>,
         args: &[Value],
     ) -> Result<u32, Box<VmError>> {
-        match self.lay_out_virtual_args(callee, layout, args) {
-            Ok(count) => Ok(count),
-            Err(error) => {
-                // Discard type arguments for the failed call.
+        self.lay_out_virtual_args(callee, layout, args)
+            .inspect_err(|_| {
                 self.compiled.call_type_args.clear();
-                Err(error)
-            }
-        }
+            })
     }
 
-    /// Map named arguments to callee slots while reserving a bound method's receiver slot.
     pub fn push_indirect_args(
         &mut self,
         callee: HeapPtr,
@@ -208,7 +196,6 @@ impl BexVm {
         Ok(count(target.len()))
     }
 
-    /// Read an interface field from the receiver's mapped slot.
     pub fn virtual_load_field(
         &mut self,
         receiver: Value,
@@ -221,7 +208,6 @@ impl BexVm {
         self.load_field(receiver, slot)
     }
 
-    /// Write an interface field in the receiver's mapped slot.
     pub fn virtual_store_field(
         &mut self,
         receiver: Value,
@@ -235,7 +221,6 @@ impl BexVm {
         self.store_field(receiver, slot, value)
     }
 
-    /// Bind an interface method with implementation type arguments followed by method arguments.
     pub fn make_virtual_bound_method(
         &mut self,
         receiver: Value,
@@ -263,7 +248,6 @@ impl BexVm {
         Ok(Value::object(self.tlab.alloc(bound)))
     }
 
-    /// Create an interface method closure for a statically known `Self` type.
     pub fn make_virtual_function(
         &mut self,
         self_ty: &RealizedTy,
@@ -468,57 +452,54 @@ mod tests {
     }
 
     #[test]
-    fn adopted_defaults_carry_their_frame_through_the_cache() {
-        static GREETER: AtomicU32 = AtomicU32::new(0);
+    fn interface_resolution_and_fields() {
+        static IFACE: AtomicU32 = AtomicU32::new(0);
         fn greet(vm: &mut BexVm, _fr: &crate::compiled_rt::FrameRecord, args: &[Value]) -> Out {
-            dispatch(vm, args, &GREETER, &[], "greet")
+            dispatch(vm, args, &IFACE, &[], "greet")
         }
-        const SOURCE: &str = r#"
+        fn show(vm: &mut BexVm, _fr: &crate::compiled_rt::FrameRecord, args: &[Value]) -> Out {
+            dispatch(vm, args, &IFACE, &[], "to_string")
+        }
+        fn describe(vm: &mut BexVm, _fr: &crate::compiled_rt::FrameRecord, args: &[Value]) -> Out {
+            dispatch(vm, args, &IFACE, &[RealizedTy::Int], "describe")
+        }
+        fn area_fn(vm: &mut BexVm, _fr: &crate::compiled_rt::FrameRecord, args: &[Value]) -> Out {
+            let iface = vm.idx_to_ptr(object(&IFACE));
+            vm.make_virtual_bound_method(args[0], iface, &[], "area", &[])
+        }
+        fn rename(vm: &mut BexVm, _fr: &crate::compiled_rt::FrameRecord, args: &[Value]) -> Out {
+            let iface = vm.idx_to_ptr(object(&IFACE));
+            vm.virtual_store_field(args[0], iface, &[], 0, args[1])?;
+            vm.virtual_load_field(args[0], iface, &[], 0)
+        }
+        for (source, name, body, iface, expected) in [
+            (
+                r#"
             interface Greeter {
                 function greet(self) -> string throws never { `hello from ${reflect.Type.of<Self>().to_string()}` }
             }
             class Adopts { implements Greeter {} }
             function Greet(g: Greeter) -> string { g.greet() }
             function Main() -> string { `${Greet(Adopts {})}|${Greet(Adopts {})}` }
-        "#;
-        let out = run_with_compiled_bodies(
-            SOURCE,
-            &[("user.Greet", greet)],
-            &[("user.Greeter", &GREETER)],
-            false,
-        );
-        assert_eq!(out, "hello from Adopts|hello from Adopts");
-    }
-
-    #[test]
-    fn structural_defaults_resolve_without_caching() {
-        static TO_STRING: AtomicU32 = AtomicU32::new(0);
-        fn show(vm: &mut BexVm, _fr: &crate::compiled_rt::FrameRecord, args: &[Value]) -> Out {
-            dispatch(vm, args, &TO_STRING, &[], "to_string")
-        }
-        const SOURCE: &str = r#"
+        "#,
+                "user.Greet",
+                greet as super::super::CompiledFn,
+                "user.Greeter",
+                Some("hello from Adopts|hello from Adopts"),
+            ),
+            (
+                r#"
             class Plain { x int }
             function Show(p: Plain) -> string { p.to_string() }
             function Main() -> string { Show(Plain { x: 1 }) }
-        "#;
-        let expected = run_with_compiled_bodies(SOURCE, &[], &[], false);
-        let out = run_with_compiled_bodies(
-            SOURCE,
-            &[("user.Show", show)],
-            &[("baml.ToString", &TO_STRING)],
-            false,
-        );
-        assert_eq!(out, expected);
-        assert!(out.contains("Plain"), "{out}");
-    }
-
-    #[test]
-    fn generic_interfaces_dispatch_on_their_instantiation() {
-        static CONV: AtomicU32 = AtomicU32::new(0);
-        fn describe(vm: &mut BexVm, _fr: &crate::compiled_rt::FrameRecord, args: &[Value]) -> Out {
-            dispatch(vm, args, &CONV, &[RealizedTy::Int], "describe")
-        }
-        const SOURCE: &str = r#"
+        "#,
+                "user.Show",
+                show as super::super::CompiledFn,
+                "baml.ToString",
+                None,
+            ),
+            (
+                r#"
             interface Conv<T> { function describe(self) -> string throws never }
             class Both {
                 implements Conv<int> { function describe(self) -> string throws never { "as int" } }
@@ -526,28 +507,14 @@ mod tests {
             }
             function Describe(c: Conv<int>) -> string { c.describe() }
             function Main() -> string { Describe(Both {}) }
-        "#;
-        let out = run_with_compiled_bodies(
-            SOURCE,
-            &[("user.Describe", describe)],
-            &[("user.Conv", &CONV)],
-            false,
-        );
-        assert_eq!(out, "as int");
-    }
-
-    #[test]
-    fn bound_method_values_resolve_at_bind_time() {
-        static SHAPE: AtomicU32 = AtomicU32::new(0);
-        fn area_fn(
-            vm: &mut BexVm,
-            _fr: &crate::compiled_rt::FrameRecord,
-            args: &[Value],
-        ) -> Result<Value, Box<VmError>> {
-            let iface = vm.idx_to_ptr(object(&SHAPE));
-            vm.make_virtual_bound_method(args[0], iface, &[], "area", &[])
-        }
-        const SOURCE: &str = r#"
+        "#,
+                "user.Describe",
+                describe as super::super::CompiledFn,
+                "user.Conv",
+                Some("as int"),
+            ),
+            (
+                r#"
             interface Shape { function area(self) -> int throws never }
             class Rect {
                 w int
@@ -559,29 +526,14 @@ mod tests {
                 let f = AreaFn(Rect { w: 2, h: 5 });
                 `${f()}`
             }
-        "#;
-        let out = run_with_compiled_bodies(
-            SOURCE,
-            &[("user.AreaFn", area_fn)],
-            &[("user.Shape", &SHAPE)],
-            false,
-        );
-        assert_eq!(out, "10");
-    }
-
-    #[test]
-    fn interface_fields_follow_the_implementation_links() {
-        static NAMED: AtomicU32 = AtomicU32::new(0);
-        fn rename(
-            vm: &mut BexVm,
-            _fr: &crate::compiled_rt::FrameRecord,
-            args: &[Value],
-        ) -> Result<Value, Box<VmError>> {
-            let iface = vm.idx_to_ptr(object(&NAMED));
-            vm.virtual_store_field(args[0], iface, &[], 0, args[1])?;
-            vm.virtual_load_field(args[0], iface, &[], 0)
-        }
-        const SOURCE: &str = r#"
+        "#,
+                "user.AreaFn",
+                area_fn as super::super::CompiledFn,
+                "user.Shape",
+                Some("10"),
+            ),
+            (
+                r#"
             interface Named { name string }
             class Person {
                 name string
@@ -597,13 +549,23 @@ mod tests {
                 let pet = Pet { kind: "cat", name: "c" };
                 `${Rename(Person { name: "a" }, "b")}|${Rename(pet, "d")}|${pet.kind}`
             }
-        "#;
-        let out = run_with_compiled_bodies(
-            SOURCE,
-            &[("user.Rename", rename)],
-            &[("user.Named", &NAMED)],
-            false,
-        );
-        assert_eq!(out, "b|d|cat");
+        "#,
+                "user.Rename",
+                rename as super::super::CompiledFn,
+                "user.Named",
+                Some("b|d|cat"),
+            ),
+        ] {
+            let expected = expected.map(str::to_owned).unwrap_or_else(|| {
+                let value = run_with_compiled_bodies(source, &[], &[], false);
+                assert!(value.contains("Plain"), "{value}");
+                value
+            });
+            assert_eq!(
+                run_with_compiled_bodies(source, &[(name, body)], &[(iface, &IFACE)], false),
+                expected,
+                "{name}"
+            );
+        }
     }
 }

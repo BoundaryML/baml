@@ -243,13 +243,13 @@ struct StaticVirtualCallTarget {
     frame_type_args: Vec<bex_vm_types::RealizedTy>,
 }
 
-/// A bytecode function's call frame, also used by its compiled body.
+/// Bytecode call frame — pushed when entering a bytecode function.
 #[derive(Clone, Debug)]
 pub struct BytecodeFrame {
     /// Pointer to the running function (or closure) object.
     pub function: HeapPtr,
     /// The next instruction or resume-stub offset, or `compiled_rt::RUNNING` inside a body.
-    instruction_ptr: usize,
+    pub instruction_ptr: usize,
     /// Local variables offset in the eval stack.
     pub(crate) locals_offset: StackIndex,
     /// Resolved type arguments for this call frame.
@@ -272,7 +272,7 @@ pub struct BytecodeFrame {
     /// up-to-date before each `step()` call.
     /// Used by `capture_stack_trace`, `try_unwind_exception`, and event
     /// source location capture. Compiled bodies store their last reported
-    /// instruction index here; see `BexVm::compiled_pc`.
+    /// instruction index here; see `BexVm::frame_pc`.
     pub(crate) faulting_pc: usize,
     /// Producer-only invocation state. `None` means the invocation is hidden.
     pub(crate) telemetry: Option<FrameTelemetry>,
@@ -2558,7 +2558,7 @@ impl BexVm {
             telemetry: self.telemetry.as_mut().and_then(|state| span.enter(state)),
         });
         match record {
-            Some(record) => compiled_rt::record_ref(record).set_scoped(true),
+            Some(record) => compiled_rt::record_ref(record).scoped.set(true),
             None => self.trace_scope_frame = frame_idx,
         }
         Ok(())
@@ -2605,7 +2605,7 @@ impl BexVm {
     #[inline(never)]
     pub(crate) fn end_record_activation(&mut self, record: *const compiled_rt::FrameRecord) {
         let record = compiled_rt::record_ref(record);
-        record.set_scoped(false);
+        record.scoped.set(false);
         let level = Some(record.level());
         if let Some(previous) = self
             .manual_activations
@@ -3317,7 +3317,7 @@ impl BexVm {
         if handling == Value::NULL || self.context_error(handling) != Ok(source) {
             return;
         }
-        let active = self.active_handler_contexts();
+        let active = self.handler_contexts::<true>();
         self.context_transfers.retain(|transfer| {
             transfer.handling != handling && active.contains(&transfer.handling)
         });
@@ -3335,54 +3335,57 @@ impl BexVm {
         Some(self.context_transfers.swap_remove(index).handling)
     }
 
-    /// The contexts of every handler whose body is running on this thread, in
-    /// every frame and at every nesting depth.
-    fn active_handler_contexts(&self) -> Vec<Value> {
-        let mut contexts = Vec::new();
+    /// Collect active handler contexts, or just the innermost cause. The latter
+    /// stays inline in the `SmallVec` and stops walking as soon as it finds one.
+    fn handler_contexts<const ALL: bool>(&self) -> SmallVec<[Value; 1]> {
+        let mut contexts = SmallVec::new();
         let mut innermost_bc = true;
         for frame in self.stack_view().into_iter().rev() {
-            let depth = match frame {
-                FrameAt::Vm(depth) => depth,
-                FrameAt::Record(_) => {
-                    innermost_bc = false;
-                    contexts.extend(self.frame_cause(frame));
-                    continue;
+            let compiled_cause = match frame {
+                FrameAt::Record(_) => Some(self.frame_cause(frame)),
+                FrameAt::Vm(depth) if self.compiled_at(depth).is_some() => {
+                    Some(self.frame_cause(FrameAt::Vm(depth)))
                 }
+                FrameAt::Vm(_) => None,
             };
-            let Frame::Bytecode(bf) = &self.frames[depth] else {
-                continue;
-            };
-            if self.compiled_at(depth).is_some() {
+            if let Some(cause) = compiled_cause {
                 innermost_bc = false;
-                contexts.extend(self.compiled_cause(depth));
-                continue;
+                contexts.extend(cause);
+            } else if let FrameAt::Vm(depth) = frame
+                && let Frame::Bytecode(bf) = &self.frames[depth]
+            {
+                let pc = if innermost_bc {
+                    self.cur_pc
+                } else {
+                    bf.faulting_pc
+                };
+                innermost_bc = false;
+                // SAFETY: same `load_function` contract as the unwind walk.
+                let Ok(func) = (unsafe { self.load_function(depth) }) else {
+                    if ALL {
+                        continue;
+                    }
+                    break;
+                };
+                let table = match &func.bytecode.compact {
+                    Some(compact) => &compact.handler_context_table,
+                    None => &func.bytecode.handler_context_table,
+                };
+                let entries = table
+                    .iter()
+                    .filter(|entry| pc >= entry.start_pc && pc < entry.end_pc);
+                let value = |entry: &bex_vm_types::bytecode::HandlerContextEntry| {
+                    self.stack[Self::local_slot_stack_index(bf.locals_offset, entry.context_slot)]
+                };
+                if ALL {
+                    contexts.extend(entries.map(value));
+                } else {
+                    contexts.extend(entries.max_by_key(|entry| entry.handler_pc).map(value));
+                }
             }
-            let pc = if innermost_bc {
-                self.cur_pc
-            } else {
-                bf.faulting_pc
-            };
-            innermost_bc = false;
-            // SAFETY: same `load_function` contract as the unwind walk.
-            let Ok(func) = (unsafe { self.load_function(depth) }) else {
-                continue;
-            };
-            let slots: Vec<usize> = match &func.bytecode.compact {
-                Some(compact) => compact
-                    .handler_contexts_for_pc(pc)
-                    .map(|entry| entry.context_slot)
-                    .collect(),
-                None => func
-                    .bytecode
-                    .handler_contexts_for_pc(pc)
-                    .map(|entry| entry.context_slot)
-                    .collect(),
-            };
-            contexts.extend(
-                slots
-                    .into_iter()
-                    .map(|slot| self.stack[Self::local_slot_stack_index(bf.locals_offset, slot)]),
-            );
+            if !ALL && !contexts.is_empty() {
+                break;
+            }
         }
         contexts
     }
@@ -3779,7 +3782,7 @@ impl BexVm {
     pub(crate) fn current_runtime_package(&self) -> HeapPtr {
         // A directly called body runs in its record's package.
         if let Some(FrameAt::Record(record)) = self.top_frame() {
-            return compiled_rt::record_ref(record).package();
+            return compiled_rt::record_ref(record).package.get();
         }
         self.frames
             .iter()
@@ -6893,66 +6896,14 @@ impl BexVm {
         }
     }
 
-    /// BEP-042 cause chain: find the error currently being *handled* at the
-    /// throw site, by walking the live frames (read-only). A throw whose PC
-    /// lies in a handler body — a `HandlerContextEntry` range in the
-    /// `handler_context_table` — is "during handling of" that handler's caught
-    /// error, which becomes the new error's `cause`. Returns `Value::NULL`
-    /// when no enclosing handler is active (a fresh, unchained error).
-    ///
-    /// Mirrors the PC selection of [`Self::try_unwind_exception`]'s frame walk
-    /// (innermost bytecode frame uses the live `cur_pc`; outer frames use the
-    /// recorded call-site `faulting_pc`), but never mutates and stops at the
-    /// innermost active handler.
+    /// BEP-042 cause chain: the innermost active handler's context, or null.
+    /// Inner bytecode uses `cur_pc`; outer bytecode uses its saved call site,
+    /// and compiled frames use their recorded cause.
     fn find_cause_context(&self) -> Value {
-        let mut innermost_bc = true;
-        for frame in self.stack_view().into_iter().rev() {
-            let depth = match frame {
-                FrameAt::Vm(depth) => depth,
-                FrameAt::Record(_) => {
-                    innermost_bc = false;
-                    if let Some(context) = self.frame_cause(frame) {
-                        return context;
-                    }
-                    continue;
-                }
-            };
-            let Frame::Bytecode(bf) = &self.frames[depth] else {
-                continue; // native frames hold no handler bodies
-            };
-            if self.compiled_at(depth).is_some() {
-                innermost_bc = false;
-                if let Some(context) = self.compiled_cause(depth) {
-                    return context;
-                }
-                continue;
-            }
-            let pc = if innermost_bc {
-                self.cur_pc
-            } else {
-                bf.faulting_pc
-            };
-            innermost_bc = false;
-
-            // SAFETY: same `load_function` contract as the unwind walk.
-            let Ok(func) = (unsafe { self.load_function(depth) }) else {
-                return Value::NULL;
-            };
-            // Innermost (narrowest) handler body wins — largest handler_pc.
-            let entry = if let Some(compact) = &func.bytecode.compact {
-                compact.handler_context_for_pc(pc)
-            } else {
-                func.bytecode.handler_context_for_pc(pc)
-            };
-            if let Some(entry) = entry {
-                // The cause is the enclosing handler's `baml.errors.Context`,
-                // which lives in its context slot — itself a link in the chain
-                // (with its own `cause`).
-                let slot = Self::local_slot_stack_index(bf.locals_offset, entry.context_slot);
-                return self.stack[slot];
-            }
-        }
-        Value::NULL
+        self.handler_contexts::<false>()
+            .first()
+            .copied()
+            .unwrap_or(Value::NULL)
     }
 
     fn resolve_callable_target(
@@ -8150,7 +8101,7 @@ impl BexVm {
         match frame {
             FrameAt::Vm(frame_idx) => self.end_manual_activation(frame_idx),
             FrameAt::Record(record) => {
-                if compiled_rt::record_ref(record).scoped() {
+                if compiled_rt::record_ref(record).scoped.get() {
                     self.end_record_activation(record);
                 }
             }
@@ -8590,7 +8541,7 @@ impl BexVm {
             }
             for frame in self.stack_view() {
                 if let FrameAt::Record(record) = frame {
-                    compiled_rt::record_ref(record).set_receipt(None);
+                    compiled_rt::record_ref(record).receipt.set(None);
                 }
             }
             // An active `Span.run` scope observes through the same state.

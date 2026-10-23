@@ -24,7 +24,6 @@ impl BexVm {
         }
     }
 
-    /// The VM frame of a body entered by the VM.
     fn entry_frame(&self, frame: &FrameRecord) -> Option<&crate::vm::BytecodeFrame> {
         match &self.frames[Self::record_vm_frame(frame)?] {
             Frame::Bytecode(frame) => Some(frame),
@@ -32,7 +31,6 @@ impl BexVm {
         }
     }
 
-    /// Read a frame type argument, reporting a missing slot as a substitution error.
     #[inline]
     pub fn frame_type_arg(
         &self,
@@ -95,18 +93,14 @@ impl BexVm {
         Value::object(ptr)
     }
 
-    /// Check whether the type held by `value` satisfies `bound`.
     pub fn bound_satisfied(&mut self, value: Value, bound: Value) -> Result<bool, Box<VmError>> {
         self.satisfies_bound(value, bound).map_err(Box::new)
     }
 
-    /// The type a `reflect.Type` value denotes, read where a type argument
-    /// held as a value is used.
     pub fn type_operand(&mut self, value: Value) -> Result<RealizedTy, Box<VmError>> {
         Ok(self.type_operand_value(value).map_err(Box::new)?.ty)
     }
 
-    /// Bind a type value to a frame slot for subsequent template substitution.
     pub fn bind_type(
         &mut self,
         frame: &FrameRecord,
@@ -136,13 +130,11 @@ impl BexVm {
         Ok(())
     }
 
-    /// Test membership in a realized type.
     #[must_use]
     pub fn value_is_member_of(&self, value: Value, ty: &RealizedTy) -> bool {
         crate::type_match::value_is_member(self, value, ty.as_ty()).unwrap_or(false)
     }
 
-    /// Test class identity and invariant equivalence of its type arguments.
     #[must_use]
     pub fn is_instance_of_at(
         &self,
@@ -165,7 +157,7 @@ impl BexVm {
         }
     }
 
-    /// Return the instance type of `class` at `type_args`.
+    #[inline]
     #[must_use]
     pub fn class_type_at(&self, class: HeapPtr, type_args: Box<[RealizedTy]>) -> RealizedTy {
         let Object::Class(declaration) = self.get_object(class) else {
@@ -174,8 +166,6 @@ impl BexVm {
         RealizedTy::Class(TypeHead::new(class, declaration.type_tag), type_args)
     }
 
-    /// The existential type of the interface `iface` at `type_args`, with
-    /// its associated types bound as `assoc` names them.
     #[must_use]
     pub fn interface_type_at(
         &self,
@@ -198,7 +188,6 @@ impl BexVm {
         )
     }
 
-    /// The type of the enum `enm`'s values.
     #[must_use]
     pub fn enum_type(&self, enm: HeapPtr) -> RealizedTy {
         let Object::Enum(declaration) = self.get_object(enm) else {
@@ -207,7 +196,6 @@ impl BexVm {
         RealizedTy::Enum(TypeHead::new(enm, declaration.type_tag))
     }
 
-    /// Allocate a generic class instance with fields in slot order.
     #[inline]
     pub fn new_generic_instance(
         &mut self,
@@ -221,7 +209,6 @@ impl BexVm {
         )
     }
 
-    /// Create a generic function value in the running frame's package.
     pub fn make_generic_function(
         &mut self,
         frame: &FrameRecord,
@@ -300,10 +287,18 @@ mod tests {
         vm
     }
 
+    fn with_frame(type_args: &[RealizedTy], test: impl FnOnce(&mut BexVm, &super::FrameRecord)) {
+        vm_with_frame(type_args)
+            .run_entry_with(|vm, frame| -> Result<(), Box<crate::errors::VmError>> {
+                test(vm, frame);
+                Ok(())
+            })
+            .unwrap();
+    }
+
     #[test]
     fn templates_substitute_against_the_frame() {
-        let mut vm = vm_with_frame(&[RealizedTy::Int, RealizedTy::String]);
-        vm.run_entry_with(|vm, fr| -> Result<(), Box<crate::errors::VmError>> {
+        with_frame(&[RealizedTy::Int, RealizedTy::String], |vm, fr| {
             assert_eq!(vm.frame_type_arg(fr, 1).unwrap(), RealizedTy::String);
             let out_of_range = vm.frame_type_arg(fr, 2).unwrap_err();
             assert!(
@@ -315,48 +310,37 @@ mod tests {
                 ),
                 "{out_of_range:?}"
             );
-            Ok(())
-        })
-        .unwrap();
+        });
     }
 
     #[test]
     fn values_are_tested_against_substituted_types() {
-        let mut vm = vm_with_frame(&[RealizedTy::Int]);
-        vm.run_entry_with(|vm, fr| -> Result<(), Box<crate::errors::VmError>> {
+        with_frame(&[RealizedTy::Int], |vm, fr| {
             let t = vm.frame_type_arg(fr, 0).unwrap();
             assert!(vm.value_is_member_of(Value::int(3), &t));
             assert!(!vm.value_is_member_of(Value::bool(true), &t));
             assert!(!vm.value_is_member_of(Value::NULL, &t));
-            Ok(())
-        })
-        .unwrap();
+        });
     }
 
     #[test]
     fn static_type_values_are_one_object_per_site() {
-        let mut vm = vm_with_frame(&[]);
-        vm.run_entry_with(|vm, fr| -> Result<(), Box<crate::errors::VmError>> {
+        with_frame(&[], |vm, fr| {
             let first = vm.static_type_value(fr, 0, RealizedTy::Int);
             let again = vm.static_type_value(fr, 0, RealizedTy::Int);
             let other = vm.static_type_value(fr, 1, RealizedTy::Int);
             assert_eq!(first.as_object_ptr(), again.as_object_ptr());
             assert_ne!(first.as_object_ptr(), other.as_object_ptr());
-            Ok(())
-        })
-        .unwrap();
+        });
     }
 
     #[test]
     fn type_operands_realize_type_values_only() {
-        let mut vm = vm_with_frame(&[]);
-        vm.run_entry_with(|vm, fr| -> Result<(), Box<crate::errors::VmError>> {
+        with_frame(&[], |vm, fr| {
             let value = vm.type_value(fr, None, RealizedTy::String);
             assert_eq!(vm.type_operand(value).unwrap(), RealizedTy::String);
             assert!(vm.type_operand(Value::int(1)).is_err());
-            Ok(())
-        })
-        .unwrap();
+        });
     }
 
     #[test]
@@ -390,8 +374,7 @@ mod tests {
 
     #[test]
     fn bound_types_widen_the_frame() {
-        let mut vm = vm_with_frame(&[RealizedTy::Int]);
-        vm.run_entry_with(|vm, fr| -> Result<(), Box<crate::errors::VmError>> {
+        with_frame(&[RealizedTy::Int], |vm, fr| {
             let bound = vm.type_value(fr, None, RealizedTy::String);
             vm.bind_type(fr, 2, bound).unwrap();
             assert_eq!(vm.frame_type_args(fr).len(), 3);
@@ -409,8 +392,6 @@ mod tests {
                 RealizedTy::String,
                 "the exact bound value wins"
             );
-            Ok(())
-        })
-        .unwrap();
+        });
     }
 }

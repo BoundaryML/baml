@@ -24,8 +24,7 @@ mod r#virtual;
 #[cfg(test)]
 pub(crate) mod tests;
 
-/// Whether `BAML_GC_STRESS=1` makes compiled code yield at every check and the engine collect
-/// at every yield.
+/// `BAML_GC_STRESS=1` forces safepoints and collections.
 #[must_use]
 pub fn gc_stress() -> bool {
     static STRESS: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
@@ -43,12 +42,9 @@ pub fn collection_due(heap: &bex_heap::BexHeap) -> Option<bex_heap::CollectionLe
     heap.should_collect()
 }
 
-/// The literal in a `RealizedTy::Literal` built by generated code.
 pub use baml_base::Literal;
-/// The freshness of a `RealizedTy::Literal` built by generated code.
 pub use baml_type::Freshness;
 use bex_vm_types::{HeapPtr, Value, types::Function};
-/// Severity of a log emitted by generated code.
 pub use btel_records::LogLevel;
 pub(crate) use fiber::{Fiber, Request};
 pub use trace::TraceHookMode;
@@ -58,13 +54,10 @@ use crate::{
     vm::{BexVm, value_as_float},
 };
 
-/// A compiled BAML function body, entered with its frame record and its
-/// arguments. It runs on its VM's fiber, so it may pause through
-/// [`BexVm::suspend`] anywhere in its call chain.
+/// Bodies run on their VM's fiber and can suspend anywhere in their call chain.
 pub type CompiledFn = fn(&mut BexVm, &FrameRecord, &[Value]) -> Result<Value, Box<VmError>>;
 
-/// Whether `BAML_COMPILED_FRAMES=1` makes every compiled call push a VM frame,
-/// as before frame records.
+/// `BAML_COMPILED_FRAMES=1` disables direct record calls.
 #[must_use]
 pub fn frames_forced() -> bool {
     static FORCED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
@@ -134,7 +127,7 @@ impl CompiledEntry {
 /// Compiled frame positions: `instruction_ptr` holds [`RUNNING`] or an offset into
 /// [`stub::CODE`].
 /// `faulting_pc` holds an original bytecode instruction index, translated by
-/// `BexVm::compiled_pc`.
+/// `BexVm::frame_pc`.
 pub(crate) mod stub {
     use bex_vm_types::bytecode::OpCode;
 
@@ -177,19 +170,15 @@ pub(crate) mod stub {
     };
 }
 
-/// The `instruction_ptr` of a compiled frame whose body is running on the
-/// fiber; see [`stub`].
+/// Running fiber frames have no bytecode instruction pointer.
 pub(crate) const RUNNING: usize = usize::MAX;
 
-/// Where `function`'s [`stub::CODE`] starts, for a function with a compiled
-/// body.
 #[inline]
 pub(crate) fn stub_start(function: &Function) -> Option<usize> {
     function.compiled_body?;
     Some(function.bytecode.compact.as_ref()?.code.len() - stub::CODE.len())
 }
 
-/// Where the body of a compiled frame stands; see [`stub`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CompiledAt {
     /// Running on the Rust stack, or not yet started: an error leaves it.
@@ -198,17 +187,18 @@ pub(crate) enum CompiledAt {
     Suspended,
 }
 
-/// Where the compiled body of a frame at `instruction_ptr` running `function`
-/// stands; `None` when the frame runs bytecode.
 #[inline]
 pub(crate) fn compiled_at(instruction_ptr: usize, function: &Function) -> Option<CompiledAt> {
     if instruction_ptr == RUNNING {
         return Some(CompiledAt::Running);
     }
-    match instruction_ptr.checked_sub(stub_start(function)?)? {
-        stub::START => Some(CompiledAt::Running),
-        _ => Some(CompiledAt::Suspended),
-    }
+    Some(
+        if instruction_ptr.checked_sub(stub_start(function)?)? == stub::START {
+            CompiledAt::Running
+        } else {
+            CompiledAt::Suspended
+        },
+    )
 }
 
 /// Create a fresh throw whose context is built when it lands.
@@ -234,13 +224,11 @@ pub fn type_tag(value: Value) -> i64 {
     crate::vm::value_type_tag(value)
 }
 
-/// Unbox an `int`, reporting an internal error if the checker assigned the wrong type.
 #[inline]
 pub fn expect_int(value: Value) -> Result<i64, Box<VmError>> {
     value.as_int().ok_or_else(|| Box::new(checker_hole("int")))
 }
 
-/// Unbox a `bool`, reporting an internal error if the checker assigned the wrong type.
 #[inline]
 pub fn expect_bool(value: Value) -> Result<bool, Box<VmError>> {
     value
@@ -248,7 +236,6 @@ pub fn expect_bool(value: Value) -> Result<bool, Box<VmError>> {
         .ok_or_else(|| Box::new(checker_hole("bool")))
 }
 
-/// Unbox a `float`, reporting an internal error if the checker assigned the wrong type.
 #[inline]
 pub fn expect_f64(value: Value) -> Result<f64, Box<VmError>> {
     value_as_float(value).ok_or_else(|| Box::new(checker_hole("float")))
@@ -270,7 +257,6 @@ pub fn callee_ptr(value: Value) -> Result<HeapPtr, Box<VmError>> {
         .ok_or_else(|| Box::new(checker_hole("function")))
 }
 
-/// The compiled body attached to `function`.
 #[inline]
 #[allow(unsafe_code)]
 pub(crate) fn compiled_fn(function: &Function) -> Option<CompiledFn> {

@@ -8,7 +8,6 @@ use crate::{
 };
 
 impl BexVm {
-    /// Read a global, preserving the interpreter's initialization-order check.
     pub fn load_global_checked(
         &self,
         function: HeapPtr,
@@ -18,15 +17,15 @@ impl BexVm {
             unreachable!("compiled code names its own function object");
         };
         let slot = GlobalIndex::from_raw(index);
-        if self.runtime_package_of(body).as_ptr().is_null() && self.global_is_pending(slot) {
+        let package = self.runtime_package_of(body);
+        if package.as_ptr().is_null() && self.global_is_pending(slot) {
             return Err(Box::new(
                 VmInternalError::GlobalReadBeforeInit { slot }.into(),
             ));
         }
-        Ok(self.load_global(function, index))
+        Ok(self.load_global_in(package, slot))
     }
 
-    /// Store an initializer's result in its owning package's global cell.
     pub fn store_global(
         &mut self,
         function: HeapPtr,
@@ -48,7 +47,6 @@ impl BexVm {
         Ok(())
     }
 
-    /// Read a global initialized by the owning package's `$init`.
     #[inline]
     #[must_use]
     pub fn load_global(&self, function: HeapPtr, index: usize) -> Value {
@@ -61,13 +59,11 @@ impl BexVm {
         )
     }
 
-    /// Return `Package.current` for the linked package ordinal.
     #[inline]
     pub fn current_package(&mut self, ordinal: usize) -> Value {
         crate::package_reflect::reflect::current_package_value(self, ordinal)
     }
 
-    /// Resolve a type constant without frame type arguments.
     pub fn type_constant(
         &self,
         function: HeapPtr,
@@ -76,7 +72,6 @@ impl BexVm {
         self.substitute_type_constant(&[], function, index)
     }
 
-    /// Resolve a type constant using the type arguments of `frame`.
     pub fn frame_type_constant(
         &self,
         frame: &super::FrameRecord,
@@ -108,7 +103,6 @@ impl BexVm {
         })
     }
 
-    /// Test `value` against a type constant without frame type arguments.
     pub fn is_type_constant(
         &self,
         function: HeapPtr,

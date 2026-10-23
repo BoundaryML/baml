@@ -1,117 +1,56 @@
 use std::{
     collections::HashMap,
-    sync::{Arc, atomic::AtomicBool},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicU32, Ordering},
+    },
 };
 
 use bex_heap::CollectionLevel;
 use bex_vm_types::{FunctionKind, HeapPtr, Object, ObjectIndex, RootHaver, Value};
 
-use super::FrameRecord;
+use super::{CompiledFn, FrameRecord};
+
+type BodyResult = Result<Value, Box<VmError>>;
 use crate::{
     errors::VmError,
     telemetry::{InvocationOutcome, SpanRecord, TelemetryPolicies, TelemetryState, TimingRecord},
     vm::{BexVm, Frame, VmExecState},
 };
 
-// Rust tests can install compiled bodies directly.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
-fn compiled_body_is_indistinguishable_from_bytecode() {
-    use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
-
-    static CALLS: AtomicUsize = AtomicUsize::new(0);
+fn compiled_generic_calls_capture_type_arguments_as_bytecode_does() {
     static SAME: AtomicU32 = AtomicU32::new(0);
-    fn add_compiled(
-        vm: &mut BexVm,
-        _fr: &FrameRecord,
-        args: &[Value],
-    ) -> Result<Value, Box<VmError>> {
-        CALLS.fetch_add(1, Ordering::Relaxed);
-        let sum = vm.add_i64(test_int(args[0]), test_int(args[1]))?;
-        Ok(Value::int(sum))
+    fn same(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
+        let ty = vm.frame_type_arg(fr, 0)?;
+        Ok(Value::bool(vm.value_is_member_of(args[0], &ty)))
     }
-    // `Same<T>` forwards its type argument to the compiled `Add` body.
-    fn same_compiled(
-        vm: &mut BexVm,
-        fr: &FrameRecord,
-        args: &[Value],
-    ) -> Result<Value, Box<VmError>> {
-        let t = vm.frame_type_arg(fr, 0)?;
-        let callee = vm.idx_to_ptr(ObjectIndex::from_raw(SAME.load(Ordering::Relaxed) as usize));
-        let _ = vm.call_compiled(
-            fr,
-            callee,
-            add_compiled,
-            std::slice::from_ref(&t),
-            &[args[0], args[1]],
-            0,
-        )?;
-        Ok(Value::bool(vm.value_is_member_of(args[1], &t)))
+    fn forward(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
+        let ty = vm.frame_type_arg(fr, 0)?;
+        vm.call_compiled(fr, object(vm, &SAME), same, &[ty], args, 0)
     }
-
     const SOURCE: &str = r#"
-        function Add(a: int, b: int) -> int { a + b }
-        function Same<T>(x: T, y: T) -> bool { Add(1, 2); y is T }
-        function AddStr(a: int, b: int) -> string { `${Add(a, b)}|${Same<int>(a, b)}` }
-        function Caller(a: int, b: int) -> string {
-            AddStr(a, b) catch (e, ctx) {
-                baml.panics.IntegerOverflow => {
-                    let frames = ctx.stack_trace.frames;
-                    frames[frames.length() - 1].function_name
-                }
-            }
-        }
-        function Main() -> string {
-            `${Caller(1, 2)}|${Caller(baml.Int.max_value(), 1)}`
-        }
+        function Same<T>(x: T) -> bool { x is T }
+        function Forward<T>(x: T) -> bool { Same<T>(x) }
+        function Main() -> string { `${Forward<int>(1)}|${Forward<string>("a")}|${Forward([1])}` }
     "#;
-
-    type Timings = Vec<(btel_types::CallPathId, InvocationOutcome, bool)>;
-    type NamedPaths = HashMap<btel_types::CallPathId, (Option<String>, String)>;
-    type TypeArgs = Vec<(String, String)>;
-
-    fn named(
-        run: &(String, Timings, NamedPaths, TypeArgs),
-    ) -> Vec<(Option<String>, String, InvocationOutcome, bool)> {
-        run.1
-            .iter()
-            .map(|(path, outcome, reentry)| {
-                let (caller, callee) = run.2[path].clone();
-                (caller, callee, *outcome, *reentry)
-            })
-            .collect()
-    }
-
-    fn run(compiled: bool) -> (String, Timings, NamedPaths, TypeArgs) {
-        let mut program = baml_test_support::compile_source(SOURCE);
+    let mut runs = Vec::new();
+    for bodies in [
+        &[][..],
+        &[("user.Same", same as CompiledFn), ("user.Forward", forward)][..],
+    ] {
+        let program = compiled_program(SOURCE, bodies, &[("user.Same", &SAME)]);
         let entry = program.rendered_callables()["user.Main"].object.raw();
-        let add = program.rendered_callables()["user.Add"].object.raw();
-        SAME.store(u32::try_from(add).unwrap(), Ordering::Relaxed);
-        if compiled {
-            for (name, body) in [
-                ("user.Add", add_compiled as crate::compiled_rt::CompiledFn),
-                ("user.Same", same_compiled),
-            ] {
-                let object = program.rendered_callables()[name].object.raw();
-                let Object::Function(function) =
-                    &mut program.objects[ObjectIndex::from_raw(object)]
-                else {
-                    unreachable!()
-                };
-                assert!(matches!(function.kind, FunctionKind::Bytecode));
-                function.compiled_body = Some(test_body(body, 0));
-            }
-        }
-        let same = program.rendered_callables()["user.Same"].object.raw();
         let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
-        let Object::Function(same) = vm.get_object(vm.heap.compile_time_ptr(same)) else {
+        let Object::Function(function) = vm.get_object(object(&vm, &SAME)) else {
             unreachable!()
         };
         vm.telemetry
             .as_ref()
             .unwrap()
             .set_policy(
-                same,
+                function,
                 crate::telemetry::TelemetryPolicy {
                     span_from_entry: true,
                     capture_inputs: true,
@@ -120,102 +59,38 @@ fn compiled_body_is_indistinguishable_from_bytecode() {
             )
             .unwrap();
         vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
-        let result = loop {
-            match vm.exec().unwrap() {
-                VmExecState::EarlyYield => {}
-                VmExecState::Complete(value) => {
-                    break vm.as_string(&value).unwrap().to_string();
-                }
-                other => panic!("unexpected execution state: {other:?}"),
-            }
-        };
-        let telemetry = vm.telemetry.as_ref().unwrap();
-        let timings = telemetry
-            .timing_records()
-            .iter()
-            .filter_map(|event| match event {
-                TimingRecord::FunctionTimingCompletion {
-                    call_path,
-                    outcome,
-                    reentry,
-                    ..
-                } => Some((*call_path, *outcome, *reentry)),
-                TimingRecord::ThreadSelected { .. } | TimingRecord::SysOpTime { .. } => None,
-            })
-            .collect();
-        let mut named_paths = HashMap::new();
-        for event in telemetry.span_records() {
-            if let SpanRecord::CallPathDefined {
-                call_path,
-                visible_caller,
-                callee,
-                ..
-            } = event
-            {
-                let callee = vm.heap.function_metadata(vm.proof(), *callee).unwrap();
-                let caller =
-                    visible_caller.map(|id| vm.heap.function_metadata(vm.proof(), id).unwrap().fqn);
-                named_paths.insert(*call_path, (caller, callee.fqn));
-            }
-        }
-        let type_args = telemetry
+        assert_eq!(exec_string(&mut vm), "true|true|true");
+        let paths = named_paths(&vm);
+        let args: Vec<_> = vm
+            .telemetry
+            .as_ref()
+            .unwrap()
             .span_records()
             .iter()
             .filter_map(|event| match event {
                 SpanRecord::FunctionSpanAnnouncement {
                     call_path,
-                    captured_type_args: Some(type_args),
+                    captured_type_args: Some(args),
                     ..
-                } => Some((named_paths[call_path].1.clone(), format!("{type_args:?}"))),
+                } => Some((paths[call_path].1.clone(), format!("{args:?}"))),
                 _ => None,
             })
             .collect();
-        (result, timings, named_paths, type_args)
+        assert_eq!(args.len(), 3);
+        runs.push(args);
     }
-
-    let bytecode = run(false);
-    assert_eq!(CALLS.load(Ordering::Relaxed), 0);
-    let compiled = run(true);
-    assert_eq!(
-        CALLS.load(Ordering::Relaxed),
-        3,
-        "the compiled bodies must run for every call"
-    );
-
-    assert_eq!(bytecode.0, "3|true|user.Add");
-    assert_eq!(compiled.0, bytecode.0);
-
-    // Call-path IDs are process-global, so compare the caller and callee names.
-    let bytecode_named = named(&bytecode);
-    let compiled_named = named(&compiled);
-    assert!(bytecode_named.len() >= 9);
-    assert_eq!(compiled_named, bytecode_named);
-    assert!(
-        !bytecode.3.is_empty(),
-        "the generic call announces its type arguments"
-    );
-    assert_eq!(compiled.3, bytecode.3);
-    let add_outcomes: Vec<_> = compiled_named
-        .iter()
-        .filter(|(caller, callee, _, _)| {
-            caller.as_deref() == Some("user.AddStr") && callee == "user.Add"
-        })
-        .map(|(_, _, outcome, _)| *outcome)
-        .collect();
-    assert_eq!(add_outcomes.len(), 2);
-    assert_eq!(add_outcomes[0], InvocationOutcome::Ok);
-    assert_ne!(add_outcomes[1], InvocationOutcome::Ok);
+    assert_eq!(runs[0], runs[1]);
 }
 
-/// Read an integer from a test value.
 pub(crate) fn test_int(value: Value) -> i64 {
     value.as_int().expect("an int")
 }
 
-fn test_body(
-    body: crate::compiled_rt::CompiledFn,
-    slots: u32,
-) -> bex_vm_types::types::CompiledBody {
+fn object(vm: &BexVm, index: &AtomicU32) -> HeapPtr {
+    vm.idx_to_ptr(ObjectIndex::from_raw(index.load(Ordering::Relaxed) as usize))
+}
+
+fn test_body(body: CompiledFn, slots: u32) -> bex_vm_types::types::CompiledBody {
     crate::compiled_rt::CompiledEntry {
         object: 0,
         name: "",
@@ -228,12 +103,28 @@ fn test_body(
     .erase()
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn vm_with_main(body: CompiledFn, slots: u32, telemetry: bool) -> BexVm {
+    let mut program = baml_test_support::compile_source(r#"function Main() -> string { "" }"#);
+    let entry = program.rendered_callables()["user.Main"].object;
+    let Object::Function(function) = &mut program.objects[entry] else {
+        unreachable!()
+    };
+    function.compiled_body = Some(test_body(body, slots));
+    let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
+    if !telemetry {
+        vm.telemetry = None;
+    }
+    vm.set_entry_point(vm.heap.compile_time_ptr(entry.raw()), &[]);
+    vm
+}
+
 /// Run `user.Main` with compiled bodies installed and publish named object indices.
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn run_with_compiled_bodies(
     source: &str,
-    bodies: &[(&str, crate::compiled_rt::CompiledFn)],
-    objects: &[(&str, &std::sync::atomic::AtomicU32)],
+    bodies: &[(&str, CompiledFn)],
+    objects: &[(&str, &AtomicU32)],
     telemetry: bool,
 ) -> String {
     let level = telemetry.then_some(btel_settings::mode::AutoTelemetryLevel::Medium);
@@ -241,70 +132,91 @@ pub(crate) fn run_with_compiled_bodies(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn exec_with_compiled_bodies(
+fn assert_compiled_output(
     source: &str,
-    bodies: &[(&str, crate::compiled_rt::CompiledFn)],
-    objects: &[(&str, &std::sync::atomic::AtomicU32)],
-    level: Option<btel_settings::mode::AutoTelemetryLevel>,
-) -> (String, BexVm) {
+    bodies: &[(&str, CompiledFn)],
+    objects: &[(&str, &AtomicU32)],
+    expected: &str,
+) {
+    for telemetry in [false, true] {
+        let out = run_with_compiled_bodies(source, bodies, objects, telemetry);
+        assert_eq!(out, expected, "telemetry: {telemetry}");
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn compiled_program(
+    source: &str,
+    bodies: &[(&str, CompiledFn)],
+    objects: &[(&str, &AtomicU32)],
+) -> bex_vm_types::Program {
     let mut program = baml_test_support::compile_source(source);
     let callables = program.rendered_callables();
-    let entry = callables["user.Main"].object.raw();
-    for (name, slot) in objects {
-        let raw = callables.get(*name).map_or_else(
-            || {
-                program
-                    .packages
+    let resolve = |name: &str| {
+        if let Some(callable) = callables.get(name) {
+            return callable.object.raw();
+        }
+        if let Some(index) = (0..program.objects.len()).find(|&index| {
+            program
+                .function_name(ObjectIndex::from_raw(index))
+                .as_deref()
+                == Some(name)
+        }) {
+            return index;
+        }
+        program
+            .packages
+            .iter()
+            .find_map(|package| {
+                package
+                    .classes
                     .iter()
-                    .find_map(|package| {
-                        package.classes.iter().chain(&package.interfaces).find_map(
-                            |(path, object)| {
-                                // Display names omit the root package.
-                                let qualified = std::iter::once(package.name.as_str())
-                                    .chain(path.namespace.iter().map(baml_type::Name::as_str))
-                                    .chain(std::iter::once(path.name.as_str()))
-                                    .collect::<Vec<_>>()
-                                    .join(".");
-                                (qualified == *name).then(|| object.raw())
-                            },
-                        )
+                    .chain(&package.interfaces)
+                    .find_map(|(path, object)| {
+                        let qualified = std::iter::once(package.name.as_str())
+                            .chain(path.namespace.iter().map(baml_type::Name::as_str))
+                            .chain(std::iter::once(path.name.as_str()))
+                            .collect::<Vec<_>>()
+                            .join(".");
+                        (qualified == name).then(|| object.raw())
                     })
-                    .unwrap_or_else(|| panic!("no callable, class or interface `{name}`"))
-            },
-            |callable| callable.object.raw(),
-        );
-        slot.store(
-            u32::try_from(raw).unwrap(),
-            std::sync::atomic::Ordering::Relaxed,
-        );
+            })
+            .unwrap_or_else(|| panic!("no callable, class or interface `{name}`"))
+    };
+    for (name, slot) in objects {
+        slot.store(u32::try_from(resolve(name)).unwrap(), Ordering::Relaxed);
     }
-    // Interface implementations have display names but no callable map entries.
-    let indices: Vec<usize> = bodies
-        .iter()
-        .map(|(name, _)| {
-            callables.get(*name).map_or_else(
-                || {
-                    (0..program.objects.len())
-                        .find(|&index| {
-                            program
-                                .function_name(ObjectIndex::from_raw(index))
-                                .as_deref()
-                                == Some(*name)
-                        })
-                        .unwrap_or_else(|| panic!("no function `{name}`"))
-                },
-                |callable| callable.object.raw(),
-            )
-        })
-        .collect();
+    let indices: Vec<_> = bodies.iter().map(|(name, _)| resolve(name)).collect();
     for ((_, body), index) in bodies.iter().zip(indices) {
         let Object::Function(function) = &mut program.objects[ObjectIndex::from_raw(index)] else {
             unreachable!()
         };
+        assert!(matches!(function.kind, FunctionKind::Bytecode));
         // Generated bodies reserve at least their arguments' slots.
         let slots = u32::try_from(function.arity).unwrap();
         function.compiled_body = Some(test_body(*body, slots));
     }
+    program
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn exec_with_compiled_bodies(
+    source: &str,
+    bodies: &[(&str, CompiledFn)],
+    objects: &[(&str, &AtomicU32)],
+    level: Option<btel_settings::mode::AutoTelemetryLevel>,
+) -> (String, BexVm) {
+    let program = compiled_program(source, bodies, objects);
+    let mut vm = program_vm(program, level);
+    let out = exec_string(&mut vm);
+    (out, vm)
+}
+
+fn program_vm(
+    program: bex_vm_types::Program,
+    level: Option<btel_settings::mode::AutoTelemetryLevel>,
+) -> BexVm {
+    let entry = program.rendered_callables()["user.Main"].object.raw();
     let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
     vm.telemetry = level.map(|level| {
         TelemetryState::new_root(
@@ -314,7 +226,12 @@ fn exec_with_compiled_bodies(
         )
     });
     vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
-    let out = loop {
+    vm
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn exec_string(vm: &mut BexVm) -> String {
+    loop {
         match vm.exec() {
             Ok(VmExecState::EarlyYield) => {}
             // The engine answers a log with a null.
@@ -327,8 +244,20 @@ fn exec_with_compiled_bodies(
             Ok(other) => panic!("unexpected execution state: {other:?}"),
             Err(error) => break format!("error: {error:?}"),
         }
+    }
+}
+
+// SAFETY: callers own the heap's only mutator and keep its fiber parked.
+#[allow(unsafe_code)]
+fn collect(vm: &mut BexVm) -> HashMap<HeapPtr, HeapPtr> {
+    let mut roots = Vec::new();
+    vm.collect_roots(&mut roots);
+    let (_, _, forwarding) = unsafe {
+        vm.heap
+            .collect_garbage_generational(&roots, CollectionLevel::Major)
     };
-    (out, vm)
+    vm.forward_roots(&forwarding);
+    forwarding
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -337,7 +266,7 @@ fn exec_with_compiled_bodies(
 fn a_body_paused_at_a_yield_survives_a_moving_collection() {
     use crate::compiled_rt::Step;
 
-    fn body(vm: &mut BexVm, fr: &FrameRecord, _: &[Value]) -> Result<Value, Box<VmError>> {
+    fn body(vm: &mut BexVm, fr: &FrameRecord, _: &[Value]) -> BodyResult {
         vm.reserve_slots(fr, 1);
         let mut live = vm.string_value("still live");
         let mut cached = vm.static_type_value(fr, 0, bex_vm_types::RealizedTy::unknown());
@@ -362,25 +291,11 @@ fn a_body_paused_at_a_yield_survives_a_moving_collection() {
         }
         Ok(live)
     }
-    let mut program = baml_test_support::compile_source("function Main() -> string { \"\" }");
-    let entry = program.rendered_callables()["user.Main"].object;
-    let Object::Function(function) = &mut program.objects[entry] else {
-        unreachable!()
-    };
-    function.compiled_body = Some(test_body(body, 1));
-    let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
-    vm.set_entry_point(vm.heap.compile_time_ptr(entry.raw()), &[]);
+    let mut vm = vm_with_main(body, 1, true);
     let out = loop {
         match vm.exec().unwrap() {
             VmExecState::EarlyYield => {
-                let mut roots = Vec::new();
-                vm.collect_roots(&mut roots);
-                // SAFETY: this VM is the heap's only mutator and it is parked.
-                let (_, _, forwarding) = unsafe {
-                    vm.heap
-                        .collect_garbage_generational(&roots, CollectionLevel::Major)
-                };
-                vm.forward_roots(&forwarding);
+                collect(&mut vm);
             }
             VmExecState::Complete(value) => break value,
             other => panic!("unexpected execution state: {other:?}"),
@@ -392,17 +307,10 @@ fn a_body_paused_at_a_yield_survives_a_moving_collection() {
 #[cfg(not(any(target_arch = "wasm32", all(windows, target_arch = "aarch64"))))]
 #[test]
 fn a_panicking_compiled_body_clears_fiber_state() {
-    fn body(_: &mut BexVm, _: &FrameRecord, _: &[Value]) -> Result<Value, Box<VmError>> {
+    fn body(_: &mut BexVm, _: &FrameRecord, _: &[Value]) -> BodyResult {
         panic!("compiled body panic");
     }
-    let mut program = baml_test_support::compile_source("function Main() -> int { 0 }");
-    let entry = program.rendered_callables()["user.Main"].object;
-    let Object::Function(function) = &mut program.objects[entry] else {
-        unreachable!()
-    };
-    function.compiled_body = Some(test_body(body, 0));
-    let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
-    vm.set_entry_point(vm.heap.compile_time_ptr(entry.raw()), &[]);
+    let mut vm = vm_with_main(body, 0, true);
     let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| vm.exec()));
     assert!(panic.is_err());
     assert!(!vm.compiled.on_fiber);
@@ -410,48 +318,17 @@ fn a_panicking_compiled_body_clears_fiber_state() {
     assert!(vm.compiled.fiber.is_none());
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-#[test]
-fn compiled_recursion_hits_the_frame_limit() {
-    use std::sync::atomic::{AtomicU32, Ordering};
-    static DEEP: AtomicU32 = AtomicU32::new(0);
-    fn deep(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
-        let n = test_int(args[0]);
-        if n == 0 {
-            return Ok(Value::int(0));
-        }
-        let me = vm.idx_to_ptr(ObjectIndex::from_raw(DEEP.load(Ordering::Relaxed) as usize));
-        let below = vm.call_compiled(fr, me, deep, &[], &[Value::int(n - 1)], 0)?;
-        Ok(Value::int(test_int(below) + 1))
-    }
-    const SOURCE: &str = r#"
-        function Deep(n: int) -> int { if (n == 0) { 0 } else { 1 + Deep(n - 1) } }
-        function Main() -> string {
-            let shallow = Deep(100);
-            let d = Deep(300) catch (e) { baml.panics.StackOverflow => -7 };
-            let huge = Deep(1000000) catch (e) { baml.panics.StackOverflow => -8 };
-            `${shallow}|${d}|${huge}`
-        }
-    "#;
-    for telemetry in [false, true] {
-        let out = run_with_compiled_bodies(
-            SOURCE,
-            &[("user.Deep", deep)],
-            &[("user.Deep", &DEEP)],
-            telemetry,
-        );
-        assert_eq!(out, "100|-7|-8", "telemetry: {telemetry}");
-    }
-}
-
-// Large frames exhaust the fiber stack before the VM reaches its frame limit.
+// Large frames must exhaust fiber space before the VM's frame limit, including
+// re-entry through bytecode and when the host thread has a small stack.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn compiled_recursion_checks_fiber_stack_space() {
-    use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
-    static DEEP: AtomicU32 = AtomicU32::new(0);
+    use crate::compiled_rt::Step;
+    use std::sync::atomic::AtomicUsize;
+
+    static CALLEE: AtomicU32 = AtomicU32::new(0);
     static DEEPEST: AtomicUsize = AtomicUsize::new(0);
-    fn deep(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn deep<const BYTECODE: bool>(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
         let n = test_int(args[0]);
         DEEPEST.fetch_max(vm.level_count(), Ordering::Relaxed);
         if n == 0 {
@@ -461,13 +338,20 @@ fn compiled_recursion_checks_fiber_stack_space() {
         let slot = usize::try_from(n).unwrap() % pad.len();
         pad[slot] = 1;
         std::hint::black_box(&mut pad);
-        let me = vm.idx_to_ptr(ObjectIndex::from_raw(DEEP.load(Ordering::Relaxed) as usize));
-        let below = vm.call_compiled(fr, me, deep, &[], &[Value::int(n - 1)], 0)?;
+        let callee = object(vm, &CALLEE);
+        let arg = Value::int(n - 1);
+        let below = if BYTECODE {
+            vm.push_arg(arg);
+            vm.suspend(Step::Call { callee, argc: 1 })?
+        } else {
+            vm.call_compiled(fr, callee, deep::<false>, &[], &[arg], 0)?
+        };
         let one = std::hint::black_box(&pad)[slot];
         Ok(Value::int(test_int(below) + i64::try_from(one).unwrap()))
     }
     const SOURCE: &str = r#"
         function Deep(n: int) -> int { if (n == 0) { 0 } else { 1 + Deep(n - 1) } }
+        function Bounce(n: int) -> int { Deep(n) }
         function Main() -> string {
             let shallow = Deep(10);
             let d = Deep(300) catch (e) { baml.panics.StackOverflow => -7 };
@@ -476,19 +360,24 @@ fn compiled_recursion_checks_fiber_stack_space() {
         }
     "#;
     let run = || {
-        for telemetry in [false, true] {
-            DEEPEST.store(0, Ordering::Relaxed);
-            let out = run_with_compiled_bodies(
-                SOURCE,
-                &[("user.Deep", deep)],
-                &[("user.Deep", &DEEP)],
-                telemetry,
-            );
-            assert_eq!(out, "10|-7|-8", "telemetry: {telemetry}");
-            assert!(
-                (11..crate::vm::MAX_FRAMES).contains(&DEEPEST.load(Ordering::Relaxed)),
-                "telemetry: {telemetry}"
-            );
+        for (callee, body) in [
+            ("user.Deep", deep::<false> as CompiledFn),
+            ("user.Bounce", deep::<true>),
+        ] {
+            for telemetry in [false, true] {
+                DEEPEST.store(0, Ordering::Relaxed);
+                assert_eq!(
+                    run_with_compiled_bodies(
+                        SOURCE,
+                        &[("user.Deep", body)],
+                        &[(callee, &CALLEE)],
+                        telemetry,
+                    ),
+                    "10|-7|-8",
+                    "{callee}, telemetry: {telemetry}"
+                );
+                assert!((11..crate::vm::MAX_FRAMES).contains(&DEEPEST.load(Ordering::Relaxed)));
+            }
         }
     };
     run();
@@ -500,53 +389,6 @@ fn compiled_recursion_checks_fiber_stack_space() {
         .unwrap();
 }
 
-// A body entered from bytecode nests on the fiber below the body that called
-// that bytecode, so it must check for stack room as a direct call does.
-#[cfg(not(target_arch = "wasm32"))]
-#[test]
-fn compiled_bytecode_recursion_checks_fiber_stack_space() {
-    use std::sync::atomic::{AtomicU32, Ordering};
-
-    use crate::compiled_rt::Step;
-    static PONG: AtomicU32 = AtomicU32::new(0);
-    fn ping(vm: &mut BexVm, _fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
-        let n = test_int(args[0]);
-        if n == 0 {
-            return Ok(Value::int(0));
-        }
-        let mut pad = [0u64; 8192];
-        let slot = usize::try_from(n).unwrap() % pad.len();
-        pad[slot] = 1;
-        std::hint::black_box(&mut pad);
-        let pong = vm.idx_to_ptr(ObjectIndex::from_raw(PONG.load(Ordering::Relaxed) as usize));
-        vm.push_arg(Value::int(n - 1));
-        let below = vm.suspend(Step::Call {
-            callee: pong,
-            argc: 1,
-        })?;
-        let one = std::hint::black_box(&pad)[slot];
-        Ok(Value::int(test_int(below) + i64::try_from(one).unwrap()))
-    }
-    const SOURCE: &str = r#"
-        function Ping(n: int) -> int { if (n == 0) { 0 } else { 1 + Pong(n - 1) } }
-        function Pong(n: int) -> int { Ping(n) }
-        function Main() -> string {
-            let shallow = Ping(10);
-            let huge = Ping(1000000) catch (e) { baml.panics.StackOverflow => -8 };
-            `${shallow}|${huge}`
-        }
-    "#;
-    for telemetry in [false, true] {
-        let out = run_with_compiled_bodies(
-            SOURCE,
-            &[("user.Ping", ping)],
-            &[("user.Pong", &PONG)],
-            telemetry,
-        );
-        assert_eq!(out, "10|-8", "telemetry: {telemetry}");
-    }
-}
-
 // The engine pushes a null after every log; a compiled body must discard it.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
@@ -554,7 +396,7 @@ fn compiled_logs_leave_the_stack_as_they_found_it() {
     use std::sync::Mutex;
 
     static LENGTHS: Mutex<Vec<usize>> = Mutex::new(Vec::new());
-    fn body(vm: &mut BexVm, fr: &FrameRecord, _: &[Value]) -> Result<Value, Box<VmError>> {
+    fn body(vm: &mut BexVm, fr: &FrameRecord, _: &[Value]) -> BodyResult {
         for _ in 0..4 {
             vm.log_event(
                 fr,
@@ -579,140 +421,10 @@ fn compiled_logs_leave_the_stack_as_they_found_it() {
     assert!(lengths.iter().all(|&len| len == lengths[0]), "{lengths:?}");
 }
 
-// Type arguments must be bound before a body runs in place, including when it throws.
-#[cfg(not(target_arch = "wasm32"))]
-#[test]
-fn inline_body_of_a_generic_function_sees_the_type_arguments() {
-    fn name_of(vm: &mut BexVm, _fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
-        let Some(Frame::Bytecode(frame)) = vm.frames.last() else {
-            unreachable!("the body runs in its own frame")
-        };
-        let text = match frame.type_args.as_slice() {
-            [bex_vm_types::RealizedTy::Int] => "int",
-            [bex_vm_types::RealizedTy::String] => "string",
-            [bex_vm_types::RealizedTy::List(element)]
-                if **element == bex_vm_types::RealizedTy::Int =>
-            {
-                "int[]"
-            }
-            other => panic!("unexpected frame type arguments {other:?}"),
-        };
-        let throws = args[0]
-            .as_object_ptr()
-            .is_some_and(|ptr| matches!(vm.get_object(ptr), Object::String(s) if s == "throw"));
-        if throws {
-            let thrown = vm.string_value(text);
-            return Err(crate::compiled_rt::throw(thrown));
-        }
-        Ok(vm.string_value(text))
-    }
-    const SOURCE: &str = r#"
-        function NameOf<T>(x: T) -> string { "bytecode" }
-        function Main() -> string {
-            let caught = NameOf<string>("throw") catch (e) { string => e };
-            `${NameOf<int>(1)}|${NameOf<string>("a")}|${NameOf([1])}|${caught}`
-        }
-    "#;
-    for telemetry in [false, true] {
-        let out = run_with_compiled_bodies(SOURCE, &[("user.NameOf", name_of)], &[], telemetry);
-        assert_eq!(out, "int|string|int[]|string", "telemetry: {telemetry}");
-    }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[test]
-fn compiled_caller_passes_type_arguments_to_a_compiled_callee() {
-    use std::sync::atomic::{AtomicU32, Ordering};
-    static NAME_OF: AtomicU32 = AtomicU32::new(0);
-    fn frame_type_arg(vm: &BexVm) -> bex_vm_types::RealizedTy {
-        let Some(Frame::Bytecode(frame)) = vm.frames.last() else {
-            unreachable!("the body runs in its own frame")
-        };
-        assert_eq!(frame.type_args.len(), 1, "{:?}", frame.type_args);
-        frame.type_args[0].clone()
-    }
-    #[allow(clippy::unnecessary_wraps)]
-    fn name_of(vm: &mut BexVm, _fr: &FrameRecord, _args: &[Value]) -> Result<Value, Box<VmError>> {
-        let text = match frame_type_arg(vm) {
-            bex_vm_types::RealizedTy::Int => "int",
-            bex_vm_types::RealizedTy::String => "string",
-            other => panic!("unexpected frame type argument {other:?}"),
-        };
-        Ok(vm.string_value(text))
-    }
-    fn forward(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
-        let ty = frame_type_arg(vm);
-        let callee = vm.idx_to_ptr(ObjectIndex::from_raw(
-            NAME_OF.load(Ordering::Relaxed) as usize
-        ));
-        vm.call_compiled(fr, callee, name_of, &[ty], &[args[0]], 0)
-    }
-    const SOURCE: &str = r#"
-        function NameOf<T>(x: T) -> string { "bytecode" }
-        function Forward<T>(x: T) -> string { NameOf<T>(x) }
-        function Main() -> string { `${Forward<int>(1)}|${Forward<string>("a")}` }
-    "#;
-    for telemetry in [false, true] {
-        let out = run_with_compiled_bodies(
-            SOURCE,
-            &[("user.NameOf", name_of), ("user.Forward", forward)],
-            &[("user.NameOf", &NAME_OF)],
-            telemetry,
-        );
-        assert_eq!(out, "int|string", "telemetry: {telemetry}");
-    }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-#[test]
-fn compiled_catch_pops_the_frames_of_compiled_callees() {
-    use std::sync::atomic::{AtomicU32, Ordering};
-    static WORK: AtomicU32 = AtomicU32::new(0);
-    static PANIC: AtomicU32 = AtomicU32::new(0);
-    fn work(vm: &mut BexVm, _fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
-        let n = test_int(args[0]);
-        Ok(Value::int(vm.div_i64(n, 0)?))
-    }
-    fn safe(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
-        let work_ptr = vm.idx_to_ptr(ObjectIndex::from_raw(WORK.load(Ordering::Relaxed) as usize));
-        match vm.call_compiled(fr, work_ptr, work, &[], &[args[0]], 0) {
-            Ok(v) => Ok(v),
-            Err(e) => {
-                let (thrown, ctx) = vm.catch(e, fr)?;
-                let class =
-                    vm.idx_to_ptr(ObjectIndex::from_raw(PANIC.load(Ordering::Relaxed) as usize));
-                if vm.is_instance_of(thrown, class) {
-                    Ok(Value::int(-1))
-                } else {
-                    Err(crate::compiled_rt::rethrow(thrown, ctx))
-                }
-            }
-        }
-    }
-    const SOURCE: &str = r#"
-        function Work(n: int) -> int { n / 0 }
-        function Safe(n: int) -> int { Work(n) catch (e) { baml.panics.DivisionByZero => -1 } }
-        function Main() -> string { `${Safe(5)}|${Safe(6)}|${Safe(7)}` }
-    "#;
-    for telemetry in [false, true] {
-        let out = run_with_compiled_bodies(
-            SOURCE,
-            &[("user.Work", work), ("user.Safe", safe)],
-            &[("user.Work", &WORK), ("baml.panics.DivisionByZero", &PANIC)],
-            telemetry,
-        );
-        assert_eq!(out, "-1|-1|-1", "telemetry: {telemetry}");
-    }
-}
-
-// Suspended callers must retain the call instruction PC for traces and telemetry.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_compiled_caller_stands_at_its_call_instruction_while_the_callee_runs() {
-    use std::sync::{
-        Mutex,
-        atomic::{AtomicU32, Ordering},
-    };
+    use std::sync::{Mutex, atomic::Ordering};
 
     use bex_vm_types::bytecode::Instruction;
     static INNER: AtomicU32 = AtomicU32::new(0);
@@ -721,7 +433,7 @@ fn a_compiled_caller_stands_at_its_call_instruction_while_the_callee_runs() {
     static OUTER_CALL: AtomicU32 = AtomicU32::new(0);
     static SEEN: Mutex<Vec<(usize, usize)>> = Mutex::new(Vec::new());
     #[allow(clippy::unnecessary_wraps)] // the compiled-body signature
-    fn inner(vm: &mut BexVm, _fr: &FrameRecord, _args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn inner(vm: &mut BexVm, _fr: &FrameRecord, _args: &[Value]) -> BodyResult {
         let trace = vm.capture_stack_trace();
         let mut seen = SEEN.lock().unwrap();
         seen.clear();
@@ -737,7 +449,7 @@ fn a_compiled_caller_stands_at_its_call_instruction_while_the_callee_runs() {
             let Frame::Bytecode(frame) = &vm.frames[idx] else {
                 unreachable!("a caller has a bytecode frame")
             };
-            let pc = vm.compiled_pc(idx).unwrap_or(frame.faulting_pc);
+            let pc = vm.frame_pc(idx, None).unwrap_or(frame.faulting_pc);
             let line = trace
                 .iter()
                 .find(|frame| frame.function_name == name)
@@ -746,8 +458,8 @@ fn a_compiled_caller_stands_at_its_call_instruction_while_the_callee_runs() {
         }
         Ok(Value::int(1))
     }
-    fn middle(vm: &mut BexVm, fr: &FrameRecord, _args: &[Value]) -> Result<Value, Box<VmError>> {
-        let callee = vm.idx_to_ptr(ObjectIndex::from_raw(INNER.load(Ordering::Relaxed) as usize));
+    fn middle(vm: &mut BexVm, fr: &FrameRecord, _args: &[Value]) -> BodyResult {
+        let callee = object(vm, &INNER);
         vm.call_compiled(
             fr,
             callee,
@@ -757,10 +469,8 @@ fn a_compiled_caller_stands_at_its_call_instruction_while_the_callee_runs() {
             MIDDLE_CALL.load(Ordering::Relaxed),
         )
     }
-    fn outer(vm: &mut BexVm, fr: &FrameRecord, _args: &[Value]) -> Result<Value, Box<VmError>> {
-        let callee = vm.idx_to_ptr(ObjectIndex::from_raw(
-            MIDDLE.load(Ordering::Relaxed) as usize
-        ));
+    fn outer(vm: &mut BexVm, fr: &FrameRecord, _args: &[Value]) -> BodyResult {
+        let callee = object(vm, &MIDDLE);
         vm.call_compiled(
             fr,
             callee,
@@ -820,13 +530,15 @@ fn a_compiled_caller_stands_at_its_call_instruction_while_the_callee_runs() {
 
 #[cfg(not(target_arch = "wasm32"))]
 type NamedPath = (Option<String>, String);
+type NamedPaths = HashMap<btel_types::CallPathId, NamedPath>;
+type TimingRecords = Vec<(NamedPath, InvocationOutcome, bool)>;
 
 // Resolve run-specific IDs and discard clock readings before comparison.
 /// `records` with each usage record's span id dropped: ids come from a
 /// per-thread allocator, so two runs number the same spans differently.
 fn without_span_ids(
-    (timings, spans): (Vec<(NamedPath, InvocationOutcome, bool)>, Vec<String>),
-) -> (Vec<(NamedPath, InvocationOutcome, bool)>, Vec<String>) {
+    (timings, spans): (TimingRecords, Vec<String>),
+) -> (TimingRecords, Vec<String>) {
     let spans = spans
         .into_iter()
         .map(
@@ -839,11 +551,9 @@ fn without_span_ids(
     (timings, spans)
 }
 
-fn telemetry_records(vm: &BexVm) -> (Vec<(NamedPath, InvocationOutcome, bool)>, Vec<String>) {
-    use std::fmt::Write as _;
-
+fn named_paths(vm: &BexVm) -> NamedPaths {
     let telemetry = vm.telemetry.as_ref().unwrap();
-    let mut paths: HashMap<btel_types::CallPathId, NamedPath> = HashMap::new();
+    let mut paths = NamedPaths::new();
     for event in telemetry.span_records() {
         if let SpanRecord::CallPathDefined {
             call_path,
@@ -858,7 +568,12 @@ fn telemetry_records(vm: &BexVm) -> (Vec<(NamedPath, InvocationOutcome, bool)>, 
             paths.insert(*call_path, (caller, callee.fqn));
         }
     }
-    let timings = telemetry
+    paths
+}
+
+fn timing_records(vm: &BexVm, paths: &NamedPaths) -> TimingRecords {
+    let telemetry = vm.telemetry.as_ref().unwrap();
+    telemetry
         .timing_records()
         .iter()
         .filter_map(|event| match event {
@@ -870,7 +585,15 @@ fn telemetry_records(vm: &BexVm) -> (Vec<(NamedPath, InvocationOutcome, bool)>, 
             } => Some((paths[call_path].clone(), *outcome, *reentry)),
             TimingRecord::ThreadSelected { .. } | TimingRecord::SysOpTime { .. } => None,
         })
-        .collect();
+        .collect()
+}
+
+fn telemetry_records(vm: &BexVm) -> (TimingRecords, Vec<String>) {
+    use std::fmt::Write as _;
+
+    let telemetry = vm.telemetry.as_ref().unwrap();
+    let paths = named_paths(vm);
+    let timings = timing_records(vm, &paths);
     let mut ids: HashMap<u64, usize> = HashMap::new();
     let spans = telemetry
         .span_records()
@@ -920,21 +643,17 @@ fn telemetry_records(vm: &BexVm) -> (Vec<(NamedPath, InvocationOutcome, bool)>, 
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn inline_observed_model_invokes_charge_usage_before_completion() {
-    use std::sync::atomic::{AtomicU32, Ordering};
-
     use btel_settings::mode::AutoTelemetryLevel;
 
     use crate::compiled_rt::FORCE_CALL_FUNNEL;
 
     static INVOKE: AtomicU32 = AtomicU32::new(0);
     #[allow(clippy::unnecessary_wraps)]
-    fn invoke(_: &mut BexVm, _: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn invoke(_: &mut BexVm, _: &FrameRecord, args: &[Value]) -> BodyResult {
         Ok(args[0])
     }
-    fn caller(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
-        let callee = vm.idx_to_ptr(ObjectIndex::from_raw(
-            INVOKE.load(Ordering::Relaxed) as usize
-        ));
+    fn caller(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
+        let callee = object(vm, &INVOKE);
         vm.call_compiled(fr, callee, invoke, &[], args, 0)
     }
 
@@ -968,41 +687,19 @@ fn inline_observed_model_invokes_charge_usage_before_completion() {
     for level in [AutoTelemetryLevel::Medium, AutoTelemetryLevel::High] {
         let mut runs = Vec::new();
         for funnel in [true, false] {
-            let mut program = baml_test_support::compile_source(SOURCE);
-            let entry = program.rendered_callables()["user.Main"].object.raw();
-            let invoke_index = program.rendered_callables()["user.Invoke"].object.raw();
-            INVOKE.store(u32::try_from(invoke_index).unwrap(), Ordering::Relaxed);
-            for (name, body) in [
-                ("user.Invoke", invoke as crate::compiled_rt::CompiledFn),
-                ("user.Caller", caller),
-            ] {
-                let index = program.rendered_callables()[name].object;
-                let Object::Function(function) = &mut program.objects[index] else {
-                    unreachable!()
-                };
-                function.compiled_body = Some(test_body(body, 1));
-                if name == "user.Invoke" {
-                    function.body_meta = Some(bex_vm_types::FunctionMeta::ModelInvoke);
-                }
-            }
-            let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
-            vm.telemetry = Some(TelemetryState::new_root(
-                Arc::new(TelemetryPolicies::with_auto_level(level)),
-                btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
-                crate::telemetry::test_runtime(),
-            ));
-            vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
+            let mut program = compiled_program(
+                SOURCE,
+                &[("user.Invoke", invoke), ("user.Caller", caller)],
+                &[("user.Invoke", &INVOKE)],
+            );
+            let invoke_index = program.rendered_callables()["user.Invoke"].object;
+            let Object::Function(function) = &mut program.objects[invoke_index] else {
+                unreachable!()
+            };
+            function.body_meta = Some(bex_vm_types::FunctionMeta::ModelInvoke);
+            let mut vm = program_vm(program, Some(level));
             FORCE_CALL_FUNNEL.with(|force| force.set(funnel));
-            loop {
-                match vm.exec().unwrap() {
-                    VmExecState::EarlyYield => {}
-                    VmExecState::Complete(value) => {
-                        assert_eq!(vm.as_string(&value).unwrap().as_str(), "1");
-                        break;
-                    }
-                    other => panic!("unexpected execution state: {other:?}"),
-                }
-            }
+            assert_eq!(exec_string(&mut vm), "1");
             FORCE_CALL_FUNNEL.with(|force| force.set(false));
             vm.finish_telemetry(InvocationOutcome::Ok);
             let usages: Vec<_> = vm
@@ -1038,58 +735,54 @@ fn inline_observed_model_invokes_charge_usage_before_completion() {
     }
 }
 
+// As generated code calls a compiled callee: with a frame record when
+// the VM allows, else with a VM frame.
+fn call(
+    vm: &mut BexVm,
+    fr: &FrameRecord,
+    callee: HeapPtr,
+    body: CompiledFn,
+    arg: Value,
+) -> BodyResult {
+    if vm.direct_calls() {
+        vm.call_record(
+            fr,
+            callee,
+            0,
+            |_: &mut BexVm| [arg],
+            |vm, fr| body(vm, fr, &[arg]),
+        )
+    } else {
+        vm.call_compiled(fr, callee, body, &[], &[arg], 0)
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn inline_observed_compiled_calls_record_as_the_call_path_does() {
-    use std::sync::atomic::{AtomicU32, Ordering};
-
     use btel_settings::mode::AutoTelemetryLevel;
 
-    use crate::compiled_rt::{CompiledFn, FORCE_CALL_FUNNEL, FORCE_VM_FRAMES};
+    use crate::compiled_rt::{FORCE_CALL_FUNNEL, FORCE_VM_FRAMES};
 
     static LEAF: AtomicU32 = AtomicU32::new(0);
     static MID: AtomicU32 = AtomicU32::new(0);
     static REC: AtomicU32 = AtomicU32::new(0);
     static DEEP: AtomicU32 = AtomicU32::new(0);
     static PANIC: AtomicU32 = AtomicU32::new(0);
-    fn object(vm: &BexVm, index: &AtomicU32) -> HeapPtr {
-        vm.idx_to_ptr(ObjectIndex::from_raw(index.load(Ordering::Relaxed) as usize))
-    }
-    // As generated code calls a compiled callee: with a frame record when
-    // the VM allows, else with a VM frame.
-    fn call(
-        vm: &mut BexVm,
-        fr: &FrameRecord,
-        callee: HeapPtr,
-        body: CompiledFn,
-        arg: Value,
-    ) -> Result<Value, Box<VmError>> {
-        if vm.direct_calls() {
-            vm.call_record(
-                fr,
-                callee,
-                0,
-                |_: &mut BexVm| [arg],
-                |vm, fr| body(vm, fr, &[arg]),
-            )
-        } else {
-            vm.call_compiled(fr, callee, body, &[], &[arg], 0)
-        }
-    }
-    fn leaf(vm: &mut BexVm, _fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn leaf(vm: &mut BexVm, _fr: &FrameRecord, args: &[Value]) -> BodyResult {
         let n = test_int(args[0]);
         if n < 0 {
             return Ok(Value::int(vm.div_i64(n, 0)?));
         }
         Ok(Value::int(n + 1))
     }
-    fn mid(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn mid(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
         let leaf_ptr = object(vm, &LEAF);
         let a = call(vm, fr, leaf_ptr, leaf, args[0])?;
         let b = call(vm, fr, leaf_ptr, leaf, args[0])?;
         Ok(Value::int(test_int(a) + test_int(b)))
     }
-    fn rec(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn rec(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
         let n = test_int(args[0]);
         if n == 0 {
             return Ok(Value::int(0));
@@ -1098,7 +791,7 @@ fn inline_observed_compiled_calls_record_as_the_call_path_does() {
         let below = call(vm, fr, rec_ptr, rec, Value::int(n - 1))?;
         Ok(Value::int(test_int(below) + 1))
     }
-    fn deep(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn deep(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
         let n = test_int(args[0]);
         if n == 0 {
             return Ok(Value::int(vm.div_i64(1, 0)?));
@@ -1114,7 +807,7 @@ fn inline_observed_compiled_calls_record_as_the_call_path_does() {
         body: CompiledFn,
         arg: Value,
         fallback: i64,
-    ) -> Result<Value, Box<VmError>> {
+    ) -> BodyResult {
         let ptr = object(vm, callee);
         match call(vm, fr, ptr, body, arg) {
             Ok(v) => Ok(v),
@@ -1129,10 +822,10 @@ fn inline_observed_compiled_calls_record_as_the_call_path_does() {
             }
         }
     }
-    fn safe(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn safe(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
         guarded(vm, fr, &MID, mid, args[0], -1)
     }
-    fn guard(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn guard(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
         guarded(vm, fr, &DEEP, deep, args[0], -2)
     }
     const SOURCE: &str = r#"
@@ -1252,8 +945,6 @@ fn inline_observed_compiled_calls_record_as_the_call_path_does() {
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_spawn_below_a_frame_record_is_attributed_to_its_body() {
-    use std::sync::atomic::{AtomicU32, Ordering};
-
     use btel_settings::mode::AutoTelemetryLevel;
 
     use btel_types::CallPathEdge;
@@ -1262,24 +953,14 @@ fn a_spawn_below_a_frame_record_is_attributed_to_its_body() {
 
     static INNER: AtomicU32 = AtomicU32::new(0);
     // Spawns the plan it is passed, below `Outer`.
-    fn inner(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn inner(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
         fr.note_pc(0);
         vm.suspend(Step::Spawn(args[0]))?;
         Ok(Value::int(1))
     }
-    fn outer(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
-        let callee = vm.idx_to_ptr(ObjectIndex::from_raw(INNER.load(Ordering::Relaxed) as usize));
-        let below = if vm.direct_calls() {
-            vm.call_record(
-                fr,
-                callee,
-                0,
-                |_: &mut BexVm| [args[0]],
-                |vm, fr| inner(vm, fr, &[args[0]]),
-            )?
-        } else {
-            vm.call_compiled(fr, callee, inner, &[], &[args[0]], 0)?
-        };
+    fn outer(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
+        let callee = object(vm, &INNER);
+        let below = call(vm, fr, callee, inner, args[0])?;
         Ok(Value::int(test_int(below) + 1))
     }
     const SOURCE: &str = r#"
@@ -1346,7 +1027,7 @@ fn a_spawn_below_a_frame_record_is_attributed_to_its_body() {
 fn compiled_bodies_require_the_original_program() {
     use crate::compiled_rt::CompiledEntry;
 
-    fn body(_vm: &mut BexVm, _fr: &FrameRecord, _args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn body(_vm: &mut BexVm, _fr: &FrameRecord, _args: &[Value]) -> BodyResult {
         unreachable!("load validation does not execute compiled bodies")
     }
 
@@ -1398,15 +1079,11 @@ fn compiled_entry_points_run_their_bodies() {
     use std::sync::atomic::{AtomicUsize, Ordering};
     static RUNS: AtomicUsize = AtomicUsize::new(0);
     #[allow(clippy::unnecessary_wraps)] // the compiled-body signature
-    fn main(vm: &mut BexVm, _fr: &FrameRecord, _args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn main(vm: &mut BexVm, _fr: &FrameRecord, _args: &[Value]) -> BodyResult {
         RUNS.fetch_add(1, Ordering::Relaxed);
         Ok(vm.string_value("compiled"))
     }
-    fn failing_main(
-        vm: &mut BexVm,
-        _fr: &FrameRecord,
-        _args: &[Value],
-    ) -> Result<Value, Box<VmError>> {
+    fn failing_main(vm: &mut BexVm, _fr: &FrameRecord, _args: &[Value]) -> BodyResult {
         Ok(Value::int(vm.div_i64(1, 0)?))
     }
     const SOURCE: &str = r#"function Main() -> string { "bytecode" }"#;
@@ -1427,16 +1104,12 @@ fn compiled_entry_points_run_their_bodies() {
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn compiled_bodies_call_bytecode_and_resume() {
-    use std::sync::atomic::{AtomicU32, Ordering};
-
     use crate::compiled_rt::Step;
     static HELPER: AtomicU32 = AtomicU32::new(0);
 
-    fn twice(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn twice(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
         let n = test_int(args[0]);
-        let helper = vm.idx_to_ptr(ObjectIndex::from_raw(
-            HELPER.load(Ordering::Relaxed) as usize
-        ));
+        let helper = object(vm, &HELPER);
         vm.push_arg(Value::int(n));
         match vm.suspend(Step::Call {
             callee: helper,
@@ -1458,15 +1131,12 @@ fn compiled_bodies_call_bytecode_and_resume() {
             `${Twice(5)}|${Twice(0)}|${caught}`
         }
     "#;
-    for telemetry in [false, true] {
-        let out = run_with_compiled_bodies(
-            SOURCE,
-            &[("user.Twice", twice)],
-            &[("user.Helper", &HELPER)],
-            telemetry,
-        );
-        assert_eq!(out, "70|-1|-9", "telemetry: {telemetry}");
-    }
+    assert_compiled_output(
+        SOURCE,
+        &[("user.Twice", twice)],
+        &[("user.Helper", &HELPER)],
+        "70|-1|-9",
+    );
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -1474,7 +1144,7 @@ fn compiled_bodies_call_bytecode_and_resume() {
 fn compiled_delivery_survives_collection_before_resume() {
     use crate::compiled_rt::Step;
 
-    fn body(vm: &mut BexVm, fr: &FrameRecord, _args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn body(vm: &mut BexVm, fr: &FrameRecord, _args: &[Value]) -> BodyResult {
         let error = vm
             .suspend(Step::Yield)
             .expect_err("expected a delivered exception");
@@ -1487,16 +1157,7 @@ fn compiled_delivery_survives_collection_before_resume() {
         Ok(value)
     }
 
-    let mut program =
-        baml_test_support::compile_source(r#"function Main() -> string { "unused" }"#);
-    let entry = program.rendered_callables()["user.Main"].object;
-    let Object::Function(function) = &mut program.objects[entry] else {
-        unreachable!()
-    };
-    function.compiled_body = Some(test_body(body, 0));
-    let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
-    vm.telemetry = None;
-    vm.set_entry_point(vm.heap.compile_time_ptr(entry.raw()), &[]);
+    let mut vm = vm_with_main(body, 0, false);
     assert!(matches!(vm.exec().unwrap(), VmExecState::EarlyYield));
 
     let thrown_ptr = vm.string_value("delivered error").as_object_ptr().unwrap();
@@ -1511,16 +1172,11 @@ fn compiled_delivery_survives_collection_before_resume() {
     assert!(roots.contains(&thrown_ptr));
     assert!(roots.contains(&context_ptr));
 
-    // SAFETY: this test owns the only VM and keeps it suspended until its roots are forwarded.
-    let (_, _, forwarding) = unsafe {
-        vm.heap
-            .collect_garbage_generational(&roots, CollectionLevel::Major)
-    };
+    let forwarding = collect(&mut vm);
     let moved_value = forwarding[&thrown_ptr];
     let moved_context = forwarding[&context_ptr];
     assert_ne!(moved_value, thrown_ptr);
     assert_ne!(moved_context, context_ptr);
-    vm.forward_roots(&forwarding);
     let Some(VmError::Thrown(thrown)) = vm.compiled.delivery.as_deref() else {
         unreachable!()
     };
@@ -1538,7 +1194,7 @@ fn compiled_delivery_survives_collection_before_resume() {
 fn compiled_bodies_call_bound_method_values() {
     use crate::compiled_rt::Step;
 
-    fn apply(vm: &mut BexVm, _fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn apply(vm: &mut BexVm, _fr: &FrameRecord, args: &[Value]) -> BodyResult {
         let callee = crate::compiled_rt::callee_ptr(args[0])?;
         vm.push_arg(args[1]);
         vm.suspend(Step::Call { callee, argc: 1 })
@@ -1554,10 +1210,7 @@ fn compiled_bodies_call_bound_method_values() {
             `${Apply(s.times, 5)}|${Apply((x: int) -> int { x + 1 }, 5)}`
         }
     "#;
-    for telemetry in [false, true] {
-        let out = run_with_compiled_bodies(SOURCE, &[("user.Apply", apply)], &[], telemetry);
-        assert_eq!(out, "15|6", "telemetry: {telemetry}");
-    }
+    assert_compiled_output(SOURCE, &[("user.Apply", apply)], &[], "15|6");
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -1571,7 +1224,7 @@ fn global_callee_errors_match_bytecode_at_every_opt_level() {
     static SLOT: AtomicUsize = AtomicUsize::new(0);
     static CALL_PC: AtomicUsize = AtomicUsize::new(0);
 
-    fn main(vm: &mut BexVm, fr: &FrameRecord, _: &[Value]) -> Result<Value, Box<VmError>> {
+    fn main(vm: &mut BexVm, fr: &FrameRecord, _: &[Value]) -> BodyResult {
         let value = vm.load_global_checked(fr.function(), SLOT.load(Ordering::Relaxed))?;
         fr.note_pc(u32::try_from(CALL_PC.load(Ordering::Relaxed)).unwrap());
         let callee = vm.indirect_callee(value)?;
@@ -1583,39 +1236,43 @@ const CALLBACK = () -> int { 42 };
 function Main() -> int { CALLBACK() }
 "#;
     for opt in [OptLevel::Zero, OptLevel::One, OptLevel::Two] {
+        let program = baml_test_support::compile_source_with_opt(SOURCE, opt);
+        let package = &program.packages[program.root as usize];
+        let slot = package
+            .globals
+            .iter()
+            .find_map(|(path, cell)| {
+                matches!(path, DeclPath::Let(name) if name.name.as_str() == "CALLBACK")
+                    .then_some(package.slot_base.raw() + *cell as usize)
+            })
+            .unwrap();
+        SLOT.store(slot, Ordering::Relaxed);
+        let entry = program.rendered_callables()["user.Main"].object;
+        let Object::Function(function) = &program.objects[entry] else {
+            unreachable!()
+        };
+        CALL_PC.store(
+            function
+                .bytecode
+                .instructions
+                .iter()
+                .position(|instruction| {
+                    matches!(instruction, bex_vm_types::Instruction::CallIndirect)
+                })
+                .unwrap(),
+            Ordering::Relaxed,
+        );
+        let globals = program.globals.len();
         for case in 0..5 {
             let mut errors = Vec::new();
             for compiled in [false, true] {
-                let mut program = baml_test_support::compile_source_with_opt(SOURCE, opt);
-                let package = &program.packages[program.root as usize];
-                let slot = package
-                    .globals
-                    .iter()
-                    .find_map(|(path, cell)| {
-                        matches!(path, DeclPath::Let(name) if name.name.as_str() == "CALLBACK")
-                            .then_some(package.slot_base.raw() + *cell as usize)
-                    })
-                    .unwrap();
-                SLOT.store(slot, Ordering::Relaxed);
-                let entry = program.rendered_callables()["user.Main"].object;
+                let mut program = program.clone();
                 let Object::Function(function) = &mut program.objects[entry] else {
                     unreachable!()
                 };
-                CALL_PC.store(
-                    function
-                        .bytecode
-                        .instructions
-                        .iter()
-                        .position(|instruction| {
-                            matches!(instruction, bex_vm_types::Instruction::CallIndirect)
-                        })
-                        .unwrap(),
-                    Ordering::Relaxed,
-                );
                 if compiled {
                     function.compiled_body = Some(test_body(main, 0));
                 }
-                let globals = program.globals.len();
                 let mut vm =
                     BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
                 vm.telemetry = None;
@@ -1659,15 +1316,14 @@ function Main() -> int { CALLBACK() }
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn errors_leave_compiled_frames_past_their_bytecode_handlers() {
-    use std::sync::atomic::{AtomicU32, Ordering};
     static WORK: AtomicU32 = AtomicU32::new(0);
-    fn work(vm: &mut BexVm, _fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn work(vm: &mut BexVm, _fr: &FrameRecord, args: &[Value]) -> BodyResult {
         let n = test_int(args[0]);
         Ok(Value::int(vm.div_i64(n, 0)?))
     }
     // Safe's bytecode catches this error; its compiled body lets it escape.
-    fn safe(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
-        let work_ptr = vm.idx_to_ptr(ObjectIndex::from_raw(WORK.load(Ordering::Relaxed) as usize));
+    fn safe(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
+        let work_ptr = object(vm, &WORK);
         vm.call_compiled(fr, work_ptr, work, &[], &[args[0]], 0)
     }
     const SOURCE: &str = r#"
@@ -1678,29 +1334,25 @@ fn errors_leave_compiled_frames_past_their_bytecode_handlers() {
             `${r}`
         }
     "#;
-    for telemetry in [false, true] {
-        let out = run_with_compiled_bodies(
-            SOURCE,
-            &[("user.Work", work), ("user.Safe", safe)],
-            &[("user.Work", &WORK)],
-            telemetry,
-        );
-        assert_eq!(out, "-9", "telemetry: {telemetry}");
-    }
+    assert_compiled_output(
+        SOURCE,
+        &[("user.Work", work), ("user.Safe", safe)],
+        &[("user.Work", &WORK)],
+        "-9",
+    );
 }
 
 // Rethrowing must preserve the original throw context across compiled and bytecode frames.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn compiled_rethrow_keeps_the_original_context() {
-    use std::sync::atomic::{AtomicU32, Ordering};
     static WORK: AtomicU32 = AtomicU32::new(0);
-    fn work(vm: &mut BexVm, _fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn work(vm: &mut BexVm, _fr: &FrameRecord, args: &[Value]) -> BodyResult {
         let n = test_int(args[0]);
         Ok(Value::int(vm.div_i64(n, 0)?))
     }
-    fn relay(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
-        let work_ptr = vm.idx_to_ptr(ObjectIndex::from_raw(WORK.load(Ordering::Relaxed) as usize));
+    fn relay(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
+        let work_ptr = object(vm, &WORK);
         match vm.call_compiled(fr, work_ptr, work, &[], &[args[0]], 0) {
             Ok(v) => Ok(v),
             Err(e) => {
@@ -1727,15 +1379,12 @@ fn compiled_rethrow_keeps_the_original_context() {
     "#;
     let bytecode = run_with_compiled_bodies(SOURCE, &[], &[], true);
     assert_eq!(bytecode, "user.Work");
-    for telemetry in [false, true] {
-        let out = run_with_compiled_bodies(
-            SOURCE,
-            &[("user.Work", work), ("user.Relay", relay)],
-            &[("user.Work", &WORK)],
-            telemetry,
-        );
-        assert_eq!(out, bytecode, "telemetry: {telemetry}");
-    }
+    assert_compiled_output(
+        SOURCE,
+        &[("user.Work", work), ("user.Relay", relay)],
+        &[("user.Work", &WORK)],
+        &bytecode,
+    );
 }
 
 #[test]
@@ -1789,15 +1438,11 @@ fn call_type_lanes_root_and_forward_runtime_heads() {
             "a native call's realized argument must root its runtime declaration",
         );
 
-        let (_stats, _remapped_roots, forwarding) = unsafe {
-            vm.heap
-                .collect_garbage_generational(&roots, CollectionLevel::Major)
-        };
+        let forwarding = collect(&mut vm);
         let moved = forwarding
             .get(&class_ptr)
             .copied()
             .expect("the pending native type argument must survive collection");
-        vm.forward_roots(&forwarding);
 
         let ty = match lane {
             0 => &vm.pending_call_type_args[0],
@@ -1819,17 +1464,9 @@ fn call_type_lanes_root_and_forward_runtime_heads() {
     }
 }
 
-/// A compiled body with a declaration hook resolves the hook the call path
-/// left pending as its bytecode prologue does: the built-in modes through
-/// `builtin_trace_hook`, a hook function through `begin_trace_hook`, a call on
-/// the VM's call path, and `finish_trace_hook`. The records match bytecode's
-/// whether the hooked callee is entered from bytecode or from a compiled
-/// caller, and a hook that panics falls back to an ordinary entry.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn compiled_trace_hooks_record_as_bytecode_does() {
-    use std::sync::atomic::{AtomicU32, Ordering};
-
     use btel_settings::mode::AutoTelemetryLevel;
 
     use crate::compiled_rt::{Step, TraceHookMode};
@@ -1842,67 +1479,40 @@ fn compiled_trace_hooks_record_as_bytecode_does() {
     static FALLBACK: AtomicU32 = AtomicU32::new(0);
     static DECIDE: AtomicU32 = AtomicU32::new(0);
     static BOOM: AtomicU32 = AtomicU32::new(0);
-    fn object(vm: &BexVm, index: &AtomicU32) -> HeapPtr {
-        vm.idx_to_ptr(ObjectIndex::from_raw(index.load(Ordering::Relaxed) as usize))
-    }
-    fn mode(
-        vm: &mut BexVm,
-        fr: &FrameRecord,
-        n: Value,
-        mode: TraceHookMode,
-        add: i64,
-    ) -> Result<Value, Box<VmError>> {
-        vm.builtin_trace_hook(fr, mode)?;
-        Ok(Value::int(test_int(n) + add))
-    }
-    fn hidden(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
-        mode(vm, fr, args[0], TraceHookMode::Hidden, 1)
-    }
-    fn timing(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
-        mode(vm, fr, args[0], TraceHookMode::Timing, 2)
-    }
-    fn span(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
-        mode(vm, fr, args[0], TraceHookMode::Span, 3)
-    }
-    fn empty(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
-        mode(vm, fr, args[0], TraceHookMode::EmptySpan, 4)
-    }
-    // The prologue MIR lowers a declaration hook to: settings =
-    // TraceHookSettings; if settings != null { result = hook(n, settings);
-    // ApplyTraceHook(result) }.
-    fn with_hook(
-        vm: &mut BexVm,
-        fr: &FrameRecord,
-        n: Value,
-        hook: &AtomicU32,
-        add: i64,
-    ) -> Result<Value, Box<VmError>> {
-        let settings = vm.compiled_begin_trace_hook(fr, true)?;
-        if !settings.is_null() {
-            let callee = object(vm, hook);
-            vm.push_arg(n);
-            vm.push_arg(settings);
-            let result = vm.suspend(Step::Call { callee, argc: 2 })?;
-            vm.compiled_finish_trace_hook(fr, result)?;
+    fn traced<const MODE: usize>(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
+        let n = args[0];
+        if MODE < 4 {
+            vm.builtin_trace_hook(
+                fr,
+                [
+                    TraceHookMode::Hidden,
+                    TraceHookMode::Timing,
+                    TraceHookMode::Span,
+                    TraceHookMode::EmptySpan,
+                ][MODE],
+            )?;
+        } else {
+            let settings = vm.compiled_begin_trace_hook(fr, true)?;
+            if !settings.is_null() {
+                let callee = object(vm, if MODE == 4 { &DECIDE } else { &BOOM });
+                vm.push_arg(n);
+                vm.push_arg(settings);
+                let result = vm.suspend(Step::Call { callee, argc: 2 })?;
+                vm.compiled_finish_trace_hook(fr, result)?;
+            }
         }
-        Ok(Value::int(test_int(n) + add))
+        Ok(Value::int(test_int(n) + i64::try_from(MODE + 1).unwrap()))
     }
-    fn hooked(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
-        with_hook(vm, fr, args[0], &DECIDE, 5)
-    }
-    fn fallback(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
-        with_hook(vm, fr, args[0], &BOOM, 6)
-    }
-    fn mid(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn mid(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
         let n = args[0];
         let mut total = 0;
         for (index, body) in [
-            (&HIDDEN, hidden as crate::compiled_rt::CompiledFn),
-            (&TIMING, timing),
-            (&SPAN, span),
-            (&EMPTY, empty),
-            (&HOOKED, hooked),
-            (&FALLBACK, fallback),
+            (&HIDDEN, traced::<0> as CompiledFn),
+            (&TIMING, traced::<1>),
+            (&SPAN, traced::<2>),
+            (&EMPTY, traced::<3>),
+            (&HOOKED, traced::<4>),
+            (&FALLBACK, traced::<5>),
         ] {
             let callee = object(vm, index);
             total += test_int(vm.call_compiled(fr, callee, body, &[], &[n], 0)?);
@@ -1935,13 +1545,13 @@ fn compiled_trace_hooks_record_as_bytecode_does() {
             `${Mid(1)}|${Hidden(2)}|${Timing(2)}|${Span(2)}|${Empty(2)}|${Hooked(2)}|${Fallback(2)}`
         }
     "#;
-    const BODIES: &[(&str, crate::compiled_rt::CompiledFn)] = &[
-        ("user.Hidden", hidden),
-        ("user.Timing", timing),
-        ("user.Span", span),
-        ("user.Empty", empty),
-        ("user.Hooked", hooked),
-        ("user.Fallback", fallback),
+    const BODIES: &[(&str, CompiledFn)] = &[
+        ("user.Hidden", traced::<0>),
+        ("user.Timing", traced::<1>),
+        ("user.Span", traced::<2>),
+        ("user.Empty", traced::<3>),
+        ("user.Hooked", traced::<4>),
+        ("user.Fallback", traced::<5>),
         ("user.Mid", mid),
     ];
     const OBJECTS: &[(&str, &AtomicU32)] = &[

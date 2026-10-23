@@ -1,26 +1,7 @@
-//! The stack a VM runs its compiled bodies on.
-//!
-//! A compiled body is plain Rust, so it cannot hand the thread back to the
-//! engine from the middle of its call chain the way bytecode does between
-//! instructions. Running every compiled body on a fiber makes that possible:
-//! to pause, [`BexVm::suspend`] switches back to the VM's stack with a
-//! [`Request`], the VM carries it out exactly as it would for bytecode (parking
-//! the frame, yielding to the engine, collecting, cancelling), and the next
-//! `resume` switches back with the outcome. The Rust frames wait on the fiber;
-//! everything the collector must see is in the VM's frame slots, which is what
-//! generated code spills to before it suspends.
-//!
-//! The VM loop stays the only driver. Compiled code calls bytecode by
-//! suspending with [`Step::Call`]; if that callee calls compiled code in turn,
-//! the VM resumes the fiber with [`Message::Enter`] and the new body runs
-//! below the waiting one, so nesting on the fiber always mirrors the VM's
-//! frame stack.
-//!
-//! Every VM that runs compiled code has its own fiber, mapped on first use.
-//!
-//! Compiled bodies are packed for native hosts only. Targets without stack
-//! switching (wasm, Windows on aarch64) build the VM with a fiber that is never
-//! entered.
+//! Compiled bodies run on a lazy, VM-owned fiber. Suspensions return control
+//! to the VM driver; values surviving a suspension must live in GC-visible slots.
+//! Nested bytecode-to-compiled calls enter below the waiting Rust frames.
+//! wasm and Windows/aarch64 cannot enter compiled bodies.
 
 use std::ptr::NonNull;
 
@@ -33,24 +14,18 @@ use crate::{
     vm::BexVm,
 };
 
-/// What the VM sends into the fiber. The VM pointer is passed on every message
-/// because the fiber only touches the VM while the VM is driving it.
-///
-/// The VM must not move while a body is parked on its fiber: a parked body
-/// still holds the `&mut BexVm` it was entered with, and [`BexVm::suspend`]
-/// asserts that every later message names the same VM.
+/// The VM cannot move while a body is parked: Rust frames retain its borrow.
+/// Every resume supplies the same VM pointer; `suspend` checks this invariant.
 #[cfg_attr(
     any(target_arch = "wasm32", all(windows, target_arch = "aarch64")),
     allow(dead_code)
 )]
 pub(crate) enum Message {
-    /// Run `body` for the frame the VM just pushed.
     Enter {
         vm: NonNull<BexVm>,
         body: CompiledFn,
         args: SmallVec<[Value; 4]>,
     },
-    /// The outcome of the [`Step`] the innermost body is waiting on.
     Resume {
         vm: NonNull<BexVm>,
         outcome: Result<Value, Box<VmError>>,
@@ -59,15 +34,12 @@ pub(crate) enum Message {
     Stop,
 }
 
-/// What the fiber sends back to the VM, always about the innermost body.
 #[cfg_attr(
     any(target_arch = "wasm32", all(windows, target_arch = "aarch64")),
     allow(dead_code)
 )]
 pub(crate) enum Request {
-    /// Do this, then resume with its outcome.
     Step(Step),
-    /// The body returned.
     Done(Result<Value, Box<VmError>>),
 }
 
@@ -81,12 +53,7 @@ impl Drop for FiberReset<'_> {
 }
 
 impl BexVm {
-    /// Drive the fiber with the message `message` builds until it suspends or
-    /// its body returns.
-    ///
-    /// The fiber is moved out of `self` while it runs: the body on it holds
-    /// the only `&mut BexVm`, so nothing on this side may stay borrowed from
-    /// the VM across the switch.
+    /// Move the fiber out before switching: its body must hold the only VM borrow.
     pub(crate) fn fiber_resume(
         &mut self,
         message: impl FnOnce(NonNull<BexVm>) -> Message,
@@ -117,14 +84,6 @@ impl BexVm {
         drop(reset);
         self.compiled.fiber = Some(fiber);
         request
-    }
-
-    pub(crate) fn enter_compiled(
-        &mut self,
-        body: CompiledFn,
-        args: SmallVec<[Value; 4]>,
-    ) -> Request {
-        self.fiber_resume(|vm| Message::Enter { vm, body, args })
     }
 
     pub(crate) fn resume_body(&mut self, outcome: Result<Value, Box<VmError>>) -> Request {
@@ -159,22 +118,16 @@ mod stackful {
     #[cfg(panic = "abort")]
     compile_error!("compiled bodies run on corosensei fibers, which need `panic = \"unwind\"`");
 
-    /// Address space per fiber; the OS commits pages as they are touched. The
-    /// VM's frame limit bounds how much is ever used.
+    /// Virtual reservation; the OS commits pages on demand.
     const STACK_SIZE: usize = 4 << 20;
 
-    /// Fiber stack a compiled callee must still have below it: its builtins
-    /// and unwinding.
+    /// Reserve room for builtins and unwinding below compiled callees.
     const STACK_RED_ZONE: usize = 256 << 10;
 
     pub(crate) struct Fiber {
         coroutine: Coroutine<Message, Request, ()>,
-        /// Lowest address a compiled callee may start at; see [`BexVm::stack_room`].
         floor: usize,
-        /// Bodies running or waiting on the fiber. Each [`Message::Enter`]
-        /// starts one and each [`Request::Done`] ends one, so at zero the
-        /// coroutine is parked in its top-level loop (or has never started)
-        /// and the stack holds no frame of ours.
+        /// Zero means no Rust body remains, so `Stop` can finish without unwinding.
         bodies: usize,
     }
 
@@ -233,7 +186,6 @@ mod stackful {
             }
         }
 
-        /// Lowest address a compiled callee may start at; see [`BexVm::stack_room`].
         pub(crate) fn floor(&self) -> usize {
             self.floor
         }
@@ -241,15 +193,11 @@ mod stackful {
 
     impl Drop for Fiber {
         fn drop(&mut self) {
-            // A waiting body keeps frames on the stack: dropping the coroutine
-            // unwinds them. During a panic, leave any forced unwind to the
-            // coroutine's drop. A coroutine that never ran holds nothing.
+            // Parked bodies need forced unwinding; never interfere with panic unwinding.
             if self.bodies != 0 || std::thread::panicking() || !self.coroutine.started() {
                 return;
             }
-            // The coroutine is parked in its top-level loop: `Stop` makes it
-            // return at once, which is cheaper than the forced unwind that
-            // dropping it suspended would take.
+            // Finishing an idle coroutine avoids corosensei's more expensive forced unwind.
             match self.coroutine.resume(Message::Stop) {
                 CoroutineResult::Return(()) => {}
                 CoroutineResult::Yield(_) => unreachable!("a stopped fiber returns"),
@@ -257,9 +205,7 @@ mod stackful {
         }
     }
 
-    /// Run `body` on the fiber with the VM driving. A body entered from
-    /// bytecode nests below the bodies already waiting on the fiber, so it
-    /// checks for stack room as a direct compiled call does.
+    /// Bytecode reentry also consumes fiber stack, so it must check for room.
     fn run(
         vm: &mut BexVm,
         yielder: &Yielder<Message, Request>,
@@ -272,8 +218,6 @@ mod stackful {
         vm.run_entry(body, args)
     }
 
-    /// The running fiber's yielder, reachable from the VM so [`BexVm::suspend`]
-    /// can switch out from any depth.
     #[derive(Clone, Copy)]
     pub(crate) struct YielderPtr(NonNull<Yielder<Message, Request>>);
 
@@ -289,10 +233,7 @@ mod stackful {
     }
 
     impl BexVm {
-        /// Hand `step` to the VM and continue with its outcome once the VM
-        /// resumes this body. Heap values held in Rust locals across this call
-        /// are stale afterwards: generated code keeps them in frame slots and
-        /// reloads them.
+        /// Heap values in Rust locals become stale across suspension; spill and reload them.
         #[inline(never)]
         #[allow(unsafe_code)]
         pub fn suspend(&mut self, step: Step) -> Result<Value, Box<VmError>> {
@@ -338,7 +279,6 @@ mod stackful {
             }
         }
 
-        /// Whether the fiber has room for a compiled callee, or the error to raise.
         #[inline]
         pub(crate) fn stack_room(&mut self) -> Result<(), Box<VmError>> {
             if stack_address() >= self.compiled.fiber_floor {
@@ -383,7 +323,6 @@ mod stackless {
 
     #[allow(clippy::unused_self, clippy::unnecessary_wraps)]
     impl BexVm {
-        /// See the native implementation.
         pub fn suspend(&mut self, _: Step) -> Result<Value, Box<VmError>> {
             unreachable!("{NEVER}")
         }

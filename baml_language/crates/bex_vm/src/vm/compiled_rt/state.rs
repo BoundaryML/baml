@@ -5,30 +5,21 @@ use bex_vm_types::{HeapPtr, RealizedTy, RootHaver, Value, types::TypeValue};
 use super::{Fiber, fiber::YielderPtr};
 use crate::{errors::VmError, vm::BexVm};
 
-/// VM state that only compiled code uses.
 pub(crate) struct CompiledState {
     pub(crate) static_type_cache: HashMap<(usize, usize), HeapPtr>,
-    /// The stack compiled bodies run on, mapped on first use.
     pub(crate) fiber: Option<Fiber>,
     /// The fiber's [`Fiber::floor`], kept here so `stack_room` reads it while
     /// the fiber is out of `self` running a body.
     pub(crate) fiber_floor: usize,
-    /// How a body on the fiber switches back to the VM.
     #[cfg_attr(
         any(target_arch = "wasm32", all(windows, target_arch = "aarch64")),
         allow(dead_code)
     )]
     pub(crate) yielder: Option<YielderPtr>,
-    /// Whether the VM is currently driving the fiber, so a compiled callee may
-    /// run in place.
     pub(crate) on_fiber: bool,
-    /// Type arguments compiled code passes to a generic builtin.
     pub(crate) builtin_type_args: Vec<RealizedTy>,
-    /// Type arguments of the call a body suspends on.
     pub(crate) call_type_args: Vec<RealizedTy>,
-    /// Pending type arguments preserved across nested compiled calls.
     pub(crate) saved_call_types: Vec<SavedCallTypes>,
-    /// An error the unwinder delivered to a suspended compiled body.
     pub(crate) delivery: Option<Box<VmError>>,
     /// Frame records of compiled bodies on the fiber. Declared after `fiber`
     /// so a parked fiber unwinds into it before it is dropped.
@@ -74,16 +65,6 @@ impl CompiledState {
                     .chain(saved.values.iter().flatten().map(|value| &value.ty))
             }))
     }
-
-    fn values_mut(&mut self) -> impl Iterator<Item = &mut Value> {
-        let delivered = match self.delivery.as_deref_mut() {
-            Some(VmError::Thrown(thrown)) => Some(thrown),
-            _ => None,
-        };
-        delivered
-            .into_iter()
-            .flat_map(|thrown| std::iter::once(&mut thrown.value).chain(thrown.context.iter_mut()))
-    }
 }
 
 impl RootHaver for CompiledState {
@@ -127,11 +108,11 @@ impl RootHaver for CompiledState {
                 .flatten()
                 .for_each(|value| forward_ty(&mut value.ty));
         }
-        for value in self.values_mut() {
-            if let Some(ptr) = value.as_object_ptr()
-                && let Some(&moved) = roots.get(&ptr)
-            {
-                *value = Value::object(moved);
+        if let Some(VmError::Thrown(thrown)) = self.delivery.as_deref_mut() {
+            for value in std::iter::once(&mut thrown.value).chain(thrown.context.iter_mut()) {
+                if let Some(ptr) = value.as_object_ptr().and_then(|ptr| roots.get(&ptr)) {
+                    *value = Value::object(*ptr);
+                }
             }
         }
     }

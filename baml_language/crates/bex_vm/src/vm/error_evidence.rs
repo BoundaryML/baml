@@ -379,7 +379,13 @@ impl BexVm {
         let kind = if entry == RaiseEntry::Host {
             RaiseKind::HostBoundary
         } else if raise_compiled {
-            self.compiled_raise_kind(thrown)
+            if thrown.throw_kind == ThrowKind::Rethrow {
+                RaiseKind::Rethrow
+            } else if self.is_panic(thrown.value) {
+                RaiseKind::Runtime
+            } else {
+                RaiseKind::Throw
+            }
         } else {
             self.raise_kind(entry, raise_function, thrown)
         };
