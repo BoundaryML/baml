@@ -79,7 +79,7 @@ macro_rules! verifier_unreachable {
 
 use ::bex_heap::TlabHolder;
 use ::bex_vm_types::{
-    EarlyYieldCheck, RootHaver,
+    EarlyYieldCheck, RootHaver, RootVisitor, TypeHead,
     types::{ErrorClass, FutureId},
 };
 use ::core::any::TypeId;
@@ -346,31 +346,22 @@ impl BytecodeFrame {
 }
 
 impl RootHaver for BytecodeFrame {
-    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
-        roots.push(self.function);
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            function,
+            instruction_ptr: _,
+            locals_offset: _,
+            type_args,
+            faulting_pc: _,
+            telemetry: _,
+            context: _,
+        } = self;
+        function.visit_roots(visitor);
         // A frame's type arguments may name runtime declarations (a slot
         // bound from a runtime class, a receiver's live binding). The
         // realized argument is the type `LoadType` reads, so its heads must
         // survive and move with the frame.
-        for ty in &self.type_args {
-            ty.visit_heads(&mut |head| {
-                if head.is_resolved() {
-                    roots.push(head.ptr());
-                }
-            });
-        }
-    }
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
-        self.function = roots.get(&self.function).copied().unwrap_or(self.function);
-        for ty in &mut self.type_args {
-            ty.visit_heads_mut(&mut |head| {
-                if head.is_resolved()
-                    && let Some(&moved) = roots.get(&head.ptr())
-                {
-                    head.forward_to(moved);
-                }
-            });
-        }
+        type_args.visit_roots(visitor);
     }
 }
 
@@ -389,13 +380,14 @@ pub struct NativeFrame {
 }
 
 impl RootHaver for NativeFrame {
-    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
-        roots.push(self.function);
-        roots.extend_from_slice(&self.continuation.gc_roots());
-    }
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
-        self.function = roots.get(&self.function).copied().unwrap_or(self.function);
-        self.continuation.apply_forwarding(roots);
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            function,
+            continuation,
+            bytecode_caller: _,
+        } = self;
+        function.visit_roots(visitor);
+        continuation.visit_roots(visitor);
     }
 }
 
@@ -816,12 +808,20 @@ pub(crate) mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn hidden_native_callbacks_preserve_visible_paths_and_reentry() {
+        use ::bex_vm_types::RootVisitor;
+
         use crate::{
             package_baml::{Continuation, PassThroughContinuation},
             telemetry::{SpanRecord, TimingRecord},
         };
 
         struct Again(HeapPtr);
+        impl RootHaver for Again {
+            fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+                let Self(callee) = self;
+                callee.visit_roots(visitor);
+            }
+        }
         impl Continuation for Again {
             fn call(self: Box<Self>, _vm: &mut BexVm, _value: Value) -> NativeCallResult {
                 NativeCallResult::YieldToCall {
@@ -830,12 +830,6 @@ pub(crate) mod tests {
                     type_args: vec![],
                     continuation: Box::new(PassThroughContinuation),
                 }
-            }
-            fn gc_roots(&self) -> Vec<HeapPtr> {
-                vec![self.0]
-            }
-            fn apply_forwarding(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
-                self.0 = roots.get(&self.0).copied().unwrap_or(self.0);
             }
         }
         fn invoke_twice(_vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
@@ -1217,7 +1211,7 @@ pub(crate) mod tests {
             "active trampoline function must be forwarded by GC"
         );
 
-        vm.forward_roots(&forwarding);
+        vm.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &()));
 
         let moved_trampoline = trampoline_ptr(&vm);
         assert!(
@@ -1319,7 +1313,7 @@ pub(crate) mod tests {
             .get(&class_ptr)
             .copied()
             .expect("the frame type argument's declaration must survive collection");
-        vm.forward_roots(&forwarding);
+        vm.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &()));
 
         let Some(Frame::Bytecode(frame)) = vm.frames.last() else {
             panic!("expected trampoline bytecode frame");
@@ -1375,7 +1369,7 @@ pub(crate) mod tests {
             .get(&class_ptr)
             .copied()
             .expect("the pending native type argument must survive collection");
-        vm.forward_roots(&forwarding);
+        vm.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &()));
 
         let bex_vm_types::RealizedTy::Class(head, ..) = &vm.pending_call_type_args[0] else {
             panic!("the pending native argument must remain the dynamic class type")
@@ -1385,16 +1379,10 @@ pub(crate) mod tests {
 }
 
 impl RootHaver for Frame {
-    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
         match self {
-            Frame::Bytecode(f) => f.collect_roots(roots),
-            Frame::Native(f) => f.collect_roots(roots),
-        }
-    }
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
-        match self {
-            Frame::Bytecode(f) => f.forward_roots(roots),
-            Frame::Native(f) => f.forward_roots(roots),
+            Frame::Bytecode(f) => f.visit_roots(visitor),
+            Frame::Native(f) => f.visit_roots(visitor),
         }
     }
 }
@@ -3786,19 +3774,6 @@ impl BexVm {
         // The poll reads the pressure flag the settlement may have raised.
         self.tlab.take_budget_crossed();
         self.early_yield.poll()
-    }
-
-    /// Collect all `HeapPtr`s stored in call frames.
-    /// - For bytecode frames, the function pointer
-    /// - For native frames, the continuation pointer as well as all native-held GC roots
-    ///
-    /// Used by `bex_engine` to include frame roots in GC root sets.
-    pub fn collect_frame_roots(&self) -> Vec<HeapPtr> {
-        let mut roots = Vec::new();
-        for frame in &self.frames {
-            frame.collect_roots(&mut roots);
-        }
-        roots
     }
 
     pub(crate) fn current_runtime_package(&self) -> HeapPtr {
@@ -11880,67 +11855,24 @@ impl BexVm {
 }
 
 impl ::bex_vm_types::RootHaver for BexVm {
-    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
-        // Stack values
-        roots.extend(self.stack.iter().filter_map(Value::as_object_ptr));
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        // Stack values. Frame locals live in the stack at the frame's
+        // `locals_offset`, so they are covered here.
+        for value in &mut self.stack {
+            value.visit_roots(visitor);
+        }
 
         // Native generic calls have no bytecode frame while the builtin is
         // executing, so this is the only owner of their realized type heads.
         // A runtime declaration bound to T must remain live across any GC the
         // native performs or triggers through a continuation.
-        for ty in &self.pending_call_type_args {
-            ty.visit_heads(&mut |head| {
-                if head.is_resolved() {
-                    roots.push(head.ptr());
-                }
-            });
-        }
-        roots.extend(self.static_load_type_cache.values().copied());
-        for transfer in &self.context_transfers {
-            roots.extend(transfer.handling.as_object_ptr());
-            roots.extend(transfer.target.as_object_ptr());
-        }
+        self.pending_call_type_args.visit_roots(visitor);
 
-        self.compiled.collect_roots(roots);
-
-        // Frame function pointers (needed once closures are heap-allocated)
-        roots.extend(self.collect_frame_roots());
-        if let Some(telemetry) = &self.telemetry {
-            telemetry.collect_roots(roots);
-        }
-
-        // Note: Frame locals are stored in the stack at the locals_offset position,
-        // so they're already included in the stack iteration above.
-    }
-
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
-        // The GC has reset the heap's TLAB cursor (`gen0_next_chunk`) and
-        // swapped semispaces, so this VM's cached `alloc_ptr`/`alloc_limit`
-        // now point into a region the heap will hand out to other VMs as a
-        // fresh chunk. Drop them so the next allocation refills from the
-        // post-GC cursor.
-        self.tlab.invalidate();
-
-        // Stack values
-        for value in &mut self.stack {
-            if let Some(ptr) = value.as_object_ptr() {
-                if let Some(&new_ptr) = roots.get(&ptr) {
-                    *value = Value::object(new_ptr);
-                }
-            }
-        }
-
-        for ty in &mut self.pending_call_type_args {
-            ty.visit_heads_mut(&mut |head| {
-                if head.is_resolved()
-                    && let Some(&moved) = roots.get(&head.ptr())
-                {
-                    head.forward_to(moved);
-                }
-            });
-        }
-
-        let forward_identity = |identity: usize| -> Option<usize> {
+        // The static caches are keyed by a function's address, tagged in the
+        // low bit when it is a runtime function (a compile-time function is
+        // keyed by its pool index and never moves). A key is a weak reference:
+        // the entry goes when its function does, and follows it otherwise.
+        let forward_identity = |identity: usize, visitor: &mut dyn RootVisitor| -> Option<usize> {
             if identity & 1 == 0 {
                 return Some(identity);
             }
@@ -11948,52 +11880,69 @@ impl ::bex_vm_types::RootHaver for BexVm {
             // SAFETY: the pointer is used only as a lookup key; it is never
             // dereferenced, so validity of the pointee is not required.
             #[cfg(not(feature = "heap_debug"))]
-            let key = unsafe { HeapPtr::from_ptr(addr) };
+            let mut key = unsafe { HeapPtr::from_ptr(addr) };
             // SAFETY: as above; the epoch does not participate in `Eq`/`Hash`,
             // so a zero epoch probes correctly.
             #[cfg(feature = "heap_debug")]
-            let key = unsafe { HeapPtr::from_ptr(addr, 0) };
-            roots
-                .get(&key)
-                .map(|forwarded| (forwarded.as_ptr() as usize) | 1)
+            let mut key = unsafe { HeapPtr::from_ptr(addr, 0) };
+            visitor
+                .visit_weak(&mut key)
+                .then(|| (key.as_ptr() as usize) | 1)
         };
         let old_load_type_cache = std::mem::take(&mut self.static_load_type_cache);
-        for ((identity, index), ptr) in old_load_type_cache {
-            if let Some(identity) = forward_identity(identity) {
-                self.static_load_type_cache
-                    .insert((identity, index), roots.get(&ptr).copied().unwrap_or(ptr));
+        for ((identity, index), mut ptr) in old_load_type_cache {
+            if let Some(identity) = forward_identity(identity, visitor) {
+                ptr.visit_roots(visitor);
+                self.static_load_type_cache.insert((identity, index), ptr);
             }
         }
         let old_virtual_call_cache = std::mem::take(&mut self.static_virtual_call_cache);
-        for (mut key, target) in old_virtual_call_cache {
-            if let Some(identity) = forward_identity(key.caller_function_addr) {
-                key.caller_function_addr = identity;
-                self.static_virtual_call_cache.insert(key, target);
+        for (mut key, mut target) in old_virtual_call_cache {
+            // The whole entry is weak: it names a callee and the declarations
+            // in its type arguments, and must not keep any of them alive.
+            let Some(identity) = forward_identity(key.caller_function_addr, visitor) else {
+                continue;
+            };
+            if !visitor.visit_weak(&mut target.callee) {
+                continue;
             }
+            let mut heads_live = true;
+            for ty in &mut target.frame_type_args {
+                ty.visit_heads_mut(&mut |head: &mut TypeHead| {
+                    heads_live &= head.visit_root_weak(visitor);
+                });
+            }
+            if !heads_live {
+                continue;
+            }
+            key.caller_function_addr = identity;
+            self.static_virtual_call_cache.insert(key, target);
         }
-        let heap = &self.heap;
-        self.impl_cache.get_mut().forward(roots, |ptr| {
-            crate::package_load::survives_in_place(heap, ptr)
-        });
+        // Resolver answers, held weakly like the static caches above.
+        self.impl_cache.get_mut().visit_weak(visitor);
+
         for transfer in &mut self.context_transfers {
-            for value in [&mut transfer.handling, &mut transfer.target] {
-                if let Some(ptr) = value.as_object_ptr()
-                    && let Some(&new_ptr) = roots.get(&ptr)
-                {
-                    *value = Value::object(new_ptr);
-                }
-            }
+            transfer.handling.visit_roots(visitor);
+            transfer.target.visit_roots(visitor);
         }
 
-        self.compiled.forward_roots(roots);
+        self.compiled.visit_roots(visitor);
 
-        // Frame function pointers (needed once closures are heap-allocated)
         for frame in &mut self.frames {
-            frame.forward_roots(roots);
+            frame.visit_roots(visitor);
         }
         if let Some(telemetry) = &mut self.telemetry {
-            telemetry.forward_roots(roots);
+            telemetry.visit_roots(visitor);
         }
+    }
+
+    fn relocated(&mut self) {
+        // The GC has reset the heap's TLAB cursor (`gen0_next_chunk`) and
+        // swapped semispaces, so this VM's cached `alloc_ptr`/`alloc_limit`
+        // now point into a region the heap will hand out to other VMs as a
+        // fresh chunk. Drop them so the next allocation refills from the
+        // post-GC cursor.
+        self.tlab.invalidate();
     }
 }
 

@@ -20,7 +20,8 @@ use baml_compiler_diagnostics::{
 use baml_type::{normalize, normalize::TypeContext};
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    DeclPath, FnPath, HeapPtr, Interface, Object, RealizedTy, SessionEvalLease, Ty, TyTemplate,
+    DeclPath, FnPath, HeapPtr, Interface, Object, RealizedTy, RootHaver, RootVisitor,
+    SessionEvalLease, Ty, TyTemplate,
     types::{
         Edge, EdgeKind, ExportSurface, LocalName, Objects, Package, PackageKind, SessionState,
         Slots, TypeAliasDef, TypeValue, Value,
@@ -1035,6 +1036,14 @@ struct FinishPackage {
     package: HeapPtr,
 }
 
+impl RootHaver for FinishPackage {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self { wrapper, package } = self;
+        wrapper.visit_roots(visitor);
+        package.visit_roots(visitor);
+    }
+}
+
 impl Continuation for FinishPackage {
     fn call(self: Box<Self>, vm: &mut BexVm, _value: Value) -> NativeCallResult {
         let mut metered = vm.get_object_mut(self.package);
@@ -1046,19 +1055,6 @@ impl Continuation for FinishPackage {
         };
         *initialized = true;
         NativeCallResult::Done(Value::object(self.wrapper))
-    }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        vec![self.wrapper, self.package]
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &std::collections::HashMap<HeapPtr, HeapPtr>) {
-        if let Some(&ptr) = forwarding.get(&self.wrapper) {
-            self.wrapper = ptr;
-        }
-        if let Some(&ptr) = forwarding.get(&self.package) {
-            self.package = ptr;
-        }
     }
 }
 
@@ -1081,6 +1077,13 @@ struct RegisterPackageTests {
     test_init: HeapPtr,
 }
 
+impl RootHaver for RegisterPackageTests {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self { test_init } = self;
+        test_init.visit_roots(visitor);
+    }
+}
+
 impl Continuation for RegisterPackageTests {
     fn call(self: Box<Self>, vm: &mut BexVm, collector: Value) -> NativeCallResult {
         let Some(collector_ptr) = collector.as_object_ptr() else {
@@ -1094,20 +1097,17 @@ impl Continuation for RegisterPackageTests {
             continuation: Box::new(FinishPackageTests { collector_ptr }),
         }
     }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        vec![self.test_init]
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &std::collections::HashMap<HeapPtr, HeapPtr>) {
-        if let Some(&ptr) = forwarding.get(&self.test_init) {
-            self.test_init = ptr;
-        }
-    }
 }
 
 struct FinishPackageTests {
     collector_ptr: HeapPtr,
+}
+
+impl RootHaver for FinishPackageTests {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self { collector_ptr } = self;
+        collector_ptr.visit_roots(visitor);
+    }
 }
 
 impl Continuation for FinishPackageTests {
@@ -1143,16 +1143,6 @@ impl Continuation for FinishPackageTests {
             test_function_ty(),
             tests,
         )))
-    }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        vec![self.collector_ptr]
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &std::collections::HashMap<HeapPtr, HeapPtr>) {
-        if let Some(&ptr) = forwarding.get(&self.collector_ptr) {
-            self.collector_ptr = ptr;
-        }
     }
 }
 
@@ -1666,6 +1656,29 @@ impl SessionExecution {
     }
 }
 
+impl RootHaver for SessionExecution {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            package,
+            actions,
+            current: _,
+            metadata: _,
+            result,
+            lease: _,
+        } = self;
+        package.visit_roots(visitor);
+        for SessionAction {
+            helper,
+            target: _,
+            step: _,
+        } in actions
+        {
+            helper.visit_roots(visitor);
+        }
+        result.visit_roots(visitor);
+    }
+}
+
 impl Continuation for SessionExecution {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         let action = self.actions[self.current];
@@ -1710,29 +1723,6 @@ impl Continuation for SessionExecution {
         }
         self.lease.release();
         NativeCallResult::Done(self.result)
-    }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        std::iter::once(self.package)
-            .chain(self.actions.iter().map(|action| action.helper))
-            .chain(self.result.as_object_ptr())
-            .collect()
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        if let Some(&pointer) = forwarding.get(&self.package) {
-            self.package = pointer;
-        }
-        for action in &mut self.actions {
-            if let Some(&pointer) = forwarding.get(&action.helper) {
-                action.helper = pointer;
-            }
-        }
-        if let Some(pointer) = self.result.as_object_ptr()
-            && let Some(&forwarded) = forwarding.get(&pointer)
-        {
-            self.result = Value::object(forwarded);
-        }
     }
 }
 
@@ -2128,6 +2118,13 @@ struct CallAnyContinuation {
     expected: RealizedTy,
 }
 
+impl RootHaver for CallAnyContinuation {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self { expected } = self;
+        expected.visit_roots(visitor);
+    }
+}
+
 impl Continuation for CallAnyContinuation {
     fn call(self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         if matches!(self.expected, RealizedTy::Unknown) {
@@ -2150,26 +2147,6 @@ impl Continuation for CallAnyContinuation {
             ),
             Err(error) => error.into(),
         }
-    }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        let mut roots = Vec::new();
-        self.expected.visit_heads(&mut |head| {
-            if head.is_resolved() {
-                roots.push(head.ptr());
-            }
-        });
-        roots
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        self.expected.visit_heads_mut(&mut |head| {
-            if head.is_resolved()
-                && let Some(&moved) = forwarding.get(&head.ptr())
-            {
-                head.forward_to(moved);
-            }
-        });
     }
 }
 

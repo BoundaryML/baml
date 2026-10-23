@@ -34,14 +34,15 @@
 //!    `call_function` invocations block in `HeapPermitManager::new_permit`
 //!    because the manager's holders mutex is held by the GC.
 //! 3. **Collect roots**: [`HeapGuard`] iterates the live permit holders (via
-//!    weak references) and calls each `RootHaver::collect_roots`, unioned
-//!    with `BexHeap::collect_handle_roots` for FFI-held objects.
+//!    weak references) and walks each one's `RootHaver::visit_roots` with a
+//!    recording visitor, unioned with `BexHeap::collect_handle_roots` for
+//!    FFI-held objects.
 //! 4. **GC**: `BexHeap::collect_garbage_generational` runs under the guard;
 //!    produces a forwarding map.
-//! 5. **Fixup**: `HeapGuard` calls each parked holder's
-//!    `RootHaver::forward_roots`. The `BexVm` impl of `forward_roots` also
-//!    invalidates the VM's TLAB so post-GC allocations refill from the new
-//!    Gen0 cursor.
+//! 5. **Fixup**: `HeapGuard` walks each parked holder's `visit_roots` again
+//!    with a forwarding visitor, then calls its `RootHaver::relocated`; the
+//!    `BexVm` impl invalidates the VM's TLAB so post-GC allocations refill
+//!    from the new Gen0 cursor.
 //! 6. **Resume**: dropping the `HeapGuard` releases the semaphore; parked
 //!    VMs re-acquire and continue.
 //!
@@ -2240,10 +2241,7 @@ impl BexEngine {
         let globals_permit =
             futures::executor::block_on(heap_permit_manager.new_permit(globals.clone()));
         let dynamic_dispatch_permit = futures::executor::block_on(heap_permit_manager.new_permit(
-            bex_vm::package_load::DynDispatchRoot::new(
-                Arc::clone(&dynamic_dispatch),
-                Arc::clone(&heap),
-            ),
+            bex_vm::package_load::DynDispatchRoot::new(Arc::clone(&dynamic_dispatch)),
         ));
 
         // Build a default RuntimeIo from the SysOps table with an empty context.
@@ -3205,7 +3203,10 @@ impl BexEngine {
         // Update all parked VM stacks with forwarding pointers and invalidate TLABs
         // SAFETY: VMs are still parked (gc_complete not yet notified), we have
         // exclusive access via the parked_vms lock we're still holding
-        heap_guard.forward_roots(&forwarding);
+        heap_guard.forward_roots(&mut bex_vm_types::ForwardRoots::new(
+            &forwarding,
+            &*self.heap,
+        ));
 
         // Bug H, check 3 (heap_debug only): after `forward_roots`, no
         // holder root should still point into the inactive (former

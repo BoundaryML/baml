@@ -15,7 +15,7 @@ use std::{
 
 use baml_test_support::compile_source;
 use bex_vm::BexVm;
-use bex_vm_types::{HeapPtr, RootHaver, Value};
+use bex_vm_types::{ForwardRoots, HeapPtr, RootHaver, Value};
 
 fn make_vm() -> BexVm {
     // The program contents don't matter — we only need a VM whose TLAB
@@ -38,7 +38,7 @@ fn forward_roots_invalidates_tlab() {
         "TLAB should hold a chunk after the first allocation"
     );
 
-    vm.forward_roots(&HashMap::new());
+    vm.forward_roots(&mut ForwardRoots::new(&HashMap::new(), &()));
     assert!(
         !vm.tlab.is_valid(),
         "TLAB must be invalidated by forward_roots so the next alloc refills"
@@ -60,7 +60,7 @@ fn forward_roots_remaps_stack_object_pointers() {
     let mut forwarding: HashMap<HeapPtr, HeapPtr> = HashMap::new();
     forwarding.insert(old_ptr, new_ptr);
 
-    vm.forward_roots(&forwarding);
+    vm.forward_roots(&mut ForwardRoots::new(&forwarding, &()));
 
     assert_eq!(
         vm.stack[bex_vm_types::StackIndex::from_raw(0)],

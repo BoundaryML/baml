@@ -12,11 +12,11 @@
 //! This module provides a vector wrapper that needs specific types to index
 //! into it, thus solving the problem mentioned above at compile time.
 
-use std::{cell::UnsafeCell, collections::HashMap, marker::PhantomData, sync::Arc};
+use std::{cell::UnsafeCell, marker::PhantomData, sync::Arc};
 
 use borsh::{BorshDeserialize, BorshSerialize};
 
-use crate::{HeapPtr, Object, PermitProof, RootHaver, Value};
+use crate::{Object, PermitProof, RootHaver, RootVisitor, Value};
 
 // Marker types for different pool kinds
 
@@ -417,29 +417,16 @@ impl SharedGlobals {
 }
 
 impl RootHaver for SharedGlobals {
-    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
-        // SAFETY: GC parks every active permit before calling this, so no
-        // reader is observing the slice concurrently.
-        let slice = unsafe { &*self.inner.values.get() };
-        for value in slice {
-            if let Some(ptr) = value.as_object_ptr() {
-                roots.push(ptr);
-            }
-        }
-    }
-
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
-        // SAFETY: GC parks every active permit before calling this; `&mut self`
-        // additionally proves there is no concurrent reader of the
-        // `SharedGlobals` permit-cell value on this thread.
-        let slice = unsafe { &mut *self.inner.values.get() };
-        for value in slice.iter_mut() {
-            if let Some(ptr) = value.as_object_ptr()
-                && let Some(&new) = roots.get(&ptr)
-            {
-                *value = Value::object(new);
-            }
-        }
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self { inner } = self;
+        // SAFETY: only the collector walks these roots, while its `HeapGuard`
+        // has parked every permit, so no `as_slice` borrow is live.
+        // BUG: nothing enforces that. `SharedGlobals` is `Clone` and this
+        // method is safe, so any clone's owner can walk the roots while
+        // another thread reads the slice; only the collector's holder should
+        // be able to.
+        let slice = unsafe { &mut *inner.values.get() };
+        slice.visit_roots(visitor);
     }
 }
 
@@ -624,7 +611,7 @@ mod shared_globals_tests {
         let p2 = fake_ptr(0x2000);
         // Float is now Object-boxed; substitute another non-object scalar (Int)
         // to keep the test's intent ("non-Object values are NOT collected as roots").
-        let globals = SharedGlobals::from_vec(vec![
+        let mut globals = SharedGlobals::from_vec(vec![
             Value::int(1),
             Value::object(p1),
             Value::int(99),
@@ -657,10 +644,10 @@ mod shared_globals_tests {
             Value::object(stable),
         ]);
 
-        let mut forwarding = HashMap::new();
+        let mut forwarding = std::collections::HashMap::new();
         forwarding.insert(old1, new1);
         forwarding.insert(old2, new2);
-        globals.forward_roots(&forwarding);
+        globals.forward_roots(&mut crate::ForwardRoots::new(&forwarding, &()));
 
         // Take a fresh `as_slice()` view; the in-place rewrite must be
         // visible through the *same* `Arc<UnsafeCell<...>>` that any
@@ -687,9 +674,9 @@ mod shared_globals_tests {
         let original = SharedGlobals::from_vec(vec![Value::object(old)]);
         let mut held_by_holder = original.clone();
 
-        let mut forwarding = HashMap::new();
+        let mut forwarding = std::collections::HashMap::new();
         forwarding.insert(old, new);
-        held_by_holder.forward_roots(&forwarding);
+        held_by_holder.forward_roots(&mut crate::ForwardRoots::new(&forwarding, &()));
 
         // The engine-side clone (`original`) must see the rewrite.
         // SAFETY: single-threaded test; no concurrent `forward_roots`.

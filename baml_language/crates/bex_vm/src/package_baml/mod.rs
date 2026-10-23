@@ -61,11 +61,9 @@ mod uint8array;
 mod unknown_error;
 mod yaml;
 
-use std::collections::HashMap;
-
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    ArrayReadGuard, HeapPtr, MapReadGuard,
+    ArrayReadGuard, HeapPtr, MapReadGuard, RootHaver, RootVisitor,
     types::{Instance, Object, Type, Value},
 };
 use indexmap::IndexMap;
@@ -118,17 +116,11 @@ impl From<VmInternalError> for NativeCallResult {
 }
 
 /// A continuation that resumes a native function after a bytecode callback returns.
-/// Must expose GC roots so the compacting collector can find and forward `HeapPtr`
-/// values captured by the continuation.
-pub trait Continuation: Send {
+/// It holds heap pointers across that yield, so it is a [`RootHaver`]: the
+/// compacting collector scans and repoints them like any other root.
+pub trait Continuation: RootHaver {
     /// Invoke the continuation with the callback's return value.
     fn call(self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult;
-
-    /// Return all `HeapPtr` values held by this continuation (for GC root scanning).
-    fn gc_roots(&self) -> Vec<HeapPtr>;
-
-    /// Update all `HeapPtr` values after GC moves objects (forwarding).
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>);
 }
 
 pub(super) fn chain(
@@ -161,21 +153,18 @@ struct ChainedContinuation {
     next: Box<dyn Continuation>,
 }
 
+impl RootHaver for ChainedContinuation {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self { inner, next } = self;
+        inner.visit_roots(visitor);
+        next.visit_roots(visitor);
+    }
+}
+
 impl Continuation for ChainedContinuation {
     fn call(self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         let result = self.inner.call(vm, value);
         chain(vm, result, self.next)
-    }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        let mut roots = self.inner.gc_roots();
-        roots.extend(self.next.gc_roots());
-        roots
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        self.inner.apply_forwarding(forwarding);
-        self.next.apply_forwarding(forwarding);
     }
 }
 
@@ -184,14 +173,14 @@ impl Continuation for ChainedContinuation {
 /// only job is to dispatch one call and surface its value.
 pub(crate) struct PassThroughContinuation;
 
+impl RootHaver for PassThroughContinuation {
+    fn visit_roots(&mut self, _visitor: &mut dyn RootVisitor) {}
+}
+
 impl Continuation for PassThroughContinuation {
     fn call(self: Box<Self>, _vm: &mut BexVm, value: Value) -> NativeCallResult {
         NativeCallResult::Done(value)
     }
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        Vec::new()
-    }
-    fn apply_forwarding(&mut self, _forwarding: &HashMap<HeapPtr, HeapPtr>) {}
 }
 
 /// A typed view of an array receiver: its declared element type alongside the

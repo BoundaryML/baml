@@ -5,7 +5,7 @@ use std::{
 
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    HeapPtr, ObjectType, ValueKind,
+    HeapPtr, ObjectType, RootHaver, RootVisitor, ValueKind,
     types::{Array, AtomicValueSlot, Instance, Map, Object, Value},
 };
 
@@ -376,6 +376,18 @@ struct ToStringWalkContinuation {
     results: Vec<String>,
 }
 
+impl RootHaver for ToStringWalkContinuation {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            root,
+            pending,
+            results: _,
+        } = self;
+        root.visit_roots(visitor);
+        pending.visit_roots(visitor);
+    }
+}
+
 impl Continuation for ToStringWalkContinuation {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         self.results.push(
@@ -405,27 +417,6 @@ impl Continuation for ToStringWalkContinuation {
             };
         }
         render_done(vm, self.root, &self.pending, &self.results)
-    }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        let mut roots = self.pending.clone();
-        if let Some(ptr) = self.root.as_object_ptr() {
-            roots.push(ptr);
-        }
-        roots
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        if let Some(ptr) = self.root.as_object_ptr() {
-            if let Some(&new_ptr) = forwarding.get(&ptr) {
-                self.root = Value::object(new_ptr);
-            }
-        }
-        for ptr in &mut self.pending {
-            if let Some(&new_ptr) = forwarding.get(ptr) {
-                *ptr = new_ptr;
-            }
-        }
     }
 }
 
@@ -517,6 +508,21 @@ impl JoinContinuation {
     }
 }
 
+impl RootHaver for JoinContinuation {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            elements,
+            separator: _,
+            index: _,
+            out: _,
+            pending,
+            results: _,
+        } = self;
+        elements.visit_roots(visitor);
+        pending.visit_roots(visitor);
+    }
+}
+
 impl Continuation for JoinContinuation {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         self.results.push(
@@ -525,25 +531,6 @@ impl Continuation for JoinContinuation {
                 .unwrap_or_default(),
         );
         self.step(vm)
-    }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        let mut roots = self.pending.clone();
-        roots.extend(self.elements.iter().filter_map(Value::as_object_ptr));
-        roots
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        for element in &mut self.elements {
-            if let Some(&new_ptr) = element.as_object_ptr().and_then(|ptr| forwarding.get(&ptr)) {
-                *element = Value::object(new_ptr);
-            }
-        }
-        for ptr in &mut self.pending {
-            if let Some(&new_ptr) = forwarding.get(ptr) {
-                *ptr = new_ptr;
-            }
-        }
     }
 }
 

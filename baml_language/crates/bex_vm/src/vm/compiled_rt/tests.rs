@@ -256,7 +256,8 @@ fn collect(vm: &mut BexVm) -> HashMap<HeapPtr, HeapPtr> {
         vm.heap
             .collect_garbage_generational(&roots, CollectionLevel::Major)
     };
-    vm.forward_roots(&forwarding);
+    let heap = Arc::clone(&vm.heap);
+    vm.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
     forwarding
 }
 

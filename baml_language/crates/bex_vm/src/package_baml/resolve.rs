@@ -1557,12 +1557,10 @@ mod tests {
             moved_rule, live_rule,
             "the collection moves the live witness"
         );
-        vm.forward_roots(&forwarding);
-        crate::package_load::DynDispatchRoot::new(
-            std::sync::Arc::clone(&vm.dynamic_dispatch),
-            std::sync::Arc::clone(&vm.heap),
-        )
-        .forward_roots(&forwarding);
+        let heap = std::sync::Arc::clone(&vm.heap);
+        vm.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
+        crate::package_load::DynDispatchRoot::new(std::sync::Arc::clone(&vm.dynamic_dispatch))
+            .forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
 
         // The live answer survived the collection at the rule's new address;
         // the answer naming the freed witness is gone.
@@ -1625,7 +1623,8 @@ mod tests {
         };
         let moved_root = forwarding[&live_root];
         assert_ne!(moved_root, live_root, "the collection moves the live root");
-        vm.forward_roots(&forwarding);
+        let heap = std::sync::Arc::clone(&vm.heap);
+        vm.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
 
         // The answer under the freed root is gone; the other one now lives
         // under the moved root, so asking there is a hit that stores nothing.

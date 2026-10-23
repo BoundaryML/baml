@@ -11,16 +11,13 @@
 //! heap/container access is only sound while holding [`HeapGuard`] (all mutators
 //! parked) or during proven single-threaded setup.
 
-use ::bex_vm_types::{HeapPtr, PermitProof, RootHaver};
+use ::bex_vm_types::{PermitProof, RootHaver, RootVisitor};
 use ::core::{
     cell::UnsafeCell,
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
-use ::std::{
-    collections::HashMap,
-    sync::{Arc, Weak},
-};
+use ::std::sync::{Arc, Weak};
 
 /// The lesser of [`u32::MAX`] and [`tokio::sync::Semaphore::MAX_PERMITS`] (depends on compilation target pointer width).
 const MAX_PERMITS: u32 = {
@@ -255,23 +252,27 @@ pub struct HeapGuard<'a> {
 }
 // we are a root haver in the sense that we have access to all root havers
 impl RootHaver for HeapGuard<'_> {
-    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
         for permit_holder in self.guard.iter() {
             if let Some(permit_holder) = permit_holder.upgrade() {
                 let ptr = permit_holder.get();
-                // SAFETY: permit holders must be parked during root forwarding
-                let root_haver = unsafe { &*ptr };
-                root_haver.collect_roots(roots);
+                // SAFETY: the guard holds every permit, so no active permit
+                // reaches the holder, and an inactive permit's `holder` must
+                // not be read while a guard exists (its contract). This is the
+                // only reference to the holder for the walk.
+                let root_haver = unsafe { &mut *ptr };
+                root_haver.visit_roots(visitor);
             }
         }
     }
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+
+    fn relocated(&mut self) {
         for permit_holder in self.guard.iter() {
             if let Some(permit_holder) = permit_holder.upgrade() {
                 let ptr = permit_holder.get();
-                // SAFETY: permit holders must be parked during root forwarding
+                // SAFETY: as in `visit_roots`.
                 let root_haver = unsafe { &mut *ptr };
-                root_haver.forward_roots(roots);
+                root_haver.relocated();
             }
         }
     }

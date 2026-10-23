@@ -4,11 +4,12 @@
 
 use std::{
     cell::{Cell, UnsafeCell},
-    collections::HashMap,
     ptr,
 };
 
-use bex_vm_types::{HeapPtr, Object, RealizedTy, StackIndex, Value, types::Function};
+use bex_vm_types::{
+    HeapPtr, Object, RealizedTy, RootHaver, RootVisitor, StackIndex, Value, types::Function,
+};
 
 use super::CompiledFn;
 use crate::{
@@ -101,41 +102,40 @@ impl FrameRecord {
         self.prev.get()
     }
 
-    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
-        roots.push(self.function.get());
-        if !self.package.get().as_ptr().is_null() {
-            roots.push(self.package.get());
-        }
-        for ty in self.own_type_args() {
-            ty.visit_heads(&mut |head| {
-                if head.is_resolved() {
-                    roots.push(head.ptr());
-                }
-            });
-        }
-    }
-
-    #[allow(unsafe_code)]
-    fn forward_roots(&self, roots: &HashMap<HeapPtr, HeapPtr>) {
-        let forward = |cell: &Cell<HeapPtr>| {
-            if let Some(&moved) = roots.get(&cell.get()) {
-                cell.set(moved);
-            }
+    /// Hand every heap pointer the record holds to a collection's visitor.
+    /// Through `&self`: a record is reached through the chain's raw links,
+    /// and its pointers sit in cells.
+    #[expect(
+        unsafe_code,
+        reason = "walk the type arguments while every body is parked"
+    )]
+    fn visit_roots(&self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            prev: _,
+            function,
+            package,
+            pc: _,
+            anchor: _,
+            base: _,
+            level: _,
+            entry: _,
+            scoped: _,
+            receipt: _,
+            type_args,
+        } = self;
+        let visit = |cell: &Cell<HeapPtr>, visitor: &mut dyn RootVisitor| {
+            let mut ptr = cell.get();
+            visitor.visit(&mut ptr);
+            cell.set(ptr);
         };
-        forward(&self.function);
-        forward(&self.package);
+        visit(function, visitor);
+        // Null for the compile-time heap, which names nothing to visit.
+        if !package.get().as_ptr().is_null() {
+            visit(package, visitor);
+        }
         // SAFETY: collection runs while every body is parked, so nothing
         // borrows the type arguments.
-        let type_args = unsafe { &mut *self.type_args.get() };
-        for ty in type_args.iter_mut() {
-            ty.visit_heads_mut(&mut |head| {
-                if head.is_resolved()
-                    && let Some(&moved) = roots.get(&head.ptr())
-                {
-                    head.forward_to(moved);
-                }
-            });
-        }
+        unsafe { &mut *type_args.get() }.visit_roots(visitor);
     }
 }
 
@@ -205,15 +205,11 @@ impl RecordChain {
         }
     }
 
-    pub(crate) fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
+    /// Hand every record's heap pointers, zombies included, to a collection's
+    /// visitor.
+    pub(crate) fn visit_roots(&self, visitor: &mut dyn RootVisitor) {
         for record in self.iter() {
-            record.collect_roots(roots);
-        }
-    }
-
-    pub(crate) fn forward_roots(&self, roots: &HashMap<HeapPtr, HeapPtr>) {
-        for record in self.iter() {
-            record.forward_roots(roots);
+            record.visit_roots(visitor);
         }
     }
 }

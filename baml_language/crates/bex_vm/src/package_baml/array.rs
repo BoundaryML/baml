@@ -1,7 +1,7 @@
-use std::{borrow::Cow, cmp::Ordering, collections::HashMap};
+use std::{borrow::Cow, cmp::Ordering};
 
 use bex_heap::TlabHolder;
-use bex_vm_types::{HeapPtr, Object, ObjectType, types::Value};
+use bex_vm_types::{HeapPtr, Object, ObjectType, RootHaver, RootVisitor, types::Value};
 use num_bigint::BigInt;
 
 use super::{ArrayView, BamlClassArray, Continuation, NativeCallResult, PackageBamlImpl};
@@ -54,30 +54,6 @@ fn baml_eq(vm: &BexVm, a: Value, b: Value) -> bool {
 // All callback-driven continuations capture an `f_ptr` (the callable) plus
 // some Values they're operating on. These helpers collect the heap roots and
 // apply forwarding without each continuation re-implementing the same loops.
-
-fn collect_value_roots(values: &[Value], roots: &mut Vec<HeapPtr>) {
-    for v in values {
-        if let Some(p) = v.as_object_ptr() {
-            roots.push(p);
-        }
-    }
-}
-
-fn forward_values(values: &mut [Value], forwarding: &HashMap<HeapPtr, HeapPtr>) {
-    for v in values {
-        if let Some(ptr) = v.as_object_ptr() {
-            if let Some(&new) = forwarding.get(&ptr) {
-                *v = Value::object(new);
-            }
-        }
-    }
-}
-
-fn forward_ptr(ptr: &mut HeapPtr, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-    if let Some(&new) = forwarding.get(ptr) {
-        *ptr = new;
-    }
-}
 
 /// The result element type `U` for the `<U, E>` array transforms (`map`,
 /// `flat_map`), read at dispatch time before any nested callback overwrites the
@@ -372,34 +348,6 @@ fn write_back_array_result(
     }
 }
 
-// Boilerplate macro for the standard `Continuation` GC impls. Captures named
-// fields by kind:
-//   `f_ptr: <name>`         — a single `HeapPtr` field (optional).
-//   `values: [<name>, ...]` — one or more `Vec<Value>` / `[Value]` fields.
-macro_rules! gc_impl_array {
-    (f_ptr: $f_ptr:ident, values: [$($values:ident),+ $(,)?] $(,)?) => {
-        fn gc_roots(&self) -> Vec<HeapPtr> {
-            let mut roots = vec![self.$f_ptr];
-            $(collect_value_roots(&self.$values, &mut roots);)+
-            roots
-        }
-        fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-            forward_ptr(&mut self.$f_ptr, forwarding);
-            $(forward_values(&mut self.$values, forwarding);)+
-        }
-    };
-    (values: [$($values:ident),+ $(,)?] $(,)?) => {
-        fn gc_roots(&self) -> Vec<HeapPtr> {
-            let mut roots = Vec::new();
-            $(collect_value_roots(&self.$values, &mut roots);)+
-            roots
-        }
-        fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-            $(forward_values(&mut self.$values, forwarding);)+
-        }
-    };
-}
-
 // ── map ───────────────────────────────────────────────────────────────────────
 
 /// Continuation for `Array.map`. Accumulates the mapped results one element at
@@ -413,6 +361,22 @@ struct MapContinuation {
     /// Result element type — the closure's return type `U` from
     /// `map<U, E>(self, f: (T) -> U) -> U[]`, captured at dispatch time.
     element_ty: bex_vm_types::RealizedTy,
+}
+
+impl RootHaver for MapContinuation {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            f_ptr,
+            array,
+            idx: _,
+            results,
+            element_ty,
+        } = self;
+        f_ptr.visit_roots(visitor);
+        array.visit_roots(visitor);
+        results.visit_roots(visitor);
+        element_ty.visit_roots(visitor);
+    }
 }
 
 impl Continuation for MapContinuation {
@@ -432,7 +396,6 @@ impl Continuation for MapContinuation {
             continuation: self,
         }
     }
-    gc_impl_array!(f_ptr: f_ptr, values: [array, results]);
 }
 
 // ── filter ────────────────────────────────────────────────────────────────────
@@ -447,6 +410,22 @@ struct FilterContinuation {
     /// The receiver array's element type `T`, captured at dispatch — `filter`
     /// preserves it (`T[] -> T[]`).
     element_ty: bex_vm_types::RealizedTy,
+}
+
+impl RootHaver for FilterContinuation {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            f_ptr,
+            array,
+            idx: _,
+            results,
+            element_ty,
+        } = self;
+        f_ptr.visit_roots(visitor);
+        array.visit_roots(visitor);
+        results.visit_roots(visitor);
+        element_ty.visit_roots(visitor);
+    }
 }
 
 impl Continuation for FilterContinuation {
@@ -473,7 +452,6 @@ impl Continuation for FilterContinuation {
             continuation: self,
         }
     }
-    gc_impl_array!(f_ptr: f_ptr, values: [array, results]);
 }
 
 // ── some / every ──────────────────────────────────────────────────────────────
@@ -486,6 +464,18 @@ struct SomeContinuation {
     f_ptr: HeapPtr,
     array: Vec<Value>,
     idx: usize,
+}
+
+impl RootHaver for SomeContinuation {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            f_ptr,
+            array,
+            idx: _,
+        } = self;
+        f_ptr.visit_roots(visitor);
+        array.visit_roots(visitor);
+    }
 }
 
 impl Continuation for SomeContinuation {
@@ -509,13 +499,24 @@ impl Continuation for SomeContinuation {
             continuation: self,
         }
     }
-    gc_impl_array!(f_ptr: f_ptr, values: [array]);
 }
 
 struct EveryContinuation {
     f_ptr: HeapPtr,
     array: Vec<Value>,
     idx: usize,
+}
+
+impl RootHaver for EveryContinuation {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            f_ptr,
+            array,
+            idx: _,
+        } = self;
+        f_ptr.visit_roots(visitor);
+        array.visit_roots(visitor);
+    }
 }
 
 impl Continuation for EveryContinuation {
@@ -539,7 +540,6 @@ impl Continuation for EveryContinuation {
             continuation: self,
         }
     }
-    gc_impl_array!(f_ptr: f_ptr, values: [array]);
 }
 
 // ── find / find_index ─────────────────────────────────────────────────────────
@@ -550,6 +550,19 @@ struct FindContinuation {
     idx: usize,
     /// `true` to return the matching element, `false` to return its index.
     return_value: bool,
+}
+
+impl RootHaver for FindContinuation {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            f_ptr,
+            array,
+            idx: _,
+            return_value: _,
+        } = self;
+        f_ptr.visit_roots(visitor);
+        array.visit_roots(visitor);
+    }
 }
 
 impl Continuation for FindContinuation {
@@ -579,7 +592,6 @@ impl Continuation for FindContinuation {
             continuation: self,
         }
     }
-    gc_impl_array!(f_ptr: f_ptr, values: [array]);
 }
 
 // ── find_last / find_last_index ───────────────────────────────────────────────
@@ -592,6 +604,19 @@ struct FindLastContinuation {
     idx: usize,
     /// `true` to return the matching element, `false` to return its index.
     return_value: bool,
+}
+
+impl RootHaver for FindLastContinuation {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            f_ptr,
+            array,
+            idx: _,
+            return_value: _,
+        } = self;
+        f_ptr.visit_roots(visitor);
+        array.visit_roots(visitor);
+    }
 }
 
 impl Continuation for FindLastContinuation {
@@ -621,7 +646,6 @@ impl Continuation for FindLastContinuation {
             continuation: self,
         }
     }
-    gc_impl_array!(f_ptr: f_ptr, values: [array]);
 }
 
 // ── reduce ────────────────────────────────────────────────────────────────────
@@ -632,6 +656,18 @@ struct ReduceContinuation {
     /// Index of the element we just paired with the accumulator and yielded
     /// to the reducer. The reducer's return value will be the new accumulator.
     idx: usize,
+}
+
+impl RootHaver for ReduceContinuation {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            f_ptr,
+            array,
+            idx: _,
+        } = self;
+        f_ptr.visit_roots(visitor);
+        array.visit_roots(visitor);
+    }
 }
 
 impl Continuation for ReduceContinuation {
@@ -649,7 +685,6 @@ impl Continuation for ReduceContinuation {
             continuation: self,
         }
     }
-    gc_impl_array!(f_ptr: f_ptr, values: [array]);
 }
 
 // ── flat_map ──────────────────────────────────────────────────────────────────
@@ -663,6 +698,22 @@ struct FlatMapContinuation {
     /// Result element type — the closure's element return type `U` from
     /// `flat_map<U, E>(self, f: (T) -> U[]) -> U[]`, captured at dispatch time.
     element_ty: bex_vm_types::RealizedTy,
+}
+
+impl RootHaver for FlatMapContinuation {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            f_ptr,
+            array,
+            idx: _,
+            results,
+            element_ty,
+        } = self;
+        f_ptr.visit_roots(visitor);
+        array.visit_roots(visitor);
+        results.visit_roots(visitor);
+        element_ty.visit_roots(visitor);
+    }
 }
 
 impl Continuation for FlatMapContinuation {
@@ -688,7 +739,6 @@ impl Continuation for FlatMapContinuation {
             continuation: self,
         }
     }
-    gc_impl_array!(f_ptr: f_ptr, values: [array, results]);
 }
 
 // ─── Array.sort_by continuation ─────────────────────────────────────────────
@@ -768,6 +818,27 @@ impl SortByContinuation {
     }
 }
 
+impl RootHaver for SortByContinuation {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            receiver,
+            f_ptr,
+            source,
+            merged,
+            width: _,
+            run_start: _,
+            left: _,
+            middle: _,
+            right: _,
+            run_end: _,
+        } = self;
+        receiver.visit_roots(visitor);
+        f_ptr.visit_roots(visitor);
+        source.visit_roots(visitor);
+        merged.visit_roots(visitor);
+    }
+}
+
 impl Continuation for SortByContinuation {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         // The comparator is typed `-> baml.ops.Ordering throws never`, so a
@@ -789,21 +860,6 @@ impl Continuation for SortByContinuation {
             self.left += 1;
         }
         self.advance(vm)
-    }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        let mut roots = vec![self.f_ptr];
-        collect_value_roots(std::slice::from_ref(&self.receiver), &mut roots);
-        collect_value_roots(&self.source, &mut roots);
-        collect_value_roots(&self.merged, &mut roots);
-        roots
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        forward_ptr(&mut self.f_ptr, forwarding);
-        forward_values(std::slice::from_mut(&mut self.receiver), forwarding);
-        forward_values(&mut self.source, forwarding);
-        forward_values(&mut self.merged, forwarding);
     }
 }
 

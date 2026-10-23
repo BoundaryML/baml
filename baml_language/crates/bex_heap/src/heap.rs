@@ -300,6 +300,20 @@ unsafe impl Sync for BexHeap {}
 // so heap-mutation sites in upstream crates (e.g. `Future::set_ready` in
 // `bex_vm_types`, which can't name `BexHeap` directly because of dep
 // direction) can fire the barrier through a small trait.
+/// A pointer the collection left in place is live iff it was never a candidate:
+/// Gen2 (a minor collection never moves or frees Gen2; a major moves every
+/// survivor to a fresh buffer, so no stale address lands there) or the
+/// compile-time region (never collected). Everything else absent from the
+/// forwarding map was in a swept generation and is dead.
+impl bex_vm_types::Survival for BexHeap {
+    fn survived(&self, ptr: HeapPtr) -> bool {
+        matches!(
+            self.generation_of(ptr),
+            Generation::Gen2 | Generation::CompileTime
+        )
+    }
+}
+
 impl WriteBarrier for BexHeap {
     #[inline]
     fn write_barrier(&self, container: HeapPtr, value: Value) {

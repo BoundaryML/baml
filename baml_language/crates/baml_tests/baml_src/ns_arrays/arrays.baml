@@ -384,7 +384,7 @@ test "array_map_callback_in_catch_base_keeps_parameter_scope" {
 }
 
 // array.map over string[] — exercises heap-object paths in MapContinuation
-// (gc_roots, apply_forwarding) that int[] tests don't cover.
+// (its root walk) that int[] tests don't cover.
 test "array_map_string_elements" {
     let items: string[] = ["a", "b", "c"];
     assert.equal(items.map((s: string) -> string { s + "!" }), ["a!", "b!", "c!"])

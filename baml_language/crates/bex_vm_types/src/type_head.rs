@@ -333,6 +333,21 @@ impl TypeHead {
         self.tag
     }
 
+    /// Hand the declaration pointer to a collection's visitor, if the head is
+    /// resolved. An unresolved head names nothing on the heap yet.
+    pub fn visit_root(&mut self, visitor: &mut dyn crate::RootVisitor) {
+        if self.is_resolved() {
+            visitor.visit(&mut self.ptr);
+        }
+    }
+
+    /// [`Self::visit_root`] for a head held weakly: the declaration is
+    /// repointed if it moved but not kept alive. Returns whether it is still
+    /// live; an unresolved head is vacuously so.
+    pub fn visit_root_weak(&mut self, visitor: &mut dyn crate::RootVisitor) -> bool {
+        !self.is_resolved() || visitor.visit_weak(&mut self.ptr)
+    }
+
     /// Repoint this head after the collector has moved its declaration.
     ///
     /// Identity is untouched: a moved head remains equal to, and hashes and

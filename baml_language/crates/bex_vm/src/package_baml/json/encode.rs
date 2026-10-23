@@ -29,11 +29,9 @@
 //! not finite, wherever it is. A `json` value is in memory and holds one as
 //! it is, so `from` keeps it.
 
-use std::collections::HashMap;
-
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    HeapPtr, MapData, Object, RealizedTy, TypeHead, Value, ValueKind,
+    HeapPtr, MapData, Object, RealizedTy, RootHaver, RootVisitor, TypeHead, Value, ValueKind,
     types::{Array, Map},
 };
 use rustc_hash::FxHashMap;
@@ -389,32 +387,25 @@ impl ToJsonWalkContinuation {
     }
 }
 
+impl RootHaver for ToJsonWalkContinuation {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            root,
+            options: _,
+            finish: _,
+            pending,
+            results,
+        } = self;
+        root.visit_roots(visitor);
+        pending.visit_roots(visitor);
+        results.visit_roots(visitor);
+    }
+}
+
 impl Continuation for ToJsonWalkContinuation {
     fn call(mut self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         self.results.push(value);
         self.next(vm)
-    }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        let mut roots = self.pending.clone();
-        roots.extend(self.root.as_object_ptr());
-        roots.extend(self.results.iter().filter_map(Value::as_object_ptr));
-        roots
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        let forward = |value: &mut Value| {
-            if let Some(moved) = value.as_object_ptr().and_then(|ptr| forwarding.get(&ptr)) {
-                *value = Value::object(*moved);
-            }
-        };
-        forward(&mut self.root);
-        self.results.iter_mut().for_each(forward);
-        for ptr in &mut self.pending {
-            if let Some(&moved) = forwarding.get(ptr) {
-                *ptr = moved;
-            }
-        }
     }
 }
 

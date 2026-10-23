@@ -2,23 +2,186 @@ use ::std::{collections::HashMap, marker::PhantomData};
 
 use crate::{HeapPtr, Value};
 
-/// A trait for types that have heap roots.
+/// What a collection does at each root a [`RootHaver`] exposes: record it
+/// (the root scan) or repoint it (forwarding after objects moved). One walk
+/// serves both, so a holder names each root exactly once.
+pub trait RootVisitor {
+    /// A strong root: it keeps its object alive and is repointed when the
+    /// object moves.
+    fn visit(&mut self, root: &mut HeapPtr);
+
+    /// A weak reference: repointed when its object moves, keeping nothing
+    /// alive. Returns whether the object is still live after this collection;
+    /// always `true` while roots are being collected, since nothing has died
+    /// yet.
+    fn visit_weak(&mut self, root: &mut HeapPtr) -> bool;
+}
+
+/// Whether a pointer the collection left in place still names a live object.
 ///
-/// Allows the GC to find all roots and update them when the GC moves objects.
+/// A minor collection identity-maps every object it does not visit, so a
+/// pointer absent from the forwarding map is either untouched-and-live (an old
+/// generation, the compile-time region) or swept. Only the heap can tell the
+/// two apart, which is why [`ForwardRoots`] asks it rather than treating
+/// absence as death.
+pub trait Survival {
+    fn survived(&self, ptr: HeapPtr) -> bool;
+}
+
+/// No generation was swept: every pointer left in place is live. For tests
+/// and for forwarding passes that follow no collection.
+impl Survival for () {
+    fn survived(&self, _ptr: HeapPtr) -> bool {
+        true
+    }
+}
+
+/// The root scan: records every strong root, touches nothing.
+pub struct CollectRoots<'a>(pub &'a mut Vec<HeapPtr>);
+
+impl RootVisitor for CollectRoots<'_> {
+    fn visit(&mut self, root: &mut HeapPtr) {
+        self.0.push(*root);
+    }
+
+    fn visit_weak(&mut self, _root: &mut HeapPtr) -> bool {
+        true
+    }
+}
+
+/// Forwarding after a collection: repoints every root the collection moved
+/// and answers liveness for weak references through the heap.
+pub struct ForwardRoots<'a> {
+    forwarding: &'a HashMap<HeapPtr, HeapPtr>,
+    survival: &'a dyn Survival,
+}
+
+impl<'a> ForwardRoots<'a> {
+    pub fn new(forwarding: &'a HashMap<HeapPtr, HeapPtr>, survival: &'a dyn Survival) -> Self {
+        Self {
+            forwarding,
+            survival,
+        }
+    }
+}
+
+impl RootVisitor for ForwardRoots<'_> {
+    fn visit(&mut self, root: &mut HeapPtr) {
+        if let Some(&moved) = self.forwarding.get(root) {
+            *root = moved;
+        }
+    }
+
+    fn visit_weak(&mut self, root: &mut HeapPtr) -> bool {
+        if let Some(&moved) = self.forwarding.get(root) {
+            *root = moved;
+            true
+        } else {
+            self.survival.survived(*root)
+        }
+    }
+}
+
+/// A holder of heap roots: anything that keeps heap pointers outside the heap
+/// itself and must therefore be scanned and repointed by the collector.
 ///
 /// `Send` is required because instances are tracked across tokio tasks via the heap
 /// permit manager. `Sync` is intentionally not required — the permit/mutex enforces
 /// that at most one thread accesses the inner value at a time.
 pub trait RootHaver: Send {
-    /// Collect all heap roots in this object.
-    fn collect_roots(&self, roots: &mut Vec<HeapPtr>);
-    /// Forward the heap pointers of all roots in this object.
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>);
+    /// Hand every heap pointer this value holds to `visitor`, once each.
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor);
+
+    /// Called once after a collection relocated objects and every root was
+    /// forwarded. For state derived from the heap's layout rather than from
+    /// a pointer (a TLAB's cached allocation cursor); most holders have none.
+    fn relocated(&mut self) {}
+
+    /// Record every strong root.
+    fn collect_roots(&mut self, roots: &mut Vec<HeapPtr>) {
+        self.visit_roots(&mut CollectRoots(roots));
+    }
+
+    /// Repoint every root after a collection, then [`Self::relocated`].
+    fn forward_roots(&mut self, forward: &mut ForwardRoots<'_>) {
+        self.visit_roots(forward);
+        self.relocated();
+    }
 }
 
 impl RootHaver for () {
-    fn collect_roots(&self, _roots: &mut Vec<HeapPtr>) {}
-    fn forward_roots(&mut self, _roots: &HashMap<HeapPtr, HeapPtr>) {}
+    fn visit_roots(&mut self, _visitor: &mut dyn RootVisitor) {}
+}
+
+impl RootHaver for HeapPtr {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        visitor.visit(self);
+    }
+}
+
+impl RootHaver for Value {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        if let Some(ptr) = self.as_object_ptr() {
+            let mut moved = ptr;
+            visitor.visit(&mut moved);
+            if moved != ptr {
+                *self = Value::object(moved);
+            }
+        }
+    }
+}
+
+impl RootHaver for crate::TypeHead {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        self.visit_root(visitor);
+    }
+}
+
+impl RootHaver for crate::RealizedTy {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        self.visit_heads_mut(&mut |head: &mut crate::TypeHead| head.visit_roots(visitor));
+    }
+}
+
+impl RootHaver for crate::types::TypeValue {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        self.ty.visit_roots(visitor);
+    }
+}
+
+impl<T: ?Sized + RootHaver> RootHaver for Box<T> {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        (**self).visit_roots(visitor);
+    }
+}
+
+impl<T: RootHaver> RootHaver for [T] {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        for item in self {
+            item.visit_roots(visitor);
+        }
+    }
+}
+
+impl<T: RootHaver> RootHaver for Vec<T> {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        self.as_mut_slice().visit_roots(visitor);
+    }
+}
+
+impl<T: RootHaver> RootHaver for Option<T> {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        if let Some(item) = self {
+            item.visit_roots(visitor);
+        }
+    }
+}
+
+impl<A: RootHaver, B: RootHaver> RootHaver for (A, B) {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        self.0.visit_roots(visitor);
+        self.1.visit_roots(visitor);
+    }
 }
 
 /// Generational write-barrier hook for heap mutations that touch a [`Value`].

@@ -26,12 +26,12 @@
 
 #![allow(clippy::ptr_arg)]
 
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use baml_type::MediaKind;
 use bex_heap::TlabHolder;
 use bex_vm_types::{
-    BexStr, HeapPtr, Object, RealizedTy, TypeHead, Value, ValueKind,
+    BexStr, HeapPtr, Object, RealizedTy, RootHaver, RootVisitor, TypeHead, Value, ValueKind,
     types::{Array, Instance},
 };
 use indexmap::IndexMap;
@@ -235,114 +235,6 @@ impl Container {
                 ..
             } => vm.alloc_map(key, value, decoded),
         })
-    }
-
-    /// Every value and declaration this container holds across a yield.
-    fn roots(&self, roots: &mut Vec<HeapPtr>) {
-        roots.push(self.source());
-        let mut value = |value: &Value| roots.extend(value.as_object_ptr());
-        match self {
-            Self::Class {
-                fields, decoded, ..
-            } => fields
-                .iter()
-                .map(|field| match field {
-                    Field::Read(json) | Field::Held(json) => json,
-                })
-                .chain(decoded)
-                .for_each(&mut value),
-            Self::List {
-                elements, decoded, ..
-            } => elements.iter().chain(decoded).for_each(&mut value),
-            Self::Map {
-                entries, decoded, ..
-            } => entries
-                .iter()
-                .map(|(_, json)| json)
-                .chain(decoded.values())
-                .for_each(&mut value),
-        }
-        let mut ty = |ty: &RealizedTy| {
-            ty.visit_heads(&mut |head| {
-                if head.is_resolved() {
-                    roots.push(head.ptr());
-                }
-            });
-        };
-        match self {
-            Self::Class { plan, .. } => plan.roots(roots),
-            Self::List { element, .. } => ty(element),
-            Self::Map { key, value, .. } => {
-                ty(key);
-                ty(value);
-            }
-        }
-    }
-
-    /// Repoint everything [`Self::roots`] reported after a collection.
-    fn forward(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        let forward_value = |value: &mut Value| {
-            if let Some(moved) = value.as_object_ptr().and_then(|ptr| forwarding.get(&ptr)) {
-                *value = Value::object(*moved);
-            }
-        };
-        let forward_ty = |ty: &mut RealizedTy| {
-            ty.visit_heads_mut(&mut |head| {
-                if head.is_resolved()
-                    && let Some(moved) = forwarding.get(&head.ptr())
-                {
-                    head.forward_to(*moved);
-                }
-            });
-        };
-        match self {
-            Self::Class { source, .. } | Self::List { source, .. } | Self::Map { source, .. } => {
-                if let Some(moved) = forwarding.get(source) {
-                    *source = *moved;
-                }
-            }
-        }
-        match self {
-            Self::Class {
-                plan,
-                fields,
-                decoded,
-                ..
-            } => {
-                Arc::make_mut(plan).forward(forwarding);
-                fields
-                    .iter_mut()
-                    .map(|field| match field {
-                        Field::Read(json) | Field::Held(json) => json,
-                    })
-                    .chain(decoded)
-                    .for_each(forward_value);
-            }
-            Self::List {
-                elements,
-                element,
-                decoded,
-                ..
-            } => {
-                forward_ty(element);
-                elements.iter_mut().chain(decoded).for_each(forward_value);
-            }
-            Self::Map {
-                entries,
-                key,
-                value,
-                decoded,
-                ..
-            } => {
-                forward_ty(key);
-                forward_ty(value);
-                entries
-                    .iter_mut()
-                    .map(|(_, json)| json)
-                    .chain(decoded.values_mut())
-                    .for_each(forward_value);
-            }
-        }
     }
 }
 
@@ -559,19 +451,6 @@ impl Lookups {
         low
     }
 
-    fn roots(&self, roots: &mut Vec<HeapPtr>) {
-        for (from_json, frame) in self.provided.values().flatten() {
-            roots.push(*from_json);
-            for ty in frame {
-                ty.visit_heads(&mut |head| {
-                    if head.is_resolved() {
-                        roots.push(head.ptr());
-                    }
-                });
-            }
-        }
-    }
-
     /// Forget everything: after a collection the pointers may be stale.
     fn clear(&mut self) {
         self.plans.clear();
@@ -747,29 +626,81 @@ impl Decoder {
     }
 }
 
+impl RootHaver for Decoder {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            open,
+            inside,
+            lookups,
+        } = self;
+        // The lookups are a cache of what the call has resolved: forgotten at
+        // every collection rather than walked, and filled again as the walk
+        // goes on. Dropped first, so the plans the open containers share with
+        // it are theirs alone when they are repointed.
+        lookups.clear();
+        open.visit_roots(visitor);
+        // Keyed by the sources, so rebuilt from them.
+        *inside = OpenSet::default();
+        for container in open.iter() {
+            inside.insert(container.source());
+        }
+    }
+}
+
+/// Every value and declaration a container holds across a yield.
+impl RootHaver for Container {
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        match self {
+            Self::Class {
+                source,
+                plan,
+                fields,
+                decoded,
+            } => {
+                source.visit_roots(visitor);
+                Arc::make_mut(plan).visit_roots(visitor);
+                for field in fields.iter_mut() {
+                    match field {
+                        Field::Read(json) | Field::Held(json) => json.visit_roots(visitor),
+                    }
+                }
+                decoded.visit_roots(visitor);
+            }
+            Self::List {
+                source,
+                elements,
+                element,
+                decoded,
+            } => {
+                source.visit_roots(visitor);
+                elements.visit_roots(visitor);
+                element.visit_roots(visitor);
+                decoded.visit_roots(visitor);
+            }
+            Self::Map {
+                source,
+                entries,
+                key,
+                value,
+                decoded,
+            } => {
+                source.visit_roots(visitor);
+                for (_, json) in entries {
+                    json.visit_roots(visitor);
+                }
+                key.visit_roots(visitor);
+                value.visit_roots(visitor);
+                for decoded in decoded.values_mut() {
+                    decoded.visit_roots(visitor);
+                }
+            }
+        }
+    }
+}
+
 impl Continuation for Decoder {
     fn call(self: Box<Self>, vm: &mut BexVm, value: Value) -> NativeCallResult {
         self.resume(vm, value)
-    }
-
-    fn gc_roots(&self) -> Vec<HeapPtr> {
-        let mut roots = Vec::new();
-        for container in &self.open {
-            container.roots(&mut roots);
-        }
-        self.lookups.roots(&mut roots);
-        roots
-    }
-
-    fn apply_forwarding(&mut self, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-        for container in &mut self.open {
-            container.forward(forwarding);
-        }
-        self.inside = OpenSet::default();
-        for container in &self.open {
-            self.inside.insert(container.source());
-        }
-        self.lookups.clear();
     }
 }
 

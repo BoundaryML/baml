@@ -11,7 +11,6 @@
 )]
 
 use std::{
-    collections::HashMap,
     mem::size_of,
     sync::{
         Arc,
@@ -1602,32 +1601,65 @@ impl TelemetryState {
     pub(crate) fn span_records(&self) -> &[VmSpanRecord] {
         &self.span_records
     }
+}
 
-    pub(crate) fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
-        for key in self.call_paths.keys() {
-            roots.extend(key.visible_caller);
-            roots.push(key.callee);
+impl ::bex_vm_types::RootHaver for TelemetryState {
+    fn visit_roots(&mut self, visitor: &mut dyn ::bex_vm_types::RootVisitor) {
+        let Self {
+            context: _,
+            #[cfg(all(not(test), not(target_arch = "wasm32")))]
+                context_snapshot: _,
+            #[cfg(all(not(test), not(target_arch = "wasm32")))]
+                pending_context_snapshot: _,
+            // Holds heap addresses only during a capture, which never spans a
+            // collection.
+            capture_scratch: _,
+            #[cfg(target_arch = "wasm32")]
+                snapshots: _,
+            auto_level: _,
+            thread: _,
+            call_paths,
+            call_path_keys,
+            last_call_path,
+            policies: _,
+            clock: _,
+            #[cfg(not(target_arch = "wasm32"))]
+                runtime: _,
+            errors: _,
+            usage: _,
+            #[cfg(test)]
+                timing_records: _,
+            #[cfg(test)]
+                span_records: _,
+            #[cfg(test)]
+                span_contexts: _,
+        } = self;
+        // The pointers are part of the map's keys, so it is rebuilt through
+        // the visitor.
+        let old_paths = std::mem::take(call_paths);
+        call_path_keys.clear();
+        for (mut key, id) in old_paths {
+            key.visit_roots(visitor);
+            call_paths.insert(key, id);
+            call_path_keys.insert(id, key);
+        }
+        for (key, _) in last_call_path.iter_mut().flatten() {
+            key.visit_roots(visitor);
         }
     }
+}
 
-    pub(crate) fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
-        let old_paths = std::mem::take(&mut self.call_paths);
-        self.call_path_keys.clear();
-        for (mut key, id) in old_paths {
-            if let Some(caller) = key.visible_caller {
-                key.visible_caller = Some(roots.get(&caller).copied().unwrap_or(caller));
-            }
-            key.callee = roots.get(&key.callee).copied().unwrap_or(key.callee);
-            self.call_paths.insert(key, id);
-            self.call_path_keys.insert(id, key);
-        }
-        self.last_call_path[0] = self.last_call_path[0].map(|(mut key, id)| {
-            if let Some(caller) = key.visible_caller {
-                key.visible_caller = Some(roots.get(&caller).copied().unwrap_or(caller));
-            }
-            key.callee = roots.get(&key.callee).copied().unwrap_or(key.callee);
-            (key, id)
-        });
+impl ::bex_vm_types::RootHaver for CallPathKey {
+    fn visit_roots(&mut self, visitor: &mut dyn ::bex_vm_types::RootVisitor) {
+        let Self {
+            parent: _,
+            visible_caller,
+            caller_pc: _,
+            callee,
+            edge: _,
+        } = self;
+        visible_caller.visit_roots(visitor);
+        callee.visit_roots(visitor);
     }
 }
 
@@ -1729,6 +1761,7 @@ fn add_usage(into: &mut btel_records::ModelUsage, added: &btel_records::ModelUsa
 
 #[cfg(test)]
 mod tests {
+    use bex_vm_types::RootHaver;
     fn test_clock() -> std::sync::Arc<btel_clock::ClockEpoch> {
         btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run()
     }
@@ -2133,7 +2166,7 @@ mod tests {
             vm.heap
                 .collect_garbage_generational(&roots, bex_heap::CollectionLevel::Major)
         };
-        state.forward_roots(&forwarding);
+        state.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &()));
         assert_eq!(definitions(&state), before);
         let moved = CallPathKey {
             visible_caller: Some(forwarding[&caller]),
@@ -2159,7 +2192,7 @@ mod tests {
             vm.heap
                 .collect_garbage_generational(&roots, bex_heap::CollectionLevel::Major)
         };
-        state.forward_roots(&forwarding);
+        state.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &()));
         assert_eq!(stats.live_count, 0);
         assert!(vm.heap.function_metadata(vm.proof(), caller_id).is_none());
         assert!(vm.heap.function_metadata(vm.proof(), callee_id).is_none());
@@ -2206,7 +2239,7 @@ mod tests {
             vm.heap
                 .collect_garbage_generational(&roots, bex_heap::CollectionLevel::Major)
         };
-        state.forward_roots(&forwarding);
+        state.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &()));
         roots.clear();
         state.collect_roots(&mut roots);
         assert!(roots.is_empty());

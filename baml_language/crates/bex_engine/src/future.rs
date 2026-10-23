@@ -44,7 +44,7 @@ use ::bex_heap::{
     HeapPermit, HeapPermitManager, InactiveHeapPermit, PermitProof, Tlab, TlabHolder,
 };
 use ::bex_vm_types::{
-    FutureRead, HeapPtr, Object, ObjectType, RootHaver, SessionEvalLease, Value,
+    FutureRead, HeapPtr, Object, ObjectType, RootHaver, RootVisitor, SessionEvalLease, Value,
     errors::StackFrame,
     types::{FutureId, FutureInternalError, FutureType},
 };
@@ -608,21 +608,24 @@ impl FutureManagerInner {
     }
 }
 impl RootHaver for FutureManagerInner {
-    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
-        // blocking is fine since we should only ever call this while holding exclusive heap access
-        for future in self.active_futures.values() {
-            future.collect_roots(roots);
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            tlab: _,
+            next_future_id: _,
+            active_futures,
+            bex_work: _,
+        } = self;
+        for work in active_futures.values_mut() {
+            work.visit_roots(visitor);
         }
     }
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
+
+    fn relocated(&mut self) {
         // Drop the cached TLAB cursor — GC has swapped semispaces and our
         // `alloc_ptr`/`alloc_limit` now point into a region the heap will
         // hand out as a fresh chunk. The next `alloc_future` must refill
-        // from the post-GC cursor. Mirrors `BexVm::forward_roots`.
+        // from the post-GC cursor. Mirrors `BexVm::relocated`.
         self.tlab.invalidate();
-        for future in self.active_futures.values_mut() {
-            future.forward_roots(roots);
-        }
     }
 }
 impl TlabHolder for FutureManagerInner {
@@ -691,13 +694,13 @@ impl FutureWork {
     }
 }
 impl RootHaver for FutureWork {
-    fn collect_roots(&self, roots: &mut Vec<HeapPtr>) {
-        roots.push(self.future);
-    }
-    fn forward_roots(&mut self, roots: &HashMap<HeapPtr, HeapPtr>) {
-        if let Some(new_result) = roots.get(&self.future) {
-            self.future = *new_result;
-        }
+    fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            work_guard: _,
+            future,
+            origin: _,
+        } = self;
+        future.visit_roots(visitor);
     }
 }
 

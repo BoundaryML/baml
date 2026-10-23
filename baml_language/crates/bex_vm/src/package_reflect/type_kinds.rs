@@ -2423,16 +2423,13 @@ class Fresh {}
         // every survivor, so the rule appears in the forwarding map iff the
         // class kept it alive.
         let heap = Arc::clone(&vm.heap);
-        let mut index = crate::package_load::DynDispatchRoot::new(
-            Arc::clone(&vm.dynamic_dispatch),
-            Arc::clone(&heap),
-        );
+        let mut index = crate::package_load::DynDispatchRoot::new(Arc::clone(&vm.dynamic_dispatch));
         let (_, _, forwarding) = unsafe {
             heap.collect_garbage_generational(&[class.ptr()], bex_heap::CollectionLevel::Major)
         };
         assert!(forwarding.contains_key(&rule), "the class owns its rule");
-        vm.forward_roots(&forwarding);
-        index.forward_roots(&forwarding);
+        vm.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
+        index.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
         assert_eq!(index.tables.rule_count(), 1);
         let moved = TypeHead::new(forwarding[&class.ptr()], class.tag());
         assert!(
@@ -2448,7 +2445,7 @@ class Fresh {}
         drop(vm);
         let (_, _, forwarding) =
             unsafe { heap.collect_garbage_generational(&[], bex_heap::CollectionLevel::Major) };
-        index.forward_roots(&forwarding);
+        index.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
         assert_eq!(index.tables.rule_count(), 0);
     }
 }
