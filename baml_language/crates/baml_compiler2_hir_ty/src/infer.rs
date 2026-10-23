@@ -10436,7 +10436,13 @@ impl<'db> InferenceContext<'db> {
             }
             let head = this.expand_alias_ty(ty);
             let InferTy::Union(members) = head.kind() else {
-                return head;
+                // Only union edges and null need exposing here. A surviving
+                // class/primitive alias keeps its spelling after null removal.
+                return if matches!(head.kind(), InferTy::Null) {
+                    head
+                } else {
+                    ty.clone()
+                };
             };
             // Invalid alias cycles are diagnosed at their declarations. Keep
             // recovery bounded; valid recursion through a container stops below.
@@ -10448,7 +10454,20 @@ impl<'db> InferenceContext<'db> {
                 .map(|member| expand(this, member, visiting, memo))
                 .collect();
             visiting.remove(&head);
-            let expanded = syntactic_union(&members);
+            let flat = syntactic_union(&members);
+            let expanded = if let InferTy::Union(members) = flat.kind() {
+                // Alias-equivalent leaves are repeats too, but the first
+                // survivor keeps its written name rather than its unfolded head.
+                let mut heads = FxHashSet::default();
+                let distinct: Vec<Ty> = members
+                    .iter()
+                    .filter(|member| heads.insert(this.expand_alias_ty(member)))
+                    .cloned()
+                    .collect();
+                syntactic_union(&distinct)
+            } else {
+                flat
+            };
             memo.insert(ty.clone(), expanded.clone());
             expanded
         }

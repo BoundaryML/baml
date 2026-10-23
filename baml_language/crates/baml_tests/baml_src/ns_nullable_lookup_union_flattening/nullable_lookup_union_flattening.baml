@@ -88,7 +88,9 @@ test "aliased_nullable_lookups" {
     assert.equal(alias_guard_text(Group { text: "hi" }), "hi");
     assert.equal(alias_guard_text(null), "");
     assert.equal(alias_coalesce(Group { text: "hi" }).text, "hi");
-    assert.equal(alias_coalesce(null).text, "fallback")
+    assert.equal(alias_coalesce(null).text, "fallback");
+    assert.equal(duplicate_alias_text(Group { text: "hi" }), "hi");
+    assert.equal(duplicate_alias_text(null), "")
 }
 
 class Nested {
@@ -130,4 +132,10 @@ function concatenate(first: string, second: string) -> string throws never {
 test "aliased_nullable_callback_preserves_named_arguments" {
     assert.equal(call_named(concatenate), "ab");
     assert.equal(call_named(null), "")
+}
+
+type NamedGroup = Group;
+
+function duplicate_alias_text(value: NamedGroup | Group | null) -> string {
+    value?.text ?? ""
 }

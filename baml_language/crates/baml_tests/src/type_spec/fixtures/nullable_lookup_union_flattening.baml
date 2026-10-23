@@ -152,3 +152,30 @@ function nonnullable_alias_index(xs: Ints | string[]) -> int | string {
      // ^^^^^ int | string
     value
 }
+
+// Null removal changes the union, not the spelling of surviving leaf aliases.
+type Count = int
+type MaybeCount = Count | null
+function preserve_primitive_alias(value: MaybeCount) -> Count {
+    let count = value ?? 0;
+     // ^^^^^ user.Count
+    count
+}
+type NamedGroup = Group
+type MaybeNamedGroup = NamedGroup | null
+function preserve_class_alias(value: MaybeNamedGroup) -> NamedGroup {
+    let group = value ?? Group { text: "" };
+     // ^^^^^ user.NamedGroup
+    group
+}
+type Nothing = null
+function aliased_null(value: Group | Nothing) -> string | null {
+    let text = value?.text;
+     // ^^^^ string | null
+    text
+}
+function duplicate_class_alias(value: NamedGroup | Group | null) -> string | null {
+    let text = value?.text;
+     // ^^^^ string | null
+    text
+}
