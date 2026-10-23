@@ -2803,9 +2803,27 @@ use crate::interned;
 #[derive(Default)]
 pub struct InternedCanonicalCache {
     canonical: RefCell<HashMap<interned::ClosedTy, NormalTy>>,
+    normalized: RefCell<HashMap<interned::ClosedTy, interned::ClosedTy>>,
 }
 
 impl InternedCanonicalCache {
+    /// The cached structural spelling of [`normalize_interned`], including
+    /// its root-unfold-once rendering of recursive aliases.
+    pub fn normalize<C: TypeContext>(
+        &self,
+        ty: &interned::ClosedTy,
+        ctx: &C,
+    ) -> interned::ClosedTy {
+        if let Some(normalized) = self.normalized.borrow().get(ty) {
+            return normalized.clone();
+        }
+        let normalized = normalize_interned(ty, ctx);
+        self.normalized
+            .borrow_mut()
+            .insert(ty.clone(), normalized.clone());
+        normalized
+    }
+
     fn canonical<C: TypeContext>(&self, ty: &interned::ClosedTy, ctx: &C) -> NormalTy {
         if let Some(canonical) = self.canonical.borrow().get(ty) {
             return canonical.clone();

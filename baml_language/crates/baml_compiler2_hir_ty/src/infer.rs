@@ -4952,6 +4952,12 @@ impl<'db> InferenceContext<'db> {
     /// `1 | 2`, widening to `int` at a binding - while `true | false`
     /// collapses to `bool` here, where freshness no longer matters).
     fn join(&mut self, members: &[Ty]) -> Ty {
+        let joined = self.union_of(members);
+        Self::preserve_literal_freshness(members, joined)
+    }
+
+    /// Restore the top-level literal witnesses after semantic normalization.
+    fn preserve_literal_freshness(members: &[Ty], joined: Ty) -> Ty {
         // Collect literal witnesses by freshness (top-level members and
         // one union layer - the shapes arm joins produce). A value with
         // a RIGID witness stays rigid: TS's union-widening rule (a
@@ -4975,7 +4981,6 @@ impl<'db> InferenceContext<'db> {
                 _ => collect(member),
             }
         }
-        let joined = self.union_of(members);
         if fresh.is_empty() {
             return joined;
         }
@@ -5394,7 +5399,7 @@ impl<'db> InferenceContext<'db> {
                 .type_of_expr
                 .get(&index)
                 .cloned()
-                .map(|ty| self.table.resolve_completely(&ty));
+                .map(|ty| self.structurally_resolve(&ty));
             let index_nullable = index_ty
                 .map(|ty| self.remove_null(&ty) != ty)
                 .unwrap_or(false);
@@ -5678,7 +5683,7 @@ impl<'db> InferenceContext<'db> {
     /// frame so the BOUNDARY re-unions it) and the link proceeds on the
     /// non-null part - TS short-circuit semantics.
     fn peel_chain_null(&mut self, ty: &Ty) -> Ty {
-        let resolved = self.table.resolve_completely(ty);
+        let resolved = self.structurally_resolve(ty);
         let nonnull = self.remove_null(&resolved);
         if nonnull != resolved
             && let Some(top) = self.chain_nullable.last_mut()
@@ -10440,7 +10445,7 @@ impl<'db> InferenceContext<'db> {
             let expanded = this.expand_alias_ty(ty);
             match expanded.kind() {
                 InferTy::Function { .. } => {
-                    if callback.is_some() {
+                    if callback.as_ref().is_some_and(|prior| prior != &expanded) {
                         return false;
                     }
                     *callback = Some(expanded);
@@ -11465,6 +11470,7 @@ impl<'db> InferenceContext<'db> {
         if resolved.has_error() || resolved.has_infer() {
             return;
         }
+        let resolved = self.structurally_resolve(&resolved);
         let nullable = match resolved.kind() {
             InferTy::Null | InferTy::Unknown => true,
             InferTy::Union(members) => members
@@ -14107,15 +14113,46 @@ impl<'db> InferenceContext<'db> {
             // `list<int> | list<int>` must collapse before a projection
             // over it can reduce (B-1576).
             let canonical = self.canonicalize_unions(&closed);
-            let reduced = self.reduce_projections(&canonical, PROJECTION_FINALIZE_FUEL);
-            return self.expand_alias_ty(&reduced);
+            resolved = self
+                .reduce_projections(&canonical, PROJECTION_FINALIZE_FUEL)
+                .into_ty();
         }
-        // WEAK aliases normalize here too (rustc's `Alias::Weak` in
-        // `structurally_resolve_type`): a structure consumer never
-        // sees the nominal wrapper, so no consumer can forget to
-        // expand. Recorded types keep the written name - this is the
-        // demanded STRUCTURE, not the render.
-        if matches!(resolved.kind(), InferTy::TypeAlias(..)) {
+        // Normalize the whole union/alias, not just an alias head: a member
+        // can itself name a nullable union. The shared algebra expands
+        // non-recursive aliases and flattens/deduplicates their unions;
+        // recursive aliases expose their root while keeping back-edges named.
+        // Recorded types retain their written names; only structure demands
+        // use this spelling. Open/error types stay on the structural path.
+        if matches!(resolved.kind(), InferTy::TypeAlias(..) | InferTy::Union(..)) {
+            if !resolved.has_error()
+                && let Ok(closed) = ClosedTy::try_from(&resolved)
+            {
+                let normalized = self
+                    .canonical_cache
+                    .normalize(&closed, &self.facts)
+                    .into_ty();
+                // Equality erases required parameter names, but a callable
+                // value still accepts those names at a call site. Reuse the
+                // source signature of the unique callback, including aliases.
+                let mut restore_callback = |ty: &Ty| {
+                    if matches!(ty.kind(), InferTy::Function { .. }) {
+                        self.callback_root_fn(&resolved)
+                            .unwrap_or_else(|| ty.clone())
+                    } else {
+                        ty.clone()
+                    }
+                };
+                let normalized = match normalized.kind() {
+                    InferTy::Union(members) => syntactic_union(
+                        &members
+                            .iter()
+                            .map(&mut restore_callback)
+                            .collect::<Vec<_>>(),
+                    ),
+                    _ => restore_callback(&normalized),
+                };
+                return Self::preserve_literal_freshness(&[resolved], normalized);
+            }
             return self.expand_alias_ty(&resolved);
         }
         resolved
