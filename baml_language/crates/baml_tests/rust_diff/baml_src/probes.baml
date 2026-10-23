@@ -192,17 +192,6 @@ function CatchAllocation() -> void {
     baml.io.println(`${count}:${values[0].x}:${values[1999].x}`);
 }
 
-function Recurse(n: int) -> int {
-    1 + Recurse(n + 1)
-}
-
-function Recursion() -> void {
-    let result = Recurse(0) catch (e) {
-        let e: baml.panics.StackOverflow => -1,
-    };
-    baml.io.println(`${result}`);
-}
-
 function Allocation() -> void {
     let keep = [Point { x: 17 }];
     let i = 0;

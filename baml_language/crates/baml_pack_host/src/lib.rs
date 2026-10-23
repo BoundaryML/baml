@@ -1,23 +1,4 @@
 //! Runtime host for binaries produced by `baml pack`.
-//!
-//! Startup:
-//!   1. Extract the versioned `PackEnvelope` from the OS-native embedded section.
-//!   2. Decide single-target vs multi-subcommand dispatch from
-//!      `envelope.mode`.
-//!   3. Parse argv against the program's signatures
-//!      ([`baml_exec::parse_target_argv`] or
-//!      [`baml_exec::parse_multi_target_argv`]) without running package
-//!      init — this gives `--help` / unknown-flag / missing-required
-//!      handling for free, with the same brand-purple styling as
-//!      `baml run`'s top-level clap.
-//!   4. Load `--json-args` and the `BAML_CONTEXT` launch context, then
-//!      initialize the BAML engine with the embedded program, the launch
-//!      context, and the argv shape the chosen mode expects.
-//!   5. Dispatch to the resolved target via `baml_exec::dispatch_target`
-//!      and write the return value in the baked-in output format.
-//!
-//! Exit codes: 0 on success, non-zero on error. To set a non-zero exit
-//! code from BAML, the program calls `baml.sys.exit(code)`.
 
 // `process::exit` is intentional — the BAML target may call
 // `baml.sys.exit(code)` to short-circuit the engine with a specific
@@ -52,28 +33,6 @@ fn compiled_bodies_disabled(value: Option<&str>) -> bool {
     })
 }
 
-fn compiled_bodies_from_env(
-    compiled_bodies: Option<bex_engine::CompiledBodies>,
-) -> Option<bex_engine::CompiledBodies> {
-    let value = baml_env::raw_var("BAML_COMPILED_BODIES");
-    if compiled_bodies_disabled(value.as_deref()) {
-        None
-    } else {
-        compiled_bodies
-    }
-}
-
-fn run_envelope(
-    envelope: PackEnvelope,
-    compiled_bodies: Option<bex_engine::CompiledBodies>,
-) -> ExitCode {
-    let compiled_bodies = compiled_bodies_from_env(compiled_bodies);
-    match envelope.mode {
-        PackMode::Single => run_single(envelope, compiled_bodies),
-        PackMode::Subcommand => run_subcommand(envelope, compiled_bodies),
-    }
-}
-
 /// Compiled bodies must match the authenticated artifact fingerprint.
 pub fn run_embedded(
     artifact: &[u8],
@@ -89,13 +48,20 @@ pub fn run_embedded(
                 Ok((envelope, digest))
             });
     match envelope {
-        Ok((envelope, artifact_fingerprint)) => run_envelope(
-            envelope,
-            compiled_bodies.map(|table| bex_engine::CompiledBodies {
-                table,
-                artifact_fingerprint,
-            }),
-        ),
+        Ok((envelope, artifact_fingerprint)) => {
+            let compiled_bodies = compiled_bodies
+                .filter(|_| {
+                    !compiled_bodies_disabled(baml_env::raw_var("BAML_COMPILED_BODIES").as_deref())
+                })
+                .map(|table| bex_engine::CompiledBodies {
+                    table,
+                    artifact_fingerprint,
+                });
+            match envelope.mode {
+                PackMode::Single => run_single(envelope, compiled_bodies),
+                PackMode::Subcommand => run_subcommand(envelope, compiled_bodies),
+            }
+        }
         Err(e) => {
             print_error(e);
             ExitCode::FAILURE

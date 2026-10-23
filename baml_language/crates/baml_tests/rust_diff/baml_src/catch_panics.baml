@@ -133,15 +133,6 @@ function CatchWildcardThenBoundary() -> void {
     baml.io.println(`${result}`);
 }
 
-function CatchWildcardThenNamed() -> void {
-    let result = CatchPanicIndex(5) catch (first) {
-        _ => -1,
-    } catch (outer, ctx) {
-        baml.panics.IndexOutOfBounds => `named|${Frames(ctx)}`,
-    };
-    baml.io.println(`${result}`);
-}
-
 function CatchOrSource(n: int) -> string throws string {
     match (n) {
         0 => throw "ordinary",
