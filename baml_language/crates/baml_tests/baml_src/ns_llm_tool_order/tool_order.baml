@@ -151,7 +151,7 @@ test "a toolbox built at run time keeps the order of its list" {
 // A tool's schema lists its parameters in the handler's parameter order.
 
 function tool_order_parameters() -> string {
-    let schema = baml.json.to_string(ai.tools.tool(tool_order_zulu).input_schema);
+    let schema = baml.json.stringify(ai.tools.tool(tool_order_zulu).input_schema);
     tool_order_seen(schema, ["apple", "mango", "zebra"])
 }
 
@@ -179,7 +179,7 @@ test "a tool schema lists the required parameters in declaration order" {
 // their declaration order too.
 
 function tool_order_fields_and_variants() -> string[] {
-    let schema = baml.json.to_string(ai.tools.tool(tool_order_zulu).input_schema);
+    let schema = baml.json.stringify(ai.tools.tool(tool_order_zulu).input_schema);
     [tool_order_seen(schema, ["high", "low"]), tool_order_seen(schema, ["Alpha", "Zeta"])]
 }
 

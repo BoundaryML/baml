@@ -212,7 +212,7 @@ function tier_counts(us: User[]) -> map<string, int> {
     counts
 }
 
-function roundtrip(u: User) -> User { baml.json.from_string<User>(baml.json.to_string(u)) }
+function roundtrip(u: User) -> User { baml.json.decode<User>(baml.json.stringify(u)) }
 
 // `catch` with a typed arm handles ONE specific error
 function safe_parse(s: string) -> int { baml.Int.parse(s) catch (e) { baml.errors.ParseError => -1 } }

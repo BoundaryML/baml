@@ -65,7 +65,7 @@ class SseEvent {
 /// One `SseStream.next()` batch -> the raw SSE events it contains. Provider
 /// decoders parse each event's `data` payload with their own envelope classes.
 function decode_sse_batch(batch: string) -> SseEvent[] {
-    baml.json.from_string<SseEvent[]>(batch)
+    baml.json.decode<SseEvent[]>(batch)
 }
 
 // The provider-agnostic events a decoder yields from one SSE batch.

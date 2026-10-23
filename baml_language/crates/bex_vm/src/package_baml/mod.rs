@@ -94,7 +94,7 @@ pub enum NativeCallResult {
     ///
     /// `type_args` carries explicit BEP-039 type arguments to seed the callee's
     /// frame.  This is the native counterpart of the `Call` instruction's
-    /// type-arg channel — required so native helpers like `baml.json.from_json`
+    /// type-arg channel — required so native helpers like `baml.json.to`
     /// can dispatch a generic class' `from_json` (e.g. `Box<Secret>.from_json`)
     /// with the right `T` substitution.  Pass `vec![]` for non-generic callees.
     YieldToCall {

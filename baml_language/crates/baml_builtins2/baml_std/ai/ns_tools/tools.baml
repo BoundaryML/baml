@@ -36,7 +36,7 @@ class Tool {
                     throw baml.errors.InvalidArgument { message: `invalid arguments for ${self.name}: ${bad.to_string()}` }
                 },
             };
-            baml.json.stringify(baml.json.to_json(value))
+            baml.json.stringify(value)
         } else {
             throw baml.errors.InvalidArgument { message: `tool ${self.name} has no handler` }
         }

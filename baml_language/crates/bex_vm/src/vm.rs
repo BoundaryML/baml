@@ -7291,9 +7291,9 @@ impl BexVm {
                 // `current_call_type_args()` — the direct-call path sets these
                 // from LoadType operands, but an indirect call through the value
                 // carries them on the wrapper. A pooled `GenericFunction`
-                // (`let f = baml.json.from_string<User>`) carries them on
+                // (`let f = baml.json.decode<User>`) carries them on
                 // `specialized_type_args`; a closure-wrapped value
-                // (`let g = baml.json.from_string; let f = g<User>`) carries them
+                // (`let g = baml.json.decode; let f = g<User>`) carries them
                 // on the closure's `captured_type_args`. Use whichever is set.
                 let native_type_args: &[bex_vm_types::RealizedTy] =
                     if !specialized_type_args.is_empty() {

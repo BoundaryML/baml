@@ -165,7 +165,7 @@ function anth_batch(payloads: string[]) -> string {
         let _ = item.set("id", null);
         items.push(item);
     }
-    baml.json.stringify(baml.json.to_json(items))
+    baml.json.stringify(items)
 }
 
 // Render one request without any server: the client below the runner.
@@ -1115,10 +1115,10 @@ function anthropic_decode_tool_stream() -> json {
     }
     let calls: json[] = [];
     for (let u in state.tool_uses()) {
-        calls.push({ "id": u.id, "name": u.name, "args": baml.json.to_json(u.args) });
+        calls.push({ "id": u.id, "name": u.name, "args": baml.json.from(u.args) });
     }
     {
-        "events": baml.json.to_json(seen),
+        "events": baml.json.from(seen),
         "thinking": state.thinking,
         "signature": state.signature,
         "calls": calls,

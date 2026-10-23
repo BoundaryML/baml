@@ -312,7 +312,7 @@ function gateway_images_render(
         seed: c.seed,
         files: files,
     };
-    let base = _gw_images_drop_nulls(baml.json.to_json(request));
+    let base = _gw_images_drop_nulls(baml.json.from(request));
     let merged = ai.wire.merge_request_body(base, c.request_body);
     let url = _gw_images_with_query(
         `${_gw_images_trim_slash(c.resolved_base_url() ?? "https://ai-gateway.vercel.sh/v4/ai")}/image-model`,
@@ -433,7 +433,7 @@ function gateway_images_parse(
         throw ai.errors.InvalidResponse {
             provider: "ai-gateway-images",
             message: "response contained no images in images[]",
-            raw_body: baml.json.stringify(baml.json.to_json(resp)),
+            raw_body: baml.json.stringify(resp),
             status_code: null,
         }
     }

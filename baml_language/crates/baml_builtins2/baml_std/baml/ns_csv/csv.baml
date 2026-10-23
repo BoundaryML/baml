@@ -646,7 +646,7 @@ class Rows<T> {
 /// `bool`, `null`, any enum (written as its variant name),
 /// `baml.time.Instant`, `baml.time.PlainDate`, and `baml.time.PlainDateTime`.
 /// A nested class or list is not a cell — serialize it yourself with
-/// `baml.json.to_string` and write the string.
+/// `baml.json.stringify` and write the string.
 ///
 /// Everything that emits output shares three failure modes. A cell that would
 /// need quoting under `quote_style: "never"`, or a non-finite float, throws

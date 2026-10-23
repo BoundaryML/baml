@@ -60,7 +60,7 @@ function tool_arg_limit(q: string, limit: int = 10) -> string {
 }
 
 function tool_arg_open(n: int, extra: unknown) -> string {
-    let written = baml.json.to_string(extra) catch_all (e) {
+    let written = baml.json.stringify(extra) catch_all (e) {
         _ => "unserializable",
     };
     `${n}|${written.length()}`
@@ -71,7 +71,7 @@ function tool_arg_from_model(text: string) -> map<string, unknown> {
     let parsed = baml.json.parse(text) catch (e) {
         _ => baml.sys.panic("the test arguments are JSON"),
     };
-    baml.json.from_json<map<string, unknown>>(parsed) catch (e) {
+    baml.json.to<map<string, unknown>>(parsed) catch (e) {
         _ => baml.sys.panic("the test arguments are an object"),
     }
 }

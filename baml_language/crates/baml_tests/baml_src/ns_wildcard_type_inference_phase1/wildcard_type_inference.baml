@@ -51,7 +51,7 @@ test "throws_wildcard_absorbs_stdlib_throws" {
         `
             class BadInput { msg string }
             function parse(s: string) -> int throws BadInput | _ {
-                let v: json = baml.json.from_string(s);
+                let v: json = baml.json.decode(s);
                 throw BadInput { msg: "nope" };
             }
             function main() -> int { 0 }

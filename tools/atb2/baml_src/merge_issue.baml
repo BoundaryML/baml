@@ -460,7 +460,7 @@ function parse_checks(s: string) -> CheckRow[] {
     if (s.trim().length() == 0) {
         return [];
     };
-    baml.json.from_string<CheckRow[]>(s) catch (_) {
+    baml.json.decode<CheckRow[]>(s) catch (_) {
         _ => [],
     }
 }
@@ -469,7 +469,7 @@ function parse_comments(s: string) -> ReviewComment[] {
     if (s.trim().length() == 0) {
         return [];
     };
-    baml.json.from_string<ReviewComment[]>(s) catch (_) {
+    baml.json.decode<ReviewComment[]>(s) catch (_) {
         _ => [],
     }
 }
@@ -568,14 +568,14 @@ function read_merge_state(branch: string) -> MergeState {
     if (!baml.fs.exists(path)) {
         return MergeState { rounds: 0, handled_ids: [] };
     };
-    baml.json.from_string<MergeState>(baml.fs.read(path)) catch (_) {
+    baml.json.decode<MergeState>(baml.fs.read(path)) catch (_) {
         _ => MergeState { rounds: 0, handled_ids: [] },
     }
 }
 
 function write_merge_state(branch: string, s: MergeState) -> null {
     baml.fs.mkdir(merge_dir(branch), baml.fs.MkdirOptions { recursive: true });
-    baml.fs.write(merge_state_path(branch), baml.json.stringify_pretty(s.to_json()));
+    baml.fs.write(merge_state_path(branch), baml.json.stringify(s.to_json(), indent = 2));
     null
 }
 

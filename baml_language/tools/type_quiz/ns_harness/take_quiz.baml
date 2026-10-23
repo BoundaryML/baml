@@ -300,7 +300,7 @@ function put(
         baml.sys.exec("env", ["-u", "ANTHROPIC_API_KEY", "claude"].concat(full), options)
     };
     let printed = string.from_utf8(out.stdout);
-    baml.json.from_string<Reply>(printed)
+    baml.json.decode<Reply>(printed)
 }
 
 // ─── the debrief ─────────────────────────────────────────────────────────────
@@ -456,7 +456,7 @@ function ratings_in(reply: string) -> string? throws never {
 // ─── one sitting ─────────────────────────────────────────────────────────────
 
 function keep(path: string, run: Run) -> void throws baml.errors.Io | baml.json.SerializationError {
-    let _ = baml.fs.write(path, baml.json.to_string(run));
+    let _ = baml.fs.write(path, baml.json.stringify(run));
 }
 
 /// The sitting driven to its end, or to the harness's own stop, on a run that
@@ -466,7 +466,7 @@ function keep(path: string, run: Run) -> void throws baml.errors.Io | baml.json.
 function drive(settings: Settings, model: string, session: int, system: string, run: Run) -> void {
     let path = `${settings.out}/${model}-${session}.json`;
     if (baml.fs.exists(path)) {
-        let kept = baml.json.from_string<Run>(baml.fs.read(path));
+        let kept = baml.json.decode<Run>(baml.fs.read(path));
         run.answers = kept.answers;
         run.replies = kept.replies;
         run.marks = kept.marks;
@@ -479,7 +479,7 @@ function drive(settings: Settings, model: string, session: int, system: string, 
     }
     let going = true;
     while (going) {
-        let step = baml.json.from_string<root.Step>(root.adaptive_step(session, run.answers.join(",")));
+        let step = baml.json.decode<root.Step>(root.adaptive_step(session, run.answers.join(",")));
         // The marking is always of the answer just given, so it is stored by
         // the answer it belongs to and a resumed run rewrites it rather than
         // appending a second copy.

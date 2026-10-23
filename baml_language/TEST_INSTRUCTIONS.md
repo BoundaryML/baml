@@ -315,7 +315,7 @@ $BAML test -i "<testset>::<case>"    # run a single test by id
   "baml.panics.UserPanic", … } }` with a stack trace pointing into `testing/registry.baml`.
 - LLM functions (`client:` + `prompt:`) hit the network — **do not** rely on live LLM calls in
   e2e tests. Test the deterministic logic, and for parsing use the generated `Fn$parse(raw)`
-  companion against a canned string (or `baml.json.from_string<T>(...)`).
+  companion against a canned string (or `baml.json.decode<T>(...)`).
 
 ## A known-good reference program
 

@@ -4,7 +4,7 @@ function make_bytes() -> uint8array {
 
 function to_string_error(value: unknown) -> string {
     {
-        let _ = baml.json.to_string(value);
+        let _ = baml.json.stringify(value);
         "unexpected success"
     } catch (e) {
         let err: baml.json.SerializationError => err.message,
@@ -13,7 +13,7 @@ function to_string_error(value: unknown) -> string {
 
 function to_json_error(value: unknown) -> string {
     {
-        let _ = baml.json.to_json(value);
+        let _ = baml.json.from(value);
         "unexpected success"
     } catch (e) {
         let err: baml.json.SerializationError => err.message,

@@ -59,12 +59,12 @@ function _structured_answer_json() -> string {
 }
 
 function _structured_chat_body(content: string) -> string {
-    let text = baml.json.stringify(baml.json.to_json(content));
+    let text = baml.json.stringify(content);
     `{"id":"chatcmpl-1","model":"gpt-4o-mini","choices":[{"index":0,"message":{"role":"assistant","content":${text}},"finish_reason":"stop"}]}`
 }
 
 function _structured_responses_body(content: string) -> string {
-    let text = baml.json.stringify(baml.json.to_json(content));
+    let text = baml.json.stringify(content);
     `{"id":"resp-1","model":"gpt-4o-mini","status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":${text}}]}]}`
 }
 

@@ -565,7 +565,7 @@ keeps its number once it has one.
    renderer's `quote` in `ns_algebra/render.baml` therefore cannot spell a
    control character at all, and the name pools hold the characters they mean.
 12. **An empty class in a union matches any JSON object, so its siblings
-   decode as it.** With `type M = Empty | Named`, `baml.json.to_string` writes
+   decode as it.** With `type M = Empty | Named`, `baml.json.stringify` writes
    a `Named { model: "m" }` as `{"model":"m"}` and `from_string<M>` reads it
    back as `Empty`, silently. Decoding takes the first member that fits and an
    empty class fits everything, so listing it last happens to work, which makes

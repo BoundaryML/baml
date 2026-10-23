@@ -585,7 +585,7 @@ class UserTL { name string  age int }
 
 function top_level_from_json_call_concrete_class_name() -> string throws baml.json.ParseError | baml.json.DecodeError {
     let j: baml.json.json = baml.json.parse("{\"name\":\"Ada\",\"age\":30}");
-    let u: UserTL = baml.json.from_json<UserTL>(j);
+    let u: UserTL = baml.json.to<UserTL>(j);
     u.name
 }
 
@@ -596,7 +596,7 @@ test "top_level_from_json_call_concrete_class" {
 // top_level_from_json_call_primitive
 function top_level_from_json_call_primitive_val() -> int throws baml.json.ParseError | baml.json.DecodeError {
     let j: baml.json.json = baml.json.parse("42");
-    baml.json.from_json<int>(j)
+    baml.json.to<int>(j)
 }
 
 test "top_level_from_json_call_primitive" {

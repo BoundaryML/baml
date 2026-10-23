@@ -165,7 +165,7 @@ function uv_bound_size(view: reflect.TypeView, json: string) -> int {
     let type T extends UvSized = view else {
         return -1;
     };
-    baml.json.from_string<T>(json).size()
+    baml.json.decode<T>(json).size()
 }
 
 function uv_type_name<V extends reflect.TypeView>(view: V) -> string {
@@ -205,7 +205,7 @@ test "a bounded let type takes a user view" {
     let type T extends UvSized = UvBoxView {} else {
         throw "UvBoxView's type implements UvSized";
     };
-    let boxed = baml.json.from_string<T>(`{"n": 4}`);
+    let boxed = baml.json.decode<T>(`{"n": 4}`);
     assert.equal(boxed.size(), 4);
     assert.equal(uv_bound_size(UvBoxView {}, `{"n": 5}`), 5)
 }

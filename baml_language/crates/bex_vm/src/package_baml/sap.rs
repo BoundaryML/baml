@@ -785,7 +785,7 @@ fn skipped_field_default(
 /// needs its own empty value.
 ///
 /// This is the value a `@skip` field holds whenever a model's answer is read
-/// under the names a model is shown: here, and in `baml.json.from_string`
+/// under the names a model is shown: here, and in `baml.json.decode`
 /// with `Naming.Aliased`. [`baml_type::json_inhabit::has_empty_value`] is the
 /// same rule as a predicate.
 pub(super) fn empty_value(

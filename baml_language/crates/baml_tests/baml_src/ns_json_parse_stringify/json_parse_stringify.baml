@@ -103,7 +103,7 @@ test "parse_throws_on_garbage" {
 // The Rust test checks s.contains('\n'). BAML has string.includes, so we call
 // it directly on the stringify_pretty result.
 test "stringify_pretty_multiline" {
-    assert.is_true(baml.json.stringify_pretty(baml.json.parse("{\"a\":1}")).includes("\n"))
+    assert.is_true(baml.json.stringify(baml.json.parse("{\"a\":1}"), indent = 2).includes("\n"))
 }
 
 // ─── 2.7 Roundtrip a nested object ───────────────────────────────────────────

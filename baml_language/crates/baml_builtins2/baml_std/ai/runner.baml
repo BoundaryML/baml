@@ -210,7 +210,7 @@ class Agent {
                 only
             },
         };
-        baml.json.from_json<Out>(payload) catch_all (e) {
+        baml.json.to<Out>(payload) catch_all (e) {
             _ => {
                 throw root.errors.ParseFailed {
                     provider: provider,
@@ -433,7 +433,7 @@ class Agent {
                 } else {
                     self._media_value<Out>(turn, provider)
                 };
-                let value_json = baml.json.to_json(value) catch_all (e) {
+                let value_json = baml.json.from(value) catch_all (e) {
                     _ => {
                         throw baml.errors.UnknownError.with_message<never>(
                                 e,

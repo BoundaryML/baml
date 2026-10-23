@@ -52,9 +52,9 @@ function _media_shape(t: reflect.Type) -> string {
 }
 
 /// (internal) A media block's payload as its BEP-038 `{kind, source, value, mime}`
-/// envelope — the form `baml.json.from_json<Out>` decodes media back from.
+/// envelope — the form `baml.json.to<Out>` decodes media back from.
 function _media_envelope(m: root.content.Media) -> baml.json.json {
-    baml.json.to_json(m.media) catch_all (e) {
+    baml.json.from(m.media) catch_all (e) {
         _ => {
             throw baml.errors.UnknownError { data: e, message: [e.to_string()] }
         },

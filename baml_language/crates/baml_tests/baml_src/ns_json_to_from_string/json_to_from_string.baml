@@ -1,4 +1,4 @@
-// Tests for baml.json.to_string / from_string<T>.
+// Tests for baml.json.stringify / from_string<T>.
 //
 // Converted from crates/baml_tests/tests/json_to_from_string.rs.
 //
@@ -15,13 +15,13 @@ class User { name string  age int }
 
 test "to_string_simple_class" {
     assert.equal(
-        baml.json.to_string(User { name: "Ada", age: 30 }),
+        baml.json.stringify(User { name: "Ada", age: 30 }),
         "{\"name\":\"Ada\",\"age\":30}",
     )
 }
 
 function from_string_simple_class_name() -> string {
-    let u: User = baml.json.from_string<User>("{\"name\":\"Ada\",\"age\":30}");
+    let u: User = baml.json.decode<User>("{\"name\":\"Ada\",\"age\":30}");
     u.name
 }
 
@@ -30,7 +30,7 @@ test "from_string_simple_class" {
 }
 
 function from_string_infers_simple_class_name() -> string {
-    let u: User = baml.json.from_string("{\"name\":\"Ada\",\"age\":30}");
+    let u: User = baml.json.decode("{\"name\":\"Ada\",\"age\":30}");
     u.name
 }
 
@@ -39,7 +39,7 @@ test "from_string_infers_simple_class" {
 }
 
 function to_string_infers_simple_class() -> string {
-    baml.json.to_string(User { name: "Ada", age: 30 })
+    baml.json.stringify(User { name: "Ada", age: 30 })
 }
 
 test "to_string_infers_simple_class" {
@@ -48,8 +48,8 @@ test "to_string_infers_simple_class" {
 
 function roundtrip_simple_age() -> int {
     let u: User = User { name: "Ada", age: 30 };
-    let s: string = baml.json.to_string(u);
-    let v: User = baml.json.from_string<User>(s);
+    let s: string = baml.json.stringify(u);
+    let v: User = baml.json.decode<User>(s);
     v.age
 }
 
@@ -61,7 +61,7 @@ class BigintRecord { id bigint  exact 42n }
 
 function bigint_record_json_roundtrip_is_exact() -> bool {
     let expected = 123456789012345678901234567890n;
-    let record = baml.json.from_string<BigintRecord>(
+    let record = baml.json.decode<BigintRecord>(
         "{\"id\":123456789012345678901234567890,\"exact\":42}",
     );
     record.id == expected && record.exact == 42n
@@ -69,7 +69,7 @@ function bigint_record_json_roundtrip_is_exact() -> bool {
 
 function bigint_record_numeric_strings_decode_exactly() -> bool {
     let expected = 123456789012345678901234567890n;
-    let record = baml.json.from_string<BigintRecord>(
+    let record = baml.json.decode<BigintRecord>(
         "{\"id\":\"123456789012345678901234567890\",\"exact\":\"42\"}",
     );
     record.id == expected && record.exact == 42n
@@ -77,23 +77,23 @@ function bigint_record_numeric_strings_decode_exactly() -> bool {
 
 test "bigint_and_literal_bigint_json_roundtrip" {
     let large = 123456789012345678901234567890n;
-    let encoded = baml.json.to_string(large);
+    let encoded = baml.json.stringify(large);
     assert.equal(encoded, "123456789012345678901234567890");
-    assert.equal(baml.json.from_string<bigint>(encoded), large);
-    assert.equal(baml.json.from_string<42n>("42"), 42n);
+    assert.equal(baml.json.decode<bigint>(encoded), large);
+    assert.equal(baml.json.decode<42n>("42"), 42n);
     assert.is_true(bigint_record_json_roundtrip_is_exact());
     assert.is_true(bigint_record_numeric_strings_decode_exactly())
 }
 
 test "literal_bigint_json_rejects_wrong_value" {
     {
-        let wrong: 42n = baml.json.from_string<42n>("43");
+        let wrong: 42n = baml.json.decode<42n>("43");
         baml.sys.panic("expected literal bigint mismatch")
     } catch (e) {
         baml.json.DecodeError => null
     };
     {
-        let wrong: 42n = baml.json.from_string<42n>("\"43\"");
+        let wrong: 42n = baml.json.decode<42n>("\"43\"");
         baml.sys.panic("expected numeric-string literal bigint mismatch")
     } catch (e) {
         baml.json.DecodeError => null
@@ -101,20 +101,20 @@ test "literal_bigint_json_rejects_wrong_value" {
 }
 
 test "bigint_json_accepts_numeric_strings" {
-    assert.equal(baml.json.from_string<bigint>("\"42\""), 42n);
-    assert.equal(baml.json.from_string<bigint>("\"-42\""), -42n);
-    assert.equal(baml.json.from_string<bigint>("\"+00042\""), 42n);
-    assert.equal(baml.json.from_string<bigint>("\"-0\""), 0n);
+    assert.equal(baml.json.decode<bigint>("\"42\""), 42n);
+    assert.equal(baml.json.decode<bigint>("\"-42\""), -42n);
+    assert.equal(baml.json.decode<bigint>("\"+00042\""), 42n);
+    assert.equal(baml.json.decode<bigint>("\"-0\""), 0n);
     assert.equal(
-        baml.json.from_string<bigint>("\"123456789012345678901234567890\""),
+        baml.json.decode<bigint>("\"123456789012345678901234567890\""),
         123456789012345678901234567890n,
     );
-    assert.equal(baml.json.from_string<42n>("\"42\""), 42n)
+    assert.equal(baml.json.decode<42n>("\"42\""), 42n)
 }
 
 function bigint_numeric_string_collections_decode_exactly() -> bool {
-    let items = baml.json.from_string<bigint[]>("[\"1\",\"-2\"]");
-    let by_name = baml.json.from_string<map<string, bigint>>("{\"a\":\"9\"}");
+    let items = baml.json.decode<bigint[]>("[\"1\",\"-2\"]");
+    let by_name = baml.json.decode<map<string, bigint>>("{\"a\":\"9\"}");
     items.at(0) == 1n && items.at(1) == -2n && by_name.get("a") == 9n
 }
 
@@ -123,7 +123,7 @@ test "bigint_numeric_string_collections" {
 }
 
 function bigint_first_numeric_string_union_selects_bigint() -> bool {
-    let value: bigint | string = baml.json.from_string<bigint | string>("\"42\"");
+    let value: bigint | string = baml.json.decode<bigint | string>("\"42\"");
     match (value) {
         let n: bigint => n == 42n
         _ => false
@@ -131,7 +131,7 @@ function bigint_first_numeric_string_union_selects_bigint() -> bool {
 }
 
 function string_first_numeric_string_union_selects_string() -> bool {
-    let value: string | bigint = baml.json.from_string<string | bigint>("\"42\"");
+    let value: string | bigint = baml.json.decode<string | bigint>("\"42\"");
     match (value) {
         let s: string => s == "42"
         _ => false
@@ -145,31 +145,31 @@ test "bigint_numeric_string_union_order" {
 
 test "bigint_json_rejects_fractions_exponents_and_non_numeric_strings" {
     {
-        let wrong: bigint = baml.json.from_string<bigint>("12.5");
+        let wrong: bigint = baml.json.decode<bigint>("12.5");
         baml.sys.panic("expected fractional JSON number to fail")
     } catch (e) {
         baml.json.DecodeError => null
     };
     {
-        let wrong: bigint = baml.json.from_string<bigint>("1e3");
+        let wrong: bigint = baml.json.decode<bigint>("1e3");
         baml.sys.panic("expected exponential JSON number to fail")
     } catch (e) {
         baml.json.DecodeError => null
     };
     {
-        let wrong: bigint = baml.json.from_string<bigint>("\"12.5\"");
+        let wrong: bigint = baml.json.decode<bigint>("\"12.5\"");
         baml.sys.panic("expected fractional numeric string to fail")
     } catch (e) {
         baml.json.DecodeError => null
     };
     {
-        let wrong: bigint = baml.json.from_string<bigint>("\"1e3\"");
+        let wrong: bigint = baml.json.decode<bigint>("\"1e3\"");
         baml.sys.panic("expected exponential numeric string to fail")
     } catch (e) {
         baml.json.DecodeError => null
     };
     {
-        let wrong: bigint = baml.json.from_string<bigint>("\" 42\"");
+        let wrong: bigint = baml.json.decode<bigint>("\" 42\"");
         baml.sys.panic("expected whitespace-padded numeric string to fail")
     } catch (e) {
         baml.json.DecodeError => null
@@ -179,17 +179,17 @@ test "bigint_json_rejects_fractions_exponents_and_non_numeric_strings" {
 test "all_bigint_decoders_accept_numeric_strings" {
     let j: json = baml.json.parse("\"+00042\"");
     assert.equal(baml.json.to<bigint>(j), 42n);
-    assert.equal(baml.json.from_json<bigint>(j), 42n);
-    assert.equal(baml.json.deserialize<bigint>("\"+00042\""), 42n);
+    assert.equal(baml.json.to<bigint>(j), 42n);
+    assert.equal(baml.json.decode<bigint>("\"+00042\""), 42n);
     assert.equal(baml.json.to<42n>(j), 42n);
-    assert.equal(baml.json.from_json<42n>(j), 42n);
-    assert.equal(baml.json.deserialize<42n>("\"+00042\""), 42n);
+    assert.equal(baml.json.to<42n>(j), 42n);
+    assert.equal(baml.json.decode<42n>("\"+00042\""), 42n);
     assert.equal(
         baml.json.to<bigint>("-123456789012345678901234567890"),
         -123456789012345678901234567890n,
     );
     assert.equal(baml.json.to<bigint>("-0"), 0n);
-    assert.equal(baml.json.to_string(j), "\"+00042\"");
+    assert.equal(baml.json.stringify(j), "\"+00042\"");
     assert.equal(baml.json.to<string>(j), "+00042")
 }
 
@@ -262,8 +262,8 @@ class Container<T> { item T }
 
 function composite_generic_roundtrip_name() -> string {
     let c: Container<User> = Container<User> { item: User { name: "Ada", age: 30 } };
-    let s: string = baml.json.to_string(c);
-    let d: Container<User> = baml.json.from_string<Container<User>>(s);
+    let s: string = baml.json.stringify(c);
+    let d: Container<User> = baml.json.decode<Container<User>>(s);
     d.item.name
 }
 
@@ -274,7 +274,7 @@ test "composite_generic_roundtrip" {
 // ─── Generic forwarding (mirrors reflect_type_of_generic.rs) ─────────────────
 
 function fetch_as<T>(s: string) -> T throws baml.json.ParseError | baml.json.DecodeError {
-    baml.json.from_string<T>(s)
+    baml.json.decode<T>(s)
 }
 
 function generic_forwarding_user_name() -> string {
@@ -300,7 +300,7 @@ test "generic_forwarding_composite" {
 class UserSimple { name string }
 
 function level1<T>(s: string) -> T throws baml.json.ParseError | baml.json.DecodeError {
-    baml.json.from_string<T>(s)
+    baml.json.decode<T>(s)
 }
 function level2<T>(s: string) -> T throws baml.json.ParseError | baml.json.DecodeError {
     level1<T>(s)
@@ -321,7 +321,7 @@ test "three_level_forwarding" {
 // ─── Closure captures type-arg ────────────────────────────────────────────────
 
 function make_decoder<T>() -> (string) -> T throws baml.json.ParseError | baml.json.DecodeError {
-    return (s: string) -> T throws baml.json.ParseError | baml.json.DecodeError { baml.json.from_string<T>(s) }
+    return (s: string) -> T throws baml.json.ParseError | baml.json.DecodeError { baml.json.decode<T>(s) }
 }
 
 function closure_captures_type_arg_name() -> string {
@@ -339,11 +339,11 @@ test "closure_captures_type_arg" {
 enum Color { Red Blue }
 
 test "enum_variant_to_string" {
-    assert.equal(baml.json.to_string(Color.Red), "\"Red\"")
+    assert.equal(baml.json.stringify(Color.Red), "\"Red\"")
 }
 
 function enum_variant_from_string_name() -> string {
-    let c: Color = baml.json.from_string<Color>("\"Blue\"");
+    let c: Color = baml.json.decode<Color>("\"Blue\"");
     match (c) {
         Color.Blue => "Blue"
         _ => "other"
@@ -360,17 +360,17 @@ class Profile { nickname string? }
 
 test "optional_field_present" {
     assert.equal(
-        baml.json.to_string(Profile { nickname: "ada" }),
+        baml.json.stringify(Profile { nickname: "ada" }),
         "{\"nickname\":\"ada\"}",
     )
 }
 
 test "optional_field_null" {
-    assert.equal(baml.json.to_string(Profile { nickname: null }), "{\"nickname\":null}")
+    assert.equal(baml.json.stringify(Profile { nickname: null }), "{\"nickname\":null}")
 }
 
 function optional_field_decode_missing_is_null() -> bool {
-    let p: Profile = baml.json.from_string<Profile>("{}");
+    let p: Profile = baml.json.decode<Profile>("{}");
     p.nickname == null
 }
 
@@ -390,8 +390,8 @@ function recursive_class_roundtrip_value() -> int {
             Tree { value: 3, children: [Tree { value: 4, children: [] }] },
         ]
     };
-    let s: string = baml.json.to_string(t);
-    let d: Tree = baml.json.from_string<Tree>(s);
+    let s: string = baml.json.stringify(t);
+    let d: Tree = baml.json.decode<Tree>(s);
     d.children[1].children[0].value
 }
 
@@ -403,7 +403,7 @@ test "recursive_class_roundtrip" {
 
 test "parse_throws_on_bad_json" {
     {
-        let u: User = baml.json.from_string<User>("{[");
+        let u: User = baml.json.decode<User>("{[");
         baml.sys.panic("expected from_string to throw")
     } catch (e) {
         baml.json.ParseError => null
@@ -412,7 +412,7 @@ test "parse_throws_on_bad_json" {
 
 test "decode_throws_on_missing_field" {
     {
-        let u: User = baml.json.from_string<User>("{}");
+        let u: User = baml.json.decode<User>("{}");
         baml.sys.panic("expected from_string to throw")
     } catch (e) {
         baml.json.DecodeError => null
@@ -422,7 +422,7 @@ test "decode_throws_on_missing_field" {
 test "serialize_throws_uint8array" {
     {
         let b: Bad = Bad { x: baml.Uint8Array.from_hex("00ff") };
-        baml.json.to_string(b);
+        baml.json.stringify(b);
         baml.sys.panic("expected to_string to throw")
     } catch (e) {
         baml.json.SerializationError => null
@@ -439,7 +439,7 @@ class Outer { inner Inner }
 
 function check_decode_error_path_contains_field() -> bool {
     {
-        let u: Outer = baml.json.from_string<Outer>("{\"inner\":{}}");
+        let u: Outer = baml.json.decode<Outer>("{\"inner\":{}}");
         false
     } catch (e) {
         let err: baml.json.DecodeError => {
@@ -457,8 +457,8 @@ test "decode_error_path_points_at_missing_field" {
 
 function enum_variant_roundtrip_eq() -> bool {
     let c: Color = Color.Blue;
-    let s: string = baml.json.to_string(c);
-    let d: Color = baml.json.from_string<Color>(s);
+    let s: string = baml.json.stringify(c);
+    let d: Color = baml.json.decode<Color>(s);
     d == Color.Blue
 }
 
@@ -472,16 +472,16 @@ class ProfileMedia { avatar image }
 
 test "media_field_to_string" {
     assert.equal(
-        baml.json.to_string(ProfileMedia { avatar: image.from_url("https://example.com/a.png", "image/png") }),
+        baml.json.stringify(ProfileMedia { avatar: image.from_url("https://example.com/a.png", "image/png") }),
         "{\"avatar\":{\"kind\":\"image\",\"source\":\"url\",\"value\":\"https://example.com/a.png\",\"mime\":\"image/png\"}}",
     )
 }
 
 function media_field_roundtrip_str() -> string {
     let p: ProfileMedia = ProfileMedia { avatar: image.from_url("https://example.com/a.png", "image/png") };
-    let s: string = baml.json.to_string(p);
-    let d: ProfileMedia = baml.json.from_string<ProfileMedia>(s);
-    baml.json.to_string(d)
+    let s: string = baml.json.stringify(p);
+    let d: ProfileMedia = baml.json.decode<ProfileMedia>(s);
+    baml.json.stringify(d)
 }
 
 test "media_field_roundtrip" {
@@ -497,13 +497,13 @@ class ProfileAlias { display_name string @alias("displayName") }
 
 test "alias_field_uses_raw_name_in_json" {
     assert.equal(
-        baml.json.to_string(ProfileAlias { display_name: "Ada" }),
+        baml.json.stringify(ProfileAlias { display_name: "Ada" }),
         "{\"display_name\":\"Ada\"}",
     )
 }
 
 function alias_field_decodes_raw_name_val() -> string {
-    let d: ProfileAlias = baml.json.from_string<ProfileAlias>("{\"display_name\":\"Ada\"}");
+    let d: ProfileAlias = baml.json.decode<ProfileAlias>("{\"display_name\":\"Ada\"}");
     d.display_name
 }
 
@@ -520,7 +520,7 @@ class Bad { x uint8array }
 
 test "skip_field_still_emitted_in_json" {
     assert.equal(
-        baml.json.to_string(ProfileSkip { name: "Ada", internal_id: "secret" }),
+        baml.json.stringify(ProfileSkip { name: "Ada", internal_id: "secret" }),
         "{\"name\":\"Ada\",\"internal_id\":\"secret\"}",
     )
 }
@@ -528,7 +528,7 @@ test "skip_field_still_emitted_in_json" {
 // ─── json passthrough via TypeAlias ──────────────────────────────────────────
 
 function from_string_json_passthrough_int_match() -> bool {
-    let j: json = baml.json.from_string<json>("42");
+    let j: json = baml.json.decode<json>("42");
     match (j) {
         let n: int => true
         _ => false
@@ -540,7 +540,7 @@ test "from_string_json_passthrough_int" {
 }
 
 function from_string_json_passthrough_numeric_string_match() -> bool {
-    let j: json = baml.json.from_string<json>("\"42\"");
+    let j: json = baml.json.decode<json>("\"42\"");
     match (j) {
         let s: string => s == "42"
         _ => false
@@ -552,7 +552,7 @@ test "from_string_json_passthrough_numeric_string" {
 }
 
 function from_string_json_passthrough_object_len() -> int {
-    let j: json = baml.json.from_string<json>("{\"x\":7}");
+    let j: json = baml.json.decode<json>("{\"x\":7}");
     match (j) {
         let m: map<string, json> => m.length()
         _ => -1
@@ -565,7 +565,7 @@ test "from_string_json_passthrough_object" {
 
 function to_string_json_passthrough_str() -> string {
     let j: json = baml.json.parse("[1,2,3]");
-    baml.json.to_string(j)
+    baml.json.stringify(j)
 }
 
 test "to_string_json_passthrough" {

@@ -778,7 +778,7 @@ function gemini_build_body(
         generationConfig: generation_config,
         safetySettings: safety_settings,
     };
-    let base = _gm_strip_nulls(baml.json.to_json(request), false);
+    let base = _gm_strip_nulls(baml.json.from(request), false);
     baml.json.stringify(ai.wire.merge_request_body(base, request_body))
 }
 
@@ -860,7 +860,7 @@ function parse(resp: GmResponse, seq: int, provider: string = "google") -> ai.Mo
             message: err.message ?? "the Google request failed",
             error_type: err.status,
             error_code: if let code: int = err.code { code.to_string() } else { null },
-            raw_body: baml.json.stringify(baml.json.to_json(resp)),
+            raw_body: baml.json.stringify(resp),
             status_code: null,
         }
     }
@@ -914,7 +914,7 @@ function parse(resp: GmResponse, seq: int, provider: string = "google") -> ai.Mo
         throw ai.errors.InvalidResponse {
             provider: provider,
             message: "the response contained no model turn",
-            raw_body: baml.json.stringify(baml.json.to_json(resp)),
+            raw_body: baml.json.stringify(resp),
             status_code: null,
         }
     }
@@ -1017,7 +1017,7 @@ function _gm_decode_batch(batch: string, provider: string) -> ai.stream.Event[] 
         if (payload == "" || payload == "[DONE]") {
             null
         } else {
-            let resp: GmResponse = baml.json.from_string<GmResponse>(payload) catch_all (e) {
+            let resp: GmResponse = baml.json.decode<GmResponse>(payload) catch_all (e) {
                 _ => {
                     throw ai.errors.InvalidResponse {
                         provider: provider,

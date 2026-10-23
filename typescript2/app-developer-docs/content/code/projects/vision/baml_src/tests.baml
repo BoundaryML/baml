@@ -82,7 +82,7 @@ test "Cloudflare separates the image and preserves system instructions" {
             output_type: spec.output_type(),
         },
     );
-    let body = baml.json.from_string<CloudflareVisionInput>(request.body);
+    let body = baml.json.decode<CloudflareVisionInput>(request.body);
     assert.equal(request.method, "POST");
     assert.contains(
         request.url,
@@ -123,7 +123,7 @@ test "Cloudflare preview does not fetch an image URL" {
 
 test "Cloudflare response becomes a typed receipt" {
     let provider = CloudflareVisionClient { account_id: "test-account", api_token: "test-secret" };
-    let response = baml.json.from_string<CloudflareResponse>(
+    let response = baml.json.decode<CloudflareResponse>(
         `{"success":true,"result":{"response":"{\\\"merchant\\\":\\\"PAPER CUP CAFE\\\",\\\"items\\\":[],\\\"total\\\":16.74,\\\"currency\\\":\\\"USD\\\"}"},"errors":[]}`,
     );
     let turn = provider.to_turn(response);

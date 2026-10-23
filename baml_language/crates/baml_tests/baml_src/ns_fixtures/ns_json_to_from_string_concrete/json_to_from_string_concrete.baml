@@ -8,9 +8,9 @@ class User {
 }
 
 function serialize_user(u: User) -> string throws baml.json.SerializationError {
-  baml.json.to_string(u)
+  baml.json.stringify(u)
 }
 
 function deserialize_user(s: string) -> User throws baml.json.ParseError | baml.json.DecodeError {
-  baml.json.from_string<User>(s)
+  baml.json.decode<User>(s)
 }

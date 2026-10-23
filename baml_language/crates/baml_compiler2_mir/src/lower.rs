@@ -9916,7 +9916,7 @@ impl<'db> LoweringContext<'db> {
                     }
             )
         };
-        // Multi-segment paths: static methods, qualified free fns (e.g. baml.json.from_string).
+        // Multi-segment paths: static methods, qualified free fns (e.g. baml.json.decode).
         if let Some(item) = self
             .tir_path_final_resolution(base)
             .filter(|r| is_fn(r))

@@ -1999,7 +1999,7 @@ fn value_cell_text(vm: &BexVm, v: Value, null_value: &str) -> Result<String, Cel
                     Some(TimeClass::PlainDateTime) => plaindatetime_cell_text(inst)?,
                     None => {
                         return Err(CellTextErr::Unsupported(
-                            "nested class values are not CSV cells; serialize explicitly (e.g. baml.json.to_string)".to_string(),
+                            "nested class values are not CSV cells; serialize explicitly (e.g. baml.json.stringify)".to_string(),
                         ));
                     }
                 }
