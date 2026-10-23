@@ -103,6 +103,7 @@ impl<'db> Generator<'_, 'db> {
     pub(super) fn leaf(&mut self, id: BlockId) -> Gen<()> {
         // A leaf can have several predecessors, so its entry PC is unknown.
         self.current_mark = None;
+        self.current_pc = None;
         let pcs = self
             .positions
             .block_pcs
@@ -434,6 +435,9 @@ impl<'db> Generator<'_, 'db> {
             self.flush_bindings();
             self.out.push_str(&jump);
         } else {
+            if let Some(pc) = self.current_pc {
+                self.emit_line(&format!("pc = {pc};"));
+            }
             self.emit_statement(&format!("return Err({error});"));
         }
         Ok(())
@@ -463,6 +467,9 @@ impl<'db> Generator<'_, 'db> {
             &Expr::atom("context", Repr::Value),
         )?;
         let saved = std::mem::take(&mut self.out);
+        if let Some(pc) = self.current_pc {
+            self.emit_line(&format!("pc = {pc};"));
+        }
         self.emit_line("fr.note_pc(pc);");
         let slot = self.slot_base()
             + usize::from(self.cause_slot.is_some())
@@ -496,7 +503,12 @@ impl<'db> Generator<'_, 'db> {
     /// Route a thrown value to the block's handler, or propagate it with `?`.
     pub(super) fn fallible(&mut self, block: BlockId, code: &str) -> Gen<String> {
         if self.body.blocks[block.0].unwind.is_none() {
-            return Ok(format!("{code}?"));
+            let mark = self
+                .current_pc
+                .map_or_else(String::new, |pc| format!("pc = {pc}; "));
+            return Ok(format!(
+                "(match {code} {{ Ok(v) => v, Err(e) => {{ {mark}return Err(e); }} }})"
+            ));
         }
         let jump = self.unwind_jump(block, "e")?;
         Ok(format!(

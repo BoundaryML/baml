@@ -91,6 +91,8 @@ pub(crate) struct Generator<'a, 'db> {
     pub(crate) positions: &'a bex_vm_types::Bytecode,
     /// Source location and shielding last recorded in this leaf.
     pub(crate) current_mark: Option<(usize, bool)>,
+    /// Exact position for error branches; normal execution coalesces by line.
+    pub(crate) current_pc: Option<usize>,
     pub(crate) out: String,
     /// Bind non-atomic operands before calls to avoid overlapping VM borrows.
     pub(crate) pending: Vec<String>,
@@ -135,6 +137,7 @@ impl<'a, 'db> Generator<'a, 'db> {
             analysis: &unit.analysis,
             positions: program.index.positions(object),
             current_mark: None,
+            current_pc: None,
             out: String::new(),
             pending: Vec::new(),
             temps: 0,
@@ -744,6 +747,7 @@ impl<'db> Generator<'_, 'db> {
     /// Positions without bytecode retain the last PC.
     fn set_pc(&mut self, pc: Option<usize>) {
         let Some(pc) = pc else { return };
+        self.current_pc = Some(pc);
         let mark = (
             self.positions.source_line_for_pc(pc),
             self.positions.pc_is_shielded(pc),

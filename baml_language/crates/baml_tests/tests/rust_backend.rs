@@ -726,3 +726,57 @@ fn unsupported_programs_remain_bytecode() {
         }
     }
 }
+
+#[test]
+fn same_line_errors_keep_exact_bytecode_positions_on_error_branches() {
+    let db = baml_test_support::setup_test_db(
+        r#"
+function Throw() -> int throws int { let n = 1; throw n }
+function Caught() -> int { { let n = 1; throw n } catch (e) { int => 0 } }
+function Boundary() -> int { let map = { "present": 1 }; map["missing"] }
+"#,
+    );
+    for opt in [OptLevel::Zero, OptLevel::One, OptLevel::Two] {
+        let program = lower(&db, opt);
+        let module = render(&db, &program, opt, None);
+        for name in ["user.Throw", "user.Caught", "user.Boundary"] {
+            let object = program.rendered_callables()[name].object;
+            let Object::Function(function) = &program.objects[object] else {
+                unreachable!("a rendered callable is a function")
+            };
+            let pc = function
+                .bytecode
+                .instructions
+                .iter()
+                .rposition(|instruction| {
+                    if name == "user.Boundary" {
+                        matches!(instruction, Instruction::Call { .. })
+                    } else {
+                        matches!(instruction, Instruction::Throw)
+                    }
+                })
+                .unwrap();
+            let body: String = body_of(&module, name).split_whitespace().collect();
+            if name == "user.Boundary" {
+                let expected = format!("Err(e)=>{{pc={pc};returnErr(e);}}");
+                assert!(body.contains(&expected), "{name} at {opt:?}: {body}");
+            } else {
+                let marker = if name == "user.Throw" {
+                    "returnErr(bex_vm::compiled_rt::throw("
+                } else {
+                    "fr.note_pc(pc);"
+                };
+                // Operand temporaries may separate the PC assignment and raise.
+                let before = body.split_once(marker).unwrap().0;
+                let assigned = before
+                    .rsplit_once("pc=")
+                    .unwrap()
+                    .1
+                    .split(';')
+                    .next()
+                    .unwrap();
+                assert_eq!(assigned, pc.to_string(), "{name} at {opt:?}: {body}");
+            }
+        }
+    }
+}
