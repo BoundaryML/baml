@@ -339,3 +339,46 @@ test "path_decodes_the_leaf_as_t" {
     assert.equal(baml.json.path_or<int>(PATH_DOC, ".missing", 8), 8);
     assert.equal(baml.json.path_or<int>(PATH_DOC, ".list[0]", 9), 10)
 }
+
+// ─── An override behind a cycle, inside a union member ───────────────────────
+// Working out whether `ReachX` reaches an override meets `ReachX` again
+// through `ReachY`. The answer for `ReachY` must not be kept as `false` while
+// `ReachX` is still open: `ReachX` turns out `true` through `z`, so `ReachY`
+// does too, and the `z` nested in `y.x` must still go through `from_json`.
+
+class ReachZ {
+    v: int,
+
+    implements baml.FromJson {
+        function from_json(value: baml.json.json) -> Self throws never {
+            ReachZ { v: 42 }
+        }
+    }
+}
+
+class ReachX {
+    y: ReachY | string,
+    z: ReachZ,
+}
+
+class ReachY {
+    x: ReachX?,
+}
+
+function nested_reach_z(decoded: ReachX) -> int {
+    match (decoded.y) {
+        let y: ReachY => {
+            match (y.x) {
+                let x: ReachX => x.z.v,
+                null => -1,
+            }
+        },
+        string => -2,
+    }
+}
+
+test "an override behind a cycle is found inside a union member" {
+    let text = `{"y": {"x": {"y": "leaf", "z": {"v": 1}}}, "z": {"v": 1}}`;
+    assert.equal(nested_reach_z(baml.json.decode<ReachX>(text)), 42);
+    assert.equal(nested_reach_z(baml.json.to<ReachX>(baml.json.parse(text))), 42)
+}

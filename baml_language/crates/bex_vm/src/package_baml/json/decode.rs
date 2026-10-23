@@ -350,8 +350,12 @@ pub(super) struct Lookups {
     pub(super) plans: Plans,
     /// The `from_json` a `baml.FromJson` rule provides for a type, if any.
     provided: FxHashMap<RealizedTy, Option<(HeapPtr, Vec<RealizedTy>)>>,
-    /// Whether decoding a type can reach a provided `from_json`.
+    /// Whether decoding a type can reach a provided `from_json`. Holds only
+    /// final answers: see [`Lookups::reaches_override`].
     reaches: FxHashMap<RealizedTy, bool>,
+    /// The types [`Lookups::reaches_override`] is still working out, each
+    /// with its depth in the chain of types that led to it.
+    reaching: FxHashMap<RealizedTy, usize>,
 }
 
 /// Distinct types [`Lookups::reaches_override`] follows before it assumes an
@@ -364,6 +368,7 @@ impl Lookups {
             plans: Plans::new(naming),
             provided: FxHashMap::default(),
             reaches: FxHashMap::default(),
+            reaching: FxHashMap::default(),
         }
     }
 
@@ -396,6 +401,19 @@ impl Lookups {
     /// values, and the shown fields of classes, but not into aliases or
     /// `json`, which decode in place.
     pub(super) fn reaches_override(&mut self, vm: &BexVm, ty: &RealizedTy) -> bool {
+        self.reaches_from(vm, ty, 0).0
+    }
+
+    /// [`Self::reaches_override`] at `depth` in a chain of types still being
+    /// worked out. Also returns the shallowest depth of such a type the
+    /// answer leaned on, if any.
+    ///
+    /// A type met again while it is being worked out counts as `false` for
+    /// now. A `false` that leaned on a type above it in the chain is
+    /// provisional: that type may still turn out `true`, and so would this
+    /// one. Only answers that are `true`, or that leaned on nothing above
+    /// their own depth, are kept in `reaches`.
+    fn reaches_from(&mut self, vm: &BexVm, ty: &RealizedTy, depth: usize) -> (bool, Option<usize>) {
         if !matches!(
             ty,
             RealizedTy::Union(_)
@@ -405,25 +423,40 @@ impl Lookups {
                 | RealizedTy::Interface(..)
                 | RealizedTy::Enum(_)
         ) {
-            return false;
+            return (false, None);
         }
         if let Some(&reaches) = self.reaches.get(ty) {
-            return reaches;
+            return (reaches, None);
         }
-        if self.reaches.len() >= MAX_REACH_TYPES {
-            return true;
+        if let Some(&open) = self.reaching.get(ty) {
+            return (false, Some(open));
         }
-        // A type met again while it is being worked out adds nothing.
-        self.reaches.insert(ty.clone(), false);
+        if self.reaches.len() + self.reaching.len() >= MAX_REACH_TYPES {
+            return (true, None);
+        }
+        self.reaching.insert(ty.clone(), depth);
+        let mut leaned: Option<usize> = None;
+        let mut any = |this: &mut Self, members: &mut dyn Iterator<Item = &RealizedTy>| {
+            for member in members {
+                let (reaches, open) = this.reaches_from(vm, member, depth + 1);
+                if reaches {
+                    return true;
+                }
+                leaned = match (leaned, open) {
+                    (Some(a), Some(b)) => Some(a.min(b)),
+                    (a, b) => a.or(b),
+                };
+            }
+            false
+        };
         let reaches = match ty {
             RealizedTy::Union(members) if members.iter().any(RealizedTy::is_null) => {
-                self.reaches_override(vm, &ty.strip_null())
+                let stripped = ty.strip_null();
+                any(self, &mut std::iter::once(&stripped))
             }
-            RealizedTy::Union(members) => members
-                .iter()
-                .any(|member| self.reaches_override(vm, member)),
-            RealizedTy::List(element) => self.reaches_override(vm, element),
-            RealizedTy::Map { value, .. } => self.reaches_override(vm, value),
+            RealizedTy::Union(members) => any(self, &mut members.iter()),
+            RealizedTy::List(element) => any(self, &mut std::iter::once(element.as_ref())),
+            RealizedTy::Map { value, .. } => any(self, &mut std::iter::once(value.as_ref())),
             RealizedTy::Class(head, _) | RealizedTy::Interface(head, _, _)
                 if vm.stdlib_heads().media_kind(*head).is_some() =>
             {
@@ -432,19 +465,30 @@ impl Lookups {
             RealizedTy::Class(head, type_args) | RealizedTy::Interface(head, type_args, _) => {
                 self.provided(vm, *head, ty).is_some()
                     || match self.plans.class(vm, *head, type_args) {
-                        Ok(plan) => plan
-                            .fields
-                            .iter()
-                            .filter(|field| field.shown)
-                            .any(|field| self.reaches_override(vm, &field.ty)),
+                        Ok(plan) => any(
+                            self,
+                            &mut plan
+                                .fields
+                                .iter()
+                                .filter(|field| field.shown)
+                                .map(|field| &field.ty),
+                        ),
                         Err(_) => false,
                     }
             }
             RealizedTy::Enum(head) => self.provided(vm, *head, ty).is_some(),
             _ => false,
         };
-        self.reaches.insert(ty.clone(), reaches);
-        reaches
+        self.reaching.remove(ty);
+        // Leaning on this type itself is settled now; leaning on one above
+        // it is not.
+        let open = leaned.filter(|&at| at < depth);
+        if reaches || open.is_none() {
+            self.reaches.insert(ty.clone(), reaches);
+            (reaches, None)
+        } else {
+            (false, open)
+        }
     }
 
     fn roots(&self, roots: &mut Vec<HeapPtr>) {
@@ -465,6 +509,7 @@ impl Lookups {
         self.plans.clear();
         self.provided.clear();
         self.reaches.clear();
+        self.reaching.clear();
     }
 }
 
