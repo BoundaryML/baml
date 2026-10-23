@@ -1229,6 +1229,7 @@ BAML_TELEMETRY = "PACK_TELEMETRY"
 [bridge]
 on_initial_telemetry_failure = "warn"
 initial_telemetry_warning_message = "Telemetry unavailable; continuing."
+http_bodies = false
 [bridge.env_var_names]
 BAML_TELEMETRY = "ACME_TELEMETRY"
 "#,
@@ -1250,6 +1251,7 @@ BAML_TELEMETRY = "ACME_TELEMETRY"
                     action: InitialFailureAction::Warn,
                     warning_message: Some("Telemetry unavailable; continuing.".into()),
                 },
+                omit_http_bodies: true,
                 ..Default::default()
             }
         );

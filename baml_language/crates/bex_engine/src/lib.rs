@@ -1882,6 +1882,9 @@ impl BexEngine {
             None => btel_settings::mode::from_env()
                 .map_err(|error| EngineError::Other(error.to_string()))?,
         };
+        let http_bodies = artifact_telemetry
+            .as_ref()
+            .is_none_or(|policy| !policy.omit_http_bodies);
         #[cfg(not(target_arch = "wasm32"))]
         let recording = recording.map(|recording| match artifact_telemetry {
             Some(policy) => recording.with_artifact_telemetry(policy),
@@ -2082,9 +2085,10 @@ impl BexEngine {
                     ),
                 };
                 Ok::<_, EngineError>(EngineTelemetry {
-                    policies: Arc::new(bex_vm::telemetry::TelemetryPolicies::with_auto_level(
-                        auto_level,
-                    )),
+                    policies: Arc::new(
+                        bex_vm::telemetry::TelemetryPolicies::with_auto_level(auto_level)
+                            .with_http_bodies(http_bodies),
+                    ),
                     clock: btel_clock::ClockRuntime::new(clock_mode),
                     network: Arc::default(),
                     #[cfg(not(target_arch = "wasm32"))]

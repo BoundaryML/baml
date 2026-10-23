@@ -7,6 +7,7 @@
 //! [pack]
 //! on_initial_telemetry_failure = "warn"
 //! initial_telemetry_warning_message = "Telemetry unavailable; continuing."
+//! http_bodies = false
 //! [pack.env_var_names]
 //! BAML_TELEMETRY = "ACME_TELEMETRY"
 //! ```
@@ -107,6 +108,10 @@ pub struct ArtifactTelemetry {
     pub destination_overrides: DestinationOverrides,
     #[serde(default)]
     pub embedded: Option<Box<EmbeddedIngestion>>,
+    /// Set by `http_bodies = false`: network spans record no request or
+    /// response bodies, at any level.
+    #[serde(default)]
+    pub omit_http_bodies: bool,
 }
 
 /// An omitted binding follows credential-dependent defaults: embedded credentials
@@ -237,6 +242,7 @@ const PRODUCER_FIELDS: &[&str] = &[
     "on_initial_telemetry_failure",
     "initial_telemetry_warning_message",
     "telemetry_environment",
+    "http_bodies",
     "env_var_names",
 ];
 const ENVVAR_FIELDS: &[&str] = &["BAML_TELEMETRY", "BOUNDARY_PROJECT", "BOUNDARY_API_KEY"];
@@ -356,6 +362,11 @@ impl ArtifactTelemetry {
                     })?
                     .to_owned(),
             );
+        }
+        if let Some(value) = table.get("http_bodies") {
+            policy.omit_http_bodies = !value
+                .as_bool()
+                .ok_or_else(|| PolicyError(format!("{name}.http_bodies must be true or false.")))?;
         }
         if let Some(names) = table.get("env_var_names") {
             let names = names
@@ -524,6 +535,7 @@ on_inital_telemetry_failure = "ignore""#,
     on_initial_telemetry_failure
     initial_telemetry_warning_message
     telemetry_environment
+    http_bodies
     env_var_names"#,
             ),
             (
@@ -535,6 +547,7 @@ extra = true"#,
     on_initial_telemetry_failure
     initial_telemetry_warning_message
     telemetry_environment
+    http_bodies
     env_var_names"#,
             ),
             (
@@ -714,6 +727,43 @@ on_initial_telemetry_failure = "required""#,
                 .unwrap_err()
                 .to_string(),
             r#"bridge.on_initial_telemetry_failure must be abort, warn, or ignore."#
+        );
+    }
+
+    #[test]
+    fn http_bodies_is_a_boolean_that_defaults_to_recording_bodies() {
+        for kind in [ArtifactKind::Pack, ArtifactKind::Bridge] {
+            let name = kind.table();
+            for (input, omitted) in [
+                (String::new(), false),
+                (format!("[{name}]\nhttp_bodies = true"), false),
+                (format!("[{name}]\nhttp_bodies = false"), true),
+            ] {
+                let manifest: toml::Value = toml::from_str(&input).unwrap();
+                let policy = ArtifactTelemetry::from_manifest(&manifest, kind).unwrap();
+                assert_eq!(policy.omit_http_bodies, omitted, "{input}");
+            }
+            for value in ["\"false\"", "0", "{}"] {
+                let manifest: toml::Value =
+                    toml::from_str(&format!("[{name}]\nhttp_bodies = {value}")).unwrap();
+                assert_eq!(
+                    ArtifactTelemetry::from_manifest(&manifest, kind)
+                        .unwrap_err()
+                        .to_string(),
+                    format!("{name}.http_bodies must be true or false.")
+                );
+            }
+        }
+        // Each producer reads only its own table.
+        let manifest: toml::Value = toml::from_str("[pack]\nhttp_bodies = false").unwrap();
+        let bridge = ArtifactTelemetry::from_manifest(&manifest, ArtifactKind::Bridge).unwrap();
+        assert!(!bridge.omit_http_bodies);
+        // A policy baked before the setting existed still loads, recording bodies.
+        let mut baked = toml::Value::try_from(ArtifactTelemetry::default()).unwrap();
+        baked.as_table_mut().unwrap().remove("omit_http_bodies");
+        assert_eq!(
+            baked.try_into::<ArtifactTelemetry>().unwrap(),
+            ArtifactTelemetry::default()
         );
     }
 }

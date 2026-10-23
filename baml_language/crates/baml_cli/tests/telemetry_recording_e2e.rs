@@ -185,3 +185,182 @@ BAML_TELEMETRY = "BAML_TELEMETRY"
     assert!(!launch.join(RECORDINGS).exists());
     assert!(!temp.path().join(RECORDINGS).exists());
 }
+
+/// Sends a request whose body and response hold secrets, opens a stream
+/// whose event holds one, and opens a stream refused with a body that holds
+/// one, which the error quotes. No secret is a literal of the program, so
+/// only a recorded body can hold one.
+const NETWORK_PROGRAM: &str = r#"
+class Canned {
+    server: baml.http.Server,
+
+    function handle(self, req: baml.http.ServerRequest) -> baml.http.Response {
+        if (req.url.starts_with("/events")) {
+            let event = "data: event-" + "secret\n\n";
+            return baml.http.Response.new(200, { "content-type": "text/event-stream" }, event.to_utf8());
+        }
+        if (req.url.starts_with("/denied")) {
+            let reason = "error-" + "secret";
+            return baml.http.Response.new(403, { "content-type": "text/plain" }, reason.to_utf8());
+        }
+        let token = "response-" + "secret";
+        baml.http.Response.new(200, { "content-type": "text/plain" }, token.to_utf8())
+    }
+}
+
+function main() -> bool {
+    let canned = Canned { server: baml.http.Server.bind("127.0.0.1:0") };
+    let task = spawn { canned.server.serve(canned.handle) };
+    let base = "http://" + canned.server.addr;
+    let text = baml.http.send(baml.http.Request {
+        method: "POST",
+        url: base + "/session",
+        headers: { "content-type": "text/plain" },
+        body: "request-" + "secret",
+    }).text();
+    let events = baml.http.send_sse(baml.http.Request { method: "GET", url: base + "/events", headers: {}, body: "" });
+    let read = 0;
+    while (events.next() != null) {
+        read = read + 1;
+    }
+    // Caught here: a function the error left would record it, body included.
+    let refused = {
+        baml.http.send_sse(baml.http.Request { method: "GET", url: base + "/denied", headers: {}, body: "" });
+        false
+    } catch (e) {
+        baml.errors.Io => true,
+        _ => false
+    };
+    let _ = task.cancel();
+    text == "response-" + "secret" && read > 0 && refused
+}
+"#;
+
+/// `[pack] http_bodies = false` keeps request and response bodies, streamed
+/// events and errors that quote a body out of a packed binary's network
+/// spans, even at `high`; the request's method, the response's status, the
+/// outcome and the span's timing are still recorded.
+#[test]
+fn packed_http_bodies_false_keeps_bodies_out_of_network_spans() {
+    let _built = common::ensure_built();
+    for record_bodies in [true, false] {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source");
+        std::fs::create_dir(&source).unwrap();
+        common::write_project(&source, NETWORK_PROGRAM);
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(source.join("baml.toml"))
+            .unwrap()
+            .write_all(
+                format!(
+                    "[pack]\n{}\n[pack.env_var_names]\nBAML_TELEMETRY = \"BAML_TELEMETRY\"\n",
+                    if record_bodies {
+                        ""
+                    } else {
+                        "http_bodies = false"
+                    }
+                )
+                .as_bytes(),
+            )
+            .unwrap();
+        let home = home(temp.path());
+        common::share_build_cache(&home.join(".baml"));
+        let binary = temp.path().join("packed");
+        run(
+            cli(temp.path(), &home)
+                .args(["pack", "--from"])
+                .arg(&source)
+                .arg("-o")
+                .arg(&binary)
+                .arg("main"),
+            true,
+        );
+        let output = Command::new(&binary)
+            .current_dir(temp.path())
+            .env("HOME", &home)
+            .env("USERPROFILE", &home)
+            .env("BAML_HOME", home.join(".baml"))
+            .env_remove("BOUNDARY_API_KEY")
+            .env("BAML_TELEMETRY", "high")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "true\n");
+        assert_recordings(&home, 1);
+
+        // No secret reached the recording or its CAS.
+        let mut files = Vec::new();
+        files_under(&home.join(".baml/btel"), &mut files);
+        for secret in [
+            "request-secret",
+            "response-secret",
+            "event-secret",
+            "error-secret",
+        ] {
+            let holding = files.iter().any(|file| {
+                std::fs::read(file)
+                    .unwrap()
+                    .windows(secret.len())
+                    .any(|window| window == secret.as_bytes())
+            });
+            assert_eq!(holding, record_bodies, "{secret}");
+        }
+
+        let query = |sql: &str| {
+            let output = cli(temp.path(), &home)
+                .args(["query", "--local", "--format", "json", "--from"])
+                .arg(&home)
+                .arg(sql)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap()["rows"].take()
+        };
+        let body = |secret: &'static str| record_bodies.then_some(secret);
+        assert_eq!(
+            query(
+                "SELECT input_args['request']['method'], input_args['request']['body'],
+                   network_event_values[0]['payload']['status'],
+                   network_event_values[1]['event_name'], network_event_values[1]['payload'],
+                   duration > 0
+                 FROM spans WHERE span_name LIKE '%/session'"
+            ),
+            serde_json::json!([[
+                "POST",
+                body("request-secret"),
+                200,
+                "data",
+                body("response-secret"),
+                1
+            ]])
+        );
+        assert_eq!(
+            query(
+                "SELECT status, network_event_values[0]['payload']['status'],
+                   error_value IS NOT NULL
+                 FROM spans WHERE span_name LIKE '%/denied'"
+            ),
+            serde_json::json!([["user_error", 403, u8::from(record_bodies)]])
+        );
+    }
+}
+
+fn files_under(directory: &Path, found: &mut Vec<std::path::PathBuf>) {
+    for entry in std::fs::read_dir(directory).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            files_under(&path, found);
+        } else {
+            found.push(path);
+        }
+    }
+}
