@@ -10421,63 +10421,35 @@ impl<'db> InferenceContext<'db> {
         crate::impls::expand_alias_head(ty, &self.facts)
     }
 
-    /// Expose union structure hidden behind aliases, without rewriting payload
-    /// types. Full semantic canonicalization also erases literal freshness and
-    /// function parameter names, which structure consumers must preserve.
-    fn expand_union_aliases(&self, ty: &Ty) -> Ty {
-        fn expand(
-            this: &InferenceContext<'_>,
-            ty: &Ty,
-            visiting: &mut FxHashSet<Ty>,
-            memo: &mut FxHashMap<Ty, Ty>,
-        ) -> Ty {
-            if let Some(expanded) = memo.get(ty) {
-                return expanded.clone();
-            }
-            let head = this.expand_alias_ty(ty);
-            let InferTy::Union(members) = head.kind() else {
-                // Only union edges and null need exposing here. A surviving
-                // class/primitive alias keeps its spelling after null removal.
-                return if matches!(head.kind(), InferTy::Null) {
+    /// Expose aliases only along union edges. Alias heads use the existing
+    /// resolver; payloads retain their spelling, freshness and parameter names.
+    /// In particular, `Tree = Tree[] | null` exposes `Tree[]` and `null` but
+    /// never unfolds the element `Tree` or removes its own nullability.
+    fn flatten_union_structure(&self, ty: &Ty) -> Ty {
+        let mut pending = vec![ty.clone()];
+        let mut unions = FxHashSet::default();
+        let mut heads = FxHashSet::default();
+        let mut members = Vec::new();
+        while let Some(member) = pending.pop() {
+            let head = self.expand_alias_ty(&member);
+            if let InferTy::Union(inner) = head.kind() {
+                // A union contributes its reachable alternatives once. A
+                // repeated union adds no alternatives, including a recursive
+                // back-edge; retaining its alias would hide null again.
+                if unions.insert(head.clone()) {
+                    pending.extend(inner.iter().rev().cloned());
+                }
+            } else if heads.insert(head.clone()) {
+                // Expose aliased null, but preserve the first spelling of
+                // every surviving leaf (e.g. Count rather than int).
+                members.push(if matches!(head.kind(), InferTy::Null) {
                     head
                 } else {
-                    ty.clone()
-                };
-            };
-            // Invalid alias cycles are diagnosed at their declarations. Keep
-            // recovery bounded; valid recursion through a container stops below.
-            if !visiting.insert(head.clone()) {
-                return ty.clone();
+                    member
+                });
             }
-            let members: Vec<Ty> = members
-                .iter()
-                .map(|member| expand(this, member, visiting, memo))
-                .collect();
-            visiting.remove(&head);
-            let flat = syntactic_union(&members);
-            let expanded = if let InferTy::Union(members) = flat.kind() {
-                // Alias-equivalent leaves are repeats too, but the first
-                // survivor keeps its written name rather than its unfolded head.
-                let mut heads = FxHashSet::default();
-                let distinct: Vec<Ty> = members
-                    .iter()
-                    .filter(|member| heads.insert(this.expand_alias_ty(member)))
-                    .cloned()
-                    .collect();
-                syntactic_union(&distinct)
-            } else {
-                flat
-            };
-            memo.insert(ty.clone(), expanded.clone());
-            expanded
         }
-
-        expand(
-            self,
-            ty,
-            &mut FxHashSet::default(),
-            &mut FxHashMap::default(),
-        )
+        syntactic_union(&members)
     }
 
     /// The sole concrete function type at a callback root: `ty` itself, or
@@ -14159,7 +14131,7 @@ impl<'db> InferenceContext<'db> {
             }
             // Syntactic flattening alone cannot see null behind alias members.
             // Expose those union edges before null removal for ?., ?? or guards.
-            resolved = self.expand_union_aliases(&resolved);
+            resolved = self.flatten_union_structure(&resolved);
             // Deduplication may leave one aliased leaf. A structure demand
             // still needs that root's shape; null removal preserves member
             // spellings when it filters a surviving union below.
