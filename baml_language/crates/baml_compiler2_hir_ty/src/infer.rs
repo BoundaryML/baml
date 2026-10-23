@@ -10419,6 +10419,46 @@ impl<'db> InferenceContext<'db> {
         crate::impls::expand_alias_head(ty, &self.facts)
     }
 
+    /// Expose union structure hidden behind aliases, without rewriting payload
+    /// types. Full semantic canonicalization also erases literal freshness and
+    /// function parameter names, which structure consumers must preserve.
+    fn expand_union_aliases(&self, ty: &Ty) -> Ty {
+        fn expand(
+            this: &InferenceContext<'_>,
+            ty: &Ty,
+            visiting: &mut FxHashSet<Ty>,
+            memo: &mut FxHashMap<Ty, Ty>,
+        ) -> Ty {
+            if let Some(expanded) = memo.get(ty) {
+                return expanded.clone();
+            }
+            let head = this.expand_alias_ty(ty);
+            let InferTy::Union(members) = head.kind() else {
+                return head;
+            };
+            // Invalid alias cycles are diagnosed at their declarations. Keep
+            // recovery bounded; valid recursion through a container stops below.
+            if !visiting.insert(head.clone()) {
+                return ty.clone();
+            }
+            let members: Vec<Ty> = members
+                .iter()
+                .map(|member| expand(this, member, visiting, memo))
+                .collect();
+            visiting.remove(&head);
+            let expanded = syntactic_union(&members);
+            memo.insert(ty.clone(), expanded.clone());
+            expanded
+        }
+
+        expand(
+            self,
+            ty,
+            &mut FxHashSet::default(),
+            &mut FxHashMap::default(),
+        )
+    }
+
     /// The sole concrete function type at a callback root: `ty` itself, or
     /// the unique function member nested through unions and type aliases.
     ///
@@ -11465,6 +11505,9 @@ impl<'db> InferenceContext<'db> {
         if resolved.has_error() || resolved.has_infer() {
             return;
         }
+        // Nullability is a structural question here just as it is when the
+        // chain peels null; nullable aliases must receive the same answer.
+        let resolved = self.structurally_resolve(&resolved);
         let nullable = match resolved.kind() {
             InferTy::Null | InferTy::Unknown => true,
             InferTy::Union(members) => members
@@ -14075,6 +14118,9 @@ impl<'db> InferenceContext<'db> {
         if resolved.has_infer() && resolved.has_projection() {
             resolved = self.force_occurring_vars(&resolved);
         }
+        // Unfold the head before inspecting union structure: an alias can
+        // expose another union whose members themselves name nullable aliases.
+        resolved = self.expand_alias_ty(&resolved);
         // A member access on a union resolves through the ONE interface every
         // arm shares, so the arm count IS the structure here — and a demand
         // cannot wait for the finish fixpoint the way a relation can
@@ -14090,6 +14136,9 @@ impl<'db> InferenceContext<'db> {
                 resolved = self.force_occurring_vars(&resolved);
                 resolved = self.deduped_unions(&resolved);
             }
+            // Syntactic flattening alone cannot see null behind alias members.
+            // Expose those union edges before null removal for ?., ?? or guards.
+            resolved = self.expand_union_aliases(&resolved);
         }
         // rustc's `structurally_resolve_type` NORMALIZES as well as
         // resolving: a ground reducible projection is not structure -
@@ -14109,14 +14158,6 @@ impl<'db> InferenceContext<'db> {
             let canonical = self.canonicalize_unions(&closed);
             let reduced = self.reduce_projections(&canonical, PROJECTION_FINALIZE_FUEL);
             return self.expand_alias_ty(&reduced);
-        }
-        // WEAK aliases normalize here too (rustc's `Alias::Weak` in
-        // `structurally_resolve_type`): a structure consumer never
-        // sees the nominal wrapper, so no consumer can forget to
-        // expand. Recorded types keep the written name - this is the
-        // demanded STRUCTURE, not the render.
-        if matches!(resolved.kind(), InferTy::TypeAlias(..)) {
-            return self.expand_alias_ty(&resolved);
         }
         resolved
     }

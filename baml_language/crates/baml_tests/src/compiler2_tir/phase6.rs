@@ -328,7 +328,6 @@ function f(callback: MaybeFn) -> int? {
       { : never
         return callback?.(42) : int | null
       }
-      !! 99..113: did you mean `callback(42)`? `callback?.(42)` is unnecessary, because `callback` cannot be null
     }
     ");
 }
@@ -355,7 +354,6 @@ function f(u: MaybeUser) -> string? {
       { : never
         return u?.name : string | null
       }
-      !! 100..107: did you mean `u.name`? `u?.name` is unnecessary, because `u` cannot be null
     }
     ");
 }
