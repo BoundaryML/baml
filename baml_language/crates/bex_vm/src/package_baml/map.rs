@@ -121,11 +121,6 @@ impl MapDriver {
                 matched = None;
                 continue;
             };
-            if matches!(self.operation, Operation::Set | Operation::GetOrInsert) {
-                let ptr = self.map.as_object_ptr().unwrap();
-                vm.heap.write_barrier(ptr, self.key);
-                vm.heap.write_barrier(ptr, self.value);
-            }
             return match self.operation {
                 Operation::Has => NativeCallResult::Done(Value::bool(previous.is_some())),
                 Operation::Index if previous.is_none() => {

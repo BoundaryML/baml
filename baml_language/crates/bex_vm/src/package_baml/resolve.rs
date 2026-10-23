@@ -1514,8 +1514,7 @@ mod tests {
 
     #[test]
     fn a_collection_forwards_live_answers_and_drops_dead_ones() {
-        use bex_heap::CollectionLevel;
-        use bex_vm_types::RootHaver as _;
+        use bex_vm_types::RootHaverExt as _;
 
         let mut vm = crate::vm::tests::test_vm(Vec::new());
         let live_head = defaulted_interface(&mut vm, "Live");
@@ -1545,10 +1544,7 @@ mod tests {
         // SAFETY: the test VM is the heap's only mutator and holds no
         // pointer the root set misses.
         #[allow(unsafe_code, reason = "a test drives the collector directly")]
-        let (_, _, forwarding) = unsafe {
-            vm.heap
-                .collect_garbage_generational(&roots, CollectionLevel::Major)
-        };
+        let (_, _, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
         let moved_rule = forwarding[&live_rule];
         assert_ne!(
             moved_rule, live_rule,
@@ -1588,8 +1584,8 @@ mod tests {
 
     #[test]
     fn a_collection_rekeys_answers_under_a_moved_world_root() {
-        use bex_heap::{CollectionLevel, TlabHolder};
-        use bex_vm_types::{Object, RootHaver as _};
+        use bex_heap::TlabHolder;
+        use bex_vm_types::{Object, RootHaverExt as _};
 
         let mut vm = crate::vm::tests::test_vm(Vec::new());
         let head = defaulted_interface(&mut vm, "Defaulted");
@@ -1614,10 +1610,7 @@ mod tests {
         // SAFETY: the test VM is the heap's only mutator and holds no
         // pointer the root set misses.
         #[allow(unsafe_code, reason = "a test drives the collector directly")]
-        let (_, _, forwarding) = unsafe {
-            vm.heap
-                .collect_garbage_generational(&roots, CollectionLevel::Major)
-        };
+        let (_, _, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
         let moved_root = forwarding[&live_root];
         assert_ne!(moved_root, live_root, "the collection moves the live root");
         let heap = std::sync::Arc::clone(&vm.heap);

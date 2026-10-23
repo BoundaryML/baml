@@ -134,10 +134,8 @@ impl DynDispatchTables {
     /// moved, and sweep the entries whose owning runtime class died.
     ///
     /// Death is the visitor's verdict, never mere absence from the forwarding
-    /// map: a *minor* collection identity-maps every Gen2 object it does not
-    /// visit, so an old runtime class reachable only from other old objects is
-    /// alive yet absent from the map. Treating absence as death there evicted
-    /// live classes on every minor GC.
+    /// map: the compile-time region is never collected, so a pointer into it
+    /// is live however many collections leave it in place.
     pub fn visit_weak_entries(&self, visitor: &mut dyn RootVisitor) {
         let mut table = self
             .impl_rules
@@ -154,10 +152,9 @@ impl DynDispatchTables {
                 if !entry.class.visit(visitor) {
                     return false;
                 }
-                // The rule is reachable iff its class is; a class that survived
+                // The rule is reachable iff its class is: a class that survived
                 // keeps its rule alive through the same tracing that found the
-                // class, so a live class with an unforwarded rule means the rule
-                // sat in a generation the collection left in place.
+                // class.
                 let rule_live = entry.rule.visit(visitor);
                 debug_assert!(rule_live, "a witness rule outlived by its class");
                 rule_live
@@ -836,8 +833,8 @@ pub fn build_heap_with_packages(
 
 #[cfg(test)]
 mod tests {
-    use bex_heap::{CollectionLevel, Generation, Tlab};
-    use bex_vm_types::{ForwardRoots, RootHaver, types::Object};
+    use bex_heap::Tlab;
+    use bex_vm_types::{ForwardRoots, RootHaverExt, types::Object};
 
     use super::*;
 
@@ -926,65 +923,5 @@ mod tests {
             0,
             "dropping the last runtime class/witness reachability must sweep every rule"
         );
-    }
-
-    /// A minor collection identity-maps every Gen2 object it does not visit, so
-    /// an old runtime class reachable only from other old objects is alive yet
-    /// absent from the forwarding map. The sweep must not evict it.
-    #[test]
-    fn minor_collection_keeps_unvisited_old_witnesses() {
-        let heap = BexHeap::new(vec![Object::String(bex_str::BexStr::from(
-            "static interface",
-        ))]);
-        let interface = heap.compile_time_ptr(0);
-        let tables = Arc::new(DynDispatchTables::default());
-        let mut hook = DynDispatchRoot::new(Arc::clone(&tables));
-        let (mut tlab, owners) = register_witnesses(&heap, &tables, interface, 8);
-
-        // Promote everything into Gen2: two minors move Gen0 -> Gen1 -> Gen2.
-        // `roots[0]` is the first owner throughout — each collection returns
-        // the remapped root list in order.
-        let mut roots = owners;
-        roots.extend(tables.rules_of(interface));
-        #[expect(unsafe_code, reason = "standalone stop-the-world GC test")]
-        let (_, roots, forwarding) =
-            unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Minor) };
-        hook.forward_roots(&mut ForwardRoots::new(&forwarding, &*heap));
-        #[expect(unsafe_code, reason = "standalone stop-the-world GC test")]
-        let (_, roots, forwarding) =
-            unsafe { heap.collect_garbage_generational(&roots, CollectionLevel::Minor) };
-        hook.forward_roots(&mut ForwardRoots::new(&forwarding, &*heap));
-        assert_eq!(tables.rule_count(), 8);
-        let old_class = roots[0];
-        assert_eq!(heap.generation_of(old_class), Generation::Gen2);
-
-        // Now a minor collection with NO roots at all: nothing young is live,
-        // and the old witnesses are simply not visited. They must all survive.
-        tlab.invalidate();
-        #[expect(unsafe_code, reason = "standalone stop-the-world GC test")]
-        let (_, _, forwarding) =
-            unsafe { heap.collect_garbage_generational(&[], CollectionLevel::Minor) };
-        assert!(
-            !forwarding.contains_key(&old_class),
-            "precondition: an unvisited Gen2 object is absent from a minor forwarding map"
-        );
-        hook.forward_roots(&mut ForwardRoots::new(&forwarding, &*heap));
-        assert_eq!(
-            tables.rule_count(),
-            8,
-            "a minor collection must not evict live, unvisited old witnesses"
-        );
-        assert!(
-            !tables.rules_for_class(old_class).is_empty(),
-            "the unvisited owner keeps its witness"
-        );
-
-        // A major with no roots reclaims them for real.
-        #[expect(unsafe_code, reason = "standalone stop-the-world GC test")]
-        let (_, _, forwarding) =
-            unsafe { heap.collect_garbage_generational(&[], CollectionLevel::Major) };
-        hook.forward_roots(&mut ForwardRoots::new(&forwarding, &*heap));
-        assert_eq!(tables.rule_count(), 0);
-        drop(roots);
     }
 }

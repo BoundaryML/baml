@@ -4,7 +4,6 @@ mod common;
 use std::sync::Arc;
 
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
-use bex_heap::CollectionLevel;
 use common::compile_for_engine;
 use sys_native::SysOpsExt;
 
@@ -119,7 +118,7 @@ async fn returned_callbacks_share_captured_mutable_state() {
         .call_callable(increment, vec![], context(), true)
         .await
         .expect("increment callback should run");
-    engine.collect_garbage(CollectionLevel::Major).await;
+    engine.collect_garbage().await;
     let observed = engine
         .call_callable(observe, vec![], context(), true)
         .await

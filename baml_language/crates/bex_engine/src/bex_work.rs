@@ -3,7 +3,7 @@
 //! heap permit. Moving GC cannot.
 use std::sync::{Arc, Mutex, Weak};
 
-use bex_heap::{BexHeap, CollectionLevel};
+use bex_heap::BexHeap;
 use tokio::sync::Notify;
 #[cfg(not(target_arch = "wasm32"))]
 use tokio::time::Instant;
@@ -325,14 +325,11 @@ impl BexEngine {
         // The admitted entry is parked with its VM inputs rooted in the
         // entry frame. No active heap permit is held across collection.
         if idle_due || self.heap.should_gc() {
-            self.collect_garbage_with_reason(
-                CollectionLevel::Major,
-                if idle_due {
-                    "idle_on_entry"
-                } else {
-                    "allocation_on_entry"
-                },
-            )
+            self.collect_garbage_with_reason(if idle_due {
+                "idle_on_entry"
+            } else {
+                "allocation_on_entry"
+            })
             .await;
         }
     }
@@ -372,8 +369,7 @@ impl BexEngine {
         if !self.bex_work.due() {
             return;
         }
-        self.collect_garbage_parked(CollectionLevel::Major, "idle", guard, cycle)
-            .await;
+        self.collect_garbage_parked("idle", guard, cycle).await;
     }
 }
 
@@ -799,7 +795,7 @@ mod tests {
     async fn full_collection_consumes_only_the_version_it_observed() {
         let engine = engine();
         let kept = tiny(&engine).await;
-        engine.collect_garbage(CollectionLevel::Major).await;
+        engine.collect_garbage().await;
         advance(IDLE_DELAY * 2).await;
         assert_eq!(engine.heap.gc_budget().full_collections, 1);
         let collected = engine.bex_work.cleanup_version();

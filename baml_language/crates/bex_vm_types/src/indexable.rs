@@ -279,7 +279,7 @@ pub type ObjectPool = Pool<Object, ObjectKind>;
 ///
 /// Wraps an `Arc<UnsafeCell<Box<[Value]>>>` so every VM holds a cheap
 /// refcounted view, and so the GC can rewrite `Value::object(HeapPtr)`
-/// entries in place after an object move (via `RootHaver::forward_roots`)
+/// entries in place after an object move (via `RootHaverExt::forward_roots`)
 /// without re-broadcasting a new `Arc` to every VM.
 ///
 /// # Why this exists
@@ -298,9 +298,9 @@ pub type ObjectPool = Pool<Object, ObjectKind>;
 /// - Reads ([`Self::get`], [`Self::as_slice`]) require the caller to hold an
 ///   active heap permit. While any permit is active, GC cannot park, so
 ///   `forward_roots` cannot be running.
-/// - [`RootHaver::collect_roots`] / [`RootHaver::forward_roots`] are only
-///   called by the GC while every permit is parked — so the `&mut` view they
-///   take through the [`UnsafeCell`] cannot alias any reader.
+/// - The root walks ([`RootHaverExt`](crate::RootHaverExt)) are only run by
+///   the GC while every permit is parked — so the `&mut` view they take
+///   through the [`UnsafeCell`] cannot alias any reader.
 ///
 /// The "caller holds a permit for the slice's lifetime" obligation is
 /// **not** enforced by the type system: `SharedGlobals` is `Send + Sync +
@@ -589,11 +589,11 @@ pub type ObjectIndex = Index<ObjectKind>;
 #[cfg(test)]
 mod shared_globals_tests {
     use super::*;
-    use crate::HeapPtr;
+    use crate::{HeapPtr, RootHaverExt};
 
     fn fake_ptr(addr: usize) -> HeapPtr {
         // SAFETY: tests never deref the pointer; we only inspect it as a
-        // raw `HeapPtr` through `RootHaver::collect_roots` /
+        // raw `HeapPtr` through `RootHaverExt::collect_roots` /
         // `forward_roots`. The address need not be a valid heap slot.
         #[cfg(feature = "heap_debug")]
         unsafe {
@@ -647,7 +647,10 @@ mod shared_globals_tests {
         let mut forwarding = std::collections::HashMap::new();
         forwarding.insert(old1, new1);
         forwarding.insert(old2, new2);
-        globals.forward_roots(&mut crate::ForwardRoots::new(&forwarding, &()));
+        globals.forward_roots(&mut crate::ForwardRoots::new(
+            &forwarding,
+            &crate::NothingCollected,
+        ));
 
         // Take a fresh `as_slice()` view; the in-place rewrite must be
         // visible through the *same* `Arc<UnsafeCell<...>>` that any
@@ -676,7 +679,10 @@ mod shared_globals_tests {
 
         let mut forwarding = std::collections::HashMap::new();
         forwarding.insert(old, new);
-        held_by_holder.forward_roots(&mut crate::ForwardRoots::new(&forwarding, &()));
+        held_by_holder.forward_roots(&mut crate::ForwardRoots::new(
+            &forwarding,
+            &crate::NothingCollected,
+        ));
 
         // The engine-side clone (`original`) must see the rewrite.
         // SAFETY: single-threaded test; no concurrent `forward_roots`.

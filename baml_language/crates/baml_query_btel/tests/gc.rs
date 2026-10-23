@@ -7,7 +7,6 @@ use bex_engine::{
     BexEngine, BexExternalValue, EngineConfig, FunctionCallContextBuilder, ProcessStatus,
     TelemetryRecording,
 };
-use bex_heap::CollectionLevel;
 use btel_recorder::RecordingConfig;
 use serde_json::json;
 use support::{engine, index, sql};
@@ -17,21 +16,18 @@ use sys_native::SysOpsExt;
 async fn all_collections_share_one_root_profiler_node() {
     let project = tempfile::tempdir().unwrap();
     let mut expected_explicit = vec![];
-    // Both levels, repeated across independently created engines/recordings,
+    // Collections repeated across independently created engines/recordings
     // must still fold into the same node in this process's profiler.
     for _ in 0..2 {
         let engine = engine(project.path(), RecordingConfig::default());
-        for (level, name) in [
-            (CollectionLevel::Minor, "minor"),
-            (CollectionLevel::Major, "major"),
-        ] {
-            let stats = engine.collect_garbage(level).await;
+        for _ in 0..2 {
+            let stats = engine.collect_garbage().await;
             expected_explicit.push(vec![
-                json!(name),
+                json!("major"),
                 json!(stats.live_count),
                 json!(stats.collected_count),
-                json!(stats.promoted_to_gen1),
-                json!(stats.promoted_to_gen2),
+                json!(0),
+                json!(stats.live_count),
                 json!(stats.live_payload_bytes),
             ]);
         }
@@ -188,8 +184,10 @@ async fn collections_work_with_telemetry_disabled() {
         .unwrap(),
     );
     assert!(engine.telemetry_recording_directory().is_none());
-    for level in [CollectionLevel::Minor, CollectionLevel::Major] {
-        assert_eq!(engine.collect_garbage(level).await.level, level);
+    for _ in 0..2 {
+        let before = engine.heap().gc_budget().full_collections;
+        engine.collect_garbage().await;
+        assert_eq!(engine.heap().gc_budget().full_collections, before + 1);
     }
     tokio::time::timeout(Duration::from_secs(10), engine.shutdown())
         .await

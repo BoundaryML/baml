@@ -22,8 +22,6 @@ impl BexVm {
 
     #[inline]
     pub fn cell_store(&mut self, cell: Value, value: Value) -> Result<(), Box<VmError>> {
-        let (ptr, _) = self.cell_of(cell)?;
-        self.heap.write_barrier(ptr, value);
         let (_, cell) = self.cell_of(cell)?;
         cell.store(value);
         Ok(())

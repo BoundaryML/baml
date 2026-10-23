@@ -85,7 +85,7 @@ impl AllocationBudget {
     /// Called with all mutators parked, after full collection has moved
     /// survivors. `live_bytes` is what the survivors occupy: their slots and
     /// what they keep alive outside them. Collector moves are not allocation
-    /// spending. Minor GC never resets this.
+    /// spending.
     pub(crate) fn after_full(&self, live_bytes: usize) {
         self.spent.store(0, Ordering::Relaxed);
         self.budget.store(
@@ -118,7 +118,7 @@ mod tests {
     use bex_vm_types::Object;
 
     use super::*;
-    use crate::{CollectionLevel, Tlab};
+    use crate::Tlab;
 
     const BUDGET: isize = MIN_FULL_BUDGET as isize;
 
@@ -164,16 +164,13 @@ mod tests {
         assert!(!p.due());
     }
 
+    /// A full collection settles what was spent: the budget restarts from
+    /// zero, the collection is counted, and nothing is due any more.
     #[test]
-    fn minor_does_not_erase_full_spending() {
+    fn a_full_collection_resets_spending() {
         let heap = BexHeap::new(vec![]);
         heap.gc_policy.adjust(BUDGET);
-        // SAFETY: standalone heap, no concurrent users or retained pointers.
-        unsafe {
-            heap.collect_garbage_minor(&[]);
-        }
-        assert_eq!(heap.gc_budget().bytes_since_full_gc, BUDGET);
-        assert_eq!(heap.should_collect(), Some(CollectionLevel::Major));
+        assert!(heap.should_gc());
         assert!(heap.gc_pressure().load(Ordering::Relaxed));
         // SAFETY: standalone heap, no concurrent users or retained pointers.
         unsafe {
@@ -181,7 +178,25 @@ mod tests {
         }
         assert_eq!(heap.gc_budget().bytes_since_full_gc, 0);
         assert_eq!(heap.gc_budget().full_collections, 1);
-        assert_eq!(heap.should_collect(), None);
+        assert!(!heap.should_gc());
+    }
+
+    /// A full collection makes every outstanding balance stale: what it
+    /// counted is in the census now, so invalidating the allocator discards
+    /// it rather than settling it a second time.
+    #[test]
+    fn invalidation_discards_the_balance_after_a_full_collection() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(heap.clone());
+        tlab.alloc_uint8array(vec![0; 1000]);
+        assert_eq!(tlab.alloc_debt().balance(), 1000);
+        // SAFETY: single-threaded heap with no surviving roots.
+        unsafe {
+            heap.collect_garbage(&[]);
+        }
+        tlab.invalidate();
+        assert_eq!(tlab.alloc_debt().balance(), 0);
+        assert_eq!(heap.gc_budget().bytes_since_full_gc, 0);
     }
 
     #[test]
@@ -290,28 +305,6 @@ mod tests {
             heap.gc_budget().bytes_since_full_gc,
             slots + 1000 + (32 * size_of::<Object>()) as isize + 330
         );
-    }
-
-    /// A full collection makes every outstanding balance stale: what it
-    /// counted is in the census now. A minor collection does not.
-    #[test]
-    fn invalidation_discards_the_balance_only_after_a_full_collection() {
-        let heap = BexHeap::new(vec![]);
-        let mut tlab = Tlab::new(heap.clone());
-        tlab.alloc_uint8array(vec![0; 1000]);
-        // SAFETY: single-threaded heap with no surviving roots.
-        unsafe {
-            heap.collect_garbage_minor(&[]);
-        }
-        tlab.invalidate();
-        assert_eq!(tlab.alloc_debt().balance(), 1000);
-        // SAFETY: as above.
-        unsafe {
-            heap.collect_garbage(&[]);
-        }
-        tlab.invalidate();
-        assert_eq!(tlab.alloc_debt().balance(), 0);
-        assert_eq!(heap.gc_budget().bytes_since_full_gc, 0);
     }
 
     /// The budget after a full collection covers the survivors' payload, not

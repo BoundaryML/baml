@@ -541,10 +541,7 @@ mod tests {
         };
         data.lock_mut(&scratch).fill(7);
         // Captures are independent: the graph does not contribute any GC roots.
-        unsafe {
-            vm.heap
-                .collect_garbage_generational(&[], bex_heap::CollectionLevel::Major)
-        };
+        unsafe { vm.heap.collect_garbage(&[]) };
         drop(vm);
         let root = snapshot.roots()[0];
         let Obj::List {
@@ -589,10 +586,7 @@ mod tests {
             Value::object(first),
             Value::object(second),
         ]);
-        unsafe {
-            vm.heap
-                .collect_garbage_generational(&[], bex_heap::CollectionLevel::Major)
-        };
+        unsafe { vm.heap.collect_garbage(&[]) };
         drop(vm);
         assert!(
             weak.upgrade().is_none(),
@@ -654,10 +648,7 @@ mod tests {
             .collect();
         drop(sources);
         let snapshot = capture(&values);
-        unsafe {
-            vm.heap
-                .collect_garbage_generational(&[], bex_heap::CollectionLevel::Major)
-        };
+        unsafe { vm.heap.collect_garbage(&[]) };
         drop(vm);
         assert!(weak.iter().all(|weak| weak.upgrade().is_none()));
         let roots = snapshot.roots();
@@ -940,8 +931,7 @@ mod tests {
                 unreachable!()
             };
             map.lock_mut(&bex_vm_types::AllocDebt::new()).clear();
-            vm.heap
-                .collect_garbage_generational(&[], bex_heap::CollectionLevel::Major);
+            vm.heap.collect_garbage(&[]);
         }
         drop(vm);
         let Obj::Map { entries, .. } = captured_object(&snapshot, snapshot.roots()[0]) else {

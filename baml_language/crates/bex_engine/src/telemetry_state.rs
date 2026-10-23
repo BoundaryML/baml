@@ -88,26 +88,26 @@ impl GcTelemetry {
             return;
         };
 
-        let level = match stats.level {
-            bex_heap::CollectionLevel::Minor => "minor",
-            bex_heap::CollectionLevel::Major => "major",
-        };
         let mut patch = ContextPatch::default();
+        // Every collection is a full one, which promotes each survivor
+        // straight to the survivor space. The level and promotion keys stay,
+        // with what a full collection always reports, so recorded telemetry
+        // keeps one schema.
         for (key, value) in [
-            ("collection_level", ContextValue::String(level.into())),
+            ("collection_level", ContextValue::String("major".into())),
             ("trigger", ContextValue::String(reason.into())),
         ] {
             patch.metadata.insert(key.into(), Some(value));
         }
         // These are slots, including unused TLAB reservations, not object deaths.
         for (key, count) in [
-            ("live_slots", Some(stats.live_count)),
-            ("reclaimed_slots", Some(stats.collected_count)),
-            ("promoted_to_gen1", Some(stats.promoted_to_gen1)),
-            ("promoted_to_gen2", Some(stats.promoted_to_gen2)),
+            ("live_slots", stats.live_count),
+            ("reclaimed_slots", stats.collected_count),
+            ("promoted_to_gen1", 0),
+            ("promoted_to_gen2", stats.live_count),
             ("live_payload_bytes", stats.live_payload_bytes),
         ] {
-            if let Some(value) = count.and_then(|count| i64::try_from(count).ok()) {
+            if let Ok(value) = i64::try_from(count) {
                 patch
                     .metadata
                     .insert(key.into(), Some(ContextValue::Int(value)));

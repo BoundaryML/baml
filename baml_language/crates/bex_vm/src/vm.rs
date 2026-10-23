@@ -407,10 +407,10 @@ pub(crate) mod tests {
     use std::sync::atomic::AtomicBool;
     use std::{collections::HashMap, sync::Arc};
 
-    use bex_heap::{BexHeap, CollectionLevel, Tlab};
+    use bex_heap::{BexHeap, Tlab};
     use bex_vm_types::{
-        EarlyYieldCheck, FunctionKind, GlobalPool, HeapPtr, Object, ObjectIndex, RootHaver, Value,
-        ValueKind, VmGlobals,
+        EarlyYieldCheck, FunctionKind, GlobalPool, HeapPtr, Object, ObjectIndex, RootHaver,
+        RootHaverExt, Value, ValueKind, VmGlobals,
         bytecode::Bytecode,
         types::{BoundMethod, Closure, Function, FunctionOrigin, type_tags},
     };
@@ -962,7 +962,7 @@ pub(crate) mod tests {
                         unreachable!()
                     };
                     // This isolated VM owns the heap; no collector runs in this test.
-                    assert!(unsafe { value.settle_ready(vm.heap.as_ref(), future, Value::int(7)) });
+                    assert!(unsafe { value.settle_ready(Value::int(7)) });
                 };
                 if !sysop && !pending {
                     settle(&vm);
@@ -1196,10 +1196,7 @@ pub(crate) mod tests {
             "active trampoline frame must root its synthetic function"
         );
 
-        let (stats, _remapped_roots, forwarding) = unsafe {
-            vm.heap
-                .collect_garbage_generational(&roots, CollectionLevel::Major)
-        };
+        let (stats, _remapped_roots, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
 
         assert_eq!(stats.live_count, 1);
         assert!(
@@ -1207,7 +1204,8 @@ pub(crate) mod tests {
             "active trampoline function must be forwarded by GC"
         );
 
-        vm.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &()));
+        let heap = Arc::clone(&vm.heap);
+        vm.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
 
         let moved_trampoline = trampoline_ptr(&vm);
         assert!(
@@ -1246,10 +1244,7 @@ pub(crate) mod tests {
             "returned trampoline function must not remain rooted"
         );
 
-        let (stats, _remapped_roots, forwarding) = unsafe {
-            vm.heap
-                .collect_garbage_generational(&roots, CollectionLevel::Major)
-        };
+        let (stats, _remapped_roots, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
 
         assert_eq!(stats.live_count, 0);
         assert!(
@@ -1301,15 +1296,13 @@ pub(crate) mod tests {
             "a live realized frame argument must root its declaration without metadata",
         );
 
-        let (_stats, _remapped_roots, forwarding) = unsafe {
-            vm.heap
-                .collect_garbage_generational(&roots, CollectionLevel::Major)
-        };
+        let (_stats, _remapped_roots, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
         let moved = forwarding
             .get(&class_ptr)
             .copied()
             .expect("the frame type argument's declaration must survive collection");
-        vm.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &()));
+        let heap = Arc::clone(&vm.heap);
+        vm.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
 
         let Some(Frame::Bytecode(frame)) = vm.frames.last() else {
             panic!("expected trampoline bytecode frame");
@@ -1357,15 +1350,13 @@ pub(crate) mod tests {
             "a native call's realized argument must root its runtime declaration",
         );
 
-        let (_stats, _remapped_roots, forwarding) = unsafe {
-            vm.heap
-                .collect_garbage_generational(&roots, CollectionLevel::Major)
-        };
+        let (_stats, _remapped_roots, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
         let moved = forwarding
             .get(&class_ptr)
             .copied()
             .expect("the pending native type argument must survive collection");
-        vm.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &()));
+        let heap = Arc::clone(&vm.heap);
+        vm.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
 
         let bex_vm_types::RealizedTy::Class(head, ..) = &vm.pending_call_type_args[0] else {
             panic!("the pending native argument must remain the dynamic class type")
@@ -3851,7 +3842,6 @@ impl BexVm {
             .get(index.raw())
             .ok_or(VmInternalError::StoreGlobalAfterInit)?;
         slot.store(value);
-        self.heap.write_barrier(package_ptr, value);
         Ok(())
     }
 
@@ -4770,11 +4760,6 @@ impl BexVm {
         value: &Value,
     ) -> Result<bex_vm_types::ArrayWriteGuard<'_>, VmInternalError> {
         let ptr = self.as_object_ptr(*value, ObjectType::Array)?;
-        // Conservative write barrier: any mutable access to an older-generation
-        // array may introduce cross-generation references. Used by builtin dispatch
-        // (Array.push, Array.pop, etc.) where the actual written values are not
-        // visible at this call site.
-        self.heap.conservative_write_barrier(ptr);
         // Check type first to avoid borrow issues
         if !matches!(self.get_object(ptr), Object::Array(_)) {
             return Err(VmInternalError::TypeError {
@@ -4818,10 +4803,6 @@ impl BexVm {
         value: &Value,
     ) -> Result<bex_vm_types::MapWriteGuard<'_>, VmInternalError> {
         let index = self.as_object_ptr(*value, ObjectType::Map)?;
-        // Conservative write barrier: any mutable access to an older-generation
-        // map may introduce cross-generation references. Used by builtin dispatch
-        // (Map.set, etc.) where the actual written values are not visible here.
-        self.heap.conservative_write_barrier(index);
         // Check type first to avoid borrow issues
         if !matches!(self.get_object(index), Object::Map(_)) {
             return Err(VmInternalError::TypeError {
@@ -7889,7 +7870,6 @@ impl BexVm {
             if let Some(length) = store_error {
                 return Err(self.invalid_field_access_error(dest_field, length));
             }
-            self.heap.write_barrier(dest_ptr, new_value);
             let Object::Instance(dest) = self.get_object(dest_ptr) else {
                 unreachable!("destination instance already type-checked above");
             };
@@ -9558,7 +9538,6 @@ impl BexVm {
                         if let Some(length) = store_error {
                             return Err(self.invalid_field_access_error(idx, length));
                         }
-                        self.heap.write_barrier(obj_ptr, new_value);
                         let Object::Instance(instance) = self.get_object(obj_ptr) else {
                             unreachable!("already type-checked above");
                         };
@@ -9630,7 +9609,6 @@ impl BexVm {
                         if let Some(length) = store_error {
                             return Err(self.invalid_field_access_error(slot, length));
                         }
-                        self.heap.write_barrier(obj_ptr, new_value);
                         let Object::Instance(instance) = self.get_object(obj_ptr) else {
                             unreachable!("already type-checked above");
                         };
@@ -9655,7 +9633,6 @@ impl BexVm {
                         if let Some(length) = store_error {
                             return Err(self.invalid_field_access_error(idx, length));
                         }
-                        self.heap.write_barrier(obj_ptr, new_value);
                         let Object::Instance(instance) = self.get_object(obj_ptr) else {
                             unreachable!("already type-checked above");
                         };
@@ -11218,7 +11195,6 @@ impl BexVm {
                             }
                             .into());
                         };
-                        self.heap.write_barrier(cell_ptr, value);
                         let obj = unsafe { cell_ptr.get() };
                         let Object::Cell(cell) = obj else {
                             return Err(VmInternalError::TypeError {
@@ -11287,7 +11263,6 @@ impl BexVm {
                             }
                             .into());
                         };
-                        self.heap.write_barrier(cell_ptr, value);
                         let cell_obj = unsafe { cell_ptr.get() };
                         let Object::Cell(cell) = cell_obj else {
                             return Err(VmInternalError::TypeError {
@@ -11471,7 +11446,6 @@ impl BexVm {
                                 )));
                             }
                         }
-                        self.heap.write_barrier(array_object_index, new_value);
                     }
 
                     OpCode::StoreMapElement => {

@@ -17,20 +17,22 @@ pub trait RootVisitor {
     fn visit_weak(&mut self, root: &mut HeapPtr) -> bool;
 }
 
-/// Whether a pointer the collection left in place still names a live object.
+/// Whether a pointer absent from the forwarding map still names a live object.
 ///
-/// A minor collection identity-maps every object it does not visit, so a
-/// pointer absent from the forwarding map is either untouched-and-live (an old
-/// generation, the compile-time region) or swept. Only the heap can tell the
-/// two apart, which is why [`ForwardRoots`] asks it rather than treating
-/// absence as death.
+/// Absence alone does not decide it: a compile-time pointer is never in the
+/// map yet always live, and a pointer this forwarding pass already repointed
+/// names the survivor space. Only the heap can tell those from the dead,
+/// which is why [`ForwardRoots`] asks it rather than treating absence as
+/// death.
 pub trait Survival {
     fn survived(&self, ptr: HeapPtr) -> bool;
 }
 
-/// No generation was swept: every pointer left in place is live. For tests
-/// and for forwarding passes that follow no collection.
-impl Survival for () {
+/// Nothing was collected, so every pointer is live: for a forwarding pass
+/// that follows no collection, as tests run.
+pub struct NothingCollected;
+
+impl Survival for NothingCollected {
     fn survived(&self, _ptr: HeapPtr) -> bool {
         true
     }
@@ -67,8 +69,12 @@ impl<'a> ForwardRoots<'a> {
 
 impl RootVisitor for ForwardRoots<'_> {
     fn visit(&mut self, root: &mut HeapPtr) {
-        if let Some(&moved) = self.forwarding.get(root) {
-            *root = moved;
+        match self.forwarding.get(root) {
+            Some(&moved) => *root = moved,
+            None => debug_assert!(
+                self.survival.survived(*root),
+                "a strong root {root:?} the collection did not reach"
+            ),
         }
     }
 
@@ -129,13 +135,27 @@ pub trait RootHaver: Send {
     /// forwarded. For state derived from the heap's layout rather than from
     /// a pointer (a TLAB's cached allocation cursor); most holders have none.
     fn relocated(&mut self) {}
+}
 
+/// The collector's two walks over a [`RootHaver`]. Blanket-implemented, so
+/// every holder walks alike: a holder supplies
+/// [`visit_roots`](RootHaver::visit_roots) and
+/// [`relocated`](RootHaver::relocated), and cannot change what the walks do
+/// with them.
+pub trait RootHaverExt: RootHaver {
     /// Record every strong root.
+    fn collect_roots(&mut self, roots: &mut Vec<HeapPtr>);
+
+    /// Repoint every root after a collection, then
+    /// [`relocated`](RootHaver::relocated).
+    fn forward_roots(&mut self, forward: &mut ForwardRoots<'_>);
+}
+
+impl<T: RootHaver + ?Sized> RootHaverExt for T {
     fn collect_roots(&mut self, roots: &mut Vec<HeapPtr>) {
         self.visit_roots(&mut CollectRoots(roots));
     }
 
-    /// Repoint every root after a collection, then [`Self::relocated`].
     fn forward_roots(&mut self, forward: &mut ForwardRoots<'_>) {
         self.visit_roots(forward);
         self.relocated();
@@ -215,32 +235,6 @@ impl<A: RootHaver, B: RootHaver> RootHaver for (A, B) {
         self.0.visit_roots(visitor);
         self.1.visit_roots(visitor);
     }
-}
-
-/// Generational write-barrier hook for heap mutations that touch a [`Value`].
-///
-/// Implemented by `bex_heap::BexHeap` (`bex_heap` is downstream of this
-/// crate, so we can't name it here directly). Lives in `bex_vm_types` so
-/// types like [`crate::Future`] — which perform their own
-/// `UnsafeCell<MaybeUninit<Value>>` writes via `unsafe` setters — can
-/// require callers to fire the barrier through this trait without taking a
-/// dependency on the heap crate.
-///
-/// # Why this exists
-///
-/// The generational GC tracks cross-generation references via a card table.
-/// When an older-generation object is mutated to hold a younger-generation
-/// reference, the container's card must be marked dirty so a partial
-/// (Minor) GC can rediscover the reference. Heap-mutation sites in the VM
-/// (`vm.rs`) call `BexHeap::write_barrier` for this. The `Future` heap
-/// object is special: its terminal-state writes don't go through the VM —
-/// they go through the engine's spawned `run_future` writeback path. That
-/// path now must fire the barrier too, and `Future::set_ready` /
-/// `set_error` enforces it via this trait at compile time.
-pub trait WriteBarrier {
-    /// Mark a card dirty for `container` if `value` is a younger-gen
-    /// `Value::Object`. Called *before* the actual field write.
-    fn write_barrier(&self, container: HeapPtr, value: Value);
 }
 
 /// A type-erased proof that an active heap permit is held in the current

@@ -505,10 +505,7 @@ mod tests {
 
     fn collect(vm: &mut crate::BexVm, roots: &[HeapPtr]) -> Vec<HeapPtr> {
         // SAFETY: test heap; nothing else holds a pointer across it.
-        let (_, roots, _) = unsafe {
-            vm.heap
-                .collect_garbage_generational(roots, bex_heap::CollectionLevel::Major)
-        };
+        let (_, roots, _) = unsafe { vm.heap.collect_garbage(roots) };
         roots
     }
 

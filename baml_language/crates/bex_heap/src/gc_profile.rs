@@ -32,10 +32,10 @@ mod enabled {
     /// Storage counts, not payload bytes or a measurement of reachability.
     #[derive(Clone, Debug, Default)]
     pub struct GcHeapSnapshot {
-        /// Reserved/occupied slots in Gen0, Gen1, Gen2 respectively.
-        pub generation_slots: [usize; 3],
-        /// Backing capacity in Gen0, Gen1, Gen2, scratch respectively.
-        pub capacity_slots: [usize; 4],
+        /// Reserved/occupied slots in Gen0 and Gen2 respectively.
+        pub generation_slots: [usize; 2],
+        /// Backing capacity in Gen0, Gen2, scratch respectively.
+        pub capacity_slots: [usize; 3],
         /// Actual TLAB allocations since the previous collection (excludes holes).
         pub new_objects: usize,
     }
@@ -44,16 +44,9 @@ mod enabled {
         /// Caller must hold exclusive GC access; generations can move otherwise.
         pub(crate) unsafe fn capture(heap: &BexHeap) -> Self {
             // SAFETY: caller holds exclusive GC access.
-            let spaces = unsafe {
-                [
-                    heap.gen0_ref(),
-                    heap.gen1_ref(),
-                    heap.gen2_ref(),
-                    heap.inactive_ref(),
-                ]
-            };
+            let spaces = unsafe { [heap.gen0_ref(), heap.gen2_ref(), heap.inactive_ref()] };
             Self {
-                generation_slots: [spaces[0].len(), spaces[1].len(), spaces[2].len()],
+                generation_slots: [spaces[0].len(), spaces[1].len()],
                 capacity_slots: spaces.map(|space| space.capacity()),
                 new_objects: heap.allocs_since_gc(),
             }
@@ -173,7 +166,7 @@ mod enabled {
             profile.pause = self.released_at - self.parked_at;
             profile.post_gc = finished_at - self.released_at;
             profile.total = finished_at - self.start;
-            tracing::debug!(target: "bex_gc", reason = reason, level = ?stats.level,
+            tracing::debug!(target: "bex_gc", reason = reason,
             budget = ?heap.gc_budget(), profile = ?profile, "GC cycle");
         }
     }
@@ -181,7 +174,7 @@ mod enabled {
     #[cfg(test)]
     mod tests {
         use super::*;
-        use crate::{CollectionLevel, Tlab};
+        use crate::Tlab;
 
         #[test]
         fn reports_allocations_separately_from_reserved_slots() {
@@ -190,23 +183,22 @@ mod enabled {
             let live = tlab.alloc_string("live");
             tlab.alloc_string("dead");
             // SAFETY: this standalone heap has no concurrent holders.
-            let (minor, roots, _) = unsafe { heap.collect_garbage_minor(&[live]) };
-            assert_eq!(minor.profile.before.generation_slots, [16, 0, 0]);
-            assert_eq!(minor.profile.before.new_objects, 2);
-            assert_eq!(minor.profile.after.generation_slots, [0, 1, 0]);
-            assert_eq!(minor.profile.after.new_objects, 0);
-            assert_eq!(minor.collected_count, 15); // 1 dead object + 14 holes.
-            assert_eq!(minor.profile.roots, 1);
-            let p = &minor.profile;
+            let (first, roots, _) = unsafe { heap.collect_garbage(&[live]) };
+            assert_eq!(first.profile.before.generation_slots, [16, 0]);
+            assert_eq!(first.profile.before.new_objects, 2);
+            assert_eq!(first.profile.after.generation_slots, [0, 1]);
+            assert_eq!(first.profile.after.new_objects, 0);
+            assert_eq!(first.collected_count, 15); // 1 dead object + 14 holes.
+            assert_eq!(first.profile.roots, 1);
+            let p = &first.profile;
             assert!(
                 p.heap_total
                     >= p.prepare + p.trace + p.keepalive + p.fixup + p.reclaim + p.bookkeeping
             );
             // SAFETY: roots were forwarded by the preceding collection; no mutator.
-            let (major, _, _) = unsafe { heap.collect_garbage(&roots) };
-            assert_eq!(major.level, CollectionLevel::Major);
-            assert_eq!(major.profile.before.generation_slots, [0, 1, 0]);
-            assert_eq!(major.profile.after.generation_slots, [0, 0, 1]);
+            let (second, _, _) = unsafe { heap.collect_garbage(&roots) };
+            assert_eq!(second.profile.before.generation_slots, [0, 1]);
+            assert_eq!(second.profile.after.generation_slots, [0, 1]);
         }
     }
 }

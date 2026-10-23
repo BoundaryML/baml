@@ -18,7 +18,7 @@
 use std::{collections::HashMap, future::Future, sync::Arc, time::Duration};
 
 use bex_engine::HeapPermitManager;
-use bex_vm_types::{ForwardRoots, HeapPtr, RootHaver, RootVisitor};
+use bex_vm_types::{ForwardRoots, HeapPtr, NothingCollected, RootHaver, RootHaverExt, RootVisitor};
 
 /// Minimal `RootHaver` fixture: pretends to hold a single `HeapPtr` root that
 /// can be observed and rewritten via the `RootHaver` trait.
@@ -183,7 +183,7 @@ async fn heap_guard_collects_and_forwards_roots_of_live_holders() {
 
     let mut forwarding = HashMap::new();
     forwarding.insert(ptr_b, ptr_b_new);
-    guard.forward_roots(&mut ForwardRoots::new(&forwarding, &()));
+    guard.forward_roots(&mut ForwardRoots::new(&forwarding, &NothingCollected));
 
     let mut roots_after = Vec::new();
     guard.collect_roots(&mut roots_after);
@@ -226,7 +226,7 @@ async fn unit_permit_participates_in_park_as_no_op() {
         );
 
         let forwarding = HashMap::new();
-        guard.forward_roots(&mut ForwardRoots::new(&forwarding, &())); // must be a no-op with no panic
+        guard.forward_roots(&mut ForwardRoots::new(&forwarding, &NothingCollected)); // must be a no-op with no panic
     });
 
     tokio::time::sleep(Duration::from_millis(50)).await;

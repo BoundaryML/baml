@@ -37,8 +37,8 @@
 //!    weak references) and walks each one's `RootHaver::visit_roots` with a
 //!    recording visitor, unioned with `BexHeap::collect_handle_roots` for
 //!    FFI-held objects.
-//! 4. **GC**: `BexHeap::collect_garbage_generational` runs under the guard;
-//!    produces a forwarding map.
+//! 4. **GC**: `BexHeap::collect_garbage` runs under the guard; produces a
+//!    forwarding map.
 //! 5. **Fixup**: `HeapGuard` walks each parked holder's `visit_roots` again
 //!    with a forwarding visitor, then calls its `RootHaver::relocated`; the
 //!    `BexVm` impl invalidates the VM's TLAB so post-GC allocations refill
@@ -116,7 +116,7 @@ use std::{
 
 use ::bex_heap::{HeapPermit as _, Tlab};
 // Re-export event types for callers.
-use ::bex_vm_types::{RootHaver, types::FutureId};
+use ::bex_vm_types::{RootHaver, RootHaverExt, types::FutureId};
 use ::core::sync::atomic::AtomicBool;
 use async_trait::async_trait;
 #[cfg(target_arch = "wasm32")]
@@ -2948,8 +2948,7 @@ impl BexEngine {
             }
         }
 
-        self.collect_garbage_with_reason(bex_heap::CollectionLevel::Major, "shutdown")
-            .await;
+        self.collect_garbage_with_reason("shutdown").await;
         #[cfg(not(target_arch = "wasm32"))]
         {
             // All normal executions and their poll scopes have ended. Joining
@@ -3136,16 +3135,12 @@ impl BexEngine {
     /// # Returns
     ///
     /// Statistics about the collection (live count, collected count, etc.)
-    pub async fn collect_garbage(
-        self: &Arc<Self>,
-        level: bex_heap::CollectionLevel,
-    ) -> bex_heap::GcStats {
-        self.collect_garbage_with_reason(level, "explicit").await
+    pub async fn collect_garbage(self: &Arc<Self>) -> bex_heap::GcStats {
+        self.collect_garbage_with_reason("explicit").await
     }
 
     async fn collect_garbage_with_reason(
         self: &Arc<Self>,
-        level: bex_heap::CollectionLevel,
         reason: &'static str,
     ) -> bex_heap::GcStats {
         let cycle = bex_heap::GcCycleProfiler::start();
@@ -3158,12 +3153,11 @@ impl BexEngine {
         // Boxed so a collection's state (roots, forwarding map, statistics) is
         // not laid out inside every call's future: this is awaited from the VM
         // event loop, and a collection is rare and already allocates.
-        Box::pin(self.collect_garbage_parked(level, reason, heap_guard, cycle)).await
+        Box::pin(self.collect_garbage_parked(reason, heap_guard, cycle)).await
     }
 
     async fn collect_garbage_parked(
         self: &Arc<Self>,
-        level: bex_heap::CollectionLevel,
         reason: &'static str,
         mut heap_guard: HeapGuard<'_>,
         mut cycle: bex_heap::GcCycleProfiler,
@@ -3193,7 +3187,7 @@ impl BexEngine {
 
         // Run GC — always returns the forwarding map so we can update parked VM stacks.
         let (mut stats, _remapped_roots, forwarding) =
-            unsafe { self.heap.collect_garbage_generational(&all_roots, level) };
+            unsafe { self.heap.collect_garbage(&all_roots) };
 
         cycle.heap_done();
 
@@ -3213,9 +3207,9 @@ impl BexEngine {
             );
         }
 
-        // Update all parked VM stacks with forwarding pointers and invalidate TLABs
-        // SAFETY: VMs are still parked (gc_complete not yet notified), we have
-        // exclusive access via the parked_vms lock we're still holding
+        // Update all parked VM stacks with forwarding pointers and invalidate TLABs.
+        // Every holder is still parked: the `HeapGuard` holds every permit and
+        // the holders mutex until it is dropped below.
         heap_guard.forward_roots(&mut bex_vm_types::ForwardRoots::new(
             &forwarding,
             &*self.heap,
@@ -3288,9 +3282,7 @@ impl BexEngine {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .extend(pending_finalizers);
 
-        if level == bex_heap::CollectionLevel::Major {
-            self.bex_work.collected(cleanup_version);
-        }
+        self.bex_work.collected(cleanup_version);
         drop(heap_guard);
         cycle.released();
         #[cfg(not(target_arch = "wasm32"))]
@@ -5060,9 +5052,9 @@ impl BexEngine {
         if i_am_checking {
             let checking = GcCheckGuard(&self.checking_gc);
             // We won the CAS, so we own the GC check.
-            if let Some(level) = bex_vm::compiled_rt::collection_due(&self.heap) {
+            if bex_vm::compiled_rt::collection_due(&self.heap) {
                 let inactive = permit.release();
-                self.collect_garbage_with_reason(level, "automatic").await;
+                self.collect_garbage_with_reason("automatic").await;
                 permit = inactive.acquire().await;
             }
             drop(checking);
@@ -5087,8 +5079,8 @@ impl BexEngine {
             .is_ok();
         if i_am_checking {
             let _checking = GcCheckGuard(&self.checking_gc);
-            if let Some(level) = bex_vm::compiled_rt::collection_due(&self.heap) {
-                self.collect_garbage_with_reason(level, "automatic").await;
+            if bex_vm::compiled_rt::collection_due(&self.heap) {
+                self.collect_garbage_with_reason("automatic").await;
             }
         }
         // If we are not the checker, the actual checker (some other VM) is
@@ -6865,9 +6857,7 @@ impl BexEngine {
             // the caller.
             let engine = self.clone();
             return SysOpResult::Async(Box::pin(async move {
-                engine
-                    .collect_garbage(bex_heap::CollectionLevel::Major)
-                    .await;
+                engine.collect_garbage().await;
                 Ok(BexExternalValue::Null)
             }));
         }

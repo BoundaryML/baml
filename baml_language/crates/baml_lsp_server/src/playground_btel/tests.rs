@@ -80,9 +80,7 @@ async fn recorded_playground_runs_appear_on_refresh_with_captured_values() {
 
     let engine = engine(&project);
     // GC has its own root span; it must not become a playground run.
-    engine
-        .collect_garbage(bex_heap::CollectionLevel::Major)
-        .await;
+    engine.collect_garbage().await;
     call(&engine, "ann").await;
     // The default recording flushes on a deadline; poll like the UI does.
     let listed = tokio::time::timeout(Duration::from_secs(10), async {
@@ -112,9 +110,7 @@ async fn recorded_playground_runs_appear_on_refresh_with_captured_values() {
 
     // A second run becomes visible on a later refresh of the same index.
     call(&engine, "bob").await;
-    engine
-        .collect_garbage(bex_heap::CollectionLevel::Major)
-        .await;
+    engine.collect_garbage().await;
     let listed = tokio::time::timeout(Duration::from_secs(10), async {
         loop {
             let (executions, _) = telemetry.list_executions(&project_text).unwrap();

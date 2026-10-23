@@ -958,7 +958,6 @@ fn deep_copy_value_recursive(
                         new_values.push(deep_copy_value_recursive(vm, value, copied_objects)?);
                     }
 
-                    // No write barrier: the copy and its elements are all in gen0.
                     let Object::Array(array) = vm.get_object(placeholder_ptr) else {
                         unreachable!("the placeholder was allocated as an array")
                     };
@@ -985,7 +984,6 @@ fn deep_copy_value_recursive(
                         new_map.insert_hashed(entry.hash, new_key, new_value);
                     }
 
-                    // No write barrier: the copy and its entries are all in gen0.
                     let Object::Map(map) = vm.get_object(placeholder_ptr) else {
                         unreachable!("the placeholder was allocated as a map")
                     };
@@ -1010,7 +1008,6 @@ fn deep_copy_value_recursive(
                         let Object::Instance(copy) = vm.get_object(placeholder_ptr) else {
                             unreachable!("the placeholder was allocated as an instance")
                         };
-                        // No write barrier: the copy and its fields are all in gen0.
                         copy.store_field(slot, copied);
                     }
                     placeholder_ptr

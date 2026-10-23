@@ -61,9 +61,7 @@ async fn no_deadlock_between_gc_and_concurrent_schedule_future() {
         // not stress-test heap throughput.
         while !stop_clone.load(std::sync::atomic::Ordering::Relaxed) {
             tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-            engine_for_gc
-                .collect_garbage(bex_heap::CollectionLevel::Major)
-                .await;
+            engine_for_gc.collect_garbage().await;
         }
     });
 
@@ -118,9 +116,7 @@ async fn gc_during_await_completes_promptly() {
     let engine_for_gc = Arc::clone(&engine);
     let gc_task = tokio::spawn(async move {
         for _ in 0..4 {
-            engine_for_gc
-                .collect_garbage(bex_heap::CollectionLevel::Major)
-                .await;
+            engine_for_gc.collect_garbage().await;
             tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         }
     });

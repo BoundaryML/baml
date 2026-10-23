@@ -198,17 +198,15 @@ impl FutureManagerGuard<'_> {
     }
 
     pub fn fulfill_future(&mut self, id: FutureId, value: Value) -> Result<(), EngineError> {
-        // Snapshot the heap Arc before borrowing self mutably for take_pending;
-        // settle_ready needs it to fire the generational write barrier.
-        let heap = ::std::sync::Arc::clone(self.tlab().heap());
-        if let Some(self_ptr) = self.take_pending(id)? {
-            let fut = self.future(self_ptr)?;
-            // SAFETY: caller holds the heap permit (witnessed by `self.proof`).
-            // `settle_ready` CAS-transitions Pending → Ready; the producer is
-            // the unique writer reaching this path (cancel uses its own CAS).
-            // The write barrier marks `self_ptr`'s card so the next minor GC
-            // finds any young-gen ptr embedded in `value`.
-            let _ = unsafe { fut.settle_ready(heap.as_ref(), self_ptr, value) };
+        if let Some(work) = self.take_pending(id)? {
+            // SAFETY: this guard holds the heap permit (`self.proof`), so the
+            // future is alive and does not move. `settle_ready` CAS-transitions
+            // Pending → Ready; `take_pending` removed the entry under the
+            // `FutureManager` mutex, so this is the one value writer (cancel
+            // uses its own CAS).
+            let fut = unsafe { work.future_ref() }?;
+            // SAFETY: as above.
+            let _ = unsafe { fut.settle_ready(value) };
         }
         Ok(())
     }
@@ -221,21 +219,22 @@ impl FutureManagerGuard<'_> {
         err: Value,
         trace: Vec<StackFrame>,
     ) -> Result<(), EngineError> {
-        let heap = ::std::sync::Arc::clone(self.tlab().heap());
-        if let Some(self_ptr) = self.take_pending(id)? {
-            let fut = self.future(self_ptr)?;
+        if let Some(work) = self.take_pending(id)? {
             // SAFETY: see `fulfill_future`.
-            let _ = unsafe { fut.settle_error(heap.as_ref(), self_ptr, err, trace) };
+            let fut = unsafe { work.future_ref() }?;
+            // SAFETY: see `fulfill_future`.
+            let _ = unsafe { fut.settle_error(err, trace) };
         }
         Ok(())
     }
 
     pub fn cancel_future(&mut self, id: FutureId) -> Result<(), EngineError> {
-        if let Some(self_ptr) = self.take_pending(id)? {
+        if let Some(work) = self.take_pending(id)? {
             // `settle_cancelled` fires the cancel token and the wake signal
             // internally. CAS-based, so this races safely with the producer's
-            // settle_ready/settle_error. No value payload → no write barrier.
-            let _ = self.future(self_ptr)?.settle_cancelled();
+            // settle_ready/settle_error.
+            // SAFETY: see `fulfill_future`.
+            let _ = unsafe { work.future_ref() }?.settle_cancelled();
         }
         Ok(())
     }
@@ -379,26 +378,8 @@ impl FutureManagerGuard<'_> {
         entry.finish_work();
     }
 
-    /// The heap `Future` at `ptr`, readable for as long as this guard is.
-    #[expect(
-        clippy::unused_self,
-        reason = "the `&self` borrow is load-bearing: it bounds the returned borrow by \
-                  the guard, whose `proof` witnesses the active heap permit"
-    )]
-    fn future(&self, ptr: HeapPtr) -> Result<&bex_vm_types::Future, EngineError> {
-        // SAFETY: `self.proof` witnesses an active heap permit for the guard's
-        // lifetime, so the object is alive and not being moved; the returned
-        // borrow cannot outlive the guard.
-        match unsafe { ptr.get() } {
-            Object::Future(fut) => Ok(fut),
-            other => Err(EngineError::TypeMismatch {
-                message: format!("Expected Future, got {:?}", ObjectType::of(other)),
-            }),
-        }
-    }
-
-    /// Remove and return the heap pointer of the `Future` for `id` if it's
-    /// still `Pending`. Returns `Ok(None)` if the future has already been
+    /// Remove and return the entry of the `Future` for `id` if it's still
+    /// `Pending`. Returns `Ok(None)` if the future has already been
     /// settled out-of-band (e.g. via BAML's `f.cancel()` which transitions
     /// the heap state directly without going through `FutureManager`),
     /// or if it's not in the active set at all.
@@ -406,16 +387,17 @@ impl FutureManagerGuard<'_> {
     /// The cleanup-on-already-settled path also drops the leftover entry
     /// from `active_futures` so the GC anchor doesn't leak.
     ///
-    /// Once removed, GC rooting is whoever holds the pointer (typically
-    /// `BexThread.settles_future` or the awaiter's stack); the caller reads
-    /// the object through [`Self::future`] for an immediate `settle_*`.
-    fn take_pending(&mut self, id: FutureId) -> Result<Option<HeapPtr>, EngineError> {
+    /// Once removed, the future is rooted only by whoever else holds it (an
+    /// awaiter's stack, a host handle), so the caller settles it at once,
+    /// under this guard.
+    fn take_pending(&mut self, id: FutureId) -> Result<Option<FutureWork>, EngineError> {
         // Phase 1: peek. Already-removed entries → Ok(None).
         let already_settled = {
             let Some(entry_ref) = self.holder().active_futures.get(&id) else {
                 return Ok(None);
             };
-            let fut = self.future(entry_ref.future)?;
+            // SAFETY: this guard holds the heap permit (`self.proof`).
+            let fut = unsafe { entry_ref.future_ref() }?;
             !matches!(fut.read(), FutureRead::Pending(_))
         };
         if already_settled {
@@ -424,12 +406,12 @@ impl FutureManagerGuard<'_> {
             let _ = self.holder_mut().remove_future(id);
             return Ok(None);
         }
-        // Phase 2: still Pending. Remove the entry and hand back its pointer.
+        // Phase 2: still Pending. Remove the entry and hand it back.
         let entry = self
             .holder_mut()
             .remove_future(id)
             .expect("entry was present in phase 1 and we hold the `FutureManager` Mutex");
-        Ok(Some(entry.future))
+        Ok(Some(entry))
     }
     /// Returns a Rust future that resolves when the BAML future is ready.
     /// Once it is resolved, the future on the heap will be in a terminal

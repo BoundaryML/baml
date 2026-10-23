@@ -1737,8 +1737,6 @@ impl Continuation for SessionExecution {
                 }
             }
         }
-        vm.heap.write_barrier(self.package, value);
-
         self.current += 1;
         if self.current < self.actions.len() {
             return self.next();

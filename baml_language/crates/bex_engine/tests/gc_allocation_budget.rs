@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use bex_engine::{BexEngine, BexExternalValue as Ext, FunctionCallContextBuilder};
-use bex_heap::CollectionLevel;
 use sys_native::SysOpsExt;
 
 const SOURCE: &str = r#"
@@ -143,7 +142,7 @@ async fn long_compute_collects_before_returning() {
 async fn existing_old_array_growth_spends_the_budget() {
     let engine = engine();
     let values = call(&engine, "Empty", vec![], false).await;
-    engine.collect_garbage(CollectionLevel::Major).await;
+    engine.collect_garbage().await;
     let before = engine.heap().gc_budget();
     assert_eq!(
         call(
@@ -160,7 +159,7 @@ async fn existing_old_array_growth_spends_the_budget() {
         after.full_collections > before.full_collections || engine.heap().should_gc(),
         "the growth was neither collected during the call nor left due: {after:?}"
     );
-    engine.collect_garbage(CollectionLevel::Major).await;
+    engine.collect_garbage().await;
     assert_eq!(
         call(&engine, "Size", vec![values.clone()], true).await,
         Ext::Int(2_100_000)
@@ -200,7 +199,7 @@ async fn large_payloads_trigger_gc_with_few_objects() {
         collections >= 2,
         "{collections} collections for 80 MiB of payload against a 32 MiB budget"
     );
-    engine.collect_garbage(CollectionLevel::Major).await;
+    engine.collect_garbage().await;
     for value in kept {
         assert_eq!(
             call(&engine, "TextSize", vec![value], true).await,
@@ -218,7 +217,7 @@ async fn large_payloads_trigger_gc_with_few_objects() {
 #[tokio::test(start_paused = true)]
 async fn large_buffers_collect_during_the_call() {
     let engine = engine();
-    engine.collect_garbage(CollectionLevel::Major).await;
+    engine.collect_garbage().await;
     let before = engine.heap().gc_budget().full_collections;
     let size = 8 * 1024 * 1024;
     assert_eq!(
@@ -244,7 +243,7 @@ async fn large_buffers_collect_during_the_call() {
 #[tokio::test(start_paused = true)]
 async fn string_concatenation_collects_during_the_call() {
     let engine = engine();
-    engine.collect_garbage(CollectionLevel::Major).await;
+    engine.collect_garbage().await;
     let before = engine.heap().gc_budget().full_collections;
     let chunk = 1024 * 1024;
     assert_eq!(
@@ -275,7 +274,7 @@ async fn string_concatenation_collects_during_the_call() {
 #[tokio::test(start_paused = true)]
 async fn payload_growth_behind_a_lock_collects_during_the_call() {
     let engine = engine();
-    engine.collect_garbage(CollectionLevel::Major).await;
+    engine.collect_garbage().await;
     let before = engine.heap().gc_budget().full_collections;
     let cell = 1024 * 1024;
     assert_eq!(
@@ -330,12 +329,9 @@ async fn explicit_collection_parks_compute_without_allocation_pressure() {
         call(&running_engine, "Compute", vec![Ext::Int(10_000_000)], true).await
     });
     tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-    tokio::time::timeout(
-        std::time::Duration::from_secs(30),
-        engine.collect_garbage(CollectionLevel::Major),
-    )
-    .await
-    .expect("explicit GC must park a VM even when allocation pressure is absent");
+    tokio::time::timeout(std::time::Duration::from_secs(30), engine.collect_garbage())
+        .await
+        .expect("explicit GC must park a VM even when allocation pressure is absent");
     assert!(
         !task.is_finished(),
         "GC must complete before the compute loop finishes"

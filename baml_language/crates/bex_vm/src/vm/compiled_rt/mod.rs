@@ -32,15 +32,12 @@ pub fn gc_stress() -> bool {
     *STRESS.get_or_init(|| baml_env::os_var("BAML_GC_STRESS").is_some_and(|value| value == "1"))
 }
 
-/// The heap's own heuristic, or a major collection at every safepoint under
-/// `BAML_GC_STRESS=1`.
+/// Whether to collect at this safepoint: the heap's own heuristic, or every
+/// safepoint under `BAML_GC_STRESS=1`.
 #[inline]
 #[must_use]
-pub fn collection_due(heap: &bex_heap::BexHeap) -> Option<bex_heap::CollectionLevel> {
-    if gc_stress() {
-        return Some(bex_heap::CollectionLevel::Major);
-    }
-    heap.should_collect()
+pub fn collection_due(heap: &bex_heap::BexHeap) -> bool {
+    gc_stress() || heap.should_gc()
 }
 
 pub use baml_base::Literal;

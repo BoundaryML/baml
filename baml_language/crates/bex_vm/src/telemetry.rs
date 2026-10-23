@@ -1761,7 +1761,7 @@ fn add_usage(into: &mut btel_records::ModelUsage, added: &btel_records::ModelUsa
 
 #[cfg(test)]
 mod tests {
-    use bex_vm_types::RootHaver;
+    use bex_vm_types::RootHaverExt;
     fn test_clock() -> std::sync::Arc<btel_clock::ClockEpoch> {
         btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run()
     }
@@ -2162,11 +2162,11 @@ mod tests {
         state.collect_roots(&mut roots);
         // SAFETY: the test has exclusive heap access and supplies every live
         // cache pointer. No bytecode is running and no frames/captures exist.
-        let (_, _, forwarding) = unsafe {
-            vm.heap
-                .collect_garbage_generational(&roots, bex_heap::CollectionLevel::Major)
-        };
-        state.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &()));
+        let (_, _, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
+        state.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(
+            &forwarding,
+            &*vm.heap,
+        ));
         assert_eq!(definitions(&state), before);
         let moved = CallPathKey {
             visible_caller: Some(forwarding[&caller]),
@@ -2188,11 +2188,11 @@ mod tests {
         state.collect_roots(&mut roots);
         assert!(roots.is_empty());
         // SAFETY: as above; the test has discarded all live heap references.
-        let (stats, _, forwarding) = unsafe {
-            vm.heap
-                .collect_garbage_generational(&roots, bex_heap::CollectionLevel::Major)
-        };
-        state.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &()));
+        let (stats, _, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
+        state.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(
+            &forwarding,
+            &*vm.heap,
+        ));
         assert_eq!(stats.live_count, 0);
         assert!(vm.heap.function_metadata(vm.proof(), caller_id).is_none());
         assert!(vm.heap.function_metadata(vm.proof(), callee_id).is_none());
@@ -2235,11 +2235,11 @@ mod tests {
         assert!(roots.is_empty());
         // SAFETY: exclusive test heap, and the retained captures are its only
         // live objects. No bytecode or other VM/heap mutation runs concurrently.
-        let (_, _, forwarding) = unsafe {
-            vm.heap
-                .collect_garbage_generational(&roots, bex_heap::CollectionLevel::Major)
-        };
-        state.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(&forwarding, &()));
+        let (_, _, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
+        state.forward_roots(&mut ::bex_vm_types::ForwardRoots::new(
+            &forwarding,
+            &*vm.heap,
+        ));
         roots.clear();
         state.collect_roots(&mut roots);
         assert!(roots.is_empty());

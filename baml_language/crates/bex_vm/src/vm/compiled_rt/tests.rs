@@ -6,8 +6,7 @@ use std::{
     },
 };
 
-use bex_heap::CollectionLevel;
-use bex_vm_types::{FunctionKind, HeapPtr, Object, ObjectIndex, RootHaver, Value};
+use bex_vm_types::{FunctionKind, HeapPtr, Object, ObjectIndex, RootHaverExt, Value};
 
 use super::{CompiledFn, FrameRecord};
 
@@ -252,10 +251,7 @@ fn exec_string(vm: &mut BexVm) -> String {
 fn collect(vm: &mut BexVm) -> HashMap<HeapPtr, HeapPtr> {
     let mut roots = Vec::new();
     vm.collect_roots(&mut roots);
-    let (_, _, forwarding) = unsafe {
-        vm.heap
-            .collect_garbage_generational(&roots, CollectionLevel::Major)
-    };
+    let (_, _, forwarding) = unsafe { vm.heap.collect_garbage(&roots) };
     let heap = Arc::clone(&vm.heap);
     vm.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
     forwarding

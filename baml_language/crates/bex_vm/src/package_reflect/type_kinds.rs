@@ -295,11 +295,6 @@ pub(super) fn register_class_witnesses(
             (interface, rule)
         })
         .collect();
-    for (_, rule) in &entries {
-        vm.tlab
-            .heap()
-            .write_barrier(class_ptr, Value::object(*rule));
-    }
     let Object::Class(class) = vm.get_object(class_ptr) else {
         unreachable!("witnessed class placeholder changed variant")
     };
@@ -2307,7 +2302,7 @@ impl BamlNamespaceReflect for PackageReflectImpl {}
 mod registration_tests {
     use std::sync::{Arc, atomic::AtomicBool};
 
-    use bex_vm_types::{RealizedTy, RootHaver, TypeHead};
+    use bex_vm_types::{RealizedTy, RootHaverExt, TypeHead};
 
     use super::*;
 
@@ -2413,9 +2408,7 @@ class Fresh {}
         // class kept it alive.
         let heap = Arc::clone(&vm.heap);
         let mut index = crate::package_load::DynDispatchRoot::new(Arc::clone(&vm.dynamic_dispatch));
-        let (_, _, forwarding) = unsafe {
-            heap.collect_garbage_generational(&[class.ptr()], bex_heap::CollectionLevel::Major)
-        };
+        let (_, _, forwarding) = unsafe { heap.collect_garbage(&[class.ptr()]) };
         assert!(forwarding.contains_key(&rule), "the class owns its rule");
         vm.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
         index.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
@@ -2432,8 +2425,7 @@ class Fresh {}
 
         // Nothing reaches the class any more: the rule goes with it.
         drop(vm);
-        let (_, _, forwarding) =
-            unsafe { heap.collect_garbage_generational(&[], bex_heap::CollectionLevel::Major) };
+        let (_, _, forwarding) = unsafe { heap.collect_garbage(&[]) };
         index.forward_roots(&mut bex_vm_types::ForwardRoots::new(&forwarding, &*heap));
         assert_eq!(index.tables.rule_count(), 0);
     }

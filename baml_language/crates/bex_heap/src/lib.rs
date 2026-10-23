@@ -61,7 +61,6 @@
 #![warn(clippy::disallowed_methods)]
 
 mod accessor;
-pub(crate) mod card_table;
 mod chunked_vec;
 mod functions;
 mod gc;
@@ -76,7 +75,7 @@ mod tlab;
 pub use accessor::{AccessError, BexClass, BexValue, BuiltinClass};
 pub use bex_external_types::{BexExternalValue, Handle, WeakHeapRef};
 pub use bex_vm_types::PermitProof;
-pub use gc::{CollectionLevel, GcStats};
+pub use gc::GcStats;
 #[cfg(feature = "gc_profiling")]
 pub use gc_profile::GcHeapSnapshot;
 pub use gc_profile::{GcCycleProfiler, GcProfile};

@@ -121,7 +121,6 @@ impl BexVm {
         if let Err((index, length)) = store_result {
             return Err(Box::new(self.index_out_of_bounds(index, length)));
         }
-        self.heap.write_barrier(array_ptr, new_value);
         Ok(())
     }
 
@@ -152,13 +151,11 @@ impl BexVm {
         idx: usize,
         new_value: Value,
     ) -> Result<(), Box<VmError>> {
-        let obj_ptr = self.as_object_ptr(instance, ObjectType::Instance)?;
         let instance_ref = self.as_instance(&instance)?;
         let store_error = (idx >= instance_ref.field_len()).then_some(instance_ref.field_len());
         if let Some(length) = store_error {
             return Err(Box::new(self.invalid_field_access_error(idx, length)));
         }
-        self.heap.write_barrier(obj_ptr, new_value);
         self.as_instance(&instance)?.store_field(idx, new_value);
         Ok(())
     }

@@ -1729,12 +1729,8 @@ async fn manual_span_can_resume_in_another_root_call_and_close_during_gc() {
         .await
         .unwrap();
     drop(dropped);
-    engine
-        .collect_garbage(bex_heap::CollectionLevel::Major)
-        .await;
-    engine
-        .collect_garbage(bex_heap::CollectionLevel::Major)
-        .await;
+    engine.collect_garbage().await;
+    engine.collect_garbage().await;
     engine
         .call_function("after_gc", vec![], context(), true)
         .await

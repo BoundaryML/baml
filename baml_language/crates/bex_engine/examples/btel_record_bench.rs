@@ -204,9 +204,7 @@ async fn main() {
         };
         assert_eq!(result, BexExternalValue::Int(expected));
         if (i + 1) % 8 == 0 {
-            engine
-                .collect_garbage(bex_heap::CollectionLevel::Major)
-                .await;
+            engine.collect_garbage().await;
         }
     }
     let execution_s = start.elapsed().as_secs_f64();

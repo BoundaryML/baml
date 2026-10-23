@@ -14,7 +14,6 @@
 use std::{collections::VecDeque, sync::Arc, time::Instant};
 
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
-use bex_heap::CollectionLevel;
 use sys_native::SysOpsExt;
 
 const MIB: usize = 1024 * 1024;
@@ -96,61 +95,32 @@ function AsyncBatch(n: int) -> int {
 }
 "#;
 
+/// When the harness collects. Every collection is a full one; a policy only
+/// chooses the nursery budget that triggers it.
 struct Policy {
     name: String,
     budget: usize,
-    major_goal: usize,
 }
 
 impl Policy {
-    fn new(name: String, initial_old_bytes: usize) -> Self {
+    fn new(name: String) -> Self {
         let budget = match name.as_str() {
+            // The harness never collects; only the engine's own policy runs.
             "current" => usize::MAX,
-            "fixed8" => 8 * MIB,
-            "fixed32" | "adaptive" | "full32" | "full_live" => 32 * MIB,
-            "fixed128" => 128 * MIB,
+            "full32" | "full_live" => 32 * MIB,
             _ => panic!("unknown policy: {name}"),
         };
-        Self {
-            name,
-            budget,
-            major_goal: initial_old_bytes + initial_old_bytes.max(32 * MIB),
-        }
+        Self { name, budget }
     }
 
-    fn decide(&self, nursery: usize, older: usize) -> Option<CollectionLevel> {
-        if self.name == "current" {
-            return None;
-        }
-        if self.name == "full32" || self.name == "full_live" {
-            return (nursery >= self.budget).then_some(CollectionLevel::Major);
-        }
-        if older >= self.major_goal {
-            return Some(CollectionLevel::Major);
-        }
-        (nursery >= self.budget).then_some(CollectionLevel::Minor)
+    fn due(&self, nursery: usize) -> bool {
+        nursery >= self.budget
     }
 
-    fn after_gc(
-        &mut self,
-        level: CollectionLevel,
-        nursery_before: usize,
-        young_survivors: usize,
-        older_after: usize,
-    ) {
-        if level == CollectionLevel::Major {
-            self.major_goal = older_after + older_after.max(32 * MIB);
-            if self.name == "full_live" {
-                self.budget = older_after.max(32 * MIB);
-            }
-        } else if self.name == "adaptive" && nursery_before > 0 {
-            // Deliberately experimental, easy-to-change survival policy.
-            // Compare live Gen0 survivors with all reserved Gen0 storage.
-            if young_survivors * 2 >= nursery_before {
-                self.budget = (self.budget * 2).min(128 * MIB);
-            } else if young_survivors * 10 < nursery_before {
-                self.budget = (self.budget / 2).max(8 * MIB);
-            }
+    /// `full_live` scales the budget with what survived the last collection.
+    fn after_gc(&mut self, live_after: usize) {
+        if self.name == "full_live" {
+            self.budget = live_after.max(32 * MIB);
         }
     }
 }
@@ -253,7 +223,7 @@ fn percentile(values: &[f64], fraction: f64) -> f64 {
 #[test]
 #[ignore = "manual performance experiment, not a CI assertion"]
 fn compare_gc_policy() {
-    let policy_name = std::env::var("GC_POLICY").unwrap_or_else(|_| "fixed32".into());
+    let policy_name = std::env::var("GC_POLICY").unwrap_or_else(|_| "full32".into());
     let workload = std::env::var("GC_WORKLOAD").unwrap_or_else(|_| "tiny".into());
     let program = baml_test_support::compile_source(SOURCE);
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -263,8 +233,8 @@ fn compare_gc_policy() {
     runtime.block_on(async {
         let engine = Arc::new(BexEngine::new(program, Arc::new(sys_native::SysOps::native()), vec![]).unwrap());
         let slot_size = std::mem::size_of::<bex_vm_types::Object>();
-        let initial_gc = engine.collect_garbage(CollectionLevel::Major).await;
-        let mut policy = Policy::new(policy_name, initial_gc.live_count * slot_size);
+        engine.collect_garbage().await;
+        let mut policy = Policy::new(policy_name);
         let (default_calls, default_n, function, copy_result): (usize, usize, &str, bool) = match workload.as_str() {
             "scalar" => (12_000, 123, "Identity", true),
             "tiny" => (12_000, 123, "Make", true),
@@ -306,15 +276,14 @@ fn compare_gc_policy() {
         let cache = if workload == "cache" {
             Some(engine.call_function("Batch", vec![BexExternalValue::Int(cache_n)], context(), false).await.unwrap())
         } else { None };
-        let warmup_gc = engine.collect_garbage(CollectionLevel::Major).await;
+        let warmup_gc = engine.collect_garbage().await;
         // A permanent cache is part of the survivor baseline before timings.
-        policy.after_gc(CollectionLevel::Major, 0, 0, warmup_gc.live_count * slot_size);
+        policy.after_gc(warmup_gc.live_count * slot_size);
         let mut cycles = Vec::new();
         let mut kept = VecDeque::new();
         let mut gc_ms = vec![];
         let mut call_ms = vec![];
-        let mut minor_count = 0;
-        let mut major_count = 0;
+        let mut collection_count = 0;
         let initial_rss = rss_bytes();
         let mut peak_rss = initial_rss;
         let mut peak_slots = engine.heap_stats().runtime_objects;
@@ -328,19 +297,14 @@ fn compare_gc_policy() {
             let stats = engine.heap_stats();
             let nursery_slots = stats.tlab_chunks * engine.heap().tlab_size();
             let nursery_bytes = nursery_slots * slot_size;
-            let older_bytes = stats.runtime_objects.saturating_sub(nursery_slots) * slot_size;
             let call_start = Instant::now();
-            if let Some(level) = policy.decide(nursery_bytes, older_bytes) {
+            if policy.due(nursery_bytes) {
                 let gc_start = Instant::now();
-                let result = engine.collect_garbage(level).await;
+                let result = engine.collect_garbage().await;
                 gc_ms.push(gc_start.elapsed().as_secs_f64() * 1000.0);
                 cycles.push((call, start.elapsed().as_secs_f64(), result.clone(), nursery_bytes, policy.budget));
-                match level {
-                    CollectionLevel::Minor => minor_count += 1,
-                    CollectionLevel::Major => major_count += 1,
-                }
-                policy.after_gc(level, nursery_bytes, result.promoted_to_gen1 * slot_size,
-                    engine.heap_stats().runtime_objects * slot_size);
+                collection_count += 1;
+                policy.after_gc(engine.heap_stats().runtime_objects * slot_size);
             }
             let result = engine.call_function(function, make_args(), context(), copy_result).await.unwrap();
             match workload.as_str() {
@@ -381,7 +345,7 @@ fn compare_gc_policy() {
         let budget_after = engine.heap().gc_budget();
         // Every full collection bumps the engine's counter; the ones this harness
         // requested are known, so the rest were triggered by the engine's own policy.
-        let automatic_full_collections = (budget_after.full_collections - budget_before.full_collections).saturating_sub(major_count);
+        let automatic_full_collections = (budget_after.full_collections - budget_before.full_collections).saturating_sub(collection_count);
         let idle_observation = if workload == "burst_idle" {
             kept.clear();
             let before = engine.heap_stats().runtime_objects;
@@ -394,7 +358,7 @@ fn compare_gc_policy() {
                 "before_rss_mib":rss_mib(before_rss),"after_rss_mib":rss_mib(rss_bytes())}))
         } else { None };
         // Verify retained native handles after a moving collection, outside timings.
-        let validation_gc = engine.collect_garbage(CollectionLevel::Major).await;
+        let validation_gc = engine.collect_garbage().await;
         if let Some(value) = &cache {
             let checked = engine.call_function("CheckBatch", vec![value.clone()], context(), true).await.unwrap();
             assert_eq!(checked, BexExternalValue::Int(cache_n * (cache_n-1) / 2));
@@ -405,11 +369,10 @@ fn compare_gc_policy() {
         }
         if let Ok(path) = std::env::var("GC_TRACE") {
             let events: Vec<_> = cycles.iter().map(|(call, at, stats, nursery, budget)| serde_json::json!({
-                "call":call, "at_seconds":at, "trigger":"policy_before_host_call", "level":format!("{:?}",stats.level),
+                "call":call, "at_seconds":at, "trigger":"policy_before_host_call",
                 "nursery_reserved_bytes":nursery, "budget_bytes":budget, "profile":profile_json(stats),
                 "copied_objects":stats.live_count, "reclaimed_slots":stats.collected_count,
                 "live_payload_bytes":stats.live_payload_bytes,
-                "promoted_gen1":stats.promoted_to_gen1, "promoted_gen2":stats.promoted_to_gen2,
             })).collect();
             std::fs::write(path, serde_json::to_vec_pretty(&events).unwrap()).unwrap();
         }
@@ -419,7 +382,7 @@ fn compare_gc_policy() {
             "gc_ms_total":gc_ms.iter().sum::<f64>(), "gc_ms_p50":percentile(&gc_ms,0.5),
             "gc_ms_p95":percentile(&gc_ms,0.95), "gc_ms_max":percentile(&gc_ms,1.0),
             "call_ms_p50":percentile(&call_ms,0.5), "call_ms_p95":percentile(&call_ms,0.95),
-            "call_ms_p99":percentile(&call_ms,0.99), "minor_count":minor_count, "major_count":major_count,
+            "call_ms_p99":percentile(&call_ms,0.99), "collection_count":collection_count,
             "call_ms_max":percentile(&call_ms,1.0),
             "peak_slot_mib":peak_slots as f64*slot_size as f64/MIB as f64,
             "end_slot_mib":end_slots as f64*slot_size as f64/MIB as f64,
@@ -433,7 +396,7 @@ fn compare_gc_policy() {
             "cache_objects":if cache.is_some() {cache_n} else {0},
             "cache_verified":cache.is_some(), "idle_observation":idle_observation,
             "validation_gc_live_objects":validation_gc.live_count,
-            "validation_gc_live_payload_mib":validation_gc.live_payload_bytes.map(|bytes| bytes as f64/MIB as f64),
+            "validation_gc_live_payload_mib":validation_gc.live_payload_bytes as f64/MIB as f64,
             "cycle_coverage":"harness-requested collections only; automatic cycles require engine tracing",
         }));
         kept.clear();
@@ -494,7 +457,7 @@ fn profile_concurrent_gc() {
             let mut events = Vec::new();
             while !gc_done.load(std::sync::atomic::Ordering::Relaxed) {
                 tokio::time::sleep(std::time::Duration::from_millis(5)).await;
-                let stats = gc_engine.collect_garbage(CollectionLevel::Major).await;
+                let stats = gc_engine.collect_garbage().await;
                 events.push(
                     serde_json::json!({"at_seconds":start.elapsed().as_secs_f64(),
                     "trigger":"concurrent_periodic_request", "profile":profile_json(&stats)}),

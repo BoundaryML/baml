@@ -189,7 +189,7 @@ fn run(args: Run) -> Result<()> {
         invocations += 1;
         if invocations.is_multiple_of(8) {
             let gc = Instant::now();
-            rt.block_on(engine.collect_garbage(bex_heap::CollectionLevel::Major));
+            rt.block_on(engine.collect_garbage());
             gc_seconds += gc.elapsed().as_secs_f64();
         }
         if args.idle_ms != 0 {

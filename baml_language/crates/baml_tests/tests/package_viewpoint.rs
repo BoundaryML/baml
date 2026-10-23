@@ -299,9 +299,7 @@ function read_log(log: string[]) -> string[] { log }
     // allocates alias it and are garbage once the call returns.
     let log = call("make_log", Vec::new(), false).await;
     call("touch", vec![log.clone()], false).await;
-    engine
-        .collect_garbage(bex_heap::CollectionLevel::Major)
-        .await;
+    engine.collect_garbage().await;
 
     let BexExternalValue::Array { items, .. } = call("read_log", vec![log], true).await else {
         panic!("the log is an array");

@@ -2265,9 +2265,7 @@ async fn host_call_ret_ty_survives_gc_during_await() {
 
     // Force a moving GC while the engine is parked — relocates the `ret_ty`
     // `Object::Type` that `args[2]` points at.
-    engine
-        .collect_garbage(bex_heap::CollectionLevel::Major)
-        .await;
+    engine.collect_garbage().await;
 
     // Complete the parked call with a TYPE-VIOLATING value (a string where `int`
     // is declared). With the fix, the pre-captured `ret_ty` drives schema

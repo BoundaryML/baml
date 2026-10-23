@@ -34,8 +34,8 @@
 //!
 //! A load builds the package's next image in full — its objects and cells,
 //! the declaration and slot tables that index them, its rules, and the
-//! tail — and writes it into the package object once, at the end, dirtying
-//! the package's card as part of that write. The tail names the unit's
+//! tail — and writes it into the package object once, at the end. The tail
+//! names the unit's
 //! declarations as `SELF` imports, so own resolution reads the image being
 //! built, never the package object. A load that fails publishes nothing: the
 //! package is exactly what it was, and what the load allocated is garbage. A
@@ -332,8 +332,7 @@ fn load_tail(
 }
 
 /// The one write of a load into its package: every table, the cells and
-/// objects, the rules, and the tail's `$init`s. The package may be old and
-/// everything written is young, so the write dirties its card.
+/// objects, the rules, and the tail's `$init`s.
 fn publish(
     vm: &mut BexVm,
     package_ptr: HeapPtr,
@@ -370,7 +369,6 @@ fn publish(
     package.objects = Objects::Own(image.objects.into_boxed_slice());
     package.init = init;
     package.test_init = test_init;
-    vm.tlab.heap().conservative_write_barrier(package_ptr);
     // The package's rule tables changed in place, under the same pointer
     // every cached resolver answer keys this world by.
     vm.dynamic_dispatch.bump_generation();

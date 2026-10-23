@@ -46,7 +46,6 @@ def main():
         ('tiny', 'full32', dict(GC_WORKLOAD='tiny', GC_CALLS=24000, GC_WARMUP=512)),
         ('churn', 'full32', dict(GC_WORKLOAD='churn')),
         ('retained', 'full32', dict(GC_WORKLOAD='retained')),
-        ('retained_minor', 'fixed32', dict(GC_WORKLOAD='retained')),
         ('large_live_fixed', 'full32', dict(GC_WORKLOAD='retained', GC_CALLS=768, GC_N=4096, GC_RETAIN=384)),
         ('large_live_scaled', 'full_live', dict(GC_WORKLOAD='retained', GC_CALLS=768, GC_N=4096, GC_RETAIN=384)),
         ('burst', 'full32', dict(GC_WORKLOAD='burst', GC_CALLS=1536)),
