@@ -92,3 +92,51 @@ jobs:
         if: always()
         working-directory: baml_language
         run: cargo test -p bex_vm --lib compiled_rt -- --skip a_panicking_compiled_body_clears_fiber_state --test-threads=1
+
+  # Where exactly the access violation lands: run each crashing test under cdb.
+  bex-vm-cdb:
+    name: "bex_vm under cdb"
+    runs-on: blacksmith-8vcpu-windows-2025
+    timeout-minutes: 50
+    env:
+      CARGO_PROFILE_DEV_DEBUG: "full"
+      CARGO_PROFILE_TEST_DEBUG: "full"
+      CARGO_PROFILE_DEV_OPT_LEVEL: "1"
+      CARGO_PROFILE_TEST_OPT_LEVEL: "1"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install Rust toolchain
+        run: rustup show
+        working-directory: baml_language
+      - name: Build
+        working-directory: baml_language
+        run: |
+          set -euo pipefail
+          cargo test -p bex_vm --lib --no-run --message-format=json \
+            | jq -r 'select(.profile.test == true and .target.name == "bex_vm") | .executable' > test-exe.txt
+          cat test-exe.txt
+      - name: Find cdb
+        run: |
+          set -euo pipefail
+          cdb=$(ls "/c/Program Files (x86)/Windows Kits/10/Debuggers/x64/cdb.exe" 2>/dev/null || true)
+          if [ -z "$cdb" ]; then
+            winget install --id Microsoft.WinDbg --accept-source-agreements --accept-package-agreements --silent || true
+            cdb=$(find /c/Program\ Files* -name cdb.exe -path '*x64*' 2>/dev/null | head -1)
+          fi
+          echo "CDB=$cdb" >> "$GITHUB_ENV"
+          echo "cdb: $cdb"
+      - name: Crash stacks
+        working-directory: baml_language
+        run: |
+          set -uo pipefail
+          exe=$(head -1 test-exe.txt)
+          for t in a_panicking_compiled_body_clears_fiber_state global_callee_errors_match_bytecode_at_every_opt_level; do
+            echo "::group::$t"
+            # Break on first-chance access violations, dump state, then quit.
+            "$CDB" -lines -G -y "$(dirname "$exe")" \
+              -c "sxe av; g; .echo ===AV===; .exr -1; r; .ecxr; kpn 60; ub @rip L20; u @rip L8; q" \
+              "$exe" "vm::compiled_rt::tests::$t" --exact --test-threads=1 --nocapture
+            echo "::endgroup::"
+          done
