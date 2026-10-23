@@ -95,7 +95,7 @@ fn new_engine(
     telemetry: btel_settings::artifact::ArtifactTelemetry,
     launch_context: btel_types::context::Context,
 ) -> Result<BexEngine, bex_engine::EngineError> {
-    let recording = bex_engine::TelemetryRecording::from_artifact(&telemetry)?.with_host("pack");
+    let recording = bex_engine::TelemetryRecording::from_artifact(&telemetry).with_host("pack");
     BexEngine::new_with_config(
         program,
         Arc::new(sys_native::SysOps::native()),
