@@ -192,7 +192,9 @@ impl BexVm {
         *function = unsafe { self.load_function(*frame_idx)? };
         match request {
             Request::Done(outcome) => {
-                self.complete_compiled(frame_idx, function, outcome.map_err(|error| *error))
+                let value = outcome.map_err(|error| *error)?;
+                self.stack.push(value);
+                self.finish_bytecode_frame(frame_idx, function, value)
             }
             Request::Step(step) => {
                 let start = crate::compiled_rt::stub_start(function)
@@ -283,18 +285,6 @@ impl BexVm {
         if let Frame::Bytecode(frame) = &mut self.frames[frame_idx] {
             frame.instruction_ptr = instruction_ptr;
         }
-    }
-
-    /// Complete a compiled frame with its result on the stack.
-    pub(crate) fn complete_compiled(
-        &mut self,
-        frame_idx: &mut usize,
-        function: &mut &'static Function,
-        outcome: Result<Value, VmError>,
-    ) -> Result<Option<VmExecState>, VmError> {
-        let value = outcome?;
-        self.stack.push(value);
-        self.finish_bytecode_frame(frame_idx, function, value)
     }
 
     /// Call through the VM with the compiled caller's recorded call site.

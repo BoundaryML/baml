@@ -208,7 +208,7 @@ impl BexVm {
         self.check_compiled_call()?;
         if self.telemetry.is_some() {
             if type_args.is_empty() {
-                return self.call_compiled_cold(caller, callee, body, args);
+                return self.call_compiled_observed(caller, callee, body, args);
             }
             return self.call_compiled_funnelled(callee, type_args, args);
         }
@@ -309,18 +309,6 @@ impl BexVm {
         result
     }
 
-    #[cold]
-    #[inline(never)]
-    fn call_compiled_cold(
-        &mut self,
-        caller: &FrameRecord,
-        callee: HeapPtr,
-        body: CompiledFn,
-        args: &[Value],
-    ) -> Result<Value, Box<VmError>> {
-        self.call_compiled_observed(caller, callee, body, args)
-    }
-
     /// Enter a plain compiled callee with telemetry, falling back to the VM call path when needed.
     ///
     /// For a plain callee everything the call path looks up is known: the call
@@ -329,6 +317,7 @@ impl BexVm {
     /// the invocation with those facts, pushes the frame with its telemetry,
     /// runs the body, and completes the invocation as the call path does. An
     /// error leaves the frame for the unwinder, which completes it.
+    #[cold]
     #[inline(never)]
     #[allow(unsafe_code)]
     fn call_compiled_observed(
@@ -349,7 +338,7 @@ impl BexVm {
         }
         debug_assert_eq!(args.len(), function.arity);
         let frame_telemetry =
-            self.enter_record_telemetry(Self::record_frame(caller), function, callee, args);
+            self.enter_record_receipt(caller, function, callee, &[], &[], args);
         let locals_offset = self.push_compiled_frame(callee, Vec::new(), None, frame_telemetry);
         let result = self.run_entry(body, args);
         if let Ok(value) = result {

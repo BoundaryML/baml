@@ -512,7 +512,7 @@ impl BexVm {
     #[cold]
     #[inline(never)]
     #[allow(unsafe_code)]
-    fn enter_record_receipt(
+    pub(super) fn enter_record_receipt(
         &mut self,
         caller: &FrameRecord,
         function: &'static Function,
@@ -992,34 +992,12 @@ impl BexVm {
         locals_offset
     }
 
-    /// Caller facts for a call made by compiled code at `caller`, for the
-    /// telemetry call path.
-    pub(crate) fn record_caller_facts(&self, caller: FrameAt) -> (Option<HeapPtr>, u32, bool) {
-        let FrameAt::Vm(idx) = caller else {
-            let pc = self
-                .frame_at_pc(caller, None)
-                .map_or(0, |pc| u32::try_from(pc).unwrap_or(u32::MAX));
-            return (
-                self.frame_identity(caller),
-                pc,
-                self.frame_receipt(caller).is_some(),
-            );
-        };
-        let resolved = self.bytecode_caller(idx);
-        (
-            self.visible_bytecode_caller(idx)
-                .and_then(|at| self.frame_identity(at)),
-            self.caller_pc(resolved, idx, 0),
-            self.frame_receipt(resolved).is_some(),
-        )
-    }
-
     /// Caller facts for a call compiled code makes directly: the calling
     /// body's identity, the compact offset of the call site it recorded, and
     /// whether its invocation is observed, all read from its own record (an
     /// entry record's frame is observed through its VM frame). A body making
     /// a call runs; it is neither a native continuation nor a hook target
-    /// whose hook is evaluating, which [`Self::record_caller_facts`] resolves.
+    /// whose hook is evaluating.
     fn direct_caller_facts(&self, caller: &FrameRecord) -> (Option<HeapPtr>, u32, bool) {
         let ptr = caller.function();
         let identity = self.callable_function_identity(ptr);
@@ -1055,39 +1033,6 @@ impl BexVm {
             if let Some(telemetry) = self.telemetry.as_mut() {
                 telemetry.set_context(context);
             }
-        }
-    }
-
-    /// Enter a compiled callee's invocation for telemetry, with caller facts
-    /// read from `caller`.
-    #[allow(unsafe_code)]
-    pub(crate) fn enter_record_telemetry(
-        &mut self,
-        caller: FrameAt,
-        function: &'static Function,
-        callee: HeapPtr,
-        args: &[Value],
-    ) -> Option<FrameTelemetry> {
-        let (visible_caller, caller_pc, caller_is_observed) = self.record_caller_facts(caller);
-        let context = self.current_context().clone();
-        let telemetry = self.telemetry.as_mut()?;
-        if !telemetry.has_context(&context) {
-            telemetry.set_context(context);
-        }
-        // SAFETY: the heap permit is held, and the caller's locals keep the
-        // arguments and callee live.
-        unsafe {
-            telemetry.enter_bytecode_with_trace(
-                function,
-                callee,
-                visible_caller,
-                caller_pc,
-                caller_is_observed,
-                args,
-                None,
-                CallTypeArgs::default(),
-                |caller, callee| Self::register_call_path_functions(&self.heap, caller, callee),
-            )
         }
     }
 
