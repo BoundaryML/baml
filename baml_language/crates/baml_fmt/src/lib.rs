@@ -832,7 +832,7 @@ mod lambda_format_tests {
     }
 
     #[test]
-    fn bare_callable_union_members_round_trip() {
+    fn complete_union_members_round_trip() {
         let options = FormatOptions::default();
         let source = "type Value = int | () -> string throws never\n";
         assert_eq!(
@@ -840,14 +840,16 @@ mod lambda_format_tests {
             "type Value = int | () -> string throws never;\n"
         );
         for source in [
+            "type Values = int[] | string? | map<string, bool[]> | (int | string)[]\n",
+            "type Values = int[] /* first */ | /* arm */ string? | /* last */ bool\n",
             "type Values = map<string, int | (value?: int) -> string[]? throws string | int>\n",
             "type Values = (int | () -> string throws never)[]\n",
             "type Values = (() -> string throws never) | () -> int throws never\n",
             "type Values = int | /* arm */ (/* arg */ int) -> string throws never\n",
         ] {
-            let formatted = format(source, &options).expect("format a complete callable arm");
+            let formatted = format(source, &options).expect("format complete union members");
             assert_eq!(format(&formatted, &options).unwrap(), formatted);
-            for comment in ["/* arm */", "/* arg */"] {
+            for comment in ["/* first */", "/* arm */", "/* arg */", "/* last */"] {
                 if source.contains(comment) {
                     assert!(formatted.contains(comment), "lost {comment}: {formatted}");
                 }

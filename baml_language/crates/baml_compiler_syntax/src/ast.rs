@@ -53,8 +53,7 @@ use baml_base::escape::{unescape_backtick_string_literal, unescape_string_litera
 /// literal token, skipping trivia. Returns `(negated, token)` on a clean
 /// match. Rejects `--42` (multiple signs), intervening non-trivia tokens, or
 /// a missing literal — caller treats those as "not a signed literal." Used by
-/// both `UnionMemberParts` and `TypeExpr` so the two paths agree on what
-/// counts as a signed integer / float literal.
+/// `TypeExpr` for signed integer / float literals.
 fn scan_signed_literal_token(
     tokens: impl IntoIterator<Item = SyntaxToken>,
     target: SyntaxKind,
@@ -214,190 +213,6 @@ impl GenericParam {
     }
 }
 
-/// Parts of a union member for token-based parsing.
-///
-/// Union members can contain both tokens (WORD, `L_BRACKET`, etc.) and child nodes
-/// (`STRING_LITERAL`, `TYPE_EXPR` for parenthesized types, `TYPE_ARGS` for generics).
-#[derive(Debug, Clone)]
-pub struct UnionMemberParts {
-    /// Tokens in this union member (WORD, `L_BRACKET`, `R_BRACKET`, QUESTION, etc.).
-    /// Trivia tokens should not be included.
-    pub tokens: Vec<SyntaxToken>,
-    /// Child nodes in this union member (`STRING_LITERAL`, `TYPE_EXPR`, `TYPE_ARGS`, etc.).
-    pub child_nodes: Vec<SyntaxNode>,
-}
-
-impl UnionMemberParts {
-    /// Create an empty `UnionMemberParts`.
-    pub fn new() -> Self {
-        Self {
-            tokens: Vec::new(),
-            child_nodes: Vec::new(),
-        }
-    }
-
-    /// Check if this member is empty (no tokens or child nodes).
-    pub fn is_empty(&self) -> bool {
-        self.tokens.is_empty() && self.child_nodes.is_empty()
-    }
-
-    /// Source range of this member's type name — the leading run of `WORD`/`DOT`
-    /// tokens (e.g. `long_word_123.foobar`), excluding postfix `[]`/`?` modifiers
-    /// and generic args. Lets diagnostics like "unresolved type" point at the
-    /// offending identifier rather than the whole union/compound type.
-    ///
-    /// Falls back to the full extent of the member's tokens and child nodes when
-    /// there is no leading name (e.g. a string-literal member), and to `None`
-    /// when the member is empty.
-    pub fn span(&self) -> Option<rowan::TextRange> {
-        let name: Vec<_> = self
-            .tokens
-            .iter()
-            .take_while(|t| {
-                matches!(
-                    t.kind(),
-                    SyntaxKind::WORD
-                        | SyntaxKind::DOT
-                        | SyntaxKind::KW_SPAWN
-                        | SyntaxKind::KW_AWAIT
-                        | SyntaxKind::KW_CLASS
-                        | SyntaxKind::KW_ENUM
-                        | SyntaxKind::KW_INTERFACE
-                        | SyntaxKind::KW_FUNCTION
-                )
-            })
-            .collect();
-        if let (Some(first), Some(last)) = (name.first(), name.last()) {
-            return Some(rowan::TextRange::new(
-                first.text_range().start(),
-                last.text_range().end(),
-            ));
-        }
-        let ranges = || {
-            self.tokens
-                .iter()
-                .map(rowan::SyntaxToken::text_range)
-                .chain(self.child_nodes.iter().map(rowan::SyntaxNode::text_range))
-        };
-        let start = ranges().map(rowan::TextRange::start).min()?;
-        let end = ranges().map(rowan::TextRange::end).max()?;
-        Some(rowan::TextRange::new(start, end))
-    }
-
-    /// Get the full dotted name (all WORD tokens joined by DOTs).
-    ///
-    /// For `baml.http.Request` returns `Some("baml.http.Request")`.
-    /// For `MyClass` returns `Some("MyClass")`.
-    pub fn dotted_name(&self) -> Option<String> {
-        extract_dotted_name(self.tokens.iter())
-    }
-
-    /// Get the postfix modifiers (`[]` and `?`) in application order (innermost first).
-    ///
-    /// Works like `TypeExpr::postfix_modifiers()` but operates on the token list
-    /// of a union member instead of directly on CST children.
-    ///
-    /// For `Union???` returns `[Optional, Optional, Optional]`.
-    /// For `Union[]??` returns `[Array, Optional, Optional]`.
-    /// For `Union?[]?` returns `[Optional, Array, Optional]`.
-    pub fn postfix_modifiers(&self) -> Vec<TypePostFixModifier> {
-        collect_postfix_modifiers(self.tokens.iter().map(SyntaxToken::kind))
-    }
-
-    /// Get the string literal value if this member is a string literal type.
-    pub fn string_literal(&self) -> Option<String> {
-        self.child_nodes
-            .iter()
-            .find(|n| n.kind() == SyntaxKind::STRING_LITERAL)
-            .map(|n| decode_regular_string_literal_text(&n.text().to_string()))
-    }
-
-    /// Get the `TYPE_EXPR` child node if present (for parenthesized types).
-    pub fn type_expr(&self) -> Option<TypeExpr> {
-        self.child_nodes
-            .iter()
-            .find(|n| n.kind() == SyntaxKind::TYPE_EXPR)
-            .cloned()
-            .map(|syntax| TypeExpr { syntax })
-    }
-
-    /// Return `(base, interface, member)` for `(Base as Interface).Member`.
-    pub fn associated_type_projection(&self) -> Option<(TypeExpr, TypeExpr, SyntaxToken)> {
-        let mut child_types = self
-            .child_nodes
-            .iter()
-            .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
-            .cloned()
-            .map(|syntax| TypeExpr { syntax });
-        let base = child_types.next()?;
-        let interface = child_types.next()?;
-
-        if self
-            .tokens
-            .first()
-            .is_none_or(|t| t.kind() != SyntaxKind::L_PAREN)
-        {
-            return None;
-        }
-        if !self.tokens.iter().any(|t| t.kind() == SyntaxKind::KW_AS) {
-            return None;
-        }
-        let dot_idx = self
-            .tokens
-            .iter()
-            .rposition(|t| t.kind() == SyntaxKind::DOT)?;
-        let member = self.tokens.get(dot_idx + 1)?;
-        (member.kind() == SyntaxKind::WORD).then(|| (base, interface, member.clone()))
-    }
-
-    /// Get the `TYPE_ARGS` child node if present (for generic types like map<K,V>).
-    pub fn type_args(&self) -> Option<SyntaxNode> {
-        self.child_nodes
-            .iter()
-            .find(|n| n.kind() == SyntaxKind::TYPE_ARGS)
-            .cloned()
-    }
-
-    /// Get the `FUNCTION_TYPE_PARAM` child node if present.
-    ///
-    /// This is used for parenthesized types like `(Union | Union)` which have
-    /// `L_PAREN`, `FUNCTION_TYPE_PARAM`, `R_PAREN` as direct children.
-    pub fn function_type_param(&self) -> Option<SyntaxNode> {
-        self.child_nodes
-            .iter()
-            .find(|n| n.kind() == SyntaxKind::FUNCTION_TYPE_PARAM)
-            .cloned()
-    }
-
-    /// Check if this member has a `BIGINT_LITERAL` token, optionally preceded
-    /// by a single `MINUS` token (for negative literals like `-7n`). Returns
-    /// `(negated, token)`; the token text still carries the trailing `n`.
-    /// Value parsing happens in `baml_compiler2_ast` where diagnostics can be
-    /// emitted.
-    pub fn bigint_literal(&self) -> Option<(bool, SyntaxToken)> {
-        scan_signed_literal_token(self.tokens.iter().cloned(), SyntaxKind::BIGINT_LITERAL)
-    }
-
-    /// Check if this member has an `INTEGER_LITERAL` token, optionally
-    /// preceded by a single `MINUS` token (for negative literals like `-42`).
-    /// Rejects `--42` and any other shape. Returns `(negated, token)`.
-    pub fn integer_literal(&self) -> Option<(bool, SyntaxToken)> {
-        scan_signed_literal_token(self.tokens.iter().cloned(), SyntaxKind::INTEGER_LITERAL)
-    }
-
-    /// Check if this member has a `FLOAT_LITERAL` token. A single leading
-    /// `MINUS` negates. Returns `(negated, token)`.
-    pub fn float_literal(&self) -> Option<(bool, SyntaxToken)> {
-        scan_signed_literal_token(self.tokens.iter().cloned(), SyntaxKind::FLOAT_LITERAL)
-    }
-}
-
-impl Default for UnionMemberParts {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypePostFixModifier {
     Optional,
@@ -471,8 +286,7 @@ impl TypeExpr {
     /// For `int[][]?` returns `[Array, Array, Optional]`.
     /// For `int?[]` returns `[Optional, Array]`.
     pub fn postfix_modifiers(&self) -> Vec<TypePostFixModifier> {
-        // if it's a union without parens, the postfix modifiers we'd find
-        // are actually the modifiers on the final union member
+        // A union owns separators; modifiers belong to its operand nodes.
         if self.is_union() {
             return Vec::new();
         }
@@ -648,49 +462,10 @@ impl TypeExpr {
         }
     }
 
-    /// Get the parts of this type expression for each union member.
-    ///
-    /// Returns a list of `UnionMemberParts`, where each contains the tokens
-    /// and child nodes for one union member. This allows parsing union members
-    /// by token/node kinds instead of string manipulation.
-    ///
-    /// For `int | string[]`, returns two `UnionMemberParts`:
-    /// - First: tokens=\[WORD("int")\]
-    /// - Second: tokens=\[WORD("string"), `L_BRACKET`, `R_BRACKET`\]
-    ///
-    /// For `"user" | int`, returns two `UnionMemberParts`:
-    /// - First: `child_nodes`=\[`STRING_LITERAL`\], tokens=\[\]
-    /// - Second: tokens=\[WORD("int")\]
-    pub fn union_member_parts(&self) -> Vec<UnionMemberParts> {
-        let mut members = Vec::new();
-        let mut current = UnionMemberParts::new();
-
-        for child in self.syntax.children_with_tokens() {
-            match child {
-                rowan::NodeOrToken::Token(token) => {
-                    if token.kind().is_trivia() {
-                        continue;
-                    }
-                    if token.kind() == SyntaxKind::PIPE {
-                        if !current.is_empty() {
-                            members.push(current);
-                            current = UnionMemberParts::new();
-                        }
-                    } else {
-                        current.tokens.push(token);
-                    }
-                }
-                rowan::NodeOrToken::Node(child_node) => {
-                    current.child_nodes.push(child_node);
-                }
-            }
-        }
-
-        if !current.is_empty() {
-            members.push(current);
-        }
-
-        members
+    /// Complete operands of a union, in source order. Each child owns its
+    /// primary type and postfix modifiers; separators remain on the union.
+    pub fn union_members(&self) -> impl Iterator<Item = TypeExpr> + '_ {
+        self.syntax.children().filter_map(TypeExpr::cast)
     }
 
     /// Check if this is a function type: `(x: int, y: int) -> bool` or `(int) -> bool`.

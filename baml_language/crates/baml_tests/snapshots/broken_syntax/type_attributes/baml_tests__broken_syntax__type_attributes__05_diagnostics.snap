@@ -103,11 +103,11 @@ source: crates/baml_tests/src/generated_tests.rs
 
   [hir] E0108
 
-  × CST-to-AST lowering left unconsumed type syntax: AT, WORD, L_PAREN, QUOTE, WORD, QUOTE
-    ╭─[nested.baml:24:15]
+  × CST-to-AST lowering left unconsumed type syntax: L_PAREN, FUNCTION_TYPE_PARAM, AT, WORD, L_PAREN, QUOTE, WORD, QUOTE, R_PAREN, WORD, R_PAREN, L_BRACKET, R_BRACKET
+    ╭─[nested.baml:24:9]
  24 │   field (NFoo @alias("inner") | NBar)[]
-    ·               ┬
-    ·               ╰── this syntax was not represented in the lowered type
+    ·         ┬
+    ·         ╰── this syntax was not represented in the lowered type
     ╰────
 
   [parse] E0010
@@ -117,15 +117,6 @@ source: crates/baml_tests/src/generated_tests.rs
  24 │   field (NFoo @alias("inner") | NBar)[]
     ·               ┬
     ·               ╰── Unexpected '@' in type expression
-    ╰────
-
-  [hir] E0108
-
-  × CST-to-AST lowering left unconsumed type syntax: R_PAREN
-    ╭─[nested.baml:24:37]
- 24 │   field (NFoo @alias("inner") | NBar)[]
-    ·                                     ┬
-    ·                                     ╰── this syntax was not represented in the lowered type
     ╰────
 
   [parse] E0010

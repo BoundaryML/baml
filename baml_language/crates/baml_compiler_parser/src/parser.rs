@@ -3118,59 +3118,61 @@ impl<'a> Parser<'a> {
     /// a function return/throws operand belongs to `UNION_PATTERN`).
     pub(crate) fn parse_type_with(&mut self, consume_union: bool) {
         self.with_node(SyntaxKind::TYPE_EXPR, |p| {
-            p.parse_type_primary();
-
-            if p.pending_greaters > 0 {
-                // Don't parse modifiers until we've used all
-                // pending `>`
+            let first_member = p.events.len();
+            p.parse_type_postfix();
+            if !consume_union || p.pending_greaters > 0 || !p.at(TokenKind::Pipe) {
                 return;
             }
-            // Type modifiers
-            loop {
-                if p.at(TokenKind::LBracket) {
-                    // Array type: string[]
-                    p.bump(); // [
-                    p.expect(TokenKind::RBracket); // ]
-                } else if p.at(TokenKind::Question) {
-                    // Optional type: string?
-                    p.bump();
-                } else if consume_union && p.at(TokenKind::Pipe) {
-                    // Union type: string | int | "user" | "assistant"
-                    let ambiguous_pipe = (p.function_union_operand
-                        && p.pipe_starts_function_type())
+
+            // Every union member owns a complete TYPE_EXPR, including postfix
+            // modifiers. Standalone types keep their existing single wrapper.
+            p.wrap_events_in_node(first_member, SyntaxKind::TYPE_EXPR);
+            p.finish_node();
+            while p.pending_greaters == 0 && p.at(TokenKind::Pipe) {
+                let ambiguous_pipe = (p.function_union_operand && p.pipe_starts_function_type())
                     .then(|| p.skip_trivia_and_comments_from(p.current));
-                    p.bump();
-                    let errors_before_member = p.events.len();
-                    if p.at(TokenKind::LParen) && p.looks_like_function_type_paren() {
-                        // Keep a bare callable member's head, return and throws
-                        // together. Without this node union lowering mistakes
-                        // its return TYPE_EXPR for the entire member (B-1722).
-                        p.with_node(SyntaxKind::TYPE_EXPR, Self::parse_type_primary);
-                    } else {
-                        p.parse_type_primary();
-                    }
-                    // Both ownership branches are syntax-complete here: the
-                    // previous operand can finish the first function, and the
-                    // member can also be a function inside its return/throws
-                    // union. A malformed member is diagnosed by the parser
-                    // instead of gaining a second ambiguity diagnostic.
-                    if let Some(pipe) = ambiguous_pipe
-                        && !p.events[errors_before_member..].iter().any(|event| {
-                            matches!(
-                                event,
-                                Event::UnexpectedToken { .. }
-                                    | Event::SyntaxHint { .. }
-                                    | Event::RemovedFeature { .. }
-                            )
-                        })
-                    {
-                        p.ambiguous_pipes.push(pipe);
-                    }
-                } else {
-                    break;
+                p.bump();
+                let errors_before_member = p.events.len();
+                p.with_node(SyntaxKind::TYPE_EXPR, Self::parse_type_postfix);
+                // Both ownership branches are syntax-complete here: the
+                // previous operand can finish the first function, and the
+                // member can also be a function inside its return/throws
+                // union. A malformed member is diagnosed by the parser
+                // instead of gaining a second ambiguity diagnostic.
+                if let Some(pipe) = ambiguous_pipe
+                    && !p.events[errors_before_member..].iter().any(|event| {
+                        matches!(
+                            event,
+                            Event::UnexpectedToken { .. }
+                                | Event::SyntaxHint { .. }
+                                | Event::RemovedFeature { .. }
+                        )
+                    })
+                {
+                    p.ambiguous_pipes.push(pipe);
                 }
             }
         });
+    }
+
+    /// Parse one union operand. Function return/throws types still recursively
+    /// parse full type expressions, preserving their greedy union precedence.
+    fn parse_type_postfix(&mut self) {
+        self.parse_type_primary();
+        // A split `>>` can still belong to an enclosing generic argument list.
+        if self.pending_greaters > 0 {
+            return;
+        }
+        loop {
+            if self.at(TokenKind::LBracket) {
+                self.bump();
+                self.expect(TokenKind::RBracket);
+            } else if self.at(TokenKind::Question) {
+                self.bump();
+            } else {
+                break;
+            }
+        }
     }
 
     fn parse_type_primary(&mut self) {
@@ -11264,6 +11266,96 @@ type Callback = (value: int) -> string throws Foo
             "expected function type throws clause text, got {:?}",
             throws.text().to_string()
         );
+    }
+
+    #[test]
+    fn union_members_are_complete_type_expr_nodes() {
+        use baml_compiler_syntax::ast::TypeExpr;
+        use rowan::ast::AstNode;
+
+        let cases: &[(&str, &[&str])] = &[
+            ("int[] | string?", &["int[]", "string?"]),
+            (
+                "int | () -> string throws never",
+                &["int", "() -> string throws never"],
+            ),
+            (
+                "((int) -> string throws never) | (bool) -> int throws never",
+                &[
+                    "((int) -> string throws never)",
+                    "(bool) -> int throws never",
+                ],
+            ),
+            (
+                "map<string, int | bool[]>? | (string | null)[] | -1 | \"literal\"",
+                &[
+                    "map<string, int | bool[]>?",
+                    "(string | null)[]",
+                    "-1",
+                    "\"literal\"",
+                ],
+            ),
+            (
+                "int | (value?: int) -> string[]? throws string | int",
+                &["int", "(value?: int) -> string[]? throws string | int"],
+            ),
+        ];
+        for (form, expected) in cases {
+            let source = format!("type T = {form}\n");
+            let (root, errors) = parse_source(&source);
+            assert_no_errors(&errors);
+            assert_eq!(root.text().to_string(), source);
+            let outer = root
+                .descendants()
+                .filter_map(TypeExpr::cast)
+                .next()
+                .unwrap();
+            let members: Vec<_> = outer
+                .union_members()
+                .map(|member| member.syntax().text().to_string().trim().to_owned())
+                .collect();
+            assert_eq!(&members, expected, "{form}");
+            for union in root
+                .descendants()
+                .filter_map(TypeExpr::cast)
+                .filter(TypeExpr::is_union)
+            {
+                let kinds: Vec<_> = union
+                    .syntax()
+                    .children_with_tokens()
+                    .filter(|element| !element.kind().is_trivia())
+                    .map(|element| element.kind())
+                    .collect();
+                assert!(
+                    kinds.len() >= 3 && kinds.len() % 2 == 1,
+                    "{form}: {kinds:?}"
+                );
+                for (index, kind) in kinds.into_iter().enumerate() {
+                    assert_eq!(
+                        kind,
+                        if index % 2 == 0 {
+                            SyntaxKind::TYPE_EXPR
+                        } else {
+                            SyntaxKind::PIPE
+                        },
+                        "{form}"
+                    );
+                }
+            }
+        }
+
+        // Function return unions remain inside the callable, rather than
+        // introducing a union at the function's own level.
+        let (root, errors) = parse_source("type T = () -> int | string throws never\n");
+        assert_no_errors(&errors);
+        let callable = root
+            .descendants()
+            .filter_map(TypeExpr::cast)
+            .next()
+            .unwrap();
+        assert!(callable.is_function_type());
+        assert!(!callable.is_union());
+        assert!(callable.function_return_type().unwrap().is_union());
     }
 
     #[test]

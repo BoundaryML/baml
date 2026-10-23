@@ -1878,8 +1878,8 @@ function f() -> int {
 
     #[test]
     fn lossy_union_member_lowering_reports_unconsumed_syntax() {
-        // Recreate the pre-B-1722 CST without depending on whether the parser
-        // currently supplies a complete node for the callable member.
+        // Remove the callable boundary independently of the parser, recreating
+        // the structural defect behind B-1722 while preserving every token.
         fn emit_without_callable_member_wrapper(
             node: &SyntaxNode,
             builder: &mut rowan::GreenNodeBuilder<'_>,
@@ -1923,10 +1923,10 @@ function f() -> int {
         let crate::LoweringDiagnostic::UnconsumedTypeSyntax { syntax, span } = &diags[0] else {
             panic!("expected unconsumed syntax, got {diags:#?}");
         };
-        assert_eq!(syntax, "ARROW, THROWS_CLAUSE");
+        assert_eq!(syntax, "L_PAREN, R_PAREN, ARROW, THROWS_CLAUSE");
         assert_eq!(
             &source[usize::from(span.start())..usize::from(span.end())],
-            "->"
+            "("
         );
         let diag = diags[0].to_diagnostic(FileId::new(0));
         assert_eq!(
@@ -1934,14 +1934,12 @@ function f() -> int {
             baml_compiler_diagnostics::DiagnosticId::UnparseableType
         );
         assert_eq!(diag.severity, baml_compiler_diagnostics::Severity::Error);
-        let TypeExprKind::Union { variants } = first_type_alias(items).type_expr.unwrap().kind
-        else {
-            panic!("expected a union");
-        };
-        assert!(matches!(variants[0].kind, TypeExprKind::Int));
         assert!(
-            matches!(variants[1].kind, TypeExprKind::Error),
-            "must not publish string as the arm"
+            matches!(
+                first_type_alias(items).type_expr.unwrap().kind,
+                TypeExprKind::Error
+            ),
+            "a union with unwrapped syntax must not publish a partial type"
         );
 
         // This is a consumption check, not a special-case rejection of arrows:
@@ -1954,6 +1952,41 @@ function f() -> int {
             )),
             "{diags:#?}"
         );
+    }
+
+    #[test]
+    fn union_members_use_standalone_type_lowering() {
+        for member in [
+            "string[]?",
+            "map<string, bool[]>?",
+            "(string | null)[]",
+            "-1",
+            "-7n",
+            "true",
+            "\"literal\"",
+            "User[]",
+            "(value?: int, fallback: string) -> string | int throws never",
+            "(User as Display).Item?",
+        ] {
+            let lower = |form: &str| {
+                first_type_alias(parse_and_lower(&format!("type T = {form}\n")))
+                    .type_expr
+                    .unwrap()
+            };
+            let standalone = strip_spans(&lower(member));
+            let union = lower(&format!("int | {member}"));
+            let TypeExprKind::Union { variants } = union.kind else {
+                panic!("expected outer union: {member}");
+            };
+            assert_eq!(variants.len(), 2, "{member}");
+            assert_eq!(strip_spans(&variants[1]), standalone, "{member}");
+
+            let union = lower(&format!("({member}) | int"));
+            let TypeExprKind::Union { variants } = union.kind else {
+                panic!("expected outer union: {member}");
+            };
+            assert_eq!(strip_spans(&variants[0]), standalone, "{member}");
+        }
     }
 
     #[test]

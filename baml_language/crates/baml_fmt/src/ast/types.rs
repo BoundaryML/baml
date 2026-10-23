@@ -60,29 +60,28 @@ impl FromCST for Type {
         let node = StrongAstError::assert_is_node(elem)?;
         StrongAstError::assert_kind_node(&node, SyntaxKind::TYPE_EXPR)?;
 
-        // TYPE_EXPR contains tokens and nodes directly in a flat structure
-        // We need to parse them into the appropriate Type variant
-
         let mut it = SyntaxNodeIter::new(&node);
-
-        let first = UnionTypeMember::take(&mut it)?;
-
-        let mut rest = Vec::new();
-        while let Some(pipe) = it.next_if_kind(SyntaxKind::PIPE) {
-            let pipe = t::Pipe::from_cst(pipe)?;
-            let next = UnionTypeMember::take(&mut it)?;
-            rest.push((pipe, next));
-        }
-
-        it.expect_end()?;
-
-        if rest.is_empty() {
-            Ok(first.into())
-        } else {
+        if node
+            .children_with_tokens()
+            .any(|element| element.kind() == SyntaxKind::PIPE)
+        {
+            // Union operands use the same conversion as standalone types.
+            let first = it.expect_parse()?;
+            let mut rest = Vec::new();
+            while let Some(pipe) = it.next_if_kind(SyntaxKind::PIPE) {
+                let pipe = t::Pipe::from_cst(pipe)?;
+                let next = it.expect_parse()?;
+                rest.push((pipe, next));
+            }
+            it.expect_end()?;
             Ok(Type::Union(UnionType {
                 first: Box::new(first),
                 rest,
             }))
+        } else {
+            let ty = UnionTypeMember::take(&mut it)?;
+            it.expect_end()?;
+            Ok(ty.into())
         }
     }
 }
@@ -295,8 +294,8 @@ impl Printable for StringType {
 
 #[derive(Debug)]
 pub struct UnionType {
-    pub first: Box<UnionTypeMember>,
-    pub rest: Vec<(t::Pipe, UnionTypeMember)>,
+    pub first: Box<Type>,
+    pub rest: Vec<(t::Pipe, Type)>,
 }
 
 impl PrintMultiLine for UnionType {
@@ -434,15 +433,6 @@ impl UnionTypeMember {
     fn take_base_type(it: &mut SyntaxNodeIter) -> Result<Self, StrongAstError> {
         let first = it.expect_next("a type")?;
         match first.kind() {
-            SyntaxKind::TYPE_EXPR => {
-                // Bare callable union members have a complete TYPE_EXPR node;
-                // it groups syntax without introducing source parentheses.
-                let node = StrongAstError::assert_is_node(first)?;
-                let mut inner = SyntaxNodeIter::new(&node);
-                let member = Self::take(&mut inner)?;
-                inner.expect_end()?;
-                Ok(member)
-            }
             SyntaxKind::MINUS => {
                 let minus = t::Minus::from_cst(first)?;
                 let literal = it.expect_next("numeric literal after '-'")?;
