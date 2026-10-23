@@ -167,7 +167,7 @@ impl Drop for ObjectMut<'_> {
 }
 
 /// Max call stack size.
-pub const MAX_FRAMES: usize = 256;
+pub const MAX_FRAMES: usize = 10_000;
 
 #[derive(Clone, Copy)]
 struct CallOptions<'a> {
