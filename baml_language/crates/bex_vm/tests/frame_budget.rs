@@ -307,10 +307,19 @@ fn indirect_and_native_callback_frames_share_the_budget() {
 /// Report observed release layout and capacity for the requested recursion input.
 fn measure_frame_capacity() {
     let input = std::env::var("BAML_PROBE_DEPTH").unwrap();
-    let entry = std::env::var("BAML_PROBE_ENTRY").unwrap_or_else(|_| "user.main".to_string());
+    let locals = std::env::var("BAML_PROBE_LOCALS")
+        .ok()
+        .map(|value| value.parse::<usize>().unwrap());
+    let entry = std::env::var("BAML_PROBE_ENTRY").unwrap_or_else(|_| {
+        if locals.is_some() {
+            "user.measured_main"
+        } else {
+            "user.main"
+        }
+        .to_string()
+    });
     let mut source = SOURCE.to_string();
-    if let Ok(locals) = std::env::var("BAML_PROBE_LOCALS") {
-        let locals: usize = locals.parse().unwrap();
+    if let Some(locals) = locals {
         source.push_str("function measured_depth(n: int) -> int { ");
         for index in 0..locals {
             write!(source, "let local{index} = n + {index}; ").unwrap();
