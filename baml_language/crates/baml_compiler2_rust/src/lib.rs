@@ -7,6 +7,7 @@ mod codegen;
 mod coords;
 mod index;
 mod init;
+mod operands;
 mod reach;
 mod render;
 mod structure;

@@ -8,20 +8,20 @@ use std::{
 
 use baml_compiler2_mir::{
     CellId, Constant, IntrinsicOp, Local, MirFunctionBody, Operand, Place, RuntimeTy, Rvalue,
-    StatementKind, Terminator, UnaryOp,
+    StatementKind, Terminator, TyTemplate, UnaryOp,
     memory::{Resources, place_reads, walk_operand_places, walk_rvalue_places},
 };
-use baml_type::{Literal, TyTemplate};
+use baml_type::Literal;
 use bex_vm_types::FunctionKind;
 
 use crate::{
     admit::Rejection,
     codegen::types::realized_expr,
     index::ProgramIndex,
+    operands::{walk_statement_operands, walk_terminator_operands},
     structure::{Cfg, Flow},
 };
 
-/// How a local is held in generated code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Repr {
     Int,
@@ -31,7 +31,7 @@ pub(crate) enum Repr {
 }
 
 impl Repr {
-    pub(crate) fn of(ty: &baml_compiler2_mir::RuntimeTy) -> Self {
+    pub(crate) fn of(ty: &RuntimeTy) -> Self {
         use baml_compiler2_mir::RuntimeTy as T;
         match ty {
             T::Int | T::Literal(Literal::Int(_), _) => Self::Int,
@@ -42,27 +42,24 @@ impl Repr {
     }
 
     pub(crate) fn rust_type(self) -> &'static str {
-        match self {
-            Self::Int => "i64",
-            Self::Float => "f64",
-            Self::Bool => "bool",
-            Self::Value => "Value",
-        }
+        self.rust_binding().0
     }
 
     pub(crate) fn default_value(self) -> &'static str {
+        self.rust_binding().1
+    }
+
+    fn rust_binding(self) -> (&'static str, &'static str) {
         match self {
-            Self::Int => "0i64",
-            Self::Float => "0.0f64",
-            Self::Bool => "false",
-            Self::Value => "Value::NULL",
+            Self::Int => ("i64", "0i64"),
+            Self::Float => ("f64", "0.0f64"),
+            Self::Bool => ("bool", "false"),
+            Self::Value => ("Value", "Value::NULL"),
         }
     }
 }
 
-/// The typed signature of a body's direct entry: its parameters and result
-/// held as the body holds them, so a compiled caller passes and receives
-/// scalars unboxed.
+/// Direct calls pass and return scalars unboxed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Signature {
     pub(crate) params: Vec<Repr>,
@@ -84,7 +81,7 @@ pub(crate) struct Analysis {
     /// Type locals built from the frame where they are used. In a body that
     /// binds frame types, only those whose every use follows their load in
     /// its block with no binding in between.
-    pub(crate) deferred_types: HashMap<usize, baml_compiler2_mir::TyTemplate>,
+    pub(crate) deferred_types: HashMap<usize, TyTemplate>,
     /// Direct suspension; admission propagates it through user calls.
     pub(crate) suspends: bool,
     /// Iterator locals for iteration compiled as an index walk.
@@ -100,8 +97,7 @@ pub(crate) struct Analysis {
 }
 
 impl Analysis {
-    /// The body's [`Signature`]. A captured parameter is boxed into its cell
-    /// from a `Value`, and a type parameter has no value binding.
+    /// Captured parameters enter as `Value`; type locals have no value binding.
     pub(crate) fn signature(&self, body: &MirFunctionBody<'_>) -> Signature {
         let params = (1..=self.arity)
             .map(|i| {
@@ -135,22 +131,37 @@ impl Analysis {
         }
         let values = value_reprs(body);
         let reprs = slot_reprs(body, &values);
-        let intrinsics = Intrinsics::of(body);
-        let (static_types, deferred_types) = type_locals(index, body, intrinsics.binds_types);
+        let (static_types, deferred_types, intrinsics) = type_locals(index, body);
         let array_iters = array_iterators(body, arity);
-        let BodyFlow {
-            cfg,
-            user_callees,
-            suspends,
-        } = body_flow(
-            db,
-            index,
-            body,
-            arity,
-            &static_types,
-            &array_iters,
-            &intrinsics.hook_results,
-        )?;
+        let mut cfg = Cfg {
+            entry: body.entry.0,
+            flows: Vec::with_capacity(body.blocks.len()),
+            unwinds: Vec::with_capacity(body.blocks.len()),
+        };
+        let mut user_callees = BTreeSet::new();
+        let mut suspends = false;
+        for block in &body.blocks {
+            let terminator = block
+                .terminator
+                .as_ref()
+                .ok_or_else(|| Rejection::Invalid(format!("{} has no terminator", block.id)))?;
+            cfg.flows.push(flow_of(terminator));
+            cfg.unwinds.push(block.unwind.map(|b| b.0));
+            if let Terminator::Call { callee, .. } = terminator {
+                user_callees.extend(user_callee(db, index, callee));
+            }
+            let array_iteration = array_iter_walk(body, arity, terminator, &array_iters).is_some()
+                || array_next_call(terminator, &array_iters).is_some();
+            suspends |= suspends_directly(
+                db,
+                index,
+                body,
+                terminator,
+                &static_types,
+                &intrinsics.hook_results,
+            ) || (matches!(terminator, Terminator::VirtualCall { .. })
+                && !array_iteration);
+        }
         let loop_headers = cfg.loop_headers();
         if loop_headers.len() > 128 {
             return Err(Rejection::Unsupported("more than 128 MIR loops".into()));
@@ -178,47 +189,16 @@ impl Analysis {
         self.suspends || !self.loop_headers.is_empty()
     }
 
-    /// Type locals have no runtime `Value` binding.
     pub(crate) fn is_type_local(&self, i: usize) -> bool {
         self.static_types.contains_key(&i) || self.deferred_types.contains_key(&i)
     }
 }
 
-/// What the body's intrinsics ask of its frame, from one scan.
+#[derive(Default)]
 struct Intrinsics {
     binds_types: bool,
     hooked: bool,
     hook_results: BTreeSet<usize>,
-}
-
-impl Intrinsics {
-    fn of(body: &MirFunctionBody<'_>) -> Self {
-        let mut out = Self {
-            binds_types: false,
-            hooked: false,
-            hook_results: BTreeSet::new(),
-        };
-        for statement in body.blocks.iter().flat_map(|block| &block.statements) {
-            let StatementKind::Intrinsic { op, args } = &statement.kind else {
-                continue;
-            };
-            match op {
-                IntrinsicOp::BindType(_) => out.binds_types = true,
-                IntrinsicOp::BuiltinTraceHook(_) => out.hooked = true,
-                IntrinsicOp::ApplyTraceHook => {
-                    out.hooked = true;
-                    out.hook_results
-                        .extend(args.iter().filter_map(|arg| match arg {
-                            Operand::Copy(Place::Local(local))
-                            | Operand::Move(Place::Local(local)) => Some(local.0),
-                            _ => None,
-                        }));
-                }
-                IntrinsicOp::Log(_) => {}
-            }
-        }
-        out
-    }
 }
 
 fn slot_reprs(body: &MirFunctionBody<'_>, values: &[Repr]) -> Vec<Repr> {
@@ -235,15 +215,15 @@ fn slot_reprs(body: &MirFunctionBody<'_>, values: &[Repr]) -> Vec<Repr> {
         .collect()
 }
 
-/// The static and deferred type locals of `body`.
 fn type_locals(
     index: &ProgramIndex,
     body: &MirFunctionBody<'_>,
-    binds_types: bool,
 ) -> (
     HashMap<usize, StaticTy>,
-    HashMap<usize, baml_compiler2_mir::TyTemplate>,
+    HashMap<usize, TyTemplate>,
+    Intrinsics,
 ) {
+    let mut intrinsics = Intrinsics::default();
     let mut static_types = HashMap::new();
     let mut deferred_types = HashMap::new();
     // Where each frame-derived type is loaded, as (block, statement).
@@ -252,6 +232,23 @@ fn type_locals(
     let mut written = HashSet::new();
     for (b, block) in body.blocks.iter().enumerate() {
         for (s, statement) in block.statements.iter().enumerate() {
+            if let StatementKind::Intrinsic { op, args } = &statement.kind {
+                match op {
+                    IntrinsicOp::BindType(_) => intrinsics.binds_types = true,
+                    IntrinsicOp::BuiltinTraceHook(_) => intrinsics.hooked = true,
+                    IntrinsicOp::ApplyTraceHook => {
+                        intrinsics.hooked = true;
+                        intrinsics
+                            .hook_results
+                            .extend(args.iter().filter_map(|arg| match arg {
+                                Operand::Copy(Place::Local(local))
+                                | Operand::Move(Place::Local(local)) => Some(local.0),
+                                _ => None,
+                            }));
+                    }
+                    IntrinsicOp::Log(_) => {}
+                }
+            }
             let StatementKind::Assign {
                 destination: Place::Local(local),
                 value,
@@ -280,16 +277,15 @@ fn type_locals(
     // Frame types can change between a LoadType and its use. A type the
     // body binds is read from the frame at the use instead, which is the
     // load's own reading only while no binding comes between the two.
-    if binds_types {
+    if intrinsics.binds_types {
         deferred_types.retain(|&local, _| {
             matches!(loads[&local].as_slice(), [(block, statement)]
                 if read_only_after_load(body, local, *block, *statement))
         });
     }
-    (static_types, deferred_types)
+    (static_types, deferred_types, intrinsics)
 }
 
-/// The place a terminator writes, if any.
 fn destination<'a>(terminator: &'a Terminator<'_>) -> Option<&'a Place> {
     if let Terminator::ShortCircuit { destination, .. } = terminator {
         Some(destination)
@@ -332,25 +328,6 @@ pub(crate) fn continuation<'a>(
     }
 }
 
-/// Every place a statement reads.
-fn walk_statement_places<'a>(statement: &'a StatementKind<'_>, f: &mut impl FnMut(&'a Place)) {
-    match statement {
-        StatementKind::Assign { value, .. } => walk_rvalue_places(value, f),
-        StatementKind::Intrinsic { args, .. } => {
-            for arg in args {
-                walk_operand_places(arg, f);
-            }
-        }
-        StatementKind::VirtualFieldStore {
-            receiver, value, ..
-        } => {
-            walk_operand_places(receiver, f);
-            walk_operand_places(value, f);
-        }
-        StatementKind::Drop(_) | StatementKind::FreshCell { .. } | StatementKind::Nop => {}
-    }
-}
-
 /// Whether `place` names `local`, as its root, a cell's local, or an index.
 fn mentions(place: &Place, local: usize) -> bool {
     let mut reads = Resources::default();
@@ -360,7 +337,14 @@ fn mentions(place: &Place, local: usize) -> bool {
 
 fn statement_reads(statement: &StatementKind<'_>, local: usize) -> bool {
     let mut reads = false;
-    walk_statement_places(statement, &mut |place| reads |= mentions(place, local));
+    match statement {
+        StatementKind::Assign { value, .. } => {
+            walk_rvalue_places(value, &mut |place| reads |= mentions(place, local));
+        }
+        _ => walk_statement_operands(statement, &mut |operand| {
+            walk_operand_places(operand, &mut |place| reads |= mentions(place, local));
+        }),
+    }
     reads
 }
 
@@ -408,12 +392,7 @@ fn read_only_after_load(
     true
 }
 
-/// Array iterator locals a loop consumes in place. The index walk stands in
-/// for the `ArrayIterator` only while the
-/// iterator local is nothing but the loop's `next` receiver: one that
-/// escapes (passed on, adapted, copied, captured, stored, reassigned) is the
-/// real object the dispatch builds, and its `iter` and `next` calls go
-/// through the VM like any other virtual call.
+/// Only nonescaping iterators can replace VM dispatch with an index walk.
 fn array_iterators(body: &MirFunctionBody<'_>, arity: usize) -> BTreeSet<usize> {
     let mut array_iters: BTreeSet<_> = body
         .blocks
@@ -441,57 +420,6 @@ fn iter_escapes(body: &MirFunctionBody<'_>, arity: usize, iter: usize) -> bool {
                 && array_next_shape(terminator) != Some(iter)
                 && terminator_mentions(terminator, iter)
         })
-    })
-}
-
-struct BodyFlow {
-    cfg: Cfg,
-    user_callees: BTreeSet<usize>,
-    suspends: bool,
-}
-
-fn body_flow<'db>(
-    db: &'db dyn baml_compiler2_mir::Db,
-    index: &ProgramIndex,
-    body: &MirFunctionBody<'db>,
-    arity: usize,
-    static_types: &HashMap<usize, StaticTy>,
-    array_iters: &BTreeSet<usize>,
-    hook_results: &BTreeSet<usize>,
-) -> Result<BodyFlow, Rejection> {
-    let mut flows = Vec::with_capacity(body.blocks.len());
-    let mut unwinds = Vec::with_capacity(body.blocks.len());
-    let mut user_callees = BTreeSet::new();
-    let mut suspends = false;
-    for block in &body.blocks {
-        let Some(terminator) = &block.terminator else {
-            return Err(Rejection::Invalid(format!(
-                "{} has no terminator",
-                block.id
-            )));
-        };
-        let array_iteration = array_iter_walk(body, arity, terminator, array_iters).is_some()
-            || array_next_call(terminator, array_iters).is_some();
-        flows.push(flow_of(terminator));
-        unwinds.push(block.unwind.map(|b| b.0));
-        if let Terminator::Call { callee, .. } = terminator
-            && let Some(object) = user_callee(db, index, callee)
-        {
-            user_callees.insert(object);
-        }
-        // Virtual calls need VM dispatch except for array iteration.
-        suspends |= suspends_directly(db, index, body, terminator, static_types, hook_results)
-            || (matches!(terminator, Terminator::VirtualCall { .. }) && !array_iteration);
-    }
-    let cfg = Cfg {
-        entry: body.entry.0,
-        flows,
-        unwinds,
-    };
-    Ok(BodyFlow {
-        cfg,
-        user_callees,
-        suspends,
     })
 }
 
@@ -595,8 +523,6 @@ pub(crate) fn array_iter_call(
         .then_some((iter, array))
 }
 
-/// An `xs.iter()` call compiled as an index walk: [`array_iter_call`] on an
-/// iterator in `array_iters`.
 pub(crate) fn array_iter_walk(
     body: &MirFunctionBody<'_>,
     arity: usize,
@@ -606,7 +532,6 @@ pub(crate) fn array_iter_walk(
     array_iter_call(body, arity, terminator).filter(|(iter, _)| array_iters.contains(iter))
 }
 
-/// `it.next()` on a local, as that local.
 fn array_next_shape(terminator: &Terminator<'_>) -> Option<usize> {
     let (method, iter, _) = unary_virtual_call(terminator)?;
     (method == "next").then_some(iter)
@@ -633,8 +558,6 @@ fn unary_virtual_call<'a>(terminator: &'a Terminator<'_>) -> Option<(&'a str, us
     Some((method, receiver.0, destination.0))
 }
 
-/// `it.next()` on an array iterator compiled as an index walk, as the
-/// iterator local.
 pub(crate) fn array_next_call(
     terminator: &Terminator<'_>,
     array_iters: &BTreeSet<usize>,
@@ -807,13 +730,8 @@ pub(crate) fn operand_ty(body: &MirFunctionBody<'_>, operand: &Operand<'_>) -> O
     }
 }
 
-/// Whether `==` against a value of `ty` can never reach a user `Equals.eq`.
-///
-/// The `==` driver calls user code only for a pair of distinct instances of
-/// one class, or variants of one enum, with an explicit `eq`. It compares
-/// pairs drawn one from each operand at the same position (array elements,
-/// map keys and values, class fields), so an operand whose type admits no
-/// class or enum value rules out every such pair.
+/// Equality can call user code only for a class or enum pair; an operand
+/// containing neither rules out callbacks, including in nested containers.
 pub(crate) fn equality_is_primitive(ty: &RuntimeTy) -> bool {
     match ty {
         RuntimeTy::Int
@@ -902,7 +820,7 @@ pub(crate) struct StaticTy {
 }
 
 /// Primitives and arrays of primitives cannot carry user callbacks.
-fn is_primitive(template: &baml_compiler2_mir::TyTemplate) -> bool {
+fn is_primitive(template: &TyTemplate) -> bool {
     match template {
         TyTemplate::Int
         | TyTemplate::Float
@@ -915,49 +833,20 @@ fn is_primitive(template: &baml_compiler2_mir::TyTemplate) -> bool {
     }
 }
 
-pub(crate) fn static_realized(
-    index: &ProgramIndex,
-    template: &baml_compiler2_mir::TyTemplate,
-) -> Option<String> {
+pub(crate) fn static_realized(index: &ProgramIndex, template: &TyTemplate) -> Option<String> {
     realized_expr(index, template, false)
 }
 
-pub(crate) fn reads_frame(template: &baml_compiler2_mir::TyTemplate) -> bool {
+pub(crate) fn reads_frame(template: &TyTemplate) -> bool {
     let mut reads = false;
     template.for_each_type_arg_ref(&mut |_| reads = true);
     reads
 }
 
-/// Walk every place a terminator reads, calling `f` for each: its operands
-/// and the future an `Await` reads. The places it writes are not walked.
 fn walk_terminator_places<'a>(terminator: &'a Terminator<'_>, f: &mut impl FnMut(&'a Place)) {
-    match terminator {
-        Terminator::Branch { condition: x, .. }
-        | Terminator::NarrowBind { source: x, .. }
-        | Terminator::Switch {
-            discriminant: x, ..
-        }
-        | Terminator::Spawn { plan: x, .. }
-        | Terminator::AwaitAny { futures: x, .. }
-        | Terminator::Throw { value: x }
-        | Terminator::ShortCircuit { operand: x, .. } => walk_operand_places(x, f),
-        Terminator::Rethrow { value, context } => {
-            walk_operand_places(value, f);
-            walk_operand_places(context, f);
-        }
-        Terminator::Call { callee, args, .. } | Terminator::SysOp { callee, args, .. } => {
-            walk_operand_places(callee, f);
-            for arg in args {
-                walk_operand_places(arg, f);
-            }
-        }
-        Terminator::VirtualCall { args, .. } => {
-            for arg in args {
-                walk_operand_places(arg, f);
-            }
-        }
-        Terminator::Await { future, .. } => f(future),
-        Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {}
+    walk_terminator_operands(terminator, &mut |operand| walk_operand_places(operand, f));
+    if let Terminator::Await { future, .. } = terminator {
+        f(future);
     }
 }
 
@@ -972,64 +861,58 @@ mod tests {
     };
 
     #[test]
-    fn callable_builtins_follow_the_may_yield_directive() {
-        for key in [
-            "baml.Array.push",
-            "baml.Array.slice",
-            "baml.Int.abs",
-            "baml.String.byte_length",
-            "baml.Float.floor",
-            "baml.deep_copy",
-            "baml.Map.length",
-            "baml.Map.keys",
-        ] {
-            assert_eq!(builtin_may_yield(key), Some(false), "{key}");
-            assert!(builtin_is_callable(key, DIRECT), "{key}");
-        }
-        for key in [
-            "baml.Array.filter",
-            "baml.Array.sort_by",
-            "baml._equals_structural_default",
-        ] {
-            assert_eq!(builtin_may_yield(key), Some(true), "{key}");
-            assert!(!builtin_is_callable(key, DIRECT), "{key}");
-            assert!(
-                !builtin_is_callable(
-                    key,
-                    CallShape {
-                        type_args_primitive: true,
-                        map_key_primitive: true,
-                        equality_primitive: true,
-                    }
-                ),
-                "{key} runs a callback whatever the types"
-            );
-        }
-        assert_eq!(
-            builtin_may_yield("baml.sys.sleep"),
-            None,
-            "a sys op is no VM builtin"
-        );
-        assert_eq!(builtin_may_yield("baml.no_such_builtin"), None);
-        assert!(!builtin_is_callable("baml.no_such_builtin", DIRECT));
-    }
-
-    #[test]
-    fn callback_free_yielders_are_callable_when_the_types_rule_callbacks_out() {
-        let primitive_types = CallShape {
+    fn builtin_callability_obeys_yield_metadata_and_callback_types() {
+        let all_primitive = CallShape {
             type_args_primitive: true,
-            map_key_primitive: false,
-            equality_primitive: false,
-        };
-        assert!(builtin_is_callable(
-            "baml._to_string_default",
-            primitive_types
-        ));
-        assert!(!builtin_is_callable("baml._to_string_default", DIRECT));
-        let primitive_keys = CallShape {
-            type_args_primitive: false,
             map_key_primitive: true,
-            equality_primitive: false,
+            equality_primitive: true,
+        };
+        for (key, may_yield, primitive) in [
+            ("baml.Array.push", Some(false), true),
+            ("baml.Array.slice", Some(false), true),
+            ("baml.Int.abs", Some(false), true),
+            ("baml.String.byte_length", Some(false), true),
+            ("baml.Float.floor", Some(false), true),
+            ("baml.deep_copy", Some(false), true),
+            ("baml.Map.length", Some(false), true),
+            ("baml.Map.keys", Some(false), true),
+            ("baml.Array.filter", Some(true), false),
+            ("baml.Array.sort_by", Some(true), false),
+            ("baml._equals_structural_default", Some(true), false),
+            ("baml.sys.sleep", None, false),
+            ("baml.no_such_builtin", None, false),
+            ("baml._to_string_default", Some(true), true),
+            (EQUALS_EQUALS, Some(true), true),
+        ] {
+            assert_eq!(builtin_may_yield(key), may_yield, "{key}");
+            assert_eq!(
+                builtin_is_callable(key, DIRECT),
+                may_yield == Some(false),
+                "{key}"
+            );
+            assert_eq!(builtin_is_callable(key, all_primitive), primitive, "{key}");
+        }
+        for (key, shape) in [
+            (
+                "baml._to_string_default",
+                CallShape {
+                    type_args_primitive: true,
+                    ..DIRECT
+                },
+            ),
+            (
+                EQUALS_EQUALS,
+                CallShape {
+                    equality_primitive: true,
+                    ..DIRECT
+                },
+            ),
+        ] {
+            assert!(builtin_is_callable(key, shape), "{key}");
+        }
+        let primitive_keys = CallShape {
+            map_key_primitive: true,
+            ..DIRECT
         };
         for method in MAP_KEY_METHODS {
             let key = format!("baml.Map.{method}");
@@ -1041,15 +924,6 @@ mod tests {
 
     #[test]
     fn equality_is_callable_when_an_operand_admits_no_class_or_enum() {
-        assert_eq!(builtin_may_yield(EQUALS_EQUALS), Some(true));
-        assert!(!builtin_is_callable(EQUALS_EQUALS, DIRECT));
-        assert!(builtin_is_callable(
-            EQUALS_EQUALS,
-            CallShape {
-                equality_primitive: true,
-                ..DIRECT
-            }
-        ));
         // `unknown` stands for any type that admits an instance.
         let class = RuntimeTy::Unknown;
         for ty in [

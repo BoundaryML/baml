@@ -8,7 +8,10 @@ use baml_compiler2_mir::{
     Terminator,
 };
 
-use crate::index::ProgramIndex;
+use crate::{
+    index::ProgramIndex,
+    operands::{walk_statement_operands, walk_terminator_operands},
+};
 
 /// The function objects `body` (and the lambdas lowered inside it) refer to.
 pub(crate) fn references<'db>(
@@ -28,7 +31,7 @@ pub(crate) fn references<'db>(
 
 struct Collector<'a, 'db> {
     db: &'db dyn baml_compiler2_mir::Db,
-    index: &'a ProgramIndex,
+    index: &'a ProgramIndex<'a>,
     out: BTreeSet<usize>,
 }
 
@@ -48,12 +51,6 @@ impl<'db> Collector<'_, 'db> {
         }
     }
 
-    fn operands(&mut self, operands: &[Operand<'db>]) {
-        for operand in operands {
-            self.operand(operand);
-        }
-    }
-
     fn dispatch(&mut self, method: &str) {
         self.out.extend(self.index.methods_named(method));
     }
@@ -61,117 +58,38 @@ impl<'db> Collector<'_, 'db> {
     fn body(&mut self, body: &MirFunctionBody<'db>, lambdas: &[MirFunction<'db>]) {
         for block in &body.blocks {
             for statement in &block.statements {
-                match &statement.kind {
-                    StatementKind::Assign { value, .. } => self.rvalue(value, lambdas),
-                    StatementKind::Intrinsic { args, .. } => self.operands(args),
-                    StatementKind::VirtualFieldStore {
-                        receiver, value, ..
-                    } => {
-                        self.operand(receiver);
-                        self.operand(value);
+                walk_statement_operands(&statement.kind, &mut |operand| self.operand(operand));
+                if let StatementKind::Assign { value, .. } = &statement.kind {
+                    match value {
+                        Rvalue::MakeClosure { lambda_idx, .. } => {
+                            // Include closure bodies even if their calls cannot be resolved statically.
+                            if let Some(lambda) = lambdas.get(*lambda_idx) {
+                                self.out
+                                    .extend(self.index.lambda(self.db, &lambda.identity));
+                                if let MirFunctionKind::Bytecode(body) = &lambda.kind {
+                                    self.body(body, &lambda.lambdas);
+                                }
+                            }
+                        }
+                        Rvalue::MakeBoundMethod { func, .. }
+                        | Rvalue::MakeGenericFunction { func, .. } => self.function(*func),
+                        Rvalue::MakeVirtualBoundMethod { method, .. }
+                        | Rvalue::MakeVirtualFunction { method, .. } => self.dispatch(method),
+                        _ => {}
                     }
-                    StatementKind::Drop(_)
-                    | StatementKind::FreshCell { .. }
-                    | StatementKind::Nop => {}
                 }
             }
-            match &block.terminator {
-                Some(
-                    Terminator::Call { callee, args, .. } | Terminator::SysOp { callee, args, .. },
-                ) => {
-                    self.operand(callee);
-                    self.operands(args);
-                }
-                Some(Terminator::VirtualCall { method, args, .. }) => {
+            if let Some(terminator) = &block.terminator {
+                if let Terminator::VirtualCall { method, .. } = terminator {
                     self.dispatch(method);
-                    self.operands(args);
                 }
-                Some(
-                    Terminator::Branch { condition: x, .. }
-                    | Terminator::NarrowBind { source: x, .. }
-                    | Terminator::Switch {
-                        discriminant: x, ..
-                    }
-                    | Terminator::Spawn { plan: x, .. }
-                    | Terminator::AwaitAny { futures: x, .. }
-                    | Terminator::Throw { value: x, .. }
-                    | Terminator::Rethrow { value: x, .. }
-                    | Terminator::ShortCircuit { operand: x, .. },
-                ) => self.operand(x),
-                Some(
-                    Terminator::Goto { .. }
-                    | Terminator::Return
-                    | Terminator::Unreachable
-                    | Terminator::Await { .. },
-                )
-                | None => {}
-            }
-        }
-    }
-
-    fn rvalue(&mut self, value: &Rvalue<'db>, lambdas: &[MirFunction<'db>]) {
-        match value {
-            Rvalue::Use(x)
-            | Rvalue::UnaryOp { operand: x, .. }
-            | Rvalue::IsType { operand: x, .. }
-            | Rvalue::IsTypeTag { operand: x, .. }
-            | Rvalue::VirtualFieldAccess { receiver: x, .. }
-            | Rvalue::MakeGenericFunctionFromValue { value: x, .. } => self.operand(x),
-            Rvalue::BinaryOp { left, right, .. } => {
-                self.operand(left);
-                self.operand(right);
-            }
-            Rvalue::Array(_, elements)
-            | Rvalue::Aggregate {
-                fields: elements, ..
-            } => self.operands(elements),
-            Rvalue::Map(_, _, entries) => {
-                for (key, value) in entries {
-                    self.operand(key);
+                // Rethrow's context is VM exception state, not a callable reference.
+                if let Terminator::Rethrow { value, .. } = terminator {
                     self.operand(value);
+                } else {
+                    walk_terminator_operands(terminator, &mut |operand| self.operand(operand));
                 }
             }
-            // Include closure bodies even when their calls cannot be resolved statically.
-            Rvalue::MakeClosure {
-                lambda_idx,
-                captures,
-                ..
-            } => {
-                self.operands(captures);
-                if let Some(lambda) = lambdas.get(*lambda_idx) {
-                    if let Some(object) = self.index.lambda(self.db, &lambda.identity) {
-                        self.out.insert(object);
-                    }
-                    if let MirFunctionKind::Bytecode(body) = &lambda.kind {
-                        self.body(body, &lambda.lambdas);
-                    }
-                }
-            }
-            Rvalue::MakeBoundMethod { func, receiver } => {
-                self.function(*func);
-                self.operand(receiver);
-            }
-            Rvalue::MakeGenericFunction { func, .. } => self.function(*func),
-            Rvalue::MakeVirtualBoundMethod {
-                method, receiver, ..
-            } => {
-                self.dispatch(method);
-                self.operand(receiver);
-            }
-            Rvalue::MakeVirtualFunction {
-                method, type_args, ..
-            } => {
-                self.dispatch(method);
-                self.operands(type_args);
-            }
-            Rvalue::SatisfiesBound { ty, .. } => self.operand(ty),
-            Rvalue::TraceHookSettings { .. }
-            | Rvalue::Uint8Array(_)
-            | Rvalue::Discriminant(_)
-            | Rvalue::TypeTag(_)
-            | Rvalue::Len(_)
-            | Rvalue::LoadType(_)
-            | Rvalue::CurrentPackage => {}
         }
     }
 }
