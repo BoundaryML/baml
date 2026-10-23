@@ -1,0 +1,94 @@
+# Temporary diagnostic for the Windows x64 0xc0000005 when a panic unwinds a
+# compiled body's corosensei fiber (PR #5264). Not for merging.
+name: Windows fiber unwind diagnostic
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/win-fiber-diag.yaml"
+      - ".github/diag/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  RUSTUP_TOOLCHAIN: "1.98.0"
+
+jobs:
+  # Is corosensei itself broken on this runner and toolchain, independent of bex_vm?
+  corosensei-alone:
+    name: "corosensei alone (linker=${{ matrix.linker }}, opt=${{ matrix.opt }})"
+    runs-on: blacksmith-8vcpu-windows-2025
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        linker: [default, rust-lld]
+        opt: ["0", "1"]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install 1.98.0 --profile minimal
+      - name: Run
+        working-directory: .github/diag/coro_panic
+        env:
+          CARGO_PROFILE_DEV_OPT_LEVEL: ${{ matrix.opt }}
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.linker }}" = rust-lld ]; then
+            export CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=rust-lld
+          fi
+          cargo test -- --test-threads=1 --nocapture
+
+  # The failing bex_vm test, varying one suspect per job. CI's Windows job uses
+  # rust-lld (baml_language/.cargo/config.toml), /STACK:64MiB and opt-level 1.
+  bex-vm:
+    name: "bex_vm (${{ matrix.variant }})"
+    runs-on: blacksmith-8vcpu-windows-2025
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [baseline, link-exe, no-stack-flag, opt0]
+    env:
+      CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
+      CARGO_PROFILE_TEST_DEBUG: "line-tables-only"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install Rust toolchain
+        run: rustup show
+        working-directory: baml_language
+      - name: Apply variant
+        working-directory: baml_language
+        run: |
+          set -euo pipefail
+          opt=1
+          case "${{ matrix.variant }}" in
+            link-exe) sed -i '/^linker = "rust-lld"/d' .cargo/config.toml ;;
+            no-stack-flag) sed -i '/link-arg=\/STACK/d' .cargo/config.toml ;;
+            opt0) opt=0 ;;
+          esac
+          echo "CARGO_PROFILE_DEV_OPT_LEVEL=$opt" >> "$GITHUB_ENV"
+          echo "CARGO_PROFILE_TEST_OPT_LEVEL=$opt" >> "$GITHUB_ENV"
+          cat .cargo/config.toml
+      - name: Build
+        working-directory: baml_language
+        run: cargo test -p bex_vm --lib --no-run
+      - name: The failing test alone
+        working-directory: baml_language
+        run: cargo test -p bex_vm --lib vm::compiled_rt::tests::a_panicking_compiled_body_clears_fiber_state -- --exact --test-threads=1 --nocapture
+      - name: The other fiber tests
+        if: always()
+        working-directory: baml_language
+        run: cargo test -p bex_vm --lib compiled_rt -- --skip a_panicking_compiled_body_clears_fiber_state --test-threads=1
