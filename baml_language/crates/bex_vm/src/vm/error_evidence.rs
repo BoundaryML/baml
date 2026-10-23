@@ -378,7 +378,15 @@ impl BexVm {
         let raise_compiled = raise_at.is_some_and(|frame| self.frame_runs_compiled(frame));
         let kind = if entry == RaiseEntry::Host {
             RaiseKind::HostBoundary
-        } else if raise_compiled {
+        } else if raise_compiled
+            && !raise_at.is_some_and(|frame| {
+                matches!(frame, FrameAt::Vm(idx)
+                    if self.compiled_at(idx) == Some(crate::compiled_rt::CompiledAt::Suspended))
+                    && raise_function.and_then(|function| {
+                        function.bytecode.compact.as_ref()?.code.get(self.cur_pc)
+                    }) == Some(&(OpCode::Await as u8))
+            })
+        {
             self.compiled_raise_kind(thrown)
         } else {
             self.raise_kind(entry, raise_function, thrown)
