@@ -6,6 +6,7 @@ require_relative "options"
 require_relative "bridge/native"
 require_relative "bridge/call"
 require_relative "bridge/handle"
+require_relative "bridge/types"
 require_relative "value_equality"
 require_relative "bridge/protocol"
 require_relative "bridge/process_runtime"
@@ -19,8 +20,8 @@ module Baml
         @process_runtime.register_program(bytecode, metadata)
       end
 
-      def define_class(wire, klass, fields:)
-        Protocol.define_class(wire, klass, fields: fields)
+      def define_class(wire, klass, fields:, type_params: [])
+        Protocol.define_class(wire, klass, fields: fields, type_params: type_params)
       end
 
       def define_enum(wire, klass)
@@ -31,12 +32,12 @@ module Baml
         Protocol.define_alias(wire, descriptor)
       end
 
-      def define_function(wire, params:)
-        Protocol.define_function(wire, params: params)
+      def define_function(wire, params:, class_type_params: [], type_params: [])
+        Protocol.define_function(wire, params: params, class_type_params: class_type_params, type_params: type_params)
       end
 
-      def call_async(wire, args, baml: nil)
-        @process_runtime.call_async(wire, args, baml: baml)
+      def call_async(wire, args, types: nil, baml: nil)
+        @process_runtime.call_async(wire, args, types: types, baml: baml)
       end
 
       def initialize!

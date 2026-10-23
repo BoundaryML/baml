@@ -56,18 +56,21 @@ module Baml
       @names = {}
       @fields = {}
       @functions = {}
+      @function_type_params = {}
       @aliases = {}
       module_function
 
       # The generator owns Ruby naming, including renamed fields. No constant
       # lookup or naming conversion happens while decoding untrusted wire data.
-      def define_class(name, type, fields:)
+      def define_class(name, type, fields:, type_params: [])
+        ::Baml::Types.register(type, name, type_params.length)
         @types[name] = type
         @names[type] = name
         @fields[type] = fields.transform_values { |ruby, descriptor| [ruby, descriptor].freeze }.freeze
       end
 
       def define_enum(name, type)
+        ::Baml::Types.register(type, name)
         @types[name] = type
         @names[type] = name
         @fields[type] = nil
@@ -77,8 +80,9 @@ module Baml
         @aliases[name] = descriptor
       end
 
-      def define_function(name, params:)
+      def define_function(name, params:, class_type_params: [], type_params: [])
         @functions[name] = params.to_h.freeze
+        @function_type_params[name] = [class_type_params.freeze, type_params.freeze].freeze
       end
 
       def registered_type(name)
@@ -106,15 +110,56 @@ module Baml
         invocation
       end
 
-      def encode_call(call_id, function_name, arguments, scope: nil, invocation: Wire::InvocationOptions.new)
+      def prepare_type_args(function_name, arguments, types)
+        unless types.nil? || types.is_a?(Hash)
+          raise TypeError, "_types must be a Hash of Symbol names to BAML type tokens"
+        end
+        class_params, method_params = @function_type_params.fetch(function_name, [[], []])
+        types ||= {}
+        types.each_key do |name|
+          unless name.is_a?(Symbol) && method_params.include?(name.to_s)
+            raise TypeError, "unknown type binding #{name.inspect} for #{function_name}; expected #{method_params.inspect}"
+          end
+        end
+        explicit = method_params.filter_map do |name|
+          Wire::BamlTyArg.new(type_var: name, type_value: ::Baml::Types.token(types[name.to_sym])) if types.key?(name.to_sym)
+        end
+        receiver_args = arguments.key?("self") ? ::Baml::Types.instance_args(arguments["self"]) : []
+        if !explicit.empty? && !class_params.empty? && receiver_args.empty?
+          raise TypeError, "_types on a generic method requires a parameterized receiver; use Baml.bind_types(receiver, ...)"
+        end
+        unless receiver_args.empty?
+          ::Baml::Types.check_arity("#{function_name} receiver", class_params.length, receiver_args.length)
+        end
+        inherited = receiver_args.each_with_index.map do |type, index|
+          Wire::BamlTyArg.new(type_var: class_params.fetch(index), type_value: type)
+        end
+        inherited + explicit
+      end
+
+      def substitute_descriptor(descriptor, bindings, indexed: false)
+        return descriptor unless descriptor
+        substitute = ->(item) { substitute_descriptor(item, bindings, indexed: indexed) }
+        case descriptor[0]
+        when :param then bindings.fetch(descriptor[indexed ? 1 : 2], descriptor)
+        when :list then [:list, substitute.call(descriptor[1])]
+        when :map then [:map, substitute.call(descriptor[1]), substitute.call(descriptor[2])]
+        when :union then [:union, descriptor[1].map(&substitute)]
+        when :class then [:class, descriptor[1], descriptor[2].map(&substitute)]
+        else descriptor
+        end
+      end
+
+      def encode_call(call_id, function_name, arguments, scope: nil, invocation: Wire::InvocationOptions.new, type_args: [])
         hints = @functions.fetch(function_name, {})
+        bindings = type_args.to_h { |arg| [arg.type_var, ::Baml::Types.descriptor(arg.type_value)] }
         kwargs = arguments.filter_map do |name, value|
           next if value.equal?(::Baml::UNSET)
 
-          Wire::InboundMapEntry.new(string_key: name, value: encode_value(value, hints[name], scope: scope))
+          Wire::InboundMapEntry.new(string_key: name, value: encode_value(value, substitute_descriptor(hints[name], bindings), scope: scope))
         end
         Wire::CallFunctionArgs.encode(Wire::CallFunctionArgs.new(
-          call_id: call_id, function_name: function_name, kwargs: kwargs,
+          call_id: call_id, function_name: function_name, kwargs: kwargs, type_args: type_args,
           invocation: invocation
         ))
       end
@@ -144,7 +189,7 @@ module Baml
                    key, handle_type = value.clone_for_wire(scope)
                    { handle: Wire::BamlHandle.new(key: key, handle_type: handle_type) }
                  else
-                   encode_registered_value(value, scope: scope)
+                   encode_registered_value(value, descriptor, scope: scope)
                  end
         Wire::InboundValue.new(**fields)
       end
@@ -200,17 +245,21 @@ module Baml
         end
       end
 
-      def encode_registered_value(value, scope: nil)
+      def encode_registered_value(value, hint = nil, scope: nil)
         name = @names.fetch(value.class) do
           raise TypeError, "Cannot encode BAML argument kind #{value.class}"
         end
         fields = @fields.fetch(value.class)
         if fields
+          type_args = ::Baml::Types.instance_args(value)
+          field_args = type_args.map { |arg| ::Baml::Types.descriptor(arg) }
+          field_args = hint[2] if field_args.empty? && hint&.first == :class && hint[1] == name
+          bindings = field_args.each_with_index.to_h { |arg, index| [index, arg] }
           entries = fields.map do |wire, (ruby, descriptor)|
-            encode_entry(wire, value.public_send(ruby), descriptor, scope: scope)
+            encode_entry(wire, value.public_send(ruby), substitute_descriptor(descriptor, bindings, indexed: true), scope: scope)
           end
           {
-            value_type: Wire::BamlTy.new(class_ty: Wire::BamlTyClass.new(name: name)),
+            value_type: Wire::BamlTy.new(class_ty: Wire::BamlTyClass.new(name: name, type_args: type_args)),
             class_value: Wire::InboundClassValue.new(fields: entries)
           }
         else
@@ -307,7 +356,11 @@ module Baml
           type = registered_type(object.name)
           fields = @fields.fetch(type)
           decoded = object.fields.to_h { |field| [fields.fetch(field.key)[0], decode_value(field.value, api, handles: handles)] }
-          type.new(**decoded)
+          instance = type.new(**decoded)
+          unless object.type_args.empty?
+            ::Baml::Types.bind(instance, *object.type_args.map(&:freeze))
+          end
+          instance
         when :enum_value
           enum = value.enum_value
           if enum.is_dynamic

@@ -7,7 +7,7 @@ use baml_sdkgen_types::{
 use crate::{
     descriptors::descriptor,
     names::{NameTable, callable_parts, constant, identifier, parameter, quote},
-    types::{ruby_alias_type, ruby_input_type, ruby_type},
+    types::{ruby_alias_type, ruby_input_type, ruby_type, ruby_type_with_params},
 };
 
 pub(crate) struct Emitter<'a> {
@@ -42,6 +42,20 @@ impl Emitter<'_> {
             scope.rsplit("::").next().unwrap()
         )
         .unwrap();
+        let class_params: Vec<_> = class
+            .generic_params
+            .iter()
+            .enumerate()
+            .map(|(index, _)| format!("BamlTypeParam{index}"))
+            .collect();
+        if !class_params.is_empty() {
+            // Forward references may apply [] before the class body is loaded.
+            writeln!(self.shells, "{scope}.extend(::T::Generic)").unwrap();
+            body.push_str("  extend ::T::Generic\n");
+            for param in &class_params {
+                writeln!(body, "  {param} = type_member").unwrap();
+            }
+        }
         let mut fields = Vec::new();
         for property in &class.properties {
             let field = self.names.claim(
@@ -52,7 +66,14 @@ impl Emitter<'_> {
             writeln!(
                 body,
                 "  const :{field}, {}",
-                ruby_input_type(&property.ty, self.supported, &self.names, self.pool).unwrap()
+                ruby_input_type(
+                    &property.ty,
+                    self.supported,
+                    &self.names,
+                    self.pool,
+                    &class_params
+                )
+                .unwrap()
             )
             .unwrap();
             fields.push(format!(
@@ -63,9 +84,10 @@ impl Emitter<'_> {
         }
         writeln!(
             self.registry,
-            "::Baml::Bridge.define_class({}, ::{scope}, fields: {{{}}})",
+            "::Baml::Bridge.define_class({}, ::{scope}, fields: {{{}}}, type_params: {:?})",
             quote(&name.to_string()),
-            fields.join(", ")
+            fields.join(", "),
+            class.generic_params
         )
         .unwrap();
         for (instance, methods) in [
@@ -79,6 +101,7 @@ impl Emitter<'_> {
                     &format!("{name}.{}", method.name),
                     method,
                     instance.then_some(name),
+                    &class.generic_params,
                     &mut source,
                 );
                 for line in source.lines() {
@@ -166,10 +189,10 @@ impl Emitter<'_> {
         wire: &str,
         function: &Function,
         receiver: Option<&Name>,
+        class_params: &[baml_base::Name],
         body: &mut String,
     ) {
         if wire.contains('$')
-            || !function.generic_params.is_empty()
             || !function.watchers.is_empty()
             || ruby_type(&function.return_type, self.supported, &self.names).is_none()
             || function
@@ -181,11 +204,31 @@ impl Emitter<'_> {
             self.skipped.insert(wire.to_owned());
             return;
         }
-        let result = ruby_type(&function.return_type, self.supported, &self.names).unwrap();
+        let mut signature_params = Vec::new();
+        let mut type_params = Vec::new();
+        for index in 0..class_params.len() + function.generic_params.len() {
+            let name = format!("BamlTypeParam{index}");
+            if receiver.is_some() && index < class_params.len() {
+                signature_params.push(name);
+            } else {
+                signature_params.push(format!("::T.type_parameter(:{name})"));
+                type_params.push(format!(":{name}"));
+            }
+        }
+        let render = |ty| ruby_type_with_params(ty, self.supported, &self.names, &signature_params);
+        let result = render(&function.return_type).unwrap();
         let argument_types: Vec<_> = function
             .arguments
             .iter()
-            .map(|a| ruby_input_type(&a.ty, self.supported, &self.names, self.pool))
+            .map(|a| {
+                ruby_input_type(
+                    &a.ty,
+                    self.supported,
+                    &self.names,
+                    self.pool,
+                    &signature_params,
+                )
+            })
             .collect();
         let (base, suffix) = callable_parts(function.name.as_str());
         let base = identifier(base, self.naming);
@@ -209,7 +252,19 @@ impl Emitter<'_> {
             arguments.push("\"self\" => self".into());
             descriptors.push(format!(
                 "[\"self\", {}]",
-                descriptor(&baml_sdkgen_types::Ty::Class(class.clone(), Box::new([])))
+                descriptor(&baml_sdkgen_types::Ty::Class(
+                    class.clone(),
+                    class_params
+                        .iter()
+                        .enumerate()
+                        .map(|(index, name)| {
+                            baml_sdkgen_types::Ty::TypeVar(baml_sdkgen_types::ParamTy::new(
+                                u32::try_from(index).expect("type parameter index fits u32"),
+                                name.clone(),
+                            ))
+                        })
+                        .collect(),
+                ))
             ));
         }
         for (argument, argument_type) in function
@@ -247,14 +302,24 @@ impl Emitter<'_> {
         params.extend(keyword_params);
         params.push("_baml: ::T.nilable(::Baml::Options)".into());
         keywords.push("_baml: nil".into());
+        let generic = !function.generic_params.is_empty() || !class_params.is_empty();
+        if generic {
+            params.push("_types: ::T.nilable(::T::Hash[::Symbol, ::T.untyped])".into());
+            keywords.push("_types: nil".into());
+        }
         required.extend(keywords);
-        writeln!(
-            self.registry,
-            "::Baml::Bridge.define_function({}, params: [{}])",
-            quote(wire),
-            descriptors.join(", ")
-        )
-        .unwrap();
+        let receiver_params = if receiver.is_some() {
+            class_params
+        } else {
+            &[]
+        };
+        writeln!(self.registry, "::Baml::Bridge.define_function({}, params: [{}], class_type_params: {:?}, type_params: {:?})", quote(wire), descriptors.join(", "), receiver_params, function.generic_params).unwrap();
+        let generic_signature = if type_params.is_empty() {
+            String::new()
+        } else {
+            format!("type_parameters({}).", type_params.join(", "))
+        };
+        let type_bindings = if generic { ", types: _types" } else { "" };
         for asynchronous in [false, true] {
             let method = format!("{method}{}", if asynchronous { "_async" } else { "" });
             let returns = if asynchronous {
@@ -280,7 +345,7 @@ impl Emitter<'_> {
                 }
             }
             doc_comment(body, &doc);
-            writeln!(body, "sig {{ params({}).returns({returns}) }}\ndef {target}{method}({})\n  ::Baml::Bridge.call_async({}, {{{}}}, baml: _baml){}\nend", params.join(", "), required.join(", "), quote(wire), arguments.join(", "), if asynchronous { "" } else { ".wait" }).unwrap();
+            writeln!(body, "sig {{ {generic_signature}params({}).returns({returns}) }}\ndef {target}{method}({})\n  ::Baml::Bridge.call_async({}, {{{}}}, baml: _baml{type_bindings}){}\nend", params.join(", "), required.join(", "), quote(wire), arguments.join(", "), if asynchronous { "" } else { ".wait" }).unwrap();
         }
     }
 }

@@ -34,12 +34,17 @@ pub(crate) fn descriptor(ty: &Ty) -> String {
                 Literal::Bool(v) => v.to_string(),
             }
         ),
-        Ty::Class(name, _) => format!(":class, {}", quote(&name.to_string())),
+        Ty::Class(name, args) => format!(
+            ":class, {}, {}",
+            quote(&name.to_string()),
+            descriptors(args)
+        ),
         Ty::Enum(name) | Ty::EnumVariant(name, _) => format!(":enum, {}", quote(&name.to_string())),
         Ty::List(inner) => format!(":list, {}", descriptor(inner)),
         Ty::Map { key, value } => format!(":map, {}, {}", descriptor(key), descriptor(value)),
         Ty::Union(items) => format!(":union, {}", descriptors(items)),
         Ty::TypeAlias(name) => format!(":alias, {}", quote(&name.to_string())),
+        Ty::TypeVar(param) => format!(":param, {}, {}", param.index(), quote(param.as_str())),
         _ => ":other".into(),
     };
     format!("[{body}].freeze")

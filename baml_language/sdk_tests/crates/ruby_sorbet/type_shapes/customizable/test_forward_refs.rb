@@ -16,6 +16,13 @@ class ForwardRefsTest < Minitest::Test
     assert_equal [1, [2, 3]], BamlSdk::ForwardRefs.round_trip_rec_list([1, [2, 3]])
   end
 
+  def test_forward_refs_round_trip_g_node_int
+    node = BamlSdk::ForwardRefs::GNode
+    leaf = Baml.bind_types(node[Integer].new(children: []), Integer)
+    tree = Baml.bind_types(node[Integer].new(children: [leaf]), Integer)
+    assert_equal tree, BamlSdk::ForwardRefs.round_trip_g_node_int(tree)
+  end
+
   def test_forward_refs_round_trip_rec_list_with_other
     assert_equal 1, BamlSdk::ForwardRefs.round_trip_rec_list_with_other(1)
     assert_equal [1, 2], BamlSdk::ForwardRefs.round_trip_rec_list_with_other([1, 2])

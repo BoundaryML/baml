@@ -4,7 +4,7 @@ sdk_test_harness_runner::ruby_sorbet::test_suite! {
     fixture function_calls { minitest: on, sorbet: on }
     fixture llm_functions { minitest: on, sorbet: on }
     fixture type_shapes { minitest: on, sorbet: on }
-    fixture unsupported_only { minitest: later, sorbet: later }
+    fixture unsupported_only { minitest: on, sorbet: on }
 }
 
 #[cfg(test)]

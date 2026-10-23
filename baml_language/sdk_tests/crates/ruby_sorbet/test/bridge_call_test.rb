@@ -125,6 +125,33 @@ class BridgeCallTest < Minitest::Test
     assert_same runtime.instance_variable_get(:@result_callback).function, api.callback
   end
 
+  class GenericValue < T::Struct
+    const :value, String
+  end
+
+  def test_decoded_generic_preserves_string_literal_and_alias_hints
+    protocol = Baml::Bridge::Protocol
+    Baml::Bridge.define_class("user.GenericValue", GenericValue, fields: { "value" => [:value, [:param, 0, "T"]] }, type_params: ["T"])
+    protocol.define_alias("user.Text", [:string])
+    [{ primitive: { kind: :BAML_TY_PRIMITIVE_STRING } }, { literal: { string_value: "text" } },
+     { type_alias: { name: "user.Text" } }].each do |text_type|
+      type = { union: { options: [text_type, { primitive: { kind: :BAML_TY_PRIMITIVE_BYTES } }] } }
+      [:string_value, :uint8array_value].each do |kind|
+        @api.dispatch = lambda do |args, id|
+          if args.kwargs.empty?
+            @api.deliver(id, ok: { class_value: { name: "user.GenericValue", type_args: [type], fields: [
+              { key: "value", value: { kind => "text" } }
+            ] } })
+          else
+            assert_equal kind, args.kwargs.first.value.class_value.fields.first.value.value
+            @api.deliver(id, ok: { bool_value: true })
+          end
+        end
+        assert call("value" => call)
+      end
+    end
+  end
+
   def test_concurrent_calls_receive_only_their_own_result
     dispatched = Queue.new
     @api.dispatch = ->(args, id) { dispatched << [args, id] }

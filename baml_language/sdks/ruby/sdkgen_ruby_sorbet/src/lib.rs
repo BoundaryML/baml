@@ -36,9 +36,8 @@ pub fn to_source_code_with_bytecode_and_skipped(
     let mut supported: BTreeSet<Name> = symbols
         .iter()
         .filter_map(|(n, s)| match s {
-            Symbol::Class(class) if class.generic_params.is_empty() => Some((*n).clone()),
-            Symbol::Enum(_) | Symbol::TypeAlias(_) => Some((*n).clone()),
-            _ => None,
+            Symbol::Class(_) | Symbol::Enum(_) | Symbol::TypeAlias(_) => Some((*n).clone()),
+            Symbol::Function(_) => None,
         })
         .collect();
     // Remove declarations referring to omitted types, including transitive edges.
@@ -92,7 +91,7 @@ pub fn to_source_code_with_bytecode_and_skipped(
                 emitter.type_alias(name, alias, pool);
             }
             Symbol::Function(function) => {
-                emitter.function(&module, &name.to_string(), function, None, body);
+                emitter.function(&module, &name.to_string(), function, None, &[], body);
             }
             _ => {
                 emitter.skipped.insert(name.to_string());

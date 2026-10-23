@@ -5,7 +5,24 @@ use baml_sdkgen_types::{Name, Symbol, SymbolPool, Ty};
 use crate::names::NameTable;
 
 pub(crate) fn ruby_type(ty: &Ty, supported: &BTreeSet<Name>, names: &NameTable) -> Option<String> {
-    render(ty, supported, names, false, None, &mut BTreeSet::new())
+    ruby_type_with_params(ty, supported, names, &[])
+}
+
+pub(crate) fn ruby_type_with_params(
+    ty: &Ty,
+    supported: &BTreeSet<Name>,
+    names: &NameTable,
+    params: &[String],
+) -> Option<String> {
+    render(
+        ty,
+        supported,
+        names,
+        false,
+        None,
+        params,
+        &mut BTreeSet::new(),
+    )
 }
 
 pub(crate) fn ruby_input_type(
@@ -13,8 +30,17 @@ pub(crate) fn ruby_input_type(
     supported: &BTreeSet<Name>,
     names: &NameTable,
     pool: &SymbolPool,
+    params: &[String],
 ) -> Option<String> {
-    render(ty, supported, names, true, Some(pool), &mut BTreeSet::new())
+    render(
+        ty,
+        supported,
+        names,
+        true,
+        Some(pool),
+        params,
+        &mut BTreeSet::new(),
+    )
 }
 
 pub(crate) fn ruby_alias_type(
@@ -29,6 +55,7 @@ pub(crate) fn ruby_alias_type(
         names,
         false,
         Some(pool),
+        &[],
         &mut BTreeSet::new(),
     )
 }
@@ -39,9 +66,10 @@ fn render(
     names: &NameTable,
     input: bool,
     aliases: Option<&SymbolPool>,
+    params: &[String],
     visiting: &mut BTreeSet<Name>,
 ) -> Option<String> {
-    let mut child = |ty: &Ty| render(ty, supported, names, input, aliases, visiting);
+    let mut child = |ty: &Ty| render(ty, supported, names, input, aliases, params, visiting);
     Some(match ty {
         // The pool also defines baml.String and baml.Float; do not resolve to those wrappers.
         Ty::Literal(baml_base::Literal::String(_), ..) => "::String".into(),
@@ -70,10 +98,25 @@ fn render(
         // JSON is a recursive Ruby value, not a generated wrapper.
         Ty::TypeAlias(name) if name.to_string() == "baml.json.json" => "::T.untyped".into(),
         Ty::Never => "::T.noreturn".into(),
+        Ty::TypeVar(param) => params
+            .get(param.index() as usize)
+            .cloned()
+            .unwrap_or_else(|| "::T.untyped".into()),
         Ty::List(t) => format!("::T::Array[{}]", child(t)?),
         Ty::Map { key, value } => format!("::T::Hash[{}, {}]", child(key)?, child(value)?),
-        Ty::Class(n, args) if args.is_empty() && supported.contains(n) => {
-            format!("::{}", names.qualified(n))
+        Ty::Class(n, args) if supported.contains(n) => {
+            let base = format!("::{}", names.qualified(n));
+            if args.is_empty() {
+                base
+            } else {
+                format!(
+                    "{base}[{}]",
+                    args.iter()
+                        .map(&mut child)
+                        .collect::<Option<Vec<_>>>()?
+                        .join(", ")
+                )
+            }
         }
         Ty::Enum(n) | Ty::EnumVariant(n, _) if supported.contains(n) => {
             format!("::{}", names.qualified(n))
@@ -94,6 +137,7 @@ fn render(
                     names,
                     input,
                     aliases,
+                    params,
                     visiting,
                 );
                 visiting.remove(n);
