@@ -2295,7 +2295,7 @@ fn open_class(
                 return Err(raise_decode(
                     vm,
                     format!("missing required field `{key}`"),
-                    &format!("{path}.{key}"),
+                    path,
                 ));
             }
         };

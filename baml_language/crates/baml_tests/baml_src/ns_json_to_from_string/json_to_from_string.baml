@@ -6,8 +6,8 @@
 // functions to avoid the test-block local-boxing VM bug (field access on a
 // stored local throws `expected Instance, got Any`).
 //
-// decode_error_path_points_at_missing_field uses `assert.contains(err.path, ...)`
-// (the std `assert.contains` helper) to check the baml.json.DecodeError path.
+// decode_error_path_points_at_missing_field checks the baml.json.DecodeError
+// path and message with the std `assert` helpers.
 
 // ─── Simple class round-trip ──────────────────────────────────────────────────
 
@@ -429,10 +429,9 @@ test "serialize_throws_uint8array" {
     }
 }
 
-// Decode-error path includes the offending field's dotted path.  The check is
-// done inside a helper to avoid the test-block local-boxing bug when operating
-// on a caught error via a local.  baml.json.DecodeError carries a dedicated `path`
-// field (separate from `message`) that holds the dotted field path.
+// A missing field's decode error names the class that lacks it in `path`, and
+// the field in `message`.  The check is done inside a helper to avoid the
+// test-block local-boxing bug when operating on a caught error via a local.
 
 class Inner { value int }
 class Outer { inner Inner }
@@ -443,7 +442,8 @@ function check_decode_error_path_contains_field() -> bool {
         false
     } catch (e) {
         let err: baml.json.DecodeError => {
-            assert.contains(err.path, ".inner.value");
+            assert.equal(err.path, ".inner");
+            assert.contains(err.message, "missing required field `value`");
             true
         }
     }

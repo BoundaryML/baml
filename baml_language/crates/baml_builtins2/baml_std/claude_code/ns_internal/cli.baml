@@ -432,9 +432,7 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
                     `cc_call_${input.journal.entries().length()}_${i}`,
                 );
                 let name = baml.json.path_or<string>(raw_call, ".name", "");
-                let call_args = baml.json.to<map<string, unknown>>(
-                    baml.json.path_or<json>(raw_call, ".args", {}),
-                ) catch_all (e) {
+                let call_args = baml.json.to<map<string, unknown>>(baml.json.path_or<json>(raw_call, ".args", {})) catch_all (e) {
                     _ => {
                         let empty: map<string, unknown> = {};
                         empty
