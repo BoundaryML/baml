@@ -262,6 +262,70 @@ fn fault_switches_future_runs_to_os_without_reinterpreting_active_records() {
 }
 
 #[test]
+fn transient_calibration_failure_retries_then_selects_hardware() {
+    for reason in [FallbackReason::Calibration, FallbackReason::ScaleValidation] {
+        let clock = Clock::new_uncached_with_options(quanta::CalibrationOptions {
+            timeout: Duration::ZERO,
+            ..quanta::CalibrationOptions::default()
+        });
+        let metadata = clock.calibration_metadata();
+        if !matches!(metadata.source, Source::Tsc | Source::SystemCounter) {
+            continue;
+        }
+        // Inject the outcomes so this test does not depend on scheduling noise.
+        let mut success = Some(Calibrated {
+            clock,
+            domain: ClockDomainId(next_id()),
+            quality: metadata.quality,
+            rate_error: RateErrorPpb(10_000),
+            resolution: 1,
+            fallback: None,
+        });
+        let mut attempts = 0;
+        let selected = Calibrated::with_attempts(|| {
+            attempts += 1;
+            if attempts == 1 {
+                Calibrated::monotonic(reason, None)
+            } else {
+                success.take().unwrap()
+            }
+        });
+        assert_eq!(attempts, 2);
+        assert_eq!(selected.fallback, None);
+        assert_eq!(selected.clock.calibration_metadata().source, metadata.source);
+    }
+}
+
+#[test]
+fn calibration_retries_are_bounded_and_preserve_last_failure() {
+    let mut attempts = 0;
+    let selected = Calibrated::with_attempts(|| {
+        attempts += 1;
+        let reason = if attempts == btel_settings::clock::CALIBRATION_ATTEMPTS {
+            FallbackReason::ScaleValidation
+        } else {
+            FallbackReason::Calibration
+        };
+        Calibrated::monotonic(reason, None)
+    });
+    assert_eq!(attempts, btel_settings::clock::CALIBRATION_ATTEMPTS);
+    assert_eq!(selected.fallback, Some(FallbackReason::ScaleValidation));
+}
+
+#[test]
+fn non_retryable_fallbacks_stop_after_one_attempt() {
+    for reason in [FallbackReason::Requested, FallbackReason::Unsupported] {
+        let mut attempts = 0;
+        let selected = Calibrated::with_attempts(|| {
+            attempts += 1;
+            Calibrated::monotonic(reason, None)
+        });
+        assert_eq!(attempts, 1);
+        assert_eq!(selected.fallback, Some(reason));
+    }
+}
+
+#[test]
 fn calibration_deadline_and_inaccurate_scale_are_rejected() {
     let failed = Clock::new_uncached_with_options(quanta::CalibrationOptions {
         timeout: Duration::ZERO,

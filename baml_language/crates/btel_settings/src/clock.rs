@@ -44,13 +44,16 @@ pub const PROBE_ATTEMPTS: usize = 3;
 /// **Sensitive sampling tolerance.** Stops after a sufficiently tight bracket; validate
 /// against OS clock resolution and scheduling noise.
 pub const EARLY_PROBE_WIDTH_NS: u64 = 1_000;
+/// **Sensitive startup cost.** Total attempts before falling back after calibration or
+/// scale validation fails; retries allow recovery from transient scheduling noise.
+pub const CALIBRATION_ATTEMPTS: usize = 3;
 /// **Sensitive startup cost.** Minimum calibration observation window, not per-call work.
 /// Requires accuracy/fallback measurements before shortening.
 pub const CALIBRATION_MIN_DURATION: Duration = Duration::from_millis(20);
 /// **Sensitive convergence tolerance.** Shared by Quanta options and acceptance checks;
 /// relaxation can admit a less accurate scale.
 pub const CALIBRATION_MAX_ERROR_NS: u32 = 100;
-/// **Startup bound.** Maximum calibration wait before fallback. Shorter waits can select the
+/// **Startup bound.** Maximum calibration wait per attempt. Shorter waits can select the
 /// slower OS backend more often.
 pub const CALIBRATION_TIMEOUT_DURATION: Duration = Duration::from_millis(200);
 /// **Sensitive convergence requirement.** Must observe strictly more samples than this;
@@ -58,3 +61,4 @@ pub const CALIBRATION_TIMEOUT_DURATION: Duration = Duration::from_millis(200);
 pub const CALIBRATION_MIN_SAMPLES: u64 = 500;
 const _: () = assert!(DISCONTINUITY_MARGIN_NS < ACCURACY_TARGET_NS);
 const _: () = assert!(RATE_ERROR_FLOOR_PPB <= MAX_RATE_ERROR_PPB);
+const _: () = assert!(CALIBRATION_ATTEMPTS > 0);

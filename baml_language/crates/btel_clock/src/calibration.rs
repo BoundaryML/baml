@@ -60,13 +60,29 @@ impl Calibrated {
         if mode == ClockMode::Monotonic || cfg!(miri) {
             return Self::monotonic(FallbackReason::Requested, None);
         }
-        let clock = Clock::new_uncached_with_options(quanta::CalibrationOptions {
-            minimum_duration: settings::CALIBRATION_MIN_DURATION,
-            maximum_error: Duration::from_nanos(u64::from(settings::CALIBRATION_MAX_ERROR_NS)),
-            minimum_samples: settings::CALIBRATION_MIN_SAMPLES,
-            timeout: settings::CALIBRATION_TIMEOUT_DURATION,
-        });
-        Self::from_clock(clock)
+        Self::with_attempts(|| {
+            let clock = Clock::new_uncached_with_options(quanta::CalibrationOptions {
+                minimum_duration: settings::CALIBRATION_MIN_DURATION,
+                maximum_error: Duration::from_nanos(u64::from(settings::CALIBRATION_MAX_ERROR_NS)),
+                minimum_samples: settings::CALIBRATION_MIN_SAMPLES,
+                timeout: settings::CALIBRATION_TIMEOUT_DURATION,
+            });
+            Self::from_clock(clock)
+        })
+    }
+
+    pub(super) fn with_attempts(mut attempt: impl FnMut() -> Self) -> Self {
+        let mut calibrated = attempt();
+        for _ in 1..settings::CALIBRATION_ATTEMPTS {
+            if !matches!(
+                calibrated.fallback,
+                Some(FallbackReason::Calibration | FallbackReason::ScaleValidation)
+            ) {
+                break;
+            }
+            calibrated = attempt();
+        }
+        calibrated
     }
 
     pub(super) fn from_clock(clock: Clock) -> Self {
