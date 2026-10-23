@@ -1,6 +1,7 @@
 //! Pool-wide analysis the emitters consume: which nominal types can be
-//! emitted, where recursive class fields need `Box`, and which module
-//! path segments must be renamed away from type-name collisions.
+//! emitted, where recursive class fields need `Box`, which module path
+//! segments must be renamed away from type-name collisions, and which
+//! types get serde impls under the generated crate's `serde` feature.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -27,6 +28,10 @@ pub(crate) struct Analysis {
     /// Emitted type names per (renamed) leaf — the namespace synthesized
     /// union enums must not collide with.
     type_names_by_leaf: HashMap<Vec<String>, HashSet<String>>,
+    /// Emitted classes and aliases whose values all have a JSON form
+    /// serde can match to BAML's own (`baml.json`), so their Rust types
+    /// get serde impls under the generated crate's `serde` feature.
+    serde: HashSet<Name>,
 }
 
 impl Analysis {
@@ -58,6 +63,17 @@ impl Analysis {
             .get(leaf)
             .cloned()
             .unwrap_or_default()
+    }
+
+    /// Whether the emitted class `name` derives serde's traits.
+    pub(crate) fn derives_serde(&self, name: &Name) -> bool {
+        self.serde.contains(name)
+    }
+
+    /// Whether the Rust type for `ty` implements serde's traits under the
+    /// `serde` feature.
+    pub(crate) fn has_serde(&self, ty: &Ty) -> bool {
+        has_serde(ty, &self.serde)
     }
 }
 
@@ -228,6 +244,43 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
     let mut emitted = alive;
     emitted.extend(enums.iter().cloned());
 
+    // Greatest fixpoint, so recursive types keep their impls: start from
+    // every emitted class and alias, then drop each one holding a type
+    // without serde impls until nothing changes. Classes from BAML's
+    // bundled packages never start in: many render through a
+    // `baml.ToJson` override (`baml.time.PlainDate` is a date string),
+    // which a derive cannot follow, and some are `baml_bridge` handles.
+    let serde_candidates: Vec<(&Name, Vec<&Ty>)> = classes
+        .iter()
+        .filter(|(name, _)| !baml_base::LangPackage::is_manifest_name(name.package().as_str()))
+        .map(|(name, class)| (*name, class.properties.iter().map(|p| &p.ty).collect()))
+        .chain(
+            aliases
+                .iter()
+                .map(|(name, alias)| (*name, vec![&alias.resolves_to])),
+        )
+        .filter(|(name, _)| emitted.contains(*name))
+        .collect();
+    let mut serde: HashSet<Name> = serde_candidates
+        .iter()
+        .map(|(name, _)| (*name).clone())
+        .collect();
+    loop {
+        let lacking: Vec<&Name> = serde_candidates
+            .iter()
+            .filter(|(name, tys)| {
+                serde.contains(*name) && !tys.iter().all(|ty| has_serde(ty, &serde))
+            })
+            .map(|(name, _)| *name)
+            .collect();
+        if lacking.is_empty() {
+            break;
+        }
+        for name in lacking {
+            serde.remove(name);
+        }
+    }
+
     // Containment graph over emitted classes and type aliases: an edge per
     // class or alias reference reachable without crossing a heap-indirected
     // container (`Vec`, `Map`); those already break cycles, so only
@@ -283,6 +336,7 @@ pub(crate) fn analyze(pool: &SymbolPool) -> (Analysis, Vec<SkipWarning>) {
             scc,
             renames,
             type_names_by_leaf,
+            serde,
         },
         warnings,
     )
@@ -378,6 +432,43 @@ fn field_deps(ty: &Ty, generic_params: &[&str], deps: &mut Vec<Name>) -> Result<
         Ty::PromptAst => Err("unsupported type: prompt AST".to_string()),
         Ty::Never => Err("unsupported type: never".to_string()),
         Ty::RustType => Ok(()),
+    }
+}
+
+/// Whether the Rust type `translate_ty` produces for `ty` implements
+/// serde's traits in the JSON shape BAML's own `baml.json` uses, given the
+/// classes and aliases that do (`serde`).
+fn has_serde(ty: &Ty, serde: &HashSet<Name>) -> bool {
+    match ty {
+        Ty::Int | Ty::Float | Ty::String | Ty::Bool | Ty::Null | Ty::TypeVar(_) => true,
+        Ty::Enum(_) | Ty::EnumVariant(..) => true,
+        // A literal widens to its base primitive.
+        Ty::Literal(literal, ..) => !matches!(literal, baml_base::Literal::Bigint(_)),
+        // `uint8array` has no JSON form in BAML. A `bigint` is a JSON
+        // number of any size there, but `BigInt`'s own serde form is a
+        // `[sign, digits]` pair.
+        Ty::Bigint | Ty::Uint8Array => false,
+        Ty::List(inner) => has_serde(inner, serde),
+        Ty::Map { value, .. } => has_serde(value, serde),
+        Ty::Union(items) => items.iter().all(|item| has_serde(item, serde)),
+        Ty::Class(name, args) => {
+            serde.contains(name) && args.iter().all(|arg| has_serde(arg, serde))
+        }
+        // `baml_bridge::Json` is `serde_json::Value`: its serde form is the
+        // JSON value itself.
+        Ty::TypeAlias(name) if crate::translate_ty::is_canonical_json(name) => true,
+        Ty::TypeAlias(name) => serde.contains(name),
+        // Functions, handles and opaque values have no JSON form.
+        Ty::Media(_)
+        | Ty::Unknown
+        | Ty::Function { .. }
+        | Ty::Future(..)
+        | Ty::Interface(..)
+        | Ty::Type
+        | Ty::Resource
+        | Ty::PromptAst
+        | Ty::Never
+        | Ty::RustType => false,
     }
 }
 

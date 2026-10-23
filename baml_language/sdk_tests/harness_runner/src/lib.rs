@@ -937,10 +937,11 @@ pub mod rust {
     /// (rustfmt follows the enabled `mod` declarations; generated `src/` is
     /// intentionally not checked — the emitter's pretty-printer is its
     /// canonical format), `clippy` lints the generated library, and
-    /// `cargo_test` compiles and runs the enabled ports. Only `cargo_test`
-    /// gets `BAML_BRIDGE_PATH`: `baml_bridge` is dylib-only, so the fixture's
-    /// tests load the engine cdylib at run time, while fmt and clippy never
-    /// execute it.
+    /// `cargo_test` compiles and runs the enabled ports. Both build with
+    /// every feature of the generated crate (its optional `serde` impls).
+    /// Only `cargo_test` gets `BAML_BRIDGE_PATH`: `baml_bridge` is
+    /// dylib-only, so the fixture's tests load the engine cdylib at run
+    /// time, while fmt and clippy never execute it.
     #[macro_export]
     macro_rules! rust_test_suite {
         ( $( fixture $name:ident; )+ ) => {
@@ -993,14 +994,14 @@ pub mod rust {
 
                     #[test]
                     fn clippy() {
-                        cmd("cargo clippy --manifest-path Cargo.toml -- -D warnings");
+                        cmd("cargo clippy --manifest-path Cargo.toml --all-features -- -D warnings");
                     }
 
                     #[test]
                     fn cargo_test() {
                         let engine = $crate::engine_library();
                         cmd_env(
-                            "cargo test --manifest-path Cargo.toml",
+                            "cargo test --manifest-path Cargo.toml --all-features",
                             &[
                                 (
                                     "BAML_BRIDGE_PATH",

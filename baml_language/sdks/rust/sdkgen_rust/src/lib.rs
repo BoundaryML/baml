@@ -575,6 +575,18 @@ doctest = false
 
 [dependencies]
 baml_bridge = {runtime_dep}
+serde = {{ version = "1", features = ["derive"], optional = true }}
+
+[features]
+# `serde::Serialize` and `serde::Deserialize` for the generated classes,
+# enums and unions, in the JSON shape of BAML's own `baml.json`: keys are
+# the BAML field names, an enum is its variant name, and a union is
+# untagged (deserializing takes the first arm that fits). The impls are
+# structural, so a `baml.ToJson` override on one of your classes is not
+# applied. BAML standard-library classes, and any class holding a `bigint`,
+# `uint8array`, function or handle, directly or nested, get no impls; the
+# class docs name the field.
+serde = ["dep:serde"]
 "#
     );
     if let Some(extra) = manifest_extra {
@@ -2081,6 +2093,297 @@ mod tests {
         let lib = flat(text(&generated, "src/lib.rs"));
         assert!(
             lib.contains("pubenumjsonListOrString{jsonList(::std::vec::Vec<::baml_bridge::Json>),String(::std::string::String),}"),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn serde_is_an_opt_in_feature_of_the_generated_crate() {
+        let manifest = render_manifest(&options());
+        assert!(
+            manifest.contains(
+                "serde = { version = \"1\", features = [\"derive\"], optional = true }\n\n"
+            ),
+            "{manifest}"
+        );
+        assert!(
+            manifest.contains("[features]\n#") && manifest.contains("\nserde = [\"dep:serde\"]\n"),
+            "{manifest}"
+        );
+    }
+
+    fn string_literal(value: &str) -> Ty {
+        Ty::Literal(
+            baml_base::Literal::String(value.to_string()),
+            baml_sdkgen_types::Freshness::Regular,
+        )
+    }
+
+    #[test]
+    fn serde_impls_follow_baml_json_behind_the_serde_feature() {
+        let doc = name("user", &[], "Doc");
+        let shade = name("user", &[], "Shade");
+        let variant = |variant: &str| baml_sdkgen_types::EnumVariant {
+            name: baml_base::Name::new(variant),
+            docstring: None,
+            value: variant.to_string(),
+        };
+        let pool = SymbolPool::from([
+            (
+                doc.clone(),
+                class_symbol(
+                    &doc,
+                    vec![
+                        property("title", Ty::String),
+                        property("type", Ty::String),
+                        property("crate", Ty::Int),
+                        property("shade", Ty::Enum(shade.clone())),
+                        property(
+                            "speed",
+                            Ty::Union(Box::new([string_literal("fast"), Ty::Int, Ty::Null])),
+                        ),
+                    ],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+            (
+                shade.clone(),
+                Symbol::Enum(baml_sdkgen_types::Enum {
+                    name: shade,
+                    docstring: None,
+                    variants: vec![variant("Light"), variant("Self")],
+                    origin: Origin {
+                        source_file_path: "main.baml".to_string(),
+                        span_start: 0,
+                    },
+                }),
+            ),
+        ]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        let flat = flat(lib);
+        let derive =
+            "#[cfg_attr(feature=\"serde\",derive(::serde::Serialize,::serde::Deserialize))]";
+
+        // Class keys are the BAML field names: a rename only where the Rust
+        // name differs.
+        assert!(
+            flat.contains(&format!(
+                "#[derive(Debug,Clone,PartialEq)]{derive}pubstructDoc{{pubtitle:"
+            )),
+            "{lib}"
+        );
+        assert!(
+            flat.contains("#[cfg_attr(feature=\"serde\",serde(rename=\"type\"))]pubr#type:"),
+            "{lib}"
+        );
+        assert!(
+            flat.contains("#[cfg_attr(feature=\"serde\",serde(rename=\"crate\"))]pubcrate_:"),
+            "{lib}"
+        );
+        // An enum is its variant name.
+        assert!(
+            flat.contains(&format!(
+                "#[derive(Debug,Clone,Copy,PartialEq,Eq,Hash)]{derive}pubenumShade{{Light,\
+                 #[cfg_attr(feature=\"serde\",serde(rename=\"Self\"))]Self_,}}"
+            )),
+            "{lib}"
+        );
+        assert_eq!(flat.matches("serde(rename=").count(), 3, "{lib}");
+        // A union is untagged: arms serialize as themselves, and
+        // deserializing tries them in declaration order.
+        assert!(
+            flat.contains(
+                "#[cfg(feature=\"serde\")]impl::serde::SerializeforFastOrInt{\
+                 fnserialize<__S:::serde::Serializer>(&self,serializer:__S,)\
+                 ->::std::result::Result<__S::Ok,__S::Error>{matchself{\
+                 Self::Fast=>serializer.serialize_str(\"fast\"),\
+                 Self::Int(value)=>::serde::Serialize::serialize(value,serializer),}}}"
+            ),
+            "{lib}"
+        );
+        let fast = flat.find("ifjson.as_str()==::std::option::Option::Some(\"fast\")");
+        let int = flat.find("<::core::primitive::i64as::serde::Deserialize<'de");
+        assert!(fast.is_some() && int.is_some() && fast < int, "{lib}");
+        assert!(
+            flat.contains(
+                "#[cfg(feature=\"serde\")]impl<'de>::serde::Deserialize<'de>forFastOrInt"
+            ),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn types_without_a_baml_json_form_get_no_serde_impls() {
+        let bytes = name("user", &[], "Bytes");
+        let holder = name("user", &[], "Holder");
+        let tree = name("user", &[], "Tree");
+        let plain_date = name("baml", &["time"], "PlainDate");
+        let dated = name("user", &[], "Dated");
+        let tree_ty = Ty::Class(tree.clone(), Box::new([]));
+        let class = |n: &Name, properties| class_symbol(n, properties, Vec::new(), Vec::new());
+        let pool = SymbolPool::from([
+            (
+                bytes.clone(),
+                class(
+                    &bytes,
+                    vec![property("id", Ty::Int), property("data", Ty::Uint8Array)],
+                ),
+            ),
+            // Lacks impls through `Bytes`, inside a union arm.
+            (
+                holder.clone(),
+                class(
+                    &holder,
+                    vec![property(
+                        "item",
+                        Ty::Union(Box::new([Ty::Class(bytes, Box::new([])), Ty::Bigint])),
+                    )],
+                ),
+            ),
+            (
+                plain_date.clone(),
+                class(&plain_date, vec![property("_days", Ty::Int)]),
+            ),
+            (
+                dated.clone(),
+                class(
+                    &dated,
+                    vec![property("on", Ty::Class(plain_date, Box::new([])))],
+                ),
+            ),
+            // Recursion alone keeps them.
+            (
+                tree.clone(),
+                class(
+                    &tree,
+                    vec![
+                        property("children", Ty::List(Box::new(tree_ty.clone()))),
+                        property("parent", Ty::Union(Box::new([tree_ty, Ty::Null]))),
+                    ],
+                ),
+            ),
+        ]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        let time = flat(text(&generated, "src/baml/time/mod.rs"));
+        let flat = flat(lib);
+        let note = |field: &str| {
+            format!(
+                "#[cfg_attr(feature=\"serde\",doc=\"\",doc=\"Notserializablewiththe`serde`feature:\
+                 field`{field}`holdsa`bigint`,`uint8array`,function,handleorBAMLstandard-libraryclass.\")]"
+            )
+        };
+        assert!(
+            flat.contains(&format!("{}pubstructBytes", note("data"))),
+            "{lib}"
+        );
+        assert!(
+            flat.contains(&format!("{}pubstructHolder", note("item"))),
+            "{lib}"
+        );
+        assert!(
+            flat.contains(&format!("{}pubstructDated", note("on"))),
+            "{lib}"
+        );
+        assert!(
+            flat.contains(
+                "#[cfg_attr(feature=\"serde\",derive(::serde::Serialize,::serde::Deserialize))]pubstructTree"
+            ),
+            "{lib}"
+        );
+        assert_eq!(flat.matches("::serde::Serialize").count(), 1, "{lib}");
+        // A standard-library class may render through a `baml.ToJson`
+        // override, which a derive cannot follow.
+        assert!(
+            time.contains(
+                "#[cfg_attr(feature=\"serde\",doc=\"\",doc=\"Notserializablewiththe`serde`feature:\
+                 BAMLstandard-libraryclasseshavenoserdeimpls.\")]pubstructPlainDate"
+            ),
+            "{time}"
+        );
+    }
+
+    #[test]
+    fn generic_unions_need_only_the_bounds_serde_derive_infers() {
+        // ContainerShapes<T> { mixed: T | string | null }: serde's derive
+        // bounds the class's `T` by `Deserialize<'de>`, so the union must
+        // not ask for more.
+        let c = name("user", &[], "ContainerShapes");
+        let mixed = Ty::Union(Box::new([typevar(0, "T"), Ty::String, Ty::Null]));
+        let pool =
+            SymbolPool::from([(c.clone(), generic_class(&c, &["T"], vec![("mixed", mixed)]))]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        let flat = flat(lib);
+        assert!(
+            flat.contains(
+                "impl<T:::baml_bridge::BamlValue+::serde::Serialize>::serde::SerializeforTOrString<T>"
+            ),
+            "{lib}"
+        );
+        assert!(
+            flat.contains("impl<'de,T:::baml_bridge::BamlValue+::serde::Deserialize<'de>,>")
+                && flat.contains(",>::serde::Deserialize<'de>forTOrString<T>"),
+            "{lib}"
+        );
+    }
+
+    #[test]
+    fn json_values_have_serde_impls() {
+        // `baml_bridge::Json` is `serde_json::Value`. The stdlib alias item's
+        // expansion has a `bigint` arm, which must not count against it.
+        let json_alias = Name::from_dotted_path(baml_base::qualified_name::BAML_JSON_JSON);
+        let payload = name("user", &[], "Payload");
+        let event = name("user", &[], "Event");
+        let pool = SymbolPool::from([
+            (json_alias.clone(), json_shaped_alias(&json_alias)),
+            (
+                payload.clone(),
+                Symbol::TypeAlias(baml_sdkgen_types::TypeAlias {
+                    name: payload.clone(),
+                    resolves_to: json_ref(),
+                    recursive: false,
+                    origin: Origin {
+                        source_file_path: "main.baml".to_string(),
+                        span_start: 0,
+                    },
+                }),
+            ),
+            (
+                event.clone(),
+                class_symbol(
+                    &event,
+                    vec![
+                        property("payload", json_ref()),
+                        property("maybe", Ty::Union(Box::new([json_ref(), Ty::Null]))),
+                        property(
+                            "items",
+                            Ty::Union(Box::new([Ty::List(Box::new(json_ref())), Ty::String])),
+                        ),
+                        property("aliased", Ty::TypeAlias(payload)),
+                    ],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+        ]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = text(&generated, "src/lib.rs");
+        let flat = flat(lib);
+        assert!(
+            flat.contains(
+                "#[cfg_attr(feature=\"serde\",derive(::serde::Serialize,::serde::Deserialize))]pubstructEvent"
+            ),
+            "{lib}"
+        );
+        assert!(
+            flat.contains("#[cfg(feature=\"serde\")]impl::serde::SerializeforjsonListOrString"),
             "{lib}"
         );
     }

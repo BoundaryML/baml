@@ -33,7 +33,7 @@ doctest = false
 # are baked into the shared library when *it* is built.
 [dependencies]
 hex = { workspace = true }
-indexmap = { workspace = true }
+indexmap = { workspace = true, features = [ "serde" ] }
 libc = { workspace = true }
 libloading = { workspace = true }
 num-bigint = { workspace = true }

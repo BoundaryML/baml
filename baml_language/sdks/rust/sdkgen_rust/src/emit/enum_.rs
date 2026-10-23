@@ -1,7 +1,8 @@
 //! Enum emission: a fieldless Rust enum plus the value conversions.
 //! Variant identifiers come from the BAML variant names; the wire carries
 //! each variant's declared *value*, so both conversion directions match
-//! on the value string, never the Rust identifier.
+//! on the value string, never the Rust identifier. Under the `serde`
+//! feature a variant is its name string, as in BAML's own JSON.
 //!
 //! The impl shape is pinned by the hand-written executable spec in
 //! `bridge_rust/tests/conversions.rs`.
@@ -25,8 +26,12 @@ pub(crate) fn emit(name: &Name, enum_: &Enum) -> TokenStream {
         let variant_ident = idents::ident(variant.name.as_str());
         let value = variant.value.as_str();
         let variant_docs = doc_attrs(variant.docstring.as_deref());
+        let variant_name = variant.name.as_str();
+        let serde_rename = (variant_ident != variant_name)
+            .then(|| quote! { #[cfg_attr(feature = "serde", serde(rename = #variant_name))] });
         variant_defs.push(quote! {
             #(#variant_docs)*
+            #serde_rename
             #variant_ident
         });
         encode_arms.push(quote! { Self::#variant_ident => #value });
@@ -36,6 +41,7 @@ pub(crate) fn emit(name: &Name, enum_: &Enum) -> TokenStream {
     quote! {
         #(#docs)*
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        #[cfg_attr(feature = "serde", derive(::serde::Serialize, ::serde::Deserialize))]
         pub enum #ident {
             #(#variant_defs,)*
         }
