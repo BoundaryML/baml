@@ -434,6 +434,15 @@ impl UnionTypeMember {
     fn take_base_type(it: &mut SyntaxNodeIter) -> Result<Self, StrongAstError> {
         let first = it.expect_next("a type")?;
         match first.kind() {
+            SyntaxKind::TYPE_EXPR => {
+                // Bare callable union members have a complete TYPE_EXPR node;
+                // it groups syntax without introducing source parentheses.
+                let node = StrongAstError::assert_is_node(first)?;
+                let mut inner = SyntaxNodeIter::new(&node);
+                let member = Self::take(&mut inner)?;
+                inner.expect_end()?;
+                Ok(member)
+            }
             SyntaxKind::MINUS => {
                 let minus = t::Minus::from_cst(first)?;
                 let literal = it.expect_next("numeric literal after '-'")?;

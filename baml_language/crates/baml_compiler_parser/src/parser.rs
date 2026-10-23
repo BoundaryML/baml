@@ -3141,7 +3141,14 @@ impl<'a> Parser<'a> {
                     .then(|| p.skip_trivia_and_comments_from(p.current));
                     p.bump();
                     let errors_before_member = p.events.len();
-                    p.parse_type_primary();
+                    if p.at(TokenKind::LParen) && p.looks_like_function_type_paren() {
+                        // Keep a bare callable member's head, return and throws
+                        // together. Without this node union lowering mistakes
+                        // its return TYPE_EXPR for the entire member (B-1722).
+                        p.with_node(SyntaxKind::TYPE_EXPR, Self::parse_type_primary);
+                    } else {
+                        p.parse_type_primary();
+                    }
                     // Both ownership branches are syntax-complete here: the
                     // previous operand can finish the first function, and the
                     // member can also be a function inside its return/throws

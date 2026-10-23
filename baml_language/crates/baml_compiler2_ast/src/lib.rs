@@ -1877,6 +1877,73 @@ function f() -> int {
     }
 
     #[test]
+    fn bare_function_union_members_preserve_the_entire_callable() {
+        // These AST assertions catch syntax loss before downstream inference can
+        // accept the return type as an unrelated union arm (B-1722).
+        let pairs = [
+            (
+                "int | () -> string throws never",
+                "int | (() -> string throws never)",
+            ),
+            (
+                "int | bool | (value: int, fallback?: string) -> string | int throws string | int",
+                "int | bool | ((value: int, fallback?: string) -> string | int throws string | int)",
+            ),
+            (
+                "((int) -> string throws never) | (bool) -> int throws never",
+                "((int) -> string throws never) | ((bool) -> int throws never)",
+            ),
+            (
+                "map<string, int | (cb: () -> int throws never) -> string[]? throws never>",
+                "map<string, int | ((cb: () -> int throws never) -> string[]? throws never)>",
+            ),
+            (
+                "(int | () -> string throws never)[]",
+                "(int | (() -> string throws never))[]",
+            ),
+            (
+                "() -> (int | () -> string throws never) throws never",
+                "() -> (int | (() -> string throws never)) throws never",
+            ),
+            (
+                "() -> int throws (int | () -> string throws never)",
+                "() -> int throws (int | (() -> string throws never))",
+            ),
+            ("int | () -> string", "int | (() -> string)"),
+        ];
+        for (bare, grouped) in pairs {
+            let lower = |form| {
+                let alias = first_type_alias(parse_and_lower(&format!("type T = {form}\n")));
+                strip_spans(&alias.type_expr.unwrap())
+            };
+            assert_eq!(lower(bare), lower(grouped), "{bare}");
+        }
+
+        let alias = first_type_alias(parse_and_lower(
+            "type T = int | () -> string throws never\n",
+        ));
+        let TypeExprKind::Union { variants } = alias.type_expr.unwrap().kind else {
+            panic!("expected an outer union");
+        };
+        assert_eq!(variants.len(), 2);
+        assert!(matches!(variants[0].kind, TypeExprKind::Int));
+        let TypeExprKind::Function {
+            params,
+            ret,
+            throws,
+        } = &variants[1].kind
+        else {
+            panic!("expected the callable arm, got {:?}", variants[1]);
+        };
+        assert!(params.is_empty());
+        assert!(matches!(ret.kind, TypeExprKind::String));
+        assert!(matches!(
+            throws.as_deref().unwrap().kind,
+            TypeExprKind::Never
+        ));
+    }
+
+    #[test]
     fn type_expr_simple_optional() {
         let ta = first_type_alias(parse_and_lower("type T = int?\n"));
         assert_eq!(

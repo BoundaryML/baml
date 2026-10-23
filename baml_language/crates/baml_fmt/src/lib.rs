@@ -832,6 +832,30 @@ mod lambda_format_tests {
     }
 
     #[test]
+    fn bare_callable_union_members_round_trip() {
+        let options = FormatOptions::default();
+        let source = "type Value = int | () -> string throws never\n";
+        assert_eq!(
+            format(source, &options).unwrap(),
+            "type Value = int | () -> string throws never;\n"
+        );
+        for source in [
+            "type Values = map<string, int | (value?: int) -> string[]? throws string | int>\n",
+            "type Values = (int | () -> string throws never)[]\n",
+            "type Values = (() -> string throws never) | () -> int throws never\n",
+            "type Values = int | /* arm */ (/* arg */ int) -> string throws never\n",
+        ] {
+            let formatted = format(source, &options).expect("format a complete callable arm");
+            assert_eq!(format(&formatted, &options).unwrap(), formatted);
+            for comment in ["/* arm */", "/* arg */"] {
+                if source.contains(comment) {
+                    assert!(formatted.contains(comment), "lost {comment}: {formatted}");
+                }
+            }
+        }
+    }
+
+    #[test]
     fn test_top_level_function_with_throws_formatting() {
         let source = "function risky(x: int) -> int throws string {\n    throw \"boom\"\n}\n";
         let options = FormatOptions::default();
