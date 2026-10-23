@@ -11305,11 +11305,7 @@ type Callback = (value: int) -> string throws Foo
             let (root, errors) = parse_source(&source);
             assert_no_errors(&errors);
             assert_eq!(root.text().to_string(), source);
-            let outer = root
-                .descendants()
-                .filter_map(TypeExpr::cast)
-                .next()
-                .unwrap();
+            let outer = root.descendants().find_map(TypeExpr::cast).unwrap();
             let members: Vec<_> = outer
                 .union_members()
                 .map(|member| member.syntax().text().to_string().trim().to_owned())
@@ -11348,11 +11344,7 @@ type Callback = (value: int) -> string throws Foo
         // introducing a union at the function's own level.
         let (root, errors) = parse_source("type T = () -> int | string throws never\n");
         assert_no_errors(&errors);
-        let callable = root
-            .descendants()
-            .filter_map(TypeExpr::cast)
-            .next()
-            .unwrap();
+        let callable = root.descendants().find_map(TypeExpr::cast).unwrap();
         assert!(callable.is_function_type());
         assert!(!callable.is_union());
         assert!(callable.function_return_type().unwrap().is_union());
