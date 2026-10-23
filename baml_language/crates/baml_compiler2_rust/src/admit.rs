@@ -164,6 +164,13 @@ fn lower_program<'db>(
     let mut refs: HashMap<usize, BTreeSet<usize>> = HashMap::new();
     let mut seeds: BTreeSet<usize> = entries.into_iter().flatten().copied().collect();
 
+    let mut admission = Admission {
+        db,
+        index,
+        units: &mut units,
+        rejected: &mut rejected,
+    };
+
     for &file in world_files(db, root) {
         let package = index.package_of(file_package(db, file).root);
         for &function in file_functions(db, file) {
@@ -174,7 +181,7 @@ fn lower_program<'db>(
                 Ok(mir) => mir,
                 Err(error) => {
                     reject(
-                        &mut rejected,
+                        admission.rejected,
                         format!("{function:?}"),
                         Rejection::Invalid(format!("lowering failed: {error:?}")),
                     );
@@ -185,19 +192,10 @@ fn lower_program<'db>(
                 continue;
             };
             // Lambdas are admitted independently of their parent.
-            admit_lambdas(
-                db,
-                index,
-                &mut units,
-                &mut rejected,
-                body,
-                &mir.lambdas,
-                &[],
-                package,
-            );
+            admission.admit_lambdas(body, &mir.lambdas, &[], package);
             let Some(object) = index.declared(db, function) else {
                 reject(
-                    &mut rejected,
+                    admission.rejected,
                     mir.identity.display_name(db),
                     Rejection::Invalid("no function of this identity in the program".into()),
                 );
@@ -206,18 +204,7 @@ fn lower_program<'db>(
             if entries.is_some() {
                 refs.insert(object, references(db, index, body, &mir.lambdas));
             }
-            admit_unit(
-                db,
-                index,
-                &mut units,
-                &mut rejected,
-                object,
-                mir.arity,
-                body,
-                &mir.lambdas,
-                Vec::new(),
-                package,
-            );
+            admission.admit_unit(object, mir.arity, body, &mir.lambdas, Vec::new(), package);
         }
         for &binding in file_lets(db, file) {
             let name = baml_compiler2_mir::definition_display_name(
@@ -229,7 +216,7 @@ fn lower_program<'db>(
                 Ok(None) => continue,
                 Err(error) => {
                     reject(
-                        &mut rejected,
+                        admission.rejected,
                         bex_vm_types::init_let_helper_name(&name),
                         Rejection::Invalid(format!("lowering failed: {error:?}")),
                     );
@@ -238,7 +225,7 @@ fn lower_program<'db>(
             };
             let Some(object) = index.let_helper(db, binding) else {
                 reject(
-                    &mut rejected,
+                    admission.rejected,
                     bex_vm_types::init_let_helper_name(&name),
                     Rejection::Invalid("no initializer of this identity in the program".into()),
                 );
@@ -248,28 +235,8 @@ fn lower_program<'db>(
                 seeds.insert(object);
                 refs.insert(object, references(db, index, &body, &lambdas));
             }
-            admit_lambdas(
-                db,
-                index,
-                &mut units,
-                &mut rejected,
-                &body,
-                &lambdas,
-                &[],
-                package,
-            );
-            admit_unit(
-                db,
-                index,
-                &mut units,
-                &mut rejected,
-                object,
-                0,
-                &body,
-                &lambdas,
-                Vec::new(),
-                package,
-            );
+            admission.admit_lambdas(&body, &lambdas, &[], package);
+            admission.admit_unit(object, 0, &body, &lambdas, Vec::new(), package);
         }
     }
 
@@ -337,7 +304,10 @@ fn admission_fixpoint(
                 unit.analysis.hooked
                     || unit.analysis.binds_types
                     || info.trace_passthrough
-                    || info.model_invoke
+                    || matches!(
+                        info.body_meta,
+                        Some(bex_vm_types::FunctionMeta::ModelInvoke)
+                    )
             })
             .map(|(&object, _)| object)
             .collect();
@@ -399,102 +369,89 @@ fn admission_fixpoint(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn admit_unit<'db>(
+struct Admission<'a, 'db> {
     db: &'db dyn baml_compiler2_mir::Db,
-    index: &ProgramIndex,
-    units: &mut BTreeMap<usize, Unit<'db>>,
-    rejected: &mut Vec<(String, Rejection)>,
-    object: usize,
-    arity: usize,
-    body: &MirFunctionBody<'db>,
-    lambdas: &[MirFunction<'db>],
-    captures: Vec<Repr>,
-    package: Option<u32>,
-) {
-    let name = index.display(object).to_owned();
-    let info = index.info(object);
-    if !matches!(info.kind, FunctionKind::Bytecode) {
-        return;
-    }
-    match Analysis::new(db, index, arity, body, captures) {
-        Ok(analysis) => {
-            units.insert(
-                object,
-                Unit {
-                    body: body.clone(),
-                    lambdas: lambdas.to_vec(),
-                    analysis,
-                    package,
-                    recursive: false,
-                },
-            );
-        }
-        Err(rejection) => reject(rejected, name, rejection),
-    }
+    index: &'a ProgramIndex<'a>,
+    units: &'a mut BTreeMap<usize, Unit<'db>>,
+    rejected: &'a mut Vec<(String, Rejection)>,
 }
 
-/// Admit nested lambdas with their enclosing capture representations.
-#[allow(clippy::too_many_arguments)]
-fn admit_lambdas<'db>(
-    db: &'db dyn baml_compiler2_mir::Db,
-    index: &ProgramIndex,
-    units: &mut BTreeMap<usize, Unit<'db>>,
-    rejected: &mut Vec<(String, Rejection)>,
-    parent_body: &MirFunctionBody<'db>,
-    lambdas: &[MirFunction<'db>],
-    captures: &[Repr],
-    package: Option<u32>,
-) {
-    let values = value_reprs(parent_body);
-    for (lambda_idx, lambda) in lambdas.iter().enumerate() {
-        let MirFunctionKind::Bytecode(body) = &lambda.kind else {
-            continue;
-        };
-        let captures = capture_reprs(parent_body, lambda_idx, &values, captures);
-        let Some(object) = index.lambda(db, &lambda.identity) else {
-            reject(
-                rejected,
-                lambda.identity.display_name(db),
-                Rejection::Invalid("no function of this identity in the program".into()),
+impl<'db> Admission<'_, 'db> {
+    fn admit_unit(
+        &mut self,
+        object: usize,
+        arity: usize,
+        body: &MirFunctionBody<'db>,
+        lambdas: &[MirFunction<'db>],
+        captures: Vec<Repr>,
+        package: Option<u32>,
+    ) {
+        let info = self.index.info(object);
+        if !matches!(info.kind, FunctionKind::Bytecode) {
+            return;
+        }
+        match Analysis::new(self.db, self.index, arity, body, captures) {
+            Ok(analysis) => {
+                self.units.insert(
+                    object,
+                    Unit {
+                        body: body.clone(),
+                        lambdas: lambdas.to_vec(),
+                        analysis,
+                        package,
+                        recursive: false,
+                    },
+                );
+            }
+            Err(rejection) => reject(
+                self.rejected,
+                self.index.display(object).to_owned(),
+                rejection,
+            ),
+        }
+    }
+
+    /// Admit nested lambdas with their enclosing capture representations.
+    fn admit_lambdas(
+        &mut self,
+        parent_body: &MirFunctionBody<'db>,
+        lambdas: &[MirFunction<'db>],
+        captures: &[Repr],
+        package: Option<u32>,
+    ) {
+        let values = value_reprs(parent_body);
+        for (lambda_idx, lambda) in lambdas.iter().enumerate() {
+            let MirFunctionKind::Bytecode(body) = &lambda.kind else {
+                continue;
+            };
+            let captures = capture_reprs(parent_body, lambda_idx, &values, captures);
+            let Some(object) = self.index.lambda(self.db, &lambda.identity) else {
+                reject(
+                    self.rejected,
+                    lambda.identity.display_name(self.db),
+                    Rejection::Invalid("no function of this identity in the program".into()),
+                );
+                continue;
+            };
+            self.admit_lambdas(body, &lambda.lambdas, &captures, package);
+            self.admit_unit(
+                object,
+                lambda.arity,
+                body,
+                &lambda.lambdas,
+                captures,
+                package,
             );
-            continue;
-        };
-        admit_lambdas(
-            db,
-            index,
-            units,
-            rejected,
-            body,
-            &lambda.lambdas,
-            &captures,
-            package,
-        );
-        admit_unit(
-            db,
-            index,
-            units,
-            rejected,
-            object,
-            lambda.arity,
-            body,
-            &lambda.lambdas,
-            captures,
-            package,
-        );
+        }
     }
 }
 
 /// Object indices disambiguate functions whose display names collide.
 fn symbol_for(name: &str, object: usize) -> String {
-    let mut symbol = String::with_capacity(name.len() + 8);
-    for ch in name.chars() {
-        if ch.is_ascii_alphanumeric() {
-            symbol.push(ch);
-        } else {
-            symbol.push('_');
-        }
-    }
+    let symbol: String = name
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })
+        .collect();
     format!("{symbol}_{object}")
 }
 
@@ -600,15 +557,17 @@ mod tests {
 
     #[test]
     fn symbols_are_identifiers() {
-        assert_eq!(symbol_for("user.Add", 3), "user_Add_3");
-        assert_eq!(
-            symbol_for("user.<lambda(f, 0)>", 7),
-            "user__lambda_f__0___7"
-        );
-        assert_eq!(symbol_for("pkg.ns.Class.m", 0), "pkg_ns_Class_m_0");
-        assert_eq!(
-            symbol_for("user.<(user.A as baml.Show)>.show", 12),
-            "user___user_A_as_baml_Show___show_12"
-        );
+        for (name, object, expected) in [
+            ("user.Add", 3, "user_Add_3"),
+            ("user.<lambda(f, 0)>", 7, "user__lambda_f__0___7"),
+            ("pkg.ns.Class.m", 0, "pkg_ns_Class_m_0"),
+            (
+                "user.<(user.A as baml.Show)>.show",
+                12,
+                "user___user_A_as_baml_Show___show_12",
+            ),
+        ] {
+            assert_eq!(symbol_for(name, object), expected);
+        }
     }
 }
