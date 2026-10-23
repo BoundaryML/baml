@@ -606,7 +606,9 @@ impl TelemetryState {
 
     /// End an open request's span. An errored one captures its error; where
     /// the error's text quotes one of `raw_urls` (the URLs the request went
-    /// to, as sent), the capture has the sanitized URL instead.
+    /// to, as sent), the capture has the sanitized URL instead. Without
+    /// bodies it captures only the outcome: an error can quote the response
+    /// body, as a failed `send_sse`'s does.
     ///
     /// # Safety
     /// `error` and its reachable objects must remain live under the heap permit.
@@ -619,6 +621,7 @@ impl TelemetryState {
         raw_urls: &[&str],
     ) {
         self.start_thread();
+        let error = error.filter(|_| self.policies.http_bodies());
         let error = error.and_then(|error| {
             let mut rewrites: Vec<_> = raw_urls
                 .iter()
@@ -2376,14 +2379,9 @@ mod tests {
         assert!(captured["request"].get("body").is_none());
         assert_eq!(captured["request"]["method"], "POST");
         assert_eq!((data.name.as_str(), data.payload.is_none()), ("data", true));
+        // The error is not captured: it could quote the body.
         assert_eq!(completion.outcome, InvocationOutcome::Errored);
-        assert!(matches!(
-            completion
-                .error
-                .as_ref()
-                .and_then(btel_snapshot::Snapshot::value),
-            Some(btel_snapshot::SnapshotValue::Int(3))
-        ));
+        assert!(completion.error.is_none());
 
         let mut low = test_state(
             Arc::new(TelemetryPolicies::with_auto_level(AutoTelemetryLevel::Low)),
