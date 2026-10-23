@@ -239,6 +239,8 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         "trace.SpanId" | "trace.Options" | "trace.ReservedSpan"
         | "baml.spawn.Limit"
         | "baml.spawn.CancelToken"
+        | "baml.sync.Lock"
+        | "baml.sync.Guard"
         | "baml.http.Response"
         | "baml.http.SseStream"
         | "baml.http.Server"

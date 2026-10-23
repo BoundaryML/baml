@@ -54,6 +54,8 @@ pub use spawn::{
 };
 mod stack_trace;
 mod string;
+mod sync;
+pub(crate) use sync::HeldLocks;
 mod sys;
 mod time;
 mod toml;

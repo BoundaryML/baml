@@ -20,6 +20,7 @@ pub mod identity;
 pub mod indexable;
 pub mod lazy_biased_mutex;
 pub mod limit;
+pub mod lock;
 pub mod media;
 pub mod meter;
 pub mod prompt;
@@ -39,6 +40,7 @@ pub use indexable::{
     GlobalIndex, GlobalPool, ObjectIndex, ObjectPool, SharedGlobals, StackIndex, VmGlobals,
 };
 pub use limit::{Admission, AdmissionTicket, LimitInner, LimitSet};
+pub use lock::{GuardState, LockInner, NotHeld, Waiter};
 pub use media::{MediaContent, MediaValue};
 pub use meter::{AllocDebt, Meter};
 pub use prompt::{PromptAst, PromptAstSimple, StructuredMessage};

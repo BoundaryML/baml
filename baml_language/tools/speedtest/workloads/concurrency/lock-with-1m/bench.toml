@@ -1,0 +1,5 @@
+name = "lock with 1m"
+description = "1,000,000 uncontended re-entrant lock holds, each running one closure"
+expect = "2000000"
+jobs = 2
+warmup = 1

@@ -477,6 +477,7 @@ pub(crate) mod tests {
             stdlib_heads: Arc::new(crate::package_load::StdlibHeads::default()),
 
             thread_id: NonZeroU64::MIN,
+            held_locks: crate::package_baml::HeldLocks::new(NonZeroU64::MIN),
 
             context_transfers: Vec::new(),
             argv: Arc::from([]),
@@ -1696,9 +1697,13 @@ pub struct BexVm {
     /// once from `packages` and shared across spawned VMs.
     stdlib_heads: Arc<crate::package_load::StdlibHeads>,
 
-    /// Engine-local logical thread identity for structured logs. Unique among
-    /// the engine's VMs; set at construction.
+    /// Engine-local logical thread identity for structured logs, and the
+    /// task that holds the `baml.sync.Lock`s this VM takes. Unique among the
+    /// engine's VMs; set at construction.
     pub thread_id: NonZeroU64,
+
+    /// The `baml.sync.Lock`s this VM's task has entered and not yet exited.
+    pub(crate) held_locks: crate::package_baml::HeldLocks,
 
     /// VM-owned producer state. It deliberately has no transport or buffer.
     pub(crate) telemetry: Option<TelemetryState>,
@@ -2432,6 +2437,7 @@ impl BexVm {
             stdlib_heads,
 
             thread_id,
+            held_locks: crate::package_baml::HeldLocks::new(thread_id),
 
             context_transfers: Vec::new(),
             argv,
@@ -6126,6 +6132,10 @@ impl BexVm {
             VmPanic::NegativeBitShift { message } => {
                 let msg = Value::object(self.alloc_string(message));
                 (PanicClass::NegativeBitShift, vec![msg])
+            }
+            VmPanic::LockNotHeld { message } => {
+                let msg = Value::object(self.alloc_string(message));
+                (PanicClass::LockNotHeld, vec![msg])
             }
             // Field order matches the `HostContractViolation` class in
             // `ns_panics/panics.baml`: message, class_name?, language?.
