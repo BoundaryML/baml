@@ -165,26 +165,24 @@ impl RecordingDelivery {
 impl TelemetryRecording {
     /// Resolve an artifact's explicitly permitted bindings without changing process
     /// environment. Embedded credentials never fall back to an ambient login or key.
-    pub fn from_artifact(policy: &ArtifactTelemetry) -> Result<Self, EngineError> {
+    /// Never fails, so a telemetry setting cannot stop the program: when the settings
+    /// can't select a usable cloud destination, it records locally.
+    pub fn from_artifact(policy: &ArtifactTelemetry) -> Self {
         use btel_settings::artifact::IngestionSelection;
         if policy.resolve_level().is_none() {
-            return Ok(Self::user_files(RecordingConfig::default()));
+            return Self::user_files(RecordingConfig::default());
         }
-        let selection = policy
-            .select_ingestion_with(baml_env::os_var)
-            .map_err(|error| EngineError::Other(error.to_string()))?;
+        let selection = match policy.select_ingestion_with(baml_env::os_var) {
+            Ok(selection) => selection,
+            Err(error) => return Self::cloud_unusable(error),
+        };
         if matches!(&selection, IngestionSelection::Caller { api_key: Some(key), .. } if key == bcs_api::credentials::LOCAL_API_KEY)
         {
-            return Ok(Self::user_files(RecordingConfig::default()));
+            return Self::user_files(RecordingConfig::default());
         }
-        // An unusable endpoint must not stop the program. Record locally, as
-        // without cloud credentials.
         let endpoint = match bcs_api::Endpoint::with_default(policy.api_url.as_deref()) {
             Ok(endpoint) => endpoint,
-            Err(error) => {
-                tracing::debug!(%error, "cloud telemetry disabled; recording locally");
-                return Ok(Self::user_files(RecordingConfig::default()));
-            }
+            Err(error) => return Self::cloud_unusable(error),
         };
         let (credential, target, source, build_id) = match selection {
             IngestionSelection::Embedded(embedded) => (
@@ -202,7 +200,9 @@ impl TelemetryRecording {
                 let (credential, source) = match api_key {
                     Some(key) => {
                         if key.starts_with(bcs_api::credentials::PUBLIC_PREFIX) {
-                            return Err(EngineError::Other("A public telemetry credential must be embedded with its build registration. Supply a Boundary API key or use `baml auth login`.".into()));
+                            return Self::cloud_unusable(
+                                "a public credential works only when embedded with its build registration",
+                            );
                         }
                         (key, CredentialSource::ApiKey)
                     }
@@ -210,14 +210,7 @@ impl TelemetryRecording {
                         let saved =
                             match bcs_api::Store::new(&endpoint).and_then(|store| store.read()) {
                                 Ok(saved) => saved,
-                                Err(error) => {
-                                    return Err(artifact_configuration_error(
-                                        policy,
-                                        Some(endpoint),
-                                        CredentialSource::SavedLogin,
-                                        error,
-                                    ));
-                                }
+                                Err(error) => return Self::cloud_unusable(error),
                             };
                         match saved {
                             Some(saved) => (
@@ -225,15 +218,10 @@ impl TelemetryRecording {
                                 CredentialSource::SavedLogin,
                             ),
                             None if policy.embedded.is_none() => {
-                                return Ok(Self::user_files(RecordingConfig::default()));
+                                return Self::user_files(RecordingConfig::default());
                             }
                             None => {
-                                return Err(artifact_configuration_error(
-                                    policy,
-                                    Some(endpoint),
-                                    CredentialSource::SavedLogin,
-                                    bcs_api::Error::MissingCredentials,
-                                ));
+                                return Self::cloud_unusable(bcs_api::Error::MissingCredentials);
                             }
                         }
                     }
@@ -260,12 +248,11 @@ impl TelemetryRecording {
                 bcs_api::Secret::new(credential),
             ),
         };
-        let mut delivery = btel_bcs::delivery::DeliveryConfig::new(
-            endpoint
-                .as_str()
-                .parse()
-                .map_err(|_| EngineError::Other("Invalid Boundary API URL.".into()))?,
-        );
+        let prepare_base_url = match endpoint.as_str().parse() {
+            Ok(url) => url,
+            Err(error) => return Self::cloud_unusable(error),
+        };
+        let mut delivery = btel_bcs::delivery::DeliveryConfig::new(prepare_base_url);
         delivery.authorization = Some(bcs_api::credentials::RequestAuthorization {
             authentication,
             target: Some(target),
@@ -282,7 +269,15 @@ impl TelemetryRecording {
         {
             authorization_context.source = source;
         }
-        Ok(recording)
+        recording
+    }
+
+    /// The artifact's settings can't select a usable cloud destination. Record
+    /// locally, as without cloud credentials, never with another credential, and
+    /// print nothing.
+    fn cloud_unusable(reason: impl std::fmt::Display) -> Self {
+        tracing::debug!(%reason, "cloud telemetry disabled; recording locally");
+        Self::user_files(RecordingConfig::default())
     }
 
     /// Resolve the selected endpoint and credential without making a network request.
@@ -739,23 +734,6 @@ fn artifact_recovery(policy: &ArtifactTelemetry) -> RecordingOverride {
         project: names.as_ref().map(|names| names.0.clone()),
         api_key: names.map(|names| names.1),
     }
-}
-
-fn artifact_configuration_error(
-    policy: &ArtifactTelemetry,
-    endpoint: Option<bcs_api::Endpoint>,
-    source: CredentialSource,
-    error: bcs_api::Error,
-) -> EngineError {
-    let diagnostic = AuthorizationContext {
-        endpoint,
-        source,
-        operation: Operation::Ingest,
-    }
-    .report(error, Outcome::ExecutionCancelled)
-    .diagnostic
-    .with_recording_override(artifact_recovery(policy));
-    EngineError::CloudAuthorization(Box::new(diagnostic))
 }
 
 #[allow(clippy::print_stderr)]
