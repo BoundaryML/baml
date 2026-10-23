@@ -69,6 +69,31 @@ module Baml
     def close; end
   end
 
+  # Frozen portable media values; file constructors read content immediately.
+  class Media
+    extend T::Sig
+    sig { params(url: String, mime_type: T.nilable(String)).returns(T.attached_class) }
+    def self.from_url(url, mime_type: nil); end
+    sig { params(base64: String, mime_type: T.nilable(String)).returns(T.attached_class) }
+    def self.from_base64(base64, mime_type: nil); end
+    sig { params(file: String, mime_type: T.nilable(String)).returns(T.attached_class) }
+    def self.from_file(file, mime_type: nil); end
+    sig { params(file: String, base64: String, mime_type: T.nilable(String)).returns(T.attached_class) }
+    def self.from_file_content(file, base64, mime_type: nil); end
+    sig { returns(T.nilable(String)) }
+    def url; end
+    sig { returns(String) }
+    def base64; end
+    sig { returns(T.nilable(String)) }
+    def mime_type; end
+    sig { returns(T.nilable(String)) }
+    def name; end
+  end
+  class Image < Media; end
+  class Audio < Media; end
+  class Video < Media; end
+  class Pdf < Media; end
+
   module Bridge
     extend T::Sig
 
@@ -76,13 +101,16 @@ module Baml
     class UnsupportedTypeError < Error; end
 
     # Type descriptors are frozen arrays mirroring the generator's Ty. Grammar:
-    #   [:int] [:float] [:string] [:bool] [:null] [:never] [:handle]
+    #   [:int] [:bigint] [:float] [:string] [:bool] [:null] [:bytes] [:never] [:handle]
     #   [:literal, value]                  value: String, Integer, Float, true or false
+    #   [:media, kind]                     kind: :image, :audio, :video, :pdf, :generic
     #   [:class, "pkg.ns.Name"]
     #   [:enum, "pkg.ns.Name"]
-    #   [:list, d]  [:map, [:string], value]  [:union, [d, [:null]]]
+    #   [:list, d]  [:map, key, value]  [:union, [d, ...]]
+    #   [:alias, "pkg.ns.Name"]
     #   [:other]                           anything the encoder encodes by value
-    # Values encode by their Ruby kind.
+    # Descriptors preserve bytes hints through fields and containers;
+    # other values encode by their Ruby kind.
     Descriptor = T.type_alias { T::Array[T.untyped] }
 
     # Called once when the generated package loads. Registering a different
@@ -107,6 +135,10 @@ module Baml
 
     sig { params(wire: String, klass: T.class_of(T::Enum)).void }
     def self.define_enum(wire, klass); end
+
+    # Exact alias targets retain byte hints, including through recursive aliases.
+    sig { params(wire: String, descriptor: Descriptor).void }
+    def self.define_alias(wire, descriptor); end
 
     # params: [wire name, descriptor] in declaration order.
     # Instance methods include their receiver as the first param, named "self".

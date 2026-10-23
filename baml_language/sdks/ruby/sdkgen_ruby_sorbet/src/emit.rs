@@ -1,19 +1,23 @@
 use std::{collections::BTreeSet, fmt::Write as _};
 
-use baml_sdkgen_types::{Class, Enum, Function, FunctionArgument, Name, NamingConvention};
+use baml_sdkgen_types::{
+    Class, Enum, Function, FunctionArgument, Name, NamingConvention, SymbolPool, Ty, TypeAlias,
+};
 
 use crate::{
     descriptors::descriptor,
     names::{NameTable, callable_parts, constant, identifier, parameter, quote},
-    types::ruby_type,
+    types::{ruby_alias_type, ruby_input_type, ruby_type},
 };
 
 pub(crate) struct Emitter<'a> {
+    pub(crate) pool: &'a SymbolPool,
     pub(crate) supported: &'a BTreeSet<Name>,
     pub(crate) naming: NamingConvention,
     pub(crate) names: NameTable,
     pub(crate) registry: String,
     pub(crate) shells: String,
+    pub(crate) aliases: String,
     pub(crate) skipped: BTreeSet<String>,
 }
 
@@ -21,6 +25,17 @@ impl Emitter<'_> {
     pub(crate) fn class(&mut self, name: &Name, class: &Class, body: &mut String) {
         let scope = self.names.qualified(name);
         self.shell(name, "Struct");
+        doc_comment(
+            body,
+            &member_doc(
+                class.docstring.as_deref(),
+                "Attributes",
+                class
+                    .properties
+                    .iter()
+                    .map(|p| (p.name.as_str(), p.docstring.as_deref())),
+            ),
+        );
         writeln!(
             body,
             "class {} < ::T::Struct\n  extend ::T::Sig\n  include ::Baml::ValueEquality",
@@ -37,7 +52,7 @@ impl Emitter<'_> {
             writeln!(
                 body,
                 "  const :{field}, {}",
-                ruby_type(&property.ty, self.supported, &self.names).unwrap()
+                ruby_input_type(&property.ty, self.supported, &self.names, self.pool).unwrap()
             )
             .unwrap();
             fields.push(format!(
@@ -77,6 +92,17 @@ impl Emitter<'_> {
     pub(crate) fn enum_(&mut self, name: &Name, enum_: &Enum, body: &mut String) {
         self.shell(name, "Enum");
         let scope = self.names.qualified(name);
+        doc_comment(
+            body,
+            &member_doc(
+                enum_.docstring.as_deref(),
+                "Members",
+                enum_
+                    .variants
+                    .iter()
+                    .map(|v| (v.name.as_str(), v.docstring.as_deref())),
+            ),
+        );
         writeln!(
             body,
             "class {} < ::T::Enum\n  enums do",
@@ -97,6 +123,29 @@ impl Emitter<'_> {
             "::Baml::Bridge.define_enum({}, ::{})",
             quote(&name.to_string()),
             scope
+        )
+        .unwrap();
+    }
+
+    pub(crate) fn type_alias(&mut self, name: &Name, alias: &TypeAlias, pool: &SymbolPool) {
+        let ty = ruby_alias_type(
+            &Ty::TypeAlias(name.clone()),
+            pool,
+            self.supported,
+            &self.names,
+        )
+        .unwrap();
+        writeln!(
+            self.aliases,
+            "{} = ::T.type_alias {{ {ty} }}",
+            self.names.qualified(name)
+        )
+        .unwrap();
+        writeln!(
+            self.registry,
+            "::Baml::Bridge.define_alias({}, {})",
+            quote(&name.to_string()),
+            descriptor(&alias.resolves_to)
         )
         .unwrap();
     }
@@ -138,7 +187,7 @@ impl Emitter<'_> {
         let argument_types: Vec<_> = function
             .arguments
             .iter()
-            .map(|a| ruby_type(&a.ty, self.supported, &self.names))
+            .map(|a| ruby_input_type(&a.ty, self.supported, &self.names, self.pool))
             .collect();
         let (base, suffix) = callable_parts(function.name.as_str());
         let base = identifier(base, self.naming);
@@ -195,12 +244,80 @@ impl Emitter<'_> {
                 result.clone()
             };
             let target = if receiver.is_some() { "" } else { "self." };
+            let mut doc = function.docstring.clone().unwrap_or_default();
+            if let Some(throws) = &function.throws {
+                let mut names = BTreeSet::new();
+                throws_names(throws, &mut names);
+                if !names.is_empty() {
+                    if !doc.is_empty() {
+                        doc.push_str("\n\n");
+                    }
+                    write!(
+                        doc,
+                        "Raises:\n    {}",
+                        names.into_iter().collect::<Vec<_>>().join(", ")
+                    )
+                    .unwrap();
+                }
+            }
+            doc_comment(body, &doc);
             let signature = if params.is_empty() {
                 String::new()
             } else {
                 format!("params({}).", params.join(", "))
             };
             writeln!(body, "sig {{ {signature}returns({returns}) }}\ndef {target}{method}({})\n  ::Baml::Bridge.call_async({}, {{{}}}){}\nend", required.join(", "), quote(wire), arguments.join(", "), if asynchronous { "" } else { ".wait" }).unwrap();
+        }
+    }
+}
+
+fn doc_comment(body: &mut String, doc: &str) {
+    for line in doc.lines() {
+        if line.is_empty() {
+            body.push_str("#\n");
+        } else {
+            writeln!(body, "# {line}").unwrap();
+        }
+    }
+}
+
+fn member_doc<'a>(
+    summary: Option<&str>,
+    section: &str,
+    members: impl Iterator<Item = (&'a str, Option<&'a str>)>,
+) -> String {
+    let mut doc = summary.unwrap_or_default().to_owned();
+    let members: Vec<_> = members.collect();
+    if members.iter().any(|(_, doc)| doc.is_some()) {
+        if !doc.is_empty() {
+            doc.push_str("\n\n");
+        }
+        write!(doc, "{section}:").unwrap();
+        for (name, comment) in members {
+            write!(doc, "\n    {name}").unwrap();
+            if let Some(comment) = comment {
+                let mut lines = comment.lines();
+                if let Some(first) = lines.next() {
+                    write!(doc, ": {first}").unwrap();
+                }
+                for line in lines {
+                    write!(doc, "\n        {line}").unwrap();
+                }
+            }
+        }
+    }
+    doc
+}
+
+fn throws_names(ty: &Ty, names: &mut BTreeSet<String>) {
+    match ty {
+        Ty::Union(items) => items.iter().for_each(|t| throws_names(t, names)),
+        Ty::Class(name, _) | Ty::Enum(name) | Ty::TypeAlias(name) => {
+            names.insert(name.name().to_string());
+        }
+        Ty::Never => {}
+        _ => {
+            names.insert(ty.to_string());
         }
     }
 }

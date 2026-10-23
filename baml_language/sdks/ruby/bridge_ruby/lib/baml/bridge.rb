@@ -26,6 +26,10 @@ module Baml
         Protocol.define_enum(wire, klass)
       end
 
+      def define_alias(wire, descriptor)
+        Protocol.define_alias(wire, descriptor)
+      end
+
       def define_function(wire, params:)
         Protocol.define_function(wire, params: params)
       end

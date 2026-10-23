@@ -2,6 +2,7 @@
 
 require "baml_bridge/cffi/v1/baml_inbound_pb"
 require "baml_bridge/cffi/v1/baml_outbound_pb"
+require_relative "../media"
 
 module Baml
   module Bridge
@@ -55,6 +56,7 @@ module Baml
       @names = {}
       @fields = {}
       @functions = {}
+      @aliases = {}
       module_function
 
       # The generator owns Ruby naming, including renamed fields. No constant
@@ -69,6 +71,10 @@ module Baml
         @types[name] = type
         @names[type] = name
         @fields[type] = nil
+      end
+
+      def define_alias(name, descriptor)
+        @aliases[name] = descriptor
       end
 
       def define_function(name, params:)
@@ -94,15 +100,23 @@ module Baml
 
       def encode_value(value, descriptor = nil, scope: nil)
         fields = case value
-                 when String then { string_value: value }
-                 when Integer then { int_value: value }
+                 when String
+                   bytes = encoding_hint(descriptor, :bytes) &&
+                           (!encoding_hint(descriptor, :string) || value.encoding == Encoding::BINARY)
+                   bytes ? { uint8array_value: value.b } : { string_value: value }
+                 when Integer
+                   value.between?(-(2**63), 2**63 - 1) ? { int_value: value } : { bigint_value: value.to_s(16) }
                  when Float then { float_value: value }
                  when true, false then { bool_value: value }
                  when nil then {}
                  when Array
-                   { list_value: Wire::InboundListValue.new(values: value.map { |item| encode_value(item, scope: scope) }) }
+                   hint = encoding_hint(descriptor, :list, 1)
+                   { list_value: Wire::InboundListValue.new(values: value.map { |item| encode_value(item, hint, scope: scope) }) }
                  when Hash
-                   { map_value: Wire::InboundMapValue.new(entries: value.map { |key, item| encode_entry(key, item, scope: scope) }) }
+                   hint = encoding_hint(descriptor, :map, 2)
+                   { map_value: Wire::InboundMapValue.new(entries: value.map { |key, item| encode_entry(key, item, hint, scope: scope) }) }
+                 when ::Baml::Media
+                   { media_value: encode_media(value) }
                  when ::Baml::Handle
                    raise Error, "BAML handles can only be sent inside a call" unless scope
 
@@ -112,6 +126,57 @@ module Baml
                    encode_registered_value(value, scope: scope)
                  end
         Wire::InboundValue.new(**fields)
+      end
+
+      # Only bytes affect value-based encoding. Keep both bytes and string
+      # hints through containers so a binary String can break a union tie.
+      def encoding_hint(descriptor, kind, index = nil, visiting = [])
+        return unless descriptor
+        if descriptor[0] == :alias
+          name = descriptor[1]
+          return if visiting.include?(name)
+
+          return encoding_hint(@aliases[name], kind, index, visiting + [name])
+        end
+        if descriptor[0] == :union
+          hints = descriptor[1].filter_map { |option| encoding_hint(option, kind, index, visiting) }
+          return if hints.empty?
+
+          return index ? [:union, hints] : true
+        end
+        return true if kind == :string && descriptor[0] == :literal && descriptor[1].is_a?(String)
+        return unless descriptor[0] == kind
+
+        index ? descriptor[index] : true
+      end
+
+      def encode_media(value)
+        kind = { ::Baml::Image => :IMAGE, ::Baml::Audio => :AUDIO, ::Baml::Video => :VIDEO, ::Baml::Pdf => :PDF }
+          .fetch(value.class) { raise UnsupportedTypeError, "BAML media kind #{value.class} is not supported" }
+        fields = { media: kind }
+        fields[:mime_type] = value.mime_type if value.mime_type
+        if value.url
+          fields[:url] = value.url
+        elsif value.name
+          fields[:file_content] = Wire::BamlValueMediaFileContent.new(name: value.name, base64: value.base64)
+        else
+          fields[:base64] = value.base64
+        end
+        Wire::BamlValueMedia.new(**fields)
+      end
+
+      def decode_media(media)
+        type = { IMAGE: ::Baml::Image, AUDIO: ::Baml::Audio, VIDEO: ::Baml::Video, PDF: ::Baml::Pdf }[media.media]
+        raise UnsupportedTypeError, "BAML media kind #{media.media} is not supported" unless type
+
+        mime = media.has_mime_type? ? media.mime_type : nil
+        case media.value
+        when :url then type.from_url(media.url, mime_type: mime)
+        when :base64 then type.from_base64(media.base64, mime_type: mime)
+        when :file_content
+          type.from_file_content(media.file_content.name, media.file_content.base64, mime_type: mime)
+        else raise Error, "BAML returned media with no content"
+        end
       end
 
       def encode_registered_value(value, scope: nil)
@@ -135,8 +200,14 @@ module Baml
       def encode_entry(key, value, descriptor = nil, scope: nil)
         fields = case key
                  when String then { string_key: key }
+                 when Integer then { int_key: key }
+                 when true, false then { bool_key: key }
                  else
-                   raise UnsupportedTypeError, "BAML map key kind #{key.class} is not yet supported"
+                   encoded = encode_value(key)
+                   unless encoded.value == :enum_value
+                     raise UnsupportedTypeError, "BAML map key kind #{key.class} is not yet supported"
+                   end
+                   { enum_key: encoded.enum_value }
                  end
         Wire::InboundMapEntry.new(**fields, value: encode_value(value, descriptor, scope: scope))
       end
@@ -192,6 +263,12 @@ module Baml
         case value.value
         when :string_value, :int_value, :float_value, :bool_value
           value.public_send(value.value)
+        when :uint8array_value
+          value.uint8array_value.b
+        when :bigint_value
+          Integer(value.bigint_value, 16)
+        when :media_value
+          decode_media(value.media_value)
         when :handle_value
           handle = value.handle_value
           if %i[HOST_VALUE_CALLABLE HOST_VALUE_OPAQUE].include?(handle.handle_type)
@@ -228,6 +305,8 @@ module Baml
             literal.public_send(literal.literal)
           when :float_value
             Float(literal.float_value)
+          when :bigint_value
+            Integer(literal.bigint_value, 16)
           else
             raise UnsupportedTypeError, "BAML literal kind #{literal.literal.inspect} is not yet supported"
           end
@@ -238,15 +317,42 @@ module Baml
 
       def decode_map_key(key, type)
         case type&.ty
+        when :enum
+          registered_type(type.enum.name).deserialize(key)
+        when :enum_variant
+          registered_type(type.enum_variant.name).deserialize(key)
+        when :union, :type_alias, :never
+          # Current compiler map keys (including aliases and literal unions)
+          # denote strings. Legacy integer, bool and enum keys retain their
+          # explicit wire cases below.
+          key
         when :primitive
           case type.primitive.kind
           when :BAML_TY_PRIMITIVE_STRING then key
+          when :BAML_TY_PRIMITIVE_INT, :BAML_TY_PRIMITIVE_BIGINT then Integer(key, 10)
+          when :BAML_TY_PRIMITIVE_BOOL then decode_bool_key(key)
           else
             raise UnsupportedTypeError, "BAML map key type #{type.primitive.kind} is not yet supported"
+          end
+        when :literal
+          # The generator types literal keys as their primitive (String, Integer, T::Boolean).
+          case type.literal.literal
+          when :string_value then key
+          when :int_value, :bigint_value then Integer(key, 10)
+          when :bool_value then decode_bool_key(key)
+          else
+            raise UnsupportedTypeError, "BAML map key literal #{type.literal.literal} is not yet supported"
           end
         else
           raise UnsupportedTypeError, "BAML map key type #{type&.ty.inspect} is not yet supported"
         end
+      end
+
+      def decode_bool_key(key)
+        return true if key == "true"
+        return false if key == "false"
+
+        raise Error, "BAML returned an invalid bool map key #{key.inspect}"
       end
 
       def raise_failure(error_class, value, api = nil, handles: nil)

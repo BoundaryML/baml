@@ -32,6 +32,7 @@ pub(crate) fn emit(
         writeln!(root, "module {module}; end").unwrap();
     }
     root.push_str(&emitter.shells);
+    root.push_str(&emitter.aliases);
     let mut files = HashMap::new();
     for (module, body) in namespaces {
         // Ruby constants never start with underscores, so namespaces cannot

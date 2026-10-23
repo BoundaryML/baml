@@ -1,6 +1,6 @@
 #[cfg(test)]
 sdk_test_harness_runner::ruby_sorbet::test_suite! {
-    fixture docstrings_etc { minitest: later, sorbet: later }
+    fixture docstrings_etc { minitest: on, sorbet: on }
     fixture function_calls { minitest: on, sorbet: on }
     fixture llm_functions { minitest: on, sorbet: on }
     fixture type_shapes { minitest: on, sorbet: on }
