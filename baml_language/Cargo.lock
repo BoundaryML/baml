@@ -633,6 +633,7 @@ version = "0.22.2"
 dependencies = [
  "hex",
  "indexmap",
+ "libc",
  "libloading 0.8.9",
  "num-bigint",
  "prost",
@@ -2084,6 +2085,7 @@ dependencies = [
  "strsim",
  "thiserror 2.0.18",
  "toml 0.8.23",
+ "tracing",
 ]
 
 [[package]]

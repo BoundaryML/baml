@@ -167,11 +167,7 @@ impl TelemetryRecording {
     /// environment. Embedded credentials never fall back to an ambient login or key.
     pub fn from_artifact(policy: &ArtifactTelemetry) -> Result<Self, EngineError> {
         use btel_settings::artifact::IngestionSelection;
-        if policy
-            .resolve_level()
-            .map_err(|error| EngineError::Other(error.to_string()))?
-            .is_none()
-        {
+        if policy.resolve_level().is_none() {
             return Ok(Self::user_files(RecordingConfig::default()));
         }
         let selection = policy
@@ -181,10 +177,15 @@ impl TelemetryRecording {
         {
             return Ok(Self::user_files(RecordingConfig::default()));
         }
-        let endpoint =
-            bcs_api::Endpoint::with_default(policy.api_url.as_deref()).map_err(|error| {
-                artifact_configuration_error(policy, None, CredentialSource::Configured, error)
-            })?;
+        // An unusable endpoint must not stop the program. Record locally, as
+        // without cloud credentials.
+        let endpoint = match bcs_api::Endpoint::with_default(policy.api_url.as_deref()) {
+            Ok(endpoint) => endpoint,
+            Err(error) => {
+                tracing::debug!(%error, "cloud telemetry disabled; recording locally");
+                return Ok(Self::user_files(RecordingConfig::default()));
+            }
+        };
         let (credential, target, source, build_id) = match selection {
             IngestionSelection::Embedded(embedded) => (
                 embedded.token.expose().to_owned(),

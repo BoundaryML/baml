@@ -136,17 +136,22 @@ BAML_TELEMETRY = "ACME_TELEMETRY"
     assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n");
     assert_eq!(String::from_utf8_lossy(&output.stderr), "");
 
-    let output = Command::new(&bin)
-        .env("ACME_TELEMETRY", "invalid")
-        .env("BOUNDARY_API_KEY", "local")
-        .output()
-        .unwrap();
-    assert!(!output.status.success());
-    assert_eq!(
-        String::from_utf8_lossy(&output.stderr),
-        r#"error: failed to initialize engine: ACME_TELEMETRY must be off, low, medium, or high.
-"#
-    );
+    // A value that is not a level never stops the program, and records nothing.
+    for level in ["false", "invalid"] {
+        let output = Command::new(&bin)
+            .env("ACME_TELEMETRY", level)
+            .env("BOUNDARY_API_KEY", "bdry_secret_test")
+            .env("BOUNDARY_API_URL", server.uri())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{level}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "7\n");
+        assert_eq!(String::from_utf8_lossy(&output.stderr), "");
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

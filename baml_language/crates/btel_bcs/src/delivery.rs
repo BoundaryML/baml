@@ -965,7 +965,6 @@ impl BcsDelivery {
                     let client = Client::builder()
                         .redirect(reqwest::redirect::Policy::none())
                         .retry(reqwest::retry::never())
-                        .no_proxy()
                         .timeout(worker_shared.config.request_timeout)
                         .build()
                         .map_err(|_| DeliveryError::Http)?;

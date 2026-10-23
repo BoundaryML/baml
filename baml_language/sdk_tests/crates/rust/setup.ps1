@@ -50,10 +50,10 @@ Get-ChildItem -Directory | ForEach-Object {
             Write-Host "==> skipping $($_.Name)/generated (no Cargo.toml - codegen failed?)"
             return
         }
-        Write-Host "==> cargo test --no-run in $($_.Name)/generated"
+        Write-Host "==> cargo test --no-run --all-features in $($_.Name)/generated"
         Push-Location $generated
         try {
-            cargo test --no-run --manifest-path Cargo.toml
+            cargo test --no-run --manifest-path Cargo.toml --all-features
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         } finally {
             Pop-Location

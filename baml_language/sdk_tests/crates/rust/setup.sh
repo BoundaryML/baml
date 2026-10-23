@@ -58,8 +58,8 @@ for fixture_dir in */generated; do
         echo "==> skipping $fixture_dir (no Cargo.toml — codegen failed?)"
         continue
     fi
-    echo "==> cargo test --no-run in $fixture_dir"
-    (cd "$fixture_dir" && cargo test --no-run --manifest-path Cargo.toml)
+    echo "==> cargo test --no-run --all-features in $fixture_dir"
+    (cd "$fixture_dir" && cargo test --no-run --manifest-path Cargo.toml --all-features)
 done
 
 # Per-run breadcrumb for the in-test guard. nextest reads $NEXTEST_ENV

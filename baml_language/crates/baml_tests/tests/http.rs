@@ -3,6 +3,11 @@
 //! Tests here use insta snapshots (bytecode and/or traceback text), which
 //! cannot be expressed in BAML.
 
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
+
 use baml_tests::baml_test;
 use bex_engine::BexExternalValue;
 use wiremock::{
@@ -457,6 +462,87 @@ async fn http_non_positive_timeout_is_no_limit() {
         output.result,
         Ok(BexExternalValue::String("body|body".into()))
     );
+}
+
+/// A keep-alive HTTP/1.1 server that answers every request with `ok`, and the
+/// number of connections it has accepted.
+async fn counting_server() -> (
+    tokio::task::JoinHandle<()>,
+    std::net::SocketAddr,
+    Arc<AtomicUsize>,
+) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let accepted = Arc::new(AtomicUsize::new(0));
+    let counter = Arc::clone(&accepted);
+    let server = tokio::spawn(async move {
+        while let Ok((mut conn, _)) = listener.accept().await {
+            counter.fetch_add(1, Ordering::SeqCst);
+            tokio::spawn(async move {
+                // The requests are bodiless GETs, so each ends at a blank line.
+                let mut pending = Vec::new();
+                let mut buf = [0; 1024];
+                while let Ok(n @ 1..) = conn.read(&mut buf).await {
+                    pending.extend_from_slice(&buf[..n]);
+                    while let Some(end) = pending.windows(4).position(|w| w == b"\r\n\r\n") {
+                        pending.drain(..end + 4);
+                        let response = b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\nok";
+                        if conn.write_all(response).await.is_err() {
+                            return;
+                        }
+                    }
+                }
+            });
+        }
+    });
+    (server, addr, accepted)
+}
+
+#[tokio::test]
+async fn http_requests_reuse_connections() {
+    let (server, addr, accepted) = counting_server().await;
+
+    // `fetch` and `send` under the default limits share one connection.
+    let output = baml_test!(&format!(
+        r#"
+        function main() -> int {{
+            let ok = 0;
+            for (let i = 0; i < 5; i += 1) {{
+                if (baml.http.fetch("http://{addr}/").text() == "ok") {{ ok += 1; }}
+                let req = baml.http.Request.from_url("http://{addr}/").set_method("GET");
+                if (baml.http.send(req).text() == "ok") {{ ok += 1; }}
+            }}
+            ok
+        }}
+        "#
+    ));
+    assert_eq!(output.result, Ok(BexExternalValue::Int(10)));
+    assert_eq!(accepted.load(Ordering::SeqCst), 1);
+
+    // The total limit is set per request, so changing it keeps the
+    // connection. A different connect limit opens one more connection, and
+    // later requests with that limit reuse it.
+    let output = baml_test!(&format!(
+        r#"
+        function main() -> int {{
+            let ok = 0;
+            for (let i = 0; i < 3; i += 1) {{
+                let total = baml.time.Duration.from_seconds(7);
+                if (baml.http.fetch("http://{addr}/", timeout = total).text() == "ok") {{ ok += 1; }}
+                let req = baml.http.Request.from_url("http://{addr}/")
+                    .set_method("GET")
+                    .set_connect_timeout(baml.time.Duration.from_seconds(3));
+                if (baml.http.send(req).text() == "ok") {{ ok += 1; }}
+            }}
+            ok
+        }}
+        "#
+    ));
+    server.abort();
+    assert_eq!(output.result, Ok(BexExternalValue::Int(6)));
+    assert_eq!(accepted.load(Ordering::SeqCst), 2);
 }
 
 #[tokio::test]

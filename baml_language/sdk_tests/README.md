@@ -48,7 +48,7 @@ cargo nextest run -p sdk_test_typescript function_calls::vitest_node
 # rust: run tests matching a name filter (set CARGO_TARGET_DIR to reuse the
 # shared build cache the nextest-driven runs populate).
 cargo nextest run -p sdk_test_rust function_calls::cargo_test
-(cd sdk_tests/crates/rust/function_calls/generated && CARGO_TARGET_DIR=../../../../../target/sdk-rust-target cargo test optional_args)
+(cd sdk_tests/crates/rust/function_calls/generated && CARGO_TARGET_DIR=../../../../../target/sdk-rust-target cargo test --all-features optional_args)
 ```
 
 ### Rust port gating
