@@ -10,13 +10,12 @@
 
 use std::sync::Arc;
 
-use rustc_hash::FxHashMap;
-
 use bex_heap::TlabHolder;
 use bex_vm_types::{
     MapData, Object, RealizedTy, Value,
     types::{Array, Map},
 };
+use rustc_hash::FxHashMap;
 
 use crate::{BexVm, errors::VmRustFnError};
 

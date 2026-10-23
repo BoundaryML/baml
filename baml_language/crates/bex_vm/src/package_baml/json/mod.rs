@@ -2,10 +2,10 @@
 //! `_`-prefixed natives behind `decode<T>`, `from`, `stringify`, `to<T>`, and
 //! the structural decode that `OpenAI` structured outputs use.
 //!
-//! No path goes through a `serde_json::Value`: [`text`] reads JSON text into
-//! VM values, [`decode_text`] reads it straight into a declared type,
-//! [`decode`] decodes `json` values into one, [`encode`] writes VM values
-//! as text or as `json` values, and [`path`] walks a `path<T>` selector.
+//! No path goes through a `serde_json::Value`: `text` reads JSON text into
+//! VM values, `decode_text` reads it straight into a declared type,
+//! `decode` decodes `json` values into one, `encode` writes VM values
+//! as text or as `json` values, and `path` walks a `path<T>` selector.
 //!
 //! The generic natives read their type-arg `T` from
 //! `vm.current_call_type_args()`, populated by the call-instruction handler

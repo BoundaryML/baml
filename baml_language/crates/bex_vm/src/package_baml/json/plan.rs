@@ -6,9 +6,8 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-use rustc_hash::FxHashMap;
-
 use bex_vm_types::{HeapPtr, Object, RealizedTy, TypeHead};
+use rustc_hash::FxHashMap;
 use sys_types::JsonNaming;
 
 use crate::BexVm;
