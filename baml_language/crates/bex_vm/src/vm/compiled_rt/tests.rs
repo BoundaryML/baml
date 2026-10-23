@@ -1236,39 +1236,43 @@ const CALLBACK = () -> int { 42 };
 function Main() -> int { CALLBACK() }
 "#;
     for opt in [OptLevel::Zero, OptLevel::One, OptLevel::Two] {
+        let program = baml_test_support::compile_source_with_opt(SOURCE, opt);
+        let package = &program.packages[program.root as usize];
+        let slot = package
+            .globals
+            .iter()
+            .find_map(|(path, cell)| {
+                matches!(path, DeclPath::Let(name) if name.name.as_str() == "CALLBACK")
+                    .then_some(package.slot_base.raw() + *cell as usize)
+            })
+            .unwrap();
+        SLOT.store(slot, Ordering::Relaxed);
+        let entry = program.rendered_callables()["user.Main"].object;
+        let Object::Function(function) = &program.objects[entry] else {
+            unreachable!()
+        };
+        CALL_PC.store(
+            function
+                .bytecode
+                .instructions
+                .iter()
+                .position(|instruction| {
+                    matches!(instruction, bex_vm_types::Instruction::CallIndirect)
+                })
+                .unwrap(),
+            Ordering::Relaxed,
+        );
+        let globals = program.globals.len();
         for case in 0..5 {
             let mut errors = Vec::new();
             for compiled in [false, true] {
-                let mut program = baml_test_support::compile_source_with_opt(SOURCE, opt);
-                let package = &program.packages[program.root as usize];
-                let slot = package
-                    .globals
-                    .iter()
-                    .find_map(|(path, cell)| {
-                        matches!(path, DeclPath::Let(name) if name.name.as_str() == "CALLBACK")
-                            .then_some(package.slot_base.raw() + *cell as usize)
-                    })
-                    .unwrap();
-                SLOT.store(slot, Ordering::Relaxed);
-                let entry = program.rendered_callables()["user.Main"].object;
+                let mut program = program.clone();
                 let Object::Function(function) = &mut program.objects[entry] else {
                     unreachable!()
                 };
-                CALL_PC.store(
-                    function
-                        .bytecode
-                        .instructions
-                        .iter()
-                        .position(|instruction| {
-                            matches!(instruction, bex_vm_types::Instruction::CallIndirect)
-                        })
-                        .unwrap(),
-                    Ordering::Relaxed,
-                );
                 if compiled {
                     function.compiled_body = Some(test_body(main, 0));
                 }
-                let globals = program.globals.len();
                 let mut vm =
                     BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
                 vm.telemetry = None;
@@ -1475,64 +1479,40 @@ fn compiled_trace_hooks_record_as_bytecode_does() {
     static FALLBACK: AtomicU32 = AtomicU32::new(0);
     static DECIDE: AtomicU32 = AtomicU32::new(0);
     static BOOM: AtomicU32 = AtomicU32::new(0);
-    fn mode(
-        vm: &mut BexVm,
-        fr: &FrameRecord,
-        n: Value,
-        mode: TraceHookMode,
-        add: i64,
-    ) -> BodyResult {
-        vm.builtin_trace_hook(fr, mode)?;
-        Ok(Value::int(test_int(n) + add))
-    }
-    fn hidden(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
-        mode(vm, fr, args[0], TraceHookMode::Hidden, 1)
-    }
-    fn timing(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
-        mode(vm, fr, args[0], TraceHookMode::Timing, 2)
-    }
-    fn span(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
-        mode(vm, fr, args[0], TraceHookMode::Span, 3)
-    }
-    fn empty(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
-        mode(vm, fr, args[0], TraceHookMode::EmptySpan, 4)
-    }
-    // The prologue MIR lowers a declaration hook to: settings =
-    // TraceHookSettings; if settings != null { result = hook(n, settings);
-    // ApplyTraceHook(result) }.
-    fn with_hook(
-        vm: &mut BexVm,
-        fr: &FrameRecord,
-        n: Value,
-        hook: &AtomicU32,
-        add: i64,
-    ) -> BodyResult {
-        let settings = vm.compiled_begin_trace_hook(fr, true)?;
-        if !settings.is_null() {
-            let callee = object(vm, hook);
-            vm.push_arg(n);
-            vm.push_arg(settings);
-            let result = vm.suspend(Step::Call { callee, argc: 2 })?;
-            vm.compiled_finish_trace_hook(fr, result)?;
+    fn traced<const MODE: usize>(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
+        let n = args[0];
+        if MODE < 4 {
+            vm.builtin_trace_hook(
+                fr,
+                [
+                    TraceHookMode::Hidden,
+                    TraceHookMode::Timing,
+                    TraceHookMode::Span,
+                    TraceHookMode::EmptySpan,
+                ][MODE],
+            )?;
+        } else {
+            let settings = vm.compiled_begin_trace_hook(fr, true)?;
+            if !settings.is_null() {
+                let callee = object(vm, if MODE == 4 { &DECIDE } else { &BOOM });
+                vm.push_arg(n);
+                vm.push_arg(settings);
+                let result = vm.suspend(Step::Call { callee, argc: 2 })?;
+                vm.compiled_finish_trace_hook(fr, result)?;
+            }
         }
-        Ok(Value::int(test_int(n) + add))
-    }
-    fn hooked(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
-        with_hook(vm, fr, args[0], &DECIDE, 5)
-    }
-    fn fallback(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
-        with_hook(vm, fr, args[0], &BOOM, 6)
+        Ok(Value::int(test_int(n) + i64::try_from(MODE + 1).unwrap()))
     }
     fn mid(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
         let n = args[0];
         let mut total = 0;
         for (index, body) in [
-            (&HIDDEN, hidden as CompiledFn),
-            (&TIMING, timing),
-            (&SPAN, span),
-            (&EMPTY, empty),
-            (&HOOKED, hooked),
-            (&FALLBACK, fallback),
+            (&HIDDEN, traced::<0> as CompiledFn),
+            (&TIMING, traced::<1>),
+            (&SPAN, traced::<2>),
+            (&EMPTY, traced::<3>),
+            (&HOOKED, traced::<4>),
+            (&FALLBACK, traced::<5>),
         ] {
             let callee = object(vm, index);
             total += test_int(vm.call_compiled(fr, callee, body, &[], &[n], 0)?);
@@ -1566,12 +1546,12 @@ fn compiled_trace_hooks_record_as_bytecode_does() {
         }
     "#;
     const BODIES: &[(&str, CompiledFn)] = &[
-        ("user.Hidden", hidden),
-        ("user.Timing", timing),
-        ("user.Span", span),
-        ("user.Empty", empty),
-        ("user.Hooked", hooked),
-        ("user.Fallback", fallback),
+        ("user.Hidden", traced::<0>),
+        ("user.Timing", traced::<1>),
+        ("user.Span", traced::<2>),
+        ("user.Empty", traced::<3>),
+        ("user.Hooked", traced::<4>),
+        ("user.Fallback", traced::<5>),
         ("user.Mid", mid),
     ];
     const OBJECTS: &[(&str, &AtomicU32)] = &[
