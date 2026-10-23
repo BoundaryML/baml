@@ -751,6 +751,11 @@ impl BexHeap {
         // `replace` moves the object out and installs the tombstone in one
         // step; the slot is never left uninitialized.
         let obj = unsafe { std::ptr::replace(old_ptr.as_ptr(), Object::Tombstone) };
+        debug_assert!(
+            !matches!(obj, Object::Tombstone),
+            "the collector reached a tombstone at {old_ptr:?}: a stale pointer, or a \
+             reservation dropped or held unpublished across a collection"
+        );
 
         // Append to the destination space and get a pointer to the new location.
         // SAFETY: GC runs at safepoints, no VMs are executing.
@@ -1778,11 +1783,7 @@ impl BexHeap {
 /// The heap edges a declaration's [`Owner`](bex_vm_types::types::Owner)
 /// carries: its package, or the witness rules an anonymous declaration holds.
 fn owner_edges(owner: &bex_vm_types::types::Owner) -> impl Iterator<Item = HeapPtr> + '_ {
-    match owner {
-        bex_vm_types::types::Owner::Package(package) => std::slice::from_ref(package).iter(),
-        bex_vm_types::types::Owner::Anonymous { witnesses } => witnesses.iter(),
-    }
-    .copied()
+    owner.edges().iter().copied()
 }
 
 fn trace_owner(owner: &bex_vm_types::types::Owner, worklist: &mut Vec<HeapPtr>) {
@@ -1790,11 +1791,7 @@ fn trace_owner(owner: &bex_vm_types::types::Owner, worklist: &mut Vec<HeapPtr>) 
 }
 
 fn forward_owner(owner: &mut bex_vm_types::types::Owner, forwarding: &HashMap<HeapPtr, HeapPtr>) {
-    let edges: &mut dyn Iterator<Item = &mut HeapPtr> = match owner {
-        bex_vm_types::types::Owner::Package(package) => &mut std::iter::once(package),
-        bex_vm_types::types::Owner::Anonymous { witnesses } => &mut witnesses.iter_mut(),
-    };
-    for ptr in edges {
+    for ptr in owner.edges_mut() {
         if let Some(&new_ptr) = forwarding.get(ptr) {
             *ptr = new_ptr;
         }
@@ -3868,6 +3865,58 @@ mod tests {
         assert_eq!(
             heap.take_pending_finalizers(),
             vec![(forwarding[&older], forwarding[&finalizer])]
+        );
+    }
+
+    /// Publishing an instance of a class with a finalizer registers it, as
+    /// allocating one does.
+    #[test]
+    fn a_published_finalizable_instance_is_finalized() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let finalizer = tlab.alloc_string("cleanup".to_string());
+        let class = tlab.alloc(class_object(Some(finalizer)));
+        heap.note_finalizable_class();
+        let reservation = tlab.reserve();
+        // SAFETY: no collection has run since the reservation.
+        let instance = unsafe {
+            tlab.publish(
+                reservation,
+                Object::Instance(bex_vm_types::types::Instance::new(
+                    class,
+                    Box::new([]),
+                    vec![],
+                )),
+            )
+        };
+
+        let (_, _, forwarding) = unsafe { heap.collect_garbage(&[]) };
+        assert_eq!(
+            heap.take_pending_finalizers(),
+            vec![(forwarding[&instance], forwarding[&finalizer])]
+        );
+    }
+
+    /// An instance can name a class that is still only reserved; it is
+    /// allocated against the tombstone, so nothing registers it. Publishing
+    /// the class with a finalizer invalidates the list, and the next
+    /// collection finds the instance.
+    #[test]
+    fn publishing_a_class_with_a_finalizer_finds_its_earlier_instances() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let finalizer = tlab.alloc_string("cleanup".to_string());
+        let reservation = tlab.reserve();
+        let early = tlab.alloc_instance(reservation.ptr(), vec![]);
+        assert!(finalizable_entries(&heap).is_empty());
+
+        // SAFETY: no collection has run since the reservation.
+        unsafe { tlab.publish(reservation, class_object(Some(finalizer))) };
+
+        let (_, _, forwarding) = unsafe { heap.collect_garbage(&[]) };
+        assert_eq!(
+            heap.take_pending_finalizers(),
+            vec![(forwarding[&early], forwarding[&finalizer])]
         );
     }
 

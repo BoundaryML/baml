@@ -116,12 +116,13 @@ pub struct HeapStats {
 ///
 /// Kept by:
 /// - [`BexHeap::register_finalizable`], called when such an instance is
-///   allocated ([`Tlab::alloc`](crate::Tlab::alloc)) or written in place
-///   (the VM's `ObjectMut`). That covers compile-time classes, runtime-compiled
-///   and session classes (a graft allocates a new class object before any
-///   instance of it exists), and an instance whose class changes.
-/// - [`BexHeap::invalidate_finalizable_instances`], when an existing class
-///   gains a finalizer: its older instances were never registered, so the next
+///   allocated ([`Tlab::alloc`](crate::Tlab::alloc)) or, through
+///   [`BexHeap::note_rewrite`], written in place (the VM's `ObjectMut`, or
+///   [`Tlab::publish`](crate::Tlab::publish) filling a reservation). That
+///   covers compile-time classes, runtime-compiled and session classes, and an
+///   instance whose class changes.
+/// - [`BexHeap::invalidate_finalizable_instances`], when a rewrite gives a
+///   class a finalizer: instances of it may exist, unregistered, so the next
 ///   collection rebuilds the list from a walk of every generation, before it
 ///   moves anything.
 /// - Every collection, which moves entries to their new addresses (promotions
@@ -131,6 +132,34 @@ pub struct HeapStats {
 pub(crate) struct FinalizableInstances {
     pub(crate) instances: Vec<HeapPtr>,
     pub(crate) stale: bool,
+}
+
+/// What an object is to the collector's finalizable list (BEP-042). An
+/// in-place rewrite that changes it must be reported with
+/// [`BexHeap::note_rewrite`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Finalizable {
+    Neither,
+    /// An instance of a class with a `cleanup` finalizer.
+    Instance,
+    /// A class with a `cleanup` finalizer.
+    Class,
+}
+
+impl Finalizable {
+    /// What `object` is to the finalizable list.
+    ///
+    /// # Safety
+    ///
+    /// As for [`BexHeap::needs_finalizer_registration`].
+    pub unsafe fn of(object: &Object) -> Self {
+        match object {
+            Object::Class(class) if class.cleanup.is_some() => Self::Class,
+            // SAFETY: the caller guarantees an instance's class object is live.
+            _ if unsafe { BexHeap::needs_finalizer_registration(object) } => Self::Instance,
+            _ => Self::Neither,
+        }
+    }
 }
 
 /// Unified heap for the BEX virtual machine.
@@ -1264,6 +1293,23 @@ impl BexHeap {
         };
         // SAFETY: the caller guarantees the class object is live.
         matches!(unsafe { instance.class.get() }, Object::Class(class) if class.cleanup.is_some())
+    }
+
+    /// BEP-042: keep the finalizable list complete after the object at `ptr`
+    /// was rewritten in place, from an object that was `before` to one that
+    /// is `after`. An object that became a finalizable instance is
+    /// registered. One that became a class with a finalizer invalidates the
+    /// list: instances of it may already exist, unregistered, since an
+    /// instance is checked against its class only when it is allocated.
+    pub fn note_rewrite(&self, ptr: HeapPtr, before: Finalizable, after: Finalizable) {
+        if after == before {
+            return;
+        }
+        match after {
+            Finalizable::Instance => self.register_finalizable(ptr),
+            Finalizable::Class => self.invalidate_finalizable_instances(),
+            Finalizable::Neither => {}
+        }
     }
 
     /// BEP-042: record `instance`, an instance of a class with a `cleanup`

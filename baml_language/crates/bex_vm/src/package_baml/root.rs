@@ -947,7 +947,7 @@ fn deep_copy_value_recursive(
                     let element_ty = values.element_ty.as_ref().clone();
                     let placeholder_ptr = vm
                         .tlab
-                        .alloc(Object::Array(Array::new(element_ty.clone(), Vec::new())));
+                        .alloc(Object::Array(Array::new(element_ty, Vec::new())));
                     copied_objects.insert(ptr, placeholder_ptr);
 
                     // Snapshot under the source's lock; the recursive call
@@ -958,9 +958,11 @@ fn deep_copy_value_recursive(
                         new_values.push(deep_copy_value_recursive(vm, value, copied_objects)?);
                     }
 
-                    // no GC write barrier because it is all in gen0
-                    *vm.get_object_mut(placeholder_ptr) =
-                        Object::Array(Array::new(element_ty, new_values));
+                    // No write barrier: the copy and its elements are all in gen0.
+                    let Object::Array(array) = vm.get_object(placeholder_ptr) else {
+                        unreachable!("the placeholder was allocated as an array")
+                    };
+                    array.lock_mut(vm.tlab.alloc_debt()).extend(new_values);
                     placeholder_ptr
                 }
 
@@ -969,8 +971,8 @@ fn deep_copy_value_recursive(
                     let key_ty = map.key_ty.as_ref().clone();
                     let value_ty = map.value_ty.as_ref().clone();
                     let placeholder_ptr = vm.tlab.alloc(Object::Map(Map::new(
-                        key_ty.clone(),
-                        value_ty.clone(),
+                        key_ty,
+                        value_ty,
                         bex_vm_types::MapData::new(),
                     )));
                     copied_objects.insert(ptr, placeholder_ptr);
@@ -983,32 +985,34 @@ fn deep_copy_value_recursive(
                         new_map.insert_hashed(entry.hash, new_key, new_value);
                     }
 
-                    // no GC write barrier because it is all in gen0
-                    *vm.get_object_mut(placeholder_ptr) =
-                        Object::Map(Map::new(key_ty, value_ty, new_map));
+                    // No write barrier: the copy and its entries are all in gen0.
+                    let Object::Map(map) = vm.get_object(placeholder_ptr) else {
+                        unreachable!("the placeholder was allocated as a map")
+                    };
+                    let mut entries = map.lock_mut(vm.tlab.alloc_debt());
+                    **entries = new_map;
+                    drop(entries);
                     placeholder_ptr
                 }
 
                 Object::Instance(instance) => {
+                    // The copy starts with every field null and is filled slot by
+                    // slot: a field may reach back to this instance.
                     let placeholder_ptr = vm.tlab.alloc(Object::Instance(Instance::new(
                         instance.class,
                         instance.class_type_args.to_vec().into_boxed_slice(),
-                        Vec::new(),
+                        vec![Value::NULL; instance.fields.len()],
                     )));
                     copied_objects.insert(ptr, placeholder_ptr);
 
-                    let mut new_fields = Vec::with_capacity(instance.fields.len());
-                    for field in instance.field_values() {
-                        new_fields.push(deep_copy_value_recursive(vm, field, copied_objects)?);
+                    for (slot, field) in instance.field_values().enumerate() {
+                        let copied = deep_copy_value_recursive(vm, field, copied_objects)?;
+                        let Object::Instance(copy) = vm.get_object(placeholder_ptr) else {
+                            unreachable!("the placeholder was allocated as an instance")
+                        };
+                        // No write barrier: the copy and its fields are all in gen0.
+                        copy.store_field(slot, copied);
                     }
-
-                    let new_instance = Instance::new(
-                        instance.class,
-                        instance.class_type_args.to_vec().into_boxed_slice(),
-                        new_fields,
-                    );
-                    // no GC write barrier because it is all in gen0
-                    *vm.get_object_mut(placeholder_ptr) = Object::Instance(new_instance);
                     placeholder_ptr
                 }
 

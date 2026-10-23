@@ -7476,7 +7476,10 @@ impl BexEngine {
             ));
         };
         let (history, visible, mounts, sequence) = {
-            let mut metered = vm.get_object_mut(package_ptr);
+            // SAFETY: the session's `busy` lease, acquired just above, keeps
+            // every other eval from writing the package; it does not keep
+            // readers out. See the `BUG:` on `BexVm::get_object_mut`.
+            let mut metered = unsafe { vm.get_object_mut(package_ptr) };
             let Object::Package(package) = &mut *metered else {
                 return Err(invalid(
                     "Session has an invalid runtime payload".to_string(),

@@ -80,9 +80,11 @@ pub use gc::{CollectionLevel, GcStats};
 #[cfg(feature = "gc_profiling")]
 pub use gc_profile::GcHeapSnapshot;
 pub use gc_profile::{GcCycleProfiler, GcProfile};
-pub use heap::{BexHeap, DEFAULT_TLAB_SIZE, Generation, HeapStats, UnhandledSpawnError};
+pub use heap::{
+    BexHeap, DEFAULT_TLAB_SIZE, Finalizable, Generation, HeapStats, UnhandledSpawnError,
+};
 pub(crate) use heap_debugger::{HeapDebuggerConfig, HeapDebuggerState};
 pub use heap_guard::{
     ActiveHeapPermit, HeapGuard, HeapPermit, HeapPermitManager, InactiveHeapPermit,
 };
-pub use tlab::{SETTLE_QUANTUM, Tlab, TlabHolder};
+pub use tlab::{Reservation, SETTLE_QUANTUM, Tlab, TlabHolder};

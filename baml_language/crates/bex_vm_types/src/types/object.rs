@@ -124,10 +124,12 @@ pub enum Object {
     /// type by construction.
     Type(Box<crate::types::TypeValue>),
 
-    /// What is left in a slot whose object is gone: a collection moved it to
-    /// another space. Nothing live points at a tombstone, so one is only ever
-    /// seen by code that walks slots by position; reaching one by following a
-    /// reference is a use-after-free.
+    /// What is in a slot with no object: one a collection moved to another
+    /// space, or one reserved and not yet published (`bex_heap::Reservation`).
+    /// Nothing live points at a tombstone, except a member of a reserved group
+    /// naming a sibling that is published before anything reads it; so one is
+    /// only ever seen by code that walks slots by position, and reaching one by
+    /// following a reference is a use-after-free.
     Tombstone,
 
     #[cfg(feature = "heap_debug")]

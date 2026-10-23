@@ -300,18 +300,12 @@ pub(super) fn register_class_witnesses(
             .heap()
             .write_barrier(class_ptr, Value::object(*rule));
     }
-    let mut metered = vm.get_object_mut(class_ptr);
-    let Object::Class(class) = &mut *metered else {
+    let Object::Class(class) = vm.get_object(class_ptr) else {
         unreachable!("witnessed class placeholder changed variant")
     };
-    let bex_vm_types::types::Owner::Anonymous { witnesses } = &mut class.owner else {
-        unreachable!("a minted class belongs to no package")
-    };
-    debug_assert!(
-        witnesses.is_empty(),
-        "a class's witnesses are registered once"
-    );
-    witnesses.extend(entries.iter().map(|(_, rule)| *rule));
+    class
+        .owner
+        .set_witnesses(entries.iter().map(|(_, rule)| *rule).collect());
     for (interface, rule) in entries {
         vm.dynamic_dispatch
             .register_rule(interface, class_ptr, rule);

@@ -2,14 +2,20 @@
 //!
 //! # Unsafe Code
 //!
-//! This module uses unsafe code for direct heap access during instruction execution:
-//! - `heap.get_object(idx)`: Reading objects for type checks, field access, method dispatch
-//! - `get_object_mut()`: Mutating object fields through `&mut self`
+//! This module uses unsafe code for direct heap access during instruction
+//! execution: `get_object(ptr)` dereferences a `HeapPtr` to read an object for
+//! type checks, field access and method dispatch. A published object is never
+//! written through `&mut Object`: its mutable parts synchronize themselves
+//! (`LockedContainer`, `AtomicValueSlot`, `Future::settle_*`). The
+//! exceptions are a `Reservation`, written once before it is published, and
+//! [`BexVm::get_object_mut`], whose `unsafe` protocols cover packages and
+//! classes under construction (see its contract).
 //!
 //! Safety is ensured by:
 //! - Single-threaded execution: Each VM instance runs on one thread at a time
 //! - TLAB exclusivity: VMs have exclusive write access to their allocation regions
-//! - Controlled mutation: Only VM-owned runtime objects can be mutated, and only via `&mut self`
+//! - Object-level synchronization: every other write to a published object
+//!   goes through the object's own lock, atomic or settle protocol
 //! - GC coordination: Garbage collection only runs when VMs are at safepoints (yielded)
 
 #![allow(unsafe_code)]
@@ -85,7 +91,7 @@ use ::bex_vm_types::{
 use ::core::any::TypeId;
 #[cfg(not(target_arch = "wasm32"))]
 use ::core::sync::atomic::AtomicBool;
-use bex_heap::{BexHeap, Tlab};
+use bex_heap::{BexHeap, Finalizable, Tlab};
 use bex_vm_types::{
     BinOp, CmpOp, FunctionKind, FutureRead, GlobalIndex, HeapPtr, Object, ObjectIndex, ObjectPool,
     ObjectType, PanicClass, PermitProof, RustDataArc as _, StackIndex, UnaryOp, Value, Variant,
@@ -126,16 +132,6 @@ pub struct ObjectMut<'a> {
     finalizable_before: Finalizable,
 }
 
-/// What an object is to the collector's finalizable list.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Finalizable {
-    Neither,
-    /// An instance of a class with a `cleanup` finalizer.
-    Instance,
-    /// A class with a `cleanup` finalizer.
-    Class,
-}
-
 impl ObjectMut<'_> {
     fn footprint(object: &mut Object) -> usize {
         let mut meter = bex_vm_types::Meter::charge();
@@ -144,13 +140,9 @@ impl ObjectMut<'_> {
     }
 
     fn finalizable(object: &Object) -> Finalizable {
-        match object {
-            Object::Class(class) if class.cleanup.is_some() => Finalizable::Class,
-            // SAFETY: the VM holds a heap permit while it mutates an object,
-            // so an instance's class object is live.
-            _ if unsafe { BexHeap::needs_finalizer_registration(object) } => Finalizable::Instance,
-            _ => Finalizable::Neither,
-        }
+        // SAFETY: the VM holds a heap permit while it mutates an object, so
+        // an instance's class object is live.
+        unsafe { Finalizable::of(object) }
     }
 }
 
@@ -178,14 +170,11 @@ impl Drop for ObjectMut<'_> {
         };
         self.debt.add(delta);
 
-        let finalizable = Self::finalizable(self.object);
-        if finalizable != self.finalizable_before {
-            match finalizable {
-                Finalizable::Instance => self.heap.register_finalizable(self.ptr),
-                Finalizable::Class => self.heap.invalidate_finalizable_instances(),
-                Finalizable::Neither => {}
-            }
-        }
+        self.heap.note_rewrite(
+            self.ptr,
+            self.finalizable_before,
+            Self::finalizable(self.object),
+        );
     }
 }
 
@@ -505,7 +494,10 @@ pub(crate) mod tests {
         let class = vm.tlab.alloc(class_object(None));
         let older = vm.tlab.alloc_instance(class, vec![]);
 
-        *vm.get_object_mut(class) = class_object(Some(finalizer));
+        // SAFETY: single-threaded test; nothing else reaches the class.
+        unsafe {
+            *vm.get_object_mut(class) = class_object(Some(finalizer));
+        }
 
         // SAFETY: single-threaded test; no VM is executing.
         let (_, _, forwarding) = unsafe { vm.heap.collect_garbage(&[]) };
@@ -527,11 +519,14 @@ pub(crate) mod tests {
         vm.heap.note_finalizable_class();
         let placeholder = vm.tlab.alloc_string("placeholder".to_string());
 
-        *vm.get_object_mut(placeholder) = Object::Instance(bex_vm_types::types::Instance::new(
-            class,
-            Box::new([]),
-            vec![],
-        ));
+        // SAFETY: single-threaded test; nothing else reaches the placeholder.
+        unsafe {
+            *vm.get_object_mut(placeholder) = Object::Instance(bex_vm_types::types::Instance::new(
+                class,
+                Box::new([]),
+                vec![],
+            ));
+        }
 
         // SAFETY: single-threaded test; no VM is executing.
         let (_, _, forwarding) = unsafe { vm.heap.collect_garbage(&[]) };
@@ -2463,15 +2458,26 @@ impl BexVm {
         }
     }
 
-    /// Materialize a new executable object. Imported pointers bypass this;
-    /// moving GC preserves the existing identity without re-registration.
-    pub(crate) fn alloc_runtime_object(
+    /// Materialize a new executable object into a reserved slot, once it is
+    /// built knowing its own address. A function takes its telemetry identity
+    /// here; imported pointers bypass this, since a moving GC preserves an
+    /// existing identity without re-registration.
+    ///
+    /// # Safety
+    ///
+    /// As for [`bex_heap::Tlab::publish`]: no collection since `reservation`
+    /// was made.
+    pub(crate) unsafe fn publish_runtime_object(
         &mut self,
+        reservation: bex_heap::Reservation,
         object: Object,
     ) -> Result<HeapPtr, VmInternalError> {
+        // SAFETY: the caller upholds `publish`'s contract.
         match object {
-            Object::Function(function) => Ok(self.tlab.alloc_function(function)?),
-            other => Ok(self.tlab.alloc(other)),
+            Object::Function(function) => {
+                Ok(unsafe { self.tlab.publish_function(reservation, function) }?)
+            }
+            other => Ok(unsafe { self.tlab.publish(reservation, other) }),
         }
     }
 
@@ -3699,34 +3705,33 @@ impl BexVm {
         }
     }
 
-    /// Get mutable access to an object via `HeapPtr`.
+    /// Mutate an object in place through its `HeapPtr`.
     ///
     /// Whatever the object comes to keep alive outside its slot while the
     /// returned guard is held — or stops keeping alive — is charged to this
-    /// VM's allocation account when the guard drops. Replacing the object
-    /// wholesale is charged the same way, so an object built in place costs
-    /// what one built before allocation would.
+    /// VM's allocation account when the guard drops.
     ///
     /// # Safety
     ///
-    /// Caller must ensure exclusive access to the heap object itself: nothing
-    /// else may reach it while the guard is held, including through another
-    /// guard from this VM. A borrow of the VM proves nothing about the object,
-    /// which is why this takes `&self`. Mutator paths for shared state should
-    /// use [`Self::get_object`] plus the object's interior synchronization
-    /// instead.
-    ///
-    // BUG: this fabricates `&mut Object` from a heap every VM shares, and the
-    // exclusivity above is upheld by convention at each caller rather than by
-    // construction: deep-copy placeholders are not yet published, graft
-    // relocates unit objects before their package is published, the class
-    // builder owns the declarations it fills in, and session state is guarded
-    // by the session's `busy` flag. The shape the rest of the heap already
-    // uses is `&Object` plus interior synchronization (locked containers,
-    // atomic value slots); giving declaration and session objects the same
-    // would remove this API.
+    /// The heap is shared by every VM, and `&self` proves nothing about the
+    /// object, so the caller must guarantee that nothing else reaches it while
+    /// the guard is held — including through another guard from this VM.
+    /// Everything else on the heap is mutated through its own interior
+    /// synchronization (locked containers, atomic slots) or built complete
+    /// behind a [`bex_heap::Reservation`]. Three protocols write through this
+    /// today: a package being grafted, before the load is visible; a
+    /// `reflect.Session` package, under its `busy` lease; and a class the
+    /// runtime class builder has not frozen yet.
+    // BUG: only the first protocol meets the contract. The session lease keeps
+    // other evals out, not readers: a function from an earlier submission,
+    // running on another VM, reads the package's tables (and the cells box a
+    // graft replaces) while they are written, and so does `Session.diagnostics`.
+    // `Package._finish` is in the same position once the package's `$init` has
+    // run, since anything the `$init` spawned can read the package. The class
+    // builder has its own `BUG:` at its call. A package that never changes
+    // after it is loaded would leave only the first protocol.
     #[inline]
-    pub fn get_object_mut(&self, ptr: HeapPtr) -> ObjectMut<'_> {
+    pub unsafe fn get_object_mut(&self, ptr: HeapPtr) -> ObjectMut<'_> {
         debug_assert!(
             !self.heap.is_compile_time_ptr(ptr),
             "Cannot mutate compile-time object"

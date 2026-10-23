@@ -1036,7 +1036,16 @@ fn build_group(
             });
         }
         let plan = &plans[&node.id];
-        let mut metered = vm.get_object_mut(plan.ptr);
+        // SAFETY: the builder's protocol — the group's classes belong to this
+        // builder until it freezes them.
+        // BUG: the protocol is weaker than the contract: each class's type is
+        // stored into a builder instance (BAML-visible) before its fields are
+        // written here, so a reader of that type can race this write, and can
+        // dispatch on it before `register_class_witnesses` below has given it
+        // its interfaces. Building the fields before the class is allocated
+        // would close it, but the witness resolver reads the class in between.
+        #[expect(unsafe_code, reason = "fill a class the builder still owns")]
+        let mut metered = unsafe { vm.get_object_mut(plan.ptr) };
         let Object::Class(class) = &mut *metered else {
             unreachable!("builder class placeholder changed variant")
         };
