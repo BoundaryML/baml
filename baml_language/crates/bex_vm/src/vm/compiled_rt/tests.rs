@@ -1688,6 +1688,34 @@ fn compiled_trace_hooks_record_as_bytecode_does() {
         if level.is_none() {
             continue;
         }
+        // Context IDs are hashes of the captured contents. Check the contents
+        // and IDs, including hook patches and restoration on normal/error return.
+        let contexts = |vm: &BexVm| {
+            let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+            vm.telemetry
+                .as_ref()
+                .unwrap()
+                .span_contexts
+                .iter()
+                .map(|context| {
+                    let id = btel_snapshot::context::capture(context, &pool)
+                        .expect("a test context fits")
+                        .root_id();
+                    (context.clone(), id)
+                })
+                .collect::<Vec<_>>()
+        };
+        let bytecode_contexts = contexts(&bytecode);
+        let compiled_contexts = contexts(&compiled);
+        assert!(
+            bytecode_contexts
+                .iter()
+                .any(|(context, _)| { context.metadata().contains_key("decided") })
+        );
+        assert_eq!(
+            compiled_contexts, bytecode_contexts,
+            "contexts at {level:?}"
+        );
         let bytecode = telemetry_records(&bytecode);
         let compiled = telemetry_records(&compiled);
         assert_eq!(compiled.0, bytecode.0, "timing records at {level:?}");

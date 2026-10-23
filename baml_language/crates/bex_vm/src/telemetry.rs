@@ -212,6 +212,8 @@ pub struct TelemetryState {
     timing_records: Vec<TimingRecord>,
     #[cfg(test)]
     span_records: Vec<VmSpanRecord>,
+    #[cfg(test)]
+    pub(crate) span_contexts: Vec<btel_types::context::Context>,
 }
 
 impl TelemetryState {
@@ -379,6 +381,8 @@ impl TelemetryState {
             timing_records: Vec::new(),
             #[cfg(test)]
             span_records: Vec::new(),
+            #[cfg(test)]
+            span_contexts: Vec::new(),
         }
     }
 
@@ -1556,7 +1560,12 @@ impl TelemetryState {
     #[inline(always)]
     fn write_span(&mut self, record: VmSpanRecord) {
         #[cfg(test)]
-        self.span_records.push(record);
+        {
+            if record.is_context_observation() {
+                self.span_contexts.push(self.context.clone());
+            }
+            self.span_records.push(record);
+        }
         #[cfg(all(not(test), not(target_arch = "wasm32")))]
         {
             use btel_records::ContextReference;
