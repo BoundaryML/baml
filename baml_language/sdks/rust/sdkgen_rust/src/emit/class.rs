@@ -124,9 +124,10 @@ pub(crate) fn emit(
         let serde_rename = (derives_serde && field_ident != field_name)
             .then(|| quote! { #[cfg_attr(feature = "serde", serde(rename = #field_name))] });
         // BAML reads a missing `json` field as `null` (the type admits it), so
-        // serde must too. `Option` fields already read a missing key as `None`.
+        // serde must too, through user aliases of `json` as well. `Option`
+        // fields already read a missing key as `None`.
         let serde_default = (derives_serde
-            && matches!(&prop.ty, Ty::TypeAlias(name) if translate_ty::is_canonical_json(name)))
+            && matches!(&prop.ty, Ty::TypeAlias(name) if ctx.analysis.is_json_alias(name)))
         .then(|| quote! { #[cfg_attr(feature = "serde", serde(default))] });
         field_defs.push(quote! {
             #(#field_docs)*
