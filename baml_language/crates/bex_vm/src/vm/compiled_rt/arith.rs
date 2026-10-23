@@ -3,42 +3,31 @@
 use bex_heap::TlabHolder;
 use bex_vm_types::{BinOp, CmpOp, Object, UnaryOp, Value};
 
-use super::checker_hole;
+use super::expect_int;
 use crate::{
     errors::{VmError, VmInternalError, VmPanic},
     vm::{BexVm, value_as_float},
 };
 
 impl BexVm {
-    /// Apply a binary operator to tagged values, including mixed numeric types and string
-    /// concatenation.
     #[inline]
     pub fn binop(&mut self, op: BinOp, left: Value, right: Value) -> Result<Value, Box<VmError>> {
         self.binop_values(op, left, right).map_err(Box::new)
     }
 
-    /// Compare numeric values, strings, byte arrays, enum variants, or types.
     #[inline]
     pub fn cmpop(&mut self, op: CmpOp, left: Value, right: Value) -> Result<Value, Box<VmError>> {
         self.cmpop_values(op, left, right).map_err(Box::new)
     }
 
-    /// Box a float for use as a tagged value.
     #[inline]
     pub fn float_value(&mut self, f: f64) -> Value {
         Value::object(self.alloc_float(f))
     }
 
-    /// Unary minus over `int`, `float`, and `bigint`.
     pub fn neg(&mut self, val: Value) -> Result<Value, Box<VmError>> {
         if let Some(n) = val.as_int() {
-            // Negating -2^62 fits i64 but exceeds the i63 range.
-            return match Value::try_int(n.wrapping_neg()) {
-                Some(v) => Ok(v),
-                None => Err(Box::new(
-                    self.integer_overflow(format!("-({n}) overflows int")),
-                )),
-            };
+            return self.neg_i64(n).map(Value::int);
         }
         if let Some(n) = value_as_float(val) {
             return Ok(self.float_value(-n));
@@ -59,7 +48,6 @@ impl BexVm {
         .into())
     }
 
-    /// Build a catchable `baml.panics.DivisionByZero` throw for `l / 0`.
     #[cold]
     #[inline(never)]
     pub(crate) fn division_by_zero(&mut self, l: i64, r: i64) -> VmError {
@@ -115,17 +103,13 @@ impl BexVm {
     /// `l << r` on raw ints with the i63 semantics constant folding uses.
     #[inline]
     pub fn shl_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
-        self.int_shl(l, r)?
-            .as_int()
-            .ok_or_else(|| Box::new(checker_hole("int")))
+        expect_int(self.int_shl(l, r)?)
     }
 
     /// `l >> r` on raw ints with the i63 semantics constant folding uses.
     #[inline]
     pub fn shr_i64(&mut self, l: i64, r: i64) -> Result<i64, Box<VmError>> {
-        self.int_shr(l, r)?
-            .as_int()
-            .ok_or_else(|| Box::new(checker_hole("int")))
+        expect_int(self.int_shr(l, r)?)
     }
 
     /// `-n` on a raw int: `IntegerOverflow` for `INT_MIN`.
