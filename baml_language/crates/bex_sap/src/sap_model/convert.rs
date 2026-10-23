@@ -276,7 +276,7 @@ impl TypeCtx {
     /// Builds the context from definitions that are closed under reference:
     /// every named type a class field, an alias body, or the target refers to
     /// is present too (the named types a type reaches on the heap are such a
-    /// set). A missing one fails [`Self::analyzed`].
+    /// set). A missing one fails [`crate::CompiledSapModel::from_type_ctx`].
     ///
     /// `class_definitions` are keyed by [`NamedTy::class`], and `interfaces`
     /// are each a [`NamedTy::interface`].
