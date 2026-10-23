@@ -276,26 +276,315 @@ fn build<'db>(
         builtins: &builtins,
         array_iterators: &array_iterators,
     };
+    graph.cause = Reason::Captured;
     for (index, decl) in body.locals.iter().enumerate() {
         // A captured local's slot holds its cell, which closures share.
         if decl.is_captured {
             graph.mark_shared(index);
         }
     }
+    graph.cause = Reason::Handler;
     for (_, landing) in body.handlers() {
         // The VM writes these: an in-flight error and its context.
         graph.mark_shared(landing.error_local.0);
         graph.mark_shared(landing.context_local.0);
     }
-    for block in &body.blocks {
-        for statement in &block.statements {
+    for (block_index, block) in body.blocks.iter().enumerate() {
+        for (statement_index, statement) in block.statements.iter().enumerate() {
+            graph.cause = Reason::At {
+                block: block_index,
+                statement: Some(statement_index),
+            };
             graph.statement(&statement.kind);
         }
         if let Some(terminator) = &block.terminator {
+            graph.cause = Reason::At {
+                block: block_index,
+                statement: None,
+            };
             walker.terminator(&mut graph, terminator);
         }
     }
+    graph.cause = Reason::Parameter;
     graph
+}
+
+/// Why an object is shared, for the coverage report.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Reason {
+    Parameter,
+    Captured,
+    Handler,
+    Constant,
+    Cell,
+    /// The statement (or, with no statement, the terminator) of a block.
+    At {
+        block: usize,
+        statement: Option<usize>,
+    },
+}
+
+/// One container or field access in a body.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Access {
+    pub kind: AccessKind,
+    /// Whether the accessed object is thread-local.
+    pub thread_local: bool,
+    /// For a shared object, what made it shared.
+    pub shared_because: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum AccessKind {
+    /// `xs[i]`, read or written.
+    Element,
+    /// `xs.length()` lowered to a length read.
+    Length,
+    /// `x.field`, read or written.
+    Field,
+    /// A call to a builtin array or map method on a receiver.
+    ContainerMethod,
+    /// A step of `for` over an array.
+    Iteration,
+}
+
+/// Every container and field access in `body`, classified as [`analyze`]
+/// classifies it, with the reason for each shared one. For measuring the
+/// analysis, not for compiling.
+pub fn coverage<'db>(
+    db: &'db dyn crate::Db,
+    body: &MirFunctionBody<'db>,
+    arity: usize,
+    opt: OptLevel,
+) -> Vec<Access> {
+    let mut graph = build(db, body, opt, None);
+    for local in 1..=arity.min(body.locals.len().saturating_sub(1)) {
+        graph.mark_shared(local);
+    }
+    let resolved = graph.resolve();
+    let locals = graph.locals;
+    let facts = EscapeFacts {
+        local_node: resolved.roots[..locals].to_vec(),
+        shared: resolved.shared.clone(),
+        contents: resolved.contents.clone(),
+    };
+    let builtins = Builtins::new(db);
+    let array_iterators = array_iterators(body);
+    let mut accesses = Vec::new();
+    let mut record = |kind: AccessKind, node: Option<usize>| {
+        let thread_local = node.is_some_and(|node| !facts.shared[node]);
+        let shared_because = (!thread_local).then(|| match node {
+            Some(node) => describe(db, body, opt, resolved.reasons[node]),
+            None => "not an object the analysis tracks".to_string(),
+        });
+        accesses.push(Access {
+            kind,
+            thread_local,
+            shared_because,
+        });
+    };
+    let place = |place: &Place, record: &mut dyn FnMut(AccessKind, Option<usize>)| {
+        projections(place, &mut |kind, base| {
+            record(kind, facts.object_node(base));
+        });
+    };
+    for block in &body.blocks {
+        for statement in &block.statements {
+            match &statement.kind {
+                StatementKind::Assign { destination, value } => {
+                    place(destination, &mut record);
+                    crate::memory::walk_rvalue_places(value, &mut |read| place(read, &mut record));
+                    if let Rvalue::Len(container) = value {
+                        record(AccessKind::Length, facts.object_node(container));
+                    }
+                }
+                StatementKind::Drop(read) => place(read, &mut record),
+                StatementKind::Intrinsic { args, .. } => {
+                    for arg in args {
+                        crate::memory::walk_operand_places(arg, &mut |read| {
+                            place(read, &mut record);
+                        });
+                    }
+                }
+                StatementKind::VirtualFieldStore {
+                    receiver, value, ..
+                } => {
+                    for operand in [receiver, value] {
+                        crate::memory::walk_operand_places(operand, &mut |read| {
+                            place(read, &mut record);
+                        });
+                    }
+                }
+                StatementKind::FreshCell { .. } | StatementKind::Nop => {}
+            }
+        }
+        let Some(terminator) = &block.terminator else {
+            continue;
+        };
+        let (operands, destinations) = terminator_places(terminator);
+        for operand in operands {
+            crate::memory::walk_operand_places(operand, &mut |read| place(read, &mut record));
+        }
+        for destination in destinations {
+            place(destination, &mut record);
+        }
+        match terminator {
+            Terminator::Call {
+                callee,
+                args,
+                ntypeargs,
+                ..
+            } if builtins.effect(callee).is_some() => {
+                let receiver = args.get(*ntypeargs).and_then(|receiver| match receiver {
+                    Operand::Copy(receiver) | Operand::Move(receiver) => {
+                        facts.object_node(receiver)
+                    }
+                    Operand::Constant(_) => None,
+                });
+                record(AccessKind::ContainerMethod, receiver);
+            }
+            Terminator::VirtualCall {
+                method,
+                args,
+                destination,
+                ..
+            } if method == "next" => {
+                if let Some((iterator, _)) = unary_local_call(args, destination)
+                    && array_iterators[iterator]
+                {
+                    let array = facts.local_node[iterator];
+                    record(AccessKind::Iteration, facts.contents[array]);
+                }
+            }
+            _ => {}
+        }
+    }
+    accesses
+}
+
+/// Each field or element access within `place`, with the place of the object
+/// it goes through.
+fn projections(place: &Place, visit: &mut impl FnMut(AccessKind, &Place)) {
+    match place {
+        Place::Field { base, .. } => {
+            visit(AccessKind::Field, base);
+            projections(base, visit);
+        }
+        Place::Index { base, kind, .. } => {
+            if matches!(kind, crate::IndexKind::Array) {
+                visit(AccessKind::Element, base);
+            }
+            projections(base, visit);
+        }
+        Place::Local(_) | Place::Capture(_) | Place::Deref(_) => {}
+    }
+}
+
+/// The operands a terminator reads and the places it writes.
+fn terminator_places<'a, 'db>(
+    terminator: &'a Terminator<'db>,
+) -> (Vec<&'a Operand<'db>>, Vec<&'a Place>) {
+    match terminator {
+        Terminator::Goto { .. } | Terminator::Return | Terminator::Unreachable => {
+            (Vec::new(), Vec::new())
+        }
+        Terminator::Branch { condition, .. } => (vec![condition], Vec::new()),
+        Terminator::Switch { discriminant, .. } => (vec![discriminant], Vec::new()),
+        Terminator::NarrowBind { source, .. } => (vec![source], Vec::new()),
+        Terminator::ShortCircuit {
+            operand,
+            destination,
+            ..
+        } => (vec![operand], vec![destination]),
+        Terminator::Call {
+            callee,
+            args,
+            destination,
+            ..
+        }
+        | Terminator::SysOp {
+            callee,
+            args,
+            destination,
+            ..
+        } => (
+            std::iter::once(callee).chain(args).collect(),
+            vec![destination],
+        ),
+        Terminator::VirtualCall {
+            args, destination, ..
+        } => (args.iter().collect(), vec![destination]),
+        Terminator::Spawn { plan, future, .. } => (vec![plan], vec![future]),
+        Terminator::Await {
+            future,
+            destination,
+            ..
+        } => (Vec::new(), vec![future, destination]),
+        Terminator::AwaitAny {
+            futures,
+            destination,
+            ..
+        } => (vec![futures], vec![destination]),
+        Terminator::Throw { value } => (vec![value], Vec::new()),
+        Terminator::Rethrow { value, context } => (vec![value, context], Vec::new()),
+    }
+}
+
+fn describe<'db>(
+    db: &'db dyn crate::Db,
+    body: &MirFunctionBody<'db>,
+    opt: OptLevel,
+    reason: Reason,
+) -> String {
+    let (block, statement) = match reason {
+        Reason::Parameter => return "parameter".into(),
+        Reason::Captured => return "captured by a closure".into(),
+        Reason::Handler => return "caught error".into(),
+        Reason::Constant => return "constant or global".into(),
+        Reason::Cell => return "read from a cell".into(),
+        Reason::At { block, statement } => (block, statement),
+    };
+    let block = &body.blocks[block];
+    if let Some(statement) = statement {
+        return match &block.statements[statement].kind {
+            StatementKind::Intrinsic {
+                op: IntrinsicOp::Log(_),
+                ..
+            } => "logged".into(),
+            StatementKind::Intrinsic { .. } => "trace hook".into(),
+            StatementKind::FreshCell { .. } => "captured by a closure".into(),
+            StatementKind::Assign {
+                value: Rvalue::MakeClosure { .. },
+                ..
+            } => "closure".into(),
+            StatementKind::Assign {
+                value: Rvalue::MakeBoundMethod { .. } | Rvalue::MakeVirtualBoundMethod { .. },
+                ..
+            } => "bound method".into(),
+            StatementKind::Assign { .. }
+            | StatementKind::Drop(_)
+            | StatementKind::VirtualFieldStore { .. }
+            | StatementKind::Nop => "runtime value".into(),
+        };
+    }
+    let name = |callee: &Operand<'db>| match static_callee(callee) {
+        Some(func) => crate::function_display_name(db, func),
+        None => "a function value".into(),
+    };
+    match block.terminator.as_ref() {
+        Some(Terminator::Call { callee, .. }) => match static_callee(callee) {
+            Some(DeclRef::Source(loc)) if escape_summary(db, loc, opt).is_some() => {
+                format!("leaked by {}", name(callee))
+            }
+            _ => format!("opaque call {}", name(callee)),
+        },
+        Some(Terminator::VirtualCall { method, .. }) => format!("virtual call .{method}"),
+        Some(Terminator::SysOp { callee, .. }) => format!("sys-op {}", name(callee)),
+        Some(Terminator::Spawn { .. }) => "spawn".into(),
+        Some(Terminator::Await { .. } | Terminator::AwaitAny { .. }) => "await".into(),
+        Some(Terminator::Throw { .. } | Terminator::Rethrow { .. }) => "throw".into(),
+        _ => "runtime value".into(),
+    }
 }
 
 /// A callee's graph as seen from its call sites: the nodes its parameters
@@ -673,6 +962,10 @@ struct Graph {
     parent: Vec<usize>,
     shared: Vec<bool>,
     contents: Vec<Option<usize>>,
+    /// Per node: what made it shared, read only by [`coverage`].
+    reason: Vec<Reason>,
+    /// The reason recorded for anything made shared next.
+    cause: Reason,
     locals: usize,
 }
 
@@ -682,6 +975,8 @@ impl Graph {
             parent: (0..locals).collect(),
             shared: vec![false; locals],
             contents: vec![None; locals],
+            reason: vec![Reason::Parameter; locals],
+            cause: Reason::Parameter,
             locals,
         }
     }
@@ -696,6 +991,7 @@ impl Graph {
         self.parent.push(node);
         self.shared.push(false);
         self.contents.push(None);
+        self.reason.push(self.cause);
         node
     }
 
@@ -717,7 +1013,18 @@ impl Graph {
 
     fn mark_shared(&mut self, node: usize) {
         let root = self.find(node);
+        if !self.shared[root] {
+            self.reason[root] = self.cause;
+        }
         self.shared[root] = true;
+    }
+
+    /// [`Self::shared`], for a value shared for `reason` rather than the cause.
+    fn shared_because(&mut self, reason: Reason) -> usize {
+        let cause = std::mem::replace(&mut self.cause, reason);
+        let node = self.shared();
+        self.cause = cause;
+        node
     }
 
     /// The contents node of `node`'s objects, created on first use. A value
@@ -752,7 +1059,7 @@ impl Graph {
                 | Constant::Function(_)
                 | Constant::GlobalItem(_)
                 | Constant::GenericFunction { .. }
-                | Constant::EnumVariant { .. } => Some(self.shared()),
+                | Constant::EnumVariant { .. } => Some(self.shared_because(Reason::Constant)),
             },
         }
     }
@@ -764,7 +1071,7 @@ impl Graph {
                 let base = self.read(base);
                 self.contents_of(Some(base))
             }
-            Place::Capture(_) | Place::Deref(_) => self.shared(),
+            Place::Capture(_) | Place::Deref(_) => self.shared_because(Reason::Cell),
         }
     }
 
@@ -775,7 +1082,7 @@ impl Graph {
                 let base = self.read(base);
                 self.contents_of(Some(base))
             }
-            Place::Capture(_) | Place::Deref(_) => self.shared(),
+            Place::Capture(_) | Place::Deref(_) => self.shared_because(Reason::Cell),
         };
         self.flow(Some(into), value);
     }
@@ -989,6 +1296,9 @@ impl Graph {
                 continue;
             }
             self.parent[b] = a;
+            if !self.shared[a] && self.shared[b] {
+                self.reason[a] = self.reason[b];
+            }
             self.shared[a] |= self.shared[b];
             match (self.contents[a], self.contents[b]) {
                 (Some(x), Some(y)) => pending.push((x, y)),
@@ -1020,15 +1330,20 @@ impl Graph {
             }
         }
         let mut shared = vec![false; nodes];
+        let mut reasons = self.reason.clone();
         let mut pending: Vec<usize> = (0..nodes)
             .filter(|&node| self.shared[node])
             .map(|node| roots[node])
             .collect();
+        for &node in &pending {
+            shared[node] = true;
+        }
+        // What an object holds is shared for the reason the object is.
         while let Some(node) = pending.pop() {
-            if std::mem::replace(&mut shared[node], true) {
-                continue;
-            }
-            if let Some(inner) = contents[node] {
+            if let Some(inner) = contents[node]
+                && !std::mem::replace(&mut shared[inner], true)
+            {
+                reasons[inner] = reasons[node];
                 pending.push(inner);
             }
         }
@@ -1036,6 +1351,7 @@ impl Graph {
             roots,
             shared,
             contents,
+            reasons,
         }
     }
 }
@@ -1045,4 +1361,5 @@ struct Resolved {
     roots: Vec<usize>,
     shared: Vec<bool>,
     contents: Vec<Option<usize>>,
+    reasons: Vec<Reason>,
 }

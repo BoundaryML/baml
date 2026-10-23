@@ -414,3 +414,161 @@ function main() -> int {{
         &[("xs", false)],
     );
 }
+
+/// Coverage of the classification over real programs: what share of
+/// container and field accesses are thread-local, and why the rest are not.
+///
+/// `cargo test -p baml_tests --lib escape_coverage -- --ignored --nocapture`
+#[test]
+#[ignore = "report, not a check"]
+fn escape_coverage() {
+    use std::collections::BTreeMap;
+
+    use baml_compiler2_mir::{MirFunction, escape::AccessKind};
+
+    #[derive(Default)]
+    struct Tally {
+        sites: BTreeMap<AccessKind, (usize, usize)>,
+        reasons: BTreeMap<String, usize>,
+    }
+
+    impl Tally {
+        fn function(&mut self, db: &baml_db::ProjectDatabase, mir: &MirFunction<'_>) {
+            if let MirFunctionKind::Bytecode(body) = &mir.kind {
+                for access in escape::coverage(db, body, mir.arity, OptLevel::Two) {
+                    let (total, local) = self.sites.entry(access.kind).or_default();
+                    *total += 1;
+                    *local += usize::from(access.thread_local);
+                    if let Some(reason) = access.shared_because {
+                        *self.reasons.entry(reason).or_default() += 1;
+                    }
+                }
+            }
+            for lambda in &mir.lambdas {
+                self.function(db, lambda);
+            }
+        }
+
+        fn files(&mut self, db: &baml_db::ProjectDatabase, files: &[baml_base::SourceFile]) {
+            for &file in files {
+                for &loc in file_functions(db, file) {
+                    if let Ok(mir) = lower_function(db, loc, OptLevel::Two) {
+                        self.function(db, mir);
+                    }
+                }
+            }
+        }
+
+        fn totals(&self) -> (usize, usize) {
+            self.sites
+                .values()
+                .fold((0, 0), |(t, l), (total, local)| (t + total, l + local))
+        }
+
+        fn print(&self, title: &str) {
+            let (total, local) = self.totals();
+            println!(
+                "\n## {title}: {local}/{total} accesses thread-local ({}%)",
+                percent(local, total)
+            );
+            for (kind, (total, local)) in &self.sites {
+                println!(
+                    "  {kind:<16?} {local:>6}/{total:<6} {:>3}%",
+                    percent(*local, *total)
+                );
+            }
+            let mut reasons: Vec<_> = self.reasons.iter().collect();
+            reasons.sort_by(|a, b| b.1.cmp(a.1).then(a.0.cmp(b.0)));
+            println!("  shared because:");
+            for (reason, count) in reasons.iter().take(25) {
+                println!("  {count:>6}  {reason}");
+            }
+        }
+    }
+
+    fn percent(part: usize, whole: usize) -> usize {
+        if whole == 0 { 0 } else { part * 100 / whole }
+    }
+
+    fn baml_files(dir: &std::path::Path) -> Vec<(String, String)> {
+        let mut files: Vec<_> = std::fs::read_dir(dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|ext| ext == "baml"))
+            .map(|path| {
+                (
+                    path.file_name().unwrap().to_string_lossy().into_owned(),
+                    std::fs::read_to_string(&path).unwrap(),
+                )
+            })
+            .collect();
+        files.sort();
+        files
+    }
+
+    let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let workloads = manifest.join("../../tools/speedtest/workloads");
+    let mut all = Tally::default();
+    let mut per_workload = Vec::new();
+    let mut groups: Vec<_> = std::fs::read_dir(&workloads)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .collect();
+    groups.sort();
+    for group in groups {
+        let mut dirs: Vec<_> = std::fs::read_dir(&group)
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .collect();
+        dirs.sort();
+        for dir in dirs {
+            let sources = baml_files(&dir);
+            if sources.is_empty() {
+                continue;
+            }
+            let mut db = make_db();
+            let files: Vec<_> = sources
+                .iter()
+                .map(|(name, text)| db.file(name, text))
+                .collect();
+            let mut tally = Tally::default();
+            tally.files(&db, &files);
+            all.files(&db, &files);
+            let name = format!(
+                "{}/{}",
+                group.file_name().unwrap().to_string_lossy(),
+                dir.file_name().unwrap().to_string_lossy()
+            );
+            per_workload.push((name, tally.totals()));
+        }
+    }
+    all.print("speedtest workloads");
+    println!("  per workload:");
+    for (name, (total, local)) in &per_workload {
+        println!(
+            "  {:>3}%  {local:>4}/{total:<4}  {name}",
+            percent(*local, *total)
+        );
+    }
+
+    let mut db = make_db();
+    let probes: Vec<_> = baml_files(&manifest.join("rust_diff/baml_src"))
+        .iter()
+        .map(|(name, text)| db.file(name, text))
+        .collect();
+    let mut tally = Tally::default();
+    tally.files(&db, &probes);
+    tally.print("rust_differential probes");
+
+    let roots = baml_compiler2_hir::package::lang_roots(&db);
+    let mut tally = Tally::default();
+    for package in baml_base::LangPackage::ALL {
+        if let Some(root) = roots.get(package) {
+            tally.files(&db, root.files(&db));
+        }
+    }
+    tally.print("standard library");
+}
