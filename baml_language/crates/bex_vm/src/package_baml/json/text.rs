@@ -3,10 +3,12 @@
 //!
 //! The scanner accepts exactly what `serde_json::from_str` accepts (RFC 8259,
 //! with `serde_json`'s nesting limit), and on top of that rejects an integral
-//! number past the bigint limit, as `parse` always has. A scan that fails
-//! reports only that it failed: the error message is recovered by
-//! [`syntax_error`], which re-reads the text with `serde_json` so the message
-//! (and its line and column) stays the one `parse` has always given.
+//! number past the bigint limit, as `parse` always has, and a number with a
+//! fraction or exponent past `f64` (`1e400`), which JSON cannot mean as a
+//! finite number. A scan that fails reports only that it failed: the error
+//! message is recovered by [`syntax_error`], which re-reads the text with
+//! `serde_json` so the message (and its line and column) stays the one
+//! `parse` has always given.
 
 use std::sync::Arc;
 
@@ -98,11 +100,12 @@ impl Number<'_> {
     }
 
     /// Whether `parse` accepts the token: an integral one must fit the bigint
-    /// limit.
+    /// limit, and any other must be a finite `f64`.
     fn within_limits(self) -> bool {
-        !self.integral
-            || self.text.len() <= BIGINT_SAFE_DIGITS
-            || super::parse_decimal_bigint(self.text).is_some()
+        if !self.integral {
+            return self.as_f64().is_some();
+        }
+        self.text.len() <= BIGINT_SAFE_DIGITS || super::parse_decimal_bigint(self.text).is_some()
     }
 }
 
@@ -405,6 +408,20 @@ impl<'a> Reader<'a> {
         })
     }
 
+    /// The keys of the object at the cursor, sorted and without repeats, its
+    /// values checked and skipped.
+    pub(super) fn object_keys(&mut self) -> Result<Vec<String>, Stop> {
+        self.open_object()?;
+        let mut keys = Vec::new();
+        while let Some(key) = self.next_key(keys.is_empty())? {
+            keys.push(key.to_owned());
+            self.skip_value()?;
+        }
+        keys.sort_unstable();
+        keys.dedup();
+        Ok(keys)
+    }
+
     /// Consume one value without building it, checking it as `parse` would.
     pub(super) fn skip_value(&mut self) -> Result<(), Stop> {
         match self.peek().ok_or(Stop)? {
@@ -504,11 +521,11 @@ impl Parser<'_> {
 
 /// A number token as an untyped `json` value: an `int` when it is integral
 /// and fits BAML's 63-bit `int`, a `bigint` when it is integral and larger, a
-/// `float` otherwise. A float that overflows `f64` is NaN. An integral token
-/// past the bigint limit is [`Stop`].
+/// `float` otherwise. A float past `f64`, and an integral token past the
+/// bigint limit, are [`Stop`].
 pub(super) fn number_value(vm: &mut BexVm, number: Number<'_>) -> Result<Value, Stop> {
     if !number.integral {
-        let float = number.as_f64().unwrap_or(f64::NAN);
+        let float = number.as_f64().ok_or(Stop)?;
         return Ok(Value::object(vm.alloc_float(float)));
     }
     if let Some(int) = number.as_i64().and_then(Value::try_int) {
@@ -577,11 +594,51 @@ impl Entries {
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
 /// The `ParseError` for `text`, which a scan refused. The message is
-/// `serde_json`'s (`expected value at line 1 column 3`), or the bigint limit's
-/// when that is all that is wrong.
+/// `serde_json`'s (`expected value at line 1 column 3`), or names the number
+/// past a limit when that is all that is wrong.
 pub(super) fn syntax_error(vm: &mut BexVm, text: &str) -> VmRustFnError {
-    let message = check(text).err().unwrap_or_else(bigint_limit_message);
+    let message = match refusal(text) {
+        Refusal::Syntax(message) | Refusal::OutOfRange(message) => message,
+        Refusal::BigintLimit => bigint_limit_message(),
+    };
     VmRustFnError::thrown_fresh(super::throw_json_parse_error(vm, message))
+}
+
+/// Why a scan refused some text.
+pub(super) enum Refusal {
+    /// It is not JSON: `serde_json`'s message.
+    Syntax(String),
+    /// An integral number is past the bigint limit.
+    BigintLimit,
+    /// A number with a fraction or exponent is past `f64`: the message, with
+    /// its line and column.
+    OutOfRange(String),
+}
+
+/// Why a scan refused `text`.
+pub(super) fn refusal(text: &str) -> Refusal {
+    if let Err(message) = check(text) {
+        return Refusal::Syntax(message);
+    }
+    // The text is JSON, so a number past a limit stopped the scan, right
+    // after its token.
+    let mut reader = Reader::new(text);
+    if reader.skip_value().is_ok() {
+        return Refusal::BigintLimit;
+    }
+    let end = reader.pos;
+    let token = text[..end]
+        .rfind(|c: char| !matches!(c, '0'..='9' | '-' | '+' | '.' | 'e' | 'E'))
+        .map_or(&text[..end], |before| &text[before + 1..end]);
+    if !token.contains(['.', 'e', 'E']) {
+        return Refusal::BigintLimit;
+    }
+    let line_start = text[..end].rfind('\n').map_or(0, |newline| newline + 1);
+    let line = text[..end].matches('\n').count() + 1;
+    let column = text[line_start..end].chars().count();
+    Refusal::OutOfRange(format!(
+        "number out of range at line {line} column {column}"
+    ))
 }
 
 /// `serde_json`'s message for the first syntax error in `text`, if it has one.
@@ -655,7 +712,7 @@ impl<'de> serde::de::Visitor<'de> for Check {
 
 #[cfg(test)]
 mod tests {
-    use super::{Number, Reader, check};
+    use super::{Number, Reader, Refusal, check, refusal};
 
     /// Whether the scanner accepts `text` as one JSON document.
     fn scans(text: &str) -> bool {
@@ -663,18 +720,54 @@ mod tests {
         reader.skip_value().is_ok() && reader.finish().is_ok()
     }
 
+    /// Whether every number in `value` with a fraction or exponent is a
+    /// finite `f64`: what the scanner asks on top of `serde_json`.
+    fn finite(value: &serde_json::Value) -> bool {
+        match value {
+            serde_json::Value::Number(number) => {
+                let text = number.to_string();
+                !text.contains(['.', 'e', 'E']) || number.as_f64().is_some()
+            }
+            serde_json::Value::Array(items) => items.iter().all(finite),
+            serde_json::Value::Object(entries) => entries.values().all(finite),
+            _ => true,
+        }
+    }
+
     fn agrees(text: &str) {
-        let serde = serde_json::from_str::<serde_json::Value>(text).is_ok();
+        let serde = serde_json::from_str::<serde_json::Value>(text);
         assert_eq!(
             scans(text),
-            serde,
+            serde.as_ref().is_ok_and(finite),
             "scanner and serde_json disagree on {text:?}"
         );
         assert_eq!(
             check(text).is_ok(),
-            serde,
+            serde.is_ok(),
             "check and serde_json disagree on {text:?}"
         );
+    }
+
+    #[test]
+    fn refuses_a_number_past_f64() {
+        for (text, message) in [
+            ("1e400", "number out of range at line 1 column 5"),
+            ("[1, -2.5E+999]", "number out of range at line 1 column 13"),
+            (
+                "{\n  \"a\": [0.5,\n    1e-2, 9e9999]}",
+                "number out of range at line 3 column 16",
+            ),
+        ] {
+            assert!(!scans(text), "{text:?}");
+            match refusal(text) {
+                Refusal::OutOfRange(found) => assert_eq!(found, message, "{text:?}"),
+                _ => panic!("{text:?} is out of range"),
+            }
+        }
+        // A tiny number is zero, and a huge integral one is a bigint.
+        assert!(scans("1e-400"));
+        assert!(scans(&"9".repeat(400)));
+        assert!(matches!(refusal(&"9".repeat(2000)), Refusal::BigintLimit));
     }
 
     #[test]

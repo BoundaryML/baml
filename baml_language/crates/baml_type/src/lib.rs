@@ -31,6 +31,7 @@ pub use baml_base::qualified_name;
 pub use baml_base::{Literal, MediaKind, Name, Span};
 use borsh::{BorshDeserialize, BorshSerialize};
 
+pub mod accepts_null;
 pub mod call_layout;
 mod codegen_ty;
 pub mod compiler_aliases;

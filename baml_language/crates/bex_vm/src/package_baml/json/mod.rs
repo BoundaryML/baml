@@ -18,6 +18,7 @@ mod path;
 mod plan;
 mod serde_bridge;
 mod text;
+mod union;
 
 use std::sync::Arc;
 
@@ -115,9 +116,11 @@ impl BamlNamespaceJson for PackageBamlImpl {
             Ok(json) => {
                 Structural::reporting(&mut plans, String::new()).decode_reported(vm, json, &ty)
             }
-            Err(text::Stop) => Err(match text::check(s) {
-                Err(message) => VmRustFnError::thrown_fresh(throw_json_parse_error(vm, message)),
-                Ok(()) => raise_decode(vm, text::bigint_limit_message(), ""),
+            Err(text::Stop) => Err(match text::refusal(s) {
+                text::Refusal::Syntax(message) | text::Refusal::OutOfRange(message) => {
+                    VmRustFnError::thrown_fresh(throw_json_parse_error(vm, message))
+                }
+                text::Refusal::BigintLimit => raise_decode(vm, text::bigint_limit_message(), ""),
             }),
         }
     }
@@ -287,11 +290,12 @@ fn key_fits(vm: &BexVm, written: &str, key: &RealizedTy) -> bool {
 }
 
 /// `json` copied as a `json` value, as it has always been copied into a
-/// `json` or `unknown` target: every array and map is new, leaves are shared,
-/// a float that is not finite is `null`, a bigint that fits `int` is an
-/// `int`, an enum variant is its declared name, and a value with no JSON form
-/// is `null`. A container met again inside itself, or a map whose keys are
-/// not strings, is refused: its message and its path inside `json`.
+/// `json` or `unknown` target: every array and map is new, leaves are shared
+/// (a float that is not finite too, as `from` keeps it), a bigint that fits
+/// `int` is an `int`, an enum variant is its declared name, and a value with
+/// no JSON form is `null`. A container met again inside itself, or a map
+/// whose keys are not strings, is refused: its message and its path inside
+/// `json`.
 fn copy_json(vm: &mut BexVm, json: Value) -> Result<Value, (&'static str, String)> {
     /// A container being copied: what it holds and what it has so far.
     struct Copying {
@@ -422,7 +426,7 @@ fn copy_json(vm: &mut BexVm, json: Value) -> Result<Value, (&'static str, String
 /// A heap leaf of a `json` value, copied by [`copy_json`]'s rules.
 fn copy_leaf(vm: &mut BexVm, value: Value, ptr: HeapPtr) -> Value {
     let name = match vm.get_object(ptr) {
-        Object::Float(f) if f.is_finite() => return value,
+        Object::Float(_) => return value,
         Object::String(_) => return value,
         Object::Bigint(b) => {
             return i64::try_from(&**b)

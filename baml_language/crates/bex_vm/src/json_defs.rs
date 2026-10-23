@@ -1,6 +1,7 @@
 //! The heap's declarations as the JSON inhabitance analysis reads them
-//! ([`baml_type::json_inhabit`]): for the LLM output check, and for the empty
-//! values schema-aligned parsing fills `@skip` fields with.
+//! ([`baml_type::json_inhabit`]): for the LLM output check, for the empty
+//! values schema-aligned parsing fills `@skip` fields with, and for naming the
+//! union members `baml.json` decoding drops.
 
 use baml_type::json_inhabit::{JsonClass, JsonDefs, JsonField, JsonStatus, JsonVariant};
 use bex_vm_types::{RealizedTy, RuntimeTy, TypeHead, types::Object};
@@ -22,6 +23,25 @@ pub(crate) enum OutputReject {
 /// The heap's declarations.
 pub(crate) struct HeapDefs<'vm> {
     pub vm: &'vm BexVm,
+    /// Whether `baml.json` decoding reads them, which takes every type as it
+    /// is: `unknown` and an interface admit JSON values, and an enum variant
+    /// type is a JSON string. The LLM output check rejects those.
+    pub decoding: bool,
+}
+
+impl<'vm> HeapDefs<'vm> {
+    /// The declarations as the LLM output check reads them.
+    pub(crate) fn output(vm: &'vm BexVm) -> Self {
+        Self {
+            vm,
+            decoding: false,
+        }
+    }
+
+    /// The declarations as `baml.json` decoding reads them.
+    pub(crate) fn decoding(vm: &'vm BexVm) -> Self {
+        Self { vm, decoding: true }
+    }
 }
 
 impl JsonDefs<TypeHead> for HeapDefs<'_> {
@@ -87,6 +107,7 @@ impl JsonDefs<TypeHead> for HeapDefs<'_> {
 
     fn opaque(&self, ty: &RuntimeTy) -> Result<JsonStatus, OutputReject> {
         match ty {
+            _ if self.decoding => Ok(JsonStatus::Json),
             RuntimeTy::Media(_) => Ok(JsonStatus::Json),
             RuntimeTy::Interface(..) => Err(OutputReject::Interface(ty.to_string())),
             _ => Err(OutputReject::Unknown(ty.to_string())),
@@ -95,6 +116,7 @@ impl JsonDefs<TypeHead> for HeapDefs<'_> {
 
     fn check(&self, ty: &RuntimeTy) -> Result<(), OutputReject> {
         match ty {
+            _ if self.decoding => Ok(()),
             RuntimeTy::EnumVariant(..) => Err(OutputReject::Unrenderable(ty.to_string())),
             _ => Ok(()),
         }

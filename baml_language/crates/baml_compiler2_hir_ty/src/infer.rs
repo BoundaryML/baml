@@ -74,18 +74,6 @@ use crate::{
     render::Spell,
 };
 
-/// Whether an object slot initialized to `null` satisfies this type. Weak
-/// aliases and solved inference variables must be resolved by the caller
-/// before asking; an unconstrained type parameter is deliberately false
-/// because it is not guaranteed to admit `null` for every instantiation.
-fn type_admits_null(ty: &Ty) -> bool {
-    match ty.kind() {
-        InferTy::Null => true,
-        InferTy::Union(members) => members.iter().any(type_admits_null),
-        _ => false,
-    }
-}
-
 /// Negate a numeric literal into the negative literal TYPE (ruling 2:
 /// `-1` is a type, TS parity). Freshness carries through. `None` skips
 /// the fold: non-numeric literals, and an int result outside BAML's i63
@@ -9119,7 +9107,15 @@ impl<'db> InferenceContext<'db> {
             // An error sentinel means the declaration's rule is unknown, not
             // that the field is non-nullable. Its source diagnostic is the
             // actionable error; continue checking independently valid slots.
-            if !resolved.has_error() && !type_admits_null(&resolved) {
+            // `null` must be a value of the type, by meaning: `unknown` and
+            // an alias whose union holds `null` (`baml.json.json`) admit it.
+            // Solved inference variables are resolved above; an
+            // unconstrained type parameter admits nothing, because not every
+            // instantiation admits `null`.
+            let admits_null = baml_type::accepts_null::accepts_null(&resolved, &|name| {
+                baml_type::normalize::TypeContext::alias_def(&self.facts, name)
+            });
+            if !resolved.has_error() && !admits_null {
                 missing.push(name.clone());
             }
         }

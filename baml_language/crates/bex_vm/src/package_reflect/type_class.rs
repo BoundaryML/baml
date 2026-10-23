@@ -957,7 +957,7 @@ fn unanswerable_output(
         }
     };
     let root_ty = ty.as_runtime_ty();
-    let analysis = match JsonInhabitance::of(root_ty, &HeapDefs { vm }, JsonNaming::Aliased) {
+    let analysis = match JsonInhabitance::of(root_ty, &HeapDefs::output(vm), JsonNaming::Aliased) {
         Ok(analysis) => analysis,
         Err(JsonError { error, path }) => {
             let fields: Vec<&str> = path.iter().map(String::as_str).collect();

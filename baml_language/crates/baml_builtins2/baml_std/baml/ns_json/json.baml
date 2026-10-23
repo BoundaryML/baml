@@ -58,10 +58,21 @@ class DecodeError {
 /// A BAML value with no JSON form.
 ///
 /// `path` locates the offending node in the jq-ish notation `DecodeError`
-/// uses. `reason` is a short stable tag for the construct that had no JSON
-/// form — `uint8array`, `function`, `future`, `unserializable`, `class`,
-/// `enum`, `media`, and so on. Branch on it rather than on `message`, which is
-/// prose.
+/// uses. `reason` is a short stable tag for what had no JSON form. Branch on
+/// it rather than on `message`, which is prose:
+///
+/// - `uint8array`: a `uint8array`. Encode it explicitly with `to_base64()` or
+///   `to_hex()`.
+/// - `function`: a function or closure.
+/// - `future`: a future.
+/// - `non_finite`: a `float` that is NaN or infinite. JSON text cannot write
+///   one, so only `stringify` raises this.
+/// - `cycle`: a list, map, or class instance that contains itself.
+/// - `map_key`: a map whose keys are not strings.
+/// - `enum`: an enum variant that is `@skip` under `Naming.Aliased`, which
+///   gives it no name.
+/// - `indent`: an `indent` that `stringify` does not take.
+/// - `unserializable`: any other runtime object with no JSON form.
 class SerializationError {
     message: string,
     path: string,
@@ -74,9 +85,14 @@ class SerializationError {
 /// The whole string must be that document; trailing content is a syntax error,
 /// not a stopping point. To land in a declared type instead, use `decode<T>`.
 ///
+/// A number with a fraction or exponent must fit a `float`: `1e400` is a
+/// syntax error, because JSON has no infinity. An integral number that large
+/// is a `bigint`.
+///
 /// # Throws
 ///
-/// - `baml.json.ParseError` if `s` is not valid JSON.
+/// - `baml.json.ParseError` if `s` is not valid JSON, or holds a number with
+///   a fraction or exponent too large for a `float`.
 function parse(s: string) -> json throws ParseError {
     $rust_function
 }
@@ -88,11 +104,17 @@ function parse(s: string) -> json throws ParseError {
 /// included. The walk is a shape check rather than a coercion, so
 /// `decode<int>("\"5\"")` fails: a JSON string does not become an `int`.
 ///
+/// A union decodes as the member the value matches best, as `to<T>` says:
+/// `decode<float | int>("1")` is the `int` `1`, and a JSON object is the
+/// class that uses the most of its keys. A class field whose type admits
+/// `null` may be missing from the text, and is then `null`.
+///
 /// `naming` picks the names fields and variants go by; see `to<T>`.
 ///
 /// # Throws
 ///
-/// - `baml.json.ParseError` if `s` is not valid JSON.
+/// - `baml.json.ParseError` if `s` is not valid JSON, or holds a number with
+///   a fraction or exponent too large for a `float`, such as `1e400`.
 /// - `baml.json.DecodeError` if the parsed JSON does not fit `T`, or if a
 ///   `baml.FromJson` override rejects it. `path` locates the offending node.
 ///
@@ -150,6 +172,9 @@ function _decode_structural<T>(s: string, aliased: bool) -> T throws ParseError 
 ///
 /// - `baml.json.SerializationError` if any value in the graph has no JSON
 ///   form; see `from`.
+/// - `baml.json.SerializationError` with `reason` `"non_finite"` if a `float`
+///   anywhere in the value, a `json` value included, is NaN or infinite: JSON
+///   text has no way to write it.
 /// - `baml.json.SerializationError` with `reason` `"indent"` if `indent` is a
 ///   negative number, a number above 10, a string longer than 10 characters,
 ///   or a string holding anything other than spaces, tabs, and line breaks.
@@ -190,7 +215,8 @@ function _stringify(
 /// maps take their natural JSON shape. A class instance becomes an object of
 /// its fields, an enum value its variant's name, and media the tagged object
 /// `{ kind, source, value, mime, name? }`. A `bigint` becomes an
-/// arbitrary-precision JSON number, and a non-finite `float` becomes `null`.
+/// arbitrary-precision JSON number. A `float` that is NaN or infinite stays
+/// as it is: a `json` value holds it, but `stringify` refuses to write it.
 ///
 /// A value whose runtime class implements `baml.ToJson` with its own
 /// `to_json` is converted by that method instead, at any depth, and the
@@ -213,8 +239,9 @@ function _stringify(
 ///
 /// - `baml.json.SerializationError` if any value in the graph has no JSON
 ///   form: a `uint8array` (encode it explicitly with `to_base64()` or
-///   `to_hex()`), a function, a future, or any other opaque runtime object.
-///   `reason` names which.
+///   `to_hex()`), a function, a future, a map whose keys are not strings, a
+///   value that contains itself, or any other opaque runtime object. `reason`
+///   names which.
 /// - `baml.json.SerializationError` if `naming` is `Naming.Aliased` and the
 ///   value holds a `@skip` enum variant, which then has no name.
 function from(
@@ -250,10 +277,33 @@ function _from(value: unknown, aliased: bool, omit_nulls: bool) -> json throws S
 /// digits; leading zeroes and negative zero are normalized, and fractions,
 /// exponents, whitespace, and other bases are rejected.
 ///
-/// A class field that can be `null` may be absent and decodes to `null`;
-/// every other field must be present. Unrecognized keys are ignored. A union
-/// takes the first member the value fits by shape, and that member then
-/// decodes as above. A recursive alias decodes as its definition.
+/// A class field whose type admits `null` may be absent, and then decodes to
+/// `null`: `T?`, `unknown`, and `json` all admit it. Every other field must
+/// be present. Unrecognized keys are ignored. A recursive alias decodes as
+/// its definition. A `float` target takes a NaN or infinite `float` as it
+/// is.
+///
+/// A union decodes as the member the value matches best by shape, and that
+/// member then decodes as above, its `baml.FromJson` override included. The
+/// candidates are the members a value of its JSON kind can be at all: a JSON
+/// object is never a `string`, and a member no JSON can hold, such as
+/// `uint8array`, is never a candidate. The most specific candidate wins:
+///
+/// - For an object, the member that uses the most of its keys. A class uses
+///   the keys that name its fields under `naming`, and a map every key, so
+///   `{"n": 1}` in `Empty | Count` is the `Count`, whose field is `n`.
+/// - For a number, `int` before `bigint` before `float`, so `1` in
+///   `float | int` is the `int` `1`.
+/// - For a string, a matching literal, then a matching enum variant, then
+///   `string`. `"Red"` in `string | Color` is `Color.Red`, and `"purple"` is
+///   the string.
+/// - A literal before its base type, as `1` in `1 | int` is the literal.
+/// - `json`, `unknown`, and a map of either last: they hold any value, so
+///   they win only when nothing more specific decodes.
+///
+/// Ties go to declaration order. When the most specific candidate fails
+/// deeper in, the next one is tried. A union inside a member resolves by the
+/// same rule.
 ///
 /// `T` matters here in a way it does not for `from`: decoding has only the
 /// target type to go on, so a wider `T` changes the result, not just its
@@ -271,7 +321,8 @@ function _from(value: unknown, aliased: bool, omit_nulls: bool) -> json throws S
 ///
 /// - `baml.json.DecodeError` if `j` does not fit `T`, if a `baml.FromJson`
 ///   override rejects it, or if `j` contains itself. `path` locates the
-///   offending node.
+///   offending node. When no member of a union fits, `message` names each
+///   member's misfit, and each member no JSON can hold, with the reason.
 function to<T>(j: json, naming: Naming = Naming.Declared) -> T throws DecodeError {
     _to<T>(j, _aliased(naming))
 }
@@ -375,7 +426,8 @@ function path_or<T>(j: json, selector: string, default: T) -> T throws never {
 /// *value* between BAML and `json`, while this describes the *shape* a value
 /// of `t` would take.
 ///
-/// Optional fields are omitted from `required`, maps use schema-valued
+/// A field whose type admits `null` (`T?`, `json`) is omitted from
+/// `required`, as the decoder lets it be missing. Maps use schema-valued
 /// `additionalProperties`, and unions use `anyOf`. Enums lower to a string
 /// `enum` of their variant names. A nullable type becomes a `["T", "null"]`
 /// type list where it can, and `anyOf` otherwise. A nullable enum also lists

@@ -380,9 +380,11 @@ mod schema {
     }
 
     /// Whether a field of type `ty` may be absent from a JSON object, as the
-    /// decoder reads it: a `null` stands in for it.
-    fn may_be_absent(ty: &SapTy) -> bool {
-        ty.is_nullable_union() || ty.is_null()
+    /// decoder reads it: `null` is a value of the type, and stands in for it.
+    fn may_be_absent(ty: &SapTy, ctx: &SysOpContext) -> bool {
+        baml_type::accepts_null::accepts_null(ty.as_ty(), &|head| {
+            find_type_alias_definition(ctx, head).map(|target| target.as_ty().clone())
+        })
     }
 
     fn literal_schema(lit: &baml_base::Literal) -> Value {
@@ -620,7 +622,7 @@ mod schema {
                     documentation(field.description.as_deref(), field.docstring.as_deref()),
                 );
                 properties.insert(key.to_string(), property);
-                if !may_be_absent(&field.field_type) {
+                if !may_be_absent(&field.field_type, self.ctx) {
                     required.push(json!(key));
                 }
             }
