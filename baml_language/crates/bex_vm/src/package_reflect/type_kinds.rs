@@ -313,13 +313,8 @@ pub(super) fn register_class_witnesses(
     );
     witnesses.extend(entries.iter().map(|(_, rule)| *rule));
     for (interface, rule) in entries {
-        vm.dynamic_dispatch.register_rule(
-            interface,
-            crate::package_load::DynRuleEntry {
-                class: class_ptr,
-                rule,
-            },
-        );
+        vm.dynamic_dispatch
+            .register_rule(interface, class_ptr, rule);
     }
 }
 

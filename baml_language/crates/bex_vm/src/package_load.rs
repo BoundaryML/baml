@@ -24,7 +24,7 @@ use baml_base::{LangItem, LangPackage};
 use baml_type::{MediaKind, Name};
 use bex_heap::BexHeap;
 use bex_vm_types::{
-    HeapPtr, Object, ObjectIndex, RootVisitor, TypeHead,
+    HeapPtr, Object, ObjectIndex, RootVisitor, TypeHead, Weak,
     types::{
         LocalName, MethodImpl, Package, PackageKind, ProgramImplRule, ProgramPackage,
         RuntimeImplRule,
@@ -43,8 +43,8 @@ use indexmap::IndexMap;
 /// [`Owner::Anonymous`](bex_vm_types::types::Owner::Anonymous).
 #[derive(Clone, Copy, Debug)]
 pub struct DynRuleEntry {
-    pub class: HeapPtr,
-    pub rule: HeapPtr,
+    pub class: Weak,
+    pub rule: Weak,
 }
 
 /// Engine-local side tables for runtime-created nominal definitions.
@@ -61,18 +61,24 @@ pub struct DynRuleEntry {
 /// number moves, so a change to the rules any resolver can see must bump it.
 #[derive(Default, Debug)]
 pub struct DynDispatchTables {
-    impl_rules: RwLock<IndexMap<HeapPtr, Vec<DynRuleEntry>>>,
+    impl_rules: RwLock<IndexMap<Weak, Vec<DynRuleEntry>>>,
     generation: AtomicU64,
 }
 
 impl DynDispatchTables {
-    pub fn register_rule(&self, interface: HeapPtr, entry: DynRuleEntry) {
+    /// Index `rule`, a witness that `class` implements `interface`. Every
+    /// pointer is held weakly: the class owns its rules, and the entry goes
+    /// when the class does.
+    pub fn register_rule(&self, interface: HeapPtr, class: HeapPtr, rule: HeapPtr) {
         self.impl_rules
             .write()
             .expect("dynamic-impl table lock poisoned")
-            .entry(interface)
+            .entry(Weak::new(interface))
             .or_default()
-            .push(entry);
+            .push(DynRuleEntry {
+                class: Weak::new(class),
+                rule: Weak::new(rule),
+            });
         // After the push: a VM that reads the new generation also sees the rule.
         self.bump_generation();
     }
@@ -98,10 +104,10 @@ impl DynDispatchTables {
         self.impl_rules
             .read()
             .expect("dynamic-impl table lock poisoned")
-            .get(&interface)
+            .get(&Weak::new(interface))
             .into_iter()
             .flatten()
-            .map(|entry| entry.rule)
+            .map(|entry| entry.rule.ptr())
             .collect()
     }
 
@@ -119,8 +125,8 @@ impl DynDispatchTables {
             .expect("dynamic-impl table lock poisoned")
             .values()
             .flatten()
-            .filter(|entry| entry.class == class)
-            .map(|entry| entry.rule)
+            .filter(|entry| entry.class.ptr() == class)
+            .map(|entry| entry.rule.ptr())
             .collect()
     }
 
@@ -141,18 +147,18 @@ impl DynDispatchTables {
         // was declared at runtime — rebuild the map through the visitor.
         let entries = std::mem::take(&mut *table);
         for (mut interface, mut rules) in entries {
-            if !visitor.visit_weak(&mut interface) {
+            if !interface.visit(visitor) {
                 continue;
             }
             rules.retain_mut(|entry| {
-                if !visitor.visit_weak(&mut entry.class) {
+                if !entry.class.visit(visitor) {
                     return false;
                 }
                 // The rule is reachable iff its class is; a class that survived
                 // keeps its rule alive through the same tracing that found the
                 // class, so a live class with an unforwarded rule means the rule
                 // sat in a generation the collection left in place.
-                let rule_live = visitor.visit_weak(&mut entry.rule);
+                let rule_live = entry.rule.visit(visitor);
                 debug_assert!(rule_live, "a witness rule outlived by its class");
                 rule_live
             });
@@ -188,7 +194,8 @@ impl DynDispatchRoot {
 
 impl bex_vm_types::RootHaver for DynDispatchRoot {
     fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
-        self.tables.visit_weak_entries(visitor);
+        let Self { tables } = self;
+        tables.visit_weak_entries(visitor);
     }
 }
 
@@ -864,7 +871,7 @@ mod tests {
             let head =
                 bex_vm_types::TypeHead::new(owner, baml_type::typetag::TypeTag::fresh_dynamic());
             let rule = tlab.alloc(Object::ImplRule(Box::new(empty_rule(interface, head))));
-            tables.register_rule(interface, DynRuleEntry { class: owner, rule });
+            tables.register_rule(interface, owner, rule);
             owners.push(owner);
         }
         (tlab, owners)

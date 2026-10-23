@@ -1,11 +1,15 @@
-use bex_vm_types::{HeapPtr, RealizedTy, RootHaver, RootVisitor, errors::VmThrown};
+use bex_vm_types::{RealizedTy, RootHaver, RootVisitor, Weak, errors::VmThrown};
 use rustc_hash::FxHashMap;
 
 use super::{Fiber, fiber::YielderPtr};
 use crate::{errors::VmError, vm::BexVm};
 
 pub(crate) struct CompiledState {
-    pub(crate) static_type_cache: FxHashMap<(usize, usize), HeapPtr>,
+    /// The compiled counterpart of the interpreter's `static_load_type_cache`:
+    /// created-once type objects for `LoadType` constants of static functions,
+    /// keyed by the function's (compile-time, never moving) payload. Weak, so
+    /// a type nothing else holds is simply rebuilt.
+    pub(crate) static_type_cache: FxHashMap<(usize, usize), Weak>,
     pub(crate) fiber: Option<Fiber>,
     /// The fiber's [`Fiber::floor`], kept here so `stack_room` reads it while
     /// the fiber is out of `self` running a body.
@@ -72,9 +76,7 @@ impl RootHaver for CompiledState {
             records,
             direct_calls: _,
         } = self;
-        for ptr in static_type_cache.values_mut() {
-            ptr.visit_roots(visitor);
-        }
+        static_type_cache.retain(|_, ty| ty.visit(visitor));
         records.visit_roots(visitor);
         builtin_type_args.visit_roots(visitor);
         call_type_args.visit_roots(visitor);

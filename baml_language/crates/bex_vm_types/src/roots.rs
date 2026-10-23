@@ -82,6 +82,39 @@ impl RootVisitor for ForwardRoots<'_> {
     }
 }
 
+/// A heap pointer held without keeping its object alive.
+///
+/// A cache or index entry that must follow its object when a collection moves
+/// it, and must be dropped by its holder once the object is gone. Unlike a
+/// strong root it is never reported to the collector, so it cannot resurrect
+/// anything; [`Self::visit`] is how a holder learns the verdict.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct Weak(HeapPtr);
+
+impl Weak {
+    #[inline]
+    pub fn new(ptr: HeapPtr) -> Self {
+        Self(ptr)
+    }
+
+    /// The pointer. Valid while the object is live and has not moved: the
+    /// `Weak` must sit in a holder the collector visits, its last
+    /// [`Self::visit`] must have reported the object live, and the reader must
+    /// hold a heap permit so no collection runs meanwhile. A `Weak` copied out
+    /// of its holder goes stale at the next collection.
+    #[inline]
+    pub fn ptr(self) -> HeapPtr {
+        self.0
+    }
+
+    /// Repoint for a collection. `false` once the object is gone; the holder
+    /// must then drop this reference rather than read it.
+    #[must_use]
+    pub fn visit(&mut self, visitor: &mut dyn RootVisitor) -> bool {
+        visitor.visit_weak(&mut self.0)
+    }
+}
+
 /// A holder of heap roots: anything that keeps heap pointers outside the heap
 /// itself and must therefore be scanned and repointed by the collector.
 ///

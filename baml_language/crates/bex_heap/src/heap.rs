@@ -234,9 +234,10 @@ pub struct BexHeap {
     /// collection. Populated during a collection (`copy_collection` /
     /// `copy_collection_minor`) when a dead-but-not-yet-cleaned instance of a
     /// class with a finalizer is discovered and kept alive; the pointers are the
-    /// **new** (post-copy) locations. Drained by the engine via
-    /// [`take_pending_finalizers`](Self::take_pending_finalizers) at the same
-    /// safepoint, before any other collection runs, so the pointers stay valid.
+    /// **new** (post-copy) locations. Taken by the engine via
+    /// [`take_pending_finalizers`](Self::take_pending_finalizers) inside the same
+    /// pause and rooted as handles there, so they never outlive the pause as raw
+    /// pointers.
     ///
     /// Each entry pairs the instance's post-copy `HeapPtr` with its class's
     /// `cleanup` function, read off the class by the GC while it has the
@@ -1299,8 +1300,8 @@ impl BexHeap {
     }
 
     /// BEP-042: take and clear the queue of instances awaiting `cleanup`. The
-    /// engine drains this right after a collection (still at the GC safepoint,
-    /// before resuming normal execution) and invokes each instance's `cleanup`.
+    /// engine takes this inside the collection's pause, roots each entry as a
+    /// handle, and invokes each instance's `cleanup` once execution resumes.
     /// Each entry is `(instance, its class's cleanup function)`.
     pub fn take_pending_finalizers(&self) -> Vec<(HeapPtr, HeapPtr)> {
         std::mem::take(

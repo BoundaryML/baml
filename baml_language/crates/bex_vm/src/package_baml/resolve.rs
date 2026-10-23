@@ -1403,10 +1403,7 @@ mod tests {
         let interface = rule.interface_head;
         let rule = vm.alloc(Object::ImplRule(Box::new(rule)));
         let owner = vm.alloc(Object::String(bex_str::BexStr::from("witness owner")));
-        vm.dynamic_dispatch.register_rule(
-            interface,
-            crate::package_load::DynRuleEntry { class: owner, rule },
-        );
+        vm.dynamic_dispatch.register_rule(interface, owner, rule);
         (rule, owner)
     }
 

@@ -79,7 +79,7 @@ macro_rules! verifier_unreachable {
 
 use ::bex_heap::TlabHolder;
 use ::bex_vm_types::{
-    EarlyYieldCheck, RootHaver, RootVisitor, TypeHead,
+    EarlyYieldCheck, RootHaver, RootVisitor, TypeHead, Weak,
     types::{ErrorClass, FutureId},
 };
 use ::core::any::TypeId;
@@ -264,7 +264,8 @@ enum StaticVirtualReceiverKey {
 
 #[derive(Clone, Debug)]
 struct StaticVirtualCallTarget {
-    callee: HeapPtr,
+    /// Weak, like the key: the cache must not keep a runtime callee alive.
+    callee: Weak,
     frame_type_args: Vec<bex_vm_types::RealizedTy>,
 }
 
@@ -1701,9 +1702,11 @@ pub struct BexVm {
     /// Created-once immutable type objects for fully realized `LoadType`
     /// constants in static functions. The compact numeric key keeps the
     /// per-iteration lookup cheaper than re-hashing the full realized type.
-    /// Entries are explicit VM GC roots. Fx-hashed: the keys are function
-    /// addresses and constant indexes, never program input.
-    static_load_type_cache: FxHashMap<(usize, usize), HeapPtr>,
+    /// Entries are weak both ways: one goes when its function or its type
+    /// object does, and a type nothing else holds is simply rebuilt.
+    /// Fx-hashed: the keys are function addresses and constant indexes, never
+    /// program input.
+    static_load_type_cache: FxHashMap<(usize, usize), Weak>,
     /// Monomorphic static virtual-call results keyed by caller site and the
     /// receiver/interface instantiation observed there. Only immutable
     /// program-image rules enter this cache, so runtime package loading and
@@ -10189,7 +10192,7 @@ impl BexVm {
                             .and_then(|key| self.static_virtual_call_cache.get(key))
                             .cloned();
                         let (callee_ptr, mut type_args) = if let Some(target) = cached_target {
-                            (target.callee, target.frame_type_args)
+                            (target.callee.ptr(), target.frame_type_args)
                         } else {
                             let method_name = self.as_string(&method_value)?.to_string();
                             let (iface_qtn, iface_args) = {
@@ -10237,7 +10240,7 @@ impl BexVm {
                                 self.static_virtual_call_cache.insert(
                                     cache_key,
                                     StaticVirtualCallTarget {
-                                        callee,
+                                        callee: Weak::new(callee),
                                         frame_type_args: frame.clone(),
                                     },
                                 );
@@ -10882,7 +10885,7 @@ impl BexVm {
                         };
                         let cached_value = static_cache_key
                             .and_then(|key| self.static_load_type_cache.get(&key).copied())
-                            .map(Value::object);
+                            .map(|ty| Value::object(ty.ptr()));
                         let value = if let Some(value) = cached_value {
                             value
                         } else {
@@ -10924,7 +10927,8 @@ impl BexVm {
                             if let Some(cache_key) = static_cache_key
                                 && let Some(ptr) = value.as_object_ptr()
                             {
-                                self.static_load_type_cache.insert(cache_key, ptr);
+                                self.static_load_type_cache
+                                    .insert(cache_key, Weak::new(ptr));
                             }
                             value
                         };
@@ -11890,32 +11894,61 @@ impl ::bex_vm_types::RootHaver for BexVm {
                 .then(|| (key.as_ptr() as usize) | 1)
         };
         let old_load_type_cache = std::mem::take(&mut self.static_load_type_cache);
-        for ((identity, index), mut ptr) in old_load_type_cache {
-            if let Some(identity) = forward_identity(identity, visitor) {
-                ptr.visit_roots(visitor);
-                self.static_load_type_cache.insert((identity, index), ptr);
+        for ((identity, index), mut ty) in old_load_type_cache {
+            if let Some(identity) = forward_identity(identity, visitor)
+                && ty.visit(visitor)
+            {
+                self.static_load_type_cache.insert((identity, index), ty);
             }
         }
-        let old_virtual_call_cache = std::mem::take(&mut self.static_virtual_call_cache);
-        for (mut key, mut target) in old_virtual_call_cache {
-            // The whole entry is weak: it names a callee and the declarations
-            // in its type arguments, and must not keep any of them alive.
-            let Some(identity) = forward_identity(key.caller_function_addr, visitor) else {
-                continue;
-            };
-            if !visitor.visit_weak(&mut target.callee) {
-                continue;
-            }
-            let mut heads_live = true;
-            for ty in &mut target.frame_type_args {
+        // Whether every declaration the types name is still live, repointing
+        // each that moved.
+        let weak_heads = |tys: &mut [bex_vm_types::RealizedTy], visitor: &mut dyn RootVisitor| {
+            let mut live = true;
+            for ty in tys {
                 ty.visit_heads_mut(&mut |head: &mut TypeHead| {
-                    heads_live &= head.visit_root_weak(visitor);
+                    live &= head.visit_root_weak(visitor);
                 });
             }
-            if !heads_live {
+            live
+        };
+        let old_virtual_call_cache = std::mem::take(&mut self.static_virtual_call_cache);
+        for (mut key, mut target) in old_virtual_call_cache {
+            // The whole entry is weak, key and target alike: it names a callee,
+            // an interface and the declarations in the receiver's and the
+            // call's type arguments, and must keep none of them alive.
+            let StaticVirtualCallKey {
+                caller_function_addr,
+                call_pc: _,
+                receiver,
+                interface_head,
+                interface_args,
+            } = &mut key;
+            let StaticVirtualCallTarget {
+                callee,
+                frame_type_args,
+            } = &mut target;
+            let Some(identity) = forward_identity(*caller_function_addr, visitor) else {
+                continue;
+            };
+            let receiver_live = match receiver {
+                StaticVirtualReceiverKey::Class {
+                    type_tag: _,
+                    type_args,
+                } => weak_heads(&mut type_args[..], visitor),
+                StaticVirtualReceiverKey::Other(ty) => {
+                    weak_heads(std::slice::from_mut(ty), visitor)
+                }
+            };
+            if !(receiver_live
+                && callee.visit(visitor)
+                && interface_head.visit_root_weak(visitor)
+                && weak_heads(&mut interface_args[..], visitor)
+                && weak_heads(frame_type_args, visitor))
+            {
                 continue;
             }
-            key.caller_function_addr = identity;
+            *caller_function_addr = identity;
             self.static_virtual_call_cache.insert(key, target);
         }
         // Resolver answers, held weakly like the static caches above.

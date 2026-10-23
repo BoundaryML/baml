@@ -279,6 +279,13 @@ enum RootedUnhandledValue {
     Handle(bex_external_types::Handle),
 }
 
+/// BEP-042: an instance a collection kept alive for its `cleanup`, and the
+/// finalizer to call on it, both rooted as handles.
+struct RootedPendingFinalizer {
+    instance: bex_external_types::Handle,
+    cleanup: bex_external_types::Handle,
+}
+
 #[derive(Clone)]
 struct RootedUnhandledSpawnError {
     report_id: usize,
@@ -1159,6 +1166,11 @@ pub struct BexEngine {
     futures: FutureManager,
 
     rooted_unhandled_spawn_errors: Mutex<VecDeque<RootedUnhandledSpawnError>>,
+    /// BEP-042: instances a collection kept alive for their `cleanup`, with
+    /// the finalizer to call, rooted as handles inside the pause that found
+    /// them so a collection before the drain cannot move them out from under
+    /// the queue.
+    rooted_pending_finalizers: Mutex<VecDeque<RootedPendingFinalizer>>,
     unhandled_spawn_state: Mutex<UnhandledSpawnState>,
     unhandled_spawn_delivery: tokio::sync::Mutex<()>,
 
@@ -2317,6 +2329,7 @@ impl BexEngine {
             shutdown_required: AtomicBool::new(true),
             futures: FutureManager::new(futures_permit),
             rooted_unhandled_spawn_errors: Mutex::new(VecDeque::new()),
+            rooted_pending_finalizers: Mutex::new(VecDeque::new()),
             unhandled_spawn_state: Mutex::new(UnhandledSpawnState {
                 handler: None,
                 queued: VecDeque::new(),
@@ -3257,6 +3270,24 @@ impl BexEngine {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .extend(unhandled_spawn_errors);
 
+        // BEP-042: root the finalizer queue the same way, for the same reason.
+        // The raw pairs are post-copy pointers; `drain_finalizers` runs after
+        // the guard is released and awaits, and an explicit collection can
+        // run in between. Handles are roots and are fixed up by it.
+        let pending_finalizers = self
+            .heap
+            .take_pending_finalizers()
+            .into_iter()
+            .map(|(instance, cleanup)| RootedPendingFinalizer {
+                instance: self.heap.create_handle(instance),
+                cleanup: self.heap.create_handle(cleanup),
+            })
+            .collect::<Vec<_>>();
+        self.rooted_pending_finalizers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .extend(pending_finalizers);
+
         if level == bex_heap::CollectionLevel::Major {
             self.bex_work.collected(cleanup_version);
         }
@@ -3282,10 +3313,8 @@ impl BexEngine {
 
         // BEP-042: run the `cleanup` finalizer for every instance this
         // collection kept alive. The `heap_guard` is dropped (so `call_function`
-        // can acquire a permit), the queued pointers are valid (drained at this
-        // same safepoint, before any other collection), and a caller that holds
-        // `checking_gc` (the engine GC paths) blocks a nested collection from
-        // moving them mid-drain.
+        // can acquire a permit); the queue was rooted into handles inside the
+        // pause, so a collection between here and the drain is harmless.
         self.drain_finalizers().await;
 
         cycle.finish(&mut stats, reason, &self.heap);
@@ -5071,8 +5100,8 @@ impl BexEngine {
     /// during the collection that just completed.
     ///
     /// Called immediately after a collection (the GC copied each pending instance
-    /// into the survivor space, so it is alive). The queued instances are rooted
-    /// into handles before the first `await` (see the body), so they stay valid
+    /// into the survivor space, so it is alive). The collection rooted the queued
+    /// instances into handles before it released the heap, so they stay valid
     /// across any nested or concurrent collection — `collect_garbage` is `pub` and
     /// can be called directly, where the `checking_gc` guard is NOT held, so we do
     /// not rely on it. Each `cleanup` runs as an ordinary function call on the
@@ -5094,25 +5123,17 @@ impl BexEngine {
     // own collection — without a `cleanup` that itself collects waiting on its
     // own batch.
     async fn drain_finalizers(self: &Arc<Self>) {
-        // Root the entire queue into handles BEFORE the first `await`. The queued
-        // pointers are raw `HeapPtr`s; if a `cleanup` body yields and a nested or
-        // concurrent collection runs (possible when `collect_garbage` is called
-        // directly, where `checking_gc` is not held), the not-yet-processed
-        // pointers would be moved. Handles are GC roots and are fixed up across a
-        // collection, so converting up front keeps every pending instance — and
-        // the finalizer of a class declared at run time — valid.
-        let pending: Vec<_> = self
-            .heap
-            .take_pending_finalizers()
-            .into_iter()
-            .map(|(instance, cleanup)| {
-                (
-                    self.heap.create_handle(instance),
-                    self.heap.create_handle(cleanup),
-                )
-            })
-            .collect();
-        for (instance, cleanup) in pending {
+        // The queue was rooted into handles inside the collection that filled
+        // it (`collect_garbage_parked`), so every pending instance — and the
+        // finalizer of a class declared at run time — stays valid however many
+        // collections a `cleanup` body triggers before its turn.
+        let pending: VecDeque<_> = std::mem::take(
+            &mut *self
+                .rooted_pending_finalizers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        for RootedPendingFinalizer { instance, cleanup } in pending {
             let ctx = FunctionCallContextBuilder::new(sys_types::CallId::next())
                 .for_runtime()
                 .build();

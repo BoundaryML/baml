@@ -268,25 +268,26 @@ fn a_body_paused_at_a_yield_survives_a_moving_collection() {
     use crate::compiled_rt::Step;
 
     fn body(vm: &mut BexVm, fr: &FrameRecord, _: &[Value]) -> BodyResult {
-        vm.reserve_slots(fr, 1)?;
+        vm.reserve_slots(fr, 2)?;
         let mut live = vm.string_value("still live");
         let mut cached = vm.static_type_value(fr, 0, bex_vm_types::RealizedTy::unknown());
         for _ in 0..3 {
             let before = live;
+            let before_cached = cached;
+            // Spilled, as generated code spills what it holds across a
+            // suspension: the cache holds its type weakly, so the slot is
+            // what keeps it alive.
             vm.set_slot(fr, 0, live);
+            vm.set_slot(fr, 1, cached);
             vm.suspend(Step::Yield)?;
             live = vm.slot(fr, 0);
-            let forwarded = vm.static_type_value(fr, 0, bex_vm_types::RealizedTy::unknown());
-            assert_ne!(
-                forwarded, cached,
-                "the collection forwards the compiled cache"
-            );
+            cached = vm.slot(fr, 1);
+            assert_ne!(cached, before_cached, "the collection moves the type");
             assert_eq!(
-                forwarded,
                 vm.static_type_value(fr, 0, bex_vm_types::RealizedTy::unknown()),
-                "the forwarded value remains cached"
+                cached,
+                "the compiled cache follows its type to where it moved"
             );
-            cached = forwarded;
             assert_ne!(live, before, "the collection moves the value");
             assert_eq!(vm.as_string(&live).unwrap().as_str(), "still live");
         }
