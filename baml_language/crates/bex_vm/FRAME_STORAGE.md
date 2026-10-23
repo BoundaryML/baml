@@ -1,6 +1,6 @@
 # VM call-frame storage budget (B-1842)
 
-This is the primary **10 MiB frame-storage budget** solution for [B-1842](https://linear.app/boundaryml2/issue/B-1842/fixed-256-frame-vm-call-stack-max-frames-catch-alls-arm-doesnt-catch), independent of the emergency proposal to set `MAX_FRAMES = 10_000`. Neither proposal should be merged automatically.
+This document describes the **10 MiB frame-storage budget** for [B-1842](https://linear.app/boundaryml2/issue/B-1842/fixed-256-frame-vm-call-stack-max-frames-catch-alls-arm-doesnt-catch).
 
 ## Baseline and design
 

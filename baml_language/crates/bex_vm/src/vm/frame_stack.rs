@@ -23,6 +23,7 @@ pub struct FrameStack {
 }
 
 impl FrameStack {
+    /// Allocated frame slots, including unused slots charged to the budget.
     pub fn capacity(&self) -> usize {
         self.storage.capacity()
     }
@@ -121,10 +122,12 @@ impl FrameStack {
         self.storage.extend(std::iter::once_with(frame));
     }
 
+    /// Move a frame into a slot already reserved by `reserve_one`.
     pub(super) fn push_reserved(&mut self, frame: Frame) {
         self.push_reserved_with(|| frame);
     }
 
+    /// Remove the top frame while retaining its backing slot for reuse.
     pub(super) fn pop(&mut self) -> Option<Frame> {
         self.storage.pop()
     }
@@ -132,12 +135,14 @@ impl FrameStack {
 
 impl Deref for FrameStack {
     type Target = [Frame];
+    /// Borrow initialized frames without exposing vector growth.
     fn deref(&self) -> &Self::Target {
         &self.storage
     }
 }
 
 impl DerefMut for FrameStack {
+    /// Mutate initialized frames without exposing vector growth.
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.storage
     }
@@ -146,6 +151,7 @@ impl DerefMut for FrameStack {
 impl<'a> IntoIterator for &'a FrameStack {
     type Item = &'a Frame;
     type IntoIter = std::slice::Iter<'a, Frame>;
+    /// Visit initialized frames, excluding spare backing slots.
     fn into_iter(self) -> Self::IntoIter {
         self.storage.iter()
     }
@@ -154,12 +160,17 @@ impl<'a> IntoIterator for &'a FrameStack {
 impl<'a> IntoIterator for &'a mut FrameStack {
     type Item = &'a mut Frame;
     type IntoIter = std::slice::IterMut<'a, Frame>;
+    /// Visit initialized frames, excluding spare backing slots.
     fn into_iter(self) -> Self::IntoIter {
         self.storage.iter_mut()
     }
 }
 
 impl VecExt for FrameStack {
+    /// Drop the top frame without moving it.
+    ///
+    /// # Safety
+    /// The frame stack must be nonempty.
     unsafe fn no_return_pop(&mut self) {
         // SAFETY: the caller guarantees a nonempty frame stack.
         unsafe { self.storage.no_return_pop() };
@@ -174,6 +185,7 @@ mod tests {
     use super::*;
     use crate::vm::BytecodeFrame;
 
+    /// Construct owned test frames with markers that expose relocation loss.
     fn frame(marker: usize) -> Frame {
         Frame::Bytecode(BytecodeFrame {
             function: HeapPtr::null(),
@@ -188,6 +200,7 @@ mod tests {
     }
 
     #[test]
+    /// Exercise every growth step, the final partial growth, and slot reuse.
     fn fills_the_budget_without_geometric_overshoot_and_reuses_slots() {
         let mut frames = FrameStack::default();
         assert_eq!(frames.capacity(), 0, "shallow tasks do not reserve 10 MiB");
@@ -217,6 +230,7 @@ mod tests {
     }
 
     #[test]
+    /// A refused reallocation must preserve ownership and allow retrying.
     fn allocator_refusal_preserves_live_frames_and_is_a_controlled_panic() {
         let mut frames = FrameStack::default();
         frames.reserve_one().unwrap();
@@ -238,6 +252,7 @@ mod tests {
     }
 
     #[test]
+    /// A sub-frame budget must fail without consulting the allocator.
     fn a_budget_smaller_than_one_frame_fails_before_allocating() {
         let mut frames = FrameStack::default();
         // SAFETY: this allocator is never called; the budget check must reject.
@@ -250,6 +265,7 @@ mod tests {
         assert_eq!(frames.capacity(), 0);
     }
     #[test]
+    /// Entry allocation refusal must become a BAML panic rather than an empty run.
     fn entry_allocation_refusal_surfaces_on_exec_and_can_be_retried() {
         use std::sync::{Arc, atomic::AtomicBool};
 

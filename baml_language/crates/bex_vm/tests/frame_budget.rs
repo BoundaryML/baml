@@ -50,10 +50,12 @@ const SOURCE: &str = r#"
     }
 "#;
 
+/// Derive the usable slot count from this build's enum layout.
 fn maximum_slots() -> usize {
     FRAME_STORAGE_BUDGET_BYTES / size_of::<Frame>()
 }
 
+/// Create an opcode-yielding VM so storage peaks remain observable.
 fn make_vm(program: Program, entry: &str, depth: i64) -> BexVm {
     let index = program.rendered_callables()[entry].object.raw();
     let flag = Arc::new(AtomicBool::new(true));
@@ -71,6 +73,7 @@ struct Observation {
     capacity: usize,
 }
 
+/// Execute while checking the backing-capacity invariant after every yield.
 fn drive(vm: &mut BexVm) -> Observation {
     let mut peak = 0;
     let mut capacity = 0;
@@ -106,6 +109,7 @@ fn drive(vm: &mut BexVm) -> Observation {
 }
 
 #[test]
+/// Both dispatchers must fill the budget and reject the next frame after reuse.
 fn exact_and_general_calls_execute_to_the_layout_derived_budget() {
     let maximum = maximum_slots();
     let depth = i64::try_from(maximum - 2).unwrap();
@@ -140,6 +144,7 @@ fn exact_and_general_calls_execute_to_the_layout_derived_budget() {
 }
 
 #[test]
+/// Overflow must preserve named, ordinary wildcard, and panic wildcard behavior.
 fn the_next_frame_is_a_panic_with_the_existing_catching_boundary() {
     let depth = i64::try_from(maximum_slots() - 1).unwrap();
     for (entry, expected) in [
@@ -158,6 +163,7 @@ fn the_next_frame_is_a_panic_with_the_existing_catching_boundary() {
 }
 
 #[test]
+/// Callback continuations and bytecode calls must consume the same backing budget.
 fn indirect_and_native_callback_frames_share_the_budget() {
     for entry in ["user.indirect_main", "user.native_main"] {
         // These paths use multiple frame records per source-level recursion.
@@ -214,6 +220,7 @@ fn indirect_and_native_callback_frames_share_the_budget() {
     clippy::print_stderr,
     reason = "manual measurement probe reports observed layout and capacity"
 )]
+/// Report observed release layout and capacity for the requested recursion input.
 fn measure_frame_capacity() {
     let depth: i64 = std::env::var("BAML_PROBE_DEPTH").unwrap().parse().unwrap();
     let entry = std::env::var("BAML_PROBE_ENTRY").unwrap_or_else(|_| "user.main".to_string());
