@@ -3336,7 +3336,7 @@ impl BexVm {
     }
 
     /// Collect active handler contexts, or just the innermost cause. The latter
-    /// stays inline in the SmallVec and stops walking as soon as it finds one.
+    /// stays inline in the `SmallVec` and stops walking as soon as it finds one.
     fn handler_contexts<const ALL: bool>(&self) -> SmallVec<[Value; 1]> {
         let mut contexts = SmallVec::new();
         let mut innermost_bc = true;
@@ -3364,9 +3364,8 @@ impl BexVm {
                 let Ok(func) = (unsafe { self.load_function(depth) }) else {
                     if ALL {
                         continue;
-                    } else {
-                        break;
                     }
+                    break;
                 };
                 let table = match &func.bytecode.compact {
                     Some(compact) => &compact.handler_context_table,
