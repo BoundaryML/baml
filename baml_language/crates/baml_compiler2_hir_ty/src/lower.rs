@@ -96,6 +96,10 @@ pub enum NoInferReason {
     /// An `extends` bound of a `let type T extends I = …` binding: the
     /// statement checks it at run time, from the written type alone.
     TypeBinding,
+    /// The subject of an associated-type projection (`(Box<_> as I).Item`):
+    /// which interface declares the member is decided from the subject, so
+    /// the subject cannot be left for inference.
+    ProjectionBase,
 }
 
 /// Whether the types a [`LowerCtx`] lowers may contain an inference hole.
@@ -584,14 +588,10 @@ impl<'db> LowerCtx<'db> {
                         self.record_type_errors(lowered.diagnostics);
                         lowered.ty.as_lowering_ty().clone()
                     }
-                    // BUG: a hole-based projection (`(Box<_> as I).Item` in a
-                    // `let` annotation) errors silently — matching the
-                    // pre-split `Determination::InvalidBase` path, which also
-                    // pushed no diagnostic. The unsolved-inference diagnostics
-                    // thread owes this case a real error; today the only
-                    // hole-position diagnostics are the signature/expression
-                    // rejections.
-                    _ => LoweringTy::error(),
+                    _ => {
+                        self.record_no_infer(NoInferReason::ProjectionBase);
+                        LoweringTy::error()
+                    }
                 }
             }
             // `_` lowers to the hole node WHERE THE POSITION CAN FILL IT
@@ -850,9 +850,9 @@ impl<'db> LowerCtx<'db> {
                     continue;
                 }
                 // A chained projection over a hole-carrying prefix cannot
-                // determine; poison silently (same contract as the inner
-                // projection arm).
+                // determine (same contract as the inner projection arm).
                 let Ok(ty_plain) = baml_type::Ty::try_from(&ty) else {
+                    self.record_no_infer(NoInferReason::ProjectionBase);
                     return LoweringTy::error();
                 };
                 let lowered = crate::interfaces::lower_projection(
@@ -965,6 +965,7 @@ impl<'db> LowerCtx<'db> {
                         continue;
                     }
                     let Ok(ty_plain) = baml_type::Ty::try_from(&ty) else {
+                        self.record_no_infer(NoInferReason::ProjectionBase);
                         return LoweringTy::error();
                     };
                     let lowered = crate::interfaces::lower_projection(
@@ -1664,8 +1665,10 @@ pub fn substitute_params(ty: &baml_type::interned::Ty, args: &[baml_type::intern
     )
 }
 
-/// Generic-arity recovery without diagnostics (S17): extras truncated,
-/// missing padded with `Error`.
+/// Generic-arity recovery (S17): extras truncated, missing padded with
+/// `Error`. The arity report is `record_arity`'s, made before this runs;
+/// a sink-less re-lowering (MIR, emit) only sees signatures the checked
+/// world already reported on.
 fn enforce_arity(args: &mut Vec<LoweringTy>, expected: usize) {
     args.truncate(expected);
     while args.len() < expected {
@@ -2373,23 +2376,25 @@ pub(crate) fn signature_is_interface_contract<'db>(
 }
 
 fn function_signature_cycle_initial<'db>(
-    _db: &'db dyn baml_compiler2_hir::Db,
+    db: &'db dyn baml_compiler2_hir::Db,
     _id: salsa::Id,
-    _function: FunctionLoc<'db>,
+    function: FunctionLoc<'db>,
 ) -> FunctionSignatureResult {
     // The fixpoint seed for the signature/throws/inference cycle (an
     // omitted or partial throws clause reads `callable_throws`, which
-    // runs `infer_body`, which reads the signature): a degenerate empty
-    // signature; iteration converges to the real one.
-    FunctionSignatureResult {
-        signature: FunctionSignature {
-            generic_params: Vec::new(),
-            params: Vec::new(),
-            ret: baml_type::Ty::error(),
-            throws: baml_type::Ty::never(),
-        },
-        diagnostics: Box::new([]),
-    }
+    // runs `infer_body`, which reads the signature). Only the throws type
+    // depends on the body, so only it is seeded - at the throw set's
+    // bottom, `never` - and the first iteration infers the body against
+    // the real parameters and return type.
+    lower_function_signature(db, function, ThrowsSource::Seed)
+}
+
+/// Where a signature's throws type comes from: the written clause and,
+/// for an open one, the body fixpoint - or the fixpoint's seed.
+#[derive(Clone, Copy)]
+enum ThrowsSource {
+    Lowered,
+    Seed,
 }
 
 /// The concrete `Self` a method's OWNER provides - the class's self
@@ -2523,6 +2528,9 @@ pub fn lowering_diag_error(kind: &LoweringDiagKind) -> crate::diagnostics::TirTy
         LoweringDiagKind::HoleNotAllowed {
             reason: NoInferReason::InterfaceSignature | NoInferReason::TypeBinding,
         } => TirTypeError::CannotInferType,
+        LoweringDiagKind::HoleNotAllowed {
+            reason: NoInferReason::ProjectionBase,
+        } => TirTypeError::WildcardInProjectionSubject,
     }
 }
 
@@ -3239,6 +3247,14 @@ pub fn function_signature_with_diagnostics<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     function: FunctionLoc<'db>,
 ) -> FunctionSignatureResult {
+    lower_function_signature(db, function, ThrowsSource::Lowered)
+}
+
+fn lower_function_signature<'db>(
+    db: &'db dyn baml_compiler2_hir::Db,
+    function: FunctionLoc<'db>,
+    throws_source: ThrowsSource,
+) -> FunctionSignatureResult {
     let data = baml_compiler2_hir::item_data::elaborated_function_data(db, function);
     let frame = function_generic_frame(db, function);
     let bounds = function_generic_bounds(db, function);
@@ -3307,6 +3323,10 @@ pub fn function_signature_with_diagnostics<'db>(
     // or wholly omitted = one bare hole) fills from the body's inferred
     // effect; a closed clause is taken verbatim.
     let mut diagnostics = Vec::new();
+    let body_throws = |db: &'db dyn baml_compiler2_hir::Db| match throws_source {
+        ThrowsSource::Lowered => crate::callable::callable_throws(db, function).0,
+        ThrowsSource::Seed => baml_type::Ty::never(),
+    };
     let throws = match (data.throws, interface_owner) {
         (Some(throws), true) => {
             let (lowered, diags) = ctx.lower_type_ref_with_diagnostics(&data.type_refs, throws);
@@ -3327,14 +3347,14 @@ pub fn function_signature_with_diagnostics<'db>(
             if throws_clause_parts(&lowered).1 {
                 // Open: the named members join the body-inferred remainder
                 // (what `callable_throws` computes through the body run).
-                crate::callable::callable_throws(db, function).0
+                body_throws(db)
             } else {
                 reject_holes(&lowered)
             }
         }
         // Omitted = `throws _`: entirely body-inferred, fixpoint over
         // mutual recursion (S12's callable_throws).
-        (None, false) => crate::callable::callable_throws(db, function).0,
+        (None, false) => body_throws(db),
     };
     FunctionSignatureResult {
         signature: FunctionSignature {
@@ -3347,21 +3367,17 @@ pub fn function_signature_with_diagnostics<'db>(
     }
 }
 
-/// A class's field types, lowered in the class's own generic frame.
+/// A class's field types: [`resolve_class_fields`] without the attributes.
+/// One lowering - in the class's frame AND its bounds, so a field typed by
+/// a projection on a class parameter (`v T.Out` under `T extends HasOut`)
+/// resolves its declaring interface here exactly as it does for emit.
 pub fn class_field_types<'db>(
     db: &'db dyn baml_compiler2_hir::Db,
     class: ClassLoc<'db>,
 ) -> Vec<(Name, baml_type::Ty)> {
-    let data = baml_compiler2_hir::item_data::class_data(db, class);
-    let ctx = lower_ctx_for_file(db, class.file(db)).with_frame(class_generic_frame(db, class));
-    data.fields
+    resolve_class_fields(db, class)
         .iter()
-        .map(|field| {
-            (
-                field.name.clone(),
-                reject_holes(&ctx.lower_type_ref(&data.type_refs, field.type_ref)),
-            )
-        })
+        .map(|(name, ty, _)| (name.clone(), ty.clone()))
         .collect()
 }
 

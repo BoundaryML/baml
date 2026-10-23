@@ -108,3 +108,30 @@ function make_through<E extends GirMaker>(cb: (() -> int throws E)? = null) -> i
 test "evidence decides a bounded throws-position parameter" {
     assert.equal(make_through<GirOne>(), 1)
 }
+
+// An invariant argument is equated where it relates: the call below solves
+// `O` to the union at once, so the `match` sees a known scrutinee.
+class GirSpec<T> {
+    v T
+}
+
+class GirRes<T> {
+    value T
+}
+
+function gir_run<O>(s: GirSpec<O>) -> GirRes<O> {
+    GirRes { value: s.v }
+}
+
+function gir_match_union() -> int {
+    let s: GirSpec<int | string> = GirSpec { v: 3 };
+    let r = gir_run(s).value;
+    match (r) {
+        let i: int => i,
+        let t: string => 0,
+    }
+}
+
+test "a match sees a union an invariant argument solved at the call" {
+    assert.equal(gir_match_union(), 3)
+}

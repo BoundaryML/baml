@@ -1809,7 +1809,9 @@ fn new_tir_diagnostic(
     }
     if matches!(
         error,
-        TirTypeError::TypeMismatch { .. } | TirTypeError::UnitExpected { .. }
+        TirTypeError::TypeMismatch { .. }
+            | TirTypeError::UnitExpected { .. }
+            | TirTypeError::ListPatternNeverMatches { .. }
     ) {
         let base = runtime_type::mismatched_types();
         let diagnostic = if warning {
@@ -1902,6 +1904,9 @@ fn rich_source_aware_tir_type_error_message(
                 .type_expr(ty(expected))
                 .text(after)
         }
+        TirTypeError::ListPatternNeverMatches { scrutinee } => DiagnosticText::new()
+            .text("a list pattern never matches a value of type ")
+            .type_expr(ty(scrutinee)),
         TirTypeError::UnitExpected { context, found } => {
             let (before, after) = context.around_found();
             DiagnosticText::new()
@@ -2066,7 +2071,9 @@ fn tir_type_error_to_diagnostic_id(
     use baml_compiler2_hir_ty::diagnostics::TirTypeError;
     match error {
         TirTypeError::InvalidTraceHook { .. } => DiagnosticId::MalformedAttribute,
-        TirTypeError::TypeMismatch { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::TypeMismatch { .. } | TirTypeError::ListPatternNeverMatches { .. } => {
+            DiagnosticId::TypeMismatch
+        }
         TirTypeError::UnresolvedMember { .. } => DiagnosticId::NoSuchField,
         TirTypeError::UnionMemberNoCommonInterface { .. } => DiagnosticId::NoSuchField,
         TirTypeError::UnknownClassField { .. } | TirTypeError::UnknownClassPatternField { .. } => {
@@ -2149,6 +2156,7 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::ExtraneousThrowsDeclaration { .. }
         | TirTypeError::ImpreciseUnknownThrows { .. } => DiagnosticId::ThrowsContractExtraneous,
         TirTypeError::CannotInferTypeParameter { .. }
+        | TirTypeError::CannotInferAssociatedType { .. }
         | TirTypeError::ConflictingTypeArguments { .. } => DiagnosticId::UnknownType,
         TirTypeError::CannotInferLambdaParamType { .. } => DiagnosticId::UnknownType,
         TirTypeError::WrongNumberOfTypeArgs { .. } => DiagnosticId::TypeMismatch,
@@ -2195,7 +2203,9 @@ fn tir_type_error_to_diagnostic_id(
         }
         TirTypeError::BuiltinInterfaceNotABound { .. } => DiagnosticId::BuiltinInterfaceNotABound,
         // A `_` placeholder in a non-inferable position.
-        TirTypeError::CannotInferType => DiagnosticId::WildcardTypeNotAllowed,
+        TirTypeError::CannotInferType | TirTypeError::WildcardInProjectionSubject => {
+            DiagnosticId::WildcardTypeNotAllowed
+        }
         TirTypeError::TypeMustBeKnown { .. } => DiagnosticId::TypeMustBeKnown,
         TirTypeError::ReceiverTypeMustBeKnown { .. } => DiagnosticId::TypeMustBeKnown,
         TirTypeError::AmbiguousImplementation { .. } => DiagnosticId::TypeMustBeKnown,

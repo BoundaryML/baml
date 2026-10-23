@@ -1,0 +1,180 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// Each site needs a type, or a type's arguments, that nothing determines, and
+// reports where it needed them. A site whose undetermined part an earlier
+// error already owns is that error's cascade and reports nothing more.
+
+interface HasOut {
+    type Out;
+}
+
+interface Src<T> {
+    value: T,
+}
+
+class Box<T> {
+    v: T,
+    implements HasOut {
+        type Out = T;
+    }
+}
+
+interface HasItem {
+    type Item;
+    value: Self.Item,
+}
+
+class IntItem {
+    value: int,
+    implements HasItem {
+        type Item = int;
+    }
+}
+
+class StringItem {
+    value: string,
+    implements HasItem {
+        type Item = string;
+    }
+}
+
+class IntSrc {
+    value: int,
+    implements Src<int> {}
+}
+
+class StringSrc {
+    value: string,
+    implements Src<string> {}
+}
+
+// A `match` whose arm writes a type or a shape types it against the
+// scrutinee's structure at that point: a scrutinee still being inferred is
+// refused there, and that report covers the container's own undetermined
+// element.
+function open_scrutinee() -> int {
+    let xs = [];
+    match (xs) {
+        [let a] => 1,
+        _ => 0,
+    }
+}
+
+function open_scrutinee_typed_arm() -> int {
+    let xs = [];
+    match (xs) {
+        let whole: int[] => 1,
+        _ => 0,
+    }
+}
+
+// Arms that only bind ask nothing of the structure, so the match itself is
+// not refused; the element stays undetermined where the list was made.
+function open_scrutinee_never_pinned() -> int {
+    let xs = [];
+    match (xs) {
+        _ => 0,
+    }
+}
+
+// The element's only evidence is an unresolved name: one error, no
+// "type annotations needed" at the match.
+function open_scrutinee_owned_by_an_error() -> int {
+    let xs = [];
+    xs.push(missing_value);
+    match (xs) {
+        [let a] => 1,
+        _ => 0,
+    }
+}
+
+// An interface pattern with no written arguments adopts them from the
+// scrutinee; `unknown` provides none, so the interface's generics are
+// undetermined.
+function pattern_without_arguments(x: unknown) -> int {
+    match (x) {
+        Src { value } => 1,
+        _ => 0,
+    }
+}
+
+// Implementors that implement the interface at different arguments do not
+// determine them either.
+function pattern_with_conflicting_implementors(x: IntSrc | StringSrc) -> int {
+    match (x) {
+        Src { value } => 1,
+        _ => 0,
+    }
+}
+
+// An interface pattern pins every associated type its interface declares:
+// implementors that pin it differently determine nothing.
+function pattern_with_conflicting_associated_types(x: IntItem | StringItem) -> int {
+    match (x) {
+        HasItem { value } => 1,
+        _ => 0,
+    }
+}
+
+// `unknown` provides no pin either.
+function pattern_with_an_unpinned_associated_type(x: unknown) -> int {
+    match (x) {
+        HasItem { value } => 1,
+        _ => 0,
+    }
+}
+
+// A list pattern on a scrutinee that provably holds no list is dead.
+function list_pattern_on_non_list(x: int | string) -> int {
+    match (x) {
+        [let a] => 1,
+        _ => 0,
+    }
+}
+
+// The elements of an erroneous scrutinee are that error too: no "no member"
+// report on top of the unresolved name.
+function list_pattern_on_an_error() -> int {
+    let x = missing_list;
+    match (x) {
+        [let a] => a.anything(),
+        _ => 0,
+    }
+}
+
+// The subject of a projection decides which interface declares the member,
+// so it cannot be left to inference.
+function projection_hole() -> int {
+    let v: (Box<_> as HasOut).Out = 1;
+    1
+}
+
+// With every arm guarded, a value whose guards all fail reaches no arm: the
+// match is not exhaustive, whatever the scrutinee turns out to be.
+function open_scrutinee_all_guarded(c: bool) -> int {
+    let xs = [];
+    let n = match (xs) {
+        _ if c => 1,
+        let whole if !c => 2,
+    };
+    xs.push(1);
+    n
+}
+
+// A `_` hole reports at the hole, once: what it leaves undetermined is that
+// report's, so the call or lambda it flows into reports nothing more.
+function hole_phantom<T>() -> int {
+    0
+}
+
+function expression_hole() -> int {
+    hole_phantom<_>()
+}
+
+function annotation_hole_into_a_lambda() -> int {
+    let f: (_) -> int throws never = (x) -> {
+        1
+    };
+    0
+}

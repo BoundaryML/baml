@@ -218,6 +218,21 @@ pub(super) struct Pending {
     stall: Option<Stall>,
 }
 
+/// The generic arguments and associated-type pins of one interface
+/// instantiation.
+#[derive(Clone, PartialEq)]
+pub(super) struct InterfaceInstantiation {
+    pub args: Vec<Ty>,
+    pub pins: Vec<(baml_type::Name, Ty)>,
+}
+
+/// The one impl selection confirmed, with the instantiation of its own
+/// parameters that confirms it.
+type ConfirmedImpl<'db> = (
+    &'db crate::impls::ImplFacts<'db>,
+    rustc_hash::FxHashMap<baml_type::ParamTy, Ty>,
+);
+
 /// The outcome of candidate selection for a goal whose subject is known.
 enum Selection {
     /// Exactly one candidate applied, and confirming it committed its
@@ -550,38 +565,11 @@ impl<'db> InferenceContext<'db> {
         at: ExprId,
         required_for: &[RequiredFor],
     ) -> Selection {
-        let candidates = crate::impls::impl_candidates(self.db, goal, &interface.name);
-        let mut applicable: Option<&crate::impls::ImplFacts<'_>> = None;
-        for facts in candidates {
-            let probe = self.probe();
-            let applies = self.confirm_impl(goal, interface, facts).is_some();
-            self.rollback_probe(probe);
-            if applies {
-                if applicable.is_some() {
-                    return Selection::Ambiguous;
-                }
-                applicable = Some(facts);
-            }
-        }
-        let Some(facts) = applicable else {
-            if crate::impls::is_structural_interface(self.db, interface) {
-                return Selection::Confirmed;
-            }
-            if crate::impls::structural_interface(self.db, &interface.name)
-                == Some(baml_type::StructuralInterface::Hash)
-            {
-                if goal.has_infer() || interface_has_infer(interface) {
-                    return Selection::Unresolved;
-                }
-                if crate::impls::hash_eligible(self.db, &self.facts, subject, interface) {
-                    return Selection::Confirmed;
-                }
-            }
-            return Selection::NoCandidate;
+        let (facts, instantiation) = match self.confirm_unique_impl(goal, subject, interface) {
+            Ok(Some(confirmed)) => confirmed,
+            Ok(None) => return Selection::Confirmed,
+            Err(selection) => return selection,
         };
-        let instantiation = self
-            .confirm_impl(goal, interface, facts)
-            .expect("the unique applicable candidate re-confirms");
         let mut nested = required_for.to_vec();
         nested.push(RequiredFor {
             subject: subject.clone(),
@@ -589,6 +577,119 @@ impl<'db> InferenceContext<'db> {
         });
         self.register_impl_bound_obligations(facts, &instantiation, at, &nested);
         Selection::Confirmed
+    }
+
+    /// The candidate half of [`Self::select_impl`]: the unique impl whose
+    /// header applies to `goal`, confirmed (its header unifications
+    /// committed) with the instantiation that confirms it; `Ok(None)` when
+    /// a structural default proves the goal with no impl; otherwise the
+    /// selection no single impl decides. The confirmed impl's own bounds
+    /// are the caller's to register.
+    fn confirm_unique_impl(
+        &mut self,
+        goal: &Ty,
+        subject: &Ty,
+        interface: &InferInterface,
+    ) -> Result<Option<ConfirmedImpl<'db>>, Selection> {
+        let candidates = crate::impls::impl_candidates(self.db, goal, &interface.name);
+        let mut applicable: Option<&'db crate::impls::ImplFacts<'db>> = None;
+        for facts in candidates {
+            let probe = self.probe();
+            let applies = self.confirm_impl(goal, interface, facts).is_some();
+            self.rollback_probe(probe);
+            if applies {
+                if applicable.is_some() {
+                    return Err(Selection::Ambiguous);
+                }
+                applicable = Some(facts);
+            }
+        }
+        let Some(facts) = applicable else {
+            if crate::impls::is_structural_interface(self.db, interface) {
+                return Ok(None);
+            }
+            if crate::impls::structural_interface(self.db, &interface.name)
+                == Some(baml_type::StructuralInterface::Hash)
+            {
+                if goal.has_infer() || interface_has_infer(interface) {
+                    return Err(Selection::Unresolved);
+                }
+                if crate::impls::hash_eligible(self.db, &self.facts, subject, interface) {
+                    return Ok(None);
+                }
+            }
+            return Err(Selection::NoCandidate);
+        };
+        let instantiation = self
+            .confirm_impl(goal, interface, facts)
+            .expect("the unique applicable candidate re-confirms");
+        Ok(Some((facts, instantiation)))
+    }
+
+    /// The one instantiation - every generic argument and associated-type
+    /// pin - at which `subject` implements the interface `name`, read off
+    /// what selecting a goal with fresh arguments commits: an impl's
+    /// header, a rigid variable's bound, or an existential's own reference
+    /// (each through its `requires` closure). `None` when no candidate
+    /// proves it, several do, or what one proves is not fully determined.
+    /// Nothing the selection does survives the call.
+    pub(super) fn implemented_instantiation(
+        &mut self,
+        subject: &Ty,
+        name: &baml_type::DeclName,
+        arity: usize,
+        associated: &[baml_type::Name],
+    ) -> Option<InterfaceInstantiation> {
+        let subject = self.table.resolve_completely(subject);
+        if subject.has_infer() || subject.has_error() {
+            return None;
+        }
+        let subject = widen_literal(&self.expand_alias_ty(&subject));
+        let probe = self.probe();
+        let goal = InferInterface::new(
+            name.clone(),
+            (0..arity).map(|_| self.table.new_var_ty()).collect(),
+            associated
+                .iter()
+                .map(|member| (member.clone(), self.table.new_var_ty()))
+                .collect(),
+        );
+        let confirmed = match subject.kind() {
+            InferTy::Interface(..) => {
+                matches!(self.select_object(&subject, &goal), Selection::Confirmed)
+            }
+            InferTy::TypeVar(..) => {
+                matches!(self.select_param_env(&subject, &goal), Selection::Confirmed)
+            }
+            // No impl subject is a union, and the top type is no implementor.
+            InferTy::Union(..) | InferTy::Unknown | InferTy::Never => false,
+            // An impl's header pins the arguments only where one impl applies.
+            _ => matches!(
+                self.confirm_unique_impl(&subject, &subject, &goal),
+                Ok(Some(_))
+            ),
+        };
+        let instantiation = confirmed
+            .then(|| {
+                let args: Vec<Ty> = goal
+                    .generics
+                    .iter()
+                    .map(|arg| self.table.resolve_completely(arg))
+                    .collect();
+                let pins: Vec<(baml_type::Name, Ty)> = goal
+                    .associated_types
+                    .iter()
+                    .map(|(member, pin)| (member.clone(), self.table.resolve_completely(pin)))
+                    .collect();
+                InterfaceInstantiation { args, pins }
+            })
+            .filter(|InterfaceInstantiation { args, pins }| {
+                args.iter()
+                    .chain(pins.iter().map(|(_, pin)| pin))
+                    .all(|ty| !ty.has_infer() && !ty.has_error())
+            });
+        self.rollback_probe(probe);
+        instantiation
     }
 
     /// Object selection: the existential subject's own reference and its

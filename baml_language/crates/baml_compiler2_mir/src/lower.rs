@@ -14133,10 +14133,26 @@ impl<'db> LoweringContext<'db> {
             } => {
                 let array_success = self.builder.create_block();
 
-                if let Some(tir_ty) = self.tir_pat_type(pat_id).cloned() {
-                    self.emit_is_tir_type_branch(scrutinee, &tir_ty, array_success, failure)?;
+                // The checker records the list members the pattern claims.
+                // Where each is a list type, the elements are typed by them,
+                // so the test is membership; where one may hold lists of any
+                // element (`unknown`, a type parameter, an interface
+                // existential), the pattern accepts any list and the test is
+                // the list head alone - never membership in `unknown[]`,
+                // which no `int[]` has.
+                let claimed = self.tir_pat_type(pat_id).ok_or_else(|| {
+                    self.internal_error_here("the checker recorded no type for a list pattern")
+                })?;
+                if is_union_of_list_types(claimed) {
+                    let claimed = claimed.clone();
+                    self.emit_is_tir_type_branch(scrutinee, &claimed, array_success, failure)?;
                 } else {
-                    self.builder.goto(array_success);
+                    self.emit_is_type_tag_branch(
+                        scrutinee,
+                        baml_type::typetag::LIST,
+                        array_success,
+                        failure,
+                    );
                 }
 
                 self.builder.set_current_block(array_success);
@@ -14938,6 +14954,18 @@ impl LoweringContext<'_> {
             bb_not_panic,
         );
         self.builder.set_current_block(bb_not_panic);
+    }
+}
+
+/// Whether `ty` is a list type or a union of list types: a list pattern's
+/// claim that one membership test decides.
+fn is_union_of_list_types(ty: &Tir2Ty) -> bool {
+    match ty {
+        Tir2Ty::List(_) => true,
+        Tir2Ty::Union(members) => members
+            .iter()
+            .all(|member| matches!(member, Tir2Ty::List(_))),
+        _ => false,
     }
 }
 

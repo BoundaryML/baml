@@ -1967,7 +1967,17 @@ pub fn lower_projection(
             });
             Ty::Error
         }
-        Determination::InvalidBase | Determination::Poisoned => Ty::Error,
+        // A subject that can declare no associated type at all (a primitive,
+        // a container, a function type): the member is unknown for it.
+        Determination::InvalidBase => {
+            diagnostics.push(TirTypeError::UnknownAssociatedType {
+                member,
+                container: crate::diagnostics::AssocContainer::Ty(base),
+            });
+            Ty::Error
+        }
+        // An already-poisoned subject was reported where it was lowered.
+        Determination::Poisoned => Ty::Error,
     };
     ProjectionLowering { ty, diagnostics }
 }
