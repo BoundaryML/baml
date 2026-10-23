@@ -23,18 +23,16 @@ impl<'db> Generator<'_, 'db> {
 
     fn stmt(&mut self, stmt: &Stmt) -> Gen<()> {
         match stmt {
-            Stmt::Leaf(block) => self.leaf(BlockId(*block)),
+            Stmt::Leaf(block) => self.leaf(BlockId(*block))?,
             Stmt::Block { label, body } => {
                 self.emit_line(&format!("'b{label}: {{"));
                 self.stmts(body)?;
                 self.emit_line("}");
-                Ok(())
             }
             Stmt::Loop { label, body } => {
                 self.emit_line(&format!("'l{label}: loop {{"));
                 self.stmts(body)?;
                 self.emit_line("}");
-                Ok(())
             }
             Stmt::If {
                 block,
@@ -46,7 +44,6 @@ impl<'db> Generator<'_, 'db> {
                 self.emit_line("} else {");
                 self.stmts(else_branch)?;
                 self.emit_line("}");
-                Ok(())
             }
             Stmt::Switch {
                 block,
@@ -74,22 +71,19 @@ impl<'db> Generator<'_, 'db> {
                 self.stmts(otherwise)?;
                 self.emit_line("}");
                 self.emit_line("}");
-                Ok(())
             }
             Stmt::Break(label) => {
                 self.emit_line(&format!("break 'b{label};"));
-                Ok(())
             }
             Stmt::BreakLoop(label) => {
                 self.emit_line(&format!("break 'l{label};"));
-                Ok(())
             }
             Stmt::Continue(label) => {
                 self.emit_line(&format!("continue 'l{label};"));
-                Ok(())
             }
-            Stmt::Exit(block) => self.exit(BlockId(*block)),
+            Stmt::Exit(block) => self.exit(BlockId(*block))?,
         }
+        Ok(())
     }
 
     /// Class keys use dispatch tags; enum keys use variant indices.
@@ -232,40 +226,40 @@ impl<'db> Generator<'_, 'db> {
                 )?;
                 self.emit_statement(&format!("{code};"));
             }
-            StatementKind::Intrinsic { op, args } => match op {
-                // The declaration's hook prologue resolves the hook the VM's
-                // call path left pending for this frame.
-                IntrinsicOp::BuiltinTraceHook(mode) => {
-                    let mode = match mode {
-                        baml_compiler2_mir::BuiltinTraceHook::Hidden => "Hidden",
-                        baml_compiler2_mir::BuiltinTraceHook::Timing => "Timing",
-                        baml_compiler2_mir::BuiltinTraceHook::Span => "Span",
-                        baml_compiler2_mir::BuiltinTraceHook::Rich => "Rich",
-                        baml_compiler2_mir::BuiltinTraceHook::EmptySpan => "EmptySpan",
-                    };
-                    let code = self.fallible(
-                        id,
-                        &format!(
-                            "vm.builtin_trace_hook(fr, bex_vm::compiled_rt::TraceHookMode::{mode})"
-                        ),
-                    )?;
-                    self.emit_statement(&format!("{code};"));
-                }
-                IntrinsicOp::ApplyTraceHook => {
-                    let [result] = args.as_slice() else {
-                        return Err(Rejection::Invalid(
-                            "`ApplyTraceHook` takes one operand".into(),
-                        ));
-                    };
-                    let result = self.value_operand(id, result)?;
-                    let code =
-                        self.fallible(id, &format!("vm.compiled_finish_trace_hook(fr, {result})"))?;
-                    self.emit_statement(&format!("{code};"));
-                }
-                IntrinsicOp::BindType(_) | IntrinsicOp::Log(_) => {
-                    return unsupported("compiler intrinsic");
-                }
-            },
+            // Resolve the declaration hook left pending by the VM call path.
+            StatementKind::Intrinsic {
+                op: IntrinsicOp::BuiltinTraceHook(mode),
+                ..
+            } => {
+                let mode = match mode {
+                    baml_compiler2_mir::BuiltinTraceHook::Hidden => "Hidden",
+                    baml_compiler2_mir::BuiltinTraceHook::Timing => "Timing",
+                    baml_compiler2_mir::BuiltinTraceHook::Span => "Span",
+                    baml_compiler2_mir::BuiltinTraceHook::Rich => "Rich",
+                    baml_compiler2_mir::BuiltinTraceHook::EmptySpan => "EmptySpan",
+                };
+                let code = self.fallible(
+                    id,
+                    &format!(
+                        "vm.builtin_trace_hook(fr, bex_vm::compiled_rt::TraceHookMode::{mode})"
+                    ),
+                )?;
+                self.emit_statement(&format!("{code};"));
+            }
+            StatementKind::Intrinsic {
+                op: IntrinsicOp::ApplyTraceHook,
+                args,
+            } => {
+                let [result] = args.as_slice() else {
+                    return Err(Rejection::Invalid(
+                        "`ApplyTraceHook` takes one operand".into(),
+                    ));
+                };
+                let result = self.value_operand(id, result)?;
+                let code =
+                    self.fallible(id, &format!("vm.compiled_finish_trace_hook(fr, {result})"))?;
+                self.emit_statement(&format!("{code};"));
+            }
             StatementKind::VirtualFieldStore {
                 iface,
                 receiver,
@@ -480,7 +474,6 @@ impl<'db> Generator<'_, 'db> {
                 "{handler} is an unwind target but has no landing"
             )));
         };
-        let mut out = String::new();
         let value = self.store(
             block,
             &Place::Local(landing.error_local),
@@ -502,9 +495,7 @@ impl<'db> Generator<'_, 'db> {
             .expect("a body is structured before its leaves are emitted");
         let jumps = structured.unwind_jumps[block.0].clone();
         self.stmts(&jumps)?;
-        out.push_str(&self.out);
-        self.out = saved;
-        Ok(out)
+        Ok(std::mem::replace(&mut self.out, saved))
     }
 
     /// Route a thrown value to the block's handler, or propagate it with `?`.

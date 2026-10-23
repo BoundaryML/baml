@@ -125,17 +125,7 @@ impl<'db> Generator<'_, 'db> {
                 field_index,
                 ..
             } => self.virtual_field_value(block, iface, receiver, *field_index),
-            Rvalue::LoadType(template) => {
-                let slot = match template {
-                    TyTemplate::TypeArgRef(slot) => format!("Some({slot})"),
-                    _ => "None".to_string(),
-                };
-                let ty = self.realized(template)?;
-                Ok(Expr::new(
-                    format!("vm.type_value(fr, {slot}, {ty})"),
-                    Repr::Value,
-                ))
-            }
+            Rvalue::LoadType(template) => self.type_value(template),
             Rvalue::CurrentPackage => {
                 let Some(ordinal) = self.package else {
                     return unsupported("current package of a function the program does not place");
@@ -176,11 +166,7 @@ impl<'db> Generator<'_, 'db> {
         elements: &[Operand<'db>],
     ) -> Gen<Expr> {
         let element_ty = self.realized_type(template)?;
-        let mut values = Vec::with_capacity(elements.len());
-        for element in elements {
-            let element = self.operand(block, element)?;
-            values.push(self.value_arg(&element));
-        }
+        let values = self.arg_values(block, elements)?;
         Ok(Expr::new(
             format!("vm.new_array({element_ty}, vec![{}])", values.join(", ")),
             Repr::Value,
@@ -204,11 +190,7 @@ impl<'db> Generator<'_, 'db> {
                 fields.len()
             ));
         }
-        let mut values = Vec::with_capacity(fields.len());
-        for field in fields {
-            let field = self.operand(block, field)?;
-            values.push(self.value_arg(&field));
-        }
+        let values = self.arg_values(block, fields)?;
         let class = format!("vm.record_object(fr, ObjectIndex::from_raw({object}))");
         if type_arg_templates.is_empty() {
             return Ok(Expr::new(
@@ -262,14 +244,14 @@ impl<'db> Generator<'_, 'db> {
             format!("Value::object(vm.record_object(fr, ObjectIndex::from_raw({object})))"),
             Repr::Value,
         ));
-        let code = self.fallible(
+        self.fallible_expr(
             block,
             &format!(
                 "vm.call_builtin(builtin_{ordinal}()?, &[{}])",
                 template.code
             ),
-        )?;
-        Ok(Expr::new(code, Repr::Value))
+            Repr::Value,
+        )
     }
 
     fn closure_value(
@@ -290,11 +272,7 @@ impl<'db> Generator<'_, 'db> {
             return unsupported(format!("lambda `{name}` not found in the program"));
         };
         let types = self.realized_all(type_arg_templates)?;
-        let mut cells = Vec::with_capacity(captures.len());
-        for capture in captures {
-            let cell = self.operand(block, capture)?;
-            cells.push(self.value_arg(&cell));
-        }
+        let cells = self.arg_values(block, captures)?;
         Ok(Expr::new(
             format!(
                 "vm.make_closure(vm.record_object(fr, ObjectIndex::from_raw({object})), \
@@ -355,14 +333,14 @@ impl<'db> Generator<'_, 'db> {
     ) -> Gen<Expr> {
         let value = self.value_operand(block, value)?;
         let type_args = self.realized_all(type_arg_templates)?;
-        let code = self.fallible(
+        self.fallible_expr(
             block,
             &format!(
                 "vm.specialize_function_value({value}, &[{}])",
                 type_args.join(", ")
             ),
-        )?;
-        Ok(Expr::new(code, Repr::Value))
+            Repr::Value,
+        )
     }
 
     fn virtual_bound_method_value(
@@ -376,14 +354,13 @@ impl<'db> Generator<'_, 'db> {
         let (iface, iface_args) = self.interface_operands(iface)?;
         let types = self.realized_all(type_args)?;
         let receiver = self.value_operand(block, receiver)?;
-        let code = self.fallible(
-            block,
+        self.fallible_expr(block,
             &format!(
                 "vm.make_virtual_bound_method({receiver}, {iface}, {iface_args}, {method:?}, &[{}])",
                 types.join(", ")
             ),
-        )?;
-        Ok(Expr::new(code, Repr::Value))
+            Repr::Value,
+        )
     }
 
     fn virtual_function_value(
@@ -397,14 +374,14 @@ impl<'db> Generator<'_, 'db> {
         let self_ty = self.realized(self_ty)?;
         let (iface, iface_args) = self.interface_operands(iface)?;
         let types = self.type_operands("interface function value", type_args)?;
-        let code = self.fallible(
+        self.fallible_expr(
             block,
             &format!(
                 "vm.make_virtual_function(&{self_ty}, {iface}, {iface_args}, {method:?}, &[{}])",
                 types.join(", ")
             ),
-        )?;
-        Ok(Expr::new(code, Repr::Value))
+            Repr::Value,
+        )
     }
 
     fn virtual_field_value(
@@ -463,7 +440,6 @@ impl<'db> Generator<'_, 'db> {
     }
 
     fn template_test(&mut self, value: &str, template: &TyTemplate) -> Gen<String> {
-        frame_free(template)?;
         let tag = |tag: i64| format!("(bex_vm::compiled_rt::type_tag({value}) == {tag}i64)");
         let constant = match template {
             TyTemplate::Class(..) | TyTemplate::Enum(..) => {
@@ -508,7 +484,6 @@ impl<'db> Generator<'_, 'db> {
         if let Some(code) = static_realized(self.index, template) {
             return Ok(code);
         }
-        frame_free(template)?;
         let Some(anchored) = self.index.anchor(template) else {
             return unsupported("type naming a declaration outside the program");
         };
@@ -636,13 +611,4 @@ impl<'db> Generator<'_, 'db> {
             }
         })
     }
-}
-
-fn frame_free(template: &TyTemplate) -> Gen<()> {
-    let mut refs = 0;
-    template.for_each_type_arg_ref(&mut |_| refs += 1);
-    if refs > 0 {
-        return unsupported("type known only at runtime");
-    }
-    Ok(())
 }

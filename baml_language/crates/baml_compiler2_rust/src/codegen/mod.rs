@@ -253,19 +253,15 @@ impl<'db> Generator<'_, 'db> {
     /// leading slots.
     fn slot_base(&self) -> usize {
         if self.analysis.hooked {
-            self.arity()
+            self.analysis.arity
         } else {
             0
         }
     }
 
-    fn arity_locals(&self) -> usize {
-        self.body.locals.len().min(self.arity())
-    }
-
     fn declare_locals(&mut self, iterations: bool) {
         let analysis = self.analysis;
-        let arity = self.arity_locals();
+        let arity = self.body.locals.len().min(self.analysis.arity);
         for (i, &repr) in analysis.reprs.iter().enumerate() {
             if analysis.is_type_local(i) {
                 continue;
@@ -312,6 +308,18 @@ impl<'db> Generator<'_, 'db> {
             return Ok(code);
         }
         Ok(self.bind_type(&code))
+    }
+
+    fn type_value(&mut self, template: &baml_compiler2_mir::TyTemplate) -> Gen<Expr> {
+        let slot = match template {
+            baml_compiler2_mir::TyTemplate::TypeArgRef(slot) => format!("Some({slot})"),
+            _ => "None".to_string(),
+        };
+        let ty = self.realized(template)?;
+        Ok(Expr::new(
+            format!("vm.type_value(fr, {slot}, {ty})"),
+            Repr::Value,
+        ))
     }
 
     /// Bind type expression `code` to a temporary, emitted before the next statement.
@@ -378,8 +386,8 @@ impl<'db> Generator<'_, 'db> {
         if let Some(ty) = self.analysis.static_types.get(&local.0) {
             return Ok(ty.code.clone());
         }
-        if let Some(template) = self.analysis.deferred_types.get(&local.0).cloned() {
-            return self.realized(&template);
+        if let Some(template) = self.analysis.deferred_types.get(&local.0) {
+            return self.realized(template);
         }
         if self.analysis.array_iters.contains(&local.0) {
             return unsupported(format!("{what} with an array iterator as a type argument"));
@@ -723,10 +731,7 @@ impl<'db> Generator<'_, 'db> {
     }
 
     fn emit_statement(&mut self, text: &str) {
-        let pending = std::mem::take(&mut self.pending);
-        for binding in pending {
-            self.emit_line(&binding);
-        }
+        self.flush_bindings();
         self.emit_line(text);
     }
 
@@ -809,9 +814,5 @@ impl<'db> Generator<'_, 'db> {
         };
         user_callee(self.db, self.index, callee)
             .is_some_and(|object| !self.symbols.contains_key(&object))
-    }
-
-    fn arity(&self) -> usize {
-        self.analysis.arity
     }
 }

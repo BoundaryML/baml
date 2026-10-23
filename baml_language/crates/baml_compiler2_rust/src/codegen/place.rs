@@ -19,16 +19,8 @@ impl<'db> Generator<'_, 'db> {
         match place {
             Place::Local(local) => {
                 // Frame-derived types are rebuilt per read; static types are cached per site.
-                if let Some(template) = self.analysis.deferred_types.get(&local.0).cloned() {
-                    let slot = match template {
-                        baml_type::TyTemplate::TypeArgRef(slot) => format!("Some({slot})"),
-                        _ => "None".to_string(),
-                    };
-                    let ty = self.realized(&template)?;
-                    return Ok(Expr::new(
-                        format!("vm.type_value(fr, {slot}, {ty})"),
-                        Repr::Value,
-                    ));
+                if let Some(template) = self.analysis.deferred_types.get(&local.0) {
+                    return self.type_value(template);
                 }
                 if let Some(ty) = self.analysis.static_types.get(&local.0) {
                     let code = ty.code.clone();

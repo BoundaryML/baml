@@ -38,8 +38,7 @@ impl<'db> Generator<'_, 'db> {
         let (type_args, args) = args.split_at(ntypeargs.min(args.len()));
         let types = self.type_operands("call", type_args)?;
         if let (FunctionKind::Bytecode, Some(symbol)) = (info.kind, self.symbols.get(&object)) {
-            let symbol = symbol.clone();
-            return self.compiled_call(block, object, &symbol, &name, info, layout, args, &types);
+            return self.compiled_call(block, object, symbol, &name, info, layout, args, &types);
         }
         let values = self.laid_out_args(block, &name, info, layout, args)?;
         let args = format!("&[{}]", values.join(", "));
@@ -106,8 +105,7 @@ impl<'db> Generator<'_, 'db> {
             format!("&{name}")
         };
         let slots = self.laid_out_operands(block, name, info, layout, args)?;
-        let signature = self.signatures.get(&object).cloned();
-        let typed = signature.as_ref().filter(|signature| {
+        let typed = self.signatures.get(&object).filter(|signature| {
             !self.framed.contains(&object)
                 && signature.params.len() == slots.len()
                 && slots
@@ -231,29 +229,17 @@ impl<'db> Generator<'_, 'db> {
         layout: Option<&baml_type::CallLayout>,
         args: &[Operand<'db>],
     ) -> Gen<Vec<Option<Expr>>> {
-        let mut exprs = Vec::with_capacity(args.len());
-        for arg in args {
-            exprs.push(Some(self.operand(block, arg)?));
-        }
-        let slots: Vec<Option<Expr>> = match layout {
-            Some(layout) if layout.0.iter().any(Option::is_some) => layout
-                .map_to(&info.layout)
-                .map_err(|mismatch| {
-                    Rejection::Invalid(format!("call to `{name}` does not fit it: {mismatch:?}"))
-                })?
+        let mut exprs = args
+            .iter()
+            .map(|arg| self.operand(block, arg).map(Some))
+            .collect::<Gen<Vec<_>>>()?;
+        Ok(match call_slots(name, info, layout, exprs.len())? {
+            Some(slots) => slots
                 .into_iter()
                 .map(|slot| slot.and_then(|i| exprs[i].take()))
                 .collect(),
-            _ => exprs,
-        };
-        if slots.len() != info.arity {
-            return Err(Rejection::Invalid(format!(
-                "`{name}` called with {} of {} arguments",
-                slots.len(),
-                info.arity
-            )));
-        }
-        Ok(slots)
+            None => exprs,
+        })
     }
 
     /// `x == null` as a bit test. The `==` driver answers a pair with a
@@ -328,36 +314,21 @@ impl<'db> Generator<'_, 'db> {
         args: &[Operand<'db>],
     ) -> Gen<Vec<String>> {
         let values = self.arg_values(block, args)?;
-        let values = match layout {
-            Some(layout) if layout.0.iter().any(Option::is_some) => layout
-                .map_to(&info.layout)
-                .map_err(|mismatch| {
-                    Rejection::Invalid(format!("call to `{name}` does not fit it: {mismatch:?}"))
-                })?
+        Ok(match call_slots(name, info, layout, values.len())? {
+            Some(slots) => slots
                 .into_iter()
                 .map(|slot| {
                     slot.map_or_else(|| "Value::OMITTED_ARG".to_string(), |i| values[i].clone())
                 })
                 .collect(),
-            _ => values,
-        };
-        if values.len() != info.arity {
-            return Err(Rejection::Invalid(format!(
-                "`{name}` called with {} of {} arguments",
-                values.len(),
-                info.arity
-            )));
-        }
-        Ok(values)
+            None => values,
+        })
     }
 
     pub(super) fn arg_values(&mut self, block: BlockId, args: &[Operand<'db>]) -> Gen<Vec<String>> {
-        let mut values = Vec::with_capacity(args.len());
-        for arg in args {
-            let arg = self.operand(block, arg)?;
-            values.push(self.value_arg(&arg));
-        }
-        Ok(values)
+        args.iter()
+            .map(|arg| self.value_operand(block, arg))
+            .collect()
     }
 
     /// Realize type operands.
@@ -381,10 +352,7 @@ impl<'db> Generator<'_, 'db> {
         let Some(object) = self.index.interface_at(&iface.name) else {
             return unsupported(format!("interface `{name}` not found in the program"));
         };
-        let mut args = Vec::with_capacity(iface.generics.len());
-        for template in &iface.generics {
-            args.push(self.realized(template)?);
-        }
+        let args = self.realized_all(&iface.generics)?;
         Ok((
             format!("vm.record_object(fr, ObjectIndex::from_raw({object}))"),
             format!("&[{}]", args.join(", ")),
@@ -460,6 +428,30 @@ impl<'db> Generator<'_, 'db> {
              Ok(Some(v)) => Ok(v), Ok(None) => {suspend}, Err(e) => Err(e) }}"
         ))
     }
+}
+
+/// Named arguments in callee slot order; positional calls keep their original order.
+fn call_slots(
+    name: &str,
+    info: &FunctionInfo,
+    layout: Option<&baml_type::CallLayout>,
+    nargs: usize,
+) -> Gen<Option<Vec<Option<usize>>>> {
+    let slots = layout
+        .filter(|layout| layout.0.iter().any(Option::is_some))
+        .map(|layout| layout.map_to(&info.layout))
+        .transpose()
+        .map_err(|mismatch| {
+            Rejection::Invalid(format!("call to `{name}` does not fit it: {mismatch:?}"))
+        })?;
+    let arity = slots.as_ref().map_or(nargs, Vec::len);
+    if arity != info.arity {
+        return Err(Rejection::Invalid(format!(
+            "`{name}` called with {arity} of {} arguments",
+            info.arity
+        )));
+    }
+    Ok(slots)
 }
 
 pub(super) fn named_arg_slots(layout: &baml_type::CallLayout) -> String {
