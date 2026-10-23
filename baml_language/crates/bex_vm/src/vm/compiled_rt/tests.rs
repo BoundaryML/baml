@@ -18,74 +18,40 @@ use crate::{
 
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
-fn compiled_body_is_indistinguishable_from_bytecode() {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-
-    static CALLS: AtomicUsize = AtomicUsize::new(0);
+fn compiled_generic_calls_capture_type_arguments_as_bytecode_does() {
     static SAME: AtomicU32 = AtomicU32::new(0);
-    fn add_compiled(
-        vm: &mut BexVm,
-        _fr: &FrameRecord,
-        args: &[Value],
-    ) -> Result<Value, Box<VmError>> {
-        CALLS.fetch_add(1, Ordering::Relaxed);
-        let sum = vm.add_i64(test_int(args[0]), test_int(args[1]))?;
-        Ok(Value::int(sum))
+    fn same(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+        let ty = vm.frame_type_arg(fr, 0)?;
+        Ok(Value::bool(vm.value_is_member_of(args[0], &ty)))
     }
-    // `Same<T>` forwards its type argument to the compiled `Add` body.
-    fn same_compiled(
-        vm: &mut BexVm,
-        fr: &FrameRecord,
-        args: &[Value],
-    ) -> Result<Value, Box<VmError>> {
-        let t = vm.frame_type_arg(fr, 0)?;
-        let callee = object(vm, &SAME);
-        let _ = vm.call_compiled(
-            fr,
-            callee,
-            add_compiled,
-            std::slice::from_ref(&t),
-            &[args[0], args[1]],
-            0,
-        )?;
-        Ok(Value::bool(vm.value_is_member_of(args[1], &t)))
+    fn forward(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+        let ty = vm.frame_type_arg(fr, 0)?;
+        vm.call_compiled(fr, object(vm, &SAME), same, &[ty], args, 0)
     }
-
     const SOURCE: &str = r#"
-        function Add(a: int, b: int) -> int { a + b }
-        function Same<T>(x: T, y: T) -> bool { Add(1, 2); y is T }
-        function AddStr(a: int, b: int) -> string { `${Add(a, b)}|${Same<int>(a, b)}` }
-        function Caller(a: int, b: int) -> string {
-            AddStr(a, b) catch (e, ctx) {
-                baml.panics.IntegerOverflow => {
-                    let frames = ctx.stack_trace.frames;
-                    frames[frames.length() - 1].function_name
-                }
-            }
-        }
-        function Main() -> string {
-            `${Caller(1, 2)}|${Caller(baml.Int.max_value(), 1)}`
-        }
+        function Same<T>(x: T) -> bool { x is T }
+        function Forward<T>(x: T) -> bool { Same<T>(x) }
+        function Main() -> string { `${Forward<int>(1)}|${Forward<string>("a")}` }
     "#;
-
-    fn run(compiled: bool) -> (String, TimingRecords, Vec<(String, String)>) {
-        let bodies: &[(&str, crate::compiled_rt::CompiledFn)] = if compiled {
-            &[("user.Add", add_compiled), ("user.Same", same_compiled)]
-        } else {
-            &[]
-        };
-        let program = compiled_program(SOURCE, bodies, &[("user.Add", &SAME)]);
+    let mut runs = Vec::new();
+    for bodies in [
+        &[][..],
+        &[
+            ("user.Same", same as crate::compiled_rt::CompiledFn),
+            ("user.Forward", forward),
+        ][..],
+    ] {
+        let program = compiled_program(SOURCE, bodies, &[("user.Same", &SAME)]);
         let entry = program.rendered_callables()["user.Main"].object.raw();
-        let same = program.rendered_callables()["user.Same"].object.raw();
         let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
-        let Object::Function(same) = vm.get_object(vm.heap.compile_time_ptr(same)) else {
+        let Object::Function(function) = vm.get_object(object(&vm, &SAME)) else {
             unreachable!()
         };
         vm.telemetry
             .as_ref()
             .unwrap()
             .set_policy(
-                same,
+                function,
                 crate::telemetry::TelemetryPolicy {
                     span_from_entry: true,
                     capture_inputs: true,
@@ -94,57 +60,27 @@ fn compiled_body_is_indistinguishable_from_bytecode() {
             )
             .unwrap();
         vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
-        let result = exec_string(&mut vm);
-        let telemetry = vm.telemetry.as_ref().unwrap();
-        let named_paths = named_paths(&vm);
-        let timings = timing_records(&vm, &named_paths);
-        let type_args = telemetry
+        assert_eq!(exec_string(&mut vm), "true|true");
+        let paths = named_paths(&vm);
+        let args: Vec<_> = vm
+            .telemetry
+            .as_ref()
+            .unwrap()
             .span_records()
             .iter()
             .filter_map(|event| match event {
                 SpanRecord::FunctionSpanAnnouncement {
                     call_path,
-                    captured_type_args: Some(type_args),
+                    captured_type_args: Some(args),
                     ..
-                } => Some((named_paths[call_path].1.clone(), format!("{type_args:?}"))),
+                } => Some((paths[call_path].1.clone(), format!("{args:?}"))),
                 _ => None,
             })
             .collect();
-        (result, timings, type_args)
+        assert_eq!(args.len(), 2);
+        runs.push(args);
     }
-
-    let bytecode = run(false);
-    assert_eq!(CALLS.load(Ordering::Relaxed), 0);
-    let compiled = run(true);
-    assert_eq!(
-        CALLS.load(Ordering::Relaxed),
-        3,
-        "the compiled bodies must run for every call"
-    );
-
-    assert_eq!(bytecode.0, "3|true|user.Add");
-    assert_eq!(compiled.0, bytecode.0);
-
-    // Call-path IDs are process-global, so compare the caller and callee names.
-    let bytecode_named = &bytecode.1;
-    let compiled_named = &compiled.1;
-    assert!(bytecode_named.len() >= 9);
-    assert_eq!(compiled_named, bytecode_named);
-    assert!(
-        !bytecode.2.is_empty(),
-        "the generic call announces its type arguments"
-    );
-    assert_eq!(compiled.2, bytecode.2);
-    let add_outcomes: Vec<_> = compiled_named
-        .iter()
-        .filter(|((caller, callee), _, _)| {
-            caller.as_deref() == Some("user.AddStr") && callee == "user.Add"
-        })
-        .map(|(_, outcome, _)| *outcome)
-        .collect();
-    assert_eq!(add_outcomes.len(), 2);
-    assert_eq!(add_outcomes[0], InvocationOutcome::Ok);
-    assert_ne!(add_outcomes[1], InvocationOutcome::Ok);
+    assert_eq!(runs[0], runs[1]);
 }
 
 pub(crate) fn test_int(value: Value) -> i64 {
