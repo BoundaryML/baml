@@ -156,12 +156,13 @@ fn compiled_catches_match_bytecode_error_evidence_and_rethrow_origins() {
             .unwrap(),
         Ordering::Relaxed,
     );
+    // Skip the generated rethrow for an unmatched catch before the source arm.
     RETHROW_PC.store(
         relay_function
             .bytecode
             .instructions
             .iter()
-            .position(|i| matches!(i, Instruction::Rethrow))
+            .rposition(|i| matches!(i, Instruction::Rethrow))
             .unwrap()
             .try_into()
             .unwrap(),
@@ -371,10 +372,11 @@ fn compiled_raise_kinds_follow_source_opcodes_instead_of_error_values() {
             .bytecode
             .instructions
             .iter()
-            .position(|instruction| {
+            .rposition(|instruction| {
                 if is_throw {
                     matches!(instruction, Instruction::Throw)
                 } else {
+                    // Earlier calls construct the map; the last one indexes it.
                     matches!(instruction, Instruction::Call { .. })
                 }
             })
