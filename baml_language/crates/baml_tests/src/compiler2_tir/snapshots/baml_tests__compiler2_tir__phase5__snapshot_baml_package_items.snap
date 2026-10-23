@@ -203,25 +203,22 @@ namespace baml.json:
   class PathError { methods: [] }
   class SerializationError { methods: [] }
   type json
-  function _from_string<T>
+  function _decode_structural<T>
+  function _from
   function _path_field
   function _path_index
   function _schema
-  function deserialize<T>
+  function _stringify
+  function _to<T>
+  function decode<T>
   function field
-  function from<T>
-  function from_json<T>
-  function from_string<T>
+  function from
   function parse
   function path<T>
   function path_or<T>
   function schema
-  function serialize<T>
   function stringify
-  function stringify_pretty
   function to<T>
-  function to_json
-  function to_string
 namespace baml.media:
   class Audio { methods: [url, name, base64, mime_type, from_url, from_file, from_file_content, infer_mime_type, from_base64] }
   class Image { methods: [url, name, base64, mime_type, from_url, from_file, from_file_content, infer_mime_type, from_base64] }
@@ -356,5 +353,5 @@ namespace baml.ws:
   function connect
 namespace baml.yaml:
   class ParseError { methods: [] }
-  function deserialize<T>
+  function decode<T>
   function parse
