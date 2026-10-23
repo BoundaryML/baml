@@ -22,21 +22,21 @@
 ///   members are sorted into canonical form by it, and μ-canonicalization picks
 ///   the least head of a state as its rendering representative. Canonical form
 ///   is therefore only as deterministic as this ordering.
-/// - `'static` — a head is an owned identity, never a borrow into something
-///   else. Lets the μ-automaton's special leaves be `'static` constants
-///   (see `mu`'s `never`/`unknown_top`/…), keeping its interner borrowing.
 /// - `Eq` + `Hash` — the normalized form is compared and memoized by value, and
 ///   head identity is decided by `==` against a head obtained from the context
 ///   (see [`TypeContext::well_known`](crate::normalize::TypeContext::well_known)).
 ///
-/// Note what is absent: nothing that recovers a display name, and nothing that
-/// recognizes a particular builtin. Both would force every head representation
-/// to understand names, which is exactly what the runtime's handle cannot do.
+/// Note what is absent. No `'static`: the runtime's head is branded by the heap
+/// epoch it was read in, and the algebra never outlives its inputs (the
+/// μ-automaton borrows everything it interns, its special leaves included).
+/// Nothing that recovers a display name, and nothing that recognizes a
+/// particular builtin: both would force every head representation to understand
+/// names, which is exactly what the runtime's handle cannot do.
 ///
 /// Blanket-implemented, so a representation opts in by satisfying the bounds.
-pub trait Head: Clone + Ord + Eq + std::hash::Hash + std::fmt::Debug + 'static {}
+pub trait Head: Clone + Ord + Eq + std::hash::Hash + std::fmt::Debug {}
 
-impl<T: Clone + Ord + Eq + std::hash::Hash + std::fmt::Debug + 'static> Head for T {}
+impl<T: Clone + Ord + Eq + std::hash::Hash + std::fmt::Debug> Head for T {}
 
 /// A nominal head that carries both its identity and its spelling.
 ///
