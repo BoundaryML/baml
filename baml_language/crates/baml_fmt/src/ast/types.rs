@@ -147,14 +147,14 @@ impl Printable for Type {
 
 /// Transparent wrapper for an explicit return annotation.
 #[derive(Debug)]
-pub struct ReturnType {
+pub struct FunctionTypeReturnType {
     pub ty: Type,
 }
 
-impl FromCST for ReturnType {
+impl FromCST for FunctionTypeReturnType {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::RETURN_TYPE)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::FunctionTypeReturnType)?;
         let mut it = SyntaxNodeIter::new(&node);
         let ty = it.expect_parse()?;
         it.expect_end()?;
@@ -162,9 +162,9 @@ impl FromCST for ReturnType {
     }
 }
 
-impl KnownKind for ReturnType {
+impl KnownKind for FunctionTypeReturnType {
     fn kind() -> SyntaxKind {
-        SyntaxKind::RETURN_TYPE
+        SyntaxKind::FunctionTypeReturnType
     }
 }
 
@@ -1124,7 +1124,7 @@ impl FromCST for FunctionType {
         }
         let close_paren = it.expect_parse()?;
         let arrow = it.expect_parse()?;
-        let return_type = Box::new(it.expect_parse::<ReturnType>()?.ty);
+        let return_type = Box::new(it.expect_parse::<FunctionTypeReturnType>()?.ty);
         let throws = it
             .next_if_kind(SyntaxKind::THROWS_CLAUSE)
             .map(crate::ast::ThrowsClause::from_cst)

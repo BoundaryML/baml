@@ -169,7 +169,7 @@ ast_node!(BacktickInterpolation, BACKTICK_INTERPOLATION);
 
 ast_node!(TypeExpr, TYPE_EXPR);
 ast_node!(FunctionType, FUNCTION_TYPE);
-ast_node!(ReturnType, RETURN_TYPE);
+ast_node!(FunctionTypeReturnType, FunctionTypeReturnType);
 ast_node!(Attribute, ATTRIBUTE);
 ast_node!(ObjectField, OBJECT_FIELD);
 ast_node!(GenericParam, GENERIC_PARAM);
@@ -316,13 +316,13 @@ impl TypeExpr {
     /// Get the inner `TypeExpr` for parenthesized types like `(int | string)`.
     ///
     /// Returns None if this is not a parenthesized type or if it's a function type.
-    /// For function types, use `function_type_params()` and `function_return_type()` instead.
+    /// Inspect callable syntax through `function_type()` instead.
     pub fn inner_type_expr(&self) -> Option<TypeExpr> {
         if !self.is_parenthesized() {
             return None;
         }
         // If this is a function type, don't return the inner type
-        // (use function_type_params/function_return_type instead)
+        // (use function_type instead)
         if self.is_function_type() {
             return None;
         }
@@ -489,19 +489,6 @@ impl TypeExpr {
             .filter_map(FunctionTypeParam::cast)
             .collect()
     }
-
-    pub fn function_return_type(&self) -> Option<TypeExpr> {
-        self.function_type()?.return_type()?.ty()
-    }
-
-    pub fn function_throws_clause(&self) -> Option<ThrowsClause> {
-        self.function_type()?.throws_clause()
-    }
-
-    pub fn function_throws_type(&self) -> Option<TypeExpr> {
-        self.function_throws_clause()
-            .and_then(|clause| clause.type_expr())
-    }
 }
 
 impl FunctionType {
@@ -512,16 +499,19 @@ impl FunctionType {
             .collect()
     }
 
-    pub fn return_type(&self) -> Option<ReturnType> {
-        self.syntax.children().find_map(ReturnType::cast)
+    pub fn return_type(&self) -> Option<FunctionTypeReturnType> {
+        self.syntax
+            .children()
+            .find_map(FunctionTypeReturnType::cast)
     }
 
+    /// The full `throws E` annotation, including its keyword and inner type.
     pub fn throws_clause(&self) -> Option<ThrowsClause> {
         self.syntax.children().find_map(ThrowsClause::cast)
     }
 }
 
-impl ReturnType {
+impl FunctionTypeReturnType {
     pub fn ty(&self) -> Option<TypeExpr> {
         self.syntax.children().find_map(TypeExpr::cast)
     }
@@ -712,7 +702,7 @@ impl FunctionDef {
     pub fn return_type(&self) -> Option<TypeExpr> {
         self.syntax
             .children()
-            .find_map(ReturnType::cast)
+            .find_map(FunctionTypeReturnType::cast)
             .and_then(|ret| ret.ty())
     }
 
@@ -1914,7 +1904,7 @@ impl MethodSig {
     pub fn return_type(&self) -> Option<TypeExpr> {
         self.syntax
             .children()
-            .find_map(ReturnType::cast)
+            .find_map(FunctionTypeReturnType::cast)
             .and_then(|ret| ret.ty())
     }
 
@@ -2424,7 +2414,7 @@ impl BlockExpr {
 }
 
 impl ThrowsClause {
-    /// Get the type expression for the throws clause.
+    /// The inner type `E` of `throws E`; the clause owns the keyword.
     pub fn type_expr(&self) -> Option<TypeExpr> {
         self.syntax.children().find_map(TypeExpr::cast)
     }

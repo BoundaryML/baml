@@ -5635,7 +5635,7 @@ impl LoweringContext {
 
         let return_type = node
             .children()
-            .find_map(ast::ReturnType::cast)
+            .find_map(ast::FunctionTypeReturnType::cast)
             .and_then(|ret| ret.ty())
             .map(|ty| {
                 self.lower_body_type_expr(&ty)

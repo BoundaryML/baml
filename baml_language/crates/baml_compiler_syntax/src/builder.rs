@@ -89,11 +89,11 @@ impl SyntaxTreeBuilder {
         builder.ws(" ");
         builder.token(SyntaxKind::ARROW, "->");
         builder.ws(" ");
-        builder.start_node(SyntaxKind::RETURN_TYPE);
+        builder.start_node(SyntaxKind::FunctionTypeReturnType);
         builder.start_node(SyntaxKind::TYPE_EXPR);
         builder.token(SyntaxKind::WORD, ret_type);
         builder.finish_node(); // TYPE_EXPR
-        builder.finish_node(); // RETURN_TYPE
+        builder.finish_node(); // FunctionTypeReturnType
 
         // body
         builder.ws(" ");

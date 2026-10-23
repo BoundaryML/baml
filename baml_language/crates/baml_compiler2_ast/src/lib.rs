@@ -1893,7 +1893,8 @@ function f() -> int {
                     .parent()
                     .and_then(baml_compiler_syntax::ast::TypeExpr::cast)
                     .is_some_and(|parent| parent.is_union())
-                || wrapper == SyntaxKind::RETURN_TYPE && node.kind() == SyntaxKind::RETURN_TYPE;
+                || wrapper == SyntaxKind::FunctionTypeReturnType
+                    && node.kind() == SyntaxKind::FunctionTypeReturnType;
             if !unwrap {
                 builder.start_node(node.kind().into());
             }
@@ -1947,7 +1948,11 @@ function f() -> int {
 
         // A callable child must not hide a missing return-annotation boundary.
         let mut builder = rowan::GreenNodeBuilder::new();
-        emit_without_wrapper(&parse(source), &mut builder, SyntaxKind::RETURN_TYPE);
+        emit_without_wrapper(
+            &parse(source),
+            &mut builder,
+            SyntaxKind::FunctionTypeReturnType,
+        );
         let root = SyntaxNode::new_root(builder.finish());
         assert_eq!(root.text().to_string(), source);
         let (items, diags, _) = lower_file(&root);

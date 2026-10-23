@@ -3176,7 +3176,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_return_type(&mut self) {
-        self.with_node(SyntaxKind::RETURN_TYPE, Self::parse_type);
+        self.with_node(SyntaxKind::FunctionTypeReturnType, Self::parse_type);
     }
 
     fn parse_type_primary(&mut self) {
@@ -10537,7 +10537,7 @@ function call_llm_function(client: Client, function_name: string) -> unknown {
             .expect("expected FUNCTION_DEF");
         let returns: Vec<_> = func
             .children()
-            .filter(|node| node.kind() == SyntaxKind::RETURN_TYPE)
+            .filter(|node| node.kind() == SyntaxKind::FunctionTypeReturnType)
             .collect();
         assert_eq!(
             returns.len(),
@@ -11268,7 +11268,7 @@ type Callback = (value: int) -> string throws Foo
     #[test]
     fn callable_and_return_types_have_dedicated_nodes() {
         use baml_compiler_syntax::ast::{
-            FunctionDef, FunctionType, MethodSig, ReturnType, TypeExpr,
+            FunctionDef, FunctionType, FunctionTypeReturnType, MethodSig, TypeExpr,
         };
         use rowan::ast::AstNode;
 
@@ -11305,7 +11305,7 @@ function inferred() -> int throws never {
                 function
                     .syntax()
                     .children()
-                    .any(|node| node.kind() == SyntaxKind::RETURN_TYPE)
+                    .any(|node| node.kind() == SyntaxKind::FunctionTypeReturnType)
             );
         }
         let method = root.descendants().find_map(MethodSig::cast).unwrap();
@@ -11315,7 +11315,7 @@ function inferred() -> int throws never {
             .filter(|node| node.kind() == SyntaxKind::LAMBDA_EXPR)
             .map(|node| {
                 node.children()
-                    .find_map(ReturnType::cast)
+                    .find_map(FunctionTypeReturnType::cast)
                     .and_then(|ret| ret.ty())
                     .is_some()
             })
@@ -11337,7 +11337,7 @@ function inferred() -> int throws never {
                 SyntaxKind::L_PAREN,
                 SyntaxKind::R_PAREN,
                 SyntaxKind::ARROW,
-                SyntaxKind::RETURN_TYPE,
+                SyntaxKind::FunctionTypeReturnType,
                 SyntaxKind::THROWS_CLAUSE
             ]
         );
@@ -11435,7 +11435,8 @@ function inferred() -> int throws never {
         let callable = root.descendants().find_map(TypeExpr::cast).unwrap();
         assert!(callable.is_function_type());
         assert!(!callable.is_union());
-        assert!(callable.function_return_type().unwrap().is_union());
+        let function = callable.function_type().unwrap();
+        assert!(function.return_type().unwrap().ty().unwrap().is_union());
     }
 
     #[test]
