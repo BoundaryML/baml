@@ -16,7 +16,6 @@ use crate::{
     vm::{BexVm, Frame, VmExecState},
 };
 
-// Rust tests can install compiled bodies directly.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn compiled_body_is_indistinguishable_from_bytecode() {
@@ -148,7 +147,6 @@ fn compiled_body_is_indistinguishable_from_bytecode() {
     assert_ne!(add_outcomes[1], InvocationOutcome::Ok);
 }
 
-/// Read an integer from a test value.
 pub(crate) fn test_int(value: Value) -> i64 {
     value.as_int().expect("an int")
 }
@@ -222,53 +220,41 @@ fn compiled_program(
 ) -> bex_vm_types::Program {
     let mut program = baml_test_support::compile_source(source);
     let callables = program.rendered_callables();
-    for (name, slot) in objects {
-        let raw = callables.get(*name).map_or_else(
-            || {
-                program
-                    .packages
+    let resolve = |name: &str| {
+        if let Some(callable) = callables.get(name) {
+            return callable.object.raw();
+        }
+        if let Some(index) = (0..program.objects.len()).find(|&index| {
+            program
+                .function_name(ObjectIndex::from_raw(index))
+                .as_deref()
+                == Some(name)
+        }) {
+            return index;
+        }
+        program
+            .packages
+            .iter()
+            .find_map(|package| {
+                package
+                    .classes
                     .iter()
-                    .find_map(|package| {
-                        package.classes.iter().chain(&package.interfaces).find_map(
-                            |(path, object)| {
-                                // Display names omit the root package.
-                                let qualified = std::iter::once(package.name.as_str())
-                                    .chain(path.namespace.iter().map(baml_type::Name::as_str))
-                                    .chain(std::iter::once(path.name.as_str()))
-                                    .collect::<Vec<_>>()
-                                    .join(".");
-                                (qualified == *name).then(|| object.raw())
-                            },
-                        )
+                    .chain(&package.interfaces)
+                    .find_map(|(path, object)| {
+                        let qualified = std::iter::once(package.name.as_str())
+                            .chain(path.namespace.iter().map(baml_type::Name::as_str))
+                            .chain(std::iter::once(path.name.as_str()))
+                            .collect::<Vec<_>>()
+                            .join(".");
+                        (qualified == name).then(|| object.raw())
                     })
-                    .unwrap_or_else(|| panic!("no callable, class or interface `{name}`"))
-            },
-            |callable| callable.object.raw(),
-        );
-        slot.store(
-            u32::try_from(raw).unwrap(),
-            std::sync::atomic::Ordering::Relaxed,
-        );
+            })
+            .unwrap_or_else(|| panic!("no callable, class or interface `{name}`"))
+    };
+    for (name, slot) in objects {
+        slot.store(u32::try_from(resolve(name)).unwrap(), Ordering::Relaxed);
     }
-    // Interface implementations have display names but no callable map entries.
-    let indices: Vec<usize> = bodies
-        .iter()
-        .map(|(name, _)| {
-            callables.get(*name).map_or_else(
-                || {
-                    (0..program.objects.len())
-                        .find(|&index| {
-                            program
-                                .function_name(ObjectIndex::from_raw(index))
-                                .as_deref()
-                                == Some(*name)
-                        })
-                        .unwrap_or_else(|| panic!("no function `{name}`"))
-                },
-                |callable| callable.object.raw(),
-            )
-        })
-        .collect();
+    let indices: Vec<_> = bodies.iter().map(|(name, _)| resolve(name)).collect();
     for ((_, body), index) in bodies.iter().zip(indices) {
         let Object::Function(function) = &mut program.objects[ObjectIndex::from_raw(index)] else {
             unreachable!()
@@ -289,6 +275,15 @@ fn exec_with_compiled_bodies(
     level: Option<btel_settings::mode::AutoTelemetryLevel>,
 ) -> (String, BexVm) {
     let program = compiled_program(source, bodies, objects);
+    let mut vm = program_vm(program, level);
+    let out = exec_string(&mut vm);
+    (out, vm)
+}
+
+fn program_vm(
+    program: bex_vm_types::Program,
+    level: Option<btel_settings::mode::AutoTelemetryLevel>,
+) -> BexVm {
     let entry = program.rendered_callables()["user.Main"].object.raw();
     let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
     vm.telemetry = level.map(|level| {
@@ -299,8 +294,7 @@ fn exec_with_compiled_bodies(
         )
     });
     vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
-    let out = exec_string(&mut vm);
-    (out, vm)
+    vm
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -319,6 +313,19 @@ fn exec_string(vm: &mut BexVm) -> String {
             Err(error) => break format!("error: {error:?}"),
         }
     }
+}
+
+// SAFETY: callers own the heap's only mutator and keep its fiber parked.
+#[allow(unsafe_code)]
+fn collect(vm: &mut BexVm) -> HashMap<HeapPtr, HeapPtr> {
+    let mut roots = Vec::new();
+    vm.collect_roots(&mut roots);
+    let (_, _, forwarding) = unsafe {
+        vm.heap
+            .collect_garbage_generational(&roots, CollectionLevel::Major)
+    };
+    vm.forward_roots(&forwarding);
+    forwarding
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -356,14 +363,7 @@ fn a_body_paused_at_a_yield_survives_a_moving_collection() {
     let out = loop {
         match vm.exec().unwrap() {
             VmExecState::EarlyYield => {
-                let mut roots = Vec::new();
-                vm.collect_roots(&mut roots);
-                // SAFETY: this VM is the heap's only mutator and it is parked.
-                let (_, _, forwarding) = unsafe {
-                    vm.heap
-                        .collect_garbage_generational(&roots, CollectionLevel::Major)
-                };
-                vm.forward_roots(&forwarding);
+                collect(&mut vm);
             }
             VmExecState::Complete(value) => break value,
             other => panic!("unexpected execution state: {other:?}"),
@@ -386,13 +386,21 @@ fn a_panicking_compiled_body_clears_fiber_state() {
     assert!(vm.compiled.fiber.is_none());
 }
 
+// Large frames must exhaust fiber space before the VM's frame limit, including
+// re-entry through bytecode and when the host thread has a small stack.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn compiled_recursion_checks_fiber_stack_space() {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    static DEEP: AtomicU32 = AtomicU32::new(0);
+    use crate::compiled_rt::{CompiledFn, Step};
+    use std::sync::atomic::AtomicUsize;
+
+    static CALLEE: AtomicU32 = AtomicU32::new(0);
     static DEEPEST: AtomicUsize = AtomicUsize::new(0);
-    fn deep(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
+    fn deep<const BYTECODE: bool>(
+        vm: &mut BexVm,
+        fr: &FrameRecord,
+        args: &[Value],
+    ) -> Result<Value, Box<VmError>> {
         let n = test_int(args[0]);
         DEEPEST.fetch_max(vm.level_count(), Ordering::Relaxed);
         if n == 0 {
@@ -402,13 +410,20 @@ fn compiled_recursion_checks_fiber_stack_space() {
         let slot = usize::try_from(n).unwrap() % pad.len();
         pad[slot] = 1;
         std::hint::black_box(&mut pad);
-        let me = object(vm, &DEEP);
-        let below = vm.call_compiled(fr, me, deep, &[], &[Value::int(n - 1)], 0)?;
+        let callee = object(vm, &CALLEE);
+        let arg = Value::int(n - 1);
+        let below = if BYTECODE {
+            vm.push_arg(arg);
+            vm.suspend(Step::Call { callee, argc: 1 })?
+        } else {
+            vm.call_compiled(fr, callee, deep::<false>, &[], &[arg], 0)?
+        };
         let one = std::hint::black_box(&pad)[slot];
         Ok(Value::int(test_int(below) + i64::try_from(one).unwrap()))
     }
     const SOURCE: &str = r#"
         function Deep(n: int) -> int { if (n == 0) { 0 } else { 1 + Deep(n - 1) } }
+        function Bounce(n: int) -> int { Deep(n) }
         function Main() -> string {
             let shallow = Deep(10);
             let d = Deep(300) catch (e) { baml.panics.StackOverflow => -7 };
@@ -417,19 +432,24 @@ fn compiled_recursion_checks_fiber_stack_space() {
         }
     "#;
     let run = || {
-        for telemetry in [false, true] {
-            DEEPEST.store(0, Ordering::Relaxed);
-            let out = run_with_compiled_bodies(
-                SOURCE,
-                &[("user.Deep", deep)],
-                &[("user.Deep", &DEEP)],
-                telemetry,
-            );
-            assert_eq!(out, "10|-7|-8", "telemetry: {telemetry}");
-            assert!(
-                (11..crate::vm::MAX_FRAMES).contains(&DEEPEST.load(Ordering::Relaxed)),
-                "telemetry: {telemetry}"
-            );
+        for (callee, body) in [
+            ("user.Deep", deep::<false> as CompiledFn),
+            ("user.Bounce", deep::<true>),
+        ] {
+            for telemetry in [false, true] {
+                DEEPEST.store(0, Ordering::Relaxed);
+                assert_eq!(
+                    run_with_compiled_bodies(
+                        SOURCE,
+                        &[("user.Deep", body)],
+                        &[(callee, &CALLEE)],
+                        telemetry,
+                    ),
+                    "10|-7|-8",
+                    "{callee}, telemetry: {telemetry}"
+                );
+                assert!((11..crate::vm::MAX_FRAMES).contains(&DEEPEST.load(Ordering::Relaxed)));
+            }
         }
     };
     run();
@@ -439,48 +459,6 @@ fn compiled_recursion_checks_fiber_stack_space() {
         .unwrap()
         .join()
         .unwrap();
-}
-
-// A body entered from bytecode nests on the fiber below the body that called
-// that bytecode, so it must check for stack room as a direct call does.
-#[cfg(not(target_arch = "wasm32"))]
-#[test]
-fn compiled_bytecode_recursion_checks_fiber_stack_space() {
-    use crate::compiled_rt::Step;
-    static PONG: AtomicU32 = AtomicU32::new(0);
-    fn ping(vm: &mut BexVm, _fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
-        let n = test_int(args[0]);
-        if n == 0 {
-            return Ok(Value::int(0));
-        }
-        let mut pad = [0u64; 8192];
-        let slot = usize::try_from(n).unwrap() % pad.len();
-        pad[slot] = 1;
-        std::hint::black_box(&mut pad);
-        let pong = object(vm, &PONG);
-        vm.push_arg(Value::int(n - 1));
-        let below = vm.suspend(Step::Call {
-            callee: pong,
-            argc: 1,
-        })?;
-        let one = std::hint::black_box(&pad)[slot];
-        Ok(Value::int(test_int(below) + i64::try_from(one).unwrap()))
-    }
-    const SOURCE: &str = r#"
-        function Ping(n: int) -> int { if (n == 0) { 0 } else { 1 + Pong(n - 1) } }
-        function Pong(n: int) -> int { Ping(n) }
-        function Main() -> string {
-            let shallow = Ping(10);
-            let huge = Ping(1000000) catch (e) { baml.panics.StackOverflow => -8 };
-            `${shallow}|${huge}`
-        }
-    "#;
-    assert_compiled_output(
-        SOURCE,
-        &[("user.Ping", ping)],
-        &[("user.Pong", &PONG)],
-        "10|-8",
-    );
 }
 
 // The engine pushes a null after every log; a compiled body must discard it.
@@ -543,7 +521,7 @@ fn a_compiled_caller_stands_at_its_call_instruction_while_the_callee_runs() {
             let Frame::Bytecode(frame) = &vm.frames[idx] else {
                 unreachable!("a caller has a bytecode frame")
             };
-            let pc = vm.compiled_pc(idx).unwrap_or(frame.faulting_pc);
+            let pc = vm.frame_pc(idx, None).unwrap_or(frame.faulting_pc);
             let line = trace
                 .iter()
                 .find(|frame| frame.function_name == name)
@@ -786,19 +764,12 @@ fn inline_observed_model_invokes_charge_usage_before_completion() {
                 &[("user.Invoke", invoke), ("user.Caller", caller)],
                 &[("user.Invoke", &INVOKE)],
             );
-            let entry = program.rendered_callables()["user.Main"].object.raw();
             let invoke_index = program.rendered_callables()["user.Invoke"].object;
             let Object::Function(function) = &mut program.objects[invoke_index] else {
                 unreachable!()
             };
             function.body_meta = Some(bex_vm_types::FunctionMeta::ModelInvoke);
-            let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
-            vm.telemetry = Some(TelemetryState::new_root(
-                Arc::new(TelemetryPolicies::with_auto_level(level)),
-                btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run(),
-                crate::telemetry::test_runtime(),
-            ));
-            vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
+            let mut vm = program_vm(program, Some(level));
             FORCE_CALL_FUNNEL.with(|force| force.set(funnel));
             assert_eq!(exec_string(&mut vm), "1");
             FORCE_CALL_FUNNEL.with(|force| force.set(false));
@@ -836,39 +807,40 @@ fn inline_observed_model_invokes_charge_usage_before_completion() {
     }
 }
 
+// As generated code calls a compiled callee: with a frame record when
+// the VM allows, else with a VM frame.
+fn call(
+    vm: &mut BexVm,
+    fr: &FrameRecord,
+    callee: HeapPtr,
+    body: crate::compiled_rt::CompiledFn,
+    arg: Value,
+) -> Result<Value, Box<VmError>> {
+    if vm.direct_calls() {
+        vm.call_record(
+            fr,
+            callee,
+            0,
+            |_: &mut BexVm| [arg],
+            |vm, fr| body(vm, fr, &[arg]),
+        )
+    } else {
+        vm.call_compiled(fr, callee, body, &[], &[arg], 0)
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn inline_observed_compiled_calls_record_as_the_call_path_does() {
     use btel_settings::mode::AutoTelemetryLevel;
 
-    use crate::compiled_rt::{CompiledFn, FORCE_CALL_FUNNEL, FORCE_VM_FRAMES};
+    use crate::compiled_rt::{FORCE_CALL_FUNNEL, FORCE_VM_FRAMES};
 
     static LEAF: AtomicU32 = AtomicU32::new(0);
     static MID: AtomicU32 = AtomicU32::new(0);
     static REC: AtomicU32 = AtomicU32::new(0);
     static DEEP: AtomicU32 = AtomicU32::new(0);
     static PANIC: AtomicU32 = AtomicU32::new(0);
-    // As generated code calls a compiled callee: with a frame record when
-    // the VM allows, else with a VM frame.
-    fn call(
-        vm: &mut BexVm,
-        fr: &FrameRecord,
-        callee: HeapPtr,
-        body: CompiledFn,
-        arg: Value,
-    ) -> Result<Value, Box<VmError>> {
-        if vm.direct_calls() {
-            vm.call_record(
-                fr,
-                callee,
-                0,
-                |_: &mut BexVm| [arg],
-                |vm, fr| body(vm, fr, &[arg]),
-            )
-        } else {
-            vm.call_compiled(fr, callee, body, &[], &[arg], 0)
-        }
-    }
     fn leaf(vm: &mut BexVm, _fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         let n = test_int(args[0]);
         if n < 0 {
@@ -1060,17 +1032,7 @@ fn a_spawn_below_a_frame_record_is_attributed_to_its_body() {
     }
     fn outer(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         let callee = object(vm, &INNER);
-        let below = if vm.direct_calls() {
-            vm.call_record(
-                fr,
-                callee,
-                0,
-                |_: &mut BexVm| [args[0]],
-                |vm, fr| inner(vm, fr, &[args[0]]),
-            )?
-        } else {
-            vm.call_compiled(fr, callee, inner, &[], &[args[0]], 0)?
-        };
+        let below = call(vm, fr, callee, inner, args[0])?;
         Ok(Value::int(test_int(below) + 1))
     }
     const SOURCE: &str = r#"
@@ -1286,16 +1248,11 @@ fn compiled_delivery_survives_collection_before_resume() {
     assert!(roots.contains(&thrown_ptr));
     assert!(roots.contains(&context_ptr));
 
-    // SAFETY: this test owns the only VM and keeps it suspended until its roots are forwarded.
-    let (_, _, forwarding) = unsafe {
-        vm.heap
-            .collect_garbage_generational(&roots, CollectionLevel::Major)
-    };
+    let forwarding = collect(&mut vm);
     let moved_value = forwarding[&thrown_ptr];
     let moved_context = forwarding[&context_ptr];
     assert_ne!(moved_value, thrown_ptr);
     assert_ne!(moved_context, context_ptr);
-    vm.forward_roots(&forwarding);
     let Some(VmError::Thrown(thrown)) = vm.compiled.delivery.as_deref() else {
         unreachable!()
     };
@@ -1553,15 +1510,11 @@ fn call_type_lanes_root_and_forward_runtime_heads() {
             "a native call's realized argument must root its runtime declaration",
         );
 
-        let (_stats, _remapped_roots, forwarding) = unsafe {
-            vm.heap
-                .collect_garbage_generational(&roots, CollectionLevel::Major)
-        };
+        let forwarding = collect(&mut vm);
         let moved = forwarding
             .get(&class_ptr)
             .copied()
             .expect("the pending native type argument must survive collection");
-        vm.forward_roots(&forwarding);
 
         let ty = match lane {
             0 => &vm.pending_call_type_args[0],
@@ -1583,12 +1536,6 @@ fn call_type_lanes_root_and_forward_runtime_heads() {
     }
 }
 
-/// A compiled body with a declaration hook resolves the hook the call path
-/// left pending as its bytecode prologue does: the built-in modes through
-/// `builtin_trace_hook`, a hook function through `begin_trace_hook`, a call on
-/// the VM's call path, and `finish_trace_hook`. The records match bytecode's
-/// whether the hooked callee is entered from bytecode or from a compiled
-/// caller, and a hook that panics falls back to an ordinary entry.
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn compiled_trace_hooks_record_as_bytecode_does() {
