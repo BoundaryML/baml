@@ -5678,7 +5678,9 @@ impl<'db> InferenceContext<'db> {
     /// frame so the BOUNDARY re-unions it) and the link proceeds on the
     /// non-null part - TS short-circuit semantics.
     fn peel_chain_null(&mut self, ty: &Ty) -> Ty {
-        let resolved = self.table.resolve_completely(ty);
+        // Compare the same structural spelling on both sides: unfolding an
+        // alias alone is not evidence that this chain can short-circuit.
+        let resolved = self.structurally_resolve(ty);
         let nonnull = self.remove_null(&resolved);
         if nonnull != resolved
             && let Some(top) = self.chain_nullable.last_mut()

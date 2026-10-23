@@ -143,3 +143,12 @@ function either_choice(value: AgainChoice) -> string | null {
      // ^^^^ string | null
     text
 }
+
+// Alias expansion is not null removal. Optional indexing of this non-null
+// receiver must not acquire a null arm merely because Ints unfolds.
+type Ints = int[]
+function nonnullable_alias_index(xs: Ints | string[]) -> int | string {
+    let value = xs?.[0];
+     // ^^^^^ int | string
+    value
+}

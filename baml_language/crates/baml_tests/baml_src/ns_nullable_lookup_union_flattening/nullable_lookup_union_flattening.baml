@@ -131,3 +131,14 @@ test "aliased_nullable_callback_preserves_named_arguments" {
     assert.equal(call_named(concatenate), "ab");
     assert.equal(call_named(null), "")
 }
+
+type Ints = int[];
+
+function nonnullable_alias_index(xs: Ints | string[]) -> int | string {
+    xs?.[0]
+}
+
+test "unfolding_a_nonnullable_alias_does_not_add_null" {
+    assert.equal(nonnullable_alias_index([7]), 7);
+    assert.equal(nonnullable_alias_index(["hi"]), "hi")
+}
