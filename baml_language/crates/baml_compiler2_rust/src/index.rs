@@ -4,7 +4,7 @@ use std::collections::{HashMap, VecDeque, hash_map::Entry};
 
 use crate::coords::{
     DeclCoords, class_coords, class_head_coords, declared_function_coords, enum_coords,
-    enum_head_coords, function_coords, interface_head_coords, let_coords,
+    enum_head_coords, function_coords, interface_head_coords, item_path, let_coords,
 };
 use baml_base::SourceRoot;
 use baml_compiler2_emit::function_identity;
@@ -19,7 +19,7 @@ use baml_type::{DeclName, typetag::TypeTag};
 use bex_vm_types::{
     Bytecode, ConstValue, DeclPath, FnPath, FunctionKind, Object, ObjectIndex, Program, TypeHead,
     bytecode::BlockPcs,
-    types::{FunctionIdentity, LocalName, PackageKind},
+    types::{FunctionIdentity, PackageKind},
 };
 
 pub(crate) struct FunctionInfo {
@@ -55,7 +55,6 @@ struct ObjectInfo {
     name: String,
     display: String,
     head: Option<TypeTag>,
-    class_tag: Option<i64>,
     enum_variants: Option<usize>,
     type_constants: Vec<(usize, ConstValue)>,
     positions: Option<Positions>,
@@ -65,18 +64,13 @@ struct ObjectInfo {
 pub(crate) struct ProgramIndex {
     /// Package ordinals derived from the linked dependency edges.
     packages: HashMap<SourceRoot, u32>,
-    /// Function object by identity.
     functions: HashMap<DeclKey, usize>,
     /// Class (object, field count) by identity.
     classes: HashMap<DeclKey, (usize, usize)>,
-    /// Enum object by identity.
     enums: HashMap<DeclKey, usize>,
-    /// Type heads anchored by declaration identity.
     interfaces: HashMap<DeclKey, usize>,
     aliases: HashMap<DeclKey, usize>,
-    /// The global slot of each top-level `let`, by identity.
     lets: HashMap<DeclKey, usize>,
-    /// The zero-argument initializer helper of each top-level binding.
     let_helpers: HashMap<DeclKey, usize>,
     /// Lambda (closure body) object by identity; `None` for an identity
     /// more than one object claims, which then stays bytecode.
@@ -92,7 +86,6 @@ pub(crate) struct ProgramIndex {
     pub(crate) globals: HashMap<usize, usize>,
     /// Find a pooled generic function with the program's anchored type arguments.
     generic_functions: Vec<(usize, Box<[bex_vm_types::RealizedTy]>, usize)>,
-    /// Bigint literal (as decimal text) → its pooled `Object::Bigint`.
     pub(crate) bigints: HashMap<String, usize>,
     /// Byte array literal → its pooled `Object::Uint8Array` template, which
     /// bytecode deep-copies on every evaluation.
@@ -155,7 +148,6 @@ impl ProgramIndex {
         };
         index.index_objects(program);
         index.index_globals(program);
-        index.index_bytecode(program);
         index.index_declarations(program);
         index
     }
@@ -164,6 +156,19 @@ impl ProgramIndex {
         for (object, item) in program.objects.iter().enumerate() {
             match item {
                 Object::Function(function) => {
+                    if matches!(function.kind, FunctionKind::Bytecode) {
+                        self.objects[object].type_constants = function
+                            .bytecode
+                            .constants
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, constant)| {
+                                matches!(constant, ConstValue::Type(_) | ConstValue::Literal(_))
+                            })
+                            .map(|(i, constant)| (i, constant.clone()))
+                            .collect();
+                        self.objects[object].positions = Some(Positions::of(&function.bytecode));
+                    }
                     let Some(name) = program.function_name(ObjectIndex::from_raw(object)) else {
                         continue;
                     };
@@ -218,10 +223,8 @@ impl ProgramIndex {
                             .entry(method.as_str().to_owned())
                             .or_default()
                             .push(object);
-                        let user = program
-                            .package_placing(ObjectIndex::from_raw(object))
-                            .is_some_and(|package| package.kind == PackageKind::Ordinary);
-                        if user {
+                        if placing.is_some_and(|(_, package)| package.kind == PackageKind::Ordinary)
+                        {
                             self.user_methods.push(object);
                         }
                     }
@@ -258,7 +261,6 @@ impl ProgramIndex {
                 }
                 Object::Class(class) => {
                     self.objects[object].head = Some(class.type_tag);
-                    self.objects[object].class_tag = Some(class.type_tag.as_i64());
                 }
                 Object::Enum(declaration) => {
                     self.objects[object].head = Some(declaration.type_tag);
@@ -279,31 +281,6 @@ impl ProgramIndex {
             {
                 self.globals.entry(object.raw()).or_insert(slot);
             }
-        }
-    }
-
-    fn index_bytecode(&mut self, program: &Program) {
-        for (object, item) in program.objects.iter().enumerate() {
-            let Object::Function(function) = item else {
-                continue;
-            };
-            if !matches!(function.kind, FunctionKind::Bytecode) {
-                continue;
-            }
-            let constants: Vec<(usize, ConstValue)> = function
-                .bytecode
-                .constants
-                .iter()
-                .enumerate()
-                .filter(|(_, constant)| {
-                    matches!(constant, ConstValue::Type(_) | ConstValue::Literal(_))
-                })
-                .map(|(i, constant)| (i, constant.clone()))
-                .collect();
-            if !constants.is_empty() {
-                self.objects[object].type_constants = constants;
-            }
-            self.objects[object].positions = Some(Positions::of(&function.bytecode));
         }
     }
 
@@ -389,7 +366,6 @@ impl ProgramIndex {
         Some((object, self.info(object)))
     }
 
-    /// The (object, field count) of `class`, if the program has it.
     pub(crate) fn class<'db>(
         &self,
         db: &'db dyn baml_compiler2_mir::Db,
@@ -398,17 +374,14 @@ impl ProgramIndex {
         self.lookup(&self.classes, class_coords(db, class))
     }
 
-    /// [`Self::class`] for the class a type template's head names.
     pub(crate) fn class_at(&self, head: &baml_type::DeclName) -> Option<(usize, usize)> {
         self.lookup(&self.classes, class_head_coords(head))
     }
 
-    /// The object of the interface a dispatch template's head names.
     pub(crate) fn interface_at(&self, head: &baml_type::DeclName) -> Option<usize> {
         self.lookup(&self.interfaces, interface_head_coords(head))
     }
 
-    /// [`Self::enum_`] for the enum a type template's head names.
     pub(crate) fn enum_at(&self, head: &baml_type::DeclName) -> Option<usize> {
         self.lookup(&self.enums, enum_head_coords(head))
     }
@@ -448,7 +421,6 @@ impl ProgramIndex {
             .map(|&(_, _, object)| object)
     }
 
-    /// The object of `enum_ref`, if the program has it.
     pub(crate) fn enum_<'db>(
         &self,
         db: &'db dyn baml_compiler2_mir::Db,
@@ -457,8 +429,6 @@ impl ProgramIndex {
         self.lookup(&self.enums, enum_coords(db, enum_ref))
     }
 
-    /// The global slot of the top-level `let` `binding`, if the program has
-    /// it.
     pub(crate) fn let_slot<'db>(
         &self,
         db: &'db dyn baml_compiler2_mir::Db,
@@ -467,7 +437,6 @@ impl ProgramIndex {
         self.lookup(&self.lets, let_coords(db, binding))
     }
 
-    /// The linked initializer helper of the top-level binding.
     pub(crate) fn let_helper<'db>(
         &self,
         db: &'db dyn baml_compiler2_mir::Db,
@@ -476,13 +445,12 @@ impl ProgramIndex {
         self.lookup(&self.let_helpers, let_coords(db, DeclRef::Source(binding)))
     }
 
-    /// Ordinal of the package that owns the function.
     pub(crate) fn package_of(&self, root: SourceRoot) -> Option<u32> {
         self.packages.get(&root).copied()
     }
 
     pub(crate) fn class_tag(&self, object: usize) -> i64 {
-        self.objects[object].class_tag.expect("class metadata")
+        self.objects[object].head.expect("class metadata").as_i64()
     }
 
     pub(crate) fn enum_variants(&self, object: usize) -> usize {
@@ -516,7 +484,6 @@ impl ProgramIndex {
             .or_else(|| self.lookup(&self.aliases, (root, DeclPath::TypeAlias(path))))
     }
 
-    /// Find a matching constant in the bytecode function's pool.
     pub(crate) fn pooled_constant(&self, function: usize, wanted: &ConstValue) -> Option<usize> {
         self.objects
             .get(function)?
@@ -526,7 +493,6 @@ impl ProgramIndex {
             .map(|(index, _)| *index)
     }
 
-    /// Where the MIR positions of the bytecode function at `object` landed.
     pub(crate) fn positions(&self, object: usize) -> &Positions {
         self.objects[object]
             .positions
@@ -541,7 +507,6 @@ impl ProgramIndex {
             .expect("function metadata")
     }
 
-    /// The name of the function at `object` as the loader renders it.
     pub(crate) fn name(&self, object: usize) -> &str {
         &self.objects[object].name
     }
@@ -561,13 +526,6 @@ impl ProgramIndex {
     fn lookup<T: Copy>(&self, table: &HashMap<DeclKey, T>, (root, path): DeclCoords) -> Option<T> {
         let package = *self.packages.get(&root)?;
         table.get(&DeclKey { package, path }).copied()
-    }
-}
-
-fn item_path(head: &DeclName) -> LocalName {
-    LocalName {
-        namespace: head.namespace().clone(),
-        name: head.name().clone(),
     }
 }
 
