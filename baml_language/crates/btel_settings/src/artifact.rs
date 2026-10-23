@@ -51,13 +51,19 @@ impl RecordingLevel {
         }
     }
 
-    fn parse(value: &str) -> Option<Self> {
-        match value {
-            "off" => Some(Self::Off),
-            "low" => Some(Self::Low),
-            "medium" => Some(Self::Medium),
-            "high" => Some(Self::High),
-            _ => None,
+    /// Case-insensitive. A boolean that enables recording keeps `default`.
+    fn parse(value: &str, default: Self) -> Option<Self> {
+        match baml_env::parse_bool(value) {
+            Some(true) => Some(default),
+            Some(false) => Some(Self::Off),
+            None => baml_env::parse_choice(
+                value,
+                &[
+                    ("low", Self::Low),
+                    ("medium", Self::Medium),
+                    ("high", Self::High),
+                ],
+            ),
         }
     }
 }
@@ -435,20 +441,9 @@ impl ArtifactTelemetry {
             }
             DestinationOverrides::Default | DestinationOverrides::Disabled => None,
         };
-        let read_value = |read: &mut dyn FnMut(&str) -> Option<OsString>,
-                          name: &str|
-         -> Result<Option<String>, PolicyError> {
-            read(name)
-                .map(|value| {
-                    value
-                        .into_string()
-                        .ok()
-                        .filter(|value| !value.is_empty())
-                        .ok_or_else(|| {
-                            PolicyError(format!("{name} must be a non-empty UTF-8 value."))
-                        })
-                })
-                .transpose()
+        // Empty means unset, as it does for BOUNDARY_API_URL.
+        let read_value = |read: &mut dyn FnMut(&str) -> Option<OsString>, name: &str| {
+            baml_env::string_from(name, read(name)).map_err(|error| PolicyError(error.to_string()))
         };
         let (project, api_key) = if let Some((project, api_key)) = names {
             (
@@ -488,26 +483,34 @@ impl ArtifactTelemetry {
         Ok(())
     }
 
-    pub fn resolve_level(&self) -> Result<Option<AutoTelemetryLevel>, PolicyError> {
+    pub fn resolve_level(&self) -> Option<AutoTelemetryLevel> {
         self.resolve_level_with(baml_env::os_var)
     }
 
     /// Inject the environment for tests and hosts; no process-wide mutation is needed.
+    /// Never fails, so the variable cannot stop the program: empty means unset, and
+    /// a value that is neither a level nor a boolean records nothing rather than
+    /// more than the user asked for.
     pub fn resolve_level_with(
         &self,
         mut read: impl FnMut(&str) -> Option<OsString>,
-    ) -> Result<Option<AutoTelemetryLevel>, PolicyError> {
+    ) -> Option<AutoTelemetryLevel> {
         let Some(name) = &self.recording_level_envvar else {
-            return Ok(self.recording_level.auto_level());
+            return self.recording_level.auto_level();
         };
-        let Some(value) = read(name) else {
-            return Ok(self.recording_level.auto_level());
+        let level = match baml_env::string_from(name, read(name)) {
+            Ok(None) => Some(self.recording_level),
+            Ok(Some(value)) => RecordingLevel::parse(&value, self.recording_level),
+            Err(_) => None,
         };
-        let level = value
-            .to_str()
-            .and_then(RecordingLevel::parse)
-            .ok_or_else(|| PolicyError(format!("{name} must be off, low, medium, or high.")))?;
-        Ok(level.auto_level())
+        level
+            .unwrap_or_else(|| {
+                tracing::debug!(
+                    "{name} is not off, low, medium, high or a boolean; recording is off"
+                );
+                RecordingLevel::Off
+            })
+            .auto_level()
     }
 }
 
@@ -619,7 +622,7 @@ api_ur = "https://api.cloud.boundaryml.com""#,
                     policy.resolve_level_with(|_| panic!(
                         "locked artifacts must not read a recording variable"
                     )),
-                    Ok(Some(AutoTelemetryLevel::Medium))
+                    Some(AutoTelemetryLevel::Medium)
                 );
             }
         }
@@ -643,31 +646,47 @@ api_ur = "https://api.cloud.boundaryml.com""#,
                         assert_eq!(read_name, name);
                         Some(value.into())
                     }),
-                    Ok(level)
+                    level
                 );
             }
             assert_eq!(
                 policy.resolve_level_with(|_| None),
-                Ok(Some(AutoTelemetryLevel::Medium))
+                Some(AutoTelemetryLevel::Medium)
             );
         }
     }
 
     #[test]
-    fn invalid_runtime_values_name_the_accepted_variable_exactly() {
+    fn runtime_values_never_fail_and_unrecognized_values_record_nothing() {
         let policy = ArtifactTelemetry {
+            recording_level: RecordingLevel::High,
             recording_level_envvar: Some("ACME_TELEMETRY".into()),
             ..Default::default()
         };
-        for value in ["", " high ", "HIGH", "local", "cloud"] {
-            assert_eq!(
-                policy
-                    .resolve_level_with(|_| Some(value.into()))
-                    .unwrap_err()
-                    .to_string(),
-                r#"ACME_TELEMETRY must be off, low, medium, or high."#
-            );
+        // Empty and enabling booleans keep the level an unset variable gives.
+        let unset = Some(AutoTelemetryLevel::High);
+        for (values, level) in [
+            (&["", "  ", "true", "1", "yes", "on", " On "][..], unset),
+            (&["off", "false", "0", "no", "OFF", " False "], None),
+            (&["low", " LOW "], Some(AutoTelemetryLevel::Low)),
+            (&["medium", "Medium"], Some(AutoTelemetryLevel::Medium)),
+            (&["hgih", "auto", "local", "cloud", "2"], None),
+        ] {
+            for value in values {
+                assert_eq!(
+                    policy.resolve_level_with(|_| Some(value.into())),
+                    level,
+                    "{value:?}"
+                );
+            }
         }
+        #[cfg(unix)]
+        assert_eq!(
+            policy.resolve_level_with(|_| Some(std::os::unix::ffi::OsStringExt::from_vec(vec![
+                0xff
+            ]))),
+            None
+        );
     }
 
     #[test]
@@ -890,14 +909,24 @@ mod ingestion_tests {
                 )
             );
         }
-        let policy = ArtifactTelemetry::default();
-        assert_eq!(
-            policy
-                .select_ingestion_with(|_| Some("".into()))
-                .unwrap_err()
-                .to_string(),
-            r#"BOUNDARY_PROJECT must be a non-empty UTF-8 value."#
-        );
+    }
+    #[test]
+    fn empty_destination_values_mean_unset() {
+        let policy = ArtifactTelemetry {
+            project: Some("org/app".into()),
+            ..Default::default()
+        };
+        for value in ["", "  "] {
+            assert_eq!(
+                policy
+                    .select_ingestion_with(|_| Some(value.into()))
+                    .unwrap(),
+                IngestionSelection::Caller {
+                    project: Some("org/app".into()),
+                    api_key: None
+                }
+            );
+        }
     }
     #[test]
     fn incomplete_embedded_destinations_fail_local_validation() {
