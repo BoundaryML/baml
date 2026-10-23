@@ -25,6 +25,16 @@ enum Naming {
     Aliased,
 }
 
+// A `match` reads the variant; `==` on an enum looks up how it compares on
+// every call.
+/// (internal) Whether `naming` is `Naming.Aliased`.
+function _aliased(naming: Naming) -> bool {
+    match (naming) {
+        Naming.Aliased => true,
+        Naming.Declared => false,
+    }
+}
+
 /// A JSON syntax error.
 ///
 /// Only the functions that read text raise this: `parse` and `decode<T>`.
@@ -101,7 +111,15 @@ function decode<T>(
     s: string,
     naming: Naming = Naming.Declared,
 ) -> T throws ParseError | DecodeError {
-    to<T>(parse(s), naming = naming)
+    _decode<T>(s, _aliased(naming))
+}
+
+/// (internal) `decode<T>`, with `naming` as a flag: aliased names when
+/// `aliased` holds.
+//baml:mut_vm
+//baml:may_yield
+function _decode<T>(s: string, aliased: bool) -> T throws ParseError | DecodeError {
+    $rust_function
 }
 
 // OpenAI structured outputs decode with this. `schema` describes a type by
@@ -150,7 +168,7 @@ function stringify(
     indent: int | string = 0,
     omit_nulls: bool = false,
 ) -> string throws SerializationError {
-    _stringify(value, naming == Naming.Aliased, indent, omit_nulls)
+    _stringify(value, _aliased(naming), indent, omit_nulls)
 }
 
 /// (internal) `stringify`, with `naming` as a flag: aliased names when
@@ -204,7 +222,7 @@ function from(
     naming: Naming = Naming.Declared,
     omit_nulls: bool = false,
 ) -> json throws SerializationError {
-    _from(value, naming == Naming.Aliased, omit_nulls)
+    _from(value, _aliased(naming), omit_nulls)
 }
 
 /// (internal) `from`, with `naming` as a flag: aliased names when `aliased`
@@ -255,7 +273,7 @@ function _from(value: unknown, aliased: bool, omit_nulls: bool) -> json throws S
 ///   override rejects it, or if `j` contains itself. `path` locates the
 ///   offending node.
 function to<T>(j: json, naming: Naming = Naming.Declared) -> T throws DecodeError {
-    _to<T>(j, naming == Naming.Aliased)
+    _to<T>(j, _aliased(naming))
 }
 
 /// (internal) `to<T>`, with `naming` as a flag: aliased names when `aliased`
@@ -541,7 +559,7 @@ function schema(
     t: reflect.Type,
     naming: Naming = Naming.Declared,
 ) -> json throws root.errors.Unsupported {
-    _schema(t, naming == Naming.Aliased)
+    _schema(t, _aliased(naming))
 }
 
 /// `schema`, with `naming` as a flag: aliased names when `aliased` holds.
