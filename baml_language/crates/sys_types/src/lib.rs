@@ -789,47 +789,7 @@ pub struct EnumVariantDefinition {
     pub skip: bool,
 }
 
-/// Which names a class's fields and an enum's variants go by in JSON: the
-/// runtime form of `baml.json.Naming`. The JSON Schema `baml.json.schema`
-/// writes and the JSON `baml.json.from_string` reads both follow it, through
-/// [`Self::key`] and [`Self::shows`].
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum JsonNaming {
-    /// Declared names. `@alias` and `@skip` have no effect: the interchange
-    /// form of BEP-038.
-    Declared,
-    /// The names a model is shown: a member's `@alias` if it has one, and no
-    /// `@skip` member at all.
-    Aliased,
-}
-
-impl JsonNaming {
-    /// `Aliased` when `aliased` holds, else `Declared`.
-    pub fn new(aliased: bool) -> Self {
-        if aliased {
-            JsonNaming::Aliased
-        } else {
-            JsonNaming::Declared
-        }
-    }
-
-    /// The JSON key of a field, or the JSON string of a variant, declared as
-    /// `name` with `alias`.
-    pub fn key<'a>(self, name: &'a str, alias: Option<&'a str>) -> &'a str {
-        match self {
-            JsonNaming::Declared => name,
-            JsonNaming::Aliased => alias.unwrap_or(name),
-        }
-    }
-
-    /// Whether a member with this `@skip` setting appears in JSON at all.
-    pub fn shows(self, skip: bool) -> bool {
-        match self {
-            JsonNaming::Declared => true,
-            JsonNaming::Aliased => !skip,
-        }
-    }
-}
+pub use baml_type::json_inhabit::JsonNaming;
 
 impl EnumVariantDefinition {
     /// The description the output format shows for this variant; see

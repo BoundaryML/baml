@@ -1,6 +1,11 @@
 // Regression coverage for non-data types at the LLM output-schema boundary.
 // The client points at a dead port; cases that invoke an LLM function must fail
 // during schema construction, before any provider I/O.
+//
+// A model's answer is JSON. A union member with no JSON form or no value is
+// dropped from the schema, an optional field of such a type is only `null`,
+// and a list of `never` is only the empty list. E0164 is for a whole output
+// type a model cannot answer with at all.
 
 client OutputFormatTestClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
@@ -51,7 +56,7 @@ class Wrapper<T> {
 type Callback = (int) -> int throws never;
 
 test "static_never_specialization_throws_compilation_error" {
-    let result = GenericList@render_prompt<never>("items") catch (e) {
+    let result = GenericValue@render_prompt<never>("items") catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
         _ => "wrong error",
     };
@@ -61,7 +66,7 @@ test "static_never_specialization_throws_compilation_error" {
 test "runtime_never_specialization_uses_the_same_diagnostic" {
     let runtime_type = reflect.Type.of<never>();
     let type RuntimeNever = runtime_type;
-    let result = GenericList@render_prompt<RuntimeNever>("items") catch (e) {
+    let result = GenericValue@render_prompt<RuntimeNever>("items") catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
         _ => "wrong error",
     };
@@ -69,11 +74,16 @@ test "runtime_never_specialization_uses_the_same_diagnostic" {
 }
 
 test "direct_llm_execution_fails_before_network_io" {
-    let result = GenericList<never>("items") catch (e) {
+    let result = GenericValue<never>("items") catch (e) {
         reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
         _ => "wrong error",
     };
     assert.equal(result, "E0164|non-data type `never` cannot be rendered as an LLM output schema")
+}
+
+test "a list of never renders as the empty list" {
+    let rendered = GenericList@render_prompt<never>("items").text();
+    assert.contains(rendered, "Answer with a JSON Array using this schema:\n[]")
 }
 
 test "ordinary_data_specialization_still_renders" {
@@ -145,8 +155,17 @@ test "generic_class_output_fails_before_provider_io" {
     }
 }
 
-test "never_nested_in_a_runtime_class_field_is_rejected_not_panicked" {
+test "a never list in a runtime class field renders as the empty list" {
     let outer = reflect.Class.new("RuntimeOuter", { "items": reflect.Type.of<never>().array() }) catch (e) {
+        _ => throw "reflect.Class.new threw",
+    };
+    let type RuntimeOuterType = outer;
+    let rendered = GenericValue@render_prompt<RuntimeOuterType>("runtime").text();
+    assert.contains(rendered, "items: [],")
+}
+
+test "never_nested_in_a_runtime_class_field_is_rejected_not_panicked" {
+    let outer = reflect.Class.new("RuntimeOuter", { "item": reflect.Type.of<never>() }) catch (e) {
         _ => throw "reflect.Class.new threw",
     };
     let type RuntimeOuterType = outer;
@@ -156,7 +175,95 @@ test "never_nested_in_a_runtime_class_field_is_rejected_not_panicked" {
     };
     assert.equal(
         result,
-        "E0164|field `RuntimeOuter.items` has non-data type `never`, which cannot be rendered as an LLM output schema",
+        "E0164|field `RuntimeOuter.item` has non-data type `never`, which cannot be rendered as an LLM output schema",
+    )
+}
+
+// ─── Members with no JSON form are dropped ───────────────────────────────────
+
+class Blob {
+    bytes: uint8array,
+}
+
+class MaybeRaw {
+    name: string,
+    raw: uint8array?,
+}
+
+class Loop {
+    next: Loop,
+}
+
+class HoldsSkippedType {
+    name: string,
+    kind: reflect.Type @skip,
+}
+
+interface OpenOutput {
+    value: string,
+}
+
+function render_error<T>() -> string {
+    {
+        GenericValue@render_prompt<T>("x");
+        "rendered"
+    } catch (e) {
+        reflect.errors.CompilationError => e.diagnostics[0].code + "|" + e.diagnostics[0].message,
+        _ => "wrong error",
+    }
+}
+
+test "a union member with no JSON form is dropped" {
+    assert.equal(
+        GenericValue@render_prompt<uint8array | string>("x").text(),
+        GenericValue@render_prompt<string>("x").text(),
+    )
+}
+
+test "a union drops a class that requires a uint8array" {
+    assert.equal(
+        GenericValue@render_prompt<Blob | string>("x").text(),
+        GenericValue@render_prompt<string>("x").text(),
+    )
+}
+
+test "an optional field with no JSON form renders as null" {
+    let rendered = GenericValue@render_prompt<MaybeRaw>("x").text();
+    assert.contains(rendered, "name: string,");
+    assert.contains(rendered, "raw: null,")
+}
+
+test "an output with no JSON form at all is still rejected" {
+    assert.equal(
+        render_error<uint8array>(),
+        "E0164|non-data type `uint8array` cannot be rendered as an LLM output schema",
+    );
+    assert.equal(
+        render_error<Blob>(),
+        "E0164|field `output_format_non_data.Blob.bytes` has non-data type `uint8array`, which cannot be rendered as an LLM output schema",
+    );
+    assert.equal(
+        render_error<Loop>(),
+        "E0164|every value of `output_format_non_data.Loop` is cyclic, and JSON holds only finite values, so it cannot be rendered as an LLM output schema",
+    );
+    assert.equal(
+        render_error<HoldsSkippedType>(),
+        "E0164|the `@skip` field `output_format_non_data.HoldsSkippedType.kind` has type `reflect.Type`, which has no empty value for it to hold, so its class cannot be rendered as an LLM output schema",
+    )
+}
+
+test "unknown and open interfaces are rejected even beside a member that renders" {
+    assert.equal(
+        render_error<unknown>(),
+        "E0164|non-data type `unknown` cannot be rendered as an LLM output schema",
+    );
+    assert.equal(
+        render_error<unknown | string>(),
+        "E0164|non-data type `unknown` cannot be rendered as an LLM output schema",
+    );
+    assert.equal(
+        render_error<OpenOutput>(),
+        "E0161|field `output` has open interface type `output_format_non_data.OpenOutput`, which cannot be rendered as an LLM output schema",
     )
 }
 

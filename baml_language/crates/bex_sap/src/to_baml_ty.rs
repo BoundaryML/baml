@@ -105,7 +105,10 @@ impl ToBamlTy for EnumVariantTy<'_, NamedTy> {
     /// The variant's own type, `Color.Red`: a narrower type than its enum.
     fn to_baml_ty(&self) -> ParseTy {
         ParseTy::EnumVariant(
-            self.name.decl().clone(),
+            self.name
+                .decl()
+                .unwrap_or_else(|| unreachable!("an enum variant's enum is named"))
+                .clone(),
             baml_type::Name::new(self.value.name.as_ref()),
         )
     }

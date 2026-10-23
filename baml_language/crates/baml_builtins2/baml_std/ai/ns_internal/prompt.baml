@@ -45,7 +45,8 @@ function render_output_format(return_type: reflect.Type) -> string throws never 
 /// Whether a value of `t` can hold media anywhere a model's JSON answer fills:
 /// in a union member, a list element, a map value, a class field that is not
 /// `@skip`, or behind a recursive alias. A `@skip` field is not in the JSON, so
-/// its value never comes from the model. A model returns the media it
+/// its value never comes from the model, and neither is a union member with
+/// no JSON form, which `baml.json.schema` drops. A model returns the media it
 /// generates as content of its own, never inside its text, so a client that
 /// holds the answer to a JSON Schema rejects an output type that can.
 function reaches_media(t: reflect.Type) -> bool throws baml.errors.Unsupported {

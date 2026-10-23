@@ -218,8 +218,8 @@ impl<'s, 'v, 't, N: TypeIdent> ParsingContext<'s, 'v, 't, N> {
     /// type, whose implementors it cannot choose between.
     pub(crate) fn error_uninhabited(&self) -> ParsingError {
         ParsingError {
-            reason: "Expected never (an interface type, whose implementors cannot be parsed), \
-                     got a value"
+            reason: "Expected no value: a parse builds none of this type, which has no \
+                     JSON form or no values, or is an interface"
                 .to_string(),
             scope: self.scope.clone(),
             causes: Vec::new(),
