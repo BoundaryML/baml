@@ -97,7 +97,8 @@ pub fn analyze<'db>(
     arity: usize,
     opt: OptLevel,
 ) -> EscapeFacts {
-    let mut graph = build(db, body, opt, None);
+    let types = Types::new(db, body);
+    let mut graph = build(db, body, opt, None, &types);
     // A parameter's argument may already be shared, as far as this body knows.
     for local in 1..=arity.min(body.locals.len().saturating_sub(1)) {
         graph.mark_shared(local);
@@ -119,7 +120,8 @@ pub fn escape_summary<'db>(
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         return None;
     };
-    Some(build(db, body, opt, Some(function)).summary(mir.arity))
+    let types = Types::new(db, body);
+    Some(build(db, body, opt, Some(function), &types).summary(mir.arity))
 }
 
 /// A cycle [`recursive_functions`] did not see (a runtime-compiled
@@ -259,20 +261,21 @@ fn strongly_connected(edges: &[Vec<usize>]) -> Vec<Vec<usize>> {
 }
 
 /// The constraint graph of one body, before its parameters are classified.
-fn build<'db>(
+fn build<'a, 'db>(
     db: &'db dyn crate::Db,
-    body: &MirFunctionBody<'db>,
+    body: &'a MirFunctionBody<'db>,
     opt: OptLevel,
     current: Option<FunctionLoc<'db>>,
-) -> Graph {
-    let mut graph = Graph::new(body.locals.len());
+    types: &'a Types<'a, 'db>,
+) -> Graph<'a, 'db> {
+    let mut graph = Graph::new(body.locals.len(), types);
     let builtins = Builtins::new(db);
     let array_iterators = array_iterators(body);
     let walker = Walker {
         db,
         opt,
         current,
-        body,
+        types,
         builtins: &builtins,
         array_iterators: &array_iterators,
     };
@@ -357,7 +360,8 @@ pub fn coverage<'db>(
     arity: usize,
     opt: OptLevel,
 ) -> Vec<Access> {
-    let mut graph = build(db, body, opt, None);
+    let types = Types::new(db, body);
+    let mut graph = build(db, body, opt, None, &types);
     for local in 1..=arity.min(body.locals.len().saturating_sub(1)) {
         graph.mark_shared(local);
     }
@@ -599,19 +603,160 @@ pub struct Summary {
     ret: usize,
 }
 
+/// Static types of a body's places, as far as escape analysis needs them.
+struct Types<'a, 'db> {
+    db: &'db dyn crate::Db,
+    body: &'a MirFunctionBody<'db>,
+    /// Per class-typed local: its class's field types, by slot.
+    fields: std::cell::RefCell<FxHashMap<usize, Option<Vec<baml_type::Ty>>>>,
+}
+
+impl<'a, 'db> Types<'a, 'db> {
+    fn new(db: &'db dyn crate::Db, body: &'a MirFunctionBody<'db>) -> Self {
+        Self {
+            db,
+            body,
+            fields: std::cell::RefCell::default(),
+        }
+    }
+
+    /// Whether every value `place` can hold is immutable: a scalar, string,
+    /// bigint, enum or type, which holds no reference to anything mutable.
+    fn immutable(&self, place: &Place) -> bool {
+        match place {
+            // A captured local's slot holds its cell.
+            Place::Local(local) => {
+                let decl = &self.body.locals[local.0];
+                !decl.is_captured && immutable(&decl.ty)
+            }
+            Place::Deref(crate::CellId::Local(local)) => immutable(&self.body.locals[local.0].ty),
+            Place::Field { base, field } => self
+                .field_ty(base, *field)
+                .is_some_and(|ty| immutable_ty(&ty)),
+            Place::Index { base, .. } => match self.local_ty(base) {
+                Some(RuntimeTy::List(element)) => immutable(element),
+                Some(RuntimeTy::Map { value, .. }) => immutable(value),
+                _ => false,
+            },
+            Place::Capture(_) | Place::Deref(crate::CellId::Capture(_)) => false,
+        }
+    }
+
+    /// Whether the map `place` holds has primitive keys, which hash and
+    /// compare without running user code.
+    fn primitive_map_keys(&self, place: &Place) -> bool {
+        match place {
+            Place::Field { base, field } => self.field_ty(base, *field).is_some_and(
+                |ty| matches!(ty, baml_type::Ty::Map { key, .. } if primitive_ty(&key)),
+            ),
+            _ => {
+                matches!(self.local_ty(place), Some(RuntimeTy::Map { key, .. }) if is_primitive(key))
+            }
+        }
+    }
+
+    fn local_ty(&self, place: &Place) -> Option<&'a RuntimeTy> {
+        match place {
+            Place::Local(local) if !self.body.locals[local.0].is_captured => {
+                Some(&self.body.locals[local.0].ty)
+            }
+            _ => None,
+        }
+    }
+
+    /// The declared type of slot `field` of the class `base` holds, when
+    /// `base` is a local of a known class.
+    fn field_ty(&self, base: &Place, field: usize) -> Option<baml_type::Ty> {
+        let Place::Local(local) = base else {
+            return None;
+        };
+        let RuntimeTy::Class(name, _) = self.local_ty(base)? else {
+            return None;
+        };
+        self.fields
+            .borrow_mut()
+            .entry(local.0)
+            .or_insert_with(|| {
+                let class = baml_compiler2_hir_ty::layout::class_ref_of(self.db, name)?;
+                Some(
+                    baml_compiler2_hir_ty::layout::class_fields(self.db, class)
+                        .into_iter()
+                        .map(|(_, ty)| ty)
+                        .collect(),
+                )
+            })
+            .as_ref()?
+            .get(field)
+            .cloned()
+    }
+}
+
+/// Lowering types some temporaries `null` while they hold an object (an
+/// awaited future, a sys-op result), so a bare `null` proves nothing.
+fn immutable(ty: &RuntimeTy) -> bool {
+    !matches!(ty, RuntimeTy::Null) && immutable_value(ty)
+}
+
+fn immutable_value(ty: &RuntimeTy) -> bool {
+    match ty {
+        RuntimeTy::Int
+        | RuntimeTy::Bigint
+        | RuntimeTy::Float
+        | RuntimeTy::String
+        | RuntimeTy::Bool
+        | RuntimeTy::Null
+        | RuntimeTy::Literal(..)
+        | RuntimeTy::Enum(_)
+        | RuntimeTy::EnumVariant(..) => true,
+        RuntimeTy::Union(members) => members.iter().all(immutable_value),
+        _ => false,
+    }
+}
+
+fn immutable_ty(ty: &baml_type::Ty) -> bool {
+    use baml_type::Ty;
+    match ty {
+        Ty::Int
+        | Ty::Bigint
+        | Ty::Float
+        | Ty::String
+        | Ty::Bool
+        | Ty::Null
+        | Ty::Literal(..)
+        | Ty::Enum(_)
+        | Ty::EnumVariant(..) => true,
+        Ty::Union(members) => members.iter().all(immutable_ty),
+        _ => false,
+    }
+}
+
+fn primitive_ty(ty: &baml_type::Ty) -> bool {
+    use baml_type::Ty;
+    match ty {
+        Ty::Int | Ty::String | Ty::Bool => true,
+        Ty::Literal(literal, _) => {
+            matches!(
+                literal,
+                Literal::Int(_) | Literal::String(_) | Literal::Bool(_)
+            )
+        }
+        _ => false,
+    }
+}
+
 struct Walker<'a, 'db> {
     db: &'db dyn crate::Db,
     opt: OptLevel,
     /// The function whose summary is being built, if any: calls within its
     /// recursive component are opaque.
     current: Option<FunctionLoc<'db>>,
-    body: &'a MirFunctionBody<'db>,
+    types: &'a Types<'a, 'db>,
     builtins: &'a Builtins<'db>,
     array_iterators: &'a [bool],
 }
 
 impl<'db> Walker<'_, 'db> {
-    fn terminator(&self, graph: &mut Graph, terminator: &Terminator<'db>) {
+    fn terminator(&self, graph: &mut Graph<'_, 'db>, terminator: &Terminator<'db>) {
         match terminator {
             Terminator::Goto { .. }
             | Terminator::Branch { .. }
@@ -650,7 +795,9 @@ impl<'db> Walker<'_, 'db> {
                         .as_ref()
                         .is_none_or(|layout| layout.0.iter().all(Option::is_none));
                 let values = args.get(*ntypeargs..).unwrap_or_default();
-                if let Some(effect) = self
+                if positional && self.compares_against_immutable(callee, values) {
+                    // Reads both operands; the result is a bool.
+                } else if let Some(effect) = self
                     .builtins
                     .effect(callee)
                     .filter(|&effect| positional && self.matches_builtin(effect, values))
@@ -735,6 +882,19 @@ impl<'db> Walker<'_, 'db> {
         escape_summary(self.db, callee, self.opt).as_ref()
     }
 
+    /// `a == b` through `baml.ops.equals_equals` with an immutable operand:
+    /// operands of different kinds compare unequal and only two instances of
+    /// one class run a user `Equals`, so it runs no user code.
+    fn compares_against_immutable(&self, callee: &Operand<'db>, values: &[Operand<'db>]) -> bool {
+        static_callee(callee).is_some_and(|func| Some(func) == self.builtins.equals_equals)
+            && values.len() == 2
+            && values.iter().any(|value| match value {
+                Operand::Constant(Constant::GlobalItem(_)) => false,
+                Operand::Constant(_) => true,
+                Operand::Copy(place) | Operand::Move(place) => self.types.immutable(place),
+            })
+    }
+
     /// Whether a call's value arguments have the shape `effect` describes:
     /// a receiver of the builtin's type, then its other arguments.
     fn matches_builtin(&self, effect: Effect, args: &[Operand<'db>]) -> bool {
@@ -744,26 +904,23 @@ impl<'db> Walker<'_, 'db> {
         if rest.len() != effect.arity() {
             return false;
         }
-        match (effect, self.operand_ty(receiver)) {
-            (Effect::Store | Effect::Load | Effect::Take | Effect::Read, Some(ty)) => {
-                matches!(ty, RuntimeTy::List(_))
-            }
+        let (Operand::Copy(receiver) | Operand::Move(receiver)) = receiver else {
+            return false;
+        };
+        match effect {
+            // The callee is the array method itself, so its receiver is one.
+            Effect::Store
+            | Effect::Load
+            | Effect::Take
+            | Effect::Read
+            | Effect::Copy
+            | Effect::Concat
+            | Effect::MapCopy => true,
             // A key hashes and compares through `Hash` and `Equals`, which
             // run user code for anything but a primitive key.
-            (
-                Effect::MapStore | Effect::MapLoad | Effect::MapRead,
-                Some(RuntimeTy::Map { key, .. }),
-            ) => is_primitive(key),
-            (_, _) => false,
-        }
-    }
-
-    fn operand_ty(&self, operand: &Operand<'db>) -> Option<&RuntimeTy> {
-        match operand {
-            Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => {
-                Some(&self.body.locals[local.0].ty)
+            Effect::MapStore | Effect::MapLoad | Effect::MapRead => {
+                self.types.primitive_map_keys(receiver)
             }
-            _ => None,
         }
     }
 
@@ -902,15 +1059,21 @@ enum Effect {
     MapLoad,
     /// `m.has(key)`, `m.length()`: returns no object.
     MapRead,
+    /// `xs.slice(start, end)`: a fresh array of the same elements.
+    Copy,
+    /// `xs.concat(ys)`: a fresh array of both arrays' elements.
+    Concat,
+    /// `m.keys()`, `m.values()`: a fresh array of the map's entries.
+    MapCopy,
 }
 
 impl Effect {
     /// Value arguments after the receiver.
     fn arity(self) -> usize {
         match self {
-            Effect::Store | Effect::Load => 1,
-            Effect::Take | Effect::Read => 0,
-            Effect::MapStore => 2,
+            Effect::Store | Effect::Load | Effect::Concat => 1,
+            Effect::Take | Effect::Read | Effect::MapCopy => 0,
+            Effect::MapStore | Effect::Copy => 2,
             Effect::MapLoad | Effect::MapRead => 1,
         }
     }
@@ -918,7 +1081,11 @@ impl Effect {
 
 /// The builtins whose effect on their arguments the analysis knows. Every
 /// other callee is opaque.
-struct Builtins<'db>(Vec<(FunctionRef<'db>, Effect)>);
+struct Builtins<'db> {
+    effects: Vec<(FunctionRef<'db>, Effect)>,
+    /// `baml.ops.equals_equals`, the `==` driver.
+    equals_equals: Option<FunctionRef<'db>>,
+}
 
 impl<'db> Builtins<'db> {
     /// `(class, method, effect)`.
@@ -927,16 +1094,20 @@ impl<'db> Builtins<'db> {
         ("Array", "at", Effect::Load),
         ("Array", "pop", Effect::Take),
         ("Array", "length", Effect::Read),
+        ("Array", "slice", Effect::Copy),
+        ("Array", "concat", Effect::Concat),
         ("Map", "set", Effect::MapStore),
         ("Map", "get", Effect::MapLoad),
         ("Map", "index", Effect::MapLoad),
         ("Map", "delete", Effect::MapLoad),
         ("Map", "has", Effect::MapRead),
+        ("Map", "keys", Effect::MapCopy),
+        ("Map", "values", Effect::MapCopy),
     ];
 
     fn new(db: &'db dyn crate::Db) -> Self {
-        Self(
-            Self::TABLE
+        Self {
+            effects: Self::TABLE
                 .iter()
                 .filter_map(|&(class, method, effect)| {
                     Some((
@@ -945,12 +1116,18 @@ impl<'db> Builtins<'db> {
                     ))
                 })
                 .collect(),
-        )
+            equals_equals: baml_compiler2_hir_ty::callable::lang_function(
+                db,
+                LangPackage::Baml,
+                &["ops"],
+                "equals_equals",
+            ),
+        }
     }
 
     fn effect(&self, callee: &Operand<'db>) -> Option<Effect> {
         let func = static_callee(callee)?;
-        self.0
+        self.effects
             .iter()
             .find(|(builtin, _)| *builtin == func)
             .map(|&(_, effect)| effect)
@@ -958,7 +1135,9 @@ impl<'db> Builtins<'db> {
 }
 
 /// Union-find over abstract nodes, each with a shared bit and a contents node.
-struct Graph {
+struct Graph<'a, 'db> {
+    /// Static types: values of immutable types need no tracking.
+    types: &'a Types<'a, 'db>,
     parent: Vec<usize>,
     shared: Vec<bool>,
     contents: Vec<Option<usize>>,
@@ -969,9 +1148,10 @@ struct Graph {
     locals: usize,
 }
 
-impl Graph {
-    fn new(locals: usize) -> Self {
+impl<'a, 'db> Graph<'a, 'db> {
+    fn new(locals: usize, types: &'a Types<'a, 'db>) -> Self {
         Self {
+            types,
             parent: (0..locals).collect(),
             shared: vec![false; locals],
             contents: vec![None; locals],
@@ -1046,20 +1226,23 @@ impl Graph {
     /// The node an operand's value belongs to; `None` when it is no object.
     fn operand(&mut self, operand: &Operand<'_>) -> Option<usize> {
         match operand {
-            Operand::Copy(place) | Operand::Move(place) => Some(self.read(place)),
+            Operand::Copy(place) | Operand::Move(place) => {
+                (!self.types.immutable(place)).then(|| self.read(place))
+            }
             Operand::Constant(constant) => match constant {
+                // Immutable: nothing reached through them can change.
                 Constant::Int(_)
                 | Constant::Float(_)
                 | Constant::Bool(_)
                 | Constant::Null
-                | Constant::OmittedArg => None,
-                // Pooled or global: shared by every invocation.
-                Constant::Bigint(_)
+                | Constant::OmittedArg
+                | Constant::Bigint(_)
                 | Constant::String(_)
                 | Constant::Function(_)
-                | Constant::GlobalItem(_)
                 | Constant::GenericFunction { .. }
-                | Constant::EnumVariant { .. } => Some(self.shared_because(Reason::Constant)),
+                | Constant::EnumVariant { .. } => None,
+                // A global's value is shared by every task.
+                Constant::GlobalItem(_) => Some(self.shared_because(Reason::Constant)),
             },
         }
     }
@@ -1076,6 +1259,9 @@ impl Graph {
     }
 
     fn write(&mut self, place: &Place, value: Option<usize>) {
+        if self.types.immutable(place) {
+            return;
+        }
         let into = match place {
             Place::Local(local) => self.local(local.0),
             Place::Field { base, .. } | Place::Index { base, .. } => {
@@ -1224,6 +1410,21 @@ impl Graph {
             }
             Effect::Load | Effect::Take | Effect::MapLoad => contents,
             Effect::Read | Effect::MapRead => None,
+            Effect::Copy | Effect::MapCopy => {
+                let copy = self.fresh();
+                let copy_contents = Some(self.contents_of(Some(copy)));
+                self.flow(copy_contents, contents);
+                Some(copy)
+            }
+            Effect::Concat => {
+                let other = self.operand(&args[1]);
+                let other_contents = Some(self.contents_of(other));
+                let copy = self.fresh();
+                let copy_contents = Some(self.contents_of(Some(copy)));
+                self.flow(copy_contents, contents);
+                self.flow(copy_contents, other_contents);
+                Some(copy)
+            }
         }
     }
 

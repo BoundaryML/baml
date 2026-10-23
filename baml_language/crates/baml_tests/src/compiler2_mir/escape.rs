@@ -487,7 +487,7 @@ fn escape_coverage() {
     }
 
     fn percent(part: usize, whole: usize) -> usize {
-        if whole == 0 { 0 } else { part * 100 / whole }
+        (part * 100).checked_div(whole).unwrap_or(0)
     }
 
     fn baml_files(dir: &std::path::Path) -> Vec<(String, String)> {
@@ -571,4 +571,104 @@ fn escape_coverage() {
         }
     }
     tally.print("standard library");
+}
+
+#[test]
+fn immutable_values_do_not_share_their_neighbours() {
+    assert_locality(
+        &format!(
+            r#"
+{LEAK}
+function shout(s: string) -> int {{ [s].reverse().length() }}
+class Named {{
+  name: string
+  items: int[]
+}}
+function main() -> int {{
+  let n = Named {{ name: "a", items: [1] }};
+  let name = n.name;
+  shout(name) + shout(n.name) + n.items[0]
+}}
+"#
+        ),
+        "main",
+        &[("n", true)],
+    );
+}
+
+#[test]
+fn builtin_calls_on_a_field_receiver_are_seen_through() {
+    assert_locality(
+        r#"
+class Queue {
+  items: int[]
+}
+function main() -> int {
+  let q = Queue { items: [] };
+  q.items.push(1);
+  q.items.length() + q.items[0]
+}
+"#,
+        "main",
+        &[("q", true)],
+    );
+}
+
+#[test]
+fn map_keys_and_values_copy_the_entries() {
+    assert_locality(
+        &format!(
+            r#"
+{LEAK}
+function main() -> int {{
+  let xs = [1];
+  let m = {{"a": xs}};
+  let ks = m.keys();
+  let vs = m.values();
+  keep(vs[0]) + ks.length()
+}}
+"#
+        ),
+        "main",
+        &[("xs", false), ("m", true), ("ks", true), ("vs", true)],
+    );
+}
+
+#[test]
+fn class_keyed_maps_stay_opaque() {
+    assert_locality(
+        r#"
+class Key {
+  k: int
+}
+function main(key: Key) -> int {
+  let m: map<Key, int[]> = {};
+  let xs = [1];
+  m[key] = xs;
+  xs[0]
+}
+"#,
+        "main",
+        &[("xs", false), ("m", false)],
+    );
+}
+
+#[test]
+fn comparing_with_null_runs_no_user_code() {
+    assert_locality(
+        r#"
+class Node {
+  next: Node?
+  value: int
+}
+function main() -> int {
+  let n = Node { next: null, value: 1 };
+  let m = Node { next: null, value: 2 };
+  let o = Node { next: null, value: 3 };
+  if (o.next == null && n != m) { n.value + o.value } else { 0 }
+}
+"#,
+        "main",
+        &[("n", false), ("m", false), ("o", true)],
+    );
 }
