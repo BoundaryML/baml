@@ -1,11 +1,14 @@
 //! Rust observes the frame layout, backing capacity, and simultaneous live frames;
 //! BAML test blocks cannot inspect these storage invariants.
-use std::sync::{Arc, atomic::AtomicBool};
+use std::{
+    fmt::Write as _,
+    sync::{Arc, atomic::AtomicBool},
+};
 
 use baml_test_support::compile_source;
 use bex_vm::{
     BexVm, VmExecState,
-    vm::{BytecodeFrame, FRAME_STORAGE_BUDGET_BYTES, Frame, NativeFrame},
+    vm::{BytecodeFrame, Frame, NativeFrame, STACK_STORAGE_BUDGET_BYTES},
 };
 use bex_vm_types::{EarlyYieldCheck, Object, Program, Value, errors::VmError};
 
@@ -50,9 +53,9 @@ const SOURCE: &str = r#"
     }
 "#;
 
-/// Derive the usable slot count from this build's enum layout.
+/// A conservative recursion upper bound, even before accounting for values.
 fn maximum_slots() -> usize {
-    FRAME_STORAGE_BUDGET_BYTES / size_of::<Frame>()
+    STACK_STORAGE_BUDGET_BYTES / size_of::<Frame>()
 }
 
 /// Create an opcode-yielding VM so storage peaks remain observable.
@@ -71,20 +74,38 @@ struct Observation {
     result: Result<i64, String>,
     peak: usize,
     capacity: usize,
+    value_peak: usize,
+    value_capacity: usize,
+    bytes: usize,
 }
 
 /// Execute while checking the backing-capacity invariant after every yield.
 fn drive(vm: &mut BexVm) -> Observation {
     let mut peak = 0;
     let mut capacity = 0;
-    let result = loop {
+    let mut value_peak = 0;
+    let mut value_capacity = 0;
+    let mut bytes = 0;
+    let mut sample = |vm: &BexVm| {
         peak = peak.max(vm.frames.len());
         capacity = capacity.max(vm.frames.capacity());
+        value_peak = value_peak.max(vm.stack.len());
+        value_capacity = value_capacity.max(vm.stack.capacity());
+        let allocated =
+            vm.frames.capacity() * size_of::<Frame>() + vm.stack.capacity() * size_of::<Value>();
+        bytes = bytes.max(allocated);
         // Also stop a regressed unbounded allocator promptly, rather than
         // letting this negative control exhaust the test process's memory.
         assert!(vm.frames.len() <= maximum_slots());
-        assert!(vm.frames.capacity() * size_of::<Frame>() <= FRAME_STORAGE_BUDGET_BYTES);
-        match vm.exec() {
+        assert!(allocated <= STACK_STORAGE_BUDGET_BYTES);
+    };
+    let result = loop {
+        sample(vm);
+        let state = vm.exec();
+        // Observe capacity retained by a failing instruction too, after the
+        // unwinder has removed its live frames/values.
+        sample(vm);
+        match state {
             Ok(VmExecState::EarlyYield) => {}
             Ok(VmExecState::Complete(value)) => break Ok(value.as_int().unwrap()),
             Err(VmError::ThrownUnhandled { value, .. }) => {
@@ -105,42 +126,93 @@ fn drive(vm: &mut BexVm) -> Observation {
         result,
         peak,
         capacity,
+        value_peak,
+        value_capacity,
+        bytes,
+    }
+}
+
+/// Find a fresh VM's practical depth boundary for this source and layout.
+fn boundary(program: &Program, entry: &str) -> i64 {
+    let failure = drive(&mut make_vm(
+        program.clone(),
+        entry,
+        i64::try_from(maximum_slots()).unwrap(),
+    ));
+    assert_eq!(failure.result, Err("panics.StackOverflow".to_string()));
+    // These programs have one entry frame plus depth(n)..depth(0). The
+    // observed failing run locates the boundary without a layout-specific
+    // count or repeatedly replaying a full binary search in ordinary CI.
+    let mut candidate = i64::try_from(failure.peak.saturating_sub(2)).unwrap();
+    loop {
+        let result = drive(&mut make_vm(program.clone(), entry, candidate)).result;
+        if result.is_err() {
+            assert_eq!(result, Err("panics.StackOverflow".to_string()));
+            candidate = candidate
+                .checked_sub(1)
+                .filter(|&depth| depth >= 0)
+                .expect("depth zero must fit");
+            continue;
+        }
+        let next = drive(&mut make_vm(program.clone(), entry, candidate + 1)).result;
+        if next.is_err() {
+            assert_eq!(next, Err("panics.StackOverflow".to_string()));
+            return candidate;
+        }
+        candidate += 1;
     }
 }
 
 #[test]
-/// Both dispatchers must fill the budget and reject the next frame after reuse.
-fn exact_and_general_calls_execute_to_the_layout_derived_budget() {
-    let maximum = maximum_slots();
-    let depth = i64::try_from(maximum - 2).unwrap();
+/// Both dispatchers must respect the combined budget, including retained capacity.
+fn exact_and_general_calls_execute_to_the_measured_budget() {
+    let program = compile_source(SOURCE);
     for entry in ["user.main", "user.generic_main"] {
-        let program = compile_source(SOURCE);
-        let mut vm = make_vm(program, entry, depth);
+        let depth = boundary(&program, entry);
+        assert!(depth > 256, "positive control for the old fixed ceiling");
+        let mut vm = make_vm(program.clone(), entry, depth);
         let Some(Frame::Bytecode(frame)) = vm.frames.first() else {
             panic!("expected entry frame")
         };
         let entry_ptr = frame.function;
         let observation = drive(&mut vm);
-        assert_eq!(observation.result, Ok(depth), "{entry}");
-        assert_eq!(observation.peak, maximum, "{entry}");
-        assert_eq!(observation.capacity, maximum, "{entry}");
-        assert!(
-            observation.peak > 256,
-            "regression control for the old ceiling"
-        );
+        assert_eq!(observation.result, Ok(depth));
+        assert!(observation.value_peak > observation.peak);
+        assert!(observation.bytes <= STACK_STORAGE_BUDGET_BYTES);
 
-        // Reuse retained capacity at precisely the next depth. Both dispatch
-        // paths must refuse the next slot, even with already allocated storage.
         vm.set_entry_point(entry_ptr, &[Value::int(depth + 1)]);
-        let observation = drive(&mut vm);
         assert_eq!(
-            observation.result,
-            Err("panics.StackOverflow".to_string()),
-            "{entry}"
+            drive(&mut vm).result,
+            Err("panics.StackOverflow".to_string())
         );
-        assert_eq!(observation.peak, maximum, "{entry}");
-        assert_eq!(observation.capacity, maximum, "{entry}");
     }
+}
+
+#[test]
+/// Real locals must lower practical recursion depth under the same byte budget.
+fn larger_frames_consume_more_of_the_shared_budget() {
+    let mut source = SOURCE.to_string();
+    source.push_str("function wide_depth(n: int) -> int { ");
+    for index in 0..64 {
+        write!(source, "let local{index} = n + {index}; ").unwrap();
+    }
+    source.push_str("if (n == 0) { 0 } else { wide_depth(n - 1)");
+    for index in 0..64 {
+        write!(source, " + local{index}").unwrap();
+    }
+    source.push_str(" } } function wide_main(n: int) -> int { wide_depth(n) }");
+    let program = compile_source(&source);
+    let narrow = boundary(&program, "user.main");
+    let wide = boundary(&program, "user.wide_main");
+    assert!(wide > 256);
+    assert!(
+        wide < narrow / 2,
+        "64 live locals must consume value-stack bytes"
+    );
+    let success = drive(&mut make_vm(program.clone(), "user.wide_main", wide));
+    assert!(success.result.is_ok());
+    let failure = drive(&mut make_vm(program, "user.wide_main", wide + 1));
+    assert_eq!(failure.result, Err("panics.StackOverflow".to_string()));
 }
 
 #[test]
@@ -155,10 +227,22 @@ fn the_next_frame_is_a_panic_with_the_existing_catching_boundary() {
         ("user.panics", Ok(42)),
     ] {
         let mut vm = make_vm(compile_source(SOURCE), entry, depth);
+        let Some(Frame::Bytecode(frame)) = vm.frames.first() else {
+            panic!("expected entry frame")
+        };
+        let entry_ptr = frame.function;
         let observation = drive(&mut vm);
         assert_eq!(observation.result, expected, "{entry}");
-        assert_eq!(observation.peak, maximum_slots(), "{entry}");
-        assert_eq!(observation.capacity, maximum_slots(), "{entry}");
+        assert!(observation.bytes <= STACK_STORAGE_BUDGET_BYTES);
+        if expected.is_ok() {
+            assert!(vm.frames.is_empty());
+            vm.set_entry_point(entry_ptr, &[Value::int(1000)]);
+            assert_eq!(
+                drive(&mut vm).result,
+                Ok(1000),
+                "reuse after caught overflow"
+            );
+        }
     }
 }
 
@@ -169,7 +253,7 @@ fn indirect_and_native_callback_frames_share_the_budget() {
         // These paths use multiple frame records per source-level recursion.
         // Keep a positive case far beyond 256 frames, then exceed the byte
         // budget with a depth based on this build's layout, never a foreign one.
-        let success = i64::try_from(maximum_slots() / 8).unwrap();
+        let success = 1000;
         let mut vm = make_vm(compile_source(SOURCE), entry, success);
         let observation = drive(&mut vm);
         assert_eq!(observation.result, Ok(success), "{entry}");
@@ -183,11 +267,11 @@ fn indirect_and_native_callback_frames_share_the_budget() {
             Err("panics.StackOverflow".to_string()),
             "{entry}"
         );
-        assert_eq!(observation.capacity, maximum_slots(), "{entry}");
+        assert!(observation.bytes <= STACK_STORAGE_BUDGET_BYTES);
     }
-    // Three root-depth offsets force exhaustion at each phase of a native
-    // call: the continuation slot, the callback frame, and its recursive callee.
-    // Which offset hits which phase depends on this build's Frame layout.
+    // Exercise three root-depth offsets around native callback dispatch.
+    // Either record or value growth may exhaust the combined budget; the
+    // failing phase depends on layout and the two arrays' growth histories.
     for entry in ["user.native_depth", "user.native_padded"] {
         let mut vm = make_vm(
             compile_source(SOURCE),
@@ -200,7 +284,7 @@ fn indirect_and_native_callback_frames_share_the_budget() {
             Err("panics.StackOverflow".to_string()),
             "{entry}"
         );
-        assert_eq!(observation.capacity, maximum_slots(), "{entry}");
+        assert!(observation.bytes <= STACK_STORAGE_BUDGET_BYTES);
     }
     let mut vm = make_vm(
         compile_source(SOURCE),
@@ -222,12 +306,31 @@ fn indirect_and_native_callback_frames_share_the_budget() {
 )]
 /// Report observed release layout and capacity for the requested recursion input.
 fn measure_frame_capacity() {
-    let depth: i64 = std::env::var("BAML_PROBE_DEPTH").unwrap().parse().unwrap();
+    let input = std::env::var("BAML_PROBE_DEPTH").unwrap();
     let entry = std::env::var("BAML_PROBE_ENTRY").unwrap_or_else(|_| "user.main".to_string());
-    let mut vm = make_vm(compile_source(SOURCE), &entry, depth);
+    let mut source = SOURCE.to_string();
+    if let Ok(locals) = std::env::var("BAML_PROBE_LOCALS") {
+        let locals: usize = locals.parse().unwrap();
+        source.push_str("function measured_depth(n: int) -> int { ");
+        for index in 0..locals {
+            write!(source, "let local{index} = n + {index}; ").unwrap();
+        }
+        source.push_str("if (n == 0) { 0 } else { 1 + measured_depth(n - 1)");
+        for index in 0..locals {
+            write!(source, " + local{index}").unwrap();
+        }
+        source.push_str(" } } function measured_main(n: int) -> int { measured_depth(n) }");
+    }
+    let program = compile_source(&source);
+    let depth = if input == "search" {
+        boundary(&program, &entry)
+    } else {
+        input.parse().unwrap()
+    };
+    let mut vm = make_vm(program, &entry, depth);
     let observation = drive(&mut vm);
     eprintln!(
-        "depth={depth} entry={entry} frame_size={} frame_align={} bytecode_size={} native_size={} peak={} capacity={} capacity_bytes={} outcome={:?}",
+        "depth={depth} entry={entry} frame_size={} frame_align={} bytecode_size={} native_size={} peak={} capacity={} frame_bytes={} value_size={} value_peak={} value_capacity={} total_bytes={} outcome={:?}",
         size_of::<Frame>(),
         align_of::<Frame>(),
         size_of::<BytecodeFrame>(),
@@ -235,6 +338,10 @@ fn measure_frame_capacity() {
         observation.peak,
         observation.capacity,
         observation.capacity * size_of::<Frame>(),
+        size_of::<Value>(),
+        observation.value_peak,
+        observation.value_capacity,
+        observation.bytes,
         observation.result
     );
 }
