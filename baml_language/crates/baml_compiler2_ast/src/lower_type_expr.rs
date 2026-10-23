@@ -146,19 +146,10 @@ fn lower_base_terminal(type_expr: &CstTypeExpr, diags: &mut Vec<LoweringDiagnost
         return lower_type_expr_node(&inner, diags);
     }
 
-    // Handle parenthesized unions: `(A | B)` where the union is inside parens
-    if type_expr.is_parenthesized() && !type_expr.is_function_type() {
-        let params = type_expr.function_type_params();
-        if params.len() > 1 {
-            let members: Vec<TypeExpr> = params
-                .iter()
-                .filter_map(FunctionTypeParam::ty)
-                .map(|t| lower_type_expr_node(&t, diags))
-                .collect();
-            if !members.is_empty() {
-                return TypeExprKind::Union { variants: members }.at(span);
-            }
-        }
+    if type_expr.is_parenthesized() {
+        // The parser diagnoses named parameters and comma lists without `->`.
+        // Recover as an error, never as a partial type or an invented tuple/union.
+        return TypeExprKind::Error.at(span);
     }
 
     lower_base_type(type_expr, diags)
@@ -198,6 +189,13 @@ fn lower_base_type(type_expr: &CstTypeExpr, diags: &mut Vec<LoweringDiagnostic>)
     }
 
     if let Some(b) = type_expr.bool_literal() {
+        if let Some(args) = type_expr.type_args() {
+            diags.push(LoweringDiagnostic::InvalidLiteralTypeArguments {
+                literal: b.to_string(),
+                span: args.span_range(),
+            });
+            return TypeExprKind::Error.at(span);
+        }
         return TypeExprKind::Literal {
             value: baml_base::Literal::Bool(b),
         }
@@ -377,14 +375,11 @@ fn lower_union_member_base(
     if let Some(func_param) = parts.function_type_param() {
         syntax.node(&func_param);
         syntax.parens();
-        if let Some(inner_type_expr) = func_param
-            .children()
-            .find(|n| n.kind() == baml_compiler_syntax::SyntaxKind::TYPE_EXPR)
-        {
-            if let Some(type_expr) = baml_compiler_syntax::ast::TypeExpr::cast(inner_type_expr) {
-                return lower_type_expr_node(&type_expr, diags);
-            }
+        if let Some(inner) = FunctionTypeParam::cast(func_param).and_then(|p| p.grouped_type()) {
+            return lower_type_expr_node(&inner, diags);
         }
+        // Named parameter syntax requires an arrow (reported by the parser).
+        return TypeExprKind::Error.at(span);
     }
 
     if let Some(s) = parts.string_literal() {
@@ -440,6 +435,20 @@ fn lower_union_member_base(
     // Check for named/primitive type or map type
     if let Some(name) = parts.dotted_name() {
         syntax.path(parts, &name);
+        if matches!(name.as_str(), "true" | "false") {
+            if let Some(args) = parts.type_args() {
+                syntax.node(&args);
+                diags.push(LoweringDiagnostic::InvalidLiteralTypeArguments {
+                    literal: name,
+                    span: args.span_range(),
+                });
+                return TypeExprKind::Error.at(span);
+            }
+            return TypeExprKind::Literal {
+                value: baml_base::Literal::Bool(name == "true"),
+            }
+            .at(span);
+        }
         let (type_arg_exprs, associated_type_bindings): (Vec<_>, Vec<_>) = parts
             .type_args()
             .map(|type_args_node| {
@@ -463,23 +472,13 @@ fn lower_union_member_base(
             .map(|arg| lower_type_expr_node(arg, diags))
             .collect();
 
-        return match name.as_str() {
-            "true" => TypeExprKind::Literal {
-                value: baml_base::Literal::Bool(true),
-            }
-            .at(span),
-            "false" => TypeExprKind::Literal {
-                value: baml_base::Literal::Bool(false),
-            }
-            .at(span),
-            _ => lower_from_type_name_with_generic_args(
-                &name,
-                generic_args,
-                associated_type_bindings,
-                span,
-                diags,
-            ),
-        };
+        return lower_from_type_name_with_generic_args(
+            &name,
+            generic_args,
+            associated_type_bindings,
+            span,
+            diags,
+        );
     }
 
     TypeExprKind::Missing.at(span)

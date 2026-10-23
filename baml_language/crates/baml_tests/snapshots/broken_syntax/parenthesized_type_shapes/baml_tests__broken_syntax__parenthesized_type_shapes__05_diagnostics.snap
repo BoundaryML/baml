@@ -1,0 +1,75 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[comma_eof.baml:1:14]
+ 1 │ type Comma = (int, string)
+   ·              ┬
+   ·              ╰── Parenthesized types require exactly one type; parameter lists require `->` to form a function type
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[comma_trailing_eof.baml:1:22]
+ 1 │ type TrailingComma = (int,)
+   ·                      ┬
+   ·                      ╰── Parenthesized types require exactly one type; parameter lists require `->` to form a function type
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[named_eof.baml:1:14]
+ 1 │ type Named = (x: int)
+   ·              ┬
+   ·              ╰── Named parameters in type expression require `->` to form a function type
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[nested_eof.baml:1:27]
+ 1 │ type Nested = map<string, (x?: int)>
+   ·                           ┬
+   ·                           ╰── Named parameters in type expression require `->` to form a function type
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[non_eof.baml:1:31]
+ 1 │ type NamedBeforeDeclaration = (x?: int)
+   ·                               ┬
+   ·                               ╰── Named parameters in type expression require `->` to form a function type
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[non_eof.baml:2:31]
+ 2 │ type CommaBeforeDeclaration = (int, string)
+   ·                               ┬
+   ·                               ╰── Parenthesized types require exactly one type; parameter lists require `->` to form a function type
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[optional_eof.baml:1:17]
+ 1 │ type Optional = (x?: int)
+   ·                 ┬
+   ·                 ╰── Named parameters in type expression require `->` to form a function type
+   ╰────
+
+  [parse] E0010
+
+  × invalid syntax
+   ╭─[union_eof.baml:1:25]
+ 1 │ type InUnion = string | (x?: int)
+   ·                         ┬
+   ·                         ╰── Named parameters in type expression require `->` to form a function type
+   ╰────

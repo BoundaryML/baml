@@ -494,6 +494,8 @@ function bar/*<E>*/(arg: (() -> void /* throws E */)? = null) -> void /* throws 
    callback's own parameter — is a stored/structural position with no single
    call site to instantiate an effect against, and must declare its `throws`.
 
+Parentheses without `->` group exactly one unnamed type: `(int)` and `(int | string)` are valid. Named parameters (`(x: int)` or `(x?: int)`) and comma lists (`(int, string)` or `(int,)`) require `->` to form a function type; BAML has no tuple type syntax. Function parameter lists may have a trailing comma, as in `(x?: int,) -> string throws never`.
+
 Function return and `throws` types consume following unions greedily. A bare function type can also be a non-first union member when the grouping is unambiguous:
 
 ```baml

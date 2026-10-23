@@ -499,10 +499,15 @@ impl TypeExpr {
 
     /// Get the inner `TypeExpr` for parenthesized types like `(int | string)`.
     ///
-    /// Returns None if this is not a parenthesized type or if it's a function type.
+    /// Returns None unless this is one unnamed grouped type, without a comma.
     /// For function types, use `function_type_params()` and `function_return_type()` instead.
     pub fn inner_type_expr(&self) -> Option<TypeExpr> {
-        if !self.is_parenthesized() {
+        if !self.is_parenthesized()
+            || self
+                .syntax
+                .children_with_tokens()
+                .any(|element| element.kind() == SyntaxKind::COMMA)
+        {
             return None;
         }
         // If this is a function type, don't return the inner type
@@ -530,11 +535,7 @@ impl TypeExpr {
             .collect();
 
         if params.len() == 1 {
-            // Get the TYPE_EXPR from inside the FUNCTION_TYPE_PARAM
-            return params[0]
-                .children()
-                .find(|n| n.kind() == SyntaxKind::TYPE_EXPR)
-                .map(|n| TypeExpr { syntax: n });
+            return FunctionTypeParam::cast(params[0].clone())?.grouped_type();
         }
 
         None
@@ -830,6 +831,17 @@ impl FunctionTypeParam {
                     && second.kind() == SyntaxKind::QUESTION
                     && third.kind() == SyntaxKind::COLON
         )
+    }
+
+    /// Unwrap a parameter-shaped child only when it is a single unnamed type.
+    /// A name, optional marker, colon, or recovery syntax cannot be erased as grouping.
+    pub fn grouped_type(&self) -> Option<TypeExpr> {
+        let mut elements = self
+            .syntax
+            .children_with_tokens()
+            .filter(|e| !e.kind().is_trivia());
+        let ty = elements.next()?.into_node().and_then(TypeExpr::cast)?;
+        elements.next().is_none().then_some(ty)
     }
 
     /// Get the type of this parameter.

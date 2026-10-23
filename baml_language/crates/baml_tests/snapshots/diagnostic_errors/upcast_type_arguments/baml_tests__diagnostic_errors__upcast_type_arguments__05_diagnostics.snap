@@ -1,0 +1,30 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0010
+
+  × upcast requires exactly one target type: `.as<Interface>`
+   ╭─[upcast_type_arguments.baml:4:52]
+ 4 │ function extra_target() -> I throws never { C {}.as<I, MissingType> }
+   ·                                                    ────────┬───────
+   ·                                                            ╰── expected one target type
+   ╰────
+
+  [hir] E0010
+
+  × upcast requires exactly one target type: `.as<Interface>`
+   ╭─[upcast_type_arguments.baml:5:58]
+ 5 │ function extra_target_first() -> I throws never { C {}.as<MissingType, I> }
+   ·                                                          ────────┬───────
+   ·                                                                  ╰── expected one target type
+   ╰────
+
+  [hir] E0010
+
+  × upcast requires exactly one target type: `.as<Interface>`
+   ╭─[upcast_type_arguments.baml:6:49]
+ 6 │ function no_target() -> I throws never { C {}.as<> }
+   ·                                                 ─┬
+   ·                                                  ╰── expected one target type
+   ╰────

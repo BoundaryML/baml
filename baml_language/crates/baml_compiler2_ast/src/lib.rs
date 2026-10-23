@@ -1946,7 +1946,13 @@ function f() -> int {
 
         // This is a consumption check, not a special-case rejection of arrows:
         // the permissive tuple-like CST must not silently select its first type.
-        let (_, diags) = parse_and_lower_with_diagnostics("type Value = int | (string, bool)\n");
+        let tokens = lex_lossless("type Value = int | (string, bool)\n", FileId::new(0));
+        let (green, errors) = parse_file(&tokens);
+        assert!(
+            !errors.is_empty(),
+            "comma lists also require a parser error"
+        );
+        let (_, diags, _) = lower_file(&SyntaxNode::new_root(green));
         assert!(
             diags.iter().any(|diag| matches!(diag,
                 crate::LoweringDiagnostic::UnconsumedTypeSyntax { syntax, .. }
@@ -1954,6 +1960,232 @@ function f() -> int {
             )),
             "{diags:#?}"
         );
+    }
+
+    #[test]
+    fn boolean_literal_arguments_cannot_disappear_during_lowering() {
+        for literal in ["true", "false"] {
+            for args in ["<MissingType>", "<Item = MissingType>"] {
+                let invalid = format!("{literal}{args}");
+                for form in [
+                    invalid.clone(),
+                    format!("int | {invalid}"),
+                    format!("map<string, ({invalid})[]>"),
+                ] {
+                    let source = format!("type Value = {form}");
+                    let root = parse(&source);
+                    assert!(
+                        root.descendants()
+                            .any(|node| node.kind() == SyntaxKind::TYPE_ARGS)
+                    );
+                    let (items, diags, _) = lower_file(&root);
+                    assert_eq!(diags.len(), 1, "{source}: {diags:#?}");
+                    let crate::LoweringDiagnostic::InvalidLiteralTypeArguments {
+                        literal: actual,
+                        span,
+                    } = &diags[0]
+                    else {
+                        panic!("{source}: {diags:#?}");
+                    };
+                    assert_eq!(actual, literal);
+                    assert_eq!(
+                        &source[usize::from(span.start())..usize::from(span.end())],
+                        args
+                    );
+                    let ty = first_type_alias(items).type_expr.unwrap();
+                    let invalid_leaf = match &ty.kind {
+                        TypeExprKind::Union { variants } => &variants[1],
+                        TypeExprKind::Map { value, .. } => {
+                            let TypeExprKind::List { inner } = &value.kind else {
+                                panic!("{ty:?}")
+                            };
+                            inner
+                        }
+                        _ => &ty,
+                    };
+                    assert!(
+                        matches!(invalid_leaf.kind, TypeExprKind::Error),
+                        "{source}: {ty:?}"
+                    );
+                }
+            }
+        }
+
+        let ty = first_type_alias(parse_and_lower("type Value = true | false"))
+            .type_expr
+            .unwrap();
+        let TypeExprKind::Union { variants } = ty.kind else {
+            panic!("expected union")
+        };
+        assert_eq!(variants.len(), 2);
+        for (ty, value) in variants.iter().zip([true, false]) {
+            assert!(
+                matches!(ty.kind, TypeExprKind::Literal { value: baml_base::Literal::Bool(b) } if b == value)
+            );
+        }
+        for (literal, value) in [("true", true), ("false", false)] {
+            let ty = first_type_alias(parse_and_lower(&format!("type Value = {literal}")))
+                .type_expr
+                .unwrap();
+            assert!(
+                matches!(ty.kind, TypeExprKind::Literal { value: baml_base::Literal::Bool(b) } if b == value)
+            );
+        }
+    }
+
+    #[test]
+    fn parenthesized_parameter_syntax_never_becomes_a_usable_partial_type() {
+        use rowan::ast::AstNode;
+        for invalid in ["(x: int)", "(x?: int)", "(int, string)", "(int,)", "()"] {
+            for form in [
+                invalid.to_owned(),
+                format!("string | {invalid}"),
+                format!("map<string, {invalid}>"),
+            ] {
+                for suffix in ["", "\nfunction next() -> int { 1 }"] {
+                    let source = format!("type Value = {form}{suffix}");
+                    let tokens = lex_lossless(&source, FileId::new(0));
+                    let (green, errors) = parse_file(&tokens);
+                    assert_eq!(errors.len(), 1, "{source}: {errors:#?}");
+                    let root = SyntaxNode::new_root(green);
+                    assert_eq!(root.text().to_string(), source, "lossless CST");
+                    if !form.starts_with("string |") {
+                        let grouped = root
+                            .descendants()
+                            .filter_map(baml_compiler_syntax::ast::TypeExpr::cast)
+                            .find(baml_compiler_syntax::ast::TypeExpr::is_parenthesized)
+                            .expect("grouping node");
+                        assert!(
+                            grouped.inner_type_expr().is_none(),
+                            "invalid grouping cannot unwrap"
+                        );
+                    }
+                    let (items, _, _) = lower_file(&root);
+                    let ty = first_type_alias(items).type_expr.unwrap();
+                    let invalid_leaf = match &ty.kind {
+                        TypeExprKind::Union { variants } => &variants[1],
+                        TypeExprKind::Map { value, .. } => value,
+                        _ => &ty,
+                    };
+                    assert!(
+                        matches!(invalid_leaf.kind, TypeExprKind::Error),
+                        "{source}: {ty:?}"
+                    );
+                }
+            }
+        }
+        for (grouped, bare) in [
+            ("(int)", "int"),
+            ("(int | string)", "int | string"),
+            ("((int | string))[]?", "(int | string)[]?"),
+        ] {
+            let lower = |form| {
+                strip_spans(
+                    &first_type_alias(parse_and_lower(&format!("type Value = {form}")))
+                        .type_expr
+                        .unwrap(),
+                )
+            };
+            assert_eq!(lower(grouped), lower(bare));
+        }
+        let ty = first_type_alias(parse_and_lower(
+            "type Value = (x?: int,) -> string throws never",
+        ))
+        .type_expr
+        .unwrap();
+        let TypeExprKind::Function {
+            params,
+            ret,
+            throws,
+        } = ty.kind
+        else {
+            panic!("expected function")
+        };
+        assert_eq!(params.len(), 1);
+        assert_eq!(params[0].name.as_ref().unwrap().as_str(), "x");
+        assert!(params[0].optional);
+        assert!(matches!(params[0].ty.kind, TypeExprKind::Int));
+        assert!(matches!(ret.kind, TypeExprKind::String));
+        assert!(matches!(throws.unwrap().kind, TypeExprKind::Never));
+    }
+
+    #[test]
+    fn upcast_requires_one_complete_target_and_preserves_later_method_arguments() {
+        for args in ["<I, MissingType>", "<MissingType, I>", "<>"] {
+            let source = format!("function main() -> I {{ C {{}}.as{args} }}");
+            let root = parse(&source);
+            let generic_args = root
+                .descendants()
+                .find(|n| n.kind() == SyntaxKind::GENERIC_ARGS)
+                .unwrap();
+            assert_eq!(
+                generic_args
+                    .children()
+                    .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+                    .count(),
+                if args == "<>" { 0 } else { 2 }
+            );
+            let (items, diags, _) = lower_file(&root);
+            assert!(
+                matches!(
+                    diags.as_slice(),
+                    [crate::LoweringDiagnostic::InvalidUpcastTypeArguments { .. }]
+                ),
+                "{diags:#?}"
+            );
+            let f = first_function(items);
+            let Some(FunctionBodyDef::Expr(body, _)) = f.body else {
+                panic!("expected body")
+            };
+            let target = body
+                .exprs
+                .iter()
+                .find_map(|(_, expr)| match expr {
+                    Expr::Upcast { target, .. } => Some(target),
+                    _ => None,
+                })
+                .unwrap();
+            assert!(matches!(target.kind, TypeExprKind::Error), "{target:?}");
+        }
+        for args in ["<I<map<string, int>>>", "<I<map<string, int>>,>"] {
+            let f = first_function(parse_and_lower(&format!(
+                "function main(m: C) -> bool {{ m.as{args}.convert<bool>() }}"
+            )));
+            let Some(FunctionBodyDef::Expr(body, _)) = f.body else {
+                panic!("expected body")
+            };
+            let target = body
+                .exprs
+                .iter()
+                .find_map(|(_, expr)| match expr {
+                    Expr::Upcast { target, .. } => Some(target),
+                    _ => None,
+                })
+                .unwrap();
+            let TypeExprKind::Path {
+                path, generic_args, ..
+            } = &target.kind
+            else {
+                panic!("{target:?}")
+            };
+            assert_eq!(path.to_string(), "I");
+            assert_eq!(generic_args.len(), 1);
+            let TypeExprKind::Map { key, value } = &generic_args[0].kind else {
+                panic!("{target:?}")
+            };
+            assert!(matches!(key.kind, TypeExprKind::String));
+            assert!(matches!(value.kind, TypeExprKind::Int));
+            let call_args = body
+                .exprs
+                .iter()
+                .find_map(|(_, expr)| match expr {
+                    Expr::Call { type_args, .. } => Some(type_args),
+                    _ => None,
+                })
+                .unwrap();
+            assert_eq!(call_args.len(), 1);
+            assert!(matches!(call_args[0].kind, TypeExprKind::Bool));
+        }
     }
 
     #[test]

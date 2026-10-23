@@ -29,6 +29,12 @@ pub enum LoweringDiagnostic {
         span: TextRange,
     },
 
+    /// Literal types cannot carry generic arguments or associated bindings.
+    InvalidLiteralTypeArguments { literal: String, span: TextRange },
+
+    /// An upcast must preserve one complete target, not select from a list.
+    InvalidUpcastTypeArguments { span: TextRange },
+
     /// A top-level item (class, function, enum, etc.) has no name token.
     MissingItemName {
         item_kind: &'static str,
@@ -348,6 +354,20 @@ impl LoweringDiagnostic {
                 },
                 *span,
                 "invalid builtin type arguments",
+            ),
+            LoweringDiagnostic::InvalidLiteralTypeArguments { literal, span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                format!("literal type `{literal}` does not accept type arguments or associated-type bindings"),
+                *span,
+                "remove the arguments from this literal type",
+            ),
+            LoweringDiagnostic::InvalidUpcastTypeArguments { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "upcast requires exactly one target type: `.as<Interface>`".to_string(),
+                *span,
+                "expected one target type",
             ),
             LoweringDiagnostic::MissingItemName { item_kind, span } => (
                 DiagnosticId::MissingName,

@@ -1,0 +1,1 @@
+type Nested = map<string, (x?: int)>

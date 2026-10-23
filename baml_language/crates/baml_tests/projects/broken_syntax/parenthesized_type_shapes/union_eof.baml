@@ -1,0 +1,1 @@
+type InUnion = string | (x?: int)

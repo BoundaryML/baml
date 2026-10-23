@@ -1,0 +1,93 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [hir] E0010
+
+  × literal type `true` does not accept type arguments or associated-type bindings
+   ╭─[literal_type_arguments.baml:2:21]
+ 2 │ type TrueArgs = true<MissingType>
+   ·                     ──────┬──────
+   ·                           ╰── remove the arguments from this literal type
+   ╰────
+
+  [hir] E0010
+
+  × literal type `false` does not accept type arguments or associated-type bindings
+   ╭─[literal_type_arguments.baml:3:23]
+ 3 │ type FalseArgs = false<MissingType>
+   ·                       ──────┬──────
+   ·                             ╰── remove the arguments from this literal type
+   ╰────
+
+  [hir] E0010
+
+  × literal type `true` does not accept type arguments or associated-type bindings
+   ╭─[literal_type_arguments.baml:4:24]
+ 4 │ type TrueBinding = true<Item = MissingType>
+   ·                        ──────────┬─────────
+   ·                                  ╰── remove the arguments from this literal type
+   ╰────
+
+  [hir] E0010
+
+  × literal type `false` does not accept type arguments or associated-type bindings
+   ╭─[literal_type_arguments.baml:5:26]
+ 5 │ type FalseBinding = false<Item = MissingType>
+   ·                          ──────────┬─────────
+   ·                                    ╰── remove the arguments from this literal type
+   ╰────
+
+  [hir] E0010
+
+  × literal type `true` does not accept type arguments or associated-type bindings
+   ╭─[literal_type_arguments.baml:6:28]
+ 6 │ type TrueUnion = int | true<MissingType>
+   ·                            ──────┬──────
+   ·                                  ╰── remove the arguments from this literal type
+   ╰────
+
+  [hir] E0010
+
+  × literal type `false` does not accept type arguments or associated-type bindings
+   ╭─[literal_type_arguments.baml:7:30]
+ 7 │ type FalseUnion = int | false<MissingType>
+   ·                              ──────┬──────
+   ·                                    ╰── remove the arguments from this literal type
+   ╰────
+
+  [hir] E0010
+
+  × literal type `true` does not accept type arguments or associated-type bindings
+   ╭─[literal_type_arguments.baml:8:35]
+ 8 │ type TrueUnionBinding = int | true<Item = MissingType>
+   ·                                   ──────────┬─────────
+   ·                                             ╰── remove the arguments from this literal type
+   ╰────
+
+  [hir] E0010
+
+  × literal type `false` does not accept type arguments or associated-type bindings
+   ╭─[literal_type_arguments.baml:9:37]
+ 9 │ type FalseUnionBinding = int | false<Item = MissingType>
+   ·                                     ──────────┬─────────
+   ·                                               ╰── remove the arguments from this literal type
+   ╰────
+
+  [hir] E0010
+
+  × literal type `true` does not accept type arguments or associated-type bindings
+    ╭─[literal_type_arguments.baml:10:36]
+ 10 │ type TrueNested = map<string, (true<MissingType>)[]>
+    ·                                    ──────┬──────
+    ·                                          ╰── remove the arguments from this literal type
+    ╰────
+
+  [hir] E0010
+
+  × literal type `false` does not accept type arguments or associated-type bindings
+    ╭─[literal_type_arguments.baml:11:38]
+ 11 │ type FalseNested = map<string, (false<Item = MissingType>)[]>
+    ·                                      ──────────┬─────────
+    ·                                                ╰── remove the arguments from this literal type
+    ╰────

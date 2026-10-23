@@ -3453,16 +3453,20 @@ impl<'a> Parser<'a> {
         // Pipes within a parameter list or parenthesized operand do not
         // compete with the enclosing function's return/throws boundary.
         let enclosing_function_operand = std::mem::replace(&mut self.function_union_operand, false);
+        let paren_span = self.error_span();
         self.bump(); // (
 
         // Track whether any parameter had a name (which would make it invalid as parenthesized type)
         let mut had_named_param = false;
+        let mut had_comma = false;
+        let is_empty = self.at(TokenKind::RParen);
 
         // Parse parameters/types inside parens
         if !self.at(TokenKind::RParen) {
             had_named_param |= self.parse_function_type_param_inner();
 
             while self.eat(TokenKind::Comma) {
+                had_comma = true;
                 if self.at(TokenKind::RParen) {
                     break;
                 }
@@ -3505,22 +3509,23 @@ impl<'a> Parser<'a> {
             }
         // The caller's with_node(TYPE_EXPR) will wrap this appropriately
         } else {
-            // Not a function type - should be a parenthesized type
+            // A grouping contains exactly one unnamed type. Commas belong to
+            // function parameter lists; BAML has no tuple type to lower them to.
+            // Anchor to `(` so this also reports at EOF and never highlights the
+            // next declaration as the cause of the error.
             if had_named_param {
-                // Error: named parameters require `->` to form a function type
-                if let Some(token) = self.current() {
-                    self.error(
-                        "Named parameters in type expression require `->` to form a function type"
-                            .to_string(),
-                        token.span,
-                    );
-                }
+                self.error(
+                    "Named parameters in type expression require `->` to form a function type"
+                        .to_string(),
+                    paren_span,
+                );
+            } else if had_comma || is_empty {
+                self.error(
+                    "Parenthesized types require exactly one type; parameter lists require `->` to form a function type"
+                        .to_string(),
+                    paren_span,
+                );
             }
-            // Note: We don't emit an error for multiple types without `->` because:
-            // 1. Tuple types might be added in the future
-            // 2. It allows for better error recovery
-            // 3. The type checker will catch invalid types anyway
-            // For single unnamed type, this is just a parenthesized type - that's fine
         }
     }
 
@@ -9820,6 +9825,44 @@ function f(i: Item) -> string {
             .filter(|n| n.kind() == SyntaxKind::UPCAST_EXPR)
             .count();
         assert_eq!(upcast_count, 1, "expected one UPCAST_EXPR");
+    }
+
+    #[test]
+    fn parenthesized_types_require_one_unnamed_operand_even_at_eof() {
+        for shape in ["(x: int)", "(x?: int)", "(int, string)", "(int,)", "()"] {
+            for prefix in ["", "string | ", "map<string, "] {
+                let close = if prefix.starts_with("map") { ">" } else { "" };
+                for suffix in ["", "\nfunction next() -> int { 1 }"] {
+                    let source = format!("type Value = {prefix}{shape}{close}{suffix}");
+                    let (root, errors) = parse_source(&source);
+                    assert_eq!(root.text().to_string(), source);
+                    assert_eq!(errors.len(), 1, "{source}: {errors:#?}");
+                    let ParseError::InvalidSyntax { message, span } = &errors[0] else {
+                        panic!("{errors:#?}")
+                    };
+                    assert!(
+                        message.contains("require") && message.contains("`->`"),
+                        "{message}"
+                    );
+                    assert_eq!(
+                        &source[usize::from(span.range.start())..usize::from(span.range.end())],
+                        "("
+                    );
+                }
+            }
+        }
+        for shape in [
+            "(int)",
+            "(int | string)",
+            "((int | string))[]?",
+            "() -> int throws never",
+            "(int,) -> string throws never",
+            "(x?: int,) -> string throws never",
+            "int | (x?: int) -> string throws never",
+        ] {
+            let (_, errors) = parse_source(&format!("type Value = {shape}"));
+            assert_no_errors(&errors);
+        }
     }
 
     #[test]

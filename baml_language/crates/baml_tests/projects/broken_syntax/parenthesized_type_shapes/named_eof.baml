@@ -1,0 +1,1 @@
+type Named = (x: int)

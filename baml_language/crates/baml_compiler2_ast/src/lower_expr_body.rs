@@ -3997,16 +3997,41 @@ impl LoweringContext {
         }
         let base = base.unwrap_or_else(|| self.alloc_expr(Expr::Missing, node.span_range()));
 
-        let target = node
+        let args = node
             .children()
-            .find(|child| child.kind() == SyntaxKind::GENERIC_ARGS)
-            .and_then(|args| {
-                args.children()
-                    .find(|child| child.kind() == SyntaxKind::TYPE_EXPR)
-            })
-            .and_then(baml_compiler_syntax::ast::TypeExpr::cast)
-            .map(|te| self.lower_body_type_expr(&te))
-            .unwrap_or_else(|| TypeExprKind::Missing.at(node.span_range()));
+            .find(|child| child.kind() == SyntaxKind::GENERIC_ARGS);
+        let target = if let Some(args) = args {
+            let shape: Vec<_> = args
+                .children_with_tokens()
+                .filter(|element| !element.kind().is_trivia())
+                .map(|element| element.kind())
+                .collect();
+            if matches!(
+                shape.as_slice(),
+                [SyntaxKind::LESS, SyntaxKind::TYPE_EXPR, SyntaxKind::GREATER]
+                    | [
+                        SyntaxKind::LESS,
+                        SyntaxKind::TYPE_EXPR,
+                        SyntaxKind::COMMA,
+                        SyntaxKind::GREATER
+                    ]
+            ) {
+                let te = args
+                    .children()
+                    .find_map(baml_compiler_syntax::ast::TypeExpr::cast)
+                    .expect("validated upcast target");
+                self.lower_body_type_expr(&te)
+            } else {
+                self.diags
+                    .push(LoweringDiagnostic::InvalidUpcastTypeArguments {
+                        span: args.span_range(),
+                    });
+                TypeExprKind::Error.at(args.span_range())
+            }
+        } else {
+            // A missing argument list is a parser recovery node.
+            TypeExprKind::Error.at(node.span_range())
+        };
 
         let id = self.alloc_expr(Expr::Upcast { base, target }, node.span_range());
         if self.needs_chain_wrap.remove(&base) {

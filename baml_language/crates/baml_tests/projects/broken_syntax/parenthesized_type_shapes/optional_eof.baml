@@ -1,0 +1,1 @@
+type Optional = (x?: int)
