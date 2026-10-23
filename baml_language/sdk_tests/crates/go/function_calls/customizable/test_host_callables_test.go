@@ -191,6 +191,19 @@ func Test_host_callable_optional_names_avoid_generated_and_projection_collisions
 	}
 }
 
+func Test_host_callable_two_cbs_callbacks_named_f_and_f_returns_both_run(t *testing.T) {
+	// Two callback parameters whose names differ by a `_returns` suffix each
+	// keep their own function: `f(1) + f_returns(2)`.
+	got, err := baml_sdk.HostCallableTestsTwoCbs(
+		context.Background(),
+		func(_ context.Context, x int64) int64 { return x * 10 },
+		func(_ context.Context, x int64) int64 { return x * 100 },
+	)
+	if err != nil || got != 210 {
+		t.Fatalf("two_cbs = %d, %v; want 210", got, err)
+	}
+}
+
 func Test_host_callable_class_argument(t *testing.T) {
 	person := baml_sdk.HostCallableTestsPerson{Name: "Ada", Age: 37}
 	got, err := baml_sdk.HostCallableTestsCallWithClassCallback(

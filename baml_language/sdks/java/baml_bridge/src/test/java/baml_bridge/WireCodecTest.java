@@ -389,6 +389,41 @@ class WireCodecTest {
                 ex.getMessage());
     }
 
+    /** {@code levels} lists (or single-entry maps) nested around a {@code 1}. */
+    private static Object nested(int levels, boolean maps) {
+        Object value = 1L;
+        for (int i = 0; i < levels; i++) {
+            value = maps ? Map.of("k", value) : List.of(value);
+        }
+        return value;
+    }
+
+    @Test
+    void inbound_value_nested_past_the_wire_bound_is_refused() {
+        // Lists, maps and classes nest at most 50 deep (half the wire's 100
+        // nested messages); one level more is refused before the encoder
+        // descends into it, however deep the value goes, as an argument that
+        // names itself.
+        for (boolean maps : new boolean[] {false, true}) {
+            ProtoWriter.encodeInboundValue(nested(50, maps));
+            for (int levels : new int[] {51, 5000}) {
+                Object value = nested(levels, maps);
+                IllegalArgumentException direct = assertThrows(
+                        IllegalArgumentException.class,
+                        () -> ProtoWriter.encodeInboundValue(value));
+                assertTrue(direct.getMessage().contains("more than 50 deep"), direct.getMessage());
+                IllegalArgumentException argument = assertThrows(
+                        IllegalArgumentException.class,
+                        () -> ProtoWriter.encodeCallFunctionArgs(
+                                new String[] {"value"}, new Object[] {value}, 123L));
+                assertTrue(
+                        argument.getMessage().startsWith("cannot encode argument 'value': ")
+                                && argument.getMessage().contains("more than 50 deep"),
+                        argument.getMessage());
+            }
+        }
+    }
+
     @Test
     void inbound_unsupported_argument_names_the_argument() {
         // The top-level kwarg loop rewraps a deep rejection to name the offending

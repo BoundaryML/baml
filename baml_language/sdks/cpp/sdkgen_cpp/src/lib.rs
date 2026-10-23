@@ -1255,7 +1255,8 @@ fn emit_callable(
     let mut opt_params = Vec::new();
     for arg in function.arguments.iter().filter(|arg| !arg.injected) {
         // Top-level callable parameters cross as host callables
-        // (std::function); callables nested in other types stay
+        // (std::function), receiving any closure argument as a
+        // ::baml::function; callables nested in other types stay
         // unsupported (translate_ty rejects them).
         let mut callable_names = None;
         let mut callable_throws = None;
@@ -1333,9 +1334,14 @@ fn emit_callable(
     let ret = match &function.return_type {
         ret if ret.is_unit() => "void".to_string(),
         Ty::Function { params, ret, .. } => {
-            translate_callable_ty(pool, names, params, ret, emitted_types)?
-                .0
-                .replacen("std::function<", "::baml::function<", 1)
+            translate_received_function_ty(pool, names, params, ret, emitted_types).map_err(
+                |reason| {
+                    format!(
+                        "unsupported return type {} ({reason})",
+                        function.return_type
+                    )
+                },
+            )?
         }
         return_type => {
             match translate_ty(pool, names, return_type, emitted_types, &BTreeSet::new()) {
@@ -1404,7 +1410,9 @@ fn emit_callable(
 /// A callable-typed parameter as `std::function<Ret(Slots...)>` plus its
 /// declared BAML param names ("" for unnamed). Optional callable params
 /// (`y?: int`) become `arg` slots, so an argument BAML omits materializes
-/// as an unset `arg` and the host's own default applies.
+/// as an unset `arg` and the host's own default applies. A function-typed
+/// param is a BAML closure the callback receives, spelled as
+/// [`translate_received_function_ty`] gives it.
 fn translate_callable_ty(
     pool: &SymbolPool,
     names: &CppNames,
@@ -1415,10 +1423,15 @@ fn translate_callable_ty(
     let mut slots = Vec::new();
     let mut wire_names = Vec::new();
     for p in callable_params {
-        let slot = match translate_ty(pool, names, &p.ty, emitted_types, &BTreeSet::new()) {
-            Translated::Cpp(t) => t,
-            Translated::NotYet | Translated::Unsupported(_) => {
-                return Err(format!("callable param type {}", p.ty));
+        let slot = if let Ty::Function { params, ret, .. } = &p.ty {
+            translate_received_function_ty(pool, names, params, ret, emitted_types)
+                .map_err(|reason| format!("callable param type {} ({reason})", p.ty))?
+        } else {
+            match translate_ty(pool, names, &p.ty, emitted_types, &BTreeSet::new()) {
+                Translated::Cpp(t) => t,
+                Translated::NotYet | Translated::Unsupported(_) => {
+                    return Err(format!("callable param type {}", p.ty));
+                }
             }
         };
         slots.push(match p.mode {
@@ -1446,6 +1459,46 @@ fn translate_callable_ty(
         format!("std::function<{ret_ty}({})>", slots.join(", ")),
         wire_names,
     ))
+}
+
+/// A BAML closure the host receives, as `::baml::function<Ret(Args...)>`:
+/// one a BAML function returns, or one BAML hands a host callback as an
+/// argument. Calling it sends its arguments back to BAML, so each parameter
+/// must be a required value the codecs encode; a function-typed or optional
+/// parameter is unsupported.
+fn translate_received_function_ty(
+    pool: &SymbolPool,
+    names: &CppNames,
+    params: &[CallableParam],
+    ret: &Ty,
+    emitted_types: &BTreeSet<Name>,
+) -> Result<String, String> {
+    let mut slots = Vec::with_capacity(params.len());
+    for p in params {
+        match p.mode {
+            CodegenFunctionParamMode::Required => {}
+            CodegenFunctionParamMode::Optional => {
+                return Err(format!("optional parameter of type {}", p.ty));
+            }
+        }
+        match translate_ty(pool, names, &p.ty, emitted_types, &BTreeSet::new()) {
+            Translated::Cpp(t) => slots.push(t),
+            Translated::NotYet | Translated::Unsupported(_) => {
+                return Err(format!("parameter type {}", p.ty));
+            }
+        }
+    }
+    let ret_ty = if ret.is_unit() {
+        "void".to_string()
+    } else {
+        match translate_ty(pool, names, ret, emitted_types, &BTreeSet::new()) {
+            Translated::Cpp(t) => t,
+            Translated::NotYet | Translated::Unsupported(_) => {
+                return Err(format!("return type {ret}"));
+            }
+        }
+    };
+    Ok(format!("::baml::function<{ret_ty}({})>", slots.join(", ")))
 }
 
 fn unqualified_leaf_name(ty: &Ty) -> String {

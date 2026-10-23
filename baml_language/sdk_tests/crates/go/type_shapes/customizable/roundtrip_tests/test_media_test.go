@@ -105,39 +105,70 @@ func Test_media_return_and_round_trip_all_kinds(t *testing.T) {
 		t.Fatalf("audio union returned %s", audioUnion.Kind())
 	}
 
-	mixedMedia, err := baml_sdk.MediaRoundTripMediaOrImageClass(ctx, baml_sdk.NewImageOrMediaImageFromImage(image))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := mixedMedia.AsImage(); !ok {
-		t.Fatalf("media/class collision returned %s", mixedMedia.Kind())
-	}
-	mixedClass, err := baml_sdk.MediaRoundTripMediaOrImageClass(ctx, baml_sdk.NewImageOrMediaImageFromMediaImage(baml_sdk.MediaImage{Label: "nominal"}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, ok := mixedClass.AsMediaImage(); !ok || got.Label != "nominal" {
-		t.Fatalf("media/class collision = %#v, %s", got, mixedClass.Kind())
-	}
+}
 
-	for name, test := range map[string]struct {
-		input any
-		check func(any) bool
-	}{
-		"image": {image, func(value any) bool { _, ok := value.(baml_go.Image); return ok }},
-		"audio": {audio, func(value any) bool { _, ok := value.(baml_go.Audio); return ok }},
-		"video": {video, func(value any) bool { _, ok := value.(baml_go.Video); return ok }},
-		"pdf":   {pdf, func(value any) bool { _, ok := value.(baml_go.Pdf); return ok }},
-	} {
-		got, err := baml_sdk.MediaRoundTripAllMedia(ctx, test.input)
+func Test_media_round_trip_all_media(t *testing.T) {
+	// Four candidates project as `any`; each media kind still comes back as
+	// its own Go type, carrying its URL.
+	ctx := context.Background()
+	image, err := baml_go.NewImageFromUrl(mediaURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	audio, err := baml_go.NewAudioFromUrl(mediaURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	video, err := baml_go.NewVideoFromUrl(mediaURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pdf, err := baml_go.NewPdfFromUrl(mediaURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, input := range []any{image, audio, video, pdf} {
+		got, err := baml_sdk.MediaRoundTripAllMedia(ctx, input)
 		if err != nil {
-			t.Fatalf("dynamic %s input: %v", name, err)
+			t.Fatalf("%T input: %v", input, err)
 		}
-		if !test.check(got) {
-			t.Fatalf("dynamic %s output has concrete type %T", name, got)
+		if reflect.TypeOf(got) != reflect.TypeOf(input) {
+			t.Fatalf("%T input came back as %T", input, got)
 		}
+		url, err := got.(interface{ Url() (*string, error) }).Url()
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertOptionalString(t, url, mediaURL)
 	}
+}
 
+func Test_media_round_trip_media_or_image_class(t *testing.T) {
+	// `image | Image`: the media type and a user class whose name collides
+	// with it stay distinct arms.
+	ctx := context.Background()
+	image, err := baml_go.NewImageFromUrl(mediaURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	media, err := baml_sdk.MediaRoundTripMediaOrImageClass(ctx, baml_sdk.NewImageOrMediaImageFromImage(image))
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotImage, ok := media.AsImage()
+	if !ok {
+		t.Fatalf("media arm came back as %s", media.Kind())
+	}
+	assertOptionalString(t, mustImageUrl(t, gotImage), mediaURL)
+
+	labelled := baml_sdk.MediaImage{Label: "cover"}
+	class, err := baml_sdk.MediaRoundTripMediaOrImageClass(ctx, baml_sdk.NewImageOrMediaImageFromMediaImage(labelled))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := class.AsMediaImage(); !ok || got != labelled {
+		t.Fatalf("class arm = %#v, %s; want %#v", got, class.Kind(), labelled)
+	}
 }
 
 func Test_media_constructors_and_accessors(t *testing.T) {

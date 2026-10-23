@@ -13,6 +13,7 @@ encodes the result back to the engine.
 from __future__ import annotations
 
 import gc
+import typing
 import weakref
 
 import pytest
@@ -37,11 +38,13 @@ from baml_sdk.host_callable_tests import (
     call_with_two_args,
     call_with_typed_throws,
     call_with_typed_throws_propagating,
+    hof,
     make_adder,
     make_counter,
     make_pair_builder,
     make_void_callback,
     make_void_forwarder,
+    two_cbs,
 )
 
 
@@ -67,6 +70,27 @@ def test_host_callables_int_return_callable_round_trip():
 
     result = call_int_callback(callback=cb, x=21)
     assert result == 42
+
+
+def test_host_callable_two_cbs_callbacks_named_f_and_f_returns_both_run():
+    # Two callback parameters whose names differ by a `_returns` suffix each
+    # keep their own callable: `f(1) + f_returns(2)`.
+    assert two_cbs(f=lambda x: x * 10, f_returns=lambda x: x * 100) == 210
+
+
+def test_host_callable_hof_receives_a_baml_closure():
+    # BAML hands the callback a closure of its own; it arrives as an ordinary
+    # Python callable, calls back into BAML (by position and by name, so
+    # twice), and its result flows back through `hof`.
+    received: list[object] = []
+
+    def cb(f: typing.Callable[..., int]) -> int:
+        received.append(f)
+        assert callable(f)
+        return f(41) * 100 + f(x=1) * 2
+
+    assert hof(cb=cb) == 4204
+    assert len(received) == 1
 
 
 # SDK_PARITY_LINT(skip): C# covers this canonical behavior in its native integration harness

@@ -395,9 +395,9 @@ pub(crate) fn render_callable(
     // ordinary function returning `ai.stream.Stream<T>` (→ BamlStream).
     let bare = binding_name;
 
-    // A returned callable's Swift type is declared beside the function, outside
+    // A returned closure's Swift type is declared beside the function, outside
     // the scope of any generic parameter, so it cannot mention one.
-    if returned_callable_type_var(&function.return_type).is_some() {
+    if closure_type_var(&function.return_type).is_some() {
         return None;
     }
 
@@ -480,6 +480,9 @@ pub(crate) fn render_callable(
         }
         prefix
     };
+    // The struct of each BAML closure the host receives (a returned one, or one
+    // passed to a callback), declared beside the function.
+    let mut closure_types = String::new();
     let mut params = Vec::new();
     for (position, arg) in function.arguments.iter().enumerate() {
         let name = escape_ident(arg.name.as_str());
@@ -496,7 +499,16 @@ pub(crate) fn render_callable(
         } = &arg.ty
         {
             let local = format!("{callable_local_prefix}{position}");
-            let (ty, wrapper) = render_callable_param(&name, &local, cparams, ret, throws, ctx)?;
+            let (ty, wrapper, received_closures) = render_callable_param(
+                &name,
+                &local,
+                &format!("{fqn}({position})"),
+                cparams,
+                ret,
+                throws,
+                ctx,
+            )?;
+            closure_types.push_str(&received_closures);
             params.push(Param::Callable {
                 name,
                 ty,
@@ -512,33 +524,21 @@ pub(crate) fn render_callable(
         }
     }
 
-    let returned_callable = if let Ty::Function {
-        params: callable_params,
-        ret,
-        ..
-    } = &function.return_type
-    {
-        Some(render_returned_callable(
-            callable_params,
-            ret,
-            ctx,
-            &format!("_BamlReturned_{:016x}", {
-                use std::hash::{Hash, Hasher};
-                let mut hash = std::collections::hash_map::DefaultHasher::new();
-                fqn.hash(&mut hash);
-                hash.finish()
-            }),
-        )?)
-    } else {
-        None
-    };
     let ret = match &function.return_type {
         // `never` (diverging: panic/exit) spells as a void function —
         // the call only ever returns by throwing (Python maps both
         // void and never to `None` the same way).
         Ty::Never => None,
         ret if ret.is_unit() => None,
-        Ty::Function { .. } => Some(returned_callable.as_ref()?.0.clone()),
+        Ty::Function {
+            params: callable_params,
+            ret,
+            ..
+        } => {
+            let name = closure_type_name(fqn);
+            closure_types.push_str(&render_closure_type(callable_params, ret, ctx, &name)?);
+            Some(name)
+        }
         other => Some(translate_ty(other, ctx)?),
     };
 
@@ -644,7 +644,7 @@ pub(crate) fn render_callable(
         }
     }
 
-    let mut out = String::new();
+    let mut out = closure_types;
     let static_kw = if matches!(kind, FnKind::Instance { .. }) {
         ""
     } else {
@@ -658,35 +658,17 @@ pub(crate) fn render_callable(
     }
     match &ret {
         Some(ret_ty) => {
-            if let Some((_, closure, definition)) = &returned_callable {
-                let _ = write!(
-                    out,
-                    "{definition}\n{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws -> {ret_ty} {{\n\
-                     \t_ = Baml._initialized\n\
-                     {args_setup}\tlet _raw = try BamlRuntime.shared.callRawSync(\"{fqn}\", args: {args_expr}{type_args_arg}, baml: try {control_name}.lowered())\n\
-                     \tlet _function = try BamlFunctionHandle.decode(_raw)\n\
-                     {closure}\n\
-                     }}\n\n\
-                     {doc}public {static_kw}func {async_name}{generic_sig}({param_list}) async throws -> {ret_ty} {{\n\
-                     \t_ = Baml._initialized\n\
-                     {args_setup}\tlet _raw = try await BamlRuntime.shared.callRaw(\"{fqn}\", args: {args_expr}{type_args_arg}, baml: try {control_name}.lowered())\n\
-                     \tlet _function = try BamlFunctionHandle.decode(_raw)\n\
-                     {closure}\n\
-                     }}\n"
-                );
-            } else {
-                let _ = write!(
-                    out,
-                    "{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws -> {ret_ty} {{\n\
-                     \t_ = Baml._initialized\n\
-                     {args_setup}\treturn try BamlRuntime.shared.callSync(\"{fqn}\", args: {args_expr}{type_args_arg}, baml: try {control_name}.lowered())\n\
-                     }}\n\n\
-                     {doc}public {static_kw}func {async_name}{generic_sig}({param_list}) async throws -> {ret_ty} {{\n\
-                     \t_ = Baml._initialized\n\
-                     {args_setup}\treturn try await BamlRuntime.shared.call(\"{fqn}\", args: {args_expr}{type_args_arg}, baml: try {control_name}.lowered())\n\
-                     }}\n"
-                );
-            }
+            let _ = write!(
+                out,
+                "{doc}public {static_kw}func {fn_name}{generic_sig}({param_list}) throws -> {ret_ty} {{\n\
+                 \t_ = Baml._initialized\n\
+                 {args_setup}\treturn try BamlRuntime.shared.callSync(\"{fqn}\", args: {args_expr}{type_args_arg}, baml: try {control_name}.lowered())\n\
+                 }}\n\n\
+                 {doc}public {static_kw}func {async_name}{generic_sig}({param_list}) async throws -> {ret_ty} {{\n\
+                 \t_ = Baml._initialized\n\
+                 {args_setup}\treturn try await BamlRuntime.shared.call(\"{fqn}\", args: {args_expr}{type_args_arg}, baml: try {control_name}.lowered())\n\
+                 }}\n"
+            );
         }
         None => {
             let _ = write!(
@@ -731,11 +713,11 @@ fn swift_type_mentions(ty: &Ty, name: &str) -> bool {
     }
 }
 
-/// The first generic parameter a returned callable's Swift type (its
-/// parameters and result) mentions, or `None` when `return_type` is not a
-/// callable or mentions none. The throws type is not part of the Swift type,
-/// and a synthetic effect parameter is no Swift generic parameter.
-pub(crate) fn returned_callable_type_var(return_type: &Ty) -> Option<String> {
+/// The first generic parameter the Swift type of a BAML closure of type
+/// `closure` (its parameters and result) mentions, or `None` when `closure`
+/// is not a callable or mentions none. The throws type is not part of the
+/// Swift type, and a synthetic effect parameter is no Swift generic parameter.
+pub(crate) fn closure_type_var(closure: &Ty) -> Option<String> {
     fn first(ty: &Ty) -> Option<String> {
         if let Ty::TypeVar(param) = ty
             && !is_synthetic_effect_param(param.name())
@@ -749,7 +731,7 @@ pub(crate) fn returned_callable_type_var(return_type: &Ty) -> Option<String> {
         });
         found
     }
-    let Ty::Function { params, ret, .. } = return_type else {
+    let Ty::Function { params, ret, .. } = closure else {
         return None;
     };
     params
@@ -954,38 +936,51 @@ fn thrown_leaf_names(ty: &Ty) -> Vec<String> {
 /// `unknown` return under `() -> int`) is refused, and a statement that
 /// only narrows a parameter would refuse arguments the declaration admits.
 ///
+/// A parameter of the callable that is itself a function receives a BAML
+/// closure, which arrives as the struct [`render_closure_type`] declares for
+/// it, named after `site` and the parameter's index. Those declarations are
+/// the third element, for the caller to place beside the function.
+///
 /// The prelude declares `local` (the wrapper) and `{local}_returns` (its
 /// return slot); the caller picks a `local` that no other local or
 /// parameter of the function can coincide with.
 fn render_callable_param(
     name: &str,
     local: &str,
+    site: &str,
     cparams: &[baml_sdkgen_types::CallableParam],
     ret: &Ty,
     throws: &Ty,
     ctx: &TranslateCtx,
-) -> Option<(String, String)> {
+) -> Option<(String, String, String)> {
     let mut sig_parts: Vec<String> = Vec::new();
     let mut invoke_args: Vec<String> = Vec::new();
-    let mut param_descriptors: Vec<String> = Vec::new();
+    let mut received_closures = String::new();
     let mut positional = 0usize;
-    for cp in cparams {
-        let declared = slot_expr(&cp.ty, ctx, &generic_param_slot)?;
+    for (index, cp) in cparams.iter().enumerate() {
         match cp.mode {
             baml_sdkgen_types::CodegenFunctionParamMode::Required => {
-                param_descriptors.push(format!(
-                    "BamlFunctionParamDescriptor(type: ({declared}).type)"
-                ));
-                sig_parts.push(translate_ty(&cp.ty, ctx)?);
+                let swift = match &cp.ty {
+                    Ty::Function { params, ret, .. } => {
+                        // Declared beside the function, outside any generic
+                        // parameter's scope, like a returned closure.
+                        if closure_type_var(&cp.ty).is_some() {
+                            return None;
+                        }
+                        let closure = closure_type_name(&format!("{site}.{index}"));
+                        received_closures
+                            .push_str(&render_closure_type(params, ret, ctx, &closure)?);
+                        closure
+                    }
+                    other => translate_ty(other, ctx)?,
+                };
+                sig_parts.push(swift);
                 invoke_args.push(format!("try _args.required({positional})"));
                 positional += 1;
             }
             baml_sdkgen_types::CodegenFunctionParamMode::Optional => {
                 let inner = translate_optional_arg_inner(&cp.ty, ctx)?;
                 let arg_name = cp.name.as_ref()?.as_str();
-                param_descriptors.push(format!(
-                    "BamlFunctionParamDescriptor(name: \"{arg_name}\", type: ({declared}).type, optional: true)"
-                ));
                 sig_parts.push(format!("BamlOptional<{inner}>"));
                 invoke_args.push(format!("try _args.optional(\"{arg_name}\")"));
             }
@@ -1022,30 +1017,100 @@ fn render_callable_param(
         "@escaping @Sendable ({}) async throws -> {ret_ty}",
         sig_parts.join(", ")
     );
-    // A throws clause the declaration left open is an implicit effect
-    // parameter: the host states it `unknown`, as a host callable may
-    // throw anything.
-    let throws_descriptor = match throws {
-        Ty::TypeVar(param) if is_synthetic_effect_param(param.name()) => ".unknown".to_string(),
-        Ty::Never => ".never".to_string(),
-        other => format!("({}).type", slot_expr(other, ctx, &generic_param_slot)?),
-    };
-    let function_type = format!(
-        "BamlTypeDescriptor.function(params: [{}], returns: {returns}, throws: {throws_descriptor})",
-        param_descriptors.join(", ")
-    );
+    let function_type = function_type_descriptor(cparams, &returns, throws, ctx)?;
     let wrapper = format!(
         "{prelude}\tlet {local} = BamlHostCallable(functionType: {function_type}) {{ _args in\n\t\t{wrapper_body}\n\t}}\n"
     );
-    Some((closure_ty, wrapper))
+    Some((closure_ty, wrapper, received_closures))
 }
 
-fn render_returned_callable(
+/// The `BamlTypeDescriptor` expression stating a function type with these
+/// parameters and throws type, its return type stated by the expression
+/// `returns`. A parameter is stated with its declared name: the engine binds
+/// a call of a BAML closure by the names its stated type gives.
+fn function_type_descriptor(
+    cparams: &[baml_sdkgen_types::CallableParam],
+    returns: &str,
+    throws: &Ty,
+    ctx: &TranslateCtx,
+) -> Option<String> {
+    let params = cparams
+        .iter()
+        .map(|cp| {
+            let ty = stated_type(&cp.ty, ctx)?;
+            let name = cp.name.as_deref();
+            Some(match (cp.mode, name) {
+                (baml_sdkgen_types::CodegenFunctionParamMode::Required, None) => {
+                    format!("BamlFunctionParamDescriptor(type: {ty})")
+                }
+                (baml_sdkgen_types::CodegenFunctionParamMode::Required, Some(name)) => {
+                    format!("BamlFunctionParamDescriptor(name: \"{name}\", type: {ty})")
+                }
+                // An optional parameter is passed by name, so it always has one.
+                (baml_sdkgen_types::CodegenFunctionParamMode::Optional, None) => return None,
+                (baml_sdkgen_types::CodegenFunctionParamMode::Optional, Some(name)) => format!(
+                    "BamlFunctionParamDescriptor(name: \"{name}\", type: {ty}, optional: true)"
+                ),
+            })
+        })
+        .collect::<Option<Vec<_>>>()?;
+    // A throws clause the declaration left open is an implicit effect
+    // parameter: the host states it `unknown`, as a host callable may
+    // throw anything.
+    let throws = match throws {
+        Ty::TypeVar(param) if is_synthetic_effect_param(param.name()) => ".unknown".to_string(),
+        Ty::Never => ".never".to_string(),
+        other => stated_type(other, ctx)?,
+    };
+    Some(format!(
+        "BamlTypeDescriptor.function(params: [{}], returns: {returns}, throws: {throws})",
+        params.join(", ")
+    ))
+}
+
+/// The `BamlTypeDescriptor` expression stating the declared type `ty`: a
+/// function type's own, or the type its slot states.
+fn stated_type(ty: &Ty, ctx: &TranslateCtx) -> Option<String> {
+    match ty {
+        Ty::Function {
+            params,
+            ret,
+            throws,
+        } => {
+            let returns = match &**ret {
+                Ty::Never => ".never".to_string(),
+                ret if ret.is_unit() => ".null".to_string(),
+                other => stated_type(other, ctx)?,
+            };
+            function_type_descriptor(params, &returns, throws, ctx)
+        }
+        other => Some(format!(
+            "({}).type",
+            slot_expr(other, ctx, &generic_param_slot)?
+        )),
+    }
+}
+
+/// The Swift name of the struct for the BAML closures at `site`: a function's
+/// FQN, extended with a path for a position inside its signature. The struct
+/// is declared beside the function, so `site` keeps the name unique.
+fn closure_type_name(site: &str) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut hash = std::collections::hash_map::DefaultHasher::new();
+    site.hash(&mut hash);
+    format!("_BamlClosure_{:016x}", hash.finish())
+}
+
+/// The declaration of `name`, the struct a BAML closure with these
+/// parameters and result arrives as in Swift, wherever the host receives one:
+/// a function's result or a callback's argument. It decodes from the
+/// closure's handle and calls back into BAML.
+fn render_closure_type(
     params: &[baml_sdkgen_types::CallableParam],
     ret: &Ty,
     ctx: &TranslateCtx,
     name: &str,
-) -> Option<(String, String, String)> {
+) -> Option<String> {
     let mut signature = Vec::new();
     let mut required = Vec::new();
     let mut optional = Vec::new();
@@ -1092,13 +1157,8 @@ fn render_returned_callable(
     } else {
         format!("        return try {ret_ty}._bamlDecode(result)")
     };
-    let definition = format!(
-        "public struct {name}: Sendable {{\n    private let function: BamlFunctionHandle\n    fileprivate init(_ function: BamlFunctionHandle) {{ self.function = function }}\n    public func callAsFunction({declarations}) async throws -> {ret_ty} {{\n{setup}        let result = try await function.callRaw(args: args, baml: try baml.lowered())\n{decode}\n    }}\n    public func callSync({declarations}) throws -> {ret_ty} {{\n{setup}        let result = try function.callRawSync(args: args, baml: try baml.lowered())\n{decode}\n    }}\n}}\n"
-    );
-    Some((
-        name.into(),
-        format!("\treturn {name}(_function)"),
-        definition,
+    Some(format!(
+        "public struct {name}: Sendable, BamlDecodable {{\n    private let function: BamlFunctionHandle\n    private init(_ function: BamlFunctionHandle) {{ self.function = function }}\n    public static func _bamlDecode(_ value: BamlOutboundValue) throws -> Self {{\n        Self(try BamlFunctionHandle.decode(value))\n    }}\n    public func callAsFunction({declarations}) async throws -> {ret_ty} {{\n{setup}        let result = try await function.callRaw(args: args, baml: try baml.lowered())\n{decode}\n    }}\n    public func callSync({declarations}) throws -> {ret_ty} {{\n{setup}        let result = try function.callRawSync(args: args, baml: try baml.lowered())\n{decode}\n    }}\n}}\n\n"
     ))
 }
 
@@ -1125,10 +1185,7 @@ mod shared_traversal_tests {
         assert!(mentions_type_var(&throwing, "T"));
         assert!(!swift_type_mentions(&throwing, "T"));
         assert!(swift_type_mentions(&callable, "T"));
-        assert_eq!(returned_callable_type_var(&callable).as_deref(), Some("T"));
-        assert_eq!(
-            returned_callable_type_var(&Ty::List(Box::new(variable()))),
-            None
-        );
+        assert_eq!(closure_type_var(&callable).as_deref(), Some("T"));
+        assert_eq!(closure_type_var(&Ty::List(Box::new(variable()))), None);
     }
 }

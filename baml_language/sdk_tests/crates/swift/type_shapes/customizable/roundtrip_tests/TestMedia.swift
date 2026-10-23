@@ -100,4 +100,54 @@ final class TestMedia: XCTestCase {
         let result = try Baml.media.round_trip_image_or_audio(x: .t1(x))
         XCTAssertEqual(try result.t1?.url(), url)
     }
+
+    func test_media_round_trip_all_media() throws {
+        // Each media kind sent through the four-way media union comes back as
+        // its own arm, carrying its URL.
+        let image = try Baml.media.round_trip_all_media(
+            x: .t0(try Baml.media.return_image(url: url, mime: nil)))
+        guard case .t0(let imageArm) = image else {
+            return XCTFail("expected the image arm, got \(image)")
+        }
+        XCTAssertEqual(try imageArm.url(), url)
+
+        let audio = try Baml.media.round_trip_all_media(
+            x: .t1(try Baml.media.return_audio(url: url, mime: nil)))
+        guard case .t1(let audioArm) = audio else {
+            return XCTFail("expected the audio arm, got \(audio)")
+        }
+        XCTAssertEqual(try audioArm.url(), url)
+
+        let video = try Baml.media.round_trip_all_media(
+            x: .t2(try Baml.media.return_video(url: url, mime: nil)))
+        guard case .t2(let videoArm) = video else {
+            return XCTFail("expected the video arm, got \(video)")
+        }
+        XCTAssertEqual(try videoArm.url(), url)
+
+        let pdf = try Baml.media.round_trip_all_media(
+            x: .t3(try Baml.media.return_pdf(url: url, mime: nil)))
+        guard case .t3(let pdfArm) = pdf else {
+            return XCTFail("expected the pdf arm, got \(pdf)")
+        }
+        XCTAssertEqual(try pdfArm.url(), url)
+    }
+
+    func test_media_round_trip_media_or_image_class() throws {
+        // `image | Image`: the media type and the user class whose name
+        // collides with it stay distinct arms.
+        let media = try Baml.media.round_trip_media_or_image_class(
+            x: .t0(try Baml.media.return_image(url: url, mime: nil)))
+        guard case .t0(let mediaArm) = media else {
+            return XCTFail("expected the media arm, got \(media)")
+        }
+        XCTAssertEqual(try mediaArm.url(), url)
+
+        let labelled = Baml.media.Image(label: "cover")
+        let cls = try Baml.media.round_trip_media_or_image_class(x: .t1(labelled))
+        guard case .t1(let classArm) = cls else {
+            return XCTFail("expected the class arm, got \(cls)")
+        }
+        XCTAssertEqual(classArm, labelled)
+    }
 }

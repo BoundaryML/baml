@@ -437,6 +437,45 @@ struct function_handle_state {
   uint64_t key;
 };
 
+// A BAML function handle the host receives, with the name each argument of
+// a call through it is passed by. The handle's type states its parameters;
+// one it leaves nameless (a closure BAML hands a host callback takes the
+// positional parameter type the host stated) goes by `arg<index>`, the name
+// the bridge gives it when it partitions the call.
+struct received_function {
+  std::shared_ptr<function_handle_state> state;
+  std::shared_ptr<std::vector<std::string>> names;
+};
+
+inline received_function decode_received_function(
+    const pb::BamlOutboundValue& raw, std::size_t arity) {
+  const auto& value = unwrap(raw);
+  if (value.value_case() != pb::BamlOutboundValue::kHandleValue ||
+      value.handle_value().handle_type() != pb::FUNCTION_REF ||
+      value.handle_value().key() == 0) {
+    kind_mismatch("function", value);
+  }
+  auto state =
+      std::make_shared<function_handle_state>(value.handle_value().key());
+  if (!value.handle_value().has_ty() ||
+      value.handle_value().ty().ty_case() != pb::BamlTy::kFunction) {
+    throw error("BAML decode error: function handle has no function type");
+  }
+  const auto& function_ty = value.handle_value().ty().function();
+  if (static_cast<std::size_t>(function_ty.params_size()) != arity) {
+    throw error("BAML decode error: function handle arity mismatch");
+  }
+  auto names = std::make_shared<std::vector<std::string>>();
+  names->reserve(arity);
+  for (int index = 0; index < function_ty.params_size(); ++index) {
+    const auto& param = function_ty.params(index);
+    names->push_back(param.has_name() && !param.name().empty()
+                         ? param.name()
+                         : "arg" + std::to_string(index));
+  }
+  return received_function{std::move(state), std::move(names)};
+}
+
 }  // namespace detail
 
 class rust_type {
@@ -509,32 +548,10 @@ template <typename R, typename... Args>
 struct codec<std::function<R(Args...)>> {
   static std::function<R(Args...)> decode(
       const detail::pb::BamlOutboundValue& raw) {
-    const auto& value = detail::unwrap(raw);
-    if (value.value_case() != detail::pb::BamlOutboundValue::kHandleValue ||
-        value.handle_value().handle_type() != detail::pb::FUNCTION_REF ||
-        value.handle_value().key() == 0) {
-      detail::kind_mismatch("function", value);
-    }
-    auto state = std::make_shared<detail::function_handle_state>(
-        value.handle_value().key());
-    if (!value.handle_value().has_ty() ||
-        value.handle_value().ty().ty_case() != detail::pb::BamlTy::kFunction) {
-      throw error("BAML decode error: returned function has no function type");
-    }
-    const auto& function_ty = value.handle_value().ty().function();
-    if (function_ty.params_size() != sizeof...(Args)) {
-      throw error("BAML decode error: returned function arity mismatch");
-    }
-    auto names = std::make_shared<std::vector<std::string>>();
-    names->reserve(function_ty.params_size());
-    for (const auto& param : function_ty.params()) {
-      if (!param.has_name() || param.name().empty()) {
-        throw error(
-            "BAML decode error: returned function parameter has no name");
-      }
-      names->push_back(param.name());
-    }
-    return [state, names](Args... args) -> R {
+    detail::received_function received =
+        detail::decode_received_function(raw, sizeof...(Args));
+    return [state = std::move(received.state),
+            names = std::move(received.names)](Args... args) -> R {
       detail::args_encoder encoded;
       std::size_t index = 0;
       (encoded.add_arg((*names)[index++],
@@ -552,33 +569,20 @@ struct codec<std::function<R(Args...)>> {
 };
 template <typename R, typename... Args>
 struct codec<function<R(Args...)>> {
+  // The type a host callback states for a BAML closure it receives:
+  // positional parameters and the result, from their codecs. What the
+  // closure throws is not part of its C++ type, and a callback that takes a
+  // closure takes it whatever it throws, so that is stated as `unknown`.
+  static detail::pb::BamlTy baml_ty() {
+    static_assert(!(detail::is_arg<std::decay_t<Args>>::value || ...),
+                  "a received BAML closure has no optional parameters");
+    return detail::callable_baml_ty<R, Args...>({}, detail::unknown_baml_ty());
+  }
   static function<R(Args...)> decode(const detail::pb::BamlOutboundValue& raw) {
-    const auto& value = detail::unwrap(raw);
-    if (value.value_case() != detail::pb::BamlOutboundValue::kHandleValue ||
-        value.handle_value().handle_type() != detail::pb::FUNCTION_REF ||
-        value.handle_value().key() == 0) {
-      detail::kind_mismatch("function", value);
-    }
-    auto state = std::make_shared<detail::function_handle_state>(
-        value.handle_value().key());
-    if (!value.handle_value().has_ty() ||
-        value.handle_value().ty().ty_case() != detail::pb::BamlTy::kFunction) {
-      throw error("BAML decode error: returned function has no function type");
-    }
-    const auto& function_ty = value.handle_value().ty().function();
-    if (function_ty.params_size() != sizeof...(Args)) {
-      throw error("BAML decode error: returned function arity mismatch");
-    }
-    auto names = std::make_shared<std::vector<std::string>>();
-    names->reserve(function_ty.params_size());
-    for (const auto& param : function_ty.params()) {
-      if (!param.has_name() || param.name().empty()) {
-        throw error(
-            "BAML decode error: returned function parameter has no name");
-      }
-      names->push_back(param.name());
-    }
-    return function<R(Args...)>(std::move(state), std::move(names));
+    detail::received_function received =
+        detail::decode_received_function(raw, sizeof...(Args));
+    return function<R(Args...)>(std::move(received.state),
+                                std::move(received.names));
   }
 };
 

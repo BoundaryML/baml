@@ -112,6 +112,24 @@ public final class ProtoWriter {
     private static final int ENUM_NAME = 1;
     private static final int ENUM_VALUE = 2;
 
+    /**
+     * How many nested protobuf messages the engine decodes before it refuses a
+     * message as too deep: prost's recursion limit, {@code WIRE_NESTING_LIMIT}
+     * in {@code bridge_ctypes::wire_depth}.
+     */
+    static final int WIRE_NESTING_LIMIT = 100;
+
+    /**
+     * The deepest a value's lists, maps and classes may nest. Each costs the
+     * wire at least two messages (its own and each item's {@code InboundValue};
+     * a map entry or class field adds an {@code InboundMapEntry}), so a value
+     * nested deeper can never cross, as an argument or as a callback's result.
+     * Refusing it at the level that exceeds the bound also bounds the encoder's
+     * recursion, which otherwise follows the value down however deep it goes,
+     * on whatever thread's stack the encode runs.
+     */
+    static final int MAX_VALUE_NESTING = WIRE_NESTING_LIMIT / 2;
+
     private ProtoWriter() {}
 
     /**
@@ -231,16 +249,21 @@ public final class ProtoWriter {
 
     /** One {@code InboundMapEntry} with a string key and (unless null) a value. */
     private static byte[] encodeMapEntry(String key, Object value) {
-        return encodeMapEntry(key, value, null);
+        return encodeMapEntry(key, value, null, 0);
     }
 
-    private static byte[] encodeMapEntry(String key, Object value, BamlType contextualType) {
+    /**
+     * {@code nesting} is how many lists, maps and classes enclose the entry's
+     * value (see {@link #encodeInboundValue(Object, BamlType, int)}).
+     */
+    private static byte[] encodeMapEntry(
+            String key, Object value, BamlType contextualType, int nesting) {
         WireWriter entry = new WireWriter();
         entry.writeString(MAP_ENTRY_STRING_KEY, key);
         // A null value leaves the `value` field absent, which the engine reads
         // as null (an unset oneof ≡ null).
         if (value != null) {
-            entry.writeMessage(MAP_ENTRY_VALUE, encodeInboundValue(value, contextualType));
+            entry.writeMessage(MAP_ENTRY_VALUE, encodeInboundValue(value, contextualType, nesting));
         }
         return entry.toByteArray();
     }
@@ -251,20 +274,22 @@ public final class ProtoWriter {
      * {@code InboundValue} decodes to null while still preserving position.
      */
     public static byte[] encodeInboundValue(Object value) {
-        if (value instanceof baml_bridge.BamlTypedValue typed) {
-            return encodeInboundValue(typed.value(), typed.type());
-        }
-        return encodeInboundValue(value, null);
+        return encodeInboundValue(value, null, 0);
     }
 
     /**
      * Encode {@code value} for a slot of {@code contextualType} ({@code null}
      * when the binding supplies none). The slot's type is what a container
      * states where it fixes one; otherwise the node states its own.
+     *
+     * <p>{@code nesting} is how many lists, maps and classes enclose the node.
+     * A list, map or class at {@link #MAX_VALUE_NESTING} is refused before the
+     * encoder descends into it.
      */
-    private static byte[] encodeInboundValue(Object value, BamlType contextualType) {
+    private static byte[] encodeInboundValue(Object value, BamlType contextualType, int nesting) {
+        assert nesting >= 0 && nesting <= MAX_VALUE_NESTING : nesting;
         if (value instanceof baml_bridge.BamlTypedValue typed) {
-            return encodeInboundValue(typed.value(), typed.type());
+            return encodeInboundValue(typed.value(), typed.type(), nesting);
         }
         WireWriter w = new WireWriter();
         if (value == null) {
@@ -288,7 +313,7 @@ public final class ProtoWriter {
             Object inner = value instanceof baml_bridge.BamlUnion
                     ? unwrapGenericUnion(value)
                     : TypeRegistry.unionRecordInner(value);
-            return encodeInboundValue(inner, selected);
+            return encodeInboundValue(inner, selected, nesting);
         }
         // The type a list or map node states; everything else implies its own
         // or states it where it is written.
@@ -300,7 +325,7 @@ public final class ProtoWriter {
                         ? baml_bridge.BamlFfi.bamlClosureHandle(value)
                         : null;
         if (returnedHandle != null) {
-            return encodeInboundValue(returnedHandle, contextualType);
+            return encodeInboundValue(returnedHandle, contextualType, nesting);
         }
         // bool must precede the integer arms (mirrors Python's isinstance order).
         if (value instanceof Boolean b) {
@@ -325,16 +350,20 @@ public final class ProtoWriter {
             w.writeBytes(IV_UINT8ARRAY, bytes);
         } else if (value instanceof List<?> list) {
             BamlType slot = containerSlot(contextualType, BamlType.Kind.LIST, list.isEmpty());
-            w.writeMessage(IV_LIST, encodeList(list, slot == null ? null : slot.listItem()));
+            w.writeMessage(
+                    IV_LIST,
+                    encodeList(list, slot == null ? null : slot.listItem(), enterLevel(nesting)));
             statedType = slot != null && isExact(slot)
                     ? slot
-                    : stateNatural(naturalType(list), contextualType);
+                    : stateNatural(naturalType(list, nesting), contextualType);
         } else if (value instanceof Map<?, ?> map) {
             BamlType slot = containerSlot(contextualType, BamlType.Kind.MAP, map.isEmpty());
-            w.writeMessage(IV_MAP, encodeMap(map, slot == null ? null : slot.mapValue()));
+            w.writeMessage(
+                    IV_MAP,
+                    encodeMap(map, slot == null ? null : slot.mapValue(), enterLevel(nesting)));
             statedType = slot != null && isExact(slot)
                     ? slot
-                    : stateNatural(naturalType(map), contextualType);
+                    : stateNatural(naturalType(map, nesting), contextualType);
         } else if (value instanceof Enum<?> constant) {
             // Any Java enum: encode it only if its type is a registered generated
             // enum; an unregistered enum is not a BAML value.
@@ -358,7 +387,7 @@ public final class ProtoWriter {
             // transparent on the inbound boundary, just like BamlStream: clone
             // the owned handle key so the engine may drain the wire copy while
             // the Java object remains reusable.
-            return encodeInboundValue(spec.bamlHandle(), contextualType);
+            return encodeInboundValue(spec.bamlHandle(), contextualType, nesting);
         } else if (value instanceof baml_bridge.BamlStream stream) {
             // BamlStream (ai.stream.Stream receiver): lifted to a bare
             // handle_value(ADT_TAGGED_HEAP_HANDLE) on the wire — the engine
@@ -368,11 +397,11 @@ public final class ProtoWriter {
             // handle (proto.py). Delegate to the BamlHandle arm below, which
             // clones the key per the drain contract; the inner handle already
             // carries handle_type = ADT_TAGGED_HEAP_HANDLE.
-            return encodeInboundValue(stream.bamlHandle(), contextualType);
+            return encodeInboundValue(stream.bamlHandle(), contextualType, nesting);
         } else if (value instanceof baml_bridge.BamlOpaque opaque) {
             // An opaque instance (reflect.Package, …) goes back as the
             // ADT_RUNTIME_VALUE handle it arrived as, never by fields.
-            return encodeInboundValue(opaque.bamlHandle(), contextualType);
+            return encodeInboundValue(opaque.bamlHandle(), contextualType, nesting);
         } else if (value instanceof baml_bridge.BamlHandle handle) {
             // A bare engine handle (a $rust_type shell's private field, e.g.
             // baml.fs.File `_handle` / baml.http.Response `_body`): an
@@ -387,12 +416,12 @@ public final class ProtoWriter {
         } else if (value instanceof baml_bridge.BamlUnion) {
             // Generic-family arm record (Union2..Union10): unwrap to the
             // single `value()` component — no union envelope inbound.
-            return encodeInboundValue(unwrapGenericUnion(value), contextualType);
+            return encodeInboundValue(unwrapGenericUnion(value), contextualType, nesting);
         } else if (TypeRegistry.isUnionRecord(value)) {
             // A union wrapper record carries no wrapper on the inbound wire:
             // unwrap to its bare inner value and encode that (inbound has no
             // union arm — the engine re-validates the union at the boundary).
-            return encodeInboundValue(TypeRegistry.unionRecordInner(value), contextualType);
+            return encodeInboundValue(TypeRegistry.unionRecordInner(value), contextualType, nesting);
         } else if (isHostCallable(value)) {
             // A host callable (a java.util.function.* shape, or a generated
             // @FunctionalInterface marked with baml_bridge.BamlHostCallable) has
@@ -454,10 +483,10 @@ public final class ProtoWriter {
                 List<BamlType> bound = TypeRegistry.typeArgsOf(value);
                 typeArgs = bound.isEmpty() ? contextualType.classTypeArgs() : bound;
             } else {
-                typeArgs = instanceTypeArgs(value, cw);
+                typeArgs = instanceTypeArgs(value, cw, nesting);
             }
             writeClassType(w, cw.fqn, typeArgs);
-            w.writeMessage(IV_CLASS, encodeClass(cw, typeArgs));
+            w.writeMessage(IV_CLASS, encodeClass(cw, typeArgs, enterLevel(nesting)));
         }
         // A container's natural type can mention a type variable (from a slot
         // whose binding is open) or be unknown to the token grammar (an element
@@ -627,8 +656,12 @@ public final class ProtoWriter {
      * {@code never}. {@code null} when some part of the value has no BAML type
      * the token grammar can spell (bytes, media, handles); the node is then left
      * unstated.
+     *
+     * <p>{@code nesting} is how many lists, maps and classes enclose the value,
+     * counted and bounded as the encoder counts them: this walk follows the
+     * value down too, and may run on a value the encoder has not yet refused.
      */
-    private static BamlType naturalType(Object value) {
+    private static BamlType naturalType(Object value, int nesting) {
         if (value instanceof Boolean) {
             return BamlType.BOOL;
         }
@@ -645,11 +678,11 @@ public final class ProtoWriter {
             return BamlType.STRING;
         }
         if (value instanceof List<?> list) {
-            BamlType item = naturalElementType(list);
+            BamlType item = naturalElementType(list, enterLevel(nesting));
             return item == null ? null : BamlType.list(item);
         }
         if (value instanceof Map<?, ?> map) {
-            BamlType item = naturalElementType(map.values());
+            BamlType item = naturalElementType(map.values(), enterLevel(nesting));
             return item == null ? null : BamlType.map(BamlType.STRING, item);
         }
         if (value instanceof Enum<?> constant) {
@@ -657,17 +690,17 @@ public final class ProtoWriter {
             return ew == null ? null : BamlType.of(constant.getDeclaringClass());
         }
         if (value instanceof baml_bridge.BamlUnion) {
-            return naturalType(unwrapGenericUnion(value));
+            return naturalType(unwrapGenericUnion(value), nesting);
         }
         if (TypeRegistry.isUnionRecord(value)) {
             // A record of a declared alias (`baml.json.json`) has the alias as
             // its type; a record of an anonymous union has its inner value's.
             String alias = TypeRegistry.unionAliasFqn(value);
-            return alias != null ? BamlType.typeAlias(alias) : naturalType(TypeRegistry.unionRecordInner(value));
+            return alias != null ? BamlType.typeAlias(alias) : naturalType(TypeRegistry.unionRecordInner(value), nesting);
         }
         TypeRegistry.ClassWire cw = value == null ? null : TypeRegistry.classWire(value);
         if (cw != null) {
-            return BamlType.classByFqn(cw.fqn, instanceTypeArgs(value, cw).toArray(new BamlType[0]));
+            return BamlType.classByFqn(cw.fqn, instanceTypeArgs(value, cw, nesting).toArray(new BamlType[0]));
         }
         return null;
     }
@@ -679,9 +712,11 @@ public final class ProtoWriter {
      * what its fields make of each parameter ({@code new GenericBox<>(5L)} is a
      * {@code GenericBox<int>}), as the untyped hosts do. A parameter no field
      * determines leaves the instance with no type to state, and the caller
-     * names it.
+     * names it. {@code nesting} counts the classes, lists and maps enclosing the
+     * instance, as {@link #naturalType} does.
      */
-    private static List<BamlType> instanceTypeArgs(Object value, TypeRegistry.ClassWire cw) {
+    private static List<BamlType> instanceTypeArgs(
+            Object value, TypeRegistry.ClassWire cw, int nesting) {
         List<BamlType> bound = TypeRegistry.typeArgsOf(value);
         if (!bound.isEmpty() || cw.typeParams == null || cw.typeParams.length == 0) {
             return bound;
@@ -694,7 +729,7 @@ public final class ProtoWriter {
                 if (desc == null || fieldValue == null) {
                     continue;
                 }
-                BamlType natural = naturalType(fieldValue);
+                BamlType natural = naturalType(fieldValue, enterLevel(nesting));
                 if (natural != null) {
                     unify(desc, natural, bindings);
                 }
@@ -769,7 +804,7 @@ public final class ProtoWriter {
      * {@code null}'s type folded in as an optional, several element types form a
      * union in first-seen order, and no elements give {@code never}.
      */
-    private static BamlType naturalElementType(java.util.Collection<?> elements) {
+    private static BamlType naturalElementType(java.util.Collection<?> elements, int nesting) {
         java.util.LinkedHashSet<BamlType> types = new java.util.LinkedHashSet<>();
         boolean nullable = false;
         for (Object element : elements) {
@@ -777,7 +812,7 @@ public final class ProtoWriter {
                 nullable = true;
                 continue;
             }
-            BamlType type = naturalType(element);
+            BamlType type = naturalType(element, nesting);
             if (type == null) {
                 return null;
             }
@@ -812,7 +847,8 @@ public final class ProtoWriter {
      * {@link #encodeInboundValue}). Nominal identity is carried by the enclosing
      * {@code InboundValue.value_type}, never by this payload.
      */
-    private static byte[] encodeClass(TypeRegistry.ClassWire cw, List<BamlType> typeArgs) {
+    private static byte[] encodeClass(
+            TypeRegistry.ClassWire cw, List<BamlType> typeArgs, int nesting) {
         // A field declared in terms of the class's type parameters is encoded
         // under the type the instance's bound arguments make of it: `T[]` is
         // `int[]` for a `Box<int>`, so the field needs no statement of its own.
@@ -831,7 +867,7 @@ public final class ProtoWriter {
             }
             w.writeMessage(
                     CLASS_FIELDS,
-                    encodeMapEntry(cw.fieldNames[i], cw.fieldValues[i], fieldDesc));
+                    encodeMapEntry(cw.fieldNames[i], cw.fieldValues[i], fieldDesc, nesting));
         }
         return w.toByteArray();
     }
@@ -895,7 +931,8 @@ public final class ProtoWriter {
 
     /**
      * The encoder cannot put a Java value on the wire: no inbound arm takes it,
-     * or it is a callable with no function type to take. The top-level kwarg
+     * it is a callable with no function type to take, or it nests deeper than
+     * the wire carries ({@link #enterLevel}). The top-level kwarg
      * loop ({@link #encodeCallFunctionArgs}) rewraps it into an
      * {@link IllegalArgumentException} that also names the owning argument
      * (mirroring bridge_python's {@code TypeError} naming the kwarg). Extends
@@ -909,6 +946,21 @@ public final class ProtoWriter {
         UnsupportedInboundTypeException(String reason) {
             super(reason);
         }
+    }
+
+    /**
+     * The nesting of the items of a list, map or class enclosed by
+     * {@code nesting} others, or a refusal when it would exceed
+     * {@link #MAX_VALUE_NESTING}.
+     */
+    private static int enterLevel(int nesting) {
+        if (nesting >= MAX_VALUE_NESTING) {
+            throw new UnsupportedInboundTypeException(
+                    "the value nests lists, maps and classes more than " + MAX_VALUE_NESTING
+                            + " deep, deeper than the " + WIRE_NESTING_LIMIT
+                            + " nested messages the wire carries");
+        }
+        return nesting + 1;
     }
 
     private static UnsupportedInboundTypeException unsupported(Object value) {
@@ -926,22 +978,22 @@ public final class ProtoWriter {
         }
     }
 
-    private static byte[] encodeList(List<?> list, BamlType itemType) {
+    private static byte[] encodeList(List<?> list, BamlType itemType, int nesting) {
         WireWriter w = new WireWriter();
         for (Object item : list) {
             // Always emit an entry (even for a null item) to preserve length.
-            w.writeMessage(LIST_VALUES, encodeInboundValue(item, itemType));
+            w.writeMessage(LIST_VALUES, encodeInboundValue(item, itemType, nesting));
         }
         return w.toByteArray();
     }
 
-    private static byte[] encodeMap(Map<?, ?> map, BamlType valueType) {
+    private static byte[] encodeMap(Map<?, ?> map, BamlType valueType, int nesting) {
         WireWriter w = new WireWriter();
         for (Map.Entry<?, ?> e : map.entrySet()) {
             // The engine stringifies map keys; generated maps are Map<String, V>.
             w.writeMessage(
                     MAP_ENTRIES,
-                    encodeMapEntry(String.valueOf(e.getKey()), e.getValue(), valueType));
+                    encodeMapEntry(String.valueOf(e.getKey()), e.getValue(), valueType, nesting));
         }
         return w.toByteArray();
     }

@@ -18,7 +18,7 @@ use std::fmt::Write as _;
 use baml_sdkgen_types::{Class, Function, Ty, TypeAlias};
 
 use crate::{
-    emit::returned_callable_type_var,
+    emit::closure_type_var,
     translate_ty::{TranslateCtx, translate_optional_arg_inner, translate_ty},
 };
 
@@ -38,7 +38,7 @@ pub(crate) struct Skip {
 /// the renderer's own order: a returned callable's type variables, then
 /// parameters, then the return type.
 pub(crate) fn callable_skip_reason(function: &Function, ctx: &TranslateCtx) -> String {
-    if let Some(name) = returned_callable_type_var(&function.return_type) {
+    if let Some(name) = closure_type_var(&function.return_type) {
         return format!(
             "returns a callable whose signature mentions type variable `{name}` — \
              its Swift type is declared outside the generic scope"

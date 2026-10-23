@@ -1,9 +1,9 @@
 // Smoke tests for the type_shapes sdk-test crate. Python's version asserts
 // each generated namespace imports cleanly; the C++ analog names a symbol
 // from every in-scope generated namespace so a codegen regression that
-// drops one fails this translation unit. Namespaces from removed
-// post-step-8 features (media, generics, aliases_consumer) do not emit and
-// are not named here.
+// drops one fails this translation unit. Namespaces the generator does not
+// emit yet (generics, aliases_consumer) are not named here; `media` is, in
+// test_media.cc.
 #include <baml_sdk.h>
 #include <baml_test.h>
 

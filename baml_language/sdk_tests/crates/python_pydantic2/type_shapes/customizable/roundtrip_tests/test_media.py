@@ -20,6 +20,7 @@ import baml_sdk  # noqa: F401  — initializes the BAML runtime
 from baml_sdk.baml import BamlError
 from baml_sdk.baml.errors import Io
 from baml_sdk.media import (
+    Image as LabelledImage,
     Media,
     return_image,
     return_audio,
@@ -29,11 +30,13 @@ from baml_sdk.media import (
     round_trip_audio,
     round_trip_video,
     round_trip_pdf,
+    round_trip_all_media,
     round_trip_media,
+    round_trip_media_or_image_class,
     round_trip_optional_image_list,
     image_mime_type,
 )
-from baml_sdk.baml.media import Image, Pdf
+from baml_sdk.baml.media import Audio, Image, Pdf, Video
 
 URL = "https://example.com/asset"
 PNG_B64 = "iVBORw0KGgo="
@@ -89,6 +92,38 @@ def test_media_round_trip_media():
         pdf_field=return_pdf(url=URL, mime=None),
     )
     assert round_trip_media(m=m) is not None
+
+
+# --- media under a union ---------------------------------------------------
+#
+# A union member that is media crosses as a media value, not a class or
+# scalar: it must come back as its own arm.
+
+
+def test_media_round_trip_all_media():
+    sent = [
+        (Image, return_image(url=URL, mime=None)),
+        (Audio, return_audio(url=URL, mime=None)),
+        (Video, return_video(url=URL, mime=None)),
+        (Pdf, return_pdf(url=URL, mime=None)),
+    ]
+    for kind, value in sent:
+        returned = round_trip_all_media(x=value)
+        assert type(returned) is kind
+        assert returned.url() == URL
+
+
+def test_media_round_trip_media_or_image_class():
+    # `image | Image`: the media type and the user class whose name collides
+    # with it stay distinct arms.
+    media = round_trip_media_or_image_class(x=return_image(url=URL, mime=None))
+    assert type(media) is Image
+    assert media.url() == URL
+
+    labelled = LabelledImage(label="cover")
+    returned = round_trip_media_or_image_class(x=labelled)
+    assert type(returned) is LabelledImage
+    assert returned == labelled
 
 
 # SDK_PARITY_LINT(skip): validates Python host-created media wrapper encoding

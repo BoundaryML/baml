@@ -354,4 +354,16 @@ final class TestHostCallables: XCTestCase {
         )
         XCTAssertEqual(result, 210)
     }
+
+    func test_host_callable_hof_receives_a_baml_closure() throws {
+        // BAML hands the callback a closure of its own (`x + 1`); it arrives
+        // as a callable like any BAML closure returned to Swift, calls back
+        // into BAML each time, and its results flow back through `hof`.
+        let result = try Baml.host_callable_tests.hof(cb: { f in
+            let first = try await f(41)
+            let second = try await f(1)
+            return first * 100 + second
+        })
+        XCTAssertEqual(result, 4202)
+    }
 }

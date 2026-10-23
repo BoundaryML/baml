@@ -121,6 +121,15 @@ class TestHostCallables {
     }
 
     @Test
+    void test_host_callable_two_cbs_callbacks_named_f_and_f_returns_both_run() {
+        // Two callback parameters whose names differ by a `_returns` suffix
+        // each keep their own callable: `f(1) + f_returns(2)`.
+        Function<Long, Long> f = x -> x * 10;
+        Function<Long, Long> fReturns = x -> x * 100;
+        assertEquals(210L, Fns.two_cbs(f, fReturns));
+    }
+
+    @Test
     void test_host_callable_void_signatures() {
         // A unit callable has no result to carry in either direction: a host
         // callback is a `void` method whatever its arity, and so is a BAML

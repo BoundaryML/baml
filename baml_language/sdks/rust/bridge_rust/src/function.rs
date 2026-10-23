@@ -238,15 +238,20 @@ where
                 got: "handle",
             });
         };
+        // The type may leave a parameter nameless (a closure BAML hands to a
+        // callback does); the bridge partitions a call through the handle by
+        // this same type, naming such a parameter `arg<index>`.
         let parameter_names = function_type
             .params
             .into_iter()
-            .map(|parameter| parameter.name.filter(|name| !name.is_empty()))
-            .collect::<Option<Vec<_>>>()
-            .ok_or(DecodeError::WrongType {
-                expected: "function with named parameters",
-                got: "handle",
-            })?;
+            .enumerate()
+            .map(|(index, parameter)| {
+                parameter
+                    .name
+                    .filter(|name| !name.is_empty())
+                    .unwrap_or_else(|| format!("arg{index}"))
+            })
+            .collect::<Vec<_>>();
         Ok(Self {
             handle: owned_handle,
             parameter_names: parameter_names.into(),

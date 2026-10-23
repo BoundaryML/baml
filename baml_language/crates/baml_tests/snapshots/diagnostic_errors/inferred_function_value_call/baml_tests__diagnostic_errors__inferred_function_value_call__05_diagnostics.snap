@@ -5,8 +5,8 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × mismatched types
-    ╭─[inferred_function_value_call.baml:10:62]
- 10 │ function call_inferred_with_string() -> int { get_identity()("x") }
+    ╭─[inferred_function_value_call.baml:14:62]
+ 14 │ function call_inferred_with_string() -> int { get_identity()("x") }
     ·                                                              ─┬─
     ·                                                               ╰── expected `int`, found `"x"`
     ╰────
@@ -14,8 +14,8 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × mismatched types
-    ╭─[inferred_function_value_call.baml:12:69]
- 12 │ function call_written_with_string() -> int { get_identity_written()("x") }
+    ╭─[inferred_function_value_call.baml:16:69]
+ 16 │ function call_written_with_string() -> int { get_identity_written()("x") }
     ·                                                                     ─┬─
     ·                                                                      ╰── expected `int`, found `"x"`
     ╰────
@@ -23,8 +23,8 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0001
 
   × mismatched types
-    ╭─[inferred_function_value_call.baml:16:7]
- 16 │     f("x")
+    ╭─[inferred_function_value_call.baml:20:7]
+ 20 │     f("x")
     ·       ─┬─
     ·        ╰── expected `int`, found `"x"`
     ╰────
@@ -33,7 +33,7 @@ source: crates/baml_tests/src/generated_tests.rs
 
   × generic function `identity` needs concrete type arguments before it can be stored in `f`. Specialize it explicitly, for example `identity<int>`. Or write the concrete function type after the
   │ binding name: `let f: (x: int) -> int throws never = identity`. Calling `identity(...)` directly works only when that call's arguments or expected result determine every type argument
-    ╭─[inferred_function_value_call.baml:23:13]
- 23 │     let f = identity;
+    ╭─[inferred_function_value_call.baml:26:13]
+ 26 │     let f = identity;
     ·             ────────
     ╰────

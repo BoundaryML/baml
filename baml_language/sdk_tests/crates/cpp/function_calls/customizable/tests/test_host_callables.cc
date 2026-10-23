@@ -18,6 +18,7 @@
 #include <baml_test.h>
 
 #include <exception>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -65,6 +66,27 @@ BAML_TEST(baml_closure_is_reusable_and_retains_mutable_captures) {
   const auto next_value = baml_sdk::host_callable_tests::make_counter(40);
   BAML_ASSERT_EQ(next_value(), int64_t{41});
   BAML_ASSERT_EQ(next_value(), int64_t{42});
+}
+
+BAML_TEST(host_callable_hof_receives_a_baml_closure) {
+  // BAML hands the callback a closure of its own (`x + 1`); it arrives as a
+  // baml::function like any BAML closure returned to C++, stands in for a
+  // std::function, calls back into BAML each time, and its results flow back
+  // through `hof`.
+  const int64_t result = baml_sdk::host_callable_tests::hof(
+      [](const baml::function<int64_t(int64_t)>& f) {
+        const std::function<int64_t(int64_t)> plus_one = f;
+        return plus_one(41) * 100 + f(1);
+      });
+  BAML_ASSERT_EQ(result, int64_t{4202});
+}
+
+BAML_TEST(host_callable_two_cbs_callbacks_named_f_and_f_returns_both_run) {
+  // Two callback parameters whose names differ by a `_returns` suffix each
+  // keep their own callable: `f(1) + f_returns(2)`.
+  const int64_t result = baml_sdk::host_callable_tests::two_cbs(
+      [](int64_t x) { return x * 10; }, [](int64_t x) { return x * 100; });
+  BAML_ASSERT_EQ(result, int64_t{210});
 }
 
 BAML_TEST(host_callable_void_signatures) {

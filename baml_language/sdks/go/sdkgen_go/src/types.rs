@@ -692,6 +692,15 @@ fn contains_type_var(ty: &GoTy) -> bool {
     }
 }
 
+// BUG: a callback cannot receive a BAML closure. Any function type inside a
+// callback's parameters or result makes the whole callback `Unsupported`, so a
+// BAML function such as `hof(cb: (f: (x: int) -> int) -> int)` is omitted from
+// the Go SDK entirely. Rendering is direction-blind: a function value BAML
+// hands to the host must surface as `ReturnedFunction[...]` (the decoder the
+// callback adapter would already call), while one the host hands to BAML is a
+// plain Go `func`, and every nested function flips that direction. Lifting this
+// needs that direction threaded through `render_projected_go_type`, the
+// callback options structs, and `supported_go_type`.
 fn callback_component_is_unsupported(ty: &GoTy) -> bool {
     contains_unsupported(ty)
         || contains_function(ty)

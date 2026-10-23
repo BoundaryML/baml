@@ -21,12 +21,16 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import baml_bridge.BamlError;
+import baml_bridge.BamlPanic;
 import baml_sdk.baml.json.PathError;
 import baml_sdk.baml.json.json;
+import baml_sdk.baml.panics.HostContractViolation;
 import baml_sdk.go_json_tests.Fns;
 import java.math.BigInteger;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import org.junit.jupiter.api.Test;
 
@@ -113,5 +117,64 @@ class TestJson {
         // `bigint` whatever its magnitude, so it comes back as one.
         json small = new json.BigintValue(BigInteger.valueOf(5));
         assertEquals(small, Fns.round_trip_json(small));
+    }
+
+    /** A json value whose lists nest {@code depth} deep around a {@code 1}. */
+    private static json nestedJson(int depth) {
+        json value = new json.IntValue(1L);
+        for (int i = 0; i < depth; i++) {
+            value = new json.jsonListValue(List.of(value));
+        }
+        return value;
+    }
+
+    /**
+     * The encoder refused an argument nested deeper than the wire carries
+     * before sending it, with its ordinary error for an argument it cannot
+     * encode, naming the argument and the bound.
+     */
+    private static void assertRefusedAsTooDeep(Throwable error) {
+        IllegalArgumentException refused = assertInstanceOf(IllegalArgumentException.class, error);
+        assertTrue(
+                refused.getMessage().startsWith("cannot encode argument 'value': ")
+                        && refused.getMessage().contains("more than 50 deep"),
+                refused.getMessage());
+    }
+
+    @Test
+    void test_json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument() {
+        // Well inside the bound, the value crosses both ways.
+        assertEquals(nestedJson(30), Fns.round_trip_json(nestedJson(30)));
+        // Just past it, and far past it: refused before anything is sent,
+        // never by exhausting the stack.
+        for (int depth : new int[] {60, 1000}) {
+            json value = nestedJson(depth);
+            assertRefusedAsTooDeep(assertThrows(Throwable.class, () -> Fns.round_trip_json(value)));
+        }
+        // The async form refuses through its future.
+        ExecutionException failed = assertThrows(
+                ExecutionException.class,
+                () -> Fns.round_trip_json_async(nestedJson(60)).get(60, TimeUnit.SECONDS));
+        assertRefusedAsTooDeep(failed.getCause());
+    }
+
+    @Test
+    void test_json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result() {
+        // Well inside the bound, the callback's result crosses back.
+        assertEquals(
+                nestedJson(30),
+                Fns.call_json_callback(v -> nestedJson(30), new json.IntValue(1L)));
+        // A result the wire cannot carry is refused where the callback's
+        // result is encoded: the callback broke its contract to return a value
+        // that crosses, and the call raises that panic, naming the bound.
+        for (int depth : new int[] {60, 200}) {
+            BamlPanic panic = assertThrows(
+                    BamlPanic.class,
+                    () -> Fns.call_json_callback(v -> nestedJson(depth), new json.IntValue(1L)));
+            assertEquals("baml.panics.HostContractViolation", panic.class_name());
+            HostContractViolation violation =
+                    assertInstanceOf(HostContractViolation.class, panic.value());
+            assertTrue(violation.message().contains("more than 50 deep"), violation.message());
+        }
     }
 }

@@ -2,26 +2,26 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 933. IDs with complete required parity: 191. Required gaps: 5139.
+Distinct exact test IDs: 941. IDs with complete required parity: 193. Required gaps: 5149.
 
-Baseline ratchet: WORSE. Required gaps: 5139 (baseline: 5133). Present declarations: 2495 (baseline: 2491). Newly missing required pairs: 6. Resolved baseline gaps: 0. Weakened requirements: 0.
+Baseline ratchet: WORSE. Required gaps: 5149 (baseline: 5139). Present declarations: 2547 (baseline: 2495). Newly missing required pairs: 11. Resolved baseline gaps: 1. Weakened requirements: 0.
 
 ## Python-baselined parity
 
-Parity is the share of the 449 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
+Parity is the share of the 455 test IDs declared in `python_pydantic2` that are also declared in each SDK environment. SDK-only test IDs do not affect these percentages.
 
 | SDK environment | Matching Python test IDs | Parity |
 | --- | ---: | ---: |
-| python_pydantic2 | 449 / 449 | 100.0% |
-| typescript_node | 185 / 449 | 41.2% |
-| typescript_web_chromium | 161 / 449 | 35.9% |
-| typescript_web_cloudflare_workers | 161 / 449 | 35.9% |
-| cpp | 131 / 449 | 29.2% |
-| csharp | 0 / 449 | 0.0% |
-| rust | 230 / 449 | 51.2% |
-| go | 13 / 449 | 2.9% |
-| java | 300 / 449 | 66.8% |
-| swift | 185 / 449 | 41.2% |
+| python_pydantic2 | 455 / 455 | 100.0% |
+| typescript_node | 191 / 455 | 42.0% |
+| typescript_web_chromium | 167 / 455 | 36.7% |
+| typescript_web_cloudflare_workers | 167 / 455 | 36.7% |
+| cpp | 137 / 455 | 30.1% |
+| csharp | 0 / 455 | 0.0% |
+| rust | 232 / 455 | 51.0% |
+| go | 18 / 455 | 4.0% |
+| java | 306 / 455 | 67.3% |
+| swift | 191 / 455 | 42.0% |
 
 | Test case | python_pydantic2 | typescript_node | typescript_web_chromium | typescript_web_cloudflare_workers | cpp | csharp | rust | go | java | swift | Required in | Reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -310,6 +310,7 @@ Parity is the share of the 449 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_callable_closed_union_round_trips | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/host_callable_declared_throw_is_catchable | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/host_callable_failure_under_open_throws_is_catchable | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/host_callable_hof_receives_a_baml_closure | y | y | y | y | y | - | y | - | y | y | all |  |
 | function_calls/host_callable_late_and_uncaught_failures_release_native_identity | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/host_callable_media_round_trip | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/host_callable_nullable_optional_distinguishes_all_three_states | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -320,6 +321,7 @@ Parity is the share of the 449 test IDs declared in `python_pydantic2` that are 
 | function_calls/host_callable_reentrant_call_does_not_deadlock | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/host_callable_repeated_and_concurrent_reuse | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/host_callable_structured_round_trips | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/host_callable_two_cbs_callbacks_named_f_and_f_returns_both_run | y | y | y | y | y | - | y | y | y | y | all |  |
 | function_calls/host_callable_void_signatures | y | y | y | y | y | - | y | y | y | - | all |  |
 | function_calls/host_callables_adopts_a_custom_thenable_exactly_once | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/host_callables_adopts_a_promise_from_a_separate_browser_realm | - | - | y | - | - | - | - | - | - | - | python_pydantic2, typescript_web_chromium, cpp, csharp, rust, go, java, swift |  |
@@ -427,6 +429,8 @@ Parity is the share of the 449 test IDs declared in `python_pydantic2` that are 
 | function_calls/invocation_surfaces | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/invocation_surfaces_returned_callable_accepts_controls | - | - | - | - | y | - | - | - | - | - | all |  |
 | function_calls/json_bigint_round_trips_as_bigint | - | - | - | - | - | - | - | - | y | - | all |  |
+| function_calls/json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result | y | y | y | y | y | - | - | y | y | y | all |  |
+| function_calls/json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument | y | y | y | y | y | - | - | y | y | y | all |  |
 | function_calls/json_returned_from_host_callback_supports_typed_narrowing | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# declares no function_calls suite (its native coverage is Rust-wrapped integration tests) |
 | function_calls/late_callback_keeps_async_local_storage_after_abort_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node callback Promises can outlive an aborted SDK waiter |
 | function_calls/layered_callback_context_inheritance_and_restoration_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python sync/async re-entry and ContextVar propagation |
@@ -605,6 +609,7 @@ Parity is the share of the 449 test IDs declared in `python_pydantic2` that are 
 | integration/generated_baml_clients_are_not_tracked | - | - | - | - | - | y | - | - | - | - | csharp | validates C#-specific generated-client repository hygiene |
 | integration/generics_executes_inferred_and_explicit_generics | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | integration/generics_generated_surface_rejects_ambiguous_generic_calls | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific generated-surface compile coverage |
+| integration/host_callable_hof_receives_a_baml_closure | - | - | - | - | - | y | - | - | - | - | csharp | C# canonical coverage executes through its native integration harness |
 | integration/media_executes_media_in_both_directions | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | integration/primitive_edges_executes_native_primitive_and_nullable_edges | - | - | - | - | - | y | - | - | - | - | csharp | exercises C#-specific native SDK integration coverage |
 | integration/release_abi_lifetimes_match_current_native_library | - | - | - | - | - | y | - | - | - | - | csharp | exercises the C# release ABI probe before publication |
@@ -787,14 +792,16 @@ Parity is the share of the 449 test IDs declared in `python_pydantic2` that are 
 | type_shapes/media_return_pdf_preserves_url_and_mime | - | y | y | y | - | - | - | - | - | - | all |  |
 | type_shapes/media_return_video | y | - | - | - | - | - | y | - | y | y | all |  |
 | type_shapes/media_return_video_preserves_url_and_mime | - | y | y | y | - | - | - | - | - | - | all |  |
+| type_shapes/media_round_trip_all_media | y | y | y | y | y | - | - | y | y | y | all |  |
 | type_shapes/media_round_trip_audio | y | - | - | - | - | - | y | - | y | y | all |  |
 | type_shapes/media_round_trip_audio_preserves_url_and_mime | - | y | y | y | - | - | - | - | - | - | all |  |
 | type_shapes/media_round_trip_image | y | - | - | - | - | - | y | - | y | y | all |  |
 | type_shapes/media_round_trip_image_can_reuse_the_same_wrapper | - | y | y | y | - | - | - | - | - | - | all |  |
 | type_shapes/media_round_trip_image_list | - | - | - | - | - | - | - | - | - | y | all |  |
 | type_shapes/media_round_trip_image_map | - | - | - | - | - | - | - | - | - | y | all |  |
-| type_shapes/media_round_trip_image_or_audio | - | - | - | - | - | - | - | - | - | y | all |  |
+| type_shapes/media_round_trip_image_or_audio | - | - | - | - | - | - | - | - | y | y | all |  |
 | type_shapes/media_round_trip_media | y | - | - | - | - | - | y | - | y | y | all |  |
+| type_shapes/media_round_trip_media_or_image_class | y | y | y | y | y | - | - | y | y | y | all |  |
 | type_shapes/media_round_trip_media_preserves_all_four_media_fields | - | y | y | y | - | - | - | - | - | - | all |  |
 | type_shapes/media_round_trip_media_shapes | - | - | - | - | - | - | - | - | - | y | all |  |
 | type_shapes/media_round_trip_optional_image_list | - | - | - | - | - | - | - | - | - | y | all |  |
@@ -842,6 +849,7 @@ Parity is the share of the 449 test IDs declared in `python_pydantic2` that are 
 | type_shapes/primitives_round_trip_primitives_float_field_accepts_int | y | - | - | - | y | - | y | - | y | y | all |  |
 | type_shapes/primitives_round_trip_string | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/primitives_round_trip_uint8_array | y | y | y | y | y | - | y | - | y | y | all |  |
+| type_shapes/recursion_int_binary_tree_deeper_than_the_wire_is_refused | - | - | - | - | y | - | - | - | - | - | cpp | pins sdkgen_cpp's class codec nesting level. |
 | type_shapes/recursion_round_trip_int_binary_tree | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/recursion_round_trip_mutual_recursion | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/recursion_round_trip_scc_t1_t2_t3 | y | y | y | y | y | - | y | - | y | y | all |  |
@@ -963,10 +971,19 @@ Parity is the share of the 449 test IDs declared in `python_pydantic2` that are 
 
 ### Newly missing required pairs
 
-- `host_reflect/wire_occurrences_are_fresh_and_handles_reject_serialization` in `cpp`
-- `host_reflect/wire_occurrences_are_fresh_and_handles_reject_serialization` in `csharp`
-- `host_reflect/wire_occurrences_are_fresh_and_handles_reject_serialization` in `java`
-- `host_reflect/wire_occurrences_are_fresh_and_handles_reject_serialization` in `python_pydantic2`
-- `host_reflect/wire_occurrences_are_fresh_and_handles_reject_serialization` in `rust`
-- `host_reflect/wire_occurrences_are_fresh_and_handles_reject_serialization` in `swift`
+- `function_calls/host_callable_hof_receives_a_baml_closure` in `csharp`
+- `function_calls/host_callable_hof_receives_a_baml_closure` in `go`
+- `function_calls/host_callable_two_cbs_callbacks_named_f_and_f_returns_both_run` in `csharp`
+- `function_calls/json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result` in `csharp`
+- `function_calls/json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result` in `rust`
+- `function_calls/json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument` in `csharp`
+- `function_calls/json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument` in `rust`
+- `type_shapes/media_round_trip_all_media` in `csharp`
+- `type_shapes/media_round_trip_all_media` in `rust`
+- `type_shapes/media_round_trip_media_or_image_class` in `csharp`
+- `type_shapes/media_round_trip_media_or_image_class` in `rust`
+
+### Resolved baseline gaps
+
+- `type_shapes/media_round_trip_image_or_audio` in `java`
 

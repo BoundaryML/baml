@@ -36,8 +36,9 @@ pub const WIRE_NESTING_LIMIT: usize = 100;
 /// `CallFunctionArgs` → `InboundMapEntry` → the value.
 pub const ARGUMENT_DEPTH: usize = 2;
 
-/// A host callback's result or thrown value is a standalone `InboundValue`.
-pub const RESULT_DEPTH: usize = 0;
+/// The messages that enclose a host callback's result or thrown value: the
+/// `HostCallCompletion` the host sends, whose `outcome` holds the value.
+pub const RESULT_DEPTH: usize = 1;
 
 /// How many messages `value` nests below itself, counting its own type
 /// statement and the payload of every leaf. A scalar is `0`; a list of
@@ -248,6 +249,31 @@ mod tests {
         assert_eq!(inbound_value_depth(&past), WIRE_NESTING_LIMIT + 2);
         InboundValue::decode(past.encode_to_vec().as_slice())
             .expect_err("a value past the limit is refused");
+    }
+
+    /// A callback's value sits one message below the completion, so one list
+    /// level fewer fits than at a standalone root: `RESULT_DEPTH` is that
+    /// message, measured against the real decoder.
+    #[test]
+    fn a_callback_result_is_one_message_below_the_completion() {
+        use crate::baml_bridge::cffi::{HostCallCompletion, host_call_completion::Outcome};
+        let completion = |levels: usize| HostCallCompletion {
+            outcome: Some(Outcome::Returned(nested_list(levels))),
+        };
+        let fits = completion(49);
+        assert_eq!(
+            RESULT_DEPTH + inbound_value_depth(&nested_list(49)),
+            WIRE_NESTING_LIMIT - 1
+        );
+        HostCallCompletion::decode(fits.encode_to_vec().as_slice())
+            .expect("a completion whose value fits decodes");
+        let past = completion(50);
+        assert_eq!(
+            RESULT_DEPTH + inbound_value_depth(&nested_list(50)),
+            WIRE_NESTING_LIMIT + 1
+        );
+        HostCallCompletion::decode(past.encode_to_vec().as_slice())
+            .expect_err("a value that fits a standalone root does not fit under the completion");
     }
 
     /// The refusal names the reason and a bounded path, however deep the

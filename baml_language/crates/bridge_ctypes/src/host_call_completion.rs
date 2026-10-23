@@ -29,8 +29,10 @@ pub fn decode_host_call_completion(
     let completion = match WireCompletion::decode(bytes) {
         Ok(completion) => completion,
         Err(error) => {
+            // Through `CtypesError`, whose rendering bounds prost's field path.
             return HostCallCompletion::BridgeFailure(format!(
-                "the host's completion payload is not a HostCallCompletion: {error}"
+                "the host's completion payload is not a HostCallCompletion: {}",
+                crate::CtypesError::from(error)
             ));
         }
     };
