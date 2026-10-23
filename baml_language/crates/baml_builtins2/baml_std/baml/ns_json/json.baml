@@ -309,43 +309,11 @@ class PathError {
     selector: string,
 }
 
-/// (internal) One `.field` step of a `path` walk. Use `path`.
-function _path_field(current: json, key: string, selector: string) -> json throws PathError {
-    match (current) {
-        let m: map<string, json> => {
-            if (!m.has(key)) {
-                throw PathError { message: "missing field '" + key + "'", selector: selector };
-            }
-            m.get(key)
-        },
-        _ => {
-            throw PathError {
-      message: "field access '." + key + "' on a non-object",
-      selector: selector,
-    }
-        },
-    }
-}
-
-/// (internal) One `[i]` step of a `path` walk. Use `path`.
-function _path_index(current: json, idx: int, selector: string) -> json throws PathError {
-    match (current) {
-        let arr: json[] => {
-            if (idx < 0 || idx >= arr.length()) {
-                throw PathError {
-          message: "index [" + idx.to_string() + "] out of bounds (length " + arr.length().to_string() + ")",
-          selector: selector,
-        };
-            }
-            arr.at(idx)
-        },
-        _ => {
-            throw PathError {
-      message: "index [" + idx.to_string() + "] on a non-array",
-      selector: selector,
-    }
-        },
-    }
+/// (internal) The node `selector` picks out of `j`: the walk `path` runs
+/// before it decodes the leaf. Use `path`.
+//baml:mut_vm
+function _path(j: json, selector: string) -> json throws PathError {
+    $rust_function
 }
 
 /// Navigates a jq-style selector into a `json` value and coerces the leaf to
@@ -379,98 +347,13 @@ function _path_index(current: json, idx: int, selector: string) -> json throws P
 /// assert.equal(baml.json.path<int>(doc, "[\"users\"][0][\"age\"]"), 36);
 /// ```
 function path<T>(j: json, selector: string) -> T throws PathError {
-    if (!(selector.starts_with(".") || selector.starts_with("["))) {
-        throw PathError {
-      message: "selector must start with '.' or '[' (jq style), got '" + selector + "'",
-      selector: selector,
-    };
-    }
-    let current: json = j;
-    let i = 0;
-    while (i < selector.length()) {
-        let marker = selector.slice(i, i + 1);
-        if (marker == ".") {
-            i += 1;
-            let start = i;
-            while (
-                i < selector.length()
-                    && selector.slice(i, i + 1) != "."
-                    && selector.slice(i, i + 1) != "["
-            ) {
-                i += 1;
-            }
-            if (i > start) {
-                current = _path_field(current, selector.slice(start, i), selector);
-            }
-            continue;
-        }
-
-        if (marker != "[") {
-            throw PathError {
-        message: "expected '.' or '[' at offset " + i.to_string(),
-        selector: selector,
-      };
-        }
-
-        i += 1;
-        if (i >= selector.length()) {
-            throw PathError { message: "unterminated '[' segment", selector: selector };
-        }
-
-        let first = selector.slice(i, i + 1);
-        if (first == "\"" || first == "'") {
-            let quote = first;
-            i += 1;
-            let key = "";
-            let closed = false;
-            while (i < selector.length()) {
-                let ch = selector.slice(i, i + 1);
-                if (ch == "\\") {
-                    if (i + 1 >= selector.length()) {
-                        throw PathError { message: "unterminated escape in quoted bracket key", selector: selector };
-                    }
-                    key = key + selector.slice(i + 1, i + 2);
-                    i += 2;
-                    continue;
-                }
-                if (ch == quote) {
-                    closed = true;
-                    i += 1;
-                    break;
-                }
-                key = key + ch;
-                i += 1;
-            }
-            if (!closed || i >= selector.length() || selector.slice(i, i + 1) != "]") {
-                throw PathError { message: "unterminated quoted bracket key", selector: selector };
-            }
-            i += 1;
-            current = _path_field(current, key, selector);
-            continue;
-        }
-
-        let start = i;
-        while (i < selector.length() && selector.slice(i, i + 1) != "]") {
-            i += 1;
-        }
-        if (i >= selector.length()) {
-            throw PathError { message: "unterminated '[' segment", selector: selector };
-        }
-        let token = selector.slice(start, i);
-        i += 1;
-        let idx = int.parse(token) catch (_) {
-            root.errors.ParseError => {
-                throw PathError { message: "bad bracket token '[" + token + "]'", selector: selector };
-            },
-        };
-        current = _path_index(current, idx, selector);
-    }
-    to<T>(current) catch (_) {
+    let leaf = _path(j, selector);
+    to<T>(leaf) catch (_) {
         DecodeError => {
             throw PathError {
-      message: "leaf does not coerce to the requested type",
-      selector: selector,
-    }
+                message: "leaf does not coerce to the requested type",
+                selector: selector,
+            }
         },
     }
 }

@@ -4,8 +4,8 @@
 //!
 //! No path goes through a `serde_json::Value`: [`text`] reads JSON text into
 //! VM values, [`decode_text`] reads it straight into a declared type,
-//! [`decode`] decodes `json` values into one, and [`encode`] writes VM values
-//! as text or as `json` values.
+//! [`decode`] decodes `json` values into one, [`encode`] writes VM values
+//! as text or as `json` values, and [`path`] walks a `path<T>` selector.
 //!
 //! The generic natives read their type-arg `T` from
 //! `vm.current_call_type_args()`, populated by the call-instruction handler
@@ -14,6 +14,7 @@
 mod decode;
 mod decode_text;
 mod encode;
+mod path;
 mod plan;
 mod serde_bridge;
 mod text;
@@ -152,6 +153,14 @@ impl BamlNamespaceJson for PackageBamlImpl {
             Ok(ty) => Decoder::new(JsonNaming::new(aliased)).decode(vm, *j, &ty, Root::Dispatch),
             Err(error) => NativeCallResult::Error(error),
         }
+    }
+
+    fn _path(
+        vm: &mut BexVm,
+        j: &Value,
+        selector: &bex_str::BexStr,
+    ) -> Result<Value, VmRustFnError> {
+        path::select(vm, *j, selector.as_str())
     }
 
     fn field(vm: &mut BexVm, j: &Value, key: &bex_str::BexStr) -> Value {

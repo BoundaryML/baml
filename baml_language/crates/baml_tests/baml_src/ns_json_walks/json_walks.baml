@@ -247,3 +247,95 @@ test "parse_error_names_the_line_and_column" {
     assert.equal(parse_refusal("{\n  \"a\": tru\n}"), "expected ident at line 3 column 0");
     assert.equal(parse_refusal("[1, 2] x"), "trailing characters at line 1 column 8")
 }
+
+// ─── path<T> selectors ────────────────────────────────────────────────────────
+
+const PATH_DOC: json = {
+    "name": "Ada",
+    "list": [10, 20],
+    "n": 5,
+    "a.b": "dotted",
+    "it's": "quoted",
+    "héllo": [1, 2],
+    "nested": { "deep": [{ "x": true }] },
+};
+
+function path_result(selector: string) -> string {
+    let selected = baml.json.path<json>(PATH_DOC, selector) catch (e) {
+        baml.json.PathError => {
+            return "PathError: " + e.message + " | " + e.selector;
+        },
+    };
+    baml.json.stringify(selected)
+}
+
+test "path_selects_with_every_step_form" {
+    assert.equal(path_result(".name"), `"Ada"`);
+    assert.equal(path_result(".list[1]"), "20");
+    assert.equal(path_result("[\"a.b\"]"), `"dotted"`);
+    assert.equal(path_result("['it\\'s']"), `"quoted"`);
+    assert.equal(path_result(".nested.deep[0].x"), "true");
+    assert.equal(path_result("[\"nested\"][\"deep\"][0][\"x\"]"), "true");
+    assert.equal(path_result(".héllo[1]"), "2");
+    assert.equal(path_result(".list[+1]"), "20");
+    assert.equal(path_result(".list[01]"), "20");
+    assert.equal(path_result("..name"), `"Ada"`);
+    assert.equal(path_result("."), baml.json.stringify(PATH_DOC))
+}
+
+test "path_reports_each_kind_of_bad_selector" {
+    assert.equal(
+        path_result("name"),
+        "PathError: selector must start with '.' or '[' (jq style), got 'name' | name",
+    );
+    assert.equal(path_result(".missing"), "PathError: missing field 'missing' | .missing");
+    assert.equal(path_result(".n.x"), "PathError: field access '.x' on a non-object | .n.x");
+    assert.equal(
+        path_result(".list[5]"),
+        "PathError: index [5] out of bounds (length 2) | .list[5]",
+    );
+    assert.equal(
+        path_result(".list[-1]"),
+        "PathError: index [-1] out of bounds (length 2) | .list[-1]",
+    );
+    assert.equal(path_result(".n[0]"), "PathError: index [0] on a non-array | .n[0]");
+    assert.equal(path_result(".list["), "PathError: unterminated '[' segment | .list[");
+    assert.equal(path_result(".list[0"), "PathError: unterminated '[' segment | .list[0");
+    assert.equal(path_result("[\"name"), "PathError: unterminated quoted bracket key | [\"name");
+    assert.equal(path_result("['name'x]"), "PathError: unterminated quoted bracket key | ['name'x]");
+    assert.equal(
+        path_result("[\"name\\"),
+        "PathError: unterminated escape in quoted bracket key | [\"name\\",
+    );
+    assert.equal(path_result(".list[x]"), "PathError: bad bracket token '[x]' | .list[x]");
+    assert.equal(path_result(".list[ 1]"), "PathError: bad bracket token '[ 1]' | .list[ 1]");
+    assert.equal(
+        path_result(".list[4611686018427387904]"),
+        "PathError: bad bracket token '[4611686018427387904]' | .list[4611686018427387904]",
+    );
+    assert.equal(path_result(".list[0]x"), "PathError: expected '.' or '[' at offset 8 | .list[0]x");
+    assert.equal(
+        path_result(".héllo[0]x"),
+        "PathError: expected '.' or '[' at offset 9 | .héllo[0]x",
+    )
+}
+
+function path_leaf(selector: string) -> string {
+    let n = baml.json.path<int>(PATH_DOC, selector) catch (e) {
+        baml.json.PathError => {
+            return "PathError: " + e.message + " | " + e.selector;
+        },
+    };
+    n.to_string()
+}
+
+test "path_decodes_the_leaf_as_t" {
+    assert.equal(path_leaf(".n"), "5");
+    assert.equal(
+        path_leaf(".name"),
+        "PathError: leaf does not coerce to the requested type | .name",
+    );
+    assert.equal(baml.json.path_or<int>(PATH_DOC, ".name", 7), 7);
+    assert.equal(baml.json.path_or<int>(PATH_DOC, ".missing", 8), 8);
+    assert.equal(baml.json.path_or<int>(PATH_DOC, ".list[0]", 9), 10)
+}
