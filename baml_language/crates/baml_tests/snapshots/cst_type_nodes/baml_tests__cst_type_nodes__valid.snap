@@ -1,0 +1,333 @@
+---
+source: crates/baml_tests/src/cst_type_nodes.rs
+---
+TYPE_ALIAS_DEF@0..31
+  KW_TYPE@0..4 "type"
+  WHITESPACE@4..5 " "
+  WORD@5..12 "Numbers"
+  WHITESPACE@12..13 " "
+  EQUALS@13..14 "="
+  TYPE_EXPR@14..30
+    TYPE_EXPR@14..17
+      LITERAL_TYPE@14..17
+        WHITESPACE@14..15 " "
+        MINUS@15..16 "-"
+        INTEGER_LITERAL@16..17 "1"
+    WHITESPACE@17..18 " "
+    PIPE@18..19 "|"
+    TYPE_EXPR@19..22
+      LITERAL_TYPE@19..22
+        WHITESPACE@19..20 " "
+        BIGINT_LITERAL@20..22 "7n"
+    WHITESPACE@22..23 " "
+    PIPE@23..24 "|"
+    TYPE_EXPR@24..30
+      LITERAL_TYPE@24..30
+        WHITESPACE@24..25 " "
+        STRING_LITERAL@25..30
+          QUOTE@25..26 "\""
+          WORD@26..29 "tag"
+          QUOTE@29..30 "\""
+  SEMICOLON@30..31 ";"
+
+TYPE_ALIAS_DEF@31..71
+  NEWLINE@31..32 "\n"
+  NEWLINE@32..33 "\n"
+  KW_TYPE@33..37 "type"
+  WHITESPACE@37..38 " "
+  WORD@38..50 "GroupedArray"
+  WHITESPACE@50..51 " "
+  EQUALS@51..52 "="
+  TYPE_EXPR@52..70
+    PAREN_TYPE@52..67
+      WHITESPACE@52..53 " "
+      L_PAREN@53..54 "("
+      TYPE_EXPR@54..66
+        TYPE_EXPR@54..57
+          WORD@54..57 "int"
+        WHITESPACE@57..58 " "
+        PIPE@58..59 "|"
+        TYPE_EXPR@59..66
+          WHITESPACE@59..60 " "
+          WORD@60..66 "string"
+      R_PAREN@66..67 ")"
+    L_BRACKET@67..68 "["
+    R_BRACKET@68..69 "]"
+    QUESTION@69..70 "?"
+  SEMICOLON@70..71 ";"
+
+TYPE_ALIAS_DEF@71..124
+  NEWLINE@71..72 "\n"
+  NEWLINE@72..73 "\n"
+  KW_TYPE@73..77 "type"
+  WHITESPACE@77..78 " "
+  WORD@78..94 "TrailingCallback"
+  WHITESPACE@94..95 " "
+  EQUALS@95..96 "="
+  TYPE_EXPR@96..123
+    FUNCTION_TYPE@96..123
+      WHITESPACE@96..97 " "
+      L_PAREN@97..98 "("
+      FUNCTION_TYPE_PARAM@98..101
+        TYPE_EXPR@98..101
+          WORD@98..101 "int"
+      COMMA@101..102 ","
+      R_PAREN@102..103 ")"
+      WHITESPACE@103..104 " "
+      ARROW@104..106 "->"
+      FUNCTION_TYPE_RETURN_TYPE@106..110
+        TYPE_EXPR@106..110
+          WHITESPACE@106..107 " "
+          WORD@107..110 "int"
+      THROWS_CLAUSE@110..123
+        WHITESPACE@110..111 " "
+        KW_THROWS@111..117 "throws"
+        TYPE_EXPR@117..123
+          WHITESPACE@117..118 " "
+          WORD@118..123 "never"
+  SEMICOLON@123..124 ";"
+
+TYPE_ALIAS_DEF@124..196
+  NEWLINE@124..125 "\n"
+  NEWLINE@125..126 "\n"
+  KW_TYPE@126..130 "type"
+  WHITESPACE@130..131 " "
+  WORD@131..154 "QuotedDelimiterCallback"
+  WHITESPACE@154..155 " "
+  EQUALS@155..156 "="
+  TYPE_EXPR@156..195
+    FUNCTION_TYPE@156..195
+      WHITESPACE@156..157 " "
+      L_PAREN@157..158 "("
+      FUNCTION_TYPE_PARAM@158..161
+        TYPE_EXPR@158..161
+          LITERAL_TYPE@158..161
+            STRING_LITERAL@158..161
+              QUOTE@158..159 "\""
+              L_PAREN@159..160 "("
+              QUOTE@160..161 "\""
+      COMMA@161..162 ","
+      FUNCTION_TYPE_PARAM@162..166
+        TYPE_EXPR@162..166
+          LITERAL_TYPE@162..166
+            WHITESPACE@162..163 " "
+            STRING_LITERAL@163..166
+              QUOTE@163..164 "\""
+              R_PAREN@164..165 ")"
+              QUOTE@165..166 "\""
+      COMMA@166..167 ","
+      FUNCTION_TYPE_PARAM@167..171
+        TYPE_EXPR@167..171
+          LITERAL_TYPE@167..171
+            WHITESPACE@167..168 " "
+            STRING_LITERAL@168..171
+              QUOTE@168..169 "\""
+              L_BRACE@169..170 "{"
+              QUOTE@170..171 "\""
+      R_PAREN@171..172 ")"
+      WHITESPACE@172..173 " "
+      ARROW@173..175 "->"
+      FUNCTION_TYPE_RETURN_TYPE@175..182
+        TYPE_EXPR@175..182
+          WHITESPACE@175..176 " "
+          WORD@176..182 "string"
+      THROWS_CLAUSE@182..195
+        WHITESPACE@182..183 " "
+        KW_THROWS@183..189 "throws"
+        TYPE_EXPR@189..195
+          WHITESPACE@189..190 " "
+          WORD@190..195 "never"
+  SEMICOLON@195..196 ";"
+
+TYPE_ALIAS_DEF@196..215
+  NEWLINE@196..197 "\n"
+  NEWLINE@197..198 "\n"
+  KW_TYPE@198..202 "type"
+  WHITESPACE@202..203 " "
+  WORD@203..207 "True"
+  WHITESPACE@207..208 " "
+  EQUALS@208..209 "="
+  TYPE_EXPR@209..214
+    LITERAL_TYPE@209..214
+      WHITESPACE@209..210 " "
+      KW_TRUE@210..214 "true"
+  SEMICOLON@214..215 ";"
+
+TYPE_ALIAS_DEF@215..236
+  NEWLINE@215..216 "\n"
+  NEWLINE@216..217 "\n"
+  KW_TYPE@217..221 "type"
+  WHITESPACE@221..222 " "
+  WORD@222..227 "False"
+  WHITESPACE@227..228 " "
+  EQUALS@228..229 "="
+  TYPE_EXPR@229..235
+    LITERAL_TYPE@229..235
+      WHITESPACE@229..230 " "
+      KW_FALSE@230..235 "false"
+  SEMICOLON@235..236 ";"
+
+TYPE_ALIAS_DEF@236..265
+  NEWLINE@236..237 "\n"
+  NEWLINE@237..238 "\n"
+  KW_TYPE@238..242 "type"
+  WHITESPACE@242..243 " "
+  WORD@243..249 "Either"
+  WHITESPACE@249..250 " "
+  EQUALS@250..251 "="
+  TYPE_EXPR@251..264
+    TYPE_EXPR@251..256
+      LITERAL_TYPE@251..256
+        WHITESPACE@251..252 " "
+        KW_TRUE@252..256 "true"
+    WHITESPACE@256..257 " "
+    PIPE@257..258 "|"
+    TYPE_EXPR@258..264
+      LITERAL_TYPE@258..264
+        WHITESPACE@258..259 " "
+        KW_FALSE@259..264 "false"
+  SEMICOLON@264..265 ";"
+
+TYPE_ALIAS_DEF@265..299
+  NEWLINE@265..266 "\n"
+  NEWLINE@266..267 "\n"
+  KW_TYPE@267..271 "type"
+  WHITESPACE@271..272 " "
+  WORD@272..279 "Grouped"
+  WHITESPACE@279..280 " "
+  EQUALS@280..281 "="
+  TYPE_EXPR@281..298
+    PAREN_TYPE@281..298
+      WHITESPACE@281..282 " "
+      L_PAREN@282..283 "("
+      TYPE_EXPR@283..297
+        PAREN_TYPE@283..297
+          L_PAREN@283..284 "("
+          TYPE_EXPR@284..296
+            TYPE_EXPR@284..287
+              WORD@284..287 "int"
+            WHITESPACE@287..288 " "
+            PIPE@288..289 "|"
+            TYPE_EXPR@289..296
+              WHITESPACE@289..290 " "
+              WORD@290..296 "string"
+          R_PAREN@296..297 ")"
+      R_PAREN@297..298 ")"
+  SEMICOLON@298..299 ";"
+
+TYPE_ALIAS_DEF@299..350
+  NEWLINE@299..300 "\n"
+  NEWLINE@300..301 "\n"
+  KW_TYPE@301..305 "type"
+  WHITESPACE@305..306 " "
+  WORD@306..314 "Callback"
+  WHITESPACE@314..315 " "
+  EQUALS@315..316 "="
+  TYPE_EXPR@316..349
+    FUNCTION_TYPE@316..349
+      WHITESPACE@316..317 " "
+      L_PAREN@317..318 "("
+      FUNCTION_TYPE_PARAM@318..325
+        WORD@318..319 "x"
+        QUESTION@319..320 "?"
+        COLON@320..321 ":"
+        TYPE_EXPR@321..325
+          WHITESPACE@321..322 " "
+          WORD@322..325 "int"
+      R_PAREN@325..326 ")"
+      WHITESPACE@326..327 " "
+      ARROW@327..329 "->"
+      FUNCTION_TYPE_RETURN_TYPE@329..336
+        TYPE_EXPR@329..336
+          WHITESPACE@329..330 " "
+          WORD@330..336 "string"
+      THROWS_CLAUSE@336..349
+        WHITESPACE@336..337 " "
+        KW_THROWS@337..343 "throws"
+        TYPE_EXPR@343..349
+          WHITESPACE@343..344 " "
+          WORD@344..349 "never"
+  SEMICOLON@349..350 ";"
+
+UPCAST_EXPR@1728..1738
+  OBJECT_LITERAL@1728..1732
+    WORD@1728..1729 "C"
+    WHITESPACE@1729..1730 " "
+    L_BRACE@1730..1731 "{"
+    R_BRACE@1731..1732 "}"
+  DOT@1732..1733 "."
+  KW_AS@1733..1735 "as"
+  UPCAST_TARGET@1735..1738
+    LESS@1735..1736 "<"
+    TYPE_EXPR@1736..1737
+      WORD@1736..1737 "I"
+    GREATER@1737..1738 ">"
+
+UPCAST_EXPR@1762..1798
+  OBJECT_LITERAL@1762..1771
+    WORD@1762..1768 "Viewer"
+    WHITESPACE@1768..1769 " "
+    L_BRACE@1769..1770 "{"
+    R_BRACE@1770..1771 "}"
+  DOT@1771..1772 "."
+  KW_AS@1772..1774 "as"
+  UPCAST_TARGET@1774..1798
+    LESS@1774..1775 "<"
+    TYPE_EXPR@1775..1797
+      WORD@1775..1779 "View"
+      TYPE_ARGS@1779..1797
+        LESS@1779..1780 "<"
+        TYPE_EXPR@1780..1796
+          WORD@1780..1783 "map"
+          TYPE_ARGS@1783..1796
+            LESS@1783..1784 "<"
+            TYPE_EXPR@1784..1790
+              WORD@1784..1790 "string"
+            COMMA@1790..1791 ","
+            TYPE_EXPR@1791..1795
+              WHITESPACE@1791..1792 " "
+              WORD@1792..1795 "int"
+            GREATER@1795..1796 ">"
+        GREATER@1796..1797 ">"
+    GREATER@1797..1798 ">"
+
+GENERIC_ARGS@1803..1809
+  LESS@1803..1804 "<"
+  TYPE_EXPR@1804..1808
+    WORD@1804..1808 "bool"
+  GREATER@1808..1809 ">"
+
+UPCAST_EXPR@1841..1878
+  OBJECT_LITERAL@1841..1850
+    WORD@1841..1847 "Viewer"
+    WHITESPACE@1847..1848 " "
+    L_BRACE@1848..1849 "{"
+    R_BRACE@1849..1850 "}"
+  DOT@1850..1851 "."
+  KW_AS@1851..1853 "as"
+  UPCAST_TARGET@1853..1878
+    LESS@1853..1854 "<"
+    TYPE_EXPR@1854..1876
+      WORD@1854..1858 "View"
+      TYPE_ARGS@1858..1876
+        LESS@1858..1859 "<"
+        TYPE_EXPR@1859..1875
+          WORD@1859..1862 "map"
+          TYPE_ARGS@1862..1875
+            LESS@1862..1863 "<"
+            TYPE_EXPR@1863..1869
+              WORD@1863..1869 "string"
+            COMMA@1869..1870 ","
+            TYPE_EXPR@1870..1874
+              WHITESPACE@1870..1871 " "
+              WORD@1871..1874 "int"
+            GREATER@1874..1875 ">"
+        GREATER@1875..1876 ">"
+    COMMA@1876..1877 ","
+    GREATER@1877..1878 ">"
+
+GENERIC_ARGS@1883..1891
+  LESS@1883..1884 "<"
+  TYPE_EXPR@1884..1890
+    WORD@1884..1890 "string"
+  GREATER@1890..1891 ">"

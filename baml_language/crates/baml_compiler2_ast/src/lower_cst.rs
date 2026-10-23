@@ -359,7 +359,7 @@ fn accepts_raw_string(node: &SyntaxNode) -> bool {
         matches!(
             ancestor.kind(),
             SyntaxKind::TYPE_EXPR
-                | SyntaxKind::STRING_LITERAL_TYPE
+                | SyntaxKind::LITERAL_TYPE
                 | SyntaxKind::ATTRIBUTE
                 | SyntaxKind::BLOCK_ATTRIBUTE
                 | SyntaxKind::ATTRIBUTE_ARGS

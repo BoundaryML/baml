@@ -235,6 +235,9 @@ pub mod compiler2_emit;
 pub mod corpus;
 
 #[cfg(test)]
+mod cst_type_nodes;
+
+#[cfg(test)]
 pub mod incremental;
 
 #[cfg(test)]
