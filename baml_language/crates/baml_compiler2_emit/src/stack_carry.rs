@@ -530,7 +530,24 @@ fn simulate_statement_stack<'db>(
                     classifications,
                     def_use,
                 };
-                pull_semantics::walk_projection_store(&mut sink, destination, value).is_ok()
+                pull_semantics::walk_projection_store(
+                    &mut sink,
+                    destination,
+                    value,
+                    |sink, value| {
+                        simulate_rvalue_pull_stack(
+                            value,
+                            sink.sim,
+                            carried_local,
+                            body,
+                            classifications,
+                            def_use,
+                        )
+                        .then_some(())
+                        .ok_or(())
+                    },
+                )
+                .is_ok()
             }
         },
         // Receiver, value and the interface type are pushed then all consumed by the

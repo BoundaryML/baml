@@ -1,0 +1,39 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:22:11]
+ 22 │     h.f = g.wrong_argument;
+    ·           ────────┬───────
+    ·                   ╰── expected `((int) -> int throws never) | null`, found `(x: string) -> int throws never`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:28:14]
+ 28 │     m["a"] = g.wrong_result;
+    ·              ───────┬──────
+    ·                     ╰── expected `F`, found `(x: int) -> string throws never`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:34:11]
+ 34 │     h.f = g.throwing;
+    ·           ─────┬────
+    ·                ╰── expected `((int) -> int throws never) | null`, found `(x: int) -> int throws string`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:40:14]
+ 40 │     m["a"] = g.throwing;
+    ·              ─────┬────
+    ·                   ╰── expected `F`, found `(x: int) -> int throws string`
+    ╰────
