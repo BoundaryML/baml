@@ -254,7 +254,7 @@ pub(super) fn eliminate_dead_stores(body: &mut MirFunctionBody<'_>, arity: usize
     loop {
         let mut changed = false;
         for block in body.blocks.iter().rev() {
-            let (mut live, exceptional) = live_out(body, block, &live_in);
+            let (mut live, exceptional) = live_out::<false>(body, block, &live_in);
             for statement in block.statements.iter().rev() {
                 transfer(statement, &mut live, &exceptional);
             }
@@ -268,7 +268,7 @@ pub(super) fn eliminate_dead_stores(body: &mut MirFunctionBody<'_>, arity: usize
         }
     }
     for index in 0..body.blocks.len() {
-        let (mut live, exceptional) = live_out(body, &body.blocks[index], &live_in);
+        let (mut live, exceptional) = live_out::<false>(body, &body.blocks[index], &live_in);
         let statements = &mut body.blocks[index].statements;
         for (statement_index, statement) in statements.iter_mut().enumerate().rev() {
             if let StatementKind::Assign {
@@ -301,7 +301,7 @@ pub fn live_in_precise(body: &MirFunctionBody<'_>) -> Vec<Vec<bool>> {
     loop {
         let mut changed = false;
         for block in body.blocks.iter().rev() {
-            let (mut live, exceptional) = precise_live_out(body, block, &live_in);
+            let (mut live, exceptional) = live_out::<true>(body, block, &live_in);
             for statement in block.statements.iter().rev() {
                 transfer(statement, &mut live, &exceptional);
             }
@@ -317,10 +317,8 @@ pub fn live_in_precise(body: &MirFunctionBody<'_>) -> Vec<Vec<bool>> {
     live_in
 }
 
-/// [`live_out`] with the terminator's destination killed on its normal
-/// edges: live after the terminator is what its normal successors read less
-/// what it assigns, plus what its unwind successor reads and what it uses.
-fn precise_live_out(
+/// In precise mode, kill terminator destinations only on normal edges.
+fn live_out<const PRECISE: bool>(
     body: &MirFunctionBody<'_>,
     block: &crate::BasicBlock<'_>,
     live_in: &[Vec<bool>],
@@ -360,6 +358,11 @@ fn precise_live_out(
             Terminator::Spawn { future, .. } => (Some(future), None),
             _ => (None, None),
         };
+        let (destination, unwind) = if PRECISE {
+            (destination, unwind)
+        } else {
+            (None, None)
+        };
         for successor in term.successors() {
             if Some(successor) != unwind {
                 union(&mut live, &live_in[successor.0]);
@@ -370,33 +373,6 @@ fn precise_live_out(
         }
         if let Some(unwind) = unwind {
             union(&mut live, &live_in[unwind.0]);
-        }
-        let mut uses = vec![0; live.len()];
-        super::count_in_terminator(term, &mut uses);
-        for (live, uses) in live.iter_mut().zip(uses) {
-            *live |= uses != 0;
-        }
-        if matches!(term, Terminator::Return) {
-            live[0] = true;
-        }
-    }
-    union(&mut live, &exceptional);
-    (live, exceptional)
-}
-
-fn live_out(
-    body: &MirFunctionBody<'_>,
-    block: &crate::BasicBlock<'_>,
-    live_in: &[Vec<bool>],
-) -> (Vec<bool>, Vec<bool>) {
-    let mut live = vec![false; body.locals.len()];
-    let mut exceptional = live.clone();
-    if let Some(handler) = block.unwind {
-        union(&mut exceptional, &live_in[handler.0]);
-    }
-    if let Some(term) = &block.terminator {
-        for successor in term.successors() {
-            union(&mut live, &live_in[successor.0]);
         }
         let mut uses = vec![0; live.len()];
         super::count_in_terminator(term, &mut uses);
