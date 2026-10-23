@@ -7,7 +7,8 @@
 
 use baml_base::Name;
 use baml_compiler_syntax::{
-    FunctionTypeParam, SyntaxKind, SyntaxNodeExt, ast::TypeExpr as CstTypeExpr,
+    FunctionTypeParam, SyntaxElement, SyntaxKind, SyntaxNode, SyntaxNodeExt, SyntaxToken,
+    ast::TypeExpr as CstTypeExpr,
 };
 use rowan::ast::AstNode;
 use text_size::TextRange;
@@ -233,14 +234,112 @@ fn lower_union_member(
     parts: &baml_compiler_syntax::ast::UnionMemberParts,
     diags: &mut Vec<LoweringDiagnostic>,
 ) -> TypeExpr {
-    let base = lower_union_member_base(parts, diags);
-    apply_modifiers(base, &parts.postfix_modifiers())
+    let mut syntax = TypeSyntaxCoverage::new(parts);
+    let base = lower_union_member_base(parts, diags, &mut syntax);
+    let modifiers = parts.postfix_modifiers();
+    for modifier in &modifiers {
+        match modifier {
+            baml_compiler_syntax::ast::TypePostFixModifier::Optional => {
+                syntax.token(SyntaxKind::QUESTION);
+            }
+            baml_compiler_syntax::ast::TypePostFixModifier::Array => {
+                syntax.token(SyntaxKind::L_BRACKET);
+                syntax.token(SyntaxKind::R_BRACKET);
+            }
+        }
+    }
+    if let Some((span, unconsumed)) = syntax.remaining() {
+        diags.push(LoweringDiagnostic::UnconsumedTypeSyntax {
+            syntax: unconsumed,
+            span,
+        });
+        return TypeExprKind::Error.at(parts.span().unwrap_or_default());
+    }
+    apply_modifiers(base, &modifiers)
+}
+
+/// Account for each immediate token and child node represented by a union
+/// member's AST. Nested union members are checked recursively during lowering.
+/// Finding a familiar child is not permission to ignore its siblings.
+struct TypeSyntaxCoverage {
+    remaining: Vec<SyntaxElement>,
+}
+
+impl TypeSyntaxCoverage {
+    fn new(parts: &baml_compiler_syntax::ast::UnionMemberParts) -> Self {
+        let mut remaining: Vec<SyntaxElement> = parts
+            .tokens
+            .iter()
+            .cloned()
+            .map(SyntaxElement::Token)
+            .chain(parts.child_nodes.iter().cloned().map(SyntaxElement::Node))
+            .collect();
+        remaining.sort_by_key(|element| element.text_range().start());
+        Self { remaining }
+    }
+
+    fn node(&mut self, node: &SyntaxNode) {
+        self.remaining
+            .retain(|element| element.as_node() != Some(node));
+    }
+
+    fn exact_token(&mut self, token: &SyntaxToken) {
+        self.remaining
+            .retain(|element| element.as_token() != Some(token));
+    }
+
+    fn token(&mut self, kind: SyntaxKind) {
+        if let Some(index) = self
+            .remaining
+            .iter()
+            .position(|element| element.as_token().is_some_and(|token| token.kind() == kind))
+        {
+            self.remaining.remove(index);
+        }
+    }
+
+    fn parens(&mut self) {
+        self.token(SyntaxKind::L_PAREN);
+        self.token(SyntaxKind::R_PAREN);
+    }
+
+    fn path(&mut self, parts: &baml_compiler_syntax::ast::UnionMemberParts, name: &str) {
+        // Mirror dotted_name's leading name, without consuming any other
+        // tokens that happened to accompany it in the member.
+        if let Some(start) = parts
+            .tokens
+            .iter()
+            .position(|token| token.kind() == SyntaxKind::WORD)
+        {
+            for token in parts
+                .tokens
+                .iter()
+                .skip(start)
+                .take(name.split('.').count() * 2 - 1)
+            {
+                self.exact_token(token);
+            }
+        }
+    }
+
+    fn remaining(&self) -> Option<(TextRange, String)> {
+        let first = self.remaining.first()?;
+        Some((
+            first.text_range(),
+            self.remaining
+                .iter()
+                .map(|element| format!("{:?}", element.kind()))
+                .collect::<Vec<_>>()
+                .join(", "),
+        ))
+    }
 }
 
 /// Extract the base type from union member parts (no modifiers).
 fn lower_union_member_base(
     parts: &baml_compiler_syntax::ast::UnionMemberParts,
     diags: &mut Vec<LoweringDiagnostic>,
+    syntax: &mut TypeSyntaxCoverage,
 ) -> TypeExpr {
     let span = parts.span().unwrap_or_default();
     if let Some(unreflect) = parts
@@ -249,9 +348,16 @@ fn lower_union_member_base(
         .find(|node| node.kind() == SyntaxKind::UNREFLECT_TYPE)
     {
         // Reported by the parser (E0098), like the atom form above.
+        syntax.node(unreflect);
         return TypeExprKind::Error.at(unreflect.span_range());
     }
     if let Some((base, interface, member)) = parts.associated_type_projection() {
+        syntax.node(base.syntax());
+        syntax.node(interface.syntax());
+        syntax.exact_token(&member);
+        syntax.parens();
+        syntax.token(SyntaxKind::KW_AS);
+        syntax.token(SyntaxKind::DOT);
         return TypeExprKind::AssociatedTypeProjection {
             base: Box::new(lower_type_expr_node(&base, diags)),
             interface: Some(Box::new(lower_type_expr_node(&interface, diags))),
@@ -262,11 +368,15 @@ fn lower_union_member_base(
 
     // Check for parenthesized type first (e.g., `(int | string)` in `A | (int | string)`)
     if let Some(type_expr) = parts.type_expr() {
+        syntax.node(type_expr.syntax());
+        syntax.parens();
         return lower_type_expr_node(&type_expr, diags);
     }
 
     // Check for FUNCTION_TYPE_PARAM child (new parser structure for parenthesized types)
     if let Some(func_param) = parts.function_type_param() {
+        syntax.node(&func_param);
+        syntax.parens();
         if let Some(inner_type_expr) = func_param
             .children()
             .find(|n| n.kind() == baml_compiler_syntax::SyntaxKind::TYPE_EXPR)
@@ -278,6 +388,13 @@ fn lower_union_member_base(
     }
 
     if let Some(s) = parts.string_literal() {
+        if let Some(node) = parts
+            .child_nodes
+            .iter()
+            .find(|node| node.kind() == SyntaxKind::STRING_LITERAL)
+        {
+            syntax.node(node);
+        }
         return TypeExprKind::Literal {
             value: baml_base::Literal::String(s),
         }
@@ -285,6 +402,10 @@ fn lower_union_member_base(
     }
 
     if let Some((negated, tok)) = parts.bigint_literal() {
+        syntax.exact_token(&tok);
+        if negated {
+            syntax.token(SyntaxKind::MINUS);
+        }
         let value = crate::lower_bigint_literal(tok.text(), tok.text_range(), diags);
         return TypeExprKind::Literal {
             value: baml_base::Literal::Bigint(if negated { -value } else { value }),
@@ -293,6 +414,10 @@ fn lower_union_member_base(
     }
 
     if let Some((negated, tok)) = parts.integer_literal() {
+        syntax.exact_token(&tok);
+        if negated {
+            syntax.token(SyntaxKind::MINUS);
+        }
         let value = crate::lower_int_literal(tok.text(), tok.text_range(), diags);
         return TypeExprKind::Literal {
             value: baml_base::Literal::Int(if negated { -value } else { value }),
@@ -301,6 +426,10 @@ fn lower_union_member_base(
     }
 
     if let Some((negated, tok)) = parts.float_literal() {
+        syntax.exact_token(&tok);
+        if negated {
+            syntax.token(SyntaxKind::MINUS);
+        }
         let text = baml_base::num_lit::normalize_float_literal(tok.text());
         return TypeExprKind::Literal {
             value: baml_base::Literal::Float(if negated { format!("-{text}") } else { text }),
@@ -310,9 +439,11 @@ fn lower_union_member_base(
 
     // Check for named/primitive type or map type
     if let Some(name) = parts.dotted_name() {
+        syntax.path(parts, &name);
         let (type_arg_exprs, associated_type_bindings): (Vec<_>, Vec<_>) = parts
             .type_args()
             .map(|type_args_node| {
+                syntax.node(&type_args_node);
                 let type_args = type_args_node
                     .children()
                     .filter(|n| n.kind() == baml_compiler_syntax::SyntaxKind::TYPE_EXPR)

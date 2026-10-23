@@ -1877,6 +1877,86 @@ function f() -> int {
     }
 
     #[test]
+    fn lossy_union_member_lowering_reports_unconsumed_syntax() {
+        // Recreate the pre-B-1722 CST without depending on whether the parser
+        // currently supplies a complete node for the callable member.
+        fn emit_without_callable_member_wrapper(
+            node: &SyntaxNode,
+            builder: &mut rowan::GreenNodeBuilder<'_>,
+        ) {
+            use rowan::ast::AstNode;
+            let unwrap = baml_compiler_syntax::ast::TypeExpr::cast(node.clone())
+                .is_some_and(|ty| ty.is_function_type())
+                && node
+                    .parent()
+                    .and_then(baml_compiler_syntax::ast::TypeExpr::cast)
+                    .is_some_and(|parent| parent.is_union());
+            if !unwrap {
+                builder.start_node(node.kind().into());
+            }
+            for element in node.children_with_tokens() {
+                match element {
+                    rowan::NodeOrToken::Node(child) => {
+                        emit_without_callable_member_wrapper(&child, builder);
+                    }
+                    rowan::NodeOrToken::Token(token) => {
+                        builder.token(token.kind().into(), token.text());
+                    }
+                }
+            }
+            if !unwrap {
+                builder.finish_node();
+            }
+        }
+
+        let source = "type Value = int | () -> string throws never\n";
+        let mut builder = rowan::GreenNodeBuilder::new();
+        emit_without_callable_member_wrapper(&parse(source), &mut builder);
+        let root = SyntaxNode::new_root(builder.finish());
+        assert_eq!(
+            root.text().to_string(),
+            source,
+            "the CST still contains every token"
+        );
+        let (items, diags, _) = lower_file(&root);
+        assert_eq!(diags.len(), 1, "{diags:#?}");
+        let crate::LoweringDiagnostic::UnconsumedTypeSyntax { syntax, span } = &diags[0] else {
+            panic!("expected unconsumed syntax, got {diags:#?}");
+        };
+        assert_eq!(syntax, "ARROW, THROWS_CLAUSE");
+        assert_eq!(
+            &source[usize::from(span.start())..usize::from(span.end())],
+            "->"
+        );
+        let diag = diags[0].to_diagnostic(FileId::new(0));
+        assert_eq!(
+            diag.id,
+            baml_compiler_diagnostics::DiagnosticId::UnparseableType
+        );
+        assert_eq!(diag.severity, baml_compiler_diagnostics::Severity::Error);
+        let TypeExprKind::Union { variants } = first_type_alias(items).type_expr.unwrap().kind
+        else {
+            panic!("expected a union");
+        };
+        assert!(matches!(variants[0].kind, TypeExprKind::Int));
+        assert!(
+            matches!(variants[1].kind, TypeExprKind::Error),
+            "must not publish string as the arm"
+        );
+
+        // This is a consumption check, not a special-case rejection of arrows:
+        // the permissive tuple-like CST must not silently select its first type.
+        let (_, diags) = parse_and_lower_with_diagnostics("type Value = int | (string, bool)\n");
+        assert!(
+            diags.iter().any(|diag| matches!(diag,
+                crate::LoweringDiagnostic::UnconsumedTypeSyntax { syntax, .. }
+                    if syntax.contains("COMMA") && syntax.contains("FUNCTION_TYPE_PARAM")
+            )),
+            "{diags:#?}"
+        );
+    }
+
+    #[test]
     fn bare_function_union_members_preserve_the_entire_callable() {
         // These AST assertions catch syntax loss before downstream inference can
         // accept the return type as an unrelated union arm (B-1722).

@@ -44,6 +44,10 @@ pub enum LoweringDiagnostic {
         span: TextRange,
     },
 
+    /// CST-to-AST lowering recognized only part of a type. Never publish the
+    /// partial type as though the remaining syntax had not been written.
+    UnconsumedTypeSyntax { syntax: String, span: TextRange },
+
     /// A function parameter has no name token.
     MissingParamName {
         function_name: String,
@@ -365,6 +369,13 @@ impl LoweringDiagnostic {
                 format!("could not parse type expression for {context}"),
                 *span,
                 "unparseable type",
+            ),
+            LoweringDiagnostic::UnconsumedTypeSyntax { syntax, span } => (
+                DiagnosticId::UnparseableType,
+                Severity::Error,
+                format!("CST-to-AST lowering left unconsumed type syntax: {syntax}"),
+                *span,
+                "this syntax was not represented in the lowered type",
             ),
             LoweringDiagnostic::MissingParamName {
                 function_name,
