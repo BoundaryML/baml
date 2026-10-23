@@ -955,7 +955,7 @@ fn spawn_with_modifier_typechecks() {
     let file = db.file(
         "test.baml",
         r#"function f() -> int {
-  let limit = baml.spawn.Limit.new(2) catch (e) { baml.errors.InvalidArgument => baml.sys.panic("positive") };
+  let limit = baml.sync.Semaphore.new(2) catch (e) { baml.errors.InvalidArgument => baml.sys.panic("positive") };
   let x = spawn with limit { 1 };
   await x
 }"#,

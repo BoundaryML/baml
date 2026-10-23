@@ -428,13 +428,6 @@ Require(
 _ = writer.Flush();
 _ = writer.Close();
 
-using Baml.Spawn.Limit limit = Baml.Spawn.Limit.New(2);
-Require(limit.Capacity() == 2, "Limit construction changed");
-_ = Expect<Baml.BamlErrorException>(() => Baml.Spawn.Limit.New(0));
-Require(
-    limit.ActiveCount() == 0 && limit.QueuedCount() == 0,
-    "Limit state methods changed");
-
 _ = csvReader.Close();
 
 clonedGlob.Dispose();

@@ -1,6 +1,7 @@
-//! BEP-040 `Limit`: shared admission for spawned tasks.
+//! BEP-040 admission, behind `baml.sync.Semaphore`: shared slots for spawned
+//! tasks and for running tasks that take one.
 //!
-//! A `baml.spawn.Limit` value is one admission domain with a positive
+//! A `baml.sync.Semaphore` value is one admission domain with a positive
 //! capacity. A launch under a set of limits is admitted only when a slot in
 //! every one of them can be taken together — it never holds one while waiting
 //! for another, so there is no AB/BA hold-and-wait — and holds them until its
@@ -52,7 +53,7 @@ use std::{
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 
-/// Shared admission state behind a `baml.spawn.Limit` value.
+/// Shared admission state behind a `baml.sync.Semaphore` value.
 pub struct LimitInner {
     capacity: NonZeroUsize,
     state: crate::MeteredMutex<LimitState>,
@@ -462,6 +463,15 @@ impl Waiter {
 }
 
 impl AdmissionTicket {
+    /// The admission, when registering took every slot at once; otherwise
+    /// the ticket back, to wait on.
+    pub fn into_admitted(self) -> Result<Admission, Self> {
+        match self.state {
+            TicketState::Admitted(admission) => Ok(admission),
+            TicketState::Parked(_) => Err(self),
+        }
+    }
+
     /// Wait for admission. `None` when any of `cancelled_by` fires first: the
     /// launch leaves every queue holding nothing, and its body never runs.
     ///
@@ -511,6 +521,71 @@ impl Drop for Admission {
         for limit in self.limits.iter() {
             limit.promote();
         }
+    }
+}
+
+/// One slot of one limit, taken by a running task (`baml.sync.Semaphore`'s
+/// `acquire` and `with`): queued for, then held, then released. Dropping it
+/// releases the slot or withdraws from the queue, so a permit the garbage
+/// collector frees gives its slot back.
+pub struct PermitState {
+    /// Queued and not yet admitted: what to wait on.
+    ticket: Mutex<Option<AdmissionTicket>>,
+    /// Admitted and not yet released.
+    admission: Mutex<Option<Admission>>,
+}
+
+impl PermitState {
+    /// Take a free slot of `limit`, or queue for one.
+    pub fn admit(limit: &Arc<LimitInner>) -> Self {
+        match LimitSet::new().with(limit).admit().into_admitted() {
+            Ok(admission) => Self {
+                ticket: Mutex::new(None),
+                admission: Mutex::new(Some(admission)),
+            },
+            Err(ticket) => Self {
+                ticket: Mutex::new(Some(ticket)),
+                admission: Mutex::new(None),
+            },
+        }
+    }
+
+    /// Whether this hold has its slot.
+    pub fn is_admitted(&self) -> bool {
+        lock_poisoned(&self.admission).is_some()
+    }
+
+    /// Wait for the slot. Dropping the future withdraws from the queue, and
+    /// gives back a slot granted in the meantime.
+    pub async fn wait(self: Arc<Self>) {
+        let ticket = lock_poisoned(&self.ticket).take();
+        if let Some(ticket) = ticket
+            && let Some(admission) = ticket.acquire(&[]).await
+        {
+            *lock_poisoned(&self.admission) = Some(admission);
+        }
+    }
+
+    /// Release the slot, or withdraw from the queue. Releasing again does
+    /// nothing.
+    pub fn release(&self) {
+        // Taken out first: dropping either takes the limit's lock and admits
+        // the next waiter, which must not happen under this hold's mutexes.
+        let ticket = lock_poisoned(&self.ticket).take();
+        let admission = lock_poisoned(&self.admission).take();
+        drop((ticket, admission));
+    }
+}
+
+fn lock_poisoned<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+impl crate::BexRustData for PermitState {
+    fn measure(&self, meter: &mut crate::Meter) {
+        meter.bytes(size_of::<Self>());
     }
 }
 

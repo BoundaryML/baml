@@ -1,16 +1,27 @@
-//! Native implementations for `namespace baml.sync`: `Lock` and `Guard`. The
-//! lock itself is [`LockInner`]; the wait for a contended one is the `_wait`
-//! sys-op.
+//! Native implementations for `namespace baml.sync`: `Lock` and `Guard`,
+//! `Semaphore` and `Permit`. The lock itself is [`LockInner`] and a semaphore
+//! is a [`LimitInner`], the same admission state `spawn with` uses; the waits
+//! for a contended one are the `_wait` and `_wait_permit` sys-ops.
 
-use std::{num::NonZeroU64, sync::Arc};
+use std::{
+    num::{NonZeroU64, NonZeroUsize},
+    sync::Arc,
+};
 
 use bex_heap::TlabHolder;
-use bex_vm_types::{GuardState, LockInner, Object, RustDataArc as _, types::Value};
+use bex_vm_types::{
+    GuardState, LimitInner, LockInner, Object, PermitState, RustDataArc as _, types::Value,
+};
 
-use super::{BamlClassSyncGuard, BamlClassSyncLock, BamlNamespaceSync, PackageBamlImpl};
+use super::{
+    BamlClassSyncGuard, BamlClassSyncLock, BamlClassSyncPermit, BamlClassSyncSemaphore,
+    BamlNamespaceSync, PackageBamlImpl,
+    spawn::{clamp_to_i64, limit_inner},
+    view,
+};
 use crate::{
     BexVm,
-    errors::{VmPanic, VmRustFnError},
+    errors::{VmBamlError, VmPanic, VmRustFnError},
 };
 
 /// The locks a VM's task has entered and not yet exited, one entry per
@@ -133,4 +144,75 @@ impl BamlClassSyncGuard for PackageBamlImpl {
     }
 }
 
-impl BamlNamespaceSync for PackageBamlImpl {}
+/// The hold behind a `$rust_type` from `Semaphore._admit`.
+fn permit_state(vm: &BexVm, held: Value) -> Arc<PermitState> {
+    match held.as_object_ptr().map(|ptr| vm.get_object(ptr)) {
+        Some(Object::RustData(data)) => Arc::clone(data)
+            .downcast_payload::<PermitState>()
+            .unwrap_or_else(|_| unreachable!("only `Semaphore._admit` makes a hold")),
+        _ => unreachable!("only `Semaphore._admit` makes a hold"),
+    }
+}
+
+#[allow(clippy::used_underscore_items)]
+impl BamlClassSyncSemaphore for PackageBamlImpl {
+    // Static constructor: returns the heap `Semaphore` instance, not `Self`.
+    #[allow(clippy::new_ret_no_self)]
+    fn new(vm: &mut BexVm, capacity: i64) -> Result<Value, VmRustFnError> {
+        let capacity = usize::try_from(capacity)
+            .ok()
+            .and_then(NonZeroUsize::new)
+            .ok_or_else(|| VmBamlError::InvalidArgument {
+                message: format!(
+                    "baml.sync.Semaphore.new: capacity must be positive, got {capacity}"
+                ),
+            })?;
+        Ok(alloc_handle(
+            vm,
+            crate::lang_items::BAML_SYNC_SEMAPHORE,
+            LimitInner::new(capacity),
+        ))
+    }
+
+    fn capacity(vm: &BexVm, semaphore: &view::sync::Semaphore<'_>) -> i64 {
+        clamp_to_i64(semaphore._handle::<LimitInner>(vm).capacity().get())
+    }
+
+    fn active_count(vm: &BexVm, semaphore: &view::sync::Semaphore<'_>) -> i64 {
+        clamp_to_i64(semaphore._handle::<LimitInner>(vm).active_count())
+    }
+
+    fn queued_count(vm: &BexVm, semaphore: &view::sync::Semaphore<'_>) -> i64 {
+        clamp_to_i64(semaphore._handle::<LimitInner>(vm).queued_count())
+    }
+
+    fn _admit(vm: &mut BexVm, semaphore: &Value) -> Value {
+        let limit = limit_inner(vm, *semaphore)
+            .unwrap_or_else(|_| unreachable!("only `Semaphore.new` sets its handle"));
+        let held = Arc::new(PermitState::admit(&limit));
+        Value::object(vm.alloc_rust_data(held))
+    }
+}
+
+#[allow(clippy::used_underscore_items)]
+impl BamlClassSyncPermit for PackageBamlImpl {
+    fn release(vm: &BexVm, permit: &view::sync::Permit<'_>) {
+        permit._handle::<PermitState>(vm).release();
+    }
+}
+
+#[allow(clippy::used_underscore_items)]
+impl BamlNamespaceSync for PackageBamlImpl {
+    fn _admitted(vm: &BexVm, held: &Value) -> bool {
+        permit_state(vm, *held).is_admitted()
+    }
+
+    fn _permit(vm: &mut BexVm, held: &Value) -> Value {
+        let held = permit_state(vm, *held);
+        alloc_handle(vm, crate::lang_items::BAML_SYNC_PERMIT, held)
+    }
+
+    fn _release_permit(vm: &BexVm, held: &Value) {
+        permit_state(vm, *held).release();
+    }
+}

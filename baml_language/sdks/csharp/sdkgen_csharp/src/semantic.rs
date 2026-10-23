@@ -237,10 +237,11 @@ fn builtin_projection(name: &Name) -> Option<BuiltinProjection> {
         | "baml.ws.CloseEvent" => Some(BuiltinProjection::StructuralClass),
         "trace.Mode" | "baml.csv.ErrorKind" => Some(BuiltinProjection::StructuralEnum),
         "trace.SpanId" | "trace.Options" | "trace.ReservedSpan"
-        | "baml.spawn.Limit"
         | "baml.spawn.CancelToken"
         | "baml.sync.Lock"
         | "baml.sync.Guard"
+        | "baml.sync.Semaphore"
+        | "baml.sync.Permit"
         | "baml.http.Response"
         | "baml.http.SseStream"
         | "baml.http.Server"

@@ -119,7 +119,7 @@ function work(i: int) -> int {
 
 const BAML_SPAWN_ADV = `// cap shard work at two in flight; extras wait for a slot
 function main() -> int {
-  let pool = baml.spawn.Limit.new(2);
+  let pool = baml.sync.Semaphore.new(2);
 
   let a = spawn "shard-0" with pool {
     checksum(0, 50000)

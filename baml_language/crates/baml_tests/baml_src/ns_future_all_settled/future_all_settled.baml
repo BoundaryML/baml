@@ -31,27 +31,27 @@ function fas_label(
     }
 }
 
-// A one-slot limit and the task holding that slot for `hold_ms`: anything else
-// spawned with the limit starts only once the holder is done (or cancelled).
+// A one-slot semaphore and the task holding that slot for `hold_ms`: anything else
+// spawned with the semaphore starts only once the holder is done (or cancelled).
 class FasGate {
-    limit: baml.spawn.Limit,
+    semaphore: baml.sync.Semaphore,
     holder: baml.future.Future<null, never>,
 }
 
 function fas_gate(hold_ms: int) -> FasGate {
-    let limit = baml.spawn.Limit.new(1) catch (e) {
+    let semaphore = baml.sync.Semaphore.new(1) catch (e) {
         baml.errors.InvalidArgument => baml.sys.panic("one is positive"),
     };
-    let holder = spawn with limit {
+    let holder = spawn with semaphore {
         baml.sys.sleep(baml.time.Duration.from_milliseconds(hold_ms))
     };
-    FasGate { limit: limit, holder: holder }
+    FasGate { semaphore: semaphore, holder: holder }
 }
 
 function fas_failure_preserves_successes() -> string {
     let gate = fas_gate(100);
     let failed = spawn { fas_value(-1) };
-    let later = spawn with gate.limit { fas_value(2) };
+    let later = spawn with gate.semaphore { fas_value(2) };
     defer { gate.holder.cancel() }
     let results = await baml.future.all_settled([failed, later, failed]);
     if (!later.is_settled() || later.is_cancelled()) {
@@ -75,7 +75,7 @@ test "failure_preserves_successes_and_waits_for_later_inputs" {
 
 function fas_failures_in_input_order() -> string {
     let gate = fas_gate(100);
-    let first = spawn with gate.limit { fas_value(-1) };
+    let first = spawn with gate.semaphore { fas_value(-1) };
     let second = spawn { fas_value(-2) };
     defer { gate.holder.cancel() }
     let results = await baml.future.all_settled([first, second]);
@@ -99,7 +99,7 @@ function fas_panic_and_cancellation() -> string {
     // Cancelled while still queued behind the holder: its body never runs.
     let gate = fas_gate(15000);
     defer { gate.holder.cancel() }
-    let cancelled = spawn with gate.limit { fas_value(1) };
+    let cancelled = spawn with gate.semaphore { fas_value(1) };
     cancelled.cancel();
     let panic = spawn { fas_explode() };
     let results = await baml.future.all_settled([panic, cancelled, spawn { fas_value(3) }]);
@@ -176,7 +176,7 @@ test "returning_an_error_value_is_still_success" {
 
 function fas_cancel_collector_only() -> string {
     let gate = fas_gate(15000);
-    let input = spawn with gate.limit { fas_value(7) };
+    let input = spawn with gate.semaphore { fas_value(7) };
     defer { gate.holder.cancel() }
     let collector = baml.future.all_settled([input]);
     baml.sys.sleep(baml.time.Duration.from_milliseconds(100));

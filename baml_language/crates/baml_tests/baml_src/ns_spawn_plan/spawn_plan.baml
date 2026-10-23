@@ -16,8 +16,8 @@ function sleep_ms(ms: bigint) -> void {
     baml.sys.sleep(baml.time.Duration.from_milliseconds(ms))
 }
 
-function limit_of(capacity: int) -> baml.spawn.Limit {
-    baml.spawn.Limit.new(capacity) catch (e) {
+function semaphore_of(capacity: int) -> baml.sync.Semaphore {
+    baml.sync.Semaphore.new(capacity) catch (e) {
         baml.errors.InvalidArgument => baml.sys.panic("the capacity is positive"),
     }
 }
@@ -247,9 +247,9 @@ implements<T, E> baml.spawn.Modifier<T, E> for Refuses {
     }
 }
 
-function logged_limit(log: Log) -> baml.spawn.Limit {
-    log.entries.push("make limit");
-    limit_of(1)
+function logged_semaphore(log: Log) -> baml.sync.Semaphore {
+    log.entries.push("make semaphore");
+    semaphore_of(1)
 }
 
 // A modifier that throws does so at the `spawn`: no task exists, the body never
@@ -258,7 +258,7 @@ function apply_error_throws_at_the_spawn() -> string[] {
     let log = Log { entries: [] };
     let outcome = {
         let refuses = Refuses { log: log };
-        let _ = spawn with refuses, logged_limit(log) { log.entries.push("body"); 1 };
+        let _ = spawn with refuses, logged_semaphore(log) { log.entries.push("body"); 1 };
         "spawned"
     } catch (e) {
         string => e,
@@ -431,16 +431,16 @@ test "a function with defaulted parameters is a task's body" {
     assert.equal(defaulted_bodies(), "3:default:5:true")
 }
 
-// ─── Limit ───────────────────────────────────────────────────────────────────
+// ─── Semaphore ───────────────────────────────────────────────────────────────
 
 function limit_rejects_zero() -> string {
-    let made = baml.spawn.Limit.new(0) catch (e) {
+    let made = baml.sync.Semaphore.new(0) catch (e) {
         baml.errors.InvalidArgument => null,
     };
     if (made == null) { "rejected" } else { "accepted" }
 }
 
-test "a limit's capacity must be positive" {
+test "a semaphore's capacity must be positive" {
     assert.equal(limit_rejects_zero(), "rejected")
 }
 
@@ -450,28 +450,28 @@ test "a limit's capacity must be positive" {
 // slot on its own task, which may not have run yet -- so nothing below reads
 // one there.
 function caps_active_and_queues_the_rest() -> string {
-    let limit = limit_of(2);
-    let a = spawn with limit { sleep_ms(5000n); 1 };
-    let b = spawn with limit { sleep_ms(5000n); 1 };
-    let c = spawn with limit { sleep_ms(5000n); 1 };
-    let d = spawn with limit { sleep_ms(5000n); 1 };
-    let snapshot = `${limit.capacity()}:${limit.active_count()}:${limit.queued_count()}`;
+    let semaphore = semaphore_of(2);
+    let a = spawn with semaphore { sleep_ms(5000n); 1 };
+    let b = spawn with semaphore { sleep_ms(5000n); 1 };
+    let c = spawn with semaphore { sleep_ms(5000n); 1 };
+    let d = spawn with semaphore { sleep_ms(5000n); 1 };
+    let snapshot = `${semaphore.capacity()}:${semaphore.active_count()}:${semaphore.queued_count()}`;
     let futures = [a, b, c, d];
     futures.map((f) -> { f.cancel() });
     snapshot
 }
 
-test "a limit admits up to its capacity and queues the rest" {
+test "a semaphore admits up to its capacity and queues the rest" {
     assert.equal(caps_active_and_queues_the_rest(), "2:2:2")
 }
 
 function queued_tasks_all_complete() -> int {
-    let limit = limit_of(2);
-    let a = spawn with limit { 1 };
-    let b = spawn with limit { 1 };
-    let c = spawn with limit { 1 };
-    let d = spawn with limit { 1 };
-    let e = spawn with limit { 1 };
+    let semaphore = semaphore_of(2);
+    let a = spawn with semaphore { 1 };
+    let b = spawn with semaphore { 1 };
+    let c = spawn with semaphore { 1 };
+    let d = spawn with semaphore { 1 };
+    let e = spawn with semaphore { 1 };
     (await a) + (await b) + (await c) + (await d) + (await e)
 }
 
@@ -479,20 +479,20 @@ test "queued tasks start as slots free and all complete" {
     assert.equal(queued_tasks_all_complete(), 5)
 }
 
-// The same limit applied twice is one slot, through a composite too.
-class Pool { limit: baml.spawn.Limit, token: baml.spawn.CancelToken }
+// The same semaphore applied twice is one slot, through a composite too.
+class Pool { semaphore: baml.sync.Semaphore, token: baml.spawn.CancelToken }
 
 implements<T, E> baml.spawn.Modifier<T, E> for Pool {
     function apply(self, plan: baml.spawn.Plan<T, E>) -> baml.spawn.Plan<T, E> throws never {
-        plan.with(self.limit).with(self.token)
+        plan.with(self.semaphore).with(self.token)
     }
 }
 
 function the_same_limit_twice_is_one_slot() -> string {
-    let limit = limit_of(2);
-    let pool = Pool { limit: limit, token: baml.spawn.CancelToken.new() };
-    let f = spawn with limit, pool, limit { sleep_ms(5000n); 1 };
-    let snapshot = `${limit.active_count()}:${limit.queued_count()}`;
+    let semaphore = semaphore_of(2);
+    let pool = Pool { semaphore: semaphore, token: baml.spawn.CancelToken.new() };
+    let f = spawn with semaphore, pool, semaphore { sleep_ms(5000n); 1 };
+    let snapshot = `${semaphore.active_count()}:${semaphore.queued_count()}`;
     let _ = pool.token.cancel();
     let outcome = (await f) catch (e) {
         baml.panics.Cancelled => -1,
@@ -500,14 +500,14 @@ function the_same_limit_twice_is_one_slot() -> string {
     `${snapshot}:${outcome}`
 }
 
-test "a composite modifier applies its parts and a repeated limit is one slot" {
+test "a composite modifier applies its parts and a repeated semaphore is one slot" {
     assert.equal(the_same_limit_twice_is_one_slot(), "1:0:-1")
 }
 
-// A task under two limits waits for both and holds neither meanwhile.
+// A task under two semaphores waits for both and holds neither meanwhile.
 function two_limits_are_taken_together() -> string {
-    let a = limit_of(1);
-    let b = limit_of(1);
+    let a = semaphore_of(1);
+    let b = semaphore_of(1);
     let hold_a = spawn with a { sleep_ms(60n); 1 };
     let both = spawn with a, b { 2 };
     let while_waiting = `${a.active_count()}/${a.queued_count()} ${b.active_count()}/${b.queued_count()}`;
@@ -516,16 +516,16 @@ function two_limits_are_taken_together() -> string {
     `${while_waiting}|${total}`
 }
 
-test "several limits are taken together or not at all" {
+test "several semaphores are taken together or not at all" {
     assert.equal(two_limits_are_taken_together(), "1/1 0/1|6")
 }
 
 function cancelled_while_queued_never_runs() -> string {
-    let limit = limit_of(1);
+    let semaphore = semaphore_of(1);
     let log = Log { entries: [] };
-    let first = spawn with limit { log.entries.push("ran"); sleep_ms(60n); 1 };
-    let queued = spawn with limit { log.entries.push("ran"); 1 };
-    let before = limit.queued_count();
+    let first = spawn with semaphore { log.entries.push("ran"); sleep_ms(60n); 1 };
+    let queued = spawn with semaphore { log.entries.push("ran"); 1 };
+    let before = semaphore.queued_count();
     let _ = queued.cancel();
     let outcome = (await queued) catch (e) {
         baml.panics.Cancelled => -1,
@@ -539,21 +539,21 @@ test "a task cancelled while queued never runs" {
     assert.equal(cancelled_while_queued_never_runs(), "1:-1:1")
 }
 
-// The limit holds back the WORK, not just its counts: under a capacity of one,
+// The semaphore holds back the WORK, not just its counts: under a capacity of one,
 // no body starts until the previous one has finished its IO, so the log
 // alternates strictly whatever the timing. (Capacity one also keeps the shared
 // log free of racing writes: only one body ever runs at a time.)
 function a_limit_serializes_real_io() -> string {
-    let limit = limit_of(1);
+    let semaphore = semaphore_of(1);
     let log = Log { entries: [] };
-    let a = spawn with limit { log.entries.push("start"); sleep_ms(30n); log.entries.push("end"); 1 };
-    let b = spawn with limit { log.entries.push("start"); sleep_ms(30n); log.entries.push("end"); 1 };
-    let c = spawn with limit { log.entries.push("start"); sleep_ms(30n); log.entries.push("end"); 1 };
+    let a = spawn with semaphore { log.entries.push("start"); sleep_ms(30n); log.entries.push("end"); 1 };
+    let b = spawn with semaphore { log.entries.push("start"); sleep_ms(30n); log.entries.push("end"); 1 };
+    let c = spawn with semaphore { log.entries.push("start"); sleep_ms(30n); log.entries.push("end"); 1 };
     let total = (await a) + (await b) + (await c);
     `${total}:${log.entries.join(",")}`
 }
 
-test "a limit holds back the work, not just the counts" {
+test "a semaphore holds back the work, not just the counts" {
     assert.equal(a_limit_serializes_real_io(), "3:start,end,start,end,start,end")
 }
 
@@ -577,11 +577,11 @@ test "a token modifier cancels the task when it fires" {
 // Cancelling a token frees the slot its running task held; the task queued
 // behind it under the same token must not take that slot and run.
 function token_cancels_its_queued_task() -> string {
-    let limit = limit_of(1);
+    let semaphore = semaphore_of(1);
     let token = baml.spawn.CancelToken.new();
     let log = Log { entries: [] };
-    let running = spawn with limit, token { sleep_ms(5000n); 1 };
-    let queued = spawn with limit, token { log.entries.push("ran"); 2 };
+    let running = spawn with semaphore, token { sleep_ms(5000n); 1 };
+    let queued = spawn with semaphore, token { log.entries.push("ran"); 2 };
     let _ = token.cancel();
     let first = (await running) catch (e) {
         baml.panics.Cancelled => -1,
