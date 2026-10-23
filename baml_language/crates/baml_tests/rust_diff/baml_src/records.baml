@@ -198,11 +198,7 @@ function NoLeaks() -> void {
     baml.io.println(`${before}:${after}:${inside}:${caught}`);
 }
 
-class MapDepths {
-    deepest: int,
-}
-
-function MapDown(d: MapDepths, n: int) -> int {
+function MapDown(d: Depths, n: int) -> int {
     d.deepest = n;
     let xs = [n].map((v: int) -> int { MapDown(d, v + 1) });
     xs[0]
@@ -219,7 +215,7 @@ function MapThrow(n: int) -> int {
 // Recursion and errors through a builtin's callback: the VM call path and
 // direct calls alternate on the way down.
 function CallbackDepth() -> void {
-    let d = MapDepths { deepest: 0 };
+    let d = Depths { deepest: 0 };
     let r = MapDown(d, 0) catch (e) {
         let e: baml.panics.StackOverflow => -1,
     };
@@ -402,18 +398,10 @@ function CancelDuringUnwind() -> void {
     baml.io.println(state.join(","));
 }
 
-function OverflowTask() -> int {
-    let d = Depths { deepest: 0 };
-    let _ = Descend(d, 0) catch (e) {
-        let e: baml.panics.StackOverflow => -1,
-    };
-    d.deepest
-}
-
 // Stack overflow inside spawned tasks, several at once.
 function TaskOverflow() -> void {
-    let a = spawn { OverflowTask() };
-    let b = spawn { OverflowTask() };
+    let a = spawn { Measure() };
+    let b = spawn { Measure() };
     let u = spawn { Descend(Depths { deepest: 0 }, 0) };
     let c = (await u) catch_all_panics (e) {
         _ => -7,
