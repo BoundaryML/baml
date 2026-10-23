@@ -1,8 +1,5 @@
-use btel_records::RaiseKind;
-
 use crate::{
     compiled_rt::FrameAt,
-    errors::ThrowKind,
     vm::{error_evidence::UnwindEvidence, *},
 };
 
@@ -464,16 +461,6 @@ impl BexVm {
             &self.pending_call_type_args,
             &self.pending_call_type_values,
         );
-    }
-    pub(in crate::vm) fn compiled_raise_kind(&self, thrown: &VmThrown) -> RaiseKind {
-        if thrown.throw_kind == ThrowKind::Rethrow {
-            return RaiseKind::Rethrow;
-        }
-        if self.is_panic(thrown.value) {
-            RaiseKind::Runtime
-        } else {
-            RaiseKind::Throw
-        }
     }
     pub(in crate::vm) fn unwind_suspended_compiled(
         &mut self,

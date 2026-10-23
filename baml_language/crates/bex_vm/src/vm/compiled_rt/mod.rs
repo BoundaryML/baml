@@ -127,7 +127,7 @@ impl CompiledEntry {
 /// Compiled frame positions: `instruction_ptr` holds [`RUNNING`] or an offset into
 /// [`stub::CODE`].
 /// `faulting_pc` holds an original bytecode instruction index, translated by
-/// `BexVm::compiled_pc`.
+/// `BexVm::frame_pc`.
 pub(crate) mod stub {
     use bex_vm_types::bytecode::OpCode;
 
