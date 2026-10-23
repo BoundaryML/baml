@@ -178,35 +178,6 @@ pub enum RustProfile {
     Fast,
 }
 
-impl RustProfile {
-    /// The `[profile.release]` settings of the generated crate's manifest —
-    /// the build always runs as `cargo build --release`, and the profile
-    /// decides what that means.
-    fn cargo_profile_settings(self) -> toml::Table {
-        let mut settings = toml::Table::new();
-        let mut set = |key: &str, value: toml::Value| {
-            settings.insert(key.to_owned(), value);
-        };
-        match self {
-            Self::Release => {
-                set("lto", "fat".into());
-                set("codegen-units", 1.into());
-                set("opt-level", 3.into());
-                set("strip", "symbols".into());
-            }
-            Self::Fast => {
-                set("lto", false.into());
-                set("codegen-units", 16.into());
-                set("opt-level", 1.into());
-                set("strip", "none".into());
-                set("debug", "line-tables-only".into());
-            }
-        }
-        set("panic", "unwind".into());
-        settings
-    }
-}
-
 /// One resolved entry point baked into a packed binary.
 #[derive(Debug, Clone)]
 struct ResolvedPackTarget {
@@ -321,12 +292,6 @@ impl PackArgs {
         let label = label_for(&targets);
         reporter.spin("Packaging", &label);
         let target_triple = self.resolved_target_triple()?;
-        let host_bytes = if compiled.is_some() {
-            Vec::new()
-        } else {
-            read_host_binary(target_triple, reporter)?
-        };
-
         let basename = self.resolve_output_basename()?;
         let output_path = self
             .output
@@ -336,6 +301,7 @@ impl PackArgs {
         if let Some(module) = compiled {
             self.build_rust(&module, &serialized, &output_path, reporter)?;
         } else {
+            let host_bytes = read_host_binary(target_triple, reporter)?;
             let mut output_file = std::fs::File::create(&output_path)
                 .with_context(|| format!("failed to create {}", output_path.display()))?;
             write_executable(&host_bytes, &serialized, &mut output_file, target_triple)?;
@@ -486,10 +452,7 @@ impl PackArgs {
             "Building",
             format!("{} compiled functions with cargo", module.functions.len()),
         );
-        // The host must accept the envelope this CLI encodes, and the
-        // fingerprint exists to refuse a host built from other sources. So the
-        // workspace must be at the commit this CLI was built from; the host
-        // then derives the same fingerprint from its own checkout.
+        // Enforcing channels require the host and CLI to share a commit.
         if baml_artifact::ENFORCE_BUILD_FINGERPRINT {
             let fingerprint = baml_artifact::BUILD_FINGERPRINT;
             let head = workspace_head(&workspace)?;
@@ -502,15 +465,12 @@ impl PackArgs {
                 );
             }
         }
-        // Build against the workspace's own dependency versions, the ones its
-        // tests ran with, rather than resolving fresh ones.
+        // Reuse the workspace's tested dependency versions.
         let lockfile = workspace.join("Cargo.lock");
         if lockfile.is_file() {
             std::fs::copy(&lockfile, build_dir.join("Cargo.lock"))
                 .context("failed to copy the workspace's Cargo.lock")?;
         }
-        // An explicit target dir so the built binary's location is known
-        // whatever the environment says.
         let target_dir = build_dir.join("target");
         let status = reporter.suspend(|| {
             let mut cargo = std::process::Command::new("cargo");
@@ -521,9 +481,7 @@ impl PackArgs {
                 .arg(build_dir.join("Cargo.toml"))
                 .arg("--target-dir")
                 .arg(&target_dir)
-                // From the workspace, so rustup selects the toolchain its
-                // `rust-toolchain.toml` pins (the one the runtime was tested
-                // with), not the machine's default.
+                // Select the workspace's pinned toolchain.
                 .current_dir(&workspace)
                 .stdout(std::process::Stdio::inherit())
                 .stderr(std::process::Stdio::inherit());
@@ -543,9 +501,7 @@ impl PackArgs {
                     cargo.env_remove(key);
                 }
             }
-            // A BAML function with thousands of locals becomes one Rust
-            // function as large, and rustc's default stack can overflow
-            // generating its debug info; give it room unless the caller chose.
+            // Large generated functions can overflow rustc's debug-info stack.
             if baml_env::os_var("RUST_MIN_STACK").is_none() {
                 cargo.env("RUST_MIN_STACK", (256usize << 20).to_string());
             }
@@ -898,59 +854,50 @@ fn workspace_head(workspace: &Path) -> Result<Option<String>> {
 }
 
 fn rust_manifest(workspace: &Path, profile: RustProfile) -> String {
-    let table = |entries: &[(&str, toml::Value)]| -> toml::Value {
-        toml::Value::Table(
-            entries
-                .iter()
-                .map(|(key, value)| ((*key).to_owned(), value.clone()))
-                .collect(),
-        )
+    let dependencies: toml::Table = ["bex_vm", "bex_vm_types", "baml_pack_host"]
+        .into_iter()
+        .map(|name| {
+            let path = workspace.join("crates").join(name);
+            let path = path.to_string_lossy();
+            let dependency = toml::toml! { path = (path.as_ref()) };
+            (name.to_owned(), toml::Value::Table(dependency))
+        })
+        .collect();
+    let release = match profile {
+        RustProfile::Release => toml::toml! {
+            lto = "fat"
+            codegen-units = 1
+            opt-level = 3
+            strip = "symbols"
+            panic = "unwind"
+        },
+        RustProfile::Fast => toml::toml! {
+            lto = false
+            codegen-units = 16
+            opt-level = 1
+            strip = "none"
+            debug = "line-tables-only"
+            panic = "unwind"
+        },
     };
-    let dependency = |name: &str| {
-        let path = workspace.join("crates").join(name);
-        (
-            name.to_owned(),
-            table(&[("path", path.to_string_lossy().into_owned().into())]),
-        )
+    let manifest = toml::toml! {
+        dependencies = dependencies
+        [package]
+        name = "baml_rust_program"
+        version = "0.0.0"
+        edition = "2024"
+        publish = false
+
+        // Keep the generated crate outside the source workspace.
+        [workspace]
+        [lib]
+        path = "src/lib.rs"
+        [[bin]]
+        name = "baml_rust_program"
+        path = "src/main.rs"
+        [profile]
+        release = release
     };
-    let name = "baml_rust_program";
-    let manifest = table(&[
-        (
-            "package",
-            table(&[
-                ("name", name.into()),
-                ("version", "0.0.0".into()),
-                ("edition", "2024".into()),
-                ("publish", false.into()),
-            ]),
-        ),
-        // Its own workspace, so it is no member of the one it builds from.
-        ("workspace", table(&[])),
-        ("lib", table(&[("path", "src/lib.rs".into())])),
-        (
-            "bin",
-            toml::Value::Array(vec![table(&[
-                ("name", name.into()),
-                ("path", "src/main.rs".into()),
-            ])]),
-        ),
-        (
-            "dependencies",
-            toml::Value::Table(
-                ["bex_vm", "bex_vm_types", "baml_pack_host"]
-                    .into_iter()
-                    .map(dependency)
-                    .collect(),
-            ),
-        ),
-        (
-            "profile",
-            table(&[(
-                "release",
-                toml::Value::Table(profile.cargo_profile_settings()),
-            )]),
-        ),
-    ]);
     toml::to_string(&manifest).expect("a TOML table serializes")
 }
 
