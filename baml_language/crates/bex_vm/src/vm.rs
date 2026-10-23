@@ -166,8 +166,8 @@ impl Drop for ObjectMut<'_> {
     }
 }
 
-/// Max call stack size.
-pub const MAX_FRAMES: usize = 256;
+mod frame_stack;
+pub use frame_stack::{FRAME_STORAGE_BUDGET_BYTES, FrameStack};
 
 #[derive(Clone, Copy)]
 struct CallOptions<'a> {
@@ -440,7 +440,7 @@ pub(crate) mod tests {
     };
 
     use super::{
-        BexVm, Frame, FrameTypeMetadata, TakenTypeArgs, VmExecState,
+        BexVm, Frame, FrameStack, FrameTypeMetadata, TakenTypeArgs, VmExecState,
         append_virtual_method_type_args, value_type_tag,
     };
     use crate::{
@@ -463,7 +463,8 @@ pub(crate) mod tests {
     pub(crate) fn test_vm(compile_time_objects: Vec<Object>) -> BexVm {
         let heap = BexHeap::new(compile_time_objects);
         BexVm {
-            frames: Vec::new(),
+            frames: FrameStack::default(),
+            pending_entry_frame_panic: None,
             stack: EvalStack::new(),
             op_count: 0,
             cur_pc: 0,
@@ -1630,7 +1631,12 @@ pub struct BexVm {
     /// On each function call we create a new [`Frame`] and push it on this
     /// stack. On each return, we destroy the frame and pop it from the stack
     /// to resume the execution of the previous frame.
-    pub frames: Vec<Frame>,
+    pub frames: FrameStack,
+
+    /// Entry setup has a void API. Materialize a refused frame allocation as a
+    /// BAML panic when exec starts, under the normal exception unwinder. Only
+    /// StackOverflow/AllocFailure are stored here; neither carries heap roots.
+    pending_entry_frame_panic: Option<VmPanic>,
 
     /// Evaluation stack.
     ///
@@ -2416,7 +2422,8 @@ impl BexVm {
             early_yield.with_gc_pressure(heap.gc_pressure(), bex_heap::gc_policy::POLL_INTERVAL);
 
         Self {
-            frames: Vec::new(),
+            frames: FrameStack::default(),
+            pending_entry_frame_panic: None,
             stack: EvalStack::new(),
             op_count: 0,
             cur_pc: 0,
@@ -4911,6 +4918,12 @@ impl BexVm {
             self.get_object(function)
         );
 
+        if let Err(panic) = self.frames.reserve_one() {
+            self.pending_entry_frame_panic = Some(panic);
+            return;
+        }
+        self.pending_entry_frame_panic = None;
+
         // The callee may declare trailing optionals `args` does not supply: a
         // function value of type `() -> T` can be a function with defaulted
         // parameters, and every LLM function has some. They are laid over the
@@ -5088,7 +5101,7 @@ impl BexVm {
                     }))
                 };
                 self.stack.extend(args.iter().copied());
-                self.frames.push(Frame::Bytecode(BytecodeFrame {
+                self.frames.push_reserved(Frame::Bytecode(BytecodeFrame {
                     function: dispatch_ptr,
                     instruction_ptr: 0,
                     locals_offset: StackIndex::from_raw(0),
@@ -5278,7 +5291,7 @@ impl BexVm {
 
         // Synthetic `$entry::` wrapper frame; the wrapped native/sysop emits
         // its own pair through the normal Call/SysOp instruction paths.
-        self.frames.push(Frame::Bytecode(BytecodeFrame {
+        self.frames.push_reserved(Frame::Bytecode(BytecodeFrame {
             function: entry_ptr,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(0),
@@ -5382,7 +5395,7 @@ impl BexVm {
                 )
             })
         });
-        self.frames.push(Frame::Bytecode(BytecodeFrame {
+        self.frames.push_reserved(Frame::Bytecode(BytecodeFrame {
             function: entry_ptr,
             instruction_ptr: 0,
             locals_offset: StackIndex::from_raw(0),
@@ -7264,13 +7277,6 @@ impl BexVm {
             }
             .into());
         }
-        // Check if we've reached the max call stack size.
-        if self.frames.len() >= MAX_FRAMES {
-            return Err(VmError::thrown_fresh(
-                self.panic_to_exception_value(VmPanic::StackOverflow),
-            ));
-        }
-
         match callee_kind {
             FunctionKind::Native(func_ptr) => {
                 // Cast the type-erased pointer back to NativeFunction.
@@ -7333,7 +7339,8 @@ impl BexVm {
                         // callback through ECFLO. The exec loop's continuation
                         // handler (at the top of the loop) will invoke the
                         // continuation when the callback completes.
-                        self.frames.push(Frame::Native(NativeFrame {
+                        self.reserve_call_frame()?;
+                        self.frames.push_reserved(Frame::Native(NativeFrame {
                             function: callee_ptr,
                             continuation,
                             bytecode_caller: self.bytecode_caller_index(*frame_idx),
@@ -7380,6 +7387,7 @@ impl BexVm {
             }
 
             FunctionKind::Bytecode => {
+                self.reserve_call_frame()?;
                 // Push the new frame.
                 let hooked = callee
                     .bytecode
@@ -7492,7 +7500,7 @@ impl BexVm {
                 }
                 // Construct after reserving capacity so the frame can be written
                 // directly into the vector instead of moved through a temporary.
-                self.frames.extend(std::iter::once_with(|| {
+                self.frames.push_reserved_with(|| {
                     Frame::Bytecode(BytecodeFrame {
                         function: callee_ptr,
                         instruction_ptr: 0,
@@ -7503,7 +7511,7 @@ impl BexVm {
                         telemetry: frame_telemetry,
                         context,
                     })
-                }));
+                });
                 let new_len = self.stack.len() + callee.real_local_count;
                 self.stack.resize(new_len, Value::NULL);
 
@@ -8354,6 +8362,15 @@ impl BexVm {
             .is_some_and(TelemetryState::is_root_thread)
     }
 
+    /// All frame growth is fallible and charged at the same storage boundary,
+    /// including exact calls, indirect calls, entries, and native callbacks.
+    #[inline]
+    fn reserve_call_frame(&mut self) -> Result<(), VmError> {
+        self.frames
+            .reserve_one()
+            .map_err(|panic| VmError::thrown_fresh(self.panic_to_exception_value(panic)))
+    }
+
     /// Main VM execution loop.
     ///
     /// Each "cycle" (loop iteration) executes a single instruction.
@@ -8475,6 +8492,10 @@ impl BexVm {
     #[allow(clippy::inline_always)] // Measured: 20-40% speedup from inlining the dispatch loop
     #[inline(always)]
     fn exec_inner(&mut self) -> Result<VmExecState, VmError> {
+        if let Some(panic) = self.pending_entry_frame_panic.take() {
+            let value = self.panic_to_exception_value(panic);
+            self.try_handle_external_exception(value)?;
+        }
         if self.frames.is_empty() {
             return Ok(VmExecState::Complete(Value::NULL));
         }
@@ -8775,7 +8796,8 @@ impl BexVm {
                         type_args: callback_type_args,
                         continuation,
                     } => {
-                        self.frames.push(Frame::Native(NativeFrame {
+                        // Reuse the slot popped above; no allocation is needed.
+                        self.frames.push_reserved(Frame::Native(NativeFrame {
                             function: native_fn_ptr,
                             continuation,
                             bytecode_caller: nf.bytecode_caller,
@@ -9627,11 +9649,7 @@ impl BexVm {
                                         || VmInternalError::NotEnoughItemsOnStack(callee.arity),
                                     )?,
                                 );
-                                if self.frames.len() >= MAX_FRAMES {
-                                    return Err(VmError::thrown_fresh(
-                                        self.panic_to_exception_value(VmPanic::StackOverflow),
-                                    ));
-                                }
+                                self.reserve_call_frame()?;
                                 let context = self.current_context().clone();
                                 if let Some(telemetry) = &mut self.telemetry {
                                     telemetry.set_context(context.clone());
@@ -9672,7 +9690,7 @@ impl BexVm {
                                 };
                                 caller.instruction_ptr = *pc;
                                 caller.faulting_pc = self.cur_pc;
-                                self.frames.extend(std::iter::once_with(|| {
+                                self.frames.push_reserved_with(|| {
                                     Frame::Bytecode(BytecodeFrame {
                                         function: callee_ptr,
                                         instruction_ptr: 0,
@@ -9683,7 +9701,7 @@ impl BexVm {
                                         telemetry: frame_telemetry,
                                         context,
                                     })
-                                }));
+                                });
                                 if callee.real_local_count != 0 {
                                     let new_len = self.stack.len() + callee.real_local_count;
                                     self.stack.resize(new_len, Value::NULL);

@@ -2,6 +2,8 @@
 
 Stack-based bytecode interpreter for the BAML language, inspired by CPython and Lox.
 
+See [frame storage design and measurements](FRAME_STORAGE.md) for the per-VM call-frame budget and runtime comparison.
+
 ## Architecture Overview
 
 ```
@@ -12,7 +14,7 @@ Stack-based bytecode interpreter for the BAML language, inspired by CPython and 
 │  ┌─────────────────────────────────────────────────────────────────────────────────┐  │
 │  │                             Call Stack (frames)                                 │  │
 │  │  ┌─────────┐ ┌─────────┐ ┌─────────┐                                            │  │
-│  │  │ Frame 0 │ │ Frame 1 │ │ Frame 2 │ ...  (MAX_FRAMES = 256)                    │  │
+│  │  │ Frame 0 │ │ Frame 1 │ │ Frame 2 │ ...  (10 MiB budget)                       │  │
 │  │  │ main()  │ │ foo()   │ │ bar()   │                                            │  │
 │  │  └─────────┘ └─────────┘ └─────────┘                                            │  │
 │  │                                                                                 │  │

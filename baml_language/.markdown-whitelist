@@ -68,3 +68,6 @@ sdks/csharp/DEVELOPMENT.md
 # Type-system quiz ledgers
 tools/type_quiz/SPEC_GAPS.md
 tools/type_quiz/COMPILER_DIVERGENCE.md
+
+# VM call-frame storage budget, measurements, and runtime comparison
+crates/bex_vm/FRAME_STORAGE.md
