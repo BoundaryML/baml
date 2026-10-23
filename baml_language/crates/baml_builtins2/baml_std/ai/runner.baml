@@ -433,7 +433,7 @@ class Agent {
                 } else {
                     self._media_value<Out>(turn, provider)
                 };
-                let value_json = baml.json.from(value) catch_all (e) {
+                let value_json = baml.json.stringify(value) catch_all (e) {
                     _ => {
                         throw baml.errors.UnknownError.with_message<never>(
                                 e,
@@ -441,9 +441,7 @@ class Agent {
                             )
                     },
                 };
-                j.append_all(
-                    [root.events.FinalProduced { value_json: baml.json.stringify(value_json) }],
-                );
+                j.append_all([root.events.FinalProduced { value_json: value_json }]);
                 self._deliver(j, delivered);
                 return RunResult { value: value, journal: j, usage: total };
             }

@@ -101,7 +101,7 @@ function decode<T>(
     s: string,
     naming: Naming = Naming.Declared,
 ) -> T throws ParseError | DecodeError {
-    to<T>(parse(s), naming)
+    to<T>(parse(s), naming = naming)
 }
 
 // OpenAI structured outputs decode with this. `schema` describes a type by
