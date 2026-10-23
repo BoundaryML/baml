@@ -8,7 +8,7 @@ use crate::{
     telemetry::FORCE_ERROR_EVIDENCE,
 };
 
-// Compare semantic error records, excluding run-specific IDs, clocks and PCs.
+// Compare semantic error records, excluding run-specific IDs and clocks.
 fn error_records(vm: &BexVm) -> Vec<String> {
     let mut raises = Vec::new();
     vm.telemetry
@@ -20,15 +20,17 @@ fn error_records(vm: &BexVm) -> Vec<String> {
             SpanRecord::ErrorRaised {
                 raise_id,
                 kind,
+                pc,
                 frame_count,
                 ..
             } => {
                 raises.push(*raise_id);
-                Some(format!("raise {kind:?} frames={frame_count}"))
+                Some(format!("raise {kind:?} pc={pc:?} frames={frame_count}"))
             }
             SpanRecord::ErrorRaisedAndEnded {
                 raise_id,
                 kind,
+                pc,
                 frame_count,
                 result,
                 unwound_frames,
@@ -36,7 +38,7 @@ fn error_records(vm: &BexVm) -> Vec<String> {
             } => {
                 raises.push(*raise_id);
                 Some(format!(
-                    "raise/end {kind:?} frames={frame_count} {result:?} unwound={unwound_frames}"
+                    "raise/end {kind:?} pc={pc:?} frames={frame_count} {result:?} unwound={unwound_frames}"
                 ))
             }
             SpanRecord::ErrorUnwindEnded {

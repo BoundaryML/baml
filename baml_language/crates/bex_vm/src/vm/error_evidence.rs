@@ -458,9 +458,9 @@ impl BexVm {
             && raise_function.is_some_and(|function| {
                 function.telemetry_policy_id.load() != TelemetryPolicyId::NONE
             });
-        let pc = raise_frame
-            .filter(|_| !raise_compiled)
-            .map(|_| u32::try_from(self.cur_pc).unwrap_or(u32::MAX));
+        let pc = raise_at
+            .and_then(|frame| self.frame_at_pc(frame, self.live_bytecode_frame()))
+            .map(|pc| u32::try_from(pc).unwrap_or(u32::MAX));
         let frame_count = u32::try_from(self.level_count()).unwrap_or(u32::MAX);
         let telemetry = self.telemetry.as_mut().expect("checked above");
         if origin != RaiseOrigin::Fresh {
