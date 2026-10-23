@@ -2046,6 +2046,7 @@ fn structural_cache_preserves_payload_metadata_and_aliases() {
     let lookups = ctx.alias_lookups.get();
     assert_eq!(cache.normalize_structure(&input, &ctx), view);
     assert_eq!(ctx.alias_lookups.get(), lookups);
+    assert_eq!(cache.normalize_structure(&view, &ctx), view);
     let fresh = Ty::Literal(Literal::Int(7), Freshness::Fresh);
     let input = interned::ClosedTy::from_plain(&union(vec![fresh.clone(), Ty::Null]));
     assert_eq!(
@@ -2098,6 +2099,7 @@ fn structural_cache_uses_shared_recursive_union_normalization() {
     let input = interned::ClosedTy::from_plain(&alias("Again"));
     let view = cache.normalize_structure(&input, &ctx);
     assert_eq!(view.to_plain(), union(vec![Ty::Null, list(alias("Tree"))]));
+    assert_eq!(cache.normalize_structure(&view, &ctx), view);
     assert!(cache.equivalent(&input, &view, &ctx));
     assert!(!cache.equivalent(
         &view,
@@ -2137,6 +2139,7 @@ fn structural_cache_keeps_union_algebra_and_container_nullability() {
         let input = interned::ClosedTy::from_plain(&input);
         let view = cache.normalize_structure(&input, &ctx);
         assert_eq!(view.to_plain(), expected);
+        assert_eq!(cache.normalize_structure(&view, &ctx), view);
         assert!(cache.equivalent(&input, &view, &ctx));
     }
 }
