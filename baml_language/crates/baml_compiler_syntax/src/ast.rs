@@ -169,7 +169,7 @@ ast_node!(BacktickInterpolation, BACKTICK_INTERPOLATION);
 
 ast_node!(TypeExpr, TYPE_EXPR);
 ast_node!(FunctionType, FUNCTION_TYPE);
-ast_node!(FunctionTypeReturnType, FunctionTypeReturnType);
+ast_node!(FunctionTypeReturnType, FUNCTION_TYPE_RETURN_TYPE);
 ast_node!(Attribute, ATTRIBUTE);
 ast_node!(ObjectField, OBJECT_FIELD);
 ast_node!(GenericParam, GENERIC_PARAM);

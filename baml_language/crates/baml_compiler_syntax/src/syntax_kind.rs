@@ -225,7 +225,7 @@ pub enum SyntaxKind {
     FUNCTION_TYPE_PARAM, // x: int (or just int)
     /// An explicit return annotation containing one `TYPE_EXPR` child.
     /// The arrow remains on the containing function, method, or lambda.
-    FunctionTypeReturnType,
+    FUNCTION_TYPE_RETURN_TYPE,
 
     // Attributes
     ATTRIBUTE, // @alias("name")

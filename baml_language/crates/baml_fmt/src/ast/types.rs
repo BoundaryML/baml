@@ -154,7 +154,7 @@ pub struct FunctionTypeReturnType {
 impl FromCST for FunctionTypeReturnType {
     fn from_cst(elem: SyntaxElement) -> Result<Self, StrongAstError> {
         let node = StrongAstError::assert_is_node(elem)?;
-        StrongAstError::assert_kind_node(&node, SyntaxKind::FunctionTypeReturnType)?;
+        StrongAstError::assert_kind_node(&node, SyntaxKind::FUNCTION_TYPE_RETURN_TYPE)?;
         let mut it = SyntaxNodeIter::new(&node);
         let ty = it.expect_parse()?;
         it.expect_end()?;
@@ -164,7 +164,7 @@ impl FromCST for FunctionTypeReturnType {
 
 impl KnownKind for FunctionTypeReturnType {
     fn kind() -> SyntaxKind {
-        SyntaxKind::FunctionTypeReturnType
+        SyntaxKind::FUNCTION_TYPE_RETURN_TYPE
     }
 }
 

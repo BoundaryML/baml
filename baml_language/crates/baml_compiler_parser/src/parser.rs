@@ -3176,7 +3176,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_return_type(&mut self) {
-        self.with_node(SyntaxKind::FunctionTypeReturnType, Self::parse_type);
+        self.with_node(SyntaxKind::FUNCTION_TYPE_RETURN_TYPE, Self::parse_type);
     }
 
     fn parse_type_primary(&mut self) {
@@ -10537,7 +10537,7 @@ function call_llm_function(client: Client, function_name: string) -> unknown {
             .expect("expected FUNCTION_DEF");
         let returns: Vec<_> = func
             .children()
-            .filter(|node| node.kind() == SyntaxKind::FunctionTypeReturnType)
+            .filter(|node| node.kind() == SyntaxKind::FUNCTION_TYPE_RETURN_TYPE)
             .collect();
         assert_eq!(
             returns.len(),
@@ -11305,7 +11305,7 @@ function inferred() -> int throws never {
                 function
                     .syntax()
                     .children()
-                    .any(|node| node.kind() == SyntaxKind::FunctionTypeReturnType)
+                    .any(|node| node.kind() == SyntaxKind::FUNCTION_TYPE_RETURN_TYPE)
             );
         }
         let method = root.descendants().find_map(MethodSig::cast).unwrap();
@@ -11337,7 +11337,7 @@ function inferred() -> int throws never {
                 SyntaxKind::L_PAREN,
                 SyntaxKind::R_PAREN,
                 SyntaxKind::ARROW,
-                SyntaxKind::FunctionTypeReturnType,
+                SyntaxKind::FUNCTION_TYPE_RETURN_TYPE,
                 SyntaxKind::THROWS_CLAUSE
             ]
         );

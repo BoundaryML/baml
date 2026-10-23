@@ -5339,13 +5339,13 @@ impl FromCST for LambdaExpr {
         let arrow: FunctionArrow = it.expect_parse()?;
 
         // Optional return annotation before THROWS_CLAUSE or BLOCK_EXPR
-        let return_type = if it.peek().map(|e| e.kind()) == Some(SyntaxKind::FunctionTypeReturnType)
-        {
-            let elem = it.next().expect("peeked");
-            Some(super::FunctionTypeReturnType::from_cst(elem)?.ty)
-        } else {
-            None
-        };
+        let return_type =
+            if it.peek().map(|e| e.kind()) == Some(SyntaxKind::FUNCTION_TYPE_RETURN_TYPE) {
+                let elem = it.next().expect("peeked");
+                Some(super::FunctionTypeReturnType::from_cst(elem)?.ty)
+            } else {
+                None
+            };
 
         // Optional throws clause
         let throws = if it.peek().map(|e| e.kind()) == Some(SyntaxKind::THROWS_CLAUSE) {
