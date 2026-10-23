@@ -53,14 +53,13 @@ jobs:
   # The failing bex_vm test, varying one suspect per job. CI's Windows job uses
   # rust-lld (baml_language/.cargo/config.toml), /STACK:64MiB and opt-level 1.
   bex-vm:
-    if: ${{ false }}  # answered by earlier runs; only the cdb job is live
     name: "bex_vm (${{ matrix.variant }})"
     runs-on: blacksmith-8vcpu-windows-2025
     timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
-        variant: [baseline, link-exe, no-stack-flag, opt0, bex-vm-opt0, corosensei-opt0]
+        variant: [baseline]
     env:
       CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
       CARGO_PROFILE_TEST_DEBUG: "line-tables-only"
@@ -99,6 +98,7 @@ jobs:
 
   # Where exactly the access violation lands: run each crashing test under cdb.
   bex-vm-cdb:
+    if: ${{ false }}  # root cause found
     name: "bex_vm under cdb"
     runs-on: blacksmith-8vcpu-windows-2025
     timeout-minutes: 50
