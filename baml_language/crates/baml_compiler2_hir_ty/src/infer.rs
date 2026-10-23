@@ -306,30 +306,16 @@ fn format_float(value: f64) -> Option<String> {
 /// whose union arm is positional - it could never unify with the
 /// solved member.
 fn syntactic_union(members: &[Ty]) -> Ty {
-    fn push(flat: &mut Vec<Ty>, ty: &Ty) {
-        match ty.kind() {
-            InferTy::Union(inner) => {
-                for member in inner {
-                    push(flat, member);
-                }
-            }
-            InferTy::Never => {}
-            _ => {
-                if !flat.contains(ty) {
-                    flat.push(ty.clone());
-                }
-            }
-        }
-    }
-    let mut flat: Vec<Ty> = Vec::new();
-    for member in members {
-        push(&mut flat, member);
-    }
-    match flat.len() {
-        0 => Ty::never(),
-        1 => flat.pop().expect("length checked"),
-        _ => Ty::union(flat),
-    }
+    baml_type::flat_union(
+        members.iter().cloned(),
+        |member| match member.kind() {
+            InferTy::Union(inner) => Ok(inner.clone()),
+            InferTy::Never => Ok(Box::new([])),
+            _ => Err(member),
+        },
+        Ty::never(),
+        |members| Ty::intern(InferTy::Union(members)),
+    )
 }
 
 /// Reduction budget for the finalize-time projection pass: bounds a
@@ -10421,37 +10407,6 @@ impl<'db> InferenceContext<'db> {
         crate::impls::expand_alias_head(ty, &self.facts)
     }
 
-    /// Expose aliases only along union edges. Alias heads use the existing
-    /// resolver; payloads retain their spelling, freshness and parameter names.
-    /// In particular, `Tree = Tree[] | null` exposes `Tree[]` and `null` but
-    /// never unfolds the element `Tree` or removes its own nullability.
-    fn flatten_union_structure(&self, ty: &Ty) -> Ty {
-        let mut pending = vec![ty.clone()];
-        let mut unions = FxHashSet::default();
-        let mut heads = FxHashSet::default();
-        let mut members = Vec::new();
-        while let Some(member) = pending.pop() {
-            let head = self.expand_alias_ty(&member);
-            if let InferTy::Union(inner) = head.kind() {
-                // A union contributes its reachable alternatives once. A
-                // repeated union adds no alternatives, including a recursive
-                // back-edge; retaining its alias would hide null again.
-                if unions.insert(head.clone()) {
-                    pending.extend(inner.iter().rev().cloned());
-                }
-            } else if heads.insert(head.clone()) {
-                // Expose aliased null, but preserve the first spelling of
-                // every surviving leaf (e.g. Count rather than int).
-                members.push(if matches!(head.kind(), InferTy::Null) {
-                    head
-                } else {
-                    member
-                });
-            }
-        }
-        syntactic_union(&members)
-    }
-
     /// The sole concrete function type at a callback root: `ty` itself, or
     /// the unique function member nested through unions and type aliases.
     ///
@@ -14131,7 +14086,32 @@ impl<'db> InferenceContext<'db> {
             }
             // Syntactic flattening alone cannot see null behind alias members.
             // Expose those union edges before null removal for ?., ?? or guards.
-            resolved = self.flatten_union_structure(&resolved);
+            let mut exposed = FxHashSet::default();
+            let mut spellings = FxHashMap::default();
+            resolved = baml_type::flat_union(
+                [resolved],
+                |member| {
+                    let head = self.expand_alias_ty(&member);
+                    match head.kind() {
+                        InferTy::Union(inner) => {
+                            // A recursive union contributes its alternatives
+                            // once. Container payloads remain opaque here.
+                            Ok(if exposed.insert(head.clone()) {
+                                inner.clone()
+                            } else {
+                                Box::new([])
+                            })
+                        }
+                        InferTy::Never => Ok(Box::new([])),
+                        InferTy::Null => Err(head),
+                        // Alias-equivalent leaves share their first spelling;
+                        // the shared normalizer then deduplicates them.
+                        _ => Err(spellings.entry(head).or_insert(member).clone()),
+                    }
+                },
+                Ty::never(),
+                |members| Ty::intern(InferTy::Union(members)),
+            );
             // Deduplication may leave one aliased leaf. A structure demand
             // still needs that root's shape; null removal preserves member
             // spellings when it filters a surviving union below.
