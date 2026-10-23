@@ -243,13 +243,13 @@ struct StaticVirtualCallTarget {
     frame_type_args: Vec<bex_vm_types::RealizedTy>,
 }
 
-/// A bytecode function's call frame, also used by its compiled body.
+/// Bytecode call frame — pushed when entering a bytecode function.
 #[derive(Clone, Debug)]
 pub struct BytecodeFrame {
     /// Pointer to the running function (or closure) object.
     pub function: HeapPtr,
     /// The next instruction or resume-stub offset, or `compiled_rt::RUNNING` inside a body.
-    instruction_ptr: usize,
+    pub instruction_ptr: usize,
     /// Local variables offset in the eval stack.
     pub(crate) locals_offset: StackIndex,
     /// Resolved type arguments for this call frame.
@@ -272,7 +272,7 @@ pub struct BytecodeFrame {
     /// up-to-date before each `step()` call.
     /// Used by `capture_stack_trace`, `try_unwind_exception`, and event
     /// source location capture. Compiled bodies store their last reported
-    /// instruction index here; see `BexVm::compiled_pc`.
+    /// instruction index here; see `BexVm::frame_pc`.
     pub(crate) faulting_pc: usize,
     /// Producer-only invocation state. `None` means the invocation is hidden.
     pub(crate) telemetry: Option<FrameTelemetry>,
