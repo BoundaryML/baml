@@ -210,8 +210,8 @@ pub enum SyntaxKind {
     NESTED_CONFIG,
 
     // Type expressions
-    /// A complete type expression. Unions contain alternating TYPE_EXPR
-    /// operands and PIPE tokens; each operand owns its postfix modifiers.
+    /// A complete type expression. Unions contain alternating `TYPE_EXPR`
+    /// operands and `PIPE` tokens; each operand owns its postfix modifiers.
     /// Standalone types contain their primary syntax and modifiers directly.
     TYPE_EXPR,
     UNION_TYPE,
