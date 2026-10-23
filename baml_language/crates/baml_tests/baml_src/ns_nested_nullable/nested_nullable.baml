@@ -10,7 +10,7 @@ type NestedGroup = MaybeGroup | null;
 
 type MaybeCallback = ((left: int, right: int) -> string throws never)?;
 
-type RepeatedCallback = MaybeCallback | MaybeCallback;
+type RepeatedCallback = MaybeCallback | ((left: 1 | int, right: int) -> string throws never)?;
 
 type MaybeInts = int[]?;
 

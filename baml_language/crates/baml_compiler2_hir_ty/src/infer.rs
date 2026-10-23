@@ -10472,19 +10472,27 @@ impl<'db> InferenceContext<'db> {
     /// multi-list union adopts nothing and the literal synthesizes.
     fn expected_list_element(&mut self, expected: &Expectation) -> Option<Ty> {
         let shape = self.expectation_shape(expected)?;
-        self.unique_expected_arm(&shape, |arm| match arm.kind() {
-            InferTy::List(element) => Some(element.clone()),
-            _ => None,
-        })
+        self.unique_expected_arm(
+            &shape,
+            |arm| match arm.kind() {
+                InferTy::List(element) => Some(element.clone()),
+                _ => None,
+            },
+            PartialEq::eq,
+        )
     }
 
     /// The MAP literal's counterpart of `expected_list_element`.
     fn expected_map_entry(&mut self, expected: &Expectation) -> Option<(Ty, Ty)> {
         let shape = self.expectation_shape(expected)?;
-        self.unique_expected_arm(&shape, |arm| match arm.kind() {
-            InferTy::Map { key, value, .. } => Some((key.clone(), value.clone())),
-            _ => None,
-        })
+        self.unique_expected_arm(
+            &shape,
+            |arm| match arm.kind() {
+                InferTy::Map { key, value, .. } => Some((key.clone(), value.clone())),
+                _ => None,
+            },
+            PartialEq::eq,
+        )
     }
 
     /// Whether `expected` gives `expr` a shape to build at: an aggregate
@@ -10519,10 +10527,14 @@ impl<'db> InferenceContext<'db> {
         head: &baml_type::DeclName,
     ) -> Option<Vec<Ty>> {
         let shape = self.expectation_shape(expected)?;
-        self.unique_expected_arm(&shape, |arm| match arm.kind() {
-            InferTy::Class(name, args) if name == head => Some(args.to_vec()),
-            _ => None,
-        })
+        self.unique_expected_arm(
+            &shape,
+            |arm| match arm.kind() {
+                InferTy::Class(name, args) if name == head => Some(args.to_vec()),
+                _ => None,
+            },
+            PartialEq::eq,
+        )
     }
 
     /// The instantiation that INFORMS a generic constructor's field values:
@@ -10591,15 +10603,17 @@ impl<'db> InferenceContext<'db> {
     /// Each alias expands at most once per search, so recursive aliases
     /// terminate without a depth limit; a depth limit would make the answer
     /// depend on how many aliases spell the same type.
-    fn unique_expected_arm<T: PartialEq>(
+    fn unique_expected_arm<T>(
         &self,
         ty: &Ty,
         pick: impl Fn(&Ty) -> Option<T>,
+        same: impl Fn(&T, &T) -> bool,
     ) -> Option<T> {
-        fn search<T: PartialEq>(
+        fn search<T>(
             this: &InferenceContext<'_>,
             ty: &Ty,
             pick: &impl Fn(&Ty) -> Option<T>,
+            same: &impl Fn(&T, &T) -> bool,
             expanded: &mut Vec<baml_type::DeclName>,
             found: &mut Option<T>,
         ) -> bool {
@@ -10610,9 +10624,14 @@ impl<'db> InferenceContext<'db> {
                     }
                     expanded.push(name.clone());
                     match baml_type::normalize::TypeContext::alias_def(&this.facts, name) {
-                        Some(expansion) => {
-                            search(this, &Ty::from_plain(&expansion), pick, expanded, found)
-                        }
+                        Some(expansion) => search(
+                            this,
+                            &Ty::from_plain(&expansion),
+                            pick,
+                            same,
+                            expanded,
+                            found,
+                        ),
                         None => true,
                     }
                 }
@@ -10620,10 +10639,10 @@ impl<'db> InferenceContext<'db> {
                     let members = members.to_vec();
                     members
                         .iter()
-                        .all(|member| search(this, member, pick, expanded, found))
+                        .all(|member| search(this, member, pick, same, expanded, found))
                 }
                 _ => match pick(ty) {
-                    Some(arm) if found.as_ref().is_some_and(|prior| prior != &arm) => false,
+                    Some(arm) if found.as_ref().is_some_and(|prior| !same(prior, &arm)) => false,
                     Some(arm) => {
                         *found = Some(arm);
                         true
@@ -10634,7 +10653,7 @@ impl<'db> InferenceContext<'db> {
         }
 
         let mut found = None;
-        search(self, ty, &pick, &mut Vec::new(), &mut found)
+        search(self, ty, &pick, &same, &mut Vec::new(), &mut found)
             .then_some(found)
             .flatten()
     }
@@ -14134,9 +14153,18 @@ impl<'db> InferenceContext<'db> {
                 // freshness and callable parameter names nested in containers.
                 // Consumers normalize its children when they demand structure.
                 let restore_arm = |ty: &Ty| {
-                    self.unique_expected_arm(&resolved, |arm| {
-                        self.cached_equivalent(arm, ty).then(|| arm.clone())
-                    })
+                    self.unique_expected_arm(
+                        &resolved,
+                        |arm| self.cached_equivalent(arm, ty).then(|| arm.clone()),
+                        |a, b| match (a.kind(), b.kind()) {
+                            (InferTy::Literal(..), InferTy::Literal(..)) => a == b,
+                            (
+                                InferTy::Function { params: a, .. },
+                                InferTy::Function { params: b, .. },
+                            ) => a.iter().map(|p| &p.name).eq(b.iter().map(|p| &p.name)),
+                            _ => true,
+                        },
+                    )
                     .unwrap_or_else(|| ty.clone())
                 };
                 let normalized = match normalized.kind() {
