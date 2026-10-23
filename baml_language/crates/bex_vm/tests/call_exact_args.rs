@@ -150,13 +150,15 @@ fn writable_callee_globals_are_not_specialized() {
 
 #[test]
 fn generic_calls_keep_type_arguments() {
-    let source =
-        "function identity<T>(n: T) -> T { n } function main() -> int { identity<int>(42) }";
+    // `parse<int>` returns 42 only if `T` reaches the callee's frame.
+    let source = r#"
+        function parse<T>(s: string) -> T { baml.json.from_string<T>(s) }
+        function main() -> int { parse<int>("42") }
+    "#;
     let program = convert_program(compile_source(source)).unwrap();
     let instructions = ops(function(&program, "main"));
-    assert!(instructions.iter().any(|(_, op)| *op == OpCode::Call));
     assert!(
-        !instructions
+        instructions
             .iter()
             .any(|(_, op)| *op == OpCode::CallExactArgs)
     );
@@ -250,5 +252,55 @@ fn exact_transitions_preserve_resume_pc_across_callbacks_and_reused_depths() {
             "resumption stopped progressing at interval {interval}"
         );
         assert!(yields > 0, "interval {interval} did not exercise a handoff");
+    }
+}
+
+#[test]
+fn indirect_calls_enter_closures_functions_and_bound_methods() {
+    // A capturing closure called directly, a plain function and a capturing
+    // closure called through a parameter, a generic closure whose body needs
+    // its captured `T`, and a generic class's bound method, whose receiver
+    // type arguments must still reach the frame.
+    let source = r#"
+        class Box<T> {
+            value T
+            function parse(self, s: string) -> T { baml.json.from_string<T>(s) }
+        }
+        function leaf(n: int) -> int { n }
+        function invoke(f: (int) -> int, n: int) -> int { f(n) }
+        function parse_later<T>(s: string) -> () -> T throws baml.json.DecodeError | baml.json.ParseError {
+            () -> T { baml.json.from_string<T>(s) }
+        }
+        function main() -> int {
+            let k = 3;
+            let add = (x: int) -> int { x + k };
+            let later = parse_later<int>("10");
+            let b = Box<int> { value: 0 };
+            let parse = b.parse;
+            add(1) + invoke(leaf, 5) + invoke(add, 2) + later() + parse("18")
+        }
+    "#;
+    let program = convert_program(compile_source(source)).unwrap();
+    assert!(
+        ops(function(&program, "main"))
+            .iter()
+            .any(|(_, op)| *op == OpCode::CallIndirect)
+    );
+    assert_eq!(run(source), 42);
+    // Hand off at varying points, including right after a closure frame is
+    // entered, and resume inside it.
+    for interval in [1, 2, 3, 5, 11] {
+        let program = compile_source(source);
+        let entry = program.rendered_callables()["user.main"].object.raw();
+        let flag = Arc::new(AtomicBool::new(true));
+        let mut vm = BexVm::from_program(program, Arc::clone(&flag)).unwrap();
+        vm.early_yield = bex_vm_types::EarlyYieldCheck::with_interval(flag, interval);
+        vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
+        let result = (0..500).find_map(|_| match vm.exec().unwrap() {
+            VmExecState::EarlyYield => None,
+            VmExecState::Complete(value) => Some(value.as_int()),
+            other => panic!("unexpected state at interval {interval}: {other:?}"),
+        });
+        assert_eq!(result, Some(Some(42)), "interval {interval}");
     }
 }

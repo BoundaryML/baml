@@ -1282,8 +1282,11 @@ pub enum OpCode {
     JumpIfNotNullOrPop,
 
     /// Load-time specialization of `Call` for a plain bytecode function whose
-    /// arguments already match its parameters, with no type arguments. Uses
-    /// the same u32 global + u16 zero operands as `Call`, preserving every PC.
+    /// arguments already match its parameters and that receives every type
+    /// argument it declares. Uses the same u32 global + u16 type-argument
+    /// count operands as `Call`, preserving every PC. A type operand that is
+    /// not a plain static type falls back to the general `Call` path at run
+    /// time.
     /// This opcode is never emitted into serialized `Instruction` streams.
     CallExactArgs,
     SetCallTrace,

@@ -67,10 +67,11 @@ pub(crate) fn specialize_calls(objects: &mut [Object], globals: &[ConstValue]) {
                     // Pass-through entry holds configuration even without a
                     // hook or explicit $trace. The exact-call path deliberately
                     // does not allocate that state for ordinary functions.
+                    // A generic callee qualifies when the site passes every
+                    // type argument: a function-typed parameter alone makes a
+                    // callee generic over its `throws`.
                     if !callee.trace_passthrough
-                        && ntypeargs == 0
-                        && callee.generic_param_bounds.is_empty()
-                        && callee.display_type_params.is_empty()
+                        && usize::from(ntypeargs) == callee.generic_param_bounds.len()
                         && compact
                             .call_layouts
                             .get(&pc)
