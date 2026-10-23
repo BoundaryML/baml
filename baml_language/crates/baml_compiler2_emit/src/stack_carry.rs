@@ -454,6 +454,9 @@ fn resolve_effective_use_location(
     }
 }
 
+/// Simulate a statement while validating a proposed stack-carried local.
+/// Return false when its stack effects cannot be modeled safely; the caller
+/// then rejects the candidate and retains slot-based storage for that local.
 fn simulate_statement_stack<'db>(
     kind: &StatementKind<'db>,
     sim: &mut StackCarrySim,
