@@ -4952,12 +4952,6 @@ impl<'db> InferenceContext<'db> {
     /// `1 | 2`, widening to `int` at a binding - while `true | false`
     /// collapses to `bool` here, where freshness no longer matters).
     fn join(&mut self, members: &[Ty]) -> Ty {
-        let joined = self.union_of(members);
-        Self::preserve_literal_freshness(members, joined)
-    }
-
-    /// Restore the top-level literal witnesses after semantic normalization.
-    fn preserve_literal_freshness(members: &[Ty], joined: Ty) -> Ty {
         // Collect literal witnesses by freshness (top-level members and
         // one union layer - the shapes arm joins produce). A value with
         // a RIGID witness stays rigid: TS's union-widening rule (a
@@ -4981,6 +4975,7 @@ impl<'db> InferenceContext<'db> {
                 _ => collect(member),
             }
         }
+        let joined = self.union_of(members);
         if fresh.is_empty() {
             return joined;
         }
@@ -10445,7 +10440,7 @@ impl<'db> InferenceContext<'db> {
             let expanded = this.expand_alias_ty(ty);
             match expanded.kind() {
                 InferTy::Function { .. } => {
-                    if callback.as_ref().is_some_and(|prior| prior != &expanded) {
+                    if callback.is_some() {
                         return false;
                     }
                     *callback = Some(expanded);
@@ -10591,14 +10586,18 @@ impl<'db> InferenceContext<'db> {
     /// unions and type aliases. An optional `json` expectation is
     /// `baml.json.json | null`, so resolving only the outer union would
     /// leave the recursive JSON alias hiding its list and map arms. Two
-    /// accepted arms are ambiguous and give no context.
+    /// distinct accepted arms are ambiguous and give no context.
     ///
     /// Each alias expands at most once per search, so recursive aliases
     /// terminate without a depth limit; a depth limit would make the answer
     /// depend on how many aliases spell the same type.
-    fn unique_expected_arm<T>(&mut self, ty: &Ty, pick: impl Fn(&Ty) -> Option<T>) -> Option<T> {
-        fn search<T>(
-            this: &mut InferenceContext<'_>,
+    fn unique_expected_arm<T: PartialEq>(
+        &self,
+        ty: &Ty,
+        pick: impl Fn(&Ty) -> Option<T>,
+    ) -> Option<T> {
+        fn search<T: PartialEq>(
+            this: &InferenceContext<'_>,
             ty: &Ty,
             pick: &impl Fn(&Ty) -> Option<T>,
             expanded: &mut Vec<baml_type::DeclName>,
@@ -10624,7 +10623,7 @@ impl<'db> InferenceContext<'db> {
                         .all(|member| search(this, member, pick, expanded, found))
                 }
                 _ => match pick(ty) {
-                    Some(_) if found.is_some() => false,
+                    Some(arm) if found.as_ref().is_some_and(|prior| prior != &arm) => false,
                     Some(arm) => {
                         *found = Some(arm);
                         true
@@ -14131,27 +14130,22 @@ impl<'db> InferenceContext<'db> {
                     .canonical_cache
                     .normalize(&closed, &self.facts)
                     .into_ty();
-                // Equality erases required parameter names, but a callable
-                // value still accepts those names at a call site. Reuse the
-                // source signature of the unique callback, including aliases.
-                let mut restore_callback = |ty: &Ty| {
-                    if matches!(ty.kind(), InferTy::Function { .. }) {
-                        self.callback_root_fn(&resolved)
-                            .unwrap_or_else(|| ty.clone())
-                    } else {
-                        ty.clone()
-                    }
+                // Keep a surviving source arm's metadata, including literal
+                // freshness and callable parameter names nested in containers.
+                // Consumers normalize its children when they demand structure.
+                let restore_arm = |ty: &Ty| {
+                    self.unique_expected_arm(&resolved, |arm| {
+                        self.cached_equivalent(arm, ty).then(|| arm.clone())
+                    })
+                    .unwrap_or_else(|| ty.clone())
                 };
                 let normalized = match normalized.kind() {
-                    InferTy::Union(members) => syntactic_union(
-                        &members
-                            .iter()
-                            .map(&mut restore_callback)
-                            .collect::<Vec<_>>(),
-                    ),
-                    _ => restore_callback(&normalized),
+                    InferTy::Union(members) => {
+                        syntactic_union(&members.iter().map(restore_arm).collect::<Vec<_>>())
+                    }
+                    _ => restore_arm(&normalized),
                 };
-                return Self::preserve_literal_freshness(&[resolved], normalized);
+                return normalized;
             }
             return self.expand_alias_ty(&resolved);
         }

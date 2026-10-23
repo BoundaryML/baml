@@ -14,6 +14,20 @@ type RepeatedCallback = MaybeCallback | MaybeCallback;
 
 type MaybeInts = int[]?;
 
+type NamedCallback = (left: int, right: int) -> int throws never;
+
+type Callbacks = NamedCallback[];
+
+type CallbackMap = map<string, NamedCallback>;
+
+function call_list(fs: Callbacks) -> int {
+    fs[0](right = 2, left = 1)
+}
+
+function call_map(fs: CallbackMap, key: string) -> int {
+    fs.get(key)?.(right = 2, left = 1) ?? -1
+}
+
 function map_text(m: map<string, Group?>, key: string) -> string {
     m.get(key)?.text ?? "missing"
 }
@@ -75,4 +89,13 @@ test "nested_nullable_regex_capture" {
     assert.equal(capture_text("ab"), "a");
     assert.equal(capture_text("b"), "missing");
     assert.equal(capture_text("x"), "no match")
+}
+
+test "nested_nullable_callable_containers" {
+    let cb: NamedCallback = (left, right) -> {
+        left * 10 + right
+    };
+    assert.equal(call_list([cb]), 12);
+    assert.equal(call_map({ "present": cb }, "present"), 12);
+    assert.equal(call_map({ "present": cb }, "absent"), -1)
 }
