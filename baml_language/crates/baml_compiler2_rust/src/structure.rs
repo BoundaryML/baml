@@ -513,19 +513,6 @@ impl<'a> Analysis<'a> {
 mod tests {
     use super::*;
 
-    fn cfg(entry: usize, flows: Vec<Flow>) -> Cfg {
-        let unwinds = vec![None; flows.len()];
-        Cfg {
-            entry,
-            flows,
-            unwinds,
-        }
-    }
-
-    fn structurize(cfg: &Cfg) -> Result<Vec<Stmt>, StructureError> {
-        super::structurize(cfg).map(|structured| structured.stmts)
-    }
-
     fn branch(then_block: usize, else_block: usize) -> Flow {
         Flow::Branch {
             then_block,
@@ -533,496 +520,189 @@ mod tests {
         }
     }
 
-    fn visit(stmts: &[Stmt], f: &mut impl FnMut(&Stmt)) {
-        for stmt in stmts {
-            f(stmt);
-            match stmt {
-                Stmt::Block { body, .. } | Stmt::Loop { body, .. } => visit(body, f),
-                Stmt::If {
-                    then_branch,
-                    else_branch,
-                    ..
-                } => {
-                    visit(then_branch, f);
-                    visit(else_branch, f);
-                }
-                Stmt::Switch {
-                    arms, otherwise, ..
-                } => {
-                    for (_, body) in arms {
-                        visit(body, f);
-                    }
-                    visit(otherwise, f);
-                }
-                _ => {}
-            }
-        }
-    }
-
-    fn walk(stmts: &[Stmt], leaves: &mut Vec<usize>, jumps: &mut Vec<Stmt>) {
-        visit(stmts, &mut |stmt| match stmt {
-            Stmt::Leaf(block) => leaves.push(*block),
-            Stmt::Break(_) | Stmt::BreakLoop(_) | Stmt::Continue(_) | Stmt::Exit(_) => {
-                jumps.push(stmt.clone());
-            }
-            _ => {}
-        });
-    }
-
-    fn assert_each_block_once(stmts: &[Stmt], reachable: &[usize]) {
-        let mut leaves = Vec::new();
-        let mut jumps = Vec::new();
-        walk(stmts, &mut leaves, &mut jumps);
-        let mut sorted = leaves.clone();
-        sorted.sort_unstable();
-        let mut expected = reachable.to_vec();
-        expected.sort_unstable();
-        assert_eq!(sorted, expected, "leaves {leaves:?}");
-    }
-
-    fn labels(stmts: &[Stmt], blocks: &mut Vec<usize>, loops: &mut Vec<usize>) {
-        visit(stmts, &mut |stmt| match stmt {
-            Stmt::Block { label, .. } => blocks.push(*label),
-            Stmt::Loop { label, .. } => loops.push(*label),
-            _ => {}
-        });
-    }
-
-    #[test]
-    fn straight_line() {
-        let g = cfg(0, vec![Flow::Goto(1), Flow::Exit]);
-        let stmts = structurize(&g).unwrap();
-        assert_eq!(stmts, vec![Stmt::Leaf(0), Stmt::Leaf(1), Stmt::Exit(1)]);
-    }
-
-    #[test]
-    fn diamond_opens_one_block_at_the_fork() {
-        // 0 -> {1, 2} -> 3 -> exit
-        let g = cfg(
-            0,
-            vec![branch(1, 2), Flow::Goto(3), Flow::Goto(3), Flow::Exit],
-        );
-        let stmts = structurize(&g).unwrap();
-        assert_eq!(
-            stmts,
-            vec![
-                Stmt::Block {
-                    label: 3,
-                    body: vec![
-                        Stmt::Leaf(0),
-                        Stmt::If {
-                            block: 0,
-                            then_branch: vec![Stmt::Leaf(1), Stmt::Break(3)],
-                            else_branch: vec![Stmt::Leaf(2), Stmt::Break(3)],
-                        },
-                    ],
-                },
-                Stmt::Leaf(3),
-                Stmt::Exit(3),
-            ]
-        );
-    }
-
-    #[test]
-    fn while_loop_with_break_and_continue() {
-        // 0: init -> 1 (header): branch 2 (body) / 6 (exit)
-        // 2: branch 3 (continue path) / 4
-        // 3: goto 1          (continue)
-        // 4: branch 6 (break) / 5
-        // 5: goto 1          (back edge)
-        // 6: exit
-        let g = cfg(
-            0,
-            vec![
-                Flow::Goto(1),
-                branch(2, 6),
-                branch(3, 4),
-                Flow::Goto(1),
-                branch(6, 5),
-                Flow::Goto(1),
-                Flow::Exit,
-            ],
-        );
-        let stmts = structurize(&g).unwrap();
-        assert_each_block_once(&stmts, &[0, 1, 2, 3, 4, 5, 6]);
-        let (mut blocks, mut loops) = (Vec::new(), Vec::new());
-        labels(&stmts, &mut blocks, &mut loops);
-        assert_eq!(loops, vec![1]);
-        assert!(blocks.is_empty(), "the exit follows the loop: {blocks:?}");
-        let mut leaves = Vec::new();
-        let mut jumps = Vec::new();
-        walk(&stmts, &mut leaves, &mut jumps);
-        assert_eq!(jumps.iter().filter(|j| **j == Stmt::Continue(1)).count(), 2);
-        assert_eq!(
-            jumps.iter().filter(|j| **j == Stmt::BreakLoop(1)).count(),
-            2,
-            "both exits leave the loop itself"
-        );
-        assert!(jumps.contains(&Stmt::Exit(6)));
-        assert!(matches!(stmts[1], Stmt::Loop { label: 1, .. }), "{stmts:?}");
-        assert_eq!(stmts[2..], [Stmt::Leaf(6), Stmt::Exit(6)]);
-    }
-
-    #[test]
-    fn nested_loops_with_inner_break_to_outer_body() {
-        // 0 -> 1 (outer header): branch 2 / 7
-        // 2 (inner header): branch 3 / 5
-        // 3: branch 4 / 2      (inner back edge from 3)
-        // 4: goto 5            (inner break)
-        // 5: branch 6 / 1      (outer back edge from 5)
-        // 6: goto 1            (continue outer)
-        // 7: exit
-        let g = cfg(
-            0,
-            vec![
-                Flow::Goto(1),
-                branch(2, 7),
-                branch(3, 5),
-                branch(4, 2),
-                Flow::Goto(5),
-                branch(6, 1),
-                Flow::Goto(1),
-                Flow::Exit,
-            ],
-        );
-        let stmts = structurize(&g).unwrap();
-        assert_each_block_once(&stmts, &[0, 1, 2, 3, 4, 5, 6, 7]);
-        let (mut blocks, mut loops) = (Vec::new(), Vec::new());
-        labels(&stmts, &mut blocks, &mut loops);
-        assert_eq!(loops, vec![1, 2], "outer loop opened before inner");
-        assert!(
-            blocks.is_empty(),
-            "5 is the inner loop's natural exit: {blocks:?}"
-        );
-        let outer = find_loop(&stmts, 1).expect("outer loop");
-        find_loop(outer, 2).expect("inner loop nested in outer");
-        let Stmt::If { then_branch, .. } = &outer[1] else {
-            panic!("{outer:?}");
-        };
-        assert!(
-            matches!(then_branch[0], Stmt::Loop { label: 2, .. }),
-            "{then_branch:?}"
-        );
-        assert_eq!(then_branch[1], Stmt::Leaf(5));
-        let mut leaves = Vec::new();
-        let mut jumps = Vec::new();
-        walk(&stmts, &mut leaves, &mut jumps);
-        assert_eq!(
-            jumps.iter().filter(|j| **j == Stmt::BreakLoop(2)).count(),
-            2
-        );
-        assert_eq!(
-            jumps.iter().filter(|j| **j == Stmt::BreakLoop(1)).count(),
-            1
-        );
-    }
-
-    fn find_loop(stmts: &[Stmt], wanted: usize) -> Option<&Vec<Stmt>> {
-        for stmt in stmts {
-            let found = match stmt {
-                Stmt::Loop { label, body } if *label == wanted => Some(body),
-                Stmt::Loop { body, .. } | Stmt::Block { body, .. } => find_loop(body, wanted),
-                Stmt::If {
-                    then_branch,
-                    else_branch,
-                    ..
-                } => find_loop(then_branch, wanted).or_else(|| find_loop(else_branch, wanted)),
-                Stmt::Switch {
-                    arms, otherwise, ..
-                } => arms
-                    .iter()
-                    .find_map(|(_, body)| find_loop(body, wanted))
-                    .or_else(|| find_loop(otherwise, wanted)),
-                Stmt::Leaf(_)
-                | Stmt::Break(_)
-                | Stmt::BreakLoop(_)
-                | Stmt::Continue(_)
-                | Stmt::Exit(_) => None,
-            };
-            if found.is_some() {
-                return found;
-            }
-        }
-        None
-    }
-
-    #[test]
-    fn early_return_inside_loop() {
-        // 0 -> 1 (header): branch 2 / 4; 2: branch 3 / 1; 3: exit (return); 4: exit
-        let g = cfg(
-            0,
-            vec![
-                Flow::Goto(1),
-                branch(2, 4),
-                branch(3, 1),
-                Flow::Exit,
-                Flow::Exit,
-            ],
-        );
-        let stmts = structurize(&g).unwrap();
-        assert_each_block_once(&stmts, &[0, 1, 2, 3, 4]);
-        let mut leaves = Vec::new();
-        let mut jumps = Vec::new();
-        walk(&stmts, &mut leaves, &mut jumps);
-        assert!(jumps.contains(&Stmt::Exit(3)));
-        assert!(jumps.contains(&Stmt::Exit(4)));
-        assert!(jumps.contains(&Stmt::Continue(1)));
-        assert!(jumps.contains(&Stmt::BreakLoop(1)));
-        let (mut blocks, mut loops) = (Vec::new(), Vec::new());
-        labels(&stmts, &mut blocks, &mut loops);
-        assert_eq!(loops, vec![1]);
-        assert!(blocks.is_empty(), "single-predecessor exits need no block");
-        assert_eq!(stmts[2..], [Stmt::Leaf(4), Stmt::Exit(4)]);
-    }
-
-    #[test]
-    fn switch_arms_falling_through_to_otherwise() {
-        // 0: switch [1 -> 1, 2 -> 2, 3 -> 2] otherwise 3; 1, 2 -> 3; 3: exit
-        let g = cfg(
-            0,
-            vec![
-                Flow::Switch {
-                    arms: vec![1, 2, 2],
-                    otherwise: 3,
-                },
-                Flow::Goto(3),
-                Flow::Goto(3),
-                Flow::Exit,
-            ],
-        );
-        let stmts = structurize(&g).unwrap();
-        assert_each_block_once(&stmts, &[0, 1, 2, 3]);
-        let Stmt::Block { label: 3, body } = &stmts[0] else {
-            panic!("merge block for 3 first: {stmts:?}");
-        };
-        let Stmt::Switch {
-            block: 0,
-            arms,
+    fn switch(arms: &[usize], otherwise: usize) -> Flow {
+        Flow::Switch {
+            arms: arms.to_vec(),
             otherwise,
-        } = &body[1]
-        else {
-            panic!("switch after leaf 0: {body:?}");
-        };
-        assert_eq!(arms.len(), 2, "two targets, three keys");
-        assert_eq!(arms[1].0, vec![1, 2], "keys sharing a target are grouped");
-        assert_eq!(*otherwise, vec![Stmt::Break(3)]);
-        assert_eq!(stmts[1..], [Stmt::Leaf(3), Stmt::Exit(3)]);
+        }
+    }
+
+    fn shape(stmts: &[Stmt]) -> String {
+        stmts
+            .iter()
+            .map(|stmt| match stmt {
+                Stmt::Leaf(b) => format!("leaf{b}"),
+                Stmt::Exit(b) => format!("exit{b}"),
+                Stmt::Break(b) => format!("break{b}"),
+                Stmt::BreakLoop(b) => format!("leave{b}"),
+                Stmt::Continue(b) => format!("continue{b}"),
+                Stmt::Block { label, body } => format!("block{label}[{}]", shape(body)),
+                Stmt::Loop { label, body } => format!("loop{label}[{}]", shape(body)),
+                Stmt::If {
+                    block,
+                    then_branch,
+                    else_branch,
+                } => format!("if{block}[{}][{}]", shape(then_branch), shape(else_branch)),
+                Stmt::Switch {
+                    block,
+                    arms,
+                    otherwise,
+                } => {
+                    let arms = arms
+                        .iter()
+                        .map(|(indices, body)| format!("{indices:?}[{}]", shape(body)))
+                        .collect::<Vec<_>>()
+                        .join(";");
+                    format!("switch{block}[{arms}][{}]", shape(otherwise))
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 
     #[test]
-    fn switch_arms_sharing_the_default_fold_into_it() {
-        // 0: switch [1 -> 2, 2 -> 1] otherwise 2; 1 -> 3; 2 -> 3; 3: exit
-        let g = cfg(
-            0,
-            vec![
-                Flow::Switch {
-                    arms: vec![2, 1],
-                    otherwise: 2,
-                },
-                Flow::Goto(3),
-                Flow::Goto(3),
-                Flow::Exit,
-            ],
-        );
-        let stmts = structurize(&g).unwrap();
-        assert_each_block_once(&stmts, &[0, 1, 2, 3]);
-        let Stmt::Block { label: 3, body } = &stmts[0] else {
-            panic!("{stmts:?}");
-        };
-        let Stmt::Switch { arms, .. } = &body[1] else {
-            panic!("{body:?}");
-        };
-        assert_eq!(
-            arms.len(),
-            1,
-            "the arm that shares bb2 with `otherwise` is folded"
-        );
-        assert_eq!(arms[0].0, vec![1]);
-
-        let g = cfg(
-            0,
-            vec![
-                Flow::Switch {
-                    arms: vec![1, 1],
-                    otherwise: 1,
-                },
-                Flow::Exit,
-            ],
-        );
-        assert_eq!(
-            structurize(&g).unwrap(),
-            vec![Stmt::Leaf(0), Stmt::Leaf(1), Stmt::Exit(1)]
-        );
+    fn cfg_shapes() {
+        use Flow::{Exit as E, Goto as G};
+        for (name, flows, unwind, expected) in [
+            ("straight_line", vec![G(1), E], None, "leaf0 leaf1 exit1"),
+            (
+                "diamond",
+                vec![branch(1, 2), G(3), G(3), E],
+                None,
+                "block3[leaf0 if0[leaf1 break3][leaf2 break3]] leaf3 exit3",
+            ),
+            (
+                "break_and_continue",
+                vec![
+                    G(1),
+                    branch(2, 6),
+                    branch(3, 4),
+                    G(1),
+                    branch(6, 5),
+                    G(1),
+                    E,
+                ],
+                None,
+                "leaf0 loop1[leaf1 if1[leaf2 if2[leaf3 continue1][leaf4 if4[leave1][leaf5 continue1]]][leave1]] leaf6 exit6",
+            ),
+            (
+                "nested_loops",
+                vec![
+                    G(1),
+                    branch(2, 7),
+                    branch(3, 5),
+                    branch(4, 2),
+                    G(5),
+                    branch(6, 1),
+                    G(1),
+                    E,
+                ],
+                None,
+                "leaf0 loop1[leaf1 if1[loop2[leaf2 if2[leaf3 if3[leaf4 leave2][continue2]][leave2]] leaf5 if5[leaf6 continue1][continue1]][leave1]] leaf7 exit7",
+            ),
+            (
+                "early_return",
+                vec![G(1), branch(2, 4), branch(3, 1), E, E],
+                None,
+                "leaf0 loop1[leaf1 if1[leaf2 if2[leaf3 exit3][continue1]][leave1]] leaf4 exit4",
+            ),
+            (
+                "shared_switch_targets",
+                vec![switch(&[1, 2, 2], 3), G(3), G(3), E],
+                None,
+                "block3[leaf0 switch0[[0][leaf1 break3];[1, 2][leaf2 break3]][break3]] leaf3 exit3",
+            ),
+            (
+                "switch_default_arm",
+                vec![switch(&[2, 1], 2), G(3), G(3), E],
+                None,
+                "block3[leaf0 switch0[[1][leaf1 break3]][leaf2 break3]] leaf3 exit3",
+            ),
+            (
+                "switch_fallthrough",
+                vec![switch(&[1, 1], 1), E],
+                None,
+                "leaf0 leaf1 exit1",
+            ),
+            (
+                "distinct_loop_exits",
+                vec![G(1), branch(2, 4), branch(5, 3), G(1), G(6), G(6), E],
+                None,
+                "leaf0 block6[loop1[leaf1 if1[leaf2 if2[leaf5 break6][leaf3 continue1]][leave1]] leaf4 break6] leaf6 exit6",
+            ),
+            (
+                "loop_header_merge",
+                vec![branch(1, 2), G(3), G(3), branch(4, 5), G(3), E],
+                None,
+                "block3[leaf0 if0[leaf1 break3][leaf2 break3]] loop3[leaf3 if3[leaf4 continue3][leave3]] leaf5 exit5",
+            ),
+            (
+                "branch_fallthrough",
+                vec![branch(1, 1), E],
+                None,
+                "leaf0 leaf1 exit1",
+            ),
+            (
+                "unwind",
+                vec![G(1), G(3), branch(3, 4), E, E],
+                Some((0, 2)),
+                "block3[block2[leaf0 leaf1 break3] leaf2 if2[break3][leaf4 exit4]] leaf3 exit3",
+            ),
+            (
+                "unwind_inside_loop",
+                vec![G(1), branch(2, 5), G(4), G(1), G(1), E],
+                Some((2, 3)),
+                "leaf0 loop1[leaf1 if1[block3[leaf2 leaf4 continue1] leaf3 continue1][leave1]] leaf5 exit5",
+            ),
+            (
+                "unwind_only_loop",
+                vec![E, branch(2, 3), G(1), E],
+                Some((0, 1)),
+                "block1[leaf0 exit0] loop1[leaf1 if1[leaf2 continue1][leave1]] leaf3 exit3",
+            ),
+            ("unreachable", vec![E, G(0)], None, "leaf0 exit0"),
+        ] {
+            let mut cfg = Cfg {
+                entry: 0,
+                unwinds: vec![None; flows.len()],
+                flows,
+            };
+            if let Some((from, to)) = unwind {
+                cfg.unwinds[from] = Some(to);
+            }
+            let structured = structurize(&cfg).unwrap();
+            assert_eq!(shape(&structured.stmts), expected, "{name}");
+            for (block, jumps) in structured.unwind_jumps.iter().enumerate() {
+                let expected: Vec<_> = cfg.unwinds[block].map(Stmt::Break).into_iter().collect();
+                assert_eq!(*jumps, expected, "{name}: unwind from {block}");
+            }
+            if name == "unwind_only_loop" {
+                assert_eq!(cfg.loop_headers(), BTreeSet::from([1]));
+            }
+        }
     }
 
     #[test]
-    fn loop_with_two_exits_to_distinct_blocks() {
-        // 0 -> 1 (header): branch 2 / 4; 2: branch 5 / 3; 3: goto 1; 4: goto 6; 5: goto 6; 6: exit
-        let g = cfg(
-            0,
-            vec![
-                Flow::Goto(1),
-                branch(2, 4),
-                branch(5, 3),
-                Flow::Goto(1),
-                Flow::Goto(6),
-                Flow::Goto(6),
-                Flow::Exit,
-            ],
-        );
-        let stmts = structurize(&g).unwrap();
-        assert_each_block_once(&stmts, &[0, 1, 2, 3, 4, 5, 6]);
-        let (mut blocks, mut loops) = (Vec::new(), Vec::new());
-        labels(&stmts, &mut blocks, &mut loops);
-        assert_eq!(loops, vec![1]);
-        assert_eq!(
-            blocks,
-            vec![6],
-            "6 merges the two exit paths around the loop"
-        );
-        // 4 is the natural exit (right after the `loop`); 5 has one
-        // predecessor inside the loop and is inlined there. Both then break
-        // to the block for 6, which wraps the loop.
-        let Stmt::Block { label: 6, body } = &stmts[1] else {
-            panic!("{stmts:?}");
-        };
-        assert!(matches!(body[0], Stmt::Loop { label: 1, .. }), "{body:?}");
-        assert_eq!(body[1..], [Stmt::Leaf(4), Stmt::Break(6)]);
-        let mut leaves = Vec::new();
-        let mut jumps = Vec::new();
-        walk(&stmts, &mut leaves, &mut jumps);
-        assert_eq!(jumps.iter().filter(|j| **j == Stmt::Break(6)).count(), 2);
-        assert_eq!(
-            jumps.iter().filter(|j| **j == Stmt::BreakLoop(1)).count(),
-            1
-        );
-    }
-
-    #[test]
-    fn loop_header_that_is_also_a_merge_node() {
-        // 0: branch 1 / 2; 1, 2 -> 3 (header): branch 4 / 5; 4: goto 3; 5: exit
-        let g = cfg(
-            0,
-            vec![
-                branch(1, 2),
-                Flow::Goto(3),
-                Flow::Goto(3),
-                branch(4, 5),
-                Flow::Goto(3),
-                Flow::Exit,
-            ],
-        );
-        let stmts = structurize(&g).unwrap();
-        assert_each_block_once(&stmts, &[0, 1, 2, 3, 4, 5]);
-        let (mut blocks, mut loops) = (Vec::new(), Vec::new());
-        labels(&stmts, &mut blocks, &mut loops);
-        assert_eq!(blocks, vec![3]);
-        assert_eq!(loops, vec![3]);
-        assert!(matches!(stmts[1], Stmt::Loop { label: 3, .. }));
-    }
-
-    #[test]
-    fn branch_with_one_target_is_a_fallthrough() {
-        let g = cfg(0, vec![branch(1, 1), Flow::Exit]);
-        assert_eq!(
-            structurize(&g).unwrap(),
-            vec![Stmt::Leaf(0), Stmt::Leaf(1), Stmt::Exit(1)]
-        );
-    }
-
-    #[test]
-    fn irreducible_graph_is_rejected() {
-        // 0: branch 1 / 2; 1 -> 2; 2 -> 1 : a two-entry cycle.
-        let g = cfg(0, vec![branch(1, 2), Flow::Goto(2), Flow::Goto(1)]);
-        assert!(matches!(
-            structurize(&g),
-            Err(StructureError::Irreducible { .. })
-        ));
-    }
-
-    #[test]
-    fn unwind_edges_label_their_handler() {
-        // 0: call -> 1, unwind 2; 1: goto 3; 2 (handler): branch 3 / 4; 3: exit; 4: exit (rethrow)
-        let mut g = cfg(
-            0,
-            vec![
-                Flow::Goto(1),
-                Flow::Goto(3),
-                branch(3, 4),
-                Flow::Exit,
-                Flow::Exit,
-            ],
-        );
-        g.unwinds[0] = Some(2);
-        let structured = super::structurize(&g).unwrap();
-        assert_each_block_once(&structured.stmts, &[0, 1, 2, 3, 4]);
-        let Stmt::Block { label: 3, body } = &structured.stmts[0] else {
-            panic!("{structured:?}");
-        };
-        let Stmt::Block {
-            label: 2,
-            body: inner,
-        } = &body[0]
-        else {
-            panic!("the handler is labeled though it has one predecessor: {body:?}");
-        };
-        assert_eq!(inner[..], [Stmt::Leaf(0), Stmt::Leaf(1), Stmt::Break(3)]);
-        assert_eq!(body[1], Stmt::Leaf(2), "the handler follows its block");
-        assert_eq!(structured.unwind_jumps[0], vec![Stmt::Break(2)]);
-        assert!(structured.unwind_jumps[1].is_empty());
-        assert_eq!(structured.stmts[1..], [Stmt::Leaf(3), Stmt::Exit(3)]);
-    }
-
-    #[test]
-    fn unwind_to_a_handler_inside_a_loop() {
-        // 0 -> 1 (header): branch 2 / 5; 2: call -> 4, unwind 3; 3 (handler): goto 1 (continue);
-        // 4: goto 1; 5: exit
-        let mut g = cfg(
-            0,
-            vec![
-                Flow::Goto(1),
-                branch(2, 5),
-                Flow::Goto(4),
-                Flow::Goto(1),
-                Flow::Goto(1),
-                Flow::Exit,
-            ],
-        );
-        g.unwinds[2] = Some(3);
-        let structured = super::structurize(&g).unwrap();
-        assert_each_block_once(&structured.stmts, &[0, 1, 2, 3, 4, 5]);
-        assert_eq!(structured.unwind_jumps[2], vec![Stmt::Break(3)]);
-        let (mut blocks, mut loops) = (Vec::new(), Vec::new());
-        labels(&structured.stmts, &mut blocks, &mut loops);
-        assert_eq!(loops, vec![1]);
-        assert_eq!(blocks, vec![3], "the handler's block opens inside the loop");
-    }
-
-    #[test]
-    fn unwind_only_handler_loop_has_a_header() {
-        let mut g = cfg(0, vec![Flow::Exit, branch(2, 3), Flow::Goto(1), Flow::Exit]);
-        g.unwinds[0] = Some(1);
-        assert_eq!(g.loop_headers(), BTreeSet::from([1]));
-        let structured = super::structurize(&g).unwrap();
-        assert_each_block_once(&structured.stmts, &[0, 1, 2, 3]);
-        assert!(find_loop(&structured.stmts, 1).is_some());
-    }
-
-    #[test]
-    fn unreachable_blocks_are_dropped() {
-        let g = cfg(0, vec![Flow::Exit, Flow::Goto(0)]);
-        assert_eq!(structurize(&g).unwrap(), vec![Stmt::Leaf(0), Stmt::Exit(0)]);
-    }
-
-    #[test]
-    fn malformed_graphs_are_reported() {
-        assert_eq!(
-            structurize(&cfg(0, vec![Flow::Goto(7)])),
-            Err(StructureError::UnknownBlock { from: 0, to: 7 })
-        );
-        assert_eq!(
-            structurize(&cfg(3, vec![Flow::Exit])),
-            Err(StructureError::MissingEntry(3))
-        );
+    fn invalid_cfgs() {
+        for (entry, flows, error) in [
+            (
+                0,
+                vec![Flow::Goto(7)],
+                StructureError::UnknownBlock { from: 0, to: 7 },
+            ),
+            (3, vec![Flow::Exit], StructureError::MissingEntry(3)),
+            (
+                0,
+                vec![branch(1, 2), Flow::Goto(2), Flow::Goto(1)],
+                StructureError::Irreducible { from: 2, to: 1 },
+            ),
+        ] {
+            let cfg = Cfg {
+                entry,
+                unwinds: vec![None; flows.len()],
+                flows,
+            };
+            assert_eq!(structurize(&cfg), Err(error));
+        }
     }
 }
