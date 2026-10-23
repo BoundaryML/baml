@@ -328,3 +328,90 @@ fn compiled_awaits_match_bytecode_error_evidence_and_future_origins() {
         }
     }
 }
+
+#[test]
+fn compiled_raise_kinds_follow_source_opcodes_instead_of_error_values() {
+    static THROW_PC: AtomicU32 = AtomicU32::new(0);
+    static CALL_PC: AtomicU32 = AtomicU32::new(0);
+
+    fn explicit(vm: &mut BexVm, fr: &FrameRecord, _: &[Value]) -> BodyResult {
+        fr.note_pc(THROW_PC.load(Ordering::Relaxed));
+        let value = vm.panic_to_exception_value(crate::errors::VmPanic::AssertionFailed);
+        Err(throw(value))
+    }
+    fn boundary(vm: &mut BexVm, fr: &FrameRecord, _: &[Value]) -> BodyResult {
+        fr.note_pc(CALL_PC.load(Ordering::Relaxed));
+        let value = vm.panic_to_exception_value(crate::errors::VmPanic::MapKeyNotFound);
+        Err(throw(value))
+    }
+    const SOURCE: &str = r#"
+        function Explicit() -> int {
+            throw baml.panics.AssertionFailed { message: "assertion failed" }
+        }
+        function Boundary() -> int {
+            let map = { "present": 1 };
+            map["missing"]
+        }
+        function Main() -> string {
+            let a = Explicit() catch (e) { baml.panics.AssertionFailed => -1 };
+            let b = Boundary() catch (e) { baml.panics.MapKeyNotFound => -2 };
+            `${a}:${b}`
+        }
+    "#;
+    let program = baml_test_support::compile_source(SOURCE);
+    let callables = program.rendered_callables();
+    for (name, target, is_throw) in [
+        ("user.Explicit", &THROW_PC, true),
+        ("user.Boundary", &CALL_PC, false),
+    ] {
+        let Object::Function(function) = &program.objects[callables[name].object] else {
+            unreachable!()
+        };
+        let pc = function
+            .bytecode
+            .instructions
+            .iter()
+            .position(|instruction| {
+                if is_throw {
+                    matches!(instruction, Instruction::Throw)
+                } else {
+                    matches!(instruction, Instruction::Call { .. })
+                }
+            })
+            .unwrap();
+        target.store(pc.try_into().unwrap(), Ordering::Relaxed);
+    }
+    for level in [
+        btel_settings::mode::AutoTelemetryLevel::Low,
+        btel_settings::mode::AutoTelemetryLevel::Medium,
+        btel_settings::mode::AutoTelemetryLevel::High,
+    ] {
+        FORCE_ERROR_EVIDENCE.with(|force| force.set(true));
+        let (out, reference) = exec_with_compiled_bodies(SOURCE, &[], &[], Some(level));
+        assert_eq!(out, "-1:-2");
+        let reference = error_records(&reference);
+        assert!(
+            reference.iter().any(|record| record.contains("Throw")),
+            "{reference:?}"
+        );
+        assert!(
+            reference
+                .iter()
+                .any(|record| record.contains("NativeBoundary")),
+            "{reference:?}"
+        );
+        for frames in [false, true] {
+            super::super::call::FORCE_VM_FRAMES.with(|force| force.set(frames));
+            let (out, vm) = exec_with_compiled_bodies(
+                SOURCE,
+                &[("user.Explicit", explicit), ("user.Boundary", boundary)],
+                &[],
+                Some(level),
+            );
+            assert_eq!(out, "-1:-2");
+            assert_eq!(error_records(&vm), reference, "{level:?} frames={frames}");
+        }
+        super::super::call::FORCE_VM_FRAMES.with(|force| force.set(false));
+        FORCE_ERROR_EVIDENCE.with(|force| force.set(false));
+    }
+}

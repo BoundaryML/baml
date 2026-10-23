@@ -185,16 +185,16 @@ impl BexVm {
     }
 
     fn raise_kind(
-        &self,
         entry: RaiseEntry,
         function: Option<&Function>,
+        pc: Option<usize>,
         thrown: &VmThrown,
     ) -> RaiseKind {
         if entry == RaiseEntry::Host {
             return RaiseKind::HostBoundary;
         }
         let opcode = function
-            .and_then(|function| function.bytecode.compact.as_ref()?.code.get(self.cur_pc))
+            .and_then(|function| function.bytecode.compact.as_ref()?.code.get(pc?))
             .and_then(|byte| OpCode::try_from(*byte).ok());
         match opcode {
             Some(OpCode::Throw) => RaiseKind::Throw,
@@ -375,28 +375,12 @@ impl BexVm {
             (Some(frame), _) => unsafe { self.frame_function(frame) }.ok(),
             (None, _) => None,
         };
-        let raise_compiled = raise_at.is_some_and(|frame| self.frame_runs_compiled(frame));
-        let kind = if entry == RaiseEntry::Host {
-            RaiseKind::HostBoundary
-        } else if raise_compiled
-            && !raise_at.is_some_and(|frame| {
-                matches!(frame, FrameAt::Vm(idx)
-                    if self.compiled_at(idx) == Some(crate::compiled_rt::CompiledAt::Suspended))
-                    && raise_function.and_then(|function| {
-                        function.bytecode.compact.as_ref()?.code.get(self.cur_pc)
-                    }) == Some(&(OpCode::Await as u8))
-            })
-        {
-            if thrown.throw_kind == ThrowKind::Rethrow {
-                RaiseKind::Rethrow
-            } else if self.is_panic(thrown.value) {
-                RaiseKind::Runtime
-            } else {
-                RaiseKind::Throw
-            }
-        } else {
-            self.raise_kind(entry, raise_function, thrown)
-        };
+        // Compiled records report instruction indices; resolve those to the
+        // original compact bytecode offset before classifying the raise.
+        // Values and ThrowKind do not distinguish a source throw from a
+        // failing native call, or an await from a rethrow.
+        let pc = raise_at.and_then(|frame| self.frame_at_pc(frame, self.live_bytecode_frame()));
+        let kind = Self::raise_kind(entry, raise_function, pc, thrown);
         let origin = match kind {
             RaiseKind::Rethrow | RaiseKind::PanicRethrow => self.rethrow_origin(carried_context),
             RaiseKind::Await => self.await_origin(),
@@ -458,9 +442,7 @@ impl BexVm {
             && raise_function.is_some_and(|function| {
                 function.telemetry_policy_id.load() != TelemetryPolicyId::NONE
             });
-        let pc = raise_at
-            .and_then(|frame| self.frame_at_pc(frame, self.live_bytecode_frame()))
-            .map(|pc| u32::try_from(pc).unwrap_or(u32::MAX));
+        let pc = pc.map(|pc| u32::try_from(pc).unwrap_or(u32::MAX));
         let frame_count = u32::try_from(self.level_count()).unwrap_or(u32::MAX);
         let telemetry = self.telemetry.as_mut().expect("checked above");
         if origin != RaiseOrigin::Fresh {
