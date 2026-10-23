@@ -144,6 +144,13 @@ test "stringify rejects a negative indent and an indent that is not whitespace" 
     assert.equal(bad_indent(" x"), "indent")
 }
 
+test "stringify takes an indent of at most 10" {
+    assert.equal(baml.json.stringify([1], indent = 10), "[\n          1\n]")
+    assert.equal(bad_indent(11), "indent")
+    assert.equal(bad_indent(4611686018427387903), "indent")
+    assert.equal(bad_indent("           "), "indent")
+}
+
 // ─── omit_nulls ───────────────────────────────────────────────────────────────
 
 class ApiOptional {

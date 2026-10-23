@@ -133,8 +133,9 @@ function _decode_structural<T>(s: string, aliased: bool) -> T throws ParseError 
 /// - `baml.json.SerializationError` if any value in the graph has no JSON
 ///   form; see `from`.
 /// - `baml.json.SerializationError` with `reason` `"indent"` if `indent` is a
-///   negative number, or a string holding anything other than spaces, tabs,
-///   and line breaks.
+///   negative number, a number above 10, a string longer than 10 characters,
+///   or a string holding anything other than spaces, tabs, and line breaks.
+///   JavaScript's `JSON.stringify` stops at the same width of 10.
 ///
 /// # Examples
 ///

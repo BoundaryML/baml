@@ -91,14 +91,14 @@ async fn call_function_ambiguous_bare_name_errors() {
 /// `find_user_function` post-filters to user-callable bytecode, so the
 /// stdlib's `baml.json.stringify` (and friends) must never be reachable
 /// via either bare-name suffix scan or fully qualified lookup. A
-/// regression here would let `baml run serialize` hijack `baml.json.stringify`
+/// regression here would let `baml run stringify` hijack `baml.json.stringify`
 /// with arbitrary arguments.
 #[test]
 fn find_user_function_does_not_expose_stdlib() {
     let eng = engine(&[("main.baml", "function main() -> int { 1 }")]);
 
     assert!(
-        eng.find_user_function("serialize").is_none(),
+        eng.find_user_function("stringify").is_none(),
         "bare suffix scan must not match stdlib baml.json.stringify"
     );
     assert!(

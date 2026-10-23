@@ -566,7 +566,7 @@ keeps its number once it has one.
    control character at all, and the name pools hold the characters they mean.
 12. **An empty class in a union matches any JSON object, so its siblings
    decode as it.** With `type M = Empty | Named`, `baml.json.stringify` writes
-   a `Named { model: "m" }` as `{"model":"m"}` and `from_string<M>` reads it
+   a `Named { model: "m" }` as `{"model":"m"}` and `baml.json.decode<M>` reads it
    back as `Empty`, silently. Decoding takes the first member that fits and an
    empty class fits everything, so listing it last happens to work, which makes
    correctness depend on the order of a type alias. The transcript's

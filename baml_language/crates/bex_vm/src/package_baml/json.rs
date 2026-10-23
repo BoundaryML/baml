@@ -315,29 +315,40 @@ fn write_json_text(value: &serde_json::Value, indent: &str) -> String {
     String::from_utf8(out).unwrap_or_else(|e| unreachable!("JSON text is UTF-8: {e}"))
 }
 
+/// The widest indent `stringify` takes, in spaces or characters per level:
+/// JavaScript's `JSON.stringify` stops at the same width. Without a cap, a huge
+/// count would ask the allocator for the whole indent string up front.
+const MAX_INDENT: usize = 10;
+
 /// The text `baml.json.stringify` writes for one nesting level, from its
 /// `indent` argument: that many spaces for an `int`, the string itself for a
-/// `string`. A negative count, or a string holding anything other than JSON
-/// whitespace (which would make the text invalid JSON), is refused.
+/// `string`. A negative count, anything wider than [`MAX_INDENT`], or a string
+/// holding anything other than JSON whitespace (which would make the text
+/// invalid JSON), is refused.
 fn indent_text(vm: &mut BexVm, indent: Value) -> Result<String, VmRustFnError> {
     let refused = match indent.kind() {
         ValueKind::Int(count) => match usize::try_from(count) {
-            Ok(count) => return Ok(" ".repeat(count)),
+            Ok(count) if count <= MAX_INDENT => return Ok(" ".repeat(count)),
+            Ok(_) => format!("indent must be at most {MAX_INDENT} spaces, got {count}"),
             Err(_) => format!("indent must not be negative, got {count}"),
         },
         ValueKind::Object(ptr) => match vm.get_object(ptr) {
             Object::String(text) => {
-                if text
+                let width = text.as_str().chars().count();
+                if width > MAX_INDENT {
+                    format!("indent must be at most {MAX_INDENT} characters, got {width}")
+                } else if text
                     .as_str()
                     .chars()
                     .all(|c| matches!(c, ' ' | '\t' | '\n' | '\r'))
                 {
                     return Ok(text.to_string());
+                } else {
+                    format!(
+                        "indent must hold only spaces, tabs, and line breaks, got {:?}",
+                        text.as_str()
+                    )
                 }
-                format!(
-                    "indent must hold only spaces, tabs, and line breaks, got {:?}",
-                    text.as_str()
-                )
             }
             _ => unreachable!("`indent` is statically `int | string`"),
         },
