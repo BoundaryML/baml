@@ -1387,8 +1387,7 @@ fn walk_ty(
                 let output_name = type_name.display_name().to_string();
                 // Skipped variants are already filtered out in bex_engine extraction.
                 let values: Vec<self::EnumValue> = enum_def
-                    .variants
-                    .iter()
+                    .variants()
                     .map(|v| self::EnumValue {
                         name: v.name.clone(),
                         alias: v.alias.clone(),
@@ -1532,11 +1531,12 @@ mod tests {
             docstring: None,
             description: None,
             alias: Some("SharedChoice".to_string()),
-            variants: vec![sys_types::EnumVariantDefinition {
+            declared_variants: vec![sys_types::EnumVariantDefinition {
                 name: "Value".to_string(),
                 docstring: None,
                 description: None,
                 alias: None,
+                skip: false,
             }],
         };
         let mut enums = indexmap::IndexMap::new();
@@ -1585,11 +1585,12 @@ mod tests {
                 docstring: None,
                 description: None,
                 alias: Some("SharedChoice".to_string()),
-                variants: vec![sys_types::EnumVariantDefinition {
+                declared_variants: vec![sys_types::EnumVariantDefinition {
                     name: "Value".to_string(),
                     docstring: None,
                     description: None,
                     alias: None,
+                    skip: false,
                 }],
             },
         );
@@ -2342,11 +2343,12 @@ mod tests {
             docstring: None,
             description: None,
             alias: Some("SharedChoice".to_string()),
-            variants: vec![sys_types::EnumVariantDefinition {
+            declared_variants: vec![sys_types::EnumVariantDefinition {
                 name: "Value".to_string(),
                 docstring: None,
                 description: None,
                 alias: None,
+                skip: false,
             }],
         };
         let mut enums = indexmap::IndexMap::new();

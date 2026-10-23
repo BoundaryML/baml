@@ -249,6 +249,7 @@ pub const ALL: &[BuiltinFile] = &[
     builtin!("openai", "images.baml"),
     builtin!("openai", "ns_internal/chat.baml"),
     builtin!("openai", "ns_internal/images.baml"),
+    builtin!("openai", "ns_internal/structured.baml"),
     builtin!("anthropic", "messages.baml"),
     builtin!("typesafeai", "client.baml"),
     builtin!("typesafeai", "ns_internal/jev.baml"),

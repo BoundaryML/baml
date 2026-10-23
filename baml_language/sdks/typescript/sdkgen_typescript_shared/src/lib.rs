@@ -275,7 +275,8 @@ mod tests {
 
     use baml_base::Name as BaseName;
     use baml_sdkgen_types::{
-        Class, Enum, EnumVariant, Function, FunctionArgument, Name, Origin, Symbol, SymbolPool, Ty,
+        Class, ClassProperty, Enum, EnumVariant, Function, FunctionArgument, Name, Origin, Symbol,
+        SymbolPool, Ty, TypeAlias,
     };
 
     use super::*;
@@ -385,6 +386,61 @@ mod tests {
         let leaf = &out[&PathBuf::from("lorem/index.ts")];
         assert!(leaf.contains("export class Resume {"));
         assert!(!out.contains_key(&PathBuf::from("lorem/index.d.ts")));
+    }
+
+    #[test]
+    fn nullable_fields_are_optional_keys() {
+        let nullable_string = Ty::Union(Box::new([Ty::String, Ty::Null]));
+        let alias = name("user", &["lorem"], "NullableText");
+        let class = name("user", &["lorem"], "Payload");
+        let mut pool = SymbolPool::new();
+        pool.insert(
+            alias.clone(),
+            Symbol::TypeAlias(TypeAlias {
+                name: alias.clone(),
+                resolves_to: nullable_string.clone(),
+                recursive: false,
+                origin: origin(0),
+            }),
+        );
+        let Symbol::Class(mut payload) = class_sym(&class, 10) else {
+            unreachable!()
+        };
+        payload.properties = [
+            ("required", Ty::String),
+            ("nullable", nullable_string.clone()),
+            (
+                "nullable_union",
+                Ty::Union(Box::new([Ty::Int, Ty::String, Ty::Null])),
+            ),
+            ("nullable_alias", Ty::TypeAlias(alias)),
+            ("nullable_items", Ty::List(Box::new(nullable_string))),
+        ]
+        .into_iter()
+        .map(|(field, ty)| ClassProperty {
+            name: BaseName::new(field),
+            docstring: None,
+            ty,
+        })
+        .collect();
+        pool.insert(class, Symbol::Class(payload));
+
+        let out = emit_sdk(&pool);
+        let leaf = &out[&PathBuf::from("lorem/index.ts")];
+        let expected = "export class Payload {\n\
+                        \x20 required!: string;\n\
+                        \x20 nullable?: string | null;\n\
+                        \x20 nullable_union?: number | string | null;\n\
+                        \x20 nullable_alias?: NullableText;\n\
+                        \x20 nullable_items!: (string | null)[];\n\
+                        \x20 constructor(init: {\n\
+                        \x20   required: string;\n\
+                        \x20   nullable?: string | null;\n\
+                        \x20   nullable_union?: number | string | null;\n\
+                        \x20   nullable_alias?: NullableText;\n\
+                        \x20   nullable_items: (string | null)[];\n\
+                        \x20 }) {\n";
+        assert!(leaf.contains(expected), "leaf missing class body:\n{leaf}");
     }
 
     #[test]

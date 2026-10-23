@@ -10,7 +10,7 @@ fn user.fixtures.json_to_from_string_generic_forwarding.fetch_as(s: string) -> T
 
     bb0: {
         _2 = load_type(#0);
-        _0 = call const fn baml.json.from_string<copy _2>(copy _1) -> [bb1];
+        _0 = call const fn baml.json.from_string<copy _2>(copy _1, const <omitted>) -> [bb1];
     }
 
     bb1: {

@@ -210,6 +210,38 @@ enum Event {
     },
 }
 
+/// What an enclosing delimiter holds. The parser keeps a stack of these
+/// ([`Parser::parse_context`]); the innermost entry decides whether a line break can
+/// end an expression (see [`Parser::line_break_ends_expr`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ParseContext {
+    /// A block's statements: `{ … }` bodies and `${ … }` interpolations.
+    Statements,
+    /// The arms of a `match` or `catch`.
+    Arms,
+    /// `( … )`: grouping, call/attribute/parameter lists, `match`/`for` headers.
+    Parens,
+    /// `[ … ]`: array literals and index expressions.
+    Brackets,
+    /// The `{ … }` of an object or map literal.
+    Fields,
+    /// A backtick template's `${if …}` / `${for …}` tag.
+    TemplateTag,
+}
+
+impl ParseContext {
+    /// Whether the items this delimiter holds are separated by line breaks.
+    fn separates_items_by_line(self) -> bool {
+        match self {
+            ParseContext::Statements | ParseContext::Arms => true,
+            ParseContext::Parens
+            | ParseContext::Brackets
+            | ParseContext::Fields
+            | ParseContext::TemplateTag => false,
+        }
+    }
+}
+
 /// Recursive descent parser with error recovery.
 pub(crate) struct Parser<'a> {
     tokens: &'a [Token],
@@ -259,6 +291,10 @@ pub(crate) struct Parser<'a> {
     /// While parsing the right-hand side of a removed body-level `type T = …`
     /// statement, whose own diagnostic already covers an `unreflect` there.
     suppress_removed_unreflect_depth: u32,
+    /// The delimiters enclosing the current position, innermost last. Empty
+    /// at the top level, whose items are line-separated like statements.
+    /// Managed by [`Self::with_parse_context`].
+    parse_context: Vec<ParseContext>,
 }
 
 impl<'a> Parser<'a> {
@@ -278,6 +314,7 @@ impl<'a> Parser<'a> {
             function_union_operand: false,
             ambiguous_pipes: Vec::new(),
             suppress_removed_unreflect_depth: 0,
+            parse_context: Vec::new(),
         }
     }
 
@@ -754,34 +791,60 @@ impl<'a> Parser<'a> {
             .is_some_and(|t| Self::kind_is_member_name(t.kind))
     }
 
-    /// True when a postfix `(` must NOT be glued onto the expression parsed so
-    /// far as a call, because that expression is *block-terminated* (its last
-    /// real token is `}` — an `if`/`match`/block/loop body) and the `(` opens a
-    /// fresh line.
-    ///
-    /// This is the guard-`if` early-return case (B-622):
-    ///   if (x < 0) { throw ... }
-    ///   (x * 2)
-    /// Without it the parser glues `{ ... }(x * 2)` into a call on the void
-    /// `if` result. Keying on a block-terminating `}` (rather than any callee)
-    /// keeps ordinary multi-line calls — a method chain whose `(` lands on a
-    /// later line than an identifier/`)` callee — parsing as calls, matching
-    /// the deliberately-tested `foo()`-then-`(1)` chained-call behavior. The
-    /// newline requirement keeps same-line `<block>(…)` forms (e.g. an
-    /// immediately-invoked block) untouched.
-    fn newline_separates_block_expr_from_paren(&self) -> bool {
-        self.has_newline_ahead() && self.last_significant_emitted_token_is_block_close()
+    /// Run `f` inside a delimiter holding `context`.
+    fn with_parse_context<R>(
+        &mut self,
+        context: ParseContext,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        self.parse_context.push(context);
+        let result = f(self);
+        self.parse_context.pop();
+        result
     }
 
-    /// Kind-check on the most recently *emitted* significant token: is it a
-    /// closing `}`? Trailing trivia after the current expression has not been
-    /// emitted yet at postfix-decision time, so the last non-trivia token event
-    /// is the final real token of the expression parsed so far.
-    fn last_significant_emitted_token_is_block_close(&self) -> bool {
-        self.events.iter().rev().find_map(|event| match event {
-            Event::Token { kind, .. } if !kind.is_trivia() => Some(*kind),
-            _ => None,
-        }) == Some(SyntaxKind::R_BRACE)
+    /// True when a line break before the current token ends the expression
+    /// parsed so far (B-622, B-1831).
+    ///
+    /// Where the innermost delimiter separates its items by line (a block's
+    /// statements, `match` arms, the top level), a line break ends an
+    /// expression whenever the next line could start a new one:
+    ///
+    /// ```text
+    /// foo()
+    /// (-1)           // a new statement, not the call `foo()(-1)`
+    /// a
+    /// - b            // `a`, then `-b`; not `a - b`
+    /// if (c) { [7] } else { [4] }
+    /// [0]            // a new statement, not an index into the `if`
+    /// ```
+    ///
+    /// A next line that cannot start an expression (`.`, `?.`, `+`, `&&`,
+    /// `??`, `catch`, …) still continues it, since reading it as a new
+    /// statement could only be an error.
+    ///
+    /// Inside `( … )`, `[ … ]` and literal `{ … }`, line breaks separate
+    /// nothing, so they are plain whitespace and an expression may span lines
+    /// freely: `foo(a` then `- b)` is `foo(a - b)`. A block nested inside them
+    /// (a lambda body, say) separates by line again.
+    fn line_break_ends_expr(&self) -> bool {
+        self.parse_context
+            .last()
+            .is_none_or(|context| context.separates_items_by_line())
+            && self.at_expression_start()
+            && self.has_newline_ahead()
+    }
+
+    /// Whether the current token can begin an expression. `<` does only when
+    /// it opens a generic lambda (`<T>(x: T) => x`); otherwise it is a
+    /// comparison continuing the expression before it. The contextual
+    /// `catch_all_panics` keyword is lexed as a `Word` but, like `catch`,
+    /// opens a clause that continues the expression before it.
+    fn at_expression_start(&self) -> bool {
+        self.current().is_some_and(|token| {
+            Self::is_start_of_expression(token.kind)
+                && (token.kind != TokenKind::Less || self.looks_like_generic_lambda())
+        }) && !self.at_catch_clause_start()
     }
 
     /// Check if there's a newline before the next non-trivia token.
@@ -2763,40 +2826,46 @@ impl<'a> Parser<'a> {
     /// until a matching `${endfor}`.
     fn parse_backtick_for_open(&mut self) {
         self.with_node(SyntaxKind::BACKTICK_FOR_OPEN, |p| {
-            p.bump_raw(); // $
-            p.bump_raw(); // {
-            p.expect(TokenKind::For);
-            // Reuse the host for-header grammar — handles paren / no-paren,
-            // iterator / C-style. We only consume the HEADER (no body braces).
-            p.parse_for_header_only();
-            p.expect(TokenKind::RBrace);
+            p.with_parse_context(ParseContext::TemplateTag, |p| {
+                p.bump_raw(); // $
+                p.bump_raw(); // {
+                p.expect(TokenKind::For);
+                // Reuse the host for-header grammar — handles paren / no-paren,
+                // iterator / C-style. We only consume the HEADER (no body braces).
+                p.parse_for_header_only();
+                p.expect(TokenKind::RBrace);
+            });
         });
     }
 
     /// Parse `${if (cond)}` or `${if cond}` (block-tag opener).
     fn parse_backtick_if_open(&mut self) {
         self.with_node(SyntaxKind::BACKTICK_IF_OPEN, |p| {
-            p.bump_raw(); // $
-            p.bump_raw(); // {
-            p.expect(TokenKind::If);
-            p.suppress_object_literal_depth += 1;
-            p.parse_expr();
-            p.suppress_object_literal_depth -= 1;
-            p.expect(TokenKind::RBrace);
+            p.with_parse_context(ParseContext::TemplateTag, |p| {
+                p.bump_raw(); // $
+                p.bump_raw(); // {
+                p.expect(TokenKind::If);
+                p.suppress_object_literal_depth += 1;
+                p.parse_expr();
+                p.suppress_object_literal_depth -= 1;
+                p.expect(TokenKind::RBrace);
+            });
         });
     }
 
     /// Parse `${else if (cond)}` (continuation of an open `${if}` block-tag).
     fn parse_backtick_else_if(&mut self) {
         self.with_node(SyntaxKind::BACKTICK_ELSE_IF, |p| {
-            p.bump_raw(); // $
-            p.bump_raw(); // {
-            p.expect(TokenKind::Else);
-            p.expect(TokenKind::If);
-            p.suppress_object_literal_depth += 1;
-            p.parse_expr();
-            p.suppress_object_literal_depth -= 1;
-            p.expect(TokenKind::RBrace);
+            p.with_parse_context(ParseContext::TemplateTag, |p| {
+                p.bump_raw(); // $
+                p.bump_raw(); // {
+                p.expect(TokenKind::Else);
+                p.expect(TokenKind::If);
+                p.suppress_object_literal_depth += 1;
+                p.parse_expr();
+                p.suppress_object_literal_depth -= 1;
+                p.expect(TokenKind::RBrace);
+            });
         });
     }
 
@@ -2964,22 +3033,24 @@ impl<'a> Parser<'a> {
 
     fn parse_attribute_args(&mut self) {
         self.with_node(SyntaxKind::ATTRIBUTE_ARGS, |p| {
-            p.expect(TokenKind::LParen);
+            p.with_parse_context(ParseContext::Parens, |p| {
+                p.expect(TokenKind::LParen);
 
-            // Parse first argument
-            if !p.at(TokenKind::RParen) {
-                p.parse_attribute_arg();
-
-                // Parse remaining arguments
-                while p.eat(TokenKind::Comma) {
-                    if p.at(TokenKind::RParen) {
-                        break; // Trailing comma
-                    }
+                // Parse first argument
+                if !p.at(TokenKind::RParen) {
                     p.parse_attribute_arg();
-                }
-            }
 
-            p.expect(TokenKind::RParen);
+                    // Parse remaining arguments
+                    while p.eat(TokenKind::Comma) {
+                        if p.at(TokenKind::RParen) {
+                            break; // Trailing comma
+                        }
+                        p.parse_attribute_arg();
+                    }
+                }
+
+                p.expect(TokenKind::RParen);
+            });
         });
     }
 
@@ -3116,13 +3187,15 @@ impl<'a> Parser<'a> {
             }
             self.with_node(SyntaxKind::UNREFLECT_TYPE, |p| {
                 p.bump();
-                p.expect(TokenKind::LParen);
-                if p.at(TokenKind::RParen) {
-                    p.error_here("`unreflect` requires an operand".to_string());
-                } else {
-                    p.parse_expr();
-                }
-                p.expect(TokenKind::RParen);
+                p.with_parse_context(ParseContext::Parens, |p| {
+                    p.expect(TokenKind::LParen);
+                    if p.at(TokenKind::RParen) {
+                        p.error_here("`unreflect` requires an operand".to_string());
+                    } else {
+                        p.parse_expr();
+                    }
+                    p.expect(TokenKind::RParen);
+                });
             });
             return;
         }
@@ -4398,20 +4471,22 @@ impl<'a> Parser<'a> {
 
     fn parse_parameter_list(&mut self) {
         self.with_node(SyntaxKind::PARAMETER_LIST, |p| {
-            p.expect(TokenKind::LParen);
+            p.with_parse_context(ParseContext::Parens, |p| {
+                p.expect(TokenKind::LParen);
 
-            if !p.at(TokenKind::RParen) {
-                p.parse_parameter();
-
-                while p.eat(TokenKind::Comma) {
-                    if p.at(TokenKind::RParen) {
-                        break; // Trailing comma
-                    }
+                if !p.at(TokenKind::RParen) {
                     p.parse_parameter();
-                }
-            }
 
-            p.expect(TokenKind::RParen);
+                    while p.eat(TokenKind::Comma) {
+                        if p.at(TokenKind::RParen) {
+                            break; // Trailing comma
+                        }
+                        p.parse_parameter();
+                    }
+                }
+
+                p.expect(TokenKind::RParen);
+            });
         });
     }
 
@@ -4690,20 +4765,22 @@ impl<'a> Parser<'a> {
     /// Parse a lambda parameter list where type annotations are optional.
     fn parse_lambda_parameter_list(&mut self) {
         self.with_node(SyntaxKind::PARAMETER_LIST, |p| {
-            p.expect(TokenKind::LParen);
+            p.with_parse_context(ParseContext::Parens, |p| {
+                p.expect(TokenKind::LParen);
 
-            if !p.at(TokenKind::RParen) {
-                p.parse_lambda_parameter();
-
-                while p.eat(TokenKind::Comma) {
-                    if p.at(TokenKind::RParen) {
-                        break; // Trailing comma
-                    }
+                if !p.at(TokenKind::RParen) {
                     p.parse_lambda_parameter();
-                }
-            }
 
-            p.expect(TokenKind::RParen);
+                    while p.eat(TokenKind::Comma) {
+                        if p.at(TokenKind::RParen) {
+                            break; // Trailing comma
+                        }
+                        p.parse_lambda_parameter();
+                    }
+                }
+
+                p.expect(TokenKind::RParen);
+            });
         });
     }
 
@@ -4736,24 +4813,26 @@ impl<'a> Parser<'a> {
 
             // Parse statements until closing brace. Inspect raw headers before `at(RBrace)`,
             // because ordinary lookahead treats headers as invisible line-comment trivia.
-            loop {
-                // Handle MDX-style header comments (//#...) as structural statements only in
-                // executable block expressions.
-                if p.at_header_comment_start() {
-                    p.consume_header_comment();
-                    continue;
-                }
-                if p.at_end() || p.at(TokenKind::RBrace) {
-                    break;
-                }
+            p.with_parse_context(ParseContext::Statements, |p| {
+                loop {
+                    // Handle MDX-style header comments (//#...) as structural statements only in
+                    // executable block expressions.
+                    if p.at_header_comment_start() {
+                        p.consume_header_comment();
+                        continue;
+                    }
+                    if p.at_end() || p.at(TokenKind::RBrace) {
+                        break;
+                    }
 
-                // Error recovery: if we see a top-level keyword, assume we missed a closing brace
-                if p.at_top_level_keyword_except_client() {
-                    break;
-                }
+                    // Error recovery: if we see a top-level keyword, assume we missed a closing brace
+                    if p.at_top_level_keyword_except_client() {
+                        break;
+                    }
 
-                p.parse_stmt();
-            }
+                    p.parse_stmt();
+                }
+            });
 
             p.expect(TokenKind::RBrace);
         });
@@ -5228,12 +5307,14 @@ impl<'a> Parser<'a> {
             // the `{` of the match body, so `match x: Type { ... }` would
             // be ambiguous with a type-ascribed binding).
             if p.at(TokenKind::LParen) {
-                p.bump(); // (
-                p.parse_expr();
-                if p.eat(TokenKind::Colon) {
-                    p.parse_type();
-                }
-                p.expect(TokenKind::RParen);
+                p.with_parse_context(ParseContext::Parens, |p| {
+                    p.bump(); // (
+                    p.parse_expr();
+                    if p.eat(TokenKind::Colon) {
+                        p.parse_type();
+                    }
+                    p.expect(TokenKind::RParen);
+                });
             } else {
                 // No-paren form: scrutinee runs until the `{` of the match
                 // body. Suppress the object-literal postfix so a scrutinee
@@ -5250,29 +5331,31 @@ impl<'a> Parser<'a> {
                 p.bump(); // {
 
                 let mut parsed_any_arm = false;
-                loop {
-                    // Inspect raw headers before `at(RBrace)`, whose normal lookahead skips them.
-                    if p.at_header_comment_start() {
-                        p.consume_header_comment();
-                        continue;
-                    }
-                    if p.at_end() || p.at(TokenKind::RBrace) {
-                        break;
-                    }
+                p.with_parse_context(ParseContext::Arms, |p| {
+                    loop {
+                        // Inspect raw headers before `at(RBrace)`, whose normal lookahead skips them.
+                        if p.at_header_comment_start() {
+                            p.consume_header_comment();
+                            continue;
+                        }
+                        if p.at_end() || p.at(TokenKind::RBrace) {
+                            break;
+                        }
 
-                    // Error recovery: if we see a top-level keyword, assume we missed a closing brace
-                    if p.at_top_level_keyword_except_client() {
-                        break;
+                        // Error recovery: if we see a top-level keyword, assume we missed a closing brace
+                        if p.at_top_level_keyword_except_client() {
+                            break;
+                        }
+                        let before = p.current;
+                        p.parse_match_arm();
+                        parsed_any_arm = true;
+                        // An arm that consumed nothing already emitted an error;
+                        // force progress so the loop cannot spin forever.
+                        if p.current == before {
+                            p.bump();
+                        }
                     }
-                    let before = p.current;
-                    p.parse_match_arm();
-                    parsed_any_arm = true;
-                    // An arm that consumed nothing already emitted an error;
-                    // force progress so the loop cannot spin forever.
-                    if p.current == before {
-                        p.bump();
-                    }
-                }
+                });
                 if !parsed_any_arm {
                     p.error_unexpected_token("at least one match arm".to_string());
                 }
@@ -6036,29 +6119,31 @@ impl<'a> Parser<'a> {
             p.bump(); // {
 
             let mut parsed_any_arm = false;
-            loop {
-                // Inspect raw headers before `at(RBrace)`, whose normal lookahead skips them.
-                if p.at_header_comment_start() {
-                    p.consume_header_comment();
-                    continue;
-                }
-                if p.at_end() || p.at(TokenKind::RBrace) {
-                    break;
-                }
+            p.with_parse_context(ParseContext::Arms, |p| {
+                loop {
+                    // Inspect raw headers before `at(RBrace)`, whose normal lookahead skips them.
+                    if p.at_header_comment_start() {
+                        p.consume_header_comment();
+                        continue;
+                    }
+                    if p.at_end() || p.at(TokenKind::RBrace) {
+                        break;
+                    }
 
-                if p.at_top_level_keyword_except_client() {
-                    break;
+                    if p.at_top_level_keyword_except_client() {
+                        break;
+                    }
+                    let before = p.current;
+                    p.parse_catch_arm();
+                    parsed_any_arm = true;
+                    // An arm that consumed nothing already emitted an error (e.g.
+                    // recovery bailed before advancing); force progress so the
+                    // loop cannot spin forever.
+                    if p.current == before {
+                        p.bump();
+                    }
                 }
-                let before = p.current;
-                p.parse_catch_arm();
-                parsed_any_arm = true;
-                // An arm that consumed nothing already emitted an error (e.g.
-                // recovery bailed before advancing); force progress so the
-                // loop cannot spin forever.
-                if p.current == before {
-                    p.bump();
-                }
-            }
+            });
             if !parsed_any_arm {
                 p.error_unexpected_token("at least one catch arm".to_string());
             }
@@ -6241,55 +6326,57 @@ impl<'a> Parser<'a> {
 
             // Check for parenthesized form: for (...) { }
             if p.at(TokenKind::LParen) {
-                p.bump(); // (
+                p.with_parse_context(ParseContext::Parens, |p| {
+                    p.bump(); // (
 
-                // Check if this is iterator-style: for (let var in expr) or C-style: for (init; cond; update)
-                if p.at_binding_intro_stmt() {
-                    // Peek ahead to check if this is iterator-style (has 'in' keyword)
-                    // For iterator-style: for (let i in expr) / for (const i in expr)
-                    // For C-style: for (let i = 0; ...) / for (const i = 0; ...)
-                    if p.looks_like_for_in_loop() {
-                        // Iterator-style: for (let var in expr) / for (const var in expr)
-                        p.parse_for_in_pattern();
-                        p.expect(TokenKind::In);
-                        let suppress_object_literal = !p.has_for_header_closing_paren_ahead();
-                        if suppress_object_literal {
-                            p.suppress_object_literal_depth += 1;
+                    // Check if this is iterator-style: for (let var in expr) or C-style: for (init; cond; update)
+                    if p.at_binding_intro_stmt() {
+                        // Peek ahead to check if this is iterator-style (has 'in' keyword)
+                        // For iterator-style: for (let i in expr) / for (const i in expr)
+                        // For C-style: for (let i = 0; ...) / for (const i = 0; ...)
+                        if p.looks_like_for_in_loop() {
+                            // Iterator-style: for (let var in expr) / for (const var in expr)
+                            p.parse_for_in_pattern();
+                            p.expect(TokenKind::In);
+                            let suppress_object_literal = !p.has_for_header_closing_paren_ahead();
+                            if suppress_object_literal {
+                                p.suppress_object_literal_depth += 1;
+                            }
+                            p.parse_expr(); // iterator expression
+                            if suppress_object_literal {
+                                p.suppress_object_literal_depth -= 1;
+                            }
+                        } else {
+                            // C-style: for (let i = 0; cond; update)
+                            p.parse_let_stmt();
+                            // The let statement already consumed the semicolon
+                            // Now parse condition
+                            if !p.at(TokenKind::Semicolon) && !p.at(TokenKind::RParen) {
+                                p.parse_expr(); // condition
+                            }
+                            p.eat(TokenKind::Semicolon);
+
+                            // Parse update expression
+                            if !p.at(TokenKind::RParen) {
+                                p.parse_expr(); // update
+                            }
                         }
-                        p.parse_expr(); // iterator expression
-                        if suppress_object_literal {
-                            p.suppress_object_literal_depth -= 1;
-                        }
+                    } else if p.at(TokenKind::Word) {
+                        // Bare WORD inside parens may be a C-style header starting
+                        // with an expression (`for (i = 0; cond; update)`). It
+                        // can NOT be a let-less iterator form like `for (i in
+                        // expr)` — bindings always require `let`. Defer to the
+                        // C-style path.
+                        p.parse_c_style_for_body();
+                    } else if p.at(TokenKind::Semicolon) {
+                        // C-style with empty initializer: for (; cond; update)
+                        p.parse_c_style_for_body();
                     } else {
-                        // C-style: for (let i = 0; cond; update)
-                        p.parse_let_stmt();
-                        // The let statement already consumed the semicolon
-                        // Now parse condition
-                        if !p.at(TokenKind::Semicolon) && !p.at(TokenKind::RParen) {
-                            p.parse_expr(); // condition
-                        }
-                        p.eat(TokenKind::Semicolon);
-
-                        // Parse update expression
-                        if !p.at(TokenKind::RParen) {
-                            p.parse_expr(); // update
-                        }
+                        p.error_unexpected_token("'let' or ';'".to_string());
                     }
-                } else if p.at(TokenKind::Word) {
-                    // Bare WORD inside parens may be a C-style header starting
-                    // with an expression (`for (i = 0; cond; update)`). It
-                    // can NOT be a let-less iterator form like `for (i in
-                    // expr)` — bindings always require `let`. Defer to the
-                    // C-style path.
-                    p.parse_c_style_for_body();
-                } else if p.at(TokenKind::Semicolon) {
-                    // C-style with empty initializer: for (; cond; update)
-                    p.parse_c_style_for_body();
-                } else {
-                    p.error_unexpected_token("'let' or ';'".to_string());
-                }
 
-                p.expect(TokenKind::RParen);
+                    p.expect(TokenKind::RParen);
+                });
             } else if p.at_binding_intro_stmt() && p.looks_like_for_in_loop() {
                 // Non-parenthesized form: `for let <pattern> in <expr> { }`.
                 p.parse_for_in_pattern();
@@ -6522,6 +6609,10 @@ impl<'a> Parser<'a> {
             };
             let op = token.kind;
 
+            if self.line_break_ends_expr() {
+                break;
+            }
+
             // Check for special cases first
             if self.suppress_catch_depth == 0 && self.at_catch_clause_start() {
                 self.parse_catch_expr(expr_start);
@@ -6551,22 +6642,8 @@ impl<'a> Parser<'a> {
                 self.parse_expr_bp(5); // right_bp = 5 (left associative)
                 self.wrap_events_in_node(lhs_start, SyntaxKind::BINARY_EXPR);
                 self.finish_node();
-            } else if op == TokenKind::LParen && !self.newline_separates_block_expr_from_paren() {
-                // Function call.
-                //
-                // The `newline_separates_block_expr_from_paren()` guard fixes a
-                // guard-style early return (B-622): a block-terminated
-                // statement whose value is discarded, followed on the *next
-                // line* by a parenthesized expression, must not glue into a
-                // call on that value. For example
-                //   if (x < 0) { throw ... }
-                //   (x * 2)
-                // would otherwise parse as `{ ... }(x * 2)`, invoking the void
-                // `if` result (E0006 "`void` is not a function"). Only the
-                // block-terminated + newline shape is separated (mirroring
-                // Rust's expression-statement rule); ordinary calls whose `(`
-                // sits on a later line than a non-`}` callee — e.g. a method
-                // chain broken across lines by comments — still parse as calls.
+            } else if op == TokenKind::LParen {
+                // Function call
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::CALL_EXPR);
                 self.parse_call_args();
@@ -6593,9 +6670,11 @@ impl<'a> Parser<'a> {
                 // Index expression
                 let lhs_start = self.find_previous_expr_start_after(expr_start);
                 self.wrap_events_in_node(lhs_start, SyntaxKind::INDEX_EXPR);
-                self.bump(); // [
-                self.parse_expr();
-                self.expect(TokenKind::RBracket);
+                self.with_parse_context(ParseContext::Brackets, |p| {
+                    p.bump(); // [
+                    p.parse_expr();
+                    p.expect(TokenKind::RBracket);
+                });
                 self.finish_node();
             } else if op == TokenKind::QuestionDot {
                 // Optional chaining: obj?.field, obj?.[expr], obj?.(args)
@@ -6610,9 +6689,11 @@ impl<'a> Parser<'a> {
                     // obj?.[expr] — optional index
                     self.wrap_events_in_node(lhs_start, SyntaxKind::OPTIONAL_INDEX_EXPR);
                     self.bump(); // ?.
-                    self.bump(); // [
-                    self.parse_expr();
-                    self.expect(TokenKind::RBracket);
+                    self.with_parse_context(ParseContext::Brackets, |p| {
+                        p.bump(); // [
+                        p.parse_expr();
+                        p.expect(TokenKind::RBracket);
+                    });
                     self.finish_node();
                 } else {
                     // obj?.field — optional field access
@@ -7179,20 +7260,22 @@ impl<'a> Parser<'a> {
 
     fn parse_call_args(&mut self) {
         self.with_node(SyntaxKind::CALL_ARGS, |p| {
-            p.expect(TokenKind::LParen);
+            p.with_parse_context(ParseContext::Parens, |p| {
+                p.expect(TokenKind::LParen);
 
-            if !p.at(TokenKind::RParen) {
-                p.parse_call_arg();
-
-                while p.eat(TokenKind::Comma) {
-                    if p.at(TokenKind::RParen) {
-                        break; // Trailing comma
-                    }
+                if !p.at(TokenKind::RParen) {
                     p.parse_call_arg();
-                }
-            }
 
-            p.expect(TokenKind::RParen);
+                    while p.eat(TokenKind::Comma) {
+                        if p.at(TokenKind::RParen) {
+                            break; // Trailing comma
+                        }
+                        p.parse_call_arg();
+                    }
+                }
+
+                p.expect(TokenKind::RParen);
+            });
         });
     }
 
@@ -7210,26 +7293,28 @@ impl<'a> Parser<'a> {
 
     fn parse_array_literal(&mut self) {
         self.with_node(SyntaxKind::ARRAY_LITERAL, |p| {
-            p.expect(TokenKind::LBracket);
+            p.with_parse_context(ParseContext::Brackets, |p| {
+                p.expect(TokenKind::LBracket);
 
-            if !p.at(TokenKind::RBracket) {
-                p.parse_expr();
-
-                // Allow commas and/or newlines as separators between elements
-                loop {
-                    // Consume optional comma
-                    p.eat(TokenKind::Comma);
-
-                    // Check if we're done
-                    if p.at(TokenKind::RBracket) || p.at_end() {
-                        break;
-                    }
-
+                if !p.at(TokenKind::RBracket) {
                     p.parse_expr();
-                }
-            }
 
-            p.expect(TokenKind::RBracket);
+                    // Allow commas and/or newlines as separators between elements
+                    loop {
+                        // Consume optional comma
+                        p.eat(TokenKind::Comma);
+
+                        // Check if we're done
+                        if p.at(TokenKind::RBracket) || p.at_end() {
+                            break;
+                        }
+
+                        p.parse_expr();
+                    }
+                }
+
+                p.expect(TokenKind::RBracket);
+            });
         });
     }
 
@@ -7773,14 +7858,16 @@ impl<'a> Parser<'a> {
 
     fn parse_parenthesized_expr(&mut self) {
         self.with_node(SyntaxKind::PAREN_EXPR, |p| {
-            p.expect(TokenKind::LParen);
-            // Parentheses opt back into syntax suppressed in condition position.
-            let saved_destructure = std::mem::take(&mut p.suppress_destructure_pattern_depth);
-            let saved_object = std::mem::take(&mut p.suppress_object_literal_depth);
-            p.parse_expr();
-            p.suppress_destructure_pattern_depth = saved_destructure;
-            p.suppress_object_literal_depth = saved_object;
-            p.expect(TokenKind::RParen);
+            p.with_parse_context(ParseContext::Parens, |p| {
+                p.expect(TokenKind::LParen);
+                // Parentheses opt back into syntax suppressed in condition position.
+                let saved_destructure = std::mem::take(&mut p.suppress_destructure_pattern_depth);
+                let saved_object = std::mem::take(&mut p.suppress_object_literal_depth);
+                p.parse_expr();
+                p.suppress_destructure_pattern_depth = saved_destructure;
+                p.suppress_object_literal_depth = saved_object;
+                p.expect(TokenKind::RParen);
+            });
         });
     }
 
@@ -7789,46 +7876,48 @@ impl<'a> Parser<'a> {
     /// following token unambiguously starts another key.
     fn parse_map_literal(&mut self) {
         self.with_node(SyntaxKind::MAP_LITERAL, |p| {
-            if p.at(TokenKind::Word) {
-                p.bump(); // map
-            }
-            p.expect(TokenKind::LBrace);
-
-            // Parse map entries
-            while !p.at(TokenKind::RBrace) && !p.at_end() {
-                if p.at_statement_recovery_boundary() {
-                    break;
+            p.with_parse_context(ParseContext::Fields, |p| {
+                if p.at(TokenKind::Word) {
+                    p.bump(); // map
                 }
+                p.expect(TokenKind::LBrace);
 
-                // Check for valid entry start
-                if p.at_map_key_start() {
-                    p.parse_map_entry();
-
-                    // Handle comma between entries
-                    if !p.at(TokenKind::RBrace) {
-                        if p.at_statement_recovery_boundary() {
-                            break;
-                        }
-                        if !p.eat(TokenKind::Comma)
-                            && !p.at_map_key_start()
-                            && !p.at(TokenKind::RBrace)
-                        {
-                            p.error_unexpected_token("',' or '}' after map entry".to_string());
-                            p.bump();
-                        }
+                // Parse map entries
+                while !p.at(TokenKind::RBrace) && !p.at_end() {
+                    if p.at_statement_recovery_boundary() {
+                        break;
                     }
-                } else if p.eat(TokenKind::Comma) {
-                    // Trailing comma or double comma - just continue
-                    continue;
-                } else {
-                    // Unexpected token in map
-                    p.error_unexpected_token("map key or '}'".to_string());
-                    // Skip the unexpected token to avoid getting stuck
-                    p.bump();
-                }
-            }
 
-            p.expect(TokenKind::RBrace);
+                    // Check for valid entry start
+                    if p.at_map_key_start() {
+                        p.parse_map_entry();
+
+                        // Handle comma between entries
+                        if !p.at(TokenKind::RBrace) {
+                            if p.at_statement_recovery_boundary() {
+                                break;
+                            }
+                            if !p.eat(TokenKind::Comma)
+                                && !p.at_map_key_start()
+                                && !p.at(TokenKind::RBrace)
+                            {
+                                p.error_unexpected_token("',' or '}' after map entry".to_string());
+                                p.bump();
+                            }
+                        }
+                    } else if p.eat(TokenKind::Comma) {
+                        // Trailing comma or double comma - just continue
+                        continue;
+                    } else {
+                        // Unexpected token in map
+                        p.error_unexpected_token("map key or '}'".to_string());
+                        // Skip the unexpected token to avoid getting stuck
+                        p.bump();
+                    }
+                }
+
+                p.expect(TokenKind::RBrace);
+            });
         });
     }
 
@@ -7967,6 +8056,10 @@ impl<'a> Parser<'a> {
 
     /// Parse the body of an object literal/constructor: { field: value, ...spread }
     fn parse_object_literal_body(&mut self) {
+        self.with_parse_context(ParseContext::Fields, Self::parse_object_literal_fields);
+    }
+
+    fn parse_object_literal_fields(&mut self) {
         self.expect(TokenKind::LBrace);
 
         // Parse fields until we hit the closing brace
@@ -14080,32 +14173,223 @@ function f() -> int {
         );
     }
 
+    fn count_kind(root: &SyntaxNode, kind: SyntaxKind) -> usize {
+        root.descendants().filter(|n| n.kind() == kind).count()
+    }
+
     #[test]
-    fn non_block_callee_then_paren_on_next_line_still_chains() {
-        // The B-622 fix keys strictly on a block-terminating `}` callee: a
-        // *non*-block callee (here a call `g()`, ending in `)`) followed by `(`
-        // on the next line must STILL glue into a chained call `g()(1)`. This
-        // preserves the deliberately-tested `foo()`-then-`(1)` behavior and
-        // guards against a future over-broad "newline separates" change.
-        let source = r#"function f(g: () -> (int) -> int) -> int {
-    g()
-    (1)
+    fn bracket_line_after_block_expr_is_a_new_statement() {
+        // Regression (B-1831): a `[` opening the line after a block-terminated
+        // `if` starts a new statement (an array literal), not an index into the
+        // `if` result. Before the fix `pick(true)` silently returned `7`.
+        let source = r#"function pick(c: bool) -> int[] {
+    if (c) { [7, 8, 9] } else { [4, 5, 6] }
+    [0]
 }
 "#;
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
+        assert_eq!(count_kind(&root, SyntaxKind::INDEX_EXPR), 0);
+    }
 
-        // `g()(1)` is one CALL_EXPR wrapping another (the outer call applies the
-        // returned lambda), so two CALL_EXPR nodes total — the newline did NOT
-        // split them into separate statements.
-        let call_exprs = root
-            .descendants()
-            .filter(|n| n.kind() == SyntaxKind::CALL_EXPR)
-            .count();
+    #[test]
+    fn minus_line_after_block_expr_is_a_new_statement() {
+        // Regression (B-1831): a `-` opening the line after a block-terminated
+        // statement is a prefix negation on a new statement, not a subtraction
+        // whose left operand is the `void` guard `if`.
+        let source = r#"function f(x: int?) -> int {
+    if (x != null) { return x; }
+    -1
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
         assert_eq!(
-            call_exprs, 2,
-            "a non-block callee followed by `(` on the next line must still chain as a call"
+            count_kind(&root, SyntaxKind::BINARY_EXPR),
+            1,
+            "only `x != null`"
         );
+        assert_eq!(count_kind(&root, SyntaxKind::UNARY_EXPR), 1);
+    }
+
+    #[test]
+    fn line_after_block_initializer_is_a_new_statement() {
+        // With no `;` to end a `let`, a block-terminated initializer ends at
+        // its line break too: `-y` is the tail expression, not part of the
+        // initializer (which would reference `y` before it is bound).
+        let source = r#"function g(x: int) -> int {
+    let y = match (x) {
+        0 => 10,
+        _ => 20,
+    }
+    -y
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 0);
+        assert_eq!(count_kind(&root, SyntaxKind::UNARY_EXPR), 1);
+    }
+
+    #[test]
+    fn same_line_continuation_after_block_expr_is_unchanged() {
+        // The line break is what ends the expression: on the same line, `[`,
+        // `(` and `-` still continue a block-terminated expression.
+        let source = r#"function f(c: bool) -> int {
+    let a = if (c) { [1, 2] } else { [3, 4] }[0]
+    let b = if (c) { 1 } else { 2 } - 1
+    a + b
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_kind(&root, SyntaxKind::INDEX_EXPR), 1);
+        assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 2);
+    }
+
+    #[test]
+    fn paren_line_after_call_is_a_new_statement() {
+        // A line break before `(` ends the expression whatever precedes it:
+        // `g()` then `(1)` is two statements, not the chained call `g()(1)`.
+        let source = r#"function f(g: () -> int) -> int {
+    g()
+    (-1)
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_kind(&root, SyntaxKind::CALL_EXPR), 1);
+    }
+
+    #[test]
+    fn minus_line_after_plain_expr_is_a_new_statement() {
+        // `a` then `- b` is `a`, then `-b`, in a block.
+        let source = r#"function f(a: int, b: int) -> int {
+    a
+    - b
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 0);
+        assert_eq!(count_kind(&root, SyntaxKind::UNARY_EXPR), 1);
+    }
+
+    #[test]
+    fn non_expression_start_line_still_continues() {
+        // Tokens that cannot begin an expression (`.`, `+`, `<` outside a
+        // generic lambda) continue the expression from the next line.
+        let source = r#"function f(c: bool, a: int) -> bool {
+    let s = if (c) { "x" } else { "y" }
+        .length()
+    let n = if (c) { 1 } else { 2 }
+        + 3
+    s + n
+        < a
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_kind(&root, SyntaxKind::CALL_EXPR), 1);
+        assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 3);
+    }
+
+    #[test]
+    fn catch_clause_line_continues_the_expression() {
+        // `catch`, `catch_all` and the contextual `catch_all_panics` (lexed as
+        // a plain word) on the next line attach a clause to the expression
+        // before them rather than starting a new statement.
+        for keyword in ["catch", "catch_all", "catch_all_panics"] {
+            let source = format!(
+                "function f(g: () -> int) -> int {{\n    g()\n    {keyword} (e) {{\n        _ => 0\n    }}\n}}\n"
+            );
+            let (root, errors) = parse_source(&source);
+            assert_no_errors(&errors);
+            assert_eq!(count_kind(&root, SyntaxKind::CATCH_EXPR), 1, "{keyword}");
+        }
+    }
+
+    #[test]
+    fn generic_lambda_line_is_a_new_statement() {
+        // `<` begins an expression only as a generic lambda, so this splits
+        // into `a` and a lambda (which reports its own generic-parameter
+        // error) rather than parsing `a < T > (x: T) => …` as comparisons.
+        let source = r#"function f(a: int) -> (int) -> int {
+    a
+    <T>(x: T) => { x }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_eq!(errors.len(), 1, "{errors:#?}");
+        assert!(
+            format!("{errors:?}").contains("a lambda cannot declare generic parameters"),
+            "{errors:#?}"
+        );
+        assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 0);
+    }
+
+    #[test]
+    fn line_breaks_inside_delimiters_are_whitespace() {
+        // Inside `( … )`, `[ … ]` and literal `{ … }` line breaks separate
+        // nothing, so each `a` then `- b` below is one subtraction.
+        let source = r#"function f(a: int, b: int, xs: int[]) -> int {
+    let c = g(
+        a
+            - b,
+    )
+    let d = (a
+        - b)
+    let e = [a
+        - b]
+    let i = xs[a
+        - b]
+    let p = Point { x: a
+        - b }
+    let m = { "k": a
+        - b }
+    if (a
+        - b > 0) { 1 } else { 2 }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        // Seven subtractions plus the `>`.
+        assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 8);
+    }
+
+    #[test]
+    fn block_inside_delimiters_separates_by_line_again() {
+        // A block nested in call parens holds statements, so its line breaks
+        // end expressions again: the lambda body is `a`, then `-b`.
+        let source = r#"function f(a: int, b: int) -> int {
+    g((x: int) -> int {
+        a
+        - b
+    })
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 0);
+        assert_eq!(count_kind(&root, SyntaxKind::UNARY_EXPR), 1);
+    }
+
+    #[test]
+    fn match_arms_separate_by_line() {
+        // Match arms are line-separated like statements, so a negative
+        // literal pattern on the next line starts a new arm.
+        let source = r#"function f(x: int, a: int) -> int {
+    match (x) {
+        0 => a
+        -1 => 2
+        _ => 3
+    }
+}
+"#;
+        let (root, errors) = parse_source(source);
+        assert_no_errors(&errors);
+        assert_eq!(count_kind(&root, SyntaxKind::MATCH_ARM), 3);
+        assert_eq!(count_kind(&root, SyntaxKind::BINARY_EXPR), 0);
     }
 
     #[test]

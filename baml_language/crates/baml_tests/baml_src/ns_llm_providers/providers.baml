@@ -240,7 +240,87 @@ function check_VertexLlama4ScoutRouter() -> void {
     )
 }
 
+// Structured Outputs: the strict schema OpenAI accepts, and the answer read
+// strictly. The type reaches `$defs` (a dotted name), a documented `$ref`, a
+// recursive class, an aliased enum, the int range, the bigint pattern, a
+// literal union and an optional field; the list output is sent wrapped.
+enum LiveMood {
+    Happy @alias("happy")
+    Sad @alias("sad")
+}
+
+class LiveCity {
+    name: string,
+    next: LiveCity?,
+}
+
+class LiveReport {
+    title: string @alias("headline"),
+    mood: LiveMood,
+    count: int,
+    big: bigint,
+    unit: "km" | "mi",
+    note: string?,
+    /// The first city of the route, linking to the next.
+    route: LiveCity,
+}
+
+function LiveStructuredReport() -> LiveReport {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${role("user")}
+        Fill in a report: headline "Trip", mood happy, count 3, big 12345678901234567890,
+        unit km, no note, and a route from Oslo to Bergen (two cities, Bergen last).
+        ${ctx.output_format()}
+    `
+}
+
+function LiveStructuredCities() -> string[] {
+    client: "openai/gpt-4o-mini"
+    prompt: `
+        ${role("user")}
+        List exactly these cities, in this order: Oslo, Bergen.
+        ${ctx.output_format()}
+    `
+}
+
+function check_structured(client: ai.Client) -> void {
+    let report = ai.Agent.new(client = client).run(LiveStructuredReport@spec()).value;
+    assert.equal(report.title, "Trip");
+    assert.equal(report.mood, LiveMood.Happy);
+    assert.equal(report.count, 3);
+    assert.equal(report.big, 12345678901234567890n);
+    assert.equal(report.unit, "km");
+    assert.equal(report.note, null);
+    assert.equal(report.route.name, "Oslo");
+    assert.equal(report.route.next?.name, "Bergen");
+    assert.equal(ai.Agent.new(client = client).run(LiveStructuredCities@spec()).value, ["Oslo", "Bergen"]);
+}
+
+function check_OpenAIChatStructured() -> void {
+    check_structured(
+        openai.ChatClient.new(model = "gpt-5.6-luna", api_key = env.OPENAI_API_KEY, structured_output = true),
+    )
+}
+
+function check_OpenAIResponsesStructured() -> void {
+    check_structured(
+        openai.ResponsesClient.new(
+            model = "gpt-5.6-luna",
+            api_key = env.OPENAI_API_KEY,
+            store = false,
+            structured_output = true,
+        ),
+    )
+}
+
 testset "live" with testing.Sequential() {
+    test "OpenAIChatStructured" {
+        check_OpenAIChatStructured()
+    }
+    test "OpenAIResponsesStructured" {
+        check_OpenAIResponsesStructured()
+    }
     test "BedrockHaiku45" {
         check_BedrockHaiku45()
     }

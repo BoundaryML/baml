@@ -1419,8 +1419,9 @@ impl Translator {
         Ok(compare_call(handle, op, item.clone()))
     }
 
-    /// `baml_value_state(v)` and `baml_kind(v)`: inspection functions over a
-    /// BAML value. Returns their translation, or `None` for other functions.
+    /// `baml_value_state(v)`, `baml_kind(v)` and `baml_code(v)`: inspection
+    /// functions over a BAML value. Returns their translation, or `None` for
+    /// other functions.
     fn value_function(&mut self, function: &mut Function) -> Result<Option<Expr>, SqlError> {
         let parts = object_name(&function.name)?;
         let [name] = parts.as_slice() else {
@@ -1430,6 +1431,8 @@ impl Translator {
             "__btel_value_state"
         } else if name.eq_ignore_ascii_case("baml_kind") {
             "__btel_kind"
+        } else if name.eq_ignore_ascii_case("baml_code") {
+            "__btel_code"
         } else {
             return Ok(None);
         };

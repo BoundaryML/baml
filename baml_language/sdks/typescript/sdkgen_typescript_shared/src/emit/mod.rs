@@ -12,7 +12,7 @@ pub(crate) mod method;
 pub(crate) mod type_alias;
 pub(crate) mod typemap_file;
 
-use baml_sdkgen_types::{FunctionArgument, Name, Symbol, SymbolPool, Ty};
+use baml_sdkgen_types::{FunctionArgument, Name, Symbol, SymbolPool, Ty, is_nullable};
 
 use crate::{
     emit::{
@@ -63,6 +63,7 @@ pub(crate) fn build_emitted(pool: &SymbolPool) -> Vec<(LeafPath, EmittedSymbol, 
                     .map(|p| TypeScriptClassProperty {
                         name: p.name.as_str().to_string(),
                         ty: p.ty.clone(),
+                        nullable: is_nullable(&p.ty, pool),
                         docstring: p.docstring.clone(),
                     })
                     .collect();

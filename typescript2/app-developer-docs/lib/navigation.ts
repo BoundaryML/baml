@@ -36,6 +36,10 @@ export const documentationNavigation: DocumentationGroup[] = [
             href: '/baml/book/concurrency',
             label: '12. Run work concurrently',
           },
+          {
+            href: '/baml/book/patterns',
+            label: '22. Patterns, matching, and destructuring',
+          },
         ],
         href: '/baml/book',
         label: 'Book',

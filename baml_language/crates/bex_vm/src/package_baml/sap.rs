@@ -804,7 +804,11 @@ fn unfillable_skipped_field(
 ///
 /// `within` holds the classes and aliases being built, to stop a type that
 /// needs its own empty value.
-fn empty_value(
+///
+/// This is the value a `@skip` field holds whenever a model's answer is read
+/// under the names a model is shown: here, and in `baml.json.from_string`
+/// with `Naming.Aliased`. `baml.json.schema` mirrors it as `has_empty_value`.
+pub(super) fn empty_value(
     vm: &mut BexVm,
     ty: &RealizedTy,
     within: &mut Vec<HeapPtr>,

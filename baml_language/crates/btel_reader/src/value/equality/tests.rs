@@ -130,8 +130,9 @@ fn is(a: &DecodedSnapshot, literal: &Json) -> Result<Option<bool>, Error> {
 fn declaration(name: &str, is_enum: bool) -> DecodedObject {
     DecodedObject::Declaration {
         name: DecodedName(DeclarationName::Declared(TypeName::from_dotted_path(name))),
-        tag: TypeTag::from_i64(1),
+        tag: Some(TypeTag::from_i64(1)),
         is_enum,
+        definition: None,
     }
 }
 

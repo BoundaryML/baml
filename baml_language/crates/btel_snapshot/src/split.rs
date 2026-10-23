@@ -11,7 +11,7 @@ use crate::{
     encoding::{STRING_BLOB_HEADER_BYTES, string_blob_header},
     graph::{SnapshotRoot, SnapshotValue, StringId},
     pool::Storage,
-    shape::{BlobEntry, LogicalBytesApproxV1},
+    shape::{BlobEntry, Content, LogicalBytesApproxV1},
 };
 
 /// A blob that is one string, on its own: what the blob holds before the
@@ -102,6 +102,10 @@ impl Kept<'_> {
     pub fn logical_bytes_approx_v1(&self) -> Option<u64> {
         self.0.logical_bytes_approx_v1()
     }
+    /// As [`Blob::is_definition`].
+    pub fn is_definition(&self) -> bool {
+        self.0.is_definition()
+    }
     /// As [`Blob::write`].
     pub fn write(&self, scratch: &mut BlobScratch, w: &mut impl Write) -> io::Result<()> {
         self.0.write(scratch, w)
@@ -120,21 +124,24 @@ pub struct Split {
 
 /// Whether the blob is one string.
 fn is_string(entry: &BlobEntry) -> bool {
-    match entry.root {
-        SnapshotRoot::Value(SnapshotValue::String(_)) => true,
-        SnapshotRoot::Value(
-            SnapshotValue::Null
-            | SnapshotValue::OmittedArg
-            | SnapshotValue::Bool(_)
-            | SnapshotValue::Int(_)
-            | SnapshotValue::Float(_)
-            | SnapshotValue::Bigint(_)
-            | SnapshotValue::Object(_)
-            | SnapshotValue::Type(_)
-            | SnapshotValue::Enum { .. }
-            | SnapshotValue::Truncated(_),
-        )
-        | SnapshotRoot::FunctionArgs(_) => false,
+    match entry.content {
+        Content::Capture(SnapshotRoot::Value(SnapshotValue::String(_))) => true,
+        Content::Definition(_)
+        | Content::Capture(
+            SnapshotRoot::Value(
+                SnapshotValue::Null
+                | SnapshotValue::OmittedArg
+                | SnapshotValue::Bool(_)
+                | SnapshotValue::Int(_)
+                | SnapshotValue::Float(_)
+                | SnapshotValue::Bigint(_)
+                | SnapshotValue::Object(_)
+                | SnapshotValue::Type(_)
+                | SnapshotValue::Enum { .. }
+                | SnapshotValue::Truncated(_),
+            )
+            | SnapshotRoot::FunctionArgs(_),
+        ) => false,
     }
 }
 
@@ -159,7 +166,8 @@ impl Snapshot {
         let mut leaves = Vec::new();
         let mut kept = false;
         for entry in shape.blobs.iter() {
-            let SnapshotRoot::Value(SnapshotValue::String(id)) = entry.root else {
+            let Content::Capture(SnapshotRoot::Value(SnapshotValue::String(id))) = entry.content
+            else {
                 debug_assert!(!is_string(entry));
                 kept = true;
                 continue;

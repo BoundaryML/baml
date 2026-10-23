@@ -1254,6 +1254,8 @@ dependencies = [
  "bex_vm",
  "bex_vm_types",
  "borsh",
+ "btel_clock",
+ "btel_recorder",
  "codspeed-divan-compat",
  "darwin-kperf",
  "darwin-kperf-events",
@@ -1949,6 +1951,7 @@ dependencies = [
 name = "btel_bcs"
 version = "0.0.0-beta"
 dependencies = [
+ "baml_type",
  "bcs_api",
  "btel_clock",
  "btel_processor",

@@ -225,43 +225,49 @@ function OtherExprs(a: int, b: int) -> int {
     };
 
     // ===== Trivia in object initializer (line comments) =====
-    // 1 type name leading
-    OtherPoint { // 4 open brace trailing
-        // 5 field name leading
-        x: 1, // 10 comma trailing
-        // 11 second field leading
-        y: 2, // 15 second value trailing
-        // 16 close brace leading
-};
+    (
+        // 1 type name leading
+        OtherPoint { // 4 open brace trailing
+            // 5 field name leading
+            x: 1, // 10 comma trailing
+            // 11 second field leading
+            y: 2, // 15 second value trailing
+                // 16 close brace leading
+} // 17 close brace trailing
+    );
 
     // ===== Trivia in object initializer (block comments) =====
-    /* 1 type name leading */
-    OtherPoint { /* 4 open brace trailing */
-        /* 5 field name leading */
-        x: /* 7 colon trailing *//* 8 value leading */1, /* 10 comma trailing */
-        /* 11 second field leading */
-        y: /* 13 second colon trailing *//* 14 second value leading */2, /* 15 second value trailing */
-        /* 16 close brace leading */
-}/* 17 close brace trailing */;
+    (
+        /* 1 type name leading */
+        OtherPoint { /* 4 open brace trailing */
+            /* 5 field name leading */
+            x: /* 7 colon trailing *//* 8 value leading */1, /* 10 comma trailing */
+            /* 11 second field leading */
+            y: /* 13 second colon trailing *//* 14 second value leading */2, /* 15 second value trailing */
+                /* 16 close brace leading */
+} /* 17 close brace trailing */
+    );
 
     // ===== Trivia in nested object exceeding limit (line comments) =====
-    // 1 leading
-    OtherVec { // 3 trailing
-        // 4 leading
-        p: OtherPoint { // 9 trailing
-            // 10 leading
-            x: 100000, // 15 trailing
-            // 16 leading
-            y: 200000, // 20 trailing
-        }, // 22 trailing
-        // 23 leading
-        q: OtherPoint { // 28 trailing
-            // 29 leading
-            x: 300000, // 34 trailing
-            // 35 leading
-            y: 400000, // 39 trailing
-        }, // 40 trailing
-    };
+    (
+        // 1 leading
+        OtherVec { // 3 trailing
+            // 4 leading
+            p: OtherPoint { // 9 trailing
+                // 10 leading
+                x: 100000, // 15 trailing
+                // 16 leading
+                y: 200000, // 20 trailing
+            }, // 22 trailing
+            // 23 leading
+            q: OtherPoint { // 28 trailing
+                // 29 leading
+                x: 300000, // 34 trailing
+                // 35 leading
+                y: 400000, // 39 trailing
+            }, // 40 trailing
+        } // 41 trailing
+    );
 
     // ===== Block expressions =====
     {

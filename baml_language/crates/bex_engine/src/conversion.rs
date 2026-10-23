@@ -1707,17 +1707,37 @@ impl BexEngine {
                 // as an opaque handle) can branch on the declared shape.
                 let mut values = Vec::with_capacity(class_fields.len());
                 for class_field in class_fields {
-                    let ext = fields.get(&class_field.name).ok_or_else(|| {
-                        EngineError::TypeMismatch {
-                            message: format!(
-                                "Missing field `{}` in external Instance for class `{class_name}`",
-                                class_field.name
-                            ),
-                        }
-                    })?;
                     let field_ty = class_field.field_template.substitute_symbolic(&type_args);
                     let wire_field_ty = overlay_wire_ty(&field_ty)?;
-                    let field_value = self.coerce_inbound_arg(ext.clone(), &wire_field_ty)?;
+                    let ext = match fields.get(&class_field.name) {
+                        Some(ext) => ext.clone(),
+                        None => {
+                            // An omitted field whose type admits `null` reads
+                            // as `null`, unless the value also has a key the
+                            // class does not declare: that key is likely this
+                            // field misspelled or under its `@alias` name, and
+                            // its value must not be dropped silently.
+                            let undeclared_key = fields
+                                .keys()
+                                .find(|key| !class_fields.iter().any(|field| field.name == **key));
+                            if undeclared_key.is_none()
+                                && runtime_ty_admits_null(&wire_field_ty, &self.inbound_alias_view)
+                            {
+                                BexExternalValue::Null
+                            } else {
+                                let hint = undeclared_key
+                                    .map(|key| format!(" (the value has undeclared key `{key}`)"))
+                                    .unwrap_or_default();
+                                return Err(EngineError::TypeMismatch {
+                                    message: format!(
+                                        "Missing field `{}` in external Instance for class `{class_name}`{hint}",
+                                        class_field.name
+                                    ),
+                                });
+                            }
+                        }
+                    };
+                    let field_value = self.coerce_inbound_arg(ext, &wire_field_ty)?;
                     values.push(self.convert_external_to_vm_value_with_ty_and_runtime(
                         holder,
                         field_value,
@@ -3255,6 +3275,37 @@ fn runtime_ty_resolves_to_exact_null<'a>(
         }
     }
     false
+}
+
+/// Whether `null` inhabits `ty`: `T?`, a union with a `null` arm, or an alias
+/// (recursive ones such as `json` included) that resolves to one.
+///
+/// BAML has a single "no value" state for a field, so inbound materialization
+/// reads a class field of such a type that the host omitted as `null`. Plain
+/// host objects (a TypeScript literal that skips an optional key, a Python
+/// dict, replayed JSON) depend on this.
+fn runtime_ty_admits_null(
+    ty: &RuntimeTy,
+    aliases: &indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+) -> bool {
+    fn admits<'a>(
+        ty: &'a RuntimeTy,
+        aliases: &'a indexmap::IndexMap<baml_type::TypeName, RuntimeTy>,
+        visiting: &mut std::collections::HashSet<&'a baml_type::TypeName>,
+    ) -> bool {
+        match ty {
+            RuntimeTy::Null => true,
+            RuntimeTy::Union(members) => members
+                .iter()
+                .any(|member| admits(member, aliases, visiting)),
+            RuntimeTy::TypeAlias(name) => match aliases.get(name) {
+                Some(body) if visiting.insert(name) => admits(body, aliases, visiting),
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+    admits(ty, aliases, &mut std::collections::HashSet::new())
 }
 
 fn type_name_matches_external_name(external_name: &str, type_name: &baml_type::TypeName) -> bool {
@@ -5990,6 +6041,7 @@ mod union_container_selection_tests {
             docstring: None,
             other: indexmap::IndexMap::new(),
             owner: bex_vm_types::types::Owner::Package(user),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
         })));
         let happy = RuntimeTy::EnumVariant(mood.clone(), Name::new("HAPPY"));
         let broad = RuntimeTy::Enum(mood);
@@ -6029,6 +6081,7 @@ mod union_container_selection_tests {
                 methods: indexmap::IndexMap::new(),
                 generic_param_count: 0,
                 owner,
+                telemetry_definition: bex_vm_types::DefinitionCell::default(),
             })))
         }
 

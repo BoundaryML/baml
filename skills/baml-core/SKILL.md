@@ -101,6 +101,32 @@ To add cross-cutting behavior (metering, caching, replay, budgets), write a clas
 
 For anything not shown (signatures, niche stdlib, advanced features), run **`baml describe <name>`** — the CLI is the docs; never guess the stdlib.
 
+## Debugging a recorded call
+
+Runs record their calls, and AI functions record their inputs, output, error and type arguments by default. `baml query` answers SQL over them (`baml query --schema` lists the tables). To turn a failing call into a test:
+
+```bash
+# 1. Find the call.
+baml query "SELECT span_id, input_args, error_value FROM spans
+  WHERE span_name = 'user.Extract' AND error_value IS NOT NULL ORDER BY start_time DESC LIMIT 1"
+# 2. Its types as BAML code, classes and enums built at run time included.
+#    baml_code also takes an instance or enum value: input_args['row'].
+baml query "SELECT baml_code(type_args['T']) FROM spans WHERE span_id = '<span_id>'"
+# 3. The model's raw HTTP response, from the request under the call.
+baml query "SELECT network_event_values FROM spans
+  WHERE span_type = 'network_span' AND parent_span_id = '<span_id>' ORDER BY start_time"
+```
+
+`baml_code` returns a block whose value is the recorded type: bind it with `let type`. Replay the model's reply with `F@parse`, so the test never calls the model:
+
+```baml
+test "Extract fails on the recorded Row" {
+    let t = { /* step 2's code */ };
+    let type T = t;
+    let row = Extract@parse<T>(`/* the message text from step 3's response */`);
+}
+```
+
 ## Example 1 — LLM DSL + glue (schema, attributes, client, backtick prompt, post-processing)
 
 ```baml

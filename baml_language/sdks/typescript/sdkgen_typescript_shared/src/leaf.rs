@@ -704,14 +704,19 @@ fn render_class_ts(
     write_class_doc(out, c);
     let generics = generic_decl(&c.generic_params);
 
-    // Translate each property type once; reuse for field + constructor.
-    let props: Vec<(&str, TranslatedType)> = c
+    // Translate each property type once; reuse for field + constructor. A
+    // nullable field's key is optional (`name?: T | null`): the runtime reads
+    // an omitted nullable field as `null`, so callers may leave it out of the
+    // constructor init or of a plain object passed where the class is expected.
+    // Reading the property is then typed `T | null | undefined`, although a
+    // value decoded from BAML always carries the key.
+    let props: Vec<(&str, bool, TranslatedType)> = c
         .properties
         .iter()
         .map(|p| {
             let t = translate_ty(&p.ty, ctx);
             state.merge(&t);
-            (p.name.as_str(), t)
+            (p.name.as_str(), p.nullable, t)
         })
         .collect();
 
@@ -732,10 +737,12 @@ fn render_class_ts(
     });
 
     let _ = writeln!(out, "export class {}{generics} {{", c.name);
-    for (name, t) in &props {
-        // `!` definite-assignment assertion: fields are populated via the
+    for (name, nullable, t) in &props {
+        // Nullable fields are optional (`?`). The rest use `!`, the
+        // definite-assignment assertion: they are populated via the
         // constructor's `Object.assign`, which tsc's flow analysis can't see.
-        let _ = writeln!(out, "  {name}!: {};", t.expr);
+        let marker = if *nullable { "?" } else { "!" };
+        let _ = writeln!(out, "  {name}{marker}: {};", t.expr);
     }
     if let Some(types_ty) = &types_field {
         state.uses_baml_type = true;
@@ -747,8 +754,9 @@ fn render_class_ts(
         out.push_str("  constructor(init: {}) {\n    Object.assign(this, init);\n  }\n");
     } else {
         out.push_str("  constructor(init: {\n");
-        for (name, t) in &props {
-            let _ = writeln!(out, "    {name}: {};", t.expr);
+        for (name, nullable, t) in &props {
+            let marker = if *nullable { "?" } else { "" };
+            let _ = writeln!(out, "    {name}{marker}: {};", t.expr);
         }
         if let Some(types_ty) = &types_field {
             let _ = writeln!(out, "    $types?: {types_ty};");
@@ -1045,7 +1053,7 @@ fn split_param_names(
 #[cfg(test)]
 mod tests {
     use baml_base::{Literal, Name as BaseName};
-    use baml_sdkgen_types::{DefaultLiteral, FunctionArgumentDefault, Name, Ty};
+    use baml_sdkgen_types::{DefaultLiteral, FunctionArgumentDefault, Name, SymbolPool, Ty};
 
     use super::*;
 
@@ -1082,6 +1090,7 @@ mod tests {
                 .into_iter()
                 .map(|(pn, ty)| crate::emit::class::TypeScriptClassProperty {
                     name: pn.to_string(),
+                    nullable: baml_sdkgen_types::is_nullable(&ty, &SymbolPool::new()),
                     ty,
                     docstring: None,
                 })

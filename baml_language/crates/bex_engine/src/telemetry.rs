@@ -59,6 +59,13 @@ pub(crate) enum RecordingDelivery {
 }
 
 impl RecordingDelivery {
+    /// Start cloud delivery's shutdown timeout. Local files have none.
+    pub(crate) fn start_draining(&self) {
+        if let Self::Cloud { delivery, .. } = self {
+            delivery.start_draining();
+        }
+    }
+
     pub(crate) fn finish(&self) -> Result<(), btel_processor::RuntimeError> {
         match self {
             Self::Local(delivery) => delivery
@@ -905,7 +912,9 @@ impl BexEngine {
     }
 
     /// Number of discarded cloud prepare groups or upload targets, not events or
-    /// retry attempts. Zero for local recording or when telemetry is off.
+    /// retry attempts. Zero for local recording or when telemetry is off. Work
+    /// dropped once delivery is disabled, including by the shutdown timeout, is
+    /// not counted: `telemetry_result` reports the disabling error.
     pub fn telemetry_delivery_loss_count(&self) -> u64 {
         match self
             .telemetry
