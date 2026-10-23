@@ -1,8 +1,9 @@
 //! Rust expressions for realized types.
 
-use crate::index::ProgramIndex;
 use baml_compiler2_mir::TyTemplate;
 use baml_type::Literal;
+
+use crate::index::ProgramIndex;
 
 /// Frame references require a running function; unsupported templates return `None`.
 pub(crate) fn realized_expr(

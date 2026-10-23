@@ -2,10 +2,6 @@
 
 use std::collections::{HashMap, VecDeque, hash_map::Entry};
 
-use crate::coords::{
-    DeclCoords, class_coords, class_head_coords, declared_function_coords, enum_coords,
-    enum_head_coords, function_coords, interface_head_coords, item_path, let_coords,
-};
 use baml_base::SourceRoot;
 use baml_compiler2_emit::function_identity;
 use baml_compiler2_hir::{
@@ -19,6 +15,11 @@ use baml_type::{DeclName, typetag::TypeTag};
 use bex_vm_types::{
     Bytecode, ConstValue, DeclPath, FnPath, Object, ObjectIndex, Program, TypeHead,
     types::{FunctionIdentity, PackageKind},
+};
+
+use crate::coords::{
+    DeclCoords, class_coords, class_head_coords, declared_function_coords, enum_coords,
+    enum_head_coords, function_coords, interface_head_coords, item_path, let_coords,
 };
 
 pub(crate) struct ProgramIndex<'p> {

@@ -323,8 +323,9 @@ fn a_panicking_compiled_body_clears_fiber_state() {
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn compiled_recursion_checks_fiber_stack_space() {
-    use crate::compiled_rt::Step;
     use std::sync::atomic::AtomicUsize;
+
+    use crate::compiled_rt::Step;
 
     static CALLEE: AtomicU32 = AtomicU32::new(0);
     static DEEPEST: AtomicUsize = AtomicUsize::new(0);
@@ -946,7 +947,6 @@ fn inline_observed_compiled_calls_record_as_the_call_path_does() {
 #[test]
 fn a_spawn_below_a_frame_record_is_attributed_to_its_body() {
     use btel_settings::mode::AutoTelemetryLevel;
-
     use btel_types::CallPathEdge;
 
     use crate::compiled_rt::{FORCE_CALL_FUNNEL, FORCE_VM_FRAMES, Step};

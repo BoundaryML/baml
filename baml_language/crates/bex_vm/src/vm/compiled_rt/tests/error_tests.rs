@@ -206,11 +206,12 @@ fn compiled_catches_match_bytecode_error_evidence_and_rethrow_origins() {
 #[test]
 #[allow(unsafe_code)]
 fn compiled_awaits_match_bytecode_error_evidence_and_future_origins() {
-    use crate::types::ObjectTrait;
     use bex_vm_types::{Future, RealizedTy, types::FutureId};
     use btel_records::{FutureErrorLink, OriginEvidence};
     use btel_settings::mode::AutoTelemetryLevel;
     use btel_types::allocate_telemetry_id;
+
+    use crate::types::ObjectTrait;
 
     struct EvidencePublisher;
     impl<I, V> btel_processor::Publisher<I, V> for EvidencePublisher {

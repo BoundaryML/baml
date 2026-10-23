@@ -7,8 +7,6 @@ mod place;
 mod stmt;
 pub(crate) mod types;
 
-use types::{realized_expr, template_blocker};
-
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     fmt::Write as _,
@@ -18,6 +16,7 @@ use baml_compiler2_mir::{
     BlockId, Constant, Local, MirFunction, MirFunctionBody, Operand, Place, Terminator,
     function_display_name,
 };
+use types::{realized_expr, template_blocker};
 
 use crate::{
     admit::Rejection,

@@ -44,11 +44,11 @@ syn = { workspace = true }
 walkdir = { workspace = true }
 
 [dev-dependencies]
-baml_exec = { workspace = true }
 baml_builtins2 = { workspace = true }
 baml_cli = { workspace = true }
 baml_compiler2_emit = { workspace = true }
 baml_db = { workspace = true, features = [ "rust_backend" ] }
+baml_exec = { workspace = true }
 baml_fmt = { workspace = true }
 baml_linker = { workspace = true }
 baml_linker_types = { workspace = true }

@@ -1,11 +1,9 @@
 //! Generates inline calls, suspension requests, and interface dispatch operands.
 
-use bex_vm_types::types::Function;
-
 use std::fmt::Write as _;
 
 use baml_compiler2_mir::{BlockId, Constant, Operand, TyTemplateInterface, function_display_name};
-use bex_vm_types::FunctionKind;
+use bex_vm_types::{FunctionKind, types::Function};
 
 use super::{Expr, Gen, Generator, unsupported};
 use crate::{
