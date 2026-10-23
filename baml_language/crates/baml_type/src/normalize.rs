@@ -30,10 +30,9 @@
 //! absorb, or equate, so a missing fact can only yield "not *necessarily*
 //! equivalent / subtype", never a false claim of equivalence or membership.
 
-use std::{
-    cell::RefCell,
-    collections::{HashMap, HashSet},
-};
+use std::{cell::RefCell, collections::HashSet};
+
+use rustc_hash::FxHashMap;
 
 use crate::{
     DeclName, FunctionParamMode, FunctionParamTy, Head, Interface, Literal, MediaKind, Name,
@@ -2794,7 +2793,7 @@ mod tests;
 
 use crate::interned;
 
-/// Memoizes canonical forms for a sequence of interned relations evaluated
+/// Memoizes canonical forms and normalized spellings for interned types evaluated
 /// under one immutable [`TypeContext`]. The cache deliberately takes the
 /// context at each call rather than owning it; callers are responsible for
 /// keeping one cache scoped to one fact set (compiler inference uses one per
@@ -2802,11 +2801,40 @@ use crate::interned;
 /// their meaning is table-relative rather than a property of the handle alone.
 #[derive(Default)]
 pub struct InternedCanonicalCache {
-    canonical: RefCell<HashMap<interned::ClosedTy, NormalTy>>,
-    normalized: RefCell<HashMap<interned::ClosedTy, interned::ClosedTy>>,
+    resolved: RefCell<FxHashMap<interned::ClosedTy, ResolvedTy>>,
+}
+
+#[derive(Default)]
+struct ResolvedTy {
+    canonical: Option<NormalTy>,
+    normalized: Option<interned::ClosedTy>,
 }
 
 impl InternedCanonicalCache {
+    fn get_canonical(&self, ty: &interned::ClosedTy) -> Option<NormalTy> {
+        self.resolved.borrow().get(ty)?.canonical.clone()
+    }
+
+    fn set_canonical(&self, ty: &interned::ClosedTy, canonical: NormalTy) {
+        self.resolved
+            .borrow_mut()
+            .entry(ty.clone())
+            .or_default()
+            .canonical = Some(canonical);
+    }
+
+    fn get_normalized(&self, ty: &interned::ClosedTy) -> Option<interned::ClosedTy> {
+        self.resolved.borrow().get(ty)?.normalized.clone()
+    }
+
+    fn set_normalized(&self, ty: &interned::ClosedTy, normalized: interned::ClosedTy) {
+        self.resolved
+            .borrow_mut()
+            .entry(ty.clone())
+            .or_default()
+            .normalized = Some(normalized);
+    }
+
     /// The cached structural spelling of [`normalize_interned`], including
     /// its root-unfold-once rendering of recursive aliases.
     pub fn normalize<C: TypeContext>(
@@ -2814,24 +2842,20 @@ impl InternedCanonicalCache {
         ty: &interned::ClosedTy,
         ctx: &C,
     ) -> interned::ClosedTy {
-        if let Some(normalized) = self.normalized.borrow().get(ty) {
-            return normalized.clone();
+        if let Some(normalized) = self.get_normalized(ty) {
+            return normalized;
         }
         let normalized = normalize_interned(ty, ctx);
-        self.normalized
-            .borrow_mut()
-            .insert(ty.clone(), normalized.clone());
+        self.set_normalized(ty, normalized.clone());
         normalized
     }
 
     fn canonical<C: TypeContext>(&self, ty: &interned::ClosedTy, ctx: &C) -> NormalTy {
-        if let Some(canonical) = self.canonical.borrow().get(ty) {
-            return canonical.clone();
+        if let Some(canonical) = self.get_canonical(ty) {
+            return canonical;
         }
         let canonical = NormalTy::canonical_interned(ty, ctx);
-        self.canonical
-            .borrow_mut()
-            .insert(ty.clone(), canonical.clone());
+        self.set_canonical(ty, canonical.clone());
         canonical
     }
 
