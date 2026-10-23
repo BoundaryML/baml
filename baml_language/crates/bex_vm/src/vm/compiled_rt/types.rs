@@ -166,6 +166,7 @@ impl BexVm {
     }
 
     /// Return the instance type of `class` at `type_args`.
+    #[inline]
     #[must_use]
     pub fn class_type_at(&self, class: HeapPtr, type_args: Box<[RealizedTy]>) -> RealizedTy {
         let Object::Class(declaration) = self.get_object(class) else {

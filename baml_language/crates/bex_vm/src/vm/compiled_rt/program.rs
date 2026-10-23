@@ -18,12 +18,13 @@ impl BexVm {
             unreachable!("compiled code names its own function object");
         };
         let slot = GlobalIndex::from_raw(index);
-        if self.runtime_package_of(body).as_ptr().is_null() && self.global_is_pending(slot) {
+        let package = self.runtime_package_of(body);
+        if package.as_ptr().is_null() && self.global_is_pending(slot) {
             return Err(Box::new(
                 VmInternalError::GlobalReadBeforeInit { slot }.into(),
             ));
         }
-        Ok(self.load_global(function, index))
+        Ok(self.load_global_in(package, slot))
     }
 
     /// Store an initializer's result in its owning package's global cell.

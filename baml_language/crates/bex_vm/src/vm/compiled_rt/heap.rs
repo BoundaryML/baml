@@ -11,13 +11,7 @@ use crate::{
 impl BexVm {
     /// Return the length of a container, measuring strings in bytes.
     pub fn container_len(&self, container: Value) -> Result<Value, Box<VmError>> {
-        let Some(ptr) = container.as_object_ptr() else {
-            return Err(VmInternalError::TypeError {
-                expected: ObjectType::Array.into(),
-                got: self.type_of(&container),
-            }
-            .into());
-        };
+        let ptr = self.as_object_ptr(container, ObjectType::Array)?;
         #[allow(clippy::cast_possible_wrap)]
         let len = match self.get_object(ptr) {
             Object::Array(arr) => arr.len() as i64,
@@ -236,13 +230,7 @@ impl BexVm {
 
     /// The variant index of an enum value.
     pub fn discriminant(&self, value: Value) -> Result<i64, Box<VmError>> {
-        let Some(ptr) = value.as_object_ptr() else {
-            return Err(VmInternalError::TypeError {
-                expected: ObjectType::Variant.into(),
-                got: self.type_of(&value),
-            }
-            .into());
-        };
+        let ptr = self.as_object_ptr(value, ObjectType::Variant)?;
         match self.get_object(ptr) {
             #[allow(clippy::cast_possible_wrap)]
             Object::Variant(variant) => Ok(variant.index as i64),
@@ -277,13 +265,7 @@ impl BexVm {
     /// Return the instance type of a non-generic class.
     #[must_use]
     pub fn class_type(&self, class: HeapPtr) -> RealizedTy {
-        let Object::Class(declaration) = self.get_object(class) else {
-            unreachable!("compiled code names classes by their class object");
-        };
-        RealizedTy::Class(
-            bex_vm_types::TypeHead::new(class, declaration.type_tag),
-            Box::new([]),
-        )
+        self.class_type_at(class, Box::new([]))
     }
 
     /// Allocate an instance of a non-generic class with its fields in slot

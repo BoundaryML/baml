@@ -59,15 +59,7 @@ impl BexVm {
 
     #[inline]
     fn cell_of(&self, cell: Value) -> Result<(HeapPtr, &Cell), Box<VmError>> {
-        let Some(ptr) = cell.as_object_ptr() else {
-            return Err(Box::new(
-                VmInternalError::TypeError {
-                    expected: ObjectType::Cell.into(),
-                    got: self.type_of(&cell),
-                }
-                .into(),
-            ));
-        };
+        let ptr = self.as_object_ptr(cell, ObjectType::Cell)?;
         match self.get_object(ptr) {
             Object::Cell(cell) => Ok((ptr, cell)),
             other => Err(Box::new(
