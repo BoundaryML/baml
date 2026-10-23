@@ -101,15 +101,6 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                                    ╰── expected `Unexpected token in class body`, found `'>'`
     ╰────
 
-  [hir] E0108
-
-  × CST-to-AST lowering left unconsumed type syntax: L_PAREN, FUNCTION_TYPE_PARAM, AT, WORD, L_PAREN, QUOTE, WORD, QUOTE, R_PAREN, WORD, R_PAREN, L_BRACKET, R_BRACKET
-    ╭─[nested.baml:24:9]
- 24 │   field (NFoo @alias("inner") | NBar)[]
-    ·         ┬
-    ·         ╰── this syntax was not represented in the lowered type
-    ╰────
-
   [parse] E0010
 
   × invalid syntax
@@ -990,15 +981,6 @@ source: crates/baml_tests/src/generated_tests.rs
  17 │   field UA | UB @stream.done | UC @alias("trailing")
     ·                                ─┬
     ·                                 ╰── field 'UC' is missing a type annotation
-    ╰────
-
-  [hir] E0108
-
-  × CST-to-AST lowering left unconsumed type syntax: AT, WORD, L_PAREN, QUOTE, WORD, QUOTE, R_PAREN
-    ╭─[unions.baml:21:18]
- 21 │   field UA | (UB @alias("last"))
-    ·                  ┬
-    ·                  ╰── this syntax was not represented in the lowered type
     ╰────
 
   [parse] E0010
