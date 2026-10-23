@@ -1,8 +1,4 @@
-//! The BAML-to-Rust backend admits the compute-shaped subset and keeps the
-//! rest bytecode, with a reason, and its output is well-formed Rust.
-//!
-//! Rust rather than a BAML test because the backend's output is Rust source
-//! and its admission table is compiler-side data a program cannot observe.
+//! Compiler admission, generated Rust structure, and bytecode identity checks.
 
 use baml_compiler2_emit::OptLevel;
 use baml_db::rust_backend::{Rejection, RustModule, compile_program};
@@ -18,21 +14,30 @@ fn compile(source: &str) -> RustModule {
     compile_with_program(source).0
 }
 
+fn render(
+    db: &baml_db::ProjectDatabase,
+    program: &Program,
+    opt: OptLevel,
+    entries: Option<&[usize]>,
+) -> RustModule {
+    compile_program(
+        db,
+        db.workspace_root().unwrap(),
+        program,
+        opt,
+        "program.bexa",
+        fingerprint(program),
+        entries,
+    )
+    .expect("generated module renders")
+}
+
 fn compile_with_program(source: &str) -> (RustModule, Program) {
     let db = baml_test_support::setup_test_db(source);
     let root = db.workspace_root().expect("test db has a workspace root");
     let program =
         baml_db::compile_program(&db, root, OptLevel::Two).expect("fixture compiles to bytecode");
-    let module = compile_program(
-        &db,
-        root,
-        &program,
-        OptLevel::Two,
-        "program.bexa",
-        fingerprint(&program),
-        None,
-    )
-    .expect("generated module renders");
+    let module = render(&db, &program, OptLevel::Two, None);
     (module, program)
 }
 
@@ -65,16 +70,7 @@ test "other initializer" { assert.equal(LATER.length(), 3) }
     let root = db.workspace_root().unwrap();
     for opt in [OptLevel::Zero, OptLevel::One, OptLevel::Two] {
         let program = baml_db::compile_program(&db, root, opt).unwrap();
-        let module = compile_program(
-            &db,
-            root,
-            &program,
-            opt,
-            "program.bexa",
-            fingerprint(&program),
-            None,
-        )
-        .unwrap();
+        let module = render(&db, &program, opt, None);
         let mut helpers = 0;
         let mut chainers = 0;
         for (object, item) in program.objects.iter().enumerate() {
@@ -131,16 +127,7 @@ test "registered initializer" { assert.equal(only_from_test(), 9) }
     let root = db.workspace_root().unwrap();
     let program = baml_db::compile_program(&db, root, OptLevel::Two).unwrap();
     let entries = [program.rendered_callables()["user.main"].object.raw()];
-    let module = compile_program(
-        &db,
-        root,
-        &program,
-        OptLevel::Two,
-        "program.bexa",
-        fingerprint(&program),
-        Some(&entries),
-    )
-    .unwrap();
+    let module = render(&db, &program, OptLevel::Two, Some(&entries));
     assert_admitted(
         &module,
         &[
@@ -180,16 +167,7 @@ fn global_function_values_are_indirect_callees_at_every_opt_level() {
     let root = db.workspace_root().unwrap();
     for opt in [OptLevel::Zero, OptLevel::One, OptLevel::Two] {
         let program = baml_db::compile_program(&db, root, opt).unwrap();
-        let module = compile_program(
-            &db,
-            root,
-            &program,
-            opt,
-            "program.bexa",
-            fingerprint(&program),
-            None,
-        )
-        .unwrap();
+        let module = render(&db, &program, opt, None);
         assert_admitted(&module, &["user.GlobalCalls", "user.GlobalCallPending"]);
         let body = body_of(&module, "user.GlobalCalls");
         assert!(body.contains("vm.load_global_checked("), "{opt:?}: {body}");
@@ -210,16 +188,7 @@ function invoke() -> int { CALLBACK(ARGUMENT) }
     let root = db.workspace_root().unwrap();
     for opt in [OptLevel::Zero, OptLevel::One, OptLevel::Two] {
         let program = baml_db::compile_program(&db, root, opt).unwrap();
-        let module = compile_program(
-            &db,
-            root,
-            &program,
-            opt,
-            "program.bexa",
-            fingerprint(&program),
-            None,
-        )
-        .unwrap();
+        let module = render(&db, &program, opt, None);
         let compiled = module
             .functions
             .iter()
@@ -263,16 +232,7 @@ fn initializer_chainers_validate_the_bytecode_shape() {
         panic!("the initializer is a function")
     };
     function.bytecode.instructions[1] = Instruction::Pop(1);
-    let module = compile_program(
-        &db,
-        root,
-        &program,
-        OptLevel::Two,
-        "program.bexa",
-        fingerprint(&program),
-        None,
-    )
-    .unwrap();
+    let module = render(&db, &program, OptLevel::Two, None);
     assert!(!module.functions.iter().any(|f| f.object == object.raw()));
     let name = program.function_name(object).unwrap();
     assert!(matches!(
@@ -301,16 +261,7 @@ fn corpus_bytecode_functions_are_all_admitted() {
         );
     }
     let program = baml_db::compile_program(&db, root, OptLevel::Two).unwrap();
-    let module = compile_program(
-        &db,
-        root,
-        &program,
-        OptLevel::Two,
-        "program.bexa",
-        fingerprint(&program),
-        None,
-    )
-    .unwrap();
+    let module = render(&db, &program, OptLevel::Two, None);
     assert!(module.rejected.is_empty(), "{:?}", module.rejected);
     let admitted: std::collections::BTreeSet<_> =
         module.functions.iter().map(|f| f.object).collect();
@@ -336,38 +287,18 @@ fn corpus_bytecode_functions_are_all_admitted() {
     eprintln!("{bytecode}/{bytecode} bytecode functions admitted");
 }
 
-/// Cached/artifact programs lack the compile-time MIR-to-PC map. The
-/// existing MIR shape guard must refuse to generate compiled bodies for them.
 #[test]
 fn deserialized_program_cannot_supply_compiled_bodies() {
     let db = baml_test_support::setup_test_db("function answer() -> int { 42 }");
     let root = db.workspace_root().expect("test db has a workspace root");
     let program =
         baml_db::compile_program(&db, root, OptLevel::Two).expect("fixture compiles to bytecode");
-    let fresh = compile_program(
-        &db,
-        root,
-        &program,
-        OptLevel::Two,
-        "program.bexa",
-        fingerprint(&program),
-        None,
-    )
-    .expect("generated module renders");
+    let fresh = render(&db, &program, OptLevel::Two, None);
     assert!(fresh.functions.iter().any(|f| f.name == "user.answer"));
 
     let serialized = borsh::to_vec(&program).unwrap();
     let restored: Program = borsh::from_slice(&serialized).unwrap();
-    let cached = compile_program(
-        &db,
-        root,
-        &restored,
-        OptLevel::Two,
-        "program.bexa",
-        fingerprint(&restored),
-        None,
-    )
-    .expect("generated module renders");
+    let cached = render(&db, &restored, OptLevel::Two, None);
     assert!(cached.functions.is_empty());
     assert!(matches!(
         rejection(&cached, "user.answer"),
@@ -465,38 +396,31 @@ fn rejection<'a>(module: &'a RustModule, name: &str) -> &'a Rejection {
 #[test]
 fn compute_shaped_functions_are_admitted_and_the_rest_stay_bytecode() {
     let module = compile(FIXTURE);
-    let admitted: Vec<&str> = module.functions.iter().map(|f| f.name.as_str()).collect();
-    for name in [
-        "user.sum",
-        "user.fib",
-        "user.manhattan",
-        "user.safe_div",
-        "user.mean",
-        "user.for_sum",
-        "user.build",
-        "user.origin",
-        "user.label",
-        "user.with_default",
-        "user.greet",
-    ] {
-        assert!(
-            admitted.contains(&name),
-            "{name} should compile; got {admitted:?}"
-        );
-    }
-    for name in ["user.main", "user.calls_rejected", "user.uses_closure"] {
-        assert!(
-            admitted.contains(&name),
-            "{name} should compile; got {admitted:?}"
-        );
-    }
+    assert_admitted(
+        &module,
+        &[
+            "user.sum",
+            "user.fib",
+            "user.manhattan",
+            "user.safe_div",
+            "user.mean",
+            "user.for_sum",
+            "user.build",
+            "user.origin",
+            "user.label",
+            "user.with_default",
+            "user.greet",
+            "user.main",
+            "user.calls_rejected",
+            "user.uses_closure",
+            "user.generic",
+        ],
+    );
     let uses_closure = body_of(&module, "user.uses_closure");
     assert!(uses_closure.contains("vm.suspend("), "{uses_closure}");
     let body = body_of(&module, "user.<lambda(uses_closure, 0)>");
     assert!(!body.contains("vm.suspend("), "{body}");
     assert!(!body.contains("vm.should_yield()"), "{body}");
-    // A generic function compiles too: one body for every instantiation.
-    assert!(admitted.contains(&"user.generic"), "{admitted:?}");
     assert!(
         module
             .rejected
@@ -542,10 +466,6 @@ fn generated_module_is_well_formed_rust() {
     }
 }
 
-/// A compiled body records real bytecode PCs: each call passes the index of
-/// its call instruction in the function's own bytecode, so the caller's frame
-/// reads as the bytecode frame would there (the line of a trace, the shield
-/// table, the call site telemetry records).
 #[test]
 fn a_compiled_call_passes_its_call_instruction() {
     let (module, program) = compile_with_program(FIXTURE);
@@ -598,7 +518,6 @@ fn a_compiled_call_passes_its_call_instruction() {
     assert_eq!(passed, calls, "{body}");
 }
 
-/// The generated body of one function, for shape assertions.
 fn body_of(module: &RustModule, name: &str) -> String {
     let symbol = &module
         .functions
@@ -896,13 +815,10 @@ function is_int_t<T>() -> bool { reflect.Type.of<T>() == reflect.Type.of<int>() 
 function bound(t: reflect.Type) -> bool { type U = unreflect(t); reflect.Type.of<U>() == t }
 "#;
 
-/// Each construct the backend lowers compiles; the differential probes check
-/// what the compiled code does.
 #[test]
 fn constructs_compile() {
-    let cases: &[(&str, &[&str])] = &[
-        (
-            r#"
+    let cases: &[&str] = &[
+        r#"
 enum Color {
   Red
   Green
@@ -957,31 +873,8 @@ function area(s: Circle | Square | Tri | Hex) -> int {
 
 function here() -> reflect.Package { reflect.Package.current() }
 "#,
-            &[
-                "user.words",
-                "user.squares",
-                "user.keyed",
-                "user.green",
-                "user.big",
-                "user.bytes",
-                "user.model",
-                "user.kind",
-                "user.area",
-                "user.here",
-            ],
-        ),
-        (
-            INTERFACES,
-            &[
-                "user.total",
-                "user.scaled",
-                "user.area_fn",
-                "user.rename",
-                "user.describe",
-            ],
-        ),
-        (
-            r#"
+        INTERFACES,
+        r#"
 interface Grows {
   function grow(self, by: int) -> int throws never
 }
@@ -995,18 +888,12 @@ class Plot {
 
 function grow_by(g: Grows, by: int) -> int { g.grow(by) }
 "#,
-            &["user.grow_by"],
-        ),
-        (
-            r#"
+        r#"
 function tr_and(a: string?, b: int) -> bool {
   a && b
 }
 "#,
-            &["user.tr_and"],
-        ),
-        (
-            r#"
+        r#"
 function own_id() -> trace.SpanId? {
   trace.current_span_id()
 }
@@ -1023,10 +910,7 @@ function reservation_reuse_fails() -> bool {
   }
 }
 "#,
-            &["user.reservation_reuse_fails"],
-        ),
-        (
-            r#"
+        r#"
 client TestClient = openai.ResponsesClient.new(
     model = "gpt-4o-mini",
     api_key = "test-key",
@@ -1043,10 +927,7 @@ function has_spec(topic: string) -> bool {
   true
 }
 "#,
-            &["user.has_spec"],
-        ),
-        (
-            r#"
+        r#"
 /// baml:$trace=trace.hidden
 function hidden(n: int) -> int { n + 1 }
 
@@ -1082,23 +963,7 @@ function total(words: string[]) -> int {
   total
 }
 "#,
-            &[
-                "user.hidden",
-                "user.timing",
-                "user.spanned",
-                "user.empty",
-                "user.hooked",
-                "user.hooked_without_settings",
-                "user.total",
-                // Hidden stdlib functions compile, so callers enter them directly.
-                "baml.String.length",
-                "baml.iter.Range.new",
-                "baml.<(baml.iter.Range as baml.iter.Iterator)>.next",
-                "baml.<(baml.iter.Range as baml.iter.Iterable)>.iter",
-            ],
-        ),
-        (
-            r#"
+        r#"
 function iter_of(xs: int[]) -> baml.iter.Iterator<Item = int, Error = never> {
   xs.iter()
 }
@@ -1109,10 +974,7 @@ function first(xs: int[]) -> int {
   total
 }
 "#,
-            &["user.iter_of", "user.first"],
-        ),
-        (
-            r#"
+        r#"
 function sum_of(it: baml.iter.Iterator<Item = int, Error = never>) -> int {
   let total = 0;
   for (let v in it) { total += v; }
@@ -1139,88 +1001,44 @@ function mixed(xs: int[]) -> int {
   total + sum_of(xs.iter())
 }
 "#,
-            &["user.passed", "user.chained", "user.lazy", "user.mixed"],
-        ),
-        (
-            GENERICS,
-            &[
-                "user.identity",
-                "user.is_t",
-                "user.singleton",
-                "user.twice",
-                "user.boxed",
-                "user.unbox",
-                "user.is_box_int",
-                "user.id_int",
-                "user.id_point",
-                "user.id_of",
-                "user.is_int_t",
-                "user.bound",
-                "user.Box.get",
-            ],
-        ),
-        (
-            CLOSURES,
-            &[
-                "user.cap_local",
-                "user.<lambda(cap_local, 0)>",
-                "user.cap_param",
-                "user.<lambda(cap_param, 0)>",
-                "user.loop_cells",
-                "user.<lambda(loop_cells, 0)>",
-                "user.nested",
-                "user.<lambda(nested, 0)>",
-                "user.<lambda(<lambda(nested, 0)>, 1)>",
-                "user.stored",
-                "user.<lambda(stored, 0)>",
-            ],
-        ),
-        (
-            RUNTIME_TYPES,
-            &[
-                "user.generic_describe",
-                "user.fns",
-                "user.is_tree",
-                "user.bound",
-            ],
-        ),
-        (LET_TYPE_BOUND, &["user.bind_named"]),
-        (
-            RUNTIME_BOUND_ARGUMENTS,
-            &["user.bound_call", "user.bound_dispatch"],
-        ),
-        (INTERFACE_ARGUMENTS, &["user.tagged_speaker"]),
-        (
-            GC_CHECKS,
-            &["user.sum_to", "user.build", "user.keep", "user.main"],
-        ),
+        GENERICS,
+        CLOSURES,
+        RUNTIME_TYPES,
+        LET_TYPE_BOUND,
+        RUNTIME_BOUND_ARGUMENTS,
+        INTERFACE_ARGUMENTS,
+        GC_CHECKS,
     ];
-    for (source, names) in cases {
-        let module = compile(source);
-        assert_admitted(&module, names);
+    for source in cases {
+        let (module, program) = compile_with_program(source);
+        for object in program.packages[program.root as usize].objects.clone() {
+            if let Object::Function(function) =
+                &program.objects[ObjectIndex::from_raw(object as usize)]
+                && matches!(function.kind, bex_vm_types::FunctionKind::Bytecode)
+            {
+                assert!(
+                    module.functions.iter().any(|f| f.object == object as usize),
+                    "{:?} should compile; rejected: {:?}",
+                    function.identity,
+                    module.rejected
+                );
+            }
+        }
+        if source.contains("function hidden(") {
+            assert_admitted(
+                &module,
+                &[
+                    "baml.String.length",
+                    "baml.iter.Range.new",
+                    "baml.<(baml.iter.Range as baml.iter.Iterator)>.next",
+                    "baml.<(baml.iter.Range as baml.iter.Iterable)>.iter",
+                ],
+            );
+        }
         syn::parse_file(&module.source).expect("generated module parses as Rust");
     }
 }
 
-/// No dispatch keeps a function of the fixture bytecode. (The stdlib
-/// compiled beside it has interfaces instantiated with frame type arguments
-/// and functions typed as interfaces, which stay bytecode.)
-#[test]
-fn interface_dispatch_is_admitted() {
-    let module = compile(INTERFACES);
-    assert!(
-        module
-            .rejected
-            .iter()
-            .filter(|(name, _)| name.starts_with("user."))
-            .all(|(_, rejection)| !rejection.to_string().contains("interface")),
-        "{:?}",
-        module.rejected
-    );
-}
-
-/// A lambda's entry names its own object, as the loader renders it, with
-/// the package it belongs to in the report.
 #[test]
 fn a_lambda_is_a_unit_of_its_own() {
     let module = compile(CLOSURES);
@@ -1234,8 +1052,6 @@ fn a_lambda_is_a_unit_of_its_own() {
     assert!(lambda.symbol.starts_with("user__lambda_cap_local__0__"));
 }
 
-/// A loop that alone consumes an array's iterator walks the array by index:
-/// no `ArrayIterator` is built and no virtual call is dispatched.
 #[test]
 fn a_local_loop_over_an_array_is_an_index_walk() {
     let module = compile(
@@ -1256,10 +1072,6 @@ function total(xs: int[]) -> int {
     assert!(!body.contains("ArrayIterator"), "{body}");
 }
 
-/// A namespace `Foo` with a function `m` and a class `Foo` with a method `m`
-/// render alike (`user.Foo.m`). The backend binds a function by its identity
-/// in the program, so each compiles against its own object, and the name the
-/// loader checks each entry against is that object's own.
 #[test]
 fn functions_whose_names_render_alike_compile_to_their_own_objects() {
     let db = baml_test_support::setup_multi_file_db(&[
@@ -1272,16 +1084,7 @@ fn functions_whose_names_render_alike_compile_to_their_own_objects() {
     let root = db.workspace_root().expect("test db has a workspace root");
     let program =
         baml_db::compile_program(&db, root, OptLevel::Two).expect("fixture compiles to bytecode");
-    let module = compile_program(
-        &db,
-        root,
-        &program,
-        OptLevel::Two,
-        "program.bexa",
-        fingerprint(&program),
-        None,
-    )
-    .expect("generated module renders");
+    let module = render(&db, &program, OptLevel::Two, None);
 
     let alike: Vec<_> = module
         .functions
@@ -1312,9 +1115,6 @@ fn functions_whose_names_render_alike_compile_to_their_own_objects() {
     }
 }
 
-/// With entry points, only what they reach compiles: the rest is reported
-/// as unreached, not as unsupported, and nothing an entry calls is lost
-/// (`main` reaches the stdlib's string building; `fib` reaches itself).
 #[test]
 fn entry_points_prune_admission_to_what_they_reach() {
     let db = baml_test_support::setup_test_db(FIXTURE);
@@ -1323,16 +1123,7 @@ fn entry_points_prune_admission_to_what_they_reach() {
         baml_db::compile_program(&db, root, OptLevel::Two).expect("fixture compiles to bytecode");
     let callables = program.rendered_callables();
     let entries = [callables["user.fib"].object.raw()];
-    let module = compile_program(
-        &db,
-        root,
-        &program,
-        OptLevel::Two,
-        "program.bexa",
-        fingerprint(&program),
-        Some(&entries),
-    )
-    .expect("generated module renders");
+    let module = render(&db, &program, OptLevel::Two, Some(&entries));
     let admitted: Vec<&str> = module.functions.iter().map(|f| f.name.as_str()).collect();
     assert_eq!(admitted, ["user.fib"], "only the entry's closure compiles");
     assert!(matches!(
@@ -1358,16 +1149,7 @@ fn entry_points_prune_admission_to_what_they_reach() {
     ));
 
     let entries = [callables["user.main"].object.raw()];
-    let module = compile_program(
-        &db,
-        root,
-        &program,
-        OptLevel::Two,
-        "program.bexa",
-        fingerprint(&program),
-        Some(&entries),
-    )
-    .expect("generated module renders");
+    let module = render(&db, &program, OptLevel::Two, Some(&entries));
     let admitted: Vec<&str> = module.functions.iter().map(|f| f.name.as_str()).collect();
     for name in [
         "user.main",
@@ -1408,10 +1190,6 @@ function sibling_bindings(a: reflect.Type, b: reflect.Type) -> reflect.Type[] {
 }
 "#;
 
-/// Sibling blocks reuse one frame slot for their bindings. A type derived
-/// from the first binding is built where it is loaded, as the interpreter
-/// evaluates `LoadType`, so the second block's rebinding of the slot does
-/// not reach it.
 #[test]
 fn a_derived_type_keeps_its_binding_past_a_sibling_rebinding() {
     let module = compile(SIBLING_BINDINGS);
