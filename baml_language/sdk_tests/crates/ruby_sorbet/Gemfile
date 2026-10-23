@@ -1,3 +1,4 @@
 eval_gemfile File.expand_path("../../../sdks/ruby/bridge_ruby/Gemfile", __dir__)
 
 gem "minitest", "~> 5.0"
+gem "sorbet-runtime", "~> 0.5"

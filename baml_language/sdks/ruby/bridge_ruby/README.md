@@ -1,11 +1,67 @@
-# BAML Ruby V1 bridge
+# BAML Ruby/Sorbet runtime
 
-This directory contains private runtime plumbing for generated Ruby/Sorbet SDKs. Generated code calls:
+The Ruby runtime runs generated BAML Ruby/Sorbet SDKs. It contains pure Ruby code and the committed protobuf clients, and depends on `ffi`, `google-protobuf` and `sorbet-runtime`. Ruby 3.2 or newer is required.
 
-```ruby
-Baml::Bridge.initialize!(compiled_program_bytes)
+Add a Ruby generator to your BAML project and generate the SDK:
+
+```sh
+baml generate add ruby/sorbet
+baml generate --output-dir ./generated
 ```
 
-The bridge loads the absolute library path in `BAML_RUNTIME_PATH`, validates the complete V1 C table, requires an exact canonical BAML toolchain version, registers `Baml::Bridge` as bridge language `10` with its stamped bridge runtime version, and initializes one exact generated program per process.
+The generator uses `output_type = "ruby/sorbet"` and `naming_convention = "language"` in `baml.toml`. It embeds the program and runtime metadata in `generated/baml_sdk.rb` and `generated/baml_sdk/`. Put `generated/` on the application's load path:
 
-This checkpoint deliberately has no public gem packaging, runtime discovery, download, unload, reset, or project-switching API. Packaging and the public gem name remain release work.
+```ruby
+require "baml_sdk"
+
+puts BamlSdk.hello_world
+call = BamlSdk.hello_world_async
+puts call.wait
+```
+
+Generated functions initialize the runtime on their first call. `BamlSdk.initialize!` initializes it eagerly. The process can load only one generated BAML program; a forked child must exec before using an inherited runtime.
+
+## Sorbet types
+
+`rbi/baml.rbi` is the runtime contract used to check generated code. Check
+it alongside your generated `baml_sdk.rb` and `baml_sdk/` sources.
+
+Generated structs compare by their fields and bound generic type arguments.
+Function types accept either a typed Proc or a `Baml::Closure` returned by BAML.
+
+## Generic values and calls
+
+Generated generic classes use Sorbet's normal `type_member` and `[]`. The engine
+infers generic function arguments from values where possible. To bind them
+explicitly, pass named tokens, for example `identity(5, _types: { T: Integer })`.
+Tokens include `Integer`, `String`, `Float`, `T::Boolean`, `NilClass`, generated
+classes and enums, and `Baml::Types.list(t)`, `.map(k, v)`, `.optional(t)` and
+`.generic(Klass, *args)` for compound types. Sorbet's erased `Klass[T]` is not a
+runtime token for a parameterized class; use `Baml::Types.generic(Klass, T)`.
+
+For a host-built instance that must retain concrete runtime arguments, use:
+
+```ruby
+box = Baml.bind_types(BamlSdk::GenericTests::GenericBox[Integer].new(value: 5), Integer)
+box.pair_with("hello", _types: { U: String })
+```
+
+`bind_types` returns the same instance and preserves its Sorbet type. Decoded
+instances retain their runtime arguments automatically. `T::Struct#with` creates
+a new instance and drops this binding, so bind the copy again when needed.
+Explicit method bindings require a bound receiver; bare calls can infer from
+an unbound receiver's fields.
+
+## Native library lookup
+
+Set `BAML_BRIDGE_PATH` to the absolute filename of a native bridge library built for the runtime's canonical BAML toolchain version. The loader checks the bridge ABI and canonical toolchain version before use.
+
+## Build locally
+
+The committed `google-protobuf` clients under `lib/baml_bridge/cffi/v1/` come from the authoritative CFFI V1 schemas. Regenerate them from `baml_language/` with:
+
+```sh
+cargo build -p bridge_ctypes
+```
+
+A clean regeneration must leave these clients unchanged.

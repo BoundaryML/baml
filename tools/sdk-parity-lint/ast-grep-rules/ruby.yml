@@ -1,0 +1,22 @@
+id: ruby-test
+language: Ruby
+rule:
+  pattern: 'def $NAME $$$BODY end'
+constraints:
+  NAME:
+    regex: '^test_[A-Za-z0-9_]+$'
+---
+id: ruby-audit-test
+language: Ruby
+rule:
+  pattern: 'def $NAME $$$BODY end'
+constraints:
+  NAME:
+    regex: '^test[A-Za-z0-9_]*$'
+---
+id: sdk-parity-lint-skip
+language: Ruby
+rule:
+  all:
+    - kind: comment
+    - regex: 'SDK_PARITY_LINT\(skip\):'

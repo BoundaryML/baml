@@ -1,3 +1,4 @@
 source "https://rubygems.org"
 
 gem "ffi", ">= 1.17.4", "< 2"
+gem "google-protobuf", "~> 4.0"
