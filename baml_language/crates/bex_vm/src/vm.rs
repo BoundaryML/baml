@@ -20,8 +20,12 @@ use baml_type::{Int63, IntShiftError, Name, normalize::TypeContext};
 use btel_types::context::{Context, ContextPatch};
 use smallvec::SmallVec;
 
-use crate::telemetry::{
-    CallTypeArgs, ClockDuration, ClockInstant, FrameTelemetry, InvocationOutcome, TelemetryState,
+use crate::{
+    telemetry::{
+        CallTypeArgs, ClockDuration, ClockInstant, FrameTelemetry, InvocationOutcome,
+        TelemetryState,
+    },
+    vec_ext::CopyVecExt,
 };
 
 /// Lower named host `TypeVar` bindings to the positional De Bruijn `type_args`
@@ -2735,7 +2739,7 @@ impl BexVm {
             .and_then(|index| self.frame_function_identity(index));
         let observed = pending.caller.is_some_and(|index| matches!(&self.frames[index], Frame::Bytecode(frame) if frame.telemetry.is_some()));
         // Resolve captured parameter cells without allocating for ordinary arities.
-        let args: SmallVec<[Value; 8]> = self.stack.0
+        let args: SmallVec<[Value; 8]> = self.stack.as_slice()
             [locals_offset.raw()..locals_offset.raw() + function.arity]
             .iter()
             .map(|value| {
@@ -5046,7 +5050,7 @@ impl BexVm {
                     .len()
                     .checked_add(locals)
                     .ok_or(VmPanic::StackOverflow)
-                    .and_then(|additional| self.stack.0.try_reserve(additional));
+                    .and_then(|additional| self.stack.try_reserve(additional));
                 if let Err(panic) = reserve {
                     self.pending_entry_frame_panic = Some(panic);
                     return;
@@ -5203,7 +5207,7 @@ impl BexVm {
             .len()
             .checked_add(type_args.len())
             .ok_or(VmPanic::StackOverflow)?;
-        self.stack.0.try_reserve(additional)?;
+        self.stack.try_reserve(additional)?;
         let callee_global = self
             .global_index_for_function_ptr(function)
             .expect("entry point must be present in globals");
@@ -5337,7 +5341,6 @@ impl BexVm {
         args: &[Value],
     ) -> Result<(), VmPanic> {
         self.stack
-            .0
             .try_reserve(args.len().checked_add(1).ok_or(VmPanic::StackOverflow)?)?;
         let (arity, return_type, throws_type) = match self.get_object(closure) {
             Object::HostClosure(hc) => {
@@ -7487,7 +7490,7 @@ impl BexVm {
                         caller.faulting_pc
                     };
                     let caller_pc = u32::try_from(caller_pc).unwrap_or(u32::MAX);
-                    let args = &self.stack.0
+                    let args = &self.stack.as_slice()
                         [locals_offset.raw()..locals_offset.raw().saturating_add(arg_count)];
                     let type_args = CallTypeArgs {
                         carried: initial_type_args,
@@ -8396,7 +8399,6 @@ impl BexVm {
     #[inline]
     fn reserve_stack(&mut self, additional: usize) -> Result<(), VmError> {
         self.stack
-            .0
             .try_reserve(additional)
             .map_err(|panic| VmError::thrown_fresh(self.panic_to_exception_value(panic)))
     }
@@ -9733,7 +9735,7 @@ impl BexVm {
                                         }))
                                     );
                                     let caller_pc = u32::try_from(self.cur_pc).unwrap_or(u32::MAX);
-                                    let args = &self.stack.0[locals_offset.raw()
+                                    let args = &self.stack.as_slice()[locals_offset.raw()
                                         ..locals_offset.raw().saturating_add(callee.arity)];
                                     // SAFETY: arguments and callable remain live under the heap permit.
                                     self.telemetry.as_mut().and_then(|telemetry| unsafe {
@@ -10109,7 +10111,6 @@ impl BexVm {
                                 .checked_sub(pushed)
                                 .ok_or(VmInternalError::NotEnoughItemsOnStack(pushed))?;
                             self.stack
-                                .0
                                 .try_insert(args_offset, receiver)
                                 .map_err(|panic| {
                                     VmError::thrown_fresh(self.panic_to_exception_value(panic))

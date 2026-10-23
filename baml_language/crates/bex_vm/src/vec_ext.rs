@@ -26,6 +26,64 @@ impl<T> VecExt for Vec<T> {
     }
 }
 
+/// Stack transitions for values that need no destructor. Frames must instead
+/// use `VecExt::no_return_pop`, which runs the removed element's destructor.
+pub(crate) trait CopyVecExt<T: Copy> {
+    /// Replace the top `N` elements with `result` in their lowest slot.
+    ///
+    /// # Safety
+    /// Requires `1 <= N <= self.len()`.
+    unsafe fn replace_top_n<const N: usize>(&mut self, result: T);
+
+    /// The runtime-count form of `replace_top_n`.
+    ///
+    /// # Safety
+    /// Requires `1 <= n <= self.len()`.
+    unsafe fn replace_top_n_dynamic(&mut self, n: usize, result: T);
+
+    /// Discard the top `n` elements without writing a result.
+    ///
+    /// # Safety
+    /// Requires `n <= self.len()`. Zero is allowed.
+    unsafe fn truncate_suffix(&mut self, n: usize);
+}
+
+#[allow(clippy::inline_always)]
+impl<T: Copy> CopyVecExt<T> for Vec<T> {
+    #[inline(always)]
+    unsafe fn replace_top_n<const N: usize>(&mut self, result: T) {
+        if N == 1 {
+            debug_assert!(!self.is_empty());
+            // Avoid relying on alias analysis to remove a redundant length
+            // store after writing through the vector's element pointer.
+            // SAFETY: the caller guarantees an initialized last element.
+            unsafe { self.as_mut_ptr().add(self.len() - 1).write(result) };
+        } else {
+            // SAFETY: the caller supplies the same contract with a constant count.
+            unsafe { self.replace_top_n_dynamic(N, result) };
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn replace_top_n_dynamic(&mut self, n: usize, result: T) {
+        debug_assert!(n > 0 && n <= self.len());
+        let destination = self.len() - n;
+        // SAFETY: destination is initialized and the new length cannot exceed
+        // the old length. Copy values need no drop when overwritten/discarded.
+        unsafe {
+            self.as_mut_ptr().add(destination).write(result);
+            self.set_len(destination + 1);
+        }
+    }
+
+    #[inline(always)]
+    unsafe fn truncate_suffix(&mut self, n: usize) {
+        debug_assert!(n <= self.len());
+        // SAFETY: the new length is no larger; discarded Copy values need no drop.
+        unsafe { self.set_len(self.len() - n) };
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -35,7 +93,71 @@ mod tests {
         sync::atomic::{AtomicUsize, Ordering},
     };
 
-    use super::VecExt;
+    use super::{CopyVecExt, VecExt};
+
+    #[test]
+    fn replacements_preserve_prefix_and_allocation() {
+        let mut values = vec![10, 20, 30, 40];
+        let ptr = values.as_ptr();
+        let capacity = values.capacity();
+        // SAFETY: every replacement consumes between one and all live elements.
+        unsafe {
+            values.replace_top_n::<1>(41);
+            assert_eq!(values, [10, 20, 30, 41]);
+            values.replace_top_n::<2>(50);
+            assert_eq!(values, [10, 20, 50]);
+            values.replace_top_n_dynamic(3, 80);
+            assert_eq!(values, [80]);
+        }
+        assert_eq!(values.as_ptr(), ptr);
+        assert_eq!(values.capacity(), capacity);
+        values.push(90);
+        assert_eq!(values, [80, 90]);
+    }
+
+    #[test]
+    fn copy_suffix_truncation_allows_zero_and_full_length() {
+        let mut values = vec![1, 2, 3];
+        // SAFETY: each count is within the current length.
+        unsafe {
+            values.truncate_suffix(0);
+            assert_eq!(values, [1, 2, 3]);
+            values.truncate_suffix(2);
+            assert_eq!(values, [1]);
+            values.truncate_suffix(1);
+            assert!(values.is_empty());
+            values.truncate_suffix(0);
+        }
+    }
+
+    #[test]
+    fn replacements_support_zero_sized_copy_values() {
+        let mut values = vec![(); 4];
+        // SAFETY: each replacement consumes between one and all live elements.
+        unsafe {
+            values.replace_top_n::<2>(());
+            assert_eq!(values.len(), 3);
+            values.replace_top_n_dynamic(3, ());
+            assert_eq!(values.len(), 1);
+        }
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic(expected = "n > 0 && n <= self.len()")]
+    fn replacement_rejects_zero_count_in_debug() {
+        // SAFETY: deliberately invalid only in a debug build, where the
+        // assertion panics before any unchecked operation can execute.
+        unsafe { vec![1].replace_top_n::<0>(2) };
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic(expected = "n > 0 && n <= self.len()")]
+    fn replacement_rejects_underflow_in_debug() {
+        // SAFETY: the debug assertion rejects the invalid count before access.
+        unsafe { vec![1].replace_top_n_dynamic(2, 3) };
+    }
 
     struct Record {
         id: usize,

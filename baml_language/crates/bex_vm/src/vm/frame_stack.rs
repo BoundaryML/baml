@@ -39,6 +39,78 @@ impl StackBudget {
             }
         }
     }
+    /// Reserve additional live elements without exceeding the shared byte budget.
+    #[inline]
+    pub(crate) fn try_reserve<T>(
+        &self,
+        storage: &mut Vec<T>,
+        additional: usize,
+        #[cfg(test)] refuse_next_growth: &mut bool,
+    ) -> Result<(), VmPanic> {
+        let needed = storage
+            .len()
+            .checked_add(additional)
+            .ok_or(VmPanic::StackOverflow)?;
+        if needed <= storage.capacity() {
+            return Ok(());
+        }
+        self.grow(
+            storage,
+            needed,
+            #[cfg(test)]
+            refuse_next_growth,
+        )
+    }
+
+    /// Allocate a replacement safely, validate its actual capacity, then move
+    /// live elements. The old array stays intact on allocation/budget failure.
+    #[cold]
+    fn grow<T>(
+        &self,
+        storage: &mut Vec<T>,
+        needed: usize,
+        #[cfg(test)] refuse_next_growth: &mut bool,
+    ) -> Result<(), VmPanic> {
+        let old_bytes = storage.capacity() * size_of::<T>();
+        let used = self.0.load(Ordering::Relaxed);
+        let maximum = (STACK_STORAGE_BUDGET_BYTES - used + old_bytes) / size_of::<T>();
+        if needed > maximum {
+            return Err(VmPanic::StackOverflow);
+        }
+        let capacity = storage
+            .capacity()
+            .saturating_mul(2)
+            .max(4)
+            .max(needed)
+            .min(maximum);
+        #[cfg(test)]
+        if std::mem::take(refuse_next_growth) {
+            return Err(VmPanic::AllocFailure {
+                message: "injected VM stack allocation refusal".into(),
+            });
+        }
+        let mut replacement = Vec::new();
+        replacement
+            .try_reserve_exact(capacity)
+            .map_err(|error| VmPanic::AllocFailure {
+                message: format!("unable to allocate VM stack storage: {error}"),
+            })?;
+        // try_reserve_exact promises at least the request, so charge the
+        // observed capacity and reject any over-allocation before installation.
+        let new_bytes = replacement
+            .capacity()
+            .checked_mul(size_of::<T>())
+            .ok_or(VmPanic::StackOverflow)?;
+        self.charge(new_bytes - old_bytes)?;
+        replacement.append(storage); // capacity already covers len
+        *storage = replacement;
+        Ok(())
+    }
+
+    /// Release the charge when a backing array is dropped.
+    pub(crate) fn release(&self, bytes: usize) {
+        self.0.fetch_sub(bytes, Ordering::Relaxed);
+    }
 }
 
 /// A vector that exposes slice mutation, but never infallible capacity growth.
@@ -82,57 +154,15 @@ impl<T> StackStorage<T> {
         self.try_reserve(1)
     }
 
-    /// Reserve additional live elements without exceeding the shared byte budget.
+    /// Reserve live slots through the shared allocation boundary.
     #[inline]
     pub(crate) fn try_reserve(&mut self, additional: usize) -> Result<(), VmPanic> {
-        let needed = self
-            .len()
-            .checked_add(additional)
-            .ok_or(VmPanic::StackOverflow)?;
-        if needed <= self.capacity() {
-            return Ok(());
-        }
-        self.grow(needed)
-    }
-
-    /// Allocate a replacement safely, validate its actual capacity, then move
-    /// live elements. The old array stays intact on allocation/budget failure.
-    #[cold]
-    fn grow(&mut self, needed: usize) -> Result<(), VmPanic> {
-        let old_bytes = self.capacity() * size_of::<T>();
-        let used = self.budget.0.load(Ordering::Relaxed);
-        let maximum = (STACK_STORAGE_BUDGET_BYTES - used + old_bytes) / size_of::<T>();
-        if needed > maximum {
-            return Err(VmPanic::StackOverflow);
-        }
-        let capacity = self
-            .capacity()
-            .saturating_mul(2)
-            .max(4)
-            .max(needed)
-            .min(maximum);
-        #[cfg(test)]
-        if std::mem::take(&mut self.refuse_next_growth) {
-            return Err(VmPanic::AllocFailure {
-                message: "injected VM stack allocation refusal".into(),
-            });
-        }
-        let mut replacement = Vec::new();
-        replacement
-            .try_reserve_exact(capacity)
-            .map_err(|error| VmPanic::AllocFailure {
-                message: format!("unable to allocate VM stack storage: {error}"),
-            })?;
-        // try_reserve_exact promises at least the request, so charge the
-        // observed capacity and reject any over-allocation before installation.
-        let new_bytes = replacement
-            .capacity()
-            .checked_mul(size_of::<T>())
-            .ok_or(VmPanic::StackOverflow)?;
-        self.budget.charge(new_bytes - old_bytes)?;
-        replacement.append(&mut self.storage); // capacity already covers len
-        self.storage = replacement;
-        Ok(())
+        self.budget.try_reserve(
+            &mut self.storage,
+            additional,
+            #[cfg(test)]
+            &mut self.refuse_next_growth,
+        )
     }
 
     /// Insert into pre-reserved capacity without allocating.
@@ -158,14 +188,8 @@ impl<T> StackStorage<T> {
         Ok(())
     }
 
-    /// Insert an argument after reserving its extra backing slot fallibly.
-    pub(crate) fn try_insert(&mut self, index: usize, value: T) -> Result<(), VmPanic> {
-        self.reserve_one()?;
-        self.storage.insert(index, value);
-        Ok(())
-    }
-
     /// Resize live storage, reserving fallibly before initializing new slots.
+    #[cfg(test)]
     pub(crate) fn try_resize(&mut self, len: usize, value: T) -> Result<(), VmPanic>
     where
         T: Clone,
@@ -184,22 +208,12 @@ impl<T> StackStorage<T> {
     pub fn truncate(&mut self, len: usize) {
         self.storage.truncate(len);
     }
-
-    /// Remove a range while retaining charged backing capacity.
-    pub(crate) fn drain(
-        &mut self,
-        range: impl std::ops::RangeBounds<usize>,
-    ) -> std::vec::Drain<'_, T> {
-        self.storage.drain(range)
-    }
 }
 
 impl<T> Drop for StackStorage<T> {
     /// Release the backing-capacity charge when the owning array is dropped.
     fn drop(&mut self) {
-        self.budget
-            .0
-            .fetch_sub(self.capacity() * size_of::<T>(), Ordering::Relaxed);
+        self.budget.release(self.capacity() * size_of::<T>());
     }
 }
 
@@ -316,7 +330,7 @@ mod tests {
             if refuse_frames {
                 vm.frames.refuse_next_growth = true;
             } else {
-                vm.stack.0.refuse_next_growth = true;
+                vm.stack.refuse_next_growth = true;
             }
             vm.set_entry_point(entry, &[bex_vm_types::Value::int(42)]);
             assert!(vm.frames.is_empty());
@@ -355,7 +369,7 @@ mod tests {
         let entry = program.rendered_callables()["user.main"].object.raw();
         let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
         vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
-        vm.stack.0.refuse_next_growth = true;
+        vm.stack.refuse_next_growth = true;
         vm.stack.push(Value::NULL);
         assert!(vm.stack.is_empty());
         let Err(VmError::ThrownUnhandled { value, .. }) = vm.exec() else {
