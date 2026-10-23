@@ -125,6 +125,18 @@ pub(super) fn canonicalize_mu_with_render<H: Head, C: TypeContext<H>>(
     (term, rendered)
 }
 
+/// Render the shared normalized graph for inference, keeping source payloads
+/// while exposing its canonical union alternatives.
+pub(super) fn structural_render<H: Head, C: TypeContext<H>>(term: NormalTy<H>, ctx: &C) -> Ty<H> {
+    let minimal = Builder::default()
+        .build(&term)
+        .epsilon_close()
+        .minimize_and_absorb(ctx);
+    minimal
+        .render_structure()
+        .unwrap_or_else(|| term.clone().into_ty())
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // INTERNING
 // ═══════════════════════════════════════════════════════════════════════════
@@ -208,12 +220,15 @@ enum Node {
     },
 }
 
-struct State {
+struct State<'a, H: Head> {
     node: Node,
     /// Alias names denoting this state (μ-binder origins; unioned on merge,
     /// transferred on redirect). Ordered by id — ties in rendering are broken by
     /// the *name* ordering below, not id order.
     names: BTreeSet<NameId>,
+    /// First source payload reaching this state. Rendering data only: it never
+    /// participates in epsilon-closure, refinement, or subtype absorption.
+    original: Option<(StateId, &'a Ty<H>)>,
 }
 
 /// The special leaves, pre-interned by [`Automaton::new`] so the hot
@@ -246,7 +261,7 @@ fn lit_false<H: Head>() -> &'static NormalTy<H> {
 }
 
 struct Automaton<'a, H: Head> {
-    states: Vec<State>,
+    states: Vec<State<'a, H>>,
     /// Redirect chains from ε singleton collapses, minimization merges, and
     /// binder knot-tying; [`Self::resolve`] follows them to the live state.
     redirect: Vec<StateId>,
@@ -288,6 +303,7 @@ impl<'a, H: Head> Automaton<'a, H> {
         self.states.push(State {
             node,
             names: BTreeSet::new(),
+            original: None,
         });
         self.redirect.push(id);
         id
@@ -304,8 +320,16 @@ impl<'a, H: Head> Automaton<'a, H> {
     fn redirect_to(&mut self, from: StateId, to: StateId) {
         debug_assert_ne!(self.resolve(from), self.resolve(to));
         let names = std::mem::take(&mut self.states[from].names);
+        let original = self.states[from].original.take();
         let to = self.resolve(to);
         self.states[to].names.extend(names);
+        if let Some(original) = original
+            && self.states[to]
+                .original
+                .is_none_or(|previous| original.0 < previous.0)
+        {
+            self.states[to].original = Some(original);
+        }
         self.redirect[from] = to;
     }
 
@@ -409,6 +433,7 @@ impl Builder {
         match term {
             NormalTy::Mu { binder, body } => {
                 let s = auto.alloc(Node::Union(Vec::new()));
+                auto.states[s].original = binder.original.as_ref().map(|original| (s, original));
                 if let Some(name) = &binder.name {
                     let id = NameId(auto.names.intern(name));
                     auto.states[s].names.insert(id);
@@ -574,6 +599,15 @@ struct Minimal<'a, H: Head> {
 impl<H: Head> Minimal<'_, H> {
     fn read_back(&self) -> Option<NormalTy<H>> {
         read_back(&self.auto, self.root)
+    }
+
+    fn render_structure(&self) -> Option<Ty<H>> {
+        let auto = &self.auto;
+        let cyclic = cyclic_states(auto, self.root);
+        let orders = union_orders(auto, self.root)?;
+        let mut renderer = Renderer::new(auto, &cyclic, &orders);
+        renderer.preserve_payloads = true;
+        renderer.structural(auto.resolve(self.root), &mut Vec::new())
     }
 
     /// The `normalize` rendering of the whole type: a *named* recursive root is
@@ -1381,6 +1415,7 @@ fn convert<H: Head>(
                     binder: MuDisplay {
                         name: auto.representative_name(*state).cloned(),
                         rendered: Box::new(rendered),
+                        original: None,
                     },
                     body: Box::new(body),
                 }
@@ -1492,6 +1527,7 @@ struct Renderer<'x, 'a, H: Head> {
     /// way.
     candidates: Vec<(StateId, BTreeSet<StateId>)>,
     memo: BTreeMap<StateId, Ty<H>>,
+    preserve_payloads: bool,
 }
 
 impl<'x, 'a, H: Head> Renderer<'x, 'a, H> {
@@ -1526,11 +1562,18 @@ impl<'x, 'a, H: Head> Renderer<'x, 'a, H> {
             orders,
             candidates,
             memo: BTreeMap::new(),
+            preserve_payloads: false,
         }
     }
 
     fn render(&mut self, s: StateId, path: &mut Vec<StateId>) -> Option<Ty<H>> {
         let r = self.auto.resolve(s);
+        if self.preserve_payloads
+            && !matches!(self.auto.node(r), Node::Union(_))
+            && let Some((_, original)) = self.auto.states[r].original
+        {
+            return Some(original.clone());
+        }
         if let Some(t) = self.memo.get(&r) {
             return Some(t.clone());
         }
@@ -1618,6 +1661,12 @@ impl<'x, 'a, H: Head> Renderer<'x, 'a, H> {
     /// (exposing its head constructor) while nested occurrences fold to the
     /// name.
     fn structural(&mut self, r: StateId, path: &mut Vec<StateId>) -> Option<Ty<H>> {
+        if self.preserve_payloads
+            && !matches!(self.auto.node(r), Node::Union(_))
+            && let Some((_, original)) = self.auto.states[r].original
+        {
+            return Some(original.clone());
+        }
         let auto = self.auto;
         Some(match auto.node(r) {
             Node::Leaf(l) => auto.leaves.get(l.0).clone().into_ty(),

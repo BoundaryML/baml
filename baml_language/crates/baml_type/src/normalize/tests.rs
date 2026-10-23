@@ -1978,6 +1978,7 @@ fn unguarded_mu_disjointness_terminates_conservatively() {
         binder: MuDisplay {
             name: None,
             rendered: Box::new(Ty::Never),
+            original: None,
         },
         body: Box::new(NormalTy::Union(vec![
             NormalTy::RecVar(0),
@@ -2027,4 +2028,115 @@ fn single_variant_enum_union_is_idempotent() {
         &enum_ty("F"),
         &ctx
     ));
+}
+
+#[test]
+fn structural_cache_preserves_payload_metadata_and_aliases() {
+    let mut ctx = Ctx::default();
+    ctx.aliases.insert(qtn("Count"), Ty::Int);
+    ctx.aliases
+        .insert(qtn("Maybe"), union(vec![alias("Count"), Ty::Null]));
+    ctx.aliases
+        .insert(qtn("Again"), union(vec![alias("Maybe"), Ty::Null]));
+    let cache = InternedCanonicalCache::default();
+    let input = interned::ClosedTy::from_plain(&alias("Again"));
+    let view = cache.normalize_structure(&input, &ctx);
+    assert_eq!(view.to_plain(), union(vec![alias("Count"), Ty::Null]));
+    assert!(cache.equivalent(&view, &input, &ctx));
+    let lookups = ctx.alias_lookups.get();
+    assert_eq!(cache.normalize_structure(&input, &ctx), view);
+    assert_eq!(ctx.alias_lookups.get(), lookups);
+    let fresh = Ty::Literal(Literal::Int(7), Freshness::Fresh);
+    let input = interned::ClosedTy::from_plain(&union(vec![fresh.clone(), Ty::Null]));
+    assert_eq!(
+        cache.normalize_structure(&input, &ctx).to_plain(),
+        union(vec![Ty::Null, fresh])
+    );
+    let function = Ty::Function {
+        params: vec![FunctionParamTy::required(
+            Some(Name::new("argument")),
+            Ty::String,
+        )]
+        .into(),
+        ret: Box::new(Ty::String),
+        throws: Box::new(Ty::Never),
+    };
+    ctx.aliases
+        .insert(qtn("Callback"), union(vec![function.clone(), Ty::Null]));
+    ctx.projections.push((
+        class("Box"),
+        qtn("Callable"),
+        Name::new("Callback"),
+        function.clone(),
+    ));
+    let cache = InternedCanonicalCache::default();
+    let input = interned::ClosedTy::from_plain(&alias("Callback"));
+    assert_eq!(
+        cache.normalize_structure(&input, &ctx).to_plain(),
+        union(vec![Ty::Null, function.clone()])
+    );
+    let input = interned::ClosedTy::from_plain(&union(vec![
+        projection(class("Box"), "Callable", "Callback"),
+        Ty::Null,
+    ]));
+    assert_eq!(
+        cache.normalize_structure(&input, &ctx).to_plain(),
+        union(vec![Ty::Null, function])
+    );
+}
+
+#[test]
+fn structural_cache_uses_shared_recursive_union_normalization() {
+    let mut ctx = Ctx::default();
+    ctx.aliases.insert(
+        qtn("Tree"),
+        union(vec![alias("Tree"), list(alias("Tree")), Ty::Null]),
+    );
+    ctx.aliases
+        .insert(qtn("Again"), union(vec![alias("Tree"), Ty::Null]));
+    let cache = InternedCanonicalCache::default();
+    let input = interned::ClosedTy::from_plain(&alias("Again"));
+    let view = cache.normalize_structure(&input, &ctx);
+    assert_eq!(view.to_plain(), union(vec![Ty::Null, list(alias("Tree"))]));
+    assert!(cache.equivalent(&input, &view, &ctx));
+    assert!(!cache.equivalent(
+        &view,
+        &interned::ClosedTy::from_plain(&list(list(alias("Tree")))),
+        &ctx
+    ));
+}
+
+#[test]
+fn structural_cache_keeps_union_algebra_and_container_nullability() {
+    let mut ctx = Ctx::default();
+    ctx.enums
+        .insert(qtn("Color"), vec![Name::new("Red"), Name::new("Blue")]);
+    let cache = InternedCanonicalCache::default();
+    for (input, expected) in [
+        (
+            union(vec![lit_bool(true), lit_bool(false), Ty::Null]),
+            union(vec![Ty::Bool, Ty::Null]),
+        ),
+        (
+            union(vec![
+                variant("Color", "Red"),
+                variant("Color", "Blue"),
+                Ty::Null,
+            ]),
+            union(vec![Ty::Null, enum_ty("Color")]),
+        ),
+        (
+            union(vec![lit_int(1), Ty::Int, Ty::Null]),
+            union(vec![Ty::Int, Ty::Null]),
+        ),
+        (
+            union(vec![list(union(vec![Ty::Int, Ty::Null])), Ty::Null]),
+            union(vec![Ty::Null, list(union(vec![Ty::Int, Ty::Null]))]),
+        ),
+    ] {
+        let input = interned::ClosedTy::from_plain(&input);
+        let view = cache.normalize_structure(&input, &ctx);
+        assert_eq!(view.to_plain(), expected);
+        assert!(cache.equivalent(&input, &view, &ctx));
+    }
 }

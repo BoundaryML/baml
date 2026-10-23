@@ -152,18 +152,15 @@ fn dedup_and_collapse<N: Clone + PartialEq>(types: Vec<Ty<N>>) -> Ty<N> {
 /// each member keeps the position of its first occurrence: SAP reads a union's
 /// declared order. The result is the same type as the union of `members`, and
 /// applying `T?` to an optional spells it the same way again.
-///
-/// `as_union` may keep resolver state, such as aliases already exposed during
-/// this normalization. Returning an empty slice contributes no alternatives.
 pub fn flat_union<T: PartialEq>(
     members: impl IntoIterator<Item = T>,
-    mut as_union: impl FnMut(T) -> Result<Box<[T]>, T>,
+    as_union: impl Fn(T) -> Result<Box<[T]>, T>,
     never: T,
     union: impl FnOnce(Box<[T]>) -> T,
 ) -> T {
     fn splice<T: PartialEq>(
         members: impl IntoIterator<Item = T>,
-        as_union: &mut impl FnMut(T) -> Result<Box<[T]>, T>,
+        as_union: &impl Fn(T) -> Result<Box<[T]>, T>,
         out: &mut Vec<T>,
     ) {
         for member in members {
@@ -178,7 +175,7 @@ pub fn flat_union<T: PartialEq>(
         }
     }
     let mut out = Vec::new();
-    splice(members, &mut as_union, &mut out);
+    splice(members, &as_union, &mut out);
     match <[T; 1]>::try_from(out) {
         Ok([only]) => only,
         Err(out) if out.is_empty() => never,

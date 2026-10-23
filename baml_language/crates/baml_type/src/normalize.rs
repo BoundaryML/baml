@@ -1124,15 +1124,17 @@ trait MuPhase<H: Head> {
     type Var: Clone + std::fmt::Debug + PartialEq + Eq + PartialOrd + Ord + std::hash::Hash;
 }
 
-/// The `from_ty` intermediate phase: binders and back-references carry the alias
-/// name whose expansion introduced them. This phase exists only between
+/// The `from_ty` intermediate phase: back-references carry the alias name whose
+/// expansion introduced them; binders carry that name and rendering metadata.
+/// Structural rendering can also attach a vacuous binder to a source payload.
+/// This phase exists only between
 /// `from_ty` and [`NormalTy::resolve_binders`]; nothing compares it for
 /// identity, subtypes it, or renders it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum Named {}
 
 impl<H: Head> MuPhase<H> for Named {
-    type Binder = H;
+    type Binder = MuDisplay<H>;
     type Var = H;
 }
 
@@ -1207,9 +1209,9 @@ enum NormalTy<H: Head = DeclName, P: MuPhase<H> = Canonical> {
         interface: Box<NormalTy<H, P>>,
         member: Name,
     },
-    // Recursion. `Named`: binder/variable carry the alias name whose expansion
-    // introduced them. `Canonical`: the binder carries its equality-transparent
-    // display payload and the variable a de Bruijn index (0 = innermost
+    // Recursion. Binders carry equality-transparent display payloads. `Named`
+    // variables carry the alias name whose expansion introduced them;
+    // `Canonical` variables carry a de Bruijn index (0 = innermost
     // enclosing binder) — see [`Canonical`] for the closed-term invariant.
     Mu {
         binder: P::Binder,
@@ -1239,7 +1241,7 @@ struct NormalParam<H: Head, P: MuPhase<H> = Canonical> {
     mode: FunctionParamMode,
 }
 
-/// Display payload of a canonical μ-binder ([`NormalTy::Mu`] at [`Canonical`]).
+/// Equality-transparent rendering payload of a μ-binder ([`NormalTy::Mu`]).
 ///
 /// `rendered` is the whole μ-subterm as a [`Ty`] — surface syntax has no binder,
 /// so recursion is spelled via alias names — and is what [`NormalTy::into_ty`]
@@ -1253,8 +1255,8 @@ struct NormalParam<H: Head, P: MuPhase<H> = Canonical> {
 ///   the **named-cut** rendering (recursion folded to alias names at every named
 ///   cycle state), the canonical output form.
 ///
-/// `name` is the alias whose expansion introduced the binder — `None` only for
-/// automaton read-back binders that land on a cycle state no alias denotes (e.g.
+/// `name` is the alias whose expansion introduced the binder — `None` for source
+/// payload witnesses and read-back binders on cycle states no alias denotes (e.g.
 /// the list state of `A[]` for `type A = int | A[]`); such a binder is exactly
 /// why `rendered` must be precomputed (no single alias name can spell it).
 ///
@@ -1268,6 +1270,8 @@ struct NormalParam<H: Head, P: MuPhase<H> = Canonical> {
 struct MuDisplay<H: Head> {
     name: Option<H>,
     rendered: Box<Ty<H>>,
+    /// Source payload for the structural rendering. Ignored by type identity.
+    original: Option<Ty<H>>,
 }
 
 impl<H: Head> PartialEq for MuDisplay<H> {
@@ -1301,14 +1305,25 @@ impl<H: Head> NormalTy<H, Named> {
         ty: &Ty<H>,
         ctx: &C,
         expanding: &mut HashSet<H>,
+        fuel: u32,
+    ) -> NormalTy<H, Named> {
+        Self::ingest(ty, ctx, expanding, fuel, false)
+    }
+
+    fn ingest<C: TypeContext<H>>(
+        ty: &Ty<H>,
+        ctx: &C,
+        expanding: &mut HashSet<H>,
         // Remaining projection-reduction steps along this path. Reducing a
         // projection (`(int as Foo).Assoc` → `string`) is a pure type-level
         // operator, but could loop on a cyclic `type A = (C as I).B` /
         // `type B = (C as J).A`; each reduction spends one unit, and on exhaustion
         // the projection stays opaque (conservative — never over-equates).
         fuel: u32,
+        capture_payloads: bool,
     ) -> NormalTy<H, Named> {
-        match ty {
+        let capture_children = capture_payloads && matches!(ty, Ty::Union(_) | Ty::TypeAlias(_));
+        let result = match ty {
             Ty::Int => NormalTy::Int,
             Ty::Bigint => NormalTy::Bigint,
             Ty::Float => NormalTy::Float,
@@ -1333,29 +1348,47 @@ impl<H: Head> NormalTy<H, Named> {
             Ty::Error => NormalTy::Error,
             // Freshness is a compiler-only widening flag, irrelevant to type identity.
             Ty::Literal(lit, _freshness) => NormalTy::Literal(lit.clone()),
-            Ty::Class(qn, args) => {
-                NormalTy::Class(qn.clone(), Self::from_tys(args, ctx, expanding, fuel))
-            }
+            Ty::Class(qn, args) => NormalTy::Class(
+                qn.clone(),
+                Self::ingest_all(args, ctx, expanding, fuel, capture_children),
+            ),
             Ty::Interface(qn, args, bindings) => {
                 let mut bindings: Vec<_> = bindings
                     .iter()
-                    .map(|(name, ty)| (name.clone(), Self::from_ty(ty, ctx, expanding, fuel)))
+                    .map(|(name, ty)| {
+                        (
+                            name.clone(),
+                            Self::ingest(ty, ctx, expanding, fuel, capture_children),
+                        )
+                    })
                     .collect();
                 bindings.sort_by(|(a, _), (b, _)| a.cmp(b));
                 NormalTy::Interface(
                     qn.clone(),
-                    Self::from_tys(args, ctx, expanding, fuel),
+                    Self::ingest_all(args, ctx, expanding, fuel, capture_children),
                     bindings,
                 )
             }
             Ty::Enum(qn) => NormalTy::Enum(qn.clone()),
             Ty::EnumVariant(qn, v) => NormalTy::EnumVariant(qn.clone(), v.clone()),
-            Ty::List(inner) => NormalTy::List(Box::new(Self::from_ty(inner, ctx, expanding, fuel))),
+            Ty::List(inner) => NormalTy::List(Box::new(Self::ingest(
+                inner,
+                ctx,
+                expanding,
+                fuel,
+                capture_children,
+            ))),
             Ty::Map { key, value, .. } => NormalTy::Map {
-                key: Box::new(Self::from_ty(key, ctx, expanding, fuel)),
-                value: Box::new(Self::from_ty(value, ctx, expanding, fuel)),
+                key: Box::new(Self::ingest(key, ctx, expanding, fuel, capture_children)),
+                value: Box::new(Self::ingest(value, ctx, expanding, fuel, capture_children)),
             },
-            Ty::Union(members) => NormalTy::Union(Self::from_tys(members, ctx, expanding, fuel)),
+            Ty::Union(members) => NormalTy::Union(Self::ingest_all(
+                members,
+                ctx,
+                expanding,
+                fuel,
+                capture_children,
+            )),
             Ty::Function {
                 params,
                 ret,
@@ -1366,16 +1399,16 @@ impl<H: Head> NormalTy<H, Named> {
                     .iter()
                     .map(|p| NormalParam {
                         name: p.name.clone(),
-                        ty: Self::from_ty(&p.ty, ctx, expanding, fuel),
+                        ty: Self::ingest(&p.ty, ctx, expanding, fuel, capture_children),
                         mode: p.mode,
                     })
                     .collect(),
-                ret: Box::new(Self::from_ty(ret, ctx, expanding, fuel)),
-                throws: Box::new(Self::from_ty(throws, ctx, expanding, fuel)),
+                ret: Box::new(Self::ingest(ret, ctx, expanding, fuel, capture_children)),
+                throws: Box::new(Self::ingest(throws, ctx, expanding, fuel, capture_children)),
             },
             Ty::Future(value, error) => NormalTy::Future(
-                Box::new(Self::from_ty(value, ctx, expanding, fuel)),
-                Box::new(Self::from_ty(error, ctx, expanding, fuel)),
+                Box::new(Self::ingest(value, ctx, expanding, fuel, capture_children)),
+                Box::new(Self::ingest(error, ctx, expanding, fuel, capture_children)),
             ),
             Ty::TypeVar(name) => NormalTy::TypeVar(name.clone()),
             Ty::AssociatedTypeProjection {
@@ -1394,13 +1427,19 @@ impl<H: Head> NormalTy<H, Named> {
                     && let ProjectionStep::Reduced(reduced) =
                         ctx.project(base, interface, member, fuel)
                 {
-                    return Self::from_ty(&reduced, ctx, expanding, fuel - 1);
+                    return Self::ingest(&reduced, ctx, expanding, fuel - 1, capture_payloads);
                 }
                 // Not reducible — symbolic base or exhausted fuel: an opaque leaf,
                 // equal only to a structurally-identical projection.
                 NormalTy::AssociatedTypeProjection {
-                    base: Box::new(Self::from_ty(base, ctx, expanding, fuel)),
-                    interface: Box::new(Self::from_ty(&interface.to_ty(), ctx, expanding, fuel)),
+                    base: Box::new(Self::ingest(base, ctx, expanding, fuel, capture_children)),
+                    interface: Box::new(Self::ingest(
+                        &interface.to_ty(),
+                        ctx,
+                        expanding,
+                        fuel,
+                        capture_children,
+                    )),
                     member: member.clone(),
                 }
             }
@@ -1417,29 +1456,63 @@ impl<H: Head> NormalTy<H, Named> {
                     return NormalTy::OpaqueAlias(qn.clone());
                 };
                 expanding.insert(qn.clone());
-                let body = Self::from_ty(&def, ctx, expanding, fuel);
+                let body = Self::ingest(&def, ctx, expanding, fuel, capture_children);
                 expanding.remove(qn);
-                if body.mentions_rec_var(qn) {
+                if body.mentions_rec_var(qn) || (capture_payloads && body.has_payload_head()) {
                     NormalTy::Mu {
-                        binder: qn.clone(),
+                        binder: MuDisplay {
+                            name: Some(qn.clone()),
+                            rendered: Box::new(Ty::TypeAlias(qn.clone())),
+                            original: (capture_payloads && body.has_payload_head())
+                                .then(|| Ty::TypeAlias(qn.clone())),
+                        },
                         body: Box::new(body),
                     }
                 } else {
                     body
                 }
             }
+        };
+        if capture_payloads && !matches!(ty, Ty::TypeAlias(_)) && result.has_payload_head() {
+            let original = ty.clone();
+            NormalTy::Mu {
+                binder: MuDisplay {
+                    name: None,
+                    rendered: Box::new(original.clone()),
+                    original: Some(original),
+                },
+                body: Box::new(result),
+            }
+        } else {
+            result
         }
     }
 
-    fn from_tys<C: TypeContext<H>>(
+    fn ingest_all<C: TypeContext<H>>(
         tys: &[Ty<H>],
         ctx: &C,
         expanding: &mut HashSet<H>,
         fuel: u32,
+        capture_payloads: bool,
     ) -> Vec<NormalTy<H, Named>> {
         tys.iter()
-            .map(|t| Self::from_ty(t, ctx, expanding, fuel))
+            .map(|t| Self::ingest(t, ctx, expanding, fuel, capture_payloads))
             .collect()
+    }
+
+    /// Only non-union payloads may retain their source spelling. Union aliases
+    /// must expose their alternatives, and aliased null must stay visible.
+    fn has_payload_head(&self) -> bool {
+        match self {
+            NormalTy::Mu { body, .. } => body.has_payload_head(),
+            NormalTy::Union(_)
+            | NormalTy::RecVar(_)
+            | NormalTy::Null
+            | NormalTy::Never
+            | NormalTy::Unknown
+            | NormalTy::Error => false,
+            _ => true,
+        }
     }
 
     /// Whether this type contains a back-reference to μ-variable `var`.
@@ -1447,7 +1520,9 @@ impl<H: Head> NormalTy<H, Named> {
         match self {
             NormalTy::RecVar(v) => v == var,
             // A nested μ shadowing the same name rebinds it; stop descending.
-            NormalTy::Mu { binder: v, body } => v != var && body.mentions_rec_var(var),
+            NormalTy::Mu { binder, body } => {
+                binder.name.as_ref() != Some(var) && body.mentions_rec_var(var)
+            }
             NormalTy::Class(_, args) => args.iter().any(|a| a.mentions_rec_var(var)),
             NormalTy::Interface(_, args, bindings) => {
                 args.iter().any(|a| a.mentions_rec_var(var))
@@ -1587,7 +1662,10 @@ impl<H: Head> NormalTy<H, Named> {
             // The binder has no surface syntax (its body renders in place); a
             // back-reference is spelled as its alias name — which in the named
             // phase the variable itself carries.
-            NormalTy::Mu { body, .. } => body.legacy_render(),
+            NormalTy::Mu { binder, body } => binder
+                .original
+                .clone()
+                .unwrap_or_else(|| body.legacy_render()),
             NormalTy::RecVar(qn) | NormalTy::OpaqueAlias(qn) => Ty::TypeAlias(qn.clone()),
         }
     }
@@ -1603,24 +1681,26 @@ impl<H: Head> NormalTy<H, Named> {
     /// This runs on the *completed* named term, where binder-hood is already
     /// decided — computing indices during `from_ty` itself would be off by one
     /// whenever an intervening alias expansion turns out not to bind (mutual
-    /// recursion), because `from_ty` only wraps a binder after seeing the whole
-    /// body.
-    fn resolve_binders(self, stack: &mut Vec<H>, saw_mu: &mut bool) -> NormalTy<H> {
+    /// recursion), because alias ingestion decides whether to bind only after
+    /// seeing the whole body. Vacuous source witnesses still occupy a binder
+    /// position until the graph removes them, so they must count in the stack.
+    fn resolve_binders(self, stack: &mut Vec<Option<H>>, saw_mu: &mut bool) -> NormalTy<H> {
         match self {
             NormalTy::Mu { binder, body } => {
-                // `from_ty` wraps a binder only when the body mentions it, and
-                // nothing between `from_ty` and this conversion can remove a
-                // back-reference — so a vacuous binder is a bug, not a case.
-                debug_assert!(
-                    body.mentions_rec_var(&binder),
-                    "from_ty emitted a vacuous μ-binder"
-                );
+                // Structural rendering witnesses can be vacuous binders. The
+                // shared automaton removes them; alias binders still tie knots.
                 *saw_mu = true;
                 let display = MuDisplay {
-                    name: Some(binder.clone()),
-                    rendered: Box::new(body.legacy_render()),
+                    name: binder.name.clone(),
+                    rendered: Box::new(
+                        binder
+                            .original
+                            .clone()
+                            .unwrap_or_else(|| body.legacy_render()),
+                    ),
+                    original: binder.original,
                 };
-                stack.push(binder);
+                stack.push(binder.name);
                 let body = body.resolve_binders(stack, saw_mu);
                 stack.pop();
                 NormalTy::Mu {
@@ -1632,7 +1712,7 @@ impl<H: Head> NormalTy<H, Named> {
                 let index = stack
                     .iter()
                     .rev()
-                    .position(|v| *v == qn)
+                    .position(|v| v.as_ref() == Some(&qn))
                     .unwrap_or_else(|| {
                         unreachable!(
                             "from_ty emits a RecVar only while its alias is on the \
@@ -1734,45 +1814,78 @@ impl<H: Head> NormalTy<H> {
         saw_mu: bool,
         assumptions: &mut HashSet<(NormalTy<H>, NormalTy<H>)>,
     ) -> NormalTy<H> {
+        self.canonicalize_inner(ctx, saw_mu, assumptions, false)
+    }
+
+    fn canonicalize_inner<C: TypeContext<H>>(
+        self,
+        ctx: &C,
+        saw_mu: bool,
+        assumptions: &mut HashSet<(NormalTy<H>, NormalTy<H>)>,
+        preserve_payloads: bool,
+    ) -> NormalTy<H> {
         match self {
             NormalTy::Class(qn, args) => NormalTy::Class(
                 qn,
                 args.into_iter()
-                    .map(|a| a.canonicalize(ctx, saw_mu, assumptions))
+                    .map(|a| a.canonicalize_inner(ctx, saw_mu, assumptions, preserve_payloads))
                     .collect(),
             ),
             NormalTy::Interface(qn, args, bindings) => {
                 let mut bindings: Vec<_> = bindings
                     .into_iter()
-                    .map(|(name, ty)| (name, ty.canonicalize(ctx, saw_mu, assumptions)))
+                    .map(|(name, ty)| {
+                        (
+                            name,
+                            ty.canonicalize_inner(ctx, saw_mu, assumptions, preserve_payloads),
+                        )
+                    })
                     .collect();
                 bindings.sort_by(|(a, _), (b, _)| a.cmp(b));
                 NormalTy::Interface(
                     qn,
                     args.into_iter()
-                        .map(|a| a.canonicalize(ctx, saw_mu, assumptions))
+                        .map(|a| a.canonicalize_inner(ctx, saw_mu, assumptions, preserve_payloads))
                         .collect(),
                     bindings,
                 )
             }
-            NormalTy::List(inner) => {
-                NormalTy::List(Box::new(inner.canonicalize(ctx, saw_mu, assumptions)))
-            }
+            NormalTy::List(inner) => NormalTy::List(Box::new(inner.canonicalize_inner(
+                ctx,
+                saw_mu,
+                assumptions,
+                preserve_payloads,
+            ))),
             NormalTy::Map { key, value } => NormalTy::Map {
-                key: Box::new(key.canonicalize(ctx, saw_mu, assumptions)),
-                value: Box::new(value.canonicalize(ctx, saw_mu, assumptions)),
+                key: Box::new(key.canonicalize_inner(ctx, saw_mu, assumptions, preserve_payloads)),
+                value: Box::new(value.canonicalize_inner(
+                    ctx,
+                    saw_mu,
+                    assumptions,
+                    preserve_payloads,
+                )),
             },
             NormalTy::Future(value, error) => NormalTy::Future(
-                Box::new(value.canonicalize(ctx, saw_mu, assumptions)),
-                Box::new(error.canonicalize(ctx, saw_mu, assumptions)),
+                Box::new(value.canonicalize_inner(ctx, saw_mu, assumptions, preserve_payloads)),
+                Box::new(error.canonicalize_inner(ctx, saw_mu, assumptions, preserve_payloads)),
             ),
             NormalTy::AssociatedTypeProjection {
                 base,
                 interface,
                 member,
             } => NormalTy::AssociatedTypeProjection {
-                base: Box::new(base.canonicalize(ctx, saw_mu, assumptions)),
-                interface: Box::new(interface.canonicalize(ctx, saw_mu, assumptions)),
+                base: Box::new(base.canonicalize_inner(
+                    ctx,
+                    saw_mu,
+                    assumptions,
+                    preserve_payloads,
+                )),
+                interface: Box::new(interface.canonicalize_inner(
+                    ctx,
+                    saw_mu,
+                    assumptions,
+                    preserve_payloads,
+                )),
                 member,
             },
             NormalTy::Function {
@@ -1785,7 +1898,8 @@ impl<H: Head> NormalTy<H> {
                 let mut required = Vec::new();
                 let mut optional = Vec::new();
                 for p in params {
-                    let ty = p.ty.canonicalize(ctx, saw_mu, assumptions);
+                    let ty =
+                        p.ty.canonicalize_inner(ctx, saw_mu, assumptions, preserve_payloads);
                     match p.mode {
                         FunctionParamMode::Required => required.push(NormalParam {
                             name: None,
@@ -1803,8 +1917,18 @@ impl<H: Head> NormalTy<H> {
                 required.extend(optional);
                 NormalTy::Function {
                     params: required,
-                    ret: Box::new(ret.canonicalize(ctx, saw_mu, assumptions)),
-                    throws: Box::new(throws.canonicalize(ctx, saw_mu, assumptions)),
+                    ret: Box::new(ret.canonicalize_inner(
+                        ctx,
+                        saw_mu,
+                        assumptions,
+                        preserve_payloads,
+                    )),
+                    throws: Box::new(throws.canonicalize_inner(
+                        ctx,
+                        saw_mu,
+                        assumptions,
+                        preserve_payloads,
+                    )),
                 }
             }
             // A binder stays put here even if an algebra step strands it —
@@ -1815,14 +1939,25 @@ impl<H: Head> NormalTy<H> {
             // self-heals downstream.
             NormalTy::Mu { binder, body } => NormalTy::Mu {
                 binder,
-                body: Box::new(body.canonicalize(ctx, saw_mu, assumptions)),
+                body: Box::new(body.canonicalize_inner(
+                    ctx,
+                    saw_mu,
+                    assumptions,
+                    preserve_payloads,
+                )),
             },
             NormalTy::Union(members) => {
                 let members = members
                     .into_iter()
-                    .map(|m| m.canonicalize(ctx, saw_mu, assumptions))
+                    .map(|m| m.canonicalize_inner(ctx, saw_mu, assumptions, preserve_payloads))
                     .collect();
-                Self::canonicalize_union(members, ctx, saw_mu, assumptions)
+                if preserve_payloads {
+                    // The graph's epsilon-closure and algebra perform this
+                    // normalization, retaining first-encounter payload witnesses.
+                    NormalTy::Union(members)
+                } else {
+                    Self::canonicalize_union(members, ctx, saw_mu, assumptions)
+                }
             }
             leaf => leaf,
         }
@@ -2802,19 +2937,65 @@ use crate::interned;
 /// their meaning is table-relative rather than a property of the handle alone.
 #[derive(Default)]
 pub struct InternedCanonicalCache {
-    canonical: RefCell<HashMap<interned::ClosedTy, NormalTy>>,
+    canonical: RefCell<HashMap<interned::ClosedTy, CachedCanonical>>,
+}
+
+struct CachedCanonical {
+    ty: NormalTy,
+    structure: Option<interned::ClosedTy>,
 }
 
 impl InternedCanonicalCache {
     fn canonical<C: TypeContext>(&self, ty: &interned::ClosedTy, ctx: &C) -> NormalTy {
         if let Some(canonical) = self.canonical.borrow().get(ty) {
-            return canonical.clone();
+            return canonical.ty.clone();
         }
         let canonical = NormalTy::canonical_interned(ty, ctx);
+        self.canonical.borrow_mut().insert(
+            ty.clone(),
+            CachedCanonical {
+                ty: canonical.clone(),
+                structure: None,
+            },
+        );
+        canonical
+    }
+
+    /// Canonical union structure with source payloads retained for inference.
+    /// Alias expansion, recursion and union algebra use the same normalizer as
+    /// relations; only the rendering preserves names and literal freshness.
+    pub fn normalize_structure<C: TypeContext>(
+        &self,
+        ty: &interned::ClosedTy,
+        ctx: &C,
+    ) -> interned::ClosedTy {
+        if let Some(structure) = self
+            .canonical
+            .borrow()
+            .get(ty)
+            .and_then(|entry| entry.structure.clone())
+        {
+            return structure;
+        }
+        let named = NormalTy::ingest_interned(
+            ty.as_ty(),
+            ctx,
+            &mut HashSet::new(),
+            PROJECTION_REDUCTION_FUEL,
+            true,
+        );
+        let mut saw_mu = false;
+        let resolved = named.resolve_binders(&mut Vec::new(), &mut saw_mu);
+        let prepared = resolved.canonicalize_inner(ctx, saw_mu, &mut HashSet::new(), true);
+        let rendered = mu::structural_render(prepared, ctx);
+        let structure = interned::ClosedTy::from_plain(&rendered);
+        self.canonical(ty, ctx);
         self.canonical
             .borrow_mut()
-            .insert(ty.clone(), canonical.clone());
-        canonical
+            .get_mut(ty)
+            .expect("canonical entry inserted")
+            .structure = Some(structure.clone());
+        structure
     }
 
     pub fn equivalent<C: TypeContext>(
@@ -3020,8 +3201,20 @@ impl NormalTy<DeclName, Named> {
         expanding: &mut HashSet<DeclName>,
         fuel: u32,
     ) -> NormalTy<DeclName, Named> {
+        Self::ingest_interned(ty, ctx, expanding, fuel, false)
+    }
+
+    fn ingest_interned<C: TypeContext>(
+        ty: &interned::Ty,
+        ctx: &C,
+        expanding: &mut HashSet<DeclName>,
+        fuel: u32,
+        capture_payloads: bool,
+    ) -> NormalTy<DeclName, Named> {
         use interned::InferTy as K;
-        match ty.kind() {
+        let capture_children =
+            capture_payloads && matches!(ty.kind(), K::Union(_) | K::TypeAlias(_));
+        let result = match ty.kind() {
             K::Int => NormalTy::Int,
             K::Bigint => NormalTy::Bigint,
             K::Float => NormalTy::Float,
@@ -3047,32 +3240,57 @@ impl NormalTy<DeclName, Named> {
             K::Literal(lit, _freshness) => NormalTy::Literal(lit.clone()),
             K::Class(qn, args) => NormalTy::Class(
                 qn.clone(),
-                Self::from_interned_all(args, ctx, expanding, fuel),
+                Self::ingest_interned_all(args, ctx, expanding, fuel, capture_children),
             ),
             K::Interface(qn, args, bindings) => {
                 let mut bindings: Vec<_> = bindings
                     .iter()
-                    .map(|(name, ty)| (name.clone(), Self::from_interned(ty, ctx, expanding, fuel)))
+                    .map(|(name, ty)| {
+                        (
+                            name.clone(),
+                            Self::ingest_interned(ty, ctx, expanding, fuel, capture_children),
+                        )
+                    })
                     .collect();
                 bindings.sort_by(|(a, _), (b, _)| a.cmp(b));
                 NormalTy::Interface(
                     qn.clone(),
-                    Self::from_interned_all(args, ctx, expanding, fuel),
+                    Self::ingest_interned_all(args, ctx, expanding, fuel, capture_children),
                     bindings,
                 )
             }
             K::Enum(qn) => NormalTy::Enum(qn.clone()),
             K::EnumVariant(qn, variant) => NormalTy::EnumVariant(qn.clone(), variant.clone()),
-            K::List(inner) => {
-                NormalTy::List(Box::new(Self::from_interned(inner, ctx, expanding, fuel)))
-            }
+            K::List(inner) => NormalTy::List(Box::new(Self::ingest_interned(
+                inner,
+                ctx,
+                expanding,
+                fuel,
+                capture_children,
+            ))),
             K::Map { key, value, .. } => NormalTy::Map {
-                key: Box::new(Self::from_interned(key, ctx, expanding, fuel)),
-                value: Box::new(Self::from_interned(value, ctx, expanding, fuel)),
+                key: Box::new(Self::ingest_interned(
+                    key,
+                    ctx,
+                    expanding,
+                    fuel,
+                    capture_children,
+                )),
+                value: Box::new(Self::ingest_interned(
+                    value,
+                    ctx,
+                    expanding,
+                    fuel,
+                    capture_children,
+                )),
             },
-            K::Union(members) => {
-                NormalTy::Union(Self::from_interned_all(members, ctx, expanding, fuel))
-            }
+            K::Union(members) => NormalTy::Union(Self::ingest_interned_all(
+                members,
+                ctx,
+                expanding,
+                fuel,
+                capture_children,
+            )),
             K::Function {
                 params,
                 ret,
@@ -3083,16 +3301,40 @@ impl NormalTy<DeclName, Named> {
                     .iter()
                     .map(|p| NormalParam {
                         name: p.name.clone(),
-                        ty: Self::from_interned(&p.ty, ctx, expanding, fuel),
+                        ty: Self::ingest_interned(&p.ty, ctx, expanding, fuel, capture_children),
                         mode: p.mode,
                     })
                     .collect(),
-                ret: Box::new(Self::from_interned(ret, ctx, expanding, fuel)),
-                throws: Box::new(Self::from_interned(throws, ctx, expanding, fuel)),
+                ret: Box::new(Self::ingest_interned(
+                    ret,
+                    ctx,
+                    expanding,
+                    fuel,
+                    capture_children,
+                )),
+                throws: Box::new(Self::ingest_interned(
+                    throws,
+                    ctx,
+                    expanding,
+                    fuel,
+                    capture_children,
+                )),
             },
             K::Future(value, error) => NormalTy::Future(
-                Box::new(Self::from_interned(value, ctx, expanding, fuel)),
-                Box::new(Self::from_interned(error, ctx, expanding, fuel)),
+                Box::new(Self::ingest_interned(
+                    value,
+                    ctx,
+                    expanding,
+                    fuel,
+                    capture_children,
+                )),
+                Box::new(Self::ingest_interned(
+                    error,
+                    ctx,
+                    expanding,
+                    fuel,
+                    capture_children,
+                )),
             ),
             K::TypeVar(param) => NormalTy::TypeVar(param.clone()),
             K::AssociatedTypeProjection {
@@ -3130,19 +3372,36 @@ impl NormalTy<DeclName, Named> {
                     && let ProjectionStep::Reduced(reduced) =
                         ctx.project(&plain_base, &plain_interface, member, fuel)
                 {
-                    return Self::from_ty(&reduced, ctx, expanding, fuel - 1);
+                    return Self::ingest(&reduced, ctx, expanding, fuel - 1, capture_payloads);
                 }
                 let mut bindings: Vec<_> = interface
                     .associated_types
                     .iter()
-                    .map(|(name, ty)| (name.clone(), Self::from_interned(ty, ctx, expanding, fuel)))
+                    .map(|(name, ty)| {
+                        (
+                            name.clone(),
+                            Self::ingest_interned(ty, ctx, expanding, fuel, capture_children),
+                        )
+                    })
                     .collect();
                 bindings.sort_by(|(a, _), (b, _)| a.cmp(b));
                 NormalTy::AssociatedTypeProjection {
-                    base: Box::new(Self::from_interned(base, ctx, expanding, fuel)),
+                    base: Box::new(Self::ingest_interned(
+                        base,
+                        ctx,
+                        expanding,
+                        fuel,
+                        capture_children,
+                    )),
                     interface: Box::new(NormalTy::Interface(
                         interface.name.clone(),
-                        Self::from_interned_all(&interface.generics, ctx, expanding, fuel),
+                        Self::ingest_interned_all(
+                            &interface.generics,
+                            ctx,
+                            expanding,
+                            fuel,
+                            capture_children,
+                        ),
                         bindings,
                     )),
                     member: member.clone(),
@@ -3158,28 +3417,47 @@ impl NormalTy<DeclName, Named> {
                 expanding.insert(qn.clone());
                 // The alias definition is a plain fact; its expansion
                 // continues through the plain path.
-                let body = Self::from_ty(&def, ctx, expanding, fuel);
+                let body = Self::ingest(&def, ctx, expanding, fuel, capture_children);
                 expanding.remove(qn);
-                if body.mentions_rec_var(qn) {
+                if body.mentions_rec_var(qn) || (capture_payloads && body.has_payload_head()) {
                     NormalTy::Mu {
-                        binder: qn.clone(),
+                        binder: MuDisplay {
+                            name: Some(qn.clone()),
+                            rendered: Box::new(Ty::TypeAlias(qn.clone())),
+                            original: (capture_payloads && body.has_payload_head())
+                                .then(|| Ty::TypeAlias(qn.clone())),
+                        },
                         body: Box::new(body),
                     }
                 } else {
                     body
                 }
             }
+        };
+        if capture_payloads && !matches!(ty.kind(), K::TypeAlias(_)) && result.has_payload_head() {
+            let original = interned::ClosedTy::closed_by_construction(ty.clone()).to_plain();
+            NormalTy::Mu {
+                binder: MuDisplay {
+                    name: None,
+                    rendered: Box::new(original.clone()),
+                    original: Some(original),
+                },
+                body: Box::new(result),
+            }
+        } else {
+            result
         }
     }
 
-    fn from_interned_all<C: TypeContext>(
+    fn ingest_interned_all<C: TypeContext>(
         tys: &[interned::Ty],
         ctx: &C,
         expanding: &mut HashSet<DeclName>,
         fuel: u32,
+        capture_payloads: bool,
     ) -> Vec<NormalTy<DeclName, Named>> {
         tys.iter()
-            .map(|ty| Self::from_interned(ty, ctx, expanding, fuel))
+            .map(|ty| Self::ingest_interned(ty, ctx, expanding, fuel, capture_payloads))
             .collect()
     }
 }

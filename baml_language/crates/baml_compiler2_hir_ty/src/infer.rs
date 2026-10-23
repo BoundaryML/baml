@@ -14086,32 +14086,14 @@ impl<'db> InferenceContext<'db> {
             }
             // Syntactic flattening alone cannot see null behind alias members.
             // Expose those union edges before null removal for ?., ?? or guards.
-            let mut exposed = FxHashSet::default();
-            let mut spellings = FxHashMap::default();
-            resolved = baml_type::flat_union(
-                [resolved],
-                |member| {
-                    let head = self.expand_alias_ty(&member);
-                    match head.kind() {
-                        InferTy::Union(inner) => {
-                            // A recursive union contributes its alternatives
-                            // once. Container payloads remain opaque here.
-                            Ok(if exposed.insert(head.clone()) {
-                                inner.clone()
-                            } else {
-                                Box::new([])
-                            })
-                        }
-                        InferTy::Never => Ok(Box::new([])),
-                        InferTy::Null => Err(head),
-                        // Alias-equivalent leaves share their first spelling;
-                        // the shared normalizer then deduplicates them.
-                        _ => Err(spellings.entry(head).or_insert(member).clone()),
-                    }
-                },
-                Ty::never(),
-                |members| Ty::intern(InferTy::Union(members)),
-            );
+            if !resolved.has_error()
+                && let Ok(closed) = ClosedTy::try_from(&resolved)
+            {
+                resolved = self
+                    .canonical_cache
+                    .normalize_structure(&closed, &self.facts)
+                    .into_ty();
+            }
             // Deduplication may leave one aliased leaf. A structure demand
             // still needs that root's shape; null removal preserves member
             // spellings when it filters a surviving union below.
