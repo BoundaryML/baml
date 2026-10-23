@@ -158,6 +158,13 @@ export function seedFunctionRefHandle(global_index: number): bigint;
 export function seedGenericMediaHandle(): bigint;
 
 /**
+ * Finalize the SDK lifetime: drain in-flight calls and spawned work, then
+ * release the runtime. Repeated calls are harmless; BAML calls made
+ * afterwards fail.
+ */
+export function shutdownRuntime(): Promise<void>;
+
+/**
  * Stage a runtime from precompiled BAML bytecode: a raw artifact
  * (`Uint8Array`), or the encoded string generated SDKs embed (decoded
  * natively, never in JavaScript).
@@ -200,6 +207,7 @@ export interface InitOutput {
     readonly watchInvocationCancellation: (a: bigint, b: any) => [number, number, number];
     readonly callFunction: (a: number, b: number) => any;
     readonly callFunctionSync: (a: number, b: number) => [number, number];
+    readonly shutdownRuntime: () => any;
     readonly stageRuntimeBytecode: (a: any, b: number, c: number) => [number, number];
     readonly stageRuntimeSources: (a: number, b: number, c: any) => [number, number];
     readonly _testHandleTableEntryCount: () => [number, number, number];

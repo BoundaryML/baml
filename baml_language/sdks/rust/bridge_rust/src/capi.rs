@@ -57,6 +57,12 @@ pub(crate) struct Api {
     pub(crate) handle_clone: unsafe extern "C" fn(u64, *mut u64) -> u32,
     pub(crate) handle_release: unsafe extern "C" fn(u64) -> u32,
     pub(crate) free_buffer: unsafe extern "C" fn(Buffer),
+    /// Finalize the host's BAML lifetime: waits for in-flight calls and
+    /// spawned work, finishes telemetry delivery and releases the
+    /// process-wide runtime. Blocks the calling thread (the engine runs the
+    /// work on a fresh thread). Returns a status buffer like
+    /// `initialize_runtime_from_blob`.
+    pub(crate) shutdown_runtime: unsafe extern "C" fn() -> Buffer,
     pub(crate) register_host_dispatch_v2: unsafe extern "C" fn(HostDispatchV2),
     pub(crate) register_host_cancel_callback: unsafe extern "C" fn(HostCancelFn),
     pub(crate) trace_selection: unsafe extern "C" fn(u64, u64, *mut Buffer, *mut u64) -> u32,
@@ -111,10 +117,23 @@ pub(crate) fn engine_loaded() -> bool {
     LOADED.get().is_some()
 }
 
-/// The process-wide API table, loading the engine on first use.
+/// The process-wide API table if the engine is already loaded; never loads
+/// it.
+pub(crate) fn loaded_api() -> Option<&'static Api> {
+    LOADED.get().and_then(|loaded| loaded.as_ref().ok())
+}
+
+/// The process-wide API table, loading the engine on first use (which also
+/// registers the runtime's shutdown for process exit).
 pub(crate) fn api() -> Result<&'static Api, SdkError> {
     LOADED
-        .get_or_init(load)
+        .get_or_init(|| {
+            let loaded = load();
+            if loaded.is_ok() {
+                crate::runtime::shutdown_at_exit();
+            }
+            loaded
+        })
         .as_ref()
         .map_err(|e| SdkError::new(e.to_string()))
 }
@@ -315,7 +334,7 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
         "register_unhandled_spawn_error_callback",
         &path,
     )?;
-    required_slot(table.shutdown_runtime, "shutdown_runtime", &path)?;
+    let shutdown_runtime = required_slot(table.shutdown_runtime, "shutdown_runtime", &path)?;
 
     required_slot(
         table.invocation_protocol_version,
@@ -352,6 +371,7 @@ fn load_inner(env: &loader::LoaderEnv) -> Result<Api, LoaderError> {
         handle_clone,
         handle_release,
         free_buffer,
+        shutdown_runtime,
         register_host_dispatch_v2,
         register_host_cancel_callback,
         trace_selection,
