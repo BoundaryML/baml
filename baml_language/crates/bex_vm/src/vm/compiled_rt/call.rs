@@ -36,7 +36,6 @@ impl BexVm {
             .map_err(|error| Box::new(error.into()))
     }
 
-    /// Call a builtin that the compiler guarantees will not yield.
     pub fn call_builtin(
         &mut self,
         builtin: NativeFunction,
@@ -74,13 +73,11 @@ impl BexVm {
         result
     }
 
-    /// Reserve slots on entry, keeping the arguments in the leading slots.
     pub fn reserve_slots(&mut self, frame: &FrameRecord, slots: usize) {
         let end = frame.base() + slots;
         self.stack.resize(end, Value::NULL);
     }
 
-    /// Slot `index` of the compiled body with record `frame`.
     #[inline]
     #[must_use]
     pub fn slot(&self, frame: &FrameRecord, index: usize) -> Value {
@@ -88,19 +85,16 @@ impl BexVm {
             .get_at(StackIndex::from_raw(frame.base() + index))
     }
 
-    /// Write slot `index` of the compiled body with record `frame`.
     #[inline]
     pub fn set_slot(&mut self, frame: &FrameRecord, index: usize, value: Value) {
         self.stack.0[frame.base() + index] = value;
     }
 
-    /// Root an argument above the body's slots for the next [`super::Step::Call`].
     #[inline]
     pub fn push_arg(&mut self, value: Value) {
         self.stack.push(value);
     }
 
-    /// Buffer a type argument for the next [`super::Step::Call`].
     #[inline]
     pub fn push_type_arg(&mut self, ty: RealizedTy) {
         self.compiled.call_type_args.push(ty);
@@ -113,9 +107,7 @@ impl BexVm {
         super::gc_stress() || self.should_early_yield()
     }
 
-    /// Whether a recursive body should suspend with [`Step::Yield`] on entry:
-    /// when the interpreter's countdown, which it ticks after every call, runs
-    /// out. Under `BAML_GC_STRESS=1` every time it runs out.
+    /// Tick the interpreter's call countdown; GC stress yields whenever it expires.
     #[inline]
     pub fn should_yield_at_call(&mut self) -> bool {
         self.early_yield.tick() && (super::gc_stress() || self.poll_for_yield())
@@ -132,7 +124,6 @@ impl BexVm {
         self.land_compiled_catch(error, level)
     }
 
-    /// Create a catchable `baml.panics.Unreachable` error.
     #[cold]
     #[inline(never)]
     pub fn unreachable_panic(&mut self) -> Box<VmError> {
@@ -141,7 +132,6 @@ impl BexVm {
         ))
     }
 
-    /// Set the `$trace` attachment consumed by the next call.
     pub fn set_call_trace(&mut self, value: Value) -> Result<(), Box<VmError>> {
         match self.trace_config(value) {
             Ok(trace) => {
@@ -156,7 +146,6 @@ impl BexVm {
         }
     }
 
-    /// Record a log event and suspend until the engine has delivered it.
     pub fn log_event(
         &mut self,
         frame: &FrameRecord,
@@ -189,11 +178,7 @@ impl BexVm {
         .map(drop)
     }
 
-    /// Call a compiled body with a VM frame whose type arguments are
-    /// `type_args`, in the callee's De Bruijn order, after `caller` notes the
-    /// call site `pc`. The frame stays on error for the unwinder. With
-    /// telemetry on, a call without type arguments records inline; any other
-    /// takes the VM's call path. [`Self::call_record`] is the frameless call.
+    /// VM-frame fallback: `type_args` use De Bruijn order; errors retain the frame.
     #[inline]
     pub fn call_compiled(
         &mut self,
@@ -222,9 +207,7 @@ impl BexVm {
         self.run_compiled_frame(callee, body, type_args.to_vec(), metadata, args)
     }
 
-    /// Call a compiled closure, whose frame carries its captured type
-    /// arguments: with a frame record when [`Self::direct_calls`] allows,
-    /// else as [`Self::call_compiled`] does.
+    /// Closures carry captured type arguments; framed or runtime declarations require a VM frame.
     #[inline]
     pub fn call_closure_compiled(
         &mut self,
@@ -278,7 +261,6 @@ impl BexVm {
         }
     }
 
-    /// Check the frame and fiber-stack limits.
     #[inline]
     fn check_compiled_call(&mut self) -> Result<(), Box<VmError>> {
         if self.level_count() >= crate::vm::MAX_FRAMES {
@@ -309,14 +291,7 @@ impl BexVm {
         result
     }
 
-    /// Enter a plain compiled callee with telemetry, falling back to the VM call path when needed.
-    ///
-    /// For a plain callee everything the call path looks up is known: the call
-    /// site is the caller's recorded pc, the visible caller is the calling
-    /// compiled frame's function, and the context is inherited. So this enters
-    /// the invocation with those facts, pushes the frame with its telemetry,
-    /// runs the body, and completes the invocation as the call path does. An
-    /// error leaves the frame for the unwinder, which completes it.
+    // Plain calls inherit context and use their recorded call site; errors retain the receipt.
     #[cold]
     #[inline(never)]
     #[allow(unsafe_code)]
@@ -337,8 +312,7 @@ impl BexVm {
             return self.call_compiled_funnelled(callee, &[], args);
         }
         debug_assert_eq!(args.len(), function.arity);
-        let frame_telemetry =
-            self.enter_record_receipt(caller, function, callee, &[], &[], args);
+        let frame_telemetry = self.enter_record_receipt(caller, function, callee, &[], &[], args);
         let locals_offset = self.push_compiled_frame(callee, Vec::new(), None, frame_telemetry);
         let result = self.run_entry(body, args);
         if let Ok(value) = result {

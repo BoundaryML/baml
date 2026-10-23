@@ -1,21 +1,6 @@
-//! Frame records: the frames of compiled bodies.
-//!
-//! Every compiled body runs with a [`FrameRecord`], a local in the Rust frame
-//! that called it, so it lives on the VM's fiber, which never moves while a
-//! body is running or parked on it. Records link to the previous one and
-//! [`RecordChain`] holds the newest.
-//!
-//! A body the VM enters (from bytecode, the call path, or the fiber's entry)
-//! has a VM frame too; its record is that frame's *entry record*, which only
-//! carries the body's live position. A body compiled code calls directly has
-//! no VM frame: its record is its frame. [`BexVm::stack_view`] merges the two
-//! into one stack, and a frame's *level* is its depth in that stack, stable
-//! for the frame's lifetime because nothing below a frame changes while it
-//! exists.
-//!
-//! A record whose body returns an error stays on the stack as a boxed copy, a
-//! *zombie*, exactly as a VM frame stays for the unwinder: the unwinder or a
-//! compiled catch completes and removes it.
+//! Records live on the nonmoving fiber stack; direct compiled calls have no VM frame.
+//! Entry records share their VM frame's level. A level stays stable while its frame lives.
+//! Errors retain boxed records (zombies) until the unwinder or compiled catch removes them.
 
 use std::{
     cell::{Cell, UnsafeCell},
@@ -33,14 +18,13 @@ use crate::{
     vm::{BexVm, BytecodeFrame, Frame},
 };
 
-/// The frame of one compiled body.
 pub struct FrameRecord {
     prev: Cell<*const FrameRecord>,
     /// The callable the body runs: a function, or a closure.
     function: Cell<HeapPtr>,
     /// The runtime package the body's object indices resolve in; null for
     /// the compile-time heap.
-    package: Cell<HeapPtr>,
+    pub(crate) package: Cell<HeapPtr>,
     /// The instruction index the body last reported: its call site while a
     /// callee runs, or where it raised or suspended.
     pc: Cell<u32>,
@@ -54,15 +38,13 @@ pub struct FrameRecord {
     entry: bool,
     /// Whether a manual span activation is scoped to this record; see
     /// [`BexVm::activate_manual_span`].
-    scoped: Cell<bool>,
-    receipt: Cell<Option<FrameTelemetry>>,
-    /// Type arguments in the callee's De Bruijn order; `None` for none. An
-    /// entry record's are its VM frame's.
-    type_args: UnsafeCell<Option<Box<[RealizedTy]>>>,
+    pub(crate) scoped: Cell<bool>,
+    pub(crate) receipt: Cell<Option<FrameTelemetry>>,
+    /// De Bruijn order; entry records use their VM frame's arguments.
+    type_args: UnsafeCell<Box<[RealizedTy]>>,
 }
 
 impl FrameRecord {
-    /// Record the instruction index of the body's current position.
     #[allow(clippy::inline_always, reason = "one store at every call site")]
     #[inline(always)]
     pub fn note_pc(&self, pc: u32) {
@@ -96,16 +78,6 @@ impl FrameRecord {
         self.level as usize
     }
 
-    #[inline]
-    pub(crate) fn package(&self) -> HeapPtr {
-        self.package.get()
-    }
-
-    #[inline]
-    pub(crate) fn receipt(&self) -> Option<FrameTelemetry> {
-        self.receipt.get()
-    }
-
     /// Whether the record holds a receipt, reading only its tag.
     #[inline]
     fn has_receipt(&self) -> bool {
@@ -116,27 +88,12 @@ impl FrameRecord {
         }
     }
 
-    #[inline]
-    pub(crate) fn scoped(&self) -> bool {
-        self.scoped.get()
-    }
-
-    #[inline]
-    pub(crate) fn set_scoped(&self, scoped: bool) {
-        self.scoped.set(scoped);
-    }
-
-    #[inline]
-    pub(crate) fn set_receipt(&self, receipt: Option<FrameTelemetry>) {
-        self.receipt.set(receipt);
-    }
-
     /// The record's own type arguments; empty for an entry record.
     #[allow(unsafe_code)]
     pub(crate) fn own_type_args(&self) -> &[RealizedTy] {
         // SAFETY: the vector is replaced or mutated only by collection
         // forwarding, which runs while no body holds a borrow of it.
-        unsafe { (*self.type_args.get()).as_deref().unwrap_or(&[]) }
+        unsafe { &*self.type_args.get() }
     }
 
     #[inline]
@@ -170,7 +127,7 @@ impl FrameRecord {
         // SAFETY: collection runs while every body is parked, so nothing
         // borrows the type arguments.
         let type_args = unsafe { &mut *self.type_args.get() };
-        for ty in type_args.iter_mut().flat_map(|types| types.iter_mut()) {
+        for ty in type_args.iter_mut() {
             ty.visit_heads_mut(&mut |head| {
                 if head.is_resolved()
                     && let Some(&moved) = roots.get(&head.ptr())
@@ -209,7 +166,6 @@ impl Default for RecordChain {
 }
 
 impl RecordChain {
-    /// The records from the newest down.
     fn iter(&self) -> impl Iterator<Item = &FrameRecord> {
         let mut next = self.top.get();
         std::iter::from_fn(move || {
@@ -235,18 +191,10 @@ impl RecordChain {
         unsafe { &mut *self.zombies.get() }
     }
 
-    /// Unlink `record` from the chain, wherever it is.
     fn unlink(&self, record: *const FrameRecord) {
-        let prev = {
-            // SAFETY: see `iter`.
-            #[allow(unsafe_code)]
-            let record = unsafe { &*record };
-            record.prev()
-        };
-        self.relink(record, prev);
+        self.relink(record, record_ref(record).prev());
     }
 
-    /// Make whatever pointed at `old` point at `new`.
     fn relink(&self, old: *const FrameRecord, new: *const FrameRecord) {
         if ptr::eq(self.top.get(), old) {
             self.top.set(new);
@@ -301,8 +249,6 @@ impl Drop for Pop {
     }
 }
 
-/// A frame in the merged stack: a VM frame, or a record that is a frame of
-/// its own.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum FrameAt {
     Vm(usize),
@@ -343,10 +289,7 @@ impl BexVm {
                 .all(crate::reachable::is_statically_declared)
     }
 
-    /// Run a compiled callee with a frame record, after `caller` notes the
-    /// call site `pc`. The record is popped when the body returns; an error
-    /// leaves it for the unwinder. `args` boxes the arguments for telemetry,
-    /// which needs them only for an invocation it records.
+    /// Errors retain the record for unwinding. `args` runs only when telemetry records the call.
     #[allow(clippy::inline_always, reason = "measured: the call fast path")]
     #[inline(always)]
     pub fn call_record<T: RecordResult, A: AsRef<[Value]>>(
@@ -357,18 +300,16 @@ impl BexVm {
         args: impl FnOnce(&mut BexVm) -> A,
         body: impl FnOnce(&mut BexVm, &FrameRecord) -> Result<T, Box<VmError>>,
     ) -> Result<T, Box<VmError>> {
-        caller.note_pc(pc);
-        let observe = |vm: &mut BexVm, _: &[RealizedTy]| {
-            let function = vm.observed_callee(callee)?;
-            let args = args(vm);
-            vm.enter_record_receipt(caller, function, callee, &[], &[], args.as_ref())
-        };
-        self.call_record_in(callee, caller.package.get(), None, observe, body)
+        self.call_record_typed(caller, callee, &[], pc, args, body)
     }
 
     /// [`Self::call_record`] for a generic callee, whose frame starts with
     /// the call's type arguments.
-    #[inline]
+    #[allow(
+        clippy::inline_always,
+        reason = "also specializes the untyped call fast path"
+    )]
+    #[inline(always)]
     pub fn call_record_typed<T: RecordResult, A: AsRef<[Value]>>(
         &mut self,
         caller: &FrameRecord,
@@ -387,16 +328,13 @@ impl BexVm {
         self.call_record_in(
             callee,
             caller.package.get(),
-            boxed_types(type_args.to_vec()),
+            type_args.to_vec().into_boxed_slice(),
             observe,
             body,
         )
     }
 
-    /// Run a callee from a runtime-dispatched call (a closure or an
-    /// interface implementation) with a frame record, after `caller` notes
-    /// the call site `pc`. A closure's frame carries its captured type
-    /// arguments.
+    /// Dispatched closures carry their captured type arguments in the record.
     pub(crate) fn call_record_dispatched(
         &mut self,
         caller: &FrameRecord,
@@ -415,7 +353,7 @@ impl BexVm {
         self.call_record_in(
             callee,
             package,
-            boxed_types(type_args),
+            type_args.into_boxed_slice(),
             observe,
             |vm, frame| body(vm, frame, args),
         )
@@ -432,7 +370,7 @@ impl BexVm {
         &mut self,
         callee: HeapPtr,
         package: HeapPtr,
-        type_args: Option<Box<[RealizedTy]>>,
+        type_args: Box<[RealizedTy]>,
         observe: impl FnOnce(&mut BexVm, &[RealizedTy]) -> Option<FrameTelemetry>,
         body: impl FnOnce(&mut BexVm, &FrameRecord) -> Result<T, Box<VmError>>,
     ) -> Result<T, Box<VmError>> {
@@ -495,7 +433,6 @@ impl BexVm {
         result
     }
 
-    /// The callee's function when telemetry may record its invocation.
     #[inline]
     fn observed_callee(&self, callee: HeapPtr) -> Option<&'static Function> {
         // SAFETY: a callee is rooted by its caller for the call.
@@ -507,8 +444,6 @@ impl BexVm {
             .then_some(function)
     }
 
-    /// Enter a directly called callee's invocation, with the caller facts the
-    /// call path reads from `caller`'s frame.
     #[cold]
     #[inline(never)]
     #[allow(unsafe_code)]
@@ -542,7 +477,6 @@ impl BexVm {
         }
     }
 
-    /// Enter the invocation of the callee with `record`, before it is linked.
     #[cold]
     #[inline(never)]
     fn observe_into(
@@ -553,7 +487,6 @@ impl BexVm {
         record.receipt.set(observe(self, record.own_type_args()));
     }
 
-    /// Complete a directly called callee's invocation with its result.
     #[cold]
     #[inline(never)]
     fn complete_record<T: RecordResult>(&mut self, record: &FrameRecord, value: &T) {
@@ -570,8 +503,6 @@ impl BexVm {
         self.complete_record_telemetry(receipt, function, value);
     }
 
-    /// Keep the record of a body that returned an error on the stack, boxed,
-    /// for the unwinder.
     #[cold]
     #[inline(never)]
     fn zombify(&mut self, linked: *const FrameRecord, record: FrameRecord) {
@@ -582,8 +513,6 @@ impl BexVm {
         chain.zombies().push(zombie);
     }
 
-    /// Run the body of the VM frame on top of `vm.frames`, with its entry
-    /// record.
     pub(crate) fn run_entry(
         &mut self,
         body: CompiledFn,
@@ -592,7 +521,6 @@ impl BexVm {
         self.run_entry_with(|vm, record| body(vm, record, args))
     }
 
-    /// [`Self::run_entry`] for any body.
     #[allow(
         clippy::cast_possible_truncation,
         reason = "levels are below `MAX_FRAMES` and stack offsets fit u32"
@@ -623,7 +551,7 @@ impl BexVm {
             entry: true,
             scoped: Cell::new(false),
             receipt: Cell::new(None),
-            type_args: UnsafeCell::new(None),
+            type_args: UnsafeCell::new(Box::default()),
         };
         links.top.set(&raw const record);
         let pop = Pop {
@@ -644,7 +572,6 @@ impl BexVm {
         result
     }
 
-    /// The runtime package the callable `function` runs in.
     pub(crate) fn frame_package(&self, function: HeapPtr) -> HeapPtr {
         match self.get_object(function) {
             Object::GenericFunction(function) => function.runtime_package,
@@ -655,7 +582,6 @@ impl BexVm {
         }
     }
 
-    /// The object at `idx` in the package the body of `record` runs in.
     #[allow(
         clippy::inline_always,
         reason = "resolves every object generated code names"
@@ -676,7 +602,6 @@ impl BexVm {
         VmError::thrown_fresh(self.panic_to_exception_value(VmPanic::StackOverflow))
     }
 
-    /// The number of frames: VM frames and records that are frames.
     #[inline]
     pub(crate) fn level_count(&self) -> usize {
         self.frames.len() + self.chain().count.get() as usize
@@ -741,7 +666,6 @@ impl BexVm {
             .collect()
     }
 
-    /// The frame at `level`.
     pub(crate) fn frame_at_level(&self, level: usize) -> Option<FrameAt> {
         if self.chain().top.get().is_null() {
             return (level < self.frames.len()).then_some(FrameAt::Vm(level));
@@ -749,7 +673,6 @@ impl BexVm {
         self.stack_view().get(level).copied()
     }
 
-    /// The level of VM frame `idx`.
     pub(crate) fn level_of_vm(&self, idx: usize) -> usize {
         // The newest record below the frame fixes the levels above it.
         match self.chain().iter().find(|record| record.anchor() <= idx) {
@@ -765,7 +688,6 @@ impl BexVm {
         }
     }
 
-    /// The innermost frame.
     pub(crate) fn top_frame(&self) -> Option<FrameAt> {
         match self.chain().iter().find(|record| !record.entry) {
             Some(record) if record.anchor() >= self.frames.len() => {
@@ -778,36 +700,24 @@ impl BexVm {
     /// The frame executing at VM frame `idx`: the innermost record standing
     /// directly above it, or the frame itself.
     pub(crate) fn innermost_at(&self, idx: usize) -> FrameAt {
-        for record in self.chain().iter() {
-            if record.anchor() > idx + 1 {
-                continue;
-            }
-            if record.anchor() == idx + 1 && !record.entry {
-                return FrameAt::Record(ptr::from_ref(record));
-            }
-            break;
-        }
-        FrameAt::Vm(idx)
+        self.chain()
+            .iter()
+            .find(|record| record.anchor() <= idx + 1)
+            .filter(|record| record.anchor() == idx + 1 && !record.entry)
+            .map_or(FrameAt::Vm(idx), |record| {
+                FrameAt::Record(ptr::from_ref(record))
+            })
     }
 
     /// The entry record of VM frame `idx`, while its body is on the fiber.
     pub(crate) fn entry_record(&self, idx: usize) -> Option<&FrameRecord> {
-        let mut found = None;
-        for record in self.chain().iter() {
-            if record.anchor() > idx + 1 {
-                continue;
-            }
-            if record.anchor() < idx + 1 {
-                break;
-            }
-            if record.entry {
-                found = Some(record);
-            }
-        }
-        found
+        self.chain()
+            .iter()
+            .take_while(|record| record.anchor() > idx)
+            .filter(|record| record.anchor() == idx + 1 && record.entry)
+            .last()
     }
 
-    /// The callable frame `frame` runs.
     pub(crate) fn frame_callable(&self, frame: FrameAt) -> HeapPtr {
         match frame {
             FrameAt::Vm(idx) => self.frames[idx].function(),
@@ -821,26 +731,20 @@ impl BexVm {
         &self,
         frame: FrameAt,
     ) -> Result<&'static Function, crate::errors::VmInternalError> {
-        match frame {
-            // SAFETY: forwarded to the caller.
-            FrameAt::Vm(idx) => unsafe { self.load_function(idx) },
-            // SAFETY: forwarded to the caller.
-            FrameAt::Record(record) => unsafe { self.load_callable(record_ref(record).function()) },
-        }
+        // SAFETY: forwarded to the caller.
+        unsafe { self.load_callable(self.frame_callable(frame)) }
     }
 
-    /// The telemetry receipt of `frame`.
     pub(crate) fn frame_receipt(&self, frame: FrameAt) -> Option<FrameTelemetry> {
         match frame {
             FrameAt::Vm(idx) => match &self.frames[idx] {
                 Frame::Bytecode(frame) => frame.telemetry,
                 Frame::Native(_) => None,
             },
-            FrameAt::Record(record) => record_ref(record).receipt(),
+            FrameAt::Record(record) => record_ref(record).receipt.get(),
         }
     }
 
-    /// Mutate the telemetry receipt of `frame`.
     pub(crate) fn with_frame_receipt<R>(
         &mut self,
         frame: FrameAt,
@@ -853,16 +757,14 @@ impl BexVm {
             },
             FrameAt::Record(record) => {
                 let record = record_ref(record);
-                let mut receipt = record.receipt();
+                let mut receipt = record.receipt.get();
                 let out = f(&mut receipt);
-                record.set_receipt(receipt);
+                record.receipt.set(receipt);
                 out
             }
         }
     }
 
-    /// Whether `frame` is a bytecode frame or a record (not a native
-    /// continuation).
     pub(crate) fn frame_is_bytecode(&self, frame: FrameAt) -> bool {
         match frame {
             FrameAt::Vm(idx) => matches!(self.frames[idx], Frame::Bytecode(_)),
@@ -870,7 +772,6 @@ impl BexVm {
         }
     }
 
-    /// Whether `frame` runs a compiled body.
     pub(crate) fn frame_runs_compiled(&self, frame: FrameAt) -> bool {
         match frame {
             FrameAt::Vm(idx) => self.compiled_at(idx).is_some(),
@@ -878,7 +779,6 @@ impl BexVm {
         }
     }
 
-    /// The compact pc `frame` stands at; see [`Self::frame_pc`].
     pub(crate) fn frame_at_pc(&self, frame: FrameAt, live: Option<usize>) -> Option<usize> {
         match frame {
             FrameAt::Vm(idx) => self.frame_pc(idx, live),
@@ -894,7 +794,6 @@ impl BexVm {
         }
     }
 
-    /// The instruction index a compiled frame last reported.
     pub(crate) fn compiled_instruction(&self, frame: FrameAt) -> usize {
         match frame {
             FrameAt::Vm(idx) => match self.entry_record(idx) {
@@ -908,21 +807,23 @@ impl BexVm {
         }
     }
 
-    /// The error context a compiled frame is handling, from its cause slot.
     pub(crate) fn frame_cause(&self, frame: FrameAt) -> Option<Value> {
-        match frame {
-            FrameAt::Vm(idx) => self.compiled_cause(idx),
+        let (function, base) = match frame {
+            FrameAt::Vm(idx) => match &self.frames[idx] {
+                Frame::Bytecode(frame) => (frame.function, frame.locals_offset.raw()),
+                Frame::Native(_) => return None,
+            },
             FrameAt::Record(record) => {
                 let record = record_ref(record);
-                let function = self.get_object(record.function()).as_callable().ok()?;
-                let slot = function.compiled_body?.cause_slot()?;
-                let context = *self.stack.0.get(record.base() + slot as usize)?;
-                (!context.is_null()).then_some(context)
+                (record.function(), record.base())
             }
-        }
+        };
+        let function = self.get_object(function).as_callable().ok()?;
+        let slot = function.compiled_body?.cause_slot()?;
+        let context = *self.stack.0.get(base + slot as usize)?;
+        (!context.is_null()).then_some(context)
     }
 
-    /// The frame a compiled body's record stands for.
     pub(crate) fn record_frame(record: &FrameRecord) -> FrameAt {
         if record.entry {
             FrameAt::Vm(record.anchor() - 1)
@@ -931,7 +832,6 @@ impl BexVm {
         }
     }
 
-    /// The VM frame a body's record belongs to, if it is an entry record.
     pub(crate) fn record_vm_frame(record: &FrameRecord) -> Option<usize> {
         record.entry.then(|| record.anchor() - 1)
     }
@@ -957,7 +857,6 @@ impl BexVm {
         self.stack.truncate(base);
     }
 
-    /// Whether the record `frame` is a zombie.
     pub(crate) fn is_zombie(&self, frame: *const FrameRecord) -> bool {
         self.chain()
             .zombies()
@@ -965,8 +864,6 @@ impl BexVm {
             .any(|zombie| ptr::eq(&raw const **zombie, frame))
     }
 
-    /// Run a callee with a VM frame on the call path's terms, as before frame
-    /// records; see [`Self::call_compiled`].
     pub(super) fn push_compiled_frame(
         &mut self,
         callee: HeapPtr,
@@ -983,26 +880,12 @@ impl BexVm {
         locals_offset
     }
 
-    /// Caller facts for a call compiled code makes directly: the calling
-    /// body's identity, the compact offset of the call site it recorded, and
-    /// whether its invocation is observed, all read from its own record (an
-    /// entry record's frame is observed through its VM frame). A body making
-    /// a call runs; it is neither a native continuation nor a hook target
-    /// whose hook is evaluating.
+    // A running body is neither a native continuation nor a hook target being evaluated.
     fn direct_caller_facts(&self, caller: &FrameRecord) -> (Option<HeapPtr>, u32, bool) {
         let ptr = caller.function();
         let identity = self.callable_function_identity(ptr);
         let pc = self
-            .get_object(ptr)
-            .as_callable()
-            .ok()
-            .and_then(|function| {
-                function
-                    .bytecode
-                    .compact
-                    .as_ref()?
-                    .offset_of(caller.pc() as usize)
-            })
+            .frame_at_pc(FrameAt::Record(ptr::from_ref(caller)), None)
             .map_or(0, |pc| u32::try_from(pc).unwrap_or(u32::MAX));
         let observed = match Self::record_vm_frame(caller) {
             Some(idx) => matches!(
@@ -1014,7 +897,6 @@ impl BexVm {
         (identity, pc, observed)
     }
 
-    /// Make the current context telemetry's, cloning it only when it changed.
     fn select_current_context(&mut self) {
         let Some(telemetry) = self.telemetry.as_ref() else {
             return;
@@ -1027,7 +909,6 @@ impl BexVm {
         }
     }
 
-    /// Complete a returning callee's invocation.
     #[allow(unsafe_code)]
     pub(crate) fn complete_record_telemetry(
         &mut self,
@@ -1044,11 +925,6 @@ impl BexVm {
             telemetry.complete_invocation(receipt, function, InvocationOutcome::Ok, Some(value));
         }
     }
-}
-
-/// Type arguments as a record holds them.
-fn boxed_types(type_args: Vec<RealizedTy>) -> Option<Box<[RealizedTy]>> {
-    (!type_args.is_empty()).then(|| type_args.into_boxed_slice())
 }
 
 /// What a compiled body returns, boxed for telemetry's output capture.
