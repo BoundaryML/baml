@@ -252,8 +252,10 @@ pub(crate) fn display_instruction(
         | Instruction::AllocArray(_)
         | Instruction::AllocMap(_)
         | Instruction::LoadArrayElement
+        | Instruction::LoadArrayElementLocal
         | Instruction::LoadMapElement
         | Instruction::StoreArrayElement
+        | Instruction::StoreArrayElementLocal
         | Instruction::StoreMapElement
         | Instruction::Await
         | Instruction::AwaitAny
@@ -278,6 +280,7 @@ pub(crate) fn display_instruction(
         | Instruction::Return
         | Instruction::SendEvent
         | Instruction::ContainerLen
+        | Instruction::ContainerLenLocal
         | Instruction::Spawn
         | Instruction::LoadType(_)
         | Instruction::BindType(_)
@@ -392,6 +395,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::LoadField(_)
         | Instruction::VirtualLoadField(_)
         | Instruction::LoadArrayElement
+        | Instruction::LoadArrayElementLocal
         | Instruction::LoadMapElement => Style::new().blue(),
         Instruction::StoreVar(_)
         | Instruction::StoreVarLoadVar(_)
@@ -402,6 +406,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::InitField(_)
         | Instruction::InitSpread(_)
         | Instruction::StoreArrayElement
+        | Instruction::StoreArrayElementLocal
         | Instruction::StoreMapElement => Style::new().green(),
         Instruction::BinOp(_)
         | Instruction::CmpOp(_)
@@ -482,7 +487,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         }
         Instruction::StoreDeref(_) | Instruction::StoreCapture(_) => Style::new().green(),
         Instruction::SendEvent => Style::new().green().bright(),
-        Instruction::ContainerLen => Style::new().cyan(),
+        Instruction::ContainerLen | Instruction::ContainerLenLocal => Style::new().cyan(),
     }
 }
 
@@ -954,6 +959,8 @@ fn display_instruction_textual(
         Instruction::LoadMapElement => "load_map_element".to_string(),
         Instruction::StoreArrayElement => "store_array_element".to_string(),
         Instruction::StoreMapElement => "store_map_element".to_string(),
+        Instruction::LoadArrayElementLocal => "load_array_element_local".to_string(),
+        Instruction::StoreArrayElementLocal => "store_array_element_local".to_string(),
 
         // --- Calls ---
         Instruction::Call { .. } => format!("call {}", meta_str(&"")),
@@ -1062,6 +1069,7 @@ fn display_instruction_textual(
         Instruction::CaptureRef(idx) => format!("capture_ref {idx}"),
         Instruction::SendEvent => "send_event".to_string(),
         Instruction::ContainerLen => "container_len".to_string(),
+        Instruction::ContainerLenLocal => "container_len_local".to_string(),
     }
 }
 
@@ -1326,8 +1334,10 @@ pub fn display_compact_bytecode(
             | OpCode::Throw
             | OpCode::Rethrow
             | OpCode::LoadArrayElement
+            | OpCode::LoadArrayElementLocal
             | OpCode::LoadMapElement
             | OpCode::StoreArrayElement
+            | OpCode::StoreArrayElementLocal
             | OpCode::StoreMapElement
             | OpCode::CallIndirect
             | OpCode::EndTraceHook
@@ -1345,6 +1355,7 @@ pub fn display_compact_bytecode(
             | OpCode::MakeCell
             | OpCode::SendEvent
             | OpCode::ContainerLen
+            | OpCode::ContainerLenLocal
             | OpCode::Spawn
             | OpCode::Add
             | OpCode::Sub

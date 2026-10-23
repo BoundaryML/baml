@@ -28,9 +28,14 @@ impl<'db> Generator<'_, 'db> {
                 return self.unary(block, *op, &operand);
             }
             Rvalue::Len(place) => {
+                let len = if self.analysis.escape.object_is_thread_local(place) {
+                    "container_len_local"
+                } else {
+                    "container_len"
+                };
                 let container = self.load(block, place)?;
                 let container = self.value_arg(&container);
-                self.fallible(block, &format!("vm.container_len({container})"))?
+                self.fallible(block, &format!("vm.{len}({container})"))?
             }
             Rvalue::Discriminant(place) => {
                 let value = self.load(block, place)?;

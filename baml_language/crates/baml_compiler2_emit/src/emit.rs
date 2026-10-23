@@ -328,6 +328,9 @@ struct StackifyCodegen<'db: 'ctx, 'ctx, 'obj, 'w> {
 
     /// Capture slots whose cell may be read or written by a spawned thread.
     spawn_captured_captures: HashSet<usize>,
+    /// Which objects only this thread can reach, whose container accesses
+    /// skip the lock. `None` at O0, where every access keeps it.
+    escape: Option<baml_compiler2_mir::escape::EscapeFacts>,
 }
 
 impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
@@ -343,6 +346,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         line_starts: &'ctx [u32],
         ctx: MirCodegenContext<'db, 'ctx, 'obj, 'w>,
         analysis: AnalysisResult<'ctx>,
+        escape: Option<baml_compiler2_mir::escape::EscapeFacts>,
     ) -> Self {
         // Pre-size the hot output buffers from the MIR's shape. `emit` pushes
         // one instruction + one parallel `meta` entry per bytecode op, and a
@@ -394,7 +398,15 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             captured_locals: HashSet::new(),
             spawn_captured_locals: HashSet::new(),
             spawn_captured_captures: ctx.spawn_capture_indices.clone(),
+            escape,
         }
+    }
+
+    /// Whether the object `place` evaluates to is provably thread-local.
+    fn thread_local(&self, place: &Place) -> bool {
+        self.escape
+            .as_ref()
+            .is_some_and(|facts| facts.object_is_thread_local(place))
     }
 
     /// Append an object to the pool, returning its program-absolute index
@@ -3322,8 +3334,11 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
         Ok(())
     }
 
-    fn load_index(&mut self, kind: IndexKind) -> Result<(), Self::Error> {
+    fn load_index(&mut self, kind: IndexKind, base: &Place) -> Result<(), Self::Error> {
         match kind {
+            IndexKind::Array if self.thread_local(base) => {
+                self.emit(Instruction::LoadArrayElementLocal);
+            }
             IndexKind::Array => {
                 self.emit(Instruction::LoadArrayElement);
             }
@@ -3450,7 +3465,11 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
     fn len_of_place(&mut self, place: &Place) -> Result<(), Self::Error> {
         // MIR `Rvalue::Len` → dedicated ContainerLen opcode (no function call overhead).
         pull_semantics::walk_place_pull(self, place)?;
-        self.emit(Instruction::ContainerLen);
+        self.emit(if self.thread_local(place) {
+            Instruction::ContainerLenLocal
+        } else {
+            Instruction::ContainerLen
+        });
         Ok(())
     }
 
@@ -3639,8 +3658,11 @@ impl<'db: 'ctx, 'ctx> StackEffectSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '
         Ok(())
     }
 
-    fn store_index_value(&mut self, kind: IndexKind) -> Result<(), Self::Error> {
+    fn store_index_value(&mut self, kind: IndexKind, base: &Place) -> Result<(), Self::Error> {
         match kind {
+            IndexKind::Array if self.thread_local(base) => {
+                self.emit(Instruction::StoreArrayElementLocal)
+            }
             IndexKind::Array => self.emit(Instruction::StoreArrayElement),
             IndexKind::Map => self.emit(Instruction::StoreMapElement),
         };
@@ -3715,7 +3737,9 @@ pub(crate) fn compile_mir_function<'db: 'mir, 'mir>(
     crate::verifier::verify_mir_emit_invariants(body, arity, &analysis);
 
     // Compile with stackification
-    let codegen = StackifyCodegen::new(body, arity, line_starts, ctx, analysis);
+    let escape = (opt != crate::analysis::OptLevel::Zero)
+        .then(|| baml_compiler2_mir::escape::analyze(ctx.db, body, arity, opt));
+    let codegen = StackifyCodegen::new(body, arity, line_starts, ctx, analysis, escape);
     let mut f = codegen.compile(identity);
     if let Some(span) = mir_span {
         f.span = span;

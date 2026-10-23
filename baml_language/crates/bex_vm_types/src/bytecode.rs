@@ -1084,6 +1084,14 @@ pub enum Instruction {
     /// others are free. As for a generic parameter's bound, only a concrete
     /// type can satisfy it.
     SatisfiesBound,
+
+    /// [`Self::LoadArrayElement`] on an array escape analysis proved no
+    /// other thread can reach: reads without the container's lock.
+    LoadArrayElementLocal,
+    /// [`Self::StoreArrayElement`] on a thread-local array, without the lock.
+    StoreArrayElementLocal,
+    /// [`Self::ContainerLen`] on a thread-local container, without the lock.
+    ContainerLenLocal,
 }
 
 /// Compact bytecode opcodes.
@@ -1305,6 +1313,12 @@ pub enum OpCode {
 
     /// Resume a compiled body through a stub appended at load time, never serialized.
     ResumeCompiled,
+
+    // Lock-free container access for thread-local containers, appended to
+    // preserve discriminants.
+    LoadArrayElementLocal,
+    StoreArrayElementLocal,
+    ContainerLenLocal,
 }
 
 impl OpCode {
@@ -1451,7 +1465,10 @@ impl OpCode {
             | Self::TraceHookRich
             | Self::TraceHookEmptySpan
             | Self::SatisfiesBound
-            | Self::ResumeCompiled => 1,
+            | Self::ResumeCompiled
+            | Self::LoadArrayElementLocal
+            | Self::StoreArrayElementLocal
+            | Self::ContainerLenLocal => 1,
             Self::AllocInstance | Self::Call | Self::CallExactArgs | Self::MakeGenericFunction => 7,
 
             // 9-byte: opcode + u32 + u16 + u16 (closure with capture+typearg counts)
@@ -1612,6 +1629,9 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::TraceHookEmptySpan as u8 => Ok(Self::TraceHookEmptySpan),
             x if x == Self::SatisfiesBound as u8 => Ok(Self::SatisfiesBound),
             x if x == Self::ResumeCompiled as u8 => Ok(Self::ResumeCompiled),
+            x if x == Self::LoadArrayElementLocal as u8 => Ok(Self::LoadArrayElementLocal),
+            x if x == Self::StoreArrayElementLocal as u8 => Ok(Self::StoreArrayElementLocal),
+            x if x == Self::ContainerLenLocal as u8 => Ok(Self::ContainerLenLocal),
 
             x if x == Self::CallExactArgs as u8 => Ok(Self::CallExactArgs),
             x if x == Self::SetCallTrace as u8 => Ok(Self::SetCallTrace),
@@ -1633,6 +1653,9 @@ impl std::fmt::Display for OpCode {
             Self::TraceHookEmptySpan => "TRACE_HOOK_EMPTY_SPAN",
             Self::SatisfiesBound => "SATISFIES_BOUND",
             Self::ResumeCompiled => "RESUME_COMPILED",
+            Self::LoadArrayElementLocal => "LOAD_ARRAY_ELEMENT_LOCAL",
+            Self::StoreArrayElementLocal => "STORE_ARRAY_ELEMENT_LOCAL",
+            Self::ContainerLenLocal => "CONTAINER_LEN_LOCAL",
 
             Self::Return => "RETURN",
             Self::Await => "AWAIT",
@@ -2035,6 +2058,9 @@ impl std::fmt::Display for Instruction {
             Instruction::CaptureRef(idx) => write!(f, "CAPTURE_REF {idx}"),
             Instruction::SendEvent => f.write_str("SEND_EVENT"),
             Instruction::ContainerLen => f.write_str("CONTAINER_LEN"),
+            Instruction::LoadArrayElementLocal => f.write_str("LOAD_ARRAY_ELEMENT_LOCAL"),
+            Instruction::StoreArrayElementLocal => f.write_str("STORE_ARRAY_ELEMENT_LOCAL"),
+            Instruction::ContainerLenLocal => f.write_str("CONTAINER_LEN_LOCAL"),
             Instruction::LoadVar2(a, b) => write!(f, "LOAD_VAR2 {a} {b}"),
             Instruction::StoreVar2(a, b) => write!(f, "STORE_VAR2 {a} {b}"),
         }
@@ -2543,6 +2569,9 @@ impl Bytecode {
                 | Instruction::MakeCell
                 | Instruction::SendEvent
                 | Instruction::ContainerLen
+                | Instruction::LoadArrayElementLocal
+                | Instruction::StoreArrayElementLocal
+                | Instruction::ContainerLenLocal
                 | Instruction::Spawn
                 | Instruction::AwaitAny => {}
 
@@ -2961,6 +2990,9 @@ impl Bytecode {
             Instruction::MakeCell => OpCode::MakeCell,
             Instruction::SendEvent => OpCode::SendEvent,
             Instruction::ContainerLen => OpCode::ContainerLen,
+            Instruction::LoadArrayElementLocal => OpCode::LoadArrayElementLocal,
+            Instruction::StoreArrayElementLocal => OpCode::StoreArrayElementLocal,
+            Instruction::ContainerLenLocal => OpCode::ContainerLenLocal,
             Instruction::LoadVar2(..) => OpCode::LoadVar2,
             Instruction::StoreVar2(..) => OpCode::StoreVar2,
 
@@ -3511,6 +3543,15 @@ mod compact_tests {
             (Instruction::VirtualStoreField(1), OpCode::VirtualStoreField),
             (Instruction::LoadField(1), OpCode::LoadField),
             (Instruction::StoreField(1), OpCode::StoreField),
+            (
+                Instruction::LoadArrayElementLocal,
+                OpCode::LoadArrayElementLocal,
+            ),
+            (
+                Instruction::StoreArrayElementLocal,
+                OpCode::StoreArrayElementLocal,
+            ),
+            (Instruction::ContainerLenLocal, OpCode::ContainerLenLocal),
         ] {
             let bc = make_bytecode(vec![instruction], Vec::new());
             let op = bc.instruction_to_opcode(&instruction);

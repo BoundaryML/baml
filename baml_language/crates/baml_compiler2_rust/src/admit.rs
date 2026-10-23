@@ -166,6 +166,7 @@ fn lower_program<'db>(
 
     let mut admission = Admission {
         db,
+        opt,
         index,
         units: &mut units,
         rejected: &mut rejected,
@@ -371,6 +372,7 @@ fn admission_fixpoint(
 
 struct Admission<'a, 'db> {
     db: &'db dyn baml_compiler2_mir::Db,
+    opt: OptLevel,
     index: &'a ProgramIndex<'a>,
     units: &'a mut BTreeMap<usize, Unit<'db>>,
     rejected: &'a mut Vec<(String, Rejection)>,
@@ -390,7 +392,7 @@ impl<'db> Admission<'_, 'db> {
         if !matches!(info.kind, FunctionKind::Bytecode) {
             return;
         }
-        match Analysis::new(self.db, self.index, arity, body, captures) {
+        match Analysis::new(self.db, self.opt, self.index, arity, body, captures) {
             Ok(analysis) => {
                 self.units.insert(
                     object,
