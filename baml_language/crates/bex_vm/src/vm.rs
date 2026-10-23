@@ -11839,17 +11839,80 @@ impl BexVm {
 
 impl ::bex_vm_types::RootHaver for BexVm {
     fn visit_roots(&mut self, visitor: &mut dyn RootVisitor) {
+        let Self {
+            frames,
+            // Holds only a refused frame allocation, which names nothing on
+            // the heap (asserted below).
+            pending_entry_frame_panic,
+            stack,
+            op_count: _,
+            cur_pc: _,
+            heap: _,
+            early_yield: _,
+            // Its cached cursor is layout, not a pointer; see `relocated`.
+            tlab: _,
+            globals,
+            pending_globals: _,
+            // The shared tables name compile-time objects only (the static
+            // packages and their declarations), which never move.
+            packages: _,
+            error_class_ptrs: _,
+            panic_class_ptrs: _,
+            stdlib_heads: _,
+            // Rooted by the engine's own `DynDispatchRoot` holder.
+            dynamic_dispatch: _,
+            thread_id: _,
+            telemetry,
+            trace_scope: _,
+            manual_activations: _,
+            pending_telemetry_wait: _,
+            context_transfers,
+            argv: _,
+            pending_call_trace: _,
+            pending_trace_hooks: _,
+            held_traces: _,
+            trace_scope_frame: _,
+            entry_reservation: _,
+            inherited_hook_suppression: _,
+            pending_host_trace: _,
+            entry_trace: _,
+            entry_trace_context: _,
+            root_context: _,
+            pending_call_type_args,
+            compiled,
+            impl_cache,
+            checkpoint_passed: _,
+            pending_call_passes_type_args: _,
+            static_load_type_cache,
+            static_virtual_call_cache,
+        } = self;
+        debug_assert!(
+            matches!(
+                pending_entry_frame_panic,
+                None | Some(VmPanic::StackOverflow | VmPanic::AllocFailure { .. })
+            ),
+            "a pending entry-frame panic is a refused allocation, with no heap roots"
+        );
+
         // Stack values. Frame locals live in the stack at the frame's
         // `locals_offset`, so they are covered here.
-        for value in &mut self.stack {
+        for value in &mut *stack {
             value.visit_roots(visitor);
+        }
+
+        // A `$init` VM owns the globals it is populating, and is the only
+        // thing that roots them. Once `$init` finishes they are frozen into
+        // the engine's `SharedGlobals`, a permit holder of its own.
+        match globals {
+            VmGlobals::Owned(pool) => pool.0.visit_roots(visitor),
+            VmGlobals::Shared(_) => {}
         }
 
         // Native generic calls have no bytecode frame while the builtin is
         // executing, so this is the only owner of their realized type heads.
         // A runtime declaration bound to T must remain live across any GC the
         // native performs or triggers through a continuation.
-        self.pending_call_type_args.visit_roots(visitor);
+        pending_call_type_args.visit_roots(visitor);
 
         // The static caches are keyed by a function's address, tagged in the
         // low bit when it is a runtime function (a compile-time function is
@@ -11872,12 +11935,12 @@ impl ::bex_vm_types::RootHaver for BexVm {
                 .visit_weak(&mut key)
                 .then(|| (key.as_ptr() as usize) | 1)
         };
-        let old_load_type_cache = std::mem::take(&mut self.static_load_type_cache);
+        let old_load_type_cache = std::mem::take(static_load_type_cache);
         for ((identity, index), mut ty) in old_load_type_cache {
             if let Some(identity) = forward_identity(identity, visitor)
                 && ty.visit(visitor)
             {
-                self.static_load_type_cache.insert((identity, index), ty);
+                static_load_type_cache.insert((identity, index), ty);
             }
         }
         // Whether every declaration the types name is still live, repointing
@@ -11891,7 +11954,7 @@ impl ::bex_vm_types::RootHaver for BexVm {
             }
             live
         };
-        let old_virtual_call_cache = std::mem::take(&mut self.static_virtual_call_cache);
+        let old_virtual_call_cache = std::mem::take(static_virtual_call_cache);
         for (mut key, mut target) in old_virtual_call_cache {
             // The whole entry is weak, key and target alike: it names a callee,
             // an interface and the declarations in the receiver's and the
@@ -11928,22 +11991,22 @@ impl ::bex_vm_types::RootHaver for BexVm {
                 continue;
             }
             *caller_function_addr = identity;
-            self.static_virtual_call_cache.insert(key, target);
+            static_virtual_call_cache.insert(key, target);
         }
         // Resolver answers, held weakly like the static caches above.
-        self.impl_cache.get_mut().visit_weak(visitor);
+        impl_cache.get_mut().visit_weak(visitor);
 
-        for transfer in &mut self.context_transfers {
-            transfer.handling.visit_roots(visitor);
-            transfer.target.visit_roots(visitor);
+        for ContextTransfer { handling, target } in context_transfers.iter_mut() {
+            handling.visit_roots(visitor);
+            target.visit_roots(visitor);
         }
 
-        self.compiled.visit_roots(visitor);
+        compiled.visit_roots(visitor);
 
-        for frame in &mut self.frames {
+        for frame in &mut *frames {
             frame.visit_roots(visitor);
         }
-        if let Some(telemetry) = &mut self.telemetry {
+        if let Some(telemetry) = telemetry {
             telemetry.visit_roots(visitor);
         }
     }

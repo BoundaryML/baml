@@ -9,7 +9,7 @@
 //! it does not serialize multiple VM mutators. Heap objects reachable from
 //! spawned VMs must use object-level synchronization for mutable state. Raw
 //! heap/container access is only sound while holding [`HeapGuard`] (all mutators
-//! parked) or during proven single-threaded setup.
+//! parked), or on a heap no manager coordinates at all (a standalone test heap).
 
 use ::bex_vm_types::{PermitProof, RootHaver, RootVisitor};
 use ::core::{
@@ -153,26 +153,45 @@ impl<T: RootHaver> InactiveHeapPermit<T> {
             _marker: PhantomData,
         }
     }
+    /// [`Self::acquire`] without waiting, for a caller that must not suspend
+    /// and knows nothing holds the heap exclusively (no collector exists yet,
+    /// say). Hands the permit back if a [`HeapGuard`] holds the heap or is
+    /// draining it.
+    pub fn try_acquire(self) -> Result<ActiveHeapPermit<T>, Self> {
+        match Arc::clone(&self.active).try_acquire_owned() {
+            Ok(permit) => Ok(ActiveHeapPermit {
+                state: self,
+                _permit: permit,
+                _marker: PhantomData,
+            }),
+            Err(tokio::sync::TryAcquireError::NoPermits) => Err(self),
+            Err(tokio::sync::TryAcquireError::Closed) => {
+                unreachable!("Semaphore should never be closed")
+            }
+        }
+    }
     /// ## Safety
     ///
-    /// The caller should not access the heap or use the heap roots unless the permit is active.
-    /// They may access other data on the root holder, but not the heap or heap roots.
+    /// No [`HeapGuard`] may exist while the reference lives: the collector
+    /// walks every holder through `&mut`. Holding any active permit of the
+    /// same manager guarantees that, whether it is this one's (the permit is
+    /// active) or another's (as `FutureManagerGuard` reads its holder). Only
+    /// then may the caller touch the holder's heap roots, or the heap.
     pub unsafe fn holder(&self) -> &T {
         let ptr = self.holder.get();
-        // SAFETY: caller upholds the fn-level contract — the permit is active,
-        // so no other thread (GC or mutator) is concurrently reading/writing
-        // through this `PermitCell`.
+        // SAFETY: caller upholds the fn-level contract — an active permit
+        // excludes the collector, and no mutator other than this permit's
+        // owner reaches this `PermitCell`.
         unsafe { &*ptr }
     }
 
     /// ## Safety
     ///
-    /// The caller should not access the heap or use the heap roots unless the permit is active.
-    /// They may access other data on the root holder, but not the heap or heap roots.
+    /// As for [`Self::holder`].
     pub unsafe fn holder_mut(&mut self) -> &mut T {
         let ptr = self.holder.get();
-        // SAFETY: caller upholds the fn-level contract — the permit is active
-        // and `&mut self` proves exclusive access on this thread.
+        // SAFETY: caller upholds the fn-level contract, and `&mut self` proves
+        // exclusive access on this thread.
         unsafe { &mut *ptr }
     }
 }
@@ -211,15 +230,38 @@ impl HeapPermitManager {
     /// If a GC is active, will wait for it to complete.
     pub async fn new_permit<T: RootHaver + 'static>(&self, with_roots: T) -> InactiveHeapPermit<T> {
         let mut guard = self.holders.lock().await;
-        debug_assert!(guard.len() < MAX_PERMITS as usize);
-        let holder = Arc::new(PermitCell::new(with_roots));
-        guard.push(Arc::downgrade(&holder) as Weak<PermitCell<dyn RootHaver>>);
-        let permit = InactiveHeapPermit {
-            active: self.active.clone(),
-            holder,
-        };
+        let permit = self.register(&mut guard, with_roots);
         drop(guard);
         permit
+    }
+    /// [`Self::new_permit`] without waiting, for a caller that must not
+    /// suspend and knows no collection is in progress (none can be before any
+    /// collector exists, say). Hands the holder back if the registry is
+    /// contended: a [`HeapGuard`] holds it, or another registration is under
+    /// way.
+    pub fn try_new_permit<T: RootHaver + 'static>(
+        &self,
+        with_roots: T,
+    ) -> Result<InactiveHeapPermit<T>, T> {
+        let Ok(mut guard) = self.holders.try_lock() else {
+            return Err(with_roots);
+        };
+        let permit = self.register(&mut guard, with_roots);
+        drop(guard);
+        Ok(permit)
+    }
+    fn register<T: RootHaver + 'static>(
+        &self,
+        holders: &mut Vec<Weak<PermitCell<dyn RootHaver>>>,
+        with_roots: T,
+    ) -> InactiveHeapPermit<T> {
+        debug_assert!(holders.len() < MAX_PERMITS as usize);
+        let holder = Arc::new(PermitCell::new(with_roots));
+        holders.push(Arc::downgrade(&holder) as Weak<PermitCell<dyn RootHaver>>);
+        InactiveHeapPermit {
+            active: self.active.clone(),
+            holder,
+        }
     }
     pub async fn request_park(&self) -> HeapGuard<'_> {
         // Drain the semaphore BEFORE taking the holders mutex. The semaphore
