@@ -1094,6 +1094,22 @@ pub enum TirTypeError {
         is_client: bool,
         thrown: Ty,
     },
+    /// A member of an LLM function's return type that a model's JSON answer
+    /// can never be (a warning): one with no JSON form, such as `uint8array`,
+    /// or with no values. The runtime drops it from the output schema.
+    LlmOutputMemberDropped {
+        function: Name,
+        member: Ty,
+        /// The member has no values at all, rather than no JSON form.
+        no_values: bool,
+        /// What the function can return instead, or `None` when it can
+        /// return nothing.
+        kept: Option<Ty>,
+    },
+    /// An optional field, in a class an LLM function returns, that a model's
+    /// JSON answer can never fill (a warning): its type has no JSON form
+    /// besides `null`, so the field is always `null`.
+    LlmOutputFieldAlwaysNull { field: Name },
     /// An assignment targets a top-level binding. `$init` sets every global
     /// once and requests then share it, so the binding is immutable; only
     /// what it holds may change.
@@ -2602,6 +2618,34 @@ impl TirTypeError {
                      the function that needs it"
                     )
                 }
+                TirTypeError::LlmOutputMemberDropped {
+                    function,
+                    member,
+                    no_values,
+                    kept,
+                } => {
+                    let why = if *no_values {
+                        "has no values"
+                    } else {
+                        "has no JSON form"
+                    };
+                    write!(
+                        f,
+                        "`{}` {why}, so the model can never return it",
+                        member.spell(vp)
+                    )?;
+                    match kept {
+                        Some(kept) => {
+                            write!(f, ". `{function}` can only return `{}`", kept.spell(vp))
+                        }
+                        None => write!(f, ", and every call to `{function}` fails"),
+                    }
+                }
+                TirTypeError::LlmOutputFieldAlwaysNull { field } => write!(
+                    f,
+                    "the model can never fill `{field}`, so it is always null. Mark it @skip if \
+                     that is intended"
+                ),
                 TirTypeError::InitThrowNotHandled {
                     declaration,
                     is_client,
