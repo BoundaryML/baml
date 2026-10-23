@@ -353,9 +353,19 @@ pub(super) struct Lookups {
     /// Whether decoding a type can reach a provided `from_json`. Holds only
     /// final answers: see [`Lookups::reaches_override`].
     reaches: FxHashMap<RealizedTy, bool>,
-    /// The types [`Lookups::reaches_override`] is still working out, each
-    /// with its depth in the chain of types that led to it.
-    reaching: FxHashMap<RealizedTy, usize>,
+}
+
+/// One [`Lookups::reaches_override`] walk: Tarjan's strongly connected
+/// components over the types the walk is still working out.
+#[derive(Default)]
+struct ReachWalk {
+    /// Visit order and lowest reachable visit order, per type on the walk.
+    order: FxHashMap<RealizedTy, (usize, usize)>,
+    /// The types of components not yet closed, in visit order.
+    open: Vec<RealizedTy>,
+    /// Whether a type reaches a provided `from_json` on its own: its own rule,
+    /// or an edge to a type whose answer is already final.
+    direct: FxHashMap<RealizedTy, bool>,
 }
 
 /// Distinct types [`Lookups::reaches_override`] follows before it assumes an
@@ -368,7 +378,6 @@ impl Lookups {
             plans: Plans::new(naming),
             provided: FxHashMap::default(),
             reaches: FxHashMap::default(),
-            reaching: FxHashMap::default(),
         }
     }
 
@@ -400,21 +409,28 @@ impl Lookups {
     /// rule provides, by the walk's own rules: through unions, lists, map
     /// values, and the shown fields of classes, but not into aliases or
     /// `json`, which decode in place.
+    ///
+    /// Types can refer to each other in cycles, and every type in a cycle has
+    /// the same answer. So the walk finds the strongly connected components of
+    /// the types it meets (Tarjan's algorithm), and answers each component
+    /// once, when it closes: `true` if any of its types reaches a `from_json`
+    /// on its own or through a component already answered. Every answer kept
+    /// in `reaches` is final, and each type is visited once.
     pub(super) fn reaches_override(&mut self, vm: &BexVm, ty: &RealizedTy) -> bool {
-        self.reaches_from(vm, ty, 0).0
+        if !Self::can_reach(ty) {
+            return false;
+        }
+        if let Some(&reaches) = self.reaches.get(ty) {
+            return reaches;
+        }
+        let mut walk = ReachWalk::default();
+        self.reach_component(vm, ty, &mut walk);
+        self.reaches.get(ty).copied().unwrap_or(true)
     }
 
-    /// [`Self::reaches_override`] at `depth` in a chain of types still being
-    /// worked out. Also returns the shallowest depth of such a type the
-    /// answer leaned on, if any.
-    ///
-    /// A type met again while it is being worked out counts as `false` for
-    /// now. A `false` that leaned on a type above it in the chain is
-    /// provisional: that type may still turn out `true`, and so would this
-    /// one. Only answers that are `true`, or that leaned on nothing above
-    /// their own depth, are kept in `reaches`.
-    fn reaches_from(&mut self, vm: &BexVm, ty: &RealizedTy, depth: usize) -> (bool, Option<usize>) {
-        if !matches!(
+    /// The types the walk follows: the ones that can hold a class or enum.
+    fn can_reach(ty: &RealizedTy) -> bool {
+        matches!(
             ty,
             RealizedTy::Union(_)
                 | RealizedTy::List(_)
@@ -422,73 +438,94 @@ impl Lookups {
                 | RealizedTy::Class(..)
                 | RealizedTy::Interface(..)
                 | RealizedTy::Enum(_)
-        ) {
-            return (false, None);
-        }
-        if let Some(&reaches) = self.reaches.get(ty) {
-            return (reaches, None);
-        }
-        if let Some(&open) = self.reaching.get(ty) {
-            return (false, Some(open));
-        }
-        if self.reaches.len() + self.reaching.len() >= MAX_REACH_TYPES {
-            return (true, None);
-        }
-        self.reaching.insert(ty.clone(), depth);
-        let mut leaned: Option<usize> = None;
-        let mut any = |this: &mut Self, members: &mut dyn Iterator<Item = &RealizedTy>| {
-            for member in members {
-                let (reaches, open) = this.reaches_from(vm, member, depth + 1);
-                if reaches {
-                    return true;
-                }
-                leaned = match (leaned, open) {
-                    (Some(a), Some(b)) => Some(a.min(b)),
-                    (a, b) => a.or(b),
-                };
-            }
-            false
-        };
-        let reaches = match ty {
+        )
+    }
+
+    /// The types decoding `ty` goes on to decode, and whether `ty` itself has
+    /// a provided `from_json`.
+    fn reach_edges(&mut self, vm: &BexVm, ty: &RealizedTy) -> (bool, Vec<RealizedTy>) {
+        match ty {
             RealizedTy::Union(members) if members.iter().any(RealizedTy::is_null) => {
-                let stripped = ty.strip_null();
-                any(self, &mut std::iter::once(&stripped))
+                (false, vec![ty.strip_null()])
             }
-            RealizedTy::Union(members) => any(self, &mut members.iter()),
-            RealizedTy::List(element) => any(self, &mut std::iter::once(element.as_ref())),
-            RealizedTy::Map { value, .. } => any(self, &mut std::iter::once(value.as_ref())),
+            RealizedTy::Union(members) => (false, members.to_vec()),
+            RealizedTy::List(element) => (false, vec![element.as_ref().clone()]),
+            RealizedTy::Map { value, .. } => (false, vec![value.as_ref().clone()]),
             RealizedTy::Class(head, _) | RealizedTy::Interface(head, _, _)
                 if vm.stdlib_heads().media_kind(*head).is_some() =>
             {
-                false
+                (false, Vec::new())
             }
             RealizedTy::Class(head, type_args) | RealizedTy::Interface(head, type_args, _) => {
-                self.provided(vm, *head, ty).is_some()
-                    || match self.plans.class(vm, *head, type_args) {
-                        Ok(plan) => any(
-                            self,
-                            &mut plan
-                                .fields
-                                .iter()
-                                .filter(|field| field.shown)
-                                .map(|field| &field.ty),
-                        ),
-                        Err(_) => false,
-                    }
+                if self.provided(vm, *head, ty).is_some() {
+                    return (true, Vec::new());
+                }
+                match self.plans.class(vm, *head, type_args) {
+                    Ok(plan) => (
+                        false,
+                        plan.fields
+                            .iter()
+                            .filter(|field| field.shown)
+                            .map(|field| field.ty.clone())
+                            .collect(),
+                    ),
+                    Err(_) => (false, Vec::new()),
+                }
             }
-            RealizedTy::Enum(head) => self.provided(vm, *head, ty).is_some(),
-            _ => false,
-        };
-        self.reaching.remove(ty);
-        // Leaning on this type itself is settled now; leaning on one above
-        // it is not.
-        let open = leaned.filter(|&at| at < depth);
-        if reaches || open.is_none() {
-            self.reaches.insert(ty.clone(), reaches);
-            (reaches, None)
-        } else {
-            (false, open)
+            RealizedTy::Enum(head) => (self.provided(vm, *head, ty).is_some(), Vec::new()),
+            _ => (false, Vec::new()),
         }
+    }
+
+    /// One step of the walk: visit `ty`, follow its edges, and close its
+    /// component when `ty` turns out to be the component's first type.
+    /// Returns the lowest visit order `ty` reaches among open types.
+    fn reach_component(&mut self, vm: &BexVm, ty: &RealizedTy, walk: &mut ReachWalk) -> usize {
+        let at = walk.order.len();
+        walk.order.insert(ty.clone(), (at, at));
+        walk.open.push(ty.clone());
+        let (own, edges) = self.reach_edges(vm, ty);
+        let mut direct = own;
+        let mut low = at;
+        for next in edges.iter().filter(|next| Self::can_reach(next)) {
+            if let Some(&reaches) = self.reaches.get(next) {
+                direct |= reaches;
+            } else if let Some(&(order, _)) = walk.order.get(next) {
+                // Visited on this walk: still open (same component) unless its
+                // component already closed, which would have answered it.
+                low = low.min(order);
+            } else if self.reaches.len() + walk.open.len() >= MAX_REACH_TYPES {
+                // Too many distinct types (a generic class can nest without
+                // end): assume an override can be reached.
+                direct = true;
+            } else {
+                low = low.min(self.reach_component(vm, next, walk));
+                if self.reaches.get(next) == Some(&true) {
+                    direct = true;
+                }
+            }
+        }
+        walk.direct.insert(ty.clone(), direct);
+        if let Some(entry) = walk.order.get_mut(ty) {
+            entry.1 = low;
+        }
+        if low == at {
+            let start = walk
+                .open
+                .iter()
+                .rposition(|open| open == ty)
+                .unwrap_or_else(|| {
+                    unreachable!("the walk keeps `ty` open until its component closes")
+                });
+            let component: Vec<RealizedTy> = walk.open.drain(start..).collect();
+            let reaches = component
+                .iter()
+                .any(|member| walk.direct.get(member).copied().unwrap_or(false));
+            for member in component {
+                self.reaches.insert(member, reaches);
+            }
+        }
+        low
     }
 
     fn roots(&self, roots: &mut Vec<HeapPtr>) {
@@ -509,7 +546,6 @@ impl Lookups {
         self.plans.clear();
         self.provided.clear();
         self.reaches.clear();
-        self.reaching.clear();
     }
 }
 

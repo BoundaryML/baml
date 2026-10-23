@@ -382,3 +382,192 @@ test "an override behind a cycle is found inside a union member" {
     assert.equal(nested_reach_z(baml.json.decode<ReachX>(text)), 42);
     assert.equal(nested_reach_z(baml.json.to<ReachX>(baml.json.parse(text))), 42)
 }
+
+// ─── A long chain of recursive classes ───────────────────────────────────────
+// Each class has two optional children and an optional link back to the
+// first. Working out whether the first reaches an override must visit each
+// class once: a walk that redid every open answer per field would take
+// about 2^30 steps here.
+
+class ChainLink0 {
+    a: ChainLink1?,
+    b: ChainLink1?,
+    back: ChainLink0?,
+}
+
+class ChainLink1 {
+    a: ChainLink2?,
+    b: ChainLink2?,
+    back: ChainLink0?,
+}
+
+class ChainLink2 {
+    a: ChainLink3?,
+    b: ChainLink3?,
+    back: ChainLink0?,
+}
+
+class ChainLink3 {
+    a: ChainLink4?,
+    b: ChainLink4?,
+    back: ChainLink0?,
+}
+
+class ChainLink4 {
+    a: ChainLink5?,
+    b: ChainLink5?,
+    back: ChainLink0?,
+}
+
+class ChainLink5 {
+    a: ChainLink6?,
+    b: ChainLink6?,
+    back: ChainLink0?,
+}
+
+class ChainLink6 {
+    a: ChainLink7?,
+    b: ChainLink7?,
+    back: ChainLink0?,
+}
+
+class ChainLink7 {
+    a: ChainLink8?,
+    b: ChainLink8?,
+    back: ChainLink0?,
+}
+
+class ChainLink8 {
+    a: ChainLink9?,
+    b: ChainLink9?,
+    back: ChainLink0?,
+}
+
+class ChainLink9 {
+    a: ChainLink10?,
+    b: ChainLink10?,
+    back: ChainLink0?,
+}
+
+class ChainLink10 {
+    a: ChainLink11?,
+    b: ChainLink11?,
+    back: ChainLink0?,
+}
+
+class ChainLink11 {
+    a: ChainLink12?,
+    b: ChainLink12?,
+    back: ChainLink0?,
+}
+
+class ChainLink12 {
+    a: ChainLink13?,
+    b: ChainLink13?,
+    back: ChainLink0?,
+}
+
+class ChainLink13 {
+    a: ChainLink14?,
+    b: ChainLink14?,
+    back: ChainLink0?,
+}
+
+class ChainLink14 {
+    a: ChainLink15?,
+    b: ChainLink15?,
+    back: ChainLink0?,
+}
+
+class ChainLink15 {
+    a: ChainLink16?,
+    b: ChainLink16?,
+    back: ChainLink0?,
+}
+
+class ChainLink16 {
+    a: ChainLink17?,
+    b: ChainLink17?,
+    back: ChainLink0?,
+}
+
+class ChainLink17 {
+    a: ChainLink18?,
+    b: ChainLink18?,
+    back: ChainLink0?,
+}
+
+class ChainLink18 {
+    a: ChainLink19?,
+    b: ChainLink19?,
+    back: ChainLink0?,
+}
+
+class ChainLink19 {
+    a: ChainLink20?,
+    b: ChainLink20?,
+    back: ChainLink0?,
+}
+
+class ChainLink20 {
+    a: ChainLink21?,
+    b: ChainLink21?,
+    back: ChainLink0?,
+}
+
+class ChainLink21 {
+    a: ChainLink22?,
+    b: ChainLink22?,
+    back: ChainLink0?,
+}
+
+class ChainLink22 {
+    a: ChainLink23?,
+    b: ChainLink23?,
+    back: ChainLink0?,
+}
+
+class ChainLink23 {
+    a: ChainLink24?,
+    b: ChainLink24?,
+    back: ChainLink0?,
+}
+
+class ChainLink24 {
+    a: ChainLink25?,
+    b: ChainLink25?,
+    back: ChainLink0?,
+}
+
+class ChainLink25 {
+    a: ChainLink26?,
+    b: ChainLink26?,
+    back: ChainLink0?,
+}
+
+class ChainLink26 {
+    a: ChainLink27?,
+    b: ChainLink27?,
+    back: ChainLink0?,
+}
+
+class ChainLink27 {
+    a: ChainLink28?,
+    b: ChainLink28?,
+    back: ChainLink0?,
+}
+
+class ChainLink28 {
+    a: ChainLink29?,
+    b: ChainLink29?,
+    back: ChainLink0?,
+}
+
+class ChainLink29 {
+    back: ChainLink0?,
+}
+
+test "a long chain of recursive classes decodes in one pass over its types" {
+    let decoded = baml.json.decode<ChainLink0>(`{"a": {"b": {}}, "back": {}}`);
+    assert.equal(decoded.b, null)
+}
