@@ -58,7 +58,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [baseline, link-exe, no-stack-flag, opt0]
+        variant: [baseline, link-exe, no-stack-flag, opt0, bex-vm-opt0, corosensei-opt0]
     env:
       CARGO_PROFILE_DEV_DEBUG: "line-tables-only"
       CARGO_PROFILE_TEST_DEBUG: "line-tables-only"
@@ -78,6 +78,8 @@ jobs:
             link-exe) sed -i '/^linker = "rust-lld"/d' .cargo/config.toml ;;
             no-stack-flag) sed -i '/link-arg=\/STACK/d' .cargo/config.toml ;;
             opt0) opt=0 ;;
+            bex-vm-opt0) printf '\n[profile.dev.package.bex_vm]\nopt-level = 0\n[profile.test.package.bex_vm]\nopt-level = 0\n' >> Cargo.toml ;;
+            corosensei-opt0) printf '\n[profile.dev.package.corosensei]\nopt-level = 0\n[profile.test.package.corosensei]\nopt-level = 0\n' >> Cargo.toml ;;
           esac
           echo "CARGO_PROFILE_DEV_OPT_LEVEL=$opt" >> "$GITHUB_ENV"
           echo "CARGO_PROFILE_TEST_OPT_LEVEL=$opt" >> "$GITHUB_ENV"
