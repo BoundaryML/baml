@@ -100,11 +100,8 @@ pub struct PackArgs {
     #[arg(short, long, help_heading = "Build options")]
     pub output: Option<PathBuf>,
 
-    /// Compile the program's functions to Rust where possible.
-    ///
-    /// Every function the compiler admits runs as Rust inside the VM; the rest
-    /// run as bytecode, unchanged. Builds a host binary with `cargo` from the
-    /// BAML language workspace named by `--rust-workspace`.
+    /// Compile admitted functions to Rust; run the rest as bytecode.
+    /// Builds a host with cargo from `--rust-workspace`.
     #[arg(long, help_heading = "Build options")]
     pub rust: bool,
 
@@ -127,12 +124,8 @@ pub struct PackArgs {
     )]
     pub rust_build_dir: Option<PathBuf>,
 
-    /// With `--rust`, how hard cargo optimizes the generated crate.
-    ///
-    /// `release` is the shipping build (fat LTO, one codegen unit, symbols
-    /// stripped). `fast` trades that for build time (opt-level 1, no LTO, line
-    /// tables kept) and is for correctness runs only: its output is not what
-    /// a release pack ships and its speed says nothing about one.
+    /// Cargo optimization: `release` ships with fat LTO; `fast` uses opt-level 1
+    /// without LTO for correctness runs, not performance measurements.
     #[arg(
         long,
         value_enum,
@@ -430,23 +423,23 @@ impl PackArgs {
         let src_dir = build_dir.join("src");
         std::fs::create_dir_all(&src_dir)
             .with_context(|| format!("failed to create {}", src_dir.display()))?;
-        std::fs::write(src_dir.join("program.bexa"), serialized)
-            .context("failed to write the packed program")?;
-        std::fs::write(src_dir.join("lib.rs"), &module.source)
-            .context("failed to write the generated module")?;
-        std::fs::write(
-            src_dir.join("main.rs"),
-            "fn main() -> std::process::ExitCode {\n    \
-             baml_pack_host::run_embedded(\n        \
-             baml_rust_program::PROGRAM_ARTIFACT,\n        \
-             Some(&baml_rust_program::COMPILED_BODIES),\n    )\n}\n",
-        )
-        .context("failed to write the host shim")?;
-        std::fs::write(
-            build_dir.join("Cargo.toml"),
-            rust_manifest(&workspace, self.rust_profile),
-        )
-        .context("failed to write the generated manifest")?;
+        let manifest = rust_manifest(&workspace, self.rust_profile);
+        let main = b"fn main() -> std::process::ExitCode {
+    baml_pack_host::run_embedded(
+        baml_rust_program::PROGRAM_ARTIFACT,
+        Some(&baml_rust_program::COMPILED_BODIES),
+    )
+}
+";
+        for (name, contents) in [
+            ("src/program.bexa", serialized),
+            ("src/lib.rs", module.source.as_bytes()),
+            ("src/main.rs", main.as_slice()),
+            ("Cargo.toml", manifest.as_bytes()),
+        ] {
+            std::fs::write(build_dir.join(name), contents)
+                .with_context(|| format!("failed to write generated {name}"))?;
+        }
 
         reporter.spin(
             "Building",
@@ -482,9 +475,7 @@ impl PackArgs {
                 .arg("--target-dir")
                 .arg(&target_dir)
                 // Select the workspace's pinned toolchain.
-                .current_dir(&workspace)
-                .stdout(std::process::Stdio::inherit())
-                .stderr(std::process::Stdio::inherit());
+                .current_dir(&workspace);
             // Inherited Cargo overrides can move the binary, change its profile,
             // or bypass the workspace's pinned toolchain.
             #[allow(
@@ -854,51 +845,33 @@ fn workspace_head(workspace: &Path) -> Result<Option<String>> {
 }
 
 fn rust_manifest(workspace: &Path, profile: RustProfile) -> String {
-    let dependencies: toml::Table = ["bex_vm", "bex_vm_types", "baml_pack_host"]
-        .into_iter()
-        .map(|name| {
-            let path = workspace.join("crates").join(name);
-            let path = path.to_string_lossy();
-            let dependency = toml::toml! { path = (path.as_ref()) };
-            (name.to_owned(), toml::Value::Table(dependency))
-        })
-        .collect();
-    let release = match profile {
-        RustProfile::Release => toml::toml! {
-            lto = "fat"
-            codegen-units = 1
-            opt-level = 3
-            strip = "symbols"
-            panic = "unwind"
-        },
-        RustProfile::Fast => toml::toml! {
-            lto = false
-            codegen-units = 16
-            opt-level = 1
-            strip = "none"
-            debug = "line-tables-only"
-            panic = "unwind"
-        },
-    };
-    let manifest = toml::toml! {
-        dependencies = dependencies
-        [package]
-        name = "baml_rust_program"
-        version = "0.0.0"
-        edition = "2024"
-        publish = false
+    let mut manifest = String::from(
+        r#"[package]
+name = "baml_rust_program"
+version = "0.0.0"
+edition = "2024"
+publish = false
 
-        // Keep the generated crate outside the source workspace.
-        [workspace]
-        [lib]
-        path = "src/lib.rs"
-        [[bin]]
-        name = "baml_rust_program"
-        path = "src/main.rs"
-        [profile]
-        release = release
-    };
-    toml::to_string(&manifest).expect("a TOML table serializes")
+# Keep the generated crate outside the source workspace.
+[workspace]
+[dependencies]
+"#,
+    );
+    for name in ["bex_vm", "bex_vm_types", "baml_pack_host"] {
+        let path = workspace.join("crates").join(name);
+        let path = toml::Value::String(path.to_string_lossy().into_owned());
+        manifest.push_str(&format!("{name} = {{ path = {path} }}\n"));
+    }
+    manifest.push_str("\n[profile.release]\npanic = \"unwind\"\n");
+    manifest.push_str(match profile {
+        RustProfile::Release => {
+            "lto = \"fat\"\ncodegen-units = 1\nopt-level = 3\nstrip = \"symbols\"\n"
+        }
+        RustProfile::Fast => {
+            "lto = false\ncodegen-units = 16\nopt-level = 1\nstrip = \"none\"\ndebug = \"line-tables-only\"\n"
+        }
+    });
+    manifest
 }
 
 fn read_host_binary(target_triple: &str, reporter: &Reporter) -> Result<Vec<u8>> {
@@ -1526,7 +1499,6 @@ mod tests {
             parsed["package"]["name"].as_str(),
             Some("baml_rust_program")
         );
-        assert_eq!(parsed["bin"][0]["path"].as_str(), Some("src/main.rs"));
         assert!(
             parsed["workspace"]
                 .as_table()
