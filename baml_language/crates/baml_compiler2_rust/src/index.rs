@@ -17,65 +17,19 @@ use baml_compiler2_hir_ty::extern_loc::{ClassRef, EnumRef, FunctionRef, GlobalRe
 use baml_compiler2_mir::{FunctionOwner, MirFunctionId};
 use baml_type::{DeclName, typetag::TypeTag};
 use bex_vm_types::{
-    Bytecode, ConstValue, DeclPath, FnPath, FunctionKind, Object, ObjectIndex, Program, TypeHead,
-    bytecode::BlockPcs,
+    Bytecode, ConstValue, DeclPath, FnPath, Object, ObjectIndex, Program, TypeHead,
     types::{FunctionIdentity, PackageKind},
 };
 
-pub(crate) struct FunctionInfo {
-    pub(crate) kind: FunctionKind,
-    /// The slots a call lays its arguments over (`Function::argument_layout`).
-    pub(crate) layout: baml_type::CallLayout,
-    pub(crate) native_key: Option<String>,
-    pub(crate) arity: usize,
-    /// Whether calls inherit the caller's `$trace` controls.
-    pub(crate) trace_passthrough: bool,
-    /// Whether the returned turn is charged as model usage when the call
-    /// completes (`FunctionMeta::ModelInvoke`).
-    pub(crate) model_invoke: bool,
-}
-
-/// Package and declaration path uniquely identify an object; rendered names do not.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct DeclKey {
-    package: u32,
-    path: DeclPath,
-}
-
-/// Lambdas have no package-table entry, so lookup uses their full identity.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct LambdaKey {
-    package: u32,
-    identity: FunctionIdentity,
-}
-
-#[derive(Default)]
-struct ObjectInfo {
-    function: Option<FunctionInfo>,
-    name: String,
-    display: String,
-    head: Option<TypeTag>,
-    enum_variants: Option<usize>,
-    type_constants: Vec<(usize, ConstValue)>,
-    positions: Option<Positions>,
-}
-
-#[derive(Default)]
-pub(crate) struct ProgramIndex {
+pub(crate) struct ProgramIndex<'p> {
+    program: &'p Program,
+    names: Vec<(String, String)>,
     /// Package ordinals derived from the linked dependency edges.
     packages: HashMap<SourceRoot, u32>,
-    functions: HashMap<DeclKey, usize>,
-    /// Class (object, field count) by identity.
-    classes: HashMap<DeclKey, (usize, usize)>,
-    enums: HashMap<DeclKey, usize>,
-    interfaces: HashMap<DeclKey, usize>,
-    aliases: HashMap<DeclKey, usize>,
-    lets: HashMap<DeclKey, usize>,
-    let_helpers: HashMap<DeclKey, usize>,
+    let_helpers: HashMap<(u32, DeclPath), usize>,
     /// Lambda (closure body) object by identity; `None` for an identity
     /// more than one object claims, which then stays bytecode.
-    lambdas: HashMap<LambdaKey, Option<usize>>,
-    objects: Vec<ObjectInfo>,
+    lambdas: HashMap<(u32, FunctionIdentity), Option<usize>>,
     /// Method names conservatively resolve all possible dispatch targets.
     methods: HashMap<String, Vec<usize>>,
     /// The methods and interface bodies of every non-stdlib package.
@@ -85,90 +39,42 @@ pub(crate) struct ProgramIndex {
     /// Global slot used by pooled generic function values.
     pub(crate) globals: HashMap<usize, usize>,
     /// Find a pooled generic function with the program's anchored type arguments.
-    generic_functions: Vec<(usize, Box<[bex_vm_types::RealizedTy]>, usize)>,
+    generic_functions: Vec<(usize, &'p [bex_vm_types::RealizedTy], usize)>,
     pub(crate) bigints: HashMap<String, usize>,
     /// Byte array literal → its pooled `Object::Uint8Array` template, which
     /// bytecode deep-copies on every evaluation.
     pub(crate) byte_arrays: HashMap<Vec<u8>, usize>,
 }
 
-/// Source and shield metadata for MIR positions in a bytecode function.
-pub(crate) struct Positions(Bytecode);
-
-impl Positions {
-    fn of(bytecode: &Bytecode) -> Self {
-        Self(Bytecode {
-            line_table: bytecode.line_table.clone(),
-            shield_table: bytecode.shield_table.clone(),
-            block_pcs: bytecode.block_pcs.clone(),
-            ..Bytecode::default()
-        })
-    }
-
-    /// The PCs of MIR block `block`.
-    pub(crate) fn block(&self, block: usize) -> Option<&BlockPcs> {
-        self.0.block_pcs.get(block)
-    }
-
-    /// Whether the bytecode carries no MIR positions: they are compile-time
-    /// only, so a deserialized program has none.
-    pub(crate) fn is_empty(&self) -> bool {
-        self.0.block_pcs.is_empty()
-    }
-
-    /// Both backends must lower the same blocks and statements.
-    pub(crate) fn fit(&self, body: &baml_compiler2_mir::MirFunctionBody<'_>) -> bool {
-        self.0.block_pcs.len() == body.blocks.len()
-            && self
-                .0
-                .block_pcs
-                .iter()
-                .zip(&body.blocks)
-                .all(|(pcs, block)| pcs.statements.len() == block.statements.len())
-    }
-
-    /// Source line and shield state at `pc`.
-    pub(crate) fn reading(&self, pc: usize) -> (usize, bool) {
-        (self.0.source_line_for_pc(pc), self.0.pc_is_shielded(pc))
-    }
-}
-
-impl ProgramIndex {
+impl<'p> ProgramIndex<'p> {
     pub(crate) fn new(
         db: &dyn baml_compiler2_mir::Db,
         root: SourceRoot,
-        program: &Program,
+        program: &'p Program,
     ) -> Self {
         let mut index = Self {
+            program,
+            names: vec![(String::new(), String::new()); program.objects.len()],
             packages: package_ordinals(db, root, program),
-            objects: (0..program.objects.len())
-                .map(|_| ObjectInfo::default())
-                .collect(),
-            ..Self::default()
+            let_helpers: HashMap::new(),
+            lambdas: HashMap::new(),
+            methods: HashMap::new(),
+            user_methods: Vec::new(),
+            strings: HashMap::new(),
+            globals: HashMap::new(),
+            generic_functions: Vec::new(),
+            bigints: HashMap::new(),
+            byte_arrays: HashMap::new(),
         };
         index.index_objects(program);
         index.index_globals(program);
-        index.index_declarations(program);
         index
     }
 
-    fn index_objects(&mut self, program: &Program) {
+    fn index_objects(&mut self, program: &'p Program) {
         for (object, item) in program.objects.iter().enumerate() {
             match item {
                 Object::Function(function) => {
-                    if matches!(function.kind, FunctionKind::Bytecode) {
-                        self.objects[object].type_constants = function
-                            .bytecode
-                            .constants
-                            .iter()
-                            .enumerate()
-                            .filter(|(_, constant)| {
-                                matches!(constant, ConstValue::Type(_) | ConstValue::Literal(_))
-                            })
-                            .map(|(i, constant)| (i, constant.clone()))
-                            .collect();
-                        self.objects[object].positions = Some(Positions::of(&function.bytecode));
-                    }
                     let Some(name) = program.function_name(ObjectIndex::from_raw(object)) else {
                         continue;
                     };
@@ -187,10 +93,7 @@ impl ProgramIndex {
                     if let (FunctionIdentity::Synthetic { .. }, Some((package, _))) =
                         (&function.identity, &placing)
                     {
-                        let key = LambdaKey {
-                            package: *package,
-                            identity: function.identity.clone(),
-                        };
+                        let key = (*package, function.identity.clone());
                         match self.lambdas.entry(key) {
                             Entry::Vacant(vacant) => {
                                 vacant.insert(Some(object));
@@ -204,15 +107,9 @@ impl ProgramIndex {
                     if let (FunctionIdentity::InitLet(path), Some((package, _))) =
                         (&function.identity, &placing)
                     {
-                        self.let_helpers.insert(
-                            DeclKey {
-                                package: *package,
-                                path: DeclPath::Let(path.clone()),
-                            },
-                            object,
-                        );
+                        self.let_helpers
+                            .insert((*package, DeclPath::Let(path.clone())), object);
                     }
-                    self.objects[object].name = name;
                     let method = match &function.identity {
                         FunctionIdentity::Declared(FnPath::Method { name, .. }) => Some(name),
                         FunctionIdentity::InterfaceBody(_) => function.identity.declared_name(),
@@ -228,18 +125,7 @@ impl ProgramIndex {
                             self.user_methods.push(object);
                         }
                     }
-                    self.objects[object].display = display;
-                    self.objects[object].function = Some(FunctionInfo {
-                        kind: function.kind,
-                        layout: function.argument_layout(),
-                        native_key: function.native_key.as_deref().map(str::to_owned),
-                        arity: function.arity,
-                        trace_passthrough: function.trace_passthrough,
-                        model_invoke: matches!(
-                            function.body_meta,
-                            Some(bex_vm_types::FunctionMeta::ModelInvoke)
-                        ),
-                    });
+                    self.names[object] = (name, display);
                 }
                 Object::String(text) => {
                     self.strings.entry(text.to_string()).or_insert(object);
@@ -247,7 +133,7 @@ impl ProgramIndex {
                 Object::GenericFunction(generic) => {
                     self.generic_functions.push((
                         generic.function.raw(),
-                        generic.type_args.clone(),
+                        &generic.type_args,
                         object,
                     ));
                 }
@@ -259,13 +145,6 @@ impl ProgramIndex {
                         .entry(bytes.lock().clone())
                         .or_insert(object);
                 }
-                Object::Class(class) => {
-                    self.objects[object].head = Some(class.type_tag);
-                }
-                Object::Enum(declaration) => {
-                    self.objects[object].head = Some(declaration.type_tag);
-                    self.objects[object].enum_variants = Some(declaration.variants.len());
-                }
                 _ => {}
             }
         }
@@ -274,64 +153,12 @@ impl ProgramIndex {
     fn index_globals(&mut self, program: &Program) {
         for (slot, global) in program.globals.iter().enumerate() {
             if let ConstValue::Object(object) = global
-                && self
-                    .objects
-                    .get(object.raw())
-                    .is_some_and(|info| info.function.is_some())
+                && matches!(
+                    self.program.objects.get(object.raw()),
+                    Some(Object::Function(_))
+                )
             {
                 self.globals.entry(object.raw()).or_insert(slot);
-            }
-        }
-    }
-
-    /// Each table is keyed by its package's own declaration maps, so no two
-    /// objects can claim one identity.
-    fn index_declarations(&mut self, program: &Program) {
-        for (ordinal, package) in (0u32..).zip(&program.packages) {
-            let key = |path: DeclPath| DeclKey {
-                package: ordinal,
-                path,
-            };
-            // A function's cell holds its object; a `let`'s holds its value.
-            for (path, &cell) in &package.globals {
-                let slot = package.slot_base.raw() + cell as usize;
-                if matches!(path, DeclPath::Let(_)) {
-                    self.lets.insert(key(path.clone()), slot);
-                    continue;
-                }
-                if !matches!(path, DeclPath::Function(_) | DeclPath::InterfaceBody(_)) {
-                    continue;
-                }
-                let Some(ConstValue::Object(object)) = program.globals.get(slot) else {
-                    continue;
-                };
-                if self
-                    .objects
-                    .get(object.raw())
-                    .is_some_and(|info| info.function.is_some())
-                {
-                    self.functions.insert(key(path.clone()), object.raw());
-                }
-            }
-            for (path, &object) in &package.classes {
-                if let Object::Class(class) = &program.objects[object] {
-                    self.classes.insert(
-                        key(DeclPath::Class(path.clone())),
-                        (object.raw(), class.fields.len()),
-                    );
-                }
-            }
-            for (path, &object) in &package.enums {
-                self.enums
-                    .insert(key(DeclPath::Enum(path.clone())), object.raw());
-            }
-            for (path, &object) in &package.interfaces {
-                self.interfaces
-                    .insert(key(DeclPath::Interface(path.clone())), object.raw());
-            }
-            for (path, &object) in &package.type_aliases {
-                self.aliases
-                    .insert(key(DeclPath::TypeAlias(path.clone())), object.raw());
             }
         }
     }
@@ -342,10 +169,7 @@ impl ProgramIndex {
         identity: &MirFunctionId<'db>,
     ) -> Option<usize> {
         let package = *self.packages.get(&identity_root(db, identity))?;
-        let key = LambdaKey {
-            package,
-            identity: function_identity(db, identity),
-        };
+        let key = (package, function_identity(db, identity));
         self.lambdas.get(&key).copied().flatten()
     }
 
@@ -354,15 +178,15 @@ impl ProgramIndex {
         db: &dyn baml_compiler2_mir::Db,
         function: FunctionLoc<'_>,
     ) -> Option<usize> {
-        self.lookup(&self.functions, declared_function_coords(db, function)?)
+        self.lookup(declared_function_coords(db, function)?)
     }
 
     pub(crate) fn function<'db>(
         &self,
         db: &'db dyn baml_compiler2_mir::Db,
         function: FunctionRef<'db>,
-    ) -> Option<(usize, &FunctionInfo)> {
-        let object = self.lookup(&self.functions, function_coords(db, function)?)?;
+    ) -> Option<(usize, &bex_vm_types::types::Function)> {
+        let object = self.lookup(function_coords(db, function)?)?;
         Some((object, self.info(object)))
     }
 
@@ -371,19 +195,27 @@ impl ProgramIndex {
         db: &'db dyn baml_compiler2_mir::Db,
         class: ClassRef<'db>,
     ) -> Option<(usize, usize)> {
-        self.lookup(&self.classes, class_coords(db, class))
+        self.class_fields(class_coords(db, class))
     }
 
     pub(crate) fn class_at(&self, head: &baml_type::DeclName) -> Option<(usize, usize)> {
-        self.lookup(&self.classes, class_head_coords(head))
+        self.class_fields(class_head_coords(head))
     }
 
     pub(crate) fn interface_at(&self, head: &baml_type::DeclName) -> Option<usize> {
-        self.lookup(&self.interfaces, interface_head_coords(head))
+        self.lookup(interface_head_coords(head))
     }
 
     pub(crate) fn enum_at(&self, head: &baml_type::DeclName) -> Option<usize> {
-        self.lookup(&self.enums, enum_head_coords(head))
+        self.lookup(enum_head_coords(head))
+    }
+
+    fn class_fields(&self, coords: DeclCoords) -> Option<(usize, usize)> {
+        let object = self.lookup(coords)?;
+        let Object::Class(class) = &self.program.objects[ObjectIndex::from_raw(object)] else {
+            return None;
+        };
+        Some((object, class.fields.len()))
     }
 
     /// Find a pooled generic function with the program's anchored type arguments.
@@ -398,7 +230,7 @@ impl ProgramIndex {
                 .class_at(decl)
                 .map(|(object, _)| object)
                 .or_else(|| self.enum_at(decl))?;
-            self.objects.get(object)?.head
+            self.head_tag(object)
         };
         let mut known = true;
         for ty in type_args {
@@ -426,7 +258,7 @@ impl ProgramIndex {
         db: &'db dyn baml_compiler2_mir::Db,
         enum_ref: EnumRef<'db>,
     ) -> Option<usize> {
-        self.lookup(&self.enums, enum_coords(db, enum_ref))
+        self.lookup(enum_coords(db, enum_ref))
     }
 
     pub(crate) fn let_slot<'db>(
@@ -434,7 +266,7 @@ impl ProgramIndex {
         db: &'db dyn baml_compiler2_mir::Db,
         binding: GlobalRef<'db>,
     ) -> Option<usize> {
-        self.lookup(&self.lets, let_coords(db, binding))
+        self.lookup(let_coords(db, binding))
     }
 
     pub(crate) fn let_helper<'db>(
@@ -442,19 +274,32 @@ impl ProgramIndex {
         db: &'db dyn baml_compiler2_mir::Db,
         binding: LetLoc<'db>,
     ) -> Option<usize> {
-        self.lookup(&self.let_helpers, let_coords(db, DeclRef::Source(binding)))
+        self.let_helpers
+            .get(&self.key(let_coords(db, DeclRef::Source(binding)))?)
+            .copied()
     }
 
     pub(crate) fn package_of(&self, root: SourceRoot) -> Option<u32> {
         self.packages.get(&root).copied()
     }
 
+    fn head_tag(&self, object: usize) -> Option<TypeTag> {
+        match &self.program.objects[ObjectIndex::from_raw(object)] {
+            Object::Class(class) => Some(class.type_tag),
+            Object::Enum(decl) => Some(decl.type_tag),
+            _ => None,
+        }
+    }
+
     pub(crate) fn class_tag(&self, object: usize) -> i64 {
-        self.objects[object].head.expect("class metadata").as_i64()
+        self.head_tag(object).expect("class metadata").as_i64()
     }
 
     pub(crate) fn enum_variants(&self, object: usize) -> usize {
-        self.objects[object].enum_variants.expect("enum metadata")
+        let Object::Enum(decl) = &self.program.objects[ObjectIndex::from_raw(object)] else {
+            unreachable!("enum metadata")
+        };
+        decl.variants.len()
     }
 
     /// Replace declaration heads with their linked tags for constant-pool lookup.
@@ -475,40 +320,38 @@ impl ProgramIndex {
     /// The object of the declaration `head` names: a class, enum, interface
     /// or recursive alias.
     fn head_object(&self, head: &DeclName) -> Option<usize> {
-        let path = item_path(head);
-        let root = head.root();
-        self.lookup(&self.classes, (root, DeclPath::Class(path.clone())))
-            .map(|(object, _)| object)
-            .or_else(|| self.lookup(&self.enums, (root, DeclPath::Enum(path.clone()))))
-            .or_else(|| self.lookup(&self.interfaces, (root, DeclPath::Interface(path.clone()))))
-            .or_else(|| self.lookup(&self.aliases, (root, DeclPath::TypeAlias(path))))
+        [
+            DeclPath::Class,
+            DeclPath::Enum,
+            DeclPath::Interface,
+            DeclPath::TypeAlias,
+        ]
+        .into_iter()
+        .find_map(|path| self.lookup((head.root(), path(item_path(head)))))
     }
 
     pub(crate) fn pooled_constant(&self, function: usize, wanted: &ConstValue) -> Option<usize> {
-        self.objects
-            .get(function)?
-            .type_constants
+        self.info(function)
+            .bytecode
+            .constants
             .iter()
-            .find(|(_, constant)| constant == wanted)
-            .map(|(index, _)| *index)
+            .position(|constant| constant == wanted)
     }
 
-    pub(crate) fn positions(&self, object: usize) -> &Positions {
-        self.objects[object]
-            .positions
-            .as_ref()
-            .expect("bytecode positions")
+    pub(crate) fn positions(&self, object: usize) -> &Bytecode {
+        &self.info(object).bytecode
     }
 
-    pub(crate) fn info(&self, object: usize) -> &FunctionInfo {
-        self.objects[object]
-            .function
-            .as_ref()
-            .expect("function metadata")
+    pub(crate) fn info(&self, object: usize) -> &bex_vm_types::types::Function {
+        let Object::Function(function) = &self.program.objects[ObjectIndex::from_raw(object)]
+        else {
+            unreachable!("function metadata")
+        };
+        function
     }
 
     pub(crate) fn name(&self, object: usize) -> &str {
-        &self.objects[object].name
+        &self.names[object].0
     }
 
     /// Every method and interface body named `method`, whichever class or
@@ -520,12 +363,39 @@ impl ProgramIndex {
     /// [`Self::name`] under its package's label; see
     /// [`crate::CompiledFunction::display`].
     pub(crate) fn display(&self, object: usize) -> &str {
-        &self.objects[object].display
+        &self.names[object].1
     }
 
-    fn lookup<T: Copy>(&self, table: &HashMap<DeclKey, T>, (root, path): DeclCoords) -> Option<T> {
-        let package = *self.packages.get(&root)?;
-        table.get(&DeclKey { package, path }).copied()
+    fn key(&self, (root, path): DeclCoords) -> Option<(u32, DeclPath)> {
+        Some((*self.packages.get(&root)?, path))
+    }
+
+    fn lookup(&self, coords: DeclCoords) -> Option<usize> {
+        let (ordinal, path) = self.key(coords)?;
+        let package = self.program.packages.get(ordinal as usize)?;
+        let object = match &path {
+            DeclPath::Class(name) => *package.classes.get(name)?,
+            DeclPath::Enum(name) => *package.enums.get(name)?,
+            DeclPath::Interface(name) => *package.interfaces.get(name)?,
+            DeclPath::TypeAlias(name) => *package.type_aliases.get(name)?,
+            DeclPath::Let(_) => {
+                return Some(package.slot_base.raw() + *package.globals.get(&path)? as usize);
+            }
+            DeclPath::Function(_) | DeclPath::InterfaceBody(_) => {
+                let slot = package.slot_base.raw() + *package.globals.get(&path)? as usize;
+                let ConstValue::Object(object) = self.program.globals.get(slot)? else {
+                    return None;
+                };
+                if !matches!(
+                    self.program.objects.get(object.raw()),
+                    Some(Object::Function(_))
+                ) {
+                    return None;
+                }
+                *object
+            }
+        };
+        Some(object.raw())
     }
 }
 

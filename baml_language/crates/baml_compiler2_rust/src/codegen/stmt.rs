@@ -103,7 +103,12 @@ impl<'db> Generator<'_, 'db> {
     pub(super) fn leaf(&mut self, id: BlockId) -> Gen<()> {
         // A leaf can have several predecessors, so its entry PC is unknown.
         self.current_mark = None;
-        let pcs = self.positions.block(id.0).cloned().unwrap_or_default();
+        let pcs = self
+            .positions
+            .block_pcs
+            .get(id.0)
+            .cloned()
+            .unwrap_or_default();
         self.loop_check(id, pcs.start)?;
         self.update_cause(id);
         for (index, statement) in self.body.blocks[id.0].statements.iter().enumerate() {
@@ -136,7 +141,7 @@ impl<'db> Generator<'_, 'db> {
     fn update_cause(&mut self, id: BlockId) {
         let block = &self.body.blocks[id.0];
         if let Some(slot) = self.cause_slot
-            && self.cause_changes_at(id.0)
+            && self.cause_changes[id.0]
         {
             let cause = match block.handling.and_then(|h| self.body.blocks[h.0].landing) {
                 Some(landing) => {
@@ -158,7 +163,7 @@ impl<'db> Generator<'_, 'db> {
         statement: &StatementKind<'db>,
         pc: Option<usize>,
     ) -> Gen<()> {
-        match statement {
+        let code = match statement {
             StatementKind::Assign { destination, value } => {
                 // Type locals have no runtime binding; reads construct their values.
                 if let (Place::Local(local), Rvalue::LoadType(_)) = (destination, value)
@@ -167,10 +172,9 @@ impl<'db> Generator<'_, 'db> {
                     return Ok(());
                 }
                 let value = self.rvalue(id, value)?;
-                let code = self.store(id, destination, &value)?;
-                self.emit_statement(&code);
+                self.store(id, destination, &value)?
             }
-            StatementKind::Drop(_) | StatementKind::Nop => {}
+            StatementKind::Drop(_) | StatementKind::Nop => return Ok(()),
             StatementKind::FreshCell { local, carry_value } => {
                 let init = if *carry_value {
                     self.hoist(Expr::new(
@@ -182,8 +186,7 @@ impl<'db> Generator<'_, 'db> {
                     "Value::NULL".to_string()
                 };
                 let cell = Expr::new(format!("vm.new_cell({init})"), Repr::Value);
-                let code = self.store(id, &Place::Local(*local), &cell)?;
-                self.emit_statement(&code);
+                self.store(id, &Place::Local(*local), &cell)?
             }
             StatementKind::Intrinsic {
                 op: IntrinsicOp::BindType(slot),
@@ -194,18 +197,12 @@ impl<'db> Generator<'_, 'db> {
                 };
                 let value = self.value_operand(id, value)?;
                 let code = self.fallible(id, &format!("vm.bind_type(fr, {slot}, {value})"))?;
-                self.emit_statement(&format!("{code};"));
+                format!("{code};")
             }
             StatementKind::Intrinsic {
                 op: IntrinsicOp::Log(level),
                 args,
             } => {
-                let level = match level {
-                    baml_compiler2_mir::LogLevel::Info => "Info",
-                    baml_compiler2_mir::LogLevel::Debug => "Debug",
-                    baml_compiler2_mir::LogLevel::Warn => "Warn",
-                    baml_compiler2_mir::LogLevel::Error => "Error",
-                };
                 let Some(data) = args.first() else {
                     return Err(Rejection::Invalid("`log` without its data".into()));
                 };
@@ -221,30 +218,23 @@ impl<'db> Generator<'_, 'db> {
                 let code = self.fallible(
                     id,
                     &format!(
-                        "vm.log_event(fr, bex_vm::compiled_rt::LogLevel::{level}, {data}, {name}, {at})"
+                        "vm.log_event(fr, bex_vm::compiled_rt::LogLevel::{level:?}, {data}, {name}, {at})"
                     ),
                 )?;
-                self.emit_statement(&format!("{code};"));
+                format!("{code};")
             }
             // Resolve the declaration hook left pending by the VM call path.
             StatementKind::Intrinsic {
                 op: IntrinsicOp::BuiltinTraceHook(mode),
                 ..
             } => {
-                let mode = match mode {
-                    baml_compiler2_mir::BuiltinTraceHook::Hidden => "Hidden",
-                    baml_compiler2_mir::BuiltinTraceHook::Timing => "Timing",
-                    baml_compiler2_mir::BuiltinTraceHook::Span => "Span",
-                    baml_compiler2_mir::BuiltinTraceHook::Rich => "Rich",
-                    baml_compiler2_mir::BuiltinTraceHook::EmptySpan => "EmptySpan",
-                };
                 let code = self.fallible(
                     id,
                     &format!(
-                        "vm.builtin_trace_hook(fr, bex_vm::compiled_rt::TraceHookMode::{mode})"
+                        "vm.builtin_trace_hook(fr, bex_vm::compiled_rt::TraceHookMode::{mode:?})"
                     ),
                 )?;
-                self.emit_statement(&format!("{code};"));
+                format!("{code};")
             }
             StatementKind::Intrinsic {
                 op: IntrinsicOp::ApplyTraceHook,
@@ -258,7 +248,7 @@ impl<'db> Generator<'_, 'db> {
                 let result = self.value_operand(id, result)?;
                 let code =
                     self.fallible(id, &format!("vm.compiled_finish_trace_hook(fr, {result})"))?;
-                self.emit_statement(&format!("{code};"));
+                format!("{code};")
             }
             StatementKind::VirtualFieldStore {
                 iface,
@@ -276,9 +266,10 @@ impl<'db> Generator<'_, 'db> {
                         "vm.virtual_store_field({receiver}, {iface}, {iface_args}, {field_index}, {value})"
                     ),
                 )?;
-                self.emit_statement(&format!("{code};"));
+                format!("{code};")
             }
-        }
+        };
+        self.emit_statement(&code);
         Ok(())
     }
 
@@ -408,55 +399,42 @@ impl<'db> Generator<'_, 'db> {
 
     pub(super) fn exit(&mut self, id: BlockId) -> Gen<()> {
         let block = &self.body.blocks[id.0];
-        match block.terminator.as_ref().expect("checked in Analysis") {
+        let error = match block.terminator.as_ref().expect("checked in Analysis") {
             Terminator::Return => {
-                // Type locals have no runtime binding.
-                // The result is held as the body's `Signature` returns it.
+                // Type locals have no runtime binding; other results use Signature's repr.
                 let result = if self.analysis.is_type_local(0) {
                     self.load(id, &Place::Local(Local(0)))?.code
                 } else {
                     "l0".to_string()
                 };
                 self.emit_statement(&format!("return Ok({result});"));
+                return Ok(());
             }
             Terminator::Throw { value } => {
                 let value = self.value_operand(id, value)?;
-                let error = format!("bex_vm::compiled_rt::throw({value})");
-                if block.unwind.is_some() {
-                    let jump = self.unwind_jump(id, &error)?;
-                    self.flush_bindings();
-                    self.out.push_str(&jump);
-                } else {
-                    self.emit_statement(&format!("return Err({error});"));
-                }
+                format!("bex_vm::compiled_rt::throw({value})")
             }
             Terminator::Rethrow { value, context } => {
                 let value = self.value_operand(id, value)?;
                 let context = self.value_operand(id, context)?;
-                let error = format!("bex_vm::compiled_rt::rethrow({value}, {context})");
-                if block.unwind.is_some() {
-                    let jump = self.unwind_jump(id, &error)?;
-                    self.flush_bindings();
-                    self.out.push_str(&jump);
-                } else {
-                    self.emit_statement(&format!("return Err({error});"));
-                }
+                format!("bex_vm::compiled_rt::rethrow({value}, {context})")
             }
             Terminator::Unreachable => {
                 self.emit_line("let unreachable = vm.unreachable_panic();");
-                if block.unwind.is_some() {
-                    let jump = self.unwind_jump(id, "unreachable")?;
-                    self.flush_bindings();
-                    self.out.push_str(&jump);
-                } else {
-                    self.emit_line("return Err(unreachable);");
-                }
+                "unreachable".to_string()
             }
             other => {
                 return Err(Rejection::Invalid(format!(
                     "exit through a non-exiting terminator {other:?}"
                 )));
             }
+        };
+        if block.unwind.is_some() {
+            let jump = self.unwind_jump(id, &error)?;
+            self.flush_bindings();
+            self.out.push_str(&jump);
+        } else {
+            self.emit_statement(&format!("return Err({error});"));
         }
         Ok(())
     }

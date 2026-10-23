@@ -25,12 +25,11 @@ use crate::{
         Analysis, Repr, Signature, array_iter_walk, array_next_call, reads_frame,
         suspends_directly, user_callee,
     },
-    index::{Positions, ProgramIndex},
+    index::ProgramIndex,
     render::coerce,
     structure::{Structured, structurize},
 };
 
-/// A generated expression and how it is held.
 struct Expr {
     code: String,
     repr: Repr,
@@ -56,10 +55,9 @@ impl Expr {
     }
 }
 
-/// Shared program symbols and call properties.
 pub(crate) struct ProgramContext<'a, 'db> {
     pub(crate) db: &'db dyn baml_compiler2_mir::Db,
-    pub(crate) index: &'a ProgramIndex,
+    pub(crate) index: &'a ProgramIndex<'a>,
     pub(crate) symbols: &'a HashMap<usize, String>,
     /// Functions that may suspend, so a call to one roots the caller's live values.
     pub(crate) pausing: &'a BTreeSet<usize>,
@@ -71,7 +69,7 @@ pub(crate) struct ProgramContext<'a, 'db> {
 
 pub(crate) struct Generator<'a, 'db> {
     pub(crate) db: &'db dyn baml_compiler2_mir::Db,
-    pub(crate) index: &'a ProgramIndex,
+    pub(crate) index: &'a ProgramIndex<'a>,
     /// Function object whose constant pool and package this body uses.
     pub(crate) object: usize,
     pub(crate) package: Option<u32>,
@@ -86,13 +84,11 @@ pub(crate) struct Generator<'a, 'db> {
     /// keeps live heap values in frame slots across every suspension.
     pub(crate) pauses: bool,
     pub(crate) recursive: bool,
-    /// Builtin keys mapped to stable binding ordinals.
     pub(crate) builtins: &'a mut BTreeMap<String, usize>,
     pub(crate) body: &'a MirFunctionBody<'db>,
     pub(crate) lambdas: &'a [MirFunction<'db>],
     pub(crate) analysis: &'a Analysis,
-    /// Bytecode PCs corresponding to MIR positions.
-    pub(crate) positions: &'a Positions,
+    pub(crate) positions: &'a bex_vm_types::Bytecode,
     /// Source location and shielding last recorded in this leaf.
     pub(crate) current_mark: Option<(usize, bool)>,
     pub(crate) out: String,
@@ -100,11 +96,10 @@ pub(crate) struct Generator<'a, 'db> {
     pub(crate) pending: Vec<String>,
     pub(crate) temps: usize,
     pub(crate) live_in: Vec<Vec<bool>>,
-    /// The cause slot, then the spill slots.
     pub(crate) slots: usize,
     /// Active handler context used by the VM cause chain.
     pub(crate) cause_slot: Option<usize>,
-    pub(crate) preds: Vec<Vec<usize>>,
+    pub(crate) cause_changes: Vec<bool>,
     pub(crate) call_types: Vec<String>,
     pub(crate) call_trace: Option<String>,
     pub(crate) structured: Option<Structured>,
@@ -146,7 +141,7 @@ impl<'a, 'db> Generator<'a, 'db> {
             live_in: Vec::new(),
             slots: 0,
             cause_slot: None,
-            preds: Vec::new(),
+            cause_changes: Vec::new(),
             call_types: Vec::new(),
             call_trace: None,
             structured: None,
@@ -174,10 +169,17 @@ impl<'db> Generator<'_, 'db> {
     }
 
     pub(crate) fn function(&mut self, symbol: &str) -> Gen<String> {
-        if self.positions.is_empty() {
+        if self.positions.block_pcs.is_empty() {
             return unsupported("bytecode without MIR positions (a deserialized program)");
         }
-        if !self.positions.fit(self.body) {
+        if self.positions.block_pcs.len() != self.body.blocks.len()
+            || self
+                .positions
+                .block_pcs
+                .iter()
+                .zip(&self.body.blocks)
+                .any(|(pcs, block)| pcs.statements.len() != block.statements.len())
+        {
             return Err(Rejection::Invalid(
                 "the function's bytecode was emitted from other MIR".into(),
             ));
@@ -247,10 +249,7 @@ impl<'db> Generator<'_, 'db> {
         Ok(std::mem::take(&mut self.out))
     }
 
-    /// The first slot the body may write. A hook prologue reads the
-    /// arguments from the frame when it resolves, after the hook call has
-    /// spilled across its suspension, so a hooked body keeps them in their
-    /// leading slots.
+    /// Hook prologues need their arguments in leading slots across suspension.
     fn slot_base(&self) -> usize {
         if self.analysis.hooked {
             self.analysis.arity
@@ -322,7 +321,6 @@ impl<'db> Generator<'_, 'db> {
         ))
     }
 
-    /// Bind type expression `code` to a temporary, emitted before the next statement.
     fn bind_type(&mut self, code: &str) -> String {
         let name = format!("t{}", self.temps);
         self.temps += 1;
@@ -364,7 +362,6 @@ impl<'db> Generator<'_, 'db> {
             .collect()
     }
 
-    /// Borrow a realized type.
     pub(super) fn realized_ref(
         &mut self,
         template: &baml_compiler2_mir::TyTemplate,
@@ -373,9 +370,7 @@ impl<'db> Generator<'_, 'db> {
         Ok(format!("&{}", self.bind_type(&owned)))
     }
 
-    /// Realize one type operand of `what`. A type
-    /// local is built from its template where the operand is used; any other
-    /// local holds a `reflect.Type` value, read there.
+    /// Type locals rebuild their templates; other locals hold `reflect.Type` values.
     fn type_operand(&mut self, what: &str, operand: &Operand<'db>) -> Gen<String> {
         let local = match operand {
             Operand::Copy(Place::Local(local)) | Operand::Move(Place::Local(local)) => *local,
@@ -398,12 +393,18 @@ impl<'db> Generator<'_, 'db> {
 
     fn prepare(&mut self) {
         let blocks = &self.body.blocks;
-        self.preds = vec![Vec::new(); blocks.len()];
+        let mut cause_changes = vec![None; blocks.len()];
         for block in blocks {
             for successor in block.terminator.iter().flat_map(Terminator::successors) {
-                self.preds[successor.0].push(block.id.0);
+                *cause_changes[successor.0].get_or_insert(false) |=
+                    block.handling != blocks[successor.0].handling;
             }
         }
+        self.cause_changes = cause_changes
+            .into_iter()
+            .zip(blocks)
+            .map(|(change, block)| change.unwrap_or(block.handling.is_some()))
+            .collect();
         let catches = blocks.iter().any(|block| block.handling.is_some());
         let base = self.slot_base();
         self.cause_slot = catches.then_some(base);
@@ -440,23 +441,8 @@ impl<'db> Generator<'_, 'db> {
         self.emit_line(&format!("if vm.should_yield_at_call() {{ {call}?; }}"));
     }
 
-    /// The heap values live across the suspension `block`'s terminator may make.
-    fn rooted_locals(&self, block: BlockId) -> Gen<Vec<usize>> {
-        let locals = self.saved_at(block)?;
-        Ok(self.heap_locals(locals))
-    }
-
-    /// The heap values live at a loop header's poll.
     fn header_locals(&self, header: usize) -> Vec<usize> {
-        let locals = self.saved(|i| self.live_in[header][i]);
-        self.heap_locals(locals)
-    }
-
-    fn heap_locals(&self, locals: Vec<usize>) -> Vec<usize> {
-        locals
-            .into_iter()
-            .filter(|&i| self.repr(Local(i)) == Repr::Value)
-            .collect()
+        self.saved(|i| self.live_in[header][i])
     }
 
     /// Root the caller's live values across `call`, a suspending callee or
@@ -486,7 +472,7 @@ impl<'db> Generator<'_, 'db> {
 
     /// Keep what the continuation reads except the result, plus what the
     /// handler reads.
-    fn saved_at(&self, block: BlockId) -> Gen<Vec<usize>> {
+    fn rooted_locals(&self, block: BlockId) -> Gen<Vec<usize>> {
         let (destination, target) = self.continuation(block)?;
         let overwritten = match destination {
             Place::Local(local) => Some(local.0),
@@ -512,13 +498,12 @@ impl<'db> Generator<'_, 'db> {
                         .any(|landing| landing.context_local.0 == i))
         };
         (0..self.analysis.reprs.len())
-            .filter(|&i| kept(i) && !self.analysis.is_type_local(i))
+            .filter(|&i| {
+                kept(i) && !self.analysis.is_type_local(i) && self.repr(Local(i)) == Repr::Value
+            })
             .collect()
     }
 
-    /// Store what the block's suspending terminator produces: an answer the
-    /// body gets without the VM (a settled future, a compiled callee run in
-    /// place) or the outcome of suspending on the request.
     pub(super) fn suspension(&mut self, block: BlockId) -> Gen<()> {
         let terminator = self.body.blocks[block.0]
             .terminator
@@ -547,10 +532,74 @@ impl<'db> Generator<'_, 'db> {
         self.attach_trace(&out)
     }
 
-    /// An `R<Value>` expression answering the block's suspending terminator.
     fn request(&mut self, block: BlockId, terminator: &Terminator<'db>) -> Gen<String> {
         Ok(match terminator {
-            Terminator::Call { .. } => self.call_request(block, terminator)?,
+            Terminator::Call {
+                callee,
+                args,
+                ntypeargs,
+                argument_layout,
+                has_trace,
+                ..
+            } => {
+                let (type_args, args) = args.split_at((*ntypeargs).min(args.len()));
+                let types = self.type_operands("call", type_args)?;
+                let plain = types.is_empty() && !*has_trace;
+                self.call_types = types;
+                let named = argument_layout
+                    .as_ref()
+                    .is_some_and(|layout| layout.0.iter().any(Option::is_some));
+                if let Operand::Constant(Constant::Function(func)) = callee {
+                    let args = self.trace_attachment(block, args, *has_trace)?;
+                    self.callee_ptr(block, callee, None)?;
+                    let name = function_display_name(self.db, *func);
+                    let Some((_, info)) = self.index.function(self.db, *func) else {
+                        return unsupported(format!("callee `{name}` not found in the program"));
+                    };
+                    let values =
+                        self.laid_out_args(block, &name, info, argument_layout.as_ref(), args)?;
+                    let step = format!("Step::Call {{ callee, argc: {} }}", values.len());
+                    return Ok(self.suspend_expr(block, &step, &values));
+                }
+                let (args, trace) = if *has_trace {
+                    let Some((trace, args)) = args.split_last() else {
+                        return Err(Rejection::Invalid(
+                            "a traced call without its attachment".into(),
+                        ));
+                    };
+                    (args, Some(trace))
+                } else {
+                    (args, None)
+                };
+                // Bytecode pushes the arguments before loading an indirect callee.
+                let values = self.arg_values(block, args)?;
+                self.callee_ptr(block, callee, trace)?;
+                // Function values need their named arguments mapped at runtime.
+                if named {
+                    let layout = argument_layout.as_ref().expect("checked");
+                    let slots = call::named_arg_slots(layout);
+                    self.emit_statement(&format!(
+                        "let argc = vm.push_indirect_args(callee, &[{}], &[{}])?;",
+                        slots,
+                        values.join(", ")
+                    ));
+                    return Ok(self.suspend_expr(block, "Step::Call { callee, argc }", &[]));
+                }
+                let step = format!("Step::Call {{ callee, argc: {} }}", values.len());
+                let suspend = self.suspend_expr(block, &step, &values);
+                if !plain {
+                    return Ok(suspend);
+                }
+                // A compiled closure runs in place.
+                let site = self.site_pc(block);
+                let values = values.join(", ");
+                format!(
+                    "match vm.closure_compiled_body(callee, {}) {{ \
+             Some(body) => vm.call_closure_compiled(fr, callee, body, &[{values}], {site}), \
+             None => {suspend} }}",
+                    args.len()
+                )
+            }
             Terminator::SysOp { callee, args, .. } => {
                 self.callee_ptr(block, callee, None)?;
                 let args = self.arg_values(block, args)?;
@@ -603,78 +652,6 @@ impl<'db> Generator<'_, 'db> {
         })
     }
 
-    fn call_request(&mut self, block: BlockId, terminator: &Terminator<'db>) -> Gen<String> {
-        let Terminator::Call {
-            callee,
-            args,
-            ntypeargs,
-            argument_layout,
-            has_trace,
-            ..
-        } = terminator
-        else {
-            unreachable!("call request requires a call terminator");
-        };
-        let (type_args, args) = args.split_at((*ntypeargs).min(args.len()));
-        let types = self.type_operands("call", type_args)?;
-        let plain = types.is_empty() && !*has_trace;
-        self.call_types = types;
-        let named = argument_layout
-            .as_ref()
-            .is_some_and(|layout| layout.0.iter().any(Option::is_some));
-        if let Operand::Constant(Constant::Function(func)) = callee {
-            let args = self.trace_attachment(block, args, *has_trace)?;
-            self.callee_ptr(block, callee, None)?;
-            let name = function_display_name(self.db, *func);
-            let Some((_, info)) = self.index.function(self.db, *func) else {
-                return unsupported(format!("callee `{name}` not found in the program"));
-            };
-            let values = self.laid_out_args(block, &name, info, argument_layout.as_ref(), args)?;
-            let step = format!("Step::Call {{ callee, argc: {} }}", values.len());
-            return Ok(self.suspend_expr(block, &step, &values));
-        }
-        let (args, trace) = if *has_trace {
-            let Some((trace, args)) = args.split_last() else {
-                return Err(Rejection::Invalid(
-                    "a traced call without its attachment".into(),
-                ));
-            };
-            (args, Some(trace))
-        } else {
-            (args, None)
-        };
-        // Bytecode pushes the arguments before loading an indirect callee.
-        let values = self.arg_values(block, args)?;
-        self.callee_ptr(block, callee, trace)?;
-        // Function values need their named arguments mapped at runtime.
-        if named {
-            let layout = argument_layout.as_ref().expect("checked");
-            let slots = call::named_arg_slots(layout);
-            self.emit_statement(&format!(
-                "let argc = vm.push_indirect_args(callee, &[{}], &[{}])?;",
-                slots,
-                values.join(", ")
-            ));
-            return Ok(self.suspend_expr(block, "Step::Call { callee, argc }", &[]));
-        }
-        let step = format!("Step::Call {{ callee, argc: {} }}", values.len());
-        let suspend = self.suspend_expr(block, &step, &values);
-        if !plain {
-            return Ok(suspend);
-        }
-        // A compiled closure runs in place.
-        let site = self.site_pc(block);
-        let values = values.join(", ");
-        Ok(format!(
-            "match vm.closure_compiled_body(callee, {}) {{ \
-             Some(body) => vm.call_closure_compiled(fr, callee, body, &[{values}], {site}), \
-             None => {suspend} }}",
-            args.len()
-        ))
-    }
-
-    /// Attach a traced call's final operand, its attachment, and return the
-    /// other arguments.
     fn trace_attachment<'b>(
         &mut self,
         block: BlockId,
@@ -704,7 +681,6 @@ impl<'db> Generator<'_, 'db> {
         )
     }
 
-    /// Where a suspending terminator stores its result and continues.
     fn continuation(&self, block: BlockId) -> Gen<(Place, BlockId)> {
         self.body.blocks[block.0]
             .terminator
@@ -712,17 +688,6 @@ impl<'db> Generator<'_, 'db> {
             .and_then(crate::analysis::continuation)
             .map(|(destination, target)| (destination.clone(), target))
             .ok_or_else(|| Rejection::Invalid("continuation of a non-suspending block".into()))
-    }
-
-    fn cause_changes_at(&self, block: usize) -> bool {
-        let handling = self.body.blocks[block].handling;
-        let preds = &self.preds[block];
-        if preds.is_empty() {
-            return handling.is_some();
-        }
-        preds
-            .iter()
-            .any(|&pred| self.body.blocks[pred].handling != handling)
     }
 
     fn emit_line(&mut self, text: &str) {
@@ -774,7 +739,10 @@ impl<'db> Generator<'_, 'db> {
     /// Positions without bytecode retain the last PC.
     fn set_pc(&mut self, pc: Option<usize>) {
         let Some(pc) = pc else { return };
-        let mark = self.positions.reading(pc);
+        let mark = (
+            self.positions.source_line_for_pc(pc),
+            self.positions.pc_is_shielded(pc),
+        );
         if self.current_mark != Some(mark) {
             self.current_mark = Some(mark);
             self.emit_line(&format!("pc = {pc};"));
@@ -782,7 +750,12 @@ impl<'db> Generator<'_, 'db> {
     }
 
     fn site_pc(&self, block: BlockId) -> String {
-        pc_arg(self.positions.block(block.0).and_then(|pcs| pcs.terminator))
+        pc_arg(
+            self.positions
+                .block_pcs
+                .get(block.0)
+                .and_then(|pcs| pcs.terminator),
+        )
     }
 
     /// Array iteration is inline; other virtual calls can suspend.

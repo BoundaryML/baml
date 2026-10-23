@@ -3,12 +3,13 @@ use baml_compiler2_emit::{function_path, owns_no_slot};
 use baml_compiler2_hir::{
     contributions::Definition,
     file_package::file_package,
-    item_data::{class_data, enum_data, let_data},
+    item_data::let_data,
     loc::{DeclRef, FunctionLoc},
 };
 use baml_compiler2_hir_ty::{
     callable::ExternalCallTarget,
     extern_loc::{ClassRef, EnumRef, ExternFunctionLoc, ExternRowAddr, FunctionRef, GlobalRef},
+    layout::{class_head, enum_head},
     lower::qualify_def,
 };
 use baml_type::DeclName;
@@ -18,26 +19,6 @@ pub(crate) fn item_path(head: &DeclName) -> LocalName {
     LocalName {
         namespace: head.namespace().clone(),
         name: head.name().clone(),
-    }
-}
-
-fn class_head<'db>(db: &'db dyn baml_compiler2_mir::Db, class: ClassRef<'db>) -> DeclName {
-    match class {
-        DeclRef::Source(class) => {
-            qualify_def(db, Definition::Class(class), &class_data(db, class).name)
-        }
-        DeclRef::External(class) => class.head(db).clone(),
-    }
-}
-
-fn enum_head<'db>(db: &'db dyn baml_compiler2_mir::Db, enum_ref: EnumRef<'db>) -> DeclName {
-    match enum_ref {
-        DeclRef::Source(enum_loc) => qualify_def(
-            db,
-            Definition::Enum(enum_loc),
-            &enum_data(db, enum_loc).name,
-        ),
-        DeclRef::External(enum_loc) => enum_loc.head(db).clone(),
     }
 }
 

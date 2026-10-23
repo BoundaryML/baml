@@ -1,5 +1,7 @@
 //! Generates inline calls, suspension requests, and interface dispatch operands.
 
+use bex_vm_types::types::Function;
+
 use std::fmt::Write as _;
 
 use baml_compiler2_mir::{BlockId, Constant, Operand, TyTemplateInterface, function_display_name};
@@ -9,7 +11,6 @@ use super::{Expr, Gen, Generator, unsupported};
 use crate::{
     admit::Rejection,
     analysis::{EQUALS_EQUALS, Repr, builtin_is_callable, call_shape, operand_ty},
-    index::FunctionInfo,
     render::coerce,
 };
 
@@ -72,10 +73,7 @@ impl<'db> Generator<'_, 'db> {
         }
     }
 
-    /// A call to a compiled body. A callee without VM-frame state runs with
-    /// a frame record through its typed direct entry when the VM allows
-    /// ([`bex_vm::BexVm::direct_calls`]); otherwise, and for a callee that
-    /// needs one, it runs with a VM frame through its boxed entry.
+    /// Use a typed direct entry when the callee has no VM-frame state and the VM allows it.
     #[allow(clippy::too_many_arguments)]
     fn compiled_call(
         &mut self,
@@ -83,7 +81,7 @@ impl<'db> Generator<'_, 'db> {
         object: usize,
         symbol: &str,
         name: &str,
-        info: &FunctionInfo,
+        info: &Function,
         layout: Option<&baml_type::CallLayout>,
         args: &[Operand<'db>],
         types: &[String],
@@ -225,21 +223,15 @@ impl<'db> Generator<'_, 'db> {
         &mut self,
         block: BlockId,
         name: &str,
-        info: &FunctionInfo,
+        info: &Function,
         layout: Option<&baml_type::CallLayout>,
         args: &[Operand<'db>],
     ) -> Gen<Vec<Option<Expr>>> {
-        let mut exprs = args
+        let exprs = args
             .iter()
-            .map(|arg| self.operand(block, arg).map(Some))
+            .map(|arg| self.operand(block, arg))
             .collect::<Gen<Vec<_>>>()?;
-        Ok(match call_slots(name, info, layout, exprs.len())? {
-            Some(slots) => slots
-                .into_iter()
-                .map(|slot| slot.and_then(|i| exprs[i].take()))
-                .collect(),
-            None => exprs,
-        })
+        layout_args(name, info, layout, exprs)
     }
 
     /// `x == null` as a bit test. The `==` driver answers a pair with a
@@ -248,7 +240,7 @@ impl<'db> Generator<'_, 'db> {
     fn null_test(
         &mut self,
         block: BlockId,
-        info: &FunctionInfo,
+        info: &Function,
         ntypeargs: usize,
         args: &[Operand<'db>],
     ) -> Gen<Option<Expr>> {
@@ -309,20 +301,15 @@ impl<'db> Generator<'_, 'db> {
         &mut self,
         block: BlockId,
         name: &str,
-        info: &FunctionInfo,
+        info: &Function,
         layout: Option<&baml_type::CallLayout>,
         args: &[Operand<'db>],
     ) -> Gen<Vec<String>> {
         let values = self.arg_values(block, args)?;
-        Ok(match call_slots(name, info, layout, values.len())? {
-            Some(slots) => slots
-                .into_iter()
-                .map(|slot| {
-                    slot.map_or_else(|| "Value::OMITTED_ARG".to_string(), |i| values[i].clone())
-                })
-                .collect(),
-            None => values,
-        })
+        Ok(layout_args(name, info, layout, values)?
+            .into_iter()
+            .map(|slot| slot.unwrap_or_else(|| "Value::OMITTED_ARG".to_string()))
+            .collect())
     }
 
     pub(super) fn arg_values(&mut self, block: BlockId, args: &[Operand<'db>]) -> Gen<Vec<String>> {
@@ -331,7 +318,6 @@ impl<'db> Generator<'_, 'db> {
             .collect()
     }
 
-    /// Realize type operands.
     pub(super) fn type_operands(
         &mut self,
         what: &str,
@@ -359,14 +345,8 @@ impl<'db> Generator<'_, 'db> {
         ))
     }
 
-    /// An `R<Value>` expression for an interface method call: bind `callee` to
-    /// the method's implementation for the receiver through the interpreter's
-    /// resolver and cache (which also pushes the call's type arguments); a
-    /// compiled implementation with a matching arity runs in
-    /// place, anything else is requested from the VM with the value arguments
-    /// laid over its slots. `args` are the method's type arguments then its
-    /// value arguments in declared order; `self_arg` indexes the receiver
-    /// among the value arguments.
+    /// Reuse the interpreter's resolver/cache; only matching arities run inline.
+    /// `args` starts with type arguments; `self_arg` indexes the value arguments.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn virtual_request(
         &mut self,
@@ -398,7 +378,8 @@ impl<'db> Generator<'_, 'db> {
         // A known site shares the interpreter's cache for its `VirtualCall`.
         let cache_site = self
             .positions
-            .block(block.0)
+            .block_pcs
+            .get(block.0)
             .and_then(|pcs| pcs.terminator)
             .map_or_else(|| "None".to_string(), |pc| format!("Some({pc})"));
         self.emit_statement(&format!(
@@ -431,27 +412,34 @@ impl<'db> Generator<'_, 'db> {
 }
 
 /// Named arguments in callee slot order; positional calls keep their original order.
-fn call_slots(
+fn layout_args<T>(
     name: &str,
-    info: &FunctionInfo,
+    info: &Function,
     layout: Option<&baml_type::CallLayout>,
-    nargs: usize,
-) -> Gen<Option<Vec<Option<usize>>>> {
+    args: Vec<T>,
+) -> Gen<Vec<Option<T>>> {
     let slots = layout
         .filter(|layout| layout.0.iter().any(Option::is_some))
-        .map(|layout| layout.map_to(&info.layout))
+        .map(|layout| layout.map_to(&info.argument_layout()))
         .transpose()
         .map_err(|mismatch| {
             Rejection::Invalid(format!("call to `{name}` does not fit it: {mismatch:?}"))
         })?;
-    let arity = slots.as_ref().map_or(nargs, Vec::len);
+    let arity = slots.as_ref().map_or(args.len(), Vec::len);
     if arity != info.arity {
         return Err(Rejection::Invalid(format!(
             "`{name}` called with {arity} of {} arguments",
             info.arity
         )));
     }
-    Ok(slots)
+    let mut args: Vec<_> = args.into_iter().map(Some).collect();
+    Ok(match slots {
+        Some(slots) => slots
+            .into_iter()
+            .map(|slot| slot.and_then(|i| args[i].take()))
+            .collect(),
+        None => args,
+    })
 }
 
 pub(super) fn named_arg_slots(layout: &baml_type::CallLayout) -> String {

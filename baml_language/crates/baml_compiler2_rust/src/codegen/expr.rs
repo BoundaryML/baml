@@ -1,9 +1,8 @@
 //! Rvalues: operators, type tests, and aggregates.
 
-use baml_compiler2_hir_ty::extern_loc::{ClassRef, FunctionRef};
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, BlockId, Operand, Rvalue, TyTemplate, TyTemplateInterface, TypeTest,
-    UnaryOp, class_display_name, enum_display_name, function_display_name,
+    AggregateKind, BinOp, BlockId, Rvalue, TyTemplate, TypeTest, UnaryOp, class_display_name,
+    enum_display_name, function_display_name,
 };
 use baml_type::typetag;
 use bex_vm_types::ConstValue;
@@ -12,41 +11,40 @@ use super::{Expr, Gen, Generator, unsupported};
 use crate::{
     Rejection,
     analysis::{CallShape, Repr, builtin_is_callable, reads_frame, static_realized},
-    render::{binop_name, cmp_name},
+    render::{binop_name, cmp_name, object_value},
 };
 
 impl<'db> Generator<'_, 'db> {
     pub(super) fn rvalue(&mut self, block: BlockId, rvalue: &Rvalue<'db>) -> Gen<Expr> {
-        match rvalue {
-            Rvalue::Use(operand) => self.operand(block, operand),
+        let code = match rvalue {
+            Rvalue::Use(operand) => return self.operand(block, operand),
             Rvalue::BinaryOp { op, left, right } => {
                 let left = self.operand(block, left)?;
                 let right = self.operand(block, right)?;
-                self.binary(block, *op, &left, &right)
+                return self.binary(block, *op, &left, &right);
             }
             Rvalue::UnaryOp { op, operand } => {
                 let operand = self.operand(block, operand)?;
-                self.unary(block, *op, &operand)
+                return self.unary(block, *op, &operand);
             }
             Rvalue::Len(place) => {
                 let container = self.load(block, place)?;
                 let container = self.value_arg(&container);
-                let code = self.fallible(block, &format!("vm.container_len({container})"))?;
-                Ok(Expr::new(code, Repr::Value))
+                self.fallible(block, &format!("vm.container_len({container})"))?
             }
             Rvalue::Discriminant(place) => {
                 let value = self.load(block, place)?;
                 let value = self.value_arg(&value);
                 let code = self.fallible(block, &format!("vm.discriminant({value})"))?;
-                Ok(Expr::new(code, Repr::Int))
+                return Ok(Expr::new(code, Repr::Int));
             }
             Rvalue::TypeTag(place) => {
                 let value = self.load(block, place)?;
                 let value = self.value_arg(&value);
-                Ok(Expr::new(
+                return Ok(Expr::new(
                     format!("bex_vm::compiled_rt::type_tag({value})"),
                     Repr::Int,
-                ))
+                ));
             }
             Rvalue::IsTypeTag { operand, tag } => {
                 let value = self.value_operand(block, operand)?;
@@ -55,17 +53,21 @@ impl<'db> Generator<'_, 'db> {
                 if *tag == typetag::PANIC {
                     return Ok(Expr::new(format!("vm.is_panic({value})"), Repr::Bool));
                 }
-                Ok(Expr::new(
+                return Ok(Expr::new(
                     format!("(bex_vm::compiled_rt::type_tag({value}) == {tag}i64)"),
                     Repr::Bool,
-                ))
+                ));
             }
             Rvalue::IsType { operand, test } => {
                 let value = self.value_operand(block, operand)?;
                 let code = self.type_test(&format!("({value})"), test)?;
-                Ok(Expr::new(code, Repr::Bool))
+                return Ok(Expr::new(code, Repr::Bool));
             }
-            Rvalue::Array(template, elements) => self.array_literal(block, template, elements),
+            Rvalue::Array(template, elements) => {
+                let element_ty = self.realized_type(template)?;
+                let values = self.arg_values(block, elements)?;
+                format!("vm.new_array({element_ty}, vec![{}])", values.join(", "))
+            }
             Rvalue::Aggregate {
                 kind:
                     AggregateKind::Class {
@@ -73,11 +75,33 @@ impl<'db> Generator<'_, 'db> {
                         type_arg_templates,
                     },
                 fields,
-            } => self.class_literal(block, *class, type_arg_templates, fields),
+            } => {
+                let name = class_display_name(self.db, *class);
+                let Some((object, field_count)) = self.index.class(self.db, *class) else {
+                    return unsupported(format!("class `{name}` not found in the program"));
+                };
+                if fields.len() != field_count {
+                    return unsupported(format!(
+                        "`{name}` literal with {} of {field_count} fields",
+                        fields.len()
+                    ));
+                }
+                let values = self.arg_values(block, fields)?;
+                let class = format!("vm.record_object(fr, ObjectIndex::from_raw({object}))");
+                let values = values.join(", ");
+                if type_arg_templates.is_empty() {
+                    format!("vm.new_instance({class}, vec![{values}])")
+                } else {
+                    let type_args = self.realized_all(type_arg_templates)?.join(", ");
+                    format!(
+                        "vm.new_generic_instance({class}, Box::new([{type_args}]), vec![{values}])"
+                    )
+                }
+            }
             Rvalue::Aggregate {
                 kind: AggregateKind::Array,
                 ..
-            } => unsupported("untyped array aggregate"),
+            } => return unsupported("untyped array aggregate"),
             Rvalue::Map(key, value, entries) => {
                 // Map entries must be lowered to Map.set calls.
                 if !entries.is_empty() {
@@ -85,63 +109,170 @@ impl<'db> Generator<'_, 'db> {
                 }
                 let key = self.realized_type(key)?;
                 let value = self.realized_type(value)?;
-                Ok(Expr::new(
-                    format!("vm.new_map({key}, {value})"),
-                    Repr::Value,
-                ))
+                format!("vm.new_map({key}, {value})")
             }
-            Rvalue::Uint8Array(bytes) => self.byte_array_literal(block, bytes),
+            Rvalue::Uint8Array(bytes) => {
+                // Each evaluation copies the pooled literal so mutations stay local.
+                let Some(&object) = self.index.byte_arrays.get(bytes) else {
+                    return Err(Rejection::Invalid(
+                        "byte array literal not in the program's pool".into(),
+                    ));
+                };
+                let deep_copy = baml_compiler2_hir_ty::callable::lang_function(
+                    self.db,
+                    baml_base::LangPackage::Baml,
+                    &[],
+                    "deep_copy",
+                );
+                let Some((_, info)) =
+                    deep_copy.and_then(|function| self.index.function(self.db, function))
+                else {
+                    return unsupported("`baml.deep_copy` not found in the program");
+                };
+                let Some(key) = info.native_key.as_deref() else {
+                    return unsupported("builtin `baml.deep_copy` has no native key");
+                };
+                let shape = CallShape {
+                    type_args_primitive: false,
+                    map_key_primitive: false,
+                    equality_primitive: false,
+                };
+                if !builtin_is_callable(key, shape) {
+                    return Err(Rejection::Invalid(format!(
+                        "yielding builtin `{key}` emitted inline"
+                    )));
+                }
+                let ordinal = self.builtin_ordinal(key);
+                let template = self.hoist(Expr::new(object_value(object), Repr::Value));
+                self.fallible(
+                    block,
+                    &format!(
+                        "vm.call_builtin(builtin_{ordinal}()?, &[{}])",
+                        template.code
+                    ),
+                )?
+            }
             Rvalue::MakeClosure {
                 lambda_idx,
                 captures,
                 type_arg_templates,
-            } => self.closure_value(block, *lambda_idx, captures, type_arg_templates),
+            } => {
+                let Some(lambda) = self.lambdas.get(*lambda_idx) else {
+                    return Err(Rejection::Invalid(format!(
+                        "closure over lambda {lambda_idx} of a function with {}",
+                        self.lambdas.len()
+                    )));
+                };
+                let Some(object) = self.index.lambda(self.db, &lambda.identity) else {
+                    let name = lambda.identity.display_name(self.db);
+                    return unsupported(format!("lambda `{name}` not found in the program"));
+                };
+                let types = self.realized_all(type_arg_templates)?;
+                let cells = self.arg_values(block, captures)?;
+                format!(
+                    "vm.make_closure(vm.record_object(fr, ObjectIndex::from_raw({object})), \
+                 vec![{}], vec![{}].into_boxed_slice())",
+                    cells.join(", "),
+                    types.join(", ")
+                )
+            }
             Rvalue::MakeBoundMethod { func, receiver } => {
-                self.bound_method_value(block, *func, receiver)
+                let name = function_display_name(self.db, *func);
+                let Some((object, _)) = self.index.function(self.db, *func) else {
+                    return unsupported(format!("method `{name}` not found in the program"));
+                };
+                let receiver = self.value_operand(block, receiver)?;
+                format!(
+                    "vm.make_bound_method(vm.record_object(fr, ObjectIndex::from_raw({object})), {receiver})"
+                )
             }
             Rvalue::MakeGenericFunction {
                 func,
                 type_arg_templates,
-            } => self.generic_function_value(*func, type_arg_templates),
+            } => {
+                let name = function_display_name(self.db, *func);
+                let Some((object, _)) = self.index.function(self.db, *func) else {
+                    return unsupported(format!("function `{name}` not found in the program"));
+                };
+                let Some(&global) = self.index.globals.get(&object) else {
+                    return unsupported(format!("function `{name}` has no global slot"));
+                };
+                let type_args = self.realized_all(type_arg_templates)?;
+                format!(
+                    "vm.make_generic_function(fr, GlobalIndex::from_raw({global}), Box::new([{}]))",
+                    type_args.join(", ")
+                )
+            }
             Rvalue::MakeGenericFunctionFromValue {
                 value,
                 type_arg_templates,
-            } => self.specialized_function_value(block, value, type_arg_templates),
+            } => {
+                let value = self.value_operand(block, value)?;
+                let type_args = self.realized_all(type_arg_templates)?;
+                self.fallible(
+                    block,
+                    &format!(
+                        "vm.specialize_function_value({value}, &[{}])",
+                        type_args.join(", ")
+                    ),
+                )?
+            }
             Rvalue::MakeVirtualBoundMethod {
                 iface,
                 method,
                 receiver,
                 type_args,
-            } => self.virtual_bound_method_value(block, iface, method, receiver, type_args),
+            } => {
+                let (iface, iface_args) = self.interface_operands(iface)?;
+                let types = self.realized_all(type_args)?;
+                let receiver = self.value_operand(block, receiver)?;
+                self.fallible(block, &format!(
+                "vm.make_virtual_bound_method({receiver}, {iface}, {iface_args}, {method:?}, &[{}])",
+                types.join(", ")
+            ))?
+            }
             Rvalue::MakeVirtualFunction {
                 self_ty,
                 iface,
                 method,
                 type_args,
-            } => self.virtual_function_value(block, self_ty, iface, method, type_args),
+            } => {
+                let self_ty = self.realized(self_ty)?;
+                let (iface, iface_args) = self.interface_operands(iface)?;
+                let types = self.type_operands("interface function value", type_args)?;
+                self.fallible(block, &format!(
+                "vm.make_virtual_function(&{self_ty}, {iface}, {iface_args}, {method:?}, &[{}])",
+                types.join(", ")
+            ))?
+            }
             Rvalue::VirtualFieldAccess {
                 iface,
                 receiver,
                 field_index,
                 ..
-            } => self.virtual_field_value(block, iface, receiver, *field_index),
-            Rvalue::LoadType(template) => self.type_value(template),
+            } => {
+                let (iface, iface_args) = self.interface_operands(iface)?;
+                let receiver = self.value_operand(block, receiver)?;
+                self.fallible(
+                    block,
+                    &format!(
+                        "vm.virtual_load_field({receiver}, {iface}, {iface_args}, {field_index})"
+                    ),
+                )?
+            }
+            Rvalue::LoadType(template) => return self.type_value(template),
             Rvalue::CurrentPackage => {
                 let Some(ordinal) = self.package else {
                     return unsupported("current package of a function the program does not place");
                 };
-                Ok(Expr::new(
-                    format!("vm.current_package({ordinal})"),
-                    Repr::Value,
-                ))
+                format!("vm.current_package({ordinal})")
             }
             // Null when the hook is not to run; the hook call then takes the
             // VM's call path.
-            Rvalue::TraceHookSettings { with_settings } => self.fallible_expr(
+            Rvalue::TraceHookSettings { with_settings } => self.fallible(
                 block,
                 &format!("vm.compiled_begin_trace_hook(fr, {with_settings})"),
-                Repr::Value,
-            ),
+            )?,
             Rvalue::SatisfiesBound { ty, bound } => {
                 let value = self.value_operand(block, ty)?;
                 let template = bound.to_template();
@@ -150,253 +281,13 @@ impl<'db> Generator<'_, 'db> {
                     format!("vm.type_value(fr, None, {realized})"),
                     Repr::Value,
                 ));
-                self.fallible_expr(
+                return self.fallible_expr(
                     block,
                     &format!("vm.bound_satisfied({value}, {})", bound.code),
                     Repr::Bool,
-                )
+                );
             }
-        }
-    }
-
-    fn array_literal(
-        &mut self,
-        block: BlockId,
-        template: &TyTemplate,
-        elements: &[Operand<'db>],
-    ) -> Gen<Expr> {
-        let element_ty = self.realized_type(template)?;
-        let values = self.arg_values(block, elements)?;
-        Ok(Expr::new(
-            format!("vm.new_array({element_ty}, vec![{}])", values.join(", ")),
-            Repr::Value,
-        ))
-    }
-
-    fn class_literal(
-        &mut self,
-        block: BlockId,
-        class: ClassRef<'db>,
-        type_arg_templates: &[TyTemplate],
-        fields: &[Operand<'db>],
-    ) -> Gen<Expr> {
-        let name = class_display_name(self.db, class);
-        let Some((object, field_count)) = self.index.class(self.db, class) else {
-            return unsupported(format!("class `{name}` not found in the program"));
         };
-        if fields.len() != field_count {
-            return unsupported(format!(
-                "`{name}` literal with {} of {field_count} fields",
-                fields.len()
-            ));
-        }
-        let values = self.arg_values(block, fields)?;
-        let class = format!("vm.record_object(fr, ObjectIndex::from_raw({object}))");
-        if type_arg_templates.is_empty() {
-            return Ok(Expr::new(
-                format!("vm.new_instance({class}, vec![{}])", values.join(", ")),
-                Repr::Value,
-            ));
-        }
-        let type_args = self.realized_all(type_arg_templates)?;
-        Ok(Expr::new(
-            format!(
-                "vm.new_generic_instance({class}, Box::new([{}]), vec![{}])",
-                type_args.join(", "),
-                values.join(", ")
-            ),
-            Repr::Value,
-        ))
-    }
-
-    fn byte_array_literal(&mut self, block: BlockId, bytes: &[u8]) -> Gen<Expr> {
-        // Each evaluation copies the pooled literal so mutations stay local.
-        let Some(&object) = self.index.byte_arrays.get(bytes) else {
-            return Err(Rejection::Invalid(
-                "byte array literal not in the program's pool".into(),
-            ));
-        };
-        let deep_copy = baml_compiler2_hir_ty::callable::lang_function(
-            self.db,
-            baml_base::LangPackage::Baml,
-            &[],
-            "deep_copy",
-        );
-        let Some((_, info)) = deep_copy.and_then(|function| self.index.function(self.db, function))
-        else {
-            return unsupported("`baml.deep_copy` not found in the program");
-        };
-        let Some(key) = info.native_key.as_deref() else {
-            return unsupported("builtin `baml.deep_copy` has no native key");
-        };
-        let shape = CallShape {
-            type_args_primitive: false,
-            map_key_primitive: false,
-            equality_primitive: false,
-        };
-        if !builtin_is_callable(key, shape) {
-            return Err(Rejection::Invalid(format!(
-                "yielding builtin `{key}` emitted inline"
-            )));
-        }
-        let ordinal = self.builtin_ordinal(key);
-        let template = self.hoist(Expr::new(
-            format!("Value::object(vm.record_object(fr, ObjectIndex::from_raw({object})))"),
-            Repr::Value,
-        ));
-        self.fallible_expr(
-            block,
-            &format!(
-                "vm.call_builtin(builtin_{ordinal}()?, &[{}])",
-                template.code
-            ),
-            Repr::Value,
-        )
-    }
-
-    fn closure_value(
-        &mut self,
-        block: BlockId,
-        lambda_idx: usize,
-        captures: &[Operand<'db>],
-        type_arg_templates: &[TyTemplate],
-    ) -> Gen<Expr> {
-        let Some(lambda) = self.lambdas.get(lambda_idx) else {
-            return Err(Rejection::Invalid(format!(
-                "closure over lambda {lambda_idx} of a function with {}",
-                self.lambdas.len()
-            )));
-        };
-        let Some(object) = self.index.lambda(self.db, &lambda.identity) else {
-            let name = lambda.identity.display_name(self.db);
-            return unsupported(format!("lambda `{name}` not found in the program"));
-        };
-        let types = self.realized_all(type_arg_templates)?;
-        let cells = self.arg_values(block, captures)?;
-        Ok(Expr::new(
-            format!(
-                "vm.make_closure(vm.record_object(fr, ObjectIndex::from_raw({object})), \
-                 vec![{}], vec![{}].into_boxed_slice())",
-                cells.join(", "),
-                types.join(", ")
-            ),
-            Repr::Value,
-        ))
-    }
-
-    fn bound_method_value(
-        &mut self,
-        block: BlockId,
-        func: FunctionRef<'db>,
-        receiver: &Operand<'db>,
-    ) -> Gen<Expr> {
-        let name = function_display_name(self.db, func);
-        let Some((object, _)) = self.index.function(self.db, func) else {
-            return unsupported(format!("method `{name}` not found in the program"));
-        };
-        let receiver = self.value_operand(block, receiver)?;
-        Ok(Expr::new(
-            format!(
-                "vm.make_bound_method(vm.record_object(fr, ObjectIndex::from_raw({object})), {receiver})"
-            ),
-            Repr::Value,
-        ))
-    }
-
-    fn generic_function_value(
-        &mut self,
-        func: FunctionRef<'db>,
-        type_arg_templates: &[TyTemplate],
-    ) -> Gen<Expr> {
-        let name = function_display_name(self.db, func);
-        let Some((object, _)) = self.index.function(self.db, func) else {
-            return unsupported(format!("function `{name}` not found in the program"));
-        };
-        let Some(&global) = self.index.globals.get(&object) else {
-            return unsupported(format!("function `{name}` has no global slot"));
-        };
-        let type_args = self.realized_all(type_arg_templates)?;
-        Ok(Expr::new(
-            format!(
-                "vm.make_generic_function(fr, GlobalIndex::from_raw({global}), Box::new([{}]))",
-                type_args.join(", ")
-            ),
-            Repr::Value,
-        ))
-    }
-
-    fn specialized_function_value(
-        &mut self,
-        block: BlockId,
-        value: &Operand<'db>,
-        type_arg_templates: &[TyTemplate],
-    ) -> Gen<Expr> {
-        let value = self.value_operand(block, value)?;
-        let type_args = self.realized_all(type_arg_templates)?;
-        self.fallible_expr(
-            block,
-            &format!(
-                "vm.specialize_function_value({value}, &[{}])",
-                type_args.join(", ")
-            ),
-            Repr::Value,
-        )
-    }
-
-    fn virtual_bound_method_value(
-        &mut self,
-        block: BlockId,
-        iface: &TyTemplateInterface,
-        method: &str,
-        receiver: &Operand<'db>,
-        type_args: &[TyTemplate],
-    ) -> Gen<Expr> {
-        let (iface, iface_args) = self.interface_operands(iface)?;
-        let types = self.realized_all(type_args)?;
-        let receiver = self.value_operand(block, receiver)?;
-        self.fallible_expr(block,
-            &format!(
-                "vm.make_virtual_bound_method({receiver}, {iface}, {iface_args}, {method:?}, &[{}])",
-                types.join(", ")
-            ),
-            Repr::Value,
-        )
-    }
-
-    fn virtual_function_value(
-        &mut self,
-        block: BlockId,
-        self_ty: &TyTemplate,
-        iface: &TyTemplateInterface,
-        method: &str,
-        type_args: &[Operand<'db>],
-    ) -> Gen<Expr> {
-        let self_ty = self.realized(self_ty)?;
-        let (iface, iface_args) = self.interface_operands(iface)?;
-        let types = self.type_operands("interface function value", type_args)?;
-        self.fallible_expr(
-            block,
-            &format!(
-                "vm.make_virtual_function(&{self_ty}, {iface}, {iface_args}, {method:?}, &[{}])",
-                types.join(", ")
-            ),
-            Repr::Value,
-        )
-    }
-
-    fn virtual_field_value(
-        &mut self,
-        block: BlockId,
-        iface: &TyTemplateInterface,
-        receiver: &Operand<'db>,
-        field_index: u32,
-    ) -> Gen<Expr> {
-        let (iface, iface_args) = self.interface_operands(iface)?;
-        let receiver = self.value_operand(block, receiver)?;
-        let code = self.fallible(
-            block,
-            &format!("vm.virtual_load_field({receiver}, {iface}, {iface_args}, {field_index})"),
-        )?;
         Ok(Expr::new(code, Repr::Value))
     }
 
@@ -512,80 +403,55 @@ impl<'db> Generator<'_, 'db> {
     fn binary(&mut self, block: BlockId, op: BinOp, left: &Expr, right: &Expr) -> Gen<Expr> {
         use Repr::{Bool, Float, Int};
         let (l, r) = (&left.code, &right.code);
-        let expr = match (left.repr, right.repr, op) {
-            (Int, Int, BinOp::Add) => {
-                self.fallible_expr(block, &format!("vm.add_i64({l}, {r})"), Int)?
-            }
-            (Int, Int, BinOp::Sub) => {
-                self.fallible_expr(block, &format!("vm.sub_i64({l}, {r})"), Int)?
-            }
-            (Int, Int, BinOp::Mul) => {
-                self.fallible_expr(block, &format!("vm.mul_i64({l}, {r})"), Int)?
-            }
-            (Int, Int, BinOp::Div) => {
-                self.fallible_expr(block, &format!("vm.div_i64({l}, {r})"), Int)?
-            }
-            (Int, Int, BinOp::Mod) => {
-                self.fallible_expr(block, &format!("vm.mod_i64({l}, {r})"), Int)?
-            }
-            (Int, Int, BinOp::Shl) => {
-                self.fallible_expr(block, &format!("vm.shl_i64({l}, {r})"), Int)?
-            }
-            (Int, Int, BinOp::Shr) => {
-                self.fallible_expr(block, &format!("vm.shr_i64({l}, {r})"), Int)?
-            }
-            (Int, Int, BinOp::BitAnd) => Expr::new(format!("({l} & {r})"), Int),
-            (Int, Int, BinOp::BitOr) => Expr::new(format!("({l} | {r})"), Int),
-            (Int, Int, BinOp::BitXor) => Expr::new(format!("({l} ^ {r})"), Int),
-            (Int, Int, BinOp::Eq) => Expr::new(format!("({l} == {r})"), Bool),
-            (Int, Int, BinOp::Ne) => Expr::new(format!("({l} != {r})"), Bool),
-            (Int, Int, BinOp::Lt) => Expr::new(format!("({l} < {r})"), Bool),
-            (Int, Int, BinOp::Le) => Expr::new(format!("({l} <= {r})"), Bool),
-            (Int, Int, BinOp::Gt) => Expr::new(format!("({l} > {r})"), Bool),
-            (Int, Int, BinOp::Ge) => Expr::new(format!("({l} >= {r})"), Bool),
-            (Float, Float, BinOp::Add) => Expr::new(format!("({l} + {r})"), Float),
-            (Float, Float, BinOp::Sub) => Expr::new(format!("({l} - {r})"), Float),
-            (Float, Float, BinOp::Mul) => Expr::new(format!("({l} * {r})"), Float),
-            (Float, Float, BinOp::Div) => Expr::new(format!("({l} / {r})"), Float),
-            (Float, Float, BinOp::Mod) => Expr::new(format!("({l} % {r})"), Float),
+        let comparison = matches!(
+            op,
+            BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge
+        );
+        let repr = match (left.repr, right.repr, op) {
             (
-                Float,
-                Float,
-                BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge,
-            ) => Expr::new(
-                format!(
-                    "bex_vm_types::float_order::apply(CmpOp::{}, {l}, {r})",
-                    cmp_name(op)
-                ),
-                Bool,
-            ),
-            (Bool, Bool, BinOp::Eq) => Expr::new(format!("({l} == {r})"), Bool),
-            (Bool, Bool, BinOp::Ne) => Expr::new(format!("({l} != {r})"), Bool),
-            (Bool, Bool, BinOp::BitAnd) => Expr::new(format!("({l} & {r})"), Bool),
-            (Bool, Bool, BinOp::BitOr) => Expr::new(format!("({l} | {r})"), Bool),
-            (Bool, Bool, BinOp::BitXor) => Expr::new(format!("({l} ^ {r})"), Bool),
+                Int,
+                Int,
+                BinOp::Add
+                | BinOp::Sub
+                | BinOp::Mul
+                | BinOp::Div
+                | BinOp::Mod
+                | BinOp::Shl
+                | BinOp::Shr,
+            ) => {
+                return self.fallible_expr(
+                    block,
+                    &format!("vm.{}_i64({l}, {r})", binop_name(op).to_ascii_lowercase()),
+                    Int,
+                );
+            }
+            (Float, Float, _) if comparison => {
+                return Ok(Expr::new(
+                    format!(
+                        "bex_vm_types::float_order::apply(CmpOp::{}, {l}, {r})",
+                        cmp_name(op)
+                    ),
+                    Bool,
+                ));
+            }
+            (Int, Int, _) if comparison => Bool,
+            (Int, Int, BinOp::BitAnd | BinOp::BitOr | BinOp::BitXor) => Int,
+            (Bool, Bool, BinOp::Eq | BinOp::Ne | BinOp::BitAnd | BinOp::BitOr | BinOp::BitXor) => {
+                Bool
+            }
+            (Float, Float, BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod) => Float,
             _ => {
                 let l = self.value_arg(left);
                 let r = self.value_arg(right);
-                match op {
-                    BinOp::Eq | BinOp::Ne | BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => {
-                        let code = self.fallible(
-                            block,
-                            &format!("vm.cmpop(CmpOp::{}, {l}, {r})", cmp_name(op)),
-                        )?;
-                        Expr::new(code, Repr::Value)
-                    }
-                    _ => {
-                        let code = self.fallible(
-                            block,
-                            &format!("vm.binop(BinOp::{}, {l}, {r})", binop_name(op)),
-                        )?;
-                        Expr::new(code, Repr::Value)
-                    }
-                }
+                let call = if comparison {
+                    format!("vm.cmpop(CmpOp::{}, {l}, {r})", cmp_name(op))
+                } else {
+                    format!("vm.binop(BinOp::{}, {l}, {r})", binop_name(op))
+                };
+                return self.fallible_expr(block, &call, Repr::Value);
             }
         };
-        Ok(expr)
+        Ok(Expr::new(format!("({l} {op} {r})"), repr))
     }
 
     fn unary(&mut self, block: BlockId, op: UnaryOp, operand: &Expr) -> Gen<Expr> {
