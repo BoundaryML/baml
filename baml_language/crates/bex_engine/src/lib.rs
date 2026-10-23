@@ -3603,45 +3603,81 @@ impl BexEngine {
         let full_name = func.name();
         let name = host_display_name(&full_name);
         // The frame, slot by slot. A slot the call never binds (a generic
-        // class's parameter under one of its static methods) is `None`: no
-        // value depends on it. A bound whose own arguments name such a slot
-        // has nothing to hold for and is skipped; every other bound is
-        // checked, and a bounded slot that is bound is always one concrete
-        // type.
+        // class's parameter under one of its static methods) is `None`.
         let frame: Vec<Option<bex_vm_types::RealizedTy>> = func
             .type_param_names
             .iter()
             .map(|slot| type_args.get(slot).cloned())
             .collect();
-        let full_frame: Option<Vec<bex_vm_types::RealizedTy>> = frame.iter().cloned().collect();
-        let no_frame: Vec<bex_vm_types::RealizedTy> = Vec::new();
+        let slot_name = |slot: usize| {
+            func.type_param_names
+                .get(slot)
+                .map_or_else(|| format!("#{slot}"), ToString::to_string)
+        };
+        // The frame a bound's templates substitute against. A bound is only
+        // substituted once every slot its templates read is proven bound
+        // (below), so the filler for an unread slot is never read.
+        let filled_frame: Vec<bex_vm_types::RealizedTy> = frame
+            .iter()
+            .map(|slot| slot.clone().unwrap_or(bex_vm_types::RealizedTy::Never))
+            .collect();
         for (slot, bounds) in func.generic_param_bounds.iter().enumerate() {
-            let (Some(Some(ty)), Some(var)) = (frame.get(slot), func.type_param_names.get(slot))
-            else {
-                continue;
-            };
             let Some(first) = bounds.first() else {
                 continue;
+            };
+            let var = slot_name(slot);
+            // A bounded slot the call leaves unbound has a bound nobody can
+            // check: refused, never skipped.
+            let Some(Some(ty)) = frame.get(slot) else {
+                return Err(EngineError::TypeMismatch {
+                    message: format!(
+                        "`{name}` is a generic BAML function whose type parameter `{var}` must \
+                         be one concrete type that implements `{}`, and this call does not \
+                         bind `{var}`; pass it in `type_args`.",
+                        bex_vm_types::Ty::Interface(first.interface, Box::new([]), Box::new([]))
+                    ),
+                });
             };
             if !BexVm::bound_admits(ty) {
                 return Err(EngineError::TypeMismatch {
                     message: format!(
                         "`{name}` is a generic BAML function whose type parameter `{var}` must \
-                         be one concrete type that implements `{}`; `{ty}` is not a single \
-                         concrete type.",
+                         be one concrete type that implements `{}`; `{ty}` is not a concrete \
+                         type.",
                         bex_vm_types::Ty::Interface(first.interface, Box::new([]), Box::new([]))
                     ),
                 });
             }
             for bound in bounds {
-                // A bound with no arguments of its own needs no frame.
-                let frame_for_bound = match &full_frame {
-                    Some(full_frame) => full_frame,
-                    None if bound.args.is_empty() && bound.assoc.is_empty() => &no_frame,
-                    None => continue,
+                // A bound's own arguments may read other slots (`U extends
+                // Named<T>`); every slot they read has to be bound, or the
+                // bound cannot be stated for this call.
+                let mut unbound_read: Option<usize> = None;
+                let mut note_read = |slot: u32| {
+                    let slot = slot as usize;
+                    if unbound_read.is_none() && !matches!(frame.get(slot), Some(Some(_))) {
+                        unbound_read = Some(slot);
+                    }
                 };
+                for template in bound
+                    .args
+                    .iter()
+                    .chain(bound.assoc.iter().map(|(_, template)| template))
+                {
+                    template.for_each_type_arg_ref(&mut note_read);
+                }
+                if let Some(read) = unbound_read {
+                    let read = slot_name(read);
+                    return Err(EngineError::TypeMismatch {
+                        message: format!(
+                            "`{name}` is a generic BAML function whose type parameter `{var}` has \
+                             a bound that reads `{read}`, and this call does not bind `{read}`; \
+                             pass it in `type_args`."
+                        ),
+                    });
+                }
                 let substitute = |template: &bex_vm_types::TyTemplate| {
-                    template.substitute(frame_for_bound, vm).map_err(|error| {
+                    template.substitute(&filled_frame, vm).map_err(|error| {
                         EngineError::VmInternalError(
                             bex_vm::errors::VmInternalError::TypeSubstitution {
                                 message: format!(

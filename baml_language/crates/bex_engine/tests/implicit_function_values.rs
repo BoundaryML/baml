@@ -40,6 +40,11 @@ const SOURCE: &str = r#"
         let m = { "a": 1 };
         m.length
     }
+    function get_future_is_settled() -> () -> bool throws never {
+        let f = spawn { 1 };
+        let _ = await f;
+        f.is_settled
+    }
 
     function apply_one(f: (int) -> int throws never) -> int { f(1) }
 "#;
@@ -159,12 +164,13 @@ async fn a_host_call_seeds_the_frame_of_an_inferred_instantiation() {
 }
 
 /// A builtin's method value is realized from its receiver: a list's element
-/// type and a map's key and value types fill its carrier class's frame, so the
-/// value crosses to the host complete.
-#[tokio::test]
-async fn builtin_method_values_carry_the_receivers_element_types() {
+/// type, a map's key and value types and a future's value and error types
+/// fill its carrier class's frame, so the value crosses to the host complete
+/// and runs when the host calls it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn builtin_method_values_carry_the_receivers_type_arguments() {
     let engine = engine();
-    for getter in ["get_list_at", "get_map_length"] {
+    for getter in ["get_list_at", "get_map_length", "get_future_is_settled"] {
         let value = get_function_value(&engine, getter).await;
         assert!(
             matches!(
@@ -177,4 +183,10 @@ async fn builtin_method_values_carry_the_receivers_element_types() {
             "{getter}: {value:?}"
         );
     }
+    let handle = callable_handle(get_function_value(&engine, "get_future_is_settled").await);
+    let result = engine
+        .call_callable(handle, Vec::new(), context(), true)
+        .await
+        .expect("a settled future's `is_settled` runs from the host");
+    assert_eq!(result, BexExternalValue::Bool(true));
 }

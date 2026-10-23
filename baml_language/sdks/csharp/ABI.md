@@ -118,7 +118,9 @@ for it, or only an empty container) is refused. A type parameter with an
 interface bound (`T extends baml.ops.Compare`) takes one concrete type that
 implements every bound at the bound's own arguments, whether the type was
 inferred (`int` and `"x"` join to `int | string`, which is not one concrete
-type) or stated in `type_args`; otherwise the call is refused. A callable
+type) or stated in `type_args` (a literal type such as `"x"` is not one
+either: it is a subset of `string`, and a bound takes a concrete type, never
+a value's exact literal); otherwise the call is refused. A callable
 value is already specialized and takes no `type_args`. A refusal from the engine
 names the parameter and the path; a refusal from the decoder names the node:
 

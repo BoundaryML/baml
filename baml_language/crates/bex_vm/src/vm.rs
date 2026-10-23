@@ -174,8 +174,8 @@ pub enum BoundCheck {
     /// The type implements the interface at the bound's arguments and pinned
     /// associated types.
     Satisfied,
-    /// The type has no single runtime type to dispatch on (a union, an
-    /// interface, `unknown`, `never`), so no implementation can be chosen.
+    /// The type is not one concrete type (a union, an interface, `unknown`,
+    /// `never`, or a literal type), so no implementation can be chosen for it.
     NotConcrete,
     /// The type is concrete but does not implement the bound.
     NotImplemented,
@@ -2845,16 +2845,14 @@ impl BexVm {
         Ok(self.check_bound(&ty, (head, args, assoc), Some(value)) == BoundCheck::Satisfied)
     }
 
-    /// Whether `ty` has a single runtime type a bound's implementation can
-    /// dispatch on: a union, an interface, `unknown` and `never` do not.
+    /// Whether `ty` is a type a bound can hold for: one concrete type
+    /// (`TYPE_SYSTEM.md`, "Generics on Functions"). A union, an interface,
+    /// `unknown` and `never` have no single runtime type to dispatch on, and
+    /// a literal type (`"a"`, `Side.Left`) is a subset of a concrete type
+    /// rather than one: its values use the base type's members, but it is
+    /// never a bound's type argument.
     pub fn bound_admits(ty: &bex_vm_types::RealizedTy) -> bool {
-        !matches!(
-            ty,
-            bex_vm_types::RealizedTy::Union(..)
-                | bex_vm_types::RealizedTy::Interface(..)
-                | bex_vm_types::RealizedTy::Unknown
-                | bex_vm_types::RealizedTy::Never
-        )
+        ty.as_ty().is_concrete()
     }
 
     /// [`BoundCheck`] for `ty` against the interface bound `(head, args,
@@ -6637,45 +6635,56 @@ impl BexVm {
             .collect())
     }
 
-    /// The class-level type arguments to curry into a bound method whose
-    /// receiver is `receiver`: the receiver instance's `class_type_args` (De
-    /// Bruijn class-param order — the method's `Self`), a list's element type
-    /// or a map's key and value types (its carrier class's parameters), or
-    /// empty for any other receiver (a primitive, `type`, `uint8array`, …,
-    /// whose carrier has no class generics). Captured at `MakeBoundMethod` time so the value is fully
-    /// realized; installed as the callee's `frame.type_args` at `CallIndirect`
-    /// (see the `Object::BoundMethod` arm of `execute_call_from_locals_offset`).
+    /// The frame a bound method curries from its receiver: the type arguments
+    /// of the receiver's concrete type, which are the class generics of the
+    /// method's owner (an instance's `class_type_args`, a list's element
+    /// type for `baml.Array<T>`, a map's key and value for `baml.Map<K, V>`,
+    /// a future's value and error for `baml.future.Future<T, E>`); a receiver
+    /// whose concrete type takes no arguments curries none. Captured at
+    /// `MakeBoundMethod` so the value is fully realized; installed as the
+    /// callee's `frame.type_args` at `CallIndirect`, with a later explicit
+    /// specialization (`xs.map<string, never>`) appended after them.
     ///
-    /// This is EXACT, not an approximation: `MakeBoundMethod`'s only callees
-    /// are class-inherent methods, whose owner frame IS the class frame. An
+    /// Exact, not an approximation: `MakeBoundMethod`'s only callees are
+    /// class-inherent methods, whose owner frame IS the class frame. An
     /// implements-block method referenced in value position binds through
     /// `MakeVirtualBoundMethod` (or a shim's `shim_rule_method`) instead,
     /// where the impl rule's `realize_frame` supplies the owner frame a
-    /// receiver's class args cannot express (blanket impls, adopted
-    /// defaults).
-    pub(crate) fn bound_method_curried_type_args(
+    /// receiver's type cannot express (blanket impls, adopted defaults).
+    pub(crate) fn receiver_type_args(
         &self,
         receiver: Value,
-    ) -> Box<[bex_vm_types::RealizedTy]> {
-        if let Some(ptr) = receiver.as_object_ptr()
-            && let Object::Instance(inst) = self.get_object(ptr)
-        {
-            return inst.class_type_args.clone();
-        }
-        // A builtin's methods live on its carrier class (`baml.Array<T>`,
-        // `baml.Map<K, V>`), whose frame takes the value's own element types:
-        // a list or map carries them, so the bound method is realized from
-        // the receiver as an instance's is from its class arguments.
-        match self.value_concrete_ty(receiver) {
-            Some(bex_vm_types::ConcreteRealizedTy::List(element)) => {
-                Box::new([bex_vm_types::RealizedTy::from(*element)])
-            }
-            Some(bex_vm_types::ConcreteRealizedTy::Map { key, value }) => Box::new([
-                bex_vm_types::RealizedTy::from(*key),
-                bex_vm_types::RealizedTy::from(*value),
-            ]),
-            _ => Box::new([]),
-        }
+    ) -> Result<Box<[bex_vm_types::RealizedTy]>, VmInternalError> {
+        use bex_vm_types::ConcreteRealizedTy as Concrete;
+        let Some(concrete) = self.value_concrete_ty(receiver) else {
+            return Err(VmInternalError::TypeSubstitution {
+                message: format!(
+                    "a bound method's receiver of kind {:?} has no realized concrete type",
+                    self.type_of(&receiver)
+                ),
+            });
+        };
+        Ok(match concrete {
+            Concrete::Class(_, args) => args,
+            Concrete::List(element) => Box::new([*element]),
+            Concrete::Map { key, value } => Box::new([*key, *value]),
+            Concrete::Future(value, error) => Box::new([*value, *error]),
+            Concrete::Int
+            | Concrete::Bigint
+            | Concrete::Float
+            | Concrete::String
+            | Concrete::Bool
+            | Concrete::Null
+            | Concrete::Uint8Array
+            | Concrete::Media(_)
+            | Concrete::Enum(_)
+            | Concrete::Function { .. }
+            | Concrete::RustType
+            | Concrete::Type
+            | Concrete::Resource
+            | Concrete::PromptAst
+            | Concrete::Never => Box::new([]),
+        })
     }
 
     fn event_source_location_for_line_entry(
@@ -6920,17 +6929,19 @@ impl BexVm {
             return Ok(Some(state));
         }
 
-        // Borrow wrapper type args until a frame or native call needs ownership.
-        // Plain functions use empty slices without temporary owned containers.
-        let (closure_type_args, bound_method_class_type_args, specialized_type_args): (
-            &[bex_vm_types::RealizedTy],
-            &[bex_vm_types::RealizedTy],
-            &[bex_vm_types::RealizedTy],
-        ) = match callee_object {
-            Object::Closure(c) => (&c.captured_type_args, &[], &[]),
-            Object::BoundMethod(bm) => (&[], &bm.type_args, &[]),
-            Object::GenericFunction(gf) => (&[], &[], &gf.type_args),
-            _ => (&[], &[], &[]),
+        // The frame a function value carries, in the callee's De Bruijn
+        // order: a bound method's receiver-realized class arguments followed
+        // by its specialization (`xs.map` ⇒ `[T, U, E]`), a generic
+        // function's instantiation (`foo<int>`), or a closure's snapshot of
+        // its enclosing frame. A plain function carries none. A bytecode
+        // callee installs it as `frame.type_args`; a native reads it through
+        // `current_call_type_args()`, so both see the frame a direct call
+        // would have seeded.
+        let carried_type_args: &[bex_vm_types::RealizedTy] = match callee_object {
+            Object::Closure(c) => &c.captured_type_args,
+            Object::BoundMethod(bm) => &bm.type_args,
+            Object::GenericFunction(gf) => &gf.type_args,
+            _ => &[],
         };
 
         // Resolve the callee: either a plain Function, a Closure, or a BoundMethod
@@ -7043,25 +7054,17 @@ impl BexVm {
                 // SmallVec avoids heap allocation for calls with ≤4 args (the common case).
                 let args: SmallVec<[Value; 4]> = self.stack.drain(locals_offset..).collect();
 
-                // For a generic-instantiation-valued native callee, seed the
-                // native's type args so it reads them via
-                // `current_call_type_args()` — the direct-call path sets these
-                // from LoadType operands, but an indirect call through the value
-                // carries them on the wrapper. A pooled `GenericFunction`
-                // (`let f = baml.json.from_string<User>`) carries them on
-                // `specialized_type_args`; a closure-wrapped value
-                // (`let g = baml.json.from_string; let f = g<User>`) carries them
-                // on the closure's `captured_type_args`. Use whichever is set.
-                let native_type_args: &[bex_vm_types::RealizedTy] =
-                    if !specialized_type_args.is_empty() {
-                        specialized_type_args
-                    } else {
-                        closure_type_args
-                    };
-                let restore_pending = if !native_type_args.is_empty() {
+                // A native reads its type args through
+                // `current_call_type_args()`. The direct-call path sets them
+                // from LoadType operands; an indirect call through a value
+                // carries them on the value (`let f = baml.json.from_string<User>`
+                // on a `GenericFunction`, `let g = baml.json.from_string; g<User>`
+                // on a closure, `xs.map` on a bound method whose receiver
+                // realized `T` and whose specialization appended `U, E`).
+                let restore_pending = if !carried_type_args.is_empty() {
                     Some(std::mem::replace(
                         &mut self.pending_call_type_args,
-                        native_type_args.to_vec(),
+                        carried_type_args.to_vec(),
                     ))
                 } else {
                     None
@@ -7161,29 +7164,6 @@ impl BexVm {
                 if let Some(telemetry) = &mut self.telemetry {
                     telemetry.set_context(context.clone());
                 }
-                // Seed frame.type_args from:
-                //  1. BoundMethod callees: the receiver's class_type_args (De
-                //     Bruijn slot 0..n_class_params).  The Call-instruction
-                //     writeback at vm.rs:3619-3629 appends explicit call-site
-                //     type args after these, preserving ordering
-                //     [class_args, fn_args].
-                //  2. Closure callees: captured_type_args (whole-frame snapshot
-                //     taken at MakeClosure time; enclosing_generic_params()
-                //     already widened to class+fn params so the ordering is
-                //     consistent).
-                //  3. Plain Function callees: vec![] (no-op).
-                //
-                // Note: BoundMethod takes priority over Closure; a method can
-                // never be both simultaneously.
-                let initial_type_args = if !bound_method_class_type_args.is_empty() {
-                    bound_method_class_type_args
-                } else if !specialized_type_args.is_empty() {
-                    // GenericFunction value (`foo<int>`): seed its concrete args.
-                    specialized_type_args
-                } else {
-                    closure_type_args
-                };
-
                 let frame_telemetry = if !hooked && self.telemetry.is_some() {
                     let caller_frame_idx = self.bytecode_caller_index(*frame_idx);
                     let actual_caller = self
@@ -7208,7 +7188,7 @@ impl BexVm {
                     let args = &self.stack.0
                         [locals_offset.raw()..locals_offset.raw().saturating_add(arg_count)];
                     let type_args = CallTypeArgs {
-                        carried: initial_type_args,
+                        carried: carried_type_args,
                         passed: if passes_type_args {
                             &self.pending_call_type_args
                         } else {
@@ -7253,7 +7233,7 @@ impl BexVm {
                         function: callee_ptr,
                         instruction_ptr: 0,
                         locals_offset,
-                        type_args: initial_type_args.to_vec(),
+                        type_args: carried_type_args.to_vec(),
                         faulting_pc: 0,
                         telemetry: frame_telemetry,
                         context,
@@ -7296,9 +7276,7 @@ impl BexVm {
                 // generics are type-erased for the op's glue. Any type args here
                 // would be silently dropped, so fail closed in debug.
                 debug_assert!(
-                    closure_type_args.is_empty()
-                        && bound_method_class_type_args.is_empty()
-                        && specialized_type_args.is_empty(),
+                    carried_type_args.is_empty(),
                     "sysop dispatch received type args, which it cannot thread to the op",
                 );
                 let state = self.dispatch_sysop_yield(callee_fn_ptr)?;
@@ -10319,12 +10297,12 @@ impl BexVm {
                         let callee_value = self.load_global_in(runtime_package, global_idx);
                         let function_ptr =
                             self.as_object_ptr(callee_value, FunctionType::Callable.into())?;
-                        // Curry the receiver's class type args (→ `Self`) into the
-                        // value now, so the bound method is fully realized and the
+                        // Curry the receiver's type args (→ `Self`) into the value
+                        // now, so the bound method is fully realized and the
                         // `CallIndirect` that invokes it needs no type-arg operands.
                         // A later explicit method specialization (`b.m<int>`)
                         // appends its arguments in MakeGenericFunctionFromValue.
-                        let type_args = self.bound_method_curried_type_args(receiver);
+                        let type_args = self.receiver_type_args(receiver)?;
                         let bound = Object::BoundMethod(BoundMethod {
                             function: function_ptr,
                             receiver,

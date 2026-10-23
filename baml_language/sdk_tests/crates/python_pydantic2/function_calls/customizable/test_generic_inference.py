@@ -278,11 +278,11 @@ def test_generic_inference_union_concrete_sibling_absorbs_value_binds_never():
     assert tag_or_value("hi", _types={"T": int}) == "int"
 
 
-def test_generic_inference_union_null_actual_binds_null():
-    # `None` is a value of exactly one BAML type, `null`, and the engine infers
-    # from the concrete types of the values that arrived: `T | string | null`
-    # against `null` binds `T = null`, as the compile-time unifier does.
-    assert tag_or_value(None) == "null"
+def test_generic_inference_union_null_actual_binds_never():
+    # `None` is a `null`, and the `null` sibling of `T | string | null` takes
+    # it exactly as the `string` sibling takes "hi": nothing pins `T`, and the
+    # tie breaks to `T = never`, the type no value has.
+    assert tag_or_value(None) == "never"
 
 
 def test_generic_inference_return_only_var_still_requires_binding():

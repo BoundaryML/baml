@@ -327,8 +327,9 @@ pub(super) fn shim_rule_method(
 }
 
 /// Bind a [`shim_rule_method`] resolution to its receiver: the curried frame
-/// is the rule's realized method frame — exact, not the receiver-derived
-/// approximation `bound_method_curried_type_args` gives a `MakeBoundMethod`.
+/// is the rule's realized method frame, which a blanket impl or an adopted
+/// default can make different from the receiver's own type arguments that
+/// `receiver_type_args` gives a `MakeBoundMethod`.
 fn rule_bound_method(vm: &mut BexVm, v: Value, resolved: ShimRuleMethod) -> HeapPtr {
     vm.alloc_bound_method(bex_vm_types::BoundMethod {
         function: resolved.callee,

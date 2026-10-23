@@ -390,7 +390,17 @@ fn collect<N: Head>(
             collect(fk, ak, inv, vars, opts, ctx);
             collect(fv, av, inv, vars, opts, ctx);
         }
-        (Ty::Union(_), _) if nullable_non_null_part(formal).is_some() => {
+        // An optional formal with no *direct* `TypeVar` member (`Box<T>?`,
+        // `T[]?`) peels `null` from both sides and descends into the one
+        // member that can carry evidence. A direct member (`T?`, `T | string
+        // | null`) takes the residual arm below instead, where `null` is a
+        // fixed sibling like any other: a `null` actual is absorbed by it and
+        // binds `T` to nothing, so the caller's union rule makes `T` `never`
+        // rather than `null`, which would claim the value was a `T`.
+        (Ty::Union(f_members), _)
+            if !f_members.iter().any(|m| matches!(m, Ty::TypeVar(_)))
+                && nullable_non_null_part(formal).is_some() =>
+        {
             let formal_inner = nullable_non_null_part(formal).expect("checked above");
             let actual_inner = nullable_non_null_part(actual).unwrap_or_else(|| actual.clone());
             collect(&formal_inner, &actual_inner, variance, vars, opts, ctx);
@@ -851,12 +861,31 @@ mod tests {
     }
 
     #[test]
-    fn union_null_actual_binds_typevar_to_null() {
-        // `T | string | null` vs `null` ⇒ T = null (null not absorbed by string sibling).
+    fn union_null_actual_is_absorbed_by_the_null_sibling() {
+        // `T | string | null` vs `null` ⇒ the null sibling absorbs it; T unbound.
         let formal = Ty::Union(Box::new([tv("T"), string(), null()]));
         let mut b = FxHashMap::default();
         infer_bindings(&formal, &null(), &mut b, &NoFacts);
-        assert_eq!(b.get(&param("T")), Some(&null()));
+        assert!(!b.contains_key(&param("T")));
+    }
+
+    #[test]
+    fn optional_typevar_null_actual_binds_nothing() {
+        // `T?` vs `null` ⇒ the null member absorbs it; T unbound (never `T = null`).
+        let formal = Ty::Union(Box::new([tv("T"), null()]));
+        let mut b = FxHashMap::default();
+        infer_bindings(&formal, &null(), &mut b, &NoFacts);
+        assert!(!b.contains_key(&param("T")));
+    }
+
+    #[test]
+    fn optional_typevar_nullable_actual_binds_the_inner_type() {
+        // `T?` vs `int | null` ⇒ null is absorbed, the residual `int` binds T.
+        let formal = Ty::Union(Box::new([tv("T"), null()]));
+        let actual = Ty::Union(Box::new([int(), null()]));
+        let mut b = FxHashMap::default();
+        infer_bindings(&formal, &actual, &mut b, &NoFacts);
+        assert_eq!(b.get(&param("T")), Some(&int()));
     }
 
     #[test]

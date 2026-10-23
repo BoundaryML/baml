@@ -576,14 +576,23 @@ impl EqualsDriver {
             (Object::Instance(_), _) => Cmp::NotEqual,
 
             (Object::BoundMethod(x), Object::BoundMethod(y)) => {
-                // must be the same *value* not just equivalent.
-                step(x.function == y.function && x.receiver == y.receiver)
+                // The same *value*, not an equivalent one: the same method on
+                // the same receiver at the same instantiation. `h.pick<int>`
+                // and `h.pick<string>` are distinct specializations
+                // (`TYPE_SYSTEM.md`, "Generics on Functions").
+                step(
+                    x.function == y.function
+                        && x.receiver == y.receiver
+                        && resolve::ImplResolver::new(vm)
+                            .ty_args_equivalent(&x.type_args, &y.type_args),
+                )
             }
             (Object::BoundMethod(_), _) => Cmp::NotEqual,
             (Object::GenericFunction(x), Object::GenericFunction(y)) => step(
                 x.function == y.function
-                    && x.type_args == y.type_args
-                    && x.runtime_package == y.runtime_package,
+                    && x.runtime_package == y.runtime_package
+                    && resolve::ImplResolver::new(vm)
+                        .ty_args_equivalent(&x.type_args, &y.type_args),
             ),
             (Object::GenericFunction(_), _) => Cmp::NotEqual,
             (Object::HostClosure(x), Object::HostClosure(y)) => {

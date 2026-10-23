@@ -39,6 +39,11 @@ class LtbPlain {
     x: int,
 }
 
+enum LtbSide {
+    Left,
+    Right,
+}
+
 function ltb_name_of<N extends LtbNamed>(value: N) -> string throws never {
     value.name
 }
@@ -71,6 +76,23 @@ test "a type that implements the bound binds" {
 test "a type that misses the bound runs the else block" {
     let plain = LtbPlain.type();
     assert.equal(ltb_bind_named(plain), "missed " + ltb_name(plain))
+}
+
+function ltb_bind_concrete(t: reflect.Type) -> string {
+    let type T extends baml.Concrete = t else {
+        return "missed";
+    };
+    "bound"
+}
+
+test "a literal type is not a concrete type and misses every bound" {
+    // `baml.Concrete` is implemented by every concrete type, and `"a"` is a
+    // subset of `string`, not a concrete type of its own (TYPE_SYSTEM.md,
+    // "Literal Types"): a bound takes the type, never a value's exact literal.
+    assert.equal(ltb_bind_concrete(reflect.Type.of<string>()), "bound");
+    assert.equal(ltb_bind_concrete(reflect.Type.of<"a">()), "missed");
+    assert.equal(ltb_bind_concrete(reflect.Type.of<LtbSide.Left>()), "missed");
+    assert.equal(ltb_bind_concrete(reflect.Type.of<LtbSide>()), "bound")
 }
 
 test "the else block can skip a loop iteration" {

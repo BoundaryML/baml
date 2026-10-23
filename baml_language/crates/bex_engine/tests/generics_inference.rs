@@ -365,6 +365,96 @@ async fn a_bounded_type_parameter_takes_one_concrete_implementor() {
             && message.contains("does not"),
         "{message}"
     );
+    // A literal type is not a concrete type: `"x"` is a subset of `string`
+    // (which implements `Named`), and a bound takes the type, never a value's
+    // exact literal (`TYPE_SYSTEM.md`, "Literal Types").
+    let err = call_with_bindings(
+        source,
+        "same",
+        vec![s("x"), s("x")],
+        indexmap! { "T" => WireTy::Literal(
+            baml_type::Literal::String("x".into()),
+            baml_type::Freshness::Regular,
+        ) },
+    )
+    .await
+    .expect_err("a literal type is not a concrete implementor");
+    let EngineError::TypeMismatch { message } = &err else {
+        panic!("expected TypeMismatch, got {err:?}");
+    };
+    assert!(
+        message.contains("one concrete type") && message.contains("\"x\""),
+        "{message}"
+    );
+}
+
+/// A static method's own bounded parameter is checked at its bound's own
+/// arguments even though the class's parameter is phantom to the call, and a
+/// bounded parameter the call leaves unbound is a refusal, never a skip.
+#[tokio::test]
+async fn a_static_methods_bounds_are_checked_under_an_unbound_class_parameter() {
+    let source = r#"
+        interface Named<X> {
+            function label(self, other: X) -> string throws never;
+        }
+        implement Named<int> for int {
+            function label(self, other: int) -> string throws never { "int" }
+        }
+        class Box<T> {
+            value T
+            function both<U extends Named<U>>(a: U, b: U) -> string { a.label(b) + b.label(a) }
+        }
+        class Tagged<T extends Named<T>> {
+            value T
+            function zero() -> int { 0 }
+        }
+        function main() -> int { 0 }
+    "#;
+    // `T` is phantom to `Box.both`; `U = int` implements `Named<int>`.
+    assert_eq!(
+        call_infer(source, "Box.both", vec![BEV::Int(1), BEV::Int(2)])
+            .await
+            .unwrap(),
+        s("intint")
+    );
+    // `U = bool` does not implement `Named<bool>`: refused at the boundary,
+    // not an internal error inside `a.label(b)`.
+    let err = call_infer(source, "Box.both", vec![BEV::Bool(true), BEV::Bool(false)])
+        .await
+        .expect_err("`bool` does not implement `Named<bool>`");
+    let EngineError::TypeMismatch { message } = &err else {
+        panic!("expected TypeMismatch, got {err:?}");
+    };
+    assert!(
+        message.contains("`both`")
+            && message.contains("`U`")
+            && message.contains("must implement")
+            && message.contains("Named<bool>"),
+        "{message}"
+    );
+    // `Tagged.zero` binds nothing for its class's bounded `T`, so the bound
+    // cannot be checked: the call is refused until the host states `T`.
+    let err = call_infer(source, "Tagged.zero", vec![])
+        .await
+        .expect_err("an unbound bounded parameter is a refusal");
+    let EngineError::TypeMismatch { message } = &err else {
+        panic!("expected TypeMismatch, got {err:?}");
+    };
+    assert!(
+        message.contains("`zero`") && message.contains("`T`") && message.contains("bind"),
+        "{message}"
+    );
+    assert_eq!(
+        call_with_bindings(
+            source,
+            "Tagged.zero",
+            vec![],
+            indexmap! { "T" => WireTy::int() }
+        )
+        .await
+        .unwrap(),
+        BEV::Int(0)
+    );
 }
 
 #[tokio::test]
@@ -652,13 +742,15 @@ async fn infer_maybe_id_present_value() {
 }
 
 #[tokio::test]
-async fn infer_maybe_id_null_value() {
-    // maybe_id(None): the actual is a value of type `null`, and the solver
-    // binds `T? ⊇ null` as the compile-time unifier does (T33) ⇒ T = null.
+async fn infer_maybe_id_null_binds_never() {
+    // maybe_id(None): `T?` is `T | null`, and the `null` member takes the
+    // actual, so nothing pins `T`: the value could be a `T` or not, and the
+    // tie breaks to `T = never` (TYPEVAR BINDING POLICY rule 4). `T = null`
+    // would claim the value was a `T`.
     let out = call_infer(MAYBE_ID, "maybe_id", vec![BEV::Null])
         .await
         .unwrap();
-    assert_eq!(out, BEV::String("null".into()));
+    assert_eq!(out, BEV::String("never".into()));
 }
 
 // ── §H: union with a concrete sibling — NOW IN SCOPE (02a, G5 reversal) ──────
@@ -700,13 +792,14 @@ async fn infer_tag_or_value_string_arg_binds_never() {
 }
 
 #[tokio::test]
-async fn infer_tag_or_value_null_binds_null() {
-    // tag_or_value(None): a `null` actual is a value of type `null`, which the
-    // solver binds to `T` as the compile-time unifier does ⇒ T = null.
+async fn infer_tag_or_value_null_binds_never() {
+    // tag_or_value(None): the `null` sibling absorbs the actual exactly as
+    // the `string` sibling absorbs "hi" (H3), so nothing pins `T` and the
+    // tie breaks to `T = never`.
     let out = call_infer(TAG_OR_VALUE_REFLECT, "tag_or_value", vec![BEV::Null])
         .await
         .unwrap();
-    assert_eq!(out, BEV::String("null".into()));
+    assert_eq!(out, BEV::String("never".into()));
 }
 
 /// Match-bodied variant — the function in `02a`'s "Current status" that fails to

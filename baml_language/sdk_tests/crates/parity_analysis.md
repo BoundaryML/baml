@@ -280,7 +280,7 @@ Parity is the share of the 449 test IDs declared in `python_pydantic2` that are 
 | function_calls/generic_inference_two_typevar_union_is_uninferrable_rejects | y | - | - | - | - | - | - | - | y | - | all |  |
 | function_calls/generic_inference_union_concrete_sibling_absorbs_value_binds_never | y | - | - | - | - | - | - | - | y | - | all |  |
 | function_calls/generic_inference_union_concrete_sibling_keeps_the_static_type_arg | - | - | - | - | - | - | - | - | - | y | all |  |
-| function_calls/generic_inference_union_null_actual_binds_null | y | - | - | - | - | - | - | - | y | - | all |  |
+| function_calls/generic_inference_union_null_actual_binds_never | y | - | - | - | - | - | - | - | y | - | all |  |
 | function_calls/generic_inference_union_null_actual_keeps_the_static_type_arg | - | - | - | - | - | - | - | - | - | y | all |  |
 | function_calls/generic_inference_union_with_concrete_sibling_infers_typevar | y | - | - | - | - | - | - | - | y | - | all |  |
 | function_calls/generic_inference_values_of_empty_map_requires_binding | y | - | - | - | - | - | - | - | y | - | python_pydantic2, java | a dynamic host has no static value type for an empty map; the typed SDKs state theirs and round-trip |
