@@ -32,6 +32,9 @@ pub enum OutputType {
     /// Java SDK (`com.boundaryml:baml-bridge` runtime).
     #[strum(serialize = "java")]
     Java,
+    /// Ruby SDK with Sorbet types (`baml-bridge` gem runtime).
+    #[strum(serialize = "ruby/sorbet")]
+    RubySorbet,
     /// C++17 SDK (self-contained source tree; dlopens the shared runtime).
     #[strum(serialize = "cpp")]
     Cpp,
@@ -57,6 +60,7 @@ impl OutputType {
             Self::Go => "go",
             Self::Rust => "rust",
             Self::Java => "java",
+            Self::RubySorbet => "ruby/sorbet",
             Self::Cpp => "cpp",
             Self::CSharp => "csharp",
         }
@@ -70,7 +74,7 @@ impl OutputType {
     /// The naming convention currently implemented by this generator.
     pub const fn required_naming_convention(self) -> NamingConvention {
         match self {
-            Self::Go | Self::CSharp => NamingConvention::Language,
+            Self::Go | Self::CSharp | Self::RubySorbet => NamingConvention::Language,
             _ => NamingConvention::PreserveCase,
         }
     }
@@ -139,6 +143,10 @@ mod tests {
         );
         assert_eq!(
             Generator::from(OutputType::CSharp).naming_convention,
+            NamingConvention::Language
+        );
+        assert_eq!(
+            Generator::from(OutputType::RubySorbet).naming_convention,
             NamingConvention::Language
         );
         assert_eq!(
