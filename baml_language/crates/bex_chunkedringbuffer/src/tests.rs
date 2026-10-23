@@ -1,14 +1,26 @@
+use std::time::Duration;
+
 use super::*;
 fn nz(n: usize) -> NonZeroUsize {
     NonZeroUsize::new(n).unwrap()
 }
 fn config(cap: usize, chunks: usize) -> Config {
+    config_waiting(
+        cap,
+        chunks,
+        btel_settings::transport::OVERAGE_WAIT_BASE_DURATION,
+    )
+}
+/// A pool whose writers wait `base` (at no overage) before allocating beyond
+/// a lane: seconds make reuse certain, milliseconds make the wait measurable.
+fn config_waiting(cap: usize, chunks: usize, base: Duration) -> Config {
     Config {
         chunk_capacity: nz(cap),
         timing_chunks: nz(chunks),
         span_chunks: nz(chunks),
         max_producers: nz(1),
         preallocate: false,
+        overage_wait_base: base,
     }
 }
 fn model(f: impl Fn() + Send + Sync + 'static) {
@@ -56,6 +68,30 @@ fn partial_is_private_until_sealed_and_release_flushes_both_streams() {
     });
 }
 
+/// Under the model, how often a write reused a recycled chunk (index 0)
+/// and how often it went beyond the lane (index 1), so an assertion that
+/// tolerates either is known to have seen what it tolerates.
+#[cfg(baml_loom)]
+static HANDOFF_OUTCOMES: [std::sync::atomic::AtomicUsize; 2] = [
+    std::sync::atomic::AtomicUsize::new(0),
+    std::sync::atomic::AtomicUsize::new(0),
+];
+#[cfg(baml_loom)]
+static RETAINED_OUTCOMES: [std::sync::atomic::AtomicUsize; 2] = [
+    std::sync::atomic::AtomicUsize::new(0),
+    std::sync::atomic::AtomicUsize::new(0),
+];
+#[cfg(baml_loom)]
+fn both_explored(outcomes: &[std::sync::atomic::AtomicUsize; 2]) {
+    let counts = outcomes
+        .each_ref()
+        .map(|n| n.load(std::sync::atomic::Ordering::SeqCst));
+    assert!(
+        counts.iter().all(|&n| n > 0),
+        "both reuse and overage must be explored: {counts:?}"
+    );
+}
+
 #[test]
 fn full_chunk_handoff_wakeup_and_recycling() {
     model(|| {
@@ -85,16 +121,26 @@ fn full_chunk_handoff_wakeup_and_recycling() {
         let mut p = pool.register_producer().unwrap();
         p.write_timing(0);
         p.write_timing(1);
-        assert_eq!(p.stats().allocations, 1);
+        // One allocation within the lane; the second write either reused it
+        // after the consumer recycled it or went beyond the lane.
+        let stats = p.stats();
+        #[cfg(baml_loom)]
+        HANDOFF_OUTCOMES[stats.overage_allocations]
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        assert_eq!(stats.allocations - stats.overage_allocations, 1);
         drop(p);
         pool.close_admission();
         worker.join().unwrap();
+        // A chunk beyond the lane is freed once it returns beside an idle one.
         assert_eq!(pool.stats().free_chunks, 1);
+        assert_eq!(pool.stats().allocated_timing_chunks, 1);
     });
+    #[cfg(baml_loom)]
+    both_explored(&HANDOFF_OUTCOMES);
 }
 
 #[test]
-fn retained_span_recycling_unblocks_a_different_producer() {
+fn retained_span_recycling_serves_a_different_producer_or_it_allocates_beyond_the_lane() {
     model(|| {
         let pool = ChunkPool::<usize, usize>::new(config(1, 1)).unwrap();
         let mut reader = pool.bind_consumer().unwrap();
@@ -107,7 +153,13 @@ fn retained_span_recycling_unblocks_a_different_producer() {
         let writer = thread::spawn(move || {
             let mut writer = copy.register_producer().unwrap();
             writer.write_span(2);
-            assert_eq!(writer.stats().allocations, 0);
+            let stats = writer.stats();
+            // Whichever came first: the recycled chunk, or the wait running out.
+            assert_eq!(stats.allocations, stats.overage_allocations);
+            assert!(stats.allocations <= 1);
+            #[cfg(baml_loom)]
+            RETAINED_OUTCOMES[stats.overage_allocations]
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         });
         drop(held);
         writer.join().unwrap();
@@ -117,8 +169,89 @@ fn retained_span_recycling_unblocks_a_different_producer() {
                 .drain(nz(8), |_, _| unreachable!(), |_, v| assert_eq!(v, 2))
                 .complete
         );
+        // An overage chunk returning beside an idle one is freed: the lane is
+        // back at its size either way.
         assert_eq!(pool.stats().allocated_span_chunks, 1);
         assert_eq!(pool.stats().free_chunks, 1);
+    });
+    // The model's yield lets the main thread drop the lease before the
+    // writer looks again, so only reuse is reachable here; the overage
+    // branch is `a_lane_held_beyond_its_size_grows_then_shrinks…`.
+    #[cfg(baml_loom)]
+    assert!(RETAINED_OUTCOMES[0].load(std::sync::atomic::Ordering::SeqCst) > 0);
+}
+
+/// Over its size, a lane keeps one chunk for every writer waiting and one
+/// idle one, and hands the rest back to be freed.
+#[test]
+fn a_lane_keeps_returning_chunks_for_its_waiters_and_one_idle() {
+    let mut lane = super::Lane::<usize>::new(1, 1, false);
+    lane.allocated = 5;
+    lane.waiting = 2;
+    let returned: Vec<_> = (0..4).map(|_| lane.give_back(Vec::new())).collect();
+    assert_eq!(returned.iter().filter(|r| r.is_some()).count(), 1);
+    assert!(
+        returned[3].is_some(),
+        "the fourth found two waiters and an idle one"
+    );
+    assert_eq!((lane.allocated, lane.free.len()), (4, 3));
+    lane.waiting = 0;
+    assert!(lane.give_back(Vec::new()).is_some());
+    assert_eq!((lane.allocated, lane.free.len()), (3, 3));
+    // At its size, everything is kept.
+    lane.max = 3;
+    lane.allocated = 3;
+    assert!(lane.give_back(Vec::new()).is_none());
+    assert_eq!((lane.allocated, lane.free.len()), (3, 4));
+}
+
+#[test]
+fn a_lane_held_beyond_its_size_grows_then_shrinks_as_chunks_return_idle() {
+    model(|| {
+        let pool = ChunkPool::<usize, usize>::new(config(1, 1)).unwrap();
+        let mut reader = pool.bind_consumer().unwrap();
+        let mut writer = pool.register_producer().unwrap();
+        writer.write_span(1);
+        let mut held = Vec::new();
+        reader.drain_chunks(nz(1), |_, _| unreachable!(), |_, c| held.push(c));
+        // The lane's one chunk is held downstream: the writer probes, then
+        // allocates beyond the size rather than waiting for it.
+        writer.write_span(2);
+        let stats = writer.stats();
+        assert_eq!(stats.allocations, 2);
+        assert_eq!(stats.overage_allocations, 1);
+        assert_eq!(stats.exhausted_waits, 1);
+        #[cfg(feature = "diagnostics")]
+        assert_eq!(
+            pool.diagnostics(),
+            super::PoolDiagnostics {
+                exhausted_waits: 1,
+                overage_allocations: 1,
+                // One chunk over: the one just allocated.
+                peak_overage_chunks: 1,
+            }
+        );
+        assert_eq!(pool.stats().allocated_span_chunks, 2);
+        assert_eq!(pool.stats().free_chunks, 0);
+        reader.drain_chunks(nz(1), |_, _| unreachable!(), |_, c| held.push(c));
+        assert_eq!(held.len(), 2);
+        // The first return is kept: nothing idle, so it is what the next
+        // write would take. The second finds it idle and is freed.
+        drop(held.remove(0));
+        assert_eq!(pool.stats().allocated_span_chunks, 2);
+        assert_eq!(pool.stats().free_chunks, 1);
+        drop(held.remove(0));
+        assert_eq!(pool.stats().allocated_span_chunks, 1);
+        assert_eq!(pool.stats().free_chunks, 1);
+        pool.close_admission();
+        drop(writer);
+        assert!(
+            reader
+                .drain(nz(8), |_, _| unreachable!(), |_, _| unreachable!())
+                .complete
+        );
+        assert_eq!(pool.stats().allocated_span_chunks, 1);
+        assert!(!pool.is_failed());
     });
 }
 
@@ -207,7 +340,7 @@ mod native {
             atomic::{AtomicUsize, Ordering as Order},
             mpsc,
         },
-        time::Duration,
+        time::{Duration, Instant},
     };
 
     use super::*;
@@ -280,7 +413,7 @@ mod native {
         assert_eq!(drops.load(Order::SeqCst), 4);
     }
     #[test]
-    fn publisher_owned_span_exhausts_quota_until_lease_returns() {
+    fn a_publisher_owned_lease_does_not_hold_up_a_writer_and_outlives_the_pool() {
         checked(|| {
             let pool = ChunkPool::<usize, usize>::new(config(1, 1)).unwrap();
             let mut reader = pool.bind_consumer().unwrap();
@@ -289,36 +422,37 @@ mod native {
             drop(writer);
             let mut held = None;
             reader.drain_chunks(nz(1), |_, _| unreachable!(), |_, c| held = Some(c));
-            let (started_tx, started_rx) = mpsc::channel();
-            let (done_tx, done_rx) = mpsc::channel();
             let copy = pool.clone();
-            let writer = thread::spawn(move || {
+            // The lane's one chunk stays with the publisher throughout: the
+            // writer finishes anyway, beyond the lane's size.
+            let stats = thread::spawn(move || {
                 let mut writer = copy.register_producer().unwrap();
-                started_tx.send(()).unwrap();
                 writer.write_span(2);
-                done_tx.send(()).unwrap();
                 writer.stats()
-            });
-            started_rx.recv().unwrap();
-            thread::sleep(Duration::from_millis(2));
-            assert!(done_rx.try_recv().is_err());
-            assert_eq!(pool.stats().allocated_span_chunks, 1);
+            })
+            .join()
+            .unwrap();
+            assert_eq!(stats.overage_allocations, 1);
+            assert_eq!(pool.stats().allocated_span_chunks, 2);
             assert_eq!(pool.stats().free_chunks, 0);
-            drop(held);
-            assert_eq!(writer.join().unwrap().allocations, 0);
             pool.close_admission();
-            let mut held = None;
+            let mut second = None;
             assert!(
                 reader
-                    .drain_chunks(nz(8), |_, _| unreachable!(), |_, c| held = Some(c))
+                    .drain_chunks(nz(8), |_, _| unreachable!(), |_, c| second = Some(c))
                     .complete
             );
             drop(reader); // Input completion does not require publisher release.
             assert!(!pool.is_failed());
-            let held = held.unwrap();
-            assert_eq!(held.as_slice(), [2]);
+            let second = second.unwrap();
+            assert_eq!(second.as_slice(), [2]);
+            // The first lease back finds nothing idle and is kept; the second
+            // finds it and is freed, so the lane ends at its size.
+            drop(held);
+            assert_eq!(pool.stats().allocated_span_chunks, 2);
+            assert_eq!(pool.stats().free_chunks, 1);
             drop(pool); // Lease keeps its pool alive, independently of endpoints.
-            thread::spawn(move || drop(held)).join().unwrap();
+            thread::spawn(move || drop(second)).join().unwrap();
         });
     }
 
@@ -356,7 +490,7 @@ mod native {
         }
     }
     #[test]
-    fn processor_owned_chunk_counts_toward_limit() {
+    fn a_processor_held_chunk_does_not_hold_up_a_writer() {
         checked(|| {
             let pool = ChunkPool::<usize, usize>::new(config(1, 1)).unwrap();
             let mut p = pool.register_producer().unwrap();
@@ -397,15 +531,19 @@ mod native {
                 done_tx.send(()).unwrap();
                 p.stats()
             });
-            thread::sleep(Duration::from_millis(2));
-            assert!(done_rx.try_recv().is_err());
-            assert_eq!(pool.stats().allocated_timing_chunks, 1);
-            release_tx.send(()).unwrap();
+            // The consumer holds the lane's one chunk: the writer is not held
+            // up by it, it goes beyond the lane.
+            done_rx.recv().unwrap();
             let stats = writer.join().unwrap();
-            assert_eq!(stats.allocations, 0);
+            assert_eq!(stats.allocations, 1);
+            assert_eq!(stats.overage_allocations, 1);
+            assert_eq!(pool.stats().allocated_timing_chunks, 2);
+            release_tx.send(()).unwrap();
             pool.close_admission();
             consumer.join().unwrap();
+            // The second chunk back found the first idle and was freed.
             assert_eq!(pool.stats().free_chunks, 1);
+            assert_eq!(pool.stats().allocated_timing_chunks, 1);
         });
     }
     #[test]
@@ -490,7 +628,9 @@ mod native {
                                 p.seal();
                             }
                         }
-                        assert_eq!(p.stats().allocations, 0);
+                        // Preallocated lanes: only the backstop ever allocates.
+                        let stats = p.stats();
+                        assert_eq!(stats.allocations, stats.overage_allocations);
                     })
                 })
                 .collect();
@@ -499,6 +639,7 @@ mod native {
             }
             pool.close_admission();
             consumer.join().unwrap();
+            // Whatever the backstop allocated was freed as it returned idle.
             let s = pool.stats();
             assert_eq!(s.allocated_timing_chunks + s.allocated_span_chunks, 4);
             assert_eq!(s.free_chunks, 4);
@@ -506,28 +647,132 @@ mod native {
         });
     }
     #[test]
-    fn consumer_failure_stops_an_exhausted_writer() {
+    fn consumer_failure_stops_a_writer_before_it_looks_for_a_chunk() {
         checked(|| {
             let pool = ChunkPool::<usize, usize>::new(config(1, 1)).unwrap();
             let consumer = pool.bind_consumer().unwrap();
             let copy = pool.clone();
             let (ready, received) = mpsc::channel();
+            let (failed, failure) = mpsc::channel();
             let writer = thread::spawn(move || {
                 let mut writer = copy.register_producer().unwrap();
                 writer.write_timing(1);
                 ready.send(()).unwrap();
+                failure.recv().unwrap();
                 let error = catch_unwind(AssertUnwindSafe(|| writer.write_timing(2))).unwrap_err();
                 assert!(error.is::<TransportFailed>());
             });
             received.recv().unwrap();
             drop(consumer);
+            failed.send(()).unwrap();
             writer.join().unwrap();
             assert!(pool.is_failed());
             assert_eq!(pool.stats().ready_chunks, 1);
             assert_eq!(pool.stats().active_producers, 0);
         });
     }
-
+    /// The failure lands while the writer is probing for a chunk, and the
+    /// writer's next probe sees it.
+    #[test]
+    fn consumer_failure_stops_a_writer_waiting_for_a_chunk() {
+        checked(|| {
+            let pool =
+                ChunkPool::<usize, usize>::new(config_waiting(1, 1, Duration::from_secs(60)))
+                    .unwrap();
+            let mut writer = pool.register_producer().unwrap();
+            writer.write_span(1);
+            writer.seal();
+            let (writing, writes) = mpsc::channel();
+            let copy = pool.clone();
+            let reader = thread::spawn(move || {
+                let mut consumer = copy.bind_consumer().unwrap();
+                let mut held = None;
+                consumer.drain_chunks(nz(1), |_, _| unreachable!(), |_, chunk| held = Some(chunk));
+                assert!(held.is_some());
+                writes.recv().unwrap();
+                // The writer is a minute from allocating beyond the lane.
+                thread::sleep(Duration::from_millis(5));
+                drop(consumer);
+                assert!(copy.is_failed());
+                drop(held);
+            });
+            writing.send(()).unwrap();
+            let error = catch_unwind(AssertUnwindSafe(|| writer.write_span(2))).unwrap_err();
+            assert!(error.is::<TransportFailed>());
+            reader.join().unwrap();
+            assert_eq!(writer.stats().overage_allocations, 0);
+            assert!(pool.is_failed());
+        });
+    }
+    /// A chunk that comes back within the wait is taken, not allocated beside.
+    #[test]
+    fn a_writer_takes_a_chunk_recycled_within_its_wait() {
+        checked(|| {
+            let pool =
+                ChunkPool::<usize, usize>::new(config_waiting(1, 1, Duration::from_secs(60)))
+                    .unwrap();
+            let mut reader = pool.bind_consumer().unwrap();
+            let mut writer = pool.register_producer().unwrap();
+            writer.write_span(1);
+            drop(writer);
+            let mut held = None;
+            reader.drain_chunks(nz(1), |_, _| unreachable!(), |_, chunk| held = Some(chunk));
+            let (started, starting) = mpsc::channel();
+            let copy = pool.clone();
+            let writer = thread::spawn(move || {
+                let mut writer = copy.register_producer().unwrap();
+                started.send(()).unwrap();
+                writer.write_span(2);
+                writer.stats()
+            });
+            starting.recv().unwrap();
+            // Well inside the minute: the writer is probing, or about to.
+            thread::sleep(Duration::from_millis(10));
+            drop(held);
+            let stats = writer.join().unwrap();
+            assert_eq!(stats.allocations, 0, "the recycled chunk was taken");
+            assert_eq!(stats.overage_allocations, 0);
+            assert!(stats.exhausted_waits <= 1);
+            pool.close_admission();
+            assert!(
+                reader
+                    .drain(nz(8), |_, _| unreachable!(), |_, v| assert_eq!(v, 2))
+                    .complete
+            );
+            assert_eq!(pool.stats().allocated_span_chunks, 1);
+        });
+    }
+    /// With nothing coming back, the writer waits the base and then allocates.
+    #[test]
+    fn a_writer_waits_the_base_before_allocating_beyond_the_lane() {
+        checked(|| {
+            let base = Duration::from_millis(20);
+            let pool = ChunkPool::<usize, usize>::new(config_waiting(1, 1, base)).unwrap();
+            let mut reader = pool.bind_consumer().unwrap();
+            let mut writer = pool.register_producer().unwrap();
+            writer.write_span(1);
+            writer.seal();
+            let mut held = None;
+            reader.drain_chunks(nz(1), |_, _| unreachable!(), |_, chunk| held = Some(chunk));
+            let started = Instant::now();
+            writer.write_span(2);
+            assert!(
+                started.elapsed() >= base,
+                "allocated beyond the lane too soon"
+            );
+            let stats = writer.stats();
+            assert_eq!((stats.overage_allocations, stats.exhausted_waits), (1, 1));
+            drop(writer);
+            pool.close_admission();
+            assert!(
+                reader
+                    .drain(nz(8), |_, _| unreachable!(), |_, v| assert_eq!(v, 2))
+                    .complete
+            );
+            drop(held);
+            assert_eq!(pool.stats().allocated_span_chunks, 1);
+        });
+    }
     #[test]
     fn unsafe_pool_size_and_duplicate_ownership_are_rejected() {
         let mut cfg = config(2, 1);
@@ -542,12 +787,11 @@ mod native {
             pool.register_producer(),
             Err(SetupError::ProducerAlreadyBound)
         ));
+        // A thread beyond the table is given a slot of its own.
         let copy = pool.clone();
         thread::spawn(move || {
-            assert!(matches!(
-                copy.register_producer(),
-                Err(SetupError::ProducerLimit)
-            ));
+            let beyond = copy.register_producer().unwrap();
+            assert_eq!(beyond.id().index(), 1);
         })
         .join()
         .unwrap();
@@ -580,7 +824,7 @@ fn worker_slot_is_predetermined_across_polls_and_reuses_fifo_after_retirement() 
         pool.release_worker(worker);
         let mut producer = pool.register_producer().unwrap();
         assert_eq!(id.index(), producer.id().index());
-        assert!(id.index() < reader.producer_capacity());
+        assert_eq!(id.index(), 0);
         producer.write_span(4);
         drop(producer);
         pool.close_admission();

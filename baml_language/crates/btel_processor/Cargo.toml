@@ -11,6 +11,12 @@ repository = { workspace = true }
 license = { workspace = true }
 description = "Chunk-backed telemetry processing and storage recycling"
 
+[features]
+# Producer-side diagnostics: pool-wide cold-path counts, capture-pool peaks,
+# and a warning the first time a producer takes storage beyond its budget.
+# Measurement only; nothing reads them in production.
+diagnostics = [ "bex_chunkedringbuffer/diagnostics", "btel_snapshot/stats", "dep:tracing" ]
+
 [lints]
 workspace = true
 
@@ -21,6 +27,7 @@ btel_settings = { workspace = true }
 btel_snapshot = { workspace = true }
 btel_types = { workspace = true }
 rustc-hash = { workspace = true }
+tracing = { workspace = true, optional = true }
 web-time = { workspace = true }
 
 [dev-dependencies]

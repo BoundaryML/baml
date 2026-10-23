@@ -38,4 +38,33 @@ describe("roundtrip optional", () => {
     });
     expect(round_trip_optional_container(c)).toEqual(c);
   });
+  // SDK_PARITY_LINT(skip): TypeScript object literals and constructor inits may leave nullable keys out
+  it("optional_omitted_nullable_keys_read_as_null", () => {
+    const allNull = new OptionalContainer({
+      optional_int: null,
+      optional_class: null,
+      optional_union: null,
+    });
+    // A plain object and a constructor init both type-check without the
+    // nullable keys, and the runtime reads each omitted key as `null`.
+    expect(round_trip_optional_container({})).toEqual(allNull);
+    expect(round_trip_optional_container(new OptionalContainer({}))).toEqual(allNull);
+    expect(round_trip_optional_container({ optional_class: { name: "x" } })).toEqual(
+      new OptionalContainer({
+        optional_int: null,
+        optional_class: new Resume({ name: "x" }),
+        optional_union: null,
+      }),
+    );
+  });
+  // SDK_PARITY_LINT(skip): only TypeScript has a type-level check that a required key is present
+  it("optional_omitted_required_key_is_rejected", () => {
+    // `tsc` fails if either `@ts-expect-error` stops being needed, so a
+    // required key cannot silently become optional. The host refuses the
+    // value before anything is sent, with its ordinary argument error.
+    // @ts-expect-error `name` is required
+    expect(() => round_trip_resume({})).toThrow(/requires field `name`/);
+    // @ts-expect-error `name` is required
+    expect(() => round_trip_resume(new Resume({}))).toThrow(/requires field `name`/);
+  });
 });

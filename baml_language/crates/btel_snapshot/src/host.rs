@@ -163,6 +163,8 @@ fn add<'a>(
                     declaration.identity.name(),
                     declaration.identity.tag(),
                     false,
+                    // A host value has no recorded definition at hand: named by tag.
+                    None,
                 );
                 let Some(declaration) = builder.leaves().object(declaration) else {
                     return SnapshotValue::Truncated(Limit::Objects);
@@ -202,6 +204,8 @@ fn add<'a>(
                 declaration.identity.name(),
                 declaration.identity.tag(),
                 true,
+                // A host value has no recorded definition at hand: named by tag.
+                None,
             );
             let Some(declaration) = builder.leaves().object(declared) else {
                 return SnapshotValue::Truncated(Limit::Objects);
@@ -307,7 +311,7 @@ mod tests {
 
     #[test]
     fn host_nominal_values_require_engine_declarations_and_bound_type_metadata() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let class = declaration("user.Box", 3, None);
         let value = HostValue::Instance {
             name: "user.Box".into(),
@@ -345,7 +349,7 @@ mod tests {
         };
         assert_eq!(type_arguments[0].decoded.as_deref(), Some(&OwnedType::Int));
         assert!(
-            matches!(decoded.object(*declaration), crate::DecodedObject::Declaration { tag, .. } if *tag == class.identity.tag())
+            matches!(decoded.object(*declaration), crate::DecodedObject::Declaration { tag, .. } if *tag == Some(class.identity.tag()))
         );
         drop(snapshot);
         let mut deep = HostType::Int;
@@ -391,7 +395,7 @@ mod tests {
 
     #[test]
     fn host_enum_uses_the_declared_variant_index_and_round_trips() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let declared = declaration("user.Mood", 4, Some(vec!["SAD".into(), "HAPPY".into()]));
         let value = HostValue::Enum {
             name: "user.Mood".into(),
@@ -412,7 +416,7 @@ mod tests {
 
     #[test]
     fn unsupported_and_oversized_host_values_are_explicit_observations() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let unavailable = capture(pool.try_acquire().unwrap(), &HostValue::Unavailable);
         let SnapshotRoot::Value(SnapshotValue::Object(id)) = unavailable.root() else {
             panic!("unavailable value must be represented");
@@ -441,7 +445,7 @@ mod tests {
 
     #[test]
     fn nested_host_maps_and_lists_produce_self_contained_blobs() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let value = HostValue::Map(vec![(
             "arguments".into(),
             HostValue::List(vec![
@@ -461,13 +465,10 @@ mod tests {
 
     #[test]
     fn transport_limits_are_visible_in_host_snapshots() {
-        let pool = SnapshotPool::new(
-            1,
-            Limits {
-                max_values: Some(0),
-                ..Limits::default()
-            },
-        );
+        let pool = SnapshotPool::unbounded(Limits {
+            max_values: Some(0),
+            ..Limits::default()
+        });
         let snapshot = capture(
             pool.try_acquire().unwrap(),
             &HostValue::List(vec![HostValue::Int(7)]),

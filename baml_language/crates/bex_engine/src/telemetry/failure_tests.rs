@@ -9,7 +9,12 @@ fn nz(n: usize) -> NonZeroUsize {
     NonZeroUsize::new(n).unwrap()
 }
 
+/// An engine whose telemetry recording files go through `write`. The fake
+/// covers recording files only: telemetry's blob store still writes real files
+/// under `directory`, so it must be a folder outside the source tree that
+/// outlives the engine's shutdown, such as a temp dir declared before it.
 fn engine_with_writer(
+    directory: &Path,
     source: &str,
     write: impl FnMut(&SealedFile) -> Result<(), btel_file::LocalDeliveryError> + Send + 'static,
 ) -> Arc<BexEngine> {
@@ -30,11 +35,12 @@ fn engine_with_writer(
             span_chunks: nz(2),
             max_producers: nz(2),
             preallocate: true,
+            overage_wait_base: btel_settings::transport::OVERAGE_WAIT_BASE_DURATION,
         },
         |control| {
             let failure = control;
             let writer = btel_file::LocalDelivery::with_test_writer(
-                PathBuf::new(),
+                directory.to_path_buf(),
                 btel_file::LocalDeliveryConfig::default(),
                 write,
                 move |error| failure.disable(btel_processor::RuntimeError(error.to_string())),
@@ -67,19 +73,21 @@ fn context() -> crate::FunctionCallContext {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn disk_error_with_full_file_queue_and_chunk_pool_does_not_fail_application() {
+async fn disk_error_with_full_file_queue_lets_the_program_finish_without_failing_it() {
     for errno in [libc::ENOSPC, libc::EIO] {
+        let directory = tempfile::tempdir().unwrap();
         let (entered, started) = mpsc::channel();
         let (release, released) = mpsc::channel();
         let error =
             btel_file::LocalDeliveryError(std::io::Error::from_raw_os_error(errno).to_string());
         let expected = error.to_string();
         let engine = engine_with_writer(
+            directory.path(),
             r#"
             function leaf(n: int) -> int { n + 1 }
             function main() -> int {
                 let n = 0;
-                while (n < 10000) { n = leaf(n); }
+                while (n < 1000) { n = leaf(n); }
                 let child = spawn { leaf(n) };
                 await child
             }
@@ -99,33 +107,31 @@ async fn disk_error_with_full_file_queue_and_chunk_pool_does_not_fail_applicatio
         // The disk worker is held independently of Tokio execution workers.
         started.recv_timeout(Duration::from_secs(5)).unwrap();
         let transport = &engine.telemetry.as_ref().unwrap().runtime;
-        let full = tokio::time::timeout(Duration::from_secs(5), async {
-            loop {
-                let stats = transport.stats();
-                // One chunk is at the blocked writer, eight queued files, one
-                // blocked delivery, and both remaining span chunks are ready.
-                if stats.sealed_chunks >= btel_settings::local_files::QUEUE_FILES.get() + 4
-                    && stats.ready_chunks == 2
-                    && stats.active_producers > 0
-                {
-                    break;
-                }
+        // The writer stays held: the file queue fills, the processor blocks
+        // on it, and the lanes run out. The program finishes anyway, on
+        // chunks allocated beyond the lanes.
+        let value = tokio::time::timeout(Duration::from_secs(30), task).await;
+        // Read before the release: once the writer drains, the lanes shrink
+        // back to their size.
+        let stats = transport.stats();
+        // Always release the writer before assertions, including on regression.
+        release.send(()).unwrap();
+        let value = value
+            .expect("a held writer must not stall the program")
+            .unwrap()
+            .unwrap();
+        assert_eq!(value, BexExternalValue::Int(1001));
+        assert!(stats.sealed_chunks >= btel_settings::local_files::QUEUE_FILES.get() + 4);
+        assert!(stats.allocated_timing_chunks + stats.allocated_span_chunks > 4);
+        // The released writer fails on its own thread; the failure disables
+        // recording without any help from the program.
+        tokio::time::timeout(Duration::from_secs(10), async {
+            while !transport.is_disabled() {
                 tokio::time::sleep(Duration::from_millis(1)).await;
             }
         })
-        .await;
-        let was_blocked = !task.is_finished();
-        // Always release the writer before assertions, including on regression.
-        release.send(()).unwrap();
-        full.expect("both bounded queues must reach saturation");
-        assert!(was_blocked);
-        let value = tokio::time::timeout(Duration::from_secs(10), task)
-            .await
-            .unwrap()
-            .unwrap()
-            .unwrap();
-        assert_eq!(value, BexExternalValue::Int(10001));
-        assert!(transport.is_disabled());
+        .await
+        .expect("the writer's failure disables recording");
         assert!(
             crate::telemetry_state::EngineTelemetry::new_root(engine.telemetry.as_ref()).is_none()
         );
@@ -140,7 +146,7 @@ async fn disk_error_with_full_file_queue_and_chunk_pool_does_not_fail_applicatio
                 .call_function("main", vec![], context(), true)
                 .await
                 .unwrap(),
-            BexExternalValue::Int(10001)
+            BexExternalValue::Int(1001)
         );
         tokio::time::timeout(Duration::from_secs(5), engine.shutdown())
             .await
@@ -163,12 +169,14 @@ async fn disk_error_with_full_file_queue_and_chunk_pool_does_not_fail_applicatio
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn cancelling_shutdown_does_not_reopen_a_closed_transport() {
+    let directory = tempfile::tempdir().unwrap();
     let (entered, started) = mpsc::channel();
     let (release, released) = mpsc::channel();
     let mut first = true;
     // A live manual owner also exercises terminal deferred publication without
     // reserving another producer from this deliberately tiny worker pool.
     let engine = engine_with_writer(
+        directory.path(),
         r#"function main() -> int { let span = trace.start_span("pending"); 1 }"#,
         move |_| {
             if std::mem::take(&mut first) {

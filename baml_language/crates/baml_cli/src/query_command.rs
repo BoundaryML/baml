@@ -110,6 +110,9 @@ fn print_guide() {
     println!(
         "  baml_kind(v)         null, bool, int, float, string, bigint, enum, json (structured), missing, unavailable"
     );
+    println!(
+        "  baml_code(v)         BAML code that rebuilds a recorded type, or an instance's or enum value's type, classes made at run time included; NULL for other values"
+    );
 }
 
 impl QueryArgs {

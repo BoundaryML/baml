@@ -25,8 +25,6 @@ use super::{
 };
 use crate::{BexVm, package_load::StdlibClass};
 
-impl BexVm {}
-
 #[derive(Clone, Debug)]
 struct InterfaceWitness {
     interface_ptr: bex_vm_types::HeapPtr,
@@ -415,6 +413,7 @@ fn mint_class(
         methods: IndexMap::new(),
         generic_param_count: 0,
         owner: bex_vm_types::types::Owner::anonymous(),
+        telemetry_definition: bex_vm_types::DefinitionCell::default(),
     })));
     // The head is built off the declaration that was just allocated, so the
     // type reaches it directly — there is no table to consult and no name
@@ -916,6 +915,7 @@ impl BamlClassEnum for PackageReflectImpl {
             other: IndexMap::new(),
             type_tag,
             owner: bex_vm_types::types::Owner::anonymous(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
         })));
         let ty = bex_vm_types::RealizedTy::Enum(bex_vm_types::TypeHead::new(enum_ptr, type_tag));
         Ok({

@@ -32,7 +32,7 @@ pub mod type_head;
 pub mod types;
 
 pub use bex_str::BexStr;
-pub use btel_types::{FunctionRegistration, TelemetryPolicyId};
+pub use btel_types::{DefinitionCell, FunctionRegistration, TelemetryPolicyId};
 pub use bytecode::{BinOp, Bytecode, CmpOp, Instruction, JumpTableData, UnaryOp};
 pub use heap_ptr::HeapPtr;
 pub use indexable::{
@@ -58,6 +58,27 @@ pub use rust_data::{
     TestRustData,
 };
 pub use type_head::TypeHead;
+
+/// The name prefix of the helper that evaluates one global's initializer.
+const INIT_LET_HELPER_PREFIX: &str = "$init_let.";
+
+/// The rendered name of the helper that evaluates the initializer of the
+/// global rendered `global` (`<package>.<namespace…>.<name>`):
+/// `$init_let.<global>`. The helper's identity
+/// ([`types::FunctionIdentity::InitLet`]) is the global it initializes, so
+/// this is the one spelling every rendering of it uses.
+#[must_use]
+pub fn init_let_helper_name(global: &str) -> String {
+    format!("{INIT_LET_HELPER_PREFIX}{global}")
+}
+
+/// The global a rendered function name initializes, when it is a
+/// [`init_let_helper_name`]: how the engine reads off a failing `$init`'s
+/// stack which global failed.
+#[must_use]
+pub fn init_let_helper_global(function_name: &str) -> Option<&str> {
+    function_name.strip_prefix(INIT_LET_HELPER_PREFIX)
+}
 
 // ── The runtime's instantiation of the `baml_type` family ────────────────────
 //

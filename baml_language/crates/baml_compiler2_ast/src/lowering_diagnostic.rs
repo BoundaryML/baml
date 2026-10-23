@@ -7,6 +7,10 @@ use baml_base::{ClientOptionsValidationError, FileId, Span};
 use baml_compiler_diagnostics::diagnostic::{Diagnostic, DiagnosticId, DiagnosticPhase, Severity};
 use text_size::TextRange;
 
+/// The book chapter on patterns and destructuring, linked from
+/// [`LoweringDiagnostic::InvalidAssignmentTarget`].
+pub const DESTRUCTURING_DOCS_URL: &str = "https://developer.boundaryml.com/baml/book/patterns";
+
 /// Diagnostic emitted during CST → AST lowering.
 ///
 /// These are structural problems ("missing name token", "unparseable type")
@@ -139,12 +143,25 @@ pub enum LoweringDiagnostic {
         span: TextRange,
     },
 
-    /// A source-authored `let` appeared at file scope. Only compiler-synthesized
-    /// globals (such as clients and retry policies) are supported.
-    TopLevelLetNotSupported { span: TextRange },
+    /// A file-scope binding that does not bind exactly one name: a
+    /// destructure, a wildcard, an alias chain, or a `const … else`. A global
+    /// variable is one named binding (optionally annotated with `: T`);
+    /// `reason` says which rule the declaration broke.
+    InvalidTopLevelLet {
+        reason: &'static str,
+        span: TextRange,
+    },
+
+    /// A `let type` binding at file scope. It binds a runtime type for the
+    /// rest of a block, and a file has no block for it to bind in.
+    TopLevelLetType { span: TextRange },
 
     /// `const` currently parses as a non-immutable alias for `let`.
     ConstBindingIntroducer { span: TextRange },
+
+    /// `let` introducing a global variable. A global is declared with `const`;
+    /// `let` declares a reassignable binding, which only a body has.
+    TopLevelLetIntroducer { span: TextRange },
 
     /// `const` is reserved as future language surface and cannot be used as a
     /// binding name.
@@ -155,6 +172,17 @@ pub enum LoweringDiagnostic {
     /// has no value; without this diagnostic it would lower to a `Missing` that
     /// only fails at runtime.
     AssignmentInExpressionPosition { span: TextRange },
+
+    /// The left-hand side of an assignment (`=`, `+=`, …) is not a place:
+    /// e.g. `[x, y] = [1, 2]` or `P { a: a } = mk()`. BAML destructures with
+    /// `let` patterns (`let P { a, b } = v;`, `let P { a: let other_a, b } =
+    /// v;`); the left-hand side of an assignment is an expression, so these
+    /// are a class or array *literal*, not a pattern. Without this diagnostic
+    /// the store went into a temporary and the statement silently did
+    /// nothing. `destructure` is set for a plain `=` into a class or array
+    /// literal, which reads as a destructure; the message then links to
+    /// [`DESTRUCTURING_DOCS_URL`].
+    InvalidAssignmentTarget { span: TextRange, destructure: bool },
 
     /// Parser recovery produced an object-literal node without a constructor
     /// identifier. The AST cannot represent a constructor-less object, so the
@@ -543,10 +571,18 @@ impl LoweringDiagnostic {
                 *span,
                 "type ascription not allowed here",
             ),
-            LoweringDiagnostic::TopLevelLetNotSupported { span } => (
+            LoweringDiagnostic::InvalidTopLevelLet { reason, span } => (
                 DiagnosticId::InvalidSyntax,
                 Severity::Error,
-                "top-level `let` bindings are not supported".to_string(),
+                format!("invalid top-level `const`: {reason}"),
+                *span,
+                "a global variable binds one name: `const NAME = value;` or `const NAME: Type = value;`",
+            ),
+            LoweringDiagnostic::TopLevelLetType { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "`let type` binds a type for the rest of a block, so it is only allowed inside a body"
+                    .to_string(),
                 *span,
                 "move this binding into a function body",
             ),
@@ -556,6 +592,13 @@ impl LoweringDiagnostic {
                 "`const` is currently treated like `let`; BAML does not enforce immutability yet. Use `let` for current BAML semantics.".to_string(),
                 *span,
                 "`const` behaves like `let` for now",
+            ),
+            LoweringDiagnostic::TopLevelLetIntroducer { span } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                "global variables are declared with `const`: `const NAME = value;`".to_string(),
+                *span,
+                "write `const` here; `let` is only allowed inside a body",
             ),
             LoweringDiagnostic::ReservedConstBindingName { span } => (
                 DiagnosticId::InvalidSyntax,
@@ -571,6 +614,23 @@ impl LoweringDiagnostic {
                     .to_string(),
                 *span,
                 "assignment not allowed here",
+            ),
+            LoweringDiagnostic::InvalidAssignmentTarget { span, destructure } => (
+                DiagnosticId::InvalidSyntax,
+                Severity::Error,
+                if *destructure {
+                    format!(
+                        "invalid assignment target; the left side of `=` is an expression, \
+                         not a pattern. To destructure, use a `let` pattern: see \
+                         {DESTRUCTURING_DOCS_URL}"
+                    )
+                } else {
+                    "invalid assignment target; only a variable, a field, or an index can be \
+                     assigned to"
+                        .to_string()
+                },
+                *span,
+                "cannot assign to this expression",
             ),
             LoweringDiagnostic::MissingObjectConstructor { span } => (
                 DiagnosticId::InvalidSyntax,

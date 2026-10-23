@@ -74,6 +74,18 @@ pub mod internal {
         fn baml_ty() -> wire::BamlTy;
     }
 
+    /// Wire `BamlTy` naming a recursive type alias, the one kind of alias
+    /// that exists as a declaration at run time (`baml.json.json`); every
+    /// other alias is spelled by its body.
+    pub fn type_alias_ty(fqn: &str) -> wire::BamlTy {
+        wire::BamlTy {
+            ty: Some(wire::baml_ty::Ty::TypeAlias(wire::BamlTyTypeAlias {
+                head: Some(wire::baml_ty_type_alias::Head::Name(fqn.to_string())),
+                type_args: Vec::new(),
+            })),
+        }
+    }
+
     /// Wire `BamlTy` for a user class instantiation. Generated class impls
     /// call this from [`__BamlValuePrivate::baml_ty`]. `type_args` holds the
     /// class's concrete generic arguments in declaration order (empty for a

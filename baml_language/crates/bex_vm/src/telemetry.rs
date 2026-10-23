@@ -160,6 +160,7 @@ impl FrameTelemetry {
 
 pub use btel_records::{LogLevel, SpanRecord, TimingRecord};
 
+mod definitions;
 mod host;
 pub(crate) mod manual;
 mod snapshot;
@@ -340,11 +341,11 @@ impl TelemetryState {
             #[cfg(all(not(test), not(target_arch = "wasm32")))]
             pending_context_snapshot: None,
             capture_scratch: snapshot::Scratch::default(),
+            // Every capture is consumed as it is written, so at most two are
+            // alive at once: the pool needs no budget, and `capture` can
+            // rely on admission never being refused.
             #[cfg(target_arch = "wasm32")]
-            snapshots: btel_snapshot::SnapshotPool::new(
-                btel_settings::snapshot::MIN_SNAPSHOT_SLOTS,
-                btel_snapshot::Limits::default(),
-            ),
+            snapshots: btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default()),
             auto_level: policies.auto_level(),
             thread: ThreadTelemetry {
                 active_id: id,
@@ -384,8 +385,8 @@ impl TelemetryState {
         function: &Function,
         type_args: CallTypeArgs<'_>,
     ) -> Option<btel_snapshot::Snapshot> {
-        let mut named: Vec<(&str, &bex_vm_types::RealizedTy)> =
-            Vec::with_capacity(function.type_param_names.len());
+        let mut named: smallvec::SmallVec<[(&str, &bex_vm_types::RealizedTy); 4]> =
+            smallvec::SmallVec::with_capacity(function.type_param_names.len());
         for (name, ty) in function.type_param_names.iter().zip(type_args.iter()) {
             // A frame can bind a name twice (a lambda inside a block that
             // rebinds it); the later slot is the one its body sees.
@@ -605,7 +606,9 @@ impl TelemetryState {
 
     /// End an open request's span. An errored one captures its error; where
     /// the error's text quotes one of `raw_urls` (the URLs the request went
-    /// to, as sent), the capture has the sanitized URL instead.
+    /// to, as sent), the capture has the sanitized URL instead. Without
+    /// bodies it captures only the outcome: an error can quote the response
+    /// body, as a failed `send_sse`'s does.
     ///
     /// # Safety
     /// `error` and its reachable objects must remain live under the heap permit.
@@ -618,6 +621,7 @@ impl TelemetryState {
         raw_urls: &[&str],
     ) {
         self.start_thread();
+        let error = error.filter(|_| self.policies.http_bodies());
         let error = error.and_then(|error| {
             let mut rewrites: Vec<_> = raw_urls
                 .iter()
@@ -2375,14 +2379,9 @@ mod tests {
         assert!(captured["request"].get("body").is_none());
         assert_eq!(captured["request"]["method"], "POST");
         assert_eq!((data.name.as_str(), data.payload.is_none()), ("data", true));
+        // The error is not captured: it could quote the body.
         assert_eq!(completion.outcome, InvocationOutcome::Errored);
-        assert!(matches!(
-            completion
-                .error
-                .as_ref()
-                .and_then(btel_snapshot::Snapshot::value),
-            Some(btel_snapshot::SnapshotValue::Int(3))
-        ));
+        assert!(completion.error.is_none());
 
         let mut low = test_state(
             Arc::new(TelemetryPolicies::with_auto_level(AutoTelemetryLevel::Low)),

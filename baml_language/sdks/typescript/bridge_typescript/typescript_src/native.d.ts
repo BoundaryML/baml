@@ -398,5 +398,7 @@ export declare function releaseFunctionCall(callId: string): boolean
 /**
  * Finalize the SDK lifetime, drain work and finish telemetry delivery.
  * Repeated calls are harmless; the OS process's exit outcome remains unknown.
+ * BAML calls made afterwards fail. Runs automatically on `beforeExit`; await
+ * it yourself before `process.exit()` or other early exits.
  */
 export declare function shutdownRuntime(): Promise<void>

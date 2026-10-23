@@ -31,6 +31,16 @@ impl LocalName {
     pub fn under(&self, package: &Name) -> baml_type::TypeName {
         baml_type::TypeName::new(package.clone(), self.namespace.clone(), self.name.clone())
     }
+
+    /// This path rendered under a package labelled `label`: `label.ns.Item`,
+    /// or `ns.Item` with no label. Display only, as the label is.
+    #[must_use]
+    pub fn render_under(&self, label: Option<&Name>) -> String {
+        match label {
+            Some(label) => format!("{label}.{self}"),
+            None => self.to_string(),
+        }
+    }
 }
 
 /// A [`LocalName`] borrowed in parts, for looking a declaration up in a

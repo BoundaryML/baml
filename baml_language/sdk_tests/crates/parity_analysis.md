@@ -2,9 +2,9 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 941. IDs with complete required parity: 193. Required gaps: 5149.
+Distinct exact test IDs: 955. IDs with complete required parity: 207. Required gaps: 5146.
 
-Baseline ratchet: WORSE. Required gaps: 5149 (baseline: 5139). Present declarations: 2547 (baseline: 2495). Newly missing required pairs: 11. Resolved baseline gaps: 1. Weakened requirements: 0.
+Baseline ratchet: BETTER. Required gaps: 5146 (baseline: 5149). Present declarations: 2568 (baseline: 2547). Newly missing required pairs: 0. Resolved baseline gaps: 3. Weakened requirements: 0.
 
 ## Python-baselined parity
 
@@ -120,11 +120,11 @@ Parity is the share of the 455 test IDs declared in `python_pydantic2` that are 
 | function_calls/cancelled_waiter_stays_cancelled_when_callback_returns_late | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/cancelling_call_delivers_cancellation_and_allows_callback_cleanup_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python callback task and event loop ownership |
 | function_calls/canonical_json_class_union_uses_declared_field_codecs | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/canonical_json_composes_through_containers_and_classes | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/canonical_json_defaults_and_callbacks | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/canonical_json_composes_through_containers_and_classes | - | - | - | - | - | - | y | y | - | - | all |  |
+| function_calls/canonical_json_defaults_and_callbacks | - | - | - | - | - | - | y | y | - | - | all |  |
 | function_calls/canonical_json_dynamic_union | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/canonical_json_rejects_extensions_before_dispatch | - | - | - | - | - | - | - | y | - | - | all |  |
-| function_calls/canonical_json_round_trips_at_top_level_and_through_alias | - | - | - | - | - | - | - | y | - | - | all |  |
+| function_calls/canonical_json_round_trips_at_top_level_and_through_alias | - | - | - | - | - | - | y | y | - | - | all |  |
 | function_calls/child_cancellation_does_not_cancel_input | y | y | y | y | - | - | y | - | - | - | all |  |
 | function_calls/clean_exit_helper_process | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/clean_exit_terminates_process_with_code | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -527,6 +527,9 @@ Parity is the share of the 455 test IDs declared in `python_pydantic2` that are 
 | function_calls/runtime_imports_the_generated_sdk_in_the_configured_runtime | - | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/same_callback_recurses_through_baml | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/same_callback_recurses_through_baml_without_reusing_an_entry_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | sync callback re-entry differs between Python and Node |
+| function_calls/same_named_throws_ok_passes_through | - | - | - | - | - | - | y | - | - | - | rust | validates Rust-specific throws variant naming |
+| function_calls/same_named_throws_selects_the_json_parse_error | - | - | - | - | - | - | y | - | - | - | rust | validates Rust-specific throws variant naming |
+| function_calls/same_named_throws_selects_the_stdlib_parse_error | - | - | - | - | - | - | y | - | - | - | rust | validates Rust-specific throws variant naming |
 | function_calls/single_required_arg_round_trips | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/specialized_callable_rejects_type_bindings | y | y | y | y | - | - | - | - | - | - | all |  |
 | function_calls/static_method_errors_never_cancellation_and_collision_names | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -706,6 +709,8 @@ Parity is the share of the 455 test IDs declared in `python_pydantic2` that are 
 | type_shapes/bridge_surface_exports_the_same_runtime_values_in_node_browsers_and_workers | - | y | y | y | - | - | - | - | - | - | all |  |
 | type_shapes/bridge_surface_preserves_the_public_constructor_names | - | y | y | y | - | - | - | - | - | - | all |  |
 | type_shapes/class_refs_make_outer | y | y | y | y | y | - | y | - | y | y | all |  |
+| type_shapes/class_refs_round_trip_async_by_value_or_reference_rust_only | - | - | - | - | - | - | y | - | - | - | rust | Rust class parameters take `impl Borrow<Class>`, so callers pass a value or a reference |
+| type_shapes/class_refs_round_trip_by_value_or_reference_rust_only | - | - | - | - | - | - | y | - | - | - | rust | Rust class parameters take `impl Borrow<Class>`, so callers pass a value or a reference |
 | type_shapes/class_refs_round_trip_inner | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/class_refs_round_trip_outer | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/closed_union_zero_value_returns_an_input_error | - | - | - | - | - | - | - | y | - | - | all |  |
@@ -750,6 +755,13 @@ Parity is the share of the 455 test IDs declared in `python_pydantic2` that are 
 | type_shapes/handles_open_file_returns_file_handle | y | - | - | - | - | - | y | - | y | y | all |  |
 | type_shapes/host_created_media_round_trips_through_optional_list | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates Python host-created media wrapper encoding |
 | type_shapes/host_from_file_reads_now_and_keeps_the_base_name | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | validates the Python media wrapper's from_file, which is BAML's from_file |
+| type_shapes/json_interchange_both_reject_what_baml_rejects | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
+| type_shapes/json_interchange_deserialize_matches_baml | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
+| type_shapes/json_interchange_json_fields_match_baml | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
+| type_shapes/json_interchange_optional_fields_may_be_absent_or_null | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
+| type_shapes/json_interchange_serialize_matches_baml | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
+| type_shapes/json_interchange_serialize_matches_baml_outside_a_class | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
+| type_shapes/json_interchange_unions_take_the_first_arm_that_fits | - | - | - | - | - | - | y | - | - | - | rust | validates the Rust SDK's optional serde impls |
 | type_shapes/lists_round_trip_empty_list | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/lists_round_trip_ints | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/lists_round_trip_list_container | y | y | y | y | y | - | y | - | y | y | all |  |
@@ -819,6 +831,8 @@ Parity is the share of the 455 test IDs declared in `python_pydantic2` that are 
 | type_shapes/opaque_rust_type_default_and_host_callback_positions | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/opaque_rust_type_nested_containers_classes_and_null | - | - | - | - | - | - | - | y | - | - | all |  |
 | type_shapes/opaque_rust_type_round_trips_and_remains_reusable | - | - | - | - | - | - | - | y | - | - | all |  |
+| type_shapes/optional_omitted_nullable_keys_read_as_null | - | y | y | y | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | TypeScript object literals and constructor inits may leave nullable keys out |
+| type_shapes/optional_omitted_required_key_is_rejected | - | y | y | y | - | - | - | - | - | - | typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers | only TypeScript has a type-level check that a required key is present |
 | type_shapes/optional_round_trip_optional_container | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/optional_round_trip_optional_int | y | y | y | y | y | - | y | - | y | y | all |  |
 | type_shapes/optional_round_trip_optional_resume | y | y | y | y | y | - | y | - | y | y | all |  |
@@ -969,21 +983,9 @@ Parity is the share of the 455 test IDs declared in `python_pydantic2` that are 
 
 ## Baseline comparison
 
-### Newly missing required pairs
-
-- `function_calls/host_callable_hof_receives_a_baml_closure` in `csharp`
-- `function_calls/host_callable_hof_receives_a_baml_closure` in `go`
-- `function_calls/host_callable_two_cbs_callbacks_named_f_and_f_returns_both_run` in `csharp`
-- `function_calls/json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result` in `csharp`
-- `function_calls/json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result` in `rust`
-- `function_calls/json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument` in `csharp`
-- `function_calls/json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument` in `rust`
-- `type_shapes/media_round_trip_all_media` in `csharp`
-- `type_shapes/media_round_trip_all_media` in `rust`
-- `type_shapes/media_round_trip_media_or_image_class` in `csharp`
-- `type_shapes/media_round_trip_media_or_image_class` in `rust`
-
 ### Resolved baseline gaps
 
-- `type_shapes/media_round_trip_image_or_audio` in `java`
+- `function_calls/canonical_json_composes_through_containers_and_classes` in `rust`
+- `function_calls/canonical_json_defaults_and_callbacks` in `rust`
+- `function_calls/canonical_json_round_trips_at_top_level_and_through_alias` in `rust`
 

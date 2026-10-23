@@ -73,7 +73,7 @@ pub fn parse_class(class: &Class, field_types: &[RealizedTy]) -> ParseClass {
     }
 }
 
-/// The definition of `enm`, without its skipped variants.
+/// The definition of `enm`, its skipped variants included and marked.
 #[must_use]
 pub fn enum_definition(enm: &Enum) -> EnumDefinition {
     EnumDefinition {
@@ -81,15 +81,15 @@ pub fn enum_definition(enm: &Enum) -> EnumDefinition {
         description: enm.description.clone(),
         docstring: enm.docstring.clone(),
         alias: enm.alias.clone(),
-        variants: enm
+        declared_variants: enm
             .variants
             .iter()
-            .filter(|variant| !variant.skip)
             .map(|variant| EnumVariantDefinition {
                 name: variant.name.clone(),
                 description: variant.description.clone(),
                 docstring: variant.docstring.clone(),
                 alias: variant.alias.clone(),
+                skip: variant.skip,
             })
             .collect(),
     }
@@ -187,6 +187,7 @@ mod tests {
             generic_param_count: 0,
             owner: Owner::anonymous(),
             methods: IndexMap::new(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
         };
 
         let definition = class_definition(&class);
@@ -201,7 +202,7 @@ mod tests {
     }
 
     #[test]
-    fn enum_definition_leaves_out_skipped_variants() {
+    fn enum_definition_marks_skipped_variants() {
         let enm = Enum {
             path: LocalName::new(Vec::new(), Name::new("Color")),
             type_tag: TypeTag::fresh_dynamic(),
@@ -211,15 +212,21 @@ mod tests {
             docstring: None,
             other: IndexMap::new(),
             owner: Owner::anonymous(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
         };
 
         let definition = enum_definition(&enm);
 
         let names: Vec<&str> = definition
-            .variants
-            .iter()
+            .variants()
             .map(|variant| variant.name.as_str())
             .collect();
         assert_eq!(names, ["Red"]);
+        let declared: Vec<&str> = definition
+            .declared_variants
+            .iter()
+            .map(|variant| variant.name.as_str())
+            .collect();
+        assert_eq!(declared, ["Red", "Hidden"]);
     }
 }

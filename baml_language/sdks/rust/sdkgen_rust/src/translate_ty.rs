@@ -8,6 +8,7 @@
 //! caller skips the enclosing symbol and reports it — never erasing to a
 //! catch-all type.
 
+use baml_base::qualified_name::BAML_JSON_JSON;
 use baml_sdkgen_types::{CodegenFunctionParamMode, Name, Ty};
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -68,6 +69,17 @@ pub(crate) fn translate_throws(ty: &Ty, ctx: &TyCtx<'_>) -> Result<TokenStream, 
         return Ok(quote! { ::core::convert::Infallible });
     };
     translate(&filtered, ctx)
+}
+
+/// Whether `name` is the stdlib's recursive `baml.json.json` alias. A
+/// recursive alias cannot be a plain Rust `type`, so this one alias is
+/// special-cased: it translates to `baml_bridge::Json` (`serde_json::Value`)
+/// wherever it is referenced, whether or not its alias item is in the pool.
+/// Matched by its exact compiler-owned FQN, never by the shape of its
+/// expansion, so a look-alike user alias keeps the ordinary recursive-alias
+/// treatment.
+pub(crate) fn is_canonical_json(name: &Name) -> bool {
+    name == &Name::from_dotted_path(BAML_JSON_JSON)
 }
 
 /// The absolute `crate::…` path of an emitted nominal type.
@@ -165,7 +177,9 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
                     let boxed = !under_heap
                         && ctx.boxing_for.is_some_and(|owner| {
                             arms.iter().any(|arm| match arm {
-                                Ty::Class(name, _) => ctx.analysis.needs_box(owner, name),
+                                Ty::Class(name, _) | Ty::TypeAlias(name) => {
+                                    ctx.analysis.needs_box(owner, name)
+                                }
                                 _ => false,
                             })
                         });
@@ -240,19 +254,27 @@ fn translate_inner(ty: &Ty, ctx: &TyCtx<'_>, under_heap: bool) -> Result<TokenSt
             Ok(type_path(name, ctx.analysis))
         }
         Ty::Media(kind) => Err(unsupported(&format!("media ({kind})"))),
-        // Opaque alias references (in-package non-recursive aliases are
-        // inlined upstream, so these are recursive or cross-package ones).
-        // A Rust `type` alias is transparent, so the reference resolves to
-        // the underlying type's conversions; no boxing is needed because
-        // package dependencies are acyclic, so a cross-package alias can
-        // never sit on a containment cycle.
+        Ty::TypeAlias(name) if is_canonical_json(name) => Ok(quote! { ::baml_bridge::Json }),
+        // Alias references stay nominal in the pool. A Rust `type` alias is
+        // transparent, so the reference resolves to the underlying type's
+        // conversions; it also holds its target inline, so on a containment
+        // cycle it is boxed like a class reference.
         Ty::TypeAlias(name) => {
             if !ctx.analysis.is_emitted(name) {
                 return Err(Unsupported {
                     reason: format!("references skipped or unknown type `{name}`"),
                 });
             }
-            Ok(type_path(name, ctx.analysis))
+            let path = type_path(name, ctx.analysis);
+            let boxed = !under_heap
+                && ctx
+                    .boxing_for
+                    .is_some_and(|owner| ctx.analysis.needs_box(owner, name));
+            if boxed {
+                Ok(quote! { ::std::boxed::Box<#path> })
+            } else {
+                Ok(path)
+            }
         }
         // A TypeVar naming one of the enclosing generic function's own
         // `<...>` params translates to that Rust generic parameter. The

@@ -22,7 +22,7 @@ pub use routing::namespace_segments;
 pub use string_literal::quoted_string;
 pub use symbols::*;
 pub use ty::*;
-pub use type_queries::public_interface_tokens;
+pub use type_queries::{is_nullable, public_interface_tokens};
 
 /// Macro to define an askama template function with less boilerplate.
 ///

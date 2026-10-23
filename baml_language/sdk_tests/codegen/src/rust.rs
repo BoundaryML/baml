@@ -87,17 +87,16 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
     // Rust-only: typed error surfaces from callback-throws inference (python/TS
     // erase `throws`, so there is no cross-language counterpart).
     ("function_calls", "test_callback_throws.rs", Gate::Now),
+    // Rust-only: a throws contract with two same-named errors (python/TS
+    // erase `throws`).
+    ("function_calls", "test_same_named_throws.rs", Gate::Now),
     ("function_calls", "test_methods_on_classes.rs", Gate::Now),
     (
         "function_calls",
         "test_optional_args.rs",
         Gate::Later("needs the optional-arg matrix and methods on classes"),
     ),
-    (
-        "function_calls",
-        "test_json.rs",
-        Gate::Later("needs a canonical baml.json.json projection in sdkgen_rust"),
-    ),
+    ("function_calls", "test_json.rs", Gate::Now),
     ("function_calls", "test_raises.rs", Gate::Now),
     (
         "function_calls",
@@ -125,6 +124,13 @@ const TEST_MODS: &[(&str, &str, Gate)] = &[
         Gate::Now,
     ),
     ("type_shapes", "roundtrip_tests/test_generics.rs", Gate::Now),
+    // Rust-only: the optional `serde` impls agree with BAML's own JSON (no
+    // other SDK has a `serde` feature).
+    (
+        "type_shapes",
+        "roundtrip_tests/test_json_interchange.rs",
+        Gate::Now,
+    ),
     (
         "type_shapes",
         "roundtrip_tests/test_handles.rs",

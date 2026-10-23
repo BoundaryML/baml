@@ -115,9 +115,11 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 /// Version 23: `FunctionMeta::Llm` lost its `client` string and marks every
 /// LLM function, including one whose client is an expression.
 ///
-/// Version 24: a `Class` carries its `crossing`, how an instance crosses the
+/// Version 24 adds the publisher's `http_bodies` setting to the telemetry
+/// policy in the packed dispatch envelope.
+/// Version 25: a `Class` carries its `crossing`, how an instance crosses the
 /// host boundary.
-pub const FORMAT_VERSION: u32 = 24;
+pub const FORMAT_VERSION: u32 = 25;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.

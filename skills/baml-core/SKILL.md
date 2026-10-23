@@ -54,7 +54,8 @@ Mostly it behaves like JavaScript/TypeScript, with very similar syntax — but B
 - **No ternary — `if/else` is the expression.** There's no `cond ? a : b`; `if (cond) { a } else { b }` *is* an expression that returns a value, so assign it directly: `let label = if (x > 3) { "big" } else { "small" };`. Each branch is a block whose last expression is its value (no `return`). Chain with `else if`, and pair with `if let PATTERN = expr { … } else { … }` for bind-and-narrow.
 - **Conditions use truthiness.** `if`, `while`, match guards, `&&`, `||`, and `!` accept any value. Falsy values are `false`, `null`, numeric zero, empty strings, empty arrays/maps, and empty bytes; everything else is truthy. `&&` and `||` still return `bool`, not an operand value; they short-circuit. A truthy optional local narrows in the taken branch and on the right side of `&&` (`s && s.length() > 0`).
 - **Arrays have a JS-like method set** — `map`/`filter`/`filter_map`/`reduce`/`find`/`some`/`every`/`flat_map`/`slice`/`concat`/`join`/`includes`/length(), plus in-place `push`/`pop`/`shift`/`unshift`/`sort_by`/`sort_by_key`. Most take closures that can `throws`. `baml describe Array` gives more info.
-- Local let bindings are reassignable (x = x + 1) — no mut keyword (it's TS let, not Rust); there's no const either.
+- Local let bindings are reassignable (x = x + 1) — no mut keyword (it's TS let, not Rust); inside a body `const` currently means the same as `let`, so use `let` for locals.
+- **Global variables = top-level `const`.** `const MAX_RETRIES = 3;` / `const TAGS: string[] = ["a"];` at file scope (a top-level `let` is an error). Evaluated **once at startup**, in dependency order (forward references are fine; a cycle is E0181). Visible bare in its namespace; elsewhere `root.<ns>.NAME`. The binding is **immutable** (`X = …` is E0179), but its contents are shared by every call: `X.field = v` / `X.push(…)` mutate one engine-wide value. Initializers can't do io (read config with `env.NAME` at request time), `spawn`/`await`, or `return`; an uncaught throw stops startup (warning E0183 — `catch` it). Locals/params shadow globals. Reflection: `reflect.Package.current().globals()` maps each global (clients included) to its value; `get_global<T>(name)` / `find_global<T>(name)` read one by name.
 - **Args: defaults with `=`, keyword calls with `=` (never `:`).** Declare a default in the signature: `function f(a: int, b: int = 10)`; call `f(1)` or `f(1, b = 2)`. A **defaulted param must be passed by name** — `f(1, 2)` is an error (`defaulted parameter 'b' must be passed by name`). Any param (even required) may be passed by name (`f(a = 1, b = 2)`), and you can skip a middle default to set a later one (`f(1, c = 9)`). Keyword syntax is `name = value`; `name: value` won't parse (`:` is for types/fields). **`T?` does NOT make an argument optional** — unlike TS `b?: T`, a `b: T?` param is still *required* (you must pass `null`, else `expected N argument(s), got …`); add `= null` to make it omittable. Built-ins follow this: `baml.http.fetch(url, timeout = baml.time.Duration.from_seconds(10))`.
 - **Where it diverges from TS (the silent traps):** arithmetic is *type-driven*, not TS-style. `int / int` is **truncating integer division** (`285 / 100 == 2`, NOT `2.85`) and `%` is the remainder (`285 % 100 == 85`); this compiles fine and just gives a quietly-wrong number, so it's the highest-value gotcha. Mix in a float to get float division (`285 / 100.0 == 2.85`, `285.0 / 100 == 2.85`); any mixed `int`/`float` op promotes to `float` (`5 + 2.0 == 7.0`). There is **no `.to_float()`** — convert an int with `n * 1.0` (or divide by a float). An `int` result does **not** auto-coerce to `float` on assignment (`let x: float = 285 / 100` is a compile error). `+` is **numeric-only**: string concat needs both sides already `string` (`"n=" + 5` won't compile — use `${...}` interpolation). Comparisons (`==`, `<`, …, structural `==`) and `&&`/`||`/`!` are TS-like.
 - **Tests:** lone `test "name" { ... }` (no wrapper); `testset` only GROUPS. Asserts (only 6): `assert.equal`/`approx_equal`/`is_true`/`is_type`/`not_null`/`contains`. `assert.equal` compares **structurally** (deep, across classes/arrays/maps) — and so does plain `==`, which is the bool form. `assert.equal` is *exact* on floats; use `assert.approx_equal(actual, expected, eps)` for computed ones. Last assert: no trailing `;`. Canonical IDs are `root::TestName` for a top-level test and `root::Testset::TestName` inside a testset. Run one with `baml test -i "root::TestName"` (`-x` to exclude); `baml test --list` prints valid selectors.
@@ -99,6 +100,32 @@ Use it for logs, progress, and cost. A listener that throws can't fail the run (
 To add cross-cutting behavior (metering, caching, replay, budgets), write a class that `implements ai.Runner { type Error = …; function run<Out>(self, spec: ai.FunctionSpec<Out>) -> ai.RunResult<Out> throws Self.Error }`, usually wrapping an inner `ai.Agent`. To fake or wrap a model, write one that `implements ai.Client { id, render, invoke }`. Pass either wherever a client or runner is taken, and keep AI functions free of that plumbing.
 
 For anything not shown (signatures, niche stdlib, advanced features), run **`baml describe <name>`** — the CLI is the docs; never guess the stdlib.
+
+## Debugging a recorded call
+
+Runs record their calls, and AI functions record their inputs, output, error and type arguments by default. `baml query` answers SQL over them (`baml query --schema` lists the tables). To turn a failing call into a test:
+
+```bash
+# 1. Find the call.
+baml query "SELECT span_id, input_args, error_value FROM spans
+  WHERE span_name = 'user.Extract' AND error_value IS NOT NULL ORDER BY start_time DESC LIMIT 1"
+# 2. Its types as BAML code, classes and enums built at run time included.
+#    baml_code also takes an instance or enum value: input_args['row'].
+baml query "SELECT baml_code(type_args['T']) FROM spans WHERE span_id = '<span_id>'"
+# 3. The model's raw HTTP response, from the request under the call.
+baml query "SELECT network_event_values FROM spans
+  WHERE span_type = 'network_span' AND parent_span_id = '<span_id>' ORDER BY start_time"
+```
+
+`baml_code` returns a block whose value is the recorded type: bind it with `let type`. Replay the model's reply with `F@parse`, so the test never calls the model:
+
+```baml
+test "Extract fails on the recorded Row" {
+    let t = { /* step 2's code */ };
+    let type T = t;
+    let row = Extract@parse<T>(`/* the message text from step 3's response */`);
+}
+```
 
 ## Example 1 — LLM DSL + glue (schema, attributes, client, backtick prompt, post-processing)
 

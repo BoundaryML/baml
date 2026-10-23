@@ -1112,6 +1112,19 @@ pub fn register(conn: &Connection, slot: &ContextSlot) -> rusqlite::Result<()> {
         Ok(Some(current(&s)?.resolve(handle)?.1.label()))
     })?;
     let s = slot.clone();
+    conn.create_scalar_function("__btel_code", 1, io, move |ctx| {
+        let Some(handle) = opt_blob(ctx, 0)? else {
+            return Ok(None);
+        };
+        let cx = current(&s)?;
+        Ok(cx
+            .with_nav(handle, |nav| match nav {
+                Nav::Value(found) => value::render_code(&*cx, found, &cx.limits.render),
+                Nav::Arguments(_) | Nav::Missing | Nav::Unavailable(_) => None,
+            })?
+            .flatten())
+    })?;
+    let s = slot.clone();
     conn.create_scalar_function("__btel_is_null", 1, io, move |ctx| {
         let Some(handle) = opt_blob(ctx, 0)? else {
             // No capture at all: null-like.
@@ -1264,7 +1277,7 @@ pub(crate) enum Inline {
 /// An inline value's handle: its snapshot travels inside the handle, which
 /// carries one blob, so the value is kept whole.
 pub(crate) fn inline_handle(value: &Inline) -> Vec<u8> {
-    let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+    let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
     let mut builder = pool.try_acquire().expect("a fresh pool has a slot");
     let root = build_inline(&mut builder, value);
     let mut whole = btel_snapshot::Shaper::new(btel_snapshot::ShapePolicy::Whole);

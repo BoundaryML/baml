@@ -198,12 +198,15 @@ namespace baml.iter:
   function flatten<R, E, E3, I>
 namespace baml.json:
   class DecodeError { methods: [] }
+  enum Naming
   class ParseError { methods: [] }
   class PathError { methods: [] }
   class SerializationError { methods: [] }
   type json
+  function _from_string<T>
   function _path_field
   function _path_index
+  function _schema
   function deserialize<T>
   function field
   function from<T>

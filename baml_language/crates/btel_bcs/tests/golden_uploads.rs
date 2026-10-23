@@ -95,7 +95,7 @@ fn sources(pool: &SnapshotPool, count: usize) -> (SealedFile, Vec<Snapshot>) {
 }
 
 fn source_manifest() -> Value {
-    let pool = SnapshotPool::new(5, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut recordings = Vec::new();
     let mut blobs = Vec::new();
     for count in [0, 1, 2, 5] {
@@ -268,7 +268,7 @@ async fn check_case(case: &str) {
         )
         .unwrap(),
     );
-    let pool = SnapshotPool::new(5, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let (file, snapshots) = sources(&pool, request.candidates.len());
     delivery
         .handle()

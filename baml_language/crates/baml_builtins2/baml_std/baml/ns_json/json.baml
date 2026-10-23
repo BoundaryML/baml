@@ -9,6 +9,22 @@
 /// Reach an arm with `match`, or hand the value to `to<T>`.
 type json = null | bool | int | bigint | float | string | json[] | map<string, json>;
 
+/// Which names a class's fields and an enum's variants go by in JSON.
+///
+/// `schema` and `from_string<T>` take one, and agree on every key when given
+/// the same one.
+enum Naming {
+    /// The declared names. `@alias` and `@skip` have no effect: every field
+    /// and variant appears, under the name it is declared with. This is the
+    /// interchange form `to_json` writes.
+    Declared,
+    /// The names a model is shown. A field or variant goes by its `@alias`
+    /// when it has one, and a `@skip` field or variant does not appear. A
+    /// `@skip` field read from JSON holds its type's empty value (`null`, `0`,
+    /// `""`, `[]`, ...), as it does when `baml.sap` parses a model's answer.
+    Aliased,
+}
+
 /// A JSON syntax error.
 ///
 /// Only the entry points that read text raise this: `parse`, `from_string<T>`,
@@ -164,11 +180,19 @@ function from<T>(value: T) -> json throws SerializationError {
 /// it need not be statically known at the call site. The text is parsed first,
 /// then the parsed tree is walked driven by that runtime type.
 ///
-/// Per BEP-038, JSON interchange uses raw field names, so `@alias` and `@skip`
-/// have no effect here. Every declared field must be present, except that an
-/// optional (`T?`) field may be absent and decodes to `null`. Unrecognized
-/// keys in the object are ignored. A union tries its members in declaration
-/// order and takes the first that decodes.
+/// `naming` picks the names fields and variants go by. The default,
+/// `Naming.Declared`, is BEP-038's interchange form: declared names, with
+/// `@alias` and `@skip` having no effect. `Naming.Aliased` reads the names a
+/// model is shown, which `schema(t, naming = Naming.Aliased)` describes: a
+/// member's `@alias`, and no `@skip` member. A `@skip` field then holds its
+/// type's empty value, and is an error when its type has none (media, a
+/// function, a class that contains itself).
+///
+/// Every field JSON carries must be present, except that a field that can be
+/// `null` may be absent and decodes to `null`. Unrecognized keys in the
+/// object are ignored. A union tries its members in declaration order and
+/// takes the first that decodes. A recursive alias decodes as its
+/// definition.
 ///
 /// This is the *structural* text path, and the only one that fills
 /// `DecodeError.path` with a full location. `deserialize<T>` is the same job
@@ -179,8 +203,17 @@ function from<T>(value: T) -> json throws SerializationError {
 ///
 /// - `baml.json.ParseError` if `s` is not valid JSON.
 /// - `baml.json.DecodeError` if the parsed JSON does not fit `T`.
+function from_string<T>(
+    s: string,
+    naming: Naming = Naming.Declared,
+) -> T throws ParseError | DecodeError {
+    _from_string<T>(s, naming == Naming.Aliased)
+}
+
+/// `from_string<T>`, with `naming` as a flag: aliased names when `aliased`
+/// holds.
 //baml:mut_vm
-function from_string<T>(s: string) -> T throws ParseError | DecodeError {
+function _from_string<T>(s: string, aliased: bool) -> T throws ParseError | DecodeError {
     $rust_function
 }
 
@@ -459,15 +492,43 @@ function path_or<T>(j: json, selector: string, default: T) -> T throws never {
 ///
 /// Optional fields are omitted from `required`, maps use schema-valued
 /// `additionalProperties`, and unions use `anyOf`. Enums lower to a string
-/// `enum` of their variant names, `uint8array` to `string`, and `unknown` to
-/// the empty schema `{}`. A nullable type becomes a `["T", "null"]` type list
-/// where it can, and `anyOf` otherwise. A nullable enum also lists `null` in
-/// its `enum`, and a nullable literal uses `anyOf`, because `enum` and `const`
-/// restrict the value whatever `type` says.
+/// `enum` of their variant names. A nullable type becomes a `["T", "null"]`
+/// type list where it can, and `anyOf` otherwise. A nullable enum also lists
+/// `null` in its `enum`, and a nullable literal uses `anyOf`, because `enum`
+/// and `const` restrict the value whatever `type` says.
 ///
-/// This pass *does* respect `@alias` and `@skip`, where the value conversions
-/// do not — a schema is read by something outside BAML, so it must describe
-/// the wire names. That is also why an enum variant lowers under its alias.
+/// An `int` carries its range as `minimum` and `maximum`. A `bigint` is a
+/// decimal string (`"-12"`), because a JSON number that large loses precision
+/// in most parsers; a bigint literal is that string as a `const`. A media value
+/// is the tagged object `{ kind, source, value, mime, name? }`, where `source`
+/// is `"url"` or `"base64"`. A map's key type must be `string`, or string
+/// literals, which become `propertyNames`.
+///
+/// Some types have values but no JSON form: `uint8array`, functions, futures,
+/// `reflect.Type`, a class that requires one of those, and a class whose every
+/// value is cyclic (JSON holds only finite values). Others have no values at
+/// all: `never`, an enum with no variants, and a class that requires one of
+/// those. Both kinds are dropped from a union, so `uint8array | int | string`
+/// lowers as `int | string`, and an optional field of either kind is only
+/// `null`. They differ inside a list or map:
+///
+///     never[]                 // only []: { "type": "array", "maxItems": 0 }
+///     map<string, never>      // only {}
+///     uint8array[]            // no JSON form: the list is dropped like its items
+///     map<string, uint8array> // no JSON form
+///
+/// A list of a type with no values is still a list, the empty one. A list of
+/// `uint8array` is not reduced to `[]`: that would describe only the lists the
+/// type can hold when they happen to be empty.
+///
+/// A type whose values all lack a JSON form, or that has no values, is
+/// rejected rather than lowered to a schema nothing can satisfy.
+///
+/// `naming` picks the names fields and variants go by, as it does for
+/// `from_string<T>`, so a schema and the decoder given the same `naming` agree
+/// on every key. With `Naming.Aliased`, a `@skip` field holds its type's
+/// empty value, so a class with a `@skip` field whose type has none (media, a
+/// function, a class that contains itself) has no JSON form.
 ///
 /// Documentation becomes `description`, with the text the output format
 /// shows: a class's or a field's `@description`, then its `///` docstring. A
@@ -479,13 +540,28 @@ function path_or<T>(j: json, selector: string, default: T) -> T throws never {
 /// The root type is emitted inline, and every class and named alias beneath it
 /// goes into `$defs` to be reached by `$ref`. That is what lets a recursive
 /// graph terminate: a recursive root is emitted both inline and into `$defs`,
-/// so the `$ref` back to itself resolves.
+/// so the `$ref` back to itself resolves. Definitions are keyed by name; when
+/// two share one, the later gets a `_2` (then `_3`, ...) suffix.
 ///
 /// # Throws
 ///
-/// - `baml.errors.Unsupported` for a type with no JSON Schema form, and for a
-///   class, enum, or alias the reflection context cannot resolve.
-function schema(t: reflect.Type) -> json throws root.errors.Unsupported {
+/// - `baml.errors.Unsupported` when no value of `t` has a JSON form, or `t` has
+///   no values.
+/// - `baml.errors.Unsupported` for a type no schema describes exactly:
+///   `unknown`, an interface type, media that does not name its kind, a map
+///   whose key is not `string` or string literals, and a generic class
+///   instance.
+/// - `baml.errors.Unsupported` for a class, enum, or alias the reflection
+///   context cannot resolve.
+function schema(
+    t: reflect.Type,
+    naming: Naming = Naming.Declared,
+) -> json throws root.errors.Unsupported {
+    _schema(t, naming == Naming.Aliased)
+}
+
+/// `schema`, with `naming` as a flag: aliased names when `aliased` holds.
+function _schema(t: reflect.Type, aliased: bool) -> json throws root.errors.Unsupported {
     $rust_io_function
 }
 

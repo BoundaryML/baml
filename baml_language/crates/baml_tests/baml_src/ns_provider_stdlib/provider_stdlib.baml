@@ -161,3 +161,18 @@ test "provider stdlib JSON paths preserve brackets in quoted keys" {
 test "provider stdlib exposes schema aligned parsing" {
   assert.equal(baml.sap.parse<int>("42"), 42)
 }
+
+/// Takes any JSON the model sends.
+function provider_schema_open(extra: unknown) -> string {
+  "ok"
+}
+
+// An `unknown` parameter receives the argument as the model sent it, so its
+// schema is that of `json`, not the empty schema.
+test "a reflected tool describes an unknown parameter as json" {
+  let schema = baml.json.to_json(ai.tools.tool(provider_schema_open).input_schema);
+  let reference = baml.json.path<string>(schema, ".properties.extra.$ref");
+  assert.equal(reference, "#/$defs/extra.baml.json.json");
+  let definitions = baml.json.path<map<string, json>>(schema, ".$defs");
+  assert.is_true(definitions.has("extra.baml.json.json"));
+}

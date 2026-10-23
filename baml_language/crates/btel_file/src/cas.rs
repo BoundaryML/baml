@@ -138,7 +138,7 @@ mod tests {
     #[test]
     fn known_blobs_are_forgotten_at_capacity() {
         let root = tempfile::tempdir().unwrap();
-        let pool = SnapshotPool::new(2, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let snapshot = |n| {
             pool.try_acquire()
                 .unwrap()
@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn a_missing_shard_directory_is_made_when_a_blob_needs_it() {
         let root = tempfile::tempdir().unwrap();
-        let pool = SnapshotPool::new(2, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let snapshot = |n| {
             pool.try_acquire()
                 .unwrap()

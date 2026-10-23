@@ -422,7 +422,20 @@ impl Printable for SourceFile {
         assert_eq!(shape.width, printer.config.line_width);
 
         for (idx, decl) in self.items.iter().enumerate() {
-            if idx > 0 {
+            // Items are separated by a blank line, except that a run of
+            // global variables keeps the grouping it was written with:
+            // adjacent globals stay adjacent, and a blank line the author put
+            // between two of them stays (collapsed to one).
+            let grouped_with_previous = idx > 0
+                && matches!(decl, TopLevelDeclaration::Let(_))
+                && matches!(self.items[idx - 1], TopLevelDeclaration::Let(_))
+                && !has_blank_line(
+                    &printer.input[TextRange::new(
+                        self.items[idx - 1].rightmost_token().end(),
+                        decl.leftmost_token().start(),
+                    )],
+                );
+            if idx > 0 && !grouped_with_previous {
                 printer.print_newline();
             }
 
@@ -453,6 +466,16 @@ impl Printable for SourceFile {
             .map(Printable::rightmost_token)
             .unwrap_or_default()
     }
+}
+
+/// Whether `gap` — the source between two items, comments included —
+/// contains an empty line.
+fn has_blank_line(gap: &str) -> bool {
+    let lines: Vec<&str> = gap.split('\n').collect();
+    lines.len() > 2
+        && lines[1..lines.len() - 1]
+            .iter()
+            .any(|line| line.trim().is_empty())
 }
 
 #[cfg(test)]

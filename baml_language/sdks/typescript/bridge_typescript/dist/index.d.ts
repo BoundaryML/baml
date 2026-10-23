@@ -9,6 +9,7 @@ import './bridge_path.js';
 import { BamlRuntime } from './native.js';
 import './media.js';
 export { BamlRuntime, BamlHandle, getRuntime, getBridgeRuntimeVersion, getToolchainVersion, getVersion, } from './native.js';
+export { shutdownRuntime } from './native.js';
 export { _seedGenericMediaHandle } from './native.js';
 export { BamlImage, BamlAudio, BamlVideo, BamlPdf } from './native.js';
 export { BamlStream } from './stream.js';

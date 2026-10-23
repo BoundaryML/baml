@@ -475,10 +475,26 @@ impl<'db, T> MemberResolution<'db, T> {
 /// `MemberResolution`; this table is for paths whose ROOT is a value.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResolvedPath<'db, T = baml_type::Ty> {
-    /// One entry per written segment: entry 0 is the root (a local,
-    /// parameter, or template param - no member resolution), entry
-    /// `i > 0` the member access the `i`-th segment performs.
+    /// The ladder: entry 0 is the root value (no member resolution), entry
+    /// `i > 0` the `i`-th member access after it. For a qualified global the
+    /// written qualifiers have no entry — see
+    /// [`InferenceResult::path_segment_at_written`].
     pub segments: Vec<ResolvedPathSegment<'db, T>>,
+}
+
+/// A path expression whose leading written segments name a top-level `let`
+/// (a global variable, a client, or a Session's persisted binding): bare
+/// `x` in the binding's own namespace, `root.ns.x` / `dep.ns.x`
+/// elsewhere. Recorded by the checker so MIR loads the global without
+/// re-resolving the spelling, and so the initialization-order analysis reads
+/// its edges from resolved references rather than names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GlobalRoot<'db> {
+    /// The binding: a source `let`, or an exported row of a package served
+    /// from its interface.
+    pub binding: crate::extern_loc::GlobalRef<'db>,
+    /// How many written segments name the binding (`1` for a bare name).
+    pub segments: usize,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -789,6 +805,17 @@ enum PendingDiag<'db> {
         name: baml_type::Name,
         suggestions: Box<[baml_type::Name]>,
     },
+    /// A `return` directly in a source global's initializer.
+    ReturnInGlobalInitializer {
+        at: crate::diagnostics::DiagnosticLocation,
+        name: baml_type::Name,
+    },
+    /// An assignment whose target is a top-level binding.
+    AssignmentToGlobal {
+        target: ExprId,
+        name: baml_type::Name,
+        is_client: bool,
+    },
     TopLevelLetCycle {
         expr: ExprId,
     },
@@ -969,6 +996,10 @@ enum PendingDiag<'db> {
         offset: Option<usize>,
     },
     MountedPackageCallUnsupported {
+        expr: ExprId,
+        path: baml_type::Name,
+    },
+    InvalidAssignmentTarget {
         expr: ExprId,
         path: baml_type::Name,
     },
@@ -1273,6 +1304,10 @@ pub struct InferenceResult<'db, T = baml_type::Ty> {
     /// field-chain-vs-method decisions read the ladder instead of
     /// re-resolving.
     pub path_resolutions: FxHashMap<ExprId, ResolvedPath<'db, T>>,
+    /// Path expressions rooted at a top-level `let`, keyed by the path
+    /// expression. MIR loads the global from here; the init-order analysis
+    /// reads its dependency edges from here.
+    pub global_roots: FxHashMap<ExprId, GlobalRoot<'db>>,
     /// Per-call argument matching and solved instantiations, keyed by the
     /// CALL expression. S16: MIR's argument emission and `LoadType`
     /// operands read this instead of re-planning.
@@ -1305,6 +1340,7 @@ impl<T> InferenceResult<'_, T> {
             diagnostics: Vec::new(),
             member_resolutions: FxHashMap::default(),
             path_resolutions: FxHashMap::default(),
+            global_roots: FxHashMap::default(),
             call_plans: FxHashMap::default(),
             type_bindings: FxHashMap::default(),
             expr_adjustments: FxHashMap::default(),
@@ -1312,7 +1348,29 @@ impl<T> InferenceResult<'_, T> {
     }
 }
 
-impl<T> InferenceResult<'_, T> {
+impl<'db, T> InferenceResult<'db, T> {
+    /// How many written segments of path `expr` qualify its root value: the
+    /// package and namespace segments of a qualified global
+    /// ([`GlobalRoot::segments`]), else `0`.
+    pub fn path_root_qualifiers(&self, expr: ExprId) -> usize {
+        self.global_roots
+            .get(&expr)
+            .map_or(0, |root| root.segments.saturating_sub(1))
+    }
+
+    /// The ladder entry of path `expr` for WRITTEN segment `written`: `None`
+    /// for the qualifiers of a qualified global, which name no value.
+    pub fn path_segment_at_written(
+        &self,
+        expr: ExprId,
+        written: usize,
+    ) -> Option<&ResolvedPathSegment<'db, T>> {
+        self.path_resolutions
+            .get(&expr)?
+            .segments
+            .get(written.checked_sub(self.path_root_qualifiers(expr))?)
+    }
+
     /// Whether `expr` holds a condition the checker marked for truthiness
     /// coercion ([`Adjust::Truthy`]).
     pub fn is_truthy_condition(&self, expr: ExprId) -> bool {
@@ -1568,7 +1626,16 @@ fn infer_body_impl<'db>(
                 None,
             )
         }
-        BodyOwnerId::Let(_) => (Vec::new(), Vec::new(), None, None),
+        // A global's initializer checks against its annotation the way a
+        // function body checks against its declared return type.
+        BodyOwnerId::Let(binding) => (
+            Vec::new(),
+            Vec::new(),
+            crate::lower::let_declared_type(db, binding)
+                .as_ref()
+                .map(crate::impls::interned_ty),
+            None,
+        ),
     };
     let concrete_self = match owner {
         BodyOwnerId::Function(function) | BodyOwnerId::ParameterDefaults(function) => {
@@ -1641,6 +1708,23 @@ fn infer_body_impl<'db>(
     };
     ctx.body_owner_id = Some(owner);
     ctx.defaults_owner = matches!(owner, BodyOwnerId::ParameterDefaults(_));
+    if let BodyOwnerId::Let(binding) = owner {
+        // The initializer is the owner's one return frame — opened even
+        // without an annotation, so a `return` written directly in it is
+        // told apart from one inside a lambda the initializer builds.
+        if ctx.return_frames.is_empty() {
+            ctx.return_frames.push(ReturnFrame {
+                expected: None,
+                candidates: Vec::new(),
+                scoped_bindings_floor: 0,
+            });
+        }
+        ctx.global_initializer = crate::globals::is_source_global(db, binding).then(|| {
+            baml_compiler2_hir::item_data::let_data(db, binding)
+                .name
+                .clone()
+        });
+    }
     if let BodyOwnerId::ParameterDefaults(function) = owner {
         // The defaults arena has no single root: each parameter's default
         // checks against that parameter's declared type (its expectation
@@ -1862,6 +1946,10 @@ struct InferenceContext<'db> {
     /// this lets a malformed self-reference fail closed instead of recursively
     /// asking Salsa for the inference result currently being built.
     body_owner_id: Option<BodyOwnerId<'db>>,
+    /// The global's name when this run checks a source global variable's
+    /// initializer (not a client's, not a Session binding's): the owner
+    /// whose top-level `return` is refused.
+    global_initializer: Option<baml_type::Name>,
     /// The owner's parameter types, from its lowered signature, indexed by
     /// declaration position.
     param_tys: Vec<Ty>,
@@ -2053,6 +2141,7 @@ impl<'db> InferenceContext<'db> {
             lower,
             scoped_type_bindings: Vec::new(),
             body_owner_id: None,
+            global_initializer: None,
             param_tys,
             type_refs,
             return_frames: return_ty
@@ -2275,6 +2364,17 @@ impl<'db> InferenceContext<'db> {
         value: Option<ExprId>,
         at: crate::diagnostics::DiagnosticLocation,
     ) {
+        // Frame 0 of a global's initializer is the initializer itself; a
+        // lambda inside it opens frame 1+, where `return` is ordinary.
+        if self.return_frames.len() == 1
+            && let Some(name) = self.global_initializer.clone()
+        {
+            self.pending_diags
+                .push(PendingDiag::ReturnInGlobalInitializer {
+                    at: at.clone(),
+                    name,
+                });
+        }
         let (expected, floor) = match self.return_frames.last() {
             Some(frame) => (frame.expected.clone(), frame.scoped_bindings_floor),
             None => (None, 0),
@@ -4110,9 +4210,35 @@ impl<'db> InferenceContext<'db> {
                 result
             }
         };
+        // A top-level binding is written once, by `$init`, and then shared by
+        // every call: the binding itself never changes. Only a target that
+        // IS the global (`x = v`, `root.ns.x += v`) is refused — `x.f = v` and
+        // `x[i] = v` change what the global holds, not the binding.
+        if binding.is_none()
+            && let Expr::Path(segments) = &body.exprs[target]
+            && let Some(root) = self.result.global_roots.get(&target).copied()
+            && root.segments == segments.len()
+        {
+            let (name, is_client) = match root.binding {
+                DeclRef::Source(binding) => {
+                    let data = baml_compiler2_hir::item_data::let_data(self.db, binding);
+                    (
+                        data.name.clone(),
+                        matches!(data.origin, baml_compiler2_ast::ast::LetOrigin::Client),
+                    )
+                }
+                DeclRef::External(binding) => (binding.head(self.db).name().clone(), false),
+            };
+            self.pending_diags.push(PendingDiag::AssignmentToGlobal {
+                target,
+                name,
+                is_client,
+            });
+        }
         if let Some(declared) = &declared {
             self.result.type_of_expr.insert(target, declared.clone());
         }
+        self.check_path_assignment_target(body, target);
         if let Some(binding) = binding {
             // The overlay narrows to the assigned value's OWN type
             // (B-618's rule; TS narrows assignments to the literal the
@@ -4133,6 +4259,51 @@ impl<'db> InferenceContext<'db> {
                 self.flow.remove(&binding);
             }
         }
+    }
+
+    /// A path target (`x`, `x.f.g`) writes through the local or global its
+    /// root names. AST lowering admits any path syntactically; a root that
+    /// resolves to something else - a function, an enum variant - has no
+    /// storage, and MIR would otherwise either fail to find a place or store
+    /// into a temporary that is thrown away. A global root is not this
+    /// check's concern: `x.f = v` through a global is a real store, and
+    /// `x = v` already reports `AssignmentToGlobal`. An unresolved root
+    /// already reported `unresolved name` (its type is the error sentinel)
+    /// and is skipped.
+    fn check_path_assignment_target(&mut self, body: &ExprBody, target: ExprId) {
+        let Expr::Path(segments) = &body.exprs[target] else {
+            return;
+        };
+        if self.result.global_roots.contains_key(&target) {
+            return;
+        }
+        let resolves_to_local = self
+            .metadata_key(target)
+            .and_then(|key| self.index.path_resolution(key))
+            .is_some_and(|resolution| {
+                matches!(
+                    resolution,
+                    baml_compiler2_hir::semantic_index::PathResolution::Local(_)
+                )
+            });
+        if resolves_to_local
+            || self
+                .result
+                .type_of_expr
+                .get(&target)
+                .is_none_or(Ty::has_error)
+        {
+            return;
+        }
+        let path = baml_type::Name::new(
+            segments
+                .iter()
+                .map(baml_type::Name::as_str)
+                .collect::<Vec<_>>()
+                .join("."),
+        );
+        self.pending_diags
+            .push(PendingDiag::InvalidAssignmentTarget { expr: target, path });
     }
 
     /// The TYPE a binding's `:`-ascribed sub-pattern denotes, when it is
@@ -6526,6 +6697,39 @@ impl<'db> InferenceContext<'db> {
                 self.write_resolved_path(callee, steps);
                 return (ty, bound);
             }
+            // A method called on a global (`G.m(..)`, `root.ns.G.field.m(..)`):
+            // the same road as a local receiver, so the call site's turbofish
+            // and arguments instantiate the method. Typing the callee as a
+            // bound-method VALUE instead would demand a generic method be
+            // specialized before the call could supply its type arguments.
+            Expr::Path(segments) if segments.len() >= 2 => {
+                let segments = segments.clone();
+                let (receiver_segments, member) = segments.split_at(segments.len() - 1);
+                let head = self.item_head(callee, &segments);
+                if let Some((binding, root_len)) = self.global_root(head, receiver_segments) {
+                    self.result.global_roots.insert(
+                        callee,
+                        GlobalRoot {
+                            binding,
+                            segments: root_len,
+                        },
+                    );
+                    let root = self
+                        .global_value_ty(callee, binding)
+                        .unwrap_or_else(Ty::error);
+                    let (receiver, mut steps) =
+                        self.walk_path_members(callee, root, &receiver_segments[root_len..]);
+                    let (ty, bound, resolution) =
+                        self.member_callee(call, callee, &receiver, &member[0]);
+                    self.result.type_of_expr.insert(callee, ty.clone());
+                    steps.push(ResolvedPathSegment {
+                        ty: ty.clone(),
+                        resolution,
+                    });
+                    self.write_resolved_path(callee, steps);
+                    return (ty, bound);
+                }
+            }
             _ => {}
         }
         (self.infer_expr(body, callee, &Expectation::None), false)
@@ -6902,13 +7106,19 @@ impl<'db> InferenceContext<'db> {
                 bound,
             );
         }
-        if matches!(
+        // A matched impl's method with no generics of its own still runs in
+        // the impl's frame, and the plan carries every statically resolved
+        // callee's whole frame: the impl's bindings are its owner prefix.
+        if let crate::method_resolution::MemberDeclarer::ImplMethod {
+            frame_type_args, ..
+        } = &interface_member.declarer
+        {
+            let frame_type_args = frame_type_args.clone();
+            self.write_call_type_args(call, &frame_type_args, frame_type_args.len());
+        } else if matches!(
             &interface_member.declarer,
             crate::method_resolution::MemberDeclarer::VirtualMethod {
                 method: DeclRef::External(_),
-                ..
-            } | crate::method_resolution::MemberDeclarer::ImplMethod {
-                func: DeclRef::External(_),
                 ..
             }
         ) {
@@ -7214,47 +7424,6 @@ impl<'db> InferenceContext<'db> {
             self.write_value_type_args(expr, &instantiation, 0);
             return instantiate_callable_signature(self.db, callable, &instantiation);
         }
-        // Session submissions persist root bindings as top-level `let`s. A
-        // let has no declaration signature, so recover its value type from the
-        // initializer's durable inference result and feed that through the same
-        // member walk used for lexical locals. Function and exported-value
-        // resolution deliberately run first so a root binding named `json`,
-        // `reflect`, or `type` cannot shadow those package paths. A single
-        // segment still reaches this value tier.
-        if let PathHead::Package(_) | PathHead::Plain = head
-            && let Some(root) = segments.first()
-            && let Some(ResolvedValue::Source(Definition::Let(let_binding))) = self
-                .lower
-                .resolve_value(PathHead::Plain, std::slice::from_ref(root))
-        {
-            if self.body_owner_id == Some(BodyOwnerId::Let(let_binding))
-                || let_owner_is_in_flight(self.db, let_binding)
-            {
-                if self.member_probe_depth == 0 {
-                    self.pending_diags
-                        .push(PendingDiag::TopLevelLetCycle { expr });
-                }
-                return Ty::error();
-            }
-            let inference = infer_body(self.db, BodyOwnerId::Let(let_binding));
-            let body = baml_compiler2_hir::body::let_body(self.db, let_binding);
-            if let baml_compiler2_hir::body::LetBody::Expr(body) = body.as_ref()
-                && let Some(root) = body.root_expr
-                && let Some(root_ty) = inference.type_of_expr.get(&root).cloned()
-            {
-                // The initializer's own type is the EXPRESSION type, so a
-                // fresh literal arrives unwidened - `let n = 5` would bind `5`
-                // and `n.to_string()` would be E0007 on a type with no
-                // members. A top-level let is a binding site like any other
-                // (`let` in a body applies this before recording the
-                // binding), and a session cannot annotate one to opt out, so
-                // the widening is unconditional here.
-                let root_ty = self.widen_fresh(&Ty::from_plain(&root_ty));
-                let (ty, steps) = self.walk_path_members(expr, root_ty, &segments[1..]);
-                self.write_resolved_path(expr, steps);
-                return ty;
-            }
-        }
         // A type-qualified static as a VALUE (`let f = float.nan;`,
         // `Array.filled`): the same tier the call spellings use, with
         // the own suffix fresh (only a call site can spell turbofish).
@@ -7309,8 +7478,35 @@ impl<'db> InferenceContext<'db> {
             });
             return Ty::error();
         }
+        // A top-level `let` — a global variable, a client, or a Session's
+        // persisted binding — named by the path's leading segments: bare
+        // (`x`) in its own namespace, qualified from a package head
+        // (`root.ns.x`, `dep.x`) anywhere else; the remaining segments are
+        // member accesses on its value. Every other value tier runs first
+        // (functions, exported values, statics, `default.m`, enum variants),
+        // so a global named like a type never captures its statics:
+        // `float.nan` stays the static. A global named like a package is an
+        // item of its namespace, and `head` already reads `reflect.x` as that
+        // item there, as for any item (#4543).
+        if let Some((binding, root_len)) = self.global_root(head, segments) {
+            // Recorded before typing: a reference whose type is cyclic is
+            // still an edge the initialization-order analysis must see.
+            self.result.global_roots.insert(
+                expr,
+                GlobalRoot {
+                    binding,
+                    segments: root_len,
+                },
+            );
+            let Some(root_ty) = self.global_value_ty(expr, binding) else {
+                return Ty::error();
+            };
+            let (ty, steps) = self.walk_path_members(expr, root_ty, &segments[root_len..]);
+            self.write_resolved_path(expr, steps);
+            return ty;
+        }
         // A name that RESOLVES to a definition kind this road doesn't
-        // type (clients, top-level lets outside their tier) is not
+        // type (a global whose initializer is missing or untyped) is not
         // unresolved - it stays the silent sentinel it always was.
         if self.lower.resolve_value(head, segments).is_none() {
             // When a proper prefix resolves (`baml.media.Image.missing`
@@ -10469,6 +10665,81 @@ impl<'db> InferenceContext<'db> {
         self.template_param_ty(name).is_some()
     }
 
+    /// The top-level `let` a path's leading segments name, read from `head`,
+    /// with how many segments name it: a plain path's first segment, an item
+    /// of the current namespace (`x`), or the SHORTEST `<namespace*>.<item>`
+    /// after a package head (`root.ns.x`, `dep.ns.x`).
+    fn global_root(
+        &self,
+        head: PathHead,
+        segments: &[baml_type::Name],
+    ) -> Option<(crate::extern_loc::GlobalRef<'db>, usize)> {
+        // A plain head names an item of this namespace in one segment; a
+        // package head is followed by `<namespace*>.<item>`.
+        let lengths = match head {
+            PathHead::Plain => 1..=1,
+            PathHead::Package(_) | PathHead::Lang(_) => 2..=segments.len(),
+        };
+        lengths.into_iter().find_map(|len| {
+            match self.lower.resolve_value(head, &segments[..len])? {
+                ResolvedValue::Source(Definition::Let(binding)) => {
+                    Some((DeclRef::Source(binding), len))
+                }
+                // A package served from its interface: the exported row
+                // stands in for the declaration, as for its functions.
+                ResolvedValue::ExternalLet(binding) => Some((DeclRef::External(binding), len)),
+                ResolvedValue::Source(_) | ResolvedValue::External(_) => None,
+            }
+        })
+    }
+
+    /// The type a read of global `binding` has: its annotation when it has
+    /// one — read without inferring the initializer, which is what lets an
+    /// annotated global appear in its own initializer's call graph — else
+    /// the initializer's type, widened like any binding site.
+    ///
+    /// `None` (after diagnosing) when an unannotated global's type depends
+    /// on itself.
+    fn global_value_ty(
+        &mut self,
+        expr: ExprId,
+        binding: crate::extern_loc::GlobalRef<'db>,
+    ) -> Option<Ty> {
+        let binding = match binding {
+            DeclRef::Source(binding) => binding,
+            DeclRef::External(binding) => {
+                return Some(Ty::from_plain(
+                    &crate::extern_loc::extern_let_row(self.db, binding).ty,
+                ));
+            }
+        };
+        if let Some(declared) = crate::lower::let_declared_type(self.db, binding) {
+            return Some(Ty::from_plain(declared));
+        }
+        if self.body_owner_id == Some(BodyOwnerId::Let(binding))
+            || let_owner_is_in_flight(self.db, binding)
+        {
+            // A source global's type can only depend on itself through
+            // references its initializer (or a function it reaches) makes,
+            // and each of those is an initialization edge: the cycle is
+            // reported once, deterministically, as E0181 by
+            // `crate::globals`. Reporting it here too would be order-
+            // dependent and would advise an annotation that cannot help.
+            if self.member_probe_depth == 0 && !crate::globals::is_source_global(self.db, binding) {
+                self.pending_diags
+                    .push(PendingDiag::TopLevelLetCycle { expr });
+            }
+            return None;
+        }
+        // The initializer's own type is the EXPRESSION type, so a fresh
+        // literal arrives unwidened - `let n = 5` would bind `5` and
+        // `n.to_string()` would be E0007 on a type with no members. A
+        // top-level let is a binding site like any other, so
+        // `global_value_type` widens it (an annotation is how a global opts
+        // out), and the package interface exports the same type.
+        crate::globals::global_value_type(self.db, binding).map(|ty| Ty::from_plain(&ty))
+    }
+
     /// Whether a path starts at a tagged-template body parameter: its first
     /// segment names one, and the path is read in scope at all — a path the
     /// compiler wrote into a language package (`PathHead::Lang`) is not.
@@ -12423,6 +12694,9 @@ impl<'db> InferenceContext<'db> {
                     PendingDiag::MountedPackageCallUnsupported { expr, path } => {
                         (TirTypeError::MountedPackageCallUnsupported { path }, expr)
                     }
+                    PendingDiag::InvalidAssignmentTarget { expr, path } => {
+                        (TirTypeError::InvalidAssignmentTarget { path }, expr)
+                    }
                     PendingDiag::InvalidRegexPattern {
                         expr,
                         kind,
@@ -12736,6 +13010,28 @@ impl<'db> InferenceContext<'db> {
                             },
                             severity: DiagnosticSeverity::Error,
                             primary: DiagnosticLocation::Expr(at),
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::ReturnInGlobalInitializer { at, name } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::ReturnInGlobalInitializer { name },
+                            severity: DiagnosticSeverity::Error,
+                            primary: at,
+                            related: Vec::new(),
+                        });
+                        continue;
+                    }
+                    PendingDiag::AssignmentToGlobal {
+                        target,
+                        name,
+                        is_client,
+                    } => {
+                        diags.push(TirDiagnostic {
+                            error: TirTypeError::AssignmentToGlobal { name, is_client },
+                            severity: DiagnosticSeverity::Error,
+                            primary: DiagnosticLocation::Expr(target),
                             related: Vec::new(),
                         });
                         continue;
@@ -14536,6 +14832,7 @@ impl<'db> InferenceContext<'db> {
             diagnostics,
             member_resolutions,
             path_resolutions,
+            global_roots,
             call_plans,
             type_bindings,
             expr_adjustments,
@@ -14585,6 +14882,7 @@ impl<'db> InferenceContext<'db> {
                     )
                 })
                 .collect(),
+            global_roots,
             call_plans: call_plans
                 .into_iter()
                 .map(|(expr, plan)| (expr, self.materialize_call_plan(plan)))

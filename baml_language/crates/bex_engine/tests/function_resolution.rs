@@ -183,8 +183,11 @@ async fn generic_native_json_from_string_callable_as_entry_point() {
 
     let result = eng
         .call_function(
-            "baml.json.from_string",
-            vec![BexExternalValue::String("7".into())],
+            "baml.json._from_string",
+            vec![
+                BexExternalValue::String("7".into()),
+                BexExternalValue::Bool(false),
+            ],
             FunctionCallContextBuilder::new(CallId::next())
                 .with_type_args(indexmap::IndexMap::from([(
                     "T".to_string(),
@@ -197,6 +200,6 @@ async fn generic_native_json_from_string_callable_as_entry_point() {
 
     match result {
         Ok(BexExternalValue::Int(value)) => assert_eq!(value, 7),
-        other => panic!("expected Ok(Int(7)) from baml.json.from_string<int>, got {other:?}"),
+        other => panic!("expected Ok(Int(7)) from baml.json._from_string<int>, got {other:?}"),
     }
 }

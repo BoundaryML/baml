@@ -51,7 +51,8 @@ pub enum Error<E = Infallible> {
         trace: Vec<String>,
     },
     /// The engine returned a value the declared Rust type cannot represent
-    /// — engine/codegen drift, never a user-input condition.
+    /// — engine/codegen drift, or a json value [`Json`](crate::Json) cannot
+    /// hold (see [`DecodeError::NotJson`]).
     Decode(DecodeError),
     /// SDK-boundary failure: runtime not initialized, tokio setup, task
     /// join, envelope decode.
@@ -165,6 +166,13 @@ pub enum DecodeError {
         /// Length of the offending wire string.
         len: usize,
     },
+    /// A `baml.json.json` value has no [`Json`](crate::Json) form: a
+    /// `bigint` outside `i64`/`u64`, a non-finite float, or a value that is
+    /// not JSON at all (class, enum, media, bytes, handle).
+    NotJson {
+        /// What arrived instead (a wire variant kind or a short reason).
+        got: &'static str,
+    },
     /// A union envelope selected an arm outside the generated union's range.
     InvalidUnionOptionIndex {
         /// Generated union type being decoded.
@@ -193,6 +201,9 @@ impl fmt::Display for DecodeError {
             }
             DecodeError::InvalidBigint { len } => {
                 write!(f, "invalid bigint wire string ({len} bytes)")
+            }
+            DecodeError::NotJson { got } => {
+                write!(f, "baml.json.json value has no serde_json form: {got}")
             }
             DecodeError::InvalidUnionOptionIndex {
                 union,

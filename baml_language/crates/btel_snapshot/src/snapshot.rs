@@ -7,6 +7,7 @@ use num_bigint::BigInt;
 
 use crate::{
     CasId,
+    definition::DefinitionRef,
     graph::{
         BigintId, FieldEntry, LabelId, MapEntry, NameId, ObjectId, OwnedType, Range,
         SnapshotObject, SnapshotRoot, SnapshotValue, StringId, TypeId, Uint8ArrayData,
@@ -77,7 +78,19 @@ impl<'s> Blob<'s> {
     pub fn encoded_len(&self) -> u64 {
         self.entry().encoded_len
     }
-    /// The blobs this one names, in the order of its child table.
+    /// Whether this is a definition group the capture carries
+    /// ([`crate::Carried`]) rather than part of the capture.
+    pub fn is_definition(&self) -> bool {
+        matches!(self.entry().content, crate::shape::Content::Definition(_))
+    }
+    /// The definition groups this one names by ID, which follow its
+    /// [`Self::children`] in its child table. The capture carries a group
+    /// only when its stream names it first ([`crate::Carried`]).
+    pub fn named(&self) -> &'s [CasId] {
+        &self.snapshot.0.shape.named[self.entry().named.indexes()]
+    }
+    /// The blobs of this capture that this one's values continue in, in the
+    /// order of its child table.
     pub fn children(&self) -> impl ExactSizeIterator<Item = Blob<'s>> + use<'s> {
         let snapshot = self.snapshot;
         snapshot.0.shape.children[self.entry().children.indexes()]
@@ -95,6 +108,12 @@ impl Snapshot {
     pub(crate) fn new(lease: Lease) -> Self {
         debug_assert!(!lease.shape.blobs.is_empty(), "a snapshot is shaped");
         Self(lease)
+    }
+    /// The processor has taken this capture from the producers: it no longer
+    /// counts against its pool's budget, whoever holds it from here on.
+    /// Idempotent.
+    pub fn uncharge(&self) {
+        self.0.uncharge();
     }
     /// The blob a recording references for this capture.
     pub fn root_blob(&self) -> Blob<'_> {
@@ -132,7 +151,7 @@ impl Snapshot {
         })
     }
     pub fn root(&self) -> SnapshotRoot {
-        self.root_blob().entry().root
+        *self.root_blob().entry().capture_root()
     }
     pub fn value(&self) -> Option<SnapshotValue> {
         match self.root() {
@@ -147,7 +166,7 @@ impl Snapshot {
         }
     }
     pub fn roots(&self) -> &[SnapshotValue] {
-        match &self.root_blob().entry().root {
+        match self.root_blob().entry().capture_root() {
             SnapshotRoot::Value(value) => std::slice::from_ref(value),
             SnapshotRoot::FunctionArgs(args) => self.values(args.slots),
         }
@@ -179,7 +198,11 @@ impl Snapshot {
     }
     /// A declaration's name.
     pub fn name(&self, id: NameId) -> &DeclarationName {
-        &self.0.graph.names[id.0 as usize]
+        &self.0.graph.names[id.0 as usize].name
+    }
+    /// The recorded definition a declaration is identified by, if any.
+    pub fn definition(&self, id: NameId) -> Option<DefinitionRef> {
+        self.0.graph.names[id.0 as usize].definition
     }
     pub fn ty(&self, id: TypeId) -> &OwnedType {
         &self.0.graph.types[id.0 as usize].ty

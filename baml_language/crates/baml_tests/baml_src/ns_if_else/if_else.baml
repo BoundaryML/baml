@@ -331,3 +331,85 @@ test "if_else_statement" {
 test "nested_block_with_if" {
     assert.equal(nested_block_with_if_fn(), 10)
 }
+
+// ─── A line that can start an expression starts a new statement ──────────────
+// In a block, a line break ends the expression when the next line could start
+// one, so `[`, `-` and `(` there begin a new statement (B-1831). Inside
+// parentheses line breaks are whitespace.
+
+function block_then_array_line_fn(c: bool) -> int[] {
+    if (c) { [7, 8, 9] } else { [4, 5, 6] }
+    [0]
+}
+
+function block_then_negation_line_fn(x: int?) -> int {
+    if (x != null) { return x; }
+    -1
+}
+
+function block_initializer_then_negation_line_fn(x: int) -> int {
+    let y = match (x) {
+        0 => 10,
+        _ => 20,
+    }
+    -y
+}
+
+function block_then_paren_line_fn(x: int) -> int {
+    if (x < 0) { return 0; }
+    (x * 2)
+}
+
+function block_same_line_continuation_fn(c: bool) -> int {
+    let a = if (c) { [1, 2] } else { [3, 4] }[1]
+    let b = if (c) { 10 } else { 20 } - 1
+    a + b
+}
+
+function call_then_paren_line_fn(f: () -> int) -> int {
+    f()
+    (-1)
+}
+
+function plain_then_minus_line_fn(a: int, b: int) -> int {
+    a
+    - b
+}
+
+function minus_line_inside_parens_fn(a: int, b: int) -> int {
+    (a
+        - b)
+}
+
+test "call_then_paren_line" {
+    assert.equal(call_then_paren_line_fn(() -> int { 5 }), -1)
+}
+
+test "plain_then_minus_line" {
+    assert.equal(plain_then_minus_line_fn(10, 3), -3)
+}
+
+test "minus_line_inside_parens" {
+    assert.equal(minus_line_inside_parens_fn(10, 3), 7)
+}
+
+test "block_then_array_line" {
+    assert.equal(block_then_array_line_fn(true), [0])
+}
+
+test "block_then_negation_line" {
+    assert.equal(block_then_negation_line_fn(null), -1);
+    assert.equal(block_then_negation_line_fn(3), 3)
+}
+
+test "block_initializer_then_negation_line" {
+    assert.equal(block_initializer_then_negation_line_fn(0), -10)
+}
+
+test "block_then_paren_line" {
+    assert.equal(block_then_paren_line_fn(4), 8)
+}
+
+test "block_same_line_continuation" {
+    assert.equal(block_same_line_continuation_fn(true), 11)
+}

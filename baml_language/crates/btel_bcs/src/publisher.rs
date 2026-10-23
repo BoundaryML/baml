@@ -23,7 +23,9 @@ pub struct CloudPublisherConfig {
     pub max_offered_ids: usize,
     /// Soft per-file targets: blobs waiting for a file, and the retained
     /// memory of the captures they belong to. A single capture may exceed
-    /// either.
+    /// either. A plan's worth of blobs (`max_candidates`) by default: every
+    /// file costs a prepare, so a file is not sealed for fewer blobs than a
+    /// plan takes unless the deadline or the byte targets say so.
     pub candidate_target: usize,
     pub retained_bytes_target: usize,
     /// Hard count of captures held across the queue and staged files, not
@@ -43,9 +45,9 @@ impl Default for CloudPublisherConfig {
     fn default() -> Self {
         Self {
             max_offered_ids: 65_536,
-            candidate_target: 16,
+            candidate_target: 32,
             retained_bytes_target: 4 * 1024 * 1024,
-            max_pending_snapshots: 32,
+            max_pending_snapshots: 128,
             max_retained_bytes: 8 * 1024 * 1024,
             inline_target_bytes: 16 * 1024,
             batch_target_bytes: 256 * 1024,
@@ -72,12 +74,13 @@ impl Default for CloudPublisherConfig {
 /// a file but cannot deliver it until input chunks are recycled. Staging is
 /// additionally bounded by delivery's plan and recording-byte limits. Neither
 /// sealing nor staging releases a capture; only delivery or terminal cleanup
-/// does. Combined publisher/delivery capture limits leave room in the minimum
-/// VM pool for capture to publish its partial chunk.
+/// does. Captures held here are the processor's: they stopped counting
+/// against the producers' budget when their chunk was taken, so what the
+/// publisher and delivery hold never keeps the VM from capturing.
 ///
 /// Cloud processing detaches at most one chunk, recycling its allocation before
-/// any admission wait. The unvisited suffix still owns its captures in the shared,
-/// bounded VM snapshot pool; it is not extra delivery capacity. The processor
+/// any admission wait. The unvisited suffix still owns its captures, bounded
+/// by the chunk; it is not extra delivery capacity. The processor
 /// reserves chunk-capacity-sized span and timing buffers, with only one live at
 /// a time. Handoffs occur between records and cache deltas, not between chunks.
 pub struct CloudPublisher {
@@ -109,6 +112,74 @@ pub struct CloudPublisher {
     preflight_size: Option<(CasId, usize)>,
     failure: Option<DeliveryError>,
     delivery: BcsDeliveryHandle,
+    /// Where this publisher reports what it holds, after each batch.
+    #[cfg(feature = "diagnostics")]
+    gauges: Option<Arc<PublisherGauges>>,
+}
+
+/// What the publisher holds, published after each batch for a reader on
+/// another thread: the publisher itself lives on the processor's.
+/// Measurement only, under the `diagnostics` feature.
+#[cfg(feature = "diagnostics")]
+#[derive(Default)]
+pub struct PublisherGauges {
+    retained_captures: std::sync::atomic::AtomicUsize,
+    retained_bytes: std::sync::atomic::AtomicUsize,
+    queued_blobs: std::sync::atomic::AtomicUsize,
+    queued_bytes: std::sync::atomic::AtomicUsize,
+    staged_files: std::sync::atomic::AtomicUsize,
+    staged_bytes: std::sync::atomic::AtomicUsize,
+    open_file_bytes: std::sync::atomic::AtomicUsize,
+    offered_ids: std::sync::atomic::AtomicUsize,
+    peak_retained_bytes: std::sync::atomic::AtomicUsize,
+    peak_queued_bytes: std::sync::atomic::AtomicUsize,
+    peak_staged_bytes: std::sync::atomic::AtomicUsize,
+}
+
+/// A reading of [`PublisherGauges`].
+#[cfg(feature = "diagnostics")]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct PublisherDiagnostics {
+    /// Captures held across the queue and staged files.
+    pub retained_captures: usize,
+    /// Their retained memory, and the queued strings'.
+    pub retained_bytes: usize,
+    /// Blobs waiting for a file.
+    pub queued_blobs: usize,
+    pub queued_bytes: usize,
+    /// Sealed files the last service found staged, and their bytes: staging
+    /// is emptied by every service, so this is what it held going in.
+    pub staged_files: usize,
+    pub staged_bytes: usize,
+    /// The open recording file's encoded size so far.
+    pub open_file_bytes: usize,
+    /// Blob IDs remembered as recently offered.
+    pub offered_ids: usize,
+    /// The most of each held at once, noted where each peaks: a shutdown
+    /// reading of the rest is zero.
+    pub peak_retained_bytes: usize,
+    pub peak_queued_bytes: usize,
+    pub peak_staged_bytes: usize,
+}
+
+#[cfg(feature = "diagnostics")]
+impl PublisherGauges {
+    pub fn read(&self) -> PublisherDiagnostics {
+        use std::sync::atomic::Ordering::Relaxed;
+        PublisherDiagnostics {
+            retained_captures: self.retained_captures.load(Relaxed),
+            retained_bytes: self.retained_bytes.load(Relaxed),
+            queued_blobs: self.queued_blobs.load(Relaxed),
+            queued_bytes: self.queued_bytes.load(Relaxed),
+            staged_files: self.staged_files.load(Relaxed),
+            staged_bytes: self.staged_bytes.load(Relaxed),
+            open_file_bytes: self.open_file_bytes.load(Relaxed),
+            offered_ids: self.offered_ids.load(Relaxed),
+            peak_retained_bytes: self.peak_retained_bytes.load(Relaxed),
+            peak_queued_bytes: self.peak_queued_bytes.load(Relaxed),
+            peak_staged_bytes: self.peak_staged_bytes.load(Relaxed),
+        }
+    }
 }
 
 /// A capture that blobs still queued are written from.
@@ -174,9 +245,6 @@ impl CloudPublisher {
             || config.candidate_target > limits.max_candidates
             || config.candidate_target >= limits.max_targets
             || config.max_pending_snapshots == 0
-            || config.max_pending_snapshots
-                >= btel_settings::snapshot::MIN_SNAPSHOT_SLOTS
-                    .saturating_sub(limits.max_pending_snapshots)
             || config.retained_bytes_target == 0
             || config.retained_bytes_target > config.max_retained_bytes
             || config.max_retained_bytes == 0
@@ -206,7 +274,52 @@ impl CloudPublisher {
             preflight_size: None,
             failure: None,
             delivery,
+            #[cfg(feature = "diagnostics")]
+            gauges: None,
         })
+    }
+
+    /// Report what this publisher holds to `gauges` after each batch.
+    #[cfg(feature = "diagnostics")]
+    #[must_use]
+    pub fn with_gauges(mut self, gauges: Arc<PublisherGauges>) -> Self {
+        self.gauges = Some(gauges);
+        self
+    }
+
+    #[cfg(feature = "diagnostics")]
+    fn publish_gauges(&self) {
+        use std::sync::atomic::Ordering::Relaxed;
+        let Some(gauges) = &self.gauges else {
+            return;
+        };
+        gauges
+            .retained_captures
+            .store(self.retained_snapshots, Relaxed);
+        gauges.retained_bytes.store(self.retained_bytes, Relaxed);
+        gauges.queued_blobs.store(self.queue.len(), Relaxed);
+        gauges.queued_bytes.store(self.queued_bytes, Relaxed);
+        gauges
+            .open_file_bytes
+            .store(self.recording.encoded_size_hint(), Relaxed);
+        gauges.offered_ids.store(self.offered.len(), Relaxed);
+        self.note_retained_peaks();
+    }
+
+    /// The queue and the retained captures peak after a record's captures
+    /// are retained and before pressure seals a file: noted there, and after
+    /// each batch.
+    #[cfg(feature = "diagnostics")]
+    fn note_retained_peaks(&self) {
+        use std::sync::atomic::Ordering::Relaxed;
+        if let Some(gauges) = &self.gauges {
+            gauges
+                .peak_retained_bytes
+                .fetch_max(self.retained_bytes, Relaxed);
+            gauges
+                .peak_queued_bytes
+                .fetch_max(self.queued_bytes, Relaxed);
+        }
     }
 
     #[must_use]
@@ -349,10 +462,13 @@ impl CloudPublisher {
             .into_iter()
             .filter(|leaf| !self.already_offered(leaf.id()))
             .collect();
+        // Whether it carries a definition group that no earlier offer holds.
+        let mut carried = false;
         let kept: Vec<_> = structure
             .iter()
             .flat_map(Structure::blobs)
             .filter(|blob| !self.already_offered(blob.id()))
+            .inspect(|blob| carried |= blob.is_definition())
             .map(|blob| (blob.index(), blob.id(), blob.encoded_len()))
             .collect();
         // A capture with nothing left to write is let go too.
@@ -367,8 +483,7 @@ impl CloudPublisher {
             .chain(structure.iter().map(|(_, size)| *size))
             .fold(0, usize::saturating_add);
         if !self.has_room(size, usize::from(structure.is_some())) {
-            self.delivery
-                .record_payload_loss(DeliveryError::Capacity, false);
+            self.delivery.record_capture_loss(carried);
             return;
         }
         for leaf in leaves {
@@ -530,7 +645,8 @@ impl CloudPublisher {
             || file.retained_bytes() > remaining_bytes
             || file.bytes().len() > limits.max_recording_body_bytes
         {
-            // The file is lost; queued blobs wait for the next one.
+            // The file is lost; queued blobs wait for the next one. It took
+            // no blob from the queue, so no definition group is lost with it.
             let evictions = self.metadata.retain(&file);
             self.delivery.record_metadata_replay_evictions(evictions);
             self.delivery
@@ -616,6 +732,18 @@ impl CloudPublisher {
             }
         }
         if self.failure.is_none() {
+            // Staging is emptied here: what it held is read before it is.
+            #[cfg(feature = "diagnostics")]
+            if let Some(gauges) = &self.gauges {
+                use std::sync::atomic::Ordering::Relaxed;
+                gauges.staged_files.store(self.staged.len(), Relaxed);
+                gauges
+                    .staged_bytes
+                    .store(self.staged_recording_bytes, Relaxed);
+                gauges
+                    .peak_staged_bytes
+                    .fetch_max(self.staged_recording_bytes, Relaxed);
+            }
             let staged = std::mem::take(&mut self.staged);
             self.staged_recording_bytes = 0;
             for PendingFile { file, window } in staged {
@@ -706,6 +834,8 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
             while let Some(snapshot) = record.take_capture() {
                 self.retain(snapshot);
             }
+            #[cfg(feature = "diagnostics")]
+            self.note_retained_peaks();
             self.seal_on_pressure();
         }
     }
@@ -728,6 +858,8 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
 
     fn after_batch(&mut self, _records: usize) {
         self.tick(Instant::now());
+        #[cfg(feature = "diagnostics")]
+        self.publish_gauges();
     }
 
     fn max_chunks_per_batch(&self) -> usize {
@@ -768,6 +900,8 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
             }
         }
         self.service(Instant::now(), Seal::End);
+        #[cfg(feature = "diagnostics")]
+        self.publish_gauges();
     }
 }
 
@@ -984,7 +1118,7 @@ mod tests {
     #[test]
     fn detached_preflight_size_is_consumed_and_failure_skips_preflight() {
         let (_delivery, mut publisher) = publisher(CloudPublisherConfig::default());
-        let pool = SnapshotPool::new(2, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let snapshot = pool
             .try_acquire()
             .unwrap()
@@ -1026,7 +1160,7 @@ mod tests {
     #[test]
     fn snapshots_accumulate_across_processor_batches_without_serialization() {
         let (_delivery, mut publisher) = publisher(CloudPublisherConfig::default());
-        let pool = SnapshotPool::new(4, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         for value in 0..3 {
             publisher.before_batch(1);
             capture(&mut publisher, &pool, value);
@@ -1085,7 +1219,7 @@ mod tests {
             candidate_target: 2,
             ..CloudPublisherConfig::default()
         });
-        let pool = SnapshotPool::new(8, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         publisher.before_batch(6);
         publisher.before_span_chunk(6);
         for value in 0..6 {
@@ -1112,7 +1246,7 @@ mod tests {
             ..CloudPublisherConfig::default()
         });
         let max = delivery.handle().config().max_candidates;
-        let pool = SnapshotPool::new(4, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let blobs = 2 * max + 3;
         let snapshot = cut_list(&pool, 1, blobs - 1);
         assert_eq!(snapshot.blobs().len(), blobs);
@@ -1172,7 +1306,7 @@ mod tests {
             candidate_target: 4,
             ..CloudPublisherConfig::default()
         });
-        let pool = SnapshotPool::new(4, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         // The root among them: the capture is held while they wait.
         assert_eq!(offer_with_a_tail(&mut publisher, &pool), 3);
         assert_eq!(pool.stats().in_use, 1);
@@ -1198,7 +1332,7 @@ mod tests {
             candidate_target: 4,
             ..CloudPublisherConfig::default()
         });
-        let pool = SnapshotPool::new(4, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         assert_eq!(offer_with_a_tail(&mut publisher, &pool), 3);
         publisher.flush();
         assert!(publisher.queue.is_empty());
@@ -1225,7 +1359,7 @@ mod tests {
             "network error",
         ] {
             let (delivery, mut publisher) = publisher(CloudPublisherConfig::default());
-            let pool = SnapshotPool::new(4, Limits::default());
+            let pool = SnapshotPool::unbounded(Limits::default());
             capture(&mut publisher, &pool, 1);
             // No room for a second capture beside the first.
             publisher.config.max_retained_bytes = publisher.retained_bytes;
@@ -1319,7 +1453,7 @@ mod tests {
     #[test]
     fn room_is_made_for_both_captures_of_an_announcement() {
         let (delivery, mut publisher) = publisher(CloudPublisherConfig::default());
-        let pool = SnapshotPool::new(4, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         capture(&mut publisher, &pool, 1);
         // One capture more fits, not two.
         publisher.config.max_pending_snapshots = 2;
@@ -1356,7 +1490,7 @@ mod tests {
     #[test]
     fn blobs_offered_before_are_not_queued_again_and_empty_captures_are_dropped() {
         let (_delivery, mut publisher) = publisher(CloudPublisherConfig::default());
-        let pool = SnapshotPool::new(4, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         offer(&mut publisher, cut_list(&pool, 1, 3));
         assert_eq!(publisher.queue.len(), 4);
         // The same list again: nothing new, so the capture is not held.
@@ -1390,7 +1524,7 @@ mod tests {
     #[test]
     fn a_string_blob_is_let_go_alone_and_a_string_capture_holds_no_storage() {
         let (_delivery, mut publisher) = publisher(CloudPublisherConfig::default());
-        let pool = SnapshotPool::new(2, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         // A capture that is one string: nothing of it is held but the string.
         let mut b = pool.try_acquire().unwrap();
         let output = b
@@ -1475,7 +1609,7 @@ mod tests {
             max_retained_bytes: 1,
             ..CloudPublisherConfig::default()
         });
-        let pool = SnapshotPool::new(2, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let snapshot = cut_strings(&pool, &[100, 10_000]);
         assert!(snapshot.retained_bytes() > publisher.config.max_retained_bytes);
         offer(&mut publisher, snapshot);
@@ -1510,7 +1644,7 @@ mod tests {
             delivery.handle(),
         )
         .unwrap();
-        let pool = SnapshotPool::new(2, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         // Two long strings, then byte arrays, each a blob of its own.
         let mut b = pool.try_acquire().unwrap();
         let ty = b.leaves().ty(btel_snapshot::OwnedType::unknown());
@@ -1565,7 +1699,7 @@ mod tests {
     #[test]
     fn the_sources_capture_is_offered_like_any_other() {
         let (_delivery, publisher) = publisher(CloudPublisherConfig::default());
-        let pool = SnapshotPool::new(2, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let sources = btel_snapshot::string_map(
             &pool,
             &[("main.baml".to_owned(), "function main() {}".to_owned())],
@@ -1608,7 +1742,7 @@ mod tests {
             retained_bytes_target: 1,
             ..CloudPublisherConfig::default()
         });
-        let pool = SnapshotPool::new(4, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         capture(&mut publisher, &pool, 1);
         assert_eq!(publisher.staged.len(), 1);
         let bytes = publisher.retained_bytes;
@@ -1632,7 +1766,7 @@ mod tests {
             candidate_target: 1,
             ..CloudPublisherConfig::default()
         });
-        let pool = SnapshotPool::new(4, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         capture(&mut publisher, &pool, 1);
         capture(&mut publisher, &pool, 1);
         capture(&mut publisher, &pool, 2);
@@ -1649,7 +1783,7 @@ mod tests {
             max_offered_ids: 1,
             ..CloudPublisherConfig::default()
         });
-        let pool = SnapshotPool::new(8, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         for value in [1, 2, 3, 1, 2, 3] {
             capture(&mut publisher, &pool, value);
         }
@@ -1676,7 +1810,7 @@ mod tests {
             max_pending_snapshots: 2,
             ..CloudPublisherConfig::default()
         });
-        let pool = SnapshotPool::new(4, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         for value in 0..3 {
             capture(&mut publisher, &pool, value);
         }
@@ -1703,12 +1837,16 @@ mod tests {
                 target_bytes: NonZeroUsize::new(128).unwrap(),
                 ..RecordingConfig::default()
             },
-            CloudPublisherConfig::default(),
+            CloudPublisherConfig {
+                // Sixteen captures seal the file this test watches.
+                candidate_target: 16,
+                ..CloudPublisherConfig::default()
+            },
             delivery.handle(),
         )
         .unwrap();
         publisher.recording_target = usize::MAX;
-        let pool = SnapshotPool::new(20, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         for value in 0..16 {
             capture(&mut publisher, &pool, value);
         }
@@ -1731,6 +1869,132 @@ mod tests {
         assert_eq!(publisher.staged.len(), 2);
         assert!(publisher.staged[1].window.candidates.is_empty());
         assert!(!delivery.handle().is_disabled());
+    }
+
+    /// A capture of a type that names a class recorded with its definition,
+    /// in `lists` lists, carried by a fresh stream: its group is a blob of
+    /// the capture.
+    fn carrying(pool: &SnapshotPool, name: &str, lists: usize) -> Snapshot {
+        use btel_snapshot::{
+            Carried, OwnedType, TypeIdentity,
+            definition::{self, Class, Declaration, Meta},
+        };
+        let definition = definition::single(&Declaration::Class(Class {
+            name: baml_type::DeclarationName::Anonymous(baml_type::Name::new(name)),
+            type_params: 0,
+            meta: Meta::<String>::default(),
+            stream_done: false,
+            fields: vec![],
+        }));
+        let mut carried = Carried::default();
+        carried.begin();
+        let mut b = pool.try_acquire().unwrap();
+        let named = b.leaves().define(&definition, &mut carried);
+        let class = OwnedType::Class(TypeIdentity::Defined(named), Box::new([]));
+        let ty = (0..lists).fold(class, |ty, _| OwnedType::List(Box::new(ty)));
+        let ty = b.leaves().ty(ty);
+        let snapshot = b.finish(SnapshotValue::Type(ty), &mut Shaper::default());
+        assert!(snapshot.blobs().any(|blob| blob.is_definition()));
+        snapshot
+    }
+
+    /// A capture dropped for room makes every stream carry its definition
+    /// groups again only when it carried one: one that carried none drops
+    /// nothing a later capture names by ID alone.
+    #[test]
+    fn a_capacity_drop_resets_carried_groups_only_when_it_carried_one() {
+        for carries in [false, true] {
+            let (delivery, mut publisher) = publisher(CloudPublisherConfig {
+                candidate_target: 1,
+                max_pending_snapshots: 2,
+                ..CloudPublisherConfig::default()
+            });
+            let pool = SnapshotPool::unbounded(Limits::default());
+            capture(&mut publisher, &pool, 0);
+            capture(&mut publisher, &pool, 1);
+            if carries {
+                offer(&mut publisher, carrying(&pool, "Dropped", 0));
+            } else {
+                capture(&mut publisher, &pool, 2);
+            }
+            assert_eq!(publisher.retained_snapshots, 2);
+            assert_eq!(delivery.handle().loss_count(), 1);
+            assert_eq!(delivery.handle().carried_resets(), u64::from(carries));
+            assert!(!delivery.handle().is_disabled());
+        }
+    }
+
+    /// A definition group a capture carried, already offered by an earlier
+    /// capture, is not lost when the capture is dropped for room.
+    #[test]
+    fn a_capacity_drop_of_a_group_offered_before_does_not_reset() {
+        let (delivery, mut publisher) = publisher(CloudPublisherConfig {
+            candidate_target: 1,
+            max_pending_snapshots: 2,
+            ..CloudPublisherConfig::default()
+        });
+        let pool = SnapshotPool::unbounded(Limits::default());
+        offer(&mut publisher, carrying(&pool, "Shared", 0));
+        capture(&mut publisher, &pool, 1);
+        // Another stream's capture, of another type that names the class,
+        // carries the same group.
+        let again = carrying(&pool, "Shared", 1);
+        offer(&mut publisher, again);
+        assert_eq!(publisher.retained_snapshots, 2);
+        assert_eq!(delivery.handle().loss_count(), 1);
+        assert_eq!(delivery.handle().carried_resets(), 0);
+    }
+
+    /// A recording file lost for its size takes no blob from the queue: a
+    /// definition group queued with it is sent with the next file, so the
+    /// streams keep what they carried.
+    #[test]
+    fn a_lost_recording_file_keeps_the_groups_queued_with_it() {
+        let delivery = BcsDelivery::new(
+            DeliveryConfig {
+                max_recording_body_bytes: 128,
+                ..DeliveryConfig::new("http://127.0.0.1:1".parse().unwrap())
+            },
+            |_| panic!("oversized payload must not disable delivery"),
+        )
+        .unwrap();
+        let mut publisher = CloudPublisher::new(
+            RecordingId::generate(),
+            RecordingConfig {
+                target_bytes: NonZeroUsize::new(128).unwrap(),
+                ..RecordingConfig::default()
+            },
+            CloudPublisherConfig {
+                // Sixteen captures seal the file this test watches.
+                candidate_target: 16,
+                ..CloudPublisherConfig::default()
+            },
+            delivery.handle(),
+        )
+        .unwrap();
+        publisher.recording_target = usize::MAX;
+        let pool = SnapshotPool::unbounded(Limits::default());
+        let snapshot = carrying(&pool, "Queued", 0);
+        let group = snapshot
+            .blobs()
+            .find(btel_snapshot::Blob::is_definition)
+            .map(|blob| blob.id())
+            .unwrap();
+        offer(&mut publisher, snapshot);
+        for value in 0..15 {
+            capture(&mut publisher, &pool, value);
+        }
+        assert_eq!(publisher.failure, None);
+        assert_eq!(delivery.handle().loss_count(), 1);
+        assert_eq!(delivery.handle().carried_resets(), 0);
+        let sent: Vec<_> = publisher
+            .staged
+            .iter()
+            .flat_map(|staged| &staged.window.candidates)
+            .map(|candidate| candidate.id)
+            .chain(publisher.queue.iter().map(|queued| queued.id))
+            .collect();
+        assert!(sent.contains(&group), "the group is still to be sent");
     }
 
     #[test]
@@ -1778,7 +2042,11 @@ mod tests {
                     target_bytes: NonZeroUsize::new(512).unwrap(),
                     ..RecordingConfig::default()
                 },
-                CloudPublisherConfig::default(),
+                CloudPublisherConfig {
+                    // Sixteen captures seal the file the "body" case watches.
+                    candidate_target: 16,
+                    ..CloudPublisherConfig::default()
+                },
                 delivery.handle(),
             )
             .unwrap();
@@ -1817,7 +2085,7 @@ mod tests {
                     delivery.handle().config().recording_reserved_bytes;
             }
             define(&mut publisher, 2);
-            let pool = SnapshotPool::new(20, Limits::default());
+            let pool = SnapshotPool::unbounded(Limits::default());
             if rejection == "body" {
                 for value in 0..16 {
                     capture(&mut publisher, &pool, value);
@@ -1882,26 +2150,6 @@ mod tests {
     }
 
     #[test]
-    fn publisher_owner_limit_preserves_minimum_pool_headroom() {
-        let (delivery, _) = publisher(CloudPublisherConfig::default());
-        let make = |max_pending_snapshots| {
-            CloudPublisher::new(
-                RecordingId::generate(),
-                RecordingConfig::default(),
-                CloudPublisherConfig {
-                    max_pending_snapshots,
-                    ..CloudPublisherConfig::default()
-                },
-                delivery.handle(),
-            )
-        };
-        let remaining = btel_settings::snapshot::MIN_SNAPSHOT_SLOTS
-            - delivery.handle().config().max_pending_snapshots;
-        assert!(make(remaining).is_err());
-        assert!(make(remaining - 1).is_ok());
-    }
-
-    #[test]
     fn placement_preserves_candidate_order_and_uses_all_target_kinds() {
         let config = CloudPublisherConfig {
             inline_target_bytes: 10,
@@ -1909,7 +2157,7 @@ mod tests {
             standalone_threshold_bytes: 100,
             ..CloudPublisherConfig::default()
         };
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let snapshot = pool
             .try_acquire()
             .unwrap()

@@ -441,7 +441,7 @@ fn snapshot(pool: &btel_snapshot::SnapshotPool, n: i64) -> btel_snapshot::Snapsh
 fn cas_is_shared_across_recordings_and_atomic_under_concurrent_writers() {
     let root = tempfile::tempdir().unwrap();
     let cas = root.path().join("cas");
-    let pool = btel_snapshot::SnapshotPool::new(3, btel_snapshot::Limits::default());
+    let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
     let value = snapshot(&pool, 42);
     let id = value.root_id();
     let expected = root_blob(&value);
@@ -521,7 +521,7 @@ fn cut_snapshot(pool: &btel_snapshot::SnapshotPool) -> btel_snapshot::Snapshot {
 fn every_blob_of_a_capture_is_written_and_stored_ones_are_kept() {
     let root = tempfile::tempdir().unwrap();
     let cas = root.path().join("cas");
-    let pool = btel_snapshot::SnapshotPool::new(2, btel_snapshot::Limits::default());
+    let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
     let value = cut_snapshot(&pool);
     let mut scratch = btel_snapshot::BlobScratch::default();
     let expected: Vec<_> = value
@@ -563,7 +563,7 @@ fn every_blob_of_a_capture_is_written_and_stored_ones_are_kept() {
 #[test]
 fn a_writer_does_not_check_again_for_blobs_it_placed() {
     let root = tempfile::tempdir().unwrap();
-    let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+    let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
     let value = cut_snapshot(&pool);
     let child = cas_path(root.path(), value.blobs().next().unwrap().id());
     let mut writer = crate::cas::CasWriter::new(root.path().to_owned());
@@ -583,7 +583,7 @@ fn a_writer_does_not_check_again_for_blobs_it_placed() {
 #[test]
 fn new_cas_version_does_not_reuse_or_overwrite_old_namespace() {
     let root = tempfile::tempdir().unwrap();
-    let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+    let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
     let value = snapshot(&pool, 42);
     let path = cas_path(root.path(), value.root_id());
     let legacy = crate::cas_path_versioned(
@@ -603,7 +603,7 @@ fn new_cas_version_does_not_reuse_or_overwrite_old_namespace() {
 #[test]
 fn cas_failure_releases_full_queue_and_retained_snapshot_owners() {
     let root = tempfile::tempdir().unwrap();
-    let pool = btel_snapshot::SnapshotPool::new(3, btel_snapshot::Limits::default());
+    let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
     let (entered, started) = mpsc::channel();
     let (release, released) = mpsc::channel();
     let mut sink = LocalDelivery::start_with_snapshots(

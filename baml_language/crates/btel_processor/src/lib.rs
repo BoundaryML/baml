@@ -1,7 +1,9 @@
 //! Chunk-backed processing: combine all function completions and forward spans.
 //! Captures must be independently owned before publication; this crate never
 //! accesses VM heaps. One bound worker scans original storage, with no event
-//! cloning or dynamic dispatch. Producers keep spin-only backpressure.
+//! cloning or dynamic dispatch. Producers never wait forever: out of storage,
+//! they wait a bounded time for some to come back and then take more
+//! ([`btel_settings::overage`]).
 //!
 //! The default publisher has zero sinks: it merges bounded aggregate windows and
 //! releases spans. It neither exports nor retains telemetry beyond those windows.
@@ -17,7 +19,7 @@ use std::{
 
 pub use bex_chunkedringbuffer::DrainStatus as Progress;
 use bex_chunkedringbuffer::{Consumer, ProducerId, SpanChunk, TransportFailed};
-use btel_records::{SpanRecord, TimingRecord};
+use btel_records::{Capture, SpanRecord, TimingRecord};
 use btel_types::{
     AwaitDuration, CallPathId, CallPathNodeId, ClockInstant, InvocationOutcome, TelemetryId,
 };
@@ -44,10 +46,20 @@ const _: () =
 struct Processing<P> {
     publisher: P,
     cache: CombiningCache,
-    contexts: Box<[DecoderContext]>,
+    /// One per producer index, grown as threads beyond the pool's table
+    /// bind producers of their own.
+    contexts: Vec<DecoderContext>,
 }
 
 impl<P> Processing<P> {
+    fn context(&mut self, producer: ProducerId) -> &mut DecoderContext {
+        let index = producer.index();
+        if index >= self.contexts.len() {
+            self.contexts.resize(index + 1, DecoderContext::default());
+        }
+        &mut self.contexts[index]
+    }
+
     fn sample<I, V>(
         &mut self,
         path: CallPathId,
@@ -77,7 +89,7 @@ impl<P> Processing<P> {
     where
         P: Publisher<I, V>,
     {
-        let mut thread = self.contexts[producer.index()].timing;
+        let mut thread = self.context(producer).timing;
         for record in records.as_slice() {
             match *record {
                 TimingRecord::ThreadSelected { thread_id } => thread = Some(thread_id),
@@ -103,11 +115,11 @@ impl<P> Processing<P> {
                 }
             }
         }
-        self.contexts[producer.index()].timing = thread;
+        self.context(producer).timing = thread;
         drop(records);
     }
 
-    fn spans<I, V>(
+    fn spans<I: Capture, V: Capture>(
         &mut self,
         producer: ProducerId,
         mut records: SpanChunk<TimingRecord, SpanRecord<I, V>>,
@@ -116,7 +128,13 @@ impl<P> Processing<P> {
         P: Publisher<I, V>,
     {
         self.publisher.before_span_chunk(records.as_slice().len());
-        let initial_thread = self.contexts[producer.index()].span;
+        // The chunk is the processor's now, its captures with it: they stop
+        // counting against the producers' budget before anything downstream
+        // can hold them up.
+        for record in records.as_slice() {
+            record.uncharge_captures();
+        }
+        let initial_thread = self.context(producer).span;
         let mut thread = initial_thread;
         if P::DETACH_RECORDS {
             assert!(detached.is_empty());
@@ -132,7 +150,7 @@ impl<P> Processing<P> {
             records.consume_in_place(|record| self.span(&mut thread, record));
             drop(records);
         }
-        self.contexts[producer.index()].span = thread;
+        self.context(producer).span = thread;
     }
 
     fn span<I, V>(&mut self, thread: &mut Option<TelemetryId>, record: &mut SpanRecord<I, V>)
@@ -430,6 +448,13 @@ mod runtime;
 pub use runtime::{
     ExecutionScope, FutureErrorLinks, RecordingControl, RuntimeError, SpanOwner, TelemetryRuntime,
 };
+/// What [`TelemetryRuntime::diagnostics`] reads, and the transport readings
+/// it is made of, so a reader need not name the transport crate.
+#[cfg(all(not(target_arch = "wasm32"), feature = "diagnostics"))]
+pub use {
+    bex_chunkedringbuffer::{PoolDiagnostics as LaneDiagnostics, Stats as TransportStats},
+    runtime::Diagnostics,
+};
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum ProcessorError {
@@ -464,7 +489,8 @@ pub struct Processor<InputCapture, ValueCapture, P = NoSinkPublisher> {
     max_chunks: NonZeroUsize,
     processing: Processing<P>,
     // Two capacity-sized buffers for opted-in publishers, with one live chunk
-    // at a time. Capture owners still share the existing VM snapshot pool.
+    // at a time. Their captures are the processor's, uncharged from the
+    // producers' budget, until the publisher takes or drops them.
     detached: Vec<SpanRecord<InputCapture, ValueCapture>>,
     detached_timing: Vec<TimingRecord>,
     next_flush: Instant,
@@ -472,7 +498,7 @@ pub struct Processor<InputCapture, ValueCapture, P = NoSinkPublisher> {
     deferred_spans: Option<DeferredSpans<InputCapture, ValueCapture>>,
 }
 
-impl<I, V> Processor<I, V> {
+impl<I: Capture, V: Capture> Processor<I, V> {
     pub fn new(
         consumer: Consumer<TimingRecord, SpanRecord<I, V>>,
         max_chunks: NonZeroUsize,
@@ -481,14 +507,13 @@ impl<I, V> Processor<I, V> {
     }
 }
 
-impl<I, V, P: Publisher<I, V>> Processor<I, V, P> {
+impl<I: Capture, V: Capture, P: Publisher<I, V>> Processor<I, V, P> {
     pub fn with_publisher(
         consumer: Consumer<TimingRecord, SpanRecord<I, V>>,
         max_chunks: NonZeroUsize,
         publisher: P,
     ) -> Self {
-        let contexts =
-            vec![DecoderContext::default(); consumer.producer_capacity()].into_boxed_slice();
+        let contexts = Vec::new();
         let max_chunks = NonZeroUsize::new(max_chunks.get().min(if P::DETACH_RECORDS {
             1
         } else {
@@ -613,6 +638,8 @@ impl<I, V, P: Publisher<I, V>> Processor<I, V, P> {
                         );
                         for (thread, context, record) in pending {
                             use btel_records::ContextReference;
+                            // Deferred records never went through a chunk.
+                            record.uncharge_captures();
                             let marker = match context {
                                 ContextReference::Empty => SpanRecord::ContextCleared,
                                 ContextReference::Unavailable => SpanRecord::ContextSelected {

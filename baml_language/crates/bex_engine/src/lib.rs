@@ -96,6 +96,8 @@ mod thread;
 pub use btel_types::ProcessStatus;
 #[cfg(not(target_arch = "wasm32"))]
 pub use telemetry::TelemetryRecording;
+#[cfg(all(not(target_arch = "wasm32"), feature = "telemetry_diagnostics"))]
+pub use telemetry::append_diagnostics_line;
 mod telemetry_network;
 mod telemetry_state;
 pub mod trace_heap;
@@ -788,6 +790,116 @@ fn extract_exit_code(value: &BexExternalValue) -> Option<i64> {
         },
         _ => None,
     }
+}
+
+/// Why a package's `$init` failed, for the person reading it: the global
+/// whose initializer was running, the BAML traceback, and the thrown value
+/// rendered as BAML — not the raw heap pointer `VmError`'s `Display` prints.
+fn describe_init_failure(
+    heap: &Arc<BexHeap>,
+    package: &str,
+    error: &bex_vm::errors::VmError,
+    global_names: &HashMap<usize, String>,
+) -> String {
+    use bex_vm::errors::VmError;
+    let trace: &[bex_vm::StackFrame] = match error {
+        VmError::ThrownUnhandled { trace, .. } | VmError::TracedInternalError { trace, .. } => {
+            trace
+        }
+        VmError::Thrown(_) | VmError::InternalError(_) => &[],
+    };
+    let global = init_global_on_stack(trace);
+    let detail = match error {
+        VmError::ThrownUnhandled { value, trace } => {
+            // SAFETY: `$init` runs before the engine's heap-permit manager
+            // exists, so no collector can run concurrently with this read.
+            #[allow(
+                unsafe_code,
+                reason = "no collector exists during `$init`; see SAFETY above"
+            )]
+            let permit = unsafe { bex_heap::PermitProof::new() };
+            let value = conversion::owned_external_value(heap, permit, *value);
+            format_unhandled_throw(&value, trace)
+        }
+        VmError::TracedInternalError {
+            source: bex_vm::errors::VmInternalError::GlobalReadBeforeInit { slot },
+            trace,
+        } => {
+            use std::fmt::Write;
+            let mut out = bex_vm::format_traceback(
+                trace
+                    .iter()
+                    .map(|f| (f.file_path.as_str(), f.error_line, f.function_name.as_str())),
+            );
+            let read = global_names.get(&slot.raw()).map_or_else(
+                || format!("slot {}", slot.raw()),
+                |name| format!("`{name}`"),
+            );
+            write!(
+                out,
+                "global {read} was read before its initializer ran — globals are initialized \
+                 in dependency order, but this read goes through a call the compiler cannot \
+                 follow (a virtual interface method or a function value); reach it directly \
+                 from the initializer, or move the read into the function that needs it"
+            )
+            .unwrap();
+            out
+        }
+        VmError::TracedInternalError { source, trace } => format_vm_internal_error(source, trace),
+        other => other.to_string(),
+    };
+    match global {
+        Some(global) => format!(
+            "`$init` of package `{package}` failed while initializing global `{global}`:\n{detail}"
+        ),
+        None => format!("`$init` of package `{package}` failed: {detail}"),
+    }
+}
+
+/// The global whose initializer the stack `trace` is running: each
+/// initializer runs in a helper named after its global
+/// (`$init_let.<package>.<namespace…>.<name>`), and the innermost one on the
+/// stack is the one that stopped.
+fn init_global_on_stack(trace: &[bex_vm::StackFrame]) -> Option<&str> {
+    trace
+        .iter()
+        .rev()
+        .find_map(|frame| bex_vm_types::init_let_helper_global(&frame.function_name))
+}
+
+/// Why a package's `$init` stopped at a suspension point. The checker refuses
+/// io, `spawn`, and `await` reachable from an initializer (E0163, E0182), so
+/// this is the dynamic remainder — a call it could not see through, such as a
+/// virtual interface method.
+fn describe_init_suspension(
+    package: &str,
+    state: &VmExecState,
+    trace: &[bex_vm::StackFrame],
+) -> String {
+    let what = match state {
+        VmExecState::Await(_) | VmExecState::AwaitAny(_) => {
+            "waited on a future (`await`)".to_string()
+        }
+        VmExecState::Spawn { .. } => "launched a task (`spawn`)".to_string(),
+        VmExecState::SysOp { operation, .. } => format!("performed io (`{operation:?}`)"),
+        // Complete/Event/Log/EarlyYield are handled by the `$init` loop
+        // itself and never reach here.
+        _ => "yielded to the engine".to_string(),
+    };
+    let traceback = bex_vm::format_traceback(
+        trace
+            .iter()
+            .map(|f| (f.file_path.as_str(), f.error_line, f.function_name.as_str())),
+    );
+    let subject = match init_global_on_stack(trace) {
+        Some(global) => format!("the initializer of global `{global}`"),
+        None => "a top-level initializer".to_string(),
+    };
+    format!(
+        "`$init` of package `{package}` failed: {subject} {what}, which cannot run while \
+         the program starts — globals are evaluated once, before anything can be scheduled or \
+         waited on\n{traceback}"
+    )
 }
 
 fn format_unhandled_throw(value: &BexExternalValue, trace: &[bex_vm::StackFrame]) -> String {
@@ -1718,12 +1830,13 @@ impl BexEngine {
             recording,
         } = config;
         let auto_telemetry_level = match &artifact_telemetry {
-            Some(policy) => policy
-                .resolve_level()
-                .map_err(|error| EngineError::Other(error.to_string()))?,
+            Some(policy) => policy.resolve_level(),
             None => btel_settings::mode::from_env()
                 .map_err(|error| EngineError::Other(error.to_string()))?,
         };
+        let http_bodies = artifact_telemetry
+            .as_ref()
+            .is_none_or(|policy| !policy.omit_http_bodies);
         #[cfg(not(target_arch = "wasm32"))]
         let recording = recording.map(|recording| match artifact_telemetry {
             Some(policy) => recording.with_artifact_telemetry(policy),
@@ -1861,6 +1974,27 @@ impl BexEngine {
 
         // Convert compile-time globals (ConstValue) to runtime globals (Value).
         // Object references are converted from ObjectIndex to HeapPtr.
+        // Every global-variable slot, by the global's rendered name. Each one
+        // stays pending until its initializer stores it, so `$init` can name a
+        // global read before its initializer ran instead of reading the
+        // placeholder (see `BexVm::pending_globals`).
+        let global_names: HashMap<usize, String> = bytecode
+            .packages
+            .iter()
+            .flat_map(|package| {
+                package.globals.keys().filter_map(move |path| match path {
+                    bex_vm_types::DeclPath::Let(local) => package
+                        .global_slot(path)
+                        .map(|slot| (slot.raw(), local.render_under(Some(&package.name)))),
+                    _ => None,
+                })
+            })
+            .collect();
+        let mut pending_globals: Box<[bool]> = vec![false; bytecode.globals.len()].into();
+        for &slot in global_names.keys() {
+            pending_globals[slot] = true;
+        }
+
         // Float globals were redirected to compile-time Object::Float entries
         // by the boxing pre-pass above.
         let globals_vec: Vec<Value> = bytecode
@@ -1903,9 +2037,10 @@ impl BexEngine {
                     ),
                 };
                 Ok::<_, EngineError>(EngineTelemetry {
-                    policies: Arc::new(bex_vm::telemetry::TelemetryPolicies::with_auto_level(
-                        auto_level,
-                    )),
+                    policies: Arc::new(
+                        bex_vm::telemetry::TelemetryPolicies::with_auto_level(auto_level)
+                            .with_http_bodies(http_bodies),
+                    ),
                     clock: btel_clock::ClockRuntime::new(clock_mode),
                     network: Arc::default(),
                     #[cfg(not(target_arch = "wasm32"))]
@@ -1918,6 +2053,8 @@ impl BexEngine {
                     process_exit,
                     #[cfg(not(target_arch = "wasm32"))]
                     gc_function: std::sync::OnceLock::new(),
+                    #[cfg(all(not(target_arch = "wasm32"), feature = "telemetry_diagnostics"))]
+                    diagnostics_file: telemetry::diagnostics_file(),
                 })
             })
             .transpose()?;
@@ -1949,6 +2086,7 @@ impl BexEngine {
                     trace_scope,
                 );
                 vm.set_root_context(launch_context.clone());
+                vm.pending_globals = Some(std::mem::take(&mut pending_globals));
                 vm.set_entry_point(*init_ptr, &[]);
                 // Drive the VM to completion. $init only contains synchronous
                 // bytecode, but events and GC safepoints may still yield.
@@ -1959,6 +2097,12 @@ impl BexEngine {
                                 telemetry.validate(&vm, true);
                             }
                             vm.finish_telemetry(bex_vm::telemetry::InvocationOutcome::Ok);
+                            // A later package's `$init` reads this one's globals:
+                            // carry what is still pending forward.
+                            pending_globals = vm
+                                .pending_globals
+                                .take()
+                                .unwrap_or_else(|| unreachable!("installed above"));
                             // Extract the (potentially mutated) global pool back
                             // so StoreGlobal writes are visible to subsequent calls.
                             globals_pool = match vm.globals {
@@ -1975,13 +2119,23 @@ impl BexEngine {
                             vm.stack.push(Value::NULL);
                             continue;
                         }
+                        // A cooperative yield point, not a suspension: the VM
+                        // offers the collector a chance to run (allocation
+                        // pressure, or wasm's periodic poll). No collector
+                        // exists until `$init` finishes, so there is nothing
+                        // to park for — resume. Treating it as a failure made
+                        // any initializer heavy enough to reach one abort
+                        // engine creation.
+                        Ok(VmExecState::EarlyYield) => continue,
                         Ok(other) => {
                             if let Some(telemetry) = &telemetry {
                                 telemetry.validate(&vm, true);
                             }
                             vm.finish_telemetry(bex_vm::telemetry::InvocationOutcome::Errored);
-                            return Err(EngineError::InitFailed(format!(
-                                "`$init` of package `{init_name}` yielded unexpectedly: {other:?}"
+                            return Err(EngineError::InitFailed(describe_init_suspension(
+                                init_name,
+                                &other,
+                                &vm.stack_trace(),
                             )));
                         }
                         Err(e) => {
@@ -1989,8 +2143,11 @@ impl BexEngine {
                                 telemetry.validate(&vm, true);
                             }
                             vm.finish_telemetry(bex_vm::telemetry::InvocationOutcome::Errored);
-                            return Err(EngineError::InitFailed(format!(
-                                "`$init` of package `{init_name}` failed: {e}"
+                            return Err(EngineError::InitFailed(describe_init_failure(
+                                &heap,
+                                init_name,
+                                &e,
+                                &global_names,
                             )));
                         }
                     }
@@ -2744,11 +2901,21 @@ impl BexEngine {
                 // Transfer the shutdown guard to the joining task so it completes
                 // even if this awaiting caller is dropped.
                 match tokio::task::spawn_blocking(move || {
+                    // Every call has ended. Delivery's shutdown timeout runs
+                    // from here, so it also bounds sealing the last file.
+                    if let Some(sink) = &delivery {
+                        sink.start_draining();
+                    }
                     runtime.close_span_owners();
                     let processing = runtime.finish();
                     // Drain delivery even when processing failed. No VM or
                     // heap permit survives here; cancellation cannot skip join.
                     let delivery = delivery.map_or(Ok(()), |sink| sink.finish());
+                    // Everything is final here, and this task is joined even
+                    // if the awaiting caller is dropped: the blocking write
+                    // belongs here, before the engine reads as closed.
+                    #[cfg(feature = "telemetry_diagnostics")]
+                    shutdown.engine.report_telemetry_diagnostics();
                     shutdown.complete();
                     delivery.and(processing)
                 })
@@ -7870,6 +8037,7 @@ mod type_identity_tests {
                 methods: indexmap::IndexMap::new(),
                 generic_param_count: 0,
                 owner: bex_vm_types::types::Owner::anonymous(),
+                telemetry_definition: bex_vm_types::DefinitionCell::default(),
             })));
         let head = bex_vm_types::TypeHead::new(class, tag);
         let original = thread.vm.alloc_type(bex_vm_types::types::TypeValue::new(
@@ -7994,6 +8162,7 @@ mod type_identity_tests {
                     methods: indexmap::IndexMap::new(),
                     generic_param_count: 0,
                     owner: bex_vm_types::types::Owner::anonymous(),
+                    telemetry_definition: bex_vm_types::DefinitionCell::default(),
                 })));
         let original = source_thread
             .vm

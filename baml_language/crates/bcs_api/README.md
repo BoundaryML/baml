@@ -32,6 +32,7 @@ api_url = "https://api.prod.bcs.boundaryml.com"
 telemetry_environment = "staging"
 on_initial_telemetry_failure = "warn"
 initial_telemetry_warning_message = "Telemetry unavailable; continuing."
+http_bodies = false
 
 [pack.env_var_names]
 BOUNDARY_PROJECT = "ACME_BOUNDARY_PROJECT"
@@ -46,9 +47,11 @@ Pack and bridge settings are independent. The environment default is used only w
 
 An embedded credential fixes the destination by default. A publisher can explicitly name both destination variables, or set both to `false`. With named bindings, a project and API key select caller-owned ingestion; a project alone uses the caller's saved login and personal environment; a key alone lets the API infer its bound ingestion environment. The publisher's public token is never reused for a caller-selected destination. With no binding values set, the embedded credential remains selected. Without an embedded credential, omitted bindings accept the standard Boundary variables and saved login.
 
-The recording-level binding is independently explicit: omission or `false` freezes the default `medium`; a string names the accepted variable. Levels are `off`, `low`, `medium`, and `high`. `off` starts no cloud requests. A permitted API-key variable set to `local` selects local recording. `BOUNDARY_API_URL` always overrides the baked endpoint, including fixed embedded artifacts.
+The recording-level binding is independently explicit: omission or `false` freezes the default `medium`; a string names the accepted variable. That variable takes `off`, `low`, `medium`, or `high`, case-insensitive; `false`, `0`, and `no` also mean `off`, and `true`, `1`, `yes`, and `on` keep the default. Empty means unset, and any other value turns recording off. `off` starts no cloud requests. A permitted API-key variable set to `local` selects local recording; empty destination variables are unset. `BOUNDARY_API_URL` always overrides the baked endpoint, including fixed embedded artifacts; an invalid URL records locally instead of stopping the artifact.
 
 Newly packed binaries and generated bridges default to `warn` for initial telemetry failures; publishers can explicitly choose `abort`, `warn`, or `ignore`. Authorization starts immediately in the background. Initial failure cancels BAML execution for `abort`; `warn` prints the configured message and continues; `ignore` continues silently. Bridge `abort` returns an operation error while the host process stays running. Ordinary caller-configured CLI cloud recording defaults to `abort` and exits nonzero on initial failure. After initial success, later telemetry failures remain nonfatal under every policy.
+
+At `medium` and `high`, network spans record request and response bodies, streamed events included. `http_bodies = false` keeps every body out of them at every level, for an API whose responses carry secrets such as session tokens. They still record the method, the sanitized URL and headers, the status, timing and whether the request failed, but not its error, which can quote the body. Model calls are network spans too, so this also keeps rendered prompts and raw model responses out; token usage is still recorded. Function spans are unchanged: they record arguments, results and errors as their trace policy says, and an error can carry a body, such as a model error's `raw_body`. Omission or `true` records bodies.
 
 ### Build provisioning contract
 

@@ -207,6 +207,13 @@ export function releaseWebHostCallable(key: bigint): void;
 export function seedGenericMediaHandle(): bigint;
 
 /**
+ * Finalize the SDK lifetime: drain in-flight calls and spawned work, then
+ * release the runtime. Repeated calls are harmless; BAML calls made
+ * afterwards fail.
+ */
+export function shutdownRuntime(): Promise<void>;
+
+/**
  * Stage a runtime from precompiled BAML bytecode: a raw artifact
  * (`Uint8Array`), or the encoded string generated SDKs embed (decoded
  * natively, never in JavaScript).
@@ -223,16 +230,6 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
-    readonly callFunction: (a: number, b: number, c: any, d: any) => any;
-    readonly callFunctionSync: (a: number, b: number, c: any, d: any) => [number, number, number, number];
-    readonly stageRuntimeBytecode: (a: any, b: number, c: number) => [number, number];
-    readonly stageRuntimeSources: (a: number, b: number, c: any) => [number, number];
-    readonly __wbg_cancellationwatch_free: (a: number, b: number) => void;
-    readonly cloneOutboundValue: (a: number, b: number) => [number, number, number, number];
-    readonly invocationContext: (a: bigint) => [number, number, number, number];
-    readonly isInvocationCancelled: (a: bigint) => [number, number, number];
-    readonly traceSelection: (a: bigint, b: bigint) => [number, number, number];
-    readonly watchInvocationCancellation: (a: bigint, b: any) => [number, number, number];
     readonly _encodeWebInbound: (a: any, b: number, c: number) => [number, number, number, number];
     readonly completeWebHostCallThrow: (a: number, b: any) => [number, number, number];
     readonly completeWebHostCallValue: (a: number, b: any) => [number, number, number, number];
@@ -252,6 +249,12 @@ export interface InitOutput {
     readonly cloneHandle: (a: bigint) => [bigint, number, number];
     readonly releaseHandle: (a: bigint) => number;
     readonly seedGenericMediaHandle: () => [bigint, number, number];
+    readonly __wbg_cancellationwatch_free: (a: number, b: number) => void;
+    readonly cloneOutboundValue: (a: number, b: number) => [number, number, number, number];
+    readonly invocationContext: (a: bigint) => [number, number, number, number];
+    readonly isInvocationCancelled: (a: bigint) => [number, number, number];
+    readonly traceSelection: (a: bigint, b: bigint) => [number, number, number];
+    readonly watchInvocationCancellation: (a: bigint, b: any) => [number, number, number];
     readonly mediaBase64: (a: bigint, b: number) => [number, number, number, number];
     readonly mediaFromBase64: (a: number, b: number, c: number, d: number, e: number) => [bigint, number, number];
     readonly mediaFromFileBytes: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [bigint, number, number];
@@ -274,6 +277,11 @@ export interface InitOutput {
     readonly registerWebHostCancelCallback: (a: any) => number;
     readonly registerWebHostValueReleaseCallback: (a: any) => number;
     readonly releaseWebHostCallable: (a: bigint) => void;
+    readonly callFunction: (a: number, b: number, c: any, d: any) => any;
+    readonly callFunctionSync: (a: number, b: number, c: any, d: any) => [number, number, number, number];
+    readonly shutdownRuntime: () => any;
+    readonly stageRuntimeBytecode: (a: any, b: number, c: number) => [number, number];
+    readonly stageRuntimeSources: (a: number, b: number, c: any) => [number, number];
     readonly completeHostCall: (a: number, b: number, c: number) => number;
     readonly mintHostValueKey: () => bigint;
     readonly registerHostCallable: (a: any) => bigint;

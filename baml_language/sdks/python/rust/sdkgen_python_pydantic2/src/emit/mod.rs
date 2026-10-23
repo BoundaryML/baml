@@ -12,9 +12,11 @@ pub(crate) mod method;
 pub(crate) mod type_alias;
 pub(crate) mod typemap_file;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
-use baml_sdkgen_types::{ClassCrossing, FunctionArgumentDefault, Name, Symbol, SymbolPool, Ty};
+use baml_sdkgen_types::{
+    ClassCrossing, FunctionArgumentDefault, Name, Symbol, SymbolPool, Ty, is_nullable,
+};
 
 use crate::{
     emit::{
@@ -62,14 +64,6 @@ pub(crate) fn build_emitted(
     pool: &SymbolPool,
     names: &PythonNames,
 ) -> Vec<(LeafPath, EmittedSymbol, SortKey)> {
-    let aliases: BTreeMap<Name, Ty> = pool
-        .iter()
-        .filter_map(|(name, symbol)| match symbol {
-            Symbol::TypeAlias(alias) => Some((name.clone(), alias.resolves_to.clone())),
-            _ => None,
-        })
-        .collect();
-
     // Determinism: SymbolPool is a HashMap, so iteration order is
     // nondeterministic. Sort pool entries by Name before the walk so
     // triples with identical sort keys (shouldn't happen in practice,
@@ -103,7 +97,7 @@ pub(crate) fn build_emitted(
                                     name: names.field(key, &wire_name).into_owned(),
                                     wire_name,
                                     ty: p.ty.clone(),
-                                    nullable: is_nullable(&p.ty, &aliases, &mut BTreeSet::new()),
+                                    nullable: is_nullable(&p.ty, pool),
                                     docstring: p.docstring.clone(),
                                 }
                             })
@@ -206,27 +200,6 @@ pub(crate) fn build_emitted(
     }
 
     out
-}
-
-fn is_nullable(ty: &Ty, aliases: &BTreeMap<Name, Ty>, visiting: &mut BTreeSet<Name>) -> bool {
-    match ty {
-        Ty::Null => true,
-        Ty::Union(items) => items
-            .iter()
-            .any(|item| is_nullable(item, aliases, visiting)),
-        Ty::TypeAlias(name) => {
-            let Some(resolved) = aliases.get(name) else {
-                return false;
-            };
-            if !visiting.insert(name.clone()) {
-                return false;
-            }
-            let nullable = is_nullable(resolved, aliases, visiting);
-            visiting.remove(name);
-            nullable
-        }
-        _ => false,
-    }
 }
 
 /// Emit sync and async Python bindings for one exact BAML callable FQN.

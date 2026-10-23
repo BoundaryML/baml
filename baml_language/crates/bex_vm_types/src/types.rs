@@ -1036,6 +1036,7 @@ mod tests {
             docstring: None,
             other: indexmap::IndexMap::new(),
             owner: Owner::anonymous(),
+            telemetry_definition: crate::DefinitionCell::default(),
         }));
         assert!(
             program

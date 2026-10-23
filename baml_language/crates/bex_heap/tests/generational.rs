@@ -146,6 +146,7 @@ fn runtime_package_object_cycle_survives_when_rooted_and_collects_when_dropped()
             methods: IndexMap::new(),
             generic_param_count: 0,
             owner: bex_vm_types::types::Owner::Package(package_ptr),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
         })));
         let ty = RealizedTy::Class(
             bex_vm_types::TypeHead::new(class_ptr, type_tag),
@@ -1228,6 +1229,7 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
         other: IndexMap::new(),
         type_tag: enum_tag,
         owner: bex_vm_types::types::Owner::Package(package_ptr),
+        telemetry_definition: bex_vm_types::DefinitionCell::default(),
     })));
     let field_ty = RealizedTy::Enum(bex_vm_types::TypeHead::new(enum_ptr, enum_tag));
     let class_ptr = tlab.alloc(Object::Class(Box::new(Class {
@@ -1256,6 +1258,7 @@ fn a_field_type_value_keeps_its_declaration_and_package_alive() {
         methods: IndexMap::new(),
         generic_param_count: 0,
         owner: bex_vm_types::types::Owner::anonymous(),
+        telemetry_definition: bex_vm_types::DefinitionCell::default(),
     })));
 
     // Root only the outer class: the enum survives through the field type's
@@ -1495,6 +1498,7 @@ fn class_method_bodies_are_traced_and_forwarded() {
         methods,
         generic_param_count: 0,
         owner: bex_vm_types::types::Owner::Package(package_ptr),
+        telemetry_definition: bex_vm_types::DefinitionCell::default(),
     })));
 
     let mut roots = vec![class_ptr];
@@ -1592,6 +1596,7 @@ fn future_output_type_heads_are_traced_and_forwarded() {
         methods: IndexMap::new(),
         generic_param_count: 0,
         owner: bex_vm_types::types::Owner::anonymous(),
+        telemetry_definition: bex_vm_types::DefinitionCell::default(),
     })));
     let returns = RealizedTy::Class(
         bex_vm_types::TypeHead::new(class_ptr, type_tag),
@@ -1779,6 +1784,7 @@ fn class_with_cleanup(name: &str, cleanup: bex_vm_types::HeapPtr) -> Class {
         methods,
         generic_param_count: 0,
         owner: bex_vm_types::types::Owner::anonymous(),
+        telemetry_definition: bex_vm_types::DefinitionCell::default(),
     }
 }
 

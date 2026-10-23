@@ -771,6 +771,82 @@ fn find_function(
     Ok(Some(function_value))
 }
 
+/// A global's cell, read for reflection.
+enum GlobalCell {
+    Value(Value),
+    /// A program global `$init` has not initialized yet.
+    Pending(bex_vm_types::GlobalIndex),
+}
+
+/// The cell at `ordinal` of `package`, read as a global: its value, or the
+/// slot `$init` has not reached yet (only a program's own slots are tracked).
+fn global_cell(vm: &BexVm, package: &Package, ordinal: u32) -> Option<GlobalCell> {
+    if let Slots::Program { base } = &package.slots {
+        let slot = bex_vm_types::GlobalIndex::from_raw(base.raw() + ordinal as usize);
+        if vm.global_is_pending(slot) {
+            return Some(GlobalCell::Pending(slot));
+        }
+    }
+    super::graft::cell_value(vm, package, ordinal).map(GlobalCell::Value)
+}
+
+/// The value `Package.find_global<T>` answers with, or `None` for a miss.
+/// Reading a global whose initializer has not run yet is the error a direct
+/// read is; a value that is not a `T` is a `reflect.errors.TypeMismatch`.
+fn find_global(
+    vm: &mut BexVm,
+    package: Value,
+    name: &bex_str::BexStr,
+) -> Result<Option<Value>, VmRustFnError> {
+    let package_ptr = package_ptr(vm, package)?;
+    let Some(local) = local_name(name.as_str()) else {
+        return Ok(None);
+    };
+    let path = DeclPath::Let(local);
+    let cell = find_export(vm, package_ptr, |vm, _, package| {
+        global_cell(vm, package, *package.globals.get(&path)?)
+    });
+    let value = match cell {
+        None => return Ok(None),
+        Some(GlobalCell::Pending(slot)) => {
+            return Err(VmRustFnError::InternalError(
+                bex_vm_types::errors::VmInternalError::GlobalReadBeforeInit { slot },
+            ));
+        }
+        Some(GlobalCell::Value(value)) => value,
+    };
+    // The caller's `T`. Erasing a missing one to `unknown` would admit any
+    // value; an absent type argument is a frame-seeding bug.
+    let Some(expected) = vm.current_call_type_args().first().cloned() else {
+        return Err(VmRustFnError::InternalError(
+            bex_vm_types::errors::VmInternalError::MissingNativeFunction {
+                name: "reflect.Package.find_global: missing type argument".to_string(),
+            },
+        ));
+    };
+    let matches = crate::type_match::value_matches_template(
+        vm,
+        value,
+        &TyTemplate::from(expected.clone()),
+        &[],
+    )
+    .map_err(VmRustFnError::InternalError)?;
+    if !matches {
+        let got = vm.value_concrete_ty(value).map_or_else(
+            || "unknown".to_string(),
+            |ty| RealizedTy::from(ty).to_string(),
+        );
+        let message = Value::object(vm.alloc_string(format!(
+            "global `{}` has type `{got}`, expected `{expected}`",
+            name.as_str()
+        )));
+        return Err(VmRustFnError::thrown_fresh(
+            copy::errors::TypeMismatch { message }.to_value(vm),
+        ));
+    }
+    Ok(Some(value))
+}
+
 /// The `reflect.errors.NotFound` a `get_*` lookup throws where its `find_*`
 /// counterpart returns `null`.
 fn not_found(vm: &mut BexVm, kind: &str, name: &bex_str::BexStr) -> VmRustFnError {
@@ -1422,6 +1498,50 @@ impl BamlClassPackage for PackageReflectImpl {
                 function_type(vm, owner, &name).map(|ty| (display_local_name(&name).into(), ty))
             })
             .collect()
+    }
+
+    fn globals(vm: &mut BexVm, package: &Value) -> IndexMap<bex_str::BexStr, Value> {
+        let Ok(ptr) = package_object(vm, *package) else {
+            return IndexMap::new();
+        };
+        // Every top-level binding along the export chain, each under the
+        // first package that exports its name. One `$init` has not reached
+        // yet has no value to list.
+        let mut globals: IndexMap<bex_str::BexStr, Value> = IndexMap::new();
+        for package_ptr in export_chain(vm, ptr) {
+            let Object::Package(package) = vm.get_object(package_ptr) else {
+                continue;
+            };
+            for (path, &ordinal) in &package.globals {
+                let DeclPath::Let(name) = path else {
+                    continue;
+                };
+                let key: bex_str::BexStr = display_local_name(name).into();
+                if globals.contains_key(&key) {
+                    continue;
+                }
+                if let Some(GlobalCell::Value(value)) = global_cell(vm, package, ordinal) {
+                    globals.insert(key, value);
+                }
+            }
+        }
+        globals
+    }
+
+    fn get_global(
+        vm: &mut BexVm,
+        package: &Value,
+        name: &bex_str::BexStr,
+    ) -> Result<Value, VmRustFnError> {
+        find_global(vm, *package, name)?.ok_or_else(|| not_found(vm, "global", name))
+    }
+
+    fn find_global(
+        vm: &mut BexVm,
+        package: &Value,
+        name: &bex_str::BexStr,
+    ) -> Result<Option<Value>, VmRustFnError> {
+        find_global(vm, *package, name)
     }
 
     fn tests(vm: &mut BexVm, package: &Value) -> NativeCallResult {

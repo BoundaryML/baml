@@ -312,9 +312,10 @@ pub struct PackageRecord {
     pub interface_blob: Vec<u8>,
 }
 
-/// One package's `$init` / `$init_test` tail: the package's `$init_let_{i}`
-/// helpers and `$init` (its init part), then its `$init_test` chainer (its
-/// test part), with tables of its own in the unit convention.
+/// One package's `$init` / `$init_test` tail: the package's
+/// `$init_let.<global>` helpers and `$init` (its init part), then its
+/// `$init_test` chainer (its test part), with tables of its own in the unit
+/// convention.
 ///
 /// A tail is kept apart from the unit because it is placed apart: the linker
 /// lays the image out package-major, each package's buckets then its init

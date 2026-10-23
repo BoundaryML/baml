@@ -10,6 +10,17 @@
 //!
 //! The impl shape is pinned by the hand-written executable spec in
 //! `bridge_rust/tests/conversions.rs`.
+//!
+//! Under the `serde` feature a union is untagged, as in BAML's own JSON: an
+//! arm serializes as its payload (a literal arm as its string), and
+//! deserializing takes the first arm, in declaration order, that the value
+//! fits. The impls are written out rather than derived with
+//! `#[serde(untagged)]`: serde's untagged buffer cannot read a float while
+//! `serde_json`'s `arbitrary_precision` feature is on, and `baml_bridge`
+//! turns it on. Values are buffered as a `serde_json::Value` (the bridge's
+//! re-exported `serde_json`) instead, and each arm reads an owned copy, so
+//! a type parameter needs only the `Deserialize<'de>` bound serde's derive
+//! puts on an enclosing class.
 
 use baml_sdkgen_types::Ty;
 use proc_macro2::TokenStream;
@@ -52,6 +63,8 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
     let mut trial_decodes = Vec::new();
     let mut indexed_decodes = Vec::new();
     let mut baml_ty_options = Vec::new();
+    let mut serialize_arms = Vec::new();
+    let mut deserialize_trials = Vec::new();
     let name_str = union_enum.rust_name.as_str();
     let arity = union_enum.arms.len();
     // Each arm is the exact type it declares, a type variable arm spelled as
@@ -113,6 +126,18 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
                         return ::std::result::Result::Ok(Self::#variant(value));
                     }
                 });
+                serialize_arms.push(quote! {
+                    Self::#variant(value) => ::serde::Serialize::serialize(value, serializer)
+                });
+                deserialize_trials.push(quote! {
+                    if let ::std::result::Result::Ok(value) =
+                        <#payload as ::serde::Deserialize<'de>>::deserialize(
+                            ::std::clone::Clone::clone(&json),
+                        )
+                    {
+                        return ::std::result::Result::Ok(Self::#variant(value));
+                    }
+                });
             }
             UnionArmKind::StringLiteral(value) => {
                 let value = value.as_str();
@@ -155,6 +180,14 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
                         return ::std::result::Result::Ok(Self::#variant);
                     }
                 });
+                serialize_arms.push(quote! {
+                    Self::#variant => serializer.serialize_str(#value)
+                });
+                deserialize_trials.push(quote! {
+                    if json.as_str() == ::std::option::Option::Some(#value) {
+                        return ::std::result::Result::Ok(Self::#variant);
+                    }
+                });
             }
         }
     }
@@ -191,6 +224,49 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
         }
     };
 
+    let has_serde = union_enum.arms.iter().all(|arm| match &arm.kind {
+        UnionArmKind::Payload(ty) => ctx.analysis.has_serde(ty),
+        UnionArmKind::StringLiteral(_) => true,
+    });
+    let serde_impls = if has_serde {
+        let no_arm = format!("value matches no arm of union `{name_str}`");
+        let serialize_generics = if param_idents.is_empty() {
+            TokenStream::new()
+        } else {
+            quote! { <#(#param_idents: ::baml_bridge::BamlValue + ::serde::Serialize),*> }
+        };
+        quote! {
+            #[cfg(feature = "serde")]
+            impl #serialize_generics ::serde::Serialize for #ident #type_generics {
+                fn serialize<__S: ::serde::Serializer>(
+                    &self,
+                    serializer: __S,
+                ) -> ::std::result::Result<__S::Ok, __S::Error> {
+                    match self {
+                        #(#serialize_arms,)*
+                    }
+                }
+            }
+
+            #[cfg(feature = "serde")]
+            impl<'de #(, #param_idents: ::baml_bridge::BamlValue + ::serde::Deserialize<'de>)*>
+                ::serde::Deserialize<'de> for #ident #type_generics
+            {
+                fn deserialize<__D: ::serde::Deserializer<'de>>(
+                    deserializer: __D,
+                ) -> ::std::result::Result<Self, __D::Error> {
+                    let json = <::baml_bridge::serde_json::Value as ::serde::Deserialize>::deserialize(
+                        deserializer,
+                    )?;
+                    #(#deserialize_trials)*
+                    ::std::result::Result::Err(<__D::Error as ::serde::de::Error>::custom(#no_arm))
+                }
+            }
+        }
+    } else {
+        TokenStream::new()
+    };
+
     Ok(quote! {
         #[derive(Debug, Clone, PartialEq)]
         pub enum #ident #bounded_generics {
@@ -198,6 +274,8 @@ pub(crate) fn emit(union_enum: &UnionEnum, ctx: &TyCtx<'_>) -> Result<TokenStrea
         }
 
         #(#from_impls)*
+
+        #serde_impls
 
         impl #bounded_generics ::baml_bridge::baml_value::internal::__BamlValuePrivate
             for #ident #type_generics

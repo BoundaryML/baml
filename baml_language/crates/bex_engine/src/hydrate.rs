@@ -760,27 +760,45 @@ impl<H: HeapPermit<BexThread>> Hydrator<'_, H> {
             }
             (class.name().to_string(), declared)
         };
-        if let Some(unknown) = fields
+        // A key the class does not declare is refused once the declared
+        // fields are read: beside an omitted nullable field it is likely that
+        // field misspelled or under its `@alias` name, and the refusal names
+        // it rather than reading the field as `null`.
+        let undeclared = fields
             .keys()
-            .find(|key| !declared.iter().any(|(field, _)| field == *key))
-        {
+            .find(|key| !declared.iter().any(|(field, _)| field == *key));
+        let mut values = Vec::with_capacity(declared.len());
+        for (field, field_ty) in &declared {
+            let built = match fields.get(field) {
+                Some(sent) => self.within(Segment::Field(Bounded::text(field)), |this| {
+                    let built = this.value(sent)?;
+                    this.member(built, field_ty)?;
+                    Ok(built)
+                })?,
+                // A plain host object leaves optional keys out: an omitted
+                // field whose type admits `null` reads as `null`, exactly as
+                // if the host had sent one.
+                None if undeclared.is_none() && self.member(Value::NULL, field_ty).is_ok() => {
+                    Value::NULL
+                }
+                None => {
+                    let hint = undeclared
+                        .map(|key| {
+                            format!(" (the value has undeclared key `{}`)", Bounded::text(key))
+                        })
+                        .unwrap_or_default();
+                    return Err(self.malformed(format!(
+                        "Missing field `{field}` in external Instance for class `{declared_name}`{hint}"
+                    )));
+                }
+            };
+            values.push(built);
+        }
+        if let Some(unknown) = undeclared {
             return Err(self.malformed(format!(
                 "class `{declared_name}` has no field `{}`",
                 Bounded::text(unknown)
             )));
-        }
-        let mut values = Vec::with_capacity(declared.len());
-        for (field, field_ty) in &declared {
-            let sent = fields.get(field).ok_or_else(|| {
-                self.malformed(format!(
-                    "Missing field `{field}` in external Instance for class `{declared_name}`"
-                ))
-            })?;
-            values.push(self.within(Segment::Field(Bounded::text(field)), |this| {
-                let built = this.value(sent)?;
-                this.member(built, field_ty)?;
-                Ok(built)
-            })?);
         }
         Ok(Value::object(
             self.holder

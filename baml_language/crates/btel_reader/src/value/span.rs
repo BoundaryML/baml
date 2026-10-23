@@ -3,11 +3,14 @@
 //! A blob names the blobs it continues in; each is read and verified alone.
 //! A child that is missing, unreadable or inconsistent with how its parent
 //! names it makes that part of the value unavailable, never the rest.
+//!
+//! Rendering also reads the definition groups the value's types and
+//! declarations name, and the groups those name.
 use std::{collections::HashMap, sync::Arc};
 
 use btel_snapshot::{
     CasId, ChildIndex, DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue, MediaPayload,
-    NodeId, TypeDescription,
+    NodeId, TypeDescription, TypeIdentity,
 };
 use num_bigint::BigInt;
 
@@ -96,7 +99,8 @@ fn child_root(child: &DecodedSnapshot) -> Result<&DecodedValue, Unavailable> {
         // A blob's root value is stored in it, and captured arguments are
         // never part of another value.
         DecodedRoot::Value(DecodedValue::External(_) | DecodedValue::ExternalNode { .. })
-        | DecodedRoot::FunctionArgs { .. } => Err(BROKEN_REFERENCE),
+        | DecodedRoot::FunctionArgs { .. }
+        | DecodedRoot::Definitions(_) => Err(BROKEN_REFERENCE),
         DecodedRoot::Value(value) => Ok(value),
     }
 }
@@ -268,6 +272,7 @@ pub(super) enum Examine {
 /// Every blob a value reaches, read once, so that the value can be walked
 /// without reading anything more.
 pub(super) struct Span {
+    examine: Examine,
     blobs: HashMap<CasId, Result<Arc<DecodedSnapshot>, Unavailable>>,
     /// How often the walked values name each object. Declarations are named
     /// by everything of their type, so they are not counted.
@@ -288,6 +293,7 @@ impl Span {
         max_blob_bytes: u64,
     ) -> Self {
         let mut span = Self {
+            examine,
             blobs: HashMap::new(),
             references: HashMap::new(),
             blobs_left: max_blobs,
@@ -313,7 +319,12 @@ impl Span {
                         span.visit(source, &blob, value, &mut pending);
                     }
                 }
-                DecodedObject::Instance { fields, .. } => {
+                DecodedObject::Instance {
+                    fields,
+                    declaration,
+                    ..
+                } => {
+                    span.declared(source, &blob, *declaration);
                     for (_, value) in fields {
                         span.visit(source, &blob, value, &mut pending);
                     }
@@ -366,6 +377,24 @@ impl Span {
                 };
                 (child, node)
             }
+            DecodedValue::Type(ty) => {
+                if let Some(ty) = &ty.decoded {
+                    let mut groups = Vec::new();
+                    ty.visit_heads(&mut |head| {
+                        if let TypeIdentity::Defined(definition) = head {
+                            groups.push(definition.group);
+                        }
+                    });
+                    for group in groups {
+                        self.groups(source, group);
+                    }
+                }
+                return;
+            }
+            DecodedValue::Enum { declaration, .. } => {
+                self.declared(source, blob, *declaration);
+                return;
+            }
             DecodedValue::Null
             | DecodedValue::OmittedArg
             | DecodedValue::Bool(_)
@@ -373,14 +402,60 @@ impl Span {
             | DecodedValue::Float(_)
             | DecodedValue::String(_)
             | DecodedValue::Bigint(_)
-            | DecodedValue::Type(_)
-            | DecodedValue::Enum { .. }
             | DecodedValue::Truncated(_) => return,
         };
         let count = self.references.entry((blob.id, id)).or_insert(0);
         *count += 1;
         if *count == 1 {
             pending.push((blob, id));
+        }
+    }
+
+    /// Read the definition group of the declaration `id` in `blob`, if it is
+    /// recorded with one.
+    fn declared(
+        &mut self,
+        source: &(impl BlobSource + ?Sized),
+        blob: &DecodedSnapshot,
+        id: NodeId,
+    ) {
+        if let Some(DecodedObject::Declaration {
+            definition: Some(definition),
+            ..
+        }) = blob.objects.get(id.0 as usize)
+        {
+            self.groups(source, definition.group);
+        }
+    }
+
+    /// Read the definition group `group` and every group it names, for a
+    /// rendering. A walk that only compares values needs none of them.
+    fn groups(&mut self, source: &(impl BlobSource + ?Sized), group: CasId) {
+        if self.examine != Examine::Structure {
+            return;
+        }
+        let mut pending = vec![group];
+        while let Some(group) = pending.pop() {
+            if self.blobs.contains_key(&group) {
+                continue;
+            }
+            if let Ok(blob) = self.read(source, group)
+                && let DecodedRoot::Definitions(_) = blob.root
+            {
+                // A group's children are the groups its field types name.
+                pending.extend(blob.children.iter().copied());
+            }
+        }
+    }
+
+    /// A definition group read for the rendering.
+    pub(super) fn group(&self, group: CasId) -> Result<&DecodedSnapshot, Unavailable> {
+        match self.blobs.get(&group) {
+            Some(Ok(blob)) => Ok(blob),
+            Some(Err(reason)) => Err(*reason),
+            // Past the blob budget, or not read because nothing rendered
+            // names it.
+            None => Err(Unavailable::BlobBudget),
         }
     }
 

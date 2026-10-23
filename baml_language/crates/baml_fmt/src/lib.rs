@@ -1200,6 +1200,146 @@ mod backtick_format_tests {
 }
 
 #[cfg(test)]
+mod minus_chain_format_tests {
+    use super::*;
+
+    /// Where line breaks separate statements, a line starting with `-` begins
+    /// a new one, so a multi-line chain containing `-` is wrapped in
+    /// parentheses, where line breaks are whitespace. Inside call arguments
+    /// it needs no parentheses; a block nested there needs them again. Chains
+    /// without `-` are unchanged, and `<` stays leading because the parser
+    /// reads it as a continuation.
+    #[test]
+    fn chains_with_minus_are_parenthesized_where_lines_separate_statements() {
+        let source = "function f(c: bool, aaaaaaaaaaaaaaaaaaaa: int, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: int) -> bool {
+    let v = if (c) { let t = aaaaaaaaaaaaaaaaaaaa; t } else { bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb } - aaaaaaaaaaaaaaaaaaaa
+    let w = aaaaaaaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa * bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    let y = aaaaaaaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb + aaaaaaaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    let z = g(aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb)
+    let l = g((x: int) -> int { aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb })
+    let e = aaaaaaaaaaaaaaaaaaaa == bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa
+    if (c) { let t = aaaaaaaaaaaaaaaaaaaa; t } else { bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb } < v + w + y + z
+}
+";
+        let expected = "function f(c: bool, aaaaaaaaaaaaaaaaaaaa: int, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: int) -> bool {
+    let v = (
+        if (c) {
+            let t = aaaaaaaaaaaaaaaaaaaa;
+            t
+        } else {
+            bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+        }
+            - aaaaaaaaaaaaaaaaaaaa
+    );
+    let w = (
+        aaaaaaaaaaaaaaaaaaaa
+            + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            - aaaaaaaaaaaaaaaaaaaa * bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    );
+    let y = aaaaaaaaaaaaaaaaaaaa
+        + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+        + aaaaaaaaaaaaaaaaaaaa
+        + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;
+    let z = g(
+        aaaaaaaaaaaaaaaaaaaa
+            - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            - aaaaaaaaaaaaaaaaaaaa
+            - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,
+    );
+    let l = g((x: int) -> int {
+        (
+            aaaaaaaaaaaaaaaaaaaa
+                - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+                - aaaaaaaaaaaaaaaaaaaa
+                - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+        )
+    });
+    let e = aaaaaaaaaaaaaaaaaaaa
+        == (
+            bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+                - aaaaaaaaaaaaaaaaaaaa
+                - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+                - aaaaaaaaaaaaaaaaaaaa
+        );
+    if (c) {
+        let t = aaaaaaaaaaaaaaaaaaaa;
+        t
+    } else {
+        bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    }
+        < v + w + y + z
+}
+";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, expected);
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    /// The parentheses the formatter adds around an unparenthesized `if`
+    /// condition print like a real `PAREN_EXPR`, so a wide condition gets one
+    /// pair (not `if ((…))` around a `-` chain) and reformats to itself.
+    #[test]
+    fn unparenthesized_if_condition_gets_one_pair_of_parens() {
+        let source = "function f(aaaaaaaaaaaaaaaaaaaa: int, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: int) -> int {
+    if aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb > 0 { 1 } else { 2 }
+    if aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb - aaaaaaaaaaaaaaaaaaaa { 1 } else { 2 }
+    if aaaaaaaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb + aaaaaaaaaaaaaaaaaaaa + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb > 0 { 1 } else { 2 }
+    if aaaaaaaaaaaaaaaaaaaa > 0 { 1 } else { 2 }
+}
+";
+        let expected =
+            "function f(aaaaaaaaaaaaaaaaaaaa: int, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: int) -> int {
+    if (
+        aaaaaaaaaaaaaaaaaaaa
+            - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            - aaaaaaaaaaaaaaaaaaaa
+            - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            > 0
+    ) {
+        1
+    } else {
+        2
+    }
+    if (
+        aaaaaaaaaaaaaaaaaaaa
+            - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            - aaaaaaaaaaaaaaaaaaaa
+            - bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            - aaaaaaaaaaaaaaaaaaaa
+    ) {
+        1
+    } else {
+        2
+    }
+    if (
+        aaaaaaaaaaaaaaaaaaaa
+            + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            + aaaaaaaaaaaaaaaaaaaa
+            + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            > 0
+    ) {
+        1
+    } else {
+        2
+    }
+    if (aaaaaaaaaaaaaaaaaaaa > 0) {
+        1
+    } else {
+        2
+    }
+}
+";
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(formatted, expected);
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+}
+
+#[cfg(test)]
 mod linear_formatter_regression_tests {
     use super::*;
 
@@ -2584,5 +2724,71 @@ interface /* keyword */ Named /* name */ <T> /* generics */ requires /* requires
         let formatted = format(source, &options).unwrap();
         assert_eq!(formatted, expected);
         assert_eq!(format(&formatted, &options).unwrap(), formatted);
+    }
+}
+
+#[cfg(test)]
+mod global_variable_tests {
+    //! Global variables: a file-scope `const` formats like a body-level
+    //! binding, and a run of them keeps the grouping it was written with.
+
+    use super::*;
+
+    fn assert_formats_to(source: &str, expected: &str) {
+        let options = FormatOptions::default();
+        let formatted = format(source, &options).expect("formatter should succeed");
+        assert_eq!(
+            formatted, expected,
+            "formatter output didn't match expected\n--- got ---\n{formatted}\n--- want ---\n{expected}"
+        );
+        let second = format(&formatted, &options).expect("formatter should be idempotent");
+        assert_eq!(formatted, second, "formatter should be idempotent");
+    }
+
+    #[test]
+    fn normalizes_spacing_and_inserts_the_semicolon() {
+        assert_formats_to(
+            "const   MAX:int=3\nconst  NAME =  \"x\" ;\n",
+            "const MAX: int = 3;\nconst NAME = \"x\";\n",
+        );
+    }
+
+    #[test]
+    fn adjacent_globals_stay_grouped_and_blank_lines_collapse_to_one() {
+        assert_formats_to(
+            "const A = 1;\nconst B = 2;\n\n\n\nconst C = 3;\n",
+            "const A = 1;\nconst B = 2;\n\nconst C = 3;\n",
+        );
+    }
+
+    #[test]
+    fn other_items_are_still_separated_from_globals() {
+        assert_formats_to(
+            "const A = 1;\nfunction f() -> int { A }\nconst B = 2;\n",
+            "const A = 1;\n\nfunction f() -> int {\n    A\n}\n\nconst B = 2;\n",
+        );
+    }
+
+    #[test]
+    fn comments_stay_where_they_were_written() {
+        assert_formats_to(
+            "/// The limit.\nconst LIMIT = 3; // inline\n// about NEXT\nconst NEXT = LIMIT + 1;\n",
+            "/// The limit.\nconst LIMIT = 3; // inline\n// about NEXT\nconst NEXT = LIMIT + 1;\n",
+        );
+    }
+
+    #[test]
+    fn block_initializers_format_like_body_blocks() {
+        assert_formats_to(
+            "const TOTAL = { let a = 1; a + 2 };\n",
+            "const TOTAL = {\n    let a = 1;\n    a + 2\n};\n",
+        );
+    }
+
+    /// A top-level `let` is a compile error, not a formatting one: the
+    /// formatter keeps the keyword the author wrote.
+    #[test]
+    fn a_top_level_let_keeps_its_keyword() {
+        assert_formats_to("let   A = 1\n", "let A = 1;\n");
     }
 }

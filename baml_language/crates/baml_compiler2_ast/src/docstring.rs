@@ -109,6 +109,34 @@ pub fn extract_docstring(node: &SyntaxNode) -> Option<String> {
     Some(doc_lines.join("\n"))
 }
 
+/// [`extract_docstring`] for a node whose leading comments the parser
+/// attaches to its first *token* rather than to the node itself: a file-scope
+/// `let`, whose comments sit inside its binding pattern (`LET_STMT > PATTERN >
+/// BINDING_PATTERN > LINE_COMMENT`). Walks the node's tokens in source order
+/// up to the first non-trivia token, with the same accumulation rules.
+pub fn extract_leading_docstring(node: &SyntaxNode) -> Option<String> {
+    let mut doc_lines: Vec<String> = Vec::new();
+    for token in node
+        .descendants_with_tokens()
+        .filter_map(rowan::NodeOrToken::into_token)
+    {
+        match token.kind() {
+            SyntaxKind::LINE_COMMENT => {
+                let text = token.text();
+                if let Some(doc) = text.strip_prefix("///") {
+                    let doc = doc.strip_prefix(' ').unwrap_or(doc);
+                    doc_lines.push(doc.to_string());
+                } else if !text.starts_with(DIRECTIVE_PREFIX) {
+                    doc_lines.clear();
+                }
+            }
+            SyntaxKind::WHITESPACE | SyntaxKind::NEWLINE => {}
+            _ => break,
+        }
+    }
+    (!doc_lines.is_empty()).then(|| doc_lines.join("\n"))
+}
+
 /// Return `true` when a `//baml:<marker>` directive appears in the leading
 /// comment trivia of `node`. Walks the same children prefix as
 /// `extract_docstring` so the same "immediately attached" semantics apply.

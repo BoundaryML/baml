@@ -646,6 +646,7 @@ mod tests {
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: crate::types::Owner::Package(ptr_to(&mut package)),
+            telemetry_definition: crate::DefinitionCell::default(),
         }));
 
         let mut head = TypeHead::unresolved(TypeTag::of_static_index(0));
@@ -686,6 +687,7 @@ mod tests {
             methods: indexmap::IndexMap::new(),
             generic_param_count: 0,
             owner: crate::types::Owner::anonymous(),
+            telemetry_definition: crate::DefinitionCell::default(),
         }));
         let head = TypeHead::new(ptr_to(&mut declaration), type_tag);
 

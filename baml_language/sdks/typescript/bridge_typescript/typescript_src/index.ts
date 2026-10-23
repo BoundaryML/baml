@@ -28,6 +28,10 @@ export {
     getToolchainVersion,
     getVersion,
 } from './native.js';
+// Explicit end of the BAML lifetime: drains work and seals telemetry. The
+// automatic call (exit_hook.ts) runs on Node's `beforeExit`, which does not
+// fire on `process.exit()`, on signals, or when a test runner ends workers.
+export { shutdownRuntime } from './native.js';
 export { _seedGenericMediaHandle } from './native.js';
 // Runtime-owned stdlib value classes. Exported under their `Baml*` names only;
 // codegen aliases them as Image/Audio/Video/Pdf on re-export.

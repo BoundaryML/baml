@@ -67,7 +67,7 @@ describe("builtin typemap decoding", () => {
 
   it("decodes a tagged handle as BamlStream and clones ownership when encoding", () => {
     const initialCount = raw._testHandleTableEntryCount();
-    const originalKey = raw.seedFunctionRefHandle(17);
+    const originalKey = raw.seedGenericMediaHandle();
     const stream = decode({
       ok: {
         handleValue: {
@@ -106,7 +106,7 @@ describe("builtin typemap decoding", () => {
 
   it("preserves the tagged handle class FQN on BamlStream", () => {
     const initialCount = raw._testHandleTableEntryCount();
-    const originalKey = raw.seedFunctionRefHandle(19);
+    const originalKey = raw.seedGenericMediaHandle();
     const stream = decode({
       ok: {
         handleValue: {
@@ -129,7 +129,7 @@ describe("builtin typemap decoding", () => {
   // WASM and deadlocking the JavaScript event loop.
   it("fails synthetic sync stream pulls before entering WASM", { timeout: 2_000 }, () => {
     const initialCount = raw._testHandleTableEntryCount();
-    const originalKey = raw.seedFunctionRefHandle(18);
+    const originalKey = raw.seedGenericMediaHandle();
     const stream = decode({
       ok: {
         handleValue: {

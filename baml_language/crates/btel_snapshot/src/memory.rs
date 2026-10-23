@@ -28,8 +28,20 @@ impl Snapshot {
                 (2 * size_of::<usize>() + size_of::<BigInt>())
                     .saturating_add(bigint_limb_bytes(&bigint.value))
             }))
-            .chain(graph.names.iter().map(declaration_bytes))
-            .chain(graph.types.iter().map(|ty| type_bytes(&ty.ty)));
+            .chain(
+                graph
+                    .names
+                    .iter()
+                    .map(|declared| declaration_bytes(&declared.name)),
+            )
+            .chain(graph.types.iter().map(|ty| type_bytes(&ty.ty)))
+            .chain(graph.definitions.iter().map(|group| {
+                // The shared allocation: its two counts, the blob and its
+                // bytes and child list.
+                (2 * size_of::<usize>() + size_of::<btel_types::DefinitionBlob>())
+                    .saturating_add(group.bytes().len())
+                    .saturating_add(array_bytes::<usize>(group.children().len()))
+            }));
         leaves.fold(
             size_of::<Self>().saturating_add(storage.capacity_bytes()),
             usize::saturating_add,
@@ -53,6 +65,7 @@ impl Snapshot {
             + size_of_val(&*graph.bigints)
             + size_of_val(&*graph.types)
             + size_of_val(&*graph.names)
+            + size_of_val(&*graph.definitions)
             + shape.live_bytes()
     }
 }
@@ -98,6 +111,7 @@ fn identity_bytes(identity: &TypeIdentity) -> usize {
     match identity {
         TypeIdentity::Resolved(name) => declaration_bytes(name.name()),
         TypeIdentity::Unresolved(_) => 0,
+        TypeIdentity::Defined(_) => 0,
     }
 }
 
@@ -194,7 +208,7 @@ mod tests {
 
     #[test]
     fn accounts_unused_arena_capacity() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let mut snapshot = scalar(&pool);
         let before = snapshot.retained_bytes();
         let Storage { graph, meter, .. } = &mut *snapshot.0;
@@ -207,7 +221,7 @@ mod tests {
 
     #[test]
     fn accounts_full_shared_slice_parents_for_values_and_keys() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let source = bex_str::BexStr::from("a".repeat(100_000));
         let slice = source.byte_slice(0..100);
         let mut snapshot = scalar(&pool);
@@ -232,7 +246,7 @@ mod tests {
 
     #[test]
     fn a_bigint_is_charged_its_limbs_as_a_value_and_as_a_type_literal() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let before = scalar(&pool).retained_bytes();
         // 200 bits: four limbs of eight bytes.
         let big = num_bigint::BigInt::from(1) << 199_u32;
@@ -286,14 +300,20 @@ mod tests {
             Name::new("t".repeat(1000)),
         ));
         assert!(declaration_bytes(&declaration) >= capacity * size_of::<Name>() + 3000);
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let mut snapshot = scalar(&pool);
         let Storage { graph, meter, .. } = &mut *snapshot.0;
         graph.names.reserve(1, meter);
         let before = snapshot.retained_bytes();
         let charge = declaration_bytes(&declaration);
         let Storage { graph, meter, .. } = &mut *snapshot.0;
-        graph.names.push(declaration, meter);
+        graph.names.push(
+            crate::graph::Declared {
+                name: declaration,
+                definition: None,
+            },
+            meter,
+        );
         assert_eq!(snapshot.retained_bytes() - before, charge);
     }
 

@@ -46,7 +46,7 @@ fn decode(bytes: &[u8]) -> Result<DecodedSnapshot, BlobError> {
 /// tests of its own.
 fn rich_snapshot(pool: &SnapshotPool) -> Snapshot {
     let mut b = pool.try_acquire().unwrap();
-    let declaration = b.declaration(&customer(), TypeTag::from_i64(42), false);
+    let declaration = b.declaration(&customer(), TypeTag::from_i64(42), false, None);
     let declaration = b.leaves().object(declaration).unwrap();
 
     // The list contains itself: a cycle through a container.
@@ -132,7 +132,7 @@ fn rich_snapshot(pool: &SnapshotPool) -> Snapshot {
 
 #[test]
 fn every_value_kind_round_trips_with_verified_identity_and_preserved_graph() {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let snapshot = rich_snapshot(&pool);
     let decoded = decode(&encode(&snapshot)).unwrap();
     assert_eq!(decoded.id, snapshot.root_id());
@@ -179,7 +179,7 @@ fn every_value_kind_round_trips_with_verified_identity_and_preserved_graph() {
     };
     assert!(matches!(
         decoded.object(*declaration),
-        DecodedObject::Declaration { tag, .. } if *tag == TypeTag::from_i64(42)
+        DecodedObject::Declaration { tag, .. } if *tag == Some(TypeTag::from_i64(42))
     ));
     let field = |name: &str| &fields.iter().find(|(key, _)| &**key == name).unwrap().1;
     assert_eq!(field("name"), &DecodedValue::String("hello λ".into()));
@@ -202,7 +202,7 @@ fn every_value_kind_round_trips_with_verified_identity_and_preserved_graph() {
 
 #[test]
 fn value_roots_and_limited_captures_verify() {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let b = pool.try_acquire().unwrap();
     let snapshot = b.finish(V::Truncated(crate::Limit::Bytes), &mut Shaper::default());
     assert!(snapshot.stats().limited);
@@ -221,7 +221,7 @@ fn value_roots_and_limited_captures_verify() {
 
 #[test]
 fn content_changes_are_rejected_even_when_the_header_is_intact() {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let snapshot = rich_snapshot(&pool);
     let bytes = encode(&snapshot);
     // "hello λ" appears in a string leaf; changing one letter keeps a
@@ -241,7 +241,7 @@ fn content_changes_are_rejected_even_when_the_header_is_intact() {
 
 #[test]
 fn malformed_blobs_fail_without_panicking() {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let bytes = encode(&rich_snapshot(&pool));
     for len in 0..bytes.len() {
         assert!(decode(&bytes[..len]).is_err(), "prefix {len} accepted");
@@ -282,7 +282,7 @@ fn out_of_range_references_are_structural_errors() {
 
 #[test]
 fn limits_are_enforced_before_allocation() {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let bytes = encode(&rich_snapshot(&pool));
     let tight = |limits: DecodeLimits| decode_blob(&bytes, &limits);
     assert_eq!(
@@ -332,7 +332,7 @@ fn on_large_stack<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> 
 }
 
 fn type_blob(ty: OwnedType) -> Vec<u8> {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut b = pool.try_acquire().unwrap();
     let id = b.leaves().ty(ty);
     encode(&b.finish(V::Type(id), &mut Shaper::default()))
@@ -403,10 +403,66 @@ fn type_descriptions_are_bounded_and_large_ones_never_recurse_on_the_caller() {
     assert_eq!(too_deep, Err(BlobError::Limit("type description bytes")));
 }
 
+/// A long but shallow type, such as a union of classes named by their
+/// definitions, decodes whole, on a 2 MiB stack too; the groups it names
+/// are the blob's children, in order.
+#[test]
+fn long_shallow_types_decode_whole() {
+    use crate::{Carried, TypeIdentity, definition};
+    let definitions: Vec<_> = (0..8)
+        .map(|n| {
+            let name = DeclarationName::Declared(TypeName::from_dotted_path(&format!("user.C{n}")));
+            definition::group(&[definition::Declaration::Class(definition::Class {
+                name,
+                type_params: 0,
+                meta: definition::Meta::<String>::default(),
+                stream_done: false,
+                fields: vec![],
+            })])
+            .remove(0)
+        })
+        .collect();
+    let pool = SnapshotPool::new(1, Limits::default());
+    let mut b = pool.try_acquire().unwrap();
+    let mut carried = Carried::default();
+    let members: Box<[OwnedType]> = definitions
+        .iter()
+        .map(|defined| {
+            let definition = b.leaves().define(defined, &mut carried);
+            RealizedTy::Class(TypeIdentity::Defined(definition), Box::new([]))
+        })
+        .collect();
+    let ty = RealizedTy::Union(members);
+    assert!(borsh::to_vec(&ty).unwrap().len() > SHALLOW_TYPE_BYTES);
+    let id = b.leaves().ty(ty.clone());
+    let snapshot = b.finish(V::Type(id), &mut Shaper::default());
+    let mut bytes = Vec::new();
+    snapshot
+        .root_blob()
+        .write(&mut BlobScratch::default(), &mut bytes)
+        .unwrap();
+    let decoded = std::thread::Builder::new()
+        .stack_size(2 << 20)
+        .spawn(move || decode(&bytes))
+        .unwrap()
+        .join()
+        .unwrap()
+        .unwrap();
+    let DecodedRoot::Value(DecodedValue::Type(description)) = &decoded.root else {
+        panic!("type root: {:?}", decoded.root);
+    };
+    assert_eq!(description.decoded.as_deref(), Some(&ty));
+    let groups: Vec<_> = definitions
+        .iter()
+        .map(|defined| CasId::from_bytes(defined.group.id()))
+        .collect();
+    assert_eq!(decoded.children, groups);
+}
+
 #[test]
 fn one_helper_thread_measures_every_large_description_in_a_blob() {
     let blob = on_large_stack(|| {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let mut b = pool.try_acquire().unwrap();
         let types: Vec<_> = (0..3)
             .map(|extra| b.leaves().ty(nested_list(SHALLOW_TYPE_BYTES + extra)))
@@ -436,7 +492,7 @@ fn one_helper_thread_measures_every_large_description_in_a_blob() {
 #[test]
 fn map_entry_keys_hash_like_the_producer() {
     // Keys and values from separate entry ranges must verify independently.
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut b = pool.try_acquire().unwrap();
     let key = b.leaves().ty(int_type());
     let value = b.leaves().ty(int_type());
@@ -596,7 +652,7 @@ fn references_to_other_blobs_follow_first_use_and_never_replace_a_root() {
 
 #[test]
 fn media_round_trips_each_source_with_its_content() {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut b = pool.try_acquire().unwrap();
     let label = |b: &mut crate::Builder, text: &str| b.leaves().label(&text.into()).unwrap();
     let (mime, url, path) = (

@@ -17,6 +17,7 @@ mod arena;
 mod build;
 pub mod context;
 mod decode;
+pub mod definition;
 mod encoding;
 mod graph;
 mod hash;
@@ -30,12 +31,13 @@ mod split;
 mod tags;
 mod walk;
 
-pub use build::{Builder, Leaves, Reserved, string_map};
+pub use build::{Builder, Carried, Leaves, Reserved, forget_carried, string_map};
 pub use decode::{
-    BlobError, ChildIndex, DecodeLimits, DecodedMedia, DecodedMediaSource, DecodedName,
-    DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue, Entries, Fields, MediaPayload,
-    NodeId, SHALLOW_TYPE_BYTES, SharedSnapshot, TypeDescription, decode_blob,
+    BlobError, ChildIndex, DecodeLimits, DecodedDefinition, DecodedMedia, DecodedMediaSource,
+    DecodedName, DecodedObject, DecodedRoot, DecodedSnapshot, DecodedValue, Entries, FieldType,
+    Fields, MediaPayload, NodeId, SHALLOW_TYPE_BYTES, SharedSnapshot, TypeDescription, decode_blob,
 };
+pub use definition::{DefinedHead, DefinitionHead, DefinitionRef};
 pub use encoding::{BLOB_MAGIC, BLOB_VERSION, BlobScratch};
 pub use graph::{
     BigintId, Description, FieldEntry, FunctionArgs, LabelId, Limit, MapEntry, MediaSource, NameId,

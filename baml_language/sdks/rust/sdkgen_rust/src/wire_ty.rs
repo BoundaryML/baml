@@ -183,9 +183,13 @@ pub(crate) fn wire_ty(
         Ty::PromptAst => leaf(quote! { PromptAst(::baml_bridge::wire::BamlTyPromptAst {}) }),
         Ty::Unknown => leaf(quote! { Unknown(::baml_bridge::wire::BamlTyUnknown {}) }),
         Ty::Never => leaf(quote! { Never(::baml_bridge::wire::BamlTyNever {}) }),
-        // Only a recursive alias exists as a declaration at run time, and
-        // the Rust SDK emits none; a statement spells any other alias by its
-        // body.
+        // Only a recursive alias exists as a declaration at run time: the
+        // stdlib's `json` is spelled by name, and a statement spells any other
+        // emitted alias by its body.
+        Ty::TypeAlias(name) if crate::translate_ty::is_canonical_json(name) => {
+            let fqn = name.to_string();
+            quote! { #internal::type_alias_ty(#fqn) }
+        }
         Ty::TypeAlias(name) => {
             let Some(body) = ctx.analysis.alias_body(name) else {
                 return Err(Unsupported {
