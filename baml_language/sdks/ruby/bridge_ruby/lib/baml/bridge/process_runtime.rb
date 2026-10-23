@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "pathname"
+require "rbconfig"
 require "thread"
 
 module Baml
@@ -160,20 +161,52 @@ module Baml
 
       def configured_runtime_path!
         value = ENV.fetch(RUNTIME_PATH_ENV, "")
-        if value.empty?
-          raise RuntimeConfigurationError,
-                "#{RUNTIME_PATH_ENV} must name the bridge_cffi library"
+        unless value.empty?
+          path = Pathname.new(value)
+          unless path.absolute?
+            raise RuntimeConfigurationError, "#{RUNTIME_PATH_ENV} must be an absolute path: #{value.inspect}"
+          end
+          unless path.file?
+            raise RuntimeConfigurationError, "#{RUNTIME_PATH_ENV} does not name a file: #{value.inspect} (no cache fallback)"
+          end
+
+          return path.to_s.freeze
         end
 
-        path = Pathname.new(value)
-        unless path.absolute?
-          raise RuntimeConfigurationError, "#{RUNTIME_PATH_ENV} must be an absolute path: #{value.inspect}"
-        end
+        path = cached_runtime_path
         unless path.file?
-          raise RuntimeConfigurationError, "#{RUNTIME_PATH_ENV} does not name a file: #{value.inspect}"
+          raise RuntimeConfigurationError,
+                "Unable to find BAML runtime: #{RUNTIME_PATH_ENV} is not set; " \
+                "cache path #{path.to_s.inspect} does not name a file. " \
+                "Install the library there or set #{RUNTIME_PATH_ENV}. Automatic download is not supported."
         end
 
         path.to_s.freeze
+      end
+
+      def cached_runtime_path
+        cpu, os, arch, host = RbConfig::CONFIG.values_at("host_cpu", "host_os", "arch", "host")
+        cpu = case cpu
+              when "x86_64", "amd64", "x64" then "x86_64"
+              when "aarch64", "arm64" then "aarch64"
+              end
+        target, filename = case os
+                           when /darwin/
+                             ["#{cpu}-apple-darwin", "libbridge_cffi.dylib"]
+                           when /linux/
+                             libc = [os, arch, host].join.include?("musl") ? "musl" : "gnu"
+                             ["#{cpu}-unknown-linux-#{libc}", "libbridge_cffi.so"]
+                           when /mswin|mingw/
+                             ["#{cpu}-pc-windows-msvc", "bridge_cffi.dll"]
+                           end
+        unless cpu && target
+          raise RuntimeConfigurationError,
+                "No cached BAML runtime target for #{arch}; set #{RUNTIME_PATH_ENV} explicitly"
+        end
+
+        home = ENV.fetch("BAML_HOME", "")
+        home = File.join(Dir.home, ".baml") if home.empty?
+        Pathname.new(home).join("bridges", TOOLCHAIN_VERSION, target, filename).expand_path
       end
 
       def receive_result(callback_id, outcome)

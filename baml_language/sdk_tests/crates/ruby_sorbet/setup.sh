@@ -15,6 +15,7 @@ mkdir -p "$FIXTURE_DIR"
 (
   cd "$WORKSPACE_ROOT"
   cargo build -p bridge_cffi
+  cargo build -p baml_cli --bin baml-cli
   cargo run --quiet -p sdk_test_codegen -- ruby_sorbet
 )
 
