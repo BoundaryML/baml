@@ -380,6 +380,7 @@ fn converted_output_outlives_recycled_chunks_and_preserves_selector_context() {
         span_chunks: nz(1),
         max_producers: nz(1),
         preallocate: true,
+        overage_wait_base: btel_settings::transport::OVERAGE_WAIT_BASE_DURATION,
     })
     .unwrap();
     let mut processor = Processor::with_publisher(

@@ -353,6 +353,7 @@ fn size_boundary_recycles_the_input_chunk_before_handoff() {
             span_chunks: nz(1),
             max_producers: nz(1),
             preallocate: true,
+            overage_wait_base: btel_settings::transport::OVERAGE_WAIT_BASE_DURATION,
         })
         .unwrap();
     let files = RefCell::new(Vec::new());
@@ -435,6 +436,7 @@ fn idle_processor_seals_on_the_recording_deadline_without_more_input() {
             span_chunks: nz(1),
             max_producers: nz(1),
             preallocate: true,
+            overage_wait_base: btel_settings::transport::OVERAGE_WAIT_BASE_DURATION,
         })
         .unwrap();
     let mut producer = pool.register_producer().unwrap();
@@ -791,6 +793,7 @@ fn population_outcomes_include_timing_only_calls_and_count_forwarded_spans_once(
             span_chunks: nz(1),
             max_producers: nz(1),
             preallocate: true,
+            overage_wait_base: btel_settings::transport::OVERAGE_WAIT_BASE_DURATION,
         })
         .unwrap();
     let files = RefCell::new(Vec::new());
@@ -1266,6 +1269,7 @@ fn captures_move_after_chunk_recycle_and_duplicates_release_before_file_flush() 
             span_chunks: nz(1),
             max_producers: nz(1),
             preallocate: true,
+            overage_wait_base: btel_settings::transport::OVERAGE_WAIT_BASE_DURATION,
         })
         .unwrap();
     let mut producer = chunks.register_producer().unwrap();
@@ -1659,6 +1663,7 @@ fn processor_ends_the_recording_only_after_producers_stop_writing() {
             span_chunks: nz(4),
             max_producers: nz(2),
             preallocate: true,
+            overage_wait_base: btel_settings::transport::OVERAGE_WAIT_BASE_DURATION,
         })
         .unwrap();
     let (send, recv) = std::sync::mpsc::channel();

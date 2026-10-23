@@ -30,6 +30,7 @@ fn config(capacity: usize, producers: usize) -> Config {
         span_chunks: nz(producers),
         max_producers: nz(producers),
         preallocate: true,
+        overage_wait_base: btel_settings::transport::OVERAGE_WAIT_BASE_DURATION,
     }
 }
 
@@ -238,6 +239,48 @@ fn captures_are_uncharged_once_when_the_processor_takes_them() {
     }
     run::<false>();
     run::<true>();
+}
+
+#[test]
+fn producers_beyond_the_table_are_decoded_with_state_of_their_own() {
+    let pool = ChunkPool::<TimingRecord, SpanRecord<(), ()>>::new(config(8, 1)).unwrap();
+    let mut processor = Processor::new(pool.bind_consumer().unwrap(), nz(1));
+    let mut first = pool.register_producer().unwrap();
+    let first_thread = allocate_telemetry_id();
+    first.write_timing(TimingRecord::ThreadSelected {
+        thread_id: first_thread,
+    });
+    first.write_timing(timing());
+    first.seal();
+    // A second thread binds while the first holds the table's only slot: it
+    // is given a slot beyond the table, and its decoder state with it.
+    let beyond_thread = allocate_telemetry_id();
+    thread::scope(|scope| {
+        scope
+            .spawn(|| {
+                let mut beyond = pool.register_producer().unwrap();
+                assert_eq!(beyond.id().index(), 1);
+                beyond.write_timing(TimingRecord::ThreadSelected {
+                    thread_id: beyond_thread,
+                });
+                beyond.write_timing(timing());
+                beyond.seal();
+            })
+            .join()
+            .unwrap();
+    });
+    let mut chunks = 0;
+    let mut records = 0;
+    while let progress = processor.process_available()
+        && progress.chunks > 0
+    {
+        chunks += progress.chunks;
+        records += progress.records;
+    }
+    assert_eq!((chunks, records), (2, 4));
+    assert_eq!(processor.processing.contexts.len(), 2);
+    assert_eq!(processor.processing.contexts[0].timing, Some(first_thread));
+    assert_eq!(processor.processing.contexts[1].timing, Some(beyond_thread));
 }
 
 #[test]

@@ -1,4 +1,4 @@
-//! Experimental alternative to per-record SPSC publication.
+//! The telemetry transport: per-thread chunks of records, one consumer.
 //!
 //! `write_*` stores records before returning; PRIVATE partial chunks are not
 //! consumer-visible until `seal`, fullness, or producer release. Integration MUST
@@ -12,8 +12,9 @@
 //! finds its lane out of free chunks probes for one to come back, longer the
 //! further the lane already is over its size, then allocates beyond it
 //! ([`btel_settings::overage`]); a lane over its size frees chunks as they
-//! return idle. Producers spin on metadata contention; only the idle consumer
-//! parks. Explicit recording disable abandons queued data and makes writes
+//! return idle. Producers spin on metadata contention; a producer out of chunks
+//! spins, yields, then sleeps between probes, and the idle consumer parks.
+//! Explicit recording disable abandons queued data and makes writes
 //! return without storing; invariant failures remain terminal.
 #![allow(
     clippy::inline_always,
@@ -27,6 +28,7 @@ mod consume;
 use std::{collections::VecDeque, marker::PhantomData, mem::size_of, num::NonZeroUsize, rc::Rc};
 
 pub use btel_settings::transport::ChunkConfig as Config;
+pub use sync::Wait;
 use sync::{
     Arc, AtomicBool, AtomicU8, AtomicUsize, Condvar, Mutex, MutexGuard, Ordering, Padded,
     TryLockError, thread,
@@ -38,12 +40,11 @@ pub enum SetupError {
     Closed,
     Failed,
     Disabled,
-    ProducerLimit,
     ProducerAlreadyBound,
     ConsumerAlreadyBound,
 }
 
-/// Bounded, pool-local stream index, fixed for a registered OS worker. Reusing
+/// Pool-local stream index, fixed for a registered OS worker. Reusing
 /// a retired worker's slot continues its FIFO stream, not a new global identity.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct ProducerId(usize);
@@ -196,7 +197,10 @@ struct State<T, S> {
     timing: Lane<T>,
     span: Lane<S>,
     ready: VecDeque<Chunk<T, S>>,
-    workers: Box<[WorkerState]>,
+    /// One per OS thread holding a producer at once: `max_producers` to begin
+    /// with, and one more for each thread beyond them. A released slot is
+    /// reused, so the table is as long as the most threads ever bound at once.
+    workers: Vec<WorkerState>,
     active_producers: usize,
     closed: bool,
     bound: bool,
@@ -260,11 +264,11 @@ impl<T, S> Shared<T, S> {
         self.wake.notify_all();
     }
     #[cold]
-    /// Probes spent waiting are held against the threshold for the lane's
+    /// The time spent waiting is held against the threshold for the lane's
     /// overage *as it is now*, read again at every probe. So a writer that
     /// began waiting when the lane was far over its size is let go as soon
     /// as it comes back down, and since the threshold is the same for every
-    /// waiter and the longest waiter has spent the most, no later writer
+    /// waiter and the longest waiter has waited the most, no later writer
     /// allocates beyond the size ahead of it.
     fn take<R>(
         &self,
@@ -273,16 +277,17 @@ impl<T, S> Shared<T, S> {
         available: &AtomicUsize,
         overage: &AtomicUsize,
     ) -> Option<Vec<R>> {
-        use btel_settings::transport::overage_probes;
-        let mut spent = 0_usize;
-        let mut exhausted = false;
+        use btel_settings::transport::overage_wait;
+        // Begun at the first miss: the first look never allocates beyond the
+        // size, however long the lock took.
+        let mut wait: Option<sync::Wait> = None;
         loop {
             if !self.check() {
                 return None;
             }
             let mut state = self.lock();
             let lane = lane(&mut state);
-            if exhausted {
+            if wait.is_some() {
                 lane.waiting -= 1;
             }
             if let Some(chunk) = lane.free.pop() {
@@ -293,7 +298,12 @@ impl<T, S> Shared<T, S> {
                 return Some(chunk);
             }
             let within = lane.allocated < lane.max;
-            if within || spent >= overage_probes(lane.overage()) {
+            let base = self.config.overage_wait_base;
+            if within
+                || wait
+                    .as_ref()
+                    .is_some_and(|wait| wait.past(overage_wait(base, lane.overage())))
+            {
                 // Reserved allocations also count: two writers cannot both
                 // allocate the last slot while allocation runs outside the lock.
                 lane.allocated += 1;
@@ -336,28 +346,27 @@ impl<T, S> Shared<T, S> {
             if notify {
                 self.wake.notify_one();
             }
-            if !exhausted {
+            if wait.is_none() {
                 stats.exhausted_waits += 1;
-                exhausted = true;
                 #[cfg(feature = "diagnostics")]
                 self.diagnostics
                     .exhausted_waits
                     .fetch_add(1, Ordering::Relaxed);
             }
+            let wait = wait.get_or_insert_with(sync::Wait::begin);
             // Do not fight the recycler for its mutex while the pool is empty.
             // The consumer publishes availability after returning the allocation.
             // Another writer may win it first; the locked recheck above decides,
-            // and allocates beyond the size once the probes spent reach the
+            // and allocates beyond the size once the wait reaches the
             // threshold, which it reads exactly where this loop reads a copy.
             while available.load(Ordering::Acquire) == 0 {
                 if !self.check() {
                     return None;
                 }
-                if spent >= overage_probes(overage.load(Ordering::Relaxed)) {
+                if wait.past(overage_wait(base, overage.load(Ordering::Relaxed))) {
                     break;
                 }
-                spent += 1;
-                sync::spin();
+                wait.pause();
             }
         }
     }
@@ -439,8 +448,7 @@ impl<T: Send, S: Send> ChunkPool<T, S> {
                     timing: Lane::new(capacity, timing, config.preallocate),
                     span: Lane::new(capacity, span, config.preallocate),
                     ready: VecDeque::with_capacity(chunks),
-                    workers: vec![WorkerState::default(); config.max_producers.get()]
-                        .into_boxed_slice(),
+                    workers: vec![WorkerState::default(); config.max_producers.get()],
                     active_producers: 0,
                     closed: false,
                     bound: false,
@@ -493,11 +501,16 @@ impl<T: Send, S: Send> ChunkPool<T, S> {
         {
             return Err(SetupError::ProducerAlreadyBound);
         }
+        // A thread beyond the table gets a slot of its own: no producer ever
+        // waits for one, and the processor's per-producer state grows with it.
         let index = state
             .workers
             .iter()
             .position(|worker| worker.owner.is_none())
-            .ok_or(SetupError::ProducerLimit)?;
+            .unwrap_or_else(|| {
+                state.workers.push(WorkerState::default());
+                state.workers.len() - 1
+            });
         state.workers[index] = WorkerState {
             owner: Some(owner),
             reserved: true,
@@ -1074,11 +1087,6 @@ impl<T, S> Consumer<T, S> {
 
     pub fn chunk_capacity(&self) -> usize {
         self.shared.config.chunk_capacity.get()
-    }
-
-    /// Fixed decoder capacity; every chunk carries an index below this bound.
-    pub fn producer_capacity(&self) -> usize {
-        self.shared.config.max_producers.get()
     }
 }
 impl<T, S> Drop for Consumer<T, S> {

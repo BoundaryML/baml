@@ -381,15 +381,12 @@ impl TelemetryRuntime {
             // Cold first attachment only. Dead engines leave no pool ownership;
             // remove their tiny TLS entries before attaching another engine.
             bindings.retain(|binding| binding.owner.strong_count() != 0);
-            let worker = loop {
-                match self.pool.reserve_worker() {
-                    Ok(worker) => break worker,
-                    Err(SetupError::ProducerLimit) => std::hint::spin_loop(),
-                    Err(SetupError::Disabled | SetupError::Closed) => return false,
-                    Err(_) => {
-                        self.pool.fail();
-                        std::panic::panic_any(TransportFailed);
-                    }
+            let worker = match self.pool.reserve_worker() {
+                Ok(worker) => worker,
+                Err(SetupError::Disabled | SetupError::Closed) => return false,
+                Err(_) => {
+                    self.pool.fail();
+                    std::panic::panic_any(TransportFailed);
                 }
             };
             let Some(producer) = self.bind_worker(&worker) else {
@@ -502,13 +499,13 @@ impl TelemetryRuntime {
                 }
             }
         });
-        // Probes spent are held against the threshold for the overage as it
-        // is now, read again at every probe: the further over the budget the
-        // producers are, the longer the processor is given to lift charges
-        // before this capture adds to it; and a capture that began waiting
-        // far over is let go as soon as the overage comes down, ahead of any
-        // that began waiting later.
-        let mut spent = 0_usize;
+        // The time waited is held against the threshold for the overage as
+        // it is now, read again at every probe: the further over the budget
+        // the producers are, the longer the processor is given to lift
+        // charges before this capture adds to it; and a capture that began
+        // waiting far over is let go as soon as the overage comes down,
+        // ahead of any that began waiting later.
+        let mut wait = bex_chunkedringbuffer::Wait::begin();
         let mut result = None;
         loop {
             if self.is_disabled() {
@@ -521,11 +518,12 @@ impl TelemetryRuntime {
                 result = Some(builder);
                 break;
             }
-            if spent >= btel_settings::snapshot::overage_probes(self.snapshots.overage_bytes()) {
+            if wait.past(btel_settings::snapshot::overage_wait(
+                self.snapshots.overage_bytes(),
+            )) {
                 break;
             }
-            spent += 1;
-            std::hint::spin_loop();
+            wait.pause();
         }
         if result.is_none() && !self.is_disabled() {
             // The failure may have landed since the last probe.
@@ -863,6 +861,7 @@ mod tests {
             span_chunks: NonZeroUsize::new(4).unwrap(),
             max_producers: NonZeroUsize::new(2).unwrap(),
             preallocate: true,
+            overage_wait_base: btel_settings::transport::OVERAGE_WAIT_BASE_DURATION,
         }
     }
 
@@ -941,6 +940,39 @@ mod tests {
             },
         );
         assert_eq!(found, 1);
+    }
+
+    /// More threads than the pool has slots for enter at once, every one
+    /// holding its scope while the others bind: none waits for a slot.
+    #[test]
+    fn more_threads_than_producer_slots_all_enter_without_waiting() {
+        let (runtime, pool) = manual_runtime();
+        let threads = 5;
+        let gate = std::sync::Barrier::new(threads);
+        std::thread::scope(|scope| {
+            for _ in 0..threads {
+                scope.spawn(|| {
+                    let _scope = runtime.enter();
+                    let thread_id = allocate_telemetry_id();
+                    runtime.write_timing(
+                        thread_id,
+                        TimingRecord::SysOpTime {
+                            call_path: btel_types::CallPathId::ROOT,
+                            elapsed: btel_types::ClockDuration::from_ticks(1),
+                        },
+                    );
+                    gate.wait();
+                });
+            }
+        });
+        let mut consumer = pool.bind_consumer().unwrap();
+        let mut records = 0;
+        consumer.drain_chunks(
+            NonZeroUsize::new(8).unwrap(),
+            |_, chunk| records += chunk.len(),
+            |_, _| {},
+        );
+        assert_eq!(records, 2 * threads, "a selector and a record per thread");
     }
 
     #[test]

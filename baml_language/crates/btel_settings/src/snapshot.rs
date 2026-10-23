@@ -16,11 +16,12 @@ pub const MAX_RETAINED_ALLOCATION_BYTES: usize = 256 * 1024;
 /// the processor, publisher and delivery hold is bounded by their own budgets,
 /// not this one. A single capture is never refused for its size.
 pub const CAPTURE_BUDGET_BASE_BYTES: usize = 64 * 1024 * 1024;
-/// **Tune with the transport.** The budget grows with admitted producers as
-/// the chunk lanes do, so a wide host pool is not starved by its own width.
+/// **Tune with the transport.** The budget grows with the configured producers
+/// as the chunk lanes do, so a wide host pool is not starved by its own width;
+/// threads beyond the producer table share it.
 pub const CAPTURE_BUDGET_BYTES_PER_PRODUCER: usize = 1024 * 1024;
 
-/// The capture budget of a runtime admitting `producers` OS threads.
+/// The capture budget of a runtime configured for `producers` OS threads.
 pub fn capture_budget_bytes(producers: usize) -> usize {
     producers
         .saturating_mul(CAPTURE_BUDGET_BYTES_PER_PRODUCER)
@@ -28,20 +29,23 @@ pub fn capture_budget_bytes(producers: usize) -> usize {
 }
 const _: () = assert!(CAPTURE_BUDGET_BASE_BYTES > 0);
 
-/// **Backstop; tune first under sustained backpressure.** Probes a producer
-/// makes for the budget to open, when it is full but not yet exceeded,
-/// before taking storage beyond it. One probe is one spin.
-pub const OVERAGE_PROBES_BASE: usize = 256;
-/// **Backstop.** Bytes of overage per step of the probe curve; see
+/// **Backstop; tune first under sustained backpressure.** How long a producer
+/// waits for the budget to open, when it is full and less than one
+/// [`OVERAGE_UNIT_BYTES`] over, before taking storage beyond it.
+pub const OVERAGE_WAIT_BASE_DURATION: std::time::Duration = std::time::Duration::from_micros(10);
+/// **Backstop.** Bytes of overage per step of the wait curve; see
 /// [`crate::overage`].
 pub const OVERAGE_UNIT_BYTES: usize = 1024 * 1024;
 
-/// Probes before a producer takes storage beyond the budget, with the
-/// producers already `overage_bytes` over it.
-pub fn overage_probes(overage_bytes: usize) -> usize {
-    crate::overage::probes(OVERAGE_PROBES_BASE, overage_bytes / OVERAGE_UNIT_BYTES)
+/// How long a producer waits before taking storage beyond the budget, with
+/// the producers already `overage_bytes` over it.
+pub fn overage_wait(overage_bytes: usize) -> std::time::Duration {
+    crate::overage::wait(
+        OVERAGE_WAIT_BASE_DURATION,
+        overage_bytes / OVERAGE_UNIT_BYTES,
+    )
 }
-const _: () = assert!(OVERAGE_PROBES_BASE > 0 && OVERAGE_UNIT_BYTES > 0);
+const _: () = assert!(!OVERAGE_WAIT_BASE_DURATION.is_zero() && OVERAGE_UNIT_BYTES > 0);
 
 /// Hash and copy mutable bytes in cache-sized batches during capture.
 pub const COPY_HASH_BATCH_BYTES: usize = 16 * 1024;

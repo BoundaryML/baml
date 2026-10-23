@@ -250,6 +250,19 @@ struct State {
     last_file: Option<([u8; 16], u64)>,
     finished: bool,
     authorization: InitialAuthorization,
+    /// The most held at once, under the `diagnostics` feature.
+    #[cfg(feature = "diagnostics")]
+    peaks: HeldPeaks,
+}
+
+/// The most delivery has held at once; a shutdown reading of what it holds
+/// is zero, so only the peaks show what the run cost.
+#[cfg(feature = "diagnostics")]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct HeldPeaks {
+    pub pending_plans: usize,
+    pub pending_captures: usize,
+    pub recording_reserved_used: usize,
 }
 
 /// The recording's ingestion admission state, independent of the shared credential cache.
@@ -385,6 +398,7 @@ pub struct DeliveryDiagnostics {
     pub pending_captures: usize,
     pub recording_reserved_used: usize,
     pub cas_reserved_used: usize,
+    pub peaks: HeldPeaks,
     pub prepares: RequestDiagnostics,
     pub puts: RequestDiagnostics,
 }
@@ -682,6 +696,7 @@ impl BcsDeliveryHandle {
             pending_captures: state.snapshots,
             recording_reserved_used: state.recording_bytes,
             cas_reserved_used: state.cas.used,
+            peaks: state.peaks,
             prepares: self.shared.prepares.read(),
             puts: self.shared.puts.read(),
         }
@@ -987,6 +1002,15 @@ impl BcsDeliveryHandle {
         state.recording_bytes += recording;
         state.snapshots += window.owners.len();
         state.plans += 1;
+        #[cfg(feature = "diagnostics")]
+        {
+            let (plans, snapshots, recording_bytes) =
+                (state.plans, state.snapshots, state.recording_bytes);
+            let peaks = &mut state.peaks;
+            peaks.pending_plans = peaks.pending_plans.max(plans);
+            peaks.pending_captures = peaks.pending_captures.max(snapshots);
+            peaks.recording_reserved_used = peaks.recording_reserved_used.max(recording_bytes);
+        }
         state.recording_window += recording_window;
         state.cas_window += cas_window;
         state.last_file = Some(identity);

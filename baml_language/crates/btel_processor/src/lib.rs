@@ -1,8 +1,8 @@
 //! Chunk-backed processing: combine all function completions and forward spans.
 //! Captures must be independently owned before publication; this crate never
 //! accesses VM heaps. One bound worker scans original storage, with no event
-//! cloning or dynamic dispatch. Producers never park and never wait forever:
-//! out of storage, they probe for some to come back and then take more
+//! cloning or dynamic dispatch. Producers never wait forever: out of storage,
+//! they wait a bounded time for some to come back and then take more
 //! ([`btel_settings::overage`]).
 //!
 //! The default publisher has zero sinks: it merges bounded aggregate windows and
@@ -46,10 +46,20 @@ const _: () =
 struct Processing<P> {
     publisher: P,
     cache: CombiningCache,
-    contexts: Box<[DecoderContext]>,
+    /// One per producer index, grown as threads beyond the pool's table
+    /// bind producers of their own.
+    contexts: Vec<DecoderContext>,
 }
 
 impl<P> Processing<P> {
+    fn context(&mut self, producer: ProducerId) -> &mut DecoderContext {
+        let index = producer.index();
+        if index >= self.contexts.len() {
+            self.contexts.resize(index + 1, DecoderContext::default());
+        }
+        &mut self.contexts[index]
+    }
+
     fn sample<I, V>(
         &mut self,
         path: CallPathId,
@@ -79,7 +89,7 @@ impl<P> Processing<P> {
     where
         P: Publisher<I, V>,
     {
-        let mut thread = self.contexts[producer.index()].timing;
+        let mut thread = self.context(producer).timing;
         for record in records.as_slice() {
             match *record {
                 TimingRecord::ThreadSelected { thread_id } => thread = Some(thread_id),
@@ -105,7 +115,7 @@ impl<P> Processing<P> {
                 }
             }
         }
-        self.contexts[producer.index()].timing = thread;
+        self.context(producer).timing = thread;
         drop(records);
     }
 
@@ -124,7 +134,7 @@ impl<P> Processing<P> {
         for record in records.as_slice() {
             record.uncharge_captures();
         }
-        let initial_thread = self.contexts[producer.index()].span;
+        let initial_thread = self.context(producer).span;
         let mut thread = initial_thread;
         if P::DETACH_RECORDS {
             assert!(detached.is_empty());
@@ -140,7 +150,7 @@ impl<P> Processing<P> {
             records.consume_in_place(|record| self.span(&mut thread, record));
             drop(records);
         }
-        self.contexts[producer.index()].span = thread;
+        self.context(producer).span = thread;
     }
 
     fn span<I, V>(&mut self, thread: &mut Option<TelemetryId>, record: &mut SpanRecord<I, V>)
@@ -503,8 +513,7 @@ impl<I: Capture, V: Capture, P: Publisher<I, V>> Processor<I, V, P> {
         max_chunks: NonZeroUsize,
         publisher: P,
     ) -> Self {
-        let contexts =
-            vec![DecoderContext::default(); consumer.producer_capacity()].into_boxed_slice();
+        let contexts = Vec::new();
         let max_chunks = NonZeroUsize::new(max_chunks.get().min(if P::DETACH_RECORDS {
             1
         } else {

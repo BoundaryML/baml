@@ -1041,6 +1041,12 @@ impl BexEngine {
                     pending_captures,
                     recording_reserved_used,
                     cas_reserved_used,
+                    peaks:
+                        btel_bcs::delivery::HeldPeaks {
+                            pending_plans: peak_pending_plans,
+                            pending_captures: peak_pending_captures,
+                            recording_reserved_used: peak_recording_reserved_used,
+                        },
                     prepares,
                     puts,
                 } = handle.diagnostics();
@@ -1053,6 +1059,9 @@ impl BexEngine {
                     staged_bytes,
                     open_file_bytes,
                     offered_ids,
+                    peak_retained_bytes,
+                    peak_queued_bytes,
+                    peak_staged_bytes,
                 } = gauges.read();
                 let request = |btel_bcs::delivery::RequestDiagnostics {
                                    count,
@@ -1078,6 +1087,9 @@ impl BexEngine {
                     "pending_captures": pending_captures,
                     "recording_reserved_used": recording_reserved_used,
                     "cas_reserved_used": cas_reserved_used,
+                    "peak_pending_plans": peak_pending_plans,
+                    "peak_pending_captures": peak_pending_captures,
+                    "peak_recording_reserved_used": peak_recording_reserved_used,
                     "prepare": request(prepares),
                     "put": request(puts),
                     "publisher": {
@@ -1089,6 +1101,9 @@ impl BexEngine {
                         "staged_bytes": staged_bytes,
                         "open_file_bytes": open_file_bytes,
                         "offered_ids": offered_ids,
+                        "peak_retained_bytes": peak_retained_bytes,
+                        "peak_queued_bytes": peak_queued_bytes,
+                        "peak_staged_bytes": peak_staged_bytes,
                     },
                 })
             }

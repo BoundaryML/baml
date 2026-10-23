@@ -35,6 +35,7 @@ fn engine_with_writer(
             span_chunks: nz(2),
             max_producers: nz(2),
             preallocate: true,
+            overage_wait_base: btel_settings::transport::OVERAGE_WAIT_BASE_DURATION,
         },
         |control| {
             let failure = control;

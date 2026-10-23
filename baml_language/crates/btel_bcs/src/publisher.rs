@@ -131,6 +131,9 @@ pub struct PublisherGauges {
     staged_bytes: std::sync::atomic::AtomicUsize,
     open_file_bytes: std::sync::atomic::AtomicUsize,
     offered_ids: std::sync::atomic::AtomicUsize,
+    peak_retained_bytes: std::sync::atomic::AtomicUsize,
+    peak_queued_bytes: std::sync::atomic::AtomicUsize,
+    peak_staged_bytes: std::sync::atomic::AtomicUsize,
 }
 
 /// A reading of [`PublisherGauges`].
@@ -152,6 +155,11 @@ pub struct PublisherDiagnostics {
     pub open_file_bytes: usize,
     /// Blob IDs remembered as recently offered.
     pub offered_ids: usize,
+    /// The most of each held at once, noted where each peaks: a shutdown
+    /// reading of the rest is zero.
+    pub peak_retained_bytes: usize,
+    pub peak_queued_bytes: usize,
+    pub peak_staged_bytes: usize,
 }
 
 #[cfg(feature = "diagnostics")]
@@ -167,6 +175,9 @@ impl PublisherGauges {
             staged_bytes: self.staged_bytes.load(Relaxed),
             open_file_bytes: self.open_file_bytes.load(Relaxed),
             offered_ids: self.offered_ids.load(Relaxed),
+            peak_retained_bytes: self.peak_retained_bytes.load(Relaxed),
+            peak_queued_bytes: self.peak_queued_bytes.load(Relaxed),
+            peak_staged_bytes: self.peak_staged_bytes.load(Relaxed),
         }
     }
 }
@@ -292,6 +303,23 @@ impl CloudPublisher {
             .open_file_bytes
             .store(self.recording.encoded_size_hint(), Relaxed);
         gauges.offered_ids.store(self.offered.len(), Relaxed);
+        self.note_retained_peaks();
+    }
+
+    /// The queue and the retained captures peak after a record's captures
+    /// are retained and before pressure seals a file: noted there, and after
+    /// each batch.
+    #[cfg(feature = "diagnostics")]
+    fn note_retained_peaks(&self) {
+        use std::sync::atomic::Ordering::Relaxed;
+        if let Some(gauges) = &self.gauges {
+            gauges
+                .peak_retained_bytes
+                .fetch_max(self.retained_bytes, Relaxed);
+            gauges
+                .peak_queued_bytes
+                .fetch_max(self.queued_bytes, Relaxed);
+        }
     }
 
     #[must_use]
@@ -712,6 +740,9 @@ impl CloudPublisher {
                 gauges
                     .staged_bytes
                     .store(self.staged_recording_bytes, Relaxed);
+                gauges
+                    .peak_staged_bytes
+                    .fetch_max(self.staged_recording_bytes, Relaxed);
             }
             let staged = std::mem::take(&mut self.staged);
             self.staged_recording_bytes = 0;
@@ -803,6 +834,8 @@ impl Publisher<Snapshot, Snapshot> for CloudPublisher {
             while let Some(snapshot) = record.take_capture() {
                 self.retain(snapshot);
             }
+            #[cfg(feature = "diagnostics")]
+            self.note_retained_peaks();
             self.seal_on_pressure();
         }
     }

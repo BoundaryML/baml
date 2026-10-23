@@ -44,6 +44,7 @@ fn context_runs_reach_local_recordings_and_verified_cas_through_the_span_buffer(
         span_chunks: nz(1),
         max_producers: nz(1),
         preallocate: true,
+        overage_wait_base: btel_settings::transport::OVERAGE_WAIT_BASE_DURATION,
     })
     .unwrap();
     let mut processor = Processor::with_publisher(pool.bind_consumer().unwrap(), nz(8), publisher);
