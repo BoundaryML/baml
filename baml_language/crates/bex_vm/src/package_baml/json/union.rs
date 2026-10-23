@@ -20,9 +20,8 @@
 //! keys only when two or more candidates count them. A member that fails deep
 //! inside falls through to the next.
 
-use smallvec::SmallVec;
-
 use bex_vm_types::{HeapPtr, Object, RealizedTy};
+use smallvec::SmallVec;
 
 use super::plan::Plans;
 use crate::BexVm;
