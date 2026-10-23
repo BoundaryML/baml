@@ -151,21 +151,7 @@ mod stackful {
         pub(crate) fn new() -> std::io::Result<Self> {
             let stack = DefaultStack::new(STACK_SIZE)?;
             let floor = stack.limit().get() + STACK_RED_ZONE;
-            let coroutine = Coroutine::with_stack(stack, |yielder, mut message| {
-                loop {
-                    let (vm, body, args) = match message {
-                        Message::Enter { vm, body, args } => (vm, body, args),
-                        Message::Stop => return,
-                        Message::Resume { .. } => {
-                            unreachable!("a fiber with no body running is resumed with one to run")
-                        }
-                    };
-                    // SAFETY: the VM is parked in `Fiber::resume` and touches
-                    // nothing until the fiber suspends; see `Message`.
-                    let vm = unsafe { &mut *vm.as_ptr() };
-                    message = yielder.suspend(Request::Done(run(vm, yielder, body, &args)));
-                }
-            });
+            let coroutine = Coroutine::with_stack(stack, fiber_main);
             Ok(Self {
                 coroutine,
                 floor,
@@ -208,6 +194,28 @@ mod stackful {
                 CoroutineResult::Return(()) => {}
                 CoroutineResult::Yield(_) => unreachable!("a stopped fiber returns"),
             }
+        }
+    }
+
+    /// Kept out of corosensei's root `catch_unwind`: inlined there, LLVM (Rust
+    /// 1.98, x86_64-pc-windows-msvc, opt-level >= 1) emits a cleanup funclet
+    /// that clobbers `rsi` without saving it, and the CRT's unwinder then
+    /// faults on its own `FuncInfo` pointer whenever a panic or forced unwind
+    /// leaves a body.
+    #[inline(never)]
+    fn fiber_main(yielder: &Yielder<Message, Request>, mut message: Message) {
+        loop {
+            let (vm, body, args) = match message {
+                Message::Enter { vm, body, args } => (vm, body, args),
+                Message::Stop => return,
+                Message::Resume { .. } => {
+                    unreachable!("a fiber with no body running is resumed with one to run")
+                }
+            };
+            // SAFETY: the VM is parked in `Fiber::resume` and touches
+            // nothing until the fiber suspends; see `Message`.
+            let vm = unsafe { &mut *vm.as_ptr() };
+            message = yielder.suspend(Request::Done(run(vm, yielder, body, &args)));
         }
     }
 
