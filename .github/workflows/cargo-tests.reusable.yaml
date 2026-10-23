@@ -1249,30 +1249,34 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: "Install Rust toolchain"
-        run: |
-          set -euo pipefail
-          rustup show
-          # `rustup target add wasm32` fetches a small (~20MB) std component that
-          # normally installs in seconds. A multi-minute duration means a stalled
-          # download (rustup has no idle timeout), which otherwise burns the whole
-          # job timeout and dequeues the PR from the merge queue. Cap each attempt
-          # well above the normal time and retry on a fresh connection; surface a
-          # genuine outage after 3 tries instead of hanging.
-          for attempt in 1 2 3; do
-            if timeout 300 rustup target add wasm32-unknown-unknown; then
-              break
-            fi
-            echo "::warning::rustup target add wasm32 attempt $attempt stalled/failed; retrying" >&2
-            [ "$attempt" = 3 ] && { echo "::error::rustup target add wasm32 failed after 3 attempts"; exit 1; }
-            sleep 5
-          done
-        working-directory: baml_language
+      # These mise tools are prebuilt and do not use Cargo's cache. Keep
+      # Cargo cache restore/fetch after the join; cargo:* tool installs in
+      # other jobs can fall back to source builds and must stay sequential.
+      - parallel:
+          - name: "Install Rust toolchain"
+            run: |
+              set -euo pipefail
+              rustup show
+              # `rustup target add wasm32` fetches a small (~20MB) std component that
+              # normally installs in seconds. A multi-minute duration means a stalled
+              # download (rustup has no idle timeout), which otherwise burns the whole
+              # job timeout and dequeues the PR from the merge queue. Cap each attempt
+              # well above the normal time and retry on a fresh connection; surface a
+              # genuine outage after 3 tries instead of hanging.
+              for attempt in 1 2 3; do
+                if timeout 300 rustup target add wasm32-unknown-unknown; then
+                  break
+                fi
+                echo "::warning::rustup target add wasm32 attempt $attempt stalled/failed; retrying" >&2
+                [ "$attempt" = 3 ] && { echo "::error::rustup target add wasm32 failed after 3 attempts"; exit 1; }
+                sleep 5
+              done
+            working-directory: baml_language
 
-      - name: "Install sccache and direnv"
-        uses: ./.github/actions/setup-mise
-        with:
-          install_args: "sccache direnv"
+          - name: "Install sccache and direnv"
+            uses: ./.github/actions/setup-mise
+            with:
+              install_args: "sccache direnv"
 
       - name: "Verify sccache"
         run: sccache --version
@@ -1365,18 +1369,22 @@ jobs:
           file: "baml_language/Cargo.toml"
           field: "workspace.package.rust-version"
 
-      - name: "Install Rust toolchain (MSRV)"
-        env:
-          MSRV: ${{ steps.msrv.outputs.value }}
-        run: |
-          rustup toolchain install "${MSRV}"
-          rustup default "${MSRV}"
-        working-directory: baml_language
+      # These mise tools are prebuilt and do not use Cargo's cache. Keep
+      # Cargo cache restore/fetch after the join; cargo:* tool installs in
+      # other jobs can fall back to source builds and must stay sequential.
+      - parallel:
+          - name: "Install Rust toolchain (MSRV)"
+            env:
+              MSRV: ${{ steps.msrv.outputs.value }}
+            run: |
+              rustup toolchain install "${MSRV}"
+              rustup default "${MSRV}"
+            working-directory: baml_language
 
-      - name: "Install sccache and direnv"
-        uses: ./.github/actions/setup-mise
-        with:
-          install_args: "sccache direnv"
+          - name: "Install sccache and direnv"
+            uses: ./.github/actions/setup-mise
+            with:
+              install_args: "sccache direnv"
 
       - name: "Verify sccache"
         run: sccache --version
@@ -1446,14 +1454,18 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: "Install Rust toolchain"
-        run: rustup show
-        working-directory: baml_language
+      # These mise tools are prebuilt and do not use Cargo's cache. Keep
+      # Cargo cache restore/fetch after the join; cargo:* tool installs in
+      # other jobs can fall back to source builds and must stay sequential.
+      - parallel:
+          - name: "Install Rust toolchain"
+            run: rustup show
+            working-directory: baml_language
 
-      - name: "Install sccache and direnv"
-        uses: ./.github/actions/setup-mise
-        with:
-          install_args: "sccache direnv"
+          - name: "Install sccache and direnv"
+            uses: ./.github/actions/setup-mise
+            with:
+              install_args: "sccache direnv"
 
       - name: "Verify sccache"
         run: sccache --version

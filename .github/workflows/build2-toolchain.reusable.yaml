@@ -49,11 +49,18 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: release-plan
-      - uses: actions/download-artifact@v8
+      # Packaging assets are only needed by Archive layout smoke below.
+      - name: Download VSIX
+        id: download-vsix
+        background: true
+        uses: actions/download-artifact@v8
         with:
           name: baml-vscode-vsix
           path: vsix
-      - uses: actions/download-artifact@v8
+      - name: Download playground
+        id: download-playground
+        background: true
+        uses: actions/download-artifact@v8
         with:
           name: baml-playground-dist
           path: playground-dist
@@ -111,6 +118,8 @@ jobs:
           } >> "$GITHUB_ENV"
       - name: Build CLI and pack host
         run: ${CARGO} build --manifest-path baml_language/Cargo.toml --release --bin baml-cli --bin baml-pack-host --target "${{ matrix.target }}"
+      - name: Wait for packaging assets
+        wait: [download-vsix, download-playground]
       - name: Archive layout smoke
         env:
           TARGET: ${{ matrix.target }}
