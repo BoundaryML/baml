@@ -174,7 +174,7 @@ fn test_body(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn vm_with_main(body: crate::compiled_rt::CompiledFn, slots: u32) -> BexVm {
+fn vm_with_main(body: crate::compiled_rt::CompiledFn, slots: u32, telemetry: bool) -> BexVm {
     let mut program = baml_test_support::compile_source(r#"function Main() -> string { "" }"#);
     let entry = program.rendered_callables()["user.Main"].object;
     let Object::Function(function) = &mut program.objects[entry] else {
@@ -182,6 +182,9 @@ fn vm_with_main(body: crate::compiled_rt::CompiledFn, slots: u32) -> BexVm {
     };
     function.compiled_body = Some(test_body(body, slots));
     let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
+    if !telemetry {
+        vm.telemetry = None;
+    }
     vm.set_entry_point(vm.heap.compile_time_ptr(entry.raw()), &[]);
     vm
 }
@@ -349,7 +352,7 @@ fn a_body_paused_at_a_yield_survives_a_moving_collection() {
         }
         Ok(live)
     }
-    let mut vm = vm_with_main(body, 1);
+    let mut vm = vm_with_main(body, 1, true);
     let out = loop {
         match vm.exec().unwrap() {
             VmExecState::EarlyYield => {
@@ -375,7 +378,7 @@ fn a_panicking_compiled_body_clears_fiber_state() {
     fn body(_: &mut BexVm, _: &FrameRecord, _: &[Value]) -> Result<Value, Box<VmError>> {
         panic!("compiled body panic");
     }
-    let mut vm = vm_with_main(body, 0);
+    let mut vm = vm_with_main(body, 0, true);
     let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| vm.exec()));
     assert!(panic.is_err());
     assert!(!vm.compiled.on_fiber);
@@ -1417,8 +1420,7 @@ fn compiled_delivery_survives_collection_before_resume() {
         Ok(value)
     }
 
-    let mut vm = vm_with_main(body, 0);
-    vm.telemetry = None;
+    let mut vm = vm_with_main(body, 0, false);
     assert!(matches!(vm.exec().unwrap(), VmExecState::EarlyYield));
 
     let thrown_ptr = vm.string_value("delivered error").as_object_ptr().unwrap();
