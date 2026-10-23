@@ -2,6 +2,7 @@
 
 require_relative "bridge/version"
 require_relative "bridge/errors"
+require_relative "options"
 require_relative "bridge/native"
 require_relative "bridge/call"
 require_relative "bridge/handle"
@@ -34,8 +35,8 @@ module Baml
         Protocol.define_function(wire, params: params)
       end
 
-      def call_async(wire, args)
-        @process_runtime.call_async(wire, args)
+      def call_async(wire, args, baml: nil)
+        @process_runtime.call_async(wire, args, baml: baml)
       end
 
       def initialize!

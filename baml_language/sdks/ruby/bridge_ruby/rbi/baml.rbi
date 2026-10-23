@@ -25,20 +25,45 @@ module Baml
   # Raised by Call#wait(timeout:) when the timeout passes. The call keeps running.
   class WaitTimeout < StandardError; end
 
+  class Unset; end
+  UNSET = T.let(T.unsafe(nil), Unset)
+
+  class Options
+    extend T::Sig
+    # cancel is the generated baml.spawn.CancelToken, checked at the boundary.
+    sig { params(timeout_ms: T.nilable(Integer), cancel: T.untyped, trace: NilClass).void }
+    def initialize(timeout_ms: nil, cancel: nil, trace: nil); end
+    sig { returns(T.nilable(Integer)) }
+    def timeout_ms; end
+    sig { returns(T.untyped) }
+    def cancel; end
+    sig { returns(NilClass) }
+    def trace; end
+  end
+
   class Error < StandardError
     extend T::Sig
-    sig { params(value: T.untyped, type_name: T.nilable(String)).void }
-    def initialize(value, type_name: nil); end
+    sig { params(value: T.untyped, baml_trace: T::Array[String], type_name: T.nilable(String)).void }
+    def initialize(value, baml_trace: [], type_name: nil); end
+    sig { returns(T.untyped) }
+    def value; end
+    sig { returns(T::Array[String]) }
+    def baml_trace; end
     sig { returns(T.nilable(String)) }
     def type_name; end
   end
   class Panic < Exception
     extend T::Sig
-    sig { params(value: T.untyped, type_name: T.nilable(String)).void }
-    def initialize(value, type_name: nil); end
+    sig { params(value: T.untyped, baml_trace: T::Array[String], type_name: T.nilable(String)).void }
+    def initialize(value, baml_trace: [], type_name: nil); end
+    sig { returns(T.untyped) }
+    def value; end
+    sig { returns(T::Array[String]) }
+    def baml_trace; end
     sig { returns(T.nilable(String)) }
     def type_name; end
   end
+  class CancelledError < Panic; end
 
   # The promise every BAML call returns. Sync generated methods are `call_async(...).wait`.
   class Call
@@ -151,12 +176,14 @@ module Baml
     def self.define_function(wire, params:); end
 
     # Start a call. args: wire parameter name => Ruby value; omitted keys are not sent.
+    # baml: per-call options. UNSET arguments are omitted.
     sig do
       params(
         wire: String,
-        args: T::Hash[String, T.untyped]
+        args: T::Hash[String, T.untyped],
+        baml: T.nilable(::Baml::Options)
       ).returns(::Baml::Call[T.untyped])
     end
-    def self.call_async(wire, args); end
+    def self.call_async(wire, args, baml: nil); end
   end
 end

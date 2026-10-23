@@ -258,12 +258,19 @@ fn unsupported_injected_defaults_are_omitted_without_dropping_user_arguments() {
     let source = &files[&PathBuf::from("baml_sdk/__root.rb")];
     assert!(skipped.is_empty());
     assert!(
-        source.contains("sig { params(text: ::String).returns(::String) }"),
+        source.contains(
+            "sig { params(text: ::String, _baml: ::T.nilable(::Baml::Options)).returns(::String) }"
+        ),
         "{source}"
     );
-    assert!(source.contains("def self.extract(text)"), "{source}");
     assert!(
-        source.contains("::Baml::Bridge.call_async(\"user.extract\", {\"text\" => text}).wait"),
+        source.contains("def self.extract(text, _baml: nil)"),
+        "{source}"
+    );
+    assert!(
+        source.contains(
+            "::Baml::Bridge.call_async(\"user.extract\", {\"text\" => text}, baml: _baml).wait"
+        ),
         "{source}"
     );
     assert!(!source.contains("callback"), "{source}");
@@ -279,15 +286,17 @@ fn unsupported_injected_defaults_are_omitted_without_dropping_user_arguments() {
     required_callback.arguments[1].default = None;
     assert_eq!(generate(required_callback).1, ["user.extract"]);
 
-    // Defaulted callables are omitted, even when their parameter types are supported.
+    // Defaulted values are keywords; omission leaves evaluation to BAML.
     for injected in [false, true] {
         let mut supported_default = function.clone();
         supported_default.arguments[1].injected = injected;
         supported_default.arguments[1].ty = Ty::String;
         let (files, skipped) = generate(supported_default);
-        assert_eq!(skipped, ["user.extract"]);
-        assert!(!files[&PathBuf::from("baml_sdk/__root.rb")].contains("def self.extract"));
-        assert!(!files[&PathBuf::from("baml_sdk.rb")].contains("define_function"));
+        let source = &files[&PathBuf::from("baml_sdk/__root.rb")];
+        assert!(skipped.is_empty());
+        assert!(source.contains("callback: ::Baml::UNSET"));
+        assert!(source.contains("callback: ::T.any(::String, ::Baml::Unset)"));
+        assert!(source.contains("\"callback\" => callback"));
     }
 
     // Generic declarations are omitted even when their type parameters are unused.
@@ -316,14 +325,6 @@ fn unsupported_injected_defaults_are_omitted_without_dropping_user_arguments() {
     concrete_generic.return_type = Ty::Class(class_name, Box::new([Ty::Int]));
     assert_eq!(generate(concrete_generic).1, ["user.extract"]);
 
-    let mut no_args = function.clone();
-    no_args.arguments.clear();
-    let (files, skipped) = generate(no_args);
-    assert!(skipped.is_empty());
-    let source = &files[&PathBuf::from("baml_sdk/__root.rb")];
-    assert!(source.contains("sig { returns(::String) }\n  def self.extract()"));
-    assert!(source.contains("sig { returns(::Baml::Call[::String]) }\n  def self.extract_async()"));
-
     // Nullable alone does not make a parameter optional.
     let mut nullable = function;
     nullable.arguments.truncate(1);
@@ -331,18 +332,17 @@ fn unsupported_injected_defaults_are_omitted_without_dropping_user_arguments() {
     let (files, skipped) = generate(nullable);
     assert!(skipped.is_empty());
     let source = &files[&PathBuf::from("baml_sdk/__root.rb")];
-    assert!(source.contains("def self.extract(text)"));
+    assert!(source.contains("def self.extract(text, _baml: nil)"));
     assert!(source.contains("text: ::T.nilable(::String)"));
     assert!(
         files[&PathBuf::from("baml_sdk.rb")]
             .contains("[\"text\", [:union, [[:string].freeze, [:null].freeze].freeze].freeze]")
     );
     assert!(!source.contains("_types"));
-    assert!(!source.contains("_baml"));
     assert!(!files[&PathBuf::from("baml_sdk.rb")].contains("type_params"));
     for asynchronous in [false, true] {
         assert!(source.contains(&format!(
-            "def self.extract{}(text)",
+            "def self.extract{}(text, _baml: nil)",
             if asynchronous { "_async" } else { "" }
         )));
     }

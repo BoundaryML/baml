@@ -85,6 +85,7 @@ module Baml
         new_function_call: [:uint64, []],
         release_function_call: [:int32, [:uint64]],
         cancel_function_call: [:int32, [:uint64]],
+        invocation_clock_ns: [:int32, %i[uint64 pointer]],
         handle_clone: [:int32, %i[uint64 pointer]],
         handle_release: [:int32, [:uint64]],
         call_function: [:void, %i[pointer size_t uint32], { blocking: true }],
@@ -149,6 +150,14 @@ module Baml
 
         def cancel_function_call(call_id)
           function(:cancel_function_call).call(call_id)
+        end
+
+        def invocation_clock_ns(call_id)
+          out_now = FFI::MemoryPointer.new(:uint64)
+          status = function(:invocation_clock_ns).call(call_id, out_now)
+          raise Error, "Unable to read BAML invocation clock: status #{status}" unless status.zero?
+
+          out_now.read_uint64
         end
 
         def handle_clone(key)

@@ -176,9 +176,7 @@ impl Emitter<'_> {
                 .arguments
                 .iter()
                 .filter(|a| !omit_injected_argument(a, self.supported, &self.names))
-                .any(|a| {
-                    a.default.is_some() || ruby_type(&a.ty, self.supported, &self.names).is_none()
-                })
+                .any(|a| ruby_type(&a.ty, self.supported, &self.names).is_none())
         {
             self.skipped.insert(wire.to_owned());
             return;
@@ -201,7 +199,9 @@ impl Emitter<'_> {
         let base = self.names.callable(&name_scope, &base, wire);
         let method = format!("{base}{suffix}");
         let mut params = Vec::new();
+        let mut keyword_params = Vec::new();
         let mut required = Vec::new();
+        let mut keywords = Vec::new();
         let mut arguments = Vec::new();
         let mut descriptors = Vec::new();
         let mut used = BTreeSet::from(["_baml".into(), "_types".into()]);
@@ -220,15 +220,34 @@ impl Emitter<'_> {
         {
             let arg = parameter(argument.name.as_str(), self.naming, &mut used);
             arguments.push(format!("{} => {arg}", quote(argument.name.as_str())));
+            let optional = argument.default.is_some();
             let ty = argument_type.unwrap();
-            params.push(format!("{arg}: {ty}"));
+            let ty = if optional {
+                format!("::T.any({ty}, ::Baml::Unset)")
+            } else {
+                ty
+            };
+            let signature = format!("{arg}: {ty}");
+            if optional {
+                keyword_params.push(signature);
+            } else {
+                params.push(signature);
+            }
             descriptors.push(format!(
                 "[{}, {}]",
                 quote(argument.name.as_str()),
                 descriptor(&argument.ty)
             ));
-            required.push(arg);
+            if optional {
+                keywords.push(format!("{arg}: ::Baml::UNSET"));
+            } else {
+                required.push(arg);
+            }
         }
+        params.extend(keyword_params);
+        params.push("_baml: ::T.nilable(::Baml::Options)".into());
+        keywords.push("_baml: nil".into());
+        required.extend(keywords);
         writeln!(
             self.registry,
             "::Baml::Bridge.define_function({}, params: [{}])",
@@ -261,12 +280,7 @@ impl Emitter<'_> {
                 }
             }
             doc_comment(body, &doc);
-            let signature = if params.is_empty() {
-                String::new()
-            } else {
-                format!("params({}).", params.join(", "))
-            };
-            writeln!(body, "sig {{ {signature}returns({returns}) }}\ndef {target}{method}({})\n  ::Baml::Bridge.call_async({}, {{{}}}){}\nend", required.join(", "), quote(wire), arguments.join(", "), if asynchronous { "" } else { ".wait" }).unwrap();
+            writeln!(body, "sig {{ params({}).returns({returns}) }}\ndef {target}{method}({})\n  ::Baml::Bridge.call_async({}, {{{}}}, baml: _baml){}\nend", params.join(", "), required.join(", "), quote(wire), arguments.join(", "), if asynchronous { "" } else { ".wait" }).unwrap();
         }
     }
 }

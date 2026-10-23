@@ -2,6 +2,7 @@
 require "minitest/autorun"
 require "baml_sdk"
 ENV["BAML_BRIDGE_PATH"] = ENV.fetch("BAML_RUBY_TEST_REAL_RUNTIME")
+require "socket"
 require "tempfile"
 
 class HandlesTest < Minitest::Test
@@ -42,6 +43,28 @@ class HandlesTest < Minitest::Test
     assert_equal "recording.webm", BamlSdk::Media.round_trip_audio(audio).name
     video = Baml::Video.from_url("https://example.com/video.mp4", mime_type: "video/mp4")
     assert_equal video.mime_type, BamlSdk::Media.round_trip_video(video).mime_type
+  end
+
+  def test_handles_http_get_response_fields_and_methods
+    server = TCPServer.new("127.0.0.1", 0)
+    body = "hello from localhost"
+    thread = Thread.new do
+      client = server.accept
+      while (line = client.gets) && line != "\r\n"
+        # Consume the request headers before writing a response.
+      end
+      client.write("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: #{body.bytesize}\r\nConnection: close\r\n\r\n#{body}")
+    ensure
+      client&.close
+    end
+    response = BamlSdk::Baml::Http.fetch("http://127.0.0.1:#{server.addr[1]}/", timeout: nil)
+    assert_equal 200, response.status_code
+    assert_equal true, response.ok
+    assert_equal body, response.text
+  ensure
+    server&.close
+    thread&.join(2)
+    thread&.kill if thread&.alive?
   end
 
   def test_handles_open_file_returns_file_handle
