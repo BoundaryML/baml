@@ -791,6 +791,94 @@ mod tests {
     }
 
     #[test]
+    fn recursion_through_a_type_alias_boxes_the_alias_reference() {
+        // type Part = Text | Extra; type Outer = Part
+        // class Extra { part Part, maybe Part?, alt Part | string, outer Outer, parts Part[] }
+        // class Holder { part Part } -- outside the cycle
+        let part = name("user", &[], "Part");
+        let outer = name("user", &[], "Outer");
+        let text_class = name("user", &[], "Text");
+        let extra = name("user", &[], "Extra");
+        let holder = name("user", &[], "Holder");
+        let alias = |n: &Name, resolves_to| {
+            Symbol::TypeAlias(baml_sdkgen_types::TypeAlias {
+                name: n.clone(),
+                resolves_to,
+                recursive: false,
+                origin: Origin {
+                    source_file_path: "main.baml".to_string(),
+                    span_start: 0,
+                },
+            })
+        };
+        let field = |field: &str, ty| baml_sdkgen_types::ClassProperty {
+            name: baml_base::Name::new(field),
+            docstring: None,
+            ty,
+        };
+        let part_ref = Ty::TypeAlias(part.clone());
+        let pool = SymbolPool::from([
+            (
+                part.clone(),
+                alias(
+                    &part,
+                    Ty::Union(Box::new([
+                        Ty::Class(text_class.clone(), Box::new([])),
+                        Ty::Class(extra.clone(), Box::new([])),
+                    ])),
+                ),
+            ),
+            (outer.clone(), alias(&outer, part_ref.clone())),
+            (
+                text_class.clone(),
+                class_symbol(
+                    &text_class,
+                    vec![field("text", Ty::String)],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+            (
+                extra.clone(),
+                class_symbol(
+                    &extra,
+                    vec![
+                        field("part", part_ref.clone()),
+                        field("maybe", Ty::Union(Box::new([part_ref.clone(), Ty::Null]))),
+                        field("alt", Ty::Union(Box::new([part_ref.clone(), Ty::String]))),
+                        field("outer", Ty::TypeAlias(outer.clone())),
+                        field("parts", Ty::List(Box::new(part_ref.clone()))),
+                    ],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+            (
+                holder.clone(),
+                class_symbol(
+                    &holder,
+                    vec![field("part", part_ref)],
+                    Vec::new(),
+                    Vec::new(),
+                ),
+            ),
+        ]);
+        let generated = to_source_code_with_bytecode(&pool, &[], &options());
+        assert!(generated.warnings.is_empty(), "{:?}", generated.warnings);
+        let lib = flat(text(&generated, "src/lib.rs"));
+        for expected in [
+            "pubstructExtra{pubpart:::std::boxed::Box<crate::Part>,\
+             pubmaybe:::std::option::Option<::std::boxed::Box<crate::Part>>,\
+             pubalt:::std::boxed::Box<crate::PartOrString>,\
+             pubouter:::std::boxed::Box<crate::Outer>,\
+             pubparts:::std::vec::Vec<crate::Part>,}",
+            "pubstructHolder{pubpart:crate::Part,}",
+        ] {
+            assert!(lib.contains(expected), "missing `{expected}` in:\n{lib}");
+        }
+    }
+
+    #[test]
     fn empty_pool_emits_crate_skeleton_with_stdlib_module() {
         let generated = to_source_code_with_bytecode(&SymbolPool::default(), &[], &options());
         assert!(generated.warnings.is_empty());
