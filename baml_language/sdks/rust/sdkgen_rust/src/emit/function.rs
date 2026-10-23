@@ -232,6 +232,7 @@ fn emit_binding(
             });
             kwarg_entries.push(quote! { (#arg_name, #param.to_baml_opt()) });
         } else {
+            let mut value = quote! { &#param };
             // Union-typed parameters accept anything convertible into the
             // synthesized enum, so call sites pass bare arm values
             // through the per-arm `From` impls.
@@ -240,6 +241,13 @@ fn emit_binding(
                 converts.push(quote! {
                     let #param: #ty = ::std::convert::Into::into(#param);
                 });
+            } else if matches!(&arg.ty, baml_sdkgen_types::Ty::Class(..)) {
+                // Encoding only reads the argument, so class-typed
+                // parameters accept `value` or `&value` (or an `Arc`/`Box`
+                // of it): a caller reusing one value across calls does not
+                // clone it per call.
+                params.push(quote! { #param: impl ::std::borrow::Borrow<#ty> });
+                value = quote! { ::std::borrow::Borrow::<#ty>::borrow(&#param) };
             } else {
                 params.push(quote! { #param: #ty });
             }
@@ -247,7 +255,7 @@ fn emit_binding(
                 (
                     #arg_name,
                     ::std::option::Option::Some(
-                        ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(&#param),
+                        ::baml_bridge::baml_value::internal::__BamlValuePrivate::to_baml(#value),
                     ),
                 )
             });
