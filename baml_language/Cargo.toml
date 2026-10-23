@@ -194,6 +194,7 @@ crossbeam-channel = { version = "0.5" }
 ctrlc = "3.4"
 derive_more = { version = "2.1.1", features = [ "from" ] }
 dirs = "7.0.0"
+dunce = "1.0.5"
 divan = { package = "codspeed-divan-compat", version = "*" }
 # Union-find with snapshot/rollback for hir_ty's InferenceTable - the same
 # crate rustc and rust-analyzer build their inference tables on.

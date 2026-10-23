@@ -349,6 +349,7 @@ mod tests {
             docstring: None,
             other: IndexMap::default(),
             owner: Owner::default(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
         }))
     }
 

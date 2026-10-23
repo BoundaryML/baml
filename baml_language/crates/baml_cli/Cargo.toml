@@ -54,7 +54,7 @@ borsh = { workspace = true }
 clap = { workspace = true, features = [ "color", "env", "wrap_help" ] }
 console = { workspace = true }
 ctrlc = { workspace = true }
-dunce = "1.0.5"
+dunce = { workspace = true }
 hex = { workspace = true }
 indicatif = { workspace = true }
 libsui = { workspace = true }
