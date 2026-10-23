@@ -28,6 +28,7 @@ pub use rust_type::RustType;
 pub mod host_value;
 #[doc(hidden)]
 pub mod invocation;
+mod json;
 pub mod loader;
 pub mod runtime;
 mod spec;
@@ -43,7 +44,12 @@ pub use function::{BamlFunction, FunctionArgs};
 pub use host_value::{HostCallable, HostCallback, HostParam};
 // reexports
 pub use indexmap::IndexMap;
+pub use json::Json;
 pub use num_bigint::BigInt;
+/// The `serde_json` [`Json`] belongs to, re-exported so code using a
+/// generated SDK can build values (`baml_bridge::serde_json::json!`)
+/// without depending on it separately.
+pub use serde_json;
 pub use spec::{CallOptions, FunctionSpec, Prompt, Stream};
 
 /// Order-preserving map type of BAML `map` values (the engine's own
