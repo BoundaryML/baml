@@ -49,7 +49,7 @@ fn cut() -> Shaper {
 }
 
 fn capture(shaper: &mut Shaper, build: impl FnOnce(&mut Builder) -> V) -> Snapshot {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut b = pool.try_acquire().unwrap();
     let root = build(&mut b);
     b.finish(root, shaper)
@@ -616,7 +616,7 @@ fn objects_end_where_the_node_limit_is_reached() {
 fn a_child_is_read_only_as_what_it_holds() {
     let mut blobs = Blobs::default();
     let arguments = {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let mut b = pool.try_acquire().unwrap();
         let root = b.arguments(std::iter::once(V::Int(1)), |_, value| value);
         blobs.store(&b.finish(root, &mut Shaper::default()))

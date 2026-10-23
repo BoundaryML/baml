@@ -109,6 +109,12 @@ impl Snapshot {
         debug_assert!(!lease.shape.blobs.is_empty(), "a snapshot is shaped");
         Self(lease)
     }
+    /// The processor has taken this capture from the producers: it no longer
+    /// counts against its pool's budget, whoever holds it from here on.
+    /// Idempotent.
+    pub fn uncharge(&self) {
+        self.0.uncharge();
+    }
     /// The blob a recording references for this capture.
     pub fn root_blob(&self) -> Blob<'_> {
         let last = self

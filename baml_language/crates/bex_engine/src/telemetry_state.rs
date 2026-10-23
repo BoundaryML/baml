@@ -24,6 +24,10 @@ pub(crate) struct EngineTelemetry {
     pub(super) process_exit: Option<Arc<btel_types::ProcessExitSlot>>,
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) gc_function: std::sync::OnceLock<Option<btel_types::FunctionMetadata>>,
+    /// Where shutdown appends this engine's diagnostics row, when the host
+    /// asked for one at construction.
+    #[cfg(all(not(target_arch = "wasm32"), feature = "telemetry_diagnostics"))]
+    pub(super) diagnostics_file: Option<std::path::PathBuf>,
 }
 
 /// No producer or snapshot is acquired while the heap is parked. Keeping the

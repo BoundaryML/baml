@@ -380,6 +380,7 @@ fn converted_output_outlives_recycled_chunks_and_preserves_selector_context() {
         span_chunks: nz(1),
         max_producers: nz(1),
         preallocate: true,
+        overage_wait_base: btel_settings::transport::OVERAGE_WAIT_BASE_DURATION,
     })
     .unwrap();
     let mut processor = Processor::with_publisher(
@@ -822,7 +823,7 @@ fn outcome_merge_growth_and_spills_keep_exact_encoded_size() {
 }
 
 fn snapshot() -> btel_snapshot::Snapshot {
-    let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+    let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
     let b = pool.try_acquire().unwrap();
     b.finish(
         btel_snapshot::SnapshotValue::Int(42),

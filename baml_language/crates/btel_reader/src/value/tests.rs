@@ -597,7 +597,7 @@ mod definitions {
 
     /// A capture whose value is `ty`, and its rendering.
     fn render_type(blobs: &Blobs, ty: OwnedType) -> Rendered {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let mut b = pool.try_acquire().unwrap();
         let ty = b.leaves().ty(ty);
         let snapshot = b.finish(SnapshotValue::Type(ty), &mut Shaper::default());

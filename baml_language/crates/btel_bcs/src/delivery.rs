@@ -78,16 +78,23 @@ pub struct DeliveryConfig {
     /// Initial-failure policy applies after bounded initial connection retries.
     pub terminal_initial_connection: bool,
     pub max_pending_plans: usize,
-    /// At most 32 captures, leaving default snapshot-pool headroom for VM
-    /// capture. A capture spanning plans counts once per plan.
+    /// Captures held by admitted plans until their bodies are built: enough
+    /// for `max_pending_plans` plans of `max_candidates` captures each, so
+    /// that admission never holds a prepare back for the ones in flight. A
+    /// capture spanning plans counts once per plan. Captures held here no
+    /// longer count against the VM's capture budget.
     pub max_pending_snapshots: usize,
     pub recording_reserved_bytes: usize,
     /// Memory for what the admitted plans hold: their captures until their
     /// bodies are built, and each CAS body until it is uploaded.
     pub cas_reserved_bytes: usize,
     /// CAS bodies uploaded at once, so that one long upload does not hold
-    /// the others back. Recordings upload one at a time.
+    /// the others back.
     pub max_cas_uploads: usize,
+    /// Recordings uploaded at once. Their URLs' lifetimes are still reserved
+    /// as if they went one by one, which refuses a URL sooner than the lanes
+    /// strictly require.
+    pub max_recording_uploads: usize,
     pub max_request_bytes: usize,
     pub max_response_bytes: usize,
     /// Blobs per plan.
@@ -120,11 +127,12 @@ impl DeliveryConfig {
             authorization: None,
             initial_recording_id: None,
             terminal_initial_connection: false,
-            max_pending_plans: 4,
-            max_pending_snapshots: 32,
-            recording_reserved_bytes: 128 * 1024 * 1024,
+            max_pending_plans: 16,
+            max_pending_snapshots: 512,
+            recording_reserved_bytes: 256 * 1024 * 1024,
             cas_reserved_bytes: 256 * 1024 * 1024,
             max_cas_uploads: 2,
+            max_recording_uploads: 8,
             max_request_bytes: 64 * 1024,
             max_response_bytes: 64 * 1024,
             max_candidates: 32,
@@ -201,9 +209,11 @@ impl DeliveryConfig {
             || self.max_pending_plans == 0
             || self.max_pending_plans > 32
             || self.max_pending_snapshots == 0
-            || self.max_pending_snapshots > 32
+            || self.max_pending_snapshots > 1024
             || self.max_cas_uploads == 0
             || self.max_cas_uploads > 32
+            || self.max_recording_uploads == 0
+            || self.max_recording_uploads > 32
             || self.max_candidates == 0
             || self.max_targets == 0
             || self.max_targets > self.max_candidates + 1
@@ -240,6 +250,19 @@ struct State {
     last_file: Option<([u8; 16], u64)>,
     finished: bool,
     authorization: InitialAuthorization,
+    /// The most held at once, under the `diagnostics` feature.
+    #[cfg(feature = "diagnostics")]
+    peaks: HeldPeaks,
+}
+
+/// The most delivery has held at once; a shutdown reading of what it holds
+/// is zero, so only the peaks show what the run cost.
+#[cfg(feature = "diagnostics")]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct HeldPeaks {
+    pub pending_plans: usize,
+    pub pending_captures: usize,
+    pub recording_reserved_used: usize,
 }
 
 /// The recording's ingestion admission state, independent of the shared credential cache.
@@ -315,6 +338,69 @@ struct Shared {
     /// Set once shutdown starts; the shutdown timeout runs from then.
     draining: watch::Sender<bool>,
     on_failure: Box<dyn Fn(DeliveryError) + Send + Sync>,
+    #[cfg(feature = "diagnostics")]
+    prepares: RequestTiming,
+    #[cfg(feature = "diagnostics")]
+    puts: RequestTiming,
+}
+
+/// Every attempt of one kind of request: how many, how long they took in
+/// all and at most, and the bytes they carried. Measurement only, under the
+/// `diagnostics` feature.
+#[cfg(feature = "diagnostics")]
+#[derive(Default)]
+struct RequestTiming {
+    count: std::sync::atomic::AtomicU64,
+    nanos: std::sync::atomic::AtomicU64,
+    max_nanos: std::sync::atomic::AtomicU64,
+    bytes: std::sync::atomic::AtomicU64,
+}
+
+#[cfg(feature = "diagnostics")]
+impl RequestTiming {
+    fn record(&self, elapsed: Duration, bytes: usize) {
+        use std::sync::atomic::Ordering;
+        let nanos = u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX);
+        self.count.fetch_add(1, Ordering::Relaxed);
+        self.nanos.fetch_add(nanos, Ordering::Relaxed);
+        self.max_nanos.fetch_max(nanos, Ordering::Relaxed);
+        self.bytes.fetch_add(bytes as u64, Ordering::Relaxed);
+    }
+    fn read(&self) -> RequestDiagnostics {
+        use std::sync::atomic::Ordering;
+        RequestDiagnostics {
+            count: self.count.load(Ordering::Relaxed),
+            total_nanos: self.nanos.load(Ordering::Relaxed),
+            max_nanos: self.max_nanos.load(Ordering::Relaxed),
+            bytes: self.bytes.load(Ordering::Relaxed),
+        }
+    }
+}
+
+/// What the `diagnostics` feature counted about one kind of request.
+#[cfg(feature = "diagnostics")]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct RequestDiagnostics {
+    /// Attempts, retries included.
+    pub count: u64,
+    pub total_nanos: u64,
+    pub max_nanos: u64,
+    pub bytes: u64,
+}
+
+/// What delivery holds and has done; see [`BcsDeliveryHandle::diagnostics`].
+#[cfg(feature = "diagnostics")]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct DeliveryDiagnostics {
+    /// Plans admitted whose recording is not yet uploaded.
+    pub pending_plans: usize,
+    /// Captures held by admitted plans until their bodies are built.
+    pub pending_captures: usize,
+    pub recording_reserved_used: usize,
+    pub cas_reserved_used: usize,
+    pub peaks: HeldPeaks,
+    pub prepares: RequestDiagnostics,
+    pub puts: RequestDiagnostics,
 }
 
 impl Shared {
@@ -404,7 +490,7 @@ impl Shared {
 }
 
 /// What a plan holds until its recording is uploaded. Its captures, and the
-/// storage slots they hold, are given back sooner: once its bodies are built.
+/// storage they hold, are given back sooner: once its bodies are built.
 struct Reservation {
     shared: Arc<Shared>,
     recording: usize,
@@ -575,6 +661,10 @@ impl BcsDeliveryHandle {
                 draining: watch::channel(true).0,
                 heartbeat: Heartbeat::new(),
                 on_failure: Box::new(|_| {}),
+                #[cfg(feature = "diagnostics")]
+                prepares: RequestTiming::default(),
+                #[cfg(feature = "diagnostics")]
+                puts: RequestTiming::default(),
             }),
         }
     }
@@ -595,6 +685,34 @@ impl BcsDeliveryHandle {
     /// each of which made every stream carry its groups again.
     pub fn carried_resets(&self) -> u64 {
         self.shared.state.lock().unwrap().carried_resets
+    }
+
+    /// What delivery holds now and what its requests have cost so far.
+    #[cfg(feature = "diagnostics")]
+    pub fn diagnostics(&self) -> DeliveryDiagnostics {
+        let state = self.shared.state.lock().unwrap();
+        DeliveryDiagnostics {
+            pending_plans: state.plans,
+            pending_captures: state.snapshots,
+            recording_reserved_used: state.recording_bytes,
+            cas_reserved_used: state.cas.used,
+            peaks: state.peaks,
+            prepares: self.shared.prepares.read(),
+            puts: self.shared.puts.read(),
+        }
+    }
+
+    /// The highest recording file sequence stored; zero before any. Every
+    /// staged file carries the metadata retained when it was sealed, so a
+    /// stored file acknowledges every segment through its sequence whatever
+    /// became of the files before it.
+    pub fn recording_acked_through(&self) -> u64 {
+        self.shared
+            .state
+            .lock()
+            .unwrap()
+            .progress
+            .recording_acked_through
     }
 
     /// Saturating count of definition segments evicted from bounded replay retention.
@@ -884,6 +1002,15 @@ impl BcsDeliveryHandle {
         state.recording_bytes += recording;
         state.snapshots += window.owners.len();
         state.plans += 1;
+        #[cfg(feature = "diagnostics")]
+        {
+            let (plans, snapshots, recording_bytes) =
+                (state.plans, state.snapshots, state.recording_bytes);
+            let peaks = &mut state.peaks;
+            peaks.pending_plans = peaks.pending_plans.max(plans);
+            peaks.pending_captures = peaks.pending_captures.max(snapshots);
+            peaks.recording_reserved_used = peaks.recording_reserved_used.max(recording_bytes);
+        }
         state.recording_window += recording_window;
         state.cas_window += cas_window;
         state.last_file = Some(identity);
@@ -952,6 +1079,10 @@ impl BcsDelivery {
             draining: watch::channel(false).0,
             heartbeat: Heartbeat::new(),
             on_failure: Box::new(on_failure),
+            #[cfg(feature = "diagnostics")]
+            prepares: RequestTiming::default(),
+            #[cfg(feature = "diagnostics")]
+            puts: RequestTiming::default(),
         });
         let worker_shared = shared.clone();
         let worker = thread::Builder::new()
@@ -1185,7 +1316,9 @@ async fn prepare(
         )
         .map_err(|_| DeliveryError::Capacity)?;
         let body = Bytes::from(writer.bytes);
-        match bcs_api::telemetry::prepare(
+        #[cfg(feature = "diagnostics")]
+        let (started, sent) = (std::time::Instant::now(), body.len());
+        let answer = bcs_api::telemetry::prepare(
             client,
             &url,
             config.bearer_token.as_deref(),
@@ -1193,22 +1326,28 @@ async fn prepare(
             &key,
             body,
         )
-        .await
-        {
+        .await;
+        // A prepare is answered once its plan has been read, not at its
+        // response headers.
+        let answer = match answer {
             Ok(response) => {
                 shared.authorized();
-                match read_response(response, config.max_response_bytes).await {
-                    Ok(bytes) => {
-                        heartbeat.mark_control_success();
-                        let response: PrepareUploadsResponse = serde_json::from_slice(&bytes)
-                            .map_err(|_| DeliveryError::InvalidPlan)?;
-                        let _ = heartbeat.configure(response.heartbeat);
-                        return Ok(response);
-                    }
-                    Err(DeliveryError::Http) => {}
-                    Err(error) => return Err(error),
-                }
+                Ok(read_response(response, config.max_response_bytes).await)
             }
+            Err(error) => Err(error),
+        };
+        #[cfg(feature = "diagnostics")]
+        shared.prepares.record(started.elapsed(), sent);
+        match answer {
+            Ok(Ok(bytes)) => {
+                heartbeat.mark_control_success();
+                let response: PrepareUploadsResponse =
+                    serde_json::from_slice(&bytes).map_err(|_| DeliveryError::InvalidPlan)?;
+                let _ = heartbeat.configure(response.heartbeat);
+                return Ok(response);
+            }
+            Ok(Err(DeliveryError::Http)) => {}
+            Ok(Err(error)) => return Err(error),
             Err(error)
                 if matches!(
                     error.status(),
@@ -1262,6 +1401,7 @@ async fn read_response(
 async fn put(
     client: &Client,
     config: &DeliveryConfig,
+    #[cfg_attr(not(feature = "diagnostics"), expect(unused_variables))] shared: &Shared,
     target: UploadTarget,
     body: Body,
     plan_expiry: u64,
@@ -1286,7 +1426,9 @@ async fn put(
                 .into_iter()
                 .map(Ok::<Bytes, std::convert::Infallible>),
         ));
-        match bcs_api::telemetry::upload(
+        #[cfg(feature = "diagnostics")]
+        let started = std::time::Instant::now();
+        let answer = bcs_api::telemetry::upload(
             client,
             &target.presigned_put_url,
             headers.clone(),
@@ -1296,8 +1438,10 @@ async fn put(
                 .put_timeout(body.len())
                 .min(Duration::from_millis(remaining)),
         )
-        .await
-        {
+        .await;
+        #[cfg(feature = "diagnostics")]
+        shared.puts.record(started.elapsed(), body.len());
+        match answer {
             Ok(response) if response.status().is_success() => return Ok(()),
             Ok(response) if !retryable(response.status()) => return Err(DeliveryError::Http),
             _ => {}
@@ -1474,21 +1618,30 @@ async fn assemble(
     })
 }
 
-/// Upload a plan's recording, in its turn. The plan is pending until then.
+/// Upload a plan's recording when one of the recording slots is free. The
+/// plan is pending until then. Its CAS bodies have been taken; they upload
+/// on their own. Recordings upload several at a time, in whatever order
+/// their uploads end: a stored file acknowledges the metadata it carries,
+/// which is everything retained when it was sealed.
 async fn upload_recording(
     client: &Client,
     config: &DeliveryConfig,
-    recording: Option<(UploadTarget, Body)>,
-    recording_sequence: u64,
-    expiry: u64,
-    reservation: Reservation,
+    prepared: Prepared,
     slots: Arc<Semaphore>,
 ) {
+    let Prepared {
+        recording,
+        recording_sequence,
+        cas,
+        expiry,
+        reservation,
+    } = prepared;
+    debug_assert!(cas.is_empty(), "CAS bodies upload on their own");
     let shared = &reservation.shared;
     if let Some((target, body)) = recording {
         let _slot = slots.acquire().await.expect("recording lane open");
         let reset_cas = !target.candidate_indices.is_empty();
-        match put(client, config, target, body, expiry).await {
+        match put(client, config, shared, target, body, expiry).await {
             Ok(()) => {
                 let mut state = shared.state.lock().unwrap();
                 state.progress.recording_acked_through = state
@@ -1513,7 +1666,7 @@ async fn upload_body(
     slots: Arc<Semaphore>,
 ) {
     let _slot = slots.acquire().await.expect("CAS lane open");
-    if let Err(error) = put(client, config, target, body, expiry).await {
+    if let Err(error) = put(client, config, &hold.shared, target, body, expiry).await {
         hold.shared.lose(error, true);
     }
 }
@@ -1636,15 +1789,23 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
             Err(error) => shared.lose(error, false),
         }
     }
-    let recording_slots = Arc::new(Semaphore::new(1));
+    let recording_slots = Arc::new(Semaphore::new(shared.config.max_recording_uploads));
     let cas_slots = Arc::new(Semaphore::new(shared.config.max_cas_uploads));
-    // One task per plan, for its recording, and one per CAS body.
+    // One task per plan for its prepare, then one for its recording, and one
+    // per CAS body. Prepares run together, as many as admission lets in;
+    // recordings and bodies upload as their slots allow, in any order.
+    let mut prepares: tokio::task::JoinSet<Result<Prepared, DeliveryError>> =
+        tokio::task::JoinSet::new();
     let mut recordings = tokio::task::JoinSet::new();
     let mut bodies = tokio::task::JoinSet::new();
     let mut heartbeats = tokio::task::JoinSet::new();
     let mut heartbeat_started = false;
+    let mut open = true;
     loop {
         if shared.state.lock().unwrap().failure.is_some() {
+            break;
+        }
+        if !open && prepares.is_empty() {
             break;
         }
         tokio::select! {
@@ -1658,8 +1819,41 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
                     shared.fail(DeliveryError::Worker);
                 }
             }
-            work = receiver.recv(), if recordings.len() < shared.config.max_pending_plans => {
-                let Some(work) = work else { break };
+            prepared = prepares.join_next(), if !prepares.is_empty() => {
+                match prepared {
+                    Some(Ok(Ok(mut prepared))) => {
+                        let expiry = prepared.expiry;
+                        for (target, body, hold) in std::mem::take(&mut prepared.cas) {
+                            let client = client.clone();
+                            let shared = shared.clone();
+                            let slots = cas_slots.clone();
+                            bodies.spawn(async move {
+                                upload_body(
+                                    &client, &shared.config, target, body, hold, expiry, slots,
+                                ).await;
+                            });
+                        }
+                        let client = client.clone();
+                        let shared = shared.clone();
+                        let slots = recording_slots.clone();
+                        recordings.spawn(async move {
+                            upload_recording(&client, &shared.config, prepared, slots).await;
+                        });
+                    }
+                    Some(Ok(Err(error))) => match error {
+                        error @ (DeliveryError::Unauthorized | DeliveryError::InitialAuthorization(_)) => shared.fail(error),
+                        DeliveryError::Api(failure) if matches!(failure.status.as_u16(), 401 | 403) => shared.fail(DeliveryError::Api(failure)),
+                        error => shared.lose(error, true),
+                    },
+                    Some(Err(_)) => shared.fail(DeliveryError::Worker),
+                    None => {}
+                }
+            }
+            work = receiver.recv(), if open && prepares.len() + recordings.len() < shared.config.max_pending_plans => {
+                let Some(work) = work else {
+                    open = false;
+                    continue;
+                };
                 if !heartbeat_started {
                     heartbeat_started = true;
                     match shared.config.endpoint(&work.request.recording.recording_id, "heartbeat") {
@@ -1684,35 +1878,9 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
                         Err(_) => shared.heartbeat.observe_error(HeartbeatError::InvalidEndpoint),
                     }
                 }
-                match assemble(&client, &shared.config, work).await {
-                    Ok(prepared) => {
-                        let Prepared { recording, recording_sequence, cas, expiry, reservation } = prepared;
-                        for (target, body, hold) in cas {
-                            let client = client.clone();
-                            let shared = shared.clone();
-                            let slots = cas_slots.clone();
-                            bodies.spawn(async move {
-                                upload_body(
-                                    &client, &shared.config, target, body, hold, expiry, slots,
-                                ).await;
-                            });
-                        }
-                        let client = client.clone();
-                        let shared = shared.clone();
-                        let slots = recording_slots.clone();
-                        recordings.spawn(async move {
-                            upload_recording(
-                                &client, &shared.config, recording, recording_sequence, expiry,
-                                reservation, slots,
-                            ).await;
-                        });
-                    }
-                    Err(error @ (DeliveryError::Unauthorized | DeliveryError::InitialAuthorization(_))) => shared.fail(error),
-                    Err(DeliveryError::Api(failure)) if matches!(failure.status.as_u16(), 401 | 403) => shared.fail(DeliveryError::Api(failure)),
-                    Err(error) => {
-                        shared.lose(error, true);
-                    }
-                }
+                let client = client.clone();
+                let shared = shared.clone();
+                prepares.spawn(async move { assemble(&client, &shared.config, work).await });
             }
         }
     }
@@ -1720,10 +1888,12 @@ async fn run_worker(client: Client, shared: Arc<Shared>, mut receiver: mpsc::Rec
     // Drain what was admitted, unless delivery failed.
     loop {
         if shared.state.lock().unwrap().failure.is_some() {
+            prepares.abort_all();
             recordings.abort_all();
             bodies.abort_all();
         }
         let result = tokio::select! {
+            Some(result) = prepares.join_next() => result.map(|_| ()),
             Some(result) = recordings.join_next() => result,
             Some(result) = bodies.join_next() => result,
             else => break,

@@ -91,10 +91,7 @@ async fn setup(
         server,
         delivery,
         publisher,
-        SnapshotPool::new(
-            btel_settings::snapshot::MIN_SNAPSHOT_SLOTS,
-            Limits::default(),
-        ),
+        SnapshotPool::unbounded(Limits::default()),
     )
 }
 
@@ -250,7 +247,7 @@ async fn lost_recording_replays_metadata_and_reoffers_cas_without_replaying_even
         handle.clone(),
     )
     .unwrap();
-    let pool = SnapshotPool::new(4, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let thread = allocate_telemetry_id();
     let call_path = CallPathId::new_non_root(1).unwrap();
     let clock = btel_clock::ClockRuntime::new(btel_clock::ClockMode::Monotonic).start_run();
@@ -505,7 +502,7 @@ async fn blobs_a_sealed_file_left_queued_are_delivered_without_another_record() 
         delivery.handle(),
     )
     .unwrap();
-    let pool = SnapshotPool::new(2, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let snapshot = cut_list(&pool, 2 * plan + 2);
     let root = snapshot.root_id();
     publisher.before_batch(1);
@@ -622,10 +619,7 @@ async fn captures_over_every_byte_budget_are_sent_whole_and_none_is_dropped() {
         delivery.handle(),
     )
     .unwrap();
-    let pool = SnapshotPool::new(
-        btel_settings::snapshot::MIN_SNAPSHOT_SLOTS,
-        Limits::default(),
-    );
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut expected = std::collections::HashMap::new();
     let mut scratch = btel_snapshot::BlobScratch::default();
     let mut captures: Vec<_> = (0..3)
@@ -748,7 +742,7 @@ async fn strings_sent_with_one_plan_are_let_go_while_their_capture_waits_for_the
         delivery.handle(),
     )
     .unwrap();
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     // Forty strings, each a blob of its own, and the list that names them:
     // more than the thirty-two blobs one plan takes.
     let texts: Vec<_> = (0..40)

@@ -515,7 +515,7 @@ mod tests {
         RealizedTy::Null
     }
     fn capture(values: &[Value]) -> Snapshot {
-        let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+        let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
         // SAFETY: all test values remain live; fixtures do not collect during capture.
         unsafe {
             Scratch::default().capture(pool.try_acquire().unwrap(), Input::FunctionArgs(values))
@@ -741,13 +741,10 @@ mod tests {
             }
             writer.join().unwrap();
         });
-        let pool = btel_snapshot::SnapshotPool::new(
-            1,
-            btel_snapshot::Limits {
-                max_depth: Some(0),
-                ..Default::default()
-            },
-        );
+        let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits {
+            max_depth: Some(0),
+            ..Default::default()
+        });
         let snapshot = unsafe {
             Scratch::default().capture(
                 pool.try_acquire().unwrap(),
@@ -799,13 +796,10 @@ mod tests {
             image(&mut vm, 64),
             image(&mut vm, 65),
         ];
-        let pool = btel_snapshot::SnapshotPool::new(
-            1,
-            btel_snapshot::Limits {
-                max_leaf_bytes: 64,
-                ..Default::default()
-            },
-        );
+        let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits {
+            max_leaf_bytes: 64,
+            ..Default::default()
+        });
         // SAFETY: the values stay live and nothing collects during capture.
         let snapshot = unsafe {
             Scratch::default().capture(pool.try_acquire().unwrap(), Input::FunctionArgs(&values))
@@ -1025,7 +1019,7 @@ mod tests {
         assert_eq!(slots[0], slots[3]);
         assert!(matches!(slots[1], Val::OmittedArg));
         assert!(matches!(slots[2], Val::Null));
-        let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+        let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
         let result = unsafe {
             Scratch::default().capture(pool.try_acquire().unwrap(), Input::Value(Value::NULL))
         };
@@ -1133,7 +1127,7 @@ mod tests {
                 .map(|i| (bex_str::BexStr::from(i.to_string()), Value::int(i)))
                 .collect(),
         );
-        let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+        let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
         let mut scratch = Scratch::default();
         for source in [ints, floats, map] {
             let snapshot = unsafe {
@@ -1210,7 +1204,7 @@ mod tests {
             Value::object(vm.tlab.alloc_string(message.as_str())),
             Value::object(vm.tlab.alloc_rust_data(media)),
         ];
-        let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+        let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
         let mut scratch = Scratch {
             rewrites: vec![(raw.to_owned(), clean.to_owned())],
             ..Scratch::default()
@@ -1241,7 +1235,7 @@ mod tests {
 
         use crate::telemetry::network::NetworkPayload;
 
-        let pool = btel_snapshot::SnapshotPool::new(4, btel_snapshot::Limits::default());
+        let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
         let capture = |payload: &NetworkPayload<'_>| {
             let mut b = pool.try_acquire().unwrap();
             let root = network(&mut b, payload);

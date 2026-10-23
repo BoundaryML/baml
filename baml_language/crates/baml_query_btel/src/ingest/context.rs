@@ -292,7 +292,7 @@ mod tests {
 
     #[test]
     fn unchanged_failed_blobs_are_skipped_and_repairs_recover() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let snapshot = btel_snapshot::context::capture(&Context::default(), &pool).unwrap();
         let mut valid = Vec::new();
         snapshot
@@ -357,7 +357,7 @@ mod tests {
     fn bounded_groups_do_not_omit_pending_identities() {
         let directory = tempfile::tempdir().unwrap();
         let cas = CasStore::new(directory.path().to_owned(), CasLimits::default());
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let mut conn = Connection::open_in_memory().unwrap();
         conn.execute_batch(crate::schema::DDL).unwrap();
         for i in 0..5 {

@@ -30,6 +30,7 @@ fn config(capacity: usize, producers: usize) -> Config {
         span_chunks: nz(producers),
         max_producers: nz(producers),
         preallocate: true,
+        overage_wait_base: btel_settings::transport::OVERAGE_WAIT_BASE_DURATION,
     }
 }
 
@@ -45,6 +46,9 @@ fn timing() -> TimingRecord {
 }
 
 struct Capture(Arc<AtomicUsize>);
+impl btel_records::Capture for Capture {
+    fn uncharge(&self) {}
+}
 impl Drop for Capture {
     fn drop(&mut self) {
         self.0.fetch_add(1, Ordering::Relaxed);
@@ -155,6 +159,130 @@ fn detached_and_borrowed_paths_preserve_order_and_ownership() {
     run::<true>();
 }
 
+/// The processor lifts every capture's charge exactly once, as it takes the
+/// record from the producers: on the borrowed path, on the detached path,
+/// and for records deferred to the finish drain, which never saw a chunk.
+#[test]
+fn captures_are_uncharged_once_when_the_processor_takes_them() {
+    struct Charged(Arc<AtomicUsize>);
+    impl btel_records::Capture for Charged {
+        fn uncharge(&self) {
+            self.0.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    struct Sink<const DETACHED: bool>;
+    impl<const DETACHED: bool> Publisher<Box<[Charged]>, Box<Charged>> for Sink<DETACHED> {
+        const DETACH_RECORDS: bool = DETACHED;
+        fn aggregate(&mut self, _: AggregateDelta) {}
+        fn flush(&mut self) {}
+        fn span(&mut self, _: TelemetryId, _: &mut SpanRecord<Box<[Charged]>, Box<Charged>>) {}
+    }
+    fn run<const DETACHED: bool>() {
+        let uncharges = Arc::new(AtomicUsize::new(0));
+        let charged = || Charged(uncharges.clone());
+        let completion = || SpanRecord::LateFunctionSpanCompletionOk {
+            id: allocate_telemetry_id(),
+            parent_id: allocate_telemetry_id(),
+            call_path: CallPathId::new_non_root(1).unwrap(),
+            entered_at: ClockInstant::from_ticks(1),
+            exited_at: ClockInstant::from_ticks(2),
+            await_time: AwaitDuration::ZERO,
+            captured_value: Some(Box::new(charged())),
+        };
+        let pool = ChunkPool::new(config(4, 1)).unwrap();
+        let deferred: DeferredSpans<Box<[Charged]>, Box<Charged>> = Arc::default();
+        let mut processor =
+            Processor::with_publisher(pool.bind_consumer().unwrap(), nz(1), Sink::<DETACHED>)
+                .with_deferred_spans(deferred.clone());
+        let thread = allocate_telemetry_id();
+        let mut producer = pool.register_producer().unwrap();
+        producer.write_span(SpanRecord::ThreadSelected { thread_id: thread });
+        // Two captures in the inputs, one in the type arguments, one value.
+        producer.write_span(SpanRecord::FunctionSpanAnnouncement {
+            id: allocate_telemetry_id(),
+            parent_id: allocate_telemetry_id(),
+            call_path: CallPathId::new_non_root(1).unwrap(),
+            entered_at: ClockInstant::from_ticks(1),
+            captured_inputs: Some(vec![charged(), charged()].into_boxed_slice()),
+            captured_type_args: Some(vec![charged()].into_boxed_slice()),
+        });
+        producer.write_span(completion());
+        assert_eq!(
+            uncharges.load(Ordering::Relaxed),
+            0,
+            "private records stay charged"
+        );
+        producer.seal();
+        let progress = processor.process_available();
+        assert_eq!(progress.records, 3);
+        assert_eq!(
+            uncharges.load(Ordering::Relaxed),
+            4,
+            "once per capture taken"
+        );
+        // A deferred record is uncharged by the finish drain, once.
+        deferred.lock().unwrap().push((
+            thread,
+            btel_records::ContextReference::Empty,
+            completion(),
+        ));
+        drop(producer);
+        pool.close_admission();
+        assert!(processor.process_available().complete);
+        assert_eq!(uncharges.load(Ordering::Relaxed), 5);
+        processor.flush();
+        assert_eq!(
+            uncharges.load(Ordering::Relaxed),
+            5,
+            "nothing is uncharged twice"
+        );
+    }
+    run::<false>();
+    run::<true>();
+}
+
+#[test]
+fn producers_beyond_the_table_are_decoded_with_state_of_their_own() {
+    let pool = ChunkPool::<TimingRecord, SpanRecord<(), ()>>::new(config(8, 1)).unwrap();
+    let mut processor = Processor::new(pool.bind_consumer().unwrap(), nz(1));
+    let mut first = pool.register_producer().unwrap();
+    let first_thread = allocate_telemetry_id();
+    first.write_timing(TimingRecord::ThreadSelected {
+        thread_id: first_thread,
+    });
+    first.write_timing(timing());
+    first.seal();
+    // A second thread binds while the first holds the table's only slot: it
+    // is given a slot beyond the table, and its decoder state with it.
+    let beyond_thread = allocate_telemetry_id();
+    thread::scope(|scope| {
+        scope
+            .spawn(|| {
+                let mut beyond = pool.register_producer().unwrap();
+                assert_eq!(beyond.id().index(), 1);
+                beyond.write_timing(TimingRecord::ThreadSelected {
+                    thread_id: beyond_thread,
+                });
+                beyond.write_timing(timing());
+                beyond.seal();
+            })
+            .join()
+            .unwrap();
+    });
+    let mut chunks = 0;
+    let mut records = 0;
+    while let progress = processor.process_available()
+        && progress.chunks > 0
+    {
+        chunks += progress.chunks;
+        records += progress.records;
+    }
+    assert_eq!((chunks, records), (2, 4));
+    assert_eq!(processor.processing.contexts.len(), 2);
+    assert_eq!(processor.processing.contexts[0].timing, Some(first_thread));
+    assert_eq!(processor.processing.contexts[1].timing, Some(beyond_thread));
+}
+
 #[test]
 fn bounded_processing_releases_captures_and_clock_ownership() {
     let drops = Arc::new(AtomicUsize::new(0));
@@ -237,7 +365,9 @@ fn run_recycles_tiny_pools_under_multiple_producers() {
                         producer.write_timing(timing());
                         producer.write_span(span(Capture(drops.clone())));
                     }
-                    assert_eq!(producer.stats().allocations, 0);
+                    // Preallocated lanes: only the backstop ever allocates.
+                    let stats = producer.stats();
+                    assert_eq!(stats.allocations, stats.overage_allocations);
                     // Drop seals the final partial chunks of both lanes.
                 })
             })
@@ -305,6 +435,9 @@ fn failure_wakes_idle_processor_and_is_reported_at_run_boundary() {
 #[test]
 fn destructor_panic_is_preserved_and_stops_producers() {
     struct BrokenCapture;
+    impl btel_records::Capture for BrokenCapture {
+        fn uncharge(&self) {}
+    }
     impl Drop for BrokenCapture {
         fn drop(&mut self) {
             std::panic::panic_any(42_u32);

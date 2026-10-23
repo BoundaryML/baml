@@ -320,7 +320,7 @@ mod tests {
 
     #[test]
     fn binary_values_preserve_omission_nan_bigints_cycles_and_first_reference_order() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let mut b = pool.try_acquire().unwrap();
         // Reserved first, referenced second: it is numbered second.
         let later = b.leaves().object(O::Cell(V::Null)).unwrap();
@@ -380,7 +380,7 @@ mod tests {
     }
     #[test]
     fn leaf_storage_sharing_does_not_change_blob_bytes() {
-        let pool = SnapshotPool::new(2, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let make = |reuse| {
             let mut b = pool.try_acquire().unwrap();
             let first = b.leaves().string(&"same".into()).unwrap();

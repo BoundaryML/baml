@@ -311,7 +311,7 @@ mod tests {
 
     #[test]
     fn exact_bytes_include_value_type_ids_but_exclude_uncaptured_content() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let mut b = pool.try_acquire().unwrap();
         let text = b.leaves().string_value(&"é".into());
         let bigint = b.leaves().bigint(&Arc::new(BigInt::from(256)));
@@ -381,7 +381,7 @@ mod tests {
 
     #[test]
     fn containers_and_reflected_types_count_captured_dynamic_type_content() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let check = |make: fn(&mut Builder) -> SnapshotValue, expected| {
             let mut b = pool.try_acquire().unwrap();
             let root = make(&mut b);
@@ -493,7 +493,7 @@ mod tests {
 
     #[test]
     fn aliases_count_each_occurrence_and_split_preserves_totals_after_releasing_leaves() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         for policy in [
             ShapePolicy::Whole,
             ShapePolicy::Split {
@@ -518,7 +518,7 @@ mod tests {
 
     #[test]
     fn recursive_cycles_count_cas_reference_bytes_but_regular_aliases_repeat_content() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let mut b = pool.try_acquire().unwrap();
         let ty = b.leaves().ty(OwnedType::unknown());
         let cycle = b.leaves().reserve().unwrap();
@@ -540,7 +540,7 @@ mod tests {
 
     #[test]
     fn entering_a_split_cycle_at_either_node_preserves_exact_bytes() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         for policy in [
             ShapePolicy::Whole,
             ShapePolicy::Split {
@@ -591,7 +591,7 @@ mod tests {
 
     #[test]
     fn media_counts_decoded_content_and_customer_metadata() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let mut b = pool.try_acquire().unwrap();
         let data = b.leaves().string(&"YWJjZA==".into()).unwrap();
         let mime_type = b.leaves().label(&"image/png".into());
@@ -630,7 +630,7 @@ mod tests {
 
     #[test]
     fn repeated_cyclic_subgraph_is_memoized_and_reports_real_overflow() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let mut b = pool.try_acquire().unwrap();
         let ty = b.leaves().ty(OwnedType::unknown());
         let cycle = b.leaves().reserve().unwrap();
@@ -653,7 +653,7 @@ mod tests {
 
     #[test]
     fn repeated_dag_is_memoized_and_unrepresentable_total_is_unknown() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let mut b = pool.try_acquire().unwrap();
         let ty = b.leaves().ty(OwnedType::unknown());
         let mut value = SnapshotValue::Bool(true);
