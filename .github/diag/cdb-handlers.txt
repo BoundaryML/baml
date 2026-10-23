@@ -1,5 +1,8 @@
+.symfix+ c:\symcache
+.reload
 sxe -c ".echo ===AV===; .exr -1; r; kpn 40; q" av
-bu VCRUNTIME140!__CxxFrameHandler3 ".echo HANDLER; dd @rcx+4 L1; r rdx; dps @r9 L8; ln poi(@r9); gc"
+sxe -c ".echo ===CXX-THROW===; gc" eh
+bu vcruntime140!__CxxFrameHandler3 ".echo HANDLER; dd @rcx+4 L1; r rdx; dps @r9 L8; ln poi(@r9); gc"
 bl
 g
 q
