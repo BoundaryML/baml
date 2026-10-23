@@ -14160,6 +14160,10 @@ impl<'db> InferenceContext<'db> {
             // Syntactic flattening alone cannot see null behind alias members.
             // Expose those union edges before null removal for ?., ?? or guards.
             resolved = self.expand_union_aliases(&resolved);
+            // Deduplication may leave one aliased leaf. A structure demand
+            // still needs that root's shape; null removal preserves member
+            // spellings when it filters a surviving union below.
+            resolved = self.expand_alias_ty(&resolved);
         }
         // rustc's `structurally_resolve_type` NORMALIZES as well as
         // resolving: a ground reducible projection is not structure -

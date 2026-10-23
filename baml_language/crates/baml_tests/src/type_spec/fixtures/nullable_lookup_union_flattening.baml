@@ -179,3 +179,8 @@ function duplicate_class_alias(value: NamedGroup | Group | null) -> string | nul
      // ^^^^ string | null
     text
 }
+function duplicate_nonnullable_alias(value: NamedGroup | Group) -> string {
+    let text = value.text;
+     // ^^^^ string
+    text
+}

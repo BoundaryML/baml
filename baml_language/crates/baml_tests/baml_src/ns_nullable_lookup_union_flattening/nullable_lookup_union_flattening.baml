@@ -90,7 +90,8 @@ test "aliased_nullable_lookups" {
     assert.equal(alias_coalesce(Group { text: "hi" }).text, "hi");
     assert.equal(alias_coalesce(null).text, "fallback");
     assert.equal(duplicate_alias_text(Group { text: "hi" }), "hi");
-    assert.equal(duplicate_alias_text(null), "")
+    assert.equal(duplicate_alias_text(null), "");
+    assert.equal(duplicate_plain_alias_text(Group { text: "hi" }), "hi")
 }
 
 class Nested {
@@ -138,4 +139,8 @@ type NamedGroup = Group;
 
 function duplicate_alias_text(value: NamedGroup | Group | null) -> string {
     value?.text ?? ""
+}
+
+function duplicate_plain_alias_text(value: NamedGroup | Group) -> string {
+    value.text
 }
