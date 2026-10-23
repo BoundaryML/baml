@@ -94,6 +94,9 @@ pub(crate) struct Analysis {
     pub(crate) binds_types: bool,
     /// Locals holding a declaration hook's result (`ApplyTraceHook` operands).
     pub(crate) hook_results: BTreeSet<usize>,
+    /// Which objects only this thread can reach, whose container accesses
+    /// skip the lock.
+    pub(crate) escape: baml_compiler2_mir::escape::EscapeFacts,
 }
 
 impl Analysis {
@@ -181,6 +184,7 @@ impl Analysis {
             hooked: intrinsics.hooked,
             binds_types: intrinsics.binds_types,
             hook_results: intrinsics.hook_results,
+            escape: baml_compiler2_mir::escape::analyze(db, body, arity),
         })
     }
 

@@ -39,7 +39,7 @@ function fixtures.short_circuit_locals.coalesced_lengths_compared_apart() -> boo
     cmp_op ==
     pop_jump_if_true L0
     load_var items
-    container_len
+    container_len_local
     jump L1
 
   L0:
@@ -63,7 +63,7 @@ function fixtures.short_circuit_locals.coalesced_lengths_compared_apart() -> boo
     cmp_op ==
     pop_jump_if_true L5
     load_var tags
-    container_len
+    container_len_local
     jump L6
 
   L5:

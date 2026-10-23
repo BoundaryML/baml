@@ -11244,7 +11244,11 @@ impl BexVm {
                     }
 
                     // ── Array / Map element ops ───────────────────────────────────
-                    OpCode::ContainerLen => {
+                    OpCode::ContainerLen | OpCode::ContainerLenLocal => {
+                        // SAFETY (`thread_local`): the emitter selects the
+                        // `_LOCAL` opcodes only where escape analysis proved
+                        // no other thread can reach the container.
+                        let thread_local = op == OpCode::ContainerLenLocal;
                         let container = self.stack.ensure_pop();
                         let Some(ptr) = container.as_object_ptr() else {
                             return Err(VmInternalError::TypeError {
@@ -11255,6 +11259,15 @@ impl BexVm {
                         };
                         #[allow(clippy::cast_possible_wrap)]
                         let len = match self.get_object(ptr) {
+                            Object::Array(arr) if thread_local => {
+                                arr.lock_thread_local().len() as i64
+                            }
+                            Object::Uint8Array(bytes) if thread_local => {
+                                bytes.lock_thread_local().len() as i64
+                            }
+                            Object::Map(map) if thread_local => {
+                                map.lock_thread_local().len() as i64
+                            }
                             Object::Array(arr) => arr.len() as i64,
                             Object::Uint8Array(bytes) => bytes.len() as i64,
                             Object::Map(map) => map.len() as i64,
@@ -11270,7 +11283,9 @@ impl BexVm {
                         self.stack.push(Value::int(len));
                     }
 
-                    OpCode::LoadArrayElement => {
+                    OpCode::LoadArrayElement | OpCode::LoadArrayElementLocal => {
+                        // SAFETY (`thread_local`): see `ContainerLenLocal`.
+                        let thread_local = op == OpCode::LoadArrayElementLocal;
                         let index_value = self.stack.ensure_pop();
                         let array_value = self.stack.ensure_pop();
                         let array_obj_index = self.as_object_ptr(array_value, ObjectType::Array)?;
@@ -11290,7 +11305,11 @@ impl BexVm {
                         let load_result: Result<Value, (i64, usize)> = {
                             match self.get_object(array_obj_index) {
                                 Object::Array(arr) => {
-                                    let guard = arr.lock();
+                                    let guard = if thread_local {
+                                        arr.lock_thread_local()
+                                    } else {
+                                        arr.lock()
+                                    };
                                     let len = guard.len();
                                     match crate::array_index::resolve_index(i, len) {
                                         Some(idx) => Ok(guard[idx]),
@@ -11298,7 +11317,11 @@ impl BexVm {
                                     }
                                 }
                                 Object::Uint8Array(bytes) => {
-                                    let guard = bytes.lock();
+                                    let guard = if thread_local {
+                                        bytes.lock_thread_local()
+                                    } else {
+                                        bytes.lock()
+                                    };
                                     let len = guard.len();
                                     match crate::array_index::resolve_index(i, len) {
                                         Some(idx) => Ok(Value::int(i64::from(guard[idx]))),
@@ -11332,7 +11355,9 @@ impl BexVm {
                         unreachable!("map indexing must be lowered through baml.Map.index");
                     }
 
-                    OpCode::StoreArrayElement => {
+                    OpCode::StoreArrayElement | OpCode::StoreArrayElementLocal => {
+                        // SAFETY (`thread_local`): see `ContainerLenLocal`.
+                        let thread_local = op == OpCode::StoreArrayElementLocal;
                         let new_value = self.stack.ensure_pop();
                         let index_value = self.stack.ensure_pop();
                         let array_value = self.stack.ensure_pop();
@@ -11350,7 +11375,12 @@ impl BexVm {
                         let store_result: Result<(), (i64, usize)> = {
                             match self.get_object(array_object_index) {
                                 Object::Array(arr) => {
-                                    let mut guard = arr.lock_mut(self.tlab.alloc_debt());
+                                    let debt = self.tlab.alloc_debt();
+                                    let mut guard = if thread_local {
+                                        arr.lock_mut_thread_local(debt)
+                                    } else {
+                                        arr.lock_mut(debt)
+                                    };
                                     let len = guard.len();
                                     match crate::array_index::resolve_index(i, len) {
                                         Some(idx) => {
@@ -11368,7 +11398,12 @@ impl BexVm {
                                         }
                                         .into());
                                     };
-                                    let mut guard = bytes.lock_mut(self.tlab.alloc_debt());
+                                    let debt = self.tlab.alloc_debt();
+                                    let mut guard = if thread_local {
+                                        bytes.lock_mut_thread_local(debt)
+                                    } else {
+                                        bytes.lock_mut(debt)
+                                    };
                                     let len = guard.len();
                                     match crate::array_index::resolve_index(i, len) {
                                         Some(idx) => {

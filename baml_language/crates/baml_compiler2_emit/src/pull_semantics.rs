@@ -36,7 +36,8 @@ pub(crate) trait PullSink<'db> {
     fn pull_local(&mut self, local: Local) -> Result<LocalPullAction<'db>, Self::Error>;
 
     fn load_field(&mut self, field: usize, name: &str) -> Result<(), Self::Error>;
-    fn load_index(&mut self, kind: IndexKind) -> Result<(), Self::Error>;
+    /// Load an element of `base`, the container place the index applies to.
+    fn load_index(&mut self, kind: IndexKind, base: &Place) -> Result<(), Self::Error>;
 
     /// Complete a binary operation after its operands have been pulled. Typed
     /// code generators can use the operands to select a specialized opcode.
@@ -147,7 +148,8 @@ pub(crate) trait PullSink<'db> {
 /// Stack-effect callbacks for statement/terminator helpers.
 pub(crate) trait StackEffectSink<'db>: PullSink<'db> {
     fn store_field_value(&mut self, field: usize, name: &str) -> Result<(), Self::Error>;
-    fn store_index_value(&mut self, kind: IndexKind) -> Result<(), Self::Error>;
+    /// Store an element of `base`, the container place the index applies to.
+    fn store_index_value(&mut self, kind: IndexKind, base: &Place) -> Result<(), Self::Error>;
     fn pop_values(&mut self, n: usize) -> Result<(), Self::Error>;
 }
 
@@ -225,7 +227,7 @@ pub(crate) fn walk_projection_store<'db, S: StackEffectSink<'db>>(
             walk_place_pull(sink, base)?;
             walk_place_pull(sink, &Place::Local(*index))?;
             walk_rvalue_pull(sink, value)?;
-            sink.store_index_value(*kind)?;
+            sink.store_index_value(*kind, base)?;
             Ok(true)
         }
         Place::Local(_) | Place::Deref(_) => Ok(false),
@@ -374,7 +376,7 @@ pub(crate) fn walk_place_pull<'db, S: PullSink<'db>>(
         Place::Index { base, index, kind } => {
             walk_place_pull(sink, base)?;
             walk_place_pull(sink, &Place::Local(*index))?;
-            sink.load_index(*kind)
+            sink.load_index(*kind, base)
         }
     }
 }
