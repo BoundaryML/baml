@@ -28,6 +28,7 @@ const PROBES: &[&str] = &[
     "Uncaught",
     "Async",
     "Cancellation",
+    "TimeoutCancellation",
     "RecursiveCancellation",
     "CatchAllocation",
     "Allocation",
@@ -280,7 +281,14 @@ fn rust_differential() {
             let output = run_probe(&mut command, timeout);
             match &output {
                 Ok(output) => {
-                    eprintln!("{probe}/{mode}: {} ({:?})", output.status, start.elapsed())
+                    eprintln!("{probe}/{mode}: {} ({:?})", output.status, start.elapsed());
+                    // Tokio worker panics need not change the process exit status.
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    if stderr.contains("panicked at") {
+                        let failure = format!("{probe}/{mode}: Rust panic on stderr:\n{stderr}");
+                        eprintln!("{failure}");
+                        failures.push(failure);
+                    }
                 }
                 Err(error) => {
                     let failure = format!("{probe}/{mode}: {error}");

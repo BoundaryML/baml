@@ -821,7 +821,8 @@ impl BexVm {
             FrameAt::Vm(idx) => self.frame_pc(idx, live),
             FrameAt::Record(record) => {
                 let record = record_ref(record);
-                let function = self.get_object(record.function()).as_callable().ok()?;
+                // SAFETY: the linked record roots its callable under the heap permit.
+                let function = unsafe { self.load_callable(record.function()) }.ok()?;
                 function
                     .bytecode
                     .compact
@@ -855,7 +856,8 @@ impl BexVm {
                 (record.function(), record.base())
             }
         };
-        let function = self.get_object(function).as_callable().ok()?;
+        // SAFETY: the frame or linked record roots its callable under the heap permit.
+        let function = unsafe { self.load_callable(function) }.ok()?;
         let slot = function.compiled_body?.cause_slot()?;
         let context = *self.stack.0.get(base + slot as usize)?;
         (!context.is_null()).then_some(context)

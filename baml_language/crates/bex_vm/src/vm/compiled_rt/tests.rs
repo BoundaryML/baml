@@ -1208,6 +1208,97 @@ fn compiled_delivery_survives_collection_before_resume() {
 
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
+fn cancellation_unwinds_records_above_a_function_value_frame() {
+    use btel_settings::mode::AutoTelemetryLevel;
+
+    use crate::{
+        compiled_rt::{FrameAt, Step},
+        errors::VmPanic,
+    };
+
+    static LEAF: AtomicU32 = AtomicU32::new(0);
+    static SYSOP: AtomicU32 = AtomicU32::new(0);
+    fn leaf(vm: &mut BexVm, fr: &FrameRecord, _: &[Value]) -> BodyResult {
+        fr.note_pc(0);
+        vm.suspend(Step::Call {
+            callee: object(vm, &SYSOP),
+            argc: 0,
+        })
+    }
+    fn work(vm: &mut BexVm, fr: &FrameRecord, _: &[Value]) -> BodyResult {
+        vm.call_record(
+            fr,
+            object(vm, &LEAF),
+            0,
+            |_: &mut BexVm| [Value::NULL; 0],
+            |vm, fr| leaf(vm, fr, &[]),
+        )
+    }
+    const SOURCE: &str = r#"
+        function Leaf() -> null { baml.sys.collect_garbage() }
+        function Work() -> null { Leaf() }
+        function Invoke(body: () -> null throws never) -> null { body() }
+        function Main() -> null { Invoke(Work) }
+    "#;
+
+    for level in [
+        None,
+        Some(AutoTelemetryLevel::Medium),
+        Some(AutoTelemetryLevel::High),
+    ] {
+        let mut records = Vec::new();
+        for compiled in [false, true] {
+            let bodies: &[(&str, CompiledFn)] = if compiled {
+                &[("user.Work", work), ("user.Leaf", leaf)]
+            } else {
+                &[]
+            };
+            let program = compiled_program(
+                SOURCE,
+                bodies,
+                &[("user.Leaf", &LEAF), ("baml.sys.collect_garbage", &SYSOP)],
+            );
+            let mut vm = program_vm(program, level);
+            loop {
+                match vm.exec().unwrap() {
+                    VmExecState::EarlyYield => {}
+                    VmExecState::SysOp { .. } => break,
+                    other => panic!("expected a sys-op suspension, got {other:?}"),
+                }
+            }
+            if compiled {
+                assert!(vm.frames.iter().any(|frame| matches!(
+                    vm.get_object(frame.function()),
+                    Object::GenericFunction(_)
+                )));
+            }
+            let cancelled = vm.panic_to_exception_value(VmPanic::Cancelled);
+            let result = vm.try_handle_external_exception(cancelled);
+            let error = if compiled {
+                result.expect("cancellation must be delivered to the parked fiber");
+                vm.exec().unwrap_err()
+            } else {
+                result.unwrap_err()
+            };
+            assert!(matches!(error, VmError::ThrownUnhandled { .. }));
+            assert!(
+                vm.stack_view()
+                    .iter()
+                    .all(|at| matches!(at, FrameAt::Vm(_)))
+            );
+            vm.finish_telemetry(InvocationOutcome::Cancelled);
+            if level.is_some() {
+                records.push(without_span_ids(telemetry_records(&vm)));
+            }
+        }
+        if level.is_some() {
+            assert_eq!(records[0], records[1], "telemetry at {level:?}");
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
 fn compiled_bodies_call_bound_method_values() {
     use crate::compiled_rt::Step;
 

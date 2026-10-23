@@ -362,7 +362,11 @@ impl BexVm {
         if frame.instruction_ptr == crate::compiled_rt::RUNNING {
             return Some(crate::compiled_rt::CompiledAt::Running);
         }
-        let function = self.get_object(frame.function).as_callable().ok()?;
+        // Function values retain a GenericFunction wrapper in their VM frame.
+        // Resolve it as dispatch does, or a parked fiber looks like bytecode
+        // and the unwinder pops its frame before its live records can unwind.
+        // SAFETY: the frame roots its callable under the heap permit.
+        let function = unsafe { self.load_function(idx) }.ok()?;
         crate::compiled_rt::compiled_at(frame.instruction_ptr, function)
     }
 
@@ -386,9 +390,8 @@ impl BexVm {
             return None;
         };
         if self.compiled_at(idx).is_some() {
-            return self
-                .get_object(frame.function)
-                .as_callable()
+            // SAFETY: the frame roots its callable under the heap permit.
+            return unsafe { self.load_function(idx) }
                 .ok()?
                 .bytecode
                 .compact
