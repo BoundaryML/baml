@@ -522,6 +522,37 @@ pub fn check_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Diag
                     diagnostic.render(db, file, None),
                 ));
             }
+            // LLM OUTPUT warnings: a return-type member a model can never
+            // return (E0184), at the written return type.
+            let findings = baml_compiler2_hir_ty::llm_output::llm_output_findings(db, func_loc);
+            if !findings.dropped.is_empty() {
+                let data = baml_compiler2_hir::item_data::elaborated_function_data(db, func_loc);
+                let source_map =
+                    baml_compiler2_hir::item_data::elaborated_function_source_map(db, func_loc);
+                let range = data.return_type.map_or_else(
+                    || baml_compiler2_hir::item_data::function_source_map(db, func_loc).name_span,
+                    |ret| source_map.type_refs.span(ret),
+                );
+                let function = baml_compiler2_hir::item_data::function_data(db, func_loc)
+                    .name
+                    .clone();
+                for (member, no_values) in &findings.dropped {
+                    let error = TirTypeError::LlmOutputMemberDropped {
+                        function: function.clone(),
+                        member: member.clone(),
+                        no_values: *no_values,
+                        kept: findings.kept.clone(),
+                    };
+                    let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
+                        message: error.render(&vp),
+                        error,
+                        range,
+                        severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Warning,
+                        related: Vec::new(),
+                    };
+                    diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
+                }
+            }
         }
         // BEP-042: `cleanup` is a reserved finalizer name, so a class's own
         // method called `cleanup` must have the finalizer's shape (E0144).
@@ -624,6 +655,43 @@ pub fn check_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile) -> Vec<Diag
                     related: Vec::new(),
                 };
                 diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
+            }
+        }
+        // LLM OUTPUT field warnings: an optional field an LLM function's
+        // output reaches, which a model can never fill (E0185), at the
+        // field's written type.
+        let always_null = baml_compiler2_hir_ty::llm_output::package_always_null_fields(
+            db,
+            baml_compiler2_hir::file_package::file_package(db, file).root,
+        );
+        if !always_null.is_empty() {
+            for &class_loc in baml_compiler2_hir::item_data::file_classes(db, file) {
+                let data = baml_compiler2_hir::item_data::class_data(db, class_loc);
+                let head = baml_compiler2_hir_ty::lower::qualify_def(
+                    db,
+                    baml_compiler2_hir::contributions::Definition::Class(class_loc),
+                    &data.name,
+                );
+                let source_map = baml_compiler2_hir::item_data::class_source_map(db, class_loc);
+                for field in &data.fields {
+                    if always_null
+                        .binary_search(&(head.clone(), field.name.clone()))
+                        .is_err()
+                    {
+                        continue;
+                    }
+                    let error = TirTypeError::LlmOutputFieldAlwaysNull {
+                        field: field.name.clone(),
+                    };
+                    let rendered = baml_compiler2_hir_ty::diagnostics::RenderedTirDiagnostic {
+                        message: error.render(&vp),
+                        error,
+                        range: source_map.type_refs.span(field.type_ref),
+                        severity: baml_compiler2_hir_ty::diagnostics::DiagnosticSeverity::Warning,
+                        related: Vec::new(),
+                    };
+                    diagnostics.push(tir_rendered_to_diagnostic_for_file(db, file, rendered));
+                }
             }
         }
         // INTERFACE requires-clause diagnostics.
@@ -2147,6 +2215,8 @@ fn tir_type_error_to_diagnostic_id(
         TirTypeError::InitIoNotAllowed { .. } => DiagnosticId::InitIoNotAllowed,
         TirTypeError::InitSuspendNotAllowed { .. } => DiagnosticId::InitSuspendNotAllowed,
         TirTypeError::InitThrowNotHandled { .. } => DiagnosticId::InitThrowNotHandled,
+        TirTypeError::LlmOutputMemberDropped { .. } => DiagnosticId::LlmOutputMemberDropped,
+        TirTypeError::LlmOutputFieldAlwaysNull { .. } => DiagnosticId::LlmOutputFieldAlwaysNull,
         // Global variables.
         TirTypeError::AssignmentToGlobal { .. } => DiagnosticId::AssignmentToGlobal,
         TirTypeError::ReturnInGlobalInitializer { .. } => DiagnosticId::ReturnInGlobalInitializer,

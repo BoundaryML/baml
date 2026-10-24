@@ -982,7 +982,11 @@ function from_spec<T>(
             },
             _span: span,
             _result: null,
-            _cache: baml.sap._new_parse_cache<T>(),
+            _cache: baml.sap._new_parse_cache<T>() catch (e) {
+                let err: baml.errors.ParseError => {
+                    throw baml.errors.InvalidArgument { message: err.message }
+                },
+            },
             _text: "",
             _finished: false,
         }

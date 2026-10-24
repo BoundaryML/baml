@@ -39,6 +39,7 @@ pub mod infer;
 pub mod init_io;
 pub mod interfaces;
 pub mod layout;
+pub mod llm_output;
 pub mod lower;
 pub mod method_resolution;
 pub mod ops;

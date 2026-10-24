@@ -27,21 +27,27 @@ class _NoYield {
 
 //baml:mut_vm
 //baml:fallible
-/// (internal) Builds a parse cache for `T`.
+/// (internal) Builds a parse cache for `T`, or throws `ParseError` for a `T`
+/// the parser cannot model.
 ///
 /// A free function rather than a `_ParseCache` static method: a *static*
 /// method's class type args have no receiver to ride in on, and the call path
 /// derives them from the receiver's type — so a static method would be given
 /// operand slots the call site never fills. Instance methods on a generic
 /// class (`_parse_final`, `_parse_partial`) are threaded correctly.
-function _new_parse_cache<T>() -> _ParseCache<T> throws never {
+function _new_parse_cache<T>() -> _ParseCache<T> throws root.errors.ParseError {
     $rust_function
 }
 
 /// Parse an LLM's raw text output into `T` with Schema-Aligned Parsing.
 ///
+/// A union member with no JSON form or no values is never the result:
+/// `parse<uint8array | string>` reads a string.
+///
 /// # Throws
-/// - `baml.errors.ParseError` if parsing fails.
+/// - `baml.errors.ParseError` if parsing fails, or if the parser cannot
+///   model `T`: `unknown`, or a type with no JSON form or no values, such as
+///   `uint8array`, `never`, or a class that requires one.
 function parse<T>(text: string) -> T throws root.errors.ParseError {
     let cache = _new_parse_cache<T>();
     cache._parse_final(text) catch (_) {
@@ -69,14 +75,16 @@ function parse_type(t: reflect.Type, text: string) -> unknown throws root.errors
 /// are read under the names the output format shows, and a `@skip` field is
 /// not read.
 ///
-/// The type is often data here (`let type T = t`), so a `T` that the
-/// parser cannot model is thrown, where `parse` panics: `unknown`,
-/// `uint8array`, a function, a type that holds one of those, and a class with
-/// a `@skip` field whose type has no value to fill in.
+/// A union member with no JSON form or no values is dropped:
+/// `coerce<uint8array | string>` reads a string, and an optional field of
+/// such a type is only `null`.
 ///
 /// # Throws
 /// - `baml.errors.ParseError` if `value` does not align to `T`, or if the
-///   parser cannot model `T`.
+///   parser cannot model `T`: `unknown`, a type with no JSON form or no
+///   values, such as `uint8array`, `never` or a function, a type that
+///   requires one of those, and a class with a `@skip` field whose type has
+///   no value to fill in.
 //baml:mut_vm
 function coerce<T>(value: root.json.json) -> T throws root.errors.ParseError {
     $rust_function

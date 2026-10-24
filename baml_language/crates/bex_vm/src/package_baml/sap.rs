@@ -56,12 +56,10 @@ impl bex_vm_types::BexRustData for ParseCache {
 impl BamlNamespaceSap for PackageBamlImpl {
     fn _new_parse_cache(vm: &mut BexVm) -> Result<Value, VmRustFnError> {
         let target = parse_target(vm)?;
-        let (_, model) = build_model(vm, &target).map_err(|e| {
-            // `throws never`: a `T` the parser cannot model comes from the
-            // caller's own `parse<T>`, a program bug rather than bad input.
-            VmPanic::UserPanic {
-                message: format!("schema-aligned parsing cannot model this type: {e}"),
-            }
+        let model = build_model(vm, &target).map_err(|e| {
+            parse_error(format!(
+                "schema-aligned parsing cannot model this type: {e}"
+            ))
         })?;
         let data: Arc<dyn bex_vm_types::BexRustData> = Arc::new(ParseCache { model });
         let data = Value::object(vm.alloc_rust_data(data));
@@ -76,17 +74,13 @@ impl BamlNamespaceSap for PackageBamlImpl {
 
     fn coerce(vm: &mut BexVm, value: &Value) -> Result<Value, VmRustFnError> {
         let target = parse_target(vm)?;
-        // `throws ParseError`, where `parse<T>` panics: the type of a coercion
-        // is often data, so one the parser cannot model is an answer for the
-        // caller, not a bug of the program.
-        let (reach, model) = build_model(vm, &target).map_err(|e| {
+        // The type of a coercion is often data, so one the parser cannot
+        // model is an answer for the caller, not a bug of the program.
+        let model = build_model(vm, &target).map_err(|e| {
             parse_error(format!(
                 "schema-aligned parsing cannot model this type: {e}"
             ))
         })?;
-        if let Some(unfillable) = unfillable_skipped_field(vm, &reach)? {
-            return Err(parse_error(unfillable));
-        }
         let json = super::json::json_value_to_serde(vm, *value);
         let aligned = align(
             vm,
@@ -425,7 +419,7 @@ fn model_name(class: &Class, args: &[RealizedTy]) -> NamedTy {
 /// Why the parser cannot model a target.
 enum ModelError {
     Reach(ReachError),
-    Convert(ConvertError),
+    Convert(Box<ConvertError>),
 }
 
 impl fmt::Display for ModelError {
@@ -437,17 +431,29 @@ impl fmt::Display for ModelError {
     }
 }
 
-/// The parse model for `target`, built from what it reaches, with that reach.
-fn build_model(
-    vm: &BexVm,
-    target: &RealizedTy,
-) -> Result<(ParseReach, CompiledSapModel), ModelError> {
+/// The parse model for `target`, built from what it reaches.
+///
+/// A union member the parser cannot build is dropped, as `baml.json.schema`
+/// drops it: one with no JSON form or no values, and a class with a `@skip`
+/// field whose type has no empty value to hold.
+fn build_model(vm: &BexVm, target: &RealizedTy) -> Result<CompiledSapModel, ModelError> {
     let reach = ParseReach::of(vm, target).map_err(ModelError::Reach)?;
+    let defs = crate::json_defs::HeapDefs { vm };
     let classes = reach.classes.iter().map(|reached| {
         let class = reached_class(vm, reached.head);
+        let unfillable = class
+            .fields
+            .iter()
+            .zip(&reached.fields)
+            .find(|(field, field_type)| {
+                field.skip
+                    && !baml_type::json_inhabit::has_empty_value(&defs, field_type.as_runtime_ty())
+                        .unwrap_or(false)
+            })
+            .map(|(field, _)| field.name.clone());
         (
             model_name(class, &reached.args),
-            definitions::parse_class(class, &reached.fields),
+            definitions::parse_class(class, &reached.fields, unfillable),
         )
     });
     let mut enums = IndexMap::new();
@@ -475,10 +481,8 @@ fn build_model(
         NamedTy::of(&definitions::lane_realized_ty(interface))
             .unwrap_or_else(|| unreachable!("an interface type is named: {interface}"))
     });
-    let model =
-        CompiledSapModel::from_type_ctx(TypeCtx::new(classes, enums, &aliases, interfaces), target)
-            .map_err(ModelError::Convert)?;
-    Ok((reach, model))
+    CompiledSapModel::from_type_ctx(TypeCtx::new(classes, enums, &aliases, interfaces), target)
+        .map_err(|e| ModelError::Convert(Box::new(e)))
 }
 
 /// Parse `text` with the model in `cache` and allocate the result, or `None`
@@ -688,7 +692,11 @@ fn to_heap(
             Value::object(vm.alloc_map(key, value_ty, entries))
         }
         BamlValue::Enum(e) => {
-            let enm = declarations.get(e.name.decl())?;
+            let decl = e
+                .name
+                .decl()
+                .ok_or_else(|| invariant(format!("`{}` is not an enum", e.name)))?;
+            let enm = declarations.get(decl)?;
             let Object::Enum(declaration) = vm.get_object(enm) else {
                 return Err(invariant(format!("`{}` is not an enum", e.name)));
             };
@@ -768,35 +776,6 @@ fn skipped_field_default(
     empty_value(vm, field_type, &mut Vec::new())?.ok_or_else(|| no_default(&field_type.to_string()))
 }
 
-/// The first `@skip` field, among the classes a parse can build (`reach`),
-/// whose type has no value to hold, as the message for it. A parse that builds
-/// such a class panics ([`skipped_field_default`]).
-fn unfillable_skipped_field(
-    vm: &mut BexVm,
-    reach: &ParseReach,
-) -> Result<Option<String>, VmRustFnError> {
-    for reached in &reach.classes {
-        let class = reached_class(vm, reached.head);
-        let name = model_name(class, &reached.args);
-        let skipped: Vec<(String, &RealizedTy)> = class
-            .fields
-            .iter()
-            .zip(&reached.fields)
-            .filter(|(field, _)| field.skip)
-            .map(|(field, field_type)| (field.name.clone(), field_type))
-            .collect();
-        for (field, field_type) in skipped {
-            if empty_value(vm, field_type, &mut Vec::new())?.is_none() {
-                return Ok(Some(format!(
-                    "the `@skip` field `{name}.{field}` has a type with no default value for \
-                     schema-aligned parsing to fill in"
-                )));
-            }
-        }
-    }
-    Ok(None)
-}
-
 /// The empty value of `ty`: `null` for a nullable type, the zero of a number,
 /// `false`, `""`, an empty list or map, a literal's own value, an enum's first
 /// variant, and a class of its fields' empty values. `None` when `ty` has none
@@ -807,7 +786,8 @@ fn unfillable_skipped_field(
 ///
 /// This is the value a `@skip` field holds whenever a model's answer is read
 /// under the names a model is shown: here, and in `baml.json.from_string`
-/// with `Naming.Aliased`. `baml.json.schema` mirrors it as `has_empty_value`.
+/// with `Naming.Aliased`. [`baml_type::json_inhabit::has_empty_value`] is the
+/// same rule as a predicate.
 pub(super) fn empty_value(
     vm: &mut BexVm,
     ty: &RealizedTy,

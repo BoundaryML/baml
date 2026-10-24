@@ -2,9 +2,14 @@
 
 use std::{borrow::Cow, fmt};
 
-use ::std::collections::{HashMap, HashSet};
+use ::std::collections::HashMap;
 use ::sys_types::{DefKey, EnumDefinition};
-use baml_type::{Name, RealizedTy};
+use baml_type::{
+    Name, RealizedTy, RuntimeTy,
+    json_inhabit::{
+        JsonClass, JsonDefs, JsonField, JsonInhabitance, JsonNaming, JsonStatus, JsonVariant,
+    },
+};
 use indexmap::{IndexMap, IndexSet};
 
 use crate::sap_model::{
@@ -46,6 +51,12 @@ pub enum NamedTyKind {
     /// bindings. A parse has no implementor to build, so nothing parses as
     /// one; it is named so that a container of it is typed exactly.
     Interface(DefKey, Box<[ParseTy]>, Box<[(Name, ParseTy)]>),
+    /// A type none of whose values a parse can build: one with no JSON form,
+    /// such as `uint8array`, or with no values, such as `never`. Nothing
+    /// parses as one; like an interface, it is named so that a container of
+    /// it is typed exactly. `uint8array | string` parses as `string`, and its
+    /// list stays a `(uint8array | string)[]`.
+    Unparsable(ParseTy),
 }
 
 impl NamedTy {
@@ -81,6 +92,12 @@ impl NamedTy {
         ))
     }
 
+    /// `ty`, a type none of whose values a parse can build.
+    #[must_use]
+    pub fn unparsable(ty: ParseTy) -> Self {
+        Self(NamedTyKind::Unparsable(ty))
+    }
+
     /// The named type of `ty`, if it is one: the inverse of [`Self::to_ty`].
     #[must_use]
     pub fn of(ty: &ParseTy) -> Option<Self> {
@@ -102,14 +119,16 @@ impl NamedTy {
         &self.0
     }
 
-    /// The declaration named.
+    /// The declaration named, or `None` for an unparsable type, which names
+    /// no declaration.
     #[must_use]
-    pub fn decl(&self) -> &DefKey {
+    pub fn decl(&self) -> Option<&DefKey> {
         match &self.0 {
             NamedTyKind::Class(decl, _)
             | NamedTyKind::Enum(decl)
             | NamedTyKind::TypeAlias(decl)
-            | NamedTyKind::Interface(decl, _, _) => decl,
+            | NamedTyKind::Interface(decl, _, _) => Some(decl),
+            NamedTyKind::Unparsable(_) => None,
         }
     }
 
@@ -123,6 +142,7 @@ impl NamedTy {
             NamedTyKind::Interface(decl, args, associated) => {
                 ParseTy::Interface(decl.clone(), args.clone(), associated.clone())
             }
+            NamedTyKind::Unparsable(ty) => ty.clone(),
         }
     }
 }
@@ -134,11 +154,12 @@ fn flat_args(args: impl IntoIterator<Item = ParseTy>) -> Box<[ParseTy]> {
 /// The declaration's name, then its arguments, as error messages show it.
 impl fmt::Display for NamedTy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.decl())?;
-        let args: &[ParseTy] = match &self.0 {
-            NamedTyKind::Class(_, args) | NamedTyKind::Interface(_, args, _) => args,
-            NamedTyKind::Enum(_) | NamedTyKind::TypeAlias(_) => &[],
+        let (decl, args): (&DefKey, &[ParseTy]) = match &self.0 {
+            NamedTyKind::Class(decl, args) | NamedTyKind::Interface(decl, args, _) => (decl, args),
+            NamedTyKind::Enum(decl) | NamedTyKind::TypeAlias(decl) => (decl, &[]),
+            NamedTyKind::Unparsable(ty) => return write!(f, "{ty}"),
         };
+        write!(f, "{decl}")?;
         if let [first, rest @ ..] = args {
             write!(f, "<{first}")?;
             for arg in rest {
@@ -160,6 +181,9 @@ pub struct ParseClass {
     pub fields: Vec<ParseField>,
     /// `@@stream.done`: no partial parse until the whole object is complete.
     pub stream_done: bool,
+    /// The first `@skip` field whose type has no empty value for a parsed
+    /// instance to hold. A parse cannot build such a class.
+    pub unfillable: Option<String>,
 }
 
 /// A field the parser reads.
@@ -186,6 +210,10 @@ pub enum ConvertError {
     FloatLiteral,
     #[error("Non-parsable type: {0}")]
     NonParsableType(Box<ParseTy>),
+    #[error("no value of `{ty}` has a JSON form: {reason}")]
+    NoJsonForm { ty: Box<ParseTy>, reason: String },
+    #[error("`{0}` has no values")]
+    NoValues(Box<ParseTy>),
     #[error("Unknown class: {0}")]
     UnknownClass(DefKey),
     #[error("Unknown enum: {0}")]
@@ -236,13 +264,19 @@ pub struct TypeCtx {
     enum_definitions: IndexMap<DefKey, EnumDefinition>,
     type_alias_definitions: HashMap<DefKey, ParseTy>,
     interfaces: IndexSet<NamedTy>,
-    sap_parseable: HashMap<NamedTy, bool>,
+    /// Which of the types the definitions and the target name a parse can
+    /// build ([`Self::analyzed`]). `None` until then, when every type is
+    /// taken to be one.
+    json: Option<JsonInhabitance<DefKey>>,
+    /// The types [`Self::convert_ty`] models as [`NamedTyKind::Unparsable`],
+    /// each of which the database holds as `never`.
+    unparsable: IndexSet<NamedTy>,
 }
 impl TypeCtx {
     /// Builds the context from definitions that are closed under reference:
     /// every named type a class field, an alias body, or the target refers to
     /// is present too (the named types a type reaches on the heap are such a
-    /// set). A missing one makes the types that refer to it unparsable.
+    /// set). A missing one fails [`crate::CompiledSapModel::from_type_ctx`].
     ///
     /// `class_definitions` are keyed by [`NamedTy::class`], and `interfaces`
     /// are each a [`NamedTy::interface`].
@@ -286,47 +320,82 @@ impl TypeCtx {
                     ParseClass {
                         fields,
                         stream_done: class.stream_done,
+                        unfillable: class.unfillable,
                     },
                 )
             })
             .collect();
-        // Recursively check which named types are SAP-parsable.
-        // Types can be recursive (e.g. `class Tree { children: Tree[] }`), so we
-        // track which names are currently being checked. If we encounter a name
-        // already on the stack, we optimistically treat it as parsable — the
-        // recursion itself is fine, only structurally unparsable leaves cause a
-        // type to be non-parsable.
-        let mut sap_parseable: HashMap<NamedTy, bool> = HashMap::new();
-        let all_names: Vec<NamedTy> = class_definitions
-            .keys()
-            .cloned()
-            .chain(enum_definitions.keys().cloned().map(NamedTy::enumeration))
-            .chain(
-                type_alias_definitions
-                    .keys()
-                    .cloned()
-                    .map(NamedTy::type_alias),
-            )
-            .chain(interfaces.iter().cloned())
-            .collect();
-
-        let mut checking = HashSet::new();
-        let definitions = Definitions {
-            classes: &class_definitions,
-            enums: &enum_definitions,
-            aliases: &type_alias_definitions,
-            interfaces: &interfaces,
-        };
-        for name in &all_names {
-            check_parseable(name, &definitions, &mut sap_parseable, &mut checking);
-        }
 
         Self {
             class_definitions,
             enum_definitions,
             type_alias_definitions,
             interfaces,
-            sap_parseable,
+            json: None,
+            unparsable: IndexSet::new(),
+        }
+    }
+
+    /// The context, readied to parse `target`: which of the types it and the
+    /// definitions name a parse can build. A union member it cannot build is
+    /// dropped, so `uint8array | string` parses as `string`, and an optional
+    /// field of such a type is only `null`.
+    ///
+    /// The analysis is the one `baml.json.schema` makes, under the names a
+    /// model is shown: a type with no JSON form or no values is one a parse
+    /// cannot build. Nothing parses as an interface either, and media matches
+    /// no parsed value, though it keeps its place.
+    ///
+    /// # Errors
+    ///
+    /// A type the parser cannot take at all (`unknown`), or a definition the
+    /// context does not hold.
+    pub(crate) fn analyzed(mut self, target: &ParseTy) -> Result<Self, ConvertError> {
+        let mut roots: Vec<RuntimeTy<DefKey>> = vec![target.into()];
+        for name in self.class_definitions.keys() {
+            roots.push(name.to_ty().into());
+        }
+        for name in self.type_alias_definitions.keys() {
+            roots.push(RuntimeTy::TypeAlias(name.clone()));
+        }
+        let json = JsonInhabitance::of_all(roots.iter(), &self, JsonNaming::Aliased)
+            .map_err(|e| e.error)?;
+        let mut unparsable = IndexSet::new();
+        let mut visit = |ty: &ParseTy| collect_unparsable(&json, ty, &mut unparsable);
+        visit(target);
+        for class in self.class_definitions.values() {
+            for field in &class.fields {
+                visit(&field.ty);
+            }
+        }
+        for body in self.type_alias_definitions.values() {
+            visit(body);
+        }
+        self.json = Some(json);
+        self.unparsable = unparsable;
+        Ok(self)
+    }
+
+    /// Whether a parse can build a value of `ty`, a type the context names.
+    pub(crate) fn status(&self, ty: &ParseTy) -> JsonStatus {
+        self.json
+            .as_ref()
+            .map_or(JsonStatus::Json, |json| json.status(ty.as_runtime_ty()))
+    }
+
+    /// Why no value of `target` can be parsed, if none can.
+    pub(crate) fn reject_target(&self, target: &ParseTy) -> Result<(), ConvertError> {
+        let Some(json) = &self.json else {
+            return Ok(());
+        };
+        let ty = target.as_runtime_ty();
+        match json.status(ty) {
+            JsonStatus::Json => Ok(()),
+            JsonStatus::NoJson => Err(ConvertError::NoJsonForm {
+                ty: Box::new(target.clone()),
+                reason: json.witness(ty).reason(),
+            }),
+            JsonStatus::Empty => Err(ConvertError::NoValues(Box::new(target.clone()))),
         }
     }
 
@@ -363,7 +432,9 @@ impl TypeCtx {
 
         let mut types = IndexMap::new();
         for (name, cls) in &self.class_definitions {
-            if self.sap_parseable.get(name).is_some_and(|v| !v) {
+            // A class a parse cannot build is never named: a type that holds
+            // one is modeled as unparsable.
+            if self.status(&name.to_ty()) != JsonStatus::Json {
                 continue;
             }
             add(
@@ -379,12 +450,12 @@ impl TypeCtx {
                 TyResolved::Enum(Self::convert_enum(name, enum_def)),
             )?;
         }
-        for name in &self.interfaces {
+        for name in self.interfaces.iter().chain(&self.unparsable) {
             add(&mut types, name.clone(), never())?;
         }
         for (name, alias_ty) in &self.type_alias_definitions {
             let key = NamedTy::type_alias(name.clone());
-            if self.sap_parseable.get(&key).is_some_and(|v| !v) {
+            if self.status(&key.to_ty()) != JsonStatus::Json {
                 continue;
             }
             let alias = self.convert_type_alias(name, alias_ty, 0)?;
@@ -472,7 +543,7 @@ impl TypeCtx {
             }
             sap_model::Ty::Unresolved(inner_name) => {
                 // I think this should usually already be resolved, but we can do our best here.
-                if inner_name.decl() == name {
+                if inner_name.decl() == Some(name) {
                     return Err(ConvertError::RecursionDepthExceeded(
                         "type alias due to self-reference without indirection",
                     ));
@@ -496,6 +567,9 @@ impl TypeCtx {
                     NamedTyKind::Interface(..) => {
                         self.interfaces.contains(&inner_name).then(|| Ok(never()))
                     }
+                    NamedTyKind::Unparsable(_) => {
+                        self.unparsable.contains(&inner_name).then(|| Ok(never()))
+                    }
                 };
                 return found.unwrap_or(Err(ConvertError::UnknownName(inner_name)));
             }
@@ -503,8 +577,13 @@ impl TypeCtx {
         Ok(resolved)
     }
 
-    /// Converts a BAML type into a sap model type.
+    /// Converts a BAML type into a sap model type. A type a parse cannot
+    /// build is modeled as [`NamedTyKind::Unparsable`], which parses as
+    /// nothing.
     pub fn convert_ty<'a>(&'a self, ty: &'a ParseTy) -> Result<Ty<'a, NamedTy>, ConvertError> {
+        if self.status(ty) != JsonStatus::Json {
+            return Ok(Ty::Unresolved(NamedTy::unparsable(ty.clone())));
+        }
         let ty = match ty {
             ParseTy::Int => Ty::Resolved(TyResolved::Int(IntTy)),
             ParseTy::Bigint => Ty::Resolved(TyResolved::Bigint(BigintTy)),
@@ -539,14 +618,9 @@ impl TypeCtx {
             ParseTy::Literal(baml_type::Literal::Bool(b), _) => {
                 Ty::Resolved(TyResolved::LiteralBool(BoolLiteralTy(*b)))
             }
-            ParseTy::Class(..) | ParseTy::Interface(..) => {
-                let name = NamedTy::of(ty)
-                    .unwrap_or_else(|| unreachable!("a class or interface is named"));
-                if self.sap_parseable.get(&name).is_some_and(|v| !v) {
-                    return Err(ConvertError::NonParsableType(Box::new(ty.clone())));
-                }
-                Ty::Unresolved(name)
-            }
+            ParseTy::Class(..) | ParseTy::Interface(..) => Ty::Unresolved(
+                NamedTy::of(ty).unwrap_or_else(|| unreachable!("a class or interface is named")),
+            ),
             ParseTy::Enum(type_name) => Ty::Unresolved(NamedTy::enumeration(type_name.clone())),
             ParseTy::EnumVariant(type_name, variant) => {
                 let enum_def = self
@@ -591,13 +665,6 @@ impl TypeCtx {
                 Ty::Resolved(TyResolved::Union(UnionTy { variants }))
             }
             ParseTy::TypeAlias(type_name) => {
-                if self
-                    .sap_parseable
-                    .get(&NamedTy::type_alias(type_name.clone()))
-                    .is_some_and(|v| !v)
-                {
-                    return Err(ConvertError::NonParsableType(Box::new(ty.clone())));
-                }
                 // if it hasn't already, we flatten type aliases:
                 // with `type A = B; type B = C; class C { ... }`,
                 // a type reference `name:A` becomes `name:C`
@@ -653,94 +720,118 @@ impl TypeCtx {
     }
 }
 
-/// The named types a [`TypeCtx`] holds, for [`check_parseable`].
-struct Definitions<'a> {
-    classes: &'a IndexMap<NamedTy, ParseClass>,
-    enums: &'a IndexMap<DefKey, EnumDefinition>,
-    aliases: &'a HashMap<DefKey, ParseTy>,
-    interfaces: &'a IndexSet<NamedTy>,
-}
-
 /// The model of a type nothing parses as: `never`, the empty union. An
 /// interface is one to the parser (see [`NamedTyKind::Interface`]).
 fn never<'a>() -> TyResolved<'a, NamedTy> {
     TyResolved::Union(UnionTy { variants: vec![] })
 }
 
-/// Whether the named type `name` can be modeled: a class whose read fields all
-/// can, any enum, an alias whose body can, and any interface. A name the
-/// context does not hold cannot be.
-fn check_parseable(
-    name: &NamedTy,
-    definitions: &Definitions<'_>,
-    cache: &mut HashMap<NamedTy, bool>,
-    checking: &mut HashSet<NamedTy>,
-) -> bool {
-    if let Some(&result) = cache.get(name) {
-        return result;
+/// Records in `out` each type [`TypeCtx::convert_ty`] models as unparsable
+/// while converting `ty`: the types a parse cannot build, wherever the
+/// conversion reaches one.
+fn collect_unparsable(json: &JsonInhabitance<DefKey>, ty: &ParseTy, out: &mut IndexSet<NamedTy>) {
+    if json.status(ty.as_runtime_ty()) != JsonStatus::Json {
+        out.insert(NamedTy::unparsable(ty.clone()));
+        return;
     }
-    // Recursive type — assume parsable to break the cycle.
-    if !checking.insert(name.clone()) {
-        return true;
-    }
-
-    let mut deps_parseable = |ty: &ParseTy| match is_sap_parseable(ty) {
-        Err(()) => false,
-        Ok(deps) => deps
-            .iter()
-            .all(|dep| check_parseable(dep, definitions, cache, checking)),
-    };
-    let result = match name.kind() {
-        NamedTyKind::Class(..) => definitions
-            .classes
-            .get(name)
-            .is_some_and(|class| class.fields.iter().all(|field| deps_parseable(&field.ty))),
-        NamedTyKind::Enum(decl) => definitions.enums.contains_key(decl),
-        NamedTyKind::TypeAlias(decl) => definitions
-            .aliases
-            .get(decl)
-            .is_some_and(&mut deps_parseable),
-        NamedTyKind::Interface(..) => definitions.interfaces.contains(name),
-    };
-
-    checking.remove(name);
-    cache.insert(name.clone(), result);
-    result
-}
-
-fn is_sap_parseable(ty: &ParseTy) -> Result<Vec<NamedTy>, ()> {
     match ty {
-        ParseTy::Int
-        | ParseTy::Bigint
-        | ParseTy::Float
-        | ParseTy::String
-        | ParseTy::Bool
-        | ParseTy::Null
-        | ParseTy::Literal(..) => Ok(Vec::new()),
-        ParseTy::Uint8Array | ParseTy::Media(..) => Err(()),
-        ParseTy::Class(..) | ParseTy::Interface(..) => Ok(NamedTy::of(ty).into_iter().collect()),
-        ParseTy::Enum(..) | ParseTy::EnumVariant(..) => Ok(Vec::new()),
-        ParseTy::List(inner) => is_sap_parseable(inner),
-        ParseTy::Map { key, value, .. } => {
-            let keys = is_sap_parseable(key)?;
-            let values = is_sap_parseable(value)?;
-            Ok(keys.into_iter().chain(values).collect())
+        ParseTy::List(inner) => collect_unparsable(json, inner, out),
+        ParseTy::Map { key, value } => {
+            collect_unparsable(json, key, out);
+            collect_unparsable(json, value, out);
         }
         ParseTy::Union(members) => {
-            let mut names = Vec::new();
             for member in members {
-                names.extend(is_sap_parseable(member)?);
+                collect_unparsable(json, member, out);
             }
-            Ok(names)
         }
-        ParseTy::TypeAlias(name) => Ok(vec![NamedTy::type_alias(name.clone())]),
-        ParseTy::Resource
-        | ParseTy::PromptAst
-        | ParseTy::Function { .. }
-        | ParseTy::Unknown
-        | ParseTy::Future(..)
-        | ParseTy::Never
-        | ParseTy::RustType
-        | ParseTy::Type => Err(()),
+        // A named type converts by name, and every other type has no part
+        // that converts on its own.
+        _ => {}
+    }
+}
+
+/// The context's definitions, as the JSON analysis reads them: the fields a
+/// parse reads, the variants a model is shown, and the alias bodies after
+/// simplification.
+impl JsonDefs<DefKey> for TypeCtx {
+    type Error = ConvertError;
+
+    fn class(
+        &self,
+        head: &DefKey,
+        args: &[RuntimeTy<DefKey>],
+    ) -> Result<JsonClass<DefKey>, ConvertError> {
+        let args = args
+            .iter()
+            .map(|arg| {
+                ParseTy::try_from(arg)
+                    .map_err(|_| ConvertError::InternalError("a class argument is not realized"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let name = NamedTy::class(head.clone(), args);
+        let class = self
+            .class_definitions
+            .get(&name)
+            .ok_or_else(|| ConvertError::UnknownName(name.clone()))?;
+        let mut fields: Vec<JsonField<DefKey>> = class
+            .fields
+            .iter()
+            .map(|field| JsonField {
+                name: field.name.clone(),
+                alias: field.alias.clone(),
+                skip: false,
+                ty: (&field.ty).into(),
+            })
+            .collect();
+        // The `@skip` fields are not part of a parse class, only the first
+        // one with no empty value. A `never` field, which has none either,
+        // stands in for it.
+        if let Some(field) = &class.unfillable {
+            fields.push(JsonField {
+                name: field.clone(),
+                alias: None,
+                skip: true,
+                ty: RuntimeTy::Never,
+            });
+        }
+        Ok(JsonClass { fields })
+    }
+
+    fn variants(&self, head: &DefKey) -> Result<Vec<JsonVariant>, ConvertError> {
+        let enum_def = self
+            .enum_definitions
+            .get(head)
+            .ok_or_else(|| ConvertError::UnknownEnum(head.clone()))?;
+        Ok(enum_def
+            .declared_variants
+            .iter()
+            .map(|variant| JsonVariant {
+                name: variant.name.clone(),
+                skip: variant.skip,
+            })
+            .collect())
+    }
+
+    fn alias_target(&self, head: &DefKey) -> Result<RuntimeTy<DefKey>, ConvertError> {
+        self.type_alias_definitions
+            .get(head)
+            .map(Into::into)
+            .ok_or_else(|| ConvertError::UnknownTypeAlias(head.clone()))
+    }
+
+    fn opaque(&self, ty: &RuntimeTy<DefKey>) -> Result<JsonStatus, ConvertError> {
+        match ty {
+            RuntimeTy::Media(baml_type::MediaKind::Generic) => Err(ConvertError::UnknownMediaKind),
+            // A parsed value is never media, but the type keeps its place:
+            // `image?` parses as `null` and `image[]` as `[]`.
+            RuntimeTy::Media(_) => Ok(JsonStatus::Json),
+            // A parse has no implementor to build.
+            RuntimeTy::Interface(..) => Ok(JsonStatus::Empty),
+            _ => Err(match ParseTy::try_from(ty) {
+                Ok(ty) => ConvertError::NonParsableType(Box::new(ty)),
+                Err(_) => ConvertError::InternalError("a parse target is not realized"),
+            }),
+        }
     }
 }

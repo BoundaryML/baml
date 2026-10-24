@@ -281,6 +281,18 @@ test "streaming with structured outputs is rejected before anything is sent" {
     assert.contains(structured_chat_rejects_stream(), "0|InvalidRequest: structured outputs do not stream yet")
 }
 
+// A union member with no JSON form is not in the schema, so media in it does
+// not reject the type.
+class StructuredBlob {
+    bytes: uint8array,
+    photo: image,
+}
+
+test "media in a union member with no JSON form does not reach the answer" {
+    assert.is_true(!ai.internal.reaches_media(reflect.Type.of<StructuredBlob | string>()));
+    assert.is_true(ai.internal.reaches_media(reflect.Type.of<StructuredPhoto | string>()))
+}
+
 // A `@skip` field is not in the JSON the model answers with, so media in one
 // does not reject the type: the field holds its empty value.
 class StructuredSkipsPhoto {

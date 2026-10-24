@@ -41,6 +41,7 @@ mod family;
 mod head;
 mod int;
 pub mod interned;
+pub mod json_inhabit;
 mod names;
 pub mod normalize;
 mod param;

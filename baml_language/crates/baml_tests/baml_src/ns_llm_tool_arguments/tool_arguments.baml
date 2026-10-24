@@ -386,3 +386,94 @@ test "an integer too wide for an int does not align" {
             .starts_with("InvalidArgument: invalid arguments for tool_arg_limit: "),
     )
 }
+
+// A union member with no JSON form is dropped, as the schema drops it: the
+// model is told `string`, and its answer is read back as one. An optional
+// field of such a type is only `null`.
+
+class ToolArgMaybeBytes {
+    label: string,
+    raw: uint8array?,
+}
+
+class ToolArgBytes {
+    raw: uint8array,
+}
+
+function tool_arg_coerce_bytes_or_text() -> string {
+    let sent: baml.json.json = "hello";
+    let aligned = baml.sap.coerce<uint8array | string>(sent) catch (e) {
+        baml.errors.ParseError => {
+            return "ParseError";
+        },
+    };
+    match (aligned) {
+        let text: string => text,
+        _ => "bytes",
+    }
+}
+
+function tool_arg_coerce_maybe_bytes() -> string {
+    let sent: baml.json.json = { "label": "photo", "raw": "AAEC" };
+    let aligned = baml.sap.coerce<ToolArgMaybeBytes>(sent) catch (e) {
+        baml.errors.ParseError => {
+            return "ParseError";
+        },
+    };
+    `${aligned.label}|${aligned.raw == null}`
+}
+
+function tool_arg_coerce_bytes_or_text_list() -> string {
+    let sent: baml.json.json = ["a", "b"];
+    let aligned = baml.sap.coerce<(uint8array | string)[]>(sent) catch (e) {
+        baml.errors.ParseError => {
+            return "ParseError";
+        },
+    };
+    let texts: string[] = [];
+    for (let item in aligned) {
+        match (item) {
+            let text: string => texts.push(text),
+            _ => texts.push("bytes"),
+        }
+    }
+    texts.join("+")
+}
+
+test "coerce drops a union member with no JSON form" {
+    assert.equal(tool_arg_coerce_bytes_or_text(), "hello");
+    assert.equal(tool_arg_coerce_bytes_or_text_list(), "a+b");
+    assert.is_true(
+        tool_arg_coerce_runtime_type(reflect.Type.of<(uint8array | string)[]>()) != "ParseError",
+    )
+}
+
+test "coerce reads an optional field with no JSON form as null" {
+    assert.equal(tool_arg_coerce_maybe_bytes(), "photo|true")
+}
+
+test "coerce still throws for a type with no JSON form at all" {
+    assert.equal(
+        [
+            tool_arg_coerce_runtime_type(reflect.Type.of<never>()),
+            tool_arg_coerce_runtime_type(ToolArgBytes.type()),
+            tool_arg_coerce_runtime_type(reflect.Type.of<uint8array[]>()),
+        ]
+            .join(","),
+        "ParseError,ParseError,ParseError",
+    )
+}
+
+function tool_arg_bytes_or_text(item: uint8array | string) -> string {
+    match (item) {
+        let text: string => `text:${text}`,
+        _ => "bytes",
+    }
+}
+
+test "a tool whose parameter has a member with no JSON form reads the rest" {
+    assert.equal(
+        tool_arg_model_call(tool_arg_bytes_or_text, `{"item": "hi"}`),
+        `"text:hi"`,
+    )
+}

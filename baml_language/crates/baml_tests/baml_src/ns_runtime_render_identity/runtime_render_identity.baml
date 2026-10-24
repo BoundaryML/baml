@@ -109,7 +109,7 @@ test "colliding non-hoisted generic aliases render inline" {
 }
 
 class Step<A, B> {
-    next: Step<B[], int>,
+    next: Step<B[], int>?,
 }
 
 test "finite transformed recursion reaches an exact cycle" {

@@ -19,6 +19,7 @@ pub mod debug;
 pub mod definitions;
 pub mod errors;
 pub mod indexable;
+mod json_defs;
 pub mod kperf;
 pub mod lang_items;
 mod model_usage;
