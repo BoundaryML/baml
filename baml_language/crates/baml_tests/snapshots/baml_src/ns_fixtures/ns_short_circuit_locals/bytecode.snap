@@ -21,7 +21,7 @@ function fixtures.short_circuit_locals.coalesced_lengths_compared_apart() -> boo
     load_var _4
     load_const "a"
     load_const 1
-    call baml.Map.set
+    call_local baml.Map.set
     pop 1
     load_type int
     alloc_array 0

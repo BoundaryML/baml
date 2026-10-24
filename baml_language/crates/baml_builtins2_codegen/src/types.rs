@@ -156,15 +156,15 @@ pub struct NativeBuiltin {
 
 impl NativeBuiltin {
     /// Whether the builtin has a `$local` glue twin that reads its receiver
-    /// without the container lock: a declared, non-yielding array method.
-    /// Both backends select the twin for a thread-local receiver.
+    /// without the container lock: a declared array or map method. Both
+    /// backends select the twin for a thread-local receiver. A method that
+    /// may yield qualifies too: no guard is held across a yield.
     pub fn has_thread_local_twin(&self) -> bool {
         self.effects.is_some()
-            && !self.may_yield
             && self
                 .receiver
                 .as_ref()
-                .is_some_and(|receiver| receiver.builtin_name() == "Array")
+                .is_some_and(|receiver| matches!(receiver.builtin_name(), "Array" | "Map"))
     }
 
     /// Derive the `SysOp` enum variant name from the path.

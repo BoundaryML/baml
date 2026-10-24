@@ -846,6 +846,7 @@ class Map<K extends root.Hash & root.ops.Equals, V> {
     //baml:mut_vm
     //baml:may_yield
     //baml:mut_self
+    //baml:effects(keeps(key), keeps(default), returns(element), compares(keys))
     function get_or_insert(self, key: K, default: V) -> V throws never {
         $rust_function
     }

@@ -1093,13 +1093,24 @@ fn emit_required_method(out: &mut String, method_name: &str, b: &NativeBuiltin) 
 /// The glue of [`emit_glue_method`] for a receiver only this thread can
 /// reach: the same body, with the receiver read through the thread-local
 /// accessor, which takes no lock. Callers select it per call site, where
-/// escape analysis proves the receiver thread-local.
+/// escape analysis proves the receiver thread-local. A yielding builtin's
+/// twin is declared for its implementation to write.
 fn emit_thread_local_twin(
     out: &mut String,
     trait_name: &str,
     method_name: &str,
     b: &NativeBuiltin,
 ) {
+    if b.may_yield {
+        // A yielding builtin's continuation re-reads its receiver, so only
+        // its implementation knows every access the twin must make lock-free.
+        writeln!(
+            out,
+            "    /// `__glue_{method_name}` for a receiver escape analysis proved thread-local.\n    fn __glue_{method_name}__local(vm: &mut BexVm, args: &[Value]) -> NativeCallResult;"
+        )
+        .unwrap();
+        return;
+    }
     let mut glue = String::new();
     emit_glue_method(&mut glue, trait_name, method_name, b);
     let glue = glue.replacen(
@@ -1116,6 +1127,14 @@ fn emit_thread_local_twin(
         (
             "vm.as_array(&args[0])?",
             "unsafe { vm.as_array_local(&args[0]) }?",
+        ),
+        (
+            "vm.as_map_mut(&args[0])?",
+            "unsafe { vm.as_map_mut_local(&args[0]) }?",
+        ),
+        (
+            "vm.as_map(&args[0])?",
+            "unsafe { vm.as_map_local(&args[0]) }?",
         ),
     ]
     .iter()

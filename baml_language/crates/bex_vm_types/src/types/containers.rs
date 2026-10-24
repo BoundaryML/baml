@@ -639,6 +639,16 @@ impl Map {
         unsafe { self.data.lock_thread_local() }
     }
 
+    /// Write a thread-local map's backing store without the lock.
+    ///
+    /// # Safety
+    ///
+    /// See [`LockedContainer::lock_thread_local`].
+    pub unsafe fn lock_mut_thread_local<'a>(&'a self, debt: &'a AllocDebt) -> MapWriteGuard<'a> {
+        // SAFETY: forwarded contract.
+        unsafe { self.data.lock_mut_thread_local(debt) }
+    }
+
     /// Unlocked read of the backing store. See [`LockedContainer::data_unchecked`].
     ///
     /// # Safety
@@ -686,36 +696,6 @@ impl Map {
             .iter()
             .map(|(key, value)| (*key, *value))
             .collect()
-    }
-
-    pub fn get_if_epoch(
-        &self,
-        epoch: u64,
-        id: Option<EntryId>,
-    ) -> Result<Option<Value>, MapEpochChanged> {
-        self.lock().get_if_epoch(epoch, id)
-    }
-
-    pub fn set_if_epoch(
-        &self,
-        debt: &AllocDebt,
-        epoch: u64,
-        id: Option<EntryId>,
-        hash: u64,
-        key: Value,
-        value: Value,
-    ) -> Result<Option<Value>, MapEpochChanged> {
-        self.lock_mut(debt)
-            .set_if_epoch(epoch, id, hash, key, value)
-    }
-
-    pub fn remove_if_epoch(
-        &self,
-        debt: &AllocDebt,
-        epoch: u64,
-        id: Option<EntryId>,
-    ) -> Result<Option<Value>, MapEpochChanged> {
-        self.lock_mut(debt).remove_if_epoch(epoch, id)
     }
 }
 

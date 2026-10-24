@@ -24,6 +24,7 @@ const PROBES: &[&str] = &[
     "EscapeField",
     "EscapeStoredDeep",
     "EscapeMapValue",
+    "EscapeMap",
     "EscapeReturnedAlias",
     "EscapeRecursive",
     "EscapeIterator",

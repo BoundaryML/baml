@@ -105,6 +105,29 @@ function EscapeMapValue() -> void {
     Report("map", xs);
 }
 
+function CountInto(m: map<string, int>, n: int) -> int {
+    let i = 0;
+    while (i < n) {
+        m.set(`k${i % 7}`, m.get_or_insert(`k${i % 7}`, 0) + 1);
+        i += 1;
+    }
+    m.length()
+}
+
+// Shared by capture in the spawned body: both tasks update the map itself.
+function EscapeMap() -> void {
+    let m: map<string, int> = {};
+    let child = spawn { CountInto(m, 2000) };
+    CountInto(m, 2000);
+    await child;
+    let total = 0;
+    for (let k in m.keys()) {
+        total += m[k];
+    }
+    // Updates race at the BAML level, so only the key count is fixed.
+    baml.io.println(`map-shared:${m.length()}:${total > 0}`);
+}
+
 function Same(xs: int[]) -> int[] {
     xs
 }
@@ -173,11 +196,20 @@ function BuildAndSum(n: int) -> int {
         xs[j] = xs[j] + 1;
         j += 1;
     }
-    Total(xs) + xs.length()
+    let m: map<string, int> = {};
+    let k = 0;
+    while (k < n) {
+        m[`k${k % 64}`] = m.get_or_insert(`k${k % 64}`, 0) + xs[k];
+        if (m.has("k0") && k % 5 == 0) {
+            m.delete("k1");
+        }
+        k += 1;
+    }
+    Total(xs) + xs.length() + m.length() + (m.get("k0") ?? 0)
 }
 
-// Control: two tasks, each with arrays only it can reach, which take the
-// lock-free paths at the same time.
+// Control: two tasks, each with arrays and maps only it can reach, which
+// take the lock-free paths at the same time.
 function ThreadLocalParallel() -> void {
     let a = spawn { BuildAndSum(5000) };
     let b = spawn { BuildAndSum(5000) };

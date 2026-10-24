@@ -721,3 +721,51 @@ function walk(xs: int[]) -> int {
         "`walk` still walks by index:\n{walk}"
     );
 }
+
+#[test]
+fn bytecode_takes_the_lock_free_paths_for_thread_local_maps() {
+    let program = crate::engine::compile_source_with_opt(
+        r#"
+function build(n: int) -> int {
+  let m: map<string, int> = {};
+  m.set("a", n);
+  m["b"] = n;
+  let c = m.get_or_insert("c", 1);
+  let total = m["a"] + c + m.length() + m.keys().length();
+  if (m.has("b")) { m.delete("b"); }
+  total + (m.get("a") ?? 0)
+}
+function share(m: map<string, int>) -> int {
+  m.set("a", 1);
+  m["a"]
+}
+"#,
+        OptLevel::Two,
+    );
+    let bytecode = crate::engine::display_user_functions(&program);
+    let body = |name: &str| {
+        bytecode
+            .split(&format!("function {name}("))
+            .nth(1)
+            .and_then(|rest| rest.split("\nfunction ").next())
+            .unwrap_or_else(|| panic!("no `{name}` in:\n{bytecode}"))
+    };
+    let build = body("build");
+    for local in [
+        "call_local baml.Map.set\n",
+        "call_local baml.Map.get_or_insert\n",
+        "call_local baml.Map.index\n",
+        "call_local baml.Map.keys\n",
+        "call_local baml.Map.has\n",
+        "call_local baml.Map.delete\n",
+        "call_local baml.Map.get\n",
+        "container_len_local\n",
+    ] {
+        assert!(build.contains(local), "`build` lacks {local}:\n{build}");
+    }
+    let share = body("share");
+    assert!(
+        !share.contains("_local"),
+        "a parameter's map keeps its locks:\n{share}"
+    );
+}
