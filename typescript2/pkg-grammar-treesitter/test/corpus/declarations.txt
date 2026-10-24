@@ -418,6 +418,84 @@ function C(x: string) -> string {
           (raw_string_content))))))
 
 ==================
+llm function with backtick or quoted prompt
+==================
+
+function extract(text: string) -> string {
+  client: "openai/gpt-5.6-luna"
+  prompt: `${text}`
+}
+
+function summarize(text: string) -> string {
+  client GPT4
+  prompt `Summarize: ${text}.`
+}
+
+function translate(text: string) -> string {
+  client GPT4
+  prompt: "Translate the text."
+}
+
+---
+
+(source_file
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (type_path
+          (identifier))))
+    (type_path
+      (identifier))
+    (function_body
+      (client_field
+        (string))
+      (prompt_field
+        (property_identifier)
+        (backtick_string
+          (interpolation
+            (expression_statement
+              (identifier)))))))
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (type_path
+          (identifier))))
+    (type_path
+      (identifier))
+    (function_body
+      (client_field
+        (config_value_path
+          (identifier)))
+      (prompt_field
+        (property_identifier)
+        (backtick_string
+          (string_content)
+          (interpolation
+            (expression_statement
+              (identifier)))
+          (string_content)))))
+  (function_declaration
+    (identifier)
+    (parameter_list
+      (parameter
+        (identifier)
+        (type_path
+          (identifier))))
+    (type_path
+      (identifier))
+    (function_body
+      (client_field
+        (config_value_path
+          (identifier)))
+      (prompt_field
+        (property_identifier)
+        (string)))))
+
+==================
 client declaration with unquoted values and nested options
 ==================
 

@@ -395,12 +395,12 @@ module.exports = grammar({
         optional(','),
       ),
 
-    // `prompt #"..."#` | `prompt: #"..."#,`
+    // `prompt #"..."#` | `prompt: #"..."#,` | `prompt: "..."` | `prompt: `...``
     prompt_field: ($) =>
       seq(
         alias('prompt', $.property_identifier),
         optional(':'),
-        field('value', $.raw_string),
+        field('value', choice($.raw_string, $.string, $.backtick_string)),
         optional(','),
       ),
 
