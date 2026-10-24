@@ -10,8 +10,49 @@ use std::{
 };
 
 /// Maximum bytes stored inline without heap allocation.
-/// 56 (target size) - 1 (discriminant) - 1 (byte_len) = 54.
+/// 56 (target size) - 1 (discriminant) - 1 (`InlineLen`) = 54.
 const INLINE_CAPACITY: usize = 54;
+
+/// The length byte of an inline string: the byte length in the low six bits
+/// (`INLINE_CAPACITY` < 64) and, in the high bit, whether every byte is ASCII.
+///
+/// The flag makes `char_len()` and `ascii_prefix_len()` O(1) for the common
+/// all-ASCII inline string, where both equal the byte length. A non-ASCII
+/// inline string still scans its at most 54 bytes. The exact ASCII prefix
+/// would need six more bits, which the handle doesn't have without giving up
+/// a byte of inline capacity.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct InlineLen(u8);
+
+impl InlineLen {
+    const ASCII: u8 = 0x80;
+    const LEN_MASK: u8 = 0x3f;
+
+    /// The empty string, which is (vacuously) all ASCII.
+    const EMPTY: InlineLen = InlineLen(Self::ASCII);
+
+    /// A length of `byte_len` bytes, `ascii` if every one of them is ASCII.
+    fn new(byte_len: usize, ascii: bool) -> InlineLen {
+        debug_assert!(byte_len <= INLINE_CAPACITY);
+        InlineLen(byte_len as u8 | if ascii { Self::ASCII } else { 0 })
+    }
+
+    /// The length of `bytes` (at most `INLINE_CAPACITY`), checking them for ASCII.
+    fn of(bytes: &[u8]) -> InlineLen {
+        InlineLen::new(bytes.len(), bytes.is_ascii())
+    }
+
+    /// Byte length.
+    pub fn byte_len(self) -> usize {
+        (self.0 & Self::LEN_MASK) as usize
+    }
+
+    /// Whether every byte is ASCII.
+    pub fn is_ascii(self) -> bool {
+        self.0 & Self::ASCII != 0
+    }
+}
 
 /// Sentinel for a `Slice` whose ASCII prefix doesn't fit in `u32` (a slice of
 /// 4 GiB or more): `ascii_prefix_len()` recomputes it by scanning.
@@ -38,7 +79,7 @@ pub(crate) const SLICE_ASCII_PREFIX_UNKNOWN: u32 = u32::MAX;
 pub enum BexStr {
     /// Strings ≤54 bytes: zero heap allocation, clone = memcpy.
     Inline {
-        byte_len: u8,
+        len: InlineLen,
         data: [u8; INLINE_CAPACITY],
     },
     /// Heap-allocated, ref-counted, immutable. Clone = Arc bump.
@@ -110,13 +151,31 @@ const _: fn() = || {
     assert_send_sync::<BexStr>();
 };
 
+/// Where a char is, from `BexStr::char_pos`.
+enum CharPos {
+    /// Inside the ASCII prefix: the char is this byte.
+    Ascii(u8),
+    /// The byte offset where a (possibly non-ASCII) char starts.
+    At(usize),
+}
+
 impl BexStr {
-    /// Empty string constant (Inline with byte_len = 0).
+    /// Empty string constant (Inline with byte length 0).
     pub fn empty() -> BexStr {
         BexStr::Inline {
-            byte_len: 0,
+            len: InlineLen::EMPTY,
             data: [0; INLINE_CAPACITY],
         }
+    }
+
+    /// An inline copy of `bytes` (at most `INLINE_CAPACITY`) whose ASCII-ness
+    /// is already known.
+    fn inline(bytes: &[u8], len: InlineLen) -> BexStr {
+        debug_assert_eq!(len.byte_len(), bytes.len());
+        debug_assert_eq!(len.is_ascii(), bytes.is_ascii());
+        let mut data = [0u8; INLINE_CAPACITY];
+        data[..bytes.len()].copy_from_slice(bytes);
+        BexStr::Inline { len, data }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -179,9 +238,10 @@ impl BexStr {
     }
 
     /// Byte length. O(1) for all variants.
+    #[inline]
     pub fn byte_len(&self) -> usize {
         match self {
-            BexStr::Inline { byte_len, .. } => *byte_len as usize,
+            BexStr::Inline { len, .. } => len.byte_len(),
             BexStr::Flat(f) => f.data.len(),
             BexStr::Slice { byte_len, .. } => *byte_len as usize,
             BexStr::Concat(c) => c.total_byte_len as usize,
@@ -190,10 +250,13 @@ impl BexStr {
 
     /// Number of Unicode codepoints. O(1) for all variants: a Concat caches
     /// its count at construction, so this never walks (or recurses into) the
-    /// rope, however deep repeated appends have made it.
+    /// rope, however deep repeated appends have made it; a non-ASCII inline
+    /// string counts its at most 54 bytes.
+    #[inline]
     pub fn char_len(&self) -> usize {
         match self {
-            BexStr::Inline { byte_len, data } => bytecount::num_chars(&data[..*byte_len as usize]),
+            BexStr::Inline { len, .. } if len.is_ascii() => len.byte_len(),
+            BexStr::Inline { len, data } => bytecount::num_chars(&data[..len.byte_len()]),
             BexStr::Flat(f) => f.char_len as usize,
             BexStr::Slice { char_len, .. } => *char_len as usize,
             BexStr::Concat(c) => c.total_char_len as usize,
@@ -202,12 +265,14 @@ impl BexStr {
 
     /// Length in bytes of the longest all-ASCII prefix: the byte offset of the
     /// first non-ASCII byte, or `byte_len()` if there is none. Exact, and O(1) for
-    /// all variants (an inline string scans at most 54 bytes; a slice of
-    /// 4 GiB or more rescans). For every `n <= ascii_prefix_len()`, char `n`
+    /// all variants (a non-ASCII inline string scans at most 54 bytes; a slice
+    /// of 4 GiB or more rescans). For every `n <= ascii_prefix_len()`, char `n`
     /// starts at byte `n`.
+    #[inline]
     pub fn ascii_prefix_len(&self) -> usize {
         match self {
-            BexStr::Inline { byte_len, data } => ascii_prefix_len(&data[..*byte_len as usize]),
+            BexStr::Inline { len, .. } if len.is_ascii() => len.byte_len(),
+            BexStr::Inline { len, data } => ascii_prefix_len(&data[..len.byte_len()]),
             BexStr::Flat(f) => f.ascii_prefix_len as usize,
             BexStr::Slice {
                 ascii_prefix_len: SLICE_ASCII_PREFIX_UNKNOWN,
@@ -220,26 +285,28 @@ impl BexStr {
         }
     }
 
-    /// `(ascii_prefix_len(), char_len())`, with a single scan for an
-    /// inline string.
+    /// `(ascii_prefix_len(), char_len())`, with a single scan for a
+    /// non-ASCII inline string.
     fn ascii_prefix_and_char_len(&self) -> (usize, usize) {
         match self {
-            BexStr::Inline { byte_len, data } => {
-                ascii_prefix_and_char_len(&data[..*byte_len as usize])
+            BexStr::Inline { len, data } if !len.is_ascii() => {
+                ascii_prefix_and_char_len(&data[..len.byte_len()])
             }
             _ => (self.ascii_prefix_len(), self.char_len()),
         }
     }
 
     /// Whether every byte is ASCII. O(1); shadows the O(n) `str::is_ascii`.
+    #[inline]
     pub fn is_ascii(&self) -> bool {
         self.ascii_prefix_len() == self.byte_len()
     }
 
     /// O(1) for Inline/Flat/Slice. O(n) first-call flatten for Concat.
+    #[inline]
     pub fn as_bytes(&self) -> &[u8] {
         match self {
-            BexStr::Inline { byte_len, data } => &data[..*byte_len as usize],
+            BexStr::Inline { len, data } => &data[..len.byte_len()],
             BexStr::Flat(f) => &f.data,
             BexStr::Slice {
                 parent,
@@ -272,9 +339,7 @@ impl BexStr {
     /// This is separate from `Hash`, whose `Borrow<str>` contract must be retained.
     pub fn content_hash(&self) -> u128 {
         match self {
-            Self::Inline { byte_len, data } => {
-                xxhash_rust::xxh3::xxh3_128(&data[..*byte_len as usize])
-            }
+            Self::Inline { len, data } => xxhash_rust::xxh3::xxh3_128(&data[..len.byte_len()]),
             Self::Flat(flat) => cached_hash(&flat.hash, &flat.data),
             Self::Slice { hash, .. } => cached_hash(hash, self.as_bytes()),
             Self::Concat(node) => {
@@ -306,15 +371,15 @@ impl BexStr {
             return BexStr::empty();
         }
 
-        // Short result → Inline
+        // Short result → Inline. The receiver's ASCII flag or prefix usually
+        // settles the slice's ASCII-ness without a scan.
         if slice_len <= INLINE_CAPACITY {
             let bytes = &self.as_bytes()[start..end];
-            let mut data = [0u8; INLINE_CAPACITY];
-            data[..slice_len].copy_from_slice(bytes);
-            return BexStr::Inline {
-                byte_len: slice_len as u8,
-                data,
+            let ascii = match self {
+                BexStr::Inline { len, .. } => len.is_ascii() || bytes.is_ascii(),
+                _ => end <= self.ascii_prefix_len() || bytes.is_ascii(),
             };
+            return BexStr::inline(bytes, InlineLen::new(slice_len, ascii));
         }
 
         // Long result → Slice (depth-1 invariant). The receiver's own ASCII
@@ -379,9 +444,13 @@ impl BexStr {
     /// starts from whichever of that point and the end of the ASCII prefix is
     /// further along.
     fn char_to_byte_from(&self, known: (usize, usize), n: usize) -> usize {
-        // At most 54 bytes: scanning directly beats finding the prefix first.
-        if let BexStr::Inline { byte_len, data } = self {
-            let bytes = &data[..*byte_len as usize];
+        // At most 54 bytes: when not all ASCII, scanning directly beats
+        // finding the prefix first.
+        if let BexStr::Inline { len, data } = self {
+            if len.is_ascii() {
+                return n.min(len.byte_len());
+            }
+            let bytes = &data[..len.byte_len()];
             return known.1 + scan_char_to_byte(&bytes[known.1..], n - known.0);
         }
         let prefix = self.ascii_prefix_len();
@@ -404,8 +473,11 @@ impl BexStr {
     /// (`known.0 <= b`), counting from whichever of that point and the end of
     /// the ASCII prefix is further along.
     fn byte_to_char_from(&self, known: (usize, usize), b: usize) -> usize {
-        if let BexStr::Inline { byte_len, data } = self {
-            let bytes = &data[..*byte_len as usize];
+        if let BexStr::Inline { len, data } = self {
+            if len.is_ascii() {
+                return b.min(len.byte_len());
+            }
+            let bytes = &data[..len.byte_len()];
             return known.1 + bytecount::num_chars(&bytes[known.0..b.min(bytes.len())]);
         }
         let prefix = self.ascii_prefix_len();
@@ -426,25 +498,60 @@ impl BexStr {
 
     /// The char at index `n`, or `None` if `n >= char_len()`.
     pub fn char_at(&self, n: usize) -> Option<char> {
-        // Past the end, `b == byte_len()` and the suffix is empty.
+        match self.char_pos(n)? {
+            CharPos::Ascii(byte) => Some(byte as char),
+            CharPos::At(b) => self.as_str()[b..].chars().next(),
+        }
+    }
+
+    /// The char at index `n` as a one-char string, or `None` if
+    /// `n >= char_len()`. Copies the char's bytes without decoding it.
+    pub fn char_get(&self, n: usize) -> Option<BexStr> {
+        Some(match self.char_pos(n)? {
+            CharPos::Ascii(byte) => BexStr::inline(&[byte], InlineLen::new(1, true)),
+            // The lead byte gives the char's width.
+            CharPos::At(b) => self.byte_slice(b..b + utf8_char_width(self.as_bytes()[b])),
+        })
+    }
+
+    /// Where char `n` is, or `None` if `n >= char_len()`. Inside the ASCII
+    /// prefix it is byte `n` itself: no scan, no count. Past the prefix, an
+    /// index at or past `byte_len()` is out of range without a count, since
+    /// no string has more chars than bytes; `char_to_byte` finds any other,
+    /// mapping it to `byte_len()` past the last char.
+    fn char_pos(&self, n: usize) -> Option<CharPos> {
+        match self {
+            BexStr::Inline { len, data } if len.is_ascii() => {
+                return (n < len.byte_len()).then(|| CharPos::Ascii(data[n]));
+            }
+            // Finding a non-ASCII inline string's prefix would be a scan of
+            // its own; `char_to_byte` scans it directly.
+            BexStr::Inline { .. } => {}
+            _ => {
+                if n < self.ascii_prefix_len() {
+                    return Some(CharPos::Ascii(self.as_bytes()[n]));
+                }
+            }
+        }
+        if n >= self.byte_len() {
+            return None;
+        }
         let b = self.char_to_byte(n);
-        self.as_str()[b..].chars().next()
+        (b < self.byte_len()).then_some(CharPos::At(b))
     }
 
     /// Substring by char range. Clamps both ends to `char_len()` (and `end`
     /// to at least `start`), so it never panics.
     pub fn char_slice(&self, range: Range<usize>) -> BexStr {
+        // `end - start`, not `start + 1`: `start` may be `usize::MAX`.
+        if range.end.checked_sub(range.start) == Some(1) {
+            return self.char_get(range.start).unwrap_or_else(BexStr::empty);
+        }
         // `char_to_byte` maps every index past the end to `byte_len()`, which is
         // the clamp; `end` is scanned onward from `start`.
         let byte_start = self.char_to_byte(range.start);
         let end = range.end.max(range.start);
-        // `end - start`, not `start + 1`: `start` may be `usize::MAX`.
-        let byte_end = if end - range.start == 1 && byte_start < self.byte_len() {
-            // One char (`at`): its lead byte gives its width.
-            byte_start + utf8_char_width(self.as_bytes()[byte_start])
-        } else {
-            self.char_to_byte_from((range.start, byte_start), end)
-        };
+        let byte_end = self.char_to_byte_from((range.start, byte_start), end);
         self.byte_slice(byte_start..byte_end)
     }
 
@@ -488,7 +595,8 @@ impl BexStr {
         }
         let total_byte_len = left.byte_len() + right.byte_len();
 
-        // Short result → Inline
+        // Short result → Inline. Only inline strings are this short, so both
+        // ASCII checks read a flag.
         if total_byte_len <= INLINE_CAPACITY {
             let mut data = [0u8; INLINE_CAPACITY];
             let left_bytes = left.as_bytes();
@@ -496,7 +604,7 @@ impl BexStr {
             data[..left_bytes.len()].copy_from_slice(left_bytes);
             data[left_bytes.len()..total_byte_len].copy_from_slice(right_bytes);
             return BexStr::Inline {
-                byte_len: total_byte_len as u8,
+                len: InlineLen::new(total_byte_len, left.is_ascii() && right.is_ascii()),
                 data,
             };
         }
@@ -618,8 +726,8 @@ impl ConcatNode {
 
         while let Some(node) = stack.pop() {
             match node {
-                BexStr::Inline { byte_len, data } => {
-                    buf.extend_from_slice(&data[..byte_len as usize]);
+                BexStr::Inline { len, data } => {
+                    buf.extend_from_slice(&data[..len.byte_len()]);
                 }
                 BexStr::Flat(f) => {
                     buf.extend_from_slice(&f.data);
@@ -710,8 +818,8 @@ impl Drop for ConcatNode {
 impl Clone for BexStr {
     fn clone(&self) -> Self {
         match self {
-            BexStr::Inline { byte_len, data } => BexStr::Inline {
-                byte_len: *byte_len,
+            BexStr::Inline { len, data } => BexStr::Inline {
+                len: *len,
                 data: *data,
             },
             BexStr::Flat(f) => BexStr::Flat(f.clone()),
@@ -813,12 +921,7 @@ impl Borrow<str> for BexStr {
 impl From<String> for BexStr {
     fn from(s: String) -> Self {
         if s.len() <= INLINE_CAPACITY {
-            let mut data = [0u8; INLINE_CAPACITY];
-            data[..s.len()].copy_from_slice(s.as_bytes());
-            BexStr::Inline {
-                byte_len: s.len() as u8,
-                data,
-            }
+            BexStr::inline(s.as_bytes(), InlineLen::of(s.as_bytes()))
         } else {
             BexStr::Flat(Arc::new(FlatStr::new(s.into_bytes().into_boxed_slice())))
         }
@@ -828,12 +931,7 @@ impl From<String> for BexStr {
 impl From<&str> for BexStr {
     fn from(s: &str) -> Self {
         if s.len() <= INLINE_CAPACITY {
-            let mut data = [0u8; INLINE_CAPACITY];
-            data[..s.len()].copy_from_slice(s.as_bytes());
-            BexStr::Inline {
-                byte_len: s.len() as u8,
-                data,
-            }
+            BexStr::inline(s.as_bytes(), InlineLen::of(s.as_bytes()))
         } else {
             BexStr::Flat(Arc::new(FlatStr::new(s.as_bytes().into())))
         }
