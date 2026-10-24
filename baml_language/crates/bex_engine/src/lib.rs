@@ -3939,7 +3939,7 @@ impl BexEngine {
                     &thread.vm,
                     thread.proof(),
                     &ty,
-                    crate::conversion::InboundRuntimeOverlay::new(
+                    crate::conversion::TypeDefinitionOverlay::new(
                         &dynamic_classes,
                         &dynamic_enums,
                         Some(&runtime_named_objects),
@@ -6357,32 +6357,31 @@ impl BexEngine {
                                 // recursive, schema-aware materialization as inbound
                                 // arguments. Run this after completion, with the
                                 // declared return type, before the VM resumes.
+                                let classes = runtime_type_overlay.class_handles_by_name();
+                                let enums = runtime_type_overlay.enum_handles_by_name();
+                                let type_definitions = crate::conversion::TypeDefinitionOverlay::new(
+                                    &classes, &enums, None,
+                                );
                                 let converted = if operation == SysOp::BamlHostCallHostValue {
                                     self.convert_host_return_to_vm_value_with_ty(
                                         thread,
                                         external,
                                         host_ret_ty.as_ref(),
-                                        crate::conversion::InboundRuntimeOverlay::new(
-                                            &runtime_type_overlay.class_handles_by_name(),
-                                            &runtime_type_overlay.enum_handles_by_name(),
-                                            None,
-                                        ),
+                                        type_definitions,
                                     )
                                 } else if let Some(overlay) = runtime_schema_overlay.as_ref() {
                                     self.convert_external_to_vm_value_with_runtime_schema(
                                         thread,
                                         external,
                                         overlay,
-                                        &runtime_type_overlay.class_handles_by_name(),
-                                        &runtime_type_overlay.enum_handles_by_name(),
+                                        type_definitions,
                                     )
                                 } else {
-                                    self.convert_external_to_vm_value_with_dynamic_types(
+                                    self.convert_external_to_vm_value_with_ty_and_runtime(
                                         thread,
                                         external,
                                         None,
-                                        &runtime_type_overlay.class_handles_by_name(),
-                                        &runtime_type_overlay.enum_handles_by_name(),
+                                        type_definitions,
                                     )
                                 };
                                 match converted {
@@ -8124,7 +8123,7 @@ mod type_identity_tests {
             engine.runtime_type_overlay(&thread.vm, &[bex_vm_types::Value::object(reflected)]);
         let classes = runtime_overlay.class_handles_by_name();
         let enums = runtime_overlay.enum_handles_by_name();
-        let overlay = crate::conversion::InboundRuntimeOverlay::new(&classes, &enums, None);
+        let overlay = crate::conversion::TypeDefinitionOverlay::new(&classes, &enums, None);
         let returned = engine
             .convert_host_return_to_vm_value_with_ty(
                 &mut thread,
