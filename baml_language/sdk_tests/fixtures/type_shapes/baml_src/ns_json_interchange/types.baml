@@ -1,5 +1,5 @@
 // JSON interchange: a host SDK's own JSON for these types must match BAML's
-// (`baml.json.to_string`) and read back what `baml.json.from_string` reads.
+// (`baml.json.stringify`) and read back what `baml.json.decode` reads.
 // The Rust SDK checks its optional `serde` impls against `to_json` and
 // `from_json`.
 
@@ -41,9 +41,9 @@ class JsonFields {
 }
 
 function to_json<T>(value: T) -> string throws baml.json.SerializationError {
-    baml.json.to_string(value)
+    baml.json.stringify(value)
 }
 
 function from_json<T>(source: string) -> T throws baml.json.ParseError | baml.json.DecodeError {
-    baml.json.from_string<T>(source)
+    baml.json.decode<T>(source)
 }

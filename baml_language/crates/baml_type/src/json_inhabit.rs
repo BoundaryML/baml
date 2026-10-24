@@ -19,8 +19,8 @@ use crate::{Head, HeadDisplay, RuntimeTy};
 
 /// Which names a class's fields and an enum's variants go by in JSON: the
 /// runtime form of `baml.json.Naming`. The JSON Schema `baml.json.schema`
-/// writes and the JSON `baml.json.from_string` reads both follow it, through
-/// [`Self::key`] and [`Self::shows`].
+/// writes, and the JSON the other `baml.json` conversions read and write, all
+/// follow it, through [`Self::key`] and [`Self::shows`].
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum JsonNaming {
     /// Declared names. `@alias` and `@skip` have no effect: the interchange

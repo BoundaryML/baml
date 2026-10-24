@@ -169,7 +169,7 @@ function driven_halves() -> string throws never {
 /// and nothing has been marked yet; the second carries the marking of the
 /// first answer. Driving is a pure function of the session and the answers.
 function parsed_step(printed: string) -> root.Step? throws never {
-    baml.json.from_string<root.Step>(printed) catch_all (e) {
+    baml.json.decode<root.Step>(printed) catch_all (e) {
         baml.json.DecodeError => null,
         baml.json.ParseError => null,
     }
@@ -455,7 +455,7 @@ function answers_given() -> root.Given[] throws never {
 function download_round_trip() -> string throws never {
     let expected = root.sitting_of(seed_used(), length_used(), true, answers_given());
     let text = root.sitting_json(seed_used(), length_used(), true, answers_given());
-    let back = baml.json.from_string<root.engine.Transcript>(text) catch_all (e) {
+    let back = baml.json.decode<root.engine.Transcript>(text) catch_all (e) {
         baml.json.ParseError => {
             return "parsing threw";
         },

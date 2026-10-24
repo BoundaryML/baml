@@ -278,7 +278,7 @@ function images_render(
         user: c.user,
         response_format: _oai_images_response_format(c.model, c.response_format),
     };
-    let base = _oai_images_drop_nulls(baml.json.to_json(request));
+    let base = _oai_images_drop_nulls(baml.json.from(request));
     let merged = ai.wire.merge_request_body(base, c.request_body);
     let url = _oai_images_with_query(
         `${_oai_images_trim_slash(c.resolved_base_url() ?? "https://api.openai.com/v1")}/images/generations`,
@@ -374,7 +374,7 @@ function images_parse(c: root.ImageClient, resp: OaImagesResponse) -> ai.ModelTu
         throw ai.errors.InvalidResponse {
             provider: "openai-images",
             message: "the images response contained no image data in data[]",
-            raw_body: baml.json.stringify(baml.json.to_json(resp)),
+            raw_body: baml.json.stringify(resp),
             status_code: null,
         }
     }

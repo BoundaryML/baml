@@ -324,7 +324,7 @@ class ConverseRequest {
 // ---------------------------------------------------------------------------
 // 3. Null pruning
 //
-// `baml.json.to_json` emits `"field": null` for an unset optional, but the
+// `baml.json.from` emits `"field": null` for an unset optional, but the
 // Converse endpoint expects absent members (the SDK serializer uses
 // `skip_serializing_if = Option::is_none` throughout,
 // `forks/aws-bedrock/src/lib.rs:269-276`), and an externally tagged union with
@@ -963,7 +963,7 @@ function _tool_config(
                 ToolSpec {
                     name: tool.name,
                     description: tool.description,
-                    inputSchema: ToolInputSchema { json_schema: baml.json.to_json(tool.input_schema) },
+                    inputSchema: ToolInputSchema { json_schema: baml.json.from(tool.input_schema) },
                 },
             ),
         );
@@ -1247,7 +1247,7 @@ function build_request(
     preview: bool = false,
     stream: bool = false,
 ) -> baml.http.Request {
-    let body = _prune_nulls(baml.json.to_json(converse_request(client, input, preview = preview)));
+    let body = _prune_nulls(baml.json.from(converse_request(client, input, preview = preview)));
     let merged = ai.wire.merge_request_body(body, client.request_body);
     let accept = if (stream) {
         "application/vnd.amazon.eventstream"
@@ -1407,7 +1407,7 @@ function parse_response(response: ConverseResponse) -> ai.ModelTurn {
                 message: `the model could not produce a valid turn: ${raw}`,
                 error_type: raw,
                 error_code: null,
-                raw_body: baml.json.stringify(baml.json.to_json(response)),
+                raw_body: baml.json.stringify(response),
                 status_code: null,
             }
         }
@@ -1417,7 +1417,7 @@ function parse_response(response: ConverseResponse) -> ai.ModelTurn {
         throw ai.errors.InvalidResponse {
             provider: "aws-bedrock",
             message: "the Converse response is missing output.message",
-            raw_body: baml.json.stringify(baml.json.to_json(response)),
+            raw_body: baml.json.stringify(response),
             status_code: null,
         }
     }
@@ -1654,12 +1654,12 @@ type ConverseStreamEvent = MessageStartEvent
 /// this model does not know.
 function decode_stream_event(event_type: string, data: string) -> ConverseStreamEvent? {
     match (event_type) {
-        "messageStart" => baml.json.from_string<MessageStartEvent>(data),
-        "contentBlockStart" => baml.json.from_string<ContentBlockStartEvent>(data),
-        "contentBlockDelta" => baml.json.from_string<ContentBlockDeltaEvent>(data),
-        "contentBlockStop" => baml.json.from_string<ContentBlockStopEvent>(data),
-        "messageStop" => baml.json.from_string<MessageStopEvent>(data),
-        "metadata" => baml.json.from_string<ConverseStreamMetadataEvent>(data),
+        "messageStart" => baml.json.decode<MessageStartEvent>(data),
+        "contentBlockStart" => baml.json.decode<ContentBlockStartEvent>(data),
+        "contentBlockDelta" => baml.json.decode<ContentBlockDeltaEvent>(data),
+        "contentBlockStop" => baml.json.decode<ContentBlockStopEvent>(data),
+        "messageStop" => baml.json.decode<MessageStopEvent>(data),
+        "metadata" => baml.json.decode<ConverseStreamMetadataEvent>(data),
         _ => null,
     }
 }

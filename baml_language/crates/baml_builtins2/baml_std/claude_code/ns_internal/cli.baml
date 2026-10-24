@@ -20,7 +20,7 @@ function transcript_text(j: ai.Journal) -> string {
                         },
                         let c: ai.content.ToolUse => {
                             let call = baml.json.stringify(
-                                { "id": c.id, "name": c.name, "args": baml.json.to_json(c.args) },
+                                { "id": c.id, "name": c.name, "args": baml.json.from(c.args) },
                             );
                             lines.push(`assistant tool_call: ${call}`);
                         },
@@ -52,7 +52,7 @@ function transcript_text(j: ai.Journal) -> string {
 /// lets one CLI run return either the final result or BAML tool calls. T's
 /// $defs lift to the envelope root so its $refs stay valid.
 function envelope_schema(output_type: reflect.Type) -> map<string, unknown> {
-    let final_root = baml.json.from_json<map<string, unknown>>(
+    let final_root = baml.json.to<map<string, unknown>>(
         baml.json.schema(output_type, naming = baml.json.Naming.Aliased),
     );
     let definitions = final_root.delete("$defs");
@@ -76,7 +76,7 @@ function envelope_schema(output_type: reflect.Type) -> map<string, unknown> {
     let _ = calls_schema.set("required", ["calls"]);
     let _ = calls_schema.set("additionalProperties", false);
     let outcome: map<string, unknown> = {};
-    let _ = outcome.set("anyOf", [baml.json.to_json(final_root), baml.json.to_json(calls_schema)]);
+    let _ = outcome.set("anyOf", [baml.json.from(final_root), baml.json.from(calls_schema)]);
     let props: map<string, unknown> = {};
     let _ = props.set("outcome", outcome);
     let envelope: map<string, unknown> = {};
@@ -107,7 +107,7 @@ function tool_protocol(tb: ai.tools.Toolbox) -> string {
             {
                 "name": t.name,
                 "description": t.description,
-                "parameters": baml.json.to_json(t.input_schema),
+                "parameters": baml.json.from(t.input_schema),
             },
         );
     }
@@ -241,7 +241,7 @@ function mcp_config_json(c: root.ClaudeCodeClient) -> string? {
     } else {
         let wrapper: map<string, unknown> = {};
         let _ = wrapper.set("mcpServers", c.mcp_servers);
-        baml.json.stringify(baml.json.to_json(wrapper))
+        baml.json.stringify(wrapper)
     }
 }
 
@@ -265,7 +265,7 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
     let prompt = input.prompt(ai.internal.build_output_format(input.output_type));
     let has_tools = !input.toolbox.is_empty();
     let schema = if (has_tools) {
-        baml.json.to_json(envelope_schema(input.output_type))
+        baml.json.from(envelope_schema(input.output_type))
     } else {
         // The runner parses the answer with SAP, which reads aliased names.
         baml.json.schema(input.output_type, naming = baml.json.Naming.Aliased)
@@ -432,9 +432,7 @@ function invoke(c: root.ClaudeCodeClient, input: ai.ModelTurnInput) -> ai.ModelT
                     `cc_call_${input.journal.entries().length()}_${i}`,
                 );
                 let name = baml.json.path_or<string>(raw_call, ".name", "");
-                let call_args = baml.json.from_json<map<string, unknown>>(
-                    baml.json.path_or<json>(raw_call, ".args", {}),
-                ) catch_all (e) {
+                let call_args = baml.json.to<map<string, unknown>>(baml.json.path_or<json>(raw_call, ".args", {})) catch_all (e) {
                     _ => {
                         let empty: map<string, unknown> = {};
                         empty

@@ -89,20 +89,20 @@ async fn call_function_ambiguous_bare_name_errors() {
 }
 
 /// `find_user_function` post-filters to user-callable bytecode, so the
-/// stdlib's `baml.json.serialize` (and friends) must never be reachable
+/// stdlib's `baml.json.stringify` (and friends) must never be reachable
 /// via either bare-name suffix scan or fully qualified lookup. A
-/// regression here would let `baml run serialize` hijack `baml.json.serialize`
+/// regression here would let `baml run stringify` hijack `baml.json.stringify`
 /// with arbitrary arguments.
 #[test]
 fn find_user_function_does_not_expose_stdlib() {
     let eng = engine(&[("main.baml", "function main() -> int { 1 }")]);
 
     assert!(
-        eng.find_user_function("serialize").is_none(),
-        "bare suffix scan must not match stdlib baml.json.serialize"
+        eng.find_user_function("stringify").is_none(),
+        "bare suffix scan must not match stdlib baml.json.stringify"
     );
     assert!(
-        eng.find_user_function("baml.json.serialize").is_none(),
+        eng.find_user_function("baml.json.stringify").is_none(),
         "qualified stdlib name must not be reachable via find_user_function"
     );
     assert!(
@@ -183,7 +183,7 @@ async fn generic_native_json_from_string_callable_as_entry_point() {
 
     let result = eng
         .call_function(
-            "baml.json._from_string",
+            "baml.json._decode_structural",
             vec![
                 BexExternalValue::String("7".into()),
                 BexExternalValue::Bool(false),
@@ -200,6 +200,8 @@ async fn generic_native_json_from_string_callable_as_entry_point() {
 
     match result {
         Ok(BexExternalValue::Int(value)) => assert_eq!(value, 7),
-        other => panic!("expected Ok(Int(7)) from baml.json._from_string<int>, got {other:?}"),
+        other => {
+            panic!("expected Ok(Int(7)) from baml.json._decode_structural<int>, got {other:?}")
+        }
     }
 }

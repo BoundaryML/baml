@@ -20,7 +20,7 @@
 class User { name string }
 class Container<T> { value T }
 // Renamed from Color to RgbColor to avoid collision with ns_json_to_from_string.Color,
-// which causes baml.json.from_string<Color> to become ambiguous across namespaces.
+// which causes baml.json.decode<Color> to become ambiguous across namespaces.
 enum RgbColor { Red, Green, Blue }
 
 // ─── Basic to_string tests ───────────────────────────────────────────────────

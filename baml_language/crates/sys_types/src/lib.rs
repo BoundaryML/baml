@@ -984,7 +984,7 @@ mod tests {
 
     #[test]
     fn resolve_name_user_prefix_fallback() {
-        let m = map(&[("user.main", 2), ("baml.json.serialize", 3)]);
+        let m = map(&[("user.main", 2), ("baml.json.stringify", 3)]);
         match resolve_name(&m, "main") {
             ResolveOutcome::Found(k, v) => {
                 assert_eq!(k, "user.main");
@@ -997,7 +997,7 @@ mod tests {
     #[test]
     fn resolve_name_suffix_scan_unique() {
         // Namespaced function — bare lookup falls through to suffix scan.
-        let m = map(&[("user.lorem.Summarize", 7), ("baml.json.serialize", 3)]);
+        let m = map(&[("user.lorem.Summarize", 7), ("baml.json.stringify", 3)]);
         match resolve_name(&m, "Summarize") {
             ResolveOutcome::Found(k, v) => {
                 assert_eq!(k, "user.lorem.Summarize");
@@ -1022,16 +1022,16 @@ mod tests {
     /// Exact match must win over a suffix collision elsewhere in the map,
     /// so a fully qualified call can't be diverted by an unrelated `.{name}`
     /// key. Regression: this is the property `BexEngine::lookup_function`
-    /// relies on for stdlib calls like `baml.json.serialize`.
+    /// relies on for stdlib calls like `baml.json.stringify`.
     #[test]
     fn resolve_name_exact_beats_suffix() {
-        let m = map(&[("baml.json.serialize", 1), ("user.lorem.serialize", 2)]);
-        match resolve_name(&m, "baml.json.serialize") {
+        let m = map(&[("baml.json.stringify", 1), ("user.lorem.stringify", 2)]);
+        match resolve_name(&m, "baml.json.stringify") {
             ResolveOutcome::Found(k, v) => {
-                assert_eq!(k, "baml.json.serialize");
+                assert_eq!(k, "baml.json.stringify");
                 assert_eq!(*v, 1);
             }
-            _ => panic!("expected Found(baml.json.serialize, 1)"),
+            _ => panic!("expected Found(baml.json.stringify, 1)"),
         }
     }
 

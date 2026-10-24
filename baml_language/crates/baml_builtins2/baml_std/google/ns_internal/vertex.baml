@@ -31,7 +31,7 @@ function _vertex_scope() -> string {
 function _vertex_unwrap_json(document: string) -> string {
     let trimmed = document.trim();
     if (trimmed.starts_with("\"")) {
-        baml.json.from_string<string>(trimmed) catch_all (e) {
+        baml.json.decode<string>(trimmed) catch_all (e) {
             _ => document,
         }
     } else {

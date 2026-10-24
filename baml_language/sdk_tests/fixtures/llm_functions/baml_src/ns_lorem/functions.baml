@@ -163,7 +163,7 @@ function hs7_open_collision_stream(text: string) -> unknown {
 function hs7_open_collision_value(json: string) -> unknown {
   let output_type = hs7_collision_type();
   let type OutputType = output_type;
-  baml.json.from_string<OutputType>(json)
+  baml.json.decode<OutputType>(json)
 }
 
 // Return the same live spec through `unknown` so Python exercises the handle's

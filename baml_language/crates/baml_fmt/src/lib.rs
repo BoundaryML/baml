@@ -1630,7 +1630,7 @@ mod catch_format_tests {
     #[test]
     fn test_catch_arm_bodies_indent_inside_enclosing_block() {
         let source = r#"function demo(s: string) -> int {
-    baml.json.from_string<int>(s) catch (e) {
+    baml.json.decode<int>(s) catch (e) {
     baml.json.ParseError => 0,
     baml.json.DecodeError => 0,
   };
@@ -1638,7 +1638,7 @@ mod catch_format_tests {
 }
 "#;
         let expected = r#"function demo(s: string) -> int {
-    baml.json.from_string<int>(s) catch (e) {
+    baml.json.decode<int>(s) catch (e) {
         baml.json.ParseError => 0,
         baml.json.DecodeError => 0,
     };
@@ -2261,7 +2261,7 @@ mod over_split_regression_tests {
         // A braceless `=> throw …,` catch arm that fits the budget must not be
         // wrapped into a `=> { throw … }` block. `throw` is an unmodeled node, so
         // it used to report itself as multi-line and force the block wrap.
-        let source = "function f(s: string) -> int throws Boom {\n    baml.json.from_string<int>(s) catch (e) {\n        baml.json.ParseError => throw Boom {},\n        baml.json.DecodeError => 0,\n    }\n}\n\nclass Boom {\n}\n";
+        let source = "function f(s: string) -> int throws Boom {\n    baml.json.decode<int>(s) catch (e) {\n        baml.json.ParseError => throw Boom {},\n        baml.json.DecodeError => 0,\n    }\n}\n\nclass Boom {\n}\n";
         assert_formats_to(source, source);
     }
 }

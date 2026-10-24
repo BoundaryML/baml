@@ -1170,9 +1170,6 @@ impl RunArgs {
 
         let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
         let engine = Arc::new(engine);
-        let return_type = engine
-            .function_return_type(EXPRESSION_ENTRY)
-            .unwrap_or(bex_engine::RuntimeTy::Null);
         let output_format = self.output_format;
         let (call_context, logs) = self.call_context(CallId::next());
         let helper_context = baml_exec::HelperCallContext::from_call_context(&call_context);
@@ -1192,7 +1189,6 @@ impl RunArgs {
                     if let Err(e) = baml_exec::write_output_with_context(
                         &engine,
                         value,
-                        &return_type,
                         output_format,
                         &helper_context,
                         || self.print_logs(logs.as_ref()),

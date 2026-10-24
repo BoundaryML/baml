@@ -124,7 +124,7 @@ function _oai_commentary_response(commentaries: string[], final_answer: string) 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 function _oai_json(fields: map<string, unknown>) -> string {
-    baml.json.stringify(baml.json.to_json(fields))
+    baml.json.stringify(fields)
 }
 
 // One `SseStream.next()` batch: the JSON array of `{event,data,id}` objects the
@@ -138,7 +138,7 @@ function _oai_batch(payloads: string[]) -> string {
         let _ = event.set("id", null);
         events.push(event);
     }
-    baml.json.stringify(baml.json.to_json(events))
+    baml.json.stringify(events)
 }
 
 function _oai_first_text(events: ai.stream.Event[]) -> string {

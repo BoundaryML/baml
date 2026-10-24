@@ -9,7 +9,7 @@ function setup() -> Hello {
 }
 
 function run(hello: Hello) -> string {
-  baml.json.to_string(hello)
+  baml.json.stringify(hello)
 }
 
 function main() -> string {

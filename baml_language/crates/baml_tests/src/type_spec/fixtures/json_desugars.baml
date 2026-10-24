@@ -1,10 +1,11 @@
-// R6 (S15 residue): to_json / from_json desugars
+// R6 (S15 residue): to_json / from_json interface calls
 //
-// `recv.to_json()` is sugar for `baml.json.from(recv)` (works on ANY
-// receiver, no ToJson impl needed) and `Type.from_json(j)` is sugar for
-// `baml.json.to<Type>(j)`; on a generic `T` receiver `from_json` is the
-// synthesized `(j: json) -> T throws baml.json.DecodeError`. Throws charge
-// through the real stdlib signatures.
+// `recv.to_json()` calls the `baml.ToJson` interface method (works on ANY
+// receiver: one with no explicit impl gets the structural default) and
+// `Type.from_json(j)` calls the `baml.FromJson` interface method; on a
+// generic `T` receiver `from_json` is the synthesized
+// `(j: json) -> T throws baml.json.DecodeError`. Throws charge through the
+// real stdlib signatures.
 class Point {
     x int
     y int

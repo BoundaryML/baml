@@ -374,7 +374,7 @@ class CloudflareVisionClient {
             method: "POST",
             url: `https://api.cloudflare.com/client/v4/accounts/${self.account_id}/ai/run/@cf/meta/llama-3.2-11b-vision-instruct`,
             headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-            body: baml.json.to_string(
+            body: baml.json.stringify(
                 CloudflareVisionInput { messages, image: photo, stream: false, max_tokens: 2048 },
             ),
         }
@@ -382,11 +382,11 @@ class CloudflareVisionClient {
 
     function to_turn(self, response: CloudflareResponse) -> ai.ModelTurn {
         if (!response.success) {
-            throw self.invalid_request(baml.json.to_string(response.errors));
+            throw self.invalid_request(baml.json.stringify(response.errors));
         }
         let result = response.result
             ?? throw ai.errors.ParseFailed {
-            provider: "cloudflare", raw_output: baml.json.to_string(response),
+            provider: "cloudflare", raw_output: baml.json.stringify(response),
         };
         ai.ModelTurn {
             child_turns: [],

@@ -1891,7 +1891,7 @@ function stopped_outcome(sb: Sandbox, started: baml.time.Instant) -> HandleOutco
 }
 
 function write_outcome(sb: Sandbox, o: HandleOutcome) -> null {
-    baml.fs.write(sb.run_dir + "/outcome.json", baml.json.stringify_pretty(o.to_json()));
+    baml.fs.write(sb.run_dir + "/outcome.json", baml.json.stringify(o.to_json(), indent = 2));
     log.info(
         {
             "issue_branch": sb.branch,
@@ -1910,7 +1910,7 @@ function read_outcome(issue: Issue) -> HandleOutcome? {
     if (!baml.fs.exists(path)) {
         return null;
     };
-    baml.json.from_string<HandleOutcome>(baml.fs.read(path))
+    baml.json.decode<HandleOutcome>(baml.fs.read(path))
 }
 
 // ==================== Eval ====================

@@ -135,7 +135,7 @@ function send_as<T>(req: baml.http.Request, provider: string) -> T {
         // headers last: they are what fills RateLimited.retry_after_ms on a 429.
         throw root.errors.classify_http(provider, resp.status_code, text, headers = resp.headers)
     }
-    baml.json.from_string<T>(text) catch_all (e) {
+    baml.json.decode<T>(text) catch_all (e) {
         let parse => {
             throw root.errors.InvalidResponse {
                 provider: provider,
@@ -192,7 +192,7 @@ function send_as_with_wire<T>(
     if (!resp.ok()) {
         throw root.errors.classify_http(provider, resp.status_code, text, headers = resp.headers)
     }
-    let value = baml.json.from_string<T>(text) catch_all (e) {
+    let value = baml.json.decode<T>(text) catch_all (e) {
         let parse => {
             throw root.errors.InvalidResponse {
                 provider: provider,
@@ -345,7 +345,7 @@ function resolve_media_preview(media: root.MediaPart) -> ResolvedMedia {
 /// Deep-merge a client's `request_body` passthrough into its serialized
 /// request. Call this as the LAST step of building the wire body:
 ///
-///     let body = baml.json.to_json(typed_request);
+///     let body = baml.json.from(typed_request);
 ///     let merged = ai.wire.merge_request_body(body, c.request_body);
 ///     baml.json.stringify(merged)
 ///

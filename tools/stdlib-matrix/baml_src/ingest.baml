@@ -85,7 +85,7 @@ function load_report(path: string) -> ReportHeader {
 }
 
 function load_ts_surface(path: string) -> TsSurfaceDoc {
-    let doc = baml.json.from_string<TsSurfaceDoc>(baml.fs.read(path));
+    let doc = baml.json.decode<TsSurfaceDoc>(baml.fs.read(path));
     if (doc.format_version != 2) {
         throw baml.errors.InvalidArgument {
             message: `unsupported ts-surface format_version ${doc.format_version} in ${path} (expected 2); regenerate it with tools/stdlib-matrix/run`,

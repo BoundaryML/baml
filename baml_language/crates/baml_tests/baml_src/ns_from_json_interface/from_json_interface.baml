@@ -325,8 +325,8 @@ test "enum_override_absent_optional" {
 // Every override-honoring entry is the same walk: `from_json<T>`,
 // `deserialize<T>`, and the `T.from_json(j)` sugar.
 function enum_override_through_every_entry_fn() -> string throws baml.json.DecodeError | baml.json.ParseError {
-    let a = baml.json.from_json<Paint>({ "shade": "Light" }).shade;
-    let b = baml.json.deserialize<Paint>("{\"shade\": \"Light\"}").shade;
+    let a = baml.json.to<Paint>({ "shade": "Light" }).shade;
+    let b = baml.json.decode<Paint>("{\"shade\": \"Light\"}").shade;
     let c = Paint.from_json({ "shade": "Light" }).shade;
     string.from(a) + string.from(b) + string.from(c)
 }

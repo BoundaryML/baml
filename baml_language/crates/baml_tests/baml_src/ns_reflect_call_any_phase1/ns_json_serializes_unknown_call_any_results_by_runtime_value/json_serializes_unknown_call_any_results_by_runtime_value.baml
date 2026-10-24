@@ -41,7 +41,7 @@ function make_image() -> image throws never {
 
 function serialize_unknown(f: reflect.AnyFunction) -> string {
     let value: unknown = reflect.call_any(f, {});
-    baml.json.to_string(value) + "|" + baml.json.stringify(baml.json.to_json(value))
+    baml.json.stringify(value) + "|" + baml.json.stringify(value)
 }
 
 function main() -> string {

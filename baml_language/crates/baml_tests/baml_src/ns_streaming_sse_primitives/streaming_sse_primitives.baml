@@ -272,7 +272,7 @@ function sse_event_fields_in_json_fn() -> bool {
     sse.close();
     task.cancel();
     if (events == null) { return false; }
-    let parsed: SseJsonEvent[] = baml.json.from_string<SseJsonEvent[]>(events);
+    let parsed: SseJsonEvent[] = baml.json.decode<SseJsonEvent[]>(events);
     assert.equal(parsed.length(), 1);
     assert.equal(parsed[0].event, "custom");
     assert.equal(parsed[0].data, "payload");
@@ -301,7 +301,7 @@ function sse_event_id_null_when_not_set_fn() -> bool {
     sse.close();
     task.cancel();
     if (events == null) { return false; }
-    let parsed: SseJsonEvent[] = baml.json.from_string<SseJsonEvent[]>(events);
+    let parsed: SseJsonEvent[] = baml.json.decode<SseJsonEvent[]>(events);
     assert.equal(parsed.length(), 1);
     // id should be null when not set.
     assert.is_true(parsed[0].id == null);

@@ -415,7 +415,7 @@ class IngIntIterator {
 }
 
 function ing_stringify_next(iter: IngIterator<Item = int?>) -> string {
-    return baml.json.to_string(iter.next())
+    return baml.json.stringify(iter.next())
 }
 
 function ing_main() -> string {

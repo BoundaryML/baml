@@ -248,7 +248,7 @@ test "a skipped field with no empty value has no aliased schema" {
 }
 
 function decode_named_aliased() -> string {
-    let named = baml.json.from_string<SchemaNamed>(
+    let named = baml.json.decode<SchemaNamed>(
         `{"headline": "Hi", "tone": "calm", "note": "ignored", "extra": "ignored"}`,
         naming = baml.json.Naming.Aliased,
     );
@@ -260,7 +260,7 @@ test "aliased decoding reads aliases and fills skipped fields with empty values"
 }
 
 function decode_named_declared() -> string {
-    let named = baml.json.from_string<SchemaNamed>(
+    let named = baml.json.decode<SchemaNamed>(
         `{"title": "Hi", "tone": "Hidden", "note": "kept", "extra": "kept"}`,
     );
     `${named.title}|${named.tone}|${named.note}|${named.extra ?? "null"}`
@@ -277,7 +277,7 @@ function decode_error(text: string, aliased: bool) -> string {
         baml.json.Naming.Declared
     };
     {
-        baml.json.from_string<SchemaNamed>(text, naming = naming);
+        baml.json.decode<SchemaNamed>(text, naming = naming);
         "decoded"
     } catch (e) {
         let err: baml.json.DecodeError => err.message,
@@ -297,7 +297,7 @@ test "declared decoding rejects an alias" {
 
 function decode_skips_image() -> string {
     {
-        baml.json.from_string<SchemaSkipsImage>(`{"label": "x"}`, naming = baml.json.Naming.Aliased);
+        baml.json.decode<SchemaSkipsImage>(`{"label": "x"}`, naming = baml.json.Naming.Aliased);
         "decoded"
     } catch (e) {
         let err: baml.json.DecodeError => err.message,
@@ -317,7 +317,7 @@ class SchemaLeaf {
 type SchemaTree = SchemaLeaf | SchemaTree[]
 
 function decode_tree_leaf_kind() -> string {
-    let tree = baml.json.from_string<SchemaTree>(`[[{"value": 1}], {"value": 2}]`);
+    let tree = baml.json.decode<SchemaTree>(`[[{"value": 1}], {"value": 2}]`);
     match (tree) {
         let items: SchemaTree[] => {
             match (items[1]) {
@@ -335,7 +335,7 @@ test "a recursive alias decodes as its definition" {
 
 function decode_tree_mismatch() -> string {
     {
-        baml.json.from_string<SchemaTree>(`[{"value": "two"}]`);
+        baml.json.decode<SchemaTree>(`[{"value": "two"}]`);
         "decoded"
     } catch (e) {
         let err: baml.json.DecodeError => "DecodeError",
@@ -349,7 +349,7 @@ test "a recursive alias rejects a value its definition does not admit" {
 type SchemaThunk = () -> int throws never
 
 function decode_thunk_or_string() -> string {
-    match (baml.json.from_string<SchemaThunk | string>(`"x"`)) {
+    match (baml.json.decode<SchemaThunk | string>(`"x"`)) {
         let s: string => `string ${s}`,
         _ => "a function",
     }
@@ -365,7 +365,7 @@ class SchemaNullField {
 }
 
 function decode_null_field() -> string {
-    let value = baml.json.from_string<SchemaNullField>(`{"name": "n"}`);
+    let value = baml.json.decode<SchemaNullField>(`{"name": "n"}`);
     `${value.name}|${value.nothing ?? "absent"}`
 }
 

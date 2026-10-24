@@ -4,9 +4,11 @@
 // the model to.
 //
 // The schema is `baml.json.schema` under aliased names, rewritten to the
-// subset strict mode accepts. The answer is read by `baml.json.from_string`
-// under the same names, so what the schema allows is what the decoder takes.
-// A type strict mode cannot hold is rejected before anything is sent.
+// subset strict mode accepts. The answer is read by
+// `baml.json._decode_structural` under the same names, so what the schema
+// allows is what the decoder takes: the schema describes a type by its fields,
+// so the decoder ignores `baml.FromJson` overrides too (B-1993). A type strict
+// mode cannot hold is rejected before anything is sent.
 
 /// (internal) Structured output for one output type: the schema a request
 /// carries, and how the answer is read back.
@@ -51,7 +53,7 @@ class StructuredOutput {
             text
         };
         let type T = self.output_type;
-        let value = baml.json.from_string<T>(body, naming = baml.json.Naming.Aliased) catch (e) {
+        let value = baml.json._decode_structural<T>(body, true) catch (e) {
             let err: baml.json.ParseError => {
                 throw failed(err.message)
             },

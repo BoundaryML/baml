@@ -91,7 +91,7 @@ function pa_message_metadata_survives_assembly() -> json {
     let render = prompt`${cached}Long shared preamble.${role("user")}Hi World!`;
     let out: json[] = [];
     for (let m in render(ctx).messages()) {
-        out.push({ "role": m.role, "metadata": baml.json.to_json(m.metadata) })
+        out.push({ "role": m.role, "metadata": baml.json.from(m.metadata) })
     }
     out
 }

@@ -21,7 +21,7 @@ class Box<T> {
     value T
 
     function from_json(j: baml.json.json) -> Box<T> throws baml.json.ParseError | baml.json.DecodeError {
-        Box<T> { value: baml.json.from_json<T>(baml.json.field(j, "value")) }
+        Box<T> { value: baml.json.to<T>(baml.json.field(j, "value")) }
     }
 }
 

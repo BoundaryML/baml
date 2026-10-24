@@ -1,7 +1,7 @@
 // JSON source loading for `--json-args` and `--context`.
 //
 // Coercion-to-typed-value used to live here, but it now goes through
-// `baml.json.deserialize<T>` (see `dispatch::build_args_from_signature`)
+// `baml.json.decode<T>` (see `dispatch::build_args_from_signature`)
 // so user `from_json` overrides on classes are honored. Only the I/O
 // part — reading the JSON string from inline/@file/stdin — remains here.
 
