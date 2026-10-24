@@ -757,6 +757,36 @@ mod guard_tests {
             "replacing the store credits its whole capacity"
         );
     }
+
+    /// Thread-local guards take no lock, still charge footprint, and in debug
+    /// builds catch a container someone else holds: the classifier was wrong.
+    #[test]
+    fn thread_local_guards_skip_the_lock_and_still_charge() {
+        let debt = AllocDebt::new();
+        let array: ArrayContainer = LockedContainer::new(vec![Value::int(1)]);
+        // SAFETY: nothing else can reach `array`.
+        unsafe { array.lock_mut_thread_local(&debt) }.extend((0..100).map(Value::int));
+        assert!(
+            debt.balance() > 0,
+            "growth through a thread-local guard is charged"
+        );
+        // SAFETY: as above.
+        assert_eq!(unsafe { array.lock_thread_local() }.len(), 101);
+
+        if cfg!(debug_assertions) {
+            let held = array.lock();
+            let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                // SAFETY: deliberately violated; the debug check must panic
+                // before the store is read.
+                let _ = unsafe { array.lock_thread_local() }.len();
+            }));
+            drop(held);
+            assert!(
+                caught.is_err(),
+                "a held lock must fail a thread-local access"
+            );
+        }
+    }
 }
 
 #[cfg(test)]
