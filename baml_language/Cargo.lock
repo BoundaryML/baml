@@ -1599,6 +1599,7 @@ dependencies = [
  "console",
  "getrandom 0.2.17",
  "indexmap",
+ "itoa",
  "log",
  "num-bigint",
  "rand_chacha 0.3.1",
@@ -1617,6 +1618,7 @@ dependencies = [
  "toml 0.8.23",
  "wasm-bindgen-futures",
  "yaml_serde",
+ "zmij",
 ]
 
 [[package]]

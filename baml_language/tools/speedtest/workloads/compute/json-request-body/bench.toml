@@ -1,0 +1,6 @@
+name = "json request body"
+description = "serialize a provider request body: typed messages and tools with JSON Schema parameters, twice"
+origin = "B-1815"
+expect = "44843"
+jobs = 900
+warmup = 50

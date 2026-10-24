@@ -1,0 +1,6 @@
+name = "json ndjson events"
+description = "decode 2,000 NDJSON log lines into a typed class with optional fields and an undeclared key"
+origin = "B-1815"
+expect = "100523000"
+jobs = 30
+warmup = 1

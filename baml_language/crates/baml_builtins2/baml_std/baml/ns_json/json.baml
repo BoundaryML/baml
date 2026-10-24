@@ -25,6 +25,16 @@ enum Naming {
     Aliased,
 }
 
+// A `match` reads the variant; `==` on an enum looks up how it compares on
+// every call.
+/// (internal) Whether `naming` is `Naming.Aliased`.
+function _aliased(naming: Naming) -> bool {
+    match (naming) {
+        Naming.Aliased => true,
+        Naming.Declared => false,
+    }
+}
+
 /// A JSON syntax error.
 ///
 /// Only the functions that read text raise this: `parse` and `decode<T>`.
@@ -101,7 +111,15 @@ function decode<T>(
     s: string,
     naming: Naming = Naming.Declared,
 ) -> T throws ParseError | DecodeError {
-    to<T>(parse(s), naming = naming)
+    _decode<T>(s, _aliased(naming))
+}
+
+/// (internal) `decode<T>`, with `naming` as a flag: aliased names when
+/// `aliased` holds.
+//baml:mut_vm
+//baml:may_yield
+function _decode<T>(s: string, aliased: bool) -> T throws ParseError | DecodeError {
+    $rust_function
 }
 
 // OpenAI structured outputs decode with this. `schema` describes a type by
@@ -150,7 +168,7 @@ function stringify(
     indent: int | string = 0,
     omit_nulls: bool = false,
 ) -> string throws SerializationError {
-    _stringify(value, naming == Naming.Aliased, indent, omit_nulls)
+    _stringify(value, _aliased(naming), indent, omit_nulls)
 }
 
 /// (internal) `stringify`, with `naming` as a flag: aliased names when
@@ -204,7 +222,7 @@ function from(
     naming: Naming = Naming.Declared,
     omit_nulls: bool = false,
 ) -> json throws SerializationError {
-    _from(value, naming == Naming.Aliased, omit_nulls)
+    _from(value, _aliased(naming), omit_nulls)
 }
 
 /// (internal) `from`, with `naming` as a flag: aliased names when `aliased`
@@ -255,7 +273,7 @@ function _from(value: unknown, aliased: bool, omit_nulls: bool) -> json throws S
 ///   override rejects it, or if `j` contains itself. `path` locates the
 ///   offending node.
 function to<T>(j: json, naming: Naming = Naming.Declared) -> T throws DecodeError {
-    _to<T>(j, naming == Naming.Aliased)
+    _to<T>(j, _aliased(naming))
 }
 
 /// (internal) `to<T>`, with `naming` as a flag: aliased names when `aliased`
@@ -291,43 +309,11 @@ class PathError {
     selector: string,
 }
 
-/// (internal) One `.field` step of a `path` walk. Use `path`.
-function _path_field(current: json, key: string, selector: string) -> json throws PathError {
-    match (current) {
-        let m: map<string, json> => {
-            if (!m.has(key)) {
-                throw PathError { message: "missing field '" + key + "'", selector: selector };
-            }
-            m.get(key)
-        },
-        _ => {
-            throw PathError {
-      message: "field access '." + key + "' on a non-object",
-      selector: selector,
-    }
-        },
-    }
-}
-
-/// (internal) One `[i]` step of a `path` walk. Use `path`.
-function _path_index(current: json, idx: int, selector: string) -> json throws PathError {
-    match (current) {
-        let arr: json[] => {
-            if (idx < 0 || idx >= arr.length()) {
-                throw PathError {
-          message: "index [" + idx.to_string() + "] out of bounds (length " + arr.length().to_string() + ")",
-          selector: selector,
-        };
-            }
-            arr.at(idx)
-        },
-        _ => {
-            throw PathError {
-      message: "index [" + idx.to_string() + "] on a non-array",
-      selector: selector,
-    }
-        },
-    }
+/// (internal) The node `selector` picks out of `j`: the walk `path` runs
+/// before it decodes the leaf. Use `path`.
+//baml:mut_vm
+function _path(j: json, selector: string) -> json throws PathError {
+    $rust_function
 }
 
 /// Navigates a jq-style selector into a `json` value and coerces the leaf to
@@ -361,98 +347,13 @@ function _path_index(current: json, idx: int, selector: string) -> json throws P
 /// assert.equal(baml.json.path<int>(doc, "[\"users\"][0][\"age\"]"), 36);
 /// ```
 function path<T>(j: json, selector: string) -> T throws PathError {
-    if (!(selector.starts_with(".") || selector.starts_with("["))) {
-        throw PathError {
-      message: "selector must start with '.' or '[' (jq style), got '" + selector + "'",
-      selector: selector,
-    };
-    }
-    let current: json = j;
-    let i = 0;
-    while (i < selector.length()) {
-        let marker = selector.slice(i, i + 1);
-        if (marker == ".") {
-            i += 1;
-            let start = i;
-            while (
-                i < selector.length()
-                    && selector.slice(i, i + 1) != "."
-                    && selector.slice(i, i + 1) != "["
-            ) {
-                i += 1;
-            }
-            if (i > start) {
-                current = _path_field(current, selector.slice(start, i), selector);
-            }
-            continue;
-        }
-
-        if (marker != "[") {
-            throw PathError {
-        message: "expected '.' or '[' at offset " + i.to_string(),
-        selector: selector,
-      };
-        }
-
-        i += 1;
-        if (i >= selector.length()) {
-            throw PathError { message: "unterminated '[' segment", selector: selector };
-        }
-
-        let first = selector.slice(i, i + 1);
-        if (first == "\"" || first == "'") {
-            let quote = first;
-            i += 1;
-            let key = "";
-            let closed = false;
-            while (i < selector.length()) {
-                let ch = selector.slice(i, i + 1);
-                if (ch == "\\") {
-                    if (i + 1 >= selector.length()) {
-                        throw PathError { message: "unterminated escape in quoted bracket key", selector: selector };
-                    }
-                    key = key + selector.slice(i + 1, i + 2);
-                    i += 2;
-                    continue;
-                }
-                if (ch == quote) {
-                    closed = true;
-                    i += 1;
-                    break;
-                }
-                key = key + ch;
-                i += 1;
-            }
-            if (!closed || i >= selector.length() || selector.slice(i, i + 1) != "]") {
-                throw PathError { message: "unterminated quoted bracket key", selector: selector };
-            }
-            i += 1;
-            current = _path_field(current, key, selector);
-            continue;
-        }
-
-        let start = i;
-        while (i < selector.length() && selector.slice(i, i + 1) != "]") {
-            i += 1;
-        }
-        if (i >= selector.length()) {
-            throw PathError { message: "unterminated '[' segment", selector: selector };
-        }
-        let token = selector.slice(start, i);
-        i += 1;
-        let idx = int.parse(token) catch (_) {
-            root.errors.ParseError => {
-                throw PathError { message: "bad bracket token '[" + token + "]'", selector: selector };
-            },
-        };
-        current = _path_index(current, idx, selector);
-    }
-    to<T>(current) catch (_) {
+    let leaf = _path(j, selector);
+    to<T>(leaf) catch (_) {
         DecodeError => {
             throw PathError {
-      message: "leaf does not coerce to the requested type",
-      selector: selector,
-    }
+                message: "leaf does not coerce to the requested type",
+                selector: selector,
+            }
         },
     }
 }
@@ -541,7 +442,7 @@ function schema(
     t: reflect.Type,
     naming: Naming = Naming.Declared,
 ) -> json throws root.errors.Unsupported {
-    _schema(t, naming == Naming.Aliased)
+    _schema(t, _aliased(naming))
 }
 
 /// `schema`, with `naming` as a flag: aliased names when `aliased` holds.

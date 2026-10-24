@@ -203,10 +203,11 @@ namespace baml.json:
   class PathError { methods: [] }
   class SerializationError { methods: [] }
   type json
+  function _aliased
+  function _decode<T>
   function _decode_structural<T>
   function _from
-  function _path_field
-  function _path_index
+  function _path
   function _schema
   function _stringify
   function _to<T>
