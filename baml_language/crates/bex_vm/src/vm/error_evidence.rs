@@ -239,7 +239,7 @@ impl BexVm {
             .filter(|(_, frame)| matches!(frame, Frame::Bytecode(_)))
             .map(|(depth, _)| (depth, self.frame_telemetry_function(depth)))
             .collect();
-        let stack = &self.stack.0;
+        let stack = &*self.stack;
         from_match(
             book.lookup(&live, |slot| slot < stack.len() && stack[slot] == context),
             OriginVia::Rethrow,
@@ -255,7 +255,6 @@ impl BexVm {
         };
         let future = self
             .stack
-            .0
             .last()
             .and_then(bex_vm_types::Value::as_object_ptr)
             .and_then(|ptr| match self.get_object(ptr) {
