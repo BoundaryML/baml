@@ -246,6 +246,9 @@ pub enum TirTypeError {
     InvalidTraceHook { message: String },
     /// Type mismatch: expected vs actual.
     TypeMismatch { expected: Ty, got: Ty },
+    /// A list pattern against a scrutinee none of whose values is a list:
+    /// the pattern can never match.
+    ListPatternNeverMatches { scrutinee: Ty },
     /// Member not found on a known type.
     ///
     /// Reported when the base type IS resolved (known class/enum) but the
@@ -435,6 +438,10 @@ pub enum TirTypeError {
     /// Lowered to `Ty::Error` so it never reaches the canonical normalizer, which treats
     /// the inference hole as `unreachable!`.
     CannotInferType,
+    /// A `_` in the subject of an associated-type projection
+    /// (`(Box<_> as I).Item`): the subject decides which interface declares
+    /// the member, so it cannot be left for inference.
+    WildcardInProjectionSubject,
     /// An ordinary inference variable remained unresolved at writeback.
     TypeMustBeKnown { full_type: Ty },
     /// A member was accessed on a value whose type was still being inferred.
@@ -587,8 +594,16 @@ pub enum TirTypeError {
     },
     /// A type parameter could not be inferred at a call site.
     CannotInferTypeParameter { name: Name },
-    /// A method's generic type parameter shadows a type-level parameter (generic
-    /// parameter or associated type) of the enclosing class or interface.
+    /// An interface pattern's instantiation leaves the associated type
+    /// `name` unpinned, and nothing else determines it.
+    CannotInferAssociatedType { name: Name },
+    /// A type parameter's arguments give it types with no common candidate
+    /// (`pick(1, "s")` for `pick<T>(a: T, b: T)`), and nothing else - an
+    /// expected type - decides between them. Two of the conflicting types
+    /// are named.
+    ConflictingTypeArguments { name: Name, first: Ty, second: Ty },
+    /// A method's generic type parameter shadows a generic parameter of the
+    /// enclosing class or interface.
     TypeParamShadowed {
         param_name: Name,
         type_name: Name,
@@ -1224,6 +1239,13 @@ impl TirTypeError {
                         got.spell(vp)
                     )
                 }
+                TirTypeError::ListPatternNeverMatches { scrutinee } => {
+                    write!(
+                        f,
+                        "a list pattern never matches a value of type `{}`",
+                        scrutinee.spell(vp)
+                    )
+                }
                 TirTypeError::UnresolvedMember { base_type, member } => {
                     if matches!(base_type, Ty::Unknown) {
                         write!(f, "cannot access field `{member}` on `unknown`")
@@ -1546,6 +1568,11 @@ impl TirTypeError {
                         "qualified associated type projection must use an interface"
                     )
                 }
+                TirTypeError::WildcardInProjectionSubject => write!(
+                    f,
+                    "`_` is not allowed in the subject of an associated-type projection: \
+                     the subject decides which interface declares the member, so write it out"
+                ),
                 TirTypeError::CannotInferType => {
                     write!(f, "type inference failed; write the type explicitly")
                 }
@@ -1826,6 +1853,24 @@ impl TirTypeError {
                 },
                 TirTypeError::CannotInferTypeParameter { name } => {
                     write!(f, "cannot infer type parameter `{name}`")
+                }
+                TirTypeError::CannotInferAssociatedType { name } => {
+                    write!(
+                        f,
+                        "cannot infer associated type `{name}`; write it on the pattern's interface"
+                    )
+                }
+                TirTypeError::ConflictingTypeArguments {
+                    name,
+                    first,
+                    second,
+                } => {
+                    write!(
+                        f,
+                        "cannot infer type parameter `{name}`: its arguments give it the conflicting types `{}` and `{}`; write the type argument or annotate the expected type",
+                        first.spell(vp),
+                        second.spell(vp)
+                    )
                 }
                 TirTypeError::WrongNumberOfTypeArgs {
                     type_name,

@@ -2250,15 +2250,12 @@ impl<'db> LoweringContext<'db> {
         let (iterable_tn, iterable_args, iterable_assoc) = iterable_view;
         // A bare `Iterable` view pins nothing — iterating a `T extends Iterable`
         // or an unpinned existential reaches here with an empty binding list.
-        // The top type is a sound supertype for the element, and it is what this
-        // path already produced (the old `Unknown` sentinel was laundered to
-        // `Unknown` by `erase_compiler_only_ty`), so spelling it directly
-        // keeps behavior identical while removing the sentinel.
+        // The top type is a sound supertype for the element.
         //
         // BUG: the faithful element type is the symbolic projection
         // `(collection as Iterable).Item`, which `RuntimeTy` carries and the
         // runtime can resolve from the receiver. Erasing to `unknown` throws
-        // that away; fix alongside the `erase_compiler_only_ty` cleanup.
+        // that away.
         let item_tir_ty =
             Self::associated_binding_ty(&iterable_assoc, "Item").unwrap_or(Tir2Ty::Unknown);
         let elem_ty = self.convert_tir_ty_for_runtime(&item_tir_ty);
@@ -2570,8 +2567,10 @@ impl<'db> LoweringContext<'db> {
 
     /// The local holding the method's `self` parameter, while lowering the
     /// method's own frame.
-    // BUG: inside a nested lambda `self` is a capture rather than a local, so a
-    // `default.<member>` root there resolves to nothing and lowers to null.
+    // BUG: inside a nested lambda `self` is a capture rather than a local, and
+    // capture analysis does not count a `default.<member>` root as a use of
+    // `self`, so `default.<method>` there - called or as a value - is an
+    // internal error.
     fn self_local(&self) -> Option<Local> {
         self.binding_locals.get(&self.self_binding?).copied()
     }
@@ -3087,46 +3086,38 @@ impl<'db> LoweringContext<'db> {
         // variables: `RuntimeTy` carries them, and erasing to `unknown` would
         // throw away the information needed to resolve the type at run time.
         let resolved = self.resolve_ty_projections(ty);
-        let runtime_ready = Self::erase_compiler_only_ty(resolved);
+        let runtime_ready = Self::runtime_ready_ty(resolved);
         self.runtime().convert(&runtime_ready)
     }
 
-    fn erase_compiler_only_ty(ty: Tir2Ty) -> Tir2Ty {
+    /// A checked type's runtime representation: literal freshness is a
+    /// compile-time property and drops, and a slotless effect parameter has
+    /// no frame slot to name. The error sentinel is NOT handled here - a
+    /// checked world carries none (`baml_db::CheckedWorld`'s walker), and
+    /// one that slipped through is refused loudly by the conversion.
+    fn runtime_ready_ty(ty: Tir2Ty) -> Tir2Ty {
         match ty {
-            // BUG: `Error` is an unrecoverable check's fill and must stay
-            // `Error` so downstream diagnostics stay suppressed; laundering it
-            // to the top type is what defuses `ResolvedAliases::convert`'s
-            // `unreachable!` on every MIR path. The one well-typed producer
-            // (a slot left unsolved for the runtime type gate, since removed)
-            // is gone, so every `Error` reaching here now carries a
-            // diagnostic; delete this arm once lowering of diagnosed bodies
-            // is guarded upstream, so the guard can do its job.
-            Tir2Ty::Error => Tir2Ty::Unknown,
             Tir2Ty::TypeVar(param) if is_slotless_effect_param(&param) => Tir2Ty::Unknown,
             Tir2Ty::Literal(lit, _freshness) => Tir2Ty::Literal(lit, baml_type::Freshness::Regular),
-            Tir2Ty::Class(name, args) => Tir2Ty::Class(
-                name,
-                args.into_iter().map(Self::erase_compiler_only_ty).collect(),
-            ),
+            Tir2Ty::Class(name, args) => {
+                Tir2Ty::Class(name, args.into_iter().map(Self::runtime_ready_ty).collect())
+            }
             Tir2Ty::Interface(name, args, bindings) => Tir2Ty::Interface(
                 name,
-                args.into_iter().map(Self::erase_compiler_only_ty).collect(),
+                args.into_iter().map(Self::runtime_ready_ty).collect(),
                 bindings
                     .into_iter()
-                    .map(|(name, ty)| (name, Self::erase_compiler_only_ty(ty)))
+                    .map(|(name, ty)| (name, Self::runtime_ready_ty(ty)))
                     .collect(),
             ),
-            Tir2Ty::List(inner) => Tir2Ty::List(Box::new(Self::erase_compiler_only_ty(*inner))),
+            Tir2Ty::List(inner) => Tir2Ty::List(Box::new(Self::runtime_ready_ty(*inner))),
             Tir2Ty::Map { key, value } => Tir2Ty::Map {
-                key: Box::new(Self::erase_compiler_only_ty(*key)),
-                value: Box::new(Self::erase_compiler_only_ty(*value)),
+                key: Box::new(Self::runtime_ready_ty(*key)),
+                value: Box::new(Self::runtime_ready_ty(*value)),
             },
-            Tir2Ty::Union(types) => Tir2Ty::Union(
-                types
-                    .into_iter()
-                    .map(Self::erase_compiler_only_ty)
-                    .collect(),
-            ),
+            Tir2Ty::Union(types) => {
+                Tir2Ty::Union(types.into_iter().map(Self::runtime_ready_ty).collect())
+            }
             Tir2Ty::Function {
                 params,
                 ret,
@@ -3136,30 +3127,28 @@ impl<'db> LoweringContext<'db> {
                     .into_iter()
                     .map(|param| Tir2FunctionParamTy {
                         name: param.name,
-                        ty: Self::erase_compiler_only_ty(param.ty),
+                        ty: Self::runtime_ready_ty(param.ty),
                         mode: param.mode,
                     })
                     .collect(),
-                ret: Box::new(Self::erase_compiler_only_ty(*ret)),
-                throws: Box::new(Self::erase_compiler_only_ty(*throws)),
+                ret: Box::new(Self::runtime_ready_ty(*ret)),
+                throws: Box::new(Self::runtime_ready_ty(*throws)),
             },
             Tir2Ty::Future(value, error) => Tir2Ty::Future(
-                Box::new(Self::erase_compiler_only_ty(*value)),
-                Box::new(Self::erase_compiler_only_ty(*error)),
+                Box::new(Self::runtime_ready_ty(*value)),
+                Box::new(Self::runtime_ready_ty(*error)),
             ),
             Tir2Ty::AssociatedTypeProjection {
                 base,
                 interface,
                 member,
             } => Tir2Ty::AssociatedTypeProjection {
-                base: Box::new(Self::erase_compiler_only_ty(*base)),
+                base: Box::new(Self::runtime_ready_ty(*base)),
                 // The interface annotation carries component types (generics and
                 // associated-type bindings); erase compiler-only types within them
                 // too, matching the `Tir2Ty::Interface` arm above. (The field is an
                 // `Interface` after the interface-object refactor, not a `Ty`.)
-                interface: Box::new(
-                    interface.map_tys(|ty| Self::erase_compiler_only_ty(ty.clone())),
-                ),
+                interface: Box::new(interface.map_tys(|ty| Self::runtime_ready_ty(ty.clone()))),
                 member,
             },
             other => other,
@@ -4352,31 +4341,26 @@ impl<'db> LoweringContext<'db> {
     /// The element-type template for an array-literal expression — the `T` of
     /// its `T[]` static type — for [`Rvalue::Array`]. A generic element maps to
     /// a `TypeArgRef` so it resolves against the frame's type args at runtime.
-    /// Falls back to `unknown` when the recorded type is not a list (error
-    /// recovery).
-    fn array_element_template(&self, expr_id: AstExprId) -> TyTemplate {
+    /// The checker types every array literal as a list.
+    fn array_element_template(&self, expr_id: AstExprId) -> Lowered<TyTemplate> {
         let generic_params = self.enclosing_generic_params();
         match self.tir_expr_type(expr_id) {
-            Some(Tir2Ty::List(elem)) => self.ty_to_template(elem, &generic_params),
-            _ => TyTemplate::from(RealizedTy::unknown()),
+            Some(Tir2Ty::List(elem)) => Ok(self.ty_to_template(elem, &generic_params)),
+            _ => Err(self.internal_error("the checker typed an array literal as no list", expr_id)),
         }
     }
 
     /// The key/value type templates for a map-literal expression — the `K`/`V`
-    /// of its `map<K, V>` static type — for [`Rvalue::Map`]. Falls back to
-    /// `map<string, unknown>` when the recorded type is not a map (error
-    /// recovery).
-    fn map_kv_templates(&self, expr_id: AstExprId) -> (TyTemplate, TyTemplate) {
+    /// of its `map<K, V>` static type — for [`Rvalue::Map`]. The checker
+    /// types every map literal as a map.
+    fn map_kv_templates(&self, expr_id: AstExprId) -> Lowered<(TyTemplate, TyTemplate)> {
         let generic_params = self.enclosing_generic_params();
         match self.tir_expr_type(expr_id) {
-            Some(Tir2Ty::Map { key, value, .. }) => (
+            Some(Tir2Ty::Map { key, value, .. }) => Ok((
                 self.ty_to_template(key, &generic_params),
                 self.ty_to_template(value, &generic_params),
-            ),
-            _ => (
-                TyTemplate::from(RealizedTy::string()),
-                TyTemplate::from(RealizedTy::unknown()),
-            ),
+            )),
+            _ => Err(self.internal_error("the checker typed a map literal as no map", expr_id)),
         }
     }
 
@@ -6044,13 +6028,13 @@ impl<'db> LoweringContext<'db> {
                     .iter()
                     .map(|&e| self.lower_to_operand(e))
                     .collect::<Lowered<Vec<_>>>()?;
-                let element_ty = self.array_element_template(expr_id);
+                let element_ty = self.array_element_template(expr_id)?;
                 self.builder
                     .assign(dest, Rvalue::Array(element_ty, operands));
             }
 
             AstExpr::Map { entries } => {
-                let (key_ty, value_ty) = self.map_kv_templates(expr_id);
+                let (key_ty, value_ty) = self.map_kv_templates(expr_id)?;
                 let map = Place::local(self.builder.temp(self.expr_ty(expr_id)?));
                 self.builder
                     .assign(map.clone(), Rvalue::Map(key_ty, value_ty, Vec::new()));
@@ -6320,6 +6304,100 @@ impl<'db> LoweringContext<'db> {
 // ─── Literal helper ───────────────────────────────────────────────────────────
 
 impl<'db> LoweringContext<'db> {
+    /// The delegation target of `default.<member>` at `expr_id` inside an
+    /// `implements I { .. }` block: `I`'s default body named `member`, with
+    /// the frame it runs in - `[Self ++ interface generics]`, exactly as the
+    /// runtime seeds an adopted default (the frame law on `MethodImpl` in
+    /// `bex_vm_types`; also `enclosing_generic_params`), expressed over the
+    /// enclosing impl's generic params. `Self` is the enclosing
+    /// implements-block's subject, statically known here. Associated types
+    /// are not frame slots: the default body's `Self.X` projection templates
+    /// reduce through the impl's rule bindings at realization, so a short or
+    /// shifted frame would only misresolve `Self` and the interface params.
+    ///
+    /// `None` when `member` names no DEFAULT-BODIED method of a source
+    /// interface target, mirroring TIR's `default_member`: a declared FIELD
+    /// (possibly function-typed) and a bodyless required method have no
+    /// default body to reference, so the caller falls through to the view
+    /// road, which reads `default.<member>` as `self` viewed at the declaring
+    /// interface, instead of dropping the expression with its destination
+    /// unassigned.
+    fn default_delegation(
+        &mut self,
+        expr_id: AstExprId,
+        member: &Name,
+    ) -> Lowered<Option<(FunctionLoc<'db>, Vec<Tir2Ty>)>> {
+        let Some(target) = self.implements_block_iface_target() else {
+            return Ok(None);
+        };
+        if !matches!(
+            target.type_refs[target.target].kind,
+            baml_compiler2_hir::type_ref::TypeRefKind::Path { .. }
+        ) {
+            return Ok(None);
+        }
+        let current_pkg = baml_compiler2_hir::file_package::file_package(self.db, self.file);
+        let pkg_items = package_items(self.db, current_pkg.root);
+        let Some(iface_loc) = resolve_ref_to_interface_loc(
+            self.db,
+            &target.type_refs,
+            target.target,
+            pkg_items,
+            &current_pkg.namespace_path,
+        ) else {
+            return Ok(None);
+        };
+        let Some(default_loc) = baml_compiler2_hir::item_data::interface_data(self.db, iface_loc)
+            .methods
+            .iter()
+            .copied()
+            .find(|&loc| {
+                baml_compiler2_hir::item_data::function_data(self.db, loc).name == *member
+                    && baml_compiler2_hir::item_data::function_has_body(self.db, loc)
+            })
+        else {
+            return Ok(None);
+        };
+        let generic_params = self.enclosing_generic_params();
+        let generic_param_bounds = self.enclosing_generic_param_bounds();
+        // `implements_block_iface_target` gated entry, and a recorded target
+        // pairs with a Class / Impl owner by construction (both are written
+        // by the same HIR builder call).
+        let self_subject = self.implements_subject_tir_ty().ok_or_else(|| {
+            self.internal_error(
+                "`default.<member>` outside an implements-block method",
+                expr_id,
+            )
+        })?;
+        // The target lowered whole (as the constraint head it is - written
+        // pins only): its generic args.
+        let iface_args = match lower_ref_in_scope_at(
+            self.db,
+            &target.type_refs,
+            target.target,
+            pkg_items,
+            &current_pkg.namespace_path,
+            &generic_params,
+            &generic_param_bounds,
+            None,
+            baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
+        ) {
+            Tir2Ty::Interface(_, args, _) => args.into_vec(),
+            // A target that names no interface is refused by the check, so a
+            // checked world never lowers one.
+            _ => {
+                return Err(self.internal_error(
+                    "an implements block's target lowered to no interface",
+                    expr_id,
+                ));
+            }
+        };
+        let mut frame = Vec::with_capacity(1 + iface_args.len());
+        frame.push(self_subject);
+        frame.extend(iface_args);
+        Ok(Some((default_loc, frame)))
+    }
+
     /// Whether `segments` is rooted at the BEP-044 `default` receiver keyword
     /// and that keyword is not shadowed by a local of the same name. See
     /// [`baml_compiler2_ast::DEFAULT_RECEIVER_KEYWORD`].
@@ -6416,13 +6494,7 @@ impl<'db> LoweringContext<'db> {
                                 )?;
                                 Operand::Copy(Place::local(recv_local))
                             };
-                            self.builder.assign(
-                                dest,
-                                Rvalue::MakeBoundMethod {
-                                    func: item,
-                                    receiver: receiver_op,
-                                },
-                            );
+                            self.assign_bound_method_value(expr_id, dest, item, receiver_op)?;
                             return Ok(());
                         }
                     }
@@ -6473,10 +6545,8 @@ impl<'db> LoweringContext<'db> {
                         // Unbound inherent method or free function reference —
                         // a plain function constant.
                         if let Some(item) = resolution.callable(self.db) {
-                            self.builder.assign(
-                                dest,
-                                Rvalue::Use(Operand::Constant(Constant::Function(item))),
-                            );
+                            let value = self.function_item_value(expr_id, item);
+                            self.builder.assign(dest, value);
                             return Ok(());
                         }
                     }
@@ -6522,13 +6592,7 @@ impl<'db> LoweringContext<'db> {
                                 )?;
                                 Operand::Copy(Place::local(recv_local))
                             };
-                            self.builder.assign(
-                                dest,
-                                Rvalue::MakeBoundMethod {
-                                    func: item,
-                                    receiver: receiver_op,
-                                },
-                            );
+                            self.assign_bound_method_value(expr_id, dest, item, receiver_op)?;
                             return Ok(());
                         }
                     }
@@ -6557,10 +6621,8 @@ impl<'db> LoweringContext<'db> {
                         // Unbound inherent method or free function reference —
                         // a plain function constant.
                         if let Some(item) = resolution.callable(self.db) {
-                            self.builder.assign(
-                                dest,
-                                Rvalue::Use(Operand::Constant(Constant::Function(item))),
-                            );
+                            let value = self.function_item_value(expr_id, item);
+                            self.builder.assign(dest, value);
                             return Ok(());
                         }
                     }
@@ -6618,13 +6680,49 @@ impl<'db> LoweringContext<'db> {
                     return Ok(());
                 }
             }
+            // BEP-044: `default.<method>` as a value - the interface's default
+            // body bound to `self`, over the frame an adopted default runs in
+            // (what `default.<method>(..)` calls with), never the override.
+            if segments.len() == 2
+                && self.is_default_receiver_root(expr_id, segments)
+                && let Some((default_loc, frame_tys)) =
+                    self.default_delegation(expr_id, &segments[1])?
+            {
+                let Some(self_local) = self.self_local() else {
+                    return Err(self.internal_error(
+                        "`default.<method>` as a value outside a method with `self`",
+                        expr_id,
+                    ));
+                };
+                let generic_params = self.enclosing_generic_params();
+                let mut type_arg_templates: Vec<TyTemplate> = frame_tys
+                    .iter()
+                    .map(|ty| self.ty_to_template(ty, &generic_params))
+                    .collect();
+                // A generic default method's own arguments follow the frame,
+                // as a bound inherent method's follow the receiver's.
+                type_arg_templates.extend(
+                    self.inferred_value_type_arg_templates(expr_id)
+                        .unwrap_or_default(),
+                );
+                self.builder.assign(
+                    dest,
+                    Rvalue::MakeBoundMethod {
+                        func: DeclRef::Source(default_loc),
+                        receiver: Operand::Copy(self.value_place(self_local)),
+                        frame: crate::BoundFrame::Explicit(type_arg_templates),
+                    },
+                );
+                return Ok(());
+            }
             if self
                 .binding_id_for_path(expr_id, &segments[0])
                 .is_some()
                 // BEP-044 wf3 #4: `default.<field>` as a value — the field-chain
                 // lowerer maps the `default` root to `self`-viewed-as-interface.
                 // (The `default.method(...)` call form is intercepted earlier in
-                // `lower_call`, so this only catches the value/field form.)
+                // `lower_call`, and the method VALUE form just above, so this
+                // only catches the field form.)
                 || self.is_default_receiver_root(expr_id, segments)
             {
                 self.lower_multi_segment_path_as_field_chain(expr_id, segments, dest)?;
@@ -6724,7 +6822,12 @@ impl<'db> LoweringContext<'db> {
                     self.refined_root_local_ty(expr_id, root_local)
                 }
                 Place::Deref(CellId::Capture(_)) => {
-                    self.path_root_ty(expr_id).unwrap_or(RuntimeTy::Unknown)
+                    self.path_root_ty(expr_id).ok_or_else(|| {
+                        self.internal_error(
+                            "the checker recorded no type for a captured path root",
+                            expr_id,
+                        )
+                    })?
                 }
                 Place::Capture(_) | Place::Field { .. } | Place::Index { .. } => {
                     unreachable!("path roots are locals or the values in cells")
@@ -6800,9 +6903,9 @@ impl<'db> LoweringContext<'db> {
                 }
             }
 
-            let target_ty = self
-                .path_segment_ty(expr_id, seg_idx)
-                .unwrap_or(RuntimeTy::Unknown);
+            let target_ty = self.path_segment_ty(expr_id, seg_idx).ok_or_else(|| {
+                self.internal_error("the checker recorded no type for a path segment", expr_id)
+            })?;
             let target_place = if is_last {
                 dest.clone()
             } else {
@@ -6895,7 +6998,11 @@ impl<'db> LoweringContext<'db> {
         // emit; a top-level `let` (a client, ...) is a plain read of the
         // global slot `$init` filled.
         let constant = match def {
-            Definition::Function(func) => Constant::Function(DeclRef::Source(func)),
+            Definition::Function(func) => {
+                let value = self.function_item_value(expr_id, DeclRef::Source(func));
+                self.builder.assign(dest, value);
+                return Ok(());
+            }
             Definition::Let(binding) => Constant::GlobalItem(DeclRef::Source(binding)),
             Definition::Class(_)
             | Definition::Enum(_)
@@ -8187,107 +8294,31 @@ impl<'db> LoweringContext<'db> {
         if let AstExpr::Path(segments) = callee_expr
             && segments.len() == 2
             && self.is_default_receiver_root(callee, segments)
-            && let Some(target) = self.implements_block_iface_target()
-            && matches!(
-                target.type_refs[target.target].kind,
-                baml_compiler2_hir::type_ref::TypeRefKind::Path { .. }
-            )
+            && let Some((default_loc, frame_tys)) =
+                self.default_delegation(expr_id, &segments[1])?
         {
-            let current_pkg = baml_compiler2_hir::file_package::file_package(self.db, self.file);
-            let pkg_items = package_items(self.db, current_pkg.root);
-            if let Some(iface_loc) = resolve_ref_to_interface_loc(
-                self.db,
-                &target.type_refs,
-                target.target,
-                pkg_items,
-                &current_pkg.namespace_path,
-            )
-                // The callee IS the interface's default body: reference it by
-                // its declaration, the only key a
-                // body has. Restricted to DEFAULT-BODIED methods, mirroring
-                // TIR's `default_member`: a declared FIELD (possibly
-                // function-typed and called through the view) and a bodyless
-                // required method have no default body to reference, so the
-                // call FALLS THROUGH to ordinary lowering — the value road
-                // reads `default.<member>` as `self` viewed at the declaring
-                // interface — instead of silently dropping the call with its
-                // destination unassigned.
-                && let Some(default_loc) =
-                    baml_compiler2_hir::item_data::interface_data(self.db, iface_loc)
-                        .methods
-                        .iter()
-                        .copied()
-                        .find(|&loc| {
-                            baml_compiler2_hir::item_data::function_data(self.db, loc).name
-                                == segments[1]
-                                && baml_compiler2_hir::item_data::function_has_body(self.db, loc)
-                        })
-            {
-                let callee_op = Operand::Constant(Constant::Function(DeclRef::Source(default_loc)));
-                let Some(self_local) = self.self_local() else {
-                    return Ok(());
-                };
-                // Seed the default method's frame exactly as the runtime seeds
-                // an adopted default: `[Self ++ interface generics]` (the
-                // frame law on `MethodImpl` in `bex_vm_types`; also
-                // `enclosing_generic_params`), expressed over the enclosing
-                // impl's generic params. `Self` is the enclosing
-                // implements-block's subject, statically known at this call.
-                // Associated types are not frame slots: the default body's
-                // `Self.X` projection templates reduce through the impl's
-                // rule bindings at realization, so a short or shifted frame
-                // here would only misresolve `Self` and the interface params.
-                let frame_tys: Vec<Tir2Ty> = {
-                    let generic_params = self.enclosing_generic_params();
-                    let generic_param_bounds = self.enclosing_generic_param_bounds();
-                    // `implements_block_iface_target` gated entry to this
-                    // branch, and a recorded target pairs with a Class / Impl
-                    // owner by construction (both are written by the same HIR
-                    // builder call).
-                    let self_subject = self.implements_subject_tir_ty().ok_or_else(|| {
-                        self.internal_error(
-                            "`default.<method>()` outside an implements-block method",
-                            expr_id,
-                        )
-                    })?;
-                    // The target lowered whole (as the constraint head it is —
-                    // written pins only): its generic args.
-                    let iface_args = match lower_ref_in_scope_at(
-                        self.db,
-                        &target.type_refs,
-                        target.target,
-                        pkg_items,
-                        &current_pkg.namespace_path,
-                        &generic_params,
-                        &generic_param_bounds,
-                        None,
-                        baml_compiler2_hir_ty::lower::TypePosition::ConstraintHead,
-                    ) {
-                        Tir2Ty::Interface(_, args, _) => args.into_vec(),
-                        // A non-interface resolution was already diagnosed
-                        // upstream; seed the dimension it cannot supply
-                        // as absent.
-                        _ => Vec::new(),
-                    };
-                    let mut tys = Vec::with_capacity(1 + iface_args.len());
-                    tys.push(self_subject);
-                    tys.extend(iface_args);
-                    tys
-                };
-                let frame_type_arg_ops = self.emit_frame_type_arg_ops(&frame_tys);
-                let ntypeargs = frame_type_arg_ops.len();
-                let mut all_args = frame_type_arg_ops;
-                all_args.push(Operand::Copy(self.value_place(self_local)));
-                all_args.extend(self.lower_call_arg_operands(expr_id, args)?);
-                let argument_layout =
-                    self.call_argument_layout(expr_id, all_args.len() - ntypeargs)?;
-                let target = self.builder.create_block();
-                self.builder
-                    .call_with_type_args(callee_op, all_args, ntypeargs, dest, target);
-                self.builder.set_call_layout(argument_layout);
-                self.builder.set_current_block(target);
-                return Ok(());
-            }
+            let callee_op = Operand::Constant(Constant::Function(DeclRef::Source(default_loc)));
+            let Some(self_local) = self.self_local() else {
+                return Err(self.internal_error(
+                    "`default.<method>(..)` outside a method with `self`",
+                    expr_id,
+                ));
+            };
+            // The frame is the adopted default's `[Self ++ interface args]`
+            // followed by a generic default method's own arguments, written
+            // or inferred, as at any call.
+            let mut all_args = self.emit_frame_type_arg_ops(&frame_tys);
+            all_args.extend(self.lower_call_type_args(expr_id, true, None));
+            let ntypeargs = all_args.len();
+            all_args.push(Operand::Copy(self.value_place(self_local)));
+            all_args.extend(self.lower_call_arg_operands(expr_id, args)?);
+            let argument_layout = self.call_argument_layout(expr_id, all_args.len() - ntypeargs)?;
+            let target = self.builder.create_block();
+            self.builder
+                .call_with_type_args(callee_op, all_args, ntypeargs, dest, target);
+            self.builder.set_call_layout(argument_layout);
+            self.builder.set_current_block(target);
+            return Ok(());
         }
         // BEP-044: intercept Path forms whose final segment is a method
         // call on an interface-typed receiver.
@@ -8757,7 +8788,7 @@ impl<'db> LoweringContext<'db> {
             owner_prefix_tys
                 .iter()
                 .map(|ty_arg| {
-                    let template = self.inferred_ty_to_template(ty_arg, &generic_params);
+                    let template = self.ty_to_template(ty_arg, &generic_params);
                     let temp = self.builder.temp(RuntimeTy::type_type());
                     self.builder
                         .assign(Place::local(temp), Rvalue::LoadType(template));
@@ -9415,44 +9446,6 @@ impl<'db> LoweringContext<'db> {
         Some(self.ty_to_template(&emission_ty, &generic_params))
     }
 
-    /// [`Self::ty_to_template`] for a type read back from inference rather
-    /// than lowered from written syntax.
-    ///
-    /// Inference finalizes a slot it could not solve to an error-recovery
-    /// sentinel (`erase_infer` turns a still-free var into `Error`), and
-    /// runtime lowering treats a sentinel as a compiler bug and ICEs, so
-    /// widen it to the top type first — the same answer the adjacent
-    /// out-of-scope-type-variable case already gives.
-    ///
-    /// A type variable absent from `generic_params` is widened for the same
-    /// reason: `lower_tir_template` has no slot to point it at, and its
-    /// `TemplateMode::Value` arm treats that as a compiler bug
-    /// (`unreachable!("type variable not found in type args")`). This mirrors
-    /// the guard the inferred-call-argument loop below already applies.
-    ///
-    /// KNOWN GAP: the top type is right for a VALUE slot but wrong for an
-    /// EFFECT one, where the language's defaulting rule is `never`
-    /// (`default_unsolved_effects_to_never`, which only sees params named
-    /// `__effect_param_N` — a user-written `filter<E>(…) throws E` is missed).
-    /// Fixing that needs the callee's declared params here, or effect-position
-    /// classification for user-written params in inference; either way it is a
-    /// wrong ANSWER rather than the ICE this guard removes.
-    // BUG: widening an Error-recovery sentinel to `Unknown` launders a
-    // compile error into the top type (an unrecoverable check must stay
-    // `Error` so downstream diagnostics stay suppressed). An unsolved slot
-    // is a compile error and should never reach lowering.
-    fn inferred_ty_to_template(&self, ty: &Tir2Ty, generic_params: &[ParamTy]) -> TyTemplate {
-        let widened = if baml_type_runtime::contains_error_recovery(ty)
-            || baml_type_runtime::contains_typevar_where(ty, &|name| {
-                !generic_params.iter().any(|param| param == name)
-            }) {
-            Tir2Ty::Unknown
-        } else {
-            ty.clone()
-        };
-        self.ty_to_template(&widened, generic_params)
-    }
-
     /// Recursively convert a `Tir2Ty` to a `TyTemplate`.
     ///
     /// `Tir2Ty::TypeVar("T")` whose name appears at position `N` in
@@ -9775,26 +9768,14 @@ impl<'db> LoweringContext<'db> {
 
         // Inferred calls thread only the callable-owned suffix. The receiver
         // or interface dispatcher supplies the owner prefix separately.
+        // Every slot is solved in the caller's frame (an unsolved one is a
+        // compile error a checked world does not carry), so a type variable
+        // here names a frame slot; template lowering refuses one that does
+        // not.
         let mut inferred_type_args: Vec<_> = plan.type_args[plan.own_offset..]
             .iter()
             .map(|ty| ty.clone().widen_fresh())
             .collect();
-        let caller_generic_params = self.enclosing_generic_params();
-        for ty in &mut inferred_type_args {
-            // An unsolved slot finalizes to an error-recovery sentinel; that
-            // is the same "no static answer" case as an out-of-scope type
-            // variable (see `inferred_ty_to_template`), so widen it here too.
-            // BUG: same Error→Unknown laundering as `inferred_ty_to_template`;
-            // an unsolved slot is a compile error and should never reach
-            // lowering.
-            if baml_type_runtime::contains_error_recovery(ty)
-                || baml_type_runtime::contains_typevar_where(ty, &|name| {
-                    !caller_generic_params.iter().any(|param| param == name)
-                })
-            {
-                *ty = Tir2Ty::Unknown;
-            }
-        }
         if let Some(max_count) = max_count {
             inferred_type_args.truncate(max_count);
         }
@@ -9846,10 +9827,18 @@ impl<'db> LoweringContext<'db> {
             return Ok(());
         };
         let templates = self.planned_generic_apply_type_arg_templates(expr_id);
+        let value = Self::specialized_function(item, templates);
+        self.builder.assign(dest, value);
+        Ok(())
+    }
+
+    /// A function item specialized at `templates`: a pooled, interned
+    /// constant when every argument is concrete (pointer-stable identity -
+    /// each template narrows to the `RealizedTy` the runtime carries), else
+    /// a value built at runtime, resolving the templates against the
+    /// current frame (`foo<T>` inside a generic function).
+    fn specialized_function(item: FunctionRef<'db>, templates: Vec<TyTemplate>) -> Rvalue<'db> {
         if templates.iter().all(TyTemplate::is_fully_concrete) {
-            // Concrete args → pooled, interned compile-time constant
-            // (pointer-stable identity). Each template is fully concrete, so it
-            // narrows directly to a `RealizedTy` — the value the runtime carries.
             let concrete: Vec<RealizedTy> = templates
                 .iter()
                 .map(|t| {
@@ -9857,25 +9846,81 @@ impl<'db> LoweringContext<'db> {
                         .unwrap_or_else(|e| unreachable!("checked fully concrete: {e}"))
                 })
                 .collect();
-            self.builder.assign(
-                dest,
-                Rvalue::Use(Operand::Constant(Constant::GenericFunction {
-                    func: item,
-                    type_args: concrete,
-                })),
-            );
+            Rvalue::Use(Operand::Constant(Constant::GenericFunction {
+                func: item,
+                type_args: concrete,
+            }))
         } else {
-            // A type arg depends on an enclosing generic param (`foo<T>` inside
-            // a generic fn) → build the value at runtime, resolving the
-            // templates against the current frame's type_args.
-            self.builder.assign(
-                dest,
-                Rvalue::MakeGenericFunction {
-                    func: item,
-                    type_arg_templates: templates,
-                },
-            );
+            Rvalue::MakeGenericFunction {
+                func: item,
+                type_arg_templates: templates,
+            }
         }
+    }
+
+    /// The own type arguments TIR inferred for a generic function referenced
+    /// as a VALUE at `expr_id` (`let f: (int) -> int[] = wrap`, `xs.map(wrap)`,
+    /// `C.make`, `x.make`), as the templates the value carries. A value has
+    /// no call site to seed its frame, so a reference that leaves them off
+    /// runs the function with an empty frame. `None` when the reference
+    /// instantiates nothing of its own; written arguments (`wrap<int>`) ride
+    /// the generic-apply road instead.
+    fn inferred_value_type_arg_templates(&mut self, expr_id: AstExprId) -> Option<Vec<TyTemplate>> {
+        let plan = self.tir_call_plan(expr_id)?.clone();
+        if !plan.slots.is_empty() || plan.explicit {
+            return None;
+        }
+        let own = &plan.type_args[plan.own_offset..];
+        if own.is_empty() {
+            return None;
+        }
+        let generic_params = self.enclosing_generic_params();
+        Some(
+            own.iter()
+                .map(|ty| self.ty_to_template(&ty.clone().widen_fresh(), &generic_params))
+                .collect(),
+        )
+    }
+
+    /// The value of a function item referenced at `expr_id`: the pooled
+    /// function constant, specialized at the reference's inferred own type
+    /// arguments when it has any.
+    fn function_item_value(&mut self, expr_id: AstExprId, item: FunctionRef<'db>) -> Rvalue<'db> {
+        match self.inferred_value_type_arg_templates(expr_id) {
+            Some(templates) => Self::specialized_function(item, templates),
+            None => Rvalue::Use(Operand::Constant(Constant::Function(item))),
+        }
+    }
+
+    /// `dest = receiver.item` as a bound method value: the receiver
+    /// supplies the owner prefix of the frame, and the reference's inferred
+    /// own type arguments, when it has any, are appended to it.
+    fn assign_bound_method_value(
+        &mut self,
+        expr_id: AstExprId,
+        dest: Place,
+        item: FunctionRef<'db>,
+        receiver: Operand<'db>,
+    ) -> Lowered<()> {
+        let bound = Rvalue::MakeBoundMethod {
+            func: item,
+            receiver,
+            frame: crate::BoundFrame::Receiver,
+        };
+        let Some(type_arg_templates) = self.inferred_value_type_arg_templates(expr_id) else {
+            self.builder.assign(dest, bound);
+            return Ok(());
+        };
+        let bound_ty = self.expr_ty(expr_id)?;
+        let bound_local = self.builder.temp(bound_ty);
+        self.builder.assign(Place::local(bound_local), bound);
+        self.builder.assign(
+            dest,
+            Rvalue::MakeGenericFunctionFromValue {
+                value: Operand::Copy(Place::local(bound_local)),
+                type_arg_templates,
+            },
+        );
         Ok(())
     }
 
@@ -10367,13 +10412,7 @@ impl<'db> LoweringContext<'db> {
                     let item = resolution.callable(self.db);
                     if let Some(item) = item {
                         let receiver_op = self.lower_to_operand(base)?;
-                        self.builder.assign(
-                            dest,
-                            Rvalue::MakeBoundMethod {
-                                func: item,
-                                receiver: receiver_op,
-                            },
-                        );
+                        self.assign_bound_method_value(expr_id, dest, item, receiver_op)?;
                         return Ok(());
                     }
                 }
@@ -10385,10 +10424,8 @@ impl<'db> LoweringContext<'db> {
                     // Unbound method or free function reference: emit a plain function constant.
                     let item = resolution.callable(self.db);
                     if let Some(item) = item {
-                        self.builder.assign(
-                            dest,
-                            Rvalue::Use(Operand::Constant(Constant::Function(item))),
-                        );
+                        let value = self.function_item_value(expr_id, item);
+                        self.builder.assign(dest, value);
                         return Ok(());
                     }
                 }
@@ -11143,7 +11180,9 @@ impl<'db> LoweringContext<'db> {
             .tir_path_segment_type(callee, recv_ty_idx)
             .cloned()
             .map(|t| self.convert_tir_ty_for_runtime(&t))
-            .unwrap_or(RuntimeTy::Unknown);
+            .ok_or_else(|| {
+                self.internal_error("the checker recorded no type for a method receiver", callee)
+            })?;
         if receiver_segments.len() == 1 {
             return Ok(self.operand_to_local(Operand::Copy(recv_root), recv_ty));
         }
@@ -11869,9 +11908,10 @@ impl LoweringContext<'_> {
                 let else_ty = self.expr_ty(else_expr)?;
                 let else_dest = self.builder.temp(else_ty);
                 self.lower_expr(else_expr, Place::local(else_dest))?;
-                // If for any reason lowering produced a fall-through (e.g.
-                // recovery state with an Unknown-typed else), terminate the
-                // block with an unreachable so the CFG stays valid.
+                // The checker requires the `else` to diverge, but a diverging
+                // expression need not end its block with a terminator (a
+                // call typed `never` returns to a successor), so terminate
+                // it with an unreachable to keep the CFG valid.
                 if !self.builder.is_current_terminated() {
                     self.builder.unreachable();
                 }
@@ -12268,7 +12308,12 @@ impl LoweringContext<'_> {
                                 .path_root_ty(expr_id)
                                 .unwrap_or_else(|| self.builder.local_ty(local)),
                             Place::Deref(CellId::Capture(_)) => {
-                                self.path_root_ty(expr_id).unwrap_or(RuntimeTy::Unknown)
+                                self.path_root_ty(expr_id).ok_or_else(|| {
+                                    self.internal_error(
+                                        "the checker recorded no type for a captured path root",
+                                        expr_id,
+                                    )
+                                })?
                             }
                             Place::Capture(_) | Place::Field { .. } | Place::Index { .. } => {
                                 unreachable!("path roots are locals or the values in cells")
@@ -14090,10 +14135,26 @@ impl<'db> LoweringContext<'db> {
             } => {
                 let array_success = self.builder.create_block();
 
-                if let Some(tir_ty) = self.tir_pat_type(pat_id).cloned() {
-                    self.emit_is_tir_type_branch(scrutinee, &tir_ty, array_success, failure)?;
+                // The checker records the list members the pattern claims.
+                // Where each is a list type, the elements are typed by them,
+                // so the test is membership; where one may hold lists of any
+                // element (`unknown`, a type parameter, an interface
+                // existential), the pattern accepts any list and the test is
+                // the list head alone - never membership in `unknown[]`,
+                // which no `int[]` has.
+                let claimed = self.tir_pat_type(pat_id).ok_or_else(|| {
+                    self.internal_error_here("the checker recorded no type for a list pattern")
+                })?;
+                if is_union_of_list_types(claimed) {
+                    let claimed = claimed.clone();
+                    self.emit_is_tir_type_branch(scrutinee, &claimed, array_success, failure)?;
                 } else {
-                    self.builder.goto(array_success);
+                    self.emit_is_type_tag_branch(
+                        scrutinee,
+                        baml_type::typetag::LIST,
+                        array_success,
+                        failure,
+                    );
                 }
 
                 self.builder.set_current_block(array_success);
@@ -14895,6 +14956,18 @@ impl LoweringContext<'_> {
             bb_not_panic,
         );
         self.builder.set_current_block(bb_not_panic);
+    }
+}
+
+/// Whether `ty` is a list type or a union of list types: a list pattern's
+/// claim that one membership test decides.
+fn is_union_of_list_types(ty: &Tir2Ty) -> bool {
+    match ty {
+        Tir2Ty::List(_) => true,
+        Tir2Ty::Union(members) => members
+            .iter()
+            .all(|member| matches!(member, Tir2Ty::List(_))),
+        _ => false,
     }
 }
 

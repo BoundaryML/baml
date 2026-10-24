@@ -408,8 +408,9 @@ pub struct TyRef {
     /// the link target for cross-referencing.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub head: Option<String>,
-    /// `true` when the type carries a compiler sentinel — an `!error` or
-    /// `unknown` leaf. Consumers must not treat the display string as a real
+    /// `true` when the type carries a compiler sentinel — an `!error` leaf or
+    /// an unfilled `_` hole. A written `unknown` is the top type and is not
+    /// flagged. Consumers must not treat the display string as a real
     /// type. Deliberately-symbolic forms (`(Self as I).Member`, free type
     /// variables) are *not* flagged: they are the correct declaration-site
     /// types.
@@ -438,8 +439,8 @@ impl TyRef {
             display: baml_compiler2_hir_ty::render::Viewpoint::user_facing(db, viewer)
                 .labelled_text(ty),
             head,
-            // `RuntimeTy` excludes exactly the compiler-sentinel axis
-            // (`Error`/`Unknown`/`Infer`) while keeping symbolic
+            // `RuntimeTy` excludes exactly the compiler-only axes (the
+            // `Error` sentinel and the `Infer` hole) while keeping symbolic
             // projections and type variables — the precise "is this a real
             // type" oracle.
             unresolved: RuntimeTy::try_from(ty).is_err(),

@@ -101,7 +101,9 @@ function generic<T>(value: T) -> map<string, T> {
             }
         }
     }
-    let program = baml_db::compile_program(&db, db.workspace_root().unwrap(), OptLevel::Two)
+    let program = baml_db::CheckedWorld::collect(&db, db.workspace_root().unwrap())
+        .expect("the world checks")
+        .compile(OptLevel::Two)
         .expect("compile yielding map operations");
     for object in &program.objects {
         let bex_vm_types::Object::Function(function) = object else {
@@ -154,7 +156,9 @@ function roundtrip(value: int) -> bool {
     assert!(!output.contains("virtual_call"), "{output}");
     assert!(!output.contains("make_virtual_function"), "{output}");
     assert!(!output.contains("equals_equals"), "{output}");
-    let program = baml_db::compile_program(&db, db.workspace_root().unwrap(), OptLevel::Two)
+    let program = baml_db::CheckedWorld::collect(&db, db.workspace_root().unwrap())
+        .expect("the world checks")
+        .compile(OptLevel::Two)
         .expect("compile direct calls");
     let function = program
         .objects
@@ -586,7 +590,7 @@ fn optional_dropping_function_value() {
         }
 
         function main() -> int {
-          let f: (x: int, b?: int) -> int = combine;
+          let f: (x: int, b?: int) -> int throws never = combine;
           f(1, b = 5)
         }
         "#,
@@ -656,12 +660,14 @@ fn json_container_arms_test_only_the_runtime_tag() {
 /// An element-specific arm stays element-precise on a `json` scrutinee: its
 /// list member is `json[]`, so the `LIST` tag alone cannot prove `int[]`.
 #[test]
-fn json_scrutinee_keeps_element_specific_arms_structural() {
+fn element_specific_list_arms_stay_structural() {
     let mut db = make_db();
+    // An `unknown` scrutinee may hold a list of any element type, so only an
+    // element-precise test tells an `int[]` from a `string[]`.
     let file = db.file(
         "test.baml",
         r#"
-        function ints(value: json) -> int {
+        function ints(value: unknown) -> int {
             match (value) {
                 let xs: int[] => xs.length(),
                 _ => 0,

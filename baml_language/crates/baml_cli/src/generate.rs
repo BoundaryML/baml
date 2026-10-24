@@ -427,7 +427,7 @@ impl GenerateArgs {
         reporter.spin("Compiling", format!("{} file(s)", source_files.len()));
         let program = db
             .get_bytecode(package)
-            .map_err(|e| anyhow!("compilation failed: {e:?}"))?;
+            .map_err(|e| anyhow!("compilation failed: {e}"))?;
         let baml_bytecode = baml_artifact::encode(baml_artifact::ArtifactKind::Program, &program)
             .map_err(|e| anyhow!("failed to serialize BAML bytecode: {e}"))?;
         if let Some(provisioning) = provisioning {

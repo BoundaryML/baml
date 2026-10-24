@@ -10645,6 +10645,30 @@ impl BexVm {
                         self.stack.push(Value::object(ptr));
                     }
 
+                    // ── MakeGenericBoundMethod ────────────────────────────────────
+                    // The bound method whose frame the reference site supplies:
+                    // an interface's default body bound to `self` (`default.m`
+                    // as a value), whose `[Self, interface args..]` frame the
+                    // receiver's class args cannot express.
+                    // Stack (top last): `[type_args…, receiver]`.
+                    OpCode::MakeGenericBoundMethod => {
+                        let raw = { read_u32_unchecked(code, pc) };
+                        let global_idx = bex_vm_types::GlobalIndex::from_raw(raw as usize);
+                        let ntypeargs = { read_u16_unchecked(code, pc) as usize };
+                        let receiver = self.stack.ensure_pop();
+                        let type_args = self.pop_type_args(ntypeargs)?;
+                        let callee_value = self.load_global_in(runtime_package, global_idx);
+                        let function_ptr =
+                            self.as_object_ptr(callee_value, FunctionType::Callable.into())?;
+                        let bound = Object::BoundMethod(BoundMethod {
+                            function: function_ptr,
+                            receiver,
+                            type_args: type_args.tys.into_boxed_slice(),
+                        });
+                        let ptr = self.tlab.alloc(bound);
+                        self.stack.push(Value::object(ptr));
+                    }
+
                     // ── MakeVirtualBoundMethod ────────────────────────────────────
                     // The value analogue of `VirtualCall`: resolve the interface
                     // method from the receiver's concrete `Self` at *bind* time (the

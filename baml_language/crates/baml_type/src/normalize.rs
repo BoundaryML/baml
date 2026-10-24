@@ -381,9 +381,9 @@ pub trait TypeContext<H: Head = DeclName> {
     /// Recursive Types): equality holds across alias renaming
     /// (`type A = int | A[]` ≡ `type B = int | B[]`), finite unfolding depth,
     /// and mutually recursive definitions. The residual divergences from mutual
-    /// subtyping are deliberate: the error-recovery sentinels (`Unknown`/`Error`
-    /// are bidirectionally *compatible* with everything but equivalent only to
-    /// themselves), and fact sets with a mutual `requires` cycle (mutual
+    /// subtyping are deliberate: the error-recovery sentinel (`Error` is
+    /// bidirectionally *compatible* with everything but equivalent only to
+    /// itself), and fact sets with a mutual `requires` cycle (mutual
     /// subtypes as existentials, nominally distinct — rejected in well-formed
     /// programs by the interface `requires`-cycle check).
     fn equivalent(&self, a: &Ty<H>, b: &Ty<H>) -> bool
@@ -872,8 +872,8 @@ impl<H: Head> NormalTy<H> {
     /// than a placeholder that could still resolve to something else. Only ground
     /// arguments make two generic instantiations *provably* distinct.
     ///
-    /// The non-ground cases are the error-recovery sentinels (`Unknown`, `Error`)
-    /// and the not-yet-resolved variables (a generic `TypeVar`, an unresolved
+    /// The non-ground cases are the error-recovery sentinel (`Error`) and the
+    /// not-yet-resolved variables (a generic `TypeVar`, an unresolved
     /// `AssociatedTypeProjection`, an `OpaqueAlias`) — each could later stand for
     /// the same type as the other side. The `unknown` top type (`Unknown`)
     /// is *not* one of these: it is user-written and fully determined, so
@@ -1835,9 +1835,9 @@ impl<H: Head> NormalTy<H> {
     /// BAML (type arguments are real instance data), so `T<A>` relates to `T<B>`
     /// only when every `A`/`B` pair is compatible here.
     ///
-    /// Error-recovery sentinels (`Unknown`, `Error`) satisfy this either way via
-    /// [`Self::is_subtype_of`]'s bidirectional escape, so a hole argument still
-    /// matches anything. The `unknown` top type does *not* — it is a real,
+    /// The error-recovery sentinel (`Error`) satisfies this either way via
+    /// [`Self::is_subtype_of`]'s bidirectional escape, so an erroneous argument
+    /// still matches anything. The `unknown` top type does *not* — it is a real,
     /// distinct argument (`Box<unknown>` is not `Box<int>`).
     fn invariant_compatible<C: TypeContext<H>>(
         &self,
@@ -3052,10 +3052,8 @@ impl NormalTy {
 /// (`interned::InferTy::Class(DeclName, ..)`), so this whole ingestion path is
 /// fixed at `H = DeclName`; only the μ-phase varies.
 impl NormalTy<DeclName, Named> {
-    /// [`NormalTy::from_ty`], mirrored over `interned::InferTy`. The one
-    /// naming trap: the interned `Unknown` is the TOP type (the plain enum's
-    /// `Unknown`); TIR's `Unknown` recovery sentinel is
-    /// unrepresentable in the interned form by design.
+    /// [`NormalTy::from_ty`], mirrored over `interned::InferTy`; the interned
+    /// `Unknown` is the top type, as the plain enum's is.
     fn from_interned<C: TypeContext>(
         ty: &interned::Ty,
         ctx: &C,

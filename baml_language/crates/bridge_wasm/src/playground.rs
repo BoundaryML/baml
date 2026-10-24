@@ -132,11 +132,11 @@ fn check_workspace_root(state: &GlobalState) -> Option<RootCheck> {
         if candidate.has_errors() {
             return Some(check);
         }
-        // The check above is a full sweep of the root, so `get_bytecode`'s own
-        // error gate would re-derive what `has_errors` just proved.
-        match snap.db().get_bytecode_unchecked(entry.root) {
+        // The check above swept the root's own files; `get_bytecode` checks
+        // the whole world (the root and its dependencies) before it emits.
+        match snap.db().get_bytecode(entry.root) {
             Ok(program) => check.program = Some(Box::new(program)),
-            Err(error) => check.emit_error = Some(error.to_string()),
+            Err(error) => check.emit_error = Some(error.describe(snap.db())),
         }
         Some(check)
     })

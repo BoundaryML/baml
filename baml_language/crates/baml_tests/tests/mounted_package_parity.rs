@@ -5,7 +5,7 @@
 //! The BLOB path compiles `app` independently into its check artifact (borsh of
 //! `PackageInterface`) and run artifact (its `EmittedPackage`), then mounts the
 //! former in a fresh source-less consumer database and links the latter through
-//! `compile_program_with`, served for the mount.
+//! `CheckedWorld::compile_with`, served for the mount.
 //!
 //! The oracle pins four boundaries:
 //!
@@ -28,8 +28,8 @@ use baml_base::Name;
 use baml_compiler2_emit::{OptLevel, emit_package};
 use baml_compiler2_hir_ty::package_interface::{ExportedType, WireInterface, export_interface};
 use baml_db::{
-    EmittedPackage, PackageCache, ProjectDatabase, collect_diagnostics, compile_program,
-    compile_program_with, testing::assert_no_diagnostic_errors,
+    CheckedWorld, EmittedPackage, PackageCache, ProjectDatabase, collect_diagnostics,
+    testing::assert_no_diagnostic_errors,
 };
 use baml_tests::engine::{TestDbExt, run_compiled};
 use bex_engine::BexExternalValue;
@@ -239,7 +239,10 @@ fn blob_db(user: &str, blob: Vec<u8>) -> ProjectDatabase {
 fn compile_source(user: &str) -> Program {
     let db = source_db(user);
     assert_no_diagnostic_errors(&db);
-    compile_program(&db, package(&db), OPT).expect("source-path compile")
+    CheckedWorld::collect(&db, package(&db))
+        .expect("the world checks")
+        .compile(OPT)
+        .expect("source-path compile")
 }
 
 fn compile_blob(user: &str, artifacts: &LibraryArtifacts) -> Program {
@@ -249,7 +252,10 @@ fn compile_blob(user: &str, artifacts: &LibraryArtifacts) -> Program {
         root: db.dependency_named("app"),
         app: &artifacts.emitted,
     };
-    compile_program_with(&db, package(&db), OPT, &served).expect("blob-path compile and link")
+    CheckedWorld::collect(&db, package(&db))
+        .expect("the world checks")
+        .compile_with(OPT, &served)
+        .expect("blob-path compile and link")
 }
 
 /// A program's bytes with every database-local debug `FileId` normalized:
@@ -312,7 +318,9 @@ fn a_mounted_dependency_without_served_output_is_refused_by_name() {
     let artifacts = library_artifacts();
     let db = blob_db(WIDGET_CONSUMER, artifacts.blob.clone());
     assert_no_diagnostic_errors(&db);
-    let error = compile_program_with(&db, package(&db), OPT, &baml_db::NoCache)
+    let error = CheckedWorld::collect(&db, package(&db))
+        .expect("the world checks")
+        .compile_with(OPT, &baml_db::NoCache)
         .expect_err("nothing serves `app`");
     assert!(
         matches!(
@@ -717,7 +725,9 @@ fn a_consumer_compiled_against_a_mutated_interface_is_refused() {
         root: db.dependency_named("app"),
         app: &artifacts.emitted,
     };
-    let error = compile_program_with(&db, package(&db), OPT, &served)
+    let error = CheckedWorld::collect(&db, package(&db))
+        .expect("the world checks")
+        .compile_with(OPT, &served)
         .expect_err("a consumer of another interface must not link");
     assert_interface_mismatch(error);
 }
@@ -736,7 +746,9 @@ fn a_served_output_carrying_another_interface_is_refused() {
         root: db.dependency_named("app"),
         app: &stale,
     };
-    let error = compile_program_with(&db, package(&db), OPT, &served)
+    let error = CheckedWorld::collect(&db, package(&db))
+        .expect("the world checks")
+        .compile_with(OPT, &served)
         .expect_err("a stale served output must not link");
     assert_interface_mismatch(error);
     // The honest pairing links.
@@ -744,5 +756,8 @@ fn a_served_output_carrying_another_interface_is_refused() {
         root: db.dependency_named("app"),
         app: &artifacts.emitted,
     };
-    compile_program_with(&db, package(&db), OPT, &served).expect("the real output links");
+    CheckedWorld::collect(&db, package(&db))
+        .expect("the world checks")
+        .compile_with(OPT, &served)
+        .expect("the real output links");
 }

@@ -91,3 +91,12 @@ source: crates/baml_tests/src/generated_tests.rs
  18 │   f(2)
     ·     ─
     ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[unsupported_contexts.baml:26:23]
+ 26 │   let f: NamedLimit = Filtered
+    ·                       ────┬───
+    ·                           ╰── expected `NamedLimit`, found `(query: string, filter?: string | null) -> int throws never`
+    ╰────

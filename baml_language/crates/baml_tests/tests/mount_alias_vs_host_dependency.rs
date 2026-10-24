@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use baml_base::{Dependency, Name, SourceRootKind};
 use baml_compiler2_emit::OptLevel;
-use baml_db::{ProjectDatabase, SourceRootSpec, compile_program};
+use baml_db::{CheckedWorld, ProjectDatabase, SourceRootSpec};
 use baml_tests::engine::TestDbExt;
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use sys_native::SysOpsExt;
@@ -38,7 +38,7 @@ async fn a_mount_alias_equal_to_a_host_package_spelling_binds_the_mount() {
     db.file(
         "main.baml",
         r#"
-function go() -> string throws never {
+function go() -> string {
     let mounted = reflect.Package.compile({ "m.baml": `function tag() -> string throws never { "mount" }` });
     let consumer = reflect.Package.compile(
         { "main.baml": `function go() -> string throws never { app.tag() }` },
@@ -49,8 +49,10 @@ function go() -> string throws never {
 }
 "#,
     );
-    let program =
-        compile_program(&db, workspace, OptLevel::Two).expect("the host program compiles");
+    let program = CheckedWorld::collect(&db, workspace)
+        .expect("the world checks")
+        .compile(OptLevel::Two)
+        .expect("the host program compiles");
     let engine = Arc::new(
         BexEngine::new_with_runtime_compiler(
             program,

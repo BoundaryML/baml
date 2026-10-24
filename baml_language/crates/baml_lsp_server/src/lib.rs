@@ -978,7 +978,7 @@ mod tests {
              start.elapsed().to_milliseconds() >= 0n\n}\n",
         );
         let program = db
-            .get_bytecode_unchecked(root)
+            .get_bytecode(root)
             .unwrap_or_else(|e| unreachable!("the fixture compiles: {e}"));
 
         let engine = Arc::new(
@@ -1193,7 +1193,7 @@ mod tests {
                  baml.fs.read(\"note.txt\")\n}\n",
             );
             let program = db
-                .get_bytecode_unchecked(package)
+                .get_bytecode(package)
                 .unwrap_or_else(|e| unreachable!("the fixture compiles: {e}"));
             let engine = engine::construct_engine_candidate(
                 program,

@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use baml_base::{Dependency, LangPackage, Name};
-use baml_db::{OptLevel, ProjectDatabase, SourceRootKind, SourceRootSpec, compile_program};
+use baml_db::{CheckedWorld, OptLevel, ProjectDatabase, SourceRootKind, SourceRootSpec};
 use baml_tests::engine::TestDbExt;
 use bex_engine::{BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder};
 use bex_vm_types::{
@@ -43,7 +43,10 @@ async fn call(engine: &Arc<BexEngine>, name: &str) -> Result<BexExternalValue, E
 async fn a_root_without_files_is_still_the_program_root() {
     let mut db = ProjectDatabase::new();
     let root = db.workspace(std::path::Path::new("/viewpoint/empty"));
-    let program = compile_program(&db, root, OptLevel::Two).expect("an empty root compiles");
+    let program = CheckedWorld::collect(&db, root)
+        .expect("the world checks")
+        .compile(OptLevel::Two)
+        .expect("an empty root compiles");
     let root_package = &program.packages[program.root as usize];
     assert!(root_package.globals.is_empty() && root_package.classes.is_empty());
     assert!(
@@ -82,7 +85,10 @@ fn function_metadata_is_spelled_from_the_package_root() {
         "/viewpoint/metadata/ns_util/main.baml",
         "class Bar { y int }\nfunction make(f: root.Foo) -> Bar { Bar { y: f.x } }\n",
     );
-    let program = compile_program(&db, workspace, OptLevel::Two).expect("compiles");
+    let program = CheckedWorld::collect(&db, workspace)
+        .expect("the world checks")
+        .compile(OptLevel::Two)
+        .expect("compiles");
     let make = program
         .objects
         .iter()
@@ -147,7 +153,10 @@ async fn a_host_names_a_dependency_as_the_root_reaches_it() {
         "function main() -> int { gadgets.f() }\n",
     );
 
-    let program = compile_program(&db, workspace, OptLevel::Two).expect("the world compiles");
+    let program = CheckedWorld::collect(&db, workspace)
+        .expect("the world checks")
+        .compile(OptLevel::Two)
+        .expect("the world compiles");
     let root = &program.packages[program.root as usize];
     let edge_to = |name: &str| {
         root.edges
@@ -236,7 +245,7 @@ async fn a_finalizer_runs_for_a_class_no_host_name_reaches() {
 class Deep {
   log string[]
   function cleanup(self) -> void {
-    self.log.push("core")
+    self.log.push("core");
   }
 }
 function make(log: string[]) -> Deep { Deep { log: log } }
@@ -248,7 +257,7 @@ function make(log: string[]) -> Deep { Deep { log: log } }
 class Near {
   log string[]
   function cleanup(self) -> void {
-    self.log.push("lib")
+    self.log.push("lib");
   }
 }
 function make(log: string[]) -> Near { Near { log: log } }
@@ -266,7 +275,10 @@ function touch(log: string[]) -> void { gadgets.touch(log) }
 function read_log(log: string[]) -> string[] { log }
 "#,
     );
-    let program = compile_program(&db, workspace, OptLevel::Two).expect("the world compiles");
+    let program = CheckedWorld::collect(&db, workspace)
+        .expect("the world checks")
+        .compile(OptLevel::Two)
+        .expect("the world compiles");
     let engine = engine(program);
     let call = |name: &'static str, args: Vec<BexExternalValue>, copy_objects: bool| {
         let engine = Arc::clone(&engine);

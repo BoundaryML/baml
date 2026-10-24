@@ -15,15 +15,13 @@ use baml_compiler_diagnostics::{
 };
 use baml_compiler_lexer::{TokenKind, lex_lossless};
 use baml_compiler_syntax::{BlockElement, BlockExpr, SyntaxKind, SyntaxNode};
-use baml_compiler2_emit::{OptLevel, emit_package, emit_session_submission};
+use baml_compiler2_emit::OptLevel;
 use baml_compiler2_hir::{
     body::{BodyOwnerId, LetBody, let_body},
     contributions::Definition,
 };
-use baml_compiler2_hir_ty::package_interface::{
-    PackageInterface, WireInterface, export_interface, interface_digest,
-};
-use baml_db::{Dependency, ProjectDatabase, SourceRootSpec, collect_diagnostics};
+use baml_compiler2_hir_ty::package_interface::{PackageInterface, WireInterface, interface_digest};
+use baml_db::{CheckedWorld, Dependency, ProjectDatabase, ProjectDiagnostics, SourceRootSpec};
 use baml_type::{
     TypeName, WireName,
     wire::{DepSlot, Digest, Locator},
@@ -1890,10 +1888,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             }
         }
 
-        let mut diagnostics: Vec<_> = collect_diagnostics(&db)
-            .iter()
-            .map(|diagnostic| owned_diagnostic(&db, diagnostic, session_request.is_some()))
-            .collect();
+        let mut collected = ProjectDiagnostics::collect(&db);
         // A step whose value is typed by a session binding cannot leave its
         // block as written; only the compiler knows which steps those are, so
         // the first compile finds them (E0172 at the step) and one re-lower
@@ -1909,8 +1904,14 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
         if let (Some(request), Some(lowered), Some(compile)) =
             (&session_request, &lowered_session, session.as_mut())
         {
-            let erase = steps_publishing_a_binding(&diagnostics, &request.submission_name, lowered);
+            let owned: Vec<_> = collected
+                .iter()
+                .map(|diagnostic| owned_diagnostic(&db, diagnostic, true))
+                .collect();
+            let erase = steps_publishing_a_binding(&owned, &request.submission_name, lowered);
             if !erase.is_empty() {
+                // The edit below ends the collection's revision.
+                drop(collected);
                 let relowered = lower_session_submission(request, &erase)?;
                 db.add_session_file_in(
                     workspace,
@@ -1919,18 +1920,18 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
                 );
                 compile.artifact = relowered.artifact;
                 compile.result_name = relowered.result_name;
-                diagnostics = collect_diagnostics(&db)
-                    .iter()
-                    .map(|diagnostic| owned_diagnostic(&db, diagnostic, session_request.is_some()))
-                    .collect();
+                collected = ProjectDiagnostics::collect(&db);
             }
         }
-        if diagnostics
+        let diagnostics: Vec<_> = collected
             .iter()
-            .any(|diagnostic| diagnostic.severity == RuntimeDiagnosticSeverity::Error)
-        {
+            .map(|diagnostic| owned_diagnostic(&db, diagnostic, session_request.is_some()))
+            .collect();
+        // The one gate: the world's check decides, and a refused world
+        // reports every diagnostic the collection made.
+        let Ok(world) = CheckedWorld::check(&collected, workspace) else {
             return Err(diagnostics);
-        }
+        };
 
         if let Some(session) = &session
             && !matches!(
@@ -2014,7 +2015,7 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
             }
         }
 
-        let interface = export_interface(&db, workspace);
+        let interface = world.export_interface();
         let interface_blob =
             baml_artifact::encode(baml_artifact::ArtifactKind::PackageInterface, &interface)
                 .map_err(|error| {
@@ -2038,15 +2039,16 @@ impl RuntimeCompiler for ProjectRuntimeCompiler {
         let opt = OPT_LEVEL;
         let (emitted, kind) = match session {
             None => (
-                emit_package(&db, workspace, opt).map_err(emit_error)?,
+                world.emit_package(opt).map_err(emit_error)?,
                 ArtifactKind::Package,
             ),
             Some(mut session) => {
                 let file = submission_file.unwrap_or_else(|| {
                     unreachable!("the session's submission is among the files it compiles")
                 });
-                let submission =
-                    emit_session_submission(&db, workspace, file, opt).map_err(emit_error)?;
+                let submission = world
+                    .emit_session_submission(file, opt)
+                    .map_err(emit_error)?;
                 session.artifact.initializers = submission.initializers;
                 (
                     submission.package,

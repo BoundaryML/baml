@@ -1,0 +1,28 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+// A sub-pattern on a field typed by a projection on the class parameter is
+// judged against the type the projection reduces to at the pattern's
+// arguments.
+
+interface HasOut {
+    type Out;
+}
+
+class IntOut {
+    implements HasOut {
+        type Out = int;
+    }
+}
+
+class Holder<T extends HasOut> {
+    v: T.Out,
+}
+
+// `Holder<IntOut>.v` is an `int`: a `string` binding there never matches.
+function string_binding_on_an_int_field(h: Holder<IntOut>) -> int {
+    match (h) {
+        Holder<IntOut> { v: let s: string } => 1,
+        _ => 0,
+    }
+}

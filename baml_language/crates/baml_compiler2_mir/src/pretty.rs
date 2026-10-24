@@ -676,12 +676,20 @@ fn write_rvalue(f: &mut impl Write, db: &dyn crate::Db, rvalue: &Rvalue<'_>) -> 
             }
             write!(f, ")")
         }
-        Rvalue::MakeBoundMethod { func, receiver } => {
+        Rvalue::MakeBoundMethod {
+            func,
+            receiver,
+            frame,
+        } => {
             write!(
                 f,
-                "make_bound_method {}(",
+                "make_bound_method {}",
                 crate::lower::function_display_name(db, *func)
             )?;
+            if let crate::BoundFrame::Explicit(type_arg_templates) = frame {
+                write!(f, "<{}>", Names::of(db).templates(type_arg_templates))?;
+            }
+            write!(f, "(")?;
             write_operand(f, db, receiver)?;
             write!(f, ")")
         }

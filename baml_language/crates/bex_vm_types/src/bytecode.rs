@@ -1084,6 +1084,24 @@ pub enum Instruction {
     /// others are free. As for a generic parameter's bound, only a concrete
     /// type can satisfy it.
     SatisfiesBound,
+
+    /// Create a bound method from a global function index and a receiver,
+    /// with the callee's frame type arguments supplied by the reference site
+    /// instead of curried from the receiver: pops the receiver, then
+    /// `ntypeargs` `Object::Type` values, and pushes an `Object::BoundMethod`
+    /// whose `type_args` are exactly those types. The form that binds an
+    /// interface's default body to `self` inside an `implements` block
+    /// (`default.m` as a value), whose `[Self, interface args..]` frame the
+    /// receiver's class arguments cannot express.
+    ///
+    /// Stack: `[type_args..., receiver]` -> `[bound_method]`
+    MakeGenericBoundMethod {
+        /// Global index of the function.
+        function: GlobalIndex,
+        /// Number of `Object::Type` values on the stack (below the receiver)
+        /// to pop into `type_args`.
+        ntypeargs: u16,
+    },
 }
 
 /// Compact bytecode opcodes.
@@ -1302,6 +1320,9 @@ pub enum OpCode {
     // The `let type` bound check, appended to preserve serialized
     // discriminants.
     SatisfiesBound,
+    // Bound method over an explicit frame (u32 function global + u16
+    // ntypeargs), appended to preserve serialized discriminants.
+    MakeGenericBoundMethod,
 }
 
 impl OpCode {
@@ -1448,7 +1469,11 @@ impl OpCode {
             | Self::TraceHookRich
             | Self::TraceHookEmptySpan
             | Self::SatisfiesBound => 1,
-            Self::AllocInstance | Self::Call | Self::CallExactArgs | Self::MakeGenericFunction => 7,
+            Self::AllocInstance
+            | Self::Call
+            | Self::CallExactArgs
+            | Self::MakeGenericFunction
+            | Self::MakeGenericBoundMethod => 7,
 
             // 9-byte: opcode + u32 + u16 + u16 (closure with capture+typearg counts)
             Self::MakeClosure => 9,
@@ -1607,6 +1632,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::TraceHookRich as u8 => Ok(Self::TraceHookRich),
             x if x == Self::TraceHookEmptySpan as u8 => Ok(Self::TraceHookEmptySpan),
             x if x == Self::SatisfiesBound as u8 => Ok(Self::SatisfiesBound),
+            x if x == Self::MakeGenericBoundMethod as u8 => Ok(Self::MakeGenericBoundMethod),
 
             x if x == Self::CallExactArgs as u8 => Ok(Self::CallExactArgs),
             x if x == Self::SetCallTrace as u8 => Ok(Self::SetCallTrace),
@@ -1756,6 +1782,7 @@ impl std::fmt::Display for OpCode {
             Self::JumpTable => "JUMP_TABLE",
             Self::MakeClosure => "MAKE_CLOSURE",
             Self::MakeGenericFunction => "MAKE_GENERIC_FUNCTION",
+            Self::MakeGenericBoundMethod => "MAKE_GENERIC_BOUND_METHOD",
             Self::MakeGenericFunctionFromValue => "MAKE_GENERIC_FUNCTION_FROM_VALUE",
             Self::LoadVar2 => "LOAD_VAR2",
             Self::StoreVar2 => "STORE_VAR2",
@@ -1958,6 +1985,15 @@ impl std::fmt::Display for Instruction {
                 ntypeargs,
             } => {
                 write!(f, "MAKE_GENERIC_FUNCTION {function} ntypeargs={ntypeargs}")
+            }
+            Instruction::MakeGenericBoundMethod {
+                function,
+                ntypeargs,
+            } => {
+                write!(
+                    f,
+                    "MAKE_GENERIC_BOUND_METHOD {function} ntypeargs={ntypeargs}"
+                )
             }
             Instruction::MakeGenericFunctionFromValue { ntypeargs } => {
                 write!(f, "MAKE_GENERIC_FUNCTION_FROM_VALUE ntypeargs={ntypeargs}")
@@ -2614,8 +2650,13 @@ impl Bytecode {
                     code.extend_from_slice(&ntypeargs.to_le_bytes());
                 }
 
-                // ── MakeGenericFunction: u32 function + u16 ntypeargs ─
+                // ── MakeGenericFunction / MakeGenericBoundMethod: u32
+                // function + u16 ntypeargs ─
                 Instruction::MakeGenericFunction {
+                    function,
+                    ntypeargs,
+                }
+                | Instruction::MakeGenericBoundMethod {
                     function,
                     ntypeargs,
                 } => {
@@ -3062,6 +3103,7 @@ impl Bytecode {
             Instruction::JumpTable(_) => OpCode::JumpTable,
             Instruction::MakeClosure { .. } => OpCode::MakeClosure,
             Instruction::MakeGenericFunction { .. } => OpCode::MakeGenericFunction,
+            Instruction::MakeGenericBoundMethod { .. } => OpCode::MakeGenericBoundMethod,
             Instruction::MakeGenericFunctionFromValue { .. } => {
                 OpCode::MakeGenericFunctionFromValue
             }

@@ -129,17 +129,13 @@ pub fn callable_throws<'db>(
                 .clone(),
         );
     }
-    let data = baml_compiler2_hir::item_data::elaborated_function_data(db, function);
-    if let Some(throws_ref) = data.throws {
-        let frame = crate::lower::function_generic_frame(db, function);
-        let ctx = crate::lower::lower_ctx_for_file(db, function.file(db)).with_frame(frame);
-        let lowered = ctx.lower_type_ref(&data.type_refs, throws_ref);
-        // A PARTIAL clause (`throws T | _`, spec Functions rule 3) keeps
-        // inferring: fall through to the body run, whose finalize unions
-        // the named members with the inferred set.
-        if !crate::lower::throws_clause_parts(&lowered).1 {
-            return CallableThrows(crate::lower::reject_holes(&lowered));
-        }
+    // A CLOSED clause is the function's effect as written. A partial or
+    // omitted one keeps inferring: the body run's finalize unions any named
+    // members with the inferred set.
+    if let crate::lower::DeclaredThrows::Closed(declared) =
+        crate::lower::declared_throws(db, function)
+    {
+        return CallableThrows(declared.clone());
     }
     let result = crate::infer::infer_body(
         db,

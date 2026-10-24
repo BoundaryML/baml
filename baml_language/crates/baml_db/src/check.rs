@@ -195,14 +195,60 @@ pub fn check_files_parallel(db: &ProjectDatabase, files: &[SourceFile]) -> Vec<V
     slots.into_iter().map(Option::unwrap_or_default).collect()
 }
 
+/// The project's diagnostics as one of this crate's collectors produced them
+/// ([`Self::collect`], or a narrowed collection's
+/// [`NarrowedDiagnostics::merged`]): the only evidence
+/// [`crate::CheckedWorld::check`] accepts. It borrows the database, so no
+/// edit can land between the collection and the check; nothing outside this
+/// crate can build one from an arbitrary list.
+pub struct ProjectDiagnostics<'db> {
+    db: &'db ProjectDatabase,
+    diagnostics: Vec<Diagnostic>,
+}
+
+impl<'db> ProjectDiagnostics<'db> {
+    /// Every file's diagnostics and the package-level ones
+    /// ([`collect_compiler2_diagnostics`]).
+    pub fn collect(db: &'db ProjectDatabase) -> Self {
+        Self {
+            db,
+            diagnostics: collect_compiler2_diagnostics(db),
+        }
+    }
+
+    /// The database the diagnostics were collected from.
+    pub fn db(&self) -> &'db ProjectDatabase {
+        self.db
+    }
+
+    pub fn into_vec(self) -> Vec<Diagnostic> {
+        self.diagnostics
+    }
+}
+
+impl std::fmt::Debug for ProjectDiagnostics<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(&self.diagnostics).finish()
+    }
+}
+
+impl std::ops::Deref for ProjectDiagnostics<'_> {
+    type Target = [Diagnostic];
+
+    fn deref(&self) -> &[Diagnostic] {
+        &self.diagnostics
+    }
+}
+
 /// The per-checked-file split alongside the merged, honest-ordered set produced
 /// by [`collect_compiler2_diagnostics_narrowed`].
-pub struct NarrowedDiagnostics {
+pub struct NarrowedDiagnostics<'db> {
     /// Merged set: freshly-checked files' diagnostics, the caller-supplied
     /// clean-file `precomputed`, and the always-recomputed package-level
     /// diagnostics — sorted by the same comparator as the honest collector, so
-    /// it renders byte-identically to a full run.
-    pub merged: Vec<Diagnostic>,
+    /// it renders byte-identically to a full run. The `precomputed` rows are
+    /// the caller's to vouch for: a store that serves them answers for them.
+    pub merged: ProjectDiagnostics<'db>,
     /// Only the diagnostics `check_file` freshly produced for the checked
     /// files. Excludes `precomputed` and the package-level set, so it is exactly
     /// what the caller persists per dirty file (the package-level set is never
@@ -218,11 +264,11 @@ pub struct NarrowedDiagnostics {
 /// conflicts/shadows are always recomputed. The final sort re-runs on
 /// current-process `FileId`s, so the merged set renders byte-identically to the
 /// honest collector when `should_check` is all-true and `precomputed` is empty.
-pub fn collect_compiler2_diagnostics_narrowed(
-    db: &ProjectDatabase,
+pub fn collect_compiler2_diagnostics_narrowed<'db>(
+    db: &'db ProjectDatabase,
     should_check: &dyn Fn(SourceFile) -> bool,
     precomputed: Vec<Diagnostic>,
-) -> NarrowedDiagnostics {
+) -> NarrowedDiagnostics<'db> {
     let source_files = baml_compiler2_hir::compiler2_all_files(db);
     // Even a fully-served (zero-checked-files) collection ends in
     // `package_level_diagnostics`, which derives the whole-package aggregates
@@ -257,7 +303,13 @@ pub fn collect_compiler2_diagnostics_narrowed(
     merged.extend(precomputed);
     merged.extend(package_level_diagnostics(db, &source_files));
     sort_diagnostics(&mut merged);
-    NarrowedDiagnostics { merged, fresh }
+    NarrowedDiagnostics {
+        merged: ProjectDiagnostics {
+            db,
+            diagnostics: merged,
+        },
+        fresh,
+    }
 }
 
 /// Public wrapper over the private `package_level_diagnostics` for callers that assemble
@@ -1809,7 +1861,9 @@ fn new_tir_diagnostic(
     }
     if matches!(
         error,
-        TirTypeError::TypeMismatch { .. } | TirTypeError::UnitExpected { .. }
+        TirTypeError::TypeMismatch { .. }
+            | TirTypeError::UnitExpected { .. }
+            | TirTypeError::ListPatternNeverMatches { .. }
     ) {
         let base = runtime_type::mismatched_types();
         let diagnostic = if warning {
@@ -1902,6 +1956,9 @@ fn rich_source_aware_tir_type_error_message(
                 .type_expr(ty(expected))
                 .text(after)
         }
+        TirTypeError::ListPatternNeverMatches { scrutinee } => DiagnosticText::new()
+            .text("a list pattern never matches a value of type ")
+            .type_expr(ty(scrutinee)),
         TirTypeError::UnitExpected { context, found } => {
             let (before, after) = context.around_found();
             DiagnosticText::new()
@@ -2066,7 +2123,9 @@ fn tir_type_error_to_diagnostic_id(
     use baml_compiler2_hir_ty::diagnostics::TirTypeError;
     match error {
         TirTypeError::InvalidTraceHook { .. } => DiagnosticId::MalformedAttribute,
-        TirTypeError::TypeMismatch { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::TypeMismatch { .. } | TirTypeError::ListPatternNeverMatches { .. } => {
+            DiagnosticId::TypeMismatch
+        }
         TirTypeError::UnresolvedMember { .. } => DiagnosticId::NoSuchField,
         TirTypeError::UnionMemberNoCommonInterface { .. } => DiagnosticId::NoSuchField,
         TirTypeError::UnknownClassField { .. } | TirTypeError::UnknownClassPatternField { .. } => {
@@ -2148,8 +2207,9 @@ fn tir_type_error_to_diagnostic_id(
         }
         TirTypeError::ExtraneousThrowsDeclaration { .. }
         | TirTypeError::ImpreciseUnknownThrows { .. } => DiagnosticId::ThrowsContractExtraneous,
-        TirTypeError::CannotInferTypeParameter { .. } => DiagnosticId::UnknownType,
-        TirTypeError::TypeParamShadowed { .. } => DiagnosticId::TypeMismatch,
+        TirTypeError::CannotInferTypeParameter { .. }
+        | TirTypeError::CannotInferAssociatedType { .. }
+        | TirTypeError::ConflictingTypeArguments { .. } => DiagnosticId::UnknownType,
         TirTypeError::CannotInferLambdaParamType { .. } => DiagnosticId::UnknownType,
         TirTypeError::WrongNumberOfTypeArgs { .. } => DiagnosticId::TypeMismatch,
         TirTypeError::TypeIsNotGeneric { .. } => DiagnosticId::TypeMismatch,
@@ -2195,13 +2255,16 @@ fn tir_type_error_to_diagnostic_id(
         }
         TirTypeError::BuiltinInterfaceNotABound { .. } => DiagnosticId::BuiltinInterfaceNotABound,
         // A `_` placeholder in a non-inferable position.
-        TirTypeError::CannotInferType => DiagnosticId::WildcardTypeNotAllowed,
+        TirTypeError::CannotInferType | TirTypeError::WildcardInProjectionSubject => {
+            DiagnosticId::WildcardTypeNotAllowed
+        }
         TirTypeError::TypeMustBeKnown { .. } => DiagnosticId::TypeMustBeKnown,
         TirTypeError::ReceiverTypeMustBeKnown { .. } => DiagnosticId::TypeMustBeKnown,
         TirTypeError::AmbiguousImplementation { .. } => DiagnosticId::TypeMustBeKnown,
         // Generic-parameter / associated-type declaration hygiene.
-        TirTypeError::TypeParamShadowedImplParam { .. } => DiagnosticId::TypeMismatch,
-        TirTypeError::DuplicateGenericParam { .. }
+        TirTypeError::TypeParamShadowed { .. }
+        | TirTypeError::TypeParamShadowedImplParam { .. }
+        | TirTypeError::DuplicateGenericParam { .. }
         | TirTypeError::DuplicateAssociatedType { .. }
         | TirTypeError::AssociatedTypeConflictsWithGenericParam { .. } => {
             DiagnosticId::DuplicateField
@@ -2287,6 +2350,18 @@ pub fn display_ty_for_file(db: &dyn baml_compiler2_hir::Db, file: SourceFile, ty
     ty.render_with(&baml_compiler2_hir_ty::render::Viewpoint::for_file(
         db, file,
     ))
+}
+
+#[cfg(test)]
+impl<'db> ProjectDiagnostics<'db> {
+    /// A collection with exactly `diagnostics`, for this crate's tests of
+    /// what the check does with them.
+    pub(crate) fn from_parts_for_test(
+        db: &'db ProjectDatabase,
+        diagnostics: Vec<Diagnostic>,
+    ) -> Self {
+        Self { db, diagnostics }
+    }
 }
 
 #[cfg(test)]
@@ -2940,7 +3015,7 @@ interface Pair<A, B> {
         let honest = collect_compiler2_diagnostics(&db);
         let narrowed = collect_compiler2_diagnostics_narrowed(&db, &|_| true, Vec::new());
         assert_eq!(
-            honest, narrowed.merged,
+            honest, *narrowed.merged,
             "narrowed all-true must equal honest"
         );
         // `fresh` is exactly `merged` minus the always-recomputed package-level
@@ -2957,7 +3032,7 @@ interface Pair<A, B> {
         );
         let mut fresh_sorted = narrowed.fresh;
         sort_diagnostics(&mut fresh_sorted);
-        let mut merged_minus_pkg = narrowed.merged;
+        let mut merged_minus_pkg = narrowed.merged.into_vec();
         for pkg in &package_level {
             let pos = merged_minus_pkg
                 .iter()

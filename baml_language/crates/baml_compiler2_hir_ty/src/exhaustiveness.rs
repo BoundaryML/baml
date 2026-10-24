@@ -28,7 +28,7 @@
 use std::fmt;
 
 use baml_base::Literal;
-use baml_type::{DeclName, PrimitiveType, Ty, contains_error_recovery};
+use baml_type::{DeclName, PrimitiveType, Ty, contains_error};
 use rustc_hash::FxHashSet;
 
 use crate::render::{Spell, Viewpoint};
@@ -199,7 +199,7 @@ impl Ctor {
             // Arg-sensitive, but only where decidable: a ctor pair is
             // non-covering only when the args *provably* differ. An arity
             // mismatch (a bare `Box` pattern missing its required type args)
-            // or an `Unknown`/`Error` recovery arg means the pattern already
+            // or an `Error` recovery arg means the pattern already
             // failed resolution at its own site — such a ctor covers like the
             // old qtn-only identity did, so coverage does not stack a
             // non-exhaustive error on top of the resolution error.
@@ -229,10 +229,12 @@ fn class_args_definitely_distinct(a: &[Ty], b: &[Ty]) -> bool {
             .any(|(x, y)| ty_ctor_identity(x) != ty_ctor_identity(y))
 }
 
-/// Whether any of a `Ctor::Class`'s type args carries an error-recovery
-/// sentinel anywhere in its structure — see the `covers` leniency above.
+/// Whether any of a `Ctor::Class`'s type args carries the error sentinel
+/// anywhere in its structure — see the `covers` leniency above. A written
+/// `unknown` argument is an ordinary argument: generics are invariant, so
+/// `Box<unknown>` and `Box<int>` share no value.
 fn class_args_have_recovery(args: &[Ty]) -> bool {
-    args.iter().any(contains_error_recovery)
+    args.iter().any(contains_error)
 }
 
 fn class_ty_for_ctor(qtn: &DeclName, args: &[Ty], fallback: &Ty) -> Ty {

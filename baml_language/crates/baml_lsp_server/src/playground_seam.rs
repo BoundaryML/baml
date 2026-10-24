@@ -621,8 +621,10 @@ struct BuildInput {
     /// `None` when the check found errors: emit is not attempted, and the
     /// diagnostics are the explanation the UI shows.
     program: Option<Box<bex_vm_types::Program>>,
-    /// Emit failed on a clean check — a compiler defect worth surfacing as a
-    /// project-level failure rather than silently leaving a stale engine.
+    /// The root's own files checked clean but no program was built: a
+    /// dependency's error refused the world, or emit failed (a compiler
+    /// defect). Either is surfaced as a project-level failure rather than
+    /// silently leaving a stale engine.
     emit_error: Option<String>,
 }
 
@@ -805,12 +807,13 @@ impl PlaygroundSeam {
             if check.has_errors {
                 return Some(input);
             }
-            // The check above is a full sweep of the root, so
-            // `get_bytecode`'s own error gate would re-derive exactly what
-            // `has_errors` just proved — skip it.
-            match snap.db().get_bytecode_unchecked(check.package) {
+            // The check above swept the root's own files; `get_bytecode`
+            // checks the whole world (the root and its dependencies) before
+            // it emits, so a dependency's error comes back as a refusal here
+            // rather than a panic at the runtime boundary.
+            match snap.db().get_bytecode(check.package) {
                 Ok(program) => input.program = Some(Box::new(program)),
-                Err(error) => input.emit_error = Some(error.to_string()),
+                Err(error) => input.emit_error = Some(error.describe(snap.db())),
             }
             Some(input)
         })

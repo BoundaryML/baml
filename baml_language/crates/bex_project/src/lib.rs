@@ -227,11 +227,8 @@ pub fn prepare(
             .map(|(path, text)| (path.as_path(), text.as_str())),
     );
 
-    let diagnostics = baml_db::collect_diagnostics(&db);
-    if diagnostics
-        .iter()
-        .any(|diagnostic| diagnostic.severity == baml_compiler_diagnostics::Severity::Error)
-    {
+    let diagnostics = baml_db::ProjectDiagnostics::collect(&db);
+    let world = baml_db::CheckedWorld::check(&diagnostics, root).map_err(|refused| {
         let source_files = baml_compiler2_hir::compiler2_all_files(&db);
         let sources = source_files
             .iter()
@@ -241,16 +238,17 @@ pub fn prepare(
             .iter()
             .map(|file| (file.file_id(&db), file.path(&db)))
             .collect();
-        let message = baml_compiler_diagnostics::render::render_diagnostics(
-            &diagnostics,
-            &sources,
-            &file_paths,
-            &baml_compiler_diagnostics::render::RenderConfig::agent(),
-        );
-        return Err(RuntimeError::Compilation { message });
-    }
-    let program = db
-        .get_bytecode_unchecked(root)
+        RuntimeError::Compilation {
+            message: baml_compiler_diagnostics::render::render_diagnostics(
+                refused.errors(),
+                &sources,
+                &file_paths,
+                &baml_compiler_diagnostics::render::RenderConfig::agent(),
+            ),
+        }
+    })?;
+    let program = world
+        .compile(baml_compiler2_emit::OptLevel::Two)
         .map_err(|e| RuntimeError::Compilation {
             message: e.to_string(),
         })?;

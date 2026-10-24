@@ -1,0 +1,35 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0012
+
+  × type parameter `T` on method shadows the same parameter on class `Bin`. Please use a different name for the type parameter.
+   ╭─[main.baml:7:14]
+ 7 │     function make<T>(x: T) -> int {
+   ·              ────
+   ╰────
+
+  [type] E0012
+
+  × type parameter `T` on method shadows the same parameter on interface `Source`. Please use a different name for the type parameter.
+    ╭─[main.baml:15:14]
+ 15 │     function read<T>(self) -> int throws never
+    ·              ────
+    ╰────
+
+  [type] E0012
+
+  × type parameter `T` on method shadows the same parameter on the enclosing `implements` block. Please use a different name for the type parameter.
+    ╭─[main.baml:44:14]
+ 44 │     function read<T>(self) -> int throws never {
+    ·              ────
+    ╰────
+
+  [type] E0012
+
+  × type parameter `T` on method shadows the same parameter on class `Pair`. Please use a different name for the type parameter.
+    ╭─[main.baml:61:18]
+ 61 │         function read<T>(self) -> int throws never {
+    ·                  ────
+    ╰────

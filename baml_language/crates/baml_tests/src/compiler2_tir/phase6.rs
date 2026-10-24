@@ -669,10 +669,12 @@ function pay(items: Money[] = [Money { cents: 1 }]) -> int { 0 }
 }
 
 #[test]
-fn generic_construction_does_not_report_phantom_param() {
-    // Regression (M3): a class type parameter used by no field is a phantom that
-    // construction cannot determine — it must NOT be reported as
-    // `CannotInferTypeParameter` (only a field-constrained param is).
+fn generic_construction_reports_phantom_param() {
+    // A class type parameter used by no field is a phantom that construction
+    // cannot determine: the slot is unsolved at finalize, and an unsolved
+    // instantiation slot is E0002 wherever it was minted (a written argument
+    // or an annotation is what determines it). A field-constrained param
+    // infers from its field and is not reported.
     let mut db = make_db();
     let file = db.file(
         "test.baml",
@@ -688,8 +690,8 @@ function f() -> int {
     );
     let tir = render_tir(&db, file);
     assert!(
-        !tir.contains("cannot infer type parameter `U`"),
-        "phantom param `U` (used by no field) must not be reported; got:\n{tir}"
+        tir.contains("cannot infer type parameter `U`"),
+        "phantom param `U` (used by no field) is unsolved and must be reported; got:\n{tir}"
     );
     assert!(
         !tir.contains("cannot infer type parameter `T`"),
@@ -1020,10 +1022,11 @@ function f(xs: int[]) -> null {
     );
     assert_eq!(
         expr_type_in_function(&db, file, "f", "m"),
-        // A standalone generic-method value has no call to solve `U`/`E`;
-        // hir_ty marks the unresolved slots with the error sentinel
-        // (ruled "tir-uninstantiated" family kept them symbolic).
-        "(f: (int) -> !error throws !error) -> !error[] throws !error"
+        // A standalone generic-method value has no call to solve `U`/`E`:
+        // the value slot `U` stays the error sentinel (the unspecialized
+        // value report owns it), while `E` occurs only in `throws`
+        // positions, so it is an effect and its empty default is `never`.
+        "(f: (int) -> !error throws never) -> !error[] throws never"
     );
 }
 
@@ -1716,5 +1719,44 @@ function f() -> int {
     assert!(
         output.contains("produce() : user.A"),
         "mixed OR should preserve the informative class branch as a partial expected type for generic return inference, got:\n{output}"
+    );
+}
+
+#[test]
+fn projection_typed_field_access_reduces_through_the_class_argument() {
+    // A field typed by a projection on the class's own bounded parameter
+    // (`v T.Out` under `T extends HasOut`) reads back through a realized
+    // instantiation as the projection's reduction, never the error
+    // sentinel: the field's declaring interface comes from the class's
+    // bounds, which every lowering of the field type must carry.
+    let mut db = make_db();
+    let file = db.file(
+        "test.baml",
+        r#"
+interface HasOut {
+    type Out
+}
+class IntOut {
+    implements HasOut {
+        type Out = int
+    }
+}
+class Proj<T extends HasOut> {
+    v T.Out
+}
+function f() -> int {
+    let p: Proj<IntOut> = Proj { v: 3 };
+    p.v
+}
+"#,
+    );
+    let tir = render_tir(&db, file);
+    assert!(
+        tir.contains("p.v : int"),
+        "the projection-typed field reads as `int`; got:\n{tir}"
+    );
+    assert!(
+        !tir.contains("!error"),
+        "no error sentinel in a clean program; got:\n{tir}"
     );
 }
