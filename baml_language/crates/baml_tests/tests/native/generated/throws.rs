@@ -22,12 +22,11 @@
     clippy::unit_arg,
     clippy::let_unit_value
 )]
-use std::rc::Rc;
 use bex_aot::{
-    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, int, json, map,
-    string,
+    BigInt, CcMap, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int,
+    json, map, string,
 };
-use bex_aot::handle::{Shared, shared};
+use bex_aot::handle::{Cc, Shared, cc, shared};
 use bex_aot::render::ToBaml;
 /// BAML class `user.Invalid`.
 #[derive(Debug, bex_aot::serde::Serialize)]
@@ -43,6 +42,12 @@ impl bex_aot::json::FromJson for user_Invalid {
         Ok(Self {
             message: bex_aot::json::field(object, "message", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Invalid {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.message, visitor);
     }
 }
 impl ToBaml for user_Invalid {
@@ -115,6 +120,19 @@ impl bex_aot::json::FromJson for user_Coded {
             extra: bex_aot::json::field(object, "extra", true)?,
             counts: bex_aot::json::field(object, "counts", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Coded {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.code, visitor);
+        bex_aot::mem::Trace::trace(&self.message, visitor);
+        bex_aot::mem::Trace::trace(&self.retry, visitor);
+        bex_aot::mem::Trace::trace(&self.ratio, visitor);
+        bex_aot::mem::Trace::trace(&self.tags, visitor);
+        bex_aot::mem::Trace::trace(&self.detail, visitor);
+        bex_aot::mem::Trace::trace(&self.extra, visitor);
+        bex_aot::mem::Trace::trace(&self.counts, visitor);
     }
 }
 impl ToBaml for user_Coded {
@@ -249,6 +267,13 @@ impl bex_aot::json::FromJson for user_Detail {
         })
     }
 }
+impl bex_aot::mem::Trace for user_Detail {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.n, visitor);
+        bex_aot::mem::Trace::trace(&self.note, visitor);
+    }
+}
 impl ToBaml for user_Detail {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(
@@ -319,6 +344,12 @@ impl bex_aot::json::FromJson for baml_errors_InvalidArgument {
         })
     }
 }
+impl bex_aot::mem::Trace for baml_errors_InvalidArgument {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.message, visitor);
+    }
+}
 impl ToBaml for baml_errors_InvalidArgument {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(
@@ -377,6 +408,13 @@ impl bex_aot::json::FromJson for baml_json_DecodeError {
             message: bex_aot::json::field(object, "message", false)?,
             path: bex_aot::json::field(object, "path", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for baml_json_DecodeError {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.message, visitor);
+        bex_aot::mem::Trace::trace(&self.path, visitor);
     }
 }
 impl ToBaml for baml_json_DecodeError {
@@ -450,6 +488,12 @@ impl bex_aot::json::FromJson for baml_panics_UserPanic {
         Ok(Self {
             message: bex_aot::json::field(object, "message", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for baml_panics_UserPanic {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.message, visitor);
     }
 }
 impl ToBaml for baml_panics_UserPanic {

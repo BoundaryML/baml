@@ -22,12 +22,11 @@
     clippy::unit_arg,
     clippy::let_unit_value
 )]
-use std::rc::Rc;
 use bex_aot::{
-    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, int, json, map,
-    string,
+    BigInt, CcMap, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int,
+    json, map, string,
 };
-use bex_aot::handle::{Shared, shared};
+use bex_aot::handle::{Cc, Shared, cc, shared};
 use bex_aot::render::ToBaml;
 /// BAML class `user.Point`.
 #[derive(Debug, bex_aot::serde::Serialize)]
@@ -45,6 +44,13 @@ impl bex_aot::json::FromJson for user_Point {
             x: bex_aot::json::field(object, "x", false)?,
             y: bex_aot::json::field(object, "y", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Point {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.x, visitor);
+        bex_aot::mem::Trace::trace(&self.y, visitor);
     }
 }
 impl ToBaml for user_Point {
@@ -121,6 +127,15 @@ impl bex_aot::json::FromJson for user_Box {
             tag: bex_aot::json::field(object, "tag", true)?,
             weights: bex_aot::json::field(object, "weights", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Box {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.name, visitor);
+        bex_aot::mem::Trace::trace(&self.corner, visitor);
+        bex_aot::mem::Trace::trace(&self.tag, visitor);
+        bex_aot::mem::Trace::trace(&self.weights, visitor);
     }
 }
 impl ToBaml for user_Box {
@@ -217,6 +232,12 @@ impl bex_aot::json::FromJson for user_Counter {
         })
     }
 }
+impl bex_aot::mem::Trace for user_Counter {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.n, visitor);
+    }
+}
 impl ToBaml for user_Counter {
     fn render(&self, out: &mut String, _nested: bool) {
         bex_aot::render::class(out, "Counter", &[("n", &self.n as &dyn ToBaml)]);
@@ -271,6 +292,13 @@ impl bex_aot::json::FromJson for user_Holder {
             c: bex_aot::json::field(object, "c", false)?,
             total: bex_aot::json::field(object, "total", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Holder {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.c, visitor);
+        bex_aot::mem::Trace::trace(&self.total, visitor);
     }
 }
 impl ToBaml for user_Holder {

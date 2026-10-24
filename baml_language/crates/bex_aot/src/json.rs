@@ -32,7 +32,10 @@ use std::fmt;
 
 use serde::Serialize;
 
-use crate::{ErrorObject, Int63, Str, Thrown, handle::Shared};
+use crate::{
+    ErrorObject, Int63, Str, Thrown,
+    handle::{Kind, Shared},
+};
 
 /// A parsed JSON document, as the VM holds it while decoding.
 pub type Json = serde_json::Value;
@@ -61,6 +64,8 @@ impl ErrorObject for ParseError {
     fn clone_box(&self) -> Box<dyn ErrorObject> {
         Box::new(self.clone())
     }
+
+    fn trace(&self, _visitor: &mut dyn crate::mem::Visitor) {}
 }
 
 /// `baml.json.DecodeError { message, path }`: valid JSON of the wrong shape.
@@ -99,6 +104,8 @@ impl ErrorObject for DecodeError {
     fn clone_box(&self) -> Box<dyn ErrorObject> {
         Box::new(self.clone())
     }
+
+    fn trace(&self, _visitor: &mut dyn crate::mem::Visitor) {}
 }
 
 /// `baml.json.SerializationError { message, path, reason }`: a value with no
@@ -134,6 +141,8 @@ impl ErrorObject for SerializationError {
     fn clone_box(&self) -> Box<dyn ErrorObject> {
         Box::new(self.clone())
     }
+
+    fn trace(&self, _visitor: &mut dyn crate::mem::Visitor) {}
 }
 
 /// `baml.json.to_string(value)`: compact JSON, as `serde_json::to_string`.
@@ -241,9 +250,9 @@ impl<T: FromJson> FromJson for Vec<T> {
     }
 }
 
-impl<T: FromJson> FromJson for Shared<T> {
+impl<T: FromJson + crate::mem::Trace, H: Kind> FromJson for Shared<T, H> {
     fn from_json(json: &Json) -> Result<Self, DecodeError> {
-        T::from_json(json).map(crate::handle::shared)
+        T::from_json(json).map(Shared::new)
     }
 }
 
@@ -357,6 +366,7 @@ mod tests {
         x: Int63,
         y: Option<Int63>,
     }
+    crate::mem::trace_fields!(Point, x, y);
 
     impl FromJson for Point {
         fn from_json(json: &Json) -> Result<Self, DecodeError> {

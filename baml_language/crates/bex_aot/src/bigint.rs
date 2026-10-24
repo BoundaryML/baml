@@ -547,6 +547,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "numbers at the size cap take minutes under Miri")]
     fn cap_guards_multiplication_and_powers() {
         let wide = shl(&from_i64(1), &from_i64(200_000_000)).unwrap();
         assert_eq!(
@@ -608,6 +609,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "numbers at the size cap take minutes under Miri")]
     fn parsing() {
         assert_eq!(to_std(&parse(&from_literal("42")).unwrap()), "42");
         assert_eq!(to_std(&parse(&from_literal("-7")).unwrap()), "-7");

@@ -8,7 +8,11 @@
 //! inside the braces (`user.Inner {n: 1}`), a map quotes its keys as the
 //! strings the engine converts them to, and an enum is its variant's name.
 
-use crate::{BigInt, Int63, Str, handle::Shared, map::Map};
+use crate::{
+    BigInt, Int63, Str,
+    handle::{Kind, Shared},
+    map::Map,
+};
 
 /// A value rendered as the engine prints it inside an uncaught throw.
 pub trait Readable {
@@ -66,7 +70,7 @@ impl<T: Readable> Readable for Option<T> {
     }
 }
 
-impl<T: Readable> Readable for Shared<T> {
+impl<T: Readable, H: Kind> Readable for Shared<T, H> {
     fn readable(&self) -> String {
         self.borrow().readable()
     }
@@ -103,7 +107,7 @@ impl ReadableKey for bool {
     }
 }
 
-impl<K: ReadableKey, V: Readable> Readable for Map<K, V> {
+impl<K: ReadableKey, V: Readable, H: Kind> Readable for Map<K, V, H> {
     fn readable(&self) -> String {
         let entries: Vec<String> = self
             .handle()

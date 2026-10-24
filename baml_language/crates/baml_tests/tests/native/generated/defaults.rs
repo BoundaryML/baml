@@ -22,12 +22,11 @@
     clippy::unit_arg,
     clippy::let_unit_value
 )]
-use std::rc::Rc;
 use bex_aot::{
-    BigInt, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, int, json, map,
-    string,
+    BigInt, CcMap, Int63, Map, Panic, Str, Thrown, array, bigint, cell, float, func, int,
+    json, map, string,
 };
-use bex_aot::handle::{Shared, shared};
+use bex_aot::handle::{Cc, Shared, cc, shared};
 use bex_aot::render::ToBaml;
 /// BAML class `user.Counter`.
 #[derive(Debug, bex_aot::serde::Serialize)]
@@ -43,6 +42,12 @@ impl bex_aot::json::FromJson for user_Counter {
         Ok(Self {
             n: bex_aot::json::field(object, "n", false)?,
         })
+    }
+}
+impl bex_aot::mem::Trace for user_Counter {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self.n, visitor);
     }
 }
 impl ToBaml for user_Counter {
@@ -350,6 +355,22 @@ pub fn user_risky(mut _1: Int63, __arg_2: Option<Int63>) -> Result<Int63, Thrown
     _0 = int::add(_1, _2)?;
     Ok(_0)
 }
+/// The environment of BAML lambda `.<lambda(captured_default, 0)>`.
+pub struct user_captured_default__lambda0__env {
+    pub _c0: cell::Cell<Int63>,
+}
+impl bex_aot::mem::Trace for user_captured_default__lambda0__env {
+    #[inline]
+    fn trace(&self, visitor: &mut dyn bex_aot::mem::Visitor) {
+        bex_aot::mem::Trace::trace(&self._c0, visitor);
+    }
+}
+impl bex_aot::func::Callable<(), Int63> for user_captured_default__lambda0__env {
+    #[inline]
+    fn call(&self, (): ()) -> Result<Int63, Thrown> {
+        user_captured_default__lambda0(&self._c0)
+    }
+}
 /// BAML lambda `.<lambda(captured_default, 0)>`.
 pub fn user_captured_default__lambda0(_c0: &cell::Cell<Int63>) -> Result<Int63, Thrown> {
     let _frame = bex_aot::depth::Guard::enter()?;
@@ -372,7 +393,7 @@ pub fn user_captured_default(
     let mut _2: cell::Cell<Int63> = cell::fresh();
     let mut _0: Int63;
     let mut _3: bool;
-    let mut _4: Rc<dyn Fn() -> Result<Int63, Thrown>>;
+    let mut _4: func::Func<(), Int63>;
     let mut _5: Int63;
     let mut _7: Int63;
     'bb2: {
@@ -389,14 +410,13 @@ pub fn user_captured_default(
         }
     }
     _4 = {
-        let __cell0 = cell::Cell::clone(&_2);
-        let __closure: Rc<dyn Fn() -> Result<Int63, Thrown>> = Rc::new(move || {
-            user_captured_default__lambda0(&__cell0)
+        let __closure: func::Func<(), Int63> = func::alloc(user_captured_default__lambda0__env {
+            _c0: cell::Cell::clone(&_2),
         });
         __closure
     };
-    _5 = (_4)()?;
-    _7 = (_4)()?;
+    _5 = (_4).call(())?;
+    _7 = (_4).call(())?;
     _0 = int::add(_5, _7)?;
     Ok(_0)
 }

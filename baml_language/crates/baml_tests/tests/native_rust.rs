@@ -33,6 +33,7 @@ const FIXTURES: &[&str] = &[
     "catches",
     "class_unions",
     "classes",
+    "cycles",
     "defaults",
     "defers",
     "enums",
@@ -130,6 +131,7 @@ generated_module!(generic_classes, "native/generated/generic_classes.rs");
 generated_module!(interfaces, "native/generated/interfaces.rs");
 generated_module!(overrides, "native/generated/overrides.rs");
 generated_module!(equality, "native/generated/equality.rs");
+generated_module!(cycles, "native/generated/cycles.rs");
 
 /// What a call produced, on either backend. A thrown object is compared by
 /// class and by every field but `message`: the classes and their data are
@@ -1193,7 +1195,10 @@ async fn lambdas_match_vm() {
     check!(o, strings("hi") => user_strings(text("hi")));
     // A function value is called like any other: `returned` is observed
     // through `chosen`; its own result has no VM-side observation.
-    assert_eq!((user_returned(int(1)).unwrap())(int(9)).unwrap(), int(81));
+    assert_eq!(
+        user_returned(int(1)).unwrap().call((int(9),)).unwrap(),
+        int(81)
+    );
     // Runaway recursion through a function value throws `StackOverflow`
     // instead of overflowing the native stack.
     assert_eq!(
@@ -1232,12 +1237,12 @@ async fn captures_match_vm() {
     // A closure escaping its creator keeps the cell alive and sees its own
     // copy of the binding.
     let add = user_make_adder(int(5)).unwrap();
-    assert_eq!(add(int(1)).unwrap(), int(6));
+    assert_eq!(add.call((int(1),)).unwrap(), int(6));
     let first = user_make_counter().unwrap();
     let second = user_make_counter().unwrap();
-    assert_eq!(first().unwrap(), int(1));
-    assert_eq!(first().unwrap(), int(2));
-    assert_eq!(second().unwrap(), int(1));
+    assert_eq!(first.call(()).unwrap(), int(1));
+    assert_eq!(first.call(()).unwrap(), int(2));
+    assert_eq!(second.call(()).unwrap(), int(1));
     // The class handle a closure captures is the caller's object.
     let b = bex_aot::shared(user_Box { n: int(1) });
     assert_eq!(user_mutate_box(b.clone()).unwrap(), int(5));
@@ -1366,4 +1371,159 @@ async fn interfaces_match_vm() {
         .unwrap(),
         int(18)
     );
+}
+
+/// Object graphs with cycles: each shape builds, reads back and drops its
+/// graph; the values agree with the VM's (`cycle_leaks` counts what native
+/// code leaves behind).
+#[tokio::test]
+async fn cycles_match_vm() {
+    use cycles::*;
+    let o = Oracle::new("cycles");
+    for n in [0, 1, 2, 5, 17] {
+        check!(o, self_loop(n) => user_self_loop(int(n)));
+        check!(o, doubly_linked(n) => user_doubly_linked(int(n)));
+        check!(o, closure_in_owner(n) => user_closure_in_owner(int(n)));
+        check!(o, closure_captures_owner(n) => user_closure_captures_owner(int(n)));
+        check!(o, map_cycle(n) => user_map_cycle(int(n)));
+        check!(o, generic_cycle(n) => user_generic_cycle(int(n)));
+        check!(o, union_cycle(n) => user_union_cycle(int(n)));
+        check!(o, built_then_broken(n) => user_built_then_broken(int(n)));
+        check!(o, cycle_in_error(n) => user_cycle_in_error(int(n)));
+        check!(o, cycle_across_defer(n) => user_cycle_across_defer(int(n)));
+        check!(o, long_list(n) => user_long_list(int(n)));
+    }
+    for depth in [0, 1, 3, 5] {
+        check!(o, tree_with_parents(depth) => user_tree_with_parents(int(depth)));
+    }
+    for n in [1, 2, 8, 33] {
+        check!(o, graph(n) => user_graph(int(n)));
+    }
+    for n in [0, 1, 2, 50] {
+        check!(o, cycles_into_live(n) => user_cycles_into_live(int(n)));
+    }
+    check!(o, long_list(10000) => user_long_list(int(10000)));
+}
+
+/// What each `cycles` shape leaves on the native heap once it has returned
+/// and its result is dropped, after a collection: the objects a memory
+/// manager has to free. Under plain reference counting every cycle leaked
+/// (the counts in the comments); the cycle collector (`bex_aot::cc`) frees
+/// them all, so every count is 0. The second check is that `Trace` reports
+/// every edge: every leaked object would be unreachable from outside the
+/// heap, so the unreachable count must not grow either.
+#[test]
+fn cycle_leaks() {
+    use bex_aot::mem;
+    use cycles::*;
+    let cases: &[(&str, &dyn Fn())] = &[
+        // Leaked under Rc: the node.
+        ("self_loop", &|| drop(user_self_loop(int(3)))),
+        // Leaked under Rc: every node (10).
+        ("doubly_linked", &|| drop(user_doubly_linked(int(10)))),
+        // Leaked under Rc: 15 nodes and their 15 child arrays.
+        ("tree_with_parents", &|| {
+            drop(user_tree_with_parents(int(3)));
+        }),
+        // Leaked under Rc: 8 nodes and their 8 edge arrays.
+        ("graph", &|| drop(user_graph(int(8)))),
+        // Leaked under Rc: 20 nodes and their 20 edge arrays. The node the
+        // cycles point at outlives each of them and is freed by its count.
+        ("cycles_into_live", &|| drop(user_cycles_into_live(int(10)))),
+        // Leaked under Rc: the array, its cell, two closures, `n`'s cell.
+        ("closure_in_owner", &|| drop(user_closure_in_owner(int(3)))),
+        // Leaked under Rc: the closure, the array and its cell, the owner,
+        // its cell and its items array.
+        ("closure_captures_owner", &|| {
+            drop(user_closure_captures_owner(int(3)));
+        }),
+        // Leaked under Rc: two nodes and their two maps.
+        ("map_cycle", &|| drop(user_map_cycle(int(3)))),
+        // Leaked under Rc: the three links.
+        ("generic_cycle", &|| drop(user_generic_cycle(int(3)))),
+        // Leaked under Rc: the branch.
+        ("union_cycle", &|| drop(user_union_cycle(int(3)))),
+        ("built_then_broken", &|| {
+            drop(user_built_then_broken(int(100)))
+        }),
+        // Leaked under Rc: the two nodes the caught error held.
+        ("cycle_in_error", &|| drop(user_cycle_in_error(int(3)))),
+        // Leaked under Rc: the two nodes.
+        ("cycle_across_defer", &|| {
+            drop(user_cycle_across_defer(int(3)))
+        }),
+        ("long_list", &|| drop(user_long_list(int(10000)))),
+    ];
+    for (name, run) in cases {
+        // Whatever an earlier case left buffered is settled first.
+        mem::collect();
+        let before = mem::stats();
+        let garbage_before = mem::unreachable();
+        run();
+        mem::collect();
+        let after = mem::stats();
+        assert!(after.allocs > before.allocs, "{name} allocates");
+        if mem::torture() {
+            // `BAML_MEM_TORTURE=1`: a collection at every allocation.
+            assert_eq!(
+                after.torture_collections - before.torture_collections,
+                after.allocs - before.allocs,
+                "{name}: the torture hook ran at every allocation"
+            );
+        }
+        let leaked = after.live() - before.live();
+        assert_eq!(leaked, 0, "{name}: live objects after the call");
+        assert_eq!(
+            mem::unreachable(),
+            garbage_before,
+            "{name}: nothing unreachable is left through `Trace`"
+        );
+    }
+}
+
+/// `long_list` at 1,000,000 nodes, on a thread with the 8 MiB stack a
+/// native program's main thread has. Run by `long_list_of_a_million` in a
+/// child process, since a stack overflow aborts the process.
+#[test]
+#[ignore = "run by `long_list_of_a_million` in a child process"]
+fn long_list_of_a_million_child() {
+    let head = std::thread::Builder::new()
+        .stack_size(8 << 20)
+        .spawn(|| cycles::user_long_list(int(1_000_000)).map(Int63::get).ok())
+        .expect("thread")
+        .join()
+        .expect("no panic");
+    assert_eq!(head, Some(999_999));
+}
+
+/// Dropping the head of a long list frees it node by node. Under plain
+/// reference counting each node's `Rc` drop dropped the next, recursively,
+/// and the child overflowed its 8 MiB stack (a debug build past about
+/// 22,000 nodes, a release build with fat LTO past about 260,000). A
+/// tracked handle frees iteratively (`bex_aot::cc`), so the child builds
+/// and drops all 1,000,000 nodes. The child runs without
+/// `BAML_MEM_TORTURE`: building the list buffers every old head, and a
+/// collection at each of a million allocations would trace the list each
+/// time (quadratic), which tests nothing the torture run of `long_list`
+/// at 10,000 does not.
+#[test]
+fn long_list_of_a_million() {
+    let output = std::process::Command::new(std::env::current_exe().expect("test binary"))
+        .env_remove("BAML_MEM_TORTURE")
+        .args([
+            "--exact",
+            "long_list_of_a_million_child",
+            "--ignored",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .output()
+        .expect("child test");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "the child failed:\n{stderr}\n{stdout}"
+    );
+    assert!(stdout.contains("1 passed"), "the child ran:\n{stdout}");
 }
