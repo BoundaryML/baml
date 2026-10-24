@@ -230,7 +230,7 @@ impl<'db> Generator<'_, 'db> {
         self.declare_locals(!self.analysis.loop_headers.is_empty());
         // The call path leaves the arguments in a hooked body's leading slots.
         if self.slots > self.slot_base() {
-            self.emit_line(&format!("vm.reserve_slots(fr, {});", self.slots));
+            self.emit_line(&format!("vm.reserve_slots(fr, {})?;", self.slots));
         }
         if let Some(slot) = self.cause_slot {
             self.emit_line(&format!("vm.set_slot(fr, {slot}, Value::NULL);"));
@@ -529,7 +529,7 @@ impl<'db> Generator<'_, 'db> {
     fn suspend_expr(&mut self, block: BlockId, step: &str, args: &[String]) -> String {
         let mut out = String::from("{ ");
         for arg in args {
-            let _ = write!(out, "vm.push_arg({arg}); ");
+            let _ = write!(out, "vm.push_arg({arg})?; ");
         }
         for ty in std::mem::take(&mut self.call_types) {
             let _ = write!(out, "vm.push_type_arg({ty}); ");
@@ -682,7 +682,7 @@ impl<'db> Generator<'_, 'db> {
         self.call_trace.take().map_or_else(
             || call.to_string(),
             |trace| format!(
-                "match vm.set_call_trace({trace}) {{ Ok(()) => {call}, Err(e) => {{ vm.reserve_slots(fr, {}); Err(e) }} }}",
+                "match vm.set_call_trace({trace}) {{ Ok(()) => {call}, Err(e) => {{ let _ = vm.reserve_slots(fr, {}); Err(e) }} }}",
                 self.slots
             ),
         )

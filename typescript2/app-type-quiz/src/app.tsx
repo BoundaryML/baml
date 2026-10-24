@@ -70,7 +70,7 @@ type Shown = { name: string; source: string }[];
 /** The programs a prompt shows, in the order it shows them. */
 function shownOf(prompt: Prompt): Shown[] {
   const programs = [prompt.program];
-  if (prompt.against !== null) {
+  if (prompt.against != null) {
     programs.push(prompt.against);
   }
   return programs.map((files) =>
@@ -490,7 +490,7 @@ function Question({
           does it accept?
         </p>
       )}
-      {!answered && next.teach !== null && <Teach rule={next.teach} />}
+      {!answered && next.teach != null && <Teach rule={next.teach} />}
       {phase.kind === 'revealed' && <Mark answered={phase.answered} />}
       {revealed !== null && revealed.difference !== '' && (
         <p className="difference">

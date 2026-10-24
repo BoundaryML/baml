@@ -73,9 +73,9 @@ impl BexVm {
         result
     }
 
-    pub fn reserve_slots(&mut self, frame: &FrameRecord, slots: usize) {
+    pub fn reserve_slots(&mut self, frame: &FrameRecord, slots: usize) -> Result<(), Box<VmError>> {
         let end = frame.base() + slots;
-        self.stack.resize(end, Value::NULL);
+        self.resize_stack(end, Value::NULL).map_err(Box::new)
     }
 
     #[inline]
@@ -87,12 +87,12 @@ impl BexVm {
 
     #[inline]
     pub fn set_slot(&mut self, frame: &FrameRecord, index: usize, value: Value) {
-        self.stack.0[frame.base() + index] = value;
+        self.stack[StackIndex::from_raw(frame.base() + index)] = value;
     }
 
     #[inline]
-    pub fn push_arg(&mut self, value: Value) {
-        self.stack.push(value);
+    pub fn push_arg(&mut self, value: Value) -> Result<(), Box<VmError>> {
+        self.push_stack(value).map_err(Box::new)
     }
 
     #[inline]
@@ -286,13 +286,10 @@ impl BexVm {
         }
     }
 
+    /// Reserves the callee's VM frame before telemetry or other call-setup side effects.
     #[inline]
     fn check_compiled_call(&mut self) -> Result<(), Box<VmError>> {
-        if self.level_count() >= crate::vm::MAX_FRAMES {
-            return Err(Box::new(VmError::thrown_fresh(
-                self.panic_to_exception_value(VmPanic::StackOverflow),
-            )));
-        }
+        self.reserve_call_frame().map_err(Box::new)?;
         self.stack_room()
     }
 
@@ -388,7 +385,7 @@ impl BexVm {
     ) -> Result<Value, Box<VmError>> {
         let top = self.frames.len() - 1;
         let locals_offset = StackIndex::from_raw(self.stack.len());
-        self.stack.extend(args.iter().copied());
+        self.extend_stack(args.iter().copied()).map_err(Box::new)?;
         let mut frame_idx = top;
         // SAFETY: the frame's function lives in the compile-time heap, which
         // is never collected; see `load_function`.

@@ -277,13 +277,15 @@ mod tests {
         let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
         let function = vm.heap.compile_time_ptr(entry);
         let context = vm.current_context().clone();
-        vm.frames.push(Frame::Bytecode(BytecodeFrame::compiled(
-            function,
-            StackIndex::from_raw(0),
-            type_args.to_vec(),
-            context,
-            None,
-        )));
+        vm.frames
+            .try_push(Frame::Bytecode(BytecodeFrame::compiled(
+                function,
+                StackIndex::from_raw(0),
+                type_args.to_vec(),
+                context,
+                None,
+            )))
+            .unwrap();
         vm
     }
 

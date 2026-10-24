@@ -1844,9 +1844,10 @@ pub enum Determination {
 }
 
 /// Whether `ty` already carries an upstream error, so a projection over it
-/// must not emit a fresh diagnostic.
+/// must not emit a fresh diagnostic. `unknown` is a real type and no
+/// interface: a qualifier spelling it is reported like any other.
 fn projection_poisoned(ty: &Ty) -> bool {
-    matches!(ty, Ty::Error | Ty::Unknown)
+    matches!(ty, Ty::Error)
 }
 
 /// Determine which interface declares `member` for `base`, in `ns` - the
@@ -1967,7 +1968,17 @@ pub fn lower_projection(
             });
             Ty::Error
         }
-        Determination::InvalidBase | Determination::Poisoned => Ty::Error,
+        // A subject that can declare no associated type at all (a primitive,
+        // a container, a function type): the member is unknown for it.
+        Determination::InvalidBase => {
+            diagnostics.push(TirTypeError::UnknownAssociatedType {
+                member,
+                container: crate::diagnostics::AssocContainer::Ty(base),
+            });
+            Ty::Error
+        }
+        // An already-poisoned subject was reported where it was lowered.
+        Determination::Poisoned => Ty::Error,
     };
     ProjectionLowering { ty, diagnostics }
 }

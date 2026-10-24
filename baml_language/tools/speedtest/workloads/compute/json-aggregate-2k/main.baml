@@ -33,7 +33,7 @@ function rows_json(n: int) -> string {
 }
 
 function aggregate(raw: string) -> string {
-  let rows = baml.json.deserialize<Row[]>(raw);
+  let rows = baml.json.decode<Row[]>(raw);
   let totals: map<string, int> = {};
   for (let row in rows) {
     if (!row.account.is_ascii()) { throw Invalid { message: "non-ASCII account" }; }
@@ -55,7 +55,7 @@ function aggregate(raw: string) -> string {
   for (let account in accounts) {
     output.push(Total { account: account, total_cents: totals.get(account) ?? 0 });
   }
-  baml.json.to_string(output)
+  baml.json.stringify(output)
 }
 
 function main() -> int {

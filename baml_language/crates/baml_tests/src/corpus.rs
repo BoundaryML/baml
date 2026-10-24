@@ -391,7 +391,9 @@ fn corpus_snapshots() {
     // `OptLevel::Two` matches what the deleted per-project codegen tests used
     // (the CLI's level), and O2 lets emit reuse the MIR memos the snapshots
     // above populated.
-    let program = baml_db::compile_program(&db, package, baml_compiler2_emit::OptLevel::Two)
+    let program = baml_db::CheckedWorld::collect(&db, package)
+        .expect("the world checks")
+        .compile(baml_compiler2_emit::OptLevel::Two)
         .expect("bytecode emit should succeed for an error-free corpus");
 
     // Emit mints tag-only type heads (the pointer half exists only once a heap

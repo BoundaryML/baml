@@ -211,7 +211,7 @@ fn shape_bench() {
         .map_or(200, |value| value.parse().expect("numeric setting"));
     let only_workload = std::env::var("SHAPE_BENCH_WORKLOAD").ok();
     let only_policy = std::env::var("SHAPE_BENCH_POLICY").ok();
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut scratch = BlobScratch::default();
     for (workload, build) in workloads() {
         if only_workload

@@ -8,7 +8,7 @@ function parse_and_roundtrip(s: string) -> string {
 
 function parse_and_roundtrip_pretty(s: string) -> string {
   let j: json = baml.json.parse(s)
-  baml.json.stringify_pretty(j)
+  baml.json.stringify(j, indent = 2)
 }
 
 function match_parsed(s: string) -> string {

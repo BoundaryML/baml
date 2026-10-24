@@ -569,12 +569,12 @@ test "points: answering beats abstaining exactly above the bar" {
 
 function profile_round_trip() -> string throws never {
     let sat = sit(typescripter, root.engine.Knobs { ...root.engine.default_knobs(), budget: 12 }, 6);
-    let text = baml.json.to_string(sat.profile) catch_all (e) {
+    let text = baml.json.stringify(sat.profile) catch_all (e) {
         baml.json.SerializationError => {
             return "serialize threw";
         },
     };
-    let back = baml.json.from_string<root.engine.Profile>(text) catch_all (e) {
+    let back = baml.json.decode<root.engine.Profile>(text) catch_all (e) {
         baml.json.ParseError => {
             return "parse threw";
         },
@@ -671,7 +671,7 @@ function adaptive_round_trip() -> string throws never {
     let sat = sit(typescripter, knobs, 9);
     let expected = root.adaptive_sitting(9, false, knobs, sat.taken, "test-build");
     let text = root.adaptive_json(9, false, knobs, sat.taken, "test-build");
-    let back = baml.json.from_string<root.engine.Transcript>(text) catch_all (e) {
+    let back = baml.json.decode<root.engine.Transcript>(text) catch_all (e) {
         baml.json.ParseError => {
             return "parsing threw";
         },

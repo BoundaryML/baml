@@ -37,6 +37,8 @@ impl CompiledSapModel {
         // context simplifies only its own definitions. Normalize the target at
         // the SAP boundary so the converter always receives its flat form.
         let target = type_ctx.normalize_parse_target(target);
+        let type_ctx = type_ctx.analyzed(&target)?;
+        type_ctx.reject_target(&target)?;
         let inner = CompiledSapModelInner::try_new(
             type_ctx,
             target,

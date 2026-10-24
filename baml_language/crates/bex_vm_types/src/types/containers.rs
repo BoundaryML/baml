@@ -464,6 +464,18 @@ impl MapData {
         )
     }
 
+    /// The value of the entry with key hash `hash` whose key `matches`
+    /// accepts. For keys whose equality the caller can decide without
+    /// running VM code, such as strings.
+    pub fn get_hashed(&self, hash: u64, mut matches: impl FnMut(&Value) -> bool) -> Option<Value> {
+        self.buckets
+            .get(&hash)?
+            .iter()
+            .map(|id| &self.entries[id])
+            .find(|entry| matches(&entry.key))
+            .map(|entry| entry.value)
+    }
+
     fn advance_epoch(&mut self) {
         self.epoch = self.epoch.checked_add(1).expect("map epoch exhausted");
     }

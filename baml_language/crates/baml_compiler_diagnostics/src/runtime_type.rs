@@ -272,6 +272,27 @@ pub fn non_data_field_at_render(field: &str, ty: &str) -> Diagnostic {
     )
 }
 
+/// E0164 — a `@skip` field of an LLM output type has no empty value to hold.
+pub fn unfillable_skip_field_at_render(field: &str, ty: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::NonDataTypeAtRender,
+        format!(
+            "the `@skip` field `{field}` has type `{ty}`, which has no empty value for it to hold, so its class cannot be rendered as an LLM output schema"
+        ),
+    )
+}
+
+/// E0164 — every value of an LLM output type is cyclic, and JSON holds only
+/// finite values.
+pub fn cyclic_type_at_render(ty: &str) -> Diagnostic {
+    Diagnostic::error(
+        DiagnosticId::NonDataTypeAtRender,
+        format!(
+            "every value of `{ty}` is cyclic, and JSON holds only finite values, so it cannot be rendered as an LLM output schema"
+        ),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -374,6 +395,16 @@ mod tests {
                 non_data_field_at_render("Envelope.payload", "unknown"),
                 "E0164",
                 "field `Envelope.payload` has non-data type `unknown`, which cannot be rendered as an LLM output schema",
+            ),
+            (
+                unfillable_skip_field_at_render("Envelope.raw", "reflect.Type"),
+                "E0164",
+                "the `@skip` field `Envelope.raw` has type `reflect.Type`, which has no empty value for it to hold, so its class cannot be rendered as an LLM output schema",
+            ),
+            (
+                cyclic_type_at_render("Loop"),
+                "E0164",
+                "every value of `Loop` is cyclic, and JSON holds only finite values, so it cannot be rendered as an LLM output schema",
             ),
         ];
 

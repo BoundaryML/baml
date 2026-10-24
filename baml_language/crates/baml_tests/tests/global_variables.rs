@@ -8,7 +8,7 @@
 
 use std::{path::Path, sync::Arc};
 
-use baml_db::{OptLevel, ProjectDatabase, compile_program};
+use baml_db::{CheckedWorld, OptLevel, ProjectDatabase};
 use baml_tests::engine::TestDbExt;
 use bex_engine::{BexEngine, BexExternalValue, EngineError, FunctionCallContextBuilder};
 use bex_vm_types::Program;
@@ -94,7 +94,10 @@ const CONFIG = load();
         "/globals/namespaced/main.baml",
         "function main() -> int {\n    root.config.CONFIG\n}\n",
     );
-    let program = compile_program(&db, root, OptLevel::One).expect("the package compiles");
+    let program = CheckedWorld::collect(&db, root)
+        .expect("the world checks")
+        .compile(OptLevel::One)
+        .expect("the package compiles");
     let message = init_failure(program);
     assert!(
         message.contains("while initializing global `user.config.CONFIG`"),
@@ -254,7 +257,10 @@ function main() -> string {
 }
 "#,
     );
-    let program = compile_program(&db, root, OptLevel::One).expect("the package compiles");
+    let program = CheckedWorld::collect(&db, root)
+        .expect("the world checks")
+        .compile(OptLevel::One)
+        .expect("the package compiles");
     let engine = engine(program).expect("`$init` runs");
     assert_eq!(
         call(&engine, "user.main").await,
@@ -289,7 +295,10 @@ function main() -> int {
 }
 "#,
     );
-    let program = compile_program(&db, workspace, OptLevel::One).expect("the world compiles");
+    let program = CheckedWorld::collect(&db, workspace)
+        .expect("the world checks")
+        .compile(OptLevel::One)
+        .expect("the world compiles");
     let engine = engine(program).expect("both packages' `$init`s run");
     assert_eq!(call(&engine, "user.main").await, BexExternalValue::Int(42));
 }

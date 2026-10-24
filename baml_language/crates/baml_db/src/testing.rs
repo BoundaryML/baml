@@ -1,8 +1,8 @@
 //! Test helpers for compiling BAML source into bytecode.
 //!
 //! These utilities panic on compile errors, so they are appropriate for test
-//! code only. Production callers should use [`crate::collect_diagnostics`] and
-//! [`crate::compile_program`] directly.
+//! code only. Production callers check through [`crate::CheckedWorld`] and
+//! render a refused world's errors.
 //!
 //! # These are for white-box tests, not behavior tests
 //!
@@ -50,8 +50,10 @@ pub use baml_compiler2_emit::OptLevel;
 use bex_vm_types::Program;
 
 use crate::{
-    ProjectDatabase, SourceRootSpec, collect_diagnostics,
-    program::{compile_program, compile_program_with},
+    ProjectDatabase, SourceRootSpec,
+    check::{ProjectDiagnostics, collect_compiler2_diagnostics_narrowed},
+    collect_diagnostics,
+    program::CheckedWorld,
     stdlib_prefix::StdlibPrefix,
 };
 
@@ -74,11 +76,8 @@ pub fn setup_test_db(source: &str) -> ProjectDatabase {
     db
 }
 
-/// Assert that a `ProjectDatabase` has no diagnostic errors in workspace files.
-///
-/// Non-workspace roots (the stdlib, source-bearing dependencies) may have
-/// known pre-existing errors that don't affect user code correctness. Only
-/// errors in workspace source files are checked here.
+/// Assert that the test's own sources check: no error diagnostic in a
+/// workspace file, and none without a span.
 #[track_caller]
 pub fn assert_no_diagnostic_errors(db: &ProjectDatabase) {
     let diagnostics = collect_diagnostics(db);
@@ -91,23 +90,21 @@ pub fn assert_no_diagnostic_errors(db: &ProjectDatabase) {
         .filter(|d| matches!(d.severity, Severity::Error))
         .filter(|d| {
             d.primary_span()
-                .is_some_and(|span| user_file_ids.contains(&span.file_id))
+                .is_none_or(|span| user_file_ids.contains(&span.file_id))
         })
         .collect();
-    if !errors.is_empty() {
-        use std::fmt::Write;
-        let mut msg = String::from("Compilation produced diagnostic errors:\n");
-        for (i, err) in errors.iter().enumerate() {
-            let _ = writeln!(
-                msg,
-                "  {}. [{}] {}",
-                i + 1,
-                err.code(),
-                err.message_with_primary_label()
-            );
-        }
-        panic!("{msg}");
-    }
+    assert_clean(&errors);
+}
+
+/// The world `root` heads, admitted by its check; a refused world panics with
+/// every error rendered.
+#[track_caller]
+fn checked_world<'db>(
+    diagnostics: &ProjectDiagnostics<'db>,
+    root: SourceRoot,
+) -> CheckedWorld<'db> {
+    CheckedWorld::check(diagnostics, root)
+        .unwrap_or_else(|refused| panic!("{}", errors_message(refused.errors())))
 }
 
 /// Compile BAML source with default optimization (`OptLevel::One`).
@@ -119,9 +116,9 @@ pub fn compile_source(source: &str) -> Program {
 pub fn compile_source_with_opt(source: &str, opt: OptLevel) -> Program {
     let (mut db, root) = workspace_db();
     db.add_or_update_file_in(root, Path::new("test.baml"), source);
-    assert_no_diagnostic_errors(&db);
-
-    compile_program(&db, root, opt).expect("compile_program should succeed for valid test source")
+    checked_world(&ProjectDiagnostics::collect(&db), root)
+        .compile(opt)
+        .expect("compile should succeed for valid test source")
 }
 
 /// Set up a test database whose stdlib interface derivation is served from
@@ -188,13 +185,19 @@ pub fn check_user_files(db: &ProjectDatabase) -> Vec<Diagnostic> {
 /// Panic with every error rendered, or return if there are none.
 #[track_caller]
 fn assert_clean(errors: &[&Diagnostic]) {
+    assert!(
+        errors.is_empty(),
+        "{}",
+        errors_message(errors.iter().copied())
+    );
+}
+
+/// Every error, one numbered line each.
+fn errors_message<'a>(errors: impl IntoIterator<Item = &'a Diagnostic>) -> String {
     use std::fmt::Write;
 
-    if errors.is_empty() {
-        return;
-    }
     let mut msg = String::from("Compilation produced diagnostic errors:\n");
-    for (i, err) in errors.iter().enumerate() {
+    for (i, err) in errors.into_iter().enumerate() {
         let _ = writeln!(
             msg,
             "  {}. [{}] {}",
@@ -203,7 +206,7 @@ fn assert_clean(errors: &[&Diagnostic]) {
             err.message_with_primary_label()
         );
     }
-    panic!("{msg}");
+    msg
 }
 
 /// [`assert_no_diagnostic_errors`] over [`check_user_files`].
@@ -252,10 +255,15 @@ pub fn compile_multi_file_with_prefix(
             .iter()
             .map(|(path, content)| (Path::new(*path), *content)),
     );
-    assert_no_user_diagnostic_errors(&db);
-
-    compile_program_with(&db, root, opt, prefix)
-        .expect("compile_program should succeed for valid test source")
+    // The stdlib's check is the prefix's: `build_stdlib_prefix` emits only a
+    // stdlib that checked clean, so only the test's own files are checked.
+    let user_files: std::collections::HashSet<SourceFile> =
+        db.workspace_files().into_iter().collect();
+    let diagnostics =
+        collect_compiler2_diagnostics_narrowed(&db, &|file| user_files.contains(&file), Vec::new());
+    checked_world(&diagnostics.merged, root)
+        .compile_with(opt, prefix)
+        .expect("compile should succeed for valid test source")
 }
 
 /// Compile multiple BAML files at the given relative paths in one project.
@@ -269,10 +277,9 @@ pub fn compile_multi_file(files: &[(&str, &str)]) -> Program {
             .iter()
             .map(|(path, content)| (Path::new(*path), *content)),
     );
-    assert_no_diagnostic_errors(&db);
-
-    compile_program(&db, root, OptLevel::One)
-        .expect("compile_program should succeed for valid test source")
+    checked_world(&ProjectDiagnostics::collect(&db), root)
+        .compile(OptLevel::One)
+        .expect("compile should succeed for valid test source")
 }
 
 // ── Root-aware fixture builders ─────────────────────────────────────────────

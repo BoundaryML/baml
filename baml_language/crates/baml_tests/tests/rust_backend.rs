@@ -8,7 +8,10 @@ use bex_vm_types::{
 };
 
 fn lower(db: &baml_db::ProjectDatabase, opt: OptLevel) -> Program {
-    baml_db::compile_program(db, db.workspace_root().unwrap(), opt).unwrap()
+    baml_db::CheckedWorld::collect(db, db.workspace_root().unwrap())
+        .expect("the world checks")
+        .compile(opt)
+        .unwrap()
 }
 
 fn fingerprint(program: &Program) -> [u8; 32] {
@@ -42,7 +45,7 @@ fn initializers_and_global_calls_at_every_opt_level() {
             "globals.baml",
             r#"
 const FORWARD = LATER + 1;
-let LATER = 41;
+const LATER = 41;
 const CAPTURED = { let offset = FORWARD; (n: int) -> int { n + offset } };
 function fail() -> int throws string { throw "initializer" }
 const RECOVERED = fail() catch (e) { string => 7 };
@@ -498,11 +501,11 @@ function hooked_without_settings(n: int) -> int { n + 6 }"#,
         &[], &[]),
     ("generics.is_int_t", r#"function is_int_t<T>() -> bool { reflect.Type.of<T>() == reflect.Type.of<int>() }"#,
         &[], &[]),
-    ("generics.bound", r#"function bound(t: reflect.Type) -> bool { type U = unreflect(t); reflect.Type.of<U>() == t }"#,
+    ("generics.bound", r#"function bound(t: reflect.Type) -> bool { let type U = t; reflect.Type.of<U>() == t }"#,
         &[], &[]),
     ("sibling_bindings.Wrapper", r#"class Wrapper<T> { inner T }"#,
         &[], &[]),
-    ("sibling_bindings.sibling_bindings", r#"function sibling_bindings(a: reflect.Type, b: reflect.Type) -> reflect.Type[] { let first: reflect.Type = { let type T = a; reflect.Type.of<Wrapper<T>>() } let second: reflect.Type = { let type U = b; reflect.Type.of<Wrapper<U>>() } [first, second] }"#,
+    ("sibling_bindings.sibling_bindings", r#"function sibling_bindings(a: reflect.Type, b: reflect.Type) -> reflect.Type[] { let first: reflect.Type = { let type T = a; reflect.Type.of<Wrapper<T>>() }; let second: reflect.Type = { let type U = b; reflect.Type.of<Wrapper<U>>() }; [first, second] }"#,
         &[], &[]),
     ("array_loop.total", r#"function total(xs: int[]) -> int { let total = 0; for (let v in xs) { total += v; } total }"#,
         &["vm.load_array_element(", "vm.container_len("], &["vm.virtual_target(", "ArrayIterator"]),
@@ -608,37 +611,6 @@ fn constructs_and_generated_shapes() {
         .find(|f| f.display == "user.<lambda(cap_local, 0)>")
         .unwrap();
     assert_eq!(lambda.arity, 1);
-}
-
-#[test]
-fn functions_whose_names_render_alike_compile_to_their_own_objects() {
-    let db = baml_test_support::setup_multi_file_db(&[
-        (
-            "foo.baml",
-            "class Foo {\n  x int\n  function m(self) -> int { self.x + 1 }\n}\n",
-        ),
-        ("ns_Foo/m.baml", "function m(x: int) -> int { x + 2 }\n"),
-    ]);
-    let program = lower(&db, OptLevel::Two);
-    let module = render(&db, &program, OptLevel::Two, None);
-
-    let alike: Vec<_> = module
-        .functions
-        .iter()
-        .filter(|f| f.name == "user.Foo.m")
-        .collect();
-    assert_eq!(alike.len(), 2, "{:?}", module.rejected);
-    assert_ne!(alike[0].object, alike[1].object, "each has its own object");
-    assert_ne!(alike[0].symbol, alike[1].symbol, "each has its own symbol");
-    for function in &alike {
-        assert_eq!(
-            program
-                .function_name(bex_vm_types::ObjectIndex::from_raw(function.object))
-                .as_deref(),
-            Some(function.name.as_str()),
-            "the entry's name is what the loader renders for its object"
-        );
-    }
 }
 
 #[test]

@@ -46,7 +46,8 @@
 //!    growth/shrink settings. These affect file/sealing frequency, aggregation
 //!    windows, allocation churn, visibility latency and resident memory. Cache
 //!    flushing and file sealing have separate deadlines despite equal defaults.
-//! 4. **Contention and stalls:** pool quotas, [`transport::IDLE_PROBES`], and
+//! 4. **Contention and stalls:** the chunk lanes, [`snapshot::capture_budget_bytes`],
+//!    the [`overage`] wait curves, [`transport::IDLE_PROBES`], and
 //!    [`identity::SHARD_COUNT`]. Quotas matter when producers run out of storage;
 //!    idle probes trade wake latency for idle CPU. Function shards only affect
 //!    registration/lookup/GC, not existing call-path hits. Profile those paths
@@ -54,7 +55,8 @@
 //!
 //! # Important settings that are not general speed knobs
 //!
-//! - [`transport::MIN_PRODUCER_SLOTS`] is admission capacity, not threads to spawn.
+//! - [`transport::MIN_PRODUCER_SLOTS`] is the producer table's initial size and the
+//!   lanes' sizing basis, not threads to spawn and not a limit.
 //!   [`processor::THREADS_PER_RUNTIME`] describes the supported single-consumer
 //!   architecture; adding processors requires an ownership/routing design.
 //! - [`clock::DEFAULT_MODE`] selects a backend and can change read cost. Calibration
@@ -77,6 +79,7 @@ pub mod layout;
 pub mod local_files;
 pub mod mode;
 pub mod network;
+pub mod overage;
 pub mod policy;
 pub mod processor;
 pub mod publisher;

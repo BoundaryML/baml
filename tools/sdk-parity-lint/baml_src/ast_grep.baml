@@ -81,7 +81,7 @@ function parse_ast_grep_stream(stdout: uint8array, config: SourceConfig) -> AstM
     let matches: AstMatch[] = [];
     for (let line in baml.String.from_utf8(stdout).lines()) {
         if (line.trim().length() > 0) {
-            let decoded: AstMatch = baml.json.from_string<AstMatch>(line);
+            let decoded: AstMatch = baml.json.decode<AstMatch>(line);
             let ast_match = owned_ast_match(decoded);
             if (!ast_match.file.starts_with(`${config.source_root}/`)) {
                 throw baml.errors.InvalidArgument {

@@ -1,0 +1,6 @@
+name = "json tree path"
+description = "parse a 1 MB document once, then run typed path reads and record decodes into it"
+origin = "B-1815"
+expect = "485492"
+jobs = 25
+warmup = 1

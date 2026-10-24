@@ -11,9 +11,7 @@ use std::path::{Path, PathBuf};
 
 use baml_base::{Dependency, Name};
 use baml_compiler2_emit::OptLevel;
-use baml_db::{
-    ProjectDatabase, SourceRootKind, SourceRootSpec, compile_program, discover_baml_files,
-};
+use baml_db::{CheckedWorld, ProjectDatabase, SourceRootKind, SourceRootSpec, discover_baml_files};
 use baml_tests::engine::TestDbExt;
 use bex_vm_types::RuntimeCompileRequest;
 
@@ -37,7 +35,9 @@ fn compile_to_bytes(root: &Path, sources: &[(PathBuf, String)]) -> Vec<u8> {
     for (path, content) in sources {
         db.file(path, content);
     }
-    let program = compile_program(&db, package, OptLevel::Two)
+    let program = CheckedWorld::collect(&db, package)
+        .expect("the world checks")
+        .compile(OptLevel::Two)
         .unwrap_or_else(|e| panic!("compilation of {} failed: {e:?}", root.display()));
     borsh::to_vec(&program).expect("borsh serialization failed")
 }

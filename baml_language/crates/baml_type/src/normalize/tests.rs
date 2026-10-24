@@ -1791,6 +1791,75 @@ mod interned_entry {
         }
     }
 
+    #[test]
+    fn cached_normalization_expands_nested_aliases_and_reuses_the_result() {
+        let mut ctx = Ctx::default();
+        ctx.aliases
+            .insert(qtn("MaybeInt"), union(vec![Ty::int(), Ty::null()]));
+        ctx.aliases
+            .insert(qtn("Nested"), union(vec![alias("MaybeInt"), Ty::null()]));
+        json_alias(&mut ctx, "Json");
+        let cache = InternedCanonicalCache::default();
+        for input in [
+            alias("Nested"),
+            union(vec![alias("Nested"), Ty::null()]),
+            alias("Json"),
+        ] {
+            let input = it(&input);
+            let expected = normalize_interned(&input, &ctx);
+            let actual = cache.normalize(&input, &ctx);
+            assert_eq!(actual, expected);
+            if input == it(&alias("Json")) {
+                assert!(
+                    matches!(actual.kind(), interned::InferTy::Union(_)),
+                    "recursive root must unfold"
+                );
+            } else {
+                assert_eq!(actual, it(&union(vec![Ty::int(), Ty::null()])));
+            }
+            let lookups = ctx.alias_lookups.get();
+            assert_eq!(cache.normalize(&input, &ctx), actual);
+            assert_eq!(
+                ctx.alias_lookups.get(),
+                lookups,
+                "warm normalization re-expanded aliases"
+            );
+        }
+    }
+
+    #[test]
+    fn resolved_cache_keeps_both_forms_lazy_in_either_access_order() {
+        let mut ctx = Ctx::default();
+        ctx.aliases.insert(qtn("MaybeInt"), Ty::optional(Ty::int()));
+        json_alias(&mut ctx, "Json");
+        for input in [it(&alias("MaybeInt")), it(&alias("Json"))] {
+            let expected_canonical = NormalTy::canonical_interned(&input, &ctx);
+            let expected_normalized = normalize_interned(&input, &ctx);
+            for normalized_first in [false, true] {
+                let cache = InternedCanonicalCache::default();
+                if normalized_first {
+                    assert_eq!(cache.normalize(&input, &ctx), expected_normalized);
+                    assert!(cache.get_canonical(&input).is_none());
+                } else {
+                    assert_eq!(cache.canonical(&input, &ctx), expected_canonical);
+                    assert!(cache.get_normalized(&input).is_none());
+                }
+
+                assert_eq!(cache.canonical(&input, &ctx), expected_canonical);
+                assert_eq!(cache.normalize(&input, &ctx), expected_normalized);
+
+                let lookups = ctx.alias_lookups.get();
+                assert_eq!(cache.canonical(&input, &ctx), expected_canonical);
+                assert_eq!(cache.normalize(&input, &ctx), expected_normalized);
+                assert_eq!(
+                    ctx.alias_lookups.get(),
+                    lookups,
+                    "warm reads recomputed a form"
+                );
+            }
+        }
+    }
+
     /// The plain entry gets the same spec rule (TYPE_SYSTEM.md:
     /// `(true | false) == bool`); the collapse lives in the shared algebra,
     /// not in an engine.

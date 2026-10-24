@@ -58,7 +58,7 @@ function quick_sort(values: int[]) -> int[] {
 function run(inputs: int[][]) -> int {
   let check = 0;
   for (let input in inputs) {
-    let out = baml.json.to_string(quick_sort(input));
+    let out = baml.json.stringify(quick_sort(input));
     let h = 0;
     for (let c in out.to_code_points()) { h = (h * 31 + c) % 1000000007; }
     check = (check + h + out.length()) % 1000000007;

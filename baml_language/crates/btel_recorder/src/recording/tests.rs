@@ -353,6 +353,7 @@ fn size_boundary_recycles_the_input_chunk_before_handoff() {
             span_chunks: nz(1),
             max_producers: nz(1),
             preallocate: true,
+            overage_wait_base: btel_settings::transport::OVERAGE_WAIT_BASE_DURATION,
         })
         .unwrap();
     let files = RefCell::new(Vec::new());
@@ -435,6 +436,7 @@ fn idle_processor_seals_on_the_recording_deadline_without_more_input() {
             span_chunks: nz(1),
             max_producers: nz(1),
             preallocate: true,
+            overage_wait_base: btel_settings::transport::OVERAGE_WAIT_BASE_DURATION,
         })
         .unwrap();
     let mut producer = pool.register_producer().unwrap();
@@ -791,6 +793,7 @@ fn population_outcomes_include_timing_only_calls_and_count_forwarded_spans_once(
             span_chunks: nz(1),
             max_producers: nz(1),
             preallocate: true,
+            overage_wait_base: btel_settings::transport::OVERAGE_WAIT_BASE_DURATION,
         })
         .unwrap();
     let files = RefCell::new(Vec::new());
@@ -937,7 +940,7 @@ fn thread_heavy_files_seal_near_the_encoded_target() {
 }
 
 fn snapshot() -> btel_snapshot::Snapshot {
-    let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+    let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
     let b = pool.try_acquire().unwrap();
     b.finish(
         btel_snapshot::SnapshotValue::Int(42),
@@ -959,7 +962,7 @@ fn type_args_round_trip_at_minor_eight_beside_inputs() {
         |snapshot| received.borrow_mut().push(crate::cas_id(&snapshot)),
     )
     .unwrap();
-    let snapshots = btel_snapshot::SnapshotPool::new(2, btel_snapshot::Limits::default());
+    let snapshots = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
     let capture = |value| {
         let snapshot = snapshots.try_acquire().unwrap().finish(
             btel_snapshot::SnapshotValue::Int(value),
@@ -1055,7 +1058,7 @@ fn network_spans_round_trip_at_minor_seven() {
         "https://example.com/{}",
         "a".repeat(4 * encoding::MAX_EVENT_BYTES)
     );
-    let snapshots = btel_snapshot::SnapshotPool::new(3, btel_snapshot::Limits::default());
+    let snapshots = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
     let capture = |value| {
         let snapshot = snapshots.try_acquire().unwrap().finish(
             btel_snapshot::SnapshotValue::Int(value),
@@ -1249,7 +1252,7 @@ fn span_usage_rides_its_completion_at_minor_eleven() {
 #[test]
 fn captures_move_after_chunk_recycle_and_duplicates_release_before_file_flush() {
     use btel_snapshot::{Limits, SnapshotPool, SnapshotValue};
-    let snapshots = SnapshotPool::new(2, Limits::default());
+    let snapshots = SnapshotPool::unbounded(Limits::default());
     let make = || {
         snapshots.try_acquire().unwrap().finish(
             SnapshotValue::Int(42),
@@ -1266,6 +1269,7 @@ fn captures_move_after_chunk_recycle_and_duplicates_release_before_file_flush() 
             span_chunks: nz(1),
             max_producers: nz(1),
             preallocate: true,
+            overage_wait_base: btel_settings::transport::OVERAGE_WAIT_BASE_DURATION,
         })
         .unwrap();
     let mut producer = chunks.register_producer().unwrap();
@@ -1322,7 +1326,7 @@ fn captures_move_after_chunk_recycle_and_duplicates_release_before_file_flush() 
 #[test]
 fn snapshot_receiver_panic_releases_pending_owners() {
     use btel_snapshot::{Limits, SnapshotPool, SnapshotValue};
-    let pool = SnapshotPool::new(2, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut p = RecordingPublisher::with_snapshot_receiver(
         RecordingId::generate(),
         RecordingConfig::default(),
@@ -1659,6 +1663,7 @@ fn processor_ends_the_recording_only_after_producers_stop_writing() {
             span_chunks: nz(4),
             max_producers: nz(2),
             preallocate: true,
+            overage_wait_base: btel_settings::transport::OVERAGE_WAIT_BASE_DURATION,
         })
         .unwrap();
     let (send, recv) = std::sync::mpsc::channel();

@@ -137,7 +137,7 @@ function run_ratchet(
 }
 
 function render_parity_json_output(repo_root: string = ".") -> string {
-    baml.json.serialize(render_parity_output(repo_root = repo_root))
+    baml.json.stringify(render_parity_output(repo_root = repo_root))
 }
 
 function main(repo_root: string = ".") -> RenderedParity {

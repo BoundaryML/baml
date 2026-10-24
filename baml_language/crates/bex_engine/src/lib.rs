@@ -96,6 +96,8 @@ pub use bex_vm::{CompiledBodies, CompiledBodyTable, compiled_rt::STACKFUL_FIBERS
 pub use btel_types::ProcessStatus;
 #[cfg(not(target_arch = "wasm32"))]
 pub use telemetry::TelemetryRecording;
+#[cfg(all(not(target_arch = "wasm32"), feature = "telemetry_diagnostics"))]
+pub use telemetry::append_diagnostics_line;
 mod telemetry_network;
 mod telemetry_state;
 pub mod trace_heap;
@@ -2106,6 +2108,8 @@ impl BexEngine {
                     process_exit,
                     #[cfg(not(target_arch = "wasm32"))]
                     gc_function: std::sync::OnceLock::new(),
+                    #[cfg(all(not(target_arch = "wasm32"), feature = "telemetry_diagnostics"))]
+                    diagnostics_file: telemetry::diagnostics_file(),
                 })
             })
             .transpose()?;
@@ -2980,6 +2984,11 @@ impl BexEngine {
                     // Drain delivery even when processing failed. No VM or
                     // heap permit survives here; cancellation cannot skip join.
                     let delivery = delivery.map_or(Ok(()), |sink| sink.finish());
+                    // Everything is final here, and this task is joined even
+                    // if the awaiting caller is dropped: the blocking write
+                    // belongs here, before the engine reads as closed.
+                    #[cfg(feature = "telemetry_diagnostics")]
+                    shutdown.engine.report_telemetry_diagnostics();
                     shutdown.complete();
                     delivery.and(processing)
                 })

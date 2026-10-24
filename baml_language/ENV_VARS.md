@@ -68,6 +68,7 @@ Go, Rust, C++, Java, C# and TypeScript load a native library. Python and Swift l
 | `DEV_BAML_VM_KPERF` | Hardware counters around VM execution (Apple Silicon). |
 | `DEV_BAML_QUERY_FAULT` | Crash injection for telemetry recovery tests. |
 | `DEV_BAML_HEAP_VERIFY` | `off`, `quick`, `full`. Needs the `heap_debug` feature. |
+| `DEV_BAML_TELEMETRY_DIAGNOSTICS_FILE` | Absolute path; each engine appends one JSON line of telemetry diagnostics at shutdown. Needs the `telemetry_diagnostics` feature. |
 | `DEV_BAML_PLAYGROUND_DIR`, `DEV_BAML_PLAYGROUND_PORT` | Serve the playground from a build or a dev server. |
 
 ## Standard variables we read

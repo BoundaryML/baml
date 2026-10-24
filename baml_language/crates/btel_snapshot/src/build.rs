@@ -591,6 +591,8 @@ impl Builder {
     /// Shape the capture into blobs; the snapshot is immutable afterwards.
     pub fn finish(mut self, root: impl Into<SnapshotRoot>, shaper: &mut Shaper) -> Snapshot {
         shaper.shape(&mut self.0, root.into());
+        // Charged for what it grew to; nothing grows it after this.
+        self.0.recharge();
         Snapshot::new(self.0)
     }
 }
@@ -598,7 +600,7 @@ impl Builder {
 /// A `map<string, string>` snapshot built outside any VM, such as a
 /// project's sources keyed by path. Entries are taken in order while their
 /// keys and values total at most `max_bytes`; the rest are dropped, and the
-/// map's recorded length says so. `None` when the pool has no slot.
+/// map's recorded length says so. `None` when the pool has no room.
 pub fn string_map(
     pool: &SnapshotPool,
     entries: &[(String, String)],

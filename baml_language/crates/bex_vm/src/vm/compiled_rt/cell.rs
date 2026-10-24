@@ -153,7 +153,7 @@ mod tests {
                 vm.current_context().clone(),
                 None,
             );
-            vm.frames.push(Frame::Bytecode(frame));
+            vm.frames.try_push(Frame::Bytecode(frame)).unwrap();
             vm.run_entry_with(|vm, fr| -> Result<(), Box<VmError>> {
                 for (index, expected) in captures.iter().enumerate() {
                     assert_eq!(vm.capture_cell(fr, index).unwrap(), *expected);

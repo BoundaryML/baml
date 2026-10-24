@@ -1,9 +1,9 @@
 use std::{
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use btel_bcs::{
@@ -237,7 +237,7 @@ async fn failed_physical_target_does_not_cancel_either_lane() {
             .unwrap(),
         );
         let handle = delivery.handle();
-        let pool = SnapshotPool::new(2, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         handle
             .try_submit(
                 files(1).pop().unwrap(),
@@ -279,7 +279,7 @@ async fn expired_target_drops_only_itself_and_later_work_is_accepted() {
             .await;
         let delivery = Arc::new(BcsDelivery::new(config(&server), |_| {}).unwrap());
         let handle = delivery.handle();
-        let pool = SnapshotPool::new(2, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let mut files = files(2).into_iter();
         handle
             .try_submit(
@@ -454,7 +454,7 @@ async fn serialized_snapshots_release_admission_slots_before_put_completion() {
     settings.retry_delay = Duration::from_millis(10);
     let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
     let handle = delivery.handle();
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut files = files(2).into_iter();
     handle
         .try_submit(
@@ -494,7 +494,7 @@ async fn mixed_plan_prunes_without_serializing_and_uploads_canonical_envelopes()
         .expect(3)
         .mount(&server)
         .await;
-    let pool = SnapshotPool::new(8, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let snapshots = vec![
         scalar(&pool, 10),
         scalar(&pool, 11),
@@ -614,7 +614,7 @@ async fn prepare_retries_preserve_identity_and_put_retries_preserve_exact_bytes(
         .expect(2)
         .mount(&server)
         .await;
-    let pool = SnapshotPool::new(2, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let delivery = Arc::new(BcsDelivery::new(config(&server), |_| {}).unwrap());
     delivery
         .handle()
@@ -716,7 +716,7 @@ async fn rejects_malformed_plans_before_any_put_and_releases_every_owner() {
             .unwrap(),
         );
         let handle = delivery.handle();
-        let pool = SnapshotPool::new(3, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         handle
             .try_submit(
                 files(1).pop().unwrap(),
@@ -943,7 +943,7 @@ async fn snapshot_owner_saturation_waits_until_planning_releases_owners() {
     settings.request_timeout = Duration::from_secs(2);
     let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
     let handle = delivery.handle();
-    let pool = SnapshotPool::new(2, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut files = files(2).into_iter();
     handle
         .try_submit(
@@ -1025,7 +1025,7 @@ async fn drain_finishes_multiple_plans_without_cas_blocking_the_recording_lane()
     let delivery = Arc::new(BcsDelivery::new(config(&server), |_| {}).unwrap());
     let handle = delivery.handle();
     let mut files = files(2).into_iter();
-    let pool = SnapshotPool::new(2, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     handle
         .try_submit(
             files.next().unwrap(),
@@ -1076,7 +1076,7 @@ async fn response_and_recording_body_byte_limits_drop_only_affected_work() {
             .mount(&server)
             .await;
         let delivery = Arc::new(BcsDelivery::new(config(&server), |_| {}).unwrap());
-        let pool = SnapshotPool::new(2, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         // A recording body has a limit, and a blob placed in it counts.
         delivery
             .handle()
@@ -1126,7 +1126,7 @@ async fn a_blob_larger_than_every_byte_limit_uploads_whole() {
     // Less than the blob, let alone its capture and both sides of its body.
     settings.cas_reserved_bytes = 4096;
     let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let snapshot = large(&pool);
     let mut expected = Vec::new();
     snapshot
@@ -1218,10 +1218,10 @@ async fn a_plan_over_the_cas_reservation_holds_up_only_another_such_plan() {
     settings.cas_reserved_bytes = 32 * 1024;
     let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
     let handle = delivery.handle();
-    let pool = SnapshotPool::new(2, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     // A storage that held a large capture keeps its capacity, and is
     // charged for it: the small capture takes a storage of its own.
-    let small = SnapshotPool::new(1, Limits::default());
+    let small = SnapshotPool::unbounded(Limits::default());
     let mut files = files(4).into_iter();
     // Nothing else is held: the large plan goes at once, beside the budget.
     let (snapshots, targets) = object(&pool, true);
@@ -1295,7 +1295,7 @@ async fn a_long_cas_upload_does_not_keep_its_plan_pending() {
     settings.max_pending_plans = 1;
     let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
     let handle = delivery.handle();
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut files = files(2).into_iter();
     let (snapshots, targets) = object(&pool, false);
     handle
@@ -1336,7 +1336,7 @@ async fn cas_bodies_upload_side_by_side_up_to_the_slot_count() {
         settings.retry_delay = Duration::from_millis(10);
         settings.max_cas_uploads = slots;
         let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
-        let pool = SnapshotPool::new(2, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         delivery
             .handle()
             .try_submit(
@@ -1393,7 +1393,7 @@ async fn permanent_put_failure_is_not_retried_and_draining_releases_queued_owner
         })
         .unwrap(),
     );
-    let pool = SnapshotPool::new(4, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     for (index, file) in files(3).into_iter().enumerate() {
         let result = delivery.handle().try_submit(
             file,
@@ -1423,14 +1423,16 @@ async fn disabling_cancels_a_blocked_prepare_and_releases_queued_owners_promptly
             observed.store(true, Ordering::SeqCst);
             ResponseTemplate::new(200).set_delay(Duration::from_secs(30))
         })
-        .expect(1)
+        // Prepares run together: every admitted plan's goes out and blocks,
+        // unless the disable below lands before a later one is sent.
+        .expect(1..=3)
         .mount(&server)
         .await;
     let mut settings = config(&server);
     settings.request_timeout = Duration::from_secs(10);
     let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
     let handle = delivery.handle();
-    let pool = SnapshotPool::new(4, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     for (index, file) in files(3).into_iter().enumerate() {
         handle
             .try_submit(
@@ -1508,7 +1510,7 @@ async fn the_shutdown_timeout_bounds_waiting_admission_and_drops_what_is_left() 
         BcsDelivery::new(settings, move |error| failed.lock().unwrap().push(error)).unwrap(),
     );
     let handle = delivery.handle();
-    let pool = SnapshotPool::new(4, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut files = files(2).into_iter();
     handle
         .try_submit(
@@ -1635,7 +1637,7 @@ async fn large_upload(
     settings.request_timeout = Duration::from_millis(100);
     settings.min_upload_bytes_per_second = min_upload_bytes_per_second;
     let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     delivery
         .handle()
         .try_submit(
@@ -1724,7 +1726,7 @@ async fn a_long_string_is_held_until_its_upload_ends_and_the_capture_only_until_
     settings.max_attempts = 1000;
     settings.retry_delay = Duration::from_millis(10);
     let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let texts = ["a", "b"].map(|letter| btel_snapshot::BexStr::from(letter.repeat(10_000)));
     let backing = texts.each_ref().map(|text| match text {
         btel_snapshot::BexStr::Flat(flat) => Arc::downgrade(flat),
@@ -1803,7 +1805,7 @@ async fn a_short_part_of_a_long_string_goes_with_its_recording() {
     settings.recording_reserved_bytes = 5 * 1024 * 1024;
     let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
     let handle = delivery.handle();
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let document = btel_snapshot::BexStr::from("d".repeat(8 * 1024 * 1024));
     // One part short enough to be copied into the body, one sent from the
     // document's own memory: each holds all of it.
@@ -1835,4 +1837,155 @@ async fn a_short_part_of_a_long_string_goes_with_its_recording() {
         .map(|(_, blob)| blob)
         .collect();
     assert_eq!(uploaded, sent);
+}
+
+#[tokio::test]
+async fn prepares_run_together_and_recordings_upload_together() {
+    let server = MockServer::start().await;
+    let base = server.uri();
+    // The first file's prepare is the slowest, so serial prepares would take
+    // the sum of the delays.
+    Mock::given(method("POST"))
+        .respond_with(move |request: &Request| {
+            let sequence = support::prepare(request).recording.recording_file_sequence;
+            let delay = Duration::from_millis(if sequence == 1 { 400 } else { 150 });
+            ResponseTemplate::new(200)
+                .set_body_json(response(request, &base, &[]))
+                .set_delay(delay)
+        })
+        .expect(4)
+        .mount(&server)
+        .await;
+    let stored = Arc::new(Mutex::new(Vec::new()));
+    let order = stored.clone();
+    Mock::given(method("PUT"))
+        .respond_with(move |request: &Request| {
+            order
+                .lock()
+                .unwrap()
+                .push((Instant::now(), request.url.path().to_owned()));
+            ResponseTemplate::new(200).set_delay(Duration::from_millis(150))
+        })
+        .expect(4)
+        .mount(&server)
+        .await;
+    let mut settings = config(&server);
+    settings.request_timeout = Duration::from_secs(2);
+    let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
+    let handle = delivery.handle();
+    let pool = SnapshotPool::unbounded(Limits::default());
+    let started = Instant::now();
+    for (index, file) in files(4).into_iter().enumerate() {
+        handle
+            .try_submit(
+                file,
+                vec![scalar(&pool, i64::try_from(index).unwrap())],
+                vec![proposed(0, UploadKind::Recording, &[0])],
+            )
+            .unwrap();
+    }
+    assert_eq!(finish(delivery).await, Ok(()));
+    // The slowest prepare and one PUT, at least.
+    assert!(started.elapsed() >= Duration::from_millis(550));
+    let stored = stored.lock().unwrap();
+    // Files 2, 3 and 4 were prepared together, so their PUTs began together:
+    // one at a time they would begin a PUT's length apart.
+    let mut arrivals: Vec<Instant> = stored.iter().map(|(at, _)| *at).collect();
+    arrivals.sort_unstable();
+    let closest = arrivals
+        .windows(2)
+        .map(|pair| pair[1].duration_since(pair[0]))
+        .min()
+        .unwrap();
+    assert!(
+        closest < Duration::from_millis(100),
+        "recording uploads did not overlap: {closest:?} apart"
+    );
+    // Upload IDs are `{sequence}-{target}`: every recording was stored, in
+    // whatever order the uploads ended.
+    let mut sequences: Vec<u64> = stored
+        .iter()
+        .map(|(_, path)| {
+            path.rsplit('/')
+                .next()
+                .and_then(|id| id.split('-').next())
+                .and_then(|sequence| sequence.parse().ok())
+                .expect("a recording upload path")
+        })
+        .collect();
+    sequences.sort_unstable();
+    assert_eq!(sequences, [1, 2, 3, 4]);
+    assert_eq!(handle.loss_count(), 0);
+    assert_eq!(handle.recording_acked_through(), 4);
+    #[cfg(feature = "diagnostics")]
+    {
+        let diagnostics = handle.diagnostics();
+        assert_eq!(
+            (diagnostics.pending_plans, diagnostics.pending_captures),
+            (0, 0)
+        );
+        assert_eq!((diagnostics.prepares.count, diagnostics.puts.count), (4, 4));
+        // The slowest prepare was answered after 400 ms; a prepare is not
+        // answered until its plan is read.
+        assert!(diagnostics.prepares.max_nanos >= 400_000_000);
+        assert!(diagnostics.prepares.total_nanos >= diagnostics.prepares.max_nanos);
+        assert!(diagnostics.puts.max_nanos >= 150_000_000);
+        assert!(diagnostics.prepares.bytes > 0 && diagnostics.puts.bytes > 0);
+    }
+}
+
+#[tokio::test]
+async fn a_stored_file_is_acknowledged_while_an_earlier_one_is_still_uploading() {
+    let server = MockServer::start().await;
+    let base = server.uri();
+    Mock::given(method("POST"))
+        .respond_with(move |request: &Request| {
+            ResponseTemplate::new(200).set_body_json(response(request, &base, &[]))
+        })
+        .expect(3)
+        .mount(&server)
+        .await;
+    // File 1's upload is the slowest; files 2 and 3 are stored while it is
+    // still on its way.
+    Mock::given(method("PUT"))
+        .respond_with(move |request: &Request| {
+            let first = request.url.path().ends_with("/1-0");
+            ResponseTemplate::new(200).set_delay(Duration::from_millis(if first {
+                2000
+            } else {
+                0
+            }))
+        })
+        .expect(3)
+        .mount(&server)
+        .await;
+    let mut settings = config(&server);
+    settings.request_timeout = Duration::from_secs(5);
+    let delivery = Arc::new(BcsDelivery::new(settings, |_| {}).unwrap());
+    let handle = delivery.handle();
+    let pool = SnapshotPool::unbounded(Limits::default());
+    let started = Instant::now();
+    for (index, file) in files(3).into_iter().enumerate() {
+        handle
+            .try_submit(
+                file,
+                vec![scalar(&pool, i64::try_from(index).unwrap())],
+                vec![proposed(0, UploadKind::Recording, &[0])],
+            )
+            .unwrap();
+    }
+    // Each staged file carried the metadata retained when it was sealed, so
+    // file 3 being stored acknowledges everything through it: nothing waits
+    // for file 1.
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while handle.recording_acked_through() < 3 {
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    })
+    .await
+    .expect("files 2 and 3 are acknowledged while file 1 uploads");
+    assert!(started.elapsed() < Duration::from_millis(2000));
+    assert_eq!(finish(delivery).await, Ok(()));
+    assert_eq!(handle.recording_acked_through(), 3);
+    assert_eq!(handle.loss_count(), 0);
 }

@@ -28,7 +28,7 @@ function _schema_for_signature(handler: reflect.AnyFunction) -> map<string, unkn
             a.type
         };
         let lowered = _scope_schema_refs(baml.json.schema(accepted, naming = baml.json.Naming.Aliased), prefix);
-        let property = baml.json.from_json<map<string, unknown>>(lowered);
+        let property = baml.json.to<map<string, unknown>>(lowered);
         let reached = baml.json.path_or<map<string, unknown>>(lowered, ".$defs", {});
         for (let name in reached.keys()) {
             let _ = definitions.set(prefix + name, reached.get(name));

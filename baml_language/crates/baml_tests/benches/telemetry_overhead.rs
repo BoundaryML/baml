@@ -9,7 +9,7 @@
 use std::{path::Path, sync::Arc};
 
 use baml_compiler2_emit::OptLevel;
-use baml_db::{ProjectDatabase, compile_program};
+use baml_db::{CheckedWorld, ProjectDatabase};
 use baml_tests::engine::TestDbExt;
 use bex_engine::{BexEngine, FunctionCallContextBuilder, TelemetryRecording};
 use divan::{Bencher, black_box};
@@ -34,8 +34,10 @@ fn bench_main(bencher: Bencher, source: &str, recording: bool) {
     let mut db = ProjectDatabase::new();
     let package = db.workspace(Path::new("."));
     db.file("bench.baml", source);
-    let program =
-        compile_program(&db, package, OptLevel::Two).expect("benchmark compilation failed");
+    let program = CheckedWorld::collect(&db, package)
+        .expect("the world checks")
+        .compile(OptLevel::Two)
+        .expect("benchmark compilation failed");
     let sys_ops = Arc::new(sys_native::SysOps::native());
     let dir = tempfile::tempdir().expect("recording directory");
     let engine = if recording {

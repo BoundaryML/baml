@@ -9,10 +9,15 @@ homepage = { workspace = true }
 documentation = { workspace = true }
 repository = { workspace = true }
 license = { workspace = true }
-description = "Experimental bounded reusable telemetry chunks"
+description = "Reusable telemetry chunks in lanes of a soft size"
 
 [target.'cfg(baml_loom)'.dependencies]
 loom = { workspace = true }
+
+[features]
+# Pool-wide counts of producer cold paths (exhaustion, overage). Measurement
+# only; nothing reads them in production.
+diagnostics = [  ]
 
 [lints]
 workspace = true

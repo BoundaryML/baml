@@ -12,7 +12,7 @@ function compiled_messages() -> string {
     } else {
         "sap accepted a null"
     };
-    let decoded = baml.json.from_string<Item>("[1, 2]") catch (e) {
+    let decoded = baml.json.decode<Item>("[1, 2]") catch (e) {
         baml.json.DecodeError => e.message,
         _ => "not a DecodeError",
     };
@@ -39,7 +39,7 @@ function minted_messages() -> string {
     } else {
         "sap accepted a null"
     };
-    let decoded = baml.json.from_string<Item>("[1, 2]") catch (e) {
+    let decoded = baml.json.decode<Item>("[1, 2]") catch (e) {
         baml.json.DecodeError => e.message,
         _ => "not a DecodeError",
     };

@@ -365,7 +365,7 @@ function chat_parses_tool_calls() -> json {
                 "count": uses.length(),
                 "id": use?.id,
                 "name": use?.name,
-                "args": baml.json.to_json(use?.args),
+                "args": baml.json.from(use?.args),
                 "stop_reason": `${turn.stop_reason}`,
                 "text": turn.terminal_text(),
             }
@@ -493,12 +493,12 @@ function _issue_4589_answer() -> string {
 }
 
 function _issue_4589_chat_response() -> string {
-    let answer = baml.json.stringify(baml.json.to_json(_issue_4589_answer()));
+    let answer = baml.json.stringify(_issue_4589_answer());
     `{"id":"chatcmpl-4589","model":"m","choices":[{"index":0,"message":{"role":"assistant","content":${answer}},"finish_reason":"stop"}]}`
 }
 
 function _issue_4589_responses_response() -> string {
-    let answer = baml.json.stringify(baml.json.to_json(_issue_4589_answer()));
+    let answer = baml.json.stringify(_issue_4589_answer());
     `{"id":"resp-4589","model":"m","status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":${answer}}]}]}`
 }
 
@@ -1250,8 +1250,8 @@ function chat_sse_assembles_tool_calls() -> json {
                 "count": uses.length(),
                 "id": use?.id,
                 "name": use?.name,
-                "args": baml.json.to_json(use?.args),
-                "stops": baml.json.to_json(stops),
+                "args": baml.json.from(use?.args),
+                "stops": baml.json.from(stops),
             }
         },
     )
@@ -1882,7 +1882,7 @@ function chat_bad_tool_arguments_throw() -> string {
                     return _chat_failure_label(e);
                 },
             };
-            baml.json.stringify(baml.json.to_json(turn.tool_uses().at(0)?.args))
+            baml.json.stringify(turn.tool_uses().at(0)?.args)
         },
     )
 }

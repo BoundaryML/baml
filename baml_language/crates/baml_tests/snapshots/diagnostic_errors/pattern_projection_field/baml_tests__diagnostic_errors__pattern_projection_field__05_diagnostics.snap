@@ -1,0 +1,12 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+    ╭─[main.baml:22:36]
+ 22 │         Holder<IntOut> { v: let s: string } => 1,
+    ·                                    ───┬──
+    ·                                       ╰── expected `int`, found `string`
+    ╰────

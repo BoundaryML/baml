@@ -484,7 +484,7 @@ function supabase_get(query: string) -> string {
 function load_issues() -> map<string, IssueRow> {
     let out: map<string, IssueRow> = {};
     for (
-        let row in baml.json.from_string<IssueRow[]>(
+        let row in baml.json.decode<IssueRow[]>(
             supabase_get("triage_issues?select=*&order=number"),
         )
     ) {
@@ -494,7 +494,7 @@ function load_issues() -> map<string, IssueRow> {
 }
 
 function load_feedback() -> FeedbackRow[] {
-    baml.json.from_string<FeedbackRow[]>(supabase_get("triage_feedback?select=*&order=id"))
+    baml.json.decode<FeedbackRow[]>(supabase_get("triage_feedback?select=*&order=id"))
 }
 
 /// Fraction of `keywords` present in `ours` (case-insensitive; "baml-cli"
@@ -514,13 +514,13 @@ function keyword_recall(ours: string, keywords: string[]) -> float {
 }
 
 function draft_text(d: IssueDraft) -> string {
-    baml.json.stringify_pretty(d.to_json()) catch (_) {
+    baml.json.stringify(d.to_json(), indent = 2) catch (_) {
         _ => "<unserializable>",
     }
 }
 
 function reference_text(r: ReferenceIssue) -> string {
-    baml.json.stringify_pretty(r.to_json()) catch (_) {
+    baml.json.stringify(r.to_json(), indent = 2) catch (_) {
         _ => "<unserializable>",
     }
 }

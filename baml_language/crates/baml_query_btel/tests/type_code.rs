@@ -72,7 +72,7 @@ function main(n: int) -> int {
     Pick<map<string, Extended | Resume | RuntimeMood>>(null);
 
     let type Small = reflect.Class.new("Small", { "v": int.type() });
-    let small = Echo<Small>(baml.json.from_string<Small>(`{"v": 1}`));
+    let small = Echo<Small>(baml.json.decode<Small>(`{"v": 1}`));
     n
 }
 "#;

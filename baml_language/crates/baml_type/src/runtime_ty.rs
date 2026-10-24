@@ -339,8 +339,8 @@ impl<N: Head> ResolvedAliases<N> {
     ///
     /// This is the compiler's ergonomic entry point and asserts the conversion
     /// succeeds. Per the type-system golden rule (prefer compiler errors over
-    /// type-erasure), reaching here with an `Unknown`/`Error` sentinel means an
-    /// error-recovery type slipped past type-checking into MIR lowering — a
+    /// type-erasure), reaching here with the `Error` sentinel means an
+    /// error-recovery type slipped past the checked world into lowering — a
     /// compiler bug — so it panics loudly rather than silently producing a
     /// degraded type. Callers that genuinely tolerate failure use
     /// [`lower_to_runtime`] directly.

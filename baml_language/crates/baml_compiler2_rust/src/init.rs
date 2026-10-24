@@ -83,7 +83,7 @@ fn generate(program: &Program, function: &Function, symbol: &str, test: bool) ->
         "pub fn {symbol}(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> R<Value> {{\n"
     );
     if test {
-        source.push_str("vm.reserve_slots(fr, 1);\nvm.set_slot(fr, 0, args[0]);\n");
+        source.push_str("vm.reserve_slots(fr, 1)?;\nvm.set_slot(fr, 0, args[0]);\n");
     }
     let width = if test { 3 } else { 2 };
     if !steps.len().is_multiple_of(width) {
@@ -128,7 +128,7 @@ fn generate(program: &Program, function: &Function, symbol: &str, test: bool) ->
         )
         .ok()?;
         if test {
-            source.push_str("vm.push_arg(vm.slot(fr, 0));\n");
+            source.push_str("vm.push_arg(vm.slot(fr, 0))?;\n");
         }
         writeln!(
             source,

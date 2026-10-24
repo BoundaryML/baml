@@ -65,7 +65,7 @@ class SseEvent {
 /// One `SseStream.next()` batch -> the raw SSE events it contains. Provider
 /// decoders parse each event's `data` payload with their own envelope classes.
 function decode_sse_batch(batch: string) -> SseEvent[] {
-    baml.json.from_string<SseEvent[]>(batch)
+    baml.json.decode<SseEvent[]>(batch)
 }
 
 // The provider-agnostic events a decoder yields from one SSE batch.
@@ -982,7 +982,11 @@ function from_spec<T>(
             },
             _span: span,
             _result: null,
-            _cache: baml.sap._new_parse_cache<T>(),
+            _cache: baml.sap._new_parse_cache<T>() catch (e) {
+                let err: baml.errors.ParseError => {
+                    throw baml.errors.InvalidArgument { message: err.message }
+                },
+            },
             _text: "",
             _finished: false,
         }

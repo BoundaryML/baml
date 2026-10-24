@@ -903,6 +903,20 @@ impl fmt::Display for Place {
 
 /// A value computation (rvalue).
 ///
+/// Where a bound method's frame type arguments come from.
+#[derive(Debug, Clone)]
+pub enum BoundFrame {
+    /// Curried from the receiver at bind time: its class arguments, which ARE
+    /// the owner frame of a class-inherent method (the VM's `MakeBoundMethod`).
+    Receiver,
+    /// Supplied by the reference site, one template per frame slot (the VM's
+    /// `MakeGenericBoundMethod`): an interface's default body bound to `self`
+    /// inside an `implements` block (`default.m` as a value), whose
+    /// `[Self, interface args..]` frame the receiver's class arguments cannot
+    /// express.
+    Explicit(Vec<TyTemplate>),
+}
+
 /// Rvalues are computations that produce values. They appear on the right-hand
 /// side of assignments.
 #[derive(Debug, Clone)]
@@ -1014,11 +1028,13 @@ pub enum Rvalue<'db> {
         type_arg_templates: Vec<TyTemplate>,
     },
 
-    /// Create a bound method value from a class-inherent method and its
-    /// receiver: `receiver` is the instance the method is bound to.
+    /// Create a bound method value from a method and its receiver:
+    /// `receiver` is the instance the method is bound to, and `frame` is
+    /// where the callee's frame type arguments come from.
     MakeBoundMethod {
         func: baml_compiler2_hir_ty::extern_loc::FunctionRef<'db>,
         receiver: Operand<'db>,
+        frame: BoundFrame,
     },
 
     /// Create a bound method value for an *interface* method whose impl is

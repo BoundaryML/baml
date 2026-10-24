@@ -267,7 +267,7 @@ fn a_body_paused_at_a_yield_survives_a_moving_collection() {
     use crate::compiled_rt::Step;
 
     fn body(vm: &mut BexVm, fr: &FrameRecord, _: &[Value]) -> BodyResult {
-        vm.reserve_slots(fr, 1);
+        vm.reserve_slots(fr, 1)?;
         let mut live = vm.string_value("still live");
         let mut cached = vm.static_type_value(fr, 0, bex_vm_types::RealizedTy::unknown());
         for _ in 0..3 {
@@ -342,7 +342,7 @@ fn compiled_recursion_checks_fiber_stack_space() {
         let callee = object(vm, &CALLEE);
         let arg = Value::int(n - 1);
         let below = if BYTECODE {
-            vm.push_arg(arg);
+            vm.push_arg(arg)?;
             vm.suspend(Step::Call { callee, argc: 1 })?
         } else {
             vm.call_compiled(fr, callee, deep::<false>, &[], &[arg], 0)?
@@ -377,7 +377,8 @@ fn compiled_recursion_checks_fiber_stack_space() {
                     "10|-7|-8",
                     "{callee}, telemetry: {telemetry}"
                 );
-                assert!((11..crate::vm::MAX_FRAMES).contains(&DEEPEST.load(Ordering::Relaxed)));
+                // 64 KiB frames exhaust the fiber within a few dozen levels.
+                assert!((11..256).contains(&DEEPEST.load(Ordering::Relaxed)));
             }
         }
     };
@@ -1127,7 +1128,7 @@ fn compiled_bodies_call_bytecode_and_resume() {
     fn twice(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> BodyResult {
         let n = test_int(args[0]);
         let helper = object(vm, &HELPER);
-        vm.push_arg(Value::int(n));
+        vm.push_arg(Value::int(n))?;
         match vm.suspend(Step::Call {
             callee: helper,
             argc: 1,
@@ -1304,7 +1305,7 @@ fn compiled_bodies_call_bound_method_values() {
 
     fn apply(vm: &mut BexVm, _fr: &FrameRecord, args: &[Value]) -> BodyResult {
         let callee = crate::compiled_rt::callee_ptr(args[0])?;
-        vm.push_arg(args[1]);
+        vm.push_arg(args[1])?;
         vm.suspend(Step::Call { callee, argc: 1 })
     }
     const SOURCE: &str = r#"
@@ -1603,8 +1604,8 @@ fn compiled_trace_hooks_record_as_bytecode_does() {
             let settings = vm.compiled_begin_trace_hook(fr, true)?;
             if !settings.is_null() {
                 let callee = object(vm, if MODE == 4 { &DECIDE } else { &BOOM });
-                vm.push_arg(n);
-                vm.push_arg(settings);
+                vm.push_arg(n)?;
+                vm.push_arg(settings)?;
                 let result = vm.suspend(Step::Call { callee, argc: 2 })?;
                 vm.compiled_finish_trace_hook(fr, result)?;
             }

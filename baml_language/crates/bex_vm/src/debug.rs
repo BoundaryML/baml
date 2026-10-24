@@ -147,7 +147,8 @@ pub(crate) fn display_instruction(
         | Instruction::SysOp(callee) => {
             display_global_ref(*callee, globals, objects, compile_time_globals)
         }
-        Instruction::MakeGenericFunction { function, .. } => {
+        Instruction::MakeGenericFunction { function, .. }
+        | Instruction::MakeGenericBoundMethod { function, .. } => {
             display_global_ref(*function, globals, objects, compile_time_globals)
         }
         Instruction::MakeGenericFunctionFromValue { .. } => String::new(),
@@ -472,6 +473,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         Instruction::Unreachable => Style::new().red().bright(),
         Instruction::MakeClosure { .. }
         | Instruction::MakeBoundMethod(_)
+        | Instruction::MakeGenericBoundMethod { .. }
         | Instruction::MakeVirtualBoundMethod { .. }
         | Instruction::MakeVirtualFunction { .. }
         | Instruction::MakeGenericFunction { .. }
@@ -1045,6 +1047,10 @@ fn display_instruction_textual(
             let name = meta_str(&"");
             format!("make_generic_function {name} ntypeargs={ntypeargs}")
         }
+        Instruction::MakeGenericBoundMethod { ntypeargs, .. } => {
+            let name = meta_str(&"");
+            format!("make_generic_bound_method {name} ntypeargs={ntypeargs}")
+        }
         Instruction::MakeGenericFunctionFromValue { ntypeargs } => {
             format!("make_generic_function_from_value ntypeargs={ntypeargs}")
         }
@@ -1491,7 +1497,7 @@ pub fn display_compact_bytecode(
                 writeln!(f, "class={class_obj}  ntypeargs={ntypeargs}")?;
             }
 
-            OpCode::MakeGenericFunction => {
+            OpCode::MakeGenericFunction | OpCode::MakeGenericBoundMethod => {
                 let function = read_u32(code, &mut pc);
                 let ntypeargs = read_u16(code, &mut pc);
                 writeln!(f, "function={function}  ntypeargs={ntypeargs}")?;

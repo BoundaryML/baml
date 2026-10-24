@@ -1,0 +1,121 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0155
+
+  × type annotations needed
+  │ full type: `!error[]`
+    ╭─[main.baml:55:12]
+ 55 │     match (xs) {
+    ·            ──
+    ╰────
+
+  [type] E0155
+
+  × type annotations needed
+  │ full type: `!error[]`
+    ╭─[main.baml:63:12]
+ 63 │     match (xs) {
+    ·            ──
+    ╰────
+
+  [type] E0155
+
+  × type annotations needed
+  │ full type: `!error[]`
+    ╭─[main.baml:72:14]
+ 72 │     let xs = [];
+    ·              ──
+    ╰────
+
+  [type] E0003
+
+  × unresolved name: `missing_value`
+    ╭─[main.baml:82:13]
+ 82 │     xs.push(missing_value);
+    ·             ─────────────
+    ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `T`
+    ╭─[main.baml:94:9]
+ 94 │         Src { value } => 1,
+    ·         ─────────────
+    ╰────
+
+  [type] E0002
+
+  × cannot infer type parameter `T`
+     ╭─[main.baml:103:9]
+ 103 │         Src { value } => 1,
+     ·         ─────────────
+     ╰────
+
+  [type] E0002
+
+  × cannot infer associated type `Item`; write it on the pattern's interface
+     ╭─[main.baml:112:9]
+ 112 │         HasItem { value } => 1,
+     ·         ─────────────────
+     ╰────
+
+  [type] E0002
+
+  × cannot infer associated type `Item`; write it on the pattern's interface
+     ╭─[main.baml:120:9]
+ 120 │         HasItem { value } => 1,
+     ·         ─────────────────
+     ╰────
+
+  [type] E0001
+
+  × mismatched types
+     ╭─[main.baml:128:9]
+ 128 │         [let a] => 1,
+     ·         ───┬───
+     ·            ╰── a list pattern never matches a value of type `int | string`
+     ╰────
+
+  [type] E0003
+
+  × unresolved name: `missing_list`
+     ╭─[main.baml:136:13]
+ 136 │     let x = missing_list;
+     ·             ────────────
+     ╰────
+
+  [type] E0147
+
+  × `_` is not allowed in the subject of an associated-type projection: the subject decides which interface declares the member, so write it out
+     ╭─[main.baml:146:12]
+ 146 │     let v: (Box<_> as HasOut).Out = 1;
+     ·            ──────────────────────
+     ╰────
+
+  [type] E0062
+
+  × non-exhaustive match on type int[]; missing: _
+     ╭─[main.baml:154:13]
+ 154 │ ╭─▶     let n = match (xs) {
+ 155 │ │           _ if c => 1,
+ 156 │ │           let whole if !c => 2
+ 157 │ ╰─▶     };
+     ╰────
+
+  [type] E0147
+
+  × type inference failed; write the type explicitly
+     ╭─[main.baml:169:5]
+ 169 │     hole_phantom<_>()
+     ·     ─────────────────
+     ╰────
+
+  [type] E0147
+
+  × type inference failed; write the type explicitly
+     ╭─[main.baml:173:12]
+ 173 │     let f: (_) -> int throws never = (x) -> { 1 };
+     ·            ───────────────────────
+     ╰────

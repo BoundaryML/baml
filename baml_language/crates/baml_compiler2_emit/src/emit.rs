@@ -1749,14 +1749,38 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 return;
             }
         }
-        if let Rvalue::MakeBoundMethod { func, receiver } = rvalue {
-            // Emit the receiver onto the stack first.
-            self.emit_operand_pull(receiver);
+        if let Rvalue::MakeBoundMethod {
+            func,
+            receiver,
+            frame,
+        } = rvalue
+        {
             // Resolve the method to its GlobalIndex.
             let global_idx = self.function_global_index(*func, "MakeBoundMethod: global not found");
-            let inst = self.emit(Instruction::MakeBoundMethod(GlobalIndex::from_raw(
-                global_idx,
-            )));
+            let function = GlobalIndex::from_raw(global_idx);
+            let inst = match frame {
+                baml_compiler2_mir::BoundFrame::Receiver => {
+                    self.emit_operand_pull(receiver);
+                    self.emit(Instruction::MakeBoundMethod(function))
+                }
+                baml_compiler2_mir::BoundFrame::Explicit(type_arg_templates) => {
+                    // The frame (each slot resolved against the enclosing
+                    // frame by `LoadType`), then the receiver on top - the
+                    // opcode pops in reverse.
+                    for template in type_arg_templates {
+                        let anchored = self.refs.anchor_template(template);
+                        let const_idx = self.add_constant(ConstValue::Type(anchored));
+                        let inst = self.emit(Instruction::LoadType(const_idx));
+                        self.set_operand(inst, OperandMeta::Const(self.spelled_template(template)));
+                    }
+                    self.emit_operand_pull(receiver);
+                    self.emit(Instruction::MakeGenericBoundMethod {
+                        function,
+                        ntypeargs: u16::try_from(type_arg_templates.len())
+                            .expect("ntypeargs fits in u16"),
+                    })
+                }
+            };
             self.set_operand(
                 inst,
                 OperandMeta::Global(baml_compiler2_mir::function_display_name(self.db, *func)),

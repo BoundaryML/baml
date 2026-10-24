@@ -107,3 +107,22 @@ fn a_submission_owns_its_file_and_imports_earlier_submissions_at_self() {
         ]
     );
 }
+
+/// A session binding is lowered on its own road, which must report what the
+/// source-file road does: `const` as a binding introducer is a warning.
+#[test]
+fn a_session_const_binding_warns_like_a_source_one() {
+    let mut db = ProjectDatabase::new();
+    let root = db.workspace(std::path::Path::new("/session-const"));
+    db.add_session_file_in(root, "$submission_0.baml", "const answer = 42\n");
+    let warnings: Vec<_> = baml_db::collect_compiler2_diagnostics(&db)
+        .into_iter()
+        .filter(|diagnostic| {
+            diagnostic.severity == baml_compiler_diagnostics::Severity::Warning
+                && diagnostic
+                    .message
+                    .contains("`const` is currently treated like `let`")
+        })
+        .collect();
+    assert_eq!(warnings.len(), 1, "one `const` introducer, one warning");
+}

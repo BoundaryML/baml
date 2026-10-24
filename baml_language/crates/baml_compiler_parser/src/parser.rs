@@ -3118,52 +3118,65 @@ impl<'a> Parser<'a> {
     /// a function return/throws operand belongs to `UNION_PATTERN`).
     pub(crate) fn parse_type_with(&mut self, consume_union: bool) {
         self.with_node(SyntaxKind::TYPE_EXPR, |p| {
-            p.parse_type_primary();
-
-            if p.pending_greaters > 0 {
-                // Don't parse modifiers until we've used all
-                // pending `>`
+            let first_member = p.events.len();
+            p.parse_type_postfix();
+            if !consume_union || p.pending_greaters > 0 || !p.at(TokenKind::Pipe) {
                 return;
             }
-            // Type modifiers
-            loop {
-                if p.at(TokenKind::LBracket) {
-                    // Array type: string[]
-                    p.bump(); // [
-                    p.expect(TokenKind::RBracket); // ]
-                } else if p.at(TokenKind::Question) {
-                    // Optional type: string?
-                    p.bump();
-                } else if consume_union && p.at(TokenKind::Pipe) {
-                    // Union type: string | int | "user" | "assistant"
-                    let ambiguous_pipe = (p.function_union_operand
-                        && p.pipe_starts_function_type())
+
+            // Every union member owns a complete TYPE_EXPR, including postfix
+            // modifiers. Standalone types keep their existing single wrapper.
+            p.wrap_events_in_node(first_member, SyntaxKind::TYPE_EXPR);
+            p.finish_node();
+            while p.pending_greaters == 0 && p.at(TokenKind::Pipe) {
+                let ambiguous_pipe = (p.function_union_operand && p.pipe_starts_function_type())
                     .then(|| p.skip_trivia_and_comments_from(p.current));
-                    p.bump();
-                    let errors_before_member = p.events.len();
-                    p.parse_type_primary();
-                    // Both ownership branches are syntax-complete here: the
-                    // previous operand can finish the first function, and the
-                    // member can also be a function inside its return/throws
-                    // union. A malformed member is diagnosed by the parser
-                    // instead of gaining a second ambiguity diagnostic.
-                    if let Some(pipe) = ambiguous_pipe
-                        && !p.events[errors_before_member..].iter().any(|event| {
-                            matches!(
-                                event,
-                                Event::UnexpectedToken { .. }
-                                    | Event::SyntaxHint { .. }
-                                    | Event::RemovedFeature { .. }
-                            )
-                        })
-                    {
-                        p.ambiguous_pipes.push(pipe);
-                    }
-                } else {
-                    break;
+                p.bump();
+                let errors_before_member = p.events.len();
+                p.with_node(SyntaxKind::TYPE_EXPR, Self::parse_type_postfix);
+                // Both ownership branches are syntax-complete here: the
+                // previous operand can finish the first function, and the
+                // member can also be a function inside its return/throws
+                // union. A malformed member is diagnosed by the parser
+                // instead of gaining a second ambiguity diagnostic.
+                if let Some(pipe) = ambiguous_pipe
+                    && !p.events[errors_before_member..].iter().any(|event| {
+                        matches!(
+                            event,
+                            Event::UnexpectedToken { .. }
+                                | Event::SyntaxHint { .. }
+                                | Event::RemovedFeature { .. }
+                        )
+                    })
+                {
+                    p.ambiguous_pipes.push(pipe);
                 }
             }
         });
+    }
+
+    /// Parse one union operand. Function return/throws types still recursively
+    /// parse full type expressions, preserving their greedy union precedence.
+    fn parse_type_postfix(&mut self) {
+        self.parse_type_primary();
+        // A split `>>` can still belong to an enclosing generic argument list.
+        if self.pending_greaters > 0 {
+            return;
+        }
+        loop {
+            if self.at(TokenKind::LBracket) {
+                self.bump();
+                self.expect(TokenKind::RBracket);
+            } else if self.at(TokenKind::Question) {
+                self.bump();
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn parse_return_type(&mut self) {
+        self.with_node(SyntaxKind::FUNCTION_TYPE_RETURN_TYPE, Self::parse_type);
     }
 
     fn parse_type_primary(&mut self) {
@@ -3440,8 +3453,8 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_paren_or_function_type_inner(&mut self) {
-        // We'll parse the content first, then decide based on whether `->` follows.
-        // For function types, we wrap in FUNCTION_TYPE; for parens, we just have the inner type.
+        // The arrow decides whether the parsed head belongs to a callable.
+        let function_start = self.events.len();
 
         // Pipes within a parameter list or parenthesized operand do not
         // compete with the enclosing function's return/throws boundary.
@@ -3477,15 +3490,14 @@ impl<'a> Parser<'a> {
 
         // Now check for `->` to determine if this is a function type
         if self.at(TokenKind::Arrow) {
-            // This is a function type: wrap everything in FUNCTION_TYPE node
-            // Note: The tokens are already emitted, we just need to parse the return type
+            self.wrap_events_in_node(function_start, SyntaxKind::FUNCTION_TYPE);
             self.bump(); // ->
             // Bare return unions are owned by the function even in pattern
             // position. A pipe followed by another function head is reported
             // as ambiguous instead of silently choosing this grouping.
             let enclosing_function_operand =
                 std::mem::replace(&mut self.function_union_operand, true);
-            self.parse_type(); // return type
+            self.parse_return_type();
             self.function_union_operand = enclosing_function_operand;
             if self.at(TokenKind::Throws) {
                 self.with_node(SyntaxKind::THROWS_CLAUSE, |p| {
@@ -3496,7 +3508,7 @@ impl<'a> Parser<'a> {
                     p.function_union_operand = enclosing_function_operand;
                 });
             }
-        // The caller's with_node(TYPE_EXPR) will wrap this appropriately
+            self.finish_node(); // FUNCTION_TYPE
         } else {
             // Not a function type - should be a parenthesized type
             if had_named_param {
@@ -3925,7 +3937,7 @@ impl<'a> Parser<'a> {
             p.parse_parameter_list();
 
             if p.eat(TokenKind::Arrow) {
-                p.parse_type();
+                p.parse_return_type();
             } else {
                 p.error_unexpected_token("return type (->)".to_string());
             }
@@ -4446,7 +4458,7 @@ impl<'a> Parser<'a> {
                     // directive.
                     allow_llm_body = false;
                 }
-                p.parse_type();
+                p.parse_return_type();
             } else {
                 allow_llm_body = false;
                 p.error_unexpected_token("return type (->)".to_string());
@@ -4742,7 +4754,7 @@ impl<'a> Parser<'a> {
 
             // Optional return type: anything before `throws` or `{`
             if !p.at(TokenKind::LBrace) && !p.at(TokenKind::Throws) {
-                p.parse_type();
+                p.parse_return_type();
             }
 
             // Optional throws clause
@@ -10523,15 +10535,16 @@ function call_llm_function(client: Client, function_name: string) -> unknown {
             .descendants()
             .find(|n| n.kind() == SyntaxKind::FUNCTION_DEF)
             .expect("expected FUNCTION_DEF");
-        let type_exprs: Vec<_> = func
+        let returns: Vec<_> = func
             .children()
-            .filter(|n| n.kind() == SyntaxKind::TYPE_EXPR)
+            .filter(|node| node.kind() == SyntaxKind::FUNCTION_TYPE_RETURN_TYPE)
             .collect();
         assert_eq!(
-            type_exprs.len(),
+            returns.len(),
             1,
-            "expected one top-level return TYPE_EXPR on FUNCTION_DEF"
+            "expected one return annotation on FUNCTION_DEF"
         );
+        assert_eq!(child_kinds(&returns[0]), vec![SyntaxKind::TYPE_EXPR]);
         let expr_body = func
             .children()
             .find(|n| n.kind() == SyntaxKind::EXPR_FUNCTION_BODY);
@@ -11235,17 +11248,10 @@ type Callback = (value: int) -> string throws Foo
         let (root, errors) = parse_source(source);
         assert_no_errors(&errors);
 
-        let function_type =
-            root.descendants()
-                .find(|n| {
-                    n.kind() == SyntaxKind::TYPE_EXPR && n.children_with_tokens().any(|child| {
-                        matches!(
-                            child,
-                            rowan::NodeOrToken::Token(token) if token.kind() == SyntaxKind::ARROW
-                        )
-                    })
-                })
-                .expect("expected function TYPE_EXPR");
+        let function_type = root
+            .descendants()
+            .find(|node| node.kind() == SyntaxKind::FUNCTION_TYPE)
+            .expect("expected FUNCTION_TYPE");
 
         let throws = function_type
             .children()

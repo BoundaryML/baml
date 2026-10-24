@@ -433,7 +433,7 @@ class LoggedConversion {
         function from_json(j: baml.json.json) -> Self throws baml.json.DecodeError {
             log.warn("from-json-detail");
             LoggedConversion {
-                value: baml.json.from_json<string>(baml.json.field(j, "value"))
+                value: baml.json.to<string>(baml.json.field(j, "value"))
             }
         }
     }

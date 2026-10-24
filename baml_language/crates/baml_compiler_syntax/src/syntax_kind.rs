@@ -210,6 +210,9 @@ pub enum SyntaxKind {
     NESTED_CONFIG,
 
     // Type expressions
+    /// A complete type expression. Unions contain alternating `TYPE_EXPR`
+    /// operands and `PIPE` tokens; each operand owns its postfix modifiers.
+    /// Standalone types contain their primary syntax and modifiers directly.
     TYPE_EXPR,
     UNION_TYPE,
     OPTIONAL_TYPE,
@@ -217,8 +220,12 @@ pub enum SyntaxKind {
     MAP_TYPE,
     TYPE_ARGS,
     STRING_LITERAL_TYPE, // "user" | "assistant"
-    FUNCTION_TYPE,       // (x: int, y: int) -> int
+    /// Callable type syntax: parameters, arrow, return annotation, and effects.
+    FUNCTION_TYPE,
     FUNCTION_TYPE_PARAM, // x: int (or just int)
+    /// An explicit return annotation containing one `TYPE_EXPR` child.
+    /// The arrow remains on the containing function, method, or lambda.
+    FUNCTION_TYPE_RETURN_TYPE,
 
     // Attributes
     ATTRIBUTE, // @alias("name")

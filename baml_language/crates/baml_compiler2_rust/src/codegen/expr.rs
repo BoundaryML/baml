@@ -1,8 +1,8 @@
 //! Rvalues: operators, type tests, and aggregates.
 
 use baml_compiler2_mir::{
-    AggregateKind, BinOp, BlockId, Rvalue, TyTemplate, TypeTest, UnaryOp, class_display_name,
-    enum_display_name, function_display_name,
+    AggregateKind, BinOp, BlockId, BoundFrame, Rvalue, TyTemplate, TypeTest, UnaryOp,
+    class_display_name, enum_display_name, function_display_name,
 };
 use baml_type::typetag;
 use bex_vm_types::ConstValue;
@@ -176,7 +176,11 @@ impl<'db> Generator<'_, 'db> {
                     types.join(", ")
                 )
             }
-            Rvalue::MakeBoundMethod { func, receiver } => {
+            Rvalue::MakeBoundMethod {
+                func,
+                receiver,
+                frame: BoundFrame::Receiver,
+            } => {
                 let name = function_display_name(self.db, *func);
                 let Some((object, _)) = self.index.function(self.db, *func) else {
                     return unsupported(format!("method `{name}` not found in the program"));
@@ -186,6 +190,10 @@ impl<'db> Generator<'_, 'db> {
                     "vm.make_bound_method(vm.record_object(fr, ObjectIndex::from_raw({object})), {receiver})"
                 )
             }
+            Rvalue::MakeBoundMethod {
+                frame: BoundFrame::Explicit(_),
+                ..
+            } => return unsupported("bound method with an explicit frame"),
             Rvalue::MakeGenericFunction {
                 func,
                 type_arg_templates,

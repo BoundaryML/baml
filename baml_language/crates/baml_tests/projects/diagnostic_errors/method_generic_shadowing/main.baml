@@ -1,0 +1,78 @@
+// A method's own generic parameter may not reuse the name of a type-level
+// parameter of its owner: one spelling would name two frame slots.
+
+class Bin<T> {
+    v T
+
+    function make<T>(x: T) -> int {
+        0
+    }
+}
+
+interface Source<T> {
+    type Item
+
+    function read<T>(self) -> int throws never
+    // Control: an associated type is only ever spelled `Self.Item`, so an
+    // own generic sharing its name shadows nothing.
+    function item<Item>(self) -> int throws never
+}
+
+class Ints {
+    v int
+
+    implements Source<int> {
+        type Item = int
+
+        function read<U>(self) -> int throws never {
+            0
+        }
+
+        function item<V>(self) -> int throws never {
+            0
+        }
+    }
+}
+
+class Wrap<T> {
+    v T
+}
+
+implements<T> Source<T> for Wrap<T> {
+    type Item = T
+
+    function read<T>(self) -> int throws never {
+        0
+    }
+
+    function item<V>(self) -> int throws never {
+        0
+    }
+}
+
+// An in-class `implements` block's frame is the class's own, so the
+// shadowed parameter is named as the class's.
+class Pair<T> {
+    a T
+
+    implements Source<T> {
+        type Item = T
+
+        function read<T>(self) -> int throws never {
+            0
+        }
+
+        function item<V>(self) -> int throws never {
+            0
+        }
+    }
+}
+
+// Control: distinct names are fine.
+class Fine<T> {
+    v T
+
+    function make<U>(x: U) -> int {
+        0
+    }
+}

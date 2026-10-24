@@ -87,7 +87,7 @@ function ext_field_names(class_t: reflect.Class) -> string {
 test "extends_adds_the_interface_fields_then_the_given_ones" {
     let foo_t = reflect.Class.extends<ExtFoo>("Foo", { "c": int.type() });
     let type Foo = foo_t.as_type();
-    let foo: ExtFoo = baml.json.from_string<Foo>(`{"a":1,"b":2,"c":3}`) else {
+    let foo: ExtFoo = baml.json.decode<Foo>(`{"a":1,"b":2,"c":3}`) else {
         throw "the extended class does not implement ExtFoo"
     };
     assert.equal(ext_field_names(foo_t), "a,b,c");
@@ -160,7 +160,7 @@ test "extends_merges_a_field_two_interfaces_declare_at_one_type" {
 test "extends_adopts_interface_default_methods" {
     let greeter_t = reflect.Class.extends<ExtGreeter>("Greeter", {});
     let type Greeter = greeter_t.as_type();
-    let greeter: ExtGreeter = baml.json.from_string<Greeter>(`{"name":"Ada"}`) else {
+    let greeter: ExtGreeter = baml.json.decode<Greeter>(`{"name":"Ada"}`) else {
         throw "the extended class does not implement ExtGreeter"
     };
     assert.equal(greeter.greet(), "hello, Ada")

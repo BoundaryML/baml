@@ -14,6 +14,9 @@ workspace = true
 default = [ "aws-crypto" ]
 aws-crypto = [ "reqwest/rustls", "rustls/aws_lc_rs", "rustls/std", "bcs_api/aws-crypto" ]
 ring-crypto = [ "reqwest/rustls-no-provider", "rustls/ring", "rustls/std", "bcs_api/ring-crypto" ]
+# Gauges of what the publisher and delivery hold, and per-request timing of
+# prepares and uploads. Measurement only; nothing reads them in production.
+diagnostics = [  ]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 bcs_api.workspace = true

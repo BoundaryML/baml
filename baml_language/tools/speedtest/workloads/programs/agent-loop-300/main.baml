@@ -52,7 +52,7 @@ function step(state: AgentState, action: Action) -> bool {
 function run_conversation(turns: string[]) -> AgentState {
   let state = AgentState { scratch: {}, history: [], steps: 0, retries: 0, answer: null };
   for (let raw in turns) {
-    let action: Action? = baml.json.deserialize<Action>(raw) catch (_) { let _ => null };
+    let action: Action? = baml.json.decode<Action>(raw) catch (_) { let _ => null };
     if (action == null) {
       state.retries += 1;
       state.history.push("retry");

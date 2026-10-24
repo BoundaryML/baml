@@ -14,7 +14,7 @@ fn split(unit_bytes: u64, leaf_bytes: u64) -> Shaper {
 }
 
 fn capture(shaper: &mut Shaper, build: impl FnOnce(&mut Builder) -> V) -> Snapshot {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut b = pool.try_acquire().unwrap();
     let root = build(&mut b);
     b.finish(root, shaper)
@@ -127,13 +127,10 @@ fn map_key_kind_and_content_affect_identity() {
 
 #[test]
 fn map_keys_count_toward_capture_and_decode_value_limits() {
-    let pool = SnapshotPool::new(
-        1,
-        Limits {
-            max_values: Some(3),
-            ..Limits::default()
-        },
-    );
+    let pool = SnapshotPool::unbounded(Limits {
+        max_values: Some(3),
+        ..Limits::default()
+    });
     let mut b = pool.try_acquire().unwrap();
     let ty = b.leaves().ty(RealizedTy::Unknown);
     let map = b.map(
@@ -369,7 +366,7 @@ fn a_million_objects_in_a_chain_shape_on_a_small_stack() {
     let blobs = std::thread::Builder::new()
         .stack_size(256 << 10)
         .spawn(|| {
-            let pool = SnapshotPool::new(1, Limits::default());
+            let pool = SnapshotPool::unbounded(Limits::default());
             let mut b = pool.try_acquire().unwrap();
             let mut next = V::Null;
             for _ in 0..1_000_000 {
@@ -464,7 +461,7 @@ fn a_value_that_shares_a_part_with_the_capture_is_not_cut() {
 #[test]
 fn what_the_root_names_twice_is_cut_and_what_it_names_inside_a_value_is_not() {
     let mut shaper = split(256, 1024);
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut arguments = |inside: bool| {
         let mut b = pool.try_acquire().unwrap();
         let note = text(&mut b, "note");
@@ -674,7 +671,7 @@ fn equal_values_share_one_blob_and_one_child_slot() {
 #[test]
 fn argument_slots_name_cut_values_and_scratch_is_clean_between_captures() {
     let mut shaper = split(64, 64);
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let arguments = |shaper: &mut Shaper| {
         let mut b = pool.try_acquire().unwrap();
         let large = text(&mut b, &"argument".repeat(20));

@@ -2,8 +2,11 @@ use std::fmt::Write as _;
 
 use ::sys_types::SapTy;
 use baml_base::Literal as LiteralValue;
+use baml_type::json_inhabit::{JsonInhabitance, JsonNaming, JsonStatus};
 use indexmap::IndexMap;
 use thiserror::Error;
+
+use crate::json_defs::{ContextDefs, Reader};
 
 /// Error type for output format rendering.
 #[derive(Clone, Debug, Error)]
@@ -101,6 +104,11 @@ pub struct OutputFormatContent {
     pub recursive_classes: indexmap::IndexSet<String>,
     /// Recursive type aliases: alias name → target type.
     pub recursive_type_aliases: IndexMap<String, SapTy>,
+    /// Which parts of the target a model's JSON answer can fill, under the
+    /// names a model is shown. A union member with no JSON form or no value
+    /// is left out of the schema. `None` when the definitions the target
+    /// reaches are not all known; nothing is left out then.
+    json: Option<JsonInhabitance<::sys_types::DefKey>>,
     build_error: Option<RenderError>,
 }
 
@@ -181,7 +189,53 @@ impl OutputFormatContent {
             target,
             recursive_classes: indexmap::IndexSet::new(),
             recursive_type_aliases: IndexMap::new(),
+            json: None,
             build_error: None,
+        }
+    }
+
+    /// Whether a model's answer can fill `ty`. Every type can when nothing
+    /// is known about the target.
+    fn fillable(&self, ty: &SapTy) -> bool {
+        self.json
+            .as_ref()
+            .is_none_or(|json| json.status(ty) == JsonStatus::Json)
+    }
+
+    /// Whether `ty` has no values at all, so a list or map of it is only the
+    /// empty one.
+    fn empty(&self, ty: &SapTy) -> bool {
+        self.json
+            .as_ref()
+            .is_some_and(|json| json.status(ty) == JsonStatus::Empty)
+    }
+
+    /// `ty` as a model is asked for it: each union at the top, or under a
+    /// list or map there, without the members a model's answer cannot fill.
+    /// A union left with one member is that member. A union left with none
+    /// stays whole: nothing in it can be asked for.
+    fn answerable(&self, ty: &SapTy) -> SapTy {
+        match ty {
+            SapTy::Union(members) => {
+                let mut flat = Vec::new();
+                baml_type::json_inhabit::flatten_union(members, &mut flat);
+                let mut kept: Vec<SapTy> = flat
+                    .into_iter()
+                    .filter(|member| self.fillable(member))
+                    .map(|member| self.answerable(member))
+                    .collect();
+                match kept.len() {
+                    0 => ty.clone(),
+                    1 => kept.remove(0),
+                    _ => SapTy::Union(kept.into()),
+                }
+            }
+            SapTy::List(inner) => SapTy::List(Box::new(self.answerable(inner))),
+            SapTy::Map { key, value } => SapTy::Map {
+                key: key.clone(),
+                value: Box::new(self.answerable(value)),
+            },
+            _ => ty.clone(),
         }
     }
 
@@ -222,21 +276,23 @@ impl OutputFormatContent {
             return Err(error.clone());
         }
 
+        let target = &self.answerable(&self.target);
+
         if matches!(options.prefix, RenderSetting::Auto) {
-            if let Some(instruction) = media_output_instruction(&self.target, options) {
+            if let Some(instruction) = media_output_instruction(target, options) {
                 return Ok(Some(instruction));
             }
         }
 
         // For string target with no explicit prefix, return None
-        if matches!(self.target, SapTy::String) && matches!(options.prefix, RenderSetting::Auto) {
+        if matches!(target, SapTy::String) && matches!(options.prefix, RenderSetting::Auto) {
             return Ok(None);
         }
 
         // The `json` type alias is an opaque leaf from the LLM's perspective.
         // Regardless of rendering options, the only thing we ask the model to produce
         // is arbitrary JSON — no schema body, no prefix enumeration.
-        if let SapTy::TypeAlias(tn) = &self.target {
+        if let SapTy::TypeAlias(tn) = target {
             if tn.display_name().as_str() == ::baml_base::qualified_name::BAML_JSON_JSON {
                 return Ok(Some("Respond with valid JSON.".to_string()));
             }
@@ -247,12 +303,12 @@ impl OutputFormatContent {
         let hoisted_enums = self.compute_hoisted_enums(options);
         self.validate_hoisted_definition_names(&hoisted_classes, &hoisted_enums)?;
 
-        let prefix = self.get_prefix(options, &hoisted_classes);
+        let prefix = Self::get_prefix(target, options, &hoisted_classes);
 
         // For simple primitives (int, bigint, float, bool) with Auto prefix, the prefix IS the full message
         // But with explicit prefix, we need to append the type
         if matches!(
-            self.target,
+            target,
             SapTy::Int | SapTy::Bigint | SapTy::Float | SapTy::Bool
         ) && matches!(options.prefix, RenderSetting::Auto)
         {
@@ -260,7 +316,7 @@ impl OutputFormatContent {
         }
 
         // Check if the target is a hoisted enum
-        let target_is_hoisted_enum = if let SapTy::Enum(tn) = &self.target {
+        let target_is_hoisted_enum = if let SapTy::Enum(tn) = target {
             hoisted_enums.contains(tn.display_name().as_str())
         } else {
             false
@@ -274,7 +330,7 @@ impl OutputFormatContent {
                 let enum_str = self.render_enum(enm, options);
                 // If this is the target enum, prepend prefix
                 if target_is_hoisted_enum
-                    && enm_display_name(&self.target)
+                    && enm_display_name(target)
                         .as_ref()
                         .map(baml_type::Name::as_str)
                         == Some(name.as_str())
@@ -343,19 +399,19 @@ impl OutputFormatContent {
         }
 
         // Render the target type with hoisting awareness
-        let message = if let SapTy::Class(tn, _) | SapTy::Interface(tn, _, _) = &self.target {
+        let message = if let SapTy::Class(tn, _) | SapTy::Interface(tn, _, _) = target {
             let tn_display_name = tn.display_name();
-            let class_key = class_instantiation_key(&self.target);
+            let class_key = class_instantiation_key(target);
             if hoisted_classes.contains(&class_key) {
                 Some(rendered_hoisted_class_name(
-                    &self.target,
+                    target,
                     self.find_class(&class_key)
                         .or_else(|| self.find_class(tn_display_name.as_str())),
                 ))
             } else {
-                self.render_type_hoisted(&self.target, options, &hoisted_classes, &hoisted_enums)?
+                self.render_type_hoisted(target, options, &hoisted_classes, &hoisted_enums)?
             }
-        } else if let SapTy::Enum(tn) = &self.target {
+        } else if let SapTy::Enum(tn) = target {
             if target_is_hoisted_enum {
                 // Hoisted target enum: rendered in enum_definitions block
                 None
@@ -365,10 +421,10 @@ impl OutputFormatContent {
             } else {
                 Some(tn.display_name().to_string())
             }
-        } else if let SapTy::TypeAlias(fqn) = &self.target {
+        } else if let SapTy::TypeAlias(fqn) = target {
             Some(fqn.display_name().to_string())
         } else {
-            self.render_type_hoisted(&self.target, options, &hoisted_classes, &hoisted_enums)?
+            self.render_type_hoisted(target, options, &hoisted_classes, &hoisted_enums)?
         };
 
         // Assemble: enum defs + class defs + alias defs + prefix + target
@@ -520,7 +576,7 @@ impl OutputFormatContent {
     }
 
     fn get_prefix(
-        &self,
+        target: &SapTy,
         options: &RenderOptions,
         hoisted: &indexmap::IndexSet<String>,
     ) -> Option<String> {
@@ -533,7 +589,7 @@ impl OutputFormatContent {
                     _ => "schema",
                 };
 
-                Self::auto_prefix(&self.target, type_word, hoisted)
+                Self::auto_prefix(target, type_word, hoisted)
             }
         }
     }
@@ -634,6 +690,8 @@ impl OutputFormatContent {
             SapTy::Bool => Ok(Some("bool".to_string())),
             SapTy::Null => Ok(Some(rendered_null_type(options).to_string())),
 
+            // A list of a type with no values is only the empty list.
+            SapTy::List(inner) if self.empty(inner) => Ok(Some("[]".to_string())),
             SapTy::List(inner) => {
                 let inner_str = self
                     .render_type_hoisted(inner, options, hoisted_classes, hoisted_enums)?
@@ -685,6 +743,8 @@ impl OutputFormatContent {
                 }
             }
 
+            // A map of a type with no values is only the empty object.
+            SapTy::Map { value, .. } if self.empty(value) => Ok(Some("{}".to_string())),
             SapTy::Map { key, value, .. } => {
                 let key_str = self
                     .render_type_hoisted(key, options, hoisted_classes, hoisted_enums)?
@@ -702,19 +762,21 @@ impl OutputFormatContent {
 
             SapTy::Union(variants) => {
                 // Null arms render last (`X or null`), matching the legacy
-                // renderer regardless of the union's internal arm order.
+                // renderer regardless of the union's internal arm order. A
+                // member a model's answer cannot fill is left out: `bytes:
+                // uint8array?` renders as `bytes: null`.
                 let (null_variants, value_variants): (Vec<&SapTy>, Vec<&SapTy>) = variants
                     .iter()
+                    .filter(|v| self.fillable(v))
                     .partition(|v| matches!(v, SapTy::Null));
-                let rendered: Vec<String> = value_variants
-                    .into_iter()
-                    .chain(null_variants)
-                    .filter_map(|v| {
-                        self.render_type_hoisted(v, options, hoisted_classes, hoisted_enums)
-                            .ok()
-                            .flatten()
-                    })
-                    .collect();
+                let mut rendered = Vec::new();
+                for v in value_variants.into_iter().chain(null_variants) {
+                    if let Some(text) =
+                        self.render_type_hoisted(v, options, hoisted_classes, hoisted_enums)?
+                    {
+                        rendered.push(text);
+                    }
+                }
                 Ok(Some(rendered.join(or_splitter)))
             }
 
@@ -1193,22 +1255,38 @@ pub fn build_output_format_content(
 ) -> self::OutputFormatContent {
     use std::collections::HashSet;
 
-    let mut content = self::OutputFormatContent::new(ty.clone());
-    let mut visited = HashSet::new();
-    let mut ancestry = Vec::new();
+    let walk = |json: Option<JsonInhabitance<::sys_types::DefKey>>| {
+        let mut content = self::OutputFormatContent::new(ty.clone());
+        content.json = json;
+        let result = walk_ty(
+            ty,
+            &LaneOrigins::root(),
+            ctx,
+            &mut content,
+            &mut HashSet::new(),
+            &mut Vec::new(),
+        );
+        (content, result)
+    };
 
-    if let Err(error) = walk_ty(
-        ty,
-        &LaneOrigins::root(),
-        ctx,
-        &mut content,
-        &mut visited,
-        &mut ancestry,
-    ) {
+    // The first walk finds what makes the target unrenderable, a generic
+    // class whose instantiations grow forever among it. Only a target that
+    // passes has finitely many definitions for the JSON analysis to visit.
+    let (mut content, result) = walk(None);
+    if let Err(error) = result {
         content.build_error = Some(error);
+        return content;
     }
-
-    content
+    let defs = ContextDefs {
+        ctx,
+        reader: Reader::Render,
+    };
+    match JsonInhabitance::of(ty, &defs, JsonNaming::Aliased) {
+        // The second walk collects only the definitions a model's answer can
+        // fill, so a dropped member's classes are not hoisted.
+        Ok(json) => walk(Some(json)).0,
+        Err(_) => content,
+    }
 }
 
 /// Look up a class definition by declaration identity.
@@ -1457,6 +1535,9 @@ fn walk_ty(
         }
         SapTy::Union(members) => {
             for (index, member) in members.iter().enumerate() {
+                if !content.fillable(member) {
+                    continue;
+                }
                 let member_origins = origins.union_member(index);
                 walk_ty(member, &member_origins, ctx, content, visited, ancestry)?;
             }

@@ -263,7 +263,7 @@ mod tests {
 
     #[test]
     fn a_split_capture_writes_every_blob_as_the_whole_one_did() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let snapshot = capture(&pool, &texts());
         let mut scratch = BlobScratch::default();
         let whole: Vec<_> = snapshot
@@ -301,7 +301,7 @@ mod tests {
 
     #[test]
     fn a_leaf_holds_its_string_and_the_rest_of_the_capture_none_of_it() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let texts = texts();
         let backing = texts.each_ref().map(|text| match text {
             BexStr::Flat(flat) => Arc::downgrade(flat),
@@ -332,7 +332,7 @@ mod tests {
 
     #[test]
     fn a_capture_that_is_one_string_leaves_nothing_behind() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         for text in ["short", &"long".repeat(1000)] {
             let text = BexStr::from(text);
             let mut b = pool.try_acquire().unwrap();
@@ -357,7 +357,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "the capture gave this blob up")]
     fn a_structure_does_not_write_a_blob_it_gave_up() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let snapshot = capture(&pool, &texts());
         let first = snapshot.blobs().next().unwrap().index();
         let structure = snapshot.split().structure.unwrap();

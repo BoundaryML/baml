@@ -354,7 +354,8 @@ impl RecordingBuilder {
         Ok(Some(sealed))
     }
     /// Drain every batch after input chunk recycling, regardless of file sealing.
-    /// Holding capture slots until sealing can exhaust the VM's snapshot pool.
+    /// Captures held here stopped counting against the VM's capture budget
+    /// when the processor took them; draining returns their storage sooner.
     /// Dropping this iterator releases any remaining owners, including on unwind.
     pub fn take_snapshots(&mut self) -> impl Iterator<Item = Snapshot> + '_ {
         self.pending_captures.drain(..)

@@ -14,6 +14,8 @@ pub mod publisher;
 // Preserve the existing telemetry API while BCS owns the wire contracts.
 pub use bcs_api::{proto, wire};
 pub use publisher::{CloudPublisher, CloudPublisherConfig};
+#[cfg(feature = "diagnostics")]
+pub use publisher::{PublisherDiagnostics, PublisherGauges};
 
 #[cfg(test)]
 mod tests {

@@ -156,7 +156,7 @@ test "throws wildcard is open to inferred errors while plain throws remains exha
     let open_source = `
         class BadInput { msg: string }
         function parse(s: string) -> int throws BadInput | _ {
-            let v: json = baml.json.from_string(s);
+            let v: json = baml.json.decode(s);
             throw BadInput { msg: "nope" };
         }
         function caller(s: string) -> int throws never { parse(s) }
@@ -167,7 +167,7 @@ test "throws wildcard is open to inferred errors while plain throws remains exha
     let closed_source = `
         class BadInput { msg: string }
         function parse(s: string) -> int throws BadInput {
-            let v: json = baml.json.from_string(s);
+            let v: json = baml.json.decode(s);
             throw BadInput { msg: "nope" };
         }
         function main() -> int { 0 }

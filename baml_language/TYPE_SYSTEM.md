@@ -494,6 +494,16 @@ function bar/*<E>*/(arg: (() -> void /* throws E */)? = null) -> void /* throws 
    callback's own parameter — is a stored/structural position with no single
    call site to instantiate an effect against, and must declare its `throws`.
 
+Function return and `throws` types consume following unions greedily. A bare function type can also be a non-first union member when the grouping is unambiguous:
+
+```baml
+type ReturnsUnion = () -> string | int throws never;
+type ContainsCallable = int | () -> string throws never;
+type ContainsCallableFirst = (() -> string throws never) | int;
+```
+
+`ReturnsUnion` is a function returning `string | int`; the other two types are unions of `int` and a function returning `string`. Parenthesize the entire function type to end its return and `throws` operands before an outer union pipe. If a pipe can either remain in one function's return or `throws` type or start a sibling callable arm, such as `() -> string throws never | () -> int throws never`, the compiler reports E0175 and requires explicit grouping.
+
 As previously noted, BAML function declarations may include generics. However, all function calls and function-values must have their type parameters specified — or unambiguously inferable from context — to enable monomorphization at call-time:
 
 ```baml

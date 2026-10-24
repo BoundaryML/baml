@@ -11,7 +11,7 @@ type JsonUnionPayload = JsonUnionRecord | JsonUnionPhase | image;
 type Payload = uint8array | string;
 
 function serialize_json_union_payload(value: JsonUnionPayload) -> string {
-    baml.json.to_string(value)
+    baml.json.stringify(value)
 }
 
 test "typed union preserves class enum and media values" {
@@ -41,7 +41,7 @@ test "typed class and union serialization are equivalent" {
     let record = JsonNestedRecord { name: "Ada", detail: JsonNestedDetail { label: "nested" } };
     let payload: JsonNestedPayload = record;
     assert.equal(
-        baml.json.to_string(record) + "|" + baml.json.to_string(payload),
+        baml.json.stringify(record) + "|" + baml.json.stringify(payload),
         `{"name":"Ada","detail":{"label":"nested"}}|{"name":"Ada","detail":{"label":"nested"}}`,
     )
 }
@@ -49,7 +49,7 @@ test "typed class and union serialization are equivalent" {
 test "typed union preserves uint8array serialization error" {
     let result = {
         let payload: Payload = baml.Uint8Array.from_hex("00ff");
-        let _ = baml.json.to_string(payload);
+        let _ = baml.json.stringify(payload);
         "unexpected success"
     } catch (e) {
         baml.json.SerializationError => "serialization error",

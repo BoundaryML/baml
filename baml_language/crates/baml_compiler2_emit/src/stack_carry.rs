@@ -975,9 +975,15 @@ fn simulate_rvalue_pull_stack<'db>(
         return true;
     }
 
-    // MakeBoundMethod: pops receiver (1 value), pushes bound_method (1 value).
-    // Net stack effect: 0 (receiver consumed, bound_method produced).
-    if let Rvalue::MakeBoundMethod { receiver, .. } = rvalue {
+    // MakeBoundMethod over the receiver's frame: pops receiver (1 value),
+    // pushes bound_method (1 value). Net stack effect: 0 (receiver consumed,
+    // bound_method produced).
+    if let Rvalue::MakeBoundMethod {
+        receiver,
+        frame: baml_compiler2_mir::BoundFrame::Receiver,
+        ..
+    } = rvalue
+    {
         let mut sink = StackCarryPullSink {
             sim,
             carried_local,
@@ -1002,7 +1008,10 @@ fn simulate_rvalue_pull_stack<'db>(
     // materialized correctly through `emit_rvalue_pull`.
     if matches!(
         rvalue,
-        Rvalue::MakeVirtualBoundMethod { .. }
+        Rvalue::MakeBoundMethod {
+            frame: baml_compiler2_mir::BoundFrame::Explicit(_),
+            ..
+        } | Rvalue::MakeVirtualBoundMethod { .. }
             | Rvalue::MakeVirtualFunction { .. }
             | Rvalue::VirtualFieldAccess { .. }
     ) {

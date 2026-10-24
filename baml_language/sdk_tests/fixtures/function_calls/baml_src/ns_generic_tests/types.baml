@@ -260,7 +260,7 @@ function wrap<T>(x: T) -> GenericBox<T> {
 // ---------------------------------------------------------------------------
 
 function parse_as<T>(source: string) -> T throws baml.json.ParseError | baml.json.DecodeError {
-  baml.json.from_string<T>(source)
+  baml.json.decode<T>(source)
 }
 
 // ---------------------------------------------------------------------------

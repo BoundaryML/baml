@@ -1366,7 +1366,7 @@ test "bedrock_parse_tool_use" {
     assert.equal(uses.length(), 1);
     assert.equal(uses.at(0)?.id ?? "", "tu_1");
     assert.equal(uses.at(0)?.name ?? "", "get_weather");
-    assert.equal(baml.json.to_json(uses.at(0)?.args), args)
+    assert.equal(baml.json.from(uses.at(0)?.args), args)
 }
 
 function bedrock_parse_reasoning() -> string {

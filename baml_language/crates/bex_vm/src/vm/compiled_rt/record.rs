@@ -12,7 +12,7 @@ use bex_vm_types::{HeapPtr, Object, RealizedTy, StackIndex, Value, types::Functi
 
 use super::CompiledFn;
 use crate::{
-    errors::{VmError, VmPanic},
+    errors::VmError,
     telemetry::{CallTypeArgs, FrameTelemetry, InvocationOutcome},
     types::ObjectTrait as _,
     vm::{BexVm, BytecodeFrame, Frame},
@@ -362,8 +362,8 @@ impl BexVm {
     #[allow(
         clippy::inline_always,
         clippy::cast_possible_truncation,
-        reason = "measured: the call fast path; levels are below `MAX_FRAMES` and stack \
-                  offsets fit u32"
+        reason = "measured: the call fast path; levels and stack offsets are bounded by the \
+                  fiber stack and the thread stack budget, so they fit u32"
     )]
     #[inline(always)]
     fn call_record_in<T: RecordResult>(
@@ -380,9 +380,6 @@ impl BexVm {
         let links = unsafe { &*chain };
         let count = links.count.get();
         let level = self.frames.len() + count as usize;
-        if level >= crate::vm::MAX_FRAMES {
-            return Err(Box::new(self.record_overflow()));
-        }
         self.stack_room()?;
         let base = self.stack.len();
         let record = FrameRecord {
@@ -523,7 +520,7 @@ impl BexVm {
 
     #[allow(
         clippy::cast_possible_truncation,
-        reason = "levels are below `MAX_FRAMES` and stack offsets fit u32"
+        reason = "levels and stack offsets are bounded by the thread stack budget, so they fit u32"
     )]
     pub(crate) fn run_entry_with<T>(
         &mut self,
@@ -594,12 +591,6 @@ impl BexVm {
             return self.heap.compile_time_ptr(idx.into_raw());
         }
         self.package_object(package, idx)
-    }
-
-    #[cold]
-    #[inline(never)]
-    fn record_overflow(&mut self) -> VmError {
-        VmError::thrown_fresh(self.panic_to_exception_value(VmPanic::StackOverflow))
     }
 
     #[inline]
@@ -859,7 +850,7 @@ impl BexVm {
         // SAFETY: the frame or linked record roots its callable under the heap permit.
         let function = unsafe { self.load_callable(function) }.ok()?;
         let slot = function.compiled_body?.cause_slot()?;
-        let context = *self.stack.0.get(base + slot as usize)?;
+        let context = *self.stack.get(base + slot as usize)?;
         (!context.is_null()).then_some(context)
     }
 
@@ -915,7 +906,8 @@ impl BexVm {
         let mut frame =
             BytecodeFrame::compiled(callee, locals_offset, type_args, context, telemetry);
         frame.type_metadata = type_metadata;
-        self.frames.push(Frame::Bytecode(frame));
+        // `check_compiled_call` reserved the slot.
+        self.frames.push_reserved(Frame::Bytecode(frame));
         locals_offset
     }
 
@@ -1044,7 +1036,8 @@ mod tests {
         };
         let mut outer = outer.clone();
         outer.faulting_pc = 0;
-        vm.frames.insert(0, Frame::Bytecode(outer));
+        vm.frames.try_push(Frame::Bytecode(outer)).unwrap();
+        vm.frames.rotate_right(1);
         vm.cur_pc = 5;
 
         let mut positions = Vec::new();

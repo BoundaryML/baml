@@ -2,7 +2,7 @@
 //! cache of static implementations.
 
 use bex_vm_types::{
-    HeapPtr, Object, ObjectType, RealizedTy, TypeHead, Value,
+    HeapPtr, Object, ObjectType, RealizedTy, StackIndex, TypeHead, Value,
     types::{BoundMethod, Closure},
 };
 
@@ -153,7 +153,8 @@ impl BexVm {
             .collect();
         let base = self.stack.len();
         let count = self.push_virtual_args(callee, Some(&full_layout), &full_args)?;
-        self.stack.0.remove(base);
+        self.stack
+            .drain(StackIndex::from_raw(base)..StackIndex::from_raw(base + 1));
         Ok(count - 1)
     }
 
@@ -165,12 +166,12 @@ impl BexVm {
     ) -> Result<u32, Box<VmError>> {
         let count = |count: usize| u32::try_from(count).expect("an argument count fits u32");
         let Some(layout) = layout else {
-            self.stack.extend(args.iter().copied());
+            self.extend_stack(args.iter().copied()).map_err(Box::new)?;
             return Ok(count(args.len()));
         };
         // Extra optional parameters require remapping even for positional arguments.
         if layout.iter().all(Option::is_none) && self.callee_params(callee)?.arity() == args.len() {
-            self.stack.extend(args.iter().copied());
+            self.extend_stack(args.iter().copied()).map_err(Box::new)?;
             return Ok(count(args.len()));
         }
         let caller = baml_type::CallLayout(
@@ -181,18 +182,19 @@ impl BexVm {
         );
         let params = self.callee_params(callee)?;
         if params.layout_is(&caller) {
-            self.stack.extend(args.iter().copied());
+            self.extend_stack(args.iter().copied()).map_err(Box::new)?;
             return Ok(count(args.len()));
         }
         let target = params.layout();
         let mapping = caller
             .map_to(&target)
             .map_err(VmInternalError::CallLayout)?;
-        self.stack.extend(
+        self.extend_stack(
             mapping
                 .into_iter()
                 .map(|slot| slot.map_or(Value::OMITTED_ARG, |index| args[index])),
-        );
+        )
+        .map_err(Box::new)?;
         Ok(count(target.len()))
     }
 

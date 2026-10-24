@@ -530,7 +530,7 @@ fn same_media(
 }
 
 fn snapshot(args: bool, values: &[External]) -> Snapshot {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut builder = pool.try_acquire().unwrap();
     let roots: Vec<_> = values
         .iter()
@@ -800,7 +800,7 @@ fn enum_named<'p>(
 fn graph_snapshot(program: &Program, scenario: &str, args: bool, value: i64) -> Snapshot {
     use baml_type::RealizedTy;
 
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut b = pool.try_acquire().unwrap();
     let field =
         |_: &mut btel_snapshot::Leaves<'_>, (key, value): (&str, Value)| (key.into(), value);
@@ -879,7 +879,7 @@ fn graph_snapshot(program: &Program, scenario: &str, args: bool, value: i64) -> 
 }
 
 async fn arguments_and_graphs(program: &Program) {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let omitted = finish(pool.try_acquire().unwrap(), true, &[Value::OmittedArg]);
     for (function, expected_args, expected_result) in [
         ("matrix_omitted", omitted, text("default")),
@@ -1251,7 +1251,7 @@ fn one_field_instance(
 ) -> Snapshot {
     let (class, class_name) = class_named(program, name);
     assert_eq!(class.fields.len(), 1);
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let mut b = pool.try_acquire().unwrap();
     let definition = recorded(program, class.type_tag);
     let definition = b.leaves().define(&definition, &mut Carried::default());

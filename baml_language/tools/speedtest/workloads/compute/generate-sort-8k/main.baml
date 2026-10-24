@@ -9,7 +9,7 @@ function main() -> int {
     a.push(value);
   }
   a.sort();
-  let out = baml.json.to_string(a);
+  let out = baml.json.stringify(a);
   let h = 0;
   for (let c in out.to_code_points()) { h = (h * 31 + c) % 1000000007; }
   h + out.length()

@@ -295,7 +295,7 @@ function RuntimeClass() -> void {
     let type Saved = saved;
     let text = {
         let parsed = baml.sap.parse<Saved>(`{"height": 180, "name": "Ada"}`);
-        baml.json.to_string(parsed)
+        baml.json.stringify(parsed)
     } catch (e, ctx) {
         _ => "parse failed"
     };

@@ -34,7 +34,7 @@ mod tests {
 
     #[test]
     fn combining_is_bounded_and_evicted_ids_can_be_offered_again() {
-        let pool = SnapshotPool::new(1, Limits::default());
+        let pool = SnapshotPool::unbounded(Limits::default());
         let snapshot = |n| {
             pool.try_acquire()
                 .unwrap()

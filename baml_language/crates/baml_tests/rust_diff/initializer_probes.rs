@@ -142,7 +142,10 @@ fn build_probe_variant(
     let db = baml_test_support::setup_multi_file_db(&files);
     let root = db.workspace_root().unwrap();
     let mut envelope = template.clone();
-    envelope.program = baml_db::compile_program(&db, root, opt).unwrap();
+    envelope.program = baml_db::CheckedWorld::collect(&db, root)
+        .expect("the world checks")
+        .compile(opt)
+        .unwrap();
     let package = &envelope.program.packages[envelope.program.root as usize].name;
     for target in &mut envelope.targets {
         let name = target.qualified_name.rsplit('.').next().unwrap();

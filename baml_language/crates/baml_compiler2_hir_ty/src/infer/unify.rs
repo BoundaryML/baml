@@ -121,9 +121,10 @@ impl VarPolicy {
     /// policy (its behavior set is a strict superset - real case:
     /// `let xs = []; xs.push(x)` inside a lambda unions the element slot with
     /// the parameter). An effect class joining any specialized class is not
-    /// constructible
-    /// under the current minting discipline (effects only ever unify with
-    /// throws slots, which are ground, effect vars, or plain hole vars);
+    /// constructible under the current minting discipline (effects only ever
+    /// unify with throws slots - ground, effect vars, or plain hole vars -
+    /// and with the value slots invariance ties them to, which the effect
+    /// default then leaves open: `InferenceContext::effect_default_keep_open`);
     /// debug-assert and keep the effect policy - a throws channel cannot
     /// afford to lose its `never` default.
     fn join(self, other: VarPolicy) -> VarPolicy {
@@ -163,6 +164,13 @@ enum VarValue {
         /// A var-var union keeps the shallower depth, since the merged
         /// class is observable from the outer scope.
         universe: u32,
+        /// Whether the class has been related to the `Error` sentinel. The
+        /// relation itself is a no-op (`Error` unifies with everything, the
+        /// diagnostic for it was already reported), but the class then owes
+        /// no "cannot infer" of its own: the evidence that would have
+        /// determined it was the error. A var-var union keeps the taint of
+        /// either side. Carried in the ena value so a rollback reverts it.
+        tainted: bool,
     },
     Solved(Ty),
 }
@@ -183,14 +191,17 @@ impl ut::UnifyValue for VarValue {
                 VarValue::Unsolved {
                     policy: a,
                     universe: ua,
+                    tainted: ta,
                 },
                 VarValue::Unsolved {
                     policy: b,
                     universe: ub,
+                    tainted: tb,
                 },
             ) => VarValue::Unsolved {
                 policy: a.join(*b),
                 universe: (*ua).min(*ub),
+                tainted: *ta || *tb,
             },
         })
     }
@@ -286,6 +297,7 @@ impl InferenceTable {
             .new_key(VarValue::Unsolved {
                 policy,
                 universe: self.universe,
+                tainted: false,
             })
             .0
     }
@@ -360,7 +372,12 @@ impl InferenceTable {
     /// may no longer take that block's parameters as a solution. A class
     /// already at or above `depth`, or solved, is left alone.
     pub fn demote_to(&mut self, var: InferVar, depth: u32) {
-        let VarValue::Unsolved { policy, universe } = self.vars.probe_value(VarKey(var)) else {
+        let VarValue::Unsolved {
+            policy,
+            universe,
+            tainted,
+        } = self.vars.probe_value(VarKey(var))
+        else {
             return;
         };
         if universe <= depth {
@@ -371,6 +388,7 @@ impl InferenceTable {
             VarValue::Unsolved {
                 policy,
                 universe: depth,
+                tainted,
             },
         );
     }
@@ -443,57 +461,119 @@ impl InferenceTable {
         matches!(self.vars.probe_value(root), VarValue::Unsolved { .. }).then_some(root.0)
     }
 
-    /// Defaults every still-unsolved effect variable's class to `never`.
-    /// Run before the finalize erasure so effects never become errors.
-    pub fn default_unsolved_effects_to_never(&mut self) {
+    /// Marks every open class `ty` names (through solved variables) as
+    /// related to the `Error` sentinel: see `VarValue::Unsolved::tainted`.
+    /// A solved class is left alone - its solution is its answer.
+    pub fn taint_vars_in(&mut self, ty: &Ty) {
+        for root in self.open_roots_in(ty) {
+            self.taint_root(root);
+        }
+    }
+
+    /// The roots of the open classes `ty` names (through solved
+    /// variables), each once, in walk order.
+    pub fn open_roots_in(&mut self, ty: &Ty) -> Vec<InferVar> {
+        if !ty.has_infer() {
+            return Vec::new();
+        }
+        let ty = self.resolve_completely(ty);
+        let mut vars = Vec::new();
+        collect_infer_vars(&ty, &mut vars);
+        let mut roots: Vec<InferVar> = Vec::with_capacity(vars.len());
+        for var in vars {
+            if let Some(root) = self.unsolved_root_var(var)
+                && !roots.contains(&root)
+            {
+                roots.push(root);
+            }
+        }
+        roots
+    }
+
+    /// Makes `var`'s open VALUE class an EFFECT class: unconstrained, it
+    /// defaults to `never` at finalize. Only a still-plain value class is
+    /// promoted - a class that already took on another policy (a lambda
+    /// parameter, a container slot) keeps it.
+    pub fn promote_to_effect(&mut self, var: InferVar) {
+        let key = self.vars.find(VarKey(var));
+        let VarValue::Unsolved {
+            policy: VarPolicy::Value,
+            universe,
+            tainted,
+        } = self.vars.probe_value(key)
+        else {
+            return;
+        };
+        self.vars.union_value(
+            key,
+            VarValue::Unsolved {
+                policy: VarPolicy::Effect,
+                universe,
+                tainted,
+            },
+        );
+    }
+
+    /// Marks the open class rooted at `root` as related to the `Error`
+    /// sentinel ([`Self::taint_vars_in`] for one class).
+    pub fn taint_root(&mut self, root: InferVar) {
+        let key = self.vars.find(VarKey(root));
+        let VarValue::Unsolved {
+            policy,
+            universe,
+            tainted,
+        } = self.vars.probe_value(key)
+        else {
+            return;
+        };
+        if tainted {
+            return;
+        }
+        // `union_value` merges through `unify_values`: the policy join and
+        // universe min are idempotent, so only the taint changes.
+        self.vars.union_value(
+            key,
+            VarValue::Unsolved {
+                policy,
+                universe,
+                tainted: true,
+            },
+        );
+    }
+
+    /// Whether `var`'s open class was related to the `Error` sentinel. A
+    /// solved class is never tainted: its solution stands on its own.
+    pub fn is_tainted(&mut self, var: InferVar) -> bool {
+        matches!(
+            self.vars.probe_value(VarKey(var)),
+            VarValue::Unsolved { tainted: true, .. }
+        )
+    }
+
+    /// Defaults every still-unsolved effect class to `never`, except the
+    /// classes rooted in `keep_open` (a class that also holds a slot the
+    /// program must determine is not an effect's to default). Returns
+    /// whether any class was defaulted: a quiescence tier of the
+    /// fulfillment loop, after which obligations re-run.
+    pub fn default_unsolved_effects_to_never(&mut self, keep_open: &[InferVar]) -> bool {
+        let keep_open: Vec<VarKey> = keep_open
+            .iter()
+            .map(|&var| self.vars.find(VarKey(var)))
+            .collect();
+        let mut defaulted = false;
         let len = u32::try_from(self.vars.len())
             .unwrap_or_else(|_| unreachable!("ena keys are u32-indexed"));
         for index in 0..len {
             let key = VarKey(InferVar::new(index));
             if let VarValue::Unsolved { policy, .. } = self.vars.probe_value(key)
                 && policy.defaults_to_never()
+                && !keep_open.contains(&self.vars.find(key))
             {
                 self.vars.union_value(key, VarValue::Solved(Ty::never()));
+                defaulted = true;
             }
         }
-    }
-
-    /// The fixpoint-tier slice of the effect default (rustc runs
-    /// fallback at quiescence and fulfillment RE-RUNS after it): only
-    /// effect classes with NO accumulated bounds default here - a
-    /// bounded effect class still solves from its evidence once this
-    /// default grounds it. Returns whether anything defaulted.
-    pub fn default_unbounded_effects_to_never(&mut self) -> bool {
-        // Bounds may be keyed under a non-root alias; compare by ROOT.
-        let bound_keys: Vec<u32> = self
-            .bounds
-            .iter()
-            .filter(|(_, bounds)| !bounds.lowers.is_empty() || !bounds.uppers.is_empty())
-            .map(|(&key, _)| key)
-            .collect();
-        let bound_roots: Vec<VarKey> = bound_keys
-            .into_iter()
-            .map(|key| self.vars.find(VarKey(InferVar::new(key))))
-            .collect();
-        let mut any = false;
-        let len = u32::try_from(self.vars.len())
-            .unwrap_or_else(|_| unreachable!("ena keys are u32-indexed"));
-        for index in 0..len {
-            let key = VarKey(InferVar::new(index));
-            let VarValue::Unsolved { policy, .. } = self.vars.probe_value(key) else {
-                continue;
-            };
-            if !policy.defaults_to_never() {
-                continue;
-            }
-            let root = self.vars.find(key);
-            if bound_roots.contains(&root) {
-                continue;
-            }
-            self.vars.union_value(root, VarValue::Solved(Ty::never()));
-            any = true;
-        }
-        any
+        defaulted
     }
 
     /// Replaces a solved variable at the ROOT of `ty` with its solution,
@@ -538,8 +618,23 @@ impl InferenceTable {
             return Ok(());
         }
         // Error unifies with everything: a diagnostic was already emitted.
-        if matches!(left.kind(), InferTy::Error) || matches!(right.kind(), InferTy::Error) {
-            return Ok(());
+        // The other side's open classes are tainted by it - the evidence
+        // that would have determined them was the error, so none of them
+        // owes a "cannot infer" of its own (see `VarValue::Unsolved::tainted`).
+        match (
+            matches!(left.kind(), InferTy::Error),
+            matches!(right.kind(), InferTy::Error),
+        ) {
+            (true, true) => return Ok(()),
+            (true, false) => {
+                self.taint_vars_in(&right);
+                return Ok(());
+            }
+            (false, true) => {
+                self.taint_vars_in(&left);
+                return Ok(());
+            }
+            (false, false) => {}
         }
         match (left.kind(), right.kind()) {
             (InferTy::InferVar { var: a, .. }, InferTy::InferVar { var: b, .. }) => {
@@ -1006,6 +1101,56 @@ mod tests {
     }
 
     #[test]
+    fn error_taints_the_open_classes_it_relates_to() {
+        let mut table = InferenceTable::new();
+        let a = table.new_var();
+        let elem = table.new_var();
+        let untouched = table.new_var();
+        assert!(!table.is_tainted(a));
+        table.unify(&Ty::infer_var(a), &Ty::error()).unwrap();
+        assert!(table.is_tainted(a));
+        // Nested: the error relates to a type that names the class.
+        table
+            .unify(&Ty::error(), &Ty::list(Ty::infer_var(elem)))
+            .unwrap();
+        assert!(table.is_tainted(elem));
+        assert!(!table.is_tainted(untouched));
+        // The taint is a property of the open class: an alias sees it,
+        // and a solution retires it.
+        let alias = table.new_var();
+        table
+            .unify(&Ty::infer_var(alias), &Ty::infer_var(a))
+            .unwrap();
+        assert!(table.is_tainted(alias));
+        table.unify(&Ty::infer_var(a), &Ty::int()).unwrap();
+        assert!(!table.is_tainted(a));
+    }
+
+    #[test]
+    fn var_var_union_keeps_either_taint() {
+        let mut table = InferenceTable::new();
+        let clean = table.new_var();
+        let dirty = table.new_var();
+        table.unify(&Ty::infer_var(dirty), &Ty::error()).unwrap();
+        table
+            .unify(&Ty::infer_var(clean), &Ty::infer_var(dirty))
+            .unwrap();
+        assert!(table.is_tainted(clean));
+        assert!(table.is_tainted(dirty));
+    }
+
+    #[test]
+    fn rollback_reverts_taint() {
+        let mut table = InferenceTable::new();
+        let a = table.new_var();
+        let snapshot = table.snapshot();
+        table.unify(&Ty::infer_var(a), &Ty::error()).unwrap();
+        assert!(table.is_tainted(a));
+        table.rollback_to(snapshot);
+        assert!(!table.is_tainted(a));
+    }
+
+    #[test]
     fn resolve_completely_folds_nested_solutions() {
         let mut table = InferenceTable::new();
         let elem = table.new_var_ty();
@@ -1259,7 +1404,7 @@ mod tests {
         table.rollback_to(snapshot);
 
         let value = table.new_var_ty();
-        table.default_unsolved_effects_to_never();
+        table.default_unsolved_effects_to_never(&[]);
         assert_eq!(
             table.shallow_resolve(&value),
             value,

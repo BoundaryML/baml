@@ -118,7 +118,7 @@ fn root_blob(snapshot: &Snapshot) -> Vec<u8> {
 
 #[test]
 fn all_snapshot_tags_round_trip() {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     for arguments in [true, false] {
         let snapshot = graph(&pool, arguments);
         let bytes = root_blob(&snapshot);
@@ -135,7 +135,7 @@ fn all_snapshot_tags_round_trip() {
 #[ignore = "prints current encodings for review; never rewrites the fixtures"]
 #[expect(clippy::print_stdout, reason = "the output is the point")]
 fn print_current_encodings() {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     for arguments in [true, false] {
         println!("{arguments}: {}", hex(&root_blob(&graph(&pool, arguments))));
     }
@@ -220,7 +220,7 @@ fn blob_lines(snapshot: &Snapshot) -> Vec<String> {
 
 #[test]
 fn references_between_blobs_round_trip() {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let lines = blob_lines(&cut_graph(&pool));
     assert!(lines.len() > 1);
     assert_eq!(pool.stats().in_use, 0);
@@ -230,7 +230,7 @@ fn references_between_blobs_round_trip() {
 #[ignore = "prints current encodings for review; never rewrites the fixtures"]
 #[expect(clippy::print_stdout, reason = "the output is the point")]
 fn print_current_external_encodings() {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     for line in blob_lines(&cut_graph(&pool)) {
         println!("{line}");
     }
@@ -310,7 +310,7 @@ fn media_graph(pool: &SnapshotPool) -> Snapshot {
 
 #[test]
 fn media_round_trips() {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     let lines = blob_lines(&media_graph(&pool));
     assert!(lines.len() > 1);
     assert_eq!(pool.stats().in_use, 0);
@@ -320,7 +320,7 @@ fn media_round_trips() {
 #[ignore = "prints current encodings for review; never rewrites the fixtures"]
 #[expect(clippy::print_stdout, reason = "the output is the point")]
 fn print_current_media_encodings() {
-    let pool = SnapshotPool::new(1, Limits::default());
+    let pool = SnapshotPool::unbounded(Limits::default());
     for line in blob_lines(&media_graph(&pool)) {
         println!("{line}");
     }

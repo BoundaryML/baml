@@ -380,6 +380,14 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                                                           ╰── expected `int`, but this value is discarded; remove the `;` to use it
     ╰────
 
+  [type] E0002
+
+  × cannot infer type parameter `T`: its arguments give it the conflicting types `int` and `null`; write the type argument or annotate the expected type
+    ╭─[joined_unit.baml:99:11]
+ 99 │   let x = pick(1, { side(); });
+    ·           ────────────────────
+    ╰────
+
   [type] E0029
 
   × missing value
@@ -389,11 +397,19 @@ source: crates/baml_tests/src/generated_tests.rs
     ·                        ╰── expected `!error`, but this block ends without a value
     ╰────
 
+  [type] E0002
+
+  × cannot infer type parameter `U`
+     ╭─[joined_unit.baml:107:12]
+ 107 │   let ys = [1, 2].filter_map((x) -> { side(); });
+     ·            ─────────────────────────────────────
+     ╰────
+
   [type] E0029
 
   × missing value
-     ╭─[joined_unit.baml:106:37]
- 106 │   let ys = [1, 2].filter_map((x) -> { side(); });
+     ╭─[joined_unit.baml:107:37]
+ 107 │   let ys = [1, 2].filter_map((x) -> { side(); });
      ·                                     ─────┬─────
      ·                                          ╰── expected `!error | null`, but this block ends without a value
      ╰────
@@ -401,8 +417,8 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0029
 
   × missing value
-     ╭─[joined_unit.baml:111:13]
- 111 │   length_of({ side(); })
+     ╭─[joined_unit.baml:112:13]
+ 112 │   length_of({ side(); })
      ·             ─────┬─────
      ·                  ╰── expected `!error[]`, but this block ends without a value
      ╰────
@@ -410,8 +426,8 @@ source: crates/baml_tests/src/generated_tests.rs
   [type] E0029
 
   × missing value
-     ╭─[joined_unit.baml:115:37]
- 115 │   let x = pick(() -> { 1 }, () -> { side(); });
+     ╭─[joined_unit.baml:116:37]
+ 116 │   let x = pick(() -> { 1 }, () -> { side(); });
      ·                                     ───┬──
      ·                                        ╰── expected `int`, but this value is discarded; remove the `;` to use it
      ╰────

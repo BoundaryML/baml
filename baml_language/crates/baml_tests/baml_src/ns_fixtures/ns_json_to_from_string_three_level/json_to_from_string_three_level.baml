@@ -3,7 +3,7 @@
 // caller's concrete type-arg threads all the way to the native handler.
 
 function level1<T>(s: string) -> T throws baml.json.ParseError | baml.json.DecodeError {
-  baml.json.from_string<T>(s)
+  baml.json.decode<T>(s)
 }
 
 function level2<T>(s: string) -> T throws baml.json.ParseError | baml.json.DecodeError {

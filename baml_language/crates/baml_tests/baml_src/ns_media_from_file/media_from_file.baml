@@ -145,8 +145,8 @@ test "infer_mime_type falls back to the usual type of the kind" {
 // ============================================================================
 
 function media_json_keeps_the_name() -> string {
-    let json = baml.json.to_json(image.from_file_content("/photos/cat.png", "aGk=", null));
-    let back = baml.json.from_json<image>(json);
+    let json = baml.json.from(image.from_file_content("/photos/cat.png", "aGk=", null));
+    let back = baml.json.to<image>(json);
     `${back.name() ?? "no name"}|${back.mime_type() ?? "no mime"}|${back.base64()}`
 }
 
@@ -156,7 +156,7 @@ test "a name survives JSON" {
 
 function media_json_rejects<T>(json: string) -> bool {
     {
-        baml.json.from_string<T>(json);
+        baml.json.decode<T>(json);
         false
     } catch (e) {
         baml.json.DecodeError => true

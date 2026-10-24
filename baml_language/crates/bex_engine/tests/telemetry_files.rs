@@ -187,6 +187,48 @@ async fn shutdown_reports_disk_errors_even_without_another_invocation() {
     assert_eq!(engine.telemetry_result(), Some(Err(error)));
 }
 
+/// Every reading is reported, and a file of rows is one JSON object per line.
+#[cfg(feature = "telemetry_diagnostics")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn diagnostics_report_every_pool_and_append_one_line_per_engine() {
+    let root = tempfile::tempdir().unwrap();
+    let engine = engine(
+        baml_test_support::compile_source("function main() -> int { 1 }"),
+        TelemetryRecording::local_files_in(root.path(), RecordingConfig::default()),
+    );
+    engine
+        .call_function("main", vec![], context(), true)
+        .await
+        .unwrap();
+    let diagnostics = engine.telemetry_diagnostics().unwrap();
+    assert_eq!(diagnostics["pid"], u64::from(std::process::id()));
+    assert!(diagnostics["recording_id"].is_string());
+    assert_eq!(diagnostics["delivery"]["kind"], "local");
+    assert!(diagnostics["captures"]["budget_bytes"].as_u64().unwrap() > 0);
+    assert!(diagnostics["chunks"]["sealed_records"].as_u64().unwrap() > 0);
+    assert_eq!(diagnostics["chunks"]["overage_allocations"], 0);
+    assert_eq!(diagnostics["overage_warned"], false);
+    let file = root.path().join("diagnostics.jsonl");
+    bex_engine::append_diagnostics_line(&file, &diagnostics).unwrap();
+    engine.shutdown().await;
+    bex_engine::append_diagnostics_line(&file, &engine.telemetry_diagnostics().unwrap()).unwrap();
+    let rows: Vec<serde_json::Value> = std::fs::read_to_string(&file)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0], diagnostics);
+    // After shutdown nothing is held, and the counts only grew: shutdown
+    // seals the records that end the recording.
+    assert_eq!(rows[1]["chunks"]["active_producers"], 0);
+    assert_eq!(rows[1]["captures"]["in_use"], 0);
+    assert!(
+        rows[1]["chunks"]["sealed_records"].as_u64()
+            >= rows[0]["chunks"]["sealed_records"].as_u64()
+    );
+}
+
 #[test]
 fn off_does_not_create_local_files() {
     const CHILD: &str = "BAML_FILE_SINK_OFF_TEST_CHILD";
@@ -340,16 +382,26 @@ async fn telemetry_disabled_inside_an_owned_span_does_not_stop_execution() {
             .unwrap()
             .unwrap()
             .path();
-        // The recorder keeps writing into it, so a file it adds mid-removal
-        // can fail the removal (DirectoryNotEmpty): try again. A rename
+        // The writer is still adding files: a removal can find the directory
+        // refilled (DirectoryNotEmpty), and a replacement can find it
+        // recreated. Keep at it until the replacement is in place. A rename
         // can't stand in, since Windows refuses one while files are open.
         let mut attempts = 0;
-        while let Err(error) = std::fs::remove_dir_all(&dir) {
+        loop {
+            let broken = std::fs::remove_dir_all(&dir)
+                .and_then(|()| std::fs::write(&dir, b"not a directory"))
+                .is_ok()
+                && dir.is_file();
+            if broken {
+                break;
+            }
             attempts += 1;
-            assert!(attempts < 100, "removing {}: {error}", dir.display());
-            tokio::time::sleep(Duration::from_millis(5)).await;
+            assert!(
+                attempts < 1000,
+                "the recording directory could not be broken"
+            );
+            tokio::time::sleep(Duration::from_millis(1)).await;
         }
-        std::fs::write(&dir, b"not a directory").unwrap();
     });
     assert_eq!(
         engine

@@ -1173,58 +1173,17 @@ impl ProjectDatabase {
 
     /// The compiled bytecode of `root`'s program — the root and its
     /// dependency closure, never another workspace root that shares this
-    /// database.
+    /// database — after the world's check ([`crate::CheckedWorld`]): an
+    /// error-bearing world is a recoverable
+    /// [`crate::CompileProgramError::WorldHasErrors`], never an attempt at
+    /// codegen, whose runtime-conversion boundary refuses an error-recovery
+    /// type loudly.
     pub fn get_bytecode(
         &self,
         root: SourceRoot,
     ) -> Result<bex_vm_types::Program, crate::program::CompileProgramError> {
-        // Bytecode generation lowers types through the runtime-conversion
-        // boundary (`ResolvedAliases::convert`), which deliberately panics on
-        // inference-only `Unknown`/`Error` types. Those are legitimate
-        // error-recovery types in a program that does not type-check, so do not
-        // attempt codegen on an error-bearing project: surface the failure as a
-        // recoverable `LoweringError`. The diagnostics themselves are reported
-        // through the normal check path. (CLI commands gate before calling
-        // `compile_program` directly; this protects the in-process /
-        // runtime-eval callers that go through `get_bytecode`.) The filter is
-        // the emitted WORLD's files, not the root's own: emit lowers the root
-        // plus its dependency closure, and an error left in a dependency
-        // reaches the runtime conversion, which has no error case and panics.
-        // Gating on the root alone would let exactly that through.
-        let user_file_ids: std::collections::HashSet<FileId> =
-            baml_compiler2_hir::package::world_files(self, root)
-                .iter()
-                .map(|f| f.file_id(self))
-                .collect();
-        let error_count = crate::check::collect_compiler2_diagnostics(self)
-            .iter()
-            .filter(|d| matches!(d.severity, baml_compiler_diagnostics::Severity::Error))
-            .filter(|d| {
-                d.primary_span()
-                    .is_some_and(|span| user_file_ids.contains(&span.file_id))
-            })
-            .count();
-        if error_count > 0 {
-            return Err(crate::program::CompileProgramError::Emit(
-                baml_compiler2_emit::LoweringError::ProjectHasErrors { error_count },
-            ));
-        }
-        self.get_bytecode_unchecked(root)
-    }
-
-    /// [`Self::get_bytecode`] without the error gate: goes straight to codegen.
-    ///
-    /// Only for callers that have already run a full-project check (per-file
-    /// `check_file` sweep **plus** package-level diagnostics) at the current
-    /// revision and found no workspace-file errors — the gate in
-    /// `get_bytecode` would re-derive exactly that result. Calling this on an
-    /// error-bearing project can panic in the runtime-conversion boundary (see
-    /// the gate comment above).
-    pub fn get_bytecode_unchecked(
-        &self,
-        root: SourceRoot,
-    ) -> Result<bex_vm_types::Program, crate::program::CompileProgramError> {
-        crate::program::compile_program(self, root, baml_compiler2_emit::OptLevel::Two)
+        crate::program::CheckedWorld::collect(self, root)?
+            .compile(baml_compiler2_emit::OptLevel::Two)
     }
 }
 

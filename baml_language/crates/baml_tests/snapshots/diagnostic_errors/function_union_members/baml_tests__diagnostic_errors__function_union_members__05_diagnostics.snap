@@ -1,0 +1,98 @@
+---
+source: crates/baml_tests/src/generated_tests.rs
+---
+=== COMPILER2 DIAGNOSTICS ===
+  [type] E0001
+
+  × mismatched types
+   ╭─[function_union_members.baml:4:38]
+ 4 │ function wrong_argument() -> int { h("s") }
+   ·                                      ─┬─
+   ·                                       ╰── expected `int | (() -> string throws never)`, found `"s"`
+   ╰────
+
+  [type] E0001
+
+  × mismatched types
+   ╭─[function_union_members.baml:5:45]
+ 5 │ function wrong_callable_return() -> int { h(() -> int throws never { 7 }) }
+   ·                                             ──────────────┬─────────────
+   ·                                                           ╰── expected `int | (() -> string throws never)`, found `() -> int throws never`
+   ╰────
+
+  [type] E0005
+
+  × expected 0 argument(s), got 1
+   ╭─[function_union_members.baml:6:48]
+ 6 │ function wrong_callable_parameter() -> int { h((x: int) -> string throws never { "s" }) }
+   ·                                                ───────────────────────────────────────
+   ╰────
+
+  [type] E0001
+
+  × mismatched types
+   ╭─[function_union_members.baml:9:52]
+ 9 │ function wrong_field() -> Holder { Holder { value: "s" } }
+   ·                                                    ─┬─
+   ·                                                     ╰── expected `int | (() -> string throws never)`, found `"s"`
+   ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[function_union_members.baml:13:54]
+ 13 │ function wrong_alias_argument() -> int { takes_alias("s") }
+    ·                                                      ─┬─
+    ·                                                       ╰── expected `Value`, found `"s"`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[function_union_members.baml:16:61]
+ 16 │ function wrong_generic_argument() -> int { takes_map({ "v": "s" }) }
+    ·                                                             ─┬─
+    ·                                                              ╰── expected `int | (() -> string throws never)`, found `"s"`
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[function_union_members.baml:18:60]
+ 18 │ function wrong_return() -> int | () -> string throws never { "s" }
+    ·                                                            ───┬───
+    ·                                                               ╰── expected `int | (() -> string throws never)`, found `"s"`
+    ╰────
+
+  [type] E0097
+
+  ⚠ extraneous throws declaration: () -> string throws never, int
+    ╭─[function_union_members.baml:19:72]
+ 19 │ function wrong_throw() -> never throws int | () -> string throws never { throw "s"; }
+    ·                                                                        ──────────────
+    ╰────
+
+  [type] E0096
+
+  × declared throws is `int | (() -> string throws never)`, but this function may also throw `string`
+    ╭─[function_union_members.baml:19:80]
+ 19 │ function wrong_throw() -> never throws int | () -> string throws never { throw "s"; }
+    ·                                                                                ───
+    ╰────
+
+  [type] E0151
+
+  × function type must declare an explicit `throws` clause; add `throws never` if calling it cannot throw
+    ╭─[function_union_members.baml:22:28]
+ 22 │ type MissingEffect = int | () -> string
+    ·                            ────────────
+    ╰────
+
+  [type] E0001
+
+  × mismatched types
+    ╭─[function_union_members.baml:26:62]
+ 26 │ function wrong_scalar_argument() -> int { takes_return_union(7) }
+    ·                                                              ┬
+    ·                                                              ╰── expected `() -> int | string throws never`, found `7`
+    ╰────

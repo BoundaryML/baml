@@ -1277,7 +1277,7 @@ pub(crate) enum Inline {
 /// An inline value's handle: its snapshot travels inside the handle, which
 /// carries one blob, so the value is kept whole.
 pub(crate) fn inline_handle(value: &Inline) -> Vec<u8> {
-    let pool = btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+    let pool = btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default());
     let mut builder = pool.try_acquire().expect("a fresh pool has a slot");
     let root = build_inline(&mut builder, value);
     let mut whole = btel_snapshot::Shaper::new(btel_snapshot::ShapePolicy::Whole);

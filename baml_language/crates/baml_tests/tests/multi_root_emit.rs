@@ -13,11 +13,11 @@ use std::sync::Arc;
 
 use baml_base::SourceRoot;
 use baml_compiler_diagnostics::Severity;
-use baml_compiler2_emit::{LoweringError, emit_package};
+use baml_compiler2_emit::emit_package;
 use baml_compiler2_hir::package::world_roots;
 use baml_compiler2_hir_ty::render::Viewpoint;
 use baml_db::{
-    CompileProgramError, OptLevel, ProjectDatabase, SourceRootKind, SourceRootSpec, compile_program,
+    CheckedWorld, CompileProgramError, OptLevel, ProjectDatabase, SourceRootKind, SourceRootSpec,
 };
 use bex_engine::{BexEngine, BexExternalValue, FunctionCallContextBuilder};
 use bex_vm_types::Program;
@@ -106,8 +106,14 @@ fn each_workspace_root_is_its_own_world() {
 #[test]
 fn same_named_declarations_in_two_roots_emit_as_two_programs() {
     let (db, a, b) = two_workspaces("class Point { x int }\n", "class Point { y string }\n");
-    let program_a = compile_program(&db, a, OptLevel::Two).expect("root a emits alone");
-    let program_b = compile_program(&db, b, OptLevel::Two).expect("root b emits alone");
+    let program_a = CheckedWorld::collect(&db, a)
+        .expect("the world checks")
+        .compile(OptLevel::Two)
+        .expect("root a emits alone");
+    let program_b = CheckedWorld::collect(&db, b)
+        .expect("the world checks")
+        .compile(OptLevel::Two)
+        .expect("root b emits alone");
     // Exactly one `Point` per program, the workspace's own.
     let points_a = baml_tests::engine::classes_named(&program_a, "Point");
     let points_b = baml_tests::engine::classes_named(&program_b, "Point");
@@ -130,8 +136,14 @@ async fn each_program_runs_its_own_root() {
         "function main() -> int throws never { 1 }\nfunction only_a() -> int throws never { 10 }\n",
         "function main() -> int throws never { 2 }\nfunction only_b() -> int throws never { 20 }\n",
     );
-    let program_a = compile_program(&db, a, OptLevel::Two).expect("root a emits");
-    let program_b = compile_program(&db, b, OptLevel::Two).expect("root b emits");
+    let program_a = CheckedWorld::collect(&db, a)
+        .expect("the world checks")
+        .compile(OptLevel::Two)
+        .expect("root a emits");
+    let program_b = CheckedWorld::collect(&db, b)
+        .expect("the world checks")
+        .compile(OptLevel::Two)
+        .expect("root b emits");
     assert_eq!(
         function_names(&program_a),
         vec!["user.main".to_string(), "user.only_a".to_string()]
@@ -151,12 +163,10 @@ fn one_roots_errors_do_not_block_another() {
         "function main() -> int throws never { \"not an int\" }\n",
     );
     assert!(db.get_bytecode(a).is_ok(), "root a is clean and builds");
-    let Err(CompileProgramError::Emit(LoweringError::ProjectHasErrors { error_count })) =
-        db.get_bytecode(b)
-    else {
+    let Err(CompileProgramError::WorldHasErrors(refused)) = db.get_bytecode(b) else {
         panic!("root b has a type error and must not build");
     };
-    assert_eq!(error_count, 1);
+    assert_eq!(refused.errors().len(), 1);
     // The error is reported against b's file only.
     let errors: Vec<_> = baml_db::collect_compiler2_diagnostics(&db)
         .into_iter()
@@ -198,8 +208,14 @@ fn every_world_shares_the_stdlib_prefix() {
         })
         .sum();
     assert!(stdlib_objects > 0);
-    let program_a = compile_program(&db, a, OptLevel::Two).expect("root a emits");
-    let program_b = compile_program(&db, b, OptLevel::Two).expect("root b emits");
+    let program_a = CheckedWorld::collect(&db, a)
+        .expect("the world checks")
+        .compile(OptLevel::Two)
+        .expect("root a emits");
+    let program_b = CheckedWorld::collect(&db, b)
+        .expect("the world checks")
+        .compile(OptLevel::Two)
+        .expect("root b emits");
     assert_eq!(
         object_bytes(&program_a)[..stdlib_objects],
         object_bytes(&program_b)[..stdlib_objects],

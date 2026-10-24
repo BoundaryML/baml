@@ -82,7 +82,7 @@ fn compiled_catches_match_bytecode_error_evidence_and_rethrow_origins() {
     }
     fn relay(vm: &mut BexVm, fr: &FrameRecord, args: &[Value]) -> Result<Value, Box<VmError>> {
         let again = args[0].as_bool().unwrap();
-        vm.reserve_slots(fr, 2);
+        vm.reserve_slots(fr, 2)?;
         let callee = vm.idx_to_ptr(ObjectIndex::from_raw(WORK.load(Ordering::Relaxed) as usize));
         let pc = CALL_PC.load(Ordering::Relaxed);
         let result = if MIXED.load(Ordering::Relaxed) {
@@ -96,7 +96,7 @@ fn compiled_catches_match_bytecode_error_evidence_and_rethrow_origins() {
         match result {
             Ok(value) => Ok(value),
             Err(error) => {
-                vm.reserve_slots(fr, 2);
+                vm.reserve_slots(fr, 2)?;
                 let (value, context) =
                     vm.catch_at(error, fr, 1, HANDLER_PC.load(Ordering::Relaxed) as usize)?;
                 if again {

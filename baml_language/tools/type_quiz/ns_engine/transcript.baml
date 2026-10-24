@@ -327,7 +327,7 @@ function transcript_path(dir: string, mode: Mode, seed: int) -> string throws ne
 
 function save(transcript: Transcript, dir: string) -> SaveResult throws never {
     let path = transcript_path(dir, transcript.mode, transcript.seed);
-    let written: string | SaveFailed = baml.json.to_string(transcript) catch_all (e) {
+    let written: string | SaveFailed = baml.json.stringify(transcript) catch_all (e) {
         _ => SaveFailed { path, message: `${e}` },
     };
     match (written) {
@@ -347,7 +347,7 @@ function save(transcript: Transcript, dir: string) -> SaveResult throws never {
 /// `text` as a transcript, or why it is not one. Held apart from `load` so
 /// the catch binding fits on one line, which the parser needs.
 function decode(path: string, text: string) -> Transcript | LoadFailed throws never {
-    baml.json.from_string<Transcript>(text) catch_all (e) {
+    baml.json.decode<Transcript>(text) catch_all (e) {
         _ => LoadFailed { path, message: `${e}` },
     }
 }

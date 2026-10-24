@@ -10,7 +10,7 @@
 
 use baml_base::Name;
 use baml_compiler2_emit::OptLevel;
-use baml_db::{ProjectDatabase, SourceRootKind, SourceRootSpec, compile_program};
+use baml_db::{CheckedWorld, ProjectDatabase, SourceRootKind, SourceRootSpec};
 use baml_tests::engine::{TestDbExt, run_compiled};
 use bex_external_types::BexExternalValue;
 use indexmap::IndexMap;
@@ -60,7 +60,10 @@ async fn a_root_named_like_a_language_package_does_not_capture_stdlib_lookups() 
         }
         "#,
     );
-    let program = compile_program(&db, root, OptLevel::One).expect("the program compiles");
+    let program = CheckedWorld::collect(&db, root)
+        .expect("the world checks")
+        .compile(OptLevel::One)
+        .expect("the program compiles");
     let output = run_compiled(program.clone(), "baml.parsed", IndexMap::new(), false).await;
     assert_eq!(
         output.result.expect("`parsed` runs"),

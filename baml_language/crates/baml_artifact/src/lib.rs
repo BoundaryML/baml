@@ -117,7 +117,11 @@ pub const MAGIC: &[u8; 8] = b"BAMLART\0";
 ///
 /// Version 24 adds the publisher's `http_bodies` setting to the telemetry
 /// policy in the packed dispatch envelope.
-pub const FORMAT_VERSION: u32 = 24;
+///
+/// Version 25: appended `MakeGenericBoundMethod` to the instruction/opcode
+/// sets — a bound method whose frame type arguments the reference site
+/// supplies (`default.m` as a value inside an `implements` block).
+pub const FORMAT_VERSION: u32 = 25;
 
 /// Git commit this crate was built from (`BAML_GIT_SHA`, else the checkout's
 /// HEAD), or empty when neither was available.

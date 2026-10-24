@@ -100,8 +100,9 @@ function inferred_argument_join() -> int {
   1
 }
 
-// The type parameter has nothing to solve from, so it reports as `!error`:
-// the block is refused either way.
+// The type parameter has nothing to solve from, so it is reported as
+// uninferable and the expectation renders as `!error`: the block is refused
+// either way.
 function unsolved_callback_return() -> int {
   let ys = [1, 2].filter_map((x) -> { side(); });
   1

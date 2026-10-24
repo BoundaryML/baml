@@ -95,3 +95,30 @@ test "nothing parses as an interface, so its list drops every element" {
     assert.equal(baml.sap.parse<Speaker[]>(`[{"name": "x"}]`).length(), 0);
     assert.is_true(list_inhabits<Speaker>(`[{"name": "x"}]`))
 }
+
+// A union member with no JSON form parses as nothing, and keeps its place in
+// the container's type: a `(uint8array | string)[]` is still one.
+
+test "a list keeps a union member that parses as nothing" {
+    assert.is_true(list_inhabits<uint8array | string>(`["a"]`));
+    assert.is_true(map_inhabits<uint8array | string>(`{"a": "b"}`));
+    assert.is_true(fields_inhabit<uint8array | string>(`{"xs": ["a"], "m": {}}`));
+    assert.is_true(list_inhabits<never>(`[]`))
+}
+
+function parse_unmodelled<T>() -> string {
+    let _ = baml.sap.parse<T>(`"text"`) catch (e) {
+        baml.errors.ParseError => {
+            return "ParseError";
+        },
+    };
+    "parsed"
+}
+
+test "parse throws for a type it cannot model" {
+    assert.equal(
+        [parse_unmodelled<uint8array>(), parse_unmodelled<never>(), parse_unmodelled<unknown>()]
+            .join(","),
+        "ParseError,ParseError,ParseError",
+    )
+}

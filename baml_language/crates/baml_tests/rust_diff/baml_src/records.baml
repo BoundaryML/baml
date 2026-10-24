@@ -475,16 +475,16 @@ function SpawnedClosures() -> void {
 
 function ActivateHere(s: trace.Span) -> string {
     s._activate();
-    baml.json.to_string(trace.current_context())
+    baml.json.stringify(trace.current_context())
 }
 
 // A span activated by a directly called body is scoped to that body, as it
 // is to the body's VM frame in bytecode.
 function ManualSpan() -> void {
     let s = trace.start_span("probe-span", metadata = { "k": "v" });
-    let before = baml.json.to_string(trace.current_context());
+    let before = baml.json.stringify(trace.current_context());
     let inside = ActivateHere(s);
-    let after = baml.json.to_string(trace.current_context());
+    let after = baml.json.stringify(trace.current_context());
     let again = ActivateHere(s) catch (e) {
         _ => "second activation failed",
     };

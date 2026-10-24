@@ -332,7 +332,7 @@ class ChatExtraPart {
 
     implements baml.ToJson {
         function to_json(self) -> baml.json.json {
-            let base = baml.json.to_json(self.part);
+            let base = baml.json.from(self.part);
             match (base) {
                 let object: map<string, baml.json.json> => {
                     let out: map<string, baml.json.json> = {};
@@ -340,7 +340,7 @@ class ChatExtraPart {
                         let _ = out.set(key, object.get(key));
                     }
                     if (self.extra.keys().length() > 0) {
-                        let _ = out.set(_chat_directives_key(), baml.json.to_json(self.extra));
+                        let _ = out.set(_chat_directives_key(), baml.json.from(self.extra));
                     }
                     out
                 },
@@ -378,7 +378,7 @@ class ChatToolCall {
             let out: map<string, baml.json.json> = {};
             let _ = out.set("id", self.id);
             let _ = out.set("type", self.type);
-            let _ = out.set("function", baml.json.to_json(self.fn));
+            let _ = out.set("function", baml.json.from(self.fn));
             out
         }
     }
@@ -407,7 +407,7 @@ class ChatTool {
         function to_json(self) -> baml.json.json {
             let out: map<string, baml.json.json> = {};
             let _ = out.set("type", self.type);
-            let _ = out.set("function", baml.json.to_json(self.fn));
+            let _ = out.set("function", baml.json.from(self.fn));
             out
         }
     }
@@ -956,7 +956,7 @@ function chat_lower_journal(
                                     type: "function",
                                     fn: ChatToolCallFunction {
                                         name: use.name,
-                                        arguments: baml.json.stringify(baml.json.to_json(use.args)),
+                                        arguments: baml.json.stringify(use.args),
                                     },
                                 },
                             );
@@ -1006,7 +1006,7 @@ function chat_lower_journal(
                 out.push(
                     ChatMessage {
                         role: "tool",
-                        content: baml.json.stringify(baml.json.to_json(err)),
+                        content: baml.json.stringify(err),
                         tool_calls: null,
                         tool_call_id: failed.id,
                     },
@@ -1212,7 +1212,7 @@ function _chat_tools(toolbox: ai.tools.Toolbox) -> ChatTool[]? {
                 fn: ChatToolFunction {
                     name: tool.name,
                     description: tool.description,
-                    parameters: baml.json.to_json(tool.input_schema),
+                    parameters: baml.json.from(tool.input_schema),
                 },
             },
         );
@@ -1331,7 +1331,7 @@ function chat_structured_output(
 /// The serialized body: typed request -> json -> drop unset options -> apply the
 /// caller's `request_body` passthrough LAST (PLAN P0.3 / `ai.wire`).
 function chat_render_body(compat: ChatCompat, params: ChatParams, request: ChatRequest) -> string {
-    let body = _chat_apply_directives(_chat_prune_nulls(baml.json.from<ChatRequest>(request)));
+    let body = _chat_apply_directives(_chat_prune_nulls(baml.json.from(request)));
     baml.json.stringify(ai.wire.merge_request_body(body, params.request_body))
 }
 
@@ -1403,7 +1403,7 @@ function _chat_media_block(url: string) -> ai.content.Media {
 /// nobody the arguments were discarded, so an undecodable payload is a
 /// `ParseFailed` carrying the raw string.
 function _chat_tool_args(raw: string, provider: string) -> map<string, unknown> {
-    baml.json.from_string<map<string, unknown>>(raw) catch_all (e) {
+    baml.json.decode<map<string, unknown>>(raw) catch_all (e) {
         _ => throw ai.errors.ParseFailed { provider: provider, raw_output: raw },
     }
 }

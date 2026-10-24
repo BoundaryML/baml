@@ -119,7 +119,19 @@ pub struct TelemetryRuntime {
     finished: AtomicBool,
     deferred_spans: super::DeferredSpans<Snapshot, Snapshot>,
     span_owners: Mutex<Vec<std::sync::Weak<dyn SpanOwner>>>,
+    /// Whether the first allocation beyond a budget or a lane has been
+    /// warned about.
+    #[cfg(feature = "diagnostics")]
+    overage_warned: AtomicBool,
+    /// Where that warning goes, when the host wants it somewhere `tracing`
+    /// does not reach.
+    #[cfg(feature = "diagnostics")]
+    overage_hook: Mutex<Option<OverageHook>>,
 }
+
+/// Where [`TelemetryRuntime::on_overage`] sends the warning.
+#[cfg(feature = "diagnostics")]
+type OverageHook = Box<dyn Fn(&str) + Send + Sync>;
 
 /// Bounded, engine-scoped map from a failed future to the raise that failed
 /// it. Written before the future wakes its awaiters; reading never removes
@@ -232,16 +244,13 @@ impl TelemetryRuntime {
         let id = NEXT_RUNTIME
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
             .expect("telemetry runtime identity space exhausted");
-        // A producer can own a function's input and type-argument captures
-        // while acquiring its context capture.
-        let snapshot_slots = config
-            .max_producers
-            .get()
-            .checked_mul(3)
-            .and_then(|slots| slots.checked_add(btel_settings::snapshot::MIN_SNAPSHOT_SLOTS))
-            .ok_or_else(|| std::io::Error::other("snapshot slot count overflow"))?;
-        let snapshots =
-            btel_snapshot::SnapshotPool::new(snapshot_slots, btel_snapshot::Limits::default());
+        // Bounds the captures with the producers only: the processor lifts a
+        // capture's charge as it takes its chunk, so what the publisher and
+        // delivery hold is bounded by their own budgets.
+        let snapshots = btel_snapshot::SnapshotPool::new(
+            btel_settings::snapshot::capture_budget_bytes(config.max_producers.get()),
+            btel_snapshot::Limits::default(),
+        );
         let pool = Pool::new(config).map_err(|e| std::io::Error::other(format!("{e:?}")))?;
         let publisher = make(RecordingControl {
             pool: pool.clone(),
@@ -315,6 +324,10 @@ impl TelemetryRuntime {
             finished: AtomicBool::new(false),
             deferred_spans,
             span_owners: Mutex::new(Vec::new()),
+            #[cfg(feature = "diagnostics")]
+            overage_warned: AtomicBool::new(false),
+            #[cfg(feature = "diagnostics")]
+            overage_hook: Mutex::new(None),
         }))
     }
 
@@ -368,15 +381,12 @@ impl TelemetryRuntime {
             // Cold first attachment only. Dead engines leave no pool ownership;
             // remove their tiny TLS entries before attaching another engine.
             bindings.retain(|binding| binding.owner.strong_count() != 0);
-            let worker = loop {
-                match self.pool.reserve_worker() {
-                    Ok(worker) => break worker,
-                    Err(SetupError::ProducerLimit) => std::hint::spin_loop(),
-                    Err(SetupError::Disabled | SetupError::Closed) => return false,
-                    Err(_) => {
-                        self.pool.fail();
-                        std::panic::panic_any(TransportFailed);
-                    }
+            let worker = match self.pool.reserve_worker() {
+                Ok(worker) => worker,
+                Err(SetupError::Disabled | SetupError::Closed) => return false,
+                Err(_) => {
+                    self.pool.fail();
+                    std::panic::panic_any(TransportFailed);
                 }
             };
             let Some(producer) = self.bind_worker(&worker) else {
@@ -466,8 +476,10 @@ impl TelemetryRuntime {
         }
     }
 
-    /// Capture-only admission. Publish private records before waiting: they may
-    /// own every available snapshot. Never hold a TLS borrow while spinning.
+    /// Capture-only admission. `None` only once recording is disabled: a full
+    /// budget is probed for a while, then exceeded ([`btel_settings::overage`]).
+    /// Publish private records before probing: they may own every charged
+    /// capture. Never hold a TLS borrow while spinning.
     pub fn acquire_snapshot(&self) -> Option<btel_snapshot::Builder> {
         if self.is_disabled() {
             return None;
@@ -487,18 +499,41 @@ impl TelemetryRuntime {
                 }
             }
         });
-        let result = loop {
+        // The time waited is held against the threshold for the overage as
+        // it is now, read again at every probe: the further over the budget
+        // the producers are, the longer the processor is given to lift
+        // charges before this capture adds to it; and a capture that began
+        // waiting far over is let go as soon as the overage comes down,
+        // ahead of any that began waiting later.
+        let mut wait = bex_chunkedringbuffer::Wait::begin();
+        let mut result = None;
+        loop {
             if self.is_disabled() {
-                break None;
+                break;
             }
             if self.pool.is_failed() {
                 std::panic::panic_any(TransportFailed);
             }
             if let Some(builder) = self.snapshots.try_acquire() {
-                break Some(builder);
+                result = Some(builder);
+                break;
             }
-            std::hint::spin_loop();
-        };
+            if wait.past(btel_settings::snapshot::overage_wait(
+                self.snapshots.overage_bytes(),
+            )) {
+                break;
+            }
+            wait.pause();
+        }
+        if result.is_none() && !self.is_disabled() {
+            // The failure may have landed since the last probe.
+            if self.pool.is_failed() {
+                std::panic::panic_any(TransportFailed);
+            }
+            result = Some(self.snapshots.acquire_beyond_budget());
+            #[cfg(feature = "diagnostics")]
+            self.warn_overage("capture storage beyond its budget");
+        }
         self.snapshot_wait_nanos.fetch_add(
             u64::try_from(start.elapsed().as_nanos()).unwrap_or(u64::MAX),
             Ordering::Relaxed,
@@ -510,6 +545,46 @@ impl TelemetryRuntime {
     }
     pub fn snapshot_wait_nanos(&self) -> u64 {
         self.snapshot_wait_nanos.load(Ordering::Relaxed)
+    }
+
+    /// Everything the `diagnostics` feature counts about this runtime's
+    /// producers and pools.
+    #[cfg(feature = "diagnostics")]
+    pub fn diagnostics(&self) -> Diagnostics {
+        Diagnostics {
+            captures: self.snapshots.stats(),
+            transport: self.pool.stats(),
+            lanes: self.pool.diagnostics(),
+            snapshot_wait_nanos: self.snapshot_wait_nanos(),
+            overage_warned: self.overage_warned.load(Ordering::Relaxed),
+        }
+    }
+
+    /// Send the once-per-runtime overage warning to `hook` as well as to
+    /// `tracing`: a host without a subscriber would otherwise never see it.
+    #[cfg(feature = "diagnostics")]
+    pub fn on_overage(&self, hook: impl Fn(&str) + Send + Sync + 'static) {
+        *self
+            .overage_hook
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Box::new(hook));
+    }
+
+    /// Once per runtime: producers have begun taking more than their pools'
+    /// sizes, which is the processor falling behind.
+    #[cfg(feature = "diagnostics")]
+    fn warn_overage(&self, what: &str) {
+        if !self.overage_warned.swap(true, Ordering::Relaxed) {
+            let message = format!("telemetry producers are taking {what}: the processor is behind");
+            tracing::warn!(runtime = self.id, "{message}");
+            if let Some(hook) = &*self
+                .overage_hook
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+            {
+                hook(&message);
+            }
+        }
     }
 
     /// Recording was abandoned, or `finish` has started and a task is late.
@@ -705,6 +780,18 @@ impl TelemetryRuntime {
     }
 }
 
+/// What the `diagnostics` feature counts about a runtime; see
+/// [`TelemetryRuntime::diagnostics`].
+#[cfg(feature = "diagnostics")]
+#[derive(Clone, Copy, Debug)]
+pub struct Diagnostics {
+    pub captures: btel_snapshot::PoolStats,
+    pub transport: Stats,
+    pub lanes: bex_chunkedringbuffer::PoolDiagnostics,
+    pub snapshot_wait_nanos: u64,
+    pub overage_warned: bool,
+}
+
 /// Synchronous ownership boundary; stores no references into a VM or its heap.
 pub struct ExecutionScope {
     active: bool,
@@ -727,6 +814,13 @@ impl Drop for ExecutionScope {
                 .then(|| bindings[index].producer.take())
                 .flatten()
         });
+        #[cfg(feature = "diagnostics")]
+        if released
+            .as_ref()
+            .is_some_and(|producer| producer.stats().overage_allocations > 0)
+        {
+            self.runtime.warn_overage("chunks beyond a lane's size");
+        }
         // Release outside the TLS borrow. Producer drop publishes partial chunks
         // and deactivates before shutdown can wait. Its worker slot stays bound.
         drop(released);
@@ -767,6 +861,7 @@ mod tests {
             span_chunks: NonZeroUsize::new(4).unwrap(),
             max_producers: NonZeroUsize::new(2).unwrap(),
             preallocate: true,
+            overage_wait_base: btel_settings::transport::OVERAGE_WAIT_BASE_DURATION,
         }
     }
 
@@ -775,7 +870,7 @@ mod tests {
         let pool = Pool::new(config()).unwrap();
         let runtime = Arc::new(TelemetryRuntime {
             id: NEXT_RUNTIME.fetch_add(1, Ordering::Relaxed),
-            snapshots: btel_snapshot::SnapshotPool::new(16, btel_snapshot::Limits::default()),
+            snapshots: btel_snapshot::SnapshotPool::unbounded(btel_snapshot::Limits::default()),
             snapshot_wait_nanos: AtomicU64::new(0),
             pool: pool.clone(),
             worker: Mutex::new(None),
@@ -785,6 +880,10 @@ mod tests {
             deferred_spans: Arc::new(Mutex::new(Vec::new())),
             span_owners: Mutex::new(Vec::new()),
             finished: AtomicBool::new(false),
+            #[cfg(feature = "diagnostics")]
+            overage_warned: AtomicBool::new(false),
+            #[cfg(feature = "diagnostics")]
+            overage_hook: Mutex::new(None),
         });
         (runtime, pool)
     }
@@ -843,8 +942,41 @@ mod tests {
         assert_eq!(found, 1);
     }
 
+    /// More threads than the pool has slots for enter at once, every one
+    /// holding its scope while the others bind: none waits for a slot.
     #[test]
-    fn snapshot_exhaustion_publishes_private_records_before_waiting() {
+    fn more_threads_than_producer_slots_all_enter_without_waiting() {
+        let (runtime, pool) = manual_runtime();
+        let threads = 5;
+        let gate = std::sync::Barrier::new(threads);
+        std::thread::scope(|scope| {
+            for _ in 0..threads {
+                scope.spawn(|| {
+                    let _scope = runtime.enter();
+                    let thread_id = allocate_telemetry_id();
+                    runtime.write_timing(
+                        thread_id,
+                        TimingRecord::SysOpTime {
+                            call_path: btel_types::CallPathId::ROOT,
+                            elapsed: btel_types::ClockDuration::from_ticks(1),
+                        },
+                    );
+                    gate.wait();
+                });
+            }
+        });
+        let mut consumer = pool.bind_consumer().unwrap();
+        let mut records = 0;
+        consumer.drain_chunks(
+            NonZeroUsize::new(8).unwrap(),
+            |_, chunk| records += chunk.len(),
+            |_, _| {},
+        );
+        assert_eq!(records, 2 * threads, "a selector and a record per thread");
+    }
+
+    #[test]
+    fn snapshot_exhaustion_publishes_private_records_before_probing() {
         let (mut runtime, pool) = manual_runtime();
         Arc::get_mut(&mut runtime).unwrap().snapshots =
             btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
@@ -887,7 +1019,14 @@ mod tests {
             });
             let next = runtime
                 .acquire_snapshot()
-                .expect("consumer must release capacity");
+                .expect("recording is not disabled");
+            // Sealed by the slow path itself, before it probed: not by the
+            // scope ending below.
+            assert_ne!(
+                pool.stats().sealed_records,
+                0,
+                "private records were published"
+            );
             drop(next);
             drop(execution);
             pool.close_admission();
@@ -895,11 +1034,68 @@ mod tests {
             consumer.join().unwrap();
         });
         assert_eq!(runtime.snapshot_pool_stats().in_use, 0);
-        assert_eq!(runtime.snapshot_pool_stats().allocation_misses, 1);
+        // Reused the storage the consumer gave back, or took one beyond the
+        // budget when the probes ran out first: either is right, and nothing
+        // else is allocated.
+        assert!(matches!(
+            runtime.snapshot_pool_stats().allocation_misses,
+            1 | 2
+        ));
     }
 
     #[test]
-    fn recording_disable_releases_snapshot_admission_without_cancelling_work() {
+    fn a_full_budget_is_exceeded_after_probing_rather_than_waited_on() {
+        let (mut runtime, pool) = manual_runtime();
+        Arc::get_mut(&mut runtime).unwrap().snapshots =
+            btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+        let held = no_arguments(runtime.acquire_snapshot().unwrap());
+        assert!(runtime.snapshots.overage_bytes() > 0);
+        let _scope = runtime.enter();
+        // Nothing consumes, so nothing will lift the charge: the capture is
+        // admitted anyway, once the probes are spent.
+        let beyond = no_arguments(runtime.acquire_snapshot().expect("the backstop admits"));
+        assert!(runtime.snapshot_wait_nanos() > 0);
+        assert_eq!(runtime.snapshot_pool_stats().in_use, 2);
+        drop(beyond);
+        drop(held);
+        assert_eq!(runtime.snapshots.overage_bytes(), 0);
+        assert!(!pool.is_failed());
+    }
+
+    #[cfg(feature = "diagnostics")]
+    #[test]
+    fn diagnostics_count_overage_and_warn_once() {
+        let (mut runtime, _pool) = manual_runtime();
+        Arc::get_mut(&mut runtime).unwrap().snapshots =
+            btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
+        let warnings = Arc::new(Mutex::new(Vec::new()));
+        let seen = Arc::clone(&warnings);
+        runtime.on_overage(move |message| seen.lock().unwrap().push(message.to_owned()));
+        let held = no_arguments(runtime.acquire_snapshot().unwrap());
+        let before = runtime.diagnostics();
+        assert_eq!(before.captures.overage_acquisitions, 0);
+        assert!(!before.overage_warned);
+        assert!(warnings.lock().unwrap().is_empty());
+        let _scope = runtime.enter();
+        let beyond = no_arguments(runtime.acquire_snapshot().unwrap());
+        let after = runtime.diagnostics();
+        assert_eq!(after.captures.overage_acquisitions, 1);
+        assert!(after.captures.peak_held_bytes >= after.captures.held_bytes);
+        assert!(after.snapshot_wait_nanos > 0);
+        assert!(after.overage_warned);
+        // A second overage is counted, but the host is warned only once.
+        let further = no_arguments(runtime.acquire_snapshot().unwrap());
+        assert_eq!(runtime.diagnostics().captures.overage_acquisitions, 2);
+        let warnings = warnings.lock().unwrap();
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("capture storage beyond its budget"));
+        drop(further);
+        drop(beyond);
+        drop(held);
+    }
+
+    #[test]
+    fn a_disabled_recording_admits_no_capture_without_cancelling_work() {
         let (mut runtime, pool) = manual_runtime();
         Arc::get_mut(&mut runtime).unwrap().snapshots =
             btel_snapshot::SnapshotPool::new(1, btel_snapshot::Limits::default());
@@ -917,20 +1113,13 @@ mod tests {
                 captured_type_args: None,
             },
         );
-        std::thread::scope(|scope| {
-            scope.spawn(|| {
-                // Publication proves acquire_snapshot entered its slow path.
-                while pool.stats().sealed_records == 0 {
-                    std::hint::spin_loop();
-                }
-                RecordingControl {
-                    pool: pool.clone(),
-                    result: Arc::clone(&runtime.result),
-                }
-                .disable(RuntimeError("disk full".into()));
-            });
-            assert!(runtime.acquire_snapshot().is_none());
-        });
+        RecordingControl {
+            pool,
+            result: Arc::clone(&runtime.result),
+        }
+        .disable(RuntimeError("disk full".into()));
+        // Neither the budget's probes nor its backstop apply once disabled.
+        assert!(runtime.acquire_snapshot().is_none());
         drop(held);
         assert_eq!(runtime.snapshot_pool_stats().in_use, 0);
         assert!(runtime.is_disabled());

@@ -189,7 +189,7 @@ impl BexVm {
         };
         let frame = self.frame_at_level(level).expect("catching frame is live");
         if let Some((slot, _)) = landing {
-            self.stack.0[slot] = ctx;
+            self.stack[StackIndex::from_raw(slot)] = ctx;
         }
         if let Some(evidence) = evidence {
             self.error_landed(
@@ -254,7 +254,7 @@ impl BexVm {
         let step = match request {
             Request::Done(outcome) => {
                 let value = outcome.map_err(|error| *error)?;
-                self.stack.push(value);
+                self.push_stack(value)?;
                 return self.finish_bytecode_frame(frame_idx, function, value);
             }
             Request::Step(step) => step,
@@ -280,7 +280,11 @@ impl BexVm {
                 // It takes the receiver's type arguments from the bound method.
                 if let Object::BoundMethod(method) = self.get_object(callee) {
                     let receiver = method.receiver;
-                    self.stack.insert(args_offset, receiver);
+                    self.stack
+                        .try_insert(args_offset, receiver)
+                        .map_err(|panic| {
+                            VmError::thrown_fresh(self.panic_to_exception_value(panic))
+                        })?;
                     argc += 1;
                     args_offset = self.stack.len() - argc;
                 }
@@ -300,7 +304,7 @@ impl BexVm {
             }
             // The stub executes the operation before resuming the compiled body.
             Step::Await(operand) | Step::AwaitAny(operand) | Step::Spawn(operand) => {
-                self.stack.push(operand);
+                self.push_stack(operand)?;
                 Ok(None)
             }
             Step::Log {
@@ -461,9 +465,7 @@ impl BexVm {
         // Value is Copy. No allocation or GC occurs before the stack is shortened.
         let consumed = self.stack.len() - locals_offset.raw();
         unsafe { self.stack.replace_top_n_dynamic(consumed, result) };
-        // SAFETY: the frame accessed above is the one being completed; stack
-        // operations cannot remove it.
-        unsafe { self.frames.no_return_pop() };
+        self.frames.pop();
         let context = self.current_context().clone();
         if let Some(telemetry) = &mut self.telemetry {
             telemetry.set_context(context);
@@ -518,7 +520,7 @@ impl BexVm {
             })
         {
             self.stack.truncate(kept);
-            self.stack.push(Value::NULL);
+            self.push_stack(Value::NULL)?;
             if let Some(evidence) = evidence.take() {
                 self.error_hook_fallback(evidence);
             }

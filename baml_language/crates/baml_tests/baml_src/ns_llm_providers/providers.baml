@@ -73,12 +73,12 @@ function cache_round_trip(name: string, client: ai.Client) -> ai.events.Usage[] 
 
     let first = agent.run(CachedReference@spec(nonce, reference, "Reply with exactly: one"));
     let first_usage = only_usage(first.usage);
-    log.info(`${name} first call: ${baml.json.stringify(baml.json.to_json(first_usage))}`);
+    log.info(`${name} first call: ${baml.json.stringify(first_usage)}`);
     assert.equal(first.value, "one");
 
     let second = agent.run(CachedReference@spec(nonce, reference, "Reply with exactly: two"));
     let second_usage = only_usage(second.usage);
-    log.info(`${name} second call: ${baml.json.stringify(baml.json.to_json(second_usage))}`);
+    log.info(`${name} second call: ${baml.json.stringify(second_usage)}`);
     assert.equal(second.value, "two");
     [first_usage, second_usage]
 }
