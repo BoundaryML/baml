@@ -24,7 +24,7 @@
 
 use baml_base::{LangPackage, SourceRoot};
 use baml_compiler2_hir::loc::{DeclRef, FunctionLoc};
-use baml_compiler2_hir_ty::{callable::lang_class_method, extern_loc::FunctionRef};
+use baml_compiler2_hir_ty::extern_loc::FunctionRef;
 use baml_type::Literal;
 use rustc_hash::FxHashMap;
 
@@ -800,7 +800,7 @@ impl<'db> Walker<'_, 'db> {
                 } else if let Some(effect) = self
                     .builtins
                     .effect(callee)
-                    .filter(|&effect| positional && self.matches_builtin(effect, values))
+                    .filter(|effect| positional && self.matches_builtin(effect, values))
                 {
                     let result = graph.apply_builtin(effect, values);
                     graph.write(destination, result);
@@ -895,33 +895,16 @@ impl<'db> Walker<'_, 'db> {
             })
     }
 
-    /// Whether a call's value arguments have the shape `effect` describes:
-    /// a receiver of the builtin's type, then its other arguments.
-    fn matches_builtin(&self, effect: Effect, args: &[Operand<'db>]) -> bool {
-        let Some((receiver, rest)) = args.split_first() else {
+    /// Whether a call's value arguments fit `effect`: the declared arity and
+    /// a receiver place, whose keys, when it compares them, are primitive.
+    fn matches_builtin(&self, effect: &Effect, args: &[Operand<'db>]) -> bool {
+        let Some(Operand::Copy(receiver) | Operand::Move(receiver)) = args.first() else {
             return false;
         };
-        if rest.len() != effect.arity() {
-            return false;
-        }
-        let (Operand::Copy(receiver) | Operand::Move(receiver)) = receiver else {
-            return false;
-        };
-        match effect {
-            // The callee is the array method itself, so its receiver is one.
-            Effect::Store
-            | Effect::Load
-            | Effect::Take
-            | Effect::Read
-            | Effect::Copy
-            | Effect::Concat
-            | Effect::MapCopy => true,
-            // A key hashes and compares through `Hash` and `Equals`, which
-            // run user code for anything but a primitive key.
-            Effect::MapStore | Effect::MapLoad | Effect::MapRead => {
-                self.types.primitive_map_keys(receiver)
-            }
-        }
+        // A key hashes and compares through `Hash` and `Equals`, which run
+        // user code for anything but a primitive key.
+        args.len() == effect.arity
+            && (!effect.compares_keys || self.types.primitive_map_keys(receiver))
     }
 
     fn array_iteration(
@@ -1042,80 +1025,90 @@ fn is_primitive(ty: &RuntimeTy) -> bool {
     }
 }
 
-/// What a builtin does with the objects it is given, beyond its receiver.
-#[derive(Clone, Copy)]
-enum Effect {
-    /// `xs.push(item)`: the item becomes an element.
-    Store,
-    /// `xs.at(i)`: returns an element.
-    Load,
-    /// `xs.pop()`: returns an element.
-    Take,
-    /// Reads the array; returns no object.
-    Read,
-    /// `m.set(key, value)`: the value becomes an entry; returns the old one.
-    MapStore,
-    /// `m.get(key)`, `m.index(key)`, `m.delete(key)`: returns an entry.
-    MapLoad,
-    /// `m.has(key)`, `m.length()`: returns no object.
-    MapRead,
-    /// `xs.slice(start, end)`: a fresh array of the same elements.
-    Copy,
-    /// `xs.concat(ys)`: a fresh array of both arrays' elements.
-    Concat,
-    /// `m.keys()`, `m.values()`: a fresh array of the map's entries.
-    MapCopy,
+/// What a builtin does with the objects it is given, from its
+/// `//baml:effects(...)` declaration, by argument position (the receiver is
+/// argument 0).
+#[derive(Debug)]
+struct Effect {
+    /// Value arguments, receiver included.
+    arity: usize,
+    /// Arguments that become elements or entries of the receiver.
+    keeps: Vec<usize>,
+    returns: Returns,
+    /// It hashes or compares the receiver's keys.
+    compares_keys: bool,
 }
 
-impl Effect {
-    /// Value arguments after the receiver.
-    fn arity(self) -> usize {
-        match self {
-            Effect::Store | Effect::Load | Effect::Concat => 1,
-            Effect::Take | Effect::Read | Effect::MapCopy => 0,
-            Effect::MapStore | Effect::Copy => 2,
-            Effect::MapLoad | Effect::MapRead => 1,
+#[derive(Debug)]
+enum Returns {
+    Nothing,
+    /// An element or entry of the receiver.
+    Element,
+    /// A new container of the receiver's elements and those of these
+    /// arguments.
+    Fresh(Vec<usize>),
+}
+
+/// Every declared builtin effect, by native key.
+fn declared_effects() -> &'static FxHashMap<String, Effect> {
+    /// Keep aligned with `bex_vm::package_baml::VM_NATIVE_PACKAGES`.
+    const VM_PACKAGES: &[&str] = &["baml", "testing", "ai", "reflect", "trace"];
+    static EFFECTS: std::sync::OnceLock<FxHashMap<String, Effect>> = std::sync::OnceLock::new();
+    EFFECTS.get_or_init(|| {
+        let mut effects = FxHashMap::default();
+        for package in VM_PACKAGES {
+            // The build already extracted these to generate the VM's glue,
+            // so a failure here is unreachable; an opaque builtin is sound.
+            let Ok((builtins, _, _)) = baml_builtins2_codegen::extract_native_builtins_for(package)
+            else {
+                continue;
+            };
+            for builtin in builtins {
+                let Some(declared) = &builtin.effects else {
+                    continue;
+                };
+                let position = |name: &str| {
+                    1 + builtin
+                        .params
+                        .iter()
+                        .position(|param| param.name == name)
+                        .expect("extraction checks that effects name parameters")
+                };
+                effects.insert(
+                    builtin.path.clone(),
+                    Effect {
+                        arity: 1 + builtin.params.len(),
+                        keeps: declared.keeps.iter().map(|name| position(name)).collect(),
+                        returns: match &declared.returns {
+                            baml_builtins2_codegen::EffectReturn::Nothing => Returns::Nothing,
+                            baml_builtins2_codegen::EffectReturn::Element => Returns::Element,
+                            baml_builtins2_codegen::EffectReturn::Fresh(params) => {
+                                Returns::Fresh(params.iter().map(|name| position(name)).collect())
+                            }
+                        },
+                        compares_keys: declared.compares_keys,
+                    },
+                );
+            }
         }
-    }
+        effects
+    })
 }
 
-/// The builtins whose effect on their arguments the analysis knows. Every
-/// other callee is opaque.
+/// The builtins whose effect on their arguments is declared. Every other
+/// callee is opaque.
 struct Builtins<'db> {
-    effects: Vec<(FunctionRef<'db>, Effect)>,
+    db: &'db dyn crate::Db,
+    effects: std::cell::RefCell<FxHashMap<FunctionRef<'db>, Option<&'static Effect>>>,
     /// `baml.ops.equals_equals`, the `==` driver.
     equals_equals: Option<FunctionRef<'db>>,
 }
 
 impl<'db> Builtins<'db> {
-    /// `(class, method, effect)`.
-    const TABLE: &'static [(&'static str, &'static str, Effect)] = &[
-        ("Array", "push", Effect::Store),
-        ("Array", "at", Effect::Load),
-        ("Array", "pop", Effect::Take),
-        ("Array", "length", Effect::Read),
-        ("Array", "slice", Effect::Copy),
-        ("Array", "concat", Effect::Concat),
-        ("Map", "set", Effect::MapStore),
-        ("Map", "get", Effect::MapLoad),
-        ("Map", "index", Effect::MapLoad),
-        ("Map", "delete", Effect::MapLoad),
-        ("Map", "has", Effect::MapRead),
-        ("Map", "keys", Effect::MapCopy),
-        ("Map", "values", Effect::MapCopy),
-    ];
-
     fn new(db: &'db dyn crate::Db) -> Self {
         Self {
-            effects: Self::TABLE
-                .iter()
-                .filter_map(|&(class, method, effect)| {
-                    Some((
-                        lang_class_method(db, LangPackage::Baml, class, method)?,
-                        effect,
-                    ))
-                })
-                .collect(),
+            db,
+            effects: std::cell::RefCell::default(),
             equals_equals: baml_compiler2_hir_ty::callable::lang_function(
                 db,
                 LangPackage::Baml,
@@ -1125,12 +1118,28 @@ impl<'db> Builtins<'db> {
         }
     }
 
-    fn effect(&self, callee: &Operand<'db>) -> Option<Effect> {
+    fn effect(&self, callee: &Operand<'db>) -> Option<&'static Effect> {
         let func = static_callee(callee)?;
-        self.effects
-            .iter()
-            .find(|(builtin, _)| *builtin == func)
-            .map(|&(_, effect)| effect)
+        *self.effects.borrow_mut().entry(func).or_insert_with(|| {
+            let key = match func {
+                DeclRef::Source(loc) => {
+                    let body = baml_compiler2_hir::body::function_body(self.db, loc);
+                    if !matches!(
+                        body.as_ref(),
+                        baml_compiler2_hir::body::FunctionBody::Builtin(
+                            baml_compiler2_ast::ast::BuiltinKind::Vm
+                        )
+                    ) {
+                        return None;
+                    }
+                    crate::native_key_for(self.db, loc)
+                }
+                // An inherent builtin method's key is its display name; any
+                // other external function has no declared effect.
+                DeclRef::External(_) => crate::function_display_name(self.db, func),
+            };
+            declared_effects().get(&key)
+        })
     }
 }
 
@@ -1394,35 +1403,25 @@ impl<'a, 'db> Graph<'a, 'db> {
 
     /// Apply a builtin's effect to arguments [`Walker::matches_builtin`]
     /// accepted, returning the node its result belongs to.
-    fn apply_builtin(&mut self, effect: Effect, args: &[Operand<'_>]) -> Option<usize> {
+    fn apply_builtin(&mut self, effect: &Effect, args: &[Operand<'_>]) -> Option<usize> {
         let receiver = self.operand(&args[0]);
         let contents = Some(self.contents_of(receiver));
-        match effect {
-            Effect::Store => {
-                let item = self.operand(&args[1]);
-                self.flow(contents, item);
-                None
-            }
-            Effect::MapStore => {
-                let value = self.operand(&args[2]);
-                self.flow(contents, value);
-                contents
-            }
-            Effect::Load | Effect::Take | Effect::MapLoad => contents,
-            Effect::Read | Effect::MapRead => None,
-            Effect::Copy | Effect::MapCopy => {
+        for &kept in &effect.keeps {
+            let value = self.operand(&args[kept]);
+            self.flow(contents, value);
+        }
+        match &effect.returns {
+            Returns::Nothing => None,
+            Returns::Element => contents,
+            Returns::Fresh(sources) => {
                 let copy = self.fresh();
                 let copy_contents = Some(self.contents_of(Some(copy)));
                 self.flow(copy_contents, contents);
-                Some(copy)
-            }
-            Effect::Concat => {
-                let other = self.operand(&args[1]);
-                let other_contents = Some(self.contents_of(other));
-                let copy = self.fresh();
-                let copy_contents = Some(self.contents_of(Some(copy)));
-                self.flow(copy_contents, contents);
-                self.flow(copy_contents, other_contents);
+                for &source in sources {
+                    let source = self.operand(&args[source]);
+                    let source_contents = Some(self.contents_of(source));
+                    self.flow(copy_contents, source_contents);
+                }
                 Some(copy)
             }
         }

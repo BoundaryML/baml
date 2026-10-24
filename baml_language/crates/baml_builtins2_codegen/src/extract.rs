@@ -15,8 +15,8 @@ use baml_compiler2_ast::ast::{
 };
 
 use crate::types::{
-    BamlType, BuiltinPipeline, NativeBuiltin, NativeClassDef, NativeClassField, Param, Receiver,
-    ReceiverType, VmUsage,
+    BamlType, BuiltinPipeline, MemoryEffects, NativeBuiltin, NativeClassDef, NativeClassField,
+    Param, Receiver, ReceiverType, VmUsage,
 };
 
 /// Convert a byte offset in source text to a 1-based `(line, column)` pair.
@@ -398,6 +398,25 @@ fn extract_from_class(
             .map(|te| type_expr_to_baml_type(te, &all_generics))
             .unwrap_or(BamlType::Null);
 
+        let effects = method_directive_args(cst_root, class_name, method_name, "//baml:effects")
+            .map(|text| {
+                MemoryEffects::parse(&text).unwrap_or_else(|error| {
+                    panic!("baml codegen error: {path} //baml:effects({text}): {error}")
+                })
+            });
+        if let Some(effects) = &effects {
+            for named in effects.named_params() {
+                assert!(
+                    params.iter().any(|param| param.name == named),
+                    "baml codegen error: {path} //baml:effects names `{named}`, which is not a parameter"
+                );
+            }
+            assert!(
+                effects.keeps.is_empty() || is_mut,
+                "baml codegen error: {path} //baml:effects keeps an argument without //baml:mut_self"
+            );
+        }
+
         let builtin = NativeBuiltin {
             path,
             namespace: namespace_only(namespace_prefix),
@@ -410,6 +429,7 @@ fn extract_from_class(
             vm_usage,
             may_yield,
             fallible,
+            effects,
             pipeline,
             throws,
             source_file: source_file.to_string(),
@@ -560,6 +580,7 @@ fn extract_from_free_function(
         vm_usage,
         may_yield,
         fallible,
+        effects: None,
         pipeline,
         throws,
         source_file: source_file.to_string(),
@@ -749,6 +770,7 @@ fn extract_from_implements_for(
             vm_usage,
             may_yield,
             fallible,
+            effects: None,
             pipeline,
             throws: extract_throws(method),
             source_file: source_file.to_string(),
@@ -1092,6 +1114,52 @@ fn has_method_directive(
     false
 }
 
+/// The arguments of a `directive(...)` comment on a class method, as
+/// [`has_method_directive`] finds it.
+fn method_directive_args(
+    cst_root: &SyntaxNode,
+    class_name: &str,
+    method_name: &str,
+    directive: &str,
+) -> Option<String> {
+    cst_root
+        .descendants()
+        .filter(|node| {
+            node.kind() == SyntaxKind::CLASS_DEF && class_node_has_name(node, class_name)
+        })
+        .flat_map(|class_node| class_node.descendants())
+        .filter(|node| {
+            node.kind() == SyntaxKind::FUNCTION_DEF && func_node_has_name(node, method_name)
+        })
+        .find_map(|func_node| function_node_directive_args(&func_node, directive))
+}
+
+/// The text inside `directive(...)` when that comment leads `func_node`.
+fn function_node_directive_args(func_node: &SyntaxNode, directive: &str) -> Option<String> {
+    for element in func_node.children_with_tokens() {
+        let NodeOrToken::Token(tok) = element else {
+            continue;
+        };
+        match tok.kind() {
+            SyntaxKind::LINE_COMMENT => {
+                if let Some(args) = tok
+                    .text()
+                    .trim()
+                    .strip_prefix(directive)
+                    .and_then(|rest| rest.strip_prefix('('))
+                    .and_then(|rest| rest.strip_suffix(')'))
+                {
+                    return Some(args.to_string());
+                }
+            }
+            k if k.is_whitespace() => {}
+            SyntaxKind::AT_AT | SyntaxKind::BLOCK_COMMENT => {}
+            _ => return None,
+        }
+    }
+    None
+}
+
 /// Check if an `implement`-block method has the given `directive` comment before
 /// its `function` keyword in the CST.
 ///
@@ -1360,6 +1428,7 @@ mod tests {
             vm_usage: VmUsage::None,
             may_yield: false,
             fallible: false,
+            effects: None,
             pipeline: BuiltinPipeline::Io,
             throws: Some(vec![]),
             source_file: String::new(),
@@ -1650,5 +1719,31 @@ implements<T, E> Modifier<T, E> for Root {
     #[should_panic(expected = "nested builtin namespace")]
     fn namespace_only_rejects_nested_namespaces() {
         let _ = super::namespace_only("baml.sys.io");
+    }
+}
+
+#[cfg(test)]
+mod effects_extraction_tests {
+    use crate::{EffectReturn, extract_native_builtins_for};
+
+    #[test]
+    fn container_builtins_declare_their_effects() {
+        let (builtins, _, _) = extract_native_builtins_for("baml").expect("stdlib extracts");
+        let effects = |path: &str| {
+            builtins
+                .iter()
+                .find(|builtin| builtin.path == path)
+                .and_then(|builtin| builtin.effects.clone())
+                .unwrap_or_else(|| panic!("{path} declares no effects"))
+        };
+        assert_eq!(effects("baml.Array.push").keeps, ["item"]);
+        assert_eq!(effects("baml.Array.at").returns, EffectReturn::Element);
+        assert_eq!(
+            effects("baml.Array.concat").returns,
+            EffectReturn::Fresh(vec!["other".into()])
+        );
+        let set = effects("baml.Map.set");
+        assert_eq!(set.keeps, ["key", "value"]);
+        assert!(set.compares_keys);
     }
 }
