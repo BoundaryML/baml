@@ -1404,7 +1404,7 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
         }
     }
 
-    fn load_field(&mut self, _field: usize, _name: &str) -> Result<(), Self::Error> {
+    fn load_field(&mut self, _field: usize, _name: &str, _base: &Place) -> Result<(), Self::Error> {
         if !self.sim.pop_n(1) {
             return Err(());
         }
@@ -1648,7 +1648,12 @@ impl<'a> PullSink<'a> for StackCarryPullSink<'a> {
 }
 
 impl<'a> StackEffectSink<'a> for StackCarryPullSink<'a> {
-    fn store_field_value(&mut self, _field: usize, _name: &str) -> Result<(), Self::Error> {
+    fn store_field_value(
+        &mut self,
+        _field: usize,
+        _name: &str,
+        _base: &Place,
+    ) -> Result<(), Self::Error> {
         if !self.sim.pop_n(2) {
             return Err(());
         }

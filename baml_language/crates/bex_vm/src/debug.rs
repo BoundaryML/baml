@@ -166,9 +166,11 @@ pub(crate) fn display_instruction(
             None => "(?)".to_string(),
         },
         Instruction::LoadField(_)
+        | Instruction::LoadFieldLocal(_)
         | Instruction::VirtualLoadField(_)
         | Instruction::VirtualStoreField(_)
         | Instruction::StoreField(_)
+        | Instruction::StoreFieldLocal(_)
         | Instruction::InitField(_)
         | Instruction::InitSpread(_)
         | Instruction::InitInstance(_) => operand_meta
@@ -398,6 +400,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::ArrayIterNextLocal { .. }
         | Instruction::LoadGlobal(_)
         | Instruction::LoadField(_)
+        | Instruction::LoadFieldLocal(_)
         | Instruction::VirtualLoadField(_)
         | Instruction::LoadArrayElement
         | Instruction::LoadArrayElementLocal
@@ -407,6 +410,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::StoreVar2(..)
         | Instruction::StoreGlobal(_)
         | Instruction::StoreField(_)
+        | Instruction::StoreFieldLocal(_)
         | Instruction::VirtualStoreField(_)
         | Instruction::InitField(_)
         | Instruction::InitSpread(_)
@@ -809,6 +813,14 @@ fn display_instruction_textual(
         Instruction::StoreField(idx) => {
             let name = meta_str(idx);
             format!("store_field .{name}")
+        }
+        Instruction::LoadFieldLocal(idx) => {
+            let name = meta_str(idx);
+            format!("load_field_local .{name}")
+        }
+        Instruction::StoreFieldLocal(idx) => {
+            let name = meta_str(idx);
+            format!("store_field_local .{name}")
         }
         // The operand indexes the *interface's* field list, not the receiver's
         // layout, so show the name and mark it virtual.
@@ -1239,9 +1251,11 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::LoadGlobal(_)
         | Instruction::StoreGlobal(_)
         | Instruction::LoadField(_)
+        | Instruction::LoadFieldLocal(_)
         | Instruction::VirtualLoadField(_)
         | Instruction::VirtualStoreField(_)
         | Instruction::StoreField(_)
+        | Instruction::StoreFieldLocal(_)
         | Instruction::InitField(_)
         | Instruction::InitSpread(_)
         | Instruction::Call { .. }
@@ -1454,9 +1468,11 @@ pub fn display_compact_bytecode(
             | OpCode::LoadGlobal
             | OpCode::StoreGlobal
             | OpCode::LoadField
+            | OpCode::LoadFieldLocal
             | OpCode::VirtualLoadField
             | OpCode::VirtualStoreField
             | OpCode::StoreField
+            | OpCode::StoreFieldLocal
             | OpCode::InitField
             | OpCode::InitSpread
             | OpCode::Pop

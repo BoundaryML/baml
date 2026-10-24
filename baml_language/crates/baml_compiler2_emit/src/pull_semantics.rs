@@ -35,7 +35,8 @@ pub(crate) trait PullSink<'db> {
     fn pull_constant(&mut self, constant: &Constant<'db>) -> Result<(), Self::Error>;
     fn pull_local(&mut self, local: Local) -> Result<LocalPullAction<'db>, Self::Error>;
 
-    fn load_field(&mut self, field: usize, name: &str) -> Result<(), Self::Error>;
+    /// Load a field of `base`, the instance place the field applies to.
+    fn load_field(&mut self, field: usize, name: &str, base: &Place) -> Result<(), Self::Error>;
     /// Load an element of `base`, the container place the index applies to.
     fn load_index(&mut self, kind: IndexKind, base: &Place) -> Result<(), Self::Error>;
 
@@ -147,7 +148,13 @@ pub(crate) trait PullSink<'db> {
 
 /// Stack-effect callbacks for statement/terminator helpers.
 pub(crate) trait StackEffectSink<'db>: PullSink<'db> {
-    fn store_field_value(&mut self, field: usize, name: &str) -> Result<(), Self::Error>;
+    /// Store a field of `base`, the instance place the field applies to.
+    fn store_field_value(
+        &mut self,
+        field: usize,
+        name: &str,
+        base: &Place,
+    ) -> Result<(), Self::Error>;
     /// Store an element of `base`, the container place the index applies to.
     fn store_index_value(&mut self, kind: IndexKind, base: &Place) -> Result<(), Self::Error>;
     fn pop_values(&mut self, n: usize) -> Result<(), Self::Error>;
@@ -220,7 +227,7 @@ pub(crate) fn walk_projection_store<'db, S: StackEffectSink<'db>>(
             let name = sink.resolve_field_name(base, *field);
             walk_place_pull(sink, base)?;
             walk_rvalue_pull(sink, value)?;
-            sink.store_field_value(*field, &name)?;
+            sink.store_field_value(*field, &name, base)?;
             Ok(true)
         }
         Place::Index { base, index, kind } => {
@@ -371,7 +378,7 @@ pub(crate) fn walk_place_pull<'db, S: PullSink<'db>>(
         Place::Field { base, field } => {
             let name = sink.resolve_field_name(base, *field);
             walk_place_pull(sink, base)?;
-            sink.load_field(*field, &name)
+            sink.load_field(*field, &name, base)
         }
         Place::Index { base, index, kind } => {
             walk_place_pull(sink, base)?;

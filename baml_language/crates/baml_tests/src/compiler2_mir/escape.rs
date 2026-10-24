@@ -769,3 +769,46 @@ function share(m: map<string, int>) -> int {
         "a parameter's map keeps its locks:\n{share}"
     );
 }
+
+#[test]
+fn bytecode_takes_relaxed_field_paths_for_thread_local_instances() {
+    let program = crate::engine::compile_source_with_opt(
+        r#"
+class Counter {
+  n: int
+}
+function build(k: int) -> int {
+  let c = Counter { n: 0 };
+  let i = 0;
+  while (i < k) { c.n = c.n + i; i += 1; }
+  c.n
+}
+function bump(c: Counter) -> int {
+  c.n = c.n + 1;
+  c.n
+}
+"#,
+        OptLevel::Two,
+    );
+    let bytecode = crate::engine::display_user_functions(&program);
+    let body = |name: &str| {
+        bytecode
+            .split(&format!("function {name}("))
+            .nth(1)
+            .and_then(|rest| rest.split("\nfunction ").next())
+            .unwrap_or_else(|| panic!("no `{name}` in:\n{bytecode}"))
+    };
+    let build = body("build");
+    for local in ["load_field_local .n", "store_field_local .n"] {
+        assert!(build.contains(local), "`build` lacks {local}:\n{build}");
+    }
+    assert!(
+        !build.contains("load_field .n") && !build.contains("store_field .n"),
+        "`build` keeps an ordered field access:\n{build}"
+    );
+    let bump = body("bump");
+    assert!(
+        !bump.contains("_local"),
+        "a parameter's instance keeps ordered fields:\n{bump}"
+    );
+}

@@ -29,10 +29,10 @@ function fixtures.short_circuit_locals.coalesced_lengths_compared_apart() -> boo
     init_instance user.fixtures.short_circuit_locals.ShortCircuitBox .items, .tags
     store_var box
     load_var box
-    load_field .items
+    load_field_local .items
     store_var items
     load_var box
-    load_field .tags
+    load_field_local .tags
     store_var tags
     load_var items
     load_const null

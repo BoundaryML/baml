@@ -9595,7 +9595,9 @@ impl BexVm {
                     }
 
                     // ── LoadField / StoreField / InitField ────────────────────────
-                    OpCode::LoadField => {
+                    // `_LOCAL`: the instance is thread-local (escape analysis),
+                    // so the slot needs no ordering.
+                    OpCode::LoadField | OpCode::LoadFieldLocal => {
                         let idx = { read_u32_unchecked(code, pc) as usize };
                         let top = self.stack.ensure_pop();
                         let obj_ptr = self.as_object_ptr(top, ObjectType::Instance)?;
@@ -9607,9 +9609,12 @@ impl BexVm {
                                 }
                                 .into());
                             };
-                            instance
-                                .try_load_field(idx)
-                                .ok_or_else(|| instance.field_len())
+                            if op == OpCode::LoadFieldLocal {
+                                instance.try_load_field_relaxed(idx)
+                            } else {
+                                instance.try_load_field(idx)
+                            }
+                            .ok_or_else(|| instance.field_len())
                         };
                         let value = match load_result {
                             Ok(value) => value,
@@ -9620,7 +9625,7 @@ impl BexVm {
                         self.stack.push(value);
                     }
 
-                    OpCode::StoreField => {
+                    OpCode::StoreField | OpCode::StoreFieldLocal => {
                         let idx = { read_u32_unchecked(code, pc) as usize };
                         let new_value = self.stack.ensure_pop();
                         let instance_value = self.stack.ensure_pop();
@@ -9643,7 +9648,11 @@ impl BexVm {
                         let Object::Instance(instance) = self.get_object(obj_ptr) else {
                             unreachable!("already type-checked above");
                         };
-                        instance.store_field(idx, new_value);
+                        if op == OpCode::StoreFieldLocal {
+                            instance.store_field_relaxed(idx, new_value);
+                        } else {
+                            instance.store_field(idx, new_value);
+                        }
                     }
 
                     // ── VirtualLoadField / VirtualStoreField ──────────────────────

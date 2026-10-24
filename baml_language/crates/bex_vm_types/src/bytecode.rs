@@ -1111,6 +1111,11 @@ pub enum Instruction {
         iterator: usize,
         index: usize,
     },
+    /// [`Self::LoadField`] of an instance escape analysis proved no other
+    /// thread can reach: a relaxed load, which needs no barrier.
+    LoadFieldLocal(usize),
+    /// [`Self::StoreField`] into a thread-local instance: a relaxed store.
+    StoreFieldLocal(usize),
 }
 
 /// Compact bytecode opcodes.
@@ -1343,6 +1348,9 @@ pub enum OpCode {
     // u32 iterator slot + u32 index slot.
     ArrayIterNext,
     ArrayIterNextLocal,
+    // u32 field index, like `LoadField` / `StoreField`.
+    LoadFieldLocal,
+    StoreFieldLocal,
 }
 
 impl OpCode {
@@ -1440,6 +1448,8 @@ impl OpCode {
             | Self::StoreGlobal
             | Self::LoadField
             | Self::StoreField
+            | Self::LoadFieldLocal
+            | Self::StoreFieldLocal
             | Self::InitField
             | Self::InitSpread
             | Self::Pop
@@ -1663,6 +1673,8 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::CallLocal as u8 => Ok(Self::CallLocal),
             x if x == Self::ArrayIterNext as u8 => Ok(Self::ArrayIterNext),
             x if x == Self::ArrayIterNextLocal as u8 => Ok(Self::ArrayIterNextLocal),
+            x if x == Self::LoadFieldLocal as u8 => Ok(Self::LoadFieldLocal),
+            x if x == Self::StoreFieldLocal as u8 => Ok(Self::StoreFieldLocal),
 
             x if x == Self::CallExactArgs as u8 => Ok(Self::CallExactArgs),
             x if x == Self::SetCallTrace as u8 => Ok(Self::SetCallTrace),
@@ -1690,6 +1702,8 @@ impl std::fmt::Display for OpCode {
             Self::CallLocal => "CALL_LOCAL",
             Self::ArrayIterNext => "ARRAY_ITER_NEXT",
             Self::ArrayIterNextLocal => "ARRAY_ITER_NEXT_LOCAL",
+            Self::LoadFieldLocal => "LOAD_FIELD_LOCAL",
+            Self::StoreFieldLocal => "STORE_FIELD_LOCAL",
 
             Self::Return => "RETURN",
             Self::Await => "AWAIT",
@@ -1946,6 +1960,8 @@ impl std::fmt::Display for Instruction {
             Instruction::VirtualLoadField(i) => write!(f, "VIRTUAL_LOAD_FIELD {i}"),
             Instruction::VirtualStoreField(i) => write!(f, "VIRTUAL_STORE_FIELD {i}"),
             Instruction::StoreField(i) => write!(f, "STORE_FIELD {i}"),
+            Instruction::LoadFieldLocal(i) => write!(f, "LOAD_FIELD_LOCAL {i}"),
+            Instruction::StoreFieldLocal(i) => write!(f, "STORE_FIELD_LOCAL {i}"),
             Instruction::InitField(i) => write!(f, "INIT_FIELD {i}"),
             Instruction::InitSpread(i) => write!(f, "INIT_SPREAD {i}"),
             Instruction::Pop(n) => write!(f, "POP {n}"),
@@ -2678,6 +2694,8 @@ impl Bytecode {
                 | Instruction::VirtualLoadField(v)
                 | Instruction::VirtualStoreField(v)
                 | Instruction::StoreField(v)
+                | Instruction::LoadFieldLocal(v)
+                | Instruction::StoreFieldLocal(v)
                 | Instruction::InitField(v)
                 | Instruction::InitSpread(v)
                 | Instruction::InitInstance(v)
@@ -3049,6 +3067,8 @@ impl Bytecode {
             Instruction::CallLocal { .. } => OpCode::CallLocal,
             Instruction::ArrayIterNext { .. } => OpCode::ArrayIterNext,
             Instruction::ArrayIterNextLocal { .. } => OpCode::ArrayIterNextLocal,
+            Instruction::LoadFieldLocal(_) => OpCode::LoadFieldLocal,
+            Instruction::StoreFieldLocal(_) => OpCode::StoreFieldLocal,
             Instruction::LoadVar2(..) => OpCode::LoadVar2,
             Instruction::StoreVar2(..) => OpCode::StoreVar2,
 
@@ -3599,6 +3619,8 @@ mod compact_tests {
             (Instruction::VirtualStoreField(1), OpCode::VirtualStoreField),
             (Instruction::LoadField(1), OpCode::LoadField),
             (Instruction::StoreField(1), OpCode::StoreField),
+            (Instruction::LoadFieldLocal(1), OpCode::LoadFieldLocal),
+            (Instruction::StoreFieldLocal(1), OpCode::StoreFieldLocal),
             (
                 Instruction::LoadArrayElementLocal,
                 OpCode::LoadArrayElementLocal,

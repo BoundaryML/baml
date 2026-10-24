@@ -1782,13 +1782,13 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         let name = self.resolve_field_name(base, *field);
         unwrap_infallible(pull_semantics::walk_place_pull(self, base));
         self.emit(Instruction::Copy(0));
-        unwrap_infallible(self.load_field(*field, &name));
+        unwrap_infallible(self.load_field(*field, &name, base));
         self.emit_operand_pull(right);
         let instruction = self
             .try_specialize_binary_op(*op, left, right)
             .unwrap_or_else(|| Self::binop_instruction(*op));
         self.emit(instruction);
-        unwrap_infallible(self.store_field_value(*field, &name));
+        unwrap_infallible(self.store_field_value(*field, &name, base));
         true
     }
 
@@ -3418,8 +3418,12 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
         Ok(action)
     }
 
-    fn load_field(&mut self, field: usize, name: &str) -> Result<(), Self::Error> {
-        let idx = self.emit(Instruction::LoadField(field));
+    fn load_field(&mut self, field: usize, name: &str, base: &Place) -> Result<(), Self::Error> {
+        let idx = self.emit(if self.thread_local(base) {
+            Instruction::LoadFieldLocal(field)
+        } else {
+            Instruction::LoadField(field)
+        });
         self.set_operand(idx, OperandMeta::Field(name.to_string()));
         Ok(())
     }
@@ -3742,8 +3746,17 @@ impl<'db: 'ctx, 'ctx> StackifyCodegen<'db, 'ctx, '_, '_> {
 }
 
 impl<'db: 'ctx, 'ctx> StackEffectSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
-    fn store_field_value(&mut self, field: usize, name: &str) -> Result<(), Self::Error> {
-        let idx = self.emit(Instruction::StoreField(field));
+    fn store_field_value(
+        &mut self,
+        field: usize,
+        name: &str,
+        base: &Place,
+    ) -> Result<(), Self::Error> {
+        let idx = self.emit(if self.thread_local(base) {
+            Instruction::StoreFieldLocal(field)
+        } else {
+            Instruction::StoreField(field)
+        });
         self.set_operand(idx, OperandMeta::Field(name.to_string()));
         Ok(())
     }
