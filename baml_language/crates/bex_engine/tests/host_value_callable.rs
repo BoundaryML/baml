@@ -2538,3 +2538,140 @@ async fn explicit_never_host_callback_rejects_native_throw() {
         .await;
     assert_host_contract_violation_panic(&result);
 }
+
+/// Host injection and sparse type annotations are only observable from Rust.
+/// Compare callback completion with the canonical argument entry path, rather
+/// than specifying a separate return-value coercion/validation contract.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn host_return_uses_the_same_inbound_path_as_arguments() {
+    let source = r#"
+        class Item { value: float, }
+        class Box { items: Item[], }
+        type ItemList = Item[]
+        function items(value: Item[]) -> float { value[0].value / 2.0 }
+        function host_items(f: () -> Item[]) -> float { items(f()) }
+        function entries(value: map<string, Item>) -> float { value["a"].value / 2.0 }
+        function host_entries(f: () -> map<string, Item>) -> float { entries(f()) }
+        function boxed(value: Box) -> float { items(value.items) }
+        function host_boxed(f: () -> Box) -> float { boxed(f()) }
+        function alias(value: ItemList) -> float { items(value) }
+        function host_alias(f: () -> ItemList) -> float { alias(f()) }
+        function numeric(value: float) -> float { value / 2.0 }
+        function host_numeric(f: () -> float) -> float { numeric(f()) }
+        function recover(f: () -> Item[]) -> float {
+            items(f()) catch_all_panics (e) { _ => 99.0 }
+        }
+    "#;
+    let engine = Arc::new(
+        BexEngine::new(
+            compile_for_engine(source),
+            Arc::new(sys_native::SysOps::native()),
+            Vec::new(),
+        )
+        .unwrap(),
+    );
+    let list = |value| BexExternalValue::Array {
+        element_type: RuntimeTy::unknown(),
+        items: vec![value],
+    };
+    let map = |value| BexExternalValue::Map {
+        key_type: RuntimeTy::string(),
+        value_type: RuntimeTy::unknown(),
+        entries: IndexMap::from_iter([("a".to_owned(), value)]),
+    };
+    let item = |value| {
+        BexExternalValue::typed(
+            BexExternalValue::instance("Item", IndexMap::from_iter([("value", value)])),
+            RuntimeTy::Class(baml_type::TypeName::from_dotted_path("Item"), Box::new([])),
+        )
+    };
+    let valid = item(BexExternalValue::Int(612));
+    let invalid = item(BexExternalValue::String("bad".into()));
+    let missing = BexExternalValue::instance("Item", IndexMap::new());
+    let cases = [
+        ("items", list(valid.clone()), true),
+        ("entries", map(valid.clone()), true),
+        ("alias", list(valid.clone()), true),
+        (
+            "boxed",
+            BexExternalValue::instance("Box", IndexMap::from_iter([("items", list(valid))])),
+            true,
+        ),
+        ("numeric", BexExternalValue::Int(612), true),
+        ("numeric", BexExternalValue::JsNumber(612.0), true),
+        ("items", list(invalid.clone()), false),
+        ("entries", map(invalid), false),
+        ("items", list(missing), false),
+        ("items", list(BexExternalValue::Int(1)), false),
+        ("numeric", BexExternalValue::String("bad".into()), false),
+    ];
+    for (function, value, valid) in cases {
+        let argument = engine
+            .call_function(
+                function,
+                vec![value.clone()],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await;
+        let arc = register_host_callable(move |_| FakeReturn::Ok(value.clone()));
+        let returned = engine
+            .call_function(
+                &format!("host_{function}"),
+                vec![BexExternalValue::HostValue(arc)],
+                FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+                true,
+            )
+            .await;
+        if valid {
+            assert_eq!(
+                argument.unwrap(),
+                BexExternalValue::Float(306.0),
+                "{function}"
+            );
+            assert_eq!(
+                returned.unwrap(),
+                BexExternalValue::Float(306.0),
+                "host_{function}"
+            );
+        } else {
+            let EngineError::TypeMismatch { message } = argument.unwrap_err() else {
+                panic!("expected inbound type mismatch for {function}");
+            };
+            assert_host_contract_violation_panic(&returned);
+            let Err(EngineError::UnhandledThrow { value, .. }) = returned else {
+                unreachable!();
+            };
+            let BexExternalValue::Instance { fields, .. } = value.as_ref() else {
+                unreachable!();
+            };
+            let BexExternalValue::String(diagnostic) = &fields["message"] else {
+                panic!("expected host-contract diagnostic");
+            };
+            // Entry-point root errors add the argument position; nested
+            // materialization errors retain the same useful detail verbatim.
+            if message.contains("Missing field") || message.contains("host value of type") {
+                assert!(diagnostic.contains(&message), "{diagnostic}: {message}");
+            }
+        }
+    }
+
+    // A handled contract panic must resume the handler, without pushing the
+    // rejected return into the unwound call frame's former result slot.
+    let arc = register_host_callable(|_| {
+        FakeReturn::Ok(BexExternalValue::Array {
+            element_type: RuntimeTy::unknown(),
+            items: vec![BexExternalValue::String("bad".into())],
+        })
+    });
+    let recovered = engine
+        .call_function(
+            "recover",
+            vec![BexExternalValue::HostValue(arc)],
+            FunctionCallContextBuilder::new(sys_types::CallId::next()).build(),
+            true,
+        )
+        .await
+        .unwrap();
+    assert_eq!(recovered, BexExternalValue::Float(99.0));
+}

@@ -134,14 +134,18 @@ fn trusted_stdlib_capability_kind(
     })
 }
 
+/// Call-local declaration lookups used throughout host value conversion.
+/// Handles retain runtime declarations across suspension; direct pointers are
+/// only borrowed while the caller holds the heap permit.
 #[derive(Clone, Copy)]
-pub(crate) struct InboundRuntimeOverlay<'a> {
+pub(crate) struct TypeDefinitionOverlay<'a> {
     dynamic_classes: &'a indexmap::IndexMap<String, bex_external_types::Handle>,
     dynamic_enums: &'a indexmap::IndexMap<String, bex_external_types::Handle>,
     runtime_named_objects: Option<&'a indexmap::IndexMap<String, HeapPtr>>,
 }
 
-impl<'a> InboundRuntimeOverlay<'a> {
+impl<'a> TypeDefinitionOverlay<'a> {
+    /// Borrow the caller's declaration tables without copying their contents.
     pub(crate) fn new(
         dynamic_classes: &'a indexmap::IndexMap<String, bex_external_types::Handle>,
         dynamic_enums: &'a indexmap::IndexMap<String, bex_external_types::Handle>,
@@ -165,7 +169,7 @@ impl BexEngine {
         vm: &BexVm,
         permit: PermitProof<'_>,
         name: &str,
-        overlay: InboundRuntimeOverlay<'_>,
+        overlay: TypeDefinitionOverlay<'_>,
         kind: InboundDeclarationKind,
     ) -> Result<Option<HeapPtr>, EngineError> {
         let dynamic = match kind {
@@ -237,7 +241,7 @@ impl BexEngine {
         vm: &BexVm,
         permit: PermitProof<'_>,
         ty: &RuntimeTy,
-        overlay: InboundRuntimeOverlay<'_>,
+        overlay: TypeDefinitionOverlay<'_>,
     ) -> Result<bex_vm_types::RuntimeTy, EngineError> {
         ty.try_map_heads(&mut |name: &baml_type::TypeName| {
             let spelling = name.to_string();
@@ -274,7 +278,7 @@ impl BexEngine {
         vm: &BexVm,
         permit: PermitProof<'_>,
         ty: &RuntimeTy,
-        overlay: InboundRuntimeOverlay<'_>,
+        overlay: TypeDefinitionOverlay<'_>,
     ) -> Result<bex_vm_types::RealizedTy, EngineError> {
         let anchored = self.anchor_wire_ty_with_runtime(vm, permit, ty, overlay)?;
         bex_vm_types::RealizedTy::try_from(anchored).map_err(|e| EngineError::TypeMismatch {
@@ -1241,22 +1245,25 @@ impl BexEngine {
             holder,
             external,
             None,
-            &indexmap::IndexMap::new(),
-            &indexmap::IndexMap::new(),
-            None,
+            TypeDefinitionOverlay::new(
+                &indexmap::IndexMap::new(),
+                &indexmap::IndexMap::new(),
+                None,
+            ),
         )
     }
 
+    /// Combine runtime package declarations with the call's class/enum handles
+    /// before converting a sys-op result.
     pub(crate) fn convert_external_to_vm_value_with_runtime_schema(
         &self,
         holder: &mut impl HeapPermit<BexThread>,
         external: BexExternalValue,
-        overlay: &crate::RuntimeSchemaOverlay,
-        dynamic_classes: &indexmap::IndexMap<String, bex_external_types::Handle>,
-        dynamic_enums: &indexmap::IndexMap<String, bex_external_types::Handle>,
+        schema_overlay: &crate::RuntimeSchemaOverlay,
+        overlay: TypeDefinitionOverlay<'_>,
     ) -> Result<Value, EngineError> {
         let mut named = indexmap::IndexMap::new();
-        for (name, handle) in &overlay.named_owners {
+        for (name, handle) in &schema_overlay.named_owners {
             let Some(owner) = self.resolve_handle(holder.proof(), handle) else {
                 continue;
             };
@@ -1281,9 +1288,10 @@ impl BexEngine {
             holder,
             external,
             None,
-            dynamic_classes,
-            dynamic_enums,
-            Some(&named),
+            TypeDefinitionOverlay {
+                runtime_named_objects: Some(&named),
+                ..overlay
+            },
         )
     }
 
@@ -1303,9 +1311,11 @@ impl BexEngine {
             holder,
             external,
             expected_ty,
-            &indexmap::IndexMap::new(),
-            &indexmap::IndexMap::new(),
-            None,
+            TypeDefinitionOverlay::new(
+                &indexmap::IndexMap::new(),
+                &indexmap::IndexMap::new(),
+                None,
+            ),
         )
     }
 
@@ -1313,56 +1323,54 @@ impl BexEngine {
     ///
     /// Host returns have not gone through the entry-point argument coercion
     /// pass. Resolve their inbound carriers recursively against the declared
-    /// return type before ordinary VM materialization.
+    /// return type before ordinary VM materialization. That shared path checks
+    /// every nested node against its declared type, including class fields and
+    /// sparse annotations; no callback-specific validator should precede it.
+    /// Retain call-local declaration handles so runtime types cannot resolve
+    /// to an unrelated static declaration with the same spelling.
     pub(crate) fn convert_host_return_to_vm_value_with_ty(
         &self,
         holder: &mut impl HeapPermit<BexThread>,
         external: BexExternalValue,
         expected_ty: Option<&RuntimeTy>,
+        overlay: TypeDefinitionOverlay<'_>,
     ) -> Result<Value, EngineError> {
         let external = match expected_ty {
-            Some(expected_ty) => self.coerce_inbound_arg(external, expected_ty)?,
+            Some(expected_ty) => {
+                // This type comes from the VM's callable contract, not the
+                // host payload. Losing its declaration is an engine failure;
+                // do not accuse the host of returning the wrong value.
+                self.anchor_wire_ty_with_runtime(
+                    &holder.holder().vm,
+                    holder.proof(),
+                    expected_ty,
+                    overlay,
+                )
+                .map_err(|error| {
+                    EngineError::VmInternalError(bex_vm::errors::VmInternalError::BridgeFailure {
+                        message: format!("cannot resolve host callable return contract: {error}"),
+                    })
+                })?;
+                self.coerce_inbound_arg(external, expected_ty)?
+            }
             None => external,
         };
         self.convert_external_to_vm_value_with_ty_and_runtime(
             holder,
             external,
             expected_ty,
-            &indexmap::IndexMap::new(),
-            &indexmap::IndexMap::new(),
-            None,
+            overlay,
         )
     }
 
-    /// Materialize an external value using call-local runtime class and enum
-    /// side tables in addition to the engine's frozen static definition table.
-    /// Recursive calls retain both tables for nested containers and classes.
-    pub(crate) fn convert_external_to_vm_value_with_dynamic_types(
+    /// Materialize an external value using its declared type and call-local
+    /// definitions. Recursive conversion retains the same definition overlay.
+    pub(crate) fn convert_external_to_vm_value_with_ty_and_runtime(
         &self,
         holder: &mut impl HeapPermit<BexThread>,
         external: BexExternalValue,
         expected_ty: Option<&RuntimeTy>,
-        dynamic_classes: &indexmap::IndexMap<String, bex_external_types::Handle>,
-        dynamic_enums: &indexmap::IndexMap<String, bex_external_types::Handle>,
-    ) -> Result<Value, EngineError> {
-        self.convert_external_to_vm_value_with_ty_and_runtime(
-            holder,
-            external,
-            expected_ty,
-            dynamic_classes,
-            dynamic_enums,
-            None,
-        )
-    }
-
-    fn convert_external_to_vm_value_with_ty_and_runtime(
-        &self,
-        holder: &mut impl HeapPermit<BexThread>,
-        external: BexExternalValue,
-        expected_ty: Option<&RuntimeTy>,
-        dynamic_classes: &indexmap::IndexMap<String, bex_external_types::Handle>,
-        dynamic_enums: &indexmap::IndexMap<String, bex_external_types::Handle>,
-        runtime_named_objects: Option<&indexmap::IndexMap<String, HeapPtr>>,
+        overlay: TypeDefinitionOverlay<'_>,
     ) -> Result<Value, EngineError> {
         // Never land a value whose kind contradicts its declared slot: the VM
         // runs type-specialized code on it without re-checking (#5332). Plain
@@ -1381,19 +1389,12 @@ impl BexEngine {
         let landed_check = expected_ty
             .filter(|_| lands_opaque_object(&external))
             .map(|expected| (expected.clone(), external.type_name()));
-        let value = self.materialize_external_node(
-            holder,
-            external,
-            expected_ty,
-            dynamic_classes,
-            dynamic_enums,
-            runtime_named_objects,
-        )?;
+        let value = self.materialize_external_node(holder, external, expected_ty, overlay)?;
         if let Some((expected, carrier)) = landed_check
             && !self.landed_kind_admitted(
                 &holder.holder().vm,
                 holder.proof(),
-                InboundRuntimeOverlay::new(dynamic_classes, dynamic_enums, runtime_named_objects),
+                overlay,
                 value,
                 &expected,
             )
@@ -1415,9 +1416,7 @@ impl BexEngine {
         holder: &mut impl HeapPermit<BexThread>,
         mut external: BexExternalValue,
         expected_ty: Option<&RuntimeTy>,
-        dynamic_classes: &indexmap::IndexMap<String, bex_external_types::Handle>,
-        dynamic_enums: &indexmap::IndexMap<String, bex_external_types::Handle>,
-        runtime_named_objects: Option<&indexmap::IndexMap<String, HeapPtr>>,
+        overlay: TypeDefinitionOverlay<'_>,
     ) -> Result<Value, EngineError> {
         // A `baml.json.json` slot materializes containers with the alias as
         // their element/value type, exactly like BAML-born `baml.json.parse`
@@ -1454,8 +1453,6 @@ impl BexEngine {
         // See through a user alias so a container's declared element/value
         // type still reaches its children (`type Ids = int[]`).
         let expected_ty = expected_ty.map(|ty| self.expand_inbound_alias(ty));
-        let overlay =
-            InboundRuntimeOverlay::new(dynamic_classes, dynamic_enums, runtime_named_objects);
         Ok(match external {
             BexExternalValue::Handle(handle) => Value::object(
                 self.resolve_handle(holder.proof(), &handle)
@@ -1530,9 +1527,7 @@ impl BexEngine {
                             holder,
                             v,
                             declared_element_ty,
-                            dynamic_classes,
-                            dynamic_enums,
-                            runtime_named_objects,
+                            overlay,
                         )
                     })
                     .collect::<Result<Vec<_>, _>>()?;
@@ -1621,9 +1616,7 @@ impl BexEngine {
                             holder,
                             v,
                             declared_value_ty,
-                            dynamic_classes,
-                            dynamic_enums,
-                            runtime_named_objects,
+                            overlay,
                         )
                         .map(|v| (bex_vm_types::BexStr::from(k.as_str()), v))
                     })
@@ -1742,9 +1735,7 @@ impl BexEngine {
                         holder,
                         field_value,
                         Some(&wire_field_ty),
-                        dynamic_classes,
-                        dynamic_enums,
-                        runtime_named_objects,
+                        overlay,
                     )?);
                 }
                 let realized_type_args = type_args
@@ -1810,9 +1801,7 @@ impl BexEngine {
                     holder,
                     value,
                     Some(&selected_type),
-                    dynamic_classes,
-                    dynamic_enums,
-                    runtime_named_objects,
+                    overlay,
                 );
             }
             BexExternalValue::Adt(BexExternalAdt::Type(ty)) => {
@@ -1885,9 +1874,7 @@ impl BexEngine {
                             fields,
                         },
                         None,
-                        dynamic_classes,
-                        dynamic_enums,
-                        runtime_named_objects,
+                        overlay,
                     );
                 }
             }
@@ -1933,9 +1920,7 @@ impl BexEngine {
                             fields,
                         },
                         None,
-                        dynamic_classes,
-                        dynamic_enums,
-                        runtime_named_objects,
+                        overlay,
                     );
                 }
             }
@@ -3844,262 +3829,6 @@ fn expected_admits_instance(value: &BexExternalValue, expected: &RuntimeTy) -> b
     }
 }
 
-impl BexEngine {
-    /// Schema-aware strict validation of a host-callable's returned value
-    /// against its declared return type.
-    ///
-    /// This is the engine-side complement to the bridges' shared
-    /// `bex_external_types::validate_host_return` guard. The shared guard runs
-    /// at the FFI boundary and enforces everything checkable without a schema
-    /// (scalar discrimination including contextual JavaScript `number`
-    /// resolution, container recursion,
-    /// enum identity, class-*name* identity). This method adds the one check
-    /// the shared guard cannot perform — class *field types* — by resolving
-    /// the declared class against the engine's compiled schema
-    /// (`resolved_class_names`) and recursively validating each declared
-    /// field's value against its instantiated field type.
-    ///
-    /// Returns `Err(message)` describing the first mismatch; the caller maps
-    /// it to a `VmBamlError::HostCallable` so it surfaces as a catchable
-    /// `root.errors.HostCallable`.
-    pub(crate) fn validate_host_return_schema(
-        &self,
-        value: &BexExternalValue,
-        expected: &RuntimeTy,
-    ) -> Result<(), String> {
-        // `InboundValue.value_type` is carried transiently as an annotated
-        // external union. Coerce its structural payload first so an anonymous
-        // class gains its nominal identity/type args and a class-shaped media
-        // shell becomes the underlying media ADT. The shared boundary guard
-        // has already checked that the annotation is assignable to `expected`;
-        // this pass verifies that the payload actually inhabits it and then
-        // applies the resolved class schema recursively.
-        if matches!(
-            value,
-            BexExternalValue::Union { metadata, .. }
-                if metadata.is_inbound_type_annotation
-        ) {
-            let coerced = self
-                .coerce_inbound_arg(value.clone(), expected)
-                .map_err(|error| error.to_string())?;
-            return match &coerced {
-                BexExternalValue::Union {
-                    value: inner,
-                    metadata,
-                } if metadata.is_inbound_type_annotation => {
-                    self.validate_host_return_schema(inner, expected)
-                }
-                other => self.validate_host_return_schema(other, expected),
-            };
-        }
-
-        match expected {
-            // `unknown` / opaque-any: accept (defensive — concrete at the FFI
-            // boundary).
-            RuntimeTy::Unknown => Ok(()),
-
-            // Union (including nullable `T | null`): must satisfy at least one
-            // member (schema-aware).
-            RuntimeTy::Union(members) => {
-                let inner = match value {
-                    BexExternalValue::Union { value: inner, .. } => inner.as_ref(),
-                    other => other,
-                };
-                if members
-                    .iter()
-                    .any(|m| self.validate_host_return_schema(inner, m).is_ok())
-                {
-                    Ok(())
-                } else {
-                    Err(format!(
-                        "host callable returned a value of type `{}` that does not match the \
-                         declared return type `{expected}`",
-                        inner.type_name(),
-                    ))
-                }
-            }
-
-            // A `Union`-wrapped value against a non-union declared type:
-            // validate the inner value.
-            _ if matches!(value, BexExternalValue::Union { .. }) => {
-                let BexExternalValue::Union { value: inner, .. } = value else {
-                    unreachable!("guarded by the matches! above")
-                };
-                self.validate_host_return_schema(inner, expected)
-            }
-
-            RuntimeTy::List(inner) => match value {
-                BexExternalValue::Array { items, .. } => {
-                    for item in items {
-                        self.validate_host_return_schema(item, inner)?;
-                    }
-                    Ok(())
-                }
-                other => Err(format!(
-                    "host callable returned `{}` where a list was declared",
-                    other.type_name(),
-                )),
-            },
-
-            RuntimeTy::Map { value: v_ty, .. } => match value {
-                BexExternalValue::Map { entries, .. } => {
-                    for v in entries.values() {
-                        self.validate_host_return_schema(v, v_ty)?;
-                    }
-                    Ok(())
-                }
-                other => Err(format!(
-                    "host callable returned `{}` where a map was declared",
-                    other.type_name(),
-                )),
-            },
-
-            // The schema-aware part: validate each declared field's value
-            // against its declared field type. A bare `Map` does NOT satisfy a
-            // class type here: result materialization is value-driven, so a
-            // `Map` becomes an `Object::Map`, never an instance of the declared
-            // class — accepting it would hand back a value that cannot inhabit
-            // the declared return type. A host returning a class must encode it
-            // as a class value (→ `Instance`), not a plain map.
-            RuntimeTy::Class(tn, expected_args) => match value {
-                BexExternalValue::Instance {
-                    class_name, fields, ..
-                } => {
-                    if !type_name_matches_external_name(class_name, tn) {
-                        return Err(format!(
-                            "host callable returned an instance of `{class_name}` where class \
-                             `{tn}` was declared",
-                        ));
-                    }
-                    let Some(class_ptr) = self
-                        .resolved_class_names
-                        .get(class_name)
-                        .or_else(|| resolve_named_object(&self.resolved_class_names, class_name))
-                    else {
-                        // Unknown class: leave it to the engine's
-                        // `convert_external_to_vm_value`, which errors with a
-                        // clear "Unknown class" message.
-                        return Ok(());
-                    };
-                    // SAFETY: class_ptr points to a compile-time Class object
-                    // (a GC root for the program's lifetime).
-                    #[expect(
-                        unsafe_code,
-                        reason = "reading a compile-time Class object via its GC-rooted pointer"
-                    )]
-                    let Object::Class(class) = (unsafe { class_ptr.get() }) else {
-                        return Ok(());
-                    };
-                    for class_field in &class.fields {
-                        if let Some(field_value) = fields.get(&class_field.name) {
-                            // Compare in the wire's spelling: the host supplied
-                            // `expected_args` there. A field whose template names
-                            // a declaration the host cannot name is not
-                            // host-validatable — materialization reports it.
-                            let Ok(template) = class_field
-                                .field_template
-                                .try_map_heads(&mut bex_vm_types::TypeHead::to_name)
-                            else {
-                                continue;
-                            };
-                            let field_ty = template.substitute_symbolic(expected_args);
-                            self.validate_host_return_schema(field_value, &field_ty)?;
-                        }
-                        // Missing fields are reported by
-                        // `convert_external_to_vm_value` at materialization.
-                    }
-                    Ok(())
-                }
-                other => Err(format!(
-                    "host callable returned `{}` where class `{tn}` was declared",
-                    other.type_name(),
-                )),
-            },
-
-            // Enum identity: a `Variant` must name the declared enum, and the
-            // variant must exist on that enum (the latter is also enforced by
-            // `convert_external_to_vm_value`).
-            RuntimeTy::Enum(tn) => match value {
-                BexExternalValue::Variant {
-                    enum_name,
-                    variant_name,
-                } => {
-                    if !type_name_matches_external_name(enum_name, tn) {
-                        return Err(format!(
-                            "host callable returned a variant of enum `{enum_name}` where enum \
-                             `{tn}` was declared",
-                        ));
-                    }
-                    if let Some(enum_ptr) = self
-                        .resolved_enum_names
-                        .get(enum_name)
-                        .or_else(|| resolve_named_object(&self.resolved_enum_names, enum_name))
-                    {
-                        #[expect(
-                            unsafe_code,
-                            reason = "reading a compile-time Enum object via its GC-rooted pointer"
-                        )]
-                        if let Object::Enum(enum_obj) = unsafe { enum_ptr.get() } {
-                            if !enum_obj.variants.iter().any(|v| &v.name == variant_name) {
-                                return Err(format!(
-                                    "host callable returned unknown variant `{variant_name}` of \
-                                     enum `{enum_name}`",
-                                ));
-                            }
-                        }
-                    }
-                    Ok(())
-                }
-                other => Err(format!(
-                    "host callable returned `{}` where enum `{tn}` was declared",
-                    other.type_name(),
-                )),
-            },
-
-            RuntimeTy::EnumVariant(tn, expected_variant) => match value {
-                BexExternalValue::Variant {
-                    enum_name,
-                    variant_name,
-                } => {
-                    if !type_name_matches_external_name(enum_name, tn) {
-                        return Err(format!(
-                            "host callable returned a variant of enum `{enum_name}` where enum \
-                             `{tn}` was declared",
-                        ));
-                    }
-                    if variant_name != expected_variant.as_str() {
-                        return Err(format!(
-                            "host callable returned enum variant `{enum_name}.{variant_name}` \
-                             where `{tn}.{expected_variant}` was declared",
-                        ));
-                    }
-                    Ok(())
-                }
-                other => Err(format!(
-                    "host callable returned `{}` where enum variant \
-                     `{tn}.{expected_variant}` was declared",
-                    other.type_name(),
-                )),
-            },
-
-            // Function-typed positions are materialized with their declared
-            // type context into `Object::HostClosure`, including inside
-            // containers and class fields. Keep this validation strict so an
-            // opaque host-value carrier cannot masquerade as a callable.
-            RuntimeTy::Function { .. } => {
-                bex_external_types::validate_host_return(value, expected).map_err(|e| e.to_string())
-            }
-
-            // Scalars and everything else: defer to the schema-free shape
-            // check (including contextual JavaScript-number resolution,
-            // otherwise exact tags, literal equality, and media).
-            _ => {
-                bex_external_types::validate_host_return(value, expected).map_err(|e| e.to_string())
-            }
-        }
-    }
-}
-
 /// For union types, find which member matches the actual runtime value.
 ///
 /// If the declared type is not a union, returns it unchanged.
@@ -4465,7 +4194,7 @@ impl BexEngine {
         &self,
         vm: &BexVm,
         permit: PermitProof<'_>,
-        overlay: InboundRuntimeOverlay<'_>,
+        overlay: TypeDefinitionOverlay<'_>,
         value: Value,
         ty: &RuntimeTy,
     ) -> bool {

@@ -1279,7 +1279,7 @@ fn truncate_preview(mut value: String, max_chars: usize) -> String {
 /// (`E`, the declared error contract). Returns `Err` if the slot is absent or
 /// not a `Type` object — for `BamlHostCallHostValue` that's an engine/compiler
 /// ABI bug and a missing slot would silently skip both
-/// `validate_host_return_schema` and `enforce_host_throw_contract`, so the
+/// inbound materialization and `enforce_host_throw_contract`, so the
 /// caller surfaces it as a fatal internal error rather than soft-failing the
 /// contract checks. `slot_name` is used only for the diagnostic message.
 fn host_call_type_arg(
@@ -3885,7 +3885,7 @@ impl BexEngine {
                     &thread.vm,
                     thread.proof(),
                     &ty,
-                    crate::conversion::InboundRuntimeOverlay::new(
+                    crate::conversion::TypeDefinitionOverlay::new(
                         &dynamic_classes,
                         &dynamic_enums,
                         Some(&runtime_named_objects),
@@ -6298,88 +6298,76 @@ impl BexEngine {
 
                         match outcome {
                             Ok(external) => {
-                                // Schema-aware return-type validation for host
-                                // callables. The bridge's shared
-                                // `validate_host_return` guard already rejected
-                                // scalar / enum-identity / class-name mismatches at
-                                // the FFI boundary; here — where the compiled class
-                                // schema is reachable — we additionally validate
-                                // class *field types* against the declared return
-                                // type (`host_ret_ty`, captured from `args[2]` before
-                                // the await). A mismatch is injected into the VM's
-                                // exception unwinder so an in-BAML `catch` can
-                                // catch it exactly like a host-raised error.
-                                if operation == SysOp::BamlHostCallHostValue
-                                    && let Some(ret_ty) = host_ret_ty.as_ref()
-                                    && let Err(message) =
-                                        self.validate_host_return_schema(&external, ret_ty)
-                                {
-                                    // A wrong-return-type at the engine-level
-                                    // schema check is the same kind of contract
-                                    // breach as the FFI-boundary guard catches:
-                                    // the host returned a value that doesn't
-                                    // inhabit `T`. Surface as
-                                    // `baml.panics.HostContractViolation`
-                                    // (panic, not catchable).
-                                    let op_err = OpError::new(
-                                        SysOp::BamlHostCallHostValue,
-                                        sys_types::VmPanic::HostContractViolation {
-                                            message,
-                                            class_name: None,
-                                            language: None,
-                                        },
-                                    );
-                                    if let Some(outcome) = self
-                                        .inject_sysop_throw(
-                                            thread,
-                                            call_id,
-                                            op_err,
-                                            throws_type.as_ref(),
-                                            host_throws_ty.as_ref(),
-                                        )
-                                        .await?
-                                    {
-                                        return Ok(outcome);
-                                    }
-                                    // VM caught the throw; the unwinder truncated
-                                    // the eval stack back to the catching frame's
-                                    // locals region, so we must NOT push the
-                                    // would-be return value (there's no slot
-                                    // expecting it any more). Fall through to the
-                                    // top of the outer loop.
+                                // Host returns enter through the same coercion and
+                                // recursive, schema-aware materialization as inbound
+                                // arguments. Run this after completion, with the
+                                // declared return type, before the VM resumes.
+                                let classes = runtime_type_overlay.class_handles_by_name();
+                                let enums = runtime_type_overlay.enum_handles_by_name();
+                                let type_definitions = crate::conversion::TypeDefinitionOverlay::new(
+                                    &classes, &enums, None,
+                                );
+                                let converted = if operation == SysOp::BamlHostCallHostValue {
+                                    self.convert_host_return_to_vm_value_with_ty(
+                                        thread,
+                                        external,
+                                        host_ret_ty.as_ref(),
+                                        type_definitions,
+                                    )
+                                } else if let Some(overlay) = runtime_schema_overlay.as_ref() {
+                                    self.convert_external_to_vm_value_with_runtime_schema(
+                                        thread,
+                                        external,
+                                        overlay,
+                                        type_definitions,
+                                    )
                                 } else {
-                                    // Convert the external value back into a VM
-                                    // Value (allocating string / list / instance
-                                    // heap objects as needed) and push it onto
-                                    // the eval stack. The bytecode that follows
-                                    // this sys-op call is a normal `store_var`
-                                    // / projection / whatever the surrounding
-                                    // expression expected — no implicit await.
-                                    let value = if operation == SysOp::BamlHostCallHostValue {
-                                        self.convert_host_return_to_vm_value_with_ty(
-                                            thread,
-                                            external,
-                                            host_ret_ty.as_ref(),
-                                        )?
-                                    } else if let Some(overlay) = runtime_schema_overlay.as_ref() {
-                                        self.convert_external_to_vm_value_with_runtime_schema(
-                                            thread,
-                                            external,
-                                            overlay,
-                                            &runtime_type_overlay.class_handles_by_name(),
-                                            &runtime_type_overlay.enum_handles_by_name(),
-                                        )?
-                                    } else {
-                                        self.convert_external_to_vm_value_with_dynamic_types(
-                                            thread,
-                                            external,
-                                            None,
-                                            &runtime_type_overlay.class_handles_by_name(),
-                                            &runtime_type_overlay.enum_handles_by_name(),
-                                        )?
-                                    };
-
-                                    thread.vm.stack.push(value);
+                                    self.convert_external_to_vm_value_with_ty_and_runtime(
+                                        thread,
+                                        external,
+                                        None,
+                                        type_definitions,
+                                    )
+                                };
+                                match converted {
+                                    Ok(value) => thread.vm.stack.push(value),
+                                    Err(error @ (EngineError::TypeMismatch { .. }
+                                        | EngineError::CannotConvert { .. }))
+                                        if operation == SysOp::BamlHostCallHostValue =>
+                                    {
+                                        // Keep host-contract failures on the VM's panic
+                                        // path, including nested fields and missing fields.
+                                        // Internal engine failures retain their own identity.
+                                        let op_err = OpError::new(
+                                            operation,
+                                            sys_types::VmPanic::HostContractViolation {
+                                                message: format!(
+                                                    "host callable returned a value of the wrong type: {error} (expected {})",
+                                                    host_ret_ty.as_ref().map_or_else(
+                                                        || "unknown".to_owned(),
+                                                        ToString::to_string,
+                                                    ),
+                                                ),
+                                                class_name: None,
+                                                language: None,
+                                            },
+                                        );
+                                        if let Some(outcome) = self
+                                            .inject_sysop_throw(
+                                                thread,
+                                                call_id,
+                                                op_err,
+                                                throws_type.as_ref(),
+                                                host_throws_ty.as_ref(),
+                                            )
+                                            .await?
+                                        {
+                                            return Ok(outcome);
+                                        }
+                                        // A panic handler unwound the waiting frame.
+                                        // Do not push a return value into its old slot.
+                                    }
+                                    Err(error) => return Err(error),
                                 }
                             }
                             Err(op_err) => {
@@ -8041,6 +8029,74 @@ mod type_identity_tests {
             runtime_class.type_tag.is_dynamic(),
             "runtime-created declarations mint counter tags"
         );
+
+        // A callback result must land on this runtime declaration, even though
+        // a static class has the same display name. A schema-free/static-only
+        // lookup either loses the declaration or silently changes its identity.
+        let expected_class = head.ptr();
+        let expected = crate::conversion::overlay_wire_ty_under_permit(
+            type_value.ty.as_runtime_ty(),
+            thread.proof(),
+        );
+        let reflected = thread.vm.alloc_type(type_value);
+        let runtime_overlay =
+            engine.runtime_type_overlay(&thread.vm, &[bex_vm_types::Value::object(reflected)]);
+        let classes = runtime_overlay.class_handles_by_name();
+        let enums = runtime_overlay.enum_handles_by_name();
+        let overlay = crate::conversion::TypeDefinitionOverlay::new(&classes, &enums, None);
+        let returned = engine
+            .convert_host_return_to_vm_value_with_ty(
+                &mut thread,
+                bex_external_types::BexExternalValue::instance(
+                    "user.Foo",
+                    indexmap::IndexMap::from_iter([(
+                        "value",
+                        bex_external_types::BexExternalValue::Int(7),
+                    )]),
+                ),
+                Some(&expected),
+                overlay,
+            )
+            .expect("a host return should resolve the runtime class");
+        let Object::Instance(instance) = thread.vm.get_object(returned.as_object_ptr().unwrap())
+        else {
+            panic!("expected a runtime class instance");
+        };
+        assert_eq!(instance.class, expected_class);
+
+        let invalid = engine.convert_host_return_to_vm_value_with_ty(
+            &mut thread,
+            bex_external_types::BexExternalValue::instance(
+                "user.Foo",
+                indexmap::IndexMap::from_iter([(
+                    "value",
+                    bex_external_types::BexExternalValue::String("bad".into()),
+                )]),
+            ),
+            Some(&expected),
+            overlay,
+        );
+        assert!(matches!(
+            invalid,
+            Err(super::EngineError::TypeMismatch { .. })
+        ));
+
+        let missing = baml_type::RuntimeTy::Class(
+            baml_type::TypeName::from_dotted_path("user.Missing"),
+            Box::new([]),
+        );
+        let unresolved = engine.convert_host_return_to_vm_value_with_ty(
+            &mut thread,
+            bex_external_types::BexExternalValue::Null,
+            Some(&missing),
+            overlay,
+        );
+        assert!(matches!(
+            unresolved,
+            Err(super::EngineError::VmInternalError(
+                bex_vm::errors::VmInternalError::BridgeFailure { .. }
+            ))
+        ));
     }
 
     /// A `type` value that leaves this engine and comes straight back is the
