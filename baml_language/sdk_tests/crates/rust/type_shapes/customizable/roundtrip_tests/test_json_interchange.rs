@@ -208,10 +208,9 @@ fn test_json_interchange_json_fields_match_baml() {
         let read = assert_deserialize_agrees::<JsonFields>(text);
         assert_eq!(read.extra, None);
     }
-    // A `json` field is required even though `null` is a json value.
-    let missing = r#"{"items":[]}"#;
-    assert!(from_json::<JsonFields>(missing.to_string()).is_err());
-    assert!(serde_json::from_str::<JsonFields>(missing).is_err());
+    // A `json` field may be missing: its type admits `null`, so both read it as `null`.
+    let read = assert_deserialize_agrees::<JsonFields>(r#"{"items":[]}"#);
+    assert_eq!(read.payload, serde_json::Value::Null);
 }
 
 // SDK_PARITY_LINT(skip): validates the Rust SDK's optional serde impls

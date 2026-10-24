@@ -315,8 +315,9 @@ pub enum TirTypeError {
         suggestions: Vec<Name>,
     },
     /// A class constructor omitted fields whose resolved types do not admit
-    /// `null`. Fields whose types include `null` may be omitted because the
-    /// object representation initializes absent slots to `null`.
+    /// `null`. A field whose type admits `null` (`T?`, `unknown`,
+    /// `baml.json.json`) may be omitted because the object representation
+    /// initializes absent slots to `null`.
     MissingRequiredClassFields {
         class_name: DeclName,
         field_names: Vec<Name>,

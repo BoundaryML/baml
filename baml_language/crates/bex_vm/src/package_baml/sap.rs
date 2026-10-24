@@ -438,7 +438,7 @@ impl fmt::Display for ModelError {
 /// field whose type has no empty value to hold.
 fn build_model(vm: &BexVm, target: &RealizedTy) -> Result<CompiledSapModel, ModelError> {
     let reach = ParseReach::of(vm, target).map_err(ModelError::Reach)?;
-    let defs = crate::json_defs::HeapDefs { vm };
+    let defs = crate::json_defs::HeapDefs::output(vm);
     let classes = reach.classes.iter().map(|reached| {
         let class = reached_class(vm, reached.head);
         let unfillable = class

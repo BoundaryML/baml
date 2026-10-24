@@ -338,7 +338,7 @@ test "enum_override_through_every_entry" {
 // ─── a union member is chosen by shape, then decoded by the rule ──────────────
 // A provided `from_json` that throws unwinds the whole walk, so a member
 // cannot be tried through its override and fallen through to the next. The
-// first member the value fits structurally is the one; it then decodes
+// member the value fits best structurally is the one; it then decodes
 // through the override-honoring walk.
 
 function union_member_then_override_fn() -> string throws baml.json.DecodeError {
@@ -362,7 +362,10 @@ function union_membership_is_structural_fn() -> string {
 }
 
 test "union_membership_is_structural" {
-    assert.equal(union_membership_is_structural_fn(), "no member: no union member matched")
+    assert.equal(
+        union_membership_is_structural_fn(),
+        "no member: no union member matched: `from_json_interface.Temp`: missing required field `celsius`; `int`: expected integer",
+    )
 }
 
 // ─── a value that contains itself ─────────────────────────────────────────────

@@ -37,7 +37,8 @@ pub(super) struct FieldPlan {
     pub(super) shown: bool,
     /// The field's type with the class's type arguments substituted.
     pub(super) ty: RealizedTy,
-    /// A field that can be `null` may be absent, and then decodes to `null`.
+    /// A field whose type admits `null` may be absent, and then decodes to
+    /// `null`.
     pub(super) may_be_absent: bool,
 }
 
@@ -89,7 +90,9 @@ impl ClassPlan {
                     hash: OnceLock::new(),
                     key,
                     shown: naming.shows(field.skip),
-                    may_be_absent: ty.is_nullable_union() || ty.is_null(),
+                    may_be_absent: baml_type::accepts_null::accepts_null(ty.as_ty(), &|head| {
+                        baml_type::normalize::TypeContext::alias_def(vm, head)
+                    }),
                     ty,
                 }
             })

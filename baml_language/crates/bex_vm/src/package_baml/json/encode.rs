@@ -24,6 +24,10 @@
 //! override's result is spliced in as it came back, so the collect pass must
 //! skip exactly the fields the walk skips, or the pre-order positions of the
 //! two drift apart.
+//!
+//! JSON text has no NaN or infinity, so `stringify` refuses a float that is
+//! not finite, wherever it is. A `json` value is in memory and holds one as
+//! it is, so `from` keeps it.
 
 use std::collections::HashMap;
 
@@ -113,12 +117,13 @@ pub(super) fn render_json(
 }
 
 /// Structural JSON text for `value`, ignoring `baml.ToJson` overrides: the
-/// fallback a CSV markdown cell uses for a nested value.
+/// fallback a CSV markdown cell uses for a nested value. A float that is not
+/// finite is written `null`, as a cell always has.
 pub(in crate::package_baml) fn structural_json_text(
     vm: &mut BexVm,
     value: Value,
 ) -> Result<String, VmRustFnError> {
-    let mut sink = TextSink::new("");
+    let mut sink = TextSink::new("", NonFinite::Null);
     match walk(
         vm,
         value,
@@ -147,7 +152,7 @@ fn write(
             Ok(sink.root.unwrap_or(Value::NULL))
         }
         Finish::Text { indent } => {
-            let mut sink = TextSink::new(indent);
+            let mut sink = TextSink::new(indent, NonFinite::Refuse);
             walk(vm, value, options, overrides, &mut sink)?;
             Ok(Value::object(vm.alloc_string(sink.into_string())))
         }
@@ -415,12 +420,25 @@ impl Continuation for ToJsonWalkContinuation {
 
 // ─── The walk ────────────────────────────────────────────────────────────────
 
+/// What a sink does with a float that is not finite.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NonFinite {
+    /// Holds it as it is: a `json` value can.
+    Keep,
+    /// Writes `null` instead.
+    Null,
+    /// Refuses it: JSON text has no NaN or infinity.
+    Refuse,
+}
+
 /// Where a JSON value goes: text, or a `json` value.
 trait Sink {
+    /// What the sink does with a float that is not finite.
+    fn non_finite(&self) -> NonFinite;
     fn null(&mut self, vm: &mut BexVm);
     fn bool(&mut self, vm: &mut BexVm, b: bool);
     fn int(&mut self, vm: &mut BexVm, i: i64);
-    /// A finite float object.
+    /// A float object: a finite one, or one the sink keeps.
     fn float(&mut self, vm: &mut BexVm, value: Value, f: f64);
     /// A bigint object.
     fn bigint(&mut self, vm: &mut BexVm, value: Value);
@@ -496,7 +514,8 @@ enum Shape {
     Map,
     Instance(HeapPtr),
     Variant(HeapPtr, usize),
-    Unserializable(&'static str),
+    /// No JSON form: the message, and the `SerializationError.reason` tag.
+    Unserializable(&'static str, &'static str),
 }
 
 /// What the walk does with a heap value inside an override's result.
@@ -663,12 +682,22 @@ impl Walker<'_, '_> {
             Object::Variant(variant) => Shape::Variant(variant.enm, variant.index),
             Object::Uint8Array(_) => Shape::Unserializable(
                 "uint8array requires explicit encoding (use to_base64() or to_hex())",
+                "uint8array",
             ),
-            _ => Shape::Unserializable("value has no json representation"),
+            Object::Function(_)
+            | Object::Closure(_)
+            | Object::BoundMethod(_)
+            | Object::GenericFunction(_)
+            | Object::HostClosure(_) => {
+                Shape::Unserializable("a function has no JSON form", "function")
+            }
+            Object::Future(_) => {
+                Shape::Unserializable("a future has no JSON form (await it first)", "future")
+            }
+            _ => Shape::Unserializable("value has no json representation", "unserializable"),
         };
         match shape {
-            Shape::Float(f) if f.is_finite() => sink.float(vm, value, f),
-            Shape::Float(_) => sink.null(vm),
+            Shape::Float(f) => self.float(vm, value, f, sink)?,
             Shape::String => sink.string(vm, value),
             Shape::Bigint => sink.bigint(vm, value),
             Shape::Array(values) => self.open_array(vm, ptr, values, false, sink)?,
@@ -706,8 +735,34 @@ impl Walker<'_, '_> {
                     }
                 }
             }
-            Shape::Unserializable(message) => {
-                return Err(self.refuse(vm, message, "unserializable"));
+            Shape::Unserializable(message, reason) => {
+                return Err(self.refuse(vm, message, reason));
+            }
+        }
+        Ok(())
+    }
+
+    /// Write the float object `value`, holding `f`, as the sink takes it.
+    fn float(
+        &self,
+        vm: &mut BexVm,
+        value: Value,
+        f: f64,
+        sink: &mut impl Sink,
+    ) -> Result<(), Stopped> {
+        if f.is_finite() {
+            sink.float(vm, value, f);
+            return Ok(());
+        }
+        match sink.non_finite() {
+            NonFinite::Keep => sink.float(vm, value, f),
+            NonFinite::Null => sink.null(vm),
+            NonFinite::Refuse => {
+                return Err(self.refuse(
+                    vm,
+                    format!("{f} has no JSON form: a JSON number is finite"),
+                    "non_finite",
+                ));
             }
         }
         Ok(())
@@ -737,8 +792,8 @@ impl Walker<'_, '_> {
             _ => JsonShape::Null,
         };
         match shape {
-            JsonShape::Float(f) if f.is_finite() => sink.float(vm, value, f),
-            JsonShape::Float(_) | JsonShape::Null | JsonShape::Variant(None) => sink.null(vm),
+            JsonShape::Float(f) => self.float(vm, value, f, sink)?,
+            JsonShape::Null | JsonShape::Variant(None) => sink.null(vm),
             JsonShape::String => sink.string(vm, value),
             JsonShape::Bigint => sink.bigint(vm, value),
             JsonShape::Array(values) => self.open_array(vm, ptr, values, true, sink)?,
@@ -797,7 +852,7 @@ impl Walker<'_, '_> {
             unreachable!("the value was just read as a map")
         };
         if !super::string_keyed(vm, map) {
-            return Err(self.refuse(vm, STRING_MAP_REQUIRED, "unserializable"));
+            return Err(self.refuse(vm, STRING_MAP_REQUIRED, "map_key"));
         }
         let children = map
             .snapshot_entries()
@@ -937,14 +992,16 @@ struct TextSink<'i> {
     out: Vec<u8>,
     indent: &'i [u8],
     level: usize,
+    non_finite: NonFinite,
 }
 
 impl<'i> TextSink<'i> {
-    fn new(indent: &'i str) -> Self {
+    fn new(indent: &'i str, non_finite: NonFinite) -> Self {
         Self {
             out: Vec::new(),
             indent: indent.as_bytes(),
             level: 0,
+            non_finite,
         }
     }
 
@@ -978,6 +1035,10 @@ impl<'i> TextSink<'i> {
 }
 
 impl Sink for TextSink<'_> {
+    fn non_finite(&self) -> NonFinite {
+        self.non_finite
+    }
+
     fn null(&mut self, _: &mut BexVm) {
         self.out.extend_from_slice(b"null");
     }
@@ -1126,6 +1187,10 @@ impl ValueSink {
 }
 
 impl Sink for ValueSink {
+    fn non_finite(&self) -> NonFinite {
+        NonFinite::Keep
+    }
+
     fn null(&mut self, _: &mut BexVm) {
         self.emit(Value::NULL);
     }

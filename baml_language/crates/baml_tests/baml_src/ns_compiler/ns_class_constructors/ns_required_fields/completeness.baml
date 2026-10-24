@@ -17,17 +17,23 @@ test "aggregates omitted fields in declaration order" {
     )
 }
 
-test "unknown requires a value but accepts explicit null" {
-    root.compiler.AssertRejected(
+// `null` is a value of `unknown`, and of `json`, whose union holds it, so a
+// field of either type may be omitted, as one missing from JSON is (B-1913).
+test "unknown and json admit null, so their fields may be omitted" {
+    root.compiler.AssertCompiles(
         {
             "omitted.baml": `
-                class Holder { value: unknown }
-                function run() -> Holder { Holder {} }
+                class U { a: int, extra: unknown }
+                function run() -> U { U { a: 1 } }
             `,
         },
-        root.compiler.ExactDiagnostic {
-            code: "E0001",
-            message: "class `Holder` is missing required field: `value`",
+    );
+    root.compiler.AssertCompiles(
+        {
+            "json.baml": `
+                class Payload { id: string, body: baml.json.json }
+                function run() -> Payload { Payload { id: "x" } }
+            `,
         },
     );
     root.compiler.AssertCompiles(
@@ -172,6 +178,29 @@ test "alias resolution controls whether omission is allowed" {
                 class Holder { value: MaybeText }
                 function run() -> Holder { Holder {} }
             `,
+        },
+    );
+    // A recursive alias is looked through to its definition.
+    root.compiler.AssertCompiles(
+        {
+            "recursive.baml": `
+                type Chain = Chain[] | null
+                class Holder { value: Chain }
+                function run() -> Holder { Holder {} }
+            `,
+        },
+    );
+    root.compiler.AssertRejected(
+        {
+            "recursive_required.baml": `
+                type Tree = Tree[] | int
+                class Holder { value: Tree }
+                function run() -> Holder { Holder {} }
+            `,
+        },
+        root.compiler.ExactDiagnostic {
+            code: "E0001",
+            message: "class `Holder` is missing required field: `value`",
         },
     )
 }

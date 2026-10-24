@@ -9,7 +9,7 @@
 //! optional, in a list, in a map — a `baml.FromJson` rule that provides
 //! `from_json` builds the value, and anything else decodes structurally, its
 //! children by the same rule. The one place shape decides is a union: its
-//! member is chosen by the first structural match, because a provided
+//! member is the best structural match ([`super::union`]), because a provided
 //! `from_json` that throws unwinds the whole walk and cannot be tried and
 //! fallen through; the chosen member then decodes by the rule above.
 //!
@@ -42,6 +42,7 @@ use super::{
     CYCLIC_JSON, MediaFields, OpenSet, STRING_MAP_REQUIRED,
     plan::{ClassPlan, Plans},
     raise_decode,
+    union::{self, Kind},
 };
 use crate::{
     BexVm,
@@ -778,8 +779,8 @@ impl Continuation for Decoder {
 ///
 /// - a nullable union: `null` is `null`, anything else decodes as the
 ///   non-null payload;
-/// - any other union: the first member `json` matches structurally is the
-///   one, and decodes by the rules below;
+/// - any other union: the member `json` matches structurally best
+///   ([`super::union`]) is the one, and decodes by the rules below;
 /// - a list or map opens, to decode each element or value;
 /// - a class, interface, or enum (media aside): a `baml.FromJson` rule that
 ///   provides `from_json` wins — unless this is a [`Root::Structural`] root,
@@ -808,15 +809,20 @@ fn decode_one(
             // the whole walk, so a member cannot be tried through its rule
             // and fallen through to the next.
             validate(vm, json, path)?;
-            for member in members {
-                if !could_decode(vm, json, member) {
-                    continue;
-                }
+            let keys = json.as_object_ptr().map(union::Keys::Map);
+            let order = union::Candidates::of(vm, members, kind_of(vm, json)).order(
+                vm,
+                members,
+                &mut lookups.plans,
+                keys.as_ref(),
+            );
+            for index in order {
+                let member = &members[index];
                 let mut probe = Structural::quiet(&mut lookups.plans);
                 let value = match probe.decode(vm, json, member) {
                     Ok(value) => value,
                     Err(Failed::Deep) => return Err(raise_decode(vm, too_deep_message(), &path())),
-                    Err(Failed::Quiet | Failed::Raised(_)) => continue,
+                    Err(Failed::Quiet | Failed::Report(_) | Failed::Raised(_)) => continue,
                 };
                 // Without an override in reach, the member decodes to what
                 // the probe built.
@@ -825,7 +831,12 @@ fn decode_one(
                 }
                 return decode_one(vm, json, &member.clone(), Root::Dispatch, lookups, path);
             }
-            Err(raise_decode(vm, "no union member matched", &path()))
+            match Structural::reporting(&mut lookups.plans, path()).union_failed(vm, json, members)
+            {
+                Failed::Report(report) => Err(raise_decode(vm, report.message, &report.path)),
+                Failed::Raised(error) => Err(error),
+                Failed::Quiet | Failed::Deep => Err(raise_decode(vm, too_deep_message(), &path())),
+            }
         }
         RealizedTy::List(element) => open_list(vm, json, element, path).map(Decoded::Open),
         RealizedTy::Map { key, value } => open_map(vm, json, key, value, path).map(Decoded::Open),
@@ -876,44 +887,17 @@ fn decode_leaf(
     Structural::reporting(&mut lookups.plans, path()).decode_reported(vm, json, ty)
 }
 
-/// Whether a value of `json`'s JSON kind could decode as `member` at all: a
-/// cheap check before a probe.
-fn could_decode(vm: &BexVm, json: Value, member: &RealizedTy) -> bool {
-    let kind = match json.kind() {
-        ValueKind::Null | ValueKind::OmittedArg => return true,
-        ValueKind::Bool(_) => Kind::Bool,
-        ValueKind::Int(_) => Kind::Number,
-        ValueKind::Object(ptr) => match vm.get_object(ptr) {
-            Object::Float(_) | Object::Bigint(_) => Kind::Number,
-            Object::String(_) | Object::Variant(_) => Kind::String,
-            Object::Array(_) => Kind::Array,
-            Object::Map(_) => Kind::Object,
-            _ => return true,
-        },
-    };
-    match member {
-        RealizedTy::Bool => kind == Kind::Bool,
-        RealizedTy::Int | RealizedTy::Float => kind == Kind::Number,
-        RealizedTy::Bigint => matches!(kind, Kind::Number | Kind::String),
-        RealizedTy::String | RealizedTy::Enum(_) | RealizedTy::EnumVariant(..) => {
-            kind == Kind::String
-        }
-        RealizedTy::List(_) => kind == Kind::Array,
-        RealizedTy::Map { .. } | RealizedTy::Class(..) | RealizedTy::Media(_) => {
-            kind == Kind::Object
-        }
-        RealizedTy::Null => false,
-        _ => true,
+/// The JSON kind of `json`, as a union sorts its members by: what
+/// [`node_of`] reads it as.
+fn kind_of(vm: &BexVm, json: Value) -> Kind {
+    match node_of(vm, json) {
+        Node::Null => Kind::Null,
+        Node::Bool(_) => Kind::Bool,
+        Node::Int(_) | Node::Bigint(_) | Node::Float(_) => Kind::Number,
+        Node::String(_) | Node::Variant(_) => Kind::String,
+        Node::Array(_) => Kind::Array,
+        Node::Object(_) => Kind::Object,
     }
-}
-
-#[derive(PartialEq, Eq)]
-enum Kind {
-    Bool,
-    Number,
-    String,
-    Array,
-    Object,
 }
 
 /// The entries of the JSON object `json` at `path`: a string-keyed map and
@@ -1229,8 +1213,16 @@ pub(super) enum Failed {
     /// Quietly, past [`MAX_STRUCTURAL_DEPTH`]: no other member of a union can
     /// do better, so a union does not try the next.
     Deep,
-    /// With the error a `DecodeError` reports.
+    /// With what a `DecodeError` reports.
+    Report(Report),
+    /// With an error of its own, raised already.
     Raised(VmRustFnError),
+}
+
+/// What a `DecodeError` says: the misfit, and where it is.
+pub(super) struct Report {
+    pub(super) message: String,
+    pub(super) path: String,
 }
 
 impl From<VmRustFnError> for Failed {
@@ -1330,7 +1322,7 @@ impl Node {
 
 /// Reads a `json` value as a type, structurally: no `baml.FromJson` rule is
 /// consulted. Quiet, it only says whether the value fits; reporting, it
-/// raises the `DecodeError` naming the first misfit and its path.
+/// names the first misfit and its path.
 ///
 /// Reporting assumes the value passed [`validate`]: neither it nor its parts
 /// contain themselves, and every map in it has string keys.
@@ -1372,6 +1364,7 @@ impl<'p> Structural<'p> {
     ) -> Result<Value, VmRustFnError> {
         match self.decode(vm, json, ty) {
             Ok(value) => Ok(value),
+            Err(Failed::Report(report)) => Err(raise_decode(vm, report.message, &report.path)),
             Err(Failed::Raised(error)) => Err(error),
             // Reporting raises every misfit it meets.
             Err(Failed::Quiet | Failed::Deep) => {
@@ -1385,9 +1378,12 @@ impl<'p> Structural<'p> {
         }
     }
 
-    fn fail(&self, vm: &mut BexVm, message: impl FnOnce() -> String) -> Failed {
+    fn fail(&self, _vm: &mut BexVm, message: impl FnOnce() -> String) -> Failed {
         match &self.path {
-            Some(path) => Failed::Raised(raise_decode(vm, message(), path)),
+            Some(path) => Failed::Report(Report {
+                message: message(),
+                path: path.clone(),
+            }),
             None => Failed::Quiet,
         }
     }
@@ -1517,9 +1513,12 @@ impl<'p> Structural<'p> {
     }
 
     /// Past [`MAX_STRUCTURAL_DEPTH`].
-    fn too_deep(&self, vm: &mut BexVm) -> Failed {
+    fn too_deep(&self, _vm: &mut BexVm) -> Failed {
         match &self.path {
-            Some(path) => Failed::Raised(raise_decode(vm, too_deep_message(), path)),
+            Some(path) => Failed::Report(Report {
+                message: too_deep_message(),
+                path: path.clone(),
+            }),
             None => Failed::Deep,
         }
     }
@@ -1601,26 +1600,107 @@ impl<'p> Structural<'p> {
         }
     }
 
-    /// Try each member structurally; first match wins.
+    /// The member that matches best ([`super::union`]), tried structurally
+    /// in order until one decodes.
     fn union(
         &mut self,
         vm: &mut BexVm,
         json: Value,
         members: &[RealizedTy],
     ) -> Result<Value, Failed> {
-        for member in members {
+        // `T?`, the common case: `null` is `null`, anything else is a `T`.
+        if let Some(other) = union::other_than_null(members) {
+            return if json.is_null() {
+                Ok(Value::NULL)
+            } else {
+                self.decode(vm, json, other)
+            };
+        }
+        let keys = json.as_object_ptr().map(union::Keys::Map);
+        let order = union::Candidates::of(vm, members, kind_of(vm, json)).order(
+            vm,
+            members,
+            self.plans,
+            keys.as_ref(),
+        );
+        for index in order {
             let mut probe = Structural {
                 plans: &mut *self.plans,
                 path: None,
                 depth: self.depth,
             };
-            match probe.decode(vm, json, member) {
+            match probe.decode(vm, json, &members[index]) {
                 Ok(value) => return Ok(value),
                 Err(Failed::Deep) => return Err(self.too_deep(vm)),
-                Err(Failed::Quiet | Failed::Raised(_)) => {}
+                Err(Failed::Quiet | Failed::Report(_) | Failed::Raised(_)) => {}
             }
         }
-        Err(self.fail(vm, || "no union member matched".into()))
+        Err(self.union_failed(vm, json, members))
+    }
+
+    /// Why no member of the union `members` decodes `json`. Each member a
+    /// JSON value can be is named with its own misfit; when only one is left,
+    /// the misfit is that member's own. A member no JSON value can be is named
+    /// with the reason, and `null` only when `json` is `null`.
+    fn union_failed(&mut self, vm: &mut BexVm, json: Value, members: &[RealizedTy]) -> Failed {
+        let Some(base) = self.path.clone() else {
+            return Failed::Quiet;
+        };
+        let impossible = impossible_members(vm, members, self.naming());
+        let is_null = kind_of(vm, json) == Kind::Null;
+        let mut misfits = Vec::new();
+        for (member, ty) in members.iter().enumerate() {
+            if impossible.iter().any(|(index, _)| *index == member) || (ty.is_null() && !is_null) {
+                continue;
+            }
+            let mut probe = Structural {
+                plans: &mut *self.plans,
+                path: Some(String::new()),
+                depth: self.depth,
+            };
+            match probe.decode(vm, json, ty) {
+                Err(Failed::Report(report)) => misfits.push((ty, report)),
+                Err(Failed::Raised(error)) => return Failed::Raised(error),
+                Err(Failed::Quiet | Failed::Deep) => return self.too_deep(vm),
+                // The quiet read refused it, so the reporting one does too.
+                Ok(_) => {}
+            }
+        }
+        let note = if impossible.is_empty() {
+            String::new()
+        } else {
+            let reasons: Vec<&str> = impossible
+                .iter()
+                .map(|(_, reason)| reason.as_str())
+                .collect();
+            format!(" ({})", reasons.join("; "))
+        };
+        Failed::Report(match misfits.as_slice() {
+            [] => Report {
+                message: format!("no union member can come from JSON{note}"),
+                path: base,
+            },
+            [(_, only)] => Report {
+                message: format!("{}{note}", only.message),
+                path: format!("{base}{}", only.path),
+            },
+            misfits => {
+                let named: Vec<String> = misfits
+                    .iter()
+                    .map(|(ty, report)| {
+                        if report.path.is_empty() {
+                            format!("`{ty}`: {}", report.message)
+                        } else {
+                            format!("`{ty}`: {} at `{}`", report.message, report.path)
+                        }
+                    })
+                    .collect();
+                Report {
+                    message: format!("no union member matched: {}{note}", named.join("; ")),
+                    path: base,
+                }
+            }
+        })
     }
 
     fn literal(
@@ -1787,18 +1867,21 @@ impl<'p> Structural<'p> {
                 values.push(empty);
                 continue;
             }
+            // A missing field is reported where the object is, as the walk
+            // behind `to<T>` reports it.
+            let field_json = match super::object_get(vm, ptr, field.hash(), &field.key) {
+                Some(json) => json,
+                None if field.may_be_absent => Value::NULL,
+                None => {
+                    return Err(self.fail(vm, || format!("missing required field `{}`", field.key)));
+                }
+            };
             let value = self.within(
                 |path| {
                     path.push('.');
                     path.push_str(&field.key);
                 },
-                |this| match super::object_get(vm, ptr, field.hash(), &field.key) {
-                    Some(json) => this.decode(vm, json, &field.ty),
-                    None if field.may_be_absent => this.decode(vm, Value::NULL, &field.ty),
-                    None => {
-                        Err(this.fail(vm, || format!("missing required field `{}`", field.key)))
-                    }
-                },
+                |this| this.decode(vm, field_json, &field.ty),
             )?;
             values.push(value);
         }
@@ -1843,7 +1926,10 @@ impl<'p> Structural<'p> {
         match super::copy_json(vm, json) {
             Ok(value) => Ok(value),
             Err((message, inner)) => Err(match &self.path {
-                Some(path) => Failed::Raised(raise_decode(vm, message, &format!("{path}{inner}"))),
+                Some(path) => Failed::Report(Report {
+                    message: message.to_owned(),
+                    path: format!("{path}{inner}"),
+                }),
                 None => Failed::Quiet,
             }),
         }
@@ -1856,4 +1942,35 @@ fn object_string_keyed(vm: &BexVm, ptr: HeapPtr) -> bool {
         Object::Map(map) => super::string_keyed(vm, map),
         _ => false,
     }
+}
+
+/// The members of a union no JSON value can be, each with why: a member with
+/// no JSON form, such as `uint8array`, or with no values at all.
+fn impossible_members(
+    vm: &BexVm,
+    members: &[RealizedTy],
+    naming: JsonNaming,
+) -> Vec<(usize, String)> {
+    use baml_type::json_inhabit::{JsonInhabitance, JsonStatus};
+    let defs = crate::json_defs::HeapDefs::decoding(vm);
+    let Ok(analysis) =
+        JsonInhabitance::of_all(members.iter().map(RealizedTy::as_runtime_ty), &defs, naming)
+    else {
+        return Vec::new();
+    };
+    members
+        .iter()
+        .enumerate()
+        .filter(|(_, member)| analysis.status(member.as_runtime_ty()) != JsonStatus::Json)
+        .map(|(index, member)| {
+            let named = format!("`{member}`");
+            let reason = analysis.witness(member.as_runtime_ty()).reason();
+            // "`uint8array` has no JSON form" reads "it has no JSON form".
+            let reason = match reason.strip_prefix(&named) {
+                Some(rest) => format!("it{rest}"),
+                None => reason,
+            };
+            (index, format!("{named} is not possible here: {reason}"))
+        })
+        .collect()
 }

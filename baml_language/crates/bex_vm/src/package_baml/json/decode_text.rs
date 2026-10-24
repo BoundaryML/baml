@@ -26,6 +26,7 @@ use super::{
     MediaFields,
     plan::Plans,
     text::{Entries, Parser, Reader, Stop},
+    union::{Candidates, Keys, Kind},
 };
 use crate::BexVm;
 
@@ -71,14 +72,9 @@ impl TextDecoder<'_, '_> {
                 vm.try_alloc_bigint(Arc::new(bigint)).map_err(|_| Stop)
             }
             RealizedTy::Float => {
-                let number = reader.number()?;
-                let float = match number.as_f64() {
-                    Some(float) => float,
-                    // A fraction or exponent past `f64` parses as NaN, which
-                    // `to<float>` keeps; an integer that large is a bigint.
-                    None if !number.integral => f64::NAN,
-                    None => return Err(Stop),
-                };
+                // A fraction or exponent past `f64` is a syntax error; an
+                // integer that large is a bigint, which no `float` holds.
+                let float = reader.number()?.as_f64().ok_or(Stop)?;
                 Ok(Value::object(vm.alloc_float(float)))
             }
             RealizedTy::String => {
@@ -158,11 +154,32 @@ impl TextDecoder<'_, '_> {
         }
     }
 
-    /// The first member the value decodes as, in declaration order.
+    /// The member that matches best ([`super::union`]), tried in order until
+    /// one decodes.
     fn union(&mut self, vm: &mut BexVm, members: &[RealizedTy]) -> Result<Value, Stop> {
+        let first = self.parser.reader.peek().ok_or(Stop)?;
+        // `T?`, the common case: `null` is `null`, anything else is a `T`.
+        if let Some(other) = super::union::other_than_null(members) {
+            return if first == b'n' {
+                self.parser.reader.null().map(|()| Value::NULL)
+            } else {
+                self.value(vm, other)
+            };
+        }
+        let kind = Kind::of_text(first);
         let start = self.parser.reader.mark();
-        for member in members {
-            match self.value(vm, member) {
+        let candidates = Candidates::of(vm, members, kind);
+        // The keys are read ahead only when the order depends on them.
+        let scanned = if candidates.counts_keys() {
+            let keys = self.parser.reader.object_keys()?;
+            self.parser.reader.reset(start);
+            Some(keys)
+        } else {
+            None
+        };
+        let keys = scanned.as_deref().map(Keys::Text);
+        for index in candidates.order(vm, members, self.plans, keys.as_ref()) {
+            match self.value(vm, &members[index]) {
                 Ok(value) => return Ok(value),
                 Err(Stop) => self.parser.reader.reset(start),
             }
