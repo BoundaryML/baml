@@ -2,7 +2,7 @@
 
 Stack-based bytecode interpreter for the BAML language, inspired by CPython and Lox.
 
-Call-frame records and evaluation-stack arguments, locals, and operands share a per-VM 10 MiB backing-storage budget. See [stack storage design and measurements](FRAME_STORAGE.md) for the accounting rules and runtime comparison.
+Every `BexThread`, including the main thread, has an independent 10 MiB stack limit. Its call-frame records and evaluation-stack arguments, locals, and operands count toward that thread's limit. The combined stacks of multiple threads may exceed 10 MiB. See [stack storage design and measurements](FRAME_STORAGE.md) for the accounting rules and runtime comparison.
 
 ## Architecture Overview
 

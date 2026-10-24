@@ -8,7 +8,7 @@ use std::{
 use baml_test_support::compile_source;
 use bex_vm::{
     BexVm, VmExecState,
-    vm::{BytecodeFrame, Frame, NativeFrame, STACK_STORAGE_BUDGET_BYTES},
+    vm::{BytecodeFrame, Frame, NativeFrame, THREAD_STACK_BUDGET_BYTES},
 };
 use bex_vm_types::{EarlyYieldCheck, Object, Program, Value, errors::VmError};
 
@@ -55,7 +55,7 @@ const SOURCE: &str = r#"
 
 /// A conservative recursion upper bound, even before accounting for values.
 fn maximum_slots() -> usize {
-    STACK_STORAGE_BUDGET_BYTES / size_of::<Frame>()
+    THREAD_STACK_BUDGET_BYTES / size_of::<Frame>()
 }
 
 /// Create an opcode-yielding VM so storage peaks remain observable.
@@ -97,7 +97,7 @@ fn drive(vm: &mut BexVm) -> Observation {
         // Also stop a regressed unbounded allocator promptly, rather than
         // letting this negative control exhaust the test process's memory.
         assert!(vm.frames.len() <= maximum_slots());
-        assert!(allocated <= STACK_STORAGE_BUDGET_BYTES);
+        assert!(allocated <= THREAD_STACK_BUDGET_BYTES);
     };
     let result = loop {
         sample(vm);
@@ -178,7 +178,7 @@ fn exact_and_general_calls_execute_to_the_measured_budget() {
         let observation = drive(&mut vm);
         assert_eq!(observation.result, Ok(depth));
         assert!(observation.value_peak > observation.peak);
-        assert!(observation.bytes <= STACK_STORAGE_BUDGET_BYTES);
+        assert!(observation.bytes <= THREAD_STACK_BUDGET_BYTES);
 
         vm.set_entry_point(entry_ptr, &[Value::int(depth + 1)]);
         assert_eq!(
@@ -233,7 +233,7 @@ fn the_next_frame_is_a_panic_with_the_existing_catching_boundary() {
         let entry_ptr = frame.function;
         let observation = drive(&mut vm);
         assert_eq!(observation.result, expected, "{entry}");
-        assert!(observation.bytes <= STACK_STORAGE_BUDGET_BYTES);
+        assert!(observation.bytes <= THREAD_STACK_BUDGET_BYTES);
         if expected.is_ok() {
             assert!(vm.frames.is_empty());
             vm.set_entry_point(entry_ptr, &[Value::int(1000)]);
@@ -267,7 +267,7 @@ fn indirect_and_native_callback_frames_share_the_budget() {
             Err("panics.StackOverflow".to_string()),
             "{entry}"
         );
-        assert!(observation.bytes <= STACK_STORAGE_BUDGET_BYTES);
+        assert!(observation.bytes <= THREAD_STACK_BUDGET_BYTES);
     }
     // Exercise three root-depth offsets around native callback dispatch.
     // Either record or value growth may exhaust the combined budget; the
@@ -284,7 +284,7 @@ fn indirect_and_native_callback_frames_share_the_budget() {
             Err("panics.StackOverflow".to_string()),
             "{entry}"
         );
-        assert!(observation.bytes <= STACK_STORAGE_BUDGET_BYTES);
+        assert!(observation.bytes <= THREAD_STACK_BUDGET_BYTES);
     }
     let mut vm = make_vm(
         compile_source(SOURCE),

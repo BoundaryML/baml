@@ -2,21 +2,21 @@ use std::ops::{Bound, Deref, DerefMut, Index, IndexMut, RangeBounds};
 
 use bex_vm_types::{StackIndex, Value};
 
-use crate::{VmPanic, vec_ext::CopyVecExt, vm::frame_stack::StackBudget};
+use crate::{VmPanic, vec_ext::CopyVecExt, vm::frame_stack::ThreadStackBudget};
 
-/// Argument, local, and operand slots charged to the VM's shared stack budget.
+/// Argument, local, and operand slots charged to this BexThread's stack budget.
 #[derive(Default)]
 pub struct EvalStack {
     values: Vec<Value>,
     pending_panic: Option<VmPanic>,
-    budget: StackBudget,
+    budget: ThreadStackBudget,
     #[cfg(test)]
     pub(crate) refuse_next_growth: bool,
 }
 
 impl EvalStack {
     /// Create value storage sharing the call-frame storage budget.
-    pub(crate) fn new(budget: StackBudget) -> Self {
+    pub(crate) fn new(budget: ThreadStackBudget) -> Self {
         Self {
             values: Vec::new(),
             pending_panic: None,

@@ -167,8 +167,8 @@ impl Drop for ObjectMut<'_> {
 }
 
 pub(crate) mod frame_stack;
-use frame_stack::StackBudget;
-pub use frame_stack::{FrameStack, STACK_STORAGE_BUDGET_BYTES};
+use frame_stack::ThreadStackBudget;
+pub use frame_stack::{FrameStack, THREAD_STACK_BUDGET_BYTES};
 
 #[derive(Clone, Copy)]
 struct CallOptions<'a> {
@@ -463,7 +463,7 @@ pub(crate) mod tests {
 
     pub(crate) fn test_vm(compile_time_objects: Vec<Object>) -> BexVm {
         let heap = BexHeap::new(compile_time_objects);
-        let budget = super::StackBudget::default();
+        let budget = super::ThreadStackBudget::default();
         BexVm {
             frames: FrameStack::new(budget.clone()),
             pending_entry_frame_panic: None,
@@ -1642,7 +1642,8 @@ pub struct BexVm {
 
     /// Evaluation stack.
     ///
-    /// This stack only stores values.
+    /// Arguments, locals, and operands count toward the same per-thread byte
+    /// limit as `frames`. Heap objects referenced by these slots do not.
     pub stack: EvalStack,
 
     pub op_count: u64,
@@ -2423,7 +2424,9 @@ impl BexVm {
         let early_yield =
             early_yield.with_gc_pressure(heap.gc_pressure(), bex_heap::gc_policy::POLL_INTERVAL);
 
-        let budget = StackBudget::default();
+        // Each BexThread owns a VM, including the main thread. Its stack limit
+        // is independent of the shared heap and every other thread's stacks.
+        let budget = ThreadStackBudget::default();
         Self {
             frames: FrameStack::new(budget.clone()),
             pending_entry_frame_panic: None,

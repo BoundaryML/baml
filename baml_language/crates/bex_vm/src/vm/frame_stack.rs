@@ -1,4 +1,4 @@
-//! Safe, fallible backing storage shared by VM frames and evaluation values.
+//! Safe, fallible backing storage for one BexThread's frames and evaluation values.
 
 #![forbid(unsafe_code)]
 
@@ -13,22 +13,24 @@ use std::{
 use super::Frame;
 use crate::VmPanic;
 
-/// Per-VM budget for allocated frame and evaluation-value backing capacity.
+/// Maximum allocated stack backing bytes per BexThread, including the main thread.
+/// Frame records and argument/local/operand slots count toward this limit.
 /// Referenced heap objects and the host native stack are separate.
-pub const STACK_STORAGE_BUDGET_BYTES: usize = 10 * 1024 * 1024;
+pub const THREAD_STACK_BUDGET_BYTES: usize = 10 * 1024 * 1024;
 
-/// Accounting shared only by the two backing arrays belonging to one VM.
+/// Accounting shared only by the frame and value arrays of one BexThread's VM.
+/// Every VM constructs a fresh counter; it is never inherited by spawned threads.
 #[derive(Clone, Default)]
-pub(crate) struct StackBudget(Arc<AtomicUsize>);
+pub(crate) struct ThreadStackBudget(Arc<AtomicUsize>);
 
-impl StackBudget {
+impl ThreadStackBudget {
     /// Charge capacity only if the combined backing arrays still fit.
     fn charge(&self, bytes: usize) -> Result<(), VmPanic> {
         let mut used = self.0.load(Ordering::Relaxed);
         loop {
             let next = used
                 .checked_add(bytes)
-                .filter(|&n| n <= STACK_STORAGE_BUDGET_BYTES)
+                .filter(|&n| n <= THREAD_STACK_BUDGET_BYTES)
                 .ok_or(VmPanic::StackOverflow)?;
             match self
                 .0
@@ -73,7 +75,7 @@ impl StackBudget {
     ) -> Result<(), VmPanic> {
         let old_bytes = storage.capacity() * size_of::<T>();
         let used = self.0.load(Ordering::Relaxed);
-        let maximum = (STACK_STORAGE_BUDGET_BYTES - used + old_bytes) / size_of::<T>();
+        let maximum = (THREAD_STACK_BUDGET_BYTES - used + old_bytes) / size_of::<T>();
         if needed > maximum {
             return Err(VmPanic::StackOverflow);
         }
@@ -117,7 +119,7 @@ impl StackBudget {
 /// Both kinds of VM stack use the same fallible reservation boundary.
 pub struct StackStorage<T> {
     storage: Vec<T>,
-    budget: StackBudget,
+    budget: ThreadStackBudget,
     #[cfg(test)]
     pub(super) refuse_next_growth: bool,
 }
@@ -127,13 +129,13 @@ pub type FrameStack = StackStorage<Frame>;
 
 impl<T> Default for StackStorage<T> {
     fn default() -> Self {
-        Self::new(StackBudget::default())
+        Self::new(ThreadStackBudget::default())
     }
 }
 
 impl<T> StackStorage<T> {
     /// Construct one backing array sharing this VM's budget.
-    pub(crate) fn new(budget: StackBudget) -> Self {
+    pub(crate) fn new(budget: ThreadStackBudget) -> Self {
         assert_ne!(size_of::<T>(), 0, "VM stack records must have a byte size");
         Self {
             storage: Vec::new(),
@@ -253,17 +255,17 @@ mod tests {
 
     #[test]
     fn frames_and_values_share_one_budget_and_preserve_live_data() {
-        let budget = StackBudget::default();
+        let budget = ThreadStackBudget::default();
         let mut records = StackStorage::<[u8; 112]>::new(budget.clone());
         let mut values = StackStorage::<[u8; 16]>::new(budget.clone());
         records.try_push([42; 112]).unwrap();
         values
-            .try_resize(STACK_STORAGE_BUDGET_BYTES / 32, [7; 16])
+            .try_resize(THREAD_STACK_BUDGET_BYTES / 32, [7; 16])
             .unwrap();
         while records.reserve_one().is_ok() {
             records.push_reserved([42; 112]);
         }
-        assert!(budget.0.load(Ordering::Relaxed) <= STACK_STORAGE_BUDGET_BYTES);
+        assert!(budget.0.load(Ordering::Relaxed) <= THREAD_STACK_BUDGET_BYTES);
         assert!(records.len() > 256);
         assert!(records.iter().all(|record| *record == [42; 112]));
         assert!(values.iter().all(|value| *value == [7; 16]));
@@ -306,7 +308,7 @@ mod tests {
         storage.try_push(42).unwrap();
         storage.refuse_next_growth = true;
         assert_eq!(
-            storage.try_reserve(STACK_STORAGE_BUDGET_BYTES),
+            storage.try_reserve(THREAD_STACK_BUDGET_BYTES),
             Err(VmPanic::StackOverflow)
         );
         assert!(storage.refuse_next_growth);
