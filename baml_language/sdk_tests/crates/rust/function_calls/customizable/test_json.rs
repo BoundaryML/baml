@@ -166,3 +166,51 @@ fn test_json_returned_from_host_callback_supports_typed_narrowing() {
         json_callback_kind(|value: Json| json!({ "wrapped": value }), json!("payload")).unwrap();
     assert_eq!(result, "object");
 }
+
+/// `1` wrapped in `depth` single-element lists.
+fn nested_json(depth: usize) -> Json {
+    (0..depth).fold(json!(1), |inner, _| json!([inner]))
+}
+
+#[test]
+fn test_json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument() {
+    let shallow = nested_json(30);
+    assert_eq!(round_trip_json(shallow.clone()).unwrap(), shallow);
+    // The wire carries at most 100 nested messages: a deeper value is
+    // refused as an invalid argument, however deep, never a crash.
+    for depth in [60, 1000] {
+        let err = round_trip_json(nested_json(depth)).expect_err("too deep for the wire");
+        let baml_bridge::Error::Runtime {
+            class_name,
+            message,
+            ..
+        } = &err
+        else {
+            panic!("expected an invalid-argument refusal at depth {depth}, got {err}");
+        };
+        assert_eq!(
+            class_name.as_deref(),
+            Some("baml.errors.InvalidArgument"),
+            "depth {depth}: {message}"
+        );
+    }
+}
+
+#[test]
+fn test_json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result() {
+    let shallow = nested_json(30);
+    let returned = shallow.clone();
+    assert_eq!(
+        call_json_callback(move |_: Json| returned.clone(), json!(null)).unwrap(),
+        shallow
+    );
+    // A result too deep for the wire is the bridge's own failure, fatal to
+    // the call as a panic; the caller gets it back rather than a crash.
+    for depth in [60, 200] {
+        let result = call_json_callback(move |_: Json| nested_json(depth), json!(null));
+        assert!(
+            matches!(result, Err(baml_bridge::Error::Panic { .. })),
+            "depth {depth}: {result:?}"
+        );
+    }
+}

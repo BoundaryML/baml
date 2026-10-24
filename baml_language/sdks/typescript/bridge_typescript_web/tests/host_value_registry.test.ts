@@ -44,7 +44,7 @@ describe("raw Web host-value registry", () => {
 
   it("starts with no abandoned in-flight completions", () => {
     expect(raw._testWebInFlightHostCallCount()).toBe(0);
-    expect(raw.completeWebHostCall(0xffff_ffff, 0, new Uint8Array())).toBe(false);
+    expect(raw.completeWebHostCallBridgeFailure(0xffff_ffff, "no such call")).toBe(false);
     expect(raw._testWebInFlightHostCallCount()).toBe(0);
   });
 

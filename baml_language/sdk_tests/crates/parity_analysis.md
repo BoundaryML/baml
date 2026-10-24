@@ -2,9 +2,9 @@
 
 This report inventories checked-in test declarations. It does not report whether tests passed.
 
-Distinct exact test IDs: 955. IDs with complete required parity: 207. Required gaps: 5146.
+Distinct exact test IDs: 955. IDs with complete required parity: 207. Required gaps: 5144.
 
-Baseline ratchet: BETTER. Required gaps: 5146 (baseline: 5149). Present declarations: 2568 (baseline: 2547). Newly missing required pairs: 0. Resolved baseline gaps: 3. Weakened requirements: 0.
+Baseline ratchet: BETTER. Required gaps: 5144 (baseline: 5146). Present declarations: 2570 (baseline: 2568). Newly missing required pairs: 0. Resolved baseline gaps: 2. Weakened requirements: 0.
 
 ## Python-baselined parity
 
@@ -18,7 +18,7 @@ Parity is the share of the 455 test IDs declared in `python_pydantic2` that are 
 | typescript_web_cloudflare_workers | 167 / 455 | 36.7% |
 | cpp | 137 / 455 | 30.1% |
 | csharp | 0 / 455 | 0.0% |
-| rust | 232 / 455 | 51.0% |
+| rust | 234 / 455 | 51.4% |
 | go | 18 / 455 | 4.0% |
 | java | 306 / 455 | 67.3% |
 | swift | 191 / 455 | 42.0% |
@@ -429,8 +429,8 @@ Parity is the share of the 455 test IDs declared in `python_pydantic2` that are 
 | function_calls/invocation_surfaces | - | - | - | - | - | - | - | y | - | - | all |  |
 | function_calls/invocation_surfaces_returned_callable_accepts_controls | - | - | - | - | y | - | - | - | - | - | all |  |
 | function_calls/json_bigint_round_trips_as_bigint | - | - | - | - | - | - | - | - | y | - | all |  |
-| function_calls/json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result | y | y | y | y | y | - | - | y | y | y | all |  |
-| function_calls/json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument | y | y | y | y | y | - | - | y | y | y | all |  |
+| function_calls/json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result | y | y | y | y | y | - | y | y | y | y | all |  |
+| function_calls/json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument | y | y | y | y | y | - | y | y | y | y | all |  |
 | function_calls/json_returned_from_host_callback_supports_typed_narrowing | y | y | y | y | y | - | y | y | y | y | python_pydantic2, typescript_node, typescript_web_chromium, typescript_web_cloudflare_workers, cpp, rust, go, java, swift | C# declares no function_calls suite (its native coverage is Rust-wrapped integration tests) |
 | function_calls/late_callback_keeps_async_local_storage_after_abort_typescript_only | - | y | - | - | - | - | - | - | - | - | typescript_node | Node callback Promises can outlive an aborted SDK waiter |
 | function_calls/layered_callback_context_inheritance_and_restoration_python_only | y | - | - | - | - | - | - | - | - | - | python_pydantic2 | Python sync/async re-entry and ContextVar propagation |
@@ -985,7 +985,6 @@ Parity is the share of the 455 test IDs declared in `python_pydantic2` that are 
 
 ### Resolved baseline gaps
 
-- `function_calls/canonical_json_composes_through_containers_and_classes` in `rust`
-- `function_calls/canonical_json_defaults_and_callbacks` in `rust`
-- `function_calls/canonical_json_round_trips_at_top_level_and_through_alias` in `rust`
+- `function_calls/json_nested_deeper_than_the_wire_carries_is_refused_as_a_callback_result` in `rust`
+- `function_calls/json_nested_deeper_than_the_wire_carries_is_refused_as_an_argument` in `rust`
 
