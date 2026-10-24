@@ -99,7 +99,7 @@ pub(crate) fn interface_head<'db>(
 /// inherent method, an interface's default body, or an `implements` block's
 /// provided body. The caller has already established that the function owns
 /// a slot ([`owns_no_slot`] is false).
-pub(crate) fn function_path<'db>(
+pub fn function_path<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     function: FunctionLoc<'db>,
 ) -> DeclPath {
@@ -149,7 +149,7 @@ pub(crate) fn function_path<'db>(
 /// The runtime identity of a MIR function ([`bex_vm_types::types::FunctionIdentity`]):
 /// a declared function's path in its package or its body key, a synthetic's
 /// parent and ordinal. What a pooled `Function` carries instead of a name.
-pub(crate) fn function_identity<'db>(
+pub fn function_identity<'db>(
     db: &'db dyn baml_compiler2_mir::Db,
     identity: &baml_compiler2_mir::MirFunctionId<'db>,
 ) -> bex_vm_types::types::FunctionIdentity {

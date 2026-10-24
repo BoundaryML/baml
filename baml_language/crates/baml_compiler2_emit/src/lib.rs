@@ -36,7 +36,9 @@ use bex_vm_types::{
     Bytecode, Function, FunctionKind, FunctionMeta, FunctionOrigin, Object, ObjectPool,
 };
 pub(crate) use emit::compile_mir_function;
+pub use items::owns_no_slot;
 pub use package::{emit_package, emit_session_submission};
+pub use refs::{function_identity, function_path};
 
 /// The wire origin of an emitted function: every function of a stdlib file
 /// is a builtin, whatever its metadata says; otherwise the metadata's.
@@ -1033,6 +1035,7 @@ fn builtin_emit_function(
         telemetry_function_id: None,
         telemetry_registration: bex_vm_types::FunctionRegistration::default(),
         telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
+        compiled_body: None,
         local_names: Vec::new(),
         debug_locals: Vec::new(),
         span: Span::fake(),

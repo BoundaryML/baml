@@ -27,8 +27,8 @@ use bex_vm_types::{
     BinOp as VmBinOp, Bytecode, CmpOp, ConstValue, Function, FunctionKind, FunctionOrigin,
     GlobalIndex, Instruction, Object, ObjectIndex, ObjectPool, UnaryOp as VmUnaryOp,
     bytecode::{
-        ClassInitPlan, DebugLocalScope, FieldCopy, FieldCopySet, InstructionMeta, JumpTableData,
-        LineTableEntry, OperandMeta, SwitchKey, SwitchTable,
+        BlockPcs, ClassInitPlan, DebugLocalScope, FieldCopy, FieldCopySet, InstructionMeta,
+        JumpTableData, LineTableEntry, OperandMeta, SwitchKey, SwitchTable,
     },
 };
 
@@ -287,6 +287,10 @@ struct StackifyCodegen<'db: 'ctx, 'ctx, 'obj, 'w> {
     /// Instruction index where the currently emitted basic block starts.
     current_block_start: usize,
 
+    /// The instruction performing the terminator being emitted (a call, a
+    /// suspension, a raise, a return), for `Bytecode::block_pcs`.
+    terminator_pc: Option<usize>,
+
     /// MIR local types, for field-name resolution and instruction
     /// specialization. Kept at the compiler's head: layout facts are read by
     /// declaration, never through an anchored head.
@@ -381,6 +385,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             next_line_discriminator: HashMap::new(),
             next_block: None,
             current_block_start: 0,
+            terminator_pc: None,
             local_types: HashMap::with_capacity(body.locals.len()),
             slot_names: Vec::new(),
             lambda_object_indices: ctx.lambda_object_indices.to_vec(),
@@ -739,6 +744,24 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             .and_then(|def| self.span_for_statement_ref(def.block, def.statement_ref))
     }
 
+    /// Give the statement defining the virtual `local`, which emitted
+    /// nothing, the PC of its value inlined here from `start` on: the last
+    /// instruction, as for any statement (`emit_block`), at its first use.
+    fn note_inlined_definition(&mut self, local: Local, start: usize) {
+        let end = self.current_pc();
+        let def = self
+            .analysis
+            .def_use
+            .get(&local)
+            .and_then(|du| du.def.as_ref());
+        if let Some(def) = def
+            && let StatementRef::Statement(index) = def.statement_ref
+            && end > start
+        {
+            self.bytecode.block_pcs[def.block.0].statements[index].get_or_insert(end - 1);
+        }
+    }
+
     /// Compile a MIR function to bytecode.
     fn compile(mut self, identity: bex_vm_types::types::FunctionIdentity) -> Function {
         let mir = self.body;
@@ -832,6 +855,14 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             }
         }
 
+        self.bytecode.block_pcs = mir
+            .blocks
+            .iter()
+            .map(|block| BlockPcs {
+                statements: vec![None; block.statements.len()],
+                ..BlockPcs::default()
+            })
+            .collect();
         for (i, &block_id) in rpo.iter().enumerate() {
             // Track the next *emitted* block for fall-through optimization.
             self.next_block = next_emitted_after[i];
@@ -849,7 +880,11 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             self.current_block_start = block_start;
             let block = mir.block(block_id);
             self.emit_block(block);
-            self.block_end_addresses.insert(block_id, self.current_pc());
+            let block_end = self.current_pc();
+            self.block_end_addresses.insert(block_id, block_end);
+            if block_end > block_start {
+                self.bytecode.block_pcs[block_id.0].start = Some(block_start);
+            }
         }
 
         // If any pending edges target dead-unreachable MIR blocks, patch them
@@ -879,6 +914,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             telemetry_function_id: None,
             telemetry_registration: bex_vm_types::FunctionRegistration::default(),
             telemetry_policy_id: bex_vm_types::TelemetryPolicyId::none(),
+            compiled_body: None,
             local_names: self.slot_names,
             debug_locals,
             span: Span::fake(),
@@ -1222,18 +1258,29 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
     // Block Emission
     // ========================================================================
 
-    /// Emit a basic block.
+    /// Emit a basic block, recording where its statements and terminator
+    /// landed (`Bytecode::block_pcs`).
     fn emit_block(&mut self, block: &BasicBlock<'ctx>) {
-        // Emit all statements
-        for stmt in &block.statements {
+        // Emit all statements. A statement's PC is its last instruction,
+        // where its final operation runs: the line bytecode reports for an
+        // error it raises. One that emits nothing (a definition inlined at its
+        // use) gets its PC where it is inlined (`pull_local`).
+        for (index, stmt) in block.statements.iter().enumerate() {
             self.set_debug_span(stmt.span, true);
+            let start = self.current_pc();
             self.emit_statement(&stmt.kind);
+            let end = self.current_pc();
+            if end > start {
+                self.bytecode.block_pcs[block.id.0].statements[index] = Some(end - 1);
+            }
         }
 
         // Emit terminator
         if let Some(term) = &block.terminator {
             self.set_debug_span(block.terminator_span, true);
+            self.terminator_pc = None;
             self.emit_terminator(term);
+            self.bytecode.block_pcs[block.id.0].terminator = self.terminator_pc.take();
         }
     }
 
@@ -2337,7 +2384,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             Terminator::Return => {
                 // Use pull model for return value - if _0 is Virtual, inline it
                 unwrap_infallible(pull_semantics::walk_return_value(self));
-                self.emit(Instruction::Return);
+                self.terminator_pc = Some(self.emit(Instruction::Return));
             }
 
             Terminator::Call {
@@ -2393,6 +2440,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                     // the offending call rather than its final nested operand.
                     self.set_debug_span(call_span, false);
                     let inst = self.emit(instruction);
+                    self.terminator_pc = Some(inst);
                     self.record_call_layout(inst, argument_layout.as_ref());
                     if let Some(func) = callee_item {
                         self.set_operand(
@@ -2420,6 +2468,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                     let instruction = Instruction::CallIndirect;
                     self.set_debug_span(call_span, false);
                     let inst = self.emit(instruction);
+                    self.terminator_pc = Some(inst);
                     self.record_call_layout(inst, argument_layout.as_ref());
                     self.emit_store_place(destination);
                     self.emit_jump_unless_fallthrough(*target);
@@ -2472,6 +2521,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                     self_arg,
                 };
                 let inst = self.emit(instruction);
+                self.terminator_pc = Some(inst);
                 self.record_call_layout(inst, argument_layout.as_ref());
                 self.set_operand(inst, OperandMeta::Callable(method.clone()));
                 self.emit_store_place(destination);
@@ -2483,7 +2533,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 // This should never happen - if it does, there's a bug in the
                 // compiler or type system (e.g., non-exhaustive match incorrectly
                 // marked as exhaustive).
-                self.emit(Instruction::Unreachable);
+                self.terminator_pc = Some(self.emit(Instruction::Unreachable));
             }
 
             Terminator::SysOp {
@@ -2510,6 +2560,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
 
                 let inst = self.emit(Instruction::SysOp(global_callee));
+                self.terminator_pc = Some(inst);
                 if let Some(func) = callee_item {
                     self.set_operand(
                         inst,
@@ -2533,7 +2584,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 let spawn_span = self.current_debug_span;
                 self.emit_operand_pull(plan);
                 self.restore_debug_span(spawn_span);
-                self.emit(Instruction::Spawn);
+                self.terminator_pc = Some(self.emit(Instruction::Spawn));
                 self.emit_store_place(future);
                 self.emit_jump_unless_fallthrough(*resume);
             }
@@ -2547,7 +2598,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 let await_span = self.current_debug_span;
                 unwrap_infallible(pull_semantics::walk_await_future(self, future));
                 self.restore_debug_span(await_span);
-                self.emit(Instruction::Await);
+                self.terminator_pc = Some(self.emit(Instruction::Await));
 
                 self.emit_store_place(destination);
                 self.emit_jump_unless_fallthrough(*target);
@@ -2562,7 +2613,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 // Push the array of futures, then AWAIT_ANY pops it and pushes
                 // the winning `int` index (BEP-034 `baml.future.__await_any`).
                 self.emit_operand_pull(futures);
-                self.emit(Instruction::AwaitAny);
+                self.terminator_pc = Some(self.emit(Instruction::AwaitAny));
 
                 self.emit_store_place(destination);
                 self.emit_jump_unless_fallthrough(*target);
@@ -2574,14 +2625,14 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 let throw_span = self.current_debug_span;
                 self.emit_operand_pull(value);
                 self.restore_debug_span(throw_span);
-                self.emit(Instruction::Throw);
+                self.terminator_pc = Some(self.emit(Instruction::Throw));
             }
             Terminator::Rethrow { value, context } => {
                 let throw_span = self.current_debug_span;
                 self.emit_operand_pull(value);
                 self.emit_operand_pull(context);
                 self.restore_debug_span(throw_span);
-                self.emit(Instruction::Rethrow);
+                self.terminator_pc = Some(self.emit(Instruction::Rethrow));
             }
 
             Terminator::ShortCircuit {
@@ -2809,6 +2860,9 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         }
         for (start_pc, end_pc, handler) in coalesced {
             let (handler_pc, error_slot, context_slot) = self.landing_slots(mir, handler);
+            // A landing can be an empty redirect block. Native catches need
+            // the same resolved handler address as the exception table.
+            self.bytecode.block_pcs[handler.0].start = Some(handler_pc);
             self.bytecode.exception_table.push(ExceptionTableEntry {
                 start_pc,
                 end_pc,
@@ -3227,6 +3281,7 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
                 // expression, not to its last inlined operand.
                 let consumer_span = self.current_debug_span;
                 self.set_debug_span(self.def_span_for_local(local), false);
+                let start = self.current_pc();
                 // Inline the definition rvalue at use site.
                 let rvalue = self.analysis.def_use[&local]
                     .def
@@ -3254,6 +3309,7 @@ impl<'db: 'ctx, 'ctx> PullSink<'ctx> for StackifyCodegen<'db, 'ctx, '_, '_> {
                 } else {
                     pull_semantics::walk_rvalue_pull(self, &rvalue)?;
                 }
+                self.note_inlined_definition(local, start);
                 self.restore_debug_span(consumer_span);
                 LocalPullAction::Done
             }

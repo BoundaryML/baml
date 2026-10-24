@@ -707,6 +707,7 @@ dependencies = [
  "clap",
  "console",
  "ctrlc",
+ "dunce",
  "hex",
  "indicatif",
  "insta",
@@ -841,6 +842,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml_compiler2_rust"
+version = "0.0.0-beta"
+dependencies = [
+ "baml_base",
+ "baml_builtins2_codegen",
+ "baml_compiler2_emit",
+ "baml_compiler2_hir",
+ "baml_compiler2_hir_ty",
+ "baml_compiler2_mir",
+ "baml_type",
+ "bex_vm_types",
+]
+
+[[package]]
 name = "baml_compiler2_visualization"
 version = "0.0.0-beta"
 dependencies = [
@@ -906,6 +921,7 @@ dependencies = [
  "baml_compiler2_hir",
  "baml_compiler2_hir_ty",
  "baml_compiler2_mir",
+ "baml_compiler2_rust",
  "baml_compiler_diagnostics",
  "baml_compiler_lexer",
  "baml_compiler_parser",
@@ -1102,6 +1118,7 @@ name = "baml_pack_host"
 version = "0.0.0-beta"
 dependencies = [
  "baml_artifact",
+ "baml_env",
  "baml_exec",
  "bex_engine",
  "bex_events",
@@ -1224,6 +1241,7 @@ dependencies = [
  "baml_compiler2_mir",
  "baml_compiler_diagnostics",
  "baml_db",
+ "baml_exec",
  "baml_fmt",
  "baml_linker",
  "baml_linker_types",
@@ -1597,6 +1615,7 @@ dependencies = [
  "btel_types",
  "chacha20poly1305",
  "console",
+ "corosensei",
  "getrandom 0.2.17",
  "indexmap",
  "itoa",
@@ -2565,6 +2584,19 @@ name = "core-foundation-sys"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
+
+[[package]]
+name = "corosensei"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6886a0c0f263965933c438626e7179139a62b978a33aa18281cbf0cd5a975f34"
+dependencies = [
+ "autocfg",
+ "cfg-if",
+ "libc",
+ "scopeguard",
+ "windows-sys 0.59.0",
+]
 
 [[package]]
 name = "countme"

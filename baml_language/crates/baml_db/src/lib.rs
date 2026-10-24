@@ -17,6 +17,8 @@ pub mod check;
 pub mod db;
 pub mod discovery;
 pub mod manifest;
+#[cfg(feature = "rust_backend")]
+pub use baml_compiler2_rust as rust_backend;
 pub mod program;
 pub mod project_resolution;
 pub mod stdlib_prefix;
