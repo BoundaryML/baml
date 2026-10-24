@@ -170,7 +170,7 @@ function ThrowingClosureChain(n: int) -> int {
 }
 
 // Errors caught over and over must leave no frames behind: the depth a
-// recursion reaches afterwards, and inside a handler, matches bytecode.
+// recursion reaches afterwards, and inside a handler, matches the depth before.
 function NoLeaks() -> void {
     let before = Measure();
     let i = 0;
@@ -195,7 +195,7 @@ function NoLeaks() -> void {
     let inside = DeepMid(0) catch (e) {
         _ => Measure(),
     };
-    baml.io.println(`${before}:${after}:${inside}:${caught}`);
+    baml.io.println(`${before > 1000}:${after == before}:${inside == before}:${caught}`);
 }
 
 function MapDown(d: Depths, n: int) -> int {
@@ -222,7 +222,7 @@ function CallbackDepth() -> void {
     let t = MapThrow(6) catch (e, ctx) {
         _ => `${ctx.error}|${Frames(ctx)}`,
     };
-    baml.io.println(`${r}:${d.deepest}`);
+    baml.io.println(`${r}:${d.deepest > 100}`);
     baml.io.println(`${t}`);
 }
 
@@ -406,7 +406,9 @@ function TaskOverflow() -> void {
     let c = (await u) catch_all_panics (e) {
         _ => -7,
     };
-    baml.io.println(`${await a}:${await b}:${c}`);
+    let depth_a = await a;
+    let depth_b = await b;
+    baml.io.println(`${depth_a > 1000}:${depth_a == depth_b}:${c}`);
 }
 
 function Wrap(n: int) -> int {

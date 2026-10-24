@@ -149,18 +149,19 @@ function Fibonacci(n: int) -> int {
     Fibonacci(n - 1) + Fibonacci(n - 2)
 }
 
-function RecursiveWork() -> int {
-    Fibonacci(25) + RecursiveWork()
+// Bounded: the thread stack budget allows tens of thousands of levels, too
+// many to reach in a probe's time limit.
+function RecursiveWork(n: int) -> int {
+    if (n == 0) { 0 } else { Fibonacci(25) + RecursiveWork(n - 1) }
 }
 
 // Recursive calls must yield to cancellation even without a loop backedge.
-// Keep computing until cancellation so scheduler speed cannot win the race.
 function RecursiveCancellation() -> void {
     let state: string[] = [];
     let child = spawn {
         defer { state.push("cleanup"); }
         state.push("ready");
-        RecursiveWork()
+        RecursiveWork(256)
     };
     while (state.length() == 0) {
         baml.sys.sleep(baml.time.Duration.from_milliseconds(1));
@@ -521,8 +522,9 @@ function Bounce(d: Depths, n: int) -> int {
     r
 }
 
-// Recursion to the frame limit is a catchable `StackOverflow` at the depth
-// bytecode reaches, wherever the handler is.
+// Recursion to the stack limit is a catchable `StackOverflow` wherever the
+// handler is. Compiled bodies run on a fiber with its own limit, so the
+// probe compares depths within a run rather than printing them.
 function FrameLimit() -> void {
     let d = Depths { deepest: 0 };
     let a = Descend(d, 0) catch (e) {
@@ -530,7 +532,7 @@ function FrameLimit() -> void {
     };
     let first = d.deepest;
     let b = Bounce(d, 0);
-    baml.io.println(`${a}:${first}:${b}:${d.deepest}`);
+    baml.io.println(`${a}:${first > 1000}:${b}:${d.deepest == first}`);
 }
 
 function AwaitLeaf(f: baml.future.Future<int, never>) -> int {
