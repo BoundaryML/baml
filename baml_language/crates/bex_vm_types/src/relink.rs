@@ -166,6 +166,8 @@ macro_rules! visit_bytecode_index_operands {
             | I::CaptureRef(..)
             | I::SendEvent
             | I::LoadVar2(..)
+            | I::ArrayIterNext { .. }
+            | I::ArrayIterNextLocal { .. }
             | I::StoreVar2(..) => {}
             }
         }

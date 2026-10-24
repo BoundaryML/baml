@@ -9421,6 +9421,57 @@ impl BexVm {
                         self.store_local_value(local_var_index, value);
                     }
 
+                    OpCode::ArrayIterNext | OpCode::ArrayIterNextLocal => {
+                        let iterator = { read_u32_unchecked(code, pc) as usize };
+                        let index = { read_u32_unchecked(code, pc) as usize };
+                        #[allow(unsafe_code)]
+                        let Frame::Bytecode(bf) =
+                            (unsafe { self.frames.get_unchecked(*frame_idx) })
+                        else {
+                            unreachable!()
+                        };
+                        let iterator = Self::local_slot_stack_index(bf.locals_offset, iterator);
+                        let index = Self::local_slot_stack_index(bf.locals_offset, index);
+                        let array = self.stack.get_at(iterator);
+                        let Some(i) = self.stack.get_at(index).as_int() else {
+                            return Err(VmInternalError::TypeError {
+                                expected: bex_vm_types::types::Type::Int,
+                                got: self.type_of(&self.stack.get_at(index)),
+                            }
+                            .into());
+                        };
+                        let ptr = self.as_object_ptr(array, ObjectType::Array)?;
+                        // SAFETY (`_LOCAL`): see `ContainerLenLocal`.
+                        let element = match self.get_object(ptr) {
+                            Object::Array(arr) => {
+                                let guard = if op == OpCode::ArrayIterNextLocal {
+                                    arr.lock_thread_local()
+                                } else {
+                                    arr.lock()
+                                };
+                                usize::try_from(i).ok().and_then(|i| guard.get(i).copied())
+                            }
+                            other => {
+                                return Err(VmInternalError::TypeError {
+                                    expected: ObjectType::Array.into(),
+                                    got: ObjectType::of(other).into(),
+                                }
+                                .into());
+                            }
+                        };
+                        let item = match element {
+                            Some(element) => {
+                                self.stack.set_at(index, Value::int(i + 1));
+                                element
+                            }
+                            None => {
+                                let done = self.lang_object(crate::lang_items::BAML_ITER_DONE);
+                                Value::object(self.alloc_instance(done, Vec::new()))
+                            }
+                        };
+                        self.stack.push(item);
+                    }
+
                     // ── Operand-movement superinstructions (CPython-style) ────────
                     // LoadVar2(a, b) == `LoadVar(a); LoadVar(b)`: push both locals.
                     OpCode::LoadVar2 => {

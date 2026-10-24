@@ -331,6 +331,10 @@ struct StackifyCodegen<'db: 'ctx, 'ctx, 'obj, 'w> {
     /// Which objects only this thread can reach, whose container accesses
     /// skip the lock. `None` at O0, where every access keeps it.
     escape: Option<baml_compiler2_mir::escape::EscapeFacts>,
+    /// Per local: an array iterator compiled as an index walk (O1+).
+    array_walks: Vec<bool>,
+    /// The hidden slot holding each walked iterator's next index.
+    walk_index_slots: HashMap<Local, usize>,
 }
 
 impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
@@ -398,6 +402,12 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             captured_locals: HashSet::new(),
             spawn_captured_locals: HashSet::new(),
             spawn_captured_captures: ctx.spawn_capture_indices.clone(),
+            array_walks: if escape.is_some() {
+                baml_compiler2_mir::escape::array_walks(body, arity)
+            } else {
+                Vec::new()
+            },
+            walk_index_slots: HashMap::new(),
             escape,
         }
     }
@@ -987,8 +997,72 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
             }
         }
 
+        // A walked iterator's slot holds its array; its index gets a slot of
+        // its own, which no MIR local names.
+        self.walk_index_slots.clear();
+        for (idx, &walk) in self.array_walks.iter().enumerate() {
+            if walk && self.local_slots.contains_key(&Local(idx)) {
+                self.walk_index_slots.insert(Local(idx), next_slot);
+                next_slot += 1;
+                slots_to_allocate += 1;
+            }
+        }
+
         // VM pre-allocates these slots when entering the frame.
         self.real_local_count = slots_to_allocate;
+    }
+
+    /// `it = xs.iter()` or `x = it.next()` on a walked iterator, emitted as
+    /// the index walk; `false` when the call is not one.
+    fn emit_array_walk_step(
+        &mut self,
+        method: &str,
+        args: &[Operand<'ctx>],
+        destination: &Place,
+        target: baml_compiler2_mir::BlockId,
+    ) -> bool {
+        let (
+            [Operand::Copy(Place::Local(receiver)) | Operand::Move(Place::Local(receiver))],
+            Place::Local(result),
+        ) = (args, destination)
+        else {
+            return false;
+        };
+        match method {
+            "iter" => {
+                let Some(&index) = self.walk_index_slots.get(result) else {
+                    return false;
+                };
+                // The iterator's slot holds the array; the walk starts at 0.
+                unwrap_infallible(pull_semantics::walk_call_direct_args(self, args));
+                self.emit_store_place(destination);
+                self.emit_constant(&Constant::Int(0));
+                let inst = self.emit(Instruction::StoreVar(index));
+                self.terminator_pc = Some(inst);
+            }
+            "next" => {
+                let (Some(&index), Some(&iterator)) = (
+                    self.walk_index_slots.get(receiver),
+                    self.local_slots.get(receiver),
+                ) else {
+                    return false;
+                };
+                let thread_local = self
+                    .escape
+                    .as_ref()
+                    .is_some_and(|facts| facts.contents_are_thread_local(*receiver));
+                let inst = self.emit(if thread_local {
+                    Instruction::ArrayIterNextLocal { iterator, index }
+                } else {
+                    Instruction::ArrayIterNext { iterator, index }
+                });
+                self.terminator_pc = Some(inst);
+                self.emit_store_place(destination);
+            }
+            _ => return false,
+        }
+        self.emit_jump_unless_fallthrough(target);
+        true
     }
 
     /// Get current program counter (next instruction index).
@@ -2485,6 +2559,12 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                 target,
                 unwind: _,
             } => {
+                if !*has_trace
+                    && *ntypeargs == 0
+                    && self.emit_array_walk_step(method, args, destination, *target)
+                {
+                    return;
+                }
                 // Push the method type args then the value args (declared
                 // order), then the interface type, then the method name — the
                 // layout `OpCode::VirtualCall` expects: it pops the method name,

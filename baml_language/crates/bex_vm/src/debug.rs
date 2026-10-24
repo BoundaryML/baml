@@ -249,6 +249,8 @@ pub(crate) fn display_instruction(
         | Instruction::CmpBigintOp(_)
         | Instruction::LoadVar2(..)
         | Instruction::StoreVar2(..)
+        | Instruction::ArrayIterNext { .. }
+        | Instruction::ArrayIterNextLocal { .. }
         | Instruction::UnaryOp(_)
         | Instruction::AllocArray(_)
         | Instruction::AllocMap(_)
@@ -392,6 +394,8 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::LoadCurrentPackage(_)
         | Instruction::LoadVar(_)
         | Instruction::LoadVar2(..)
+        | Instruction::ArrayIterNext { .. }
+        | Instruction::ArrayIterNextLocal { .. }
         | Instruction::LoadGlobal(_)
         | Instruction::LoadField(_)
         | Instruction::VirtualLoadField(_)
@@ -785,6 +789,12 @@ fn display_instruction_textual(
         Instruction::StoreVar(idx) => format!("store_var {}", meta_str(idx)),
         Instruction::StoreVarLoadVar(idx) => format!("store_var_load_var {}", meta_str(idx)),
         Instruction::LoadVar2(a, b) => format!("load_var2 {a} {b}"),
+        Instruction::ArrayIterNext { iterator, index } => {
+            format!("array_iter_next {iterator} {index}")
+        }
+        Instruction::ArrayIterNextLocal { iterator, index } => {
+            format!("array_iter_next_local {iterator} {index}")
+        }
         Instruction::StoreVar2(a, b) => format!("store_var2 {a} {b}"),
 
         // --- Globals ---
@@ -1537,7 +1547,11 @@ pub fn display_compact_bytecode(
             }
 
             // Two u32 operands (operand-movement superinstructions)
-            OpCode::LoadVar2 | OpCode::StoreVar2 | OpCode::NarrowBind => {
+            OpCode::LoadVar2
+            | OpCode::StoreVar2
+            | OpCode::NarrowBind
+            | OpCode::ArrayIterNext
+            | OpCode::ArrayIterNextLocal => {
                 let a = read_u32(code, &mut pc);
                 let b = read_u32(code, &mut pc);
                 writeln!(f, "{a} {b}")?;

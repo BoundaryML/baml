@@ -1098,6 +1098,19 @@ pub enum Instruction {
         callee: GlobalIndex,
         ntypeargs: u16,
     },
+    /// One step of `for` over an array, compiled as an index walk: with the
+    /// array in local `iterator` and the next index in local `index`, push
+    /// the element and advance, or push a `baml.iter.Done` at the end. The
+    /// length is re-read each step, as `ArrayIterator.next` does.
+    ArrayIterNext {
+        iterator: usize,
+        index: usize,
+    },
+    /// [`Self::ArrayIterNext`] over a thread-local array, without its lock.
+    ArrayIterNextLocal {
+        iterator: usize,
+        index: usize,
+    },
 }
 
 /// Compact bytecode opcodes.
@@ -1327,6 +1340,9 @@ pub enum OpCode {
     ContainerLenLocal,
     // u32 callee + u16 ntypeargs, like `Call`.
     CallLocal,
+    // u32 iterator slot + u32 index slot.
+    ArrayIterNext,
+    ArrayIterNextLocal,
 }
 
 impl OpCode {
@@ -1486,7 +1502,11 @@ impl OpCode {
             Self::JumpTable => 9,
 
             // 9-byte: opcode + u32 + u32 (operand-movement superinstructions)
-            Self::LoadVar2 | Self::StoreVar2 | Self::NarrowBind => 9,
+            Self::LoadVar2
+            | Self::StoreVar2
+            | Self::NarrowBind
+            | Self::ArrayIterNext
+            | Self::ArrayIterNextLocal => 9,
         }
     }
 }
@@ -1641,6 +1661,8 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::StoreArrayElementLocal as u8 => Ok(Self::StoreArrayElementLocal),
             x if x == Self::ContainerLenLocal as u8 => Ok(Self::ContainerLenLocal),
             x if x == Self::CallLocal as u8 => Ok(Self::CallLocal),
+            x if x == Self::ArrayIterNext as u8 => Ok(Self::ArrayIterNext),
+            x if x == Self::ArrayIterNextLocal as u8 => Ok(Self::ArrayIterNextLocal),
 
             x if x == Self::CallExactArgs as u8 => Ok(Self::CallExactArgs),
             x if x == Self::SetCallTrace as u8 => Ok(Self::SetCallTrace),
@@ -1666,6 +1688,8 @@ impl std::fmt::Display for OpCode {
             Self::StoreArrayElementLocal => "STORE_ARRAY_ELEMENT_LOCAL",
             Self::ContainerLenLocal => "CONTAINER_LEN_LOCAL",
             Self::CallLocal => "CALL_LOCAL",
+            Self::ArrayIterNext => "ARRAY_ITER_NEXT",
+            Self::ArrayIterNextLocal => "ARRAY_ITER_NEXT_LOCAL",
 
             Self::Return => "RETURN",
             Self::Await => "AWAIT",
@@ -1993,6 +2017,12 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::CallLocal { callee, ntypeargs } => {
                 write!(f, "CALL_LOCAL {callee} ntypeargs={ntypeargs}")
+            }
+            Instruction::ArrayIterNext { iterator, index } => {
+                write!(f, "ARRAY_ITER_NEXT {iterator} {index}")
+            }
+            Instruction::ArrayIterNextLocal { iterator, index } => {
+                write!(f, "ARRAY_ITER_NEXT_LOCAL {iterator} {index}")
             }
 
             Instruction::MakeGenericFunction {
@@ -2814,7 +2844,16 @@ impl Bytecode {
                 }
 
                 // ── Operand-movement superinstructions: two u32 operands ──
-                Instruction::LoadVar2(a, b) | Instruction::StoreVar2(a, b) => {
+                Instruction::LoadVar2(a, b)
+                | Instruction::StoreVar2(a, b)
+                | Instruction::ArrayIterNext {
+                    iterator: a,
+                    index: b,
+                }
+                | Instruction::ArrayIterNextLocal {
+                    iterator: a,
+                    index: b,
+                } => {
                     code.extend_from_slice(
                         &u32::try_from(*a).expect("operand fits u32").to_le_bytes(),
                     );
@@ -3008,6 +3047,8 @@ impl Bytecode {
             Instruction::StoreArrayElementLocal => OpCode::StoreArrayElementLocal,
             Instruction::ContainerLenLocal => OpCode::ContainerLenLocal,
             Instruction::CallLocal { .. } => OpCode::CallLocal,
+            Instruction::ArrayIterNext { .. } => OpCode::ArrayIterNext,
+            Instruction::ArrayIterNextLocal { .. } => OpCode::ArrayIterNextLocal,
             Instruction::LoadVar2(..) => OpCode::LoadVar2,
             Instruction::StoreVar2(..) => OpCode::StoreVar2,
 
@@ -3573,6 +3614,20 @@ mod compact_tests {
                     ntypeargs: 1,
                 },
                 OpCode::CallLocal,
+            ),
+            (
+                Instruction::ArrayIterNext {
+                    iterator: 2,
+                    index: 3,
+                },
+                OpCode::ArrayIterNext,
+            ),
+            (
+                Instruction::ArrayIterNextLocal {
+                    iterator: 2,
+                    index: 3,
+                },
+                OpCode::ArrayIterNextLocal,
             ),
         ] {
             let bc = make_bytecode(vec![instruction], Vec::new());

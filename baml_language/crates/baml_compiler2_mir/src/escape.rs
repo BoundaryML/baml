@@ -970,6 +970,95 @@ enum Iteration {
     Next { iterator: usize, item: usize },
 }
 
+/// Iterator locals a backend may compile as an index walk over the array:
+/// defined once, by `xs.iter()` on an array local, not captured, and
+/// mentioned nowhere but as the receiver of `next`. Such an iterator is never
+/// observed, so the walk is the same loop without the object.
+pub fn array_walks(body: &MirFunctionBody<'_>, arity: usize) -> Vec<bool> {
+    let mut walks = array_iterators(body);
+    for (local, walk) in walks.iter_mut().enumerate() {
+        *walk &= local > arity && !body.locals[local].is_captured;
+    }
+    let mut disqualify = |place: &Place| {
+        let mut mentioned = |local: Local| {
+            if let Some(walk) = walks.get_mut(local.0) {
+                *walk = false;
+            }
+        };
+        if let Some(local) = place.base_local() {
+            mentioned(local);
+        }
+        let mut indices = place;
+        while let Place::Field { base, .. } | Place::Index { base, .. } = indices {
+            if let Place::Index { index, .. } = indices {
+                mentioned(*index);
+            }
+            indices = base;
+        }
+    };
+    for block in &body.blocks {
+        for statement in &block.statements {
+            match &statement.kind {
+                StatementKind::Assign { destination, value } => {
+                    disqualify(destination);
+                    crate::memory::walk_rvalue_places(value, &mut |read| disqualify(read));
+                }
+                StatementKind::Drop(place) => disqualify(place),
+                StatementKind::FreshCell { local, .. } => disqualify(&Place::Local(*local)),
+                StatementKind::Intrinsic { args, .. } => {
+                    for arg in args {
+                        crate::memory::walk_operand_places(arg, &mut |read| disqualify(read));
+                    }
+                }
+                StatementKind::VirtualFieldStore {
+                    receiver, value, ..
+                } => {
+                    for operand in [receiver, value] {
+                        crate::memory::walk_operand_places(operand, &mut |read| disqualify(read));
+                    }
+                }
+                StatementKind::Nop => {}
+            }
+        }
+        if let Some(landing) = block.landing {
+            disqualify(&Place::Local(landing.error_local));
+            disqualify(&Place::Local(landing.context_local));
+        }
+        let Some(terminator) = &block.terminator else {
+            continue;
+        };
+        // The walk's own `iter` and `next` calls do not observe the iterator.
+        if let Terminator::VirtualCall {
+            method,
+            args,
+            destination,
+            ..
+        } = terminator
+            && let Some((receiver, result)) = unary_local_call(args, destination)
+        {
+            match method.as_str() {
+                "iter" => {
+                    disqualify(&Place::Local(Local(receiver)));
+                    continue;
+                }
+                "next" => {
+                    disqualify(&Place::Local(Local(result)));
+                    continue;
+                }
+                _ => {}
+            }
+        }
+        let (operands, destinations) = terminator_places(terminator);
+        for operand in operands {
+            crate::memory::walk_operand_places(operand, &mut |read| disqualify(read));
+        }
+        for destination in destinations {
+            disqualify(destination);
+        }
+    }
+    walks
+}
+
 /// Locals whose only definition is `xs.iter()` on an array: the runtime's
 /// `ArrayIterator`, whose `next` reads the array and nothing else.
 fn array_iterators(body: &MirFunctionBody<'_>) -> Vec<bool> {

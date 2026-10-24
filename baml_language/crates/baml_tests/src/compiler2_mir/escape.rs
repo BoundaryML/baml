@@ -672,3 +672,52 @@ function main() -> int {
         &[("n", false), ("m", false), ("o", true)],
     );
 }
+
+#[test]
+fn bytecode_takes_the_lock_free_paths_for_thread_local_arrays() {
+    let program = crate::engine::compile_source_with_opt(
+        r#"
+function build(n: int) -> int {
+  let xs: int[] = [];
+  let i = 0;
+  while (i < n) { xs.push(i); i += 1; }
+  let total = 0;
+  for (let x in xs) { total += x; }
+  total + xs[0] + xs.length()
+}
+function walk(xs: int[]) -> int {
+  let total = 0;
+  for (let x in xs) { total += x; }
+  xs.push(total);
+  total + xs[0]
+}
+"#,
+        OptLevel::Two,
+    );
+    let bytecode = crate::engine::display_user_functions(&program);
+    let body = |name: &str| {
+        bytecode
+            .split(&format!("function {name}("))
+            .nth(1)
+            .and_then(|rest| rest.split("\nfunction ").next())
+            .unwrap_or_else(|| panic!("no `{name}` in:\n{bytecode}"))
+    };
+    let build = body("build");
+    for local in [
+        "call_local baml.Array.push",
+        "array_iter_next_local",
+        "load_array_element_local",
+        "container_len_local",
+    ] {
+        assert!(build.contains(local), "`build` lacks {local}:\n{build}");
+    }
+    let walk = body("walk");
+    assert!(
+        !walk.contains("_local"),
+        "a parameter's array keeps its locks:\n{walk}"
+    );
+    assert!(
+        walk.contains("array_iter_next "),
+        "`walk` still walks by index:\n{walk}"
+    );
+}
