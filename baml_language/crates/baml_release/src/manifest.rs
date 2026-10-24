@@ -24,11 +24,6 @@ pub struct VsixArtifact {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BamlBridgePypi {
-    pub version: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SdkPackage {
     /// Registry the package was published to, e.g. `crates_io`.
     pub registry: String,
@@ -53,8 +48,6 @@ pub struct ToolchainManifest {
     pub artifacts: BTreeMap<String, Artifact>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub vsix: Option<VsixArtifact>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub baml_bridge_pypi: Option<BamlBridgePypi>,
     /// Engine cdylib assets (`target -> {url, sha256}`), recorded for
     /// completeness. The dylib-loader SDKs construct these GitHub-release URLs
     /// directly, so the loader never consults the manifest for them; `default`
@@ -218,7 +211,6 @@ mod tests {
             released_at: "2026-07-14T00:00:00Z".to_string(),
             artifacts: full_target_artifacts(),
             vsix: None,
-            baml_bridge_pypi: None,
             cffi,
             sdks: None,
         }
@@ -250,6 +242,24 @@ mod tests {
             r#"{"schema":1,"version":"0.1.0","channel":"canary","released_at":"t","artifacts":{}}"#;
         let manifest: ToolchainManifest = serde_json::from_str(json).unwrap();
         assert!(manifest.cffi.is_none());
+    }
+
+    #[test]
+    fn legacy_bridge_metadata_deserializes() {
+        let json = r#"{
+            "schema": 1,
+            "version": "0.1.0",
+            "channel": "canary",
+            "released_at": "t",
+            "artifacts": {},
+            "baml_bridge_pypi": {"version": "0.1.0"},
+            "baml_bridge_go": {
+                "module": "github.com/boundaryml/baml-go",
+                "version": "v0.1.0"
+            }
+        }"#;
+        let manifest: ToolchainManifest = serde_json::from_str(json).unwrap();
+        assert!(manifest.sdks.is_none());
     }
 
     #[test]

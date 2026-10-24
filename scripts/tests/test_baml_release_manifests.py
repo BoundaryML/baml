@@ -102,6 +102,24 @@ class ReleaseManifestTests(unittest.TestCase):
         self.assertEqual(first_manifest.read_bytes(), second_manifest.read_bytes())
         manifest = json.loads(first_manifest.read_text(encoding="utf-8"))
         self.assertEqual(manifest["released_at"], "2026-07-23T12:34:56Z")
+        self.assertNotIn("baml_bridge_go", manifest)
+        self.assertNotIn("baml_bridge_pypi", manifest)
+        self.assertEqual(
+            manifest["sdks"]["go"],
+            {
+                "registry": "go",
+                "package": "github.com/boundaryml/baml-go",
+                "version": "v1.2.3",
+            },
+        )
+        self.assertEqual(
+            manifest["sdks"]["python"],
+            {
+                "registry": "pypi",
+                "package": "baml-bridge",
+                "version": "1.2.3",
+            },
+        )
         self.assertEqual(
             manifest["sdks"]["csharp"],
             {
