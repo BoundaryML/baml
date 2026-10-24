@@ -15,9 +15,12 @@
 /// is serialized rather than racing. Use a fresh `Sha256.new()` per message.
 ///
 /// SHA-256 is a plain hash, not a keyed one. It authenticates nothing on its
-/// own: anyone can recompute the digest of a message they can guess. Do not use
-/// it to check that a message came from who you think, and do not hash passwords
-/// with it.
+/// own: anyone can recompute the digest of a message they can guess. Use
+/// `HmacSha256` to check that a message came from who you think, and do not
+/// hash passwords with it.
+///
+/// This is a cryptographic digest, unrelated to `baml.hash.Hasher`, which feeds
+/// values into a fast non-cryptographic hash for map keys.
 class Sha256 {
     /// Opaque, runtime-owned hasher state: the SHA-256 compression state and
     /// the buffered tail of the message so far.
@@ -30,24 +33,22 @@ class Sha256 {
         $rust_function
     }
 
-    implements Hasher {
-        /// Feeds `data` into the hasher. Splitting a message across several
-        /// `update` calls gives the same digest as one call with the whole
-        /// message.
-        //baml:vm
-        function update(self, data: uint8array) -> void throws never {
-            $rust_function
-        }
+    /// Feeds `data` into the hasher. Splitting a message across several
+    /// `update` calls gives the same digest as one call with the whole
+    /// message.
+    //baml:vm
+    function update(self, data: uint8array) -> void throws never {
+        $rust_function
+    }
 
-        /// Returns the 32-byte SHA-256 digest of everything fed in since the
-        /// hasher was created or last finished.
-        ///
-        /// This resets the hasher, so the next `update` starts a new message and
-        /// calling `finish` twice in a row returns the digest of the empty
-        /// message the second time.
-        //baml:vm
-        function finish(self) -> uint8array throws never {
-            $rust_function
-        }
+    /// Returns the 32-byte SHA-256 digest of everything fed in since the
+    /// hasher was created or last finished.
+    ///
+    /// This resets the hasher, so the next `update` starts a new message and
+    /// calling `finish` twice in a row returns the digest of the empty
+    /// message the second time.
+    //baml:vm
+    function finish(self) -> uint8array throws never {
+        $rust_function
     }
 }

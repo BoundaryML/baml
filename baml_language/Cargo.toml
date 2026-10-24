@@ -348,12 +348,15 @@ rand_chacha = "0.3"
 rand_xoshiro = "0.6"
 num-bigint = { version = "0.4", features = [ "rand", "serde" ] }
 num-traits = { version = "0.2" }
+# baml.crypto RS256 uses ring; its rsa use is limited to public-key parsing.
+ring = { version = "0.17.14", features = [ "std", "wasm32_unknown_unknown_js" ] }
 rsa = { version = "0.9", default-features = false, features = [ "std", "pem" ] }
 # The hardware SHA-2 backend (`asm`: SHA-NI / ARMv8 crypto extensions,
 # runtime-detected) is enabled per-target in `bex_cache` — the `asm` feature
 # does not build under MSVC (sha2-asm ships GAS `.S` sources), so it must not
 # be turned on here unconditionally.
 sha2 = { version = "0.10", features = [ "oid" ] }
+subtle = "2.6"
 # `baml.crypto`'s AEAD ciphers. `getrandom` is off (it is on by default): keys
 # and nonces come from a caller-supplied `baml.random.Rng`, never from the
 # crate's own entropy source, so the VM keeps building for
