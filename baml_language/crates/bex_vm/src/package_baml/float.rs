@@ -1,31 +1,11 @@
 use super::{BamlClassFloat, PackageBamlImpl};
 use crate::errors::{VmBamlError, VmRustFnError};
 
-// BAML int is i63 (the runtime reserves one bit for the tagged-pointer
-// Value tag). Range: `[-2^62, 2^62 - 1]`. `-2^62` and `2^62` are both
-// powers of two, exactly representable in f64 (as integers with
-// magnitudes far past f64's 53-bit mantissa but with no fractional part).
-// So the in-range predicate is `MIN_F <= r < MAX_PLUS_ONE_F` — note the
-// strict upper bound. NaN fails this check via the usual NaN-comparison
-// rules.
-const MIN_F: f64 = -4_611_686_018_427_387_904.0; // -2^62
-const MAX_PLUS_ONE_F: f64 = 4_611_686_018_427_387_904.0; // 2^62
-
-#[allow(clippy::cast_possible_truncation)]
+/// The language's float → `int` conversion, shared with native code.
 fn float_to_int(value: f64, op: &str) -> Result<i64, VmRustFnError> {
-    if value.is_nan() {
-        return Err(VmBamlError::InvalidArgument {
-            message: format!("float.{op}: cannot convert NaN to int"),
-        }
-        .into());
-    }
-    if !(MIN_F..MAX_PLUS_ONE_F).contains(&value) {
-        return Err(VmBamlError::InvalidArgument {
-            message: format!("float.{op}: {value} is out of int range"),
-        }
-        .into());
-    }
-    Ok(value as i64)
+    bex_lang::float::to_int(value, op)
+        .map(bex_lang::Int63::get)
+        .map_err(Into::into)
 }
 
 impl BamlClassFloat for PackageBamlImpl {

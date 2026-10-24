@@ -27,6 +27,7 @@ pub(crate) mod diagnostics_cache;
 #[cfg(test)]
 mod diagnostics_cache_oracle;
 mod embed_telemetry;
+pub(crate) mod emit_rust_command;
 pub(crate) mod feedback_command;
 pub(crate) mod format;
 pub(crate) mod generate;
