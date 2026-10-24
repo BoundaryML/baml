@@ -4,7 +4,7 @@ use bex_vm_types::{StackIndex, Value};
 
 use crate::{VmPanic, vec_ext::CopyVecExt, vm::frame_stack::ThreadStackBudget};
 
-/// Argument, local, and operand slots charged to this BexThread's stack budget.
+/// Argument, local, and operand slots charged to this `BexThread`'s stack budget.
 #[derive(Default)]
 pub struct EvalStack {
     values: Vec<Value>,

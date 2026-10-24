@@ -1,4 +1,4 @@
-//! Safe, fallible backing storage for one BexThread's frames and evaluation values.
+//! Safe, fallible backing storage for one `BexThread`'s frames and evaluation values.
 
 #![forbid(unsafe_code)]
 
@@ -13,12 +13,12 @@ use std::{
 use super::Frame;
 use crate::VmPanic;
 
-/// Maximum allocated stack backing bytes per BexThread, including the main thread.
+/// Maximum allocated stack backing bytes per `BexThread`, including the main thread.
 /// Frame records and argument/local/operand slots count toward this limit.
 /// Referenced heap objects and the host native stack are separate.
 pub const THREAD_STACK_BUDGET_BYTES: usize = 10 * 1024 * 1024;
 
-/// Accounting shared only by the frame and value arrays of one BexThread's VM.
+/// Accounting shared only by the frame and value arrays of one `BexThread`'s VM.
 /// Every VM constructs a fresh counter; it is never inherited by spawned threads.
 #[derive(Clone, Default)]
 pub(crate) struct ThreadStackBudget(Arc<AtomicUsize>);

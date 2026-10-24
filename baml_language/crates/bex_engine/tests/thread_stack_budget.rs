@@ -1,5 +1,5 @@
 //! Per-thread stack accounting through the real engine spawn/await path.
-//! Rust derives depths from Frame's layout so simultaneous live frame bytes
+//! Rust derives depths from `Frame`'s layout so simultaneous live frame bytes
 //! provably exceed one thread's budget without hard-coding a platform's depth.
 
 #![cfg(not(target_arch = "wasm32"))]
