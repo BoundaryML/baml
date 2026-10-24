@@ -1092,6 +1092,12 @@ pub enum Instruction {
     StoreArrayElementLocal,
     /// [`Self::ContainerLen`] on a thread-local container, without the lock.
     ContainerLenLocal,
+    /// [`Self::Call`] of a builtin whose receiver escape analysis proved
+    /// thread-local: takes the builtin's lock-free twin when it has one.
+    CallLocal {
+        callee: GlobalIndex,
+        ntypeargs: u16,
+    },
 }
 
 /// Compact bytecode opcodes.
@@ -1319,6 +1325,8 @@ pub enum OpCode {
     LoadArrayElementLocal,
     StoreArrayElementLocal,
     ContainerLenLocal,
+    // u32 callee + u16 ntypeargs, like `Call`.
+    CallLocal,
 }
 
 impl OpCode {
@@ -1456,7 +1464,7 @@ impl OpCode {
             | Self::MakeVirtualFunction => 3,
 
             // 7-byte: opcode + u32 + u16 (type-arg threading)
-            Self::CallHooked => 7,
+            Self::CallHooked | Self::CallLocal => 7,
             Self::BeginTraceHook => 2,
             Self::EndTraceHook
             | Self::TraceHookHidden
@@ -1632,6 +1640,7 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::LoadArrayElementLocal as u8 => Ok(Self::LoadArrayElementLocal),
             x if x == Self::StoreArrayElementLocal as u8 => Ok(Self::StoreArrayElementLocal),
             x if x == Self::ContainerLenLocal as u8 => Ok(Self::ContainerLenLocal),
+            x if x == Self::CallLocal as u8 => Ok(Self::CallLocal),
 
             x if x == Self::CallExactArgs as u8 => Ok(Self::CallExactArgs),
             x if x == Self::SetCallTrace as u8 => Ok(Self::SetCallTrace),
@@ -1656,6 +1665,7 @@ impl std::fmt::Display for OpCode {
             Self::LoadArrayElementLocal => "LOAD_ARRAY_ELEMENT_LOCAL",
             Self::StoreArrayElementLocal => "STORE_ARRAY_ELEMENT_LOCAL",
             Self::ContainerLenLocal => "CONTAINER_LEN_LOCAL",
+            Self::CallLocal => "CALL_LOCAL",
 
             Self::Return => "RETURN",
             Self::Await => "AWAIT",
@@ -1980,6 +1990,9 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::Call { callee, ntypeargs } => {
                 write!(f, "CALL {callee} ntypeargs={ntypeargs}")
+            }
+            Instruction::CallLocal { callee, ntypeargs } => {
+                write!(f, "CALL_LOCAL {callee} ntypeargs={ntypeargs}")
             }
 
             Instruction::MakeGenericFunction {
@@ -2672,7 +2685,8 @@ impl Bytecode {
                 // ── Call: u32 callee + u16 ntypeargs ─────────────────
                 Instruction::BeginTraceHook(settings) => code.push(u8::from(*settings)),
                 Instruction::CallHooked { callee, ntypeargs }
-                | Instruction::Call { callee, ntypeargs } => {
+                | Instruction::Call { callee, ntypeargs }
+                | Instruction::CallLocal { callee, ntypeargs } => {
                     code.extend_from_slice(
                         &u32::try_from(callee.into_raw())
                             .expect("global index fits u32")
@@ -2993,6 +3007,7 @@ impl Bytecode {
             Instruction::LoadArrayElementLocal => OpCode::LoadArrayElementLocal,
             Instruction::StoreArrayElementLocal => OpCode::StoreArrayElementLocal,
             Instruction::ContainerLenLocal => OpCode::ContainerLenLocal,
+            Instruction::CallLocal { .. } => OpCode::CallLocal,
             Instruction::LoadVar2(..) => OpCode::LoadVar2,
             Instruction::StoreVar2(..) => OpCode::StoreVar2,
 
@@ -3552,6 +3567,13 @@ mod compact_tests {
                 OpCode::StoreArrayElementLocal,
             ),
             (Instruction::ContainerLenLocal, OpCode::ContainerLenLocal),
+            (
+                Instruction::CallLocal {
+                    callee: GlobalIndex::from_raw(3),
+                    ntypeargs: 1,
+                },
+                OpCode::CallLocal,
+            ),
         ] {
             let bc = make_bytecode(vec![instruction], Vec::new());
             let op = bc.instruction_to_opcode(&instruction);

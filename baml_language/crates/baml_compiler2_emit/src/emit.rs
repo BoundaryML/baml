@@ -1291,7 +1291,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
         if let Some(term) = &block.terminator {
             self.set_debug_span(block.terminator_span, true);
             self.terminator_pc = None;
-            self.emit_terminator(term);
+            self.emit_terminator(block.id, term);
             self.bytecode.block_pcs[block.id.0].terminator = self.terminator_pc.take();
         }
     }
@@ -2287,7 +2287,7 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
     }
 
     /// Emit a terminator.
-    fn emit_terminator(&mut self, term: &Terminator<'ctx>) {
+    fn emit_terminator(&mut self, block: baml_compiler2_mir::BlockId, term: &Terminator<'ctx>) {
         match term {
             Terminator::Goto { target } => {
                 // Skip jump if target is the next block (fall-through)
@@ -2411,8 +2411,18 @@ impl<'db: 'ctx, 'ctx, 'obj, 'w> StackifyCodegen<'db, 'ctx, 'obj, 'w> {
                         }
                         baml_compiler2_hir::loc::DeclRef::External(_) => false,
                     });
+                    let thread_local = self
+                        .escape
+                        .as_ref()
+                        .is_some_and(|facts| facts.calls_thread_local_twin(block));
                     let instruction = if hooked {
                         Instruction::CallHooked {
+                            callee: global_callee,
+                            ntypeargs,
+                        }
+                    } else if thread_local {
+                        // A builtin on a thread-local receiver: its lock-free twin.
+                        Instruction::CallLocal {
                             callee: global_callee,
                             ntypeargs,
                         }

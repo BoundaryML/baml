@@ -59,6 +59,7 @@ macro_rules! visit_bytecode_index_operands {
             | I::MakeBoundMethod(slot)
             | I::CallHooked { callee: slot, .. }
             | I::Call { callee: slot, .. }
+            | I::CallLocal { callee: slot, .. }
             | I::MakeGenericFunction { function: slot, .. } => {
                 $visit($operand::Global(slot));
             }

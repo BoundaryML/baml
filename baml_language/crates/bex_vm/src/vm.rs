@@ -489,6 +489,7 @@ pub(crate) mod tests {
             context_transfers: Vec::new(),
             argv: Arc::from([]),
             pending_call_trace: None,
+            thread_local_call: false,
             pending_trace_hooks: Vec::new(),
             held_traces: Vec::new(),
             trace_scope_frame: usize::MAX,
@@ -536,7 +537,7 @@ pub(crate) mod tests {
             arity: 0,
             real_local_count: 0,
             bytecode: Bytecode::default(),
-            kind: FunctionKind::Native(native as *const ()),
+            kind: FunctionKind::Native(native as *const (), None),
             telemetry_function_id: None,
             telemetry_registration: bex_vm_types::FunctionRegistration::default(),
             telemetry_policy_id: btel_types::TelemetryPolicyId::none(),
@@ -781,7 +782,7 @@ pub(crate) mod tests {
         let Object::Function(function) = &mut program.objects[ObjectIndex::from_raw(invoke)] else {
             unreachable!()
         };
-        function.kind = FunctionKind::Native(invoke_twice as NativeFunction as *const ());
+        function.kind = FunctionKind::Native(invoke_twice as NativeFunction as *const (), None);
         let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
         vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
         loop {
@@ -1745,6 +1746,9 @@ pub struct BexVm {
     /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
     /// even if the inner callback uses different ones.
     pending_call_trace: Option<CallTrace>,
+    /// Set by `CallLocal` for the call it starts: a native callee runs its
+    /// thread-local twin, which reads the receiver without its lock.
+    thread_local_call: bool,
     pending_trace_hooks: Vec<PendingTraceHook>,
     held_traces: Vec<(usize, CallTrace)>,
     /// Nearest frame with held configuration or an owned-span scope. Ordinary
@@ -2473,6 +2477,7 @@ impl BexVm {
             context_transfers: Vec::new(),
             argv,
             pending_call_trace: None,
+            thread_local_call: false,
             pending_trace_hooks: Vec::new(),
             held_traces: Vec::new(),
             trace_scope_frame: usize::MAX,
@@ -4789,6 +4794,51 @@ impl BexVm {
         }
     }
 
+    /// [`Self::as_array`] for an array only this thread can reach, without
+    /// its lock.
+    ///
+    /// # Safety
+    ///
+    /// No other thread may reach the array while the guard lives; escape
+    /// analysis proves this at the call sites that select a `$local` builtin.
+    pub unsafe fn as_array_local(
+        &self,
+        value: &Value,
+    ) -> Result<bex_vm_types::ArrayReadGuard<'_>, VmInternalError> {
+        let ptr = self.as_object_ptr(*value, ObjectType::Array)?;
+        match self.get_object(ptr) {
+            // SAFETY: forwarded contract.
+            Object::Array(arr) => Ok(unsafe { arr.lock_thread_local() }),
+            obj => Err(VmInternalError::TypeError {
+                expected: ObjectType::Array.into(),
+                got: ObjectType::of(obj).into(),
+            }),
+        }
+    }
+
+    /// [`Self::as_array_mut`] for an array only this thread can reach,
+    /// without its lock. The write barrier still runs: generations are not
+    /// threads.
+    ///
+    /// # Safety
+    ///
+    /// As for [`Self::as_array_local`].
+    pub unsafe fn as_array_mut_local(
+        &mut self,
+        value: &Value,
+    ) -> Result<bex_vm_types::ArrayWriteGuard<'_>, VmInternalError> {
+        let ptr = self.as_object_ptr(*value, ObjectType::Array)?;
+        self.heap.conservative_write_barrier(ptr);
+        match self.get_object(ptr) {
+            // SAFETY: forwarded contract.
+            Object::Array(arr) => Ok(unsafe { arr.lock_mut_thread_local(self.tlab.alloc_debt()) }),
+            obj => Err(VmInternalError::TypeError {
+                expected: ObjectType::Array.into(),
+                got: ObjectType::of(obj).into(),
+            }),
+        }
+    }
+
     /// Get map from a Value. Acquires the container's mutex.
     pub fn as_map(&self, value: &Value) -> Result<bex_vm_types::MapReadGuard<'_>, VmInternalError> {
         let index = self.as_object_ptr(*value, ObjectType::Map)?;
@@ -5250,7 +5300,7 @@ impl BexVm {
                     frame.instruction_ptr = stub + crate::compiled_rt::stub::START;
                 }
             }
-            FunctionKind::Native(_) | FunctionKind::SysOp(_) => {
+            FunctionKind::Native(..) | FunctionKind::SysOp(_) => {
                 self.push_trampoline_frame(
                     dispatch_ptr,
                     args,
@@ -5326,7 +5376,7 @@ impl BexVm {
 
         self.pending_call_type_args.clear();
         match callable_kind {
-            FunctionKind::Native(_) => {
+            FunctionKind::Native(..) => {
                 for (index, ty) in type_args.into_iter().enumerate() {
                     let ty_ptr = match type_values.get(index).and_then(Clone::clone) {
                         Some(value) => self.alloc_type(value),
@@ -5345,7 +5395,7 @@ impl BexVm {
         }
 
         let instructions = match callable_kind {
-            FunctionKind::Native(_) => vec![
+            FunctionKind::Native(..) => vec![
                 Instruction::Call {
                     callee: callee_global,
                     ntypeargs,
@@ -7295,6 +7345,7 @@ impl BexVm {
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
         let trace = self.pending_call_trace.take();
+        let thread_local = std::mem::take(&mut self.thread_local_call);
         let passes_type_args = std::mem::take(&mut self.pending_call_passes_type_args);
         // Record the caller's call-site PC before descending. Once a callee
         // frame is pushed, this (now-outer) frame is no longer the innermost, so
@@ -7437,7 +7488,11 @@ impl BexVm {
         }
 
         match callee_kind {
-            FunctionKind::Native(func_ptr) => {
+            FunctionKind::Native(func_ptr, local) => {
+                let func_ptr = match local {
+                    Some(local) if thread_local => local,
+                    _ => func_ptr,
+                };
                 // Cast the type-erased pointer back to NativeFunction.
                 //
                 // SAFETY: The pointer was created by casting a NativeFunction to *const ()
@@ -9127,6 +9182,7 @@ impl BexVm {
                 );
                 if step_result.is_err() {
                     self.pending_call_trace = None;
+                    self.thread_local_call = false;
                 }
 
                 match step_result {
@@ -9882,6 +9938,7 @@ impl BexVm {
                                     OpCode::Call
                                         | OpCode::CallExactArgs
                                         | OpCode::CallHooked
+                                        | OpCode::CallLocal
                                         | OpCode::CallIndirect
                                         | OpCode::VirtualCall
                                 )
@@ -9891,7 +9948,12 @@ impl BexVm {
                         let value = self.stack.ensure_pop();
                         self.pending_call_trace = Some(self.trace_config(value)?);
                     }
-                    OpCode::Call | OpCode::CallExactArgs | OpCode::CallHooked => {
+                    OpCode::Call
+                    | OpCode::CallExactArgs
+                    | OpCode::CallHooked
+                    | OpCode::CallLocal => {
+                        // The general call path takes the builtin's twin.
+                        self.thread_local_call = op == OpCode::CallLocal;
                         let raw = read_u32_unchecked(code, pc);
                         let ntypeargs = usize::from(read_u16_unchecked(code, pc));
 

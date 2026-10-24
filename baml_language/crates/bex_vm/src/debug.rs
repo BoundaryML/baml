@@ -143,6 +143,7 @@ pub(crate) fn display_instruction(
             display_global_ref(*index, globals, objects, compile_time_globals)
         }
         Instruction::Call { callee, .. }
+        | Instruction::CallLocal { callee, .. }
         | Instruction::CallHooked { callee, .. }
         | Instruction::SysOp(callee) => {
             display_global_ref(*callee, globals, objects, compile_time_globals)
@@ -443,6 +444,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::JumpTable { .. }
         | Instruction::DenseTag(_) => Style::new().yellow(),
         Instruction::Call { .. }
+        | Instruction::CallLocal { .. }
         | Instruction::CallHooked { .. }
         | Instruction::BeginTraceHook(_)
         | Instruction::EndTraceHook
@@ -965,6 +967,7 @@ fn display_instruction_textual(
         // --- Calls ---
         Instruction::Call { .. } => format!("call {}", meta_str(&"")),
         Instruction::CallHooked { .. } => format!("call_hooked {}", meta_str(&"")),
+        Instruction::CallLocal { .. } => format!("call_local {}", meta_str(&"")),
         Instruction::BeginTraceHook(value) => format!("begin_trace_hook {value}"),
         Instruction::EndTraceHook => "end_trace_hook".into(),
         Instruction::TraceHookHidden => "trace_hook_hidden".into(),
@@ -1232,6 +1235,7 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::InitField(_)
         | Instruction::InitSpread(_)
         | Instruction::Call { .. }
+        | Instruction::CallLocal { .. }
         | Instruction::CallHooked { .. }
         | Instruction::BeginTraceHook(_)
         | Instruction::EndTraceHook
@@ -1490,7 +1494,7 @@ pub fn display_compact_bytecode(
                 )?;
             }
 
-            OpCode::Call | OpCode::CallExactArgs | OpCode::CallHooked => {
+            OpCode::Call | OpCode::CallExactArgs | OpCode::CallHooked | OpCode::CallLocal => {
                 let callee = read_u32(code, &mut pc);
                 let ntypeargs = read_u16(code, &mut pc);
                 writeln!(f, "callee={callee}  ntypeargs={ntypeargs}")?;

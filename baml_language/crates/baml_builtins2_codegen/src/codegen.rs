@@ -829,6 +829,9 @@ fn emit_class_trait(
 
     for entry in entries {
         emit_glue_method(out, trait_name, &entry.rust_method_name, entry.builtin);
+        if entry.builtin.has_thread_local_twin() {
+            emit_thread_local_twin(out, trait_name, &entry.rust_method_name, entry.builtin);
+        }
     }
 
     writeln!(
@@ -844,6 +847,15 @@ fn emit_class_trait(
             entry.baml_method_name, entry.rust_method_name
         )
         .unwrap();
+        if entry.builtin.has_thread_local_twin() {
+            writeln!(
+                out,
+                "            {:?} => Some(<Self as {trait_name}>::__glue_{}__local),",
+                format!("{}$local", entry.baml_method_name),
+                entry.rust_method_name
+            )
+            .unwrap();
+        }
     }
     out.push_str("            _ => None,\n");
     out.push_str("        }\n");
@@ -1076,6 +1088,50 @@ fn emit_required_method(out: &mut String, method_name: &str, b: &NativeBuiltin) 
         )
         .unwrap(),
     }
+}
+
+/// The glue of [`emit_glue_method`] for a receiver only this thread can
+/// reach: the same body, with the receiver read through the thread-local
+/// accessor, which takes no lock. Callers select it per call site, where
+/// escape analysis proves the receiver thread-local.
+fn emit_thread_local_twin(
+    out: &mut String,
+    trait_name: &str,
+    method_name: &str,
+    b: &NativeBuiltin,
+) {
+    let mut glue = String::new();
+    emit_glue_method(&mut glue, trait_name, method_name, b);
+    let glue = glue.replacen(
+        &format!("fn __glue_{method_name}("),
+        &format!("fn __glue_{method_name}__local("),
+        1,
+    );
+    let mut replaced = 0;
+    let glue = [
+        (
+            "vm.as_array_mut(&args[0])?",
+            "unsafe { vm.as_array_mut_local(&args[0]) }?",
+        ),
+        (
+            "vm.as_array(&args[0])?",
+            "unsafe { vm.as_array_local(&args[0]) }?",
+        ),
+    ]
+    .iter()
+    .fold(glue, |glue, (locked, local)| {
+        replaced += glue.matches(locked).count();
+        glue.replace(locked, local)
+    });
+    assert_eq!(
+        replaced, 1,
+        "baml codegen error: {} has a thread-local twin but its glue reads the receiver {replaced} times",
+        b.path
+    );
+    out.push_str(
+        "    // SAFETY: selected only for a receiver escape analysis proved thread-local.\n    #[allow(unsafe_code)]\n",
+    );
+    out.push_str(&glue);
 }
 
 fn emit_glue_method(out: &mut String, trait_name: &str, method_name: &str, b: &NativeBuiltin) {

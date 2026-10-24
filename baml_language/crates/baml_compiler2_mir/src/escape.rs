@@ -36,6 +36,8 @@ use crate::{
 /// The thread-locality of every object a body names.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EscapeFacts {
+    /// Per block: whether its terminator calls a builtin's thread-local twin.
+    local_calls: Vec<bool>,
     /// The node each local's value belongs to.
     local_node: Vec<usize>,
     /// Per node: whether another thread may reach what it holds.
@@ -45,6 +47,12 @@ pub struct EscapeFacts {
 }
 
 impl EscapeFacts {
+    /// Whether `block`'s terminator is a builtin call whose receiver is
+    /// thread-local, so it takes the builtin's lock-free twin.
+    pub fn calls_thread_local_twin(&self, block: crate::BlockId) -> bool {
+        self.local_calls.get(block.0).copied().unwrap_or(false)
+    }
+
     /// Whether the object `place` evaluates to is thread-local.
     pub fn object_is_thread_local(&self, place: &Place) -> bool {
         self.object_node(place)
@@ -103,7 +111,35 @@ pub fn analyze<'db>(
     for local in 1..=arity.min(body.locals.len().saturating_sub(1)) {
         graph.mark_shared(local);
     }
-    graph.finish()
+    let mut facts = graph.finish();
+    let builtins = Builtins::new(db);
+    facts.local_calls = body
+        .blocks
+        .iter()
+        .map(|block| {
+            let Some(Terminator::Call {
+                has_trace: false,
+                argument_layout,
+                callee,
+                args,
+                ntypeargs,
+                ..
+            }) = &block.terminator
+            else {
+                return false;
+            };
+            argument_layout
+                .as_ref()
+                .is_none_or(|layout| layout.0.iter().all(Option::is_none))
+                && builtins.effect(callee).is_some_and(|effect| effect.twin)
+                && matches!(
+                    args.get(*ntypeargs),
+                    Some(Operand::Copy(receiver) | Operand::Move(receiver))
+                        if facts.object_is_thread_local(receiver)
+                )
+        })
+        .collect();
+    facts
 }
 
 /// What calling `function` does with its arguments and result, for callers:
@@ -368,6 +404,7 @@ pub fn coverage<'db>(
     let resolved = graph.resolve();
     let locals = graph.locals;
     let facts = EscapeFacts {
+        local_calls: Vec::new(),
         local_node: resolved.roots[..locals].to_vec(),
         shared: resolved.shared.clone(),
         contents: resolved.contents.clone(),
@@ -1037,6 +1074,8 @@ struct Effect {
     returns: Returns,
     /// It hashes or compares the receiver's keys.
     compares_keys: bool,
+    /// It has a `$local` glue twin for a thread-local receiver.
+    twin: bool,
 }
 
 #[derive(Debug)]
@@ -1087,6 +1126,7 @@ fn declared_effects() -> &'static FxHashMap<String, Effect> {
                             }
                         },
                         compares_keys: declared.compares_keys,
+                        twin: builtin.has_thread_local_twin(),
                     },
                 );
             }
@@ -1512,6 +1552,7 @@ impl<'a, 'db> Graph<'a, 'db> {
     fn finish(mut self) -> EscapeFacts {
         let resolved = self.resolve();
         EscapeFacts {
+            local_calls: Vec::new(),
             local_node: resolved.roots[..self.locals].to_vec(),
             shared: resolved.shared,
             contents: resolved.contents,

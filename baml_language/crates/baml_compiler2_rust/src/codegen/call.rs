@@ -45,7 +45,7 @@ impl<'db> Generator<'_, 'db> {
             FunctionKind::Bytecode => Err(Rejection::Invalid(format!(
                 "call to uncompiled `{name}` emitted directly"
             ))),
-            FunctionKind::NativeUnresolved | FunctionKind::Native(_) => {
+            FunctionKind::NativeUnresolved | FunctionKind::Native(..) => {
                 let Some(key) = info.native_key.as_deref() else {
                     return unsupported(format!("builtin `{name}` has no native key"));
                 };
@@ -54,7 +54,12 @@ impl<'db> Generator<'_, 'db> {
                         "yielding builtin `{key}` emitted inline"
                     )));
                 }
-                let ordinal = self.builtin_ordinal(key);
+                // A thread-local receiver takes the builtin's lock-free twin.
+                let ordinal = if self.analysis.escape.calls_thread_local_twin(block) {
+                    self.builtin_ordinal(&format!("{key}$local"))
+                } else {
+                    self.builtin_ordinal(key)
+                };
                 let call = if types.is_empty() {
                     format!("vm.call_builtin(builtin_{ordinal}()?, {args})")
                 } else {

@@ -49,8 +49,10 @@ pub enum FunctionKind {
     /// # Safety
     ///
     /// The pointer must be cast from a valid `NativeFunction` and only
-    /// cast back to that same type when calling.
-    Native(*const ()),
+    /// cast back to that same type when calling. The second is the
+    /// builtin's thread-local twin, if it has one: the same glue reading its
+    /// receiver without the container lock, which `CallLocal` selects.
+    Native(*const (), Option<*const ()>),
 }
 
 // SAFETY: FunctionKind contains a raw pointer (*const ()) that points to
@@ -137,7 +139,7 @@ impl BorshSerialize for FunctionKind {
         let wire = match self {
             Self::Bytecode => FunctionKindWire::Bytecode,
             Self::SysOp(op) => FunctionKindWire::SysOp(*op),
-            Self::NativeUnresolved | Self::Native(_) => FunctionKindWire::NativeUnresolved,
+            Self::NativeUnresolved | Self::Native(..) => FunctionKindWire::NativeUnresolved,
         };
         wire.serialize(writer)
     }
@@ -925,7 +927,7 @@ impl From<crate::FunctionKind> for btel_types::RuntimeFunctionKind {
             crate::FunctionKind::Bytecode => Self::Bytecode,
             crate::FunctionKind::SysOp(op) => Self::SysOp(format!("{op:?}")),
             crate::FunctionKind::NativeUnresolved => Self::NativeUnresolved,
-            crate::FunctionKind::Native(_) => Self::Native,
+            crate::FunctionKind::Native(..) => Self::Native,
         }
     }
 }

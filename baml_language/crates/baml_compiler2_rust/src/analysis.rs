@@ -650,7 +650,7 @@ pub(crate) fn suspends_directly<'db>(
                 // Pass-through tracing needs VM-managed frame spans.
                 FunctionKind::Bytecode => info.trace_passthrough,
                 FunctionKind::SysOp(_) => true,
-                FunctionKind::Native(_) | FunctionKind::NativeUnresolved => {
+                FunctionKind::Native(..) | FunctionKind::NativeUnresolved => {
                     let shape = call_shape(body, args, *ntypeargs, static_types);
                     !info
                         .native_key
