@@ -750,7 +750,10 @@ function Boundary() -> int { let map = { "present": 1 }; map["missing"] }
                 .iter()
                 .rposition(|instruction| {
                     if name == "user.Boundary" {
-                        matches!(instruction, Instruction::Call { .. })
+                        matches!(
+                            instruction,
+                            Instruction::Call { .. } | Instruction::CallLocal { .. }
+                        )
                     } else {
                         matches!(instruction, Instruction::Throw)
                     }

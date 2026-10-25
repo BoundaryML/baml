@@ -1084,6 +1084,38 @@ pub enum Instruction {
     /// others are free. As for a generic parameter's bound, only a concrete
     /// type can satisfy it.
     SatisfiesBound,
+
+    /// [`Self::LoadArrayElement`] on an array escape analysis proved no
+    /// other thread can reach: reads without the container's lock.
+    LoadArrayElementLocal,
+    /// [`Self::StoreArrayElement`] on a thread-local array, without the lock.
+    StoreArrayElementLocal,
+    /// [`Self::ContainerLen`] on a thread-local container, without the lock.
+    ContainerLenLocal,
+    /// [`Self::Call`] of a builtin whose receiver escape analysis proved
+    /// thread-local: takes the builtin's lock-free twin when it has one.
+    CallLocal {
+        callee: GlobalIndex,
+        ntypeargs: u16,
+    },
+    /// One step of `for` over an array, compiled as an index walk: with the
+    /// array in local `iterator` and the next index in local `index`, push
+    /// the element and advance, or push a `baml.iter.Done` at the end. The
+    /// length is re-read each step, as `ArrayIterator.next` does.
+    ArrayIterNext {
+        iterator: usize,
+        index: usize,
+    },
+    /// [`Self::ArrayIterNext`] over a thread-local array, without its lock.
+    ArrayIterNextLocal {
+        iterator: usize,
+        index: usize,
+    },
+    /// [`Self::LoadField`] of an instance escape analysis proved no other
+    /// thread can reach: a relaxed load, which needs no barrier.
+    LoadFieldLocal(usize),
+    /// [`Self::StoreField`] into a thread-local instance: a relaxed store.
+    StoreFieldLocal(usize),
 }
 
 /// Compact bytecode opcodes.
@@ -1305,6 +1337,20 @@ pub enum OpCode {
 
     /// Resume a compiled body through a stub appended at load time, never serialized.
     ResumeCompiled,
+
+    // Lock-free container access for thread-local containers, appended to
+    // preserve discriminants.
+    LoadArrayElementLocal,
+    StoreArrayElementLocal,
+    ContainerLenLocal,
+    // u32 callee + u16 ntypeargs, like `Call`.
+    CallLocal,
+    // u32 iterator slot + u32 index slot.
+    ArrayIterNext,
+    ArrayIterNextLocal,
+    // u32 field index, like `LoadField` / `StoreField`.
+    LoadFieldLocal,
+    StoreFieldLocal,
 }
 
 impl OpCode {
@@ -1402,6 +1448,8 @@ impl OpCode {
             | Self::StoreGlobal
             | Self::LoadField
             | Self::StoreField
+            | Self::LoadFieldLocal
+            | Self::StoreFieldLocal
             | Self::InitField
             | Self::InitSpread
             | Self::Pop
@@ -1442,7 +1490,7 @@ impl OpCode {
             | Self::MakeVirtualFunction => 3,
 
             // 7-byte: opcode + u32 + u16 (type-arg threading)
-            Self::CallHooked => 7,
+            Self::CallHooked | Self::CallLocal => 7,
             Self::BeginTraceHook => 2,
             Self::EndTraceHook
             | Self::TraceHookHidden
@@ -1451,7 +1499,10 @@ impl OpCode {
             | Self::TraceHookRich
             | Self::TraceHookEmptySpan
             | Self::SatisfiesBound
-            | Self::ResumeCompiled => 1,
+            | Self::ResumeCompiled
+            | Self::LoadArrayElementLocal
+            | Self::StoreArrayElementLocal
+            | Self::ContainerLenLocal => 1,
             Self::AllocInstance | Self::Call | Self::CallExactArgs | Self::MakeGenericFunction => 7,
 
             // 9-byte: opcode + u32 + u16 + u16 (closure with capture+typearg counts)
@@ -1461,7 +1512,11 @@ impl OpCode {
             Self::JumpTable => 9,
 
             // 9-byte: opcode + u32 + u32 (operand-movement superinstructions)
-            Self::LoadVar2 | Self::StoreVar2 | Self::NarrowBind => 9,
+            Self::LoadVar2
+            | Self::StoreVar2
+            | Self::NarrowBind
+            | Self::ArrayIterNext
+            | Self::ArrayIterNextLocal => 9,
         }
     }
 }
@@ -1612,6 +1667,14 @@ impl TryFrom<u8> for OpCode {
             x if x == Self::TraceHookEmptySpan as u8 => Ok(Self::TraceHookEmptySpan),
             x if x == Self::SatisfiesBound as u8 => Ok(Self::SatisfiesBound),
             x if x == Self::ResumeCompiled as u8 => Ok(Self::ResumeCompiled),
+            x if x == Self::LoadArrayElementLocal as u8 => Ok(Self::LoadArrayElementLocal),
+            x if x == Self::StoreArrayElementLocal as u8 => Ok(Self::StoreArrayElementLocal),
+            x if x == Self::ContainerLenLocal as u8 => Ok(Self::ContainerLenLocal),
+            x if x == Self::CallLocal as u8 => Ok(Self::CallLocal),
+            x if x == Self::ArrayIterNext as u8 => Ok(Self::ArrayIterNext),
+            x if x == Self::ArrayIterNextLocal as u8 => Ok(Self::ArrayIterNextLocal),
+            x if x == Self::LoadFieldLocal as u8 => Ok(Self::LoadFieldLocal),
+            x if x == Self::StoreFieldLocal as u8 => Ok(Self::StoreFieldLocal),
 
             x if x == Self::CallExactArgs as u8 => Ok(Self::CallExactArgs),
             x if x == Self::SetCallTrace as u8 => Ok(Self::SetCallTrace),
@@ -1633,6 +1696,14 @@ impl std::fmt::Display for OpCode {
             Self::TraceHookEmptySpan => "TRACE_HOOK_EMPTY_SPAN",
             Self::SatisfiesBound => "SATISFIES_BOUND",
             Self::ResumeCompiled => "RESUME_COMPILED",
+            Self::LoadArrayElementLocal => "LOAD_ARRAY_ELEMENT_LOCAL",
+            Self::StoreArrayElementLocal => "STORE_ARRAY_ELEMENT_LOCAL",
+            Self::ContainerLenLocal => "CONTAINER_LEN_LOCAL",
+            Self::CallLocal => "CALL_LOCAL",
+            Self::ArrayIterNext => "ARRAY_ITER_NEXT",
+            Self::ArrayIterNextLocal => "ARRAY_ITER_NEXT_LOCAL",
+            Self::LoadFieldLocal => "LOAD_FIELD_LOCAL",
+            Self::StoreFieldLocal => "STORE_FIELD_LOCAL",
 
             Self::Return => "RETURN",
             Self::Await => "AWAIT",
@@ -1889,6 +1960,8 @@ impl std::fmt::Display for Instruction {
             Instruction::VirtualLoadField(i) => write!(f, "VIRTUAL_LOAD_FIELD {i}"),
             Instruction::VirtualStoreField(i) => write!(f, "VIRTUAL_STORE_FIELD {i}"),
             Instruction::StoreField(i) => write!(f, "STORE_FIELD {i}"),
+            Instruction::LoadFieldLocal(i) => write!(f, "LOAD_FIELD_LOCAL {i}"),
+            Instruction::StoreFieldLocal(i) => write!(f, "STORE_FIELD_LOCAL {i}"),
             Instruction::InitField(i) => write!(f, "INIT_FIELD {i}"),
             Instruction::InitSpread(i) => write!(f, "INIT_SPREAD {i}"),
             Instruction::Pop(n) => write!(f, "POP {n}"),
@@ -1957,6 +2030,15 @@ impl std::fmt::Display for Instruction {
             }
             Instruction::Call { callee, ntypeargs } => {
                 write!(f, "CALL {callee} ntypeargs={ntypeargs}")
+            }
+            Instruction::CallLocal { callee, ntypeargs } => {
+                write!(f, "CALL_LOCAL {callee} ntypeargs={ntypeargs}")
+            }
+            Instruction::ArrayIterNext { iterator, index } => {
+                write!(f, "ARRAY_ITER_NEXT {iterator} {index}")
+            }
+            Instruction::ArrayIterNextLocal { iterator, index } => {
+                write!(f, "ARRAY_ITER_NEXT_LOCAL {iterator} {index}")
             }
 
             Instruction::MakeGenericFunction {
@@ -2035,6 +2117,9 @@ impl std::fmt::Display for Instruction {
             Instruction::CaptureRef(idx) => write!(f, "CAPTURE_REF {idx}"),
             Instruction::SendEvent => f.write_str("SEND_EVENT"),
             Instruction::ContainerLen => f.write_str("CONTAINER_LEN"),
+            Instruction::LoadArrayElementLocal => f.write_str("LOAD_ARRAY_ELEMENT_LOCAL"),
+            Instruction::StoreArrayElementLocal => f.write_str("STORE_ARRAY_ELEMENT_LOCAL"),
+            Instruction::ContainerLenLocal => f.write_str("CONTAINER_LEN_LOCAL"),
             Instruction::LoadVar2(a, b) => write!(f, "LOAD_VAR2 {a} {b}"),
             Instruction::StoreVar2(a, b) => write!(f, "STORE_VAR2 {a} {b}"),
         }
@@ -2543,6 +2628,9 @@ impl Bytecode {
                 | Instruction::MakeCell
                 | Instruction::SendEvent
                 | Instruction::ContainerLen
+                | Instruction::LoadArrayElementLocal
+                | Instruction::StoreArrayElementLocal
+                | Instruction::ContainerLenLocal
                 | Instruction::Spawn
                 | Instruction::AwaitAny => {}
 
@@ -2606,6 +2694,8 @@ impl Bytecode {
                 | Instruction::VirtualLoadField(v)
                 | Instruction::VirtualStoreField(v)
                 | Instruction::StoreField(v)
+                | Instruction::LoadFieldLocal(v)
+                | Instruction::StoreFieldLocal(v)
                 | Instruction::InitField(v)
                 | Instruction::InitSpread(v)
                 | Instruction::InitInstance(v)
@@ -2643,7 +2733,8 @@ impl Bytecode {
                 // ── Call: u32 callee + u16 ntypeargs ─────────────────
                 Instruction::BeginTraceHook(settings) => code.push(u8::from(*settings)),
                 Instruction::CallHooked { callee, ntypeargs }
-                | Instruction::Call { callee, ntypeargs } => {
+                | Instruction::Call { callee, ntypeargs }
+                | Instruction::CallLocal { callee, ntypeargs } => {
                     code.extend_from_slice(
                         &u32::try_from(callee.into_raw())
                             .expect("global index fits u32")
@@ -2771,7 +2862,16 @@ impl Bytecode {
                 }
 
                 // ── Operand-movement superinstructions: two u32 operands ──
-                Instruction::LoadVar2(a, b) | Instruction::StoreVar2(a, b) => {
+                Instruction::LoadVar2(a, b)
+                | Instruction::StoreVar2(a, b)
+                | Instruction::ArrayIterNext {
+                    iterator: a,
+                    index: b,
+                }
+                | Instruction::ArrayIterNextLocal {
+                    iterator: a,
+                    index: b,
+                } => {
                     code.extend_from_slice(
                         &u32::try_from(*a).expect("operand fits u32").to_le_bytes(),
                     );
@@ -2961,6 +3061,14 @@ impl Bytecode {
             Instruction::MakeCell => OpCode::MakeCell,
             Instruction::SendEvent => OpCode::SendEvent,
             Instruction::ContainerLen => OpCode::ContainerLen,
+            Instruction::LoadArrayElementLocal => OpCode::LoadArrayElementLocal,
+            Instruction::StoreArrayElementLocal => OpCode::StoreArrayElementLocal,
+            Instruction::ContainerLenLocal => OpCode::ContainerLenLocal,
+            Instruction::CallLocal { .. } => OpCode::CallLocal,
+            Instruction::ArrayIterNext { .. } => OpCode::ArrayIterNext,
+            Instruction::ArrayIterNextLocal { .. } => OpCode::ArrayIterNextLocal,
+            Instruction::LoadFieldLocal(_) => OpCode::LoadFieldLocal,
+            Instruction::StoreFieldLocal(_) => OpCode::StoreFieldLocal,
             Instruction::LoadVar2(..) => OpCode::LoadVar2,
             Instruction::StoreVar2(..) => OpCode::StoreVar2,
 
@@ -3511,6 +3619,38 @@ mod compact_tests {
             (Instruction::VirtualStoreField(1), OpCode::VirtualStoreField),
             (Instruction::LoadField(1), OpCode::LoadField),
             (Instruction::StoreField(1), OpCode::StoreField),
+            (Instruction::LoadFieldLocal(1), OpCode::LoadFieldLocal),
+            (Instruction::StoreFieldLocal(1), OpCode::StoreFieldLocal),
+            (
+                Instruction::LoadArrayElementLocal,
+                OpCode::LoadArrayElementLocal,
+            ),
+            (
+                Instruction::StoreArrayElementLocal,
+                OpCode::StoreArrayElementLocal,
+            ),
+            (Instruction::ContainerLenLocal, OpCode::ContainerLenLocal),
+            (
+                Instruction::CallLocal {
+                    callee: GlobalIndex::from_raw(3),
+                    ntypeargs: 1,
+                },
+                OpCode::CallLocal,
+            ),
+            (
+                Instruction::ArrayIterNext {
+                    iterator: 2,
+                    index: 3,
+                },
+                OpCode::ArrayIterNext,
+            ),
+            (
+                Instruction::ArrayIterNextLocal {
+                    iterator: 2,
+                    index: 3,
+                },
+                OpCode::ArrayIterNextLocal,
+            ),
         ] {
             let bc = make_bytecode(vec![instruction], Vec::new());
             let op = bc.instruction_to_opcode(&instruction);

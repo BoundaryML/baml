@@ -875,6 +875,146 @@ function main() -> int {
 }
 
 #[test]
+fn bytecode_takes_the_lock_free_paths_for_thread_local_arrays() {
+    let program = crate::engine::compile_source_with_opt(
+        r#"
+function build(n: int) -> int {
+  let xs: int[] = [];
+  let i = 0;
+  while (i < n) { xs.push(i); i += 1; }
+  let total = 0;
+  for (let x in xs) { total += x; }
+  total + xs[0] + xs.length()
+}
+function walk(xs: int[]) -> int {
+  let total = 0;
+  for (let x in xs) { total += x; }
+  xs.push(total);
+  total + xs[0]
+}
+"#,
+        OptLevel::Two,
+    );
+    let bytecode = crate::engine::display_user_functions(&program);
+    let body = |name: &str| {
+        bytecode
+            .split(&format!("function {name}("))
+            .nth(1)
+            .and_then(|rest| rest.split("\nfunction ").next())
+            .unwrap_or_else(|| panic!("no `{name}` in:\n{bytecode}"))
+    };
+    let build = body("build");
+    for local in [
+        "call_local baml.Array.push",
+        "array_iter_next_local",
+        "load_array_element_local",
+        "container_len_local",
+    ] {
+        assert!(build.contains(local), "`build` lacks {local}:\n{build}");
+    }
+    let walk = body("walk");
+    assert!(
+        !walk.contains("_local"),
+        "a parameter's array keeps its locks:\n{walk}"
+    );
+    assert!(
+        walk.contains("array_iter_next "),
+        "`walk` still walks by index:\n{walk}"
+    );
+}
+
+#[test]
+fn bytecode_takes_the_lock_free_paths_for_thread_local_maps() {
+    let program = crate::engine::compile_source_with_opt(
+        r#"
+function build(n: int) -> int {
+  let m: map<string, int> = {};
+  m.set("a", n);
+  m["b"] = n;
+  let c = m.get_or_insert("c", 1);
+  let total = m["a"] + c + m.length() + m.keys().length();
+  if (m.has("b")) { m.delete("b"); }
+  total + (m.get("a") ?? 0)
+}
+function share(m: map<string, int>) -> int {
+  m.set("a", 1);
+  m["a"]
+}
+"#,
+        OptLevel::Two,
+    );
+    let bytecode = crate::engine::display_user_functions(&program);
+    let body = |name: &str| {
+        bytecode
+            .split(&format!("function {name}("))
+            .nth(1)
+            .and_then(|rest| rest.split("\nfunction ").next())
+            .unwrap_or_else(|| panic!("no `{name}` in:\n{bytecode}"))
+    };
+    let build = body("build");
+    for local in [
+        "call_local baml.Map.set\n",
+        "call_local baml.Map.get_or_insert\n",
+        "call_local baml.Map.index\n",
+        "call_local baml.Map.keys\n",
+        "call_local baml.Map.has\n",
+        "call_local baml.Map.delete\n",
+        "call_local baml.Map.get\n",
+        "container_len_local\n",
+    ] {
+        assert!(build.contains(local), "`build` lacks {local}:\n{build}");
+    }
+    let share = body("share");
+    assert!(
+        !share.contains("_local"),
+        "a parameter's map keeps its locks:\n{share}"
+    );
+}
+
+#[test]
+fn bytecode_takes_relaxed_field_paths_for_thread_local_instances() {
+    let program = crate::engine::compile_source_with_opt(
+        r#"
+class Counter {
+  n: int
+}
+function build(k: int) -> int {
+  let c = Counter { n: 0 };
+  let i = 0;
+  while (i < k) { c.n = c.n + i; i += 1; }
+  c.n
+}
+function bump(c: Counter) -> int {
+  c.n = c.n + 1;
+  c.n
+}
+"#,
+        OptLevel::Two,
+    );
+    let bytecode = crate::engine::display_user_functions(&program);
+    let body = |name: &str| {
+        bytecode
+            .split(&format!("function {name}("))
+            .nth(1)
+            .and_then(|rest| rest.split("\nfunction ").next())
+            .unwrap_or_else(|| panic!("no `{name}` in:\n{bytecode}"))
+    };
+    let build = body("build");
+    for local in ["load_field_local .n", "store_field_local .n"] {
+        assert!(build.contains(local), "`build` lacks {local}:\n{build}");
+    }
+    assert!(
+        !build.contains("load_field .n") && !build.contains("store_field .n"),
+        "`build` keeps an ordered field access:\n{build}"
+    );
+    let bump = body("bump");
+    assert!(
+        !bump.contains("_local"),
+        "a parameter's instance keeps ordered fields:\n{bump}"
+    );
+}
+
+#[test]
 fn fresh_results_of_declared_builtins_are_thread_local() {
     assert_locality(
         r#"

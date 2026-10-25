@@ -143,6 +143,7 @@ pub(crate) fn display_instruction(
             display_global_ref(*index, globals, objects, compile_time_globals)
         }
         Instruction::Call { callee, .. }
+        | Instruction::CallLocal { callee, .. }
         | Instruction::CallHooked { callee, .. }
         | Instruction::SysOp(callee) => {
             display_global_ref(*callee, globals, objects, compile_time_globals)
@@ -165,9 +166,11 @@ pub(crate) fn display_instruction(
             None => "(?)".to_string(),
         },
         Instruction::LoadField(_)
+        | Instruction::LoadFieldLocal(_)
         | Instruction::VirtualLoadField(_)
         | Instruction::VirtualStoreField(_)
         | Instruction::StoreField(_)
+        | Instruction::StoreFieldLocal(_)
         | Instruction::InitField(_)
         | Instruction::InitSpread(_)
         | Instruction::InitInstance(_) => operand_meta
@@ -248,12 +251,16 @@ pub(crate) fn display_instruction(
         | Instruction::CmpBigintOp(_)
         | Instruction::LoadVar2(..)
         | Instruction::StoreVar2(..)
+        | Instruction::ArrayIterNext { .. }
+        | Instruction::ArrayIterNextLocal { .. }
         | Instruction::UnaryOp(_)
         | Instruction::AllocArray(_)
         | Instruction::AllocMap(_)
         | Instruction::LoadArrayElement
+        | Instruction::LoadArrayElementLocal
         | Instruction::LoadMapElement
         | Instruction::StoreArrayElement
+        | Instruction::StoreArrayElementLocal
         | Instruction::StoreMapElement
         | Instruction::Await
         | Instruction::AwaitAny
@@ -278,6 +285,7 @@ pub(crate) fn display_instruction(
         | Instruction::Return
         | Instruction::SendEvent
         | Instruction::ContainerLen
+        | Instruction::ContainerLenLocal
         | Instruction::Spawn
         | Instruction::LoadType(_)
         | Instruction::BindType(_)
@@ -388,20 +396,26 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::LoadCurrentPackage(_)
         | Instruction::LoadVar(_)
         | Instruction::LoadVar2(..)
+        | Instruction::ArrayIterNext { .. }
+        | Instruction::ArrayIterNextLocal { .. }
         | Instruction::LoadGlobal(_)
         | Instruction::LoadField(_)
+        | Instruction::LoadFieldLocal(_)
         | Instruction::VirtualLoadField(_)
         | Instruction::LoadArrayElement
+        | Instruction::LoadArrayElementLocal
         | Instruction::LoadMapElement => Style::new().blue(),
         Instruction::StoreVar(_)
         | Instruction::StoreVarLoadVar(_)
         | Instruction::StoreVar2(..)
         | Instruction::StoreGlobal(_)
         | Instruction::StoreField(_)
+        | Instruction::StoreFieldLocal(_)
         | Instruction::VirtualStoreField(_)
         | Instruction::InitField(_)
         | Instruction::InitSpread(_)
         | Instruction::StoreArrayElement
+        | Instruction::StoreArrayElementLocal
         | Instruction::StoreMapElement => Style::new().green(),
         Instruction::BinOp(_)
         | Instruction::CmpOp(_)
@@ -438,6 +452,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         | Instruction::JumpTable { .. }
         | Instruction::DenseTag(_) => Style::new().yellow(),
         Instruction::Call { .. }
+        | Instruction::CallLocal { .. }
         | Instruction::CallHooked { .. }
         | Instruction::BeginTraceHook(_)
         | Instruction::EndTraceHook
@@ -482,7 +497,7 @@ fn instruction_style(instruction: &Instruction) -> Style {
         }
         Instruction::StoreDeref(_) | Instruction::StoreCapture(_) => Style::new().green(),
         Instruction::SendEvent => Style::new().green().bright(),
-        Instruction::ContainerLen => Style::new().cyan(),
+        Instruction::ContainerLen | Instruction::ContainerLenLocal => Style::new().cyan(),
     }
 }
 
@@ -778,6 +793,12 @@ fn display_instruction_textual(
         Instruction::StoreVar(idx) => format!("store_var {}", meta_str(idx)),
         Instruction::StoreVarLoadVar(idx) => format!("store_var_load_var {}", meta_str(idx)),
         Instruction::LoadVar2(a, b) => format!("load_var2 {a} {b}"),
+        Instruction::ArrayIterNext { iterator, index } => {
+            format!("array_iter_next {iterator} {index}")
+        }
+        Instruction::ArrayIterNextLocal { iterator, index } => {
+            format!("array_iter_next_local {iterator} {index}")
+        }
         Instruction::StoreVar2(a, b) => format!("store_var2 {a} {b}"),
 
         // --- Globals ---
@@ -792,6 +813,14 @@ fn display_instruction_textual(
         Instruction::StoreField(idx) => {
             let name = meta_str(idx);
             format!("store_field .{name}")
+        }
+        Instruction::LoadFieldLocal(idx) => {
+            let name = meta_str(idx);
+            format!("load_field_local .{name}")
+        }
+        Instruction::StoreFieldLocal(idx) => {
+            let name = meta_str(idx);
+            format!("store_field_local .{name}")
         }
         // The operand indexes the *interface's* field list, not the receiver's
         // layout, so show the name and mark it virtual.
@@ -954,10 +983,13 @@ fn display_instruction_textual(
         Instruction::LoadMapElement => "load_map_element".to_string(),
         Instruction::StoreArrayElement => "store_array_element".to_string(),
         Instruction::StoreMapElement => "store_map_element".to_string(),
+        Instruction::LoadArrayElementLocal => "load_array_element_local".to_string(),
+        Instruction::StoreArrayElementLocal => "store_array_element_local".to_string(),
 
         // --- Calls ---
         Instruction::Call { .. } => format!("call {}", meta_str(&"")),
         Instruction::CallHooked { .. } => format!("call_hooked {}", meta_str(&"")),
+        Instruction::CallLocal { .. } => format!("call_local {}", meta_str(&"")),
         Instruction::BeginTraceHook(value) => format!("begin_trace_hook {value}"),
         Instruction::EndTraceHook => "end_trace_hook".into(),
         Instruction::TraceHookHidden => "trace_hook_hidden".into(),
@@ -1062,6 +1094,7 @@ fn display_instruction_textual(
         Instruction::CaptureRef(idx) => format!("capture_ref {idx}"),
         Instruction::SendEvent => "send_event".to_string(),
         Instruction::ContainerLen => "container_len".to_string(),
+        Instruction::ContainerLenLocal => "container_len_local".to_string(),
     }
 }
 
@@ -1218,12 +1251,15 @@ fn display_expanded_metadata(ip: usize, instruction: &Instruction, function: &Fu
         | Instruction::LoadGlobal(_)
         | Instruction::StoreGlobal(_)
         | Instruction::LoadField(_)
+        | Instruction::LoadFieldLocal(_)
         | Instruction::VirtualLoadField(_)
         | Instruction::VirtualStoreField(_)
         | Instruction::StoreField(_)
+        | Instruction::StoreFieldLocal(_)
         | Instruction::InitField(_)
         | Instruction::InitSpread(_)
         | Instruction::Call { .. }
+        | Instruction::CallLocal { .. }
         | Instruction::CallHooked { .. }
         | Instruction::BeginTraceHook(_)
         | Instruction::EndTraceHook
@@ -1326,8 +1362,10 @@ pub fn display_compact_bytecode(
             | OpCode::Throw
             | OpCode::Rethrow
             | OpCode::LoadArrayElement
+            | OpCode::LoadArrayElementLocal
             | OpCode::LoadMapElement
             | OpCode::StoreArrayElement
+            | OpCode::StoreArrayElementLocal
             | OpCode::StoreMapElement
             | OpCode::CallIndirect
             | OpCode::EndTraceHook
@@ -1345,6 +1383,7 @@ pub fn display_compact_bytecode(
             | OpCode::MakeCell
             | OpCode::SendEvent
             | OpCode::ContainerLen
+            | OpCode::ContainerLenLocal
             | OpCode::Spawn
             | OpCode::Add
             | OpCode::Sub
@@ -1429,9 +1468,11 @@ pub fn display_compact_bytecode(
             | OpCode::LoadGlobal
             | OpCode::StoreGlobal
             | OpCode::LoadField
+            | OpCode::LoadFieldLocal
             | OpCode::VirtualLoadField
             | OpCode::VirtualStoreField
             | OpCode::StoreField
+            | OpCode::StoreFieldLocal
             | OpCode::InitField
             | OpCode::InitSpread
             | OpCode::Pop
@@ -1479,7 +1520,7 @@ pub fn display_compact_bytecode(
                 )?;
             }
 
-            OpCode::Call | OpCode::CallExactArgs | OpCode::CallHooked => {
+            OpCode::Call | OpCode::CallExactArgs | OpCode::CallHooked | OpCode::CallLocal => {
                 let callee = read_u32(code, &mut pc);
                 let ntypeargs = read_u16(code, &mut pc);
                 writeln!(f, "callee={callee}  ntypeargs={ntypeargs}")?;
@@ -1522,7 +1563,11 @@ pub fn display_compact_bytecode(
             }
 
             // Two u32 operands (operand-movement superinstructions)
-            OpCode::LoadVar2 | OpCode::StoreVar2 | OpCode::NarrowBind => {
+            OpCode::LoadVar2
+            | OpCode::StoreVar2
+            | OpCode::NarrowBind
+            | OpCode::ArrayIterNext
+            | OpCode::ArrayIterNextLocal => {
                 let a = read_u32(code, &mut pc);
                 let b = read_u32(code, &mut pc);
                 writeln!(f, "{a} {b}")?;

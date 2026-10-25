@@ -21,7 +21,7 @@ function fixtures.short_circuit_locals.coalesced_lengths_compared_apart() -> boo
     load_var _4
     load_const "a"
     load_const 1
-    call baml.Map.set
+    call_local baml.Map.set
     pop 1
     load_type int
     alloc_array 0
@@ -29,17 +29,17 @@ function fixtures.short_circuit_locals.coalesced_lengths_compared_apart() -> boo
     init_instance user.fixtures.short_circuit_locals.ShortCircuitBox .items, .tags
     store_var box
     load_var box
-    load_field .items
+    load_field_local .items
     store_var items
     load_var box
-    load_field .tags
+    load_field_local .tags
     store_var tags
     load_var items
     load_const null
     cmp_op ==
     pop_jump_if_true L0
     load_var items
-    container_len
+    container_len_local
     jump L1
 
   L0:
@@ -63,7 +63,7 @@ function fixtures.short_circuit_locals.coalesced_lengths_compared_apart() -> boo
     cmp_op ==
     pop_jump_if_true L5
     load_var tags
-    container_len
+    container_len_local
     jump L6
 
   L5:
@@ -117,16 +117,12 @@ function fixtures.short_circuit_locals.conditional_short_circuit_in_loop(items: 
     load_const 0
     store_var hits
     load_var items
-    load_type baml.iter.Iterable<Error = never, Item = int>
-    load_const "iter"
-    virtual_call nargs=1 ntypeargs=0 self_arg=0
     store_var _6
+    load_const 0
+    store_var ?8
 
   L0:
-    load_var _6
-    load_type baml.iter.Iterator<Error = never, Item = int>
-    load_const "next"
-    virtual_call nargs=1 ntypeargs=0 self_arg=0
+    array_iter_next 6 8
     store_var _7
     load_var _7
     is_type baml.iter.Done
@@ -160,16 +156,12 @@ function fixtures.short_circuit_locals.initialized_local_in_branch_loop(items: i
     load_const 0
     store_var total
     load_var items
-    load_type baml.iter.Iterable<Error = never, Item = int>
-    load_const "iter"
-    virtual_call nargs=1 ntypeargs=0 self_arg=0
     store_var _3
+    load_const 0
+    store_var ?5
 
   L0:
-    load_var _3
-    load_type baml.iter.Iterator<Error = never, Item = int>
-    load_const "next"
-    virtual_call nargs=1 ntypeargs=0 self_arg=0
+    array_iter_next 3 5
     store_var _4
     load_var _4
     is_type baml.iter.Done

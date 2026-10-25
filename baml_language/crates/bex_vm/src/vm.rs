@@ -489,6 +489,7 @@ pub(crate) mod tests {
             context_transfers: Vec::new(),
             argv: Arc::from([]),
             pending_call_trace: None,
+            thread_local_call: false,
             pending_trace_hooks: Vec::new(),
             held_traces: Vec::new(),
             trace_scope_frame: usize::MAX,
@@ -536,7 +537,7 @@ pub(crate) mod tests {
             arity: 0,
             real_local_count: 0,
             bytecode: Bytecode::default(),
-            kind: FunctionKind::Native(native as *const ()),
+            kind: FunctionKind::Native(native as *const (), None),
             telemetry_function_id: None,
             telemetry_registration: bex_vm_types::FunctionRegistration::default(),
             telemetry_policy_id: btel_types::TelemetryPolicyId::none(),
@@ -781,7 +782,7 @@ pub(crate) mod tests {
         let Object::Function(function) = &mut program.objects[ObjectIndex::from_raw(invoke)] else {
             unreachable!()
         };
-        function.kind = FunctionKind::Native(invoke_twice as NativeFunction as *const ());
+        function.kind = FunctionKind::Native(invoke_twice as NativeFunction as *const (), None);
         let mut vm = BexVm::from_program(program, Arc::new(AtomicBool::new(false))).unwrap();
         vm.set_entry_point(vm.heap.compile_time_ptr(entry), &[]);
         loop {
@@ -1745,6 +1746,9 @@ pub struct BexVm {
     /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
     /// even if the inner callback uses different ones.
     pending_call_trace: Option<CallTrace>,
+    /// Set by `CallLocal` for the call it starts: a native callee runs its
+    /// thread-local twin, which reads the receiver without its lock.
+    thread_local_call: bool,
     pending_trace_hooks: Vec<PendingTraceHook>,
     held_traces: Vec<(usize, CallTrace)>,
     /// Nearest frame with held configuration or an owned-span scope. Ordinary
@@ -2473,6 +2477,7 @@ impl BexVm {
             context_transfers: Vec::new(),
             argv,
             pending_call_trace: None,
+            thread_local_call: false,
             pending_trace_hooks: Vec::new(),
             held_traces: Vec::new(),
             trace_scope_frame: usize::MAX,
@@ -5338,7 +5343,7 @@ impl BexVm {
                     frame.instruction_ptr = stub + crate::compiled_rt::stub::START;
                 }
             }
-            FunctionKind::Native(_) | FunctionKind::SysOp(_) => {
+            FunctionKind::Native(..) | FunctionKind::SysOp(_) => {
                 self.push_trampoline_frame(
                     dispatch_ptr,
                     args,
@@ -5414,7 +5419,7 @@ impl BexVm {
 
         self.pending_call_type_args.clear();
         match callable_kind {
-            FunctionKind::Native(_) => {
+            FunctionKind::Native(..) => {
                 for (index, ty) in type_args.into_iter().enumerate() {
                     let ty_ptr = match type_values.get(index).and_then(Clone::clone) {
                         Some(value) => self.alloc_type(value),
@@ -5433,7 +5438,7 @@ impl BexVm {
         }
 
         let instructions = match callable_kind {
-            FunctionKind::Native(_) => vec![
+            FunctionKind::Native(..) => vec![
                 Instruction::Call {
                     callee: callee_global,
                     ntypeargs,
@@ -7383,6 +7388,7 @@ impl BexVm {
         function: &mut &'static Function,
     ) -> Result<Option<VmExecState>, VmError> {
         let trace = self.pending_call_trace.take();
+        let thread_local = std::mem::take(&mut self.thread_local_call);
         let passes_type_args = std::mem::take(&mut self.pending_call_passes_type_args);
         // Record the caller's call-site PC before descending. Once a callee
         // frame is pushed, this (now-outer) frame is no longer the innermost, so
@@ -7525,7 +7531,11 @@ impl BexVm {
         }
 
         match callee_kind {
-            FunctionKind::Native(func_ptr) => {
+            FunctionKind::Native(func_ptr, local) => {
+                let func_ptr = match local {
+                    Some(local) if thread_local => local,
+                    _ => func_ptr,
+                };
                 // Cast the type-erased pointer back to NativeFunction.
                 //
                 // SAFETY: The pointer was created by casting a NativeFunction to *const ()
@@ -9215,6 +9225,7 @@ impl BexVm {
                 );
                 if step_result.is_err() {
                     self.pending_call_trace = None;
+                    self.thread_local_call = false;
                 }
 
                 match step_result {
@@ -9453,6 +9464,57 @@ impl BexVm {
                         self.store_local_value(local_var_index, value);
                     }
 
+                    OpCode::ArrayIterNext | OpCode::ArrayIterNextLocal => {
+                        let iterator = { read_u32_unchecked(code, pc) as usize };
+                        let index = { read_u32_unchecked(code, pc) as usize };
+                        #[allow(unsafe_code)]
+                        let Frame::Bytecode(bf) =
+                            (unsafe { self.frames.get_unchecked(*frame_idx) })
+                        else {
+                            unreachable!()
+                        };
+                        let iterator = Self::local_slot_stack_index(bf.locals_offset, iterator);
+                        let index = Self::local_slot_stack_index(bf.locals_offset, index);
+                        let array = self.stack.get_at(iterator);
+                        let Some(i) = self.stack.get_at(index).as_int() else {
+                            return Err(VmInternalError::TypeError {
+                                expected: bex_vm_types::types::Type::Int,
+                                got: self.type_of(&self.stack.get_at(index)),
+                            }
+                            .into());
+                        };
+                        let ptr = self.as_object_ptr(array, ObjectType::Array)?;
+                        // SAFETY (`_LOCAL`): see `ContainerLenLocal`.
+                        let element = match self.get_object(ptr) {
+                            Object::Array(arr) => {
+                                let guard = if op == OpCode::ArrayIterNextLocal {
+                                    arr.lock_thread_local()
+                                } else {
+                                    arr.lock()
+                                };
+                                usize::try_from(i).ok().and_then(|i| guard.get(i).copied())
+                            }
+                            other => {
+                                return Err(VmInternalError::TypeError {
+                                    expected: ObjectType::Array.into(),
+                                    got: ObjectType::of(other).into(),
+                                }
+                                .into());
+                            }
+                        };
+                        let item = match element {
+                            Some(element) => {
+                                self.stack.set_at(index, Value::int(i + 1));
+                                element
+                            }
+                            None => {
+                                let done = self.lang_object(crate::lang_items::BAML_ITER_DONE);
+                                Value::object(self.alloc_instance(done, Vec::new()))
+                            }
+                        };
+                        self.stack.push(item);
+                    }
+
                     // ── Operand-movement superinstructions (CPython-style) ────────
                     // LoadVar2(a, b) == `LoadVar(a); LoadVar(b)`: push both locals.
                     OpCode::LoadVar2 => {
@@ -9533,7 +9595,9 @@ impl BexVm {
                     }
 
                     // ── LoadField / StoreField / InitField ────────────────────────
-                    OpCode::LoadField => {
+                    // `_LOCAL`: the instance is thread-local (escape analysis),
+                    // so the slot needs no ordering.
+                    OpCode::LoadField | OpCode::LoadFieldLocal => {
                         let idx = { read_u32_unchecked(code, pc) as usize };
                         let top = self.stack.ensure_pop();
                         let obj_ptr = self.as_object_ptr(top, ObjectType::Instance)?;
@@ -9545,9 +9609,12 @@ impl BexVm {
                                 }
                                 .into());
                             };
-                            instance
-                                .try_load_field(idx)
-                                .ok_or_else(|| instance.field_len())
+                            if op == OpCode::LoadFieldLocal {
+                                instance.try_load_field_relaxed(idx)
+                            } else {
+                                instance.try_load_field(idx)
+                            }
+                            .ok_or_else(|| instance.field_len())
                         };
                         let value = match load_result {
                             Ok(value) => value,
@@ -9558,7 +9625,7 @@ impl BexVm {
                         self.stack.push(value);
                     }
 
-                    OpCode::StoreField => {
+                    OpCode::StoreField | OpCode::StoreFieldLocal => {
                         let idx = { read_u32_unchecked(code, pc) as usize };
                         let new_value = self.stack.ensure_pop();
                         let instance_value = self.stack.ensure_pop();
@@ -9581,7 +9648,11 @@ impl BexVm {
                         let Object::Instance(instance) = self.get_object(obj_ptr) else {
                             unreachable!("already type-checked above");
                         };
-                        instance.store_field(idx, new_value);
+                        if op == OpCode::StoreFieldLocal {
+                            instance.store_field_relaxed(idx, new_value);
+                        } else {
+                            instance.store_field(idx, new_value);
+                        }
                     }
 
                     // ── VirtualLoadField / VirtualStoreField ──────────────────────
@@ -9970,6 +10041,7 @@ impl BexVm {
                                     OpCode::Call
                                         | OpCode::CallExactArgs
                                         | OpCode::CallHooked
+                                        | OpCode::CallLocal
                                         | OpCode::CallIndirect
                                         | OpCode::VirtualCall
                                 )
@@ -9979,7 +10051,12 @@ impl BexVm {
                         let value = self.stack.ensure_pop();
                         self.pending_call_trace = Some(self.trace_config(value)?);
                     }
-                    OpCode::Call | OpCode::CallExactArgs | OpCode::CallHooked => {
+                    OpCode::Call
+                    | OpCode::CallExactArgs
+                    | OpCode::CallHooked
+                    | OpCode::CallLocal => {
+                        // The general call path takes the builtin's twin.
+                        self.thread_local_call = op == OpCode::CallLocal;
                         let raw = read_u32_unchecked(code, pc);
                         let ntypeargs = usize::from(read_u16_unchecked(code, pc));
 
@@ -11332,7 +11409,11 @@ impl BexVm {
                     }
 
                     // ── Array / Map element ops ───────────────────────────────────
-                    OpCode::ContainerLen => {
+                    OpCode::ContainerLen | OpCode::ContainerLenLocal => {
+                        // SAFETY (`thread_local`): the emitter selects the
+                        // `_LOCAL` opcodes only where escape analysis proved
+                        // no other thread can reach the container.
+                        let thread_local = op == OpCode::ContainerLenLocal;
                         let container = self.stack.ensure_pop();
                         let Some(ptr) = container.as_object_ptr() else {
                             return Err(VmInternalError::TypeError {
@@ -11343,6 +11424,15 @@ impl BexVm {
                         };
                         #[allow(clippy::cast_possible_wrap)]
                         let len = match self.get_object(ptr) {
+                            Object::Array(arr) if thread_local => {
+                                arr.lock_thread_local().len() as i64
+                            }
+                            Object::Uint8Array(bytes) if thread_local => {
+                                bytes.lock_thread_local().len() as i64
+                            }
+                            Object::Map(map) if thread_local => {
+                                map.lock_thread_local().len() as i64
+                            }
                             Object::Array(arr) => arr.len() as i64,
                             Object::Uint8Array(bytes) => bytes.len() as i64,
                             Object::Map(map) => map.len() as i64,
@@ -11358,7 +11448,9 @@ impl BexVm {
                         self.stack.push(Value::int(len));
                     }
 
-                    OpCode::LoadArrayElement => {
+                    OpCode::LoadArrayElement | OpCode::LoadArrayElementLocal => {
+                        // SAFETY (`thread_local`): see `ContainerLenLocal`.
+                        let thread_local = op == OpCode::LoadArrayElementLocal;
                         let index_value = self.stack.ensure_pop();
                         let array_value = self.stack.ensure_pop();
                         let array_obj_index = self.as_object_ptr(array_value, ObjectType::Array)?;
@@ -11378,7 +11470,11 @@ impl BexVm {
                         let load_result: Result<Value, (i64, usize)> = {
                             match self.get_object(array_obj_index) {
                                 Object::Array(arr) => {
-                                    let guard = arr.lock();
+                                    let guard = if thread_local {
+                                        arr.lock_thread_local()
+                                    } else {
+                                        arr.lock()
+                                    };
                                     let len = guard.len();
                                     match crate::array_index::resolve_index(i, len) {
                                         Some(idx) => Ok(guard[idx]),
@@ -11386,7 +11482,11 @@ impl BexVm {
                                     }
                                 }
                                 Object::Uint8Array(bytes) => {
-                                    let guard = bytes.lock();
+                                    let guard = if thread_local {
+                                        bytes.lock_thread_local()
+                                    } else {
+                                        bytes.lock()
+                                    };
                                     let len = guard.len();
                                     match crate::array_index::resolve_index(i, len) {
                                         Some(idx) => Ok(Value::int(i64::from(guard[idx]))),
@@ -11420,7 +11520,9 @@ impl BexVm {
                         unreachable!("map indexing must be lowered through baml.Map.index");
                     }
 
-                    OpCode::StoreArrayElement => {
+                    OpCode::StoreArrayElement | OpCode::StoreArrayElementLocal => {
+                        // SAFETY (`thread_local`): see `ContainerLenLocal`.
+                        let thread_local = op == OpCode::StoreArrayElementLocal;
                         let new_value = self.stack.ensure_pop();
                         let index_value = self.stack.ensure_pop();
                         let array_value = self.stack.ensure_pop();
@@ -11438,7 +11540,12 @@ impl BexVm {
                         let store_result: Result<(), (i64, usize)> = {
                             match self.get_object(array_object_index) {
                                 Object::Array(arr) => {
-                                    let mut guard = arr.lock_mut(self.tlab.alloc_debt());
+                                    let debt = self.tlab.alloc_debt();
+                                    let mut guard = if thread_local {
+                                        arr.lock_mut_thread_local(debt)
+                                    } else {
+                                        arr.lock_mut(debt)
+                                    };
                                     let len = guard.len();
                                     match crate::array_index::resolve_index(i, len) {
                                         Some(idx) => {
@@ -11456,7 +11563,12 @@ impl BexVm {
                                         }
                                         .into());
                                     };
-                                    let mut guard = bytes.lock_mut(self.tlab.alloc_debt());
+                                    let debt = self.tlab.alloc_debt();
+                                    let mut guard = if thread_local {
+                                        bytes.lock_mut_thread_local(debt)
+                                    } else {
+                                        bytes.lock_mut(debt)
+                                    };
                                     let len = guard.len();
                                     match crate::array_index::resolve_index(i, len) {
                                         Some(idx) => {
