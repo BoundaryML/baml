@@ -275,21 +275,34 @@ impl<T, const CHUNK_SIZE: usize> ChunkedVec<T, CHUNK_SIZE> {
     /// every chunk makes generation checks expensive as the old heap grows.
     pub fn contains_ptr(&self, ptr: *const T) -> bool {
         let _read = self.chunks_lock.read();
-        // SAFETY: the read lock keeps the outer Vec and its chunk descriptors
-        // stable. Each chunk has CHUNK_SIZE initialized cells; we only compare
-        // addresses, never read elements or dereference the supplied pointer.
+        // SAFETY: the read lock excludes concurrent growth for the scan.
+        unsafe { self.locate_unsynchronized(ptr).is_some() }
+    }
+
+    /// Find `ptr` in the backing storage, including unused capacity, as
+    /// `(chunk_idx, offset)`. Compares addresses only; never dereferences
+    /// `ptr` or reads elements.
+    ///
+    /// # Safety
+    ///
+    /// Takes no lock: nothing may grow, clear, swap or drop `self` during the
+    /// call. The heap's Gen1 and Gen2 meet this outside collection, because
+    /// only the collector changes them and it runs with every mutator parked.
+    #[inline]
+    pub unsafe fn locate_unsynchronized(&self, ptr: *const T) -> Option<(usize, usize)> {
+        // SAFETY: the caller excludes concurrent changes to the outer Vec.
+        // Each chunk has CHUNK_SIZE initialized cells.
         unsafe {
-            let chunks = self.chunks.get();
-            let data = (*chunks).as_ptr();
-            for index in 0..(*chunks).len() {
-                let start = (*data.add(index)).as_ptr().cast::<T>();
+            let chunks = &*self.chunks.get();
+            for (index, chunk) in chunks.iter().enumerate() {
+                let start = chunk.as_ptr().cast::<T>();
                 let end = start.add(CHUNK_SIZE);
                 if ptr >= start && ptr < end {
-                    return true;
+                    return Some((index, ptr.offset_from(start) as usize));
                 }
             }
         }
-        false
+        None
     }
 
     /// Calculate chunk index and offset within chunk for a given index.

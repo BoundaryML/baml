@@ -831,13 +831,15 @@ impl BexHeap {
     ///
     /// # Safety
     ///
-    /// When `vec` comes from a generation's `UnsafeCell`, the caller must keep
-    /// that generation from being swapped/cleared by GC while it is borrowed
-    /// (a heap permit or exclusive GC access). `ChunkedVec` itself synchronizes
-    /// access to its storage descriptors, including concurrent growth.
+    /// Takes no lock (see [`ChunkedVec::locate_unsynchronized`]): nothing may
+    /// grow, clear or swap `vec` during the call. Gen1, Gen2 and the inactive
+    /// space change only inside a collection, so this holds for a mutator
+    /// holding a heap permit and for the collector itself; it does not hold
+    /// for Gen0, which grows on any VM's TLAB refill.
     #[inline]
     unsafe fn ptr_in_chunked_vec(vec: &ChunkedVec<Object>, raw_ptr: *const Object) -> bool {
-        vec.contains_ptr(raw_ptr)
+        // SAFETY: forwarded from the caller.
+        unsafe { vec.locate_unsynchronized(raw_ptr).is_some() }
     }
 
     /// Bug H, check 3 helper (heap_debug only): is `ptr` inside the
@@ -889,26 +891,15 @@ impl BexHeap {
     ///
     /// # Safety
     ///
-    /// Must only be called at safepoints or with appropriate external synchronization.
+    /// Same as [`Self::ptr_in_chunked_vec`]: takes no lock, so `vec` must not
+    /// change during the call.
     #[inline]
     pub(crate) unsafe fn locate_in_chunked_vec(
         vec: &ChunkedVec<Object>,
         raw_ptr: *const Object,
     ) -> Option<(usize, usize)> {
-        // `num_chunks` and `chunk_start_ptr` now serialize on the
-        // ChunkedVec's internal RwLock; concurrent growers are excluded.
-        let num_chunks = vec.num_chunks();
-        for chunk_idx in 0..num_chunks {
-            // SAFETY: `chunk_idx < num_chunks` by loop bound.
-            let chunk_start = unsafe { vec.chunk_start_ptr(chunk_idx) };
-            let chunk_end = unsafe { chunk_start.add(ChunkedVec::<Object>::CHUNK_SIZE) };
-            if raw_ptr >= chunk_start && raw_ptr < chunk_end {
-                // SAFETY: Both pointers are within the same allocated chunk.
-                let offset = unsafe { raw_ptr.offset_from(chunk_start) as usize };
-                return Some((chunk_idx, offset));
-            }
-        }
-        None
+        // SAFETY: forwarded from the caller.
+        unsafe { vec.locate_unsynchronized(raw_ptr) }
     }
 
     /// Monotonic change token for GC roots disappearing, including after
