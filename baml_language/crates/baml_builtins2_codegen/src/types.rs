@@ -7,6 +7,100 @@ pub enum BuiltinPipeline {
     Io,
 }
 
+/// A builtin's memory behavior, declared by `//baml:effects(...)` on a
+/// method of a container class. Clauses, comma-separated:
+///
+/// - `reads`: keeps nothing it is given.
+/// - `keeps(param)`: `param`'s value becomes an element or entry of the
+///   receiver.
+/// - `returns(element)`: returns one of the receiver's elements or entries.
+/// - `returns(fresh)` / `returns(fresh+param)`: returns a new container of
+///   the receiver's elements (and `param`'s).
+/// - `compares(keys)`: hashes or compares the receiver's keys, which runs
+///   user code unless they are primitive.
+///
+/// Anything not named is only read. Escape analysis trusts these, so a
+/// declaration must cover everything the Rust implementation does.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MemoryEffects {
+    pub keeps: Vec<String>,
+    pub returns: EffectReturn,
+    pub compares_keys: bool,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum EffectReturn {
+    /// Returns no object of the receiver's.
+    #[default]
+    Nothing,
+    /// Returns an element or entry of the receiver.
+    Element,
+    /// Returns a new container of the receiver's elements and those of the
+    /// named parameters.
+    Fresh(Vec<String>),
+}
+
+impl MemoryEffects {
+    /// Parse the text inside `//baml:effects(...)`.
+    pub fn parse(text: &str) -> Result<Self, String> {
+        let mut effects = Self::default();
+        let mut clauses = Vec::new();
+        let mut depth = 0usize;
+        let mut start = 0;
+        for (i, c) in text.char_indices() {
+            match c {
+                '(' => depth += 1,
+                ')' => depth = depth.saturating_sub(1),
+                ',' if depth == 0 => {
+                    clauses.push(&text[start..i]);
+                    start = i + 1;
+                }
+                _ => {}
+            }
+        }
+        clauses.push(&text[start..]);
+        for clause in clauses.into_iter().map(str::trim) {
+            let (name, arg) = match clause.split_once('(') {
+                Some((name, rest)) => (
+                    name.trim(),
+                    Some(
+                        rest.strip_suffix(')')
+                            .ok_or_else(|| format!("unclosed `{clause}`"))?
+                            .trim(),
+                    ),
+                ),
+                None => (clause, None),
+            };
+            match (name, arg) {
+                ("reads", None) => {}
+                ("keeps", Some(param)) => effects.keeps.push(param.to_string()),
+                ("returns", Some("element")) => effects.returns = EffectReturn::Element,
+                ("returns", Some(fresh)) if fresh.split('+').next() == Some("fresh") => {
+                    effects.returns = EffectReturn::Fresh(
+                        fresh
+                            .split('+')
+                            .skip(1)
+                            .map(|p| p.trim().to_string())
+                            .collect(),
+                    );
+                }
+                ("compares", Some("keys")) => effects.compares_keys = true,
+                _ => return Err(format!("unknown effect clause `{clause}`")),
+            }
+        }
+        Ok(effects)
+    }
+
+    /// Every parameter the declaration names.
+    pub fn named_params(&self) -> impl Iterator<Item = &str> {
+        let fresh: &[String] = match &self.returns {
+            EffectReturn::Fresh(params) => params,
+            EffectReturn::Nothing | EffectReturn::Element => &[],
+        };
+        self.keeps.iter().chain(fresh).map(String::as_str)
+    }
+}
+
 /// A single extracted `$rust_function` or `$rust_io_function` builtin.
 pub struct NativeBuiltin {
     /// Dotted path: e.g. `"baml.Array.length"`, `"baml.deep_copy"`, `"baml.sys.argv"`
@@ -44,6 +138,10 @@ pub struct NativeBuiltin {
     /// `//baml:fallible` directive — for builtins that can raise a *panic*
     /// (e.g. `AllocFailure`) rather than a catchable `throws` error.
     pub fallible: bool,
+    /// What the builtin does with the objects it receives, from
+    /// `//baml:effects(...)`; `None` when undeclared, which callers must
+    /// treat as doing anything.
+    pub effects: Option<MemoryEffects>,
     /// Which pipeline this builtin belongs to.
     pub pipeline: BuiltinPipeline,
     /// The `throws` clause:
@@ -57,6 +155,18 @@ pub struct NativeBuiltin {
 }
 
 impl NativeBuiltin {
+    /// Whether the builtin has a `$local` glue twin that reads its receiver
+    /// without the container lock: a declared array or map method. The
+    /// native backend selects the twin for a thread-local receiver. A method that
+    /// may yield qualifies too: no guard is held across a yield.
+    pub fn has_thread_local_twin(&self) -> bool {
+        self.effects.is_some()
+            && self
+                .receiver
+                .as_ref()
+                .is_some_and(|receiver| matches!(receiver.builtin_name(), "Array" | "Map"))
+    }
+
     /// Derive the `SysOp` enum variant name from the path.
     /// `"baml.fs.open"` → `"BamlFsOpen"`, `"baml.fs.File.read"` → `"BamlFsFileRead"`,
     /// `"baml.env.get"` → `"BamlEnvGet"`, `"ai.Prompt.text"` → `"AiPromptText"`.
@@ -221,6 +331,7 @@ mod tests {
                 vm_usage: super::VmUsage::None,
                 may_yield: false,
                 fallible: false,
+                effects: None,
                 pipeline: super::BuiltinPipeline::Vm,
                 throws: None,
                 source_file: String::new(),
@@ -237,5 +348,37 @@ mod tests {
             variant("baml.fs.baml.io.Read$for$File.read"),
             "BamlFsBamlIoReadForFileRead"
         );
+    }
+}
+
+#[cfg(test)]
+mod memory_effects_tests {
+    use super::{EffectReturn, MemoryEffects};
+
+    #[test]
+    fn parses_every_clause() {
+        assert_eq!(MemoryEffects::parse("reads"), Ok(MemoryEffects::default()));
+        assert_eq!(
+            MemoryEffects::parse("keeps(key), keeps(value), returns(element), compares(keys)"),
+            Ok(MemoryEffects {
+                keeps: vec!["key".into(), "value".into()],
+                returns: EffectReturn::Element,
+                compares_keys: true,
+            })
+        );
+        assert_eq!(
+            MemoryEffects::parse("returns(fresh+other)"),
+            Ok(MemoryEffects {
+                returns: EffectReturn::Fresh(vec!["other".into()]),
+                ..MemoryEffects::default()
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_unknown_clauses() {
+        assert!(MemoryEffects::parse("leaks(item)").is_err());
+        assert!(MemoryEffects::parse("returns(anything)").is_err());
+        assert!(MemoryEffects::parse("keeps(item").is_err());
     }
 }

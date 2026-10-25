@@ -238,6 +238,7 @@ class String {
     /// "hello".split("")      // ["h", "e", "l", "l", "o"]
     /// "no match".split(",")  // ["no match"]
     /// ```
+    //baml:effects(returns(fresh))
     function split(self, delimiter: string) -> string[] throws never {
         $rust_function
     }
@@ -253,6 +254,7 @@ class String {
     /// "é😀".chars()    // ["é", "😀"]
     /// "".chars()       // []
     /// ```
+    //baml:effects(returns(fresh))
     function chars(self) -> string[] throws never {
         $rust_function
     }
@@ -275,6 +277,7 @@ class String {
     /// "".lines()           // []
     /// "\n".lines()         // [""]
     /// ```
+    //baml:effects(returns(fresh))
     function lines(self) -> string[] throws never {
         $rust_function
     }
@@ -770,6 +773,7 @@ class String {
     /// "é".to_utf8()      // [0xC3, 0xA9]
     /// "".to_utf8()       // []
     /// ```
+    //baml:effects(returns(fresh))
     function to_utf8(self) -> uint8array throws never {
         $rust_function
     }
@@ -816,6 +820,7 @@ class String {
     /// "🐑".to_code_points()    // [128017]
     /// "".to_code_points()      // []
     /// ```
+    //baml:effects(returns(fresh))
     function to_code_points(self) -> int[] throws never {
         $rust_function
     }
