@@ -243,7 +243,12 @@ pub fn from_str(
         raw_string_is_done,
     )?;
 
-    if let Some(toon_values) = jsonish::parse_toon(raw_string) {
+    if let Some(mut toon_values) = jsonish::parse_toon(raw_string) {
+        if !raw_string_is_done {
+            // A TOON candidate decoded from a partial stream cannot tell which
+            // values are finished, so none of them may count as complete.
+            toon_values.iter_mut().for_each(mark_incomplete_deeply);
+        }
         let mut candidates = match value {
             Value::AnyOf(candidates, _) => candidates,
             value => vec![value],
@@ -290,6 +295,27 @@ pub fn from_str(
     // parsed_value.clear_flags();
 
     Ok(parsed_value)
+}
+
+fn mark_incomplete_deeply(value: &mut Value) {
+    match value {
+        Value::String(_, s) | Value::Number(_, s) | Value::Markdown(_, _, s) => {
+            *s = CompletionState::Incomplete
+        }
+        Value::Boolean(_) | Value::Null => {}
+        Value::Object(kv_pairs, s) => {
+            *s = CompletionState::Incomplete;
+            kv_pairs
+                .iter_mut()
+                .for_each(|(_, v)| mark_incomplete_deeply(v));
+        }
+        Value::Array(elems, s) => {
+            *s = CompletionState::Incomplete;
+            elems.iter_mut().for_each(mark_incomplete_deeply);
+        }
+        Value::FixedJson(val, _) => mark_incomplete_deeply(val),
+        Value::AnyOf(choices, _) => choices.iter_mut().for_each(mark_incomplete_deeply),
+    }
 }
 
 fn deduplicate_candidates(candidates: &mut Vec<Value>) {

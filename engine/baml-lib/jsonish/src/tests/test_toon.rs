@@ -1,5 +1,21 @@
 use super::*;
 
+test_partial_deserializer_streaming!(
+    toon_unfinished_field_respects_stream_done,
+    "class Secret {\n  value string @stream.done\n}",
+    "value: unfinished",
+    TypeIR::class("Secret"),
+    {"value": null}
+);
+
+test_deserializer!(
+    toon_finished_field_respects_stream_done,
+    "class Secret {\n  value string @stream.done\n}",
+    "value: finished",
+    TypeIR::class("Secret"),
+    {"value": "finished"}
+);
+
 const TOON_TYPES: &str = r#"
 enum Status {
   ACTIVE
