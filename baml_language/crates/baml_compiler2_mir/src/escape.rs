@@ -33,6 +33,13 @@ use crate::{
     Place, RuntimeTy, Rvalue, StatementKind, Terminator,
 };
 
+/// [`EscapeFacts::needs`] of a node that is shared whatever the caller passes.
+pub const NEVER: u64 = u64::MAX;
+
+/// Parameters past this many are always shared: a locality mask has one bit
+/// per parameter.
+pub const MASKED_PARAMS: usize = 64;
+
 /// The thread-locality of every object a body names.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EscapeFacts {
@@ -40,10 +47,16 @@ pub struct EscapeFacts {
     local_calls: Vec<bool>,
     /// The node each local's value belongs to.
     local_node: Vec<usize>,
-    /// Per node: whether another thread may reach what it holds.
+    /// Per node: whether another thread may reach what it holds, as far as
+    /// this body knows: when a caller passes nothing it proved thread-local.
     shared: Vec<bool>,
     /// Per node: the node every field and element of its objects belongs to.
     contents: Vec<Option<usize>>,
+    /// Per node: the parameters it is thread-local given, as a mask (bit `i`
+    /// for parameter `_{i+1}`), or [`NEVER`]. A caller's bit for a parameter
+    /// says its argument and everything reachable from it are thread-local;
+    /// `0` is thread-local whatever the caller passes.
+    needs: Vec<u64>,
 }
 
 impl EscapeFacts {
@@ -85,6 +98,35 @@ impl EscapeFacts {
             .is_some_and(|contents| !self.shared[contents])
     }
 
+    /// The parameters the object `place` evaluates to is thread-local given:
+    /// see [`Self::needs`]. [`NEVER`] for a place the analysis cannot name.
+    pub fn object_needs(&self, place: &Place) -> u64 {
+        self.object_node(place)
+            .map_or(NEVER, |node| self.needs[node])
+    }
+
+    /// The parameters `operand`'s value and everything reachable from it are
+    /// thread-local given, the condition for passing it as a thread-local
+    /// argument. `0` for a value that is no object.
+    pub fn operand_needs(&self, operand: &Operand<'_>) -> u64 {
+        let (Operand::Copy(place) | Operand::Move(place)) = operand else {
+            return 0;
+        };
+        let Some(mut node) = self.object_node(place) else {
+            return NEVER;
+        };
+        let mut needs = 0;
+        let mut seen = Vec::new();
+        loop {
+            needs |= self.needs[node];
+            seen.push(node);
+            match self.contents[node] {
+                Some(inner) if !seen.contains(&inner) => node = inner,
+                _ => return needs,
+            }
+        }
+    }
+
     fn object_node(&self, place: &Place) -> Option<usize> {
         match place {
             Place::Local(local) => self.local_node.get(local.0).copied(),
@@ -106,12 +148,7 @@ pub fn analyze<'db>(
     opt: OptLevel,
 ) -> EscapeFacts {
     let types = Types::new(db, body);
-    let mut graph = build(db, body, opt, None, &types);
-    // A parameter's argument may already be shared, as far as this body knows.
-    for local in 1..=arity.min(body.locals.len().saturating_sub(1)) {
-        graph.mark_shared(local);
-    }
-    let mut facts = graph.finish();
+    let mut facts = build(db, body, opt, None, &types).finish(arity);
     let builtins = Builtins::new(db);
     facts.local_calls = body
         .blocks
@@ -152,12 +189,72 @@ pub fn escape_summary<'db>(
     function: FunctionLoc<'db>,
     opt: OptLevel,
 ) -> Option<Summary> {
+    let root = function.file(db).source_root(db);
+    if let Some(&component) = recursive_functions(db, root, opt).get(&function) {
+        return component_summaries(db, root, opt, component)
+            .get(&function)
+            .cloned();
+    }
     let mir = crate::lower_function(db, function, opt).as_ref().ok()?;
     let MirFunctionKind::Bytecode(body) = &mir.kind else {
         return None;
     };
     let types = Types::new(db, body);
-    Some(build(db, body, opt, Some(function), &types).summary(mir.arity))
+    Some(build(db, body, opt, Some(function), &types).summary(0, mir.arity))
+}
+
+/// The summaries of one component of [`recursive_functions`], from one graph
+/// of all its bodies: a call within the component joins its arguments to the
+/// callee's parameters and its destination to the callee's return value, as
+/// every call of that callee in the component does. A member whose body the
+/// analysis cannot see has no summary, and calls to it are opaque.
+#[salsa::tracked(returns(ref))]
+fn component_summaries<'db>(
+    db: &'db dyn crate::Db,
+    root: SourceRoot,
+    opt: OptLevel,
+    component: usize,
+) -> FxHashMap<FunctionLoc<'db>, Summary> {
+    let mut members: Vec<(
+        FunctionLoc<'db>,
+        &'db MirFunction<'db>,
+        &'db MirFunctionBody<'db>,
+    )> = recursive_functions(db, root, opt)
+        .iter()
+        .filter(|&(_, &id)| id == component)
+        .filter_map(|(&function, _)| {
+            let mir = crate::lower_function(db, function, opt).as_ref().ok()?;
+            let MirFunctionKind::Bytecode(body) = &mir.kind else {
+                return None;
+            };
+            Some((function, mir, body))
+        })
+        .collect();
+    // Node numbering, and so the summaries, must not depend on map order.
+    members.sort_by_key(|&(function, ..)| salsa::plumbing::AsId::as_id(&function));
+    let types: Vec<Types<'_, 'db>> = members
+        .iter()
+        .map(|&(_, _, body)| Types::new(db, body))
+        .collect();
+    let mut offsets = FxHashMap::default();
+    let mut total = 0;
+    for &(function, mir, body) in &members {
+        offsets.insert(function, (total, mir.arity));
+        total += body.locals.len();
+    }
+    let Some(first) = types.first() else {
+        return FxHashMap::default();
+    };
+    let mut graph = Graph::new(total, first);
+    for (index, &(function, _, body)) in members.iter().enumerate() {
+        graph.offset = offsets[&function].0;
+        graph.types = &types[index];
+        walk(&mut graph, db, body, opt, None, Some(&offsets));
+    }
+    members
+        .iter()
+        .map(|&(function, mir, _)| (function, graph.summary(offsets[&function].0, mir.arity)))
+        .collect()
 }
 
 /// A cycle [`recursive_functions`] did not see (a runtime-compiled
@@ -305,13 +402,30 @@ fn build<'a, 'db>(
     types: &'a Types<'a, 'db>,
 ) -> Graph<'a, 'db> {
     let mut graph = Graph::new(body.locals.len(), types);
+    walk(&mut graph, db, body, opt, current, None);
+    graph
+}
+
+/// Add `body`'s constraints to `graph`, whose locals for it start at
+/// `graph.offset` and whose types are `body`'s. `component` places the other
+/// bodies of a recursive component in the same graph: each callee's node
+/// offset and arity.
+fn walk<'a, 'db>(
+    graph: &mut Graph<'a, 'db>,
+    db: &'db dyn crate::Db,
+    body: &'a MirFunctionBody<'db>,
+    opt: OptLevel,
+    current: Option<FunctionLoc<'db>>,
+    component: Option<&FxHashMap<FunctionLoc<'db>, (usize, usize)>>,
+) {
     let builtins = Builtins::new(db);
     let array_iterators = array_iterators(body);
     let walker = Walker {
         db,
         opt,
         current,
-        types,
+        component,
+        types: graph.types,
         builtins: &builtins,
         array_iterators: &array_iterators,
     };
@@ -319,14 +433,19 @@ fn build<'a, 'db>(
     for (index, decl) in body.locals.iter().enumerate() {
         // A captured local's slot holds its cell, which closures share.
         if decl.is_captured {
-            graph.mark_shared(index);
+            let node = graph.local(index);
+            graph.mark_shared(node);
         }
     }
     graph.cause = Reason::Handler;
     for (_, landing) in body.handlers() {
         // The VM writes these: an in-flight error and its context.
-        graph.mark_shared(landing.error_local.0);
-        graph.mark_shared(landing.context_local.0);
+        let (error, context) = (
+            graph.local(landing.error_local.0),
+            graph.local(landing.context_local.0),
+        );
+        graph.mark_shared(error);
+        graph.mark_shared(context);
     }
     for (block_index, block) in body.blocks.iter().enumerate() {
         for (statement_index, statement) in block.statements.iter().enumerate() {
@@ -341,11 +460,10 @@ fn build<'a, 'db>(
                 block: block_index,
                 statement: None,
             };
-            walker.terminator(&mut graph, terminator);
+            walker.terminator(graph, terminator);
         }
     }
     graph.cause = Reason::Parameter;
-    graph
 }
 
 /// Why an object is shared, for the coverage report.
@@ -371,6 +489,9 @@ pub struct Access {
     pub thread_local: bool,
     /// For a shared object, what made it shared.
     pub shared_because: Option<String>,
+    /// The parameters the accessed object is thread-local given
+    /// ([`EscapeFacts::object_needs`]).
+    pub needs: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -402,18 +523,15 @@ pub fn coverage<'db>(
         graph.mark_shared(local);
     }
     let resolved = graph.resolve();
-    let locals = graph.locals;
-    let facts = EscapeFacts {
-        local_calls: Vec::new(),
-        local_node: resolved.roots[..locals].to_vec(),
-        shared: resolved.shared.clone(),
-        contents: resolved.contents.clone(),
-    };
+    // The same graph with its parameters left unclassified: union-find roots
+    // do not depend on sharing, so its nodes are this graph's nodes.
+    let facts = build(db, body, opt, None, &types).finish(arity);
     let builtins = Builtins::new(db);
     let array_iterators = array_iterators(body);
     let mut accesses = Vec::new();
     let mut record = |kind: AccessKind, node: Option<usize>| {
         let thread_local = node.is_some_and(|node| !facts.shared[node]);
+        let needs = node.map_or(NEVER, |node| facts.needs[node]);
         let shared_because = (!thread_local).then(|| match node {
             Some(node) => describe(db, body, opt, resolved.reasons[node]),
             None => "not an object the analysis tracks".to_string(),
@@ -422,6 +540,7 @@ pub fn coverage<'db>(
             kind,
             thread_local,
             shared_because,
+            needs,
         });
     };
     let place = |place: &Place, record: &mut dyn FnMut(AccessKind, Option<usize>)| {
@@ -630,7 +749,7 @@ fn describe<'db>(
 
 /// A callee's graph as seen from its call sites: the nodes its parameters
 /// and return value reach, with sharing and contents edges.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, salsa::SalsaValue)]
 pub struct Summary {
     /// Per node: whether another thread may reach it, and its contents node.
     nodes: Vec<(bool, Option<usize>)>,
@@ -787,12 +906,15 @@ struct Walker<'a, 'db> {
     /// The function whose summary is being built, if any: calls within its
     /// recursive component are opaque.
     current: Option<FunctionLoc<'db>>,
+    /// The bodies of a recursive component sharing this graph: a call to one
+    /// joins the callee's nodes directly.
+    component: Option<&'a FxHashMap<FunctionLoc<'db>, (usize, usize)>>,
     types: &'a Types<'a, 'db>,
     builtins: &'a Builtins<'db>,
     array_iterators: &'a [bool],
 }
 
-impl<'db> Walker<'_, 'db> {
+impl<'a, 'db> Walker<'a, 'db> {
     fn terminator(&self, graph: &mut Graph<'_, 'db>, terminator: &Terminator<'db>) {
         match terminator {
             Terminator::Goto { .. }
@@ -841,6 +963,17 @@ impl<'db> Walker<'_, 'db> {
                 {
                     let result = graph.apply_builtin(effect, values);
                     graph.write(destination, result);
+                } else if let Some(&(offset, arity)) = self
+                    .component_member(callee)
+                    .filter(|&&(_, arity)| positional && arity == values.len())
+                {
+                    // The callee's parameters are `_1..=_arity`, its return
+                    // value `_0`, in its part of this graph.
+                    for (index, value) in values.iter().take(arity).enumerate() {
+                        let value = graph.operand(value);
+                        graph.flow(Some(offset + 1 + index), value);
+                    }
+                    graph.write(destination, Some(offset));
                 } else if let Some(summary) = self
                     .summary(callee)
                     .filter(|summary| positional && summary.params.len() == values.len())
@@ -899,12 +1032,29 @@ impl<'db> Walker<'_, 'db> {
         }
     }
 
+    /// The offset and arity of a call's target within this graph, when it is
+    /// a body of the component being analyzed together.
+    fn component_member(&self, callee: &Operand<'db>) -> Option<&'a (usize, usize)> {
+        let DeclRef::Source(callee) = static_callee(callee)? else {
+            return None;
+        };
+        self.component?.get(&callee)
+    }
+
     /// The summary of a call's target, unless it is opaque or in the same
     /// recursive component as the function being summarized.
     fn summary(&self, callee: &Operand<'db>) -> Option<&'db Summary> {
         let DeclRef::Source(callee) = static_callee(callee)? else {
             return None;
         };
+        // A component member the call could not join is opaque: its summary
+        // is the one being built.
+        if self
+            .component
+            .is_some_and(|component| component.contains_key(&callee))
+        {
+            return None;
+        }
         if let Some(current) = self.current {
             let root = current.file(self.db).source_root(self.db);
             let components = recursive_functions(self.db, root, self.opt);
@@ -1284,6 +1434,9 @@ struct Graph<'a, 'db> {
     /// The reason recorded for anything made shared next.
     cause: Reason,
     locals: usize,
+    /// Where the locals of the body being walked start: nonzero only for the
+    /// later bodies of a recursive component.
+    offset: usize,
 }
 
 impl<'a, 'db> Graph<'a, 'db> {
@@ -1296,12 +1449,13 @@ impl<'a, 'db> Graph<'a, 'db> {
             reason: vec![Reason::Parameter; locals],
             cause: Reason::Parameter,
             locals,
+            offset: 0,
         }
     }
 
     fn local(&self, local: usize) -> usize {
-        debug_assert!(local < self.locals);
-        local
+        debug_assert!(self.offset + local < self.locals);
+        self.offset + local
     }
 
     fn fresh(&mut self) -> usize {
@@ -1439,7 +1593,10 @@ impl<'a, 'db> Graph<'a, 'db> {
                 self.write(destination, value);
             }
             StatementKind::Drop(_) | StatementKind::Nop => {}
-            StatementKind::FreshCell { local, .. } => self.mark_shared(local.0),
+            StatementKind::FreshCell { local, .. } => {
+                let node = self.local(local.0);
+                self.mark_shared(node);
+            }
             StatementKind::Intrinsic { op, args } => match op {
                 // Logged data goes to the runtime.
                 IntrinsicOp::Log(_) | IntrinsicOp::ApplyTraceHook => {
@@ -1556,12 +1713,12 @@ impl<'a, 'db> Graph<'a, 'db> {
         }
     }
 
-    /// The summary of this graph as a callee with `arity` parameters, before
-    /// its parameters are classified.
-    fn summary(&mut self, arity: usize) -> Summary {
+    /// The summary of the body whose locals start at `offset`, as a callee
+    /// with `arity` parameters, before its parameters are classified.
+    fn summary(&mut self, offset: usize, arity: usize) -> Summary {
         let resolved = self.resolve();
-        let roots: Vec<usize> = (0..=arity.min(self.locals.saturating_sub(1)))
-            .map(|local| resolved.roots[local])
+        let roots: Vec<usize> = (0..=arity.min(self.locals.saturating_sub(offset + 1)))
+            .map(|local| resolved.roots[offset + local])
             .collect();
         let mut compact: FxHashMap<usize, usize> = FxHashMap::default();
         let mut order = Vec::new();
@@ -1637,14 +1794,22 @@ impl<'a, 'db> Graph<'a, 'db> {
         }
     }
 
-    /// Resolve every node to its root and push sharing into contents.
-    fn finish(mut self) -> EscapeFacts {
+    /// Resolve every node to its root and push sharing into contents, with
+    /// each node's locality conditioned on the `arity` parameters.
+    fn finish(mut self, arity: usize) -> EscapeFacts {
+        let params = arity.min(self.locals.saturating_sub(1));
+        // Beyond the mask, a parameter's argument may already be shared.
+        for local in MASKED_PARAMS + 1..=params {
+            self.mark_shared(local);
+        }
         let resolved = self.resolve();
+        let needs = resolved.param_needs(params.min(MASKED_PARAMS));
         EscapeFacts {
             local_calls: Vec::new(),
             local_node: resolved.roots[..self.locals].to_vec(),
-            shared: resolved.shared,
+            shared: needs.iter().map(|&needs| needs != 0).collect(),
             contents: resolved.contents,
+            needs,
         }
     }
 
@@ -1692,4 +1857,30 @@ struct Resolved {
     shared: Vec<bool>,
     contents: Vec<Option<usize>>,
     reasons: Vec<Reason>,
+}
+
+impl Resolved {
+    /// Per node, the first `params` parameters it is thread-local given: a
+    /// node is reachable from a parameter's argument when it is the
+    /// parameter's node or within its contents, and marking that parameter
+    /// shared would make exactly those nodes shared.
+    fn param_needs(&self, params: usize) -> Vec<u64> {
+        let mut needs: Vec<u64> = self
+            .shared
+            .iter()
+            .map(|&shared| if shared { NEVER } else { 0 })
+            .collect();
+        for param in 1..=params {
+            let bit = 1 << (param - 1);
+            let mut node = Some(self.roots[param]);
+            while let Some(current) = node {
+                if needs[current] & bit != 0 {
+                    break;
+                }
+                needs[current] |= bit;
+                node = self.contents[current];
+            }
+        }
+        needs
+    }
 }

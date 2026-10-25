@@ -381,7 +381,7 @@ function main(shared: int[][]) -> int {
 }
 
 #[test]
-fn recursive_callees_are_opaque() {
+fn a_recursive_callee_that_only_reads_keeps_arguments_thread_local() {
     assert_locality(
         r#"
 function walk(xs: int[], n: int) -> int {
@@ -393,7 +393,55 @@ function main() -> int {
 }
 "#,
         "main",
+        &[("xs", true)],
+    );
+}
+
+#[test]
+fn a_recursive_callee_that_spawns_at_its_base_case_shares_arguments() {
+    assert_locality(
+        r#"
+function walk(xs: int[], n: int) -> int {
+  if (n == 0) {
+    let child = spawn { xs.length() };
+    await child
+  } else {
+    walk(xs, n - 1)
+  }
+}
+function main() -> int {
+  let xs = [1];
+  walk(xs, 3)
+}
+"#,
+        "main",
         &[("xs", false)],
+    );
+}
+
+#[test]
+fn mutually_recursive_callees_share_what_either_leaks() {
+    assert_locality(
+        r#"
+function even(xs: int[], n: int) -> int {
+  if (n == 0) { xs[0] } else { odd(xs, n - 1) }
+}
+function odd(xs: int[], n: int) -> int {
+  if (n == 0) {
+    let child = spawn { xs.length() };
+    await child
+  } else {
+    even(xs, n - 1)
+  }
+}
+function main() -> int {
+  let xs = [1];
+  let ys = [2];
+  even(xs, 3) + ys[0]
+}
+"#,
+        "main",
+        &[("xs", false), ("ys", true)],
     );
 }
 
@@ -424,36 +472,140 @@ function main() -> int {{
 fn escape_coverage() {
     use std::collections::BTreeMap;
 
-    use baml_compiler2_mir::{MirFunction, escape::AccessKind};
+    use baml_compiler2_hir::loc::{DeclRef, FunctionLoc};
+    use baml_compiler2_mir::{
+        Constant, MirFunction, Operand, Terminator,
+        escape::{AccessKind, NEVER},
+    };
 
     #[derive(Default)]
     struct Tally {
         sites: BTreeMap<AccessKind, (usize, usize)>,
         reasons: BTreeMap<String, usize>,
+        /// Shared today, thread-local given some parameters.
+        conditional: usize,
+        /// Of those, accesses some in-package call chain can make local.
+        realizable: usize,
+        /// Of the rest: in a function with no static caller in scope.
+        no_caller: usize,
+    }
+
+    /// A body's accesses and its static calls, for the locality-mask estimate.
+    struct Body<'db> {
+        /// `None` for a lambda: its callers are indirect, so its mask is 0.
+        loc: Option<FunctionLoc<'db>>,
+        accesses: Vec<escape::Access>,
+        /// Per static call: the callee and each value argument's needs.
+        calls: Vec<(FunctionLoc<'db>, Vec<u64>)>,
     }
 
     impl Tally {
-        fn function(&mut self, db: &baml_db::ProjectDatabase, mir: &MirFunction<'_>) {
+        fn collect<'db>(
+            db: &'db baml_db::ProjectDatabase,
+            loc: Option<FunctionLoc<'db>>,
+            mir: &MirFunction<'db>,
+            out: &mut Vec<Body<'db>>,
+        ) {
             if let MirFunctionKind::Bytecode(body) = &mir.kind {
-                for access in escape::coverage(db, body, mir.arity, OptLevel::Two) {
-                    let (total, local) = self.sites.entry(access.kind).or_default();
-                    *total += 1;
-                    *local += usize::from(access.thread_local);
-                    if let Some(reason) = access.shared_because {
-                        *self.reasons.entry(reason).or_default() += 1;
-                    }
-                }
+                let facts = escape::analyze(db, body, mir.arity, OptLevel::Two);
+                let calls = body
+                    .blocks
+                    .iter()
+                    .filter_map(|block| match &block.terminator {
+                        Some(Terminator::Call {
+                            has_trace: false,
+                            argument_layout,
+                            callee:
+                                Operand::Constant(
+                                    Constant::Function(DeclRef::Source(callee))
+                                    | Constant::GenericFunction {
+                                        func: DeclRef::Source(callee),
+                                        ..
+                                    },
+                                ),
+                            args,
+                            ntypeargs,
+                            ..
+                        }) if argument_layout
+                            .as_ref()
+                            .is_none_or(|layout| layout.0.iter().all(Option::is_none)) =>
+                        {
+                            let values = args.get(*ntypeargs..).unwrap_or_default();
+                            Some((
+                                *callee,
+                                values.iter().map(|arg| facts.operand_needs(arg)).collect(),
+                            ))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                out.push(Body {
+                    loc,
+                    accesses: escape::coverage(db, body, mir.arity, OptLevel::Two),
+                    calls,
+                });
             }
             for lambda in &mir.lambdas {
-                self.function(db, lambda);
+                Self::collect(db, None, lambda, out);
             }
         }
 
         fn files(&mut self, db: &baml_db::ProjectDatabase, files: &[baml_base::SourceFile]) {
+            let mut bodies = Vec::new();
             for &file in files {
                 for &loc in file_functions(db, file) {
                     if let Ok(mir) = lower_function(db, loc, OptLevel::Two) {
-                        self.function(db, mir);
+                        Self::collect(db, Some(loc), mir, &mut bodies);
+                    }
+                }
+            }
+            // The parameters some in-package call chain passes a thread-local
+            // argument: least fixed point, seeded by unconditional arguments.
+            let mut passed: std::collections::HashMap<FunctionLoc<'_>, u64> =
+                std::collections::HashMap::new();
+            loop {
+                let mut changed = false;
+                for body in &bodies {
+                    let have = body
+                        .loc
+                        .map_or(0, |loc| passed.get(&loc).copied().unwrap_or(0));
+                    for (callee, args) in &body.calls {
+                        for (i, &needs) in args.iter().enumerate().take(64) {
+                            if needs != NEVER && needs & !have == 0 {
+                                let bits = passed.entry(*callee).or_default();
+                                if *bits & (1 << i) == 0 {
+                                    *bits |= 1 << i;
+                                    changed = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                if !changed {
+                    break;
+                }
+            }
+            let called: std::collections::HashSet<FunctionLoc<'_>> = bodies
+                .iter()
+                .flat_map(|body| body.calls.iter().map(|(callee, _)| *callee))
+                .collect();
+            for body in bodies {
+                let have = body
+                    .loc
+                    .map_or(0, |loc| passed.get(&loc).copied().unwrap_or(0));
+                let has_caller = body.loc.is_some_and(|loc| called.contains(&loc));
+                for access in body.accesses {
+                    let (total, local) = self.sites.entry(access.kind).or_default();
+                    *total += 1;
+                    *local += usize::from(access.thread_local);
+                    if !access.thread_local && access.needs != NEVER {
+                        self.conditional += 1;
+                        let realizable = access.needs & !have == 0;
+                        self.realizable += usize::from(realizable);
+                        self.no_caller += usize::from(!realizable && !has_caller);
+                    }
+                    if let Some(reason) = access.shared_because {
+                        *self.reasons.entry(reason).or_default() += 1;
                     }
                 }
             }
@@ -470,6 +622,14 @@ fn escape_coverage() {
             println!(
                 "\n## {title}: {local}/{total} accesses thread-local ({}%)",
                 percent(local, total)
+            );
+            println!(
+                "  locality mask: +{} conditional, +{} realizable ({} of the rest have no caller) -> {}/{total} ({}%)",
+                self.conditional,
+                self.realizable,
+                self.no_caller,
+                local + self.realizable,
+                percent(local + self.realizable, total)
             );
             for (kind, (total, local)) in &self.sites {
                 println!(
