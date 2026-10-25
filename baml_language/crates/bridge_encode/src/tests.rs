@@ -321,6 +321,15 @@ fn descriptor() -> ProgramDescriptor {
             },
             ClassDescriptor {
                 crossing: baml_sdkgen_types::ClassCrossing::Fields,
+                name: tn("C"),
+                generic_params: vec![],
+                fields: vec![
+                    field("x", Ty::Int),
+                    field("z", union(vec![Ty::String, Ty::Null])),
+                ],
+            },
+            ClassDescriptor {
+                crossing: baml_sdkgen_types::ClassCrossing::Fields,
                 name: tn("OptList"),
                 generic_params: vec![Name::new("T")],
                 fields: vec![field(
@@ -688,11 +697,29 @@ fn several_fits_collapse_when_identical_and_are_ambiguous_otherwise() {
         StatedTy::Union(Box::new([StatedTy::String, StatedTy::Null])),
     ]));
     assert!(f.encode_in(Mock::Null, &slot).is_ok());
-    // Two classes a dict converts into: ambiguous.
+    // Two classes a dict converts into: `B` would read its omitted nullable
+    // `y` as null, a transformation `A` needs none of, so `A` wins; an
+    // instance that names `B` is an identity fit and keeps `B`, omission or
+    // not. Two members that both need the read stay ambiguous.
     assert_eq!(
-        f.refusal(Mock::Map(vec![(Mock::Str("x"), Mock::Int(1))]), "l"),
-        "argument `x`: Map([(Str(\"x\"), Int(1))]) fits more than one of A | B and the \
-         host cannot yet say which member is meant"
+        stated(&f.ok(Mock::Map(vec![(Mock::Str("x"), Mock::Int(1))]), "l")),
+        Some(StatedTy::Class(sh("A"), Box::new([])))
+    );
+    assert_eq!(
+        stated(&f.ok(inst("B", vec![("x", Mock::Int(1))]), "l")),
+        Some(StatedTy::Class(sh("B"), Box::new([])))
+    );
+    let two_omitting = StatedTy::Union(Box::new([
+        StatedTy::Class(sh("B"), Box::new([])),
+        StatedTy::Class(sh("C"), Box::new([])),
+    ]));
+    assert!(
+        refusal(f.encode_in(
+            Mock::Map(vec![(Mock::Str("x"), Mock::Int(1))]),
+            &two_omitting
+        ))
+        .contains("fits more than one"),
+        "`{{x}}` omits a nullable field of each"
     );
 }
 

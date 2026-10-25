@@ -22,9 +22,9 @@ internal static class Program
     public static async Task<int> Main()
     {
         await VerifySyncAdapterSurfaceAndBehavior();
-        VerifyRegistryLifecycle();
-        VerifyStrictOptionalBindingAndArity();
         using NativeFixture native = new();
+        VerifyRegistryLifecycle(native.Api);
+        VerifyStrictOptionalBindingAndArity(native.Api);
         NativeCallbacks.Register(native.Api);
         await VerifyAsyncDispatchContextAndBorrowedCopy(native.Api);
         await VerifyCancellationClassification(native.Api);
@@ -148,7 +148,7 @@ internal static class Program
             $"{method} accidentally exposed ValueTask");
     }
 
-    private static void VerifyRegistryLifecycle()
+    private static void VerifyRegistryLifecycle(NativeApi api)
     {
         (BamlGeneratedRegistry registry, BamlGeneratedType<long> integer, _) =
             CreateRegistry();
@@ -185,7 +185,7 @@ internal static class Program
             HostInvocation invocation = hostValues.TryStartInvocation(
                 firstKey,
                 hostCallId: 1,
-                new BamlToHostCall().ToByteArray(),
+                Arguments(new BamlToHostCall(), api),
                 out string? diagnostic)
                 ?? throw new InvalidOperationException(diagnostic);
             hostValues.Release(firstKey);
@@ -219,7 +219,7 @@ internal static class Program
             HostInvocation canceledInvocation = hostValues.TryStartInvocation(
                 canceled.Key,
                 hostCallId: 77,
-                new BamlToHostCall().ToByteArray(),
+                Arguments(new BamlToHostCall(), api),
                 out string? diagnostic)
                 ?? throw new InvalidOperationException(diagnostic);
             Require(
@@ -243,7 +243,7 @@ internal static class Program
         }
     }
 
-    private static void VerifyStrictOptionalBindingAndArity()
+    private static void VerifyStrictOptionalBindingAndArity(NativeApi api)
     {
         (BamlGeneratedRegistry registry, BamlGeneratedType<long> integer, BamlGeneratedType<string> text) =
             CreateRegistry();
@@ -274,7 +274,7 @@ internal static class Program
             OptionalString("first", "x"));
         IReadOnlyList<object?> bound = HostCallableProtocol.BindArguments(
             callable.Descriptor,
-            valid.ToByteArray());
+            Arguments(valid, api));
         Require(
             (long)bound[0]! == 7
                 && ((BamlOptional<string>)bound[1]!).Value == "x"
@@ -283,7 +283,7 @@ internal static class Program
 
         bound = HostCallableProtocol.BindArguments(
             callable.Descriptor,
-            Call(RequiredInt(8)).ToByteArray());
+            Arguments(Call(RequiredInt(8)), api));
         Require(
             !((BamlOptional<string>)bound[1]!).IsSet
                 && !((BamlOptional<long>)bound[2]!).IsSet,
@@ -291,23 +291,23 @@ internal static class Program
 
         Expect<BamlProtocolException>(() => HostCallableProtocol.BindArguments(
             callable.Descriptor,
-            Call().ToByteArray()));
+            Arguments(Call(), api)));
         Expect<BamlProtocolException>(() => HostCallableProtocol.BindArguments(
             callable.Descriptor,
-            Call(OptionalString("first", "x"), RequiredInt(1)).ToByteArray()));
+            Arguments(Call(OptionalString("first", "x"), RequiredInt(1)), api)));
         Expect<BamlProtocolException>(() => HostCallableProtocol.BindArguments(
             callable.Descriptor,
-            Call(RequiredInt(1), OptionalString("first", "x"), OptionalString("first", "y")).ToByteArray()));
+            Arguments(Call(RequiredInt(1), OptionalString("first", "x"), OptionalString("first", "y")), api)));
         Expect<BamlProtocolException>(() => HostCallableProtocol.BindArguments(
             callable.Descriptor,
-            Call(RequiredInt(1), OptionalString("unknown", "x")).ToByteArray()));
+            Arguments(Call(RequiredInt(1), OptionalString("unknown", "x")), api)));
         Expect<BamlProtocolException>(() => HostCallableProtocol.BindArguments(
             callable.Descriptor,
-            Call(new BamlToHostArg
+            Arguments(Call(new BamlToHostArg
             {
                 ArgName = "not-positional",
                 Value = new BamlOutboundValue { IntValue = 1 },
-            }).ToByteArray()));
+            }), api)));
 
         BamlGeneratedHostParameter[] tooMany = Enumerable.Range(0, 16)
             .Select(_ => context.Required(integer))
@@ -375,7 +375,8 @@ internal static class Program
         Require(
             completion.CallId == hostCallId && completion.Outcome.Returned is not null,
             "async host dispatch did not complete as success");
-        InboundValue result = completion.Outcome.Returned;
+        InboundValue result = completion.Outcome.Returned
+            ?? throw new InvalidOperationException("the completion lost its returned value");
         Require(
             result.StringValue == "12!",
             "host dispatch did not copy its borrowed argument buffer before returning");
@@ -440,7 +441,8 @@ internal static class Program
                 && completion.Outcome.Raised is not null
                 && Completions.IsEmpty,
             "a canceled callback must report its actual exit exactly once");
-        ulong exceptionKey = completion.Outcome.Raised.Handle;
+        ulong exceptionKey = (completion.Outcome.Raised
+            ?? throw new InvalidOperationException("the completion lost its raised exception")).Handle;
         HostValueRegistry.Shared.Release(exceptionKey);
 
         HostValueRegistry.Shared.Release(registration.Key);
@@ -533,7 +535,8 @@ internal static class Program
         Require(
             completion.CallId == hostCallId && completion.Outcome.Raised is not null,
             "an unrelated callback exception was misclassified as cancellation");
-        HostException raised = completion.Outcome.Raised;
+        HostException raised = completion.Outcome.Raised
+            ?? throw new InvalidOperationException("the completion lost its raised exception");
         Require(
             raised.Handle != 0,
             "callback exception did not carry its registration for rehydration");
@@ -637,6 +640,13 @@ internal static class Program
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void ThrowOriginalException(CancellationToken cancellationToken) =>
         throw new OperationCanceledException("host sentinel", cancellationToken);
+
+    /// <summary>
+    /// The call's arguments as the dispatcher receives them. These payloads
+    /// carry scalars only, so the ownership scope has nothing to release.
+    /// </summary>
+    private static HostCallArguments Arguments(BamlToHostCall call, NativeApi api) =>
+        HostCallArguments.Parse(call.ToByteArray(), api);
 
     private static BamlToHostCall Call(params BamlToHostArg[] arguments)
     {

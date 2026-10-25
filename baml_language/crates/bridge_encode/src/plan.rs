@@ -66,6 +66,10 @@ pub(crate) enum Node<'t, V, T = SlotTy> {
     Class {
         ty: T,
         fields: Vec<(String, Child<'t, V, T>)>,
+        /// How many declared fields the host left out and this node reads
+        /// as `null`: a transformation with a cost of its own, the last one
+        /// a choice among union members weighs ([`Planner::tiebreak`]).
+        omitted: usize,
     },
 }
 
@@ -85,6 +89,31 @@ impl<V> Clone for KeyNode<'_, V> {
     fn clone(&self) -> Self {
         match self {
             KeyNode::String(tree) => KeyNode::String(tree),
+        }
+    }
+}
+
+impl<V, T> Node<'_, V, T> {
+    /// How many declared class fields, anywhere in this node, the host left
+    /// out and the plan reads as `null`.
+    pub(crate) fn omissions(&self) -> usize {
+        match self {
+            Node::Null
+            | Node::Scalar { .. }
+            | Node::EnumVariant { .. }
+            | Node::Leaf { .. }
+            | Node::Callable { .. } => 0,
+            Node::List { items, .. } => items.iter().map(|item| item.omissions()).sum(),
+            Node::Map { entries, .. } => entries.iter().map(|(_, item)| item.omissions()).sum(),
+            Node::Class {
+                fields, omitted, ..
+            } => {
+                omitted
+                    + fields
+                        .iter()
+                        .map(|(_, item)| item.omissions())
+                        .sum::<usize>()
+            }
         }
     }
 }
@@ -332,12 +361,17 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                     .map(|(key, item)| Ok((key.clone(), self.decide(item)?)))
                     .collect::<Result<_, FaultKind>>()?,
             },
-            Node::Class { ty, fields } => Node::Class {
+            Node::Class {
+                ty,
+                fields,
+                omitted,
+            } => Node::Class {
                 ty: state(ty)?,
                 fields: fields
                     .iter()
                     .map(|(name, item)| Ok((name.clone(), self.decide(item)?)))
                     .collect::<Result<_, FaultKind>>()?,
+                omitted: *omitted,
             },
         }))
     }
@@ -564,6 +598,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                     Node::Class {
                         ty: SlotTy::Class(WireHead::Static(class.clone()), args.into()),
                         fields: nodes,
+                        omitted: 0,
                     }
                 }
             },
@@ -704,7 +739,11 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
     /// same type count as one (a scalar under two members, `null` under
     /// `int? | string?`; unions compare as sets). Among distinct types, the
     /// one equal to the value's natural type wins, as the compiler would type
-    /// the literal; otherwise the value is `Ambiguous` among exactly those.
+    /// the literal. Failing that, reading an omitted field as `null` is a
+    /// transformation with a small cost of its own, weighed last: the member
+    /// whose plan made the fewest such reads wins (`{text}` under
+    /// `Note { text, meta: json } | Tag { text }` is a `Tag`); otherwise the
+    /// value is `Ambiguous` among exactly those.
     fn tiebreak<'m>(
         &mut self,
         tree: &'t Tree<V>,
@@ -728,13 +767,26 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                 {
                     Some((_, index)) => *index,
                     None => {
-                        return Err(Failure::unfit(UnfitKind::Ambiguous {
-                            members: distinct
-                                .iter()
-                                .map(|(_, index)| fits[*index].0.clone())
-                                .collect(),
-                            found: tree,
-                        }));
+                        let cheapest = distinct
+                            .iter()
+                            .map(|(_, index)| fits[*index].1.omissions())
+                            .min()
+                            .unwrap_or(0);
+                        let mut cheapest_fits = distinct
+                            .iter()
+                            .filter(|(_, index)| fits[*index].1.omissions() == cheapest);
+                        match (cheapest_fits.next(), cheapest_fits.next()) {
+                            (Some((_, index)), None) => *index,
+                            _ => {
+                                return Err(Failure::unfit(UnfitKind::Ambiguous {
+                                    members: distinct
+                                        .iter()
+                                        .map(|(_, index)| fits[*index].0.clone())
+                                        .collect(),
+                                    found: tree,
+                                }));
+                            }
+                        }
                     }
                 }
             }
@@ -1149,6 +1201,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                 .and_then(|index| args.get(index).cloned())
         };
         let mut nodes = Vec::with_capacity(class.fields.len());
+        let mut omitted = 0;
         for (name, declared) in &class.fields {
             let slot = substitute(declared, &resolve);
             let node = match fields.iter().find(|(field, _)| field == name) {
@@ -1165,6 +1218,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
                         _ => false,
                     };
                     if nullable {
+                        omitted += 1;
                         Rc::new(Node::Null)
                     } else {
                         return Err(Failure::unfit(UnfitKind::MissingField {
@@ -1180,6 +1234,7 @@ impl<'f, 't, V: HostValue> Planner<'f, 't, V> {
         Ok(Rc::new(Node::Class {
             ty: SlotTy::Class(WireHead::Static(class.name.clone()), args.into()),
             fields: nodes,
+            omitted,
         }))
     }
 

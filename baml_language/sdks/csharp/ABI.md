@@ -133,7 +133,12 @@ stated type arguments substituted, and the root against its slot. A
 `class_value` may leave out a field whose type admits `null`; it reads as
 `null`, exactly as if the host had sent one, unless the value also carries a
 key the class does not declare (a misspelling, an `@alias` name), which is
-refused rather than letting the real field read as `null`. A generic
+refused rather than letting the real field read as `null`. Reading an omitted
+field as `null` is a transformation with a small cost of its own, weighed
+after every other distinction when a plain object fits more than one member of
+a union: the member whose plan reads the fewest omitted fields wins (`{text}`
+under `Note { text, meta: json } | Tag { text }` is a `Tag`), and a tie is
+still refused as ambiguous. A generic
 function's type arguments are inferred from the landed values' concrete types
 and from explicit `type_args`. A variable that occurs under a union or optional
 (`x: T | string | null`, `x: T?`) in a parameter whose value arrived, and that

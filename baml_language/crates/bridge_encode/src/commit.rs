@@ -49,7 +49,7 @@ pub(crate) fn depth<V>(node: &Node<'_, V, StatedTy>) -> usize {
                 .unwrap_or(0),
         ),
         // `InboundClassValue` → `InboundMapEntry` → `InboundValue`.
-        Node::Class { ty, fields } => statement(ty).max(
+        Node::Class { ty, fields, .. } => statement(ty).max(
             1 + fields
                 .iter()
                 .map(|(_, item)| 2 + depth(item))
@@ -144,7 +144,7 @@ pub(crate) fn commit<V: HostValue, H: Host<V>>(
                 value: Some(Value::MapValue(InboundMapValue { entries })),
             })
         }
-        Node::Class { ty, fields } => {
+        Node::Class { ty, fields, .. } => {
             let fields = fields
                 .iter()
                 .map(|(name, item)| {
