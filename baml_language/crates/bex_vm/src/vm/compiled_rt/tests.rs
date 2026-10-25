@@ -1769,3 +1769,17 @@ fn compiled_trace_hooks_record_as_bytecode_does() {
 
 #[cfg(not(any(target_arch = "wasm32", all(windows, target_arch = "aarch64"))))]
 mod error_tests;
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn call_safepoints_keep_yielding_under_gc_stress() {
+    #[allow(clippy::unnecessary_wraps)] // the compiled-body signature
+    fn main(_: &mut BexVm, _: &FrameRecord, _: &[Value]) -> BodyResult {
+        Ok(Value::int(0))
+    }
+    let mut vm = vm_with_main(main, 0, false);
+    vm.early_yield =
+        bex_vm_types::EarlyYieldCheck::with_interval(Arc::new(AtomicBool::new(false)), 3);
+    let yields: Vec<_> = (1..=9).filter(|_| vm.yield_at_call(true)).collect();
+    assert_eq!(yields, [3, 6, 9]);
+}
