@@ -1690,11 +1690,17 @@ impl<'a, 'db> Graph<'a, 'db> {
     /// Apply a builtin's effect to arguments [`Walker::matches_builtin`]
     /// accepted, returning the node its result belongs to.
     fn apply_builtin(&mut self, effect: &Effect, args: &[Operand<'_>]) -> Option<usize> {
+        // An immutable receiver (a string) holds no objects: no contents.
         let receiver = self.operand(&args[0]);
-        let contents = Some(self.contents_of(receiver));
+        let contents = receiver.map(|receiver| self.contents_of(Some(receiver)));
         for &kept in &effect.keeps {
-            let value = self.operand(&args[kept]);
-            self.flow(contents, value);
+            if contents.is_some() {
+                let value = self.operand(&args[kept]);
+                self.flow(contents, value);
+            } else {
+                // Kept by something this graph does not name.
+                self.leak(&args[kept]);
+            }
         }
         match &effect.returns {
             Returns::Nothing => None,

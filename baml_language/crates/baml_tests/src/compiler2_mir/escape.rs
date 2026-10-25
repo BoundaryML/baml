@@ -106,7 +106,10 @@ function main(ys: int[]) -> int {
 }
 
 /// Leaks its argument: `reverse` is a builtin the analysis does not know.
-const LEAK: &str = "function keep(xs: int[]) -> int { xs.reverse().length() }";
+/// A callee that hands its argument to another task: a leak however precise
+/// the analysis of builtins becomes.
+const LEAK: &str =
+    "function keep(xs: int[]) -> int { let child = spawn { xs.length() }; await child }";
 
 #[test]
 fn passing_to_a_leaking_call_shares_every_alias() {
@@ -300,7 +303,7 @@ function main() -> int {{
 fn an_iterator_that_leaks_shares_its_array() {
     assert_locality(
         r#"
-function drain<T>(it: T) -> int { [it].reverse().length() }
+function drain<T>(it: T) -> int { let child = spawn { [it].length() }; await child }
 function main() -> int {
   let xs = [1, 2];
   drain(xs.iter())
@@ -970,5 +973,42 @@ function bump(c: Counter) -> int {
     assert!(
         !bump.contains("_local"),
         "a parameter's instance keeps ordered fields:\n{bump}"
+    );
+}
+
+#[test]
+fn fresh_results_of_declared_builtins_are_thread_local() {
+    assert_locality(
+        r#"
+function main(s: string) -> int {
+  let parts = s.split(",");
+  let cps = s.to_code_points();
+  let xs = [1, 2];
+  let ys = xs.reverse();
+  parts.length() + cps[0] + ys[0] + xs[0]
+}
+"#,
+        "main",
+        &[("parts", true), ("cps", true), ("xs", true), ("ys", true)],
+    );
+}
+
+#[test]
+fn inserting_into_a_shared_array_shares_the_item() {
+    assert_locality(
+        r#"
+function main(shared: int[][]) -> int {
+  let xs = [1];
+  let ys = [2];
+  let zs = [3];
+  shared.insert(xs, 0);
+  shared.unshift(ys);
+  let local: int[][] = [];
+  local.insert(zs, 0);
+  xs[0] + ys[0] + zs[0] + local.length()
+}
+"#,
+        "main",
+        &[("xs", false), ("ys", false), ("zs", true), ("local", true)],
     );
 }

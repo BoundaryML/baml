@@ -145,6 +145,7 @@ class Array<T> {
     /// xs.remove_at(99)  // null
     /// ```
     //baml:mut_self
+    //baml:effects(returns(element))
     function remove_at(self, index: int) -> T? throws never {
         $rust_function
     }
@@ -206,6 +207,7 @@ class Array<T> {
     /// let reversed = arr.reverse();
     /// assert.equal(reversed, [3, 2, 1]);
     /// ```
+    //baml:effects(returns(fresh))
     function reverse(self) -> T[] throws never {
         $rust_function
     }
@@ -589,6 +591,7 @@ class Array<T> {
     /// it observes the empty array too. Rebind to a fresh `[]` to leave the
     /// original alone.
     //baml:mut_self
+    //baml:effects(reads)
     function clear(self) -> null throws never {
         $rust_function
     }
@@ -607,6 +610,7 @@ class Array<T> {
     /// [].shift()      // null
     /// ```
     //baml:mut_self
+    //baml:effects(returns(element))
     function shift(self) -> T? throws never {
         $rust_function
     }
@@ -623,6 +627,7 @@ class Array<T> {
     /// xs              // [1, 2, 3]
     /// ```
     //baml:mut_self
+    //baml:effects(keeps(item))
     function unshift(self, item: T) -> int throws never {
         $rust_function
     }
@@ -648,6 +653,7 @@ class Array<T> {
     /// xs.insert(0, 100)      // throws — idx beyond length
     /// ```
     //baml:mut_self
+    //baml:effects(keeps(item))
     function insert(self, item: T, idx: int) -> int throws root.errors.InvalidArgument {
         $rust_function
     }
@@ -857,6 +863,7 @@ class Map<K extends root.Hash & root.ops.Equals, V> {
     /// observes the empty map too. Rebind to a fresh `{}` to leave the original
     /// alone.
     //baml:mut_self
+    //baml:effects(reads)
     function clear(self) -> null throws never {
         $rust_function
     }

@@ -128,6 +128,17 @@ function EscapeMap() -> void {
     baml.io.println(`map-shared:${m.length()}:${total > 0}`);
 }
 
+// Shared through `insert` into an array the spawned body reads.
+function EscapeInsert() -> void {
+    let xs: int[] = [];
+    let holder: int[][] = [];
+    holder.insert(xs, 0);
+    let child = spawn { PushN(holder[0], 2000) };
+    PushN(xs, 2000);
+    await child;
+    Report("insert", xs);
+}
+
 function Same(xs: int[]) -> int[] {
     xs
 }
