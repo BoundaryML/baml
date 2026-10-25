@@ -53,7 +53,7 @@ impl<T> LockedContainer<T> {
         let data = unsafe { &*self.data.get() };
         LockedReadGuard {
             data,
-            _access: access,
+            _access: Some(access),
         }
     }
 
@@ -79,9 +79,61 @@ impl<T> LockedContainer<T> {
         LockedWriteGuard {
             before: data.footprint(),
             data,
+            _access: Some(access),
+            debt,
+        }
+    }
+
+    /// [`Self::lock`] for a container no other thread can reach, which
+    /// takes no lock. Debug builds take it anyway, without waiting, and
+    /// panic when another holder has it: the container was not thread-local.
+    ///
+    /// # Safety
+    ///
+    /// No other thread may be able to reach this container for the guard's
+    /// lifetime. Escape analysis proves this for the access sites it marks
+    /// thread-local (`baml_compiler2_mir::escape`).
+    pub unsafe fn lock_thread_local(&self) -> LockedReadGuard<'_, T> {
+        let access = self.assert_thread_local();
+        // SAFETY: no other thread can reach the container (caller contract),
+        // and this thread holds no other guard across this access.
+        let data = unsafe { &*self.data.get() };
+        LockedReadGuard {
+            data,
+            _access: access,
+        }
+    }
+
+    /// [`Self::lock_mut`] for a container no other thread can reach; see
+    /// [`Self::lock_thread_local`]. Footprint changes are still charged.
+    ///
+    /// # Safety
+    ///
+    /// As for [`Self::lock_thread_local`].
+    pub unsafe fn lock_mut_thread_local<'a>(
+        &'a self,
+        debt: &'a AllocDebt,
+    ) -> LockedWriteGuard<'a, T>
+    where
+        T: Footprint,
+    {
+        let access = self.assert_thread_local();
+        // SAFETY: as for `lock_thread_local`.
+        let data = unsafe { &mut *self.data.get() };
+        LockedWriteGuard {
+            before: data.footprint(),
+            data,
             _access: access,
             debt,
         }
+    }
+
+    fn assert_thread_local(&self) -> Option<crate::lazy_biased_mutex::AccessGuard<'_>> {
+        cfg!(debug_assertions).then(|| {
+            self.mutex.try_enter().unwrap_or_else(|| {
+                panic!("a container accessed as thread-local is locked by another holder")
+            })
+        })
     }
 
     /// Get a reference to the underlying `Vec` WITHOUT acquiring the lock.
@@ -191,7 +243,8 @@ impl<T: Clone> LockedContainer<Vec<T>> {
 /// [`LazyBiasedMutex`] for the duration of the guard's lifetime.
 pub struct LockedReadGuard<'a, T> {
     data: &'a T,
-    _access: crate::lazy_biased_mutex::AccessGuard<'a>,
+    /// `None` for a thread-local access, which takes no lock.
+    _access: Option<crate::lazy_biased_mutex::AccessGuard<'a>>,
 }
 
 impl<T> std::ops::Deref for LockedReadGuard<'_, T> {
@@ -206,7 +259,8 @@ impl<T> std::ops::Deref for LockedReadGuard<'_, T> {
 /// the change in the store's footprint to an [`AllocDebt`] when dropped.
 pub struct LockedWriteGuard<'a, T: Footprint> {
     data: &'a mut T,
-    _access: crate::lazy_biased_mutex::AccessGuard<'a>,
+    /// `None` for a thread-local access, which takes no lock.
+    _access: Option<crate::lazy_biased_mutex::AccessGuard<'a>>,
     debt: &'a AllocDebt,
     /// The store's footprint when the guard was taken.
     before: usize,
@@ -264,6 +318,26 @@ impl Array {
     /// Lock the backing store for writing (see [`LockedContainer::lock_mut`]).
     pub fn lock_mut<'a>(&'a self, debt: &'a AllocDebt) -> ArrayWriteGuard<'a> {
         self.data.lock_mut(debt)
+    }
+
+    /// Read a thread-local array's backing store without the lock.
+    ///
+    /// # Safety
+    ///
+    /// See [`LockedContainer::lock_thread_local`].
+    pub unsafe fn lock_thread_local(&self) -> ArrayReadGuard<'_> {
+        // SAFETY: forwarded contract.
+        unsafe { self.data.lock_thread_local() }
+    }
+
+    /// Write a thread-local array's backing store without the lock.
+    ///
+    /// # Safety
+    ///
+    /// See [`LockedContainer::lock_thread_local`].
+    pub unsafe fn lock_mut_thread_local<'a>(&'a self, debt: &'a AllocDebt) -> ArrayWriteGuard<'a> {
+        // SAFETY: forwarded contract.
+        unsafe { self.data.lock_mut_thread_local(debt) }
     }
 
     /// Locked convenience: number of elements.
@@ -555,6 +629,26 @@ impl Map {
         self.data.lock_mut(debt)
     }
 
+    /// Read a thread-local map's backing store without the lock.
+    ///
+    /// # Safety
+    ///
+    /// See [`LockedContainer::lock_thread_local`].
+    pub unsafe fn lock_thread_local(&self) -> MapReadGuard<'_> {
+        // SAFETY: forwarded contract.
+        unsafe { self.data.lock_thread_local() }
+    }
+
+    /// Write a thread-local map's backing store without the lock.
+    ///
+    /// # Safety
+    ///
+    /// See [`LockedContainer::lock_thread_local`].
+    pub unsafe fn lock_mut_thread_local<'a>(&'a self, debt: &'a AllocDebt) -> MapWriteGuard<'a> {
+        // SAFETY: forwarded contract.
+        unsafe { self.data.lock_mut_thread_local(debt) }
+    }
+
     /// Unlocked read of the backing store. See [`LockedContainer::data_unchecked`].
     ///
     /// # Safety
@@ -603,36 +697,6 @@ impl Map {
             .map(|(key, value)| (*key, *value))
             .collect()
     }
-
-    pub fn get_if_epoch(
-        &self,
-        epoch: u64,
-        id: Option<EntryId>,
-    ) -> Result<Option<Value>, MapEpochChanged> {
-        self.lock().get_if_epoch(epoch, id)
-    }
-
-    pub fn set_if_epoch(
-        &self,
-        debt: &AllocDebt,
-        epoch: u64,
-        id: Option<EntryId>,
-        hash: u64,
-        key: Value,
-        value: Value,
-    ) -> Result<Option<Value>, MapEpochChanged> {
-        self.lock_mut(debt)
-            .set_if_epoch(epoch, id, hash, key, value)
-    }
-
-    pub fn remove_if_epoch(
-        &self,
-        debt: &AllocDebt,
-        epoch: u64,
-        id: Option<EntryId>,
-    ) -> Result<Option<Value>, MapEpochChanged> {
-        self.lock_mut(debt).remove_if_epoch(epoch, id)
-    }
 }
 
 #[cfg(test)]
@@ -672,6 +736,36 @@ mod guard_tests {
             -(4 * size_of::<Value>().cast_signed()),
             "replacing the store credits its whole capacity"
         );
+    }
+
+    /// Thread-local guards take no lock, still charge footprint, and in debug
+    /// builds catch a container someone else holds: the classifier was wrong.
+    #[test]
+    fn thread_local_guards_skip_the_lock_and_still_charge() {
+        let debt = AllocDebt::new();
+        let array: ArrayContainer = LockedContainer::new(vec![Value::int(1)]);
+        // SAFETY: nothing else can reach `array`.
+        unsafe { array.lock_mut_thread_local(&debt) }.extend((0..100).map(Value::int));
+        assert!(
+            debt.balance() > 0,
+            "growth through a thread-local guard is charged"
+        );
+        // SAFETY: as above.
+        assert_eq!(unsafe { array.lock_thread_local() }.len(), 101);
+
+        if cfg!(debug_assertions) {
+            let held = array.lock();
+            let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                // SAFETY: deliberately violated; the debug check must panic
+                // before the store is read.
+                let _ = unsafe { array.lock_thread_local() }.len();
+            }));
+            drop(held);
+            assert!(
+                caught.is_err(),
+                "a held lock must fail a thread-local access"
+            );
+        }
     }
 }
 
