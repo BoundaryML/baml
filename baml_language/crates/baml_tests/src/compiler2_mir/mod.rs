@@ -3,6 +3,8 @@
 //! Each test creates a minimal DB, adds a `.baml` file, lowers all functions
 //! to MIR, and snapshots the pretty-printed output.
 
+mod escape;
+
 use std::fmt::Write;
 
 use baml_compiler2_hir::item_data::{file_functions, function_data, function_source_map};
