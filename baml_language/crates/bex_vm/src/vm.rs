@@ -4805,6 +4805,51 @@ impl BexVm {
         }
     }
 
+    /// [`Self::as_array`] for an array only this thread can reach, without
+    /// its lock.
+    ///
+    /// # Safety
+    ///
+    /// No other thread may reach the array while the guard lives; escape
+    /// analysis proves this at the call sites that select a `$local` builtin.
+    pub unsafe fn as_array_local(
+        &self,
+        value: &Value,
+    ) -> Result<bex_vm_types::ArrayReadGuard<'_>, VmInternalError> {
+        let ptr = self.as_object_ptr(*value, ObjectType::Array)?;
+        match self.get_object(ptr) {
+            // SAFETY: forwarded contract.
+            Object::Array(arr) => Ok(unsafe { arr.lock_thread_local() }),
+            obj => Err(VmInternalError::TypeError {
+                expected: ObjectType::Array.into(),
+                got: ObjectType::of(obj).into(),
+            }),
+        }
+    }
+
+    /// [`Self::as_array_mut`] for an array only this thread can reach,
+    /// without its lock. The write barrier still runs: generations are not
+    /// threads.
+    ///
+    /// # Safety
+    ///
+    /// As for [`Self::as_array_local`].
+    pub unsafe fn as_array_mut_local(
+        &mut self,
+        value: &Value,
+    ) -> Result<bex_vm_types::ArrayWriteGuard<'_>, VmInternalError> {
+        let ptr = self.as_object_ptr(*value, ObjectType::Array)?;
+        self.heap.conservative_write_barrier(ptr);
+        match self.get_object(ptr) {
+            // SAFETY: forwarded contract.
+            Object::Array(arr) => Ok(unsafe { arr.lock_mut_thread_local(self.tlab.alloc_debt()) }),
+            obj => Err(VmInternalError::TypeError {
+                expected: ObjectType::Array.into(),
+                got: ObjectType::of(obj).into(),
+            }),
+        }
+    }
+
     /// Get map from a Value. Acquires the container's mutex.
     pub fn as_map(&self, value: &Value) -> Result<bex_vm_types::MapReadGuard<'_>, VmInternalError> {
         let index = self.as_object_ptr(*value, ObjectType::Map)?;
@@ -4849,6 +4894,49 @@ impl BexVm {
         match self.get_object(index) {
             Object::Map(map) => Ok(map.lock_mut(self.tlab.alloc_debt())),
             _ => unreachable!("type was just checked"),
+        }
+    }
+
+    /// [`Self::as_map`] for a map only this thread can reach, without its
+    /// lock.
+    ///
+    /// # Safety
+    ///
+    /// As for [`Self::as_array_local`].
+    pub unsafe fn as_map_local(
+        &self,
+        value: &Value,
+    ) -> Result<bex_vm_types::MapReadGuard<'_>, VmInternalError> {
+        let ptr = self.as_object_ptr(*value, ObjectType::Map)?;
+        match self.get_object(ptr) {
+            // SAFETY: forwarded contract.
+            Object::Map(map) => Ok(unsafe { map.lock_thread_local() }),
+            obj => Err(VmInternalError::TypeError {
+                expected: ObjectType::Map.into(),
+                got: ObjectType::of(obj).into(),
+            }),
+        }
+    }
+
+    /// [`Self::as_map_mut`] for a map only this thread can reach, without
+    /// its lock. The write barrier still runs.
+    ///
+    /// # Safety
+    ///
+    /// As for [`Self::as_array_local`].
+    pub unsafe fn as_map_mut_local(
+        &mut self,
+        value: &Value,
+    ) -> Result<bex_vm_types::MapWriteGuard<'_>, VmInternalError> {
+        let ptr = self.as_object_ptr(*value, ObjectType::Map)?;
+        self.heap.conservative_write_barrier(ptr);
+        match self.get_object(ptr) {
+            // SAFETY: forwarded contract.
+            Object::Map(map) => Ok(unsafe { map.lock_mut_thread_local(self.tlab.alloc_debt()) }),
+            obj => Err(VmInternalError::TypeError {
+                expected: ObjectType::Map.into(),
+                got: ObjectType::of(obj).into(),
+            }),
         }
     }
 

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use bex_vm_types::{EntryId, HeapPtr, MapData, Object, Value};
+use bex_vm_types::{EntryId, HeapPtr, MapData, MapReadGuard, MapWriteGuard, Object, Value};
 
 use super::{BamlClassMap, Continuation, MapView, NativeCallResult, PackageBamlImpl};
 use crate::{BexVm, VmPanic, errors::VmRustFnError};
@@ -27,10 +27,17 @@ struct MapDriver {
     candidates: Vec<(EntryId, Value)>,
     cursor: usize,
     hashing: bool,
+    /// The map is thread-local: escape analysis selected a `$local` twin.
+    thread_local: bool,
 }
 
 impl MapDriver {
-    fn start(vm: &mut BexVm, args: &[Value], operation: Operation) -> NativeCallResult {
+    fn start(
+        vm: &mut BexVm,
+        args: &[Value],
+        operation: Operation,
+        thread_local: bool,
+    ) -> NativeCallResult {
         if let Err(error) = vm.as_map(&args[0]) {
             return error.into();
         }
@@ -56,6 +63,7 @@ impl MapDriver {
             candidates: Vec::new(),
             cursor: 0,
             hashing: string_hash.is_none(),
+            thread_local,
         };
         if string_hash.is_some() {
             driver.snapshot(vm);
@@ -65,11 +73,39 @@ impl MapDriver {
         super::chain(vm, result, Box::new(driver))
     }
 
-    fn snapshot(&mut self, vm: &BexVm) {
+    /// The map's backing store, read without its lock when it is thread-local.
+    #[allow(unsafe_code)]
+    fn entries<'vm>(&self, vm: &'vm BexVm) -> MapReadGuard<'vm> {
         let Object::Map(map) = vm.get_object(self.map.as_object_ptr().unwrap()) else {
             unreachable!("map receiver was validated")
         };
-        let (epoch, entries) = map.snapshot_bucket(self.hash);
+        if self.thread_local {
+            // SAFETY: only the `$local` twins set `thread_local`, and the
+            // native backend selects those only for a receiver escape
+            // analysis proved thread-local.
+            unsafe { map.lock_thread_local() }
+        } else {
+            map.lock()
+        }
+    }
+
+    /// [`Self::entries`] for writing.
+    #[allow(unsafe_code)]
+    fn entries_mut<'vm>(&self, vm: &'vm BexVm) -> MapWriteGuard<'vm> {
+        let Object::Map(map) = vm.get_object(self.map.as_object_ptr().unwrap()) else {
+            unreachable!("map receiver was validated")
+        };
+        let debt = vm.tlab.alloc_debt();
+        if self.thread_local {
+            // SAFETY: as for `entries`.
+            unsafe { map.lock_mut_thread_local(debt) }
+        } else {
+            map.lock_mut(debt)
+        }
+    }
+
+    fn snapshot(&mut self, vm: &BexVm) {
+        let (epoch, entries) = self.entries(vm).snapshot_bucket(self.hash);
         self.epoch = epoch;
         self.candidates = entries
             .into_iter()
@@ -80,10 +116,7 @@ impl MapDriver {
 
     fn drive(mut self, vm: &mut BexVm, mut matched: Option<EntryId>) -> NativeCallResult {
         loop {
-            let Object::Map(map) = vm.get_object(self.map.as_object_ptr().unwrap()) else {
-                unreachable!("map receiver was validated")
-            };
-            if map.get_if_epoch(self.epoch, None).is_err() {
+            if self.entries(vm).get_if_epoch(self.epoch, None).is_err() {
                 self.snapshot(vm);
                 matched = None;
                 continue;
@@ -105,16 +138,16 @@ impl MapDriver {
                     other => return super::chain(vm, other, Box::new(self)),
                 }
             }
-            let debt = vm.tlab.alloc_debt();
             let result = match self.operation {
-                Operation::Set => {
-                    map.set_if_epoch(debt, self.epoch, matched, self.hash, self.key, self.value)
-                }
-                Operation::GetOrInsert if matched.is_none() => map
-                    .set_if_epoch(debt, self.epoch, None, self.hash, self.key, self.value)
+                Operation::Set => self
+                    .entries_mut(vm)
+                    .set_if_epoch(self.epoch, matched, self.hash, self.key, self.value),
+                Operation::GetOrInsert if matched.is_none() => self
+                    .entries_mut(vm)
+                    .set_if_epoch(self.epoch, None, self.hash, self.key, self.value)
                     .map(|_| Some(self.value)),
-                Operation::Delete => map.remove_if_epoch(debt, self.epoch, matched),
-                _ => map.get_if_epoch(self.epoch, matched),
+                Operation::Delete => self.entries_mut(vm).remove_if_epoch(self.epoch, matched),
+                _ => self.entries(vm).get_if_epoch(self.epoch, matched),
             };
             let Ok(previous) = result else {
                 self.snapshot(vm);
@@ -196,7 +229,11 @@ impl BamlClassMap for PackageBamlImpl {
     }
 
     fn __glue_has(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Has)
+        MapDriver::start(vm, args, Operation::Has, false)
+    }
+
+    fn __glue_has__local(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
+        MapDriver::start(vm, args, Operation::Has, true)
     }
 
     fn has(_vm: &mut BexVm, _map: MapView<'_>, _key: &Value) -> NativeCallResult {
@@ -204,7 +241,11 @@ impl BamlClassMap for PackageBamlImpl {
     }
 
     fn __glue_get(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Get)
+        MapDriver::start(vm, args, Operation::Get, false)
+    }
+
+    fn __glue_get__local(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
+        MapDriver::start(vm, args, Operation::Get, true)
     }
 
     fn get(_vm: &mut BexVm, _map: MapView<'_>, _key: &Value) -> NativeCallResult {
@@ -212,7 +253,11 @@ impl BamlClassMap for PackageBamlImpl {
     }
 
     fn __glue_index(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Index)
+        MapDriver::start(vm, args, Operation::Index, false)
+    }
+
+    fn __glue_index__local(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
+        MapDriver::start(vm, args, Operation::Index, true)
     }
 
     fn index(_vm: &mut BexVm, _map: MapView<'_>, _key: &Value) -> NativeCallResult {
@@ -220,7 +265,11 @@ impl BamlClassMap for PackageBamlImpl {
     }
 
     fn __glue_set(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Set)
+        MapDriver::start(vm, args, Operation::Set, false)
+    }
+
+    fn __glue_set__local(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
+        MapDriver::start(vm, args, Operation::Set, true)
     }
 
     fn set(_vm: &mut BexVm, _map: &Value, _key: &Value, _value: &Value) -> NativeCallResult {
@@ -228,7 +277,11 @@ impl BamlClassMap for PackageBamlImpl {
     }
 
     fn __glue_delete(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::Delete)
+        MapDriver::start(vm, args, Operation::Delete, false)
+    }
+
+    fn __glue_delete__local(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
+        MapDriver::start(vm, args, Operation::Delete, true)
     }
 
     fn delete(_vm: &mut BexVm, _map: &Value, _key: &Value) -> NativeCallResult {
@@ -236,7 +289,11 @@ impl BamlClassMap for PackageBamlImpl {
     }
 
     fn __glue_get_or_insert(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
-        MapDriver::start(vm, args, Operation::GetOrInsert)
+        MapDriver::start(vm, args, Operation::GetOrInsert, false)
+    }
+
+    fn __glue_get_or_insert__local(vm: &mut BexVm, args: &[Value]) -> NativeCallResult {
+        MapDriver::start(vm, args, Operation::GetOrInsert, true)
     }
 
     fn get_or_insert(

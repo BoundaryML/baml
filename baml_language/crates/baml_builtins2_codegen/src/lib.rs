@@ -18,8 +18,8 @@ pub use extract::{
     ExtractNativeBuiltinsError, extract_native_builtins, extract_native_builtins_for,
 };
 pub use types::{
-    BamlType, BuiltinPipeline, NativeBuiltin, NativeClassDef, NativeClassField, Param, Receiver,
-    ReceiverType,
+    BamlType, BuiltinPipeline, EffectReturn, MemoryEffects, NativeBuiltin, NativeClassDef,
+    NativeClassField, Param, Receiver, ReceiverType,
 };
 
 /// Format a `TokenStream` into a pretty-printed Rust source string.

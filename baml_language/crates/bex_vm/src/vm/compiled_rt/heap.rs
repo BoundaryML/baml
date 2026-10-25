@@ -11,9 +11,31 @@ use crate::{
 impl BexVm {
     /// Return the length of a container, measuring strings in bytes.
     pub fn container_len(&self, container: Value) -> Result<Value, Box<VmError>> {
+        self.container_len_in::<false>(container)
+    }
+
+    /// [`Self::container_len`] on a container escape analysis proved
+    /// thread-local, without its lock.
+    pub fn container_len_local(&self, container: Value) -> Result<Value, Box<VmError>> {
+        self.container_len_in::<true>(container)
+    }
+
+    #[inline]
+    fn container_len_in<const THREAD_LOCAL: bool>(
+        &self,
+        container: Value,
+    ) -> Result<Value, Box<VmError>> {
         let ptr = self.as_object_ptr(container, ObjectType::Array)?;
-        #[allow(clippy::cast_possible_wrap)]
+        // SAFETY (`THREAD_LOCAL`): codegen calls the `_local` entry points
+        // only where escape analysis proved no other thread can reach the
+        // container.
+        #[allow(clippy::cast_possible_wrap, unsafe_code)]
         let len = match self.get_object(ptr) {
+            Object::Array(arr) if THREAD_LOCAL => unsafe { arr.lock_thread_local() }.len() as i64,
+            Object::Uint8Array(bytes) if THREAD_LOCAL => {
+                unsafe { bytes.lock_thread_local() }.len() as i64
+            }
+            Object::Map(map) if THREAD_LOCAL => unsafe { map.lock_thread_local() }.len() as i64,
             Object::Array(arr) => arr.len() as i64,
             Object::Uint8Array(bytes) => bytes.len() as i64,
             Object::Map(map) => map.len() as i64,
@@ -35,6 +57,24 @@ impl BexVm {
         array: Value,
         index: Value,
     ) -> Result<Value, Box<VmError>> {
+        self.load_array_element_in::<false>(array, index)
+    }
+
+    /// [`Self::load_array_element`] on a thread-local array, without its lock.
+    pub fn load_array_element_local(
+        &mut self,
+        array: Value,
+        index: Value,
+    ) -> Result<Value, Box<VmError>> {
+        self.load_array_element_in::<true>(array, index)
+    }
+
+    #[inline]
+    fn load_array_element_in<const THREAD_LOCAL: bool>(
+        &mut self,
+        array: Value,
+        index: Value,
+    ) -> Result<Value, Box<VmError>> {
         let array_ptr = self.as_object_ptr(array, ObjectType::Array)?;
         let Some(i) = index.as_int() else {
             return Err(VmInternalError::TypeError {
@@ -47,13 +87,25 @@ impl BexVm {
         let load_result: Result<Value, (i64, usize)> = {
             match self.get_object(array_ptr) {
                 Object::Array(arr) => {
-                    let guard = arr.lock();
+                    // SAFETY (`THREAD_LOCAL`): see `container_len_in`.
+                    #[allow(unsafe_code)]
+                    let guard = if THREAD_LOCAL {
+                        unsafe { arr.lock_thread_local() }
+                    } else {
+                        arr.lock()
+                    };
                     crate::array_index::resolve_index(i, guard.len())
                         .map(|idx| guard[idx])
                         .ok_or((i, guard.len()))
                 }
                 Object::Uint8Array(bytes) => {
-                    let guard = bytes.lock();
+                    // SAFETY (`THREAD_LOCAL`): see `container_len_in`.
+                    #[allow(unsafe_code)]
+                    let guard = if THREAD_LOCAL {
+                        unsafe { bytes.lock_thread_local() }
+                    } else {
+                        bytes.lock()
+                    };
                     crate::array_index::resolve_index(i, guard.len())
                         .map(|idx| Value::int(i64::from(guard[idx])))
                         .ok_or((i, guard.len()))
@@ -79,6 +131,26 @@ impl BexVm {
         index: Value,
         new_value: Value,
     ) -> Result<(), Box<VmError>> {
+        self.store_array_element_in::<false>(array, index, new_value)
+    }
+
+    /// [`Self::store_array_element`] on a thread-local array, without its lock.
+    pub fn store_array_element_local(
+        &mut self,
+        array: Value,
+        index: Value,
+        new_value: Value,
+    ) -> Result<(), Box<VmError>> {
+        self.store_array_element_in::<true>(array, index, new_value)
+    }
+
+    #[inline]
+    fn store_array_element_in<const THREAD_LOCAL: bool>(
+        &mut self,
+        array: Value,
+        index: Value,
+        new_value: Value,
+    ) -> Result<(), Box<VmError>> {
         let array_ptr = self.as_object_ptr(array, ObjectType::Array)?;
         let Some(i) = index.as_int() else {
             return Err(VmInternalError::TypeError {
@@ -91,7 +163,14 @@ impl BexVm {
         let store_result: Result<(), (i64, usize)> = {
             match self.get_object(array_ptr) {
                 Object::Array(arr) => {
-                    let mut guard = arr.lock_mut(self.tlab.alloc_debt());
+                    let debt = self.tlab.alloc_debt();
+                    // SAFETY (`THREAD_LOCAL`): see `container_len_in`.
+                    #[allow(unsafe_code)]
+                    let mut guard = if THREAD_LOCAL {
+                        unsafe { arr.lock_mut_thread_local(debt) }
+                    } else {
+                        arr.lock_mut(debt)
+                    };
                     crate::array_index::resolve_index(i, guard.len())
                         .ok_or((i, guard.len()))
                         .map(|idx| guard[idx] = new_value)
@@ -104,7 +183,14 @@ impl BexVm {
                         }
                         .into());
                     };
-                    let mut guard = bytes.lock_mut(self.tlab.alloc_debt());
+                    let debt = self.tlab.alloc_debt();
+                    // SAFETY (`THREAD_LOCAL`): see `container_len_in`.
+                    #[allow(unsafe_code)]
+                    let mut guard = if THREAD_LOCAL {
+                        unsafe { bytes.lock_mut_thread_local(debt) }
+                    } else {
+                        bytes.lock_mut(debt)
+                    };
                     crate::array_index::resolve_index(i, guard.len())
                         .ok_or((i, guard.len()))
                         .map(|idx| guard[idx] = byte_v)
@@ -134,11 +220,29 @@ impl BexVm {
     }
 
     pub fn load_field(&mut self, instance: Value, idx: usize) -> Result<Value, Box<VmError>> {
+        self.load_field_in::<false>(instance, idx)
+    }
+
+    /// [`Self::load_field`] on an instance escape analysis proved
+    /// thread-local, with no ordering on the load.
+    pub fn load_field_local(&mut self, instance: Value, idx: usize) -> Result<Value, Box<VmError>> {
+        self.load_field_in::<true>(instance, idx)
+    }
+
+    #[inline]
+    fn load_field_in<const THREAD_LOCAL: bool>(
+        &mut self,
+        instance: Value,
+        idx: usize,
+    ) -> Result<Value, Box<VmError>> {
         let load_result = {
             let instance = self.as_instance(&instance)?;
-            instance
-                .try_load_field(idx)
-                .ok_or_else(|| instance.field_len())
+            if THREAD_LOCAL {
+                instance.try_load_field_relaxed(idx)
+            } else {
+                instance.try_load_field(idx)
+            }
+            .ok_or_else(|| instance.field_len())
         };
         match load_result {
             Ok(value) => Ok(value),
@@ -152,6 +256,27 @@ impl BexVm {
         idx: usize,
         new_value: Value,
     ) -> Result<(), Box<VmError>> {
+        self.store_field_in::<false>(instance, idx, new_value)
+    }
+
+    /// [`Self::store_field`] on a thread-local instance, with no ordering on
+    /// the store. The write barrier still runs: generations are not threads.
+    pub fn store_field_local(
+        &mut self,
+        instance: Value,
+        idx: usize,
+        new_value: Value,
+    ) -> Result<(), Box<VmError>> {
+        self.store_field_in::<true>(instance, idx, new_value)
+    }
+
+    #[inline]
+    fn store_field_in<const THREAD_LOCAL: bool>(
+        &mut self,
+        instance: Value,
+        idx: usize,
+        new_value: Value,
+    ) -> Result<(), Box<VmError>> {
         let obj_ptr = self.as_object_ptr(instance, ObjectType::Instance)?;
         let instance_ref = self.as_instance(&instance)?;
         let store_error = (idx >= instance_ref.field_len()).then_some(instance_ref.field_len());
@@ -159,7 +284,12 @@ impl BexVm {
             return Err(Box::new(self.invalid_field_access_error(idx, length)));
         }
         self.heap.write_barrier(obj_ptr, new_value);
-        self.as_instance(&instance)?.store_field(idx, new_value);
+        let instance = self.as_instance(&instance)?;
+        if THREAD_LOCAL {
+            instance.store_field_relaxed(idx, new_value);
+        } else {
+            instance.store_field(idx, new_value);
+        }
         Ok(())
     }
 
