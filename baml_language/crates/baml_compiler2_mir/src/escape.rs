@@ -43,8 +43,14 @@ pub const MASKED_PARAMS: usize = 64;
 /// The thread-locality of every object a body names.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EscapeFacts {
-    /// Per block: whether its terminator calls a builtin's thread-local twin.
-    local_calls: Vec<bool>,
+    /// Per block: the parameters its terminator's builtin call takes the
+    /// thread-local twin given ([`Self::needs`]), or [`NEVER`].
+    twin_needs: Vec<u64>,
+    /// Per block: for a call to a source function, each value argument's
+    /// [`EscapeFacts::operand_needs`], [`NEVER`] for an argument with nothing
+    /// to synchronize; the caller passes the callee a locality mask from
+    /// them. `None` for any other terminator.
+    call_args: Vec<Option<Box<[u64]>>>,
     /// The node each local's value belongs to.
     local_node: Vec<usize>,
     /// Per node: whether another thread may reach what it holds, as far as
@@ -63,7 +69,30 @@ impl EscapeFacts {
     /// Whether `block`'s terminator is a builtin call whose receiver is
     /// thread-local, so it takes the builtin's lock-free twin.
     pub fn calls_thread_local_twin(&self, block: crate::BlockId) -> bool {
-        self.local_calls.get(block.0).copied().unwrap_or(false)
+        self.twin_needs(block) == 0
+    }
+
+    /// The parameters `block`'s builtin call takes its lock-free twin given:
+    /// see [`Self::needs`]. [`NEVER`] when it has no twin to take.
+    pub fn twin_needs(&self, block: crate::BlockId) -> u64 {
+        self.twin_needs.get(block.0).copied().unwrap_or(NEVER)
+    }
+
+    /// For a call to a source function in `block`, each value argument's
+    /// needs, from which the caller's locality mask for the callee follows:
+    /// bit `i` is set when argument `i`'s needs are not [`NEVER`] and the
+    /// caller's own mask covers them.
+    pub fn call_arg_needs(&self, block: crate::BlockId) -> Option<&[u64]> {
+        self.call_args.get(block.0)?.as_deref()
+    }
+
+    /// The parameters every object held in a field or element of `local`'s
+    /// objects is thread-local given: an array iterator's array, for one.
+    pub fn contents_needs(&self, local: Local) -> u64 {
+        self.local_node
+            .get(local.0)
+            .and_then(|&node| self.contents[node])
+            .map_or(NEVER, |contents| self.needs[contents])
     }
 
     /// Whether the object `place` evaluates to is thread-local.
@@ -150,30 +179,60 @@ pub fn analyze<'db>(
     let types = Types::new(db, body);
     let mut facts = build(db, body, opt, None, &types).finish(arity);
     let builtins = Builtins::new(db);
-    facts.local_calls = body
+    let calls: Vec<_> = body
         .blocks
         .iter()
-        .map(|block| {
-            let Some(Terminator::Call {
+        .map(|block| match &block.terminator {
+            Some(Terminator::Call {
                 has_trace: false,
                 argument_layout,
                 callee,
                 args,
                 ntypeargs,
                 ..
-            }) = &block.terminator
-            else {
-                return false;
-            };
-            argument_layout
+            }) if argument_layout
                 .as_ref()
-                .is_none_or(|layout| layout.0.iter().all(Option::is_none))
-                && builtins.effect(callee).is_some_and(|effect| effect.twin)
-                && matches!(
-                    args.get(*ntypeargs),
-                    Some(Operand::Copy(receiver) | Operand::Move(receiver))
-                        if facts.object_is_thread_local(receiver)
-                )
+                .is_none_or(|layout| layout.0.iter().all(Option::is_none)) =>
+            {
+                Some((callee, args.get(*ntypeargs..).unwrap_or_default()))
+            }
+            _ => None,
+        })
+        .collect();
+    facts.twin_needs = calls
+        .iter()
+        .map(|call| match call {
+            Some((callee, values)) if builtins.effect(callee).is_some_and(|effect| effect.twin) => {
+                match values.first() {
+                    Some(Operand::Copy(receiver) | Operand::Move(receiver)) => {
+                        facts.object_needs(receiver)
+                    }
+                    _ => NEVER,
+                }
+            }
+            _ => NEVER,
+        })
+        .collect();
+    facts.call_args = calls
+        .iter()
+        .map(|call| {
+            let (callee, values) = call.as_ref()?;
+            let Some(DeclRef::Source(_)) = static_callee(callee) else {
+                return None;
+            };
+            if builtins.effect(callee).is_some() {
+                return None;
+            }
+            let needs: Box<[u64]> = values
+                .iter()
+                .map(|value| match value {
+                    Operand::Copy(place) | Operand::Move(place) if !types.immutable(place) => {
+                        facts.operand_needs(value)
+                    }
+                    _ => NEVER,
+                })
+                .collect();
+            needs.iter().any(|&needs| needs != NEVER).then_some(needs)
         })
         .collect();
     facts
@@ -1811,7 +1870,8 @@ impl<'a, 'db> Graph<'a, 'db> {
         let resolved = self.resolve();
         let needs = resolved.param_needs(params.min(MASKED_PARAMS));
         EscapeFacts {
-            local_calls: Vec::new(),
+            twin_needs: Vec::new(),
+            call_args: Vec::new(),
             local_node: resolved.roots[..self.locals].to_vec(),
             shared: needs.iter().map(|&needs| needs != 0).collect(),
             contents: resolved.contents,

@@ -54,20 +54,26 @@ impl<'db> Generator<'_, 'db> {
                         "yielding builtin `{key}` emitted inline"
                     )));
                 }
+                let call = |ordinal: usize| {
+                    if types.is_empty() {
+                        format!("vm.call_builtin(builtin_{ordinal}()?, {args})")
+                    } else {
+                        format!(
+                            "vm.call_builtin_typed(builtin_{ordinal}()?, &[{}], {args})",
+                            types.join(", ")
+                        )
+                    }
+                };
                 // A thread-local receiver takes the builtin's lock-free twin.
-                let ordinal = if self.analysis.escape.calls_thread_local_twin(block) {
-                    self.builtin_ordinal(&format!("{key}$local"))
-                } else {
-                    self.builtin_ordinal(key)
-                };
-                let call = if types.is_empty() {
-                    format!("vm.call_builtin(builtin_{ordinal}()?, {args})")
-                } else {
-                    format!(
-                        "vm.call_builtin_typed(builtin_{ordinal}()?, &[{}], {args})",
-                        types.join(", ")
-                    )
-                };
+                let needs = self.analysis.escape.twin_needs(block);
+                let locked = (needs != 0).then(|| call(self.builtin_ordinal(key)));
+                let local = (needs != baml_compiler2_mir::escape::NEVER)
+                    .then(|| call(self.builtin_ordinal(&format!("{key}$local"))));
+                let call = Self::by_locality(
+                    needs,
+                    local.as_deref().unwrap_or_default(),
+                    locked.as_deref().unwrap_or_default(),
+                );
                 self.fallible_expr(block, &call, Repr::Value)
             }
             FunctionKind::SysOp(_) => Err(Rejection::Invalid(format!(
@@ -159,6 +165,7 @@ impl<'db> Generator<'_, 'db> {
                 .push(format!("let {temp}: {} = {code};", repr.rust_type()));
             typed_args.push(temp);
         }
+        let callee_mask = self.callee_mask(block);
         let direct_args = typed_args.iter().fold(String::new(), |mut out, arg| {
             let _ = write!(out, ", {arg}");
             out
@@ -176,11 +183,11 @@ impl<'db> Generator<'_, 'db> {
         );
         let direct = if types.is_empty() {
             format!(
-                "vm.call_record(fr, {callee}, {site}, {observed}, |vm, fr| {symbol}_d(vm, fr{direct_args}))"
+                "vm.call_record(fr, {callee}, {site}, {observed}, |vm, fr| {symbol}_d(vm, fr{direct_args}, {callee_mask}))"
             )
         } else {
             format!(
-                "vm.call_record_typed(fr, {callee}, {type_args}, {site}, {observed}, |vm, fr| {symbol}_d(vm, fr{direct_args}))"
+                "vm.call_record_typed(fr, {callee}, {type_args}, {site}, {observed}, |vm, fr| {symbol}_d(vm, fr{direct_args}, {callee_mask}))"
             )
         };
         let mut boxed = String::from("{ ");

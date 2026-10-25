@@ -139,6 +139,35 @@ function EscapeInsert() -> void {
     Report("insert", xs);
 }
 
+function GrowAndTotal(xs: int[], n: int) -> int {
+    PushN(xs, n);
+    Total(xs)
+}
+
+// One function called with an array only this task can reach, and with one
+// a spawned body mutates: the locality mask lets the first call, and the
+// calls it makes with its parameter, skip the locks the second must take.
+function EscapeMaskMixed() -> void {
+    let mine: int[] = [];
+    GrowAndTotal(mine, 1000);
+    let xs: int[] = [];
+    let child = spawn { PushN(xs, 2000) };
+    GrowAndTotal(xs, 2000);
+    await child;
+    Report("mixed", xs);
+}
+
+// A closure's parameter arrives through an indirect call, whose locality
+// mask is always 0, however local the argument looks at the call.
+function EscapeMaskClosure() -> void {
+    let xs: int[] = [];
+    let grow = (ys: int[]) -> int { GrowAndTotal(ys, 2000) };
+    let child = spawn { PushN(xs, 2000) };
+    grow(xs);
+    await child;
+    Report("mask-closure", xs);
+}
+
 function Same(xs: int[]) -> int[] {
     xs
 }

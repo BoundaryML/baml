@@ -43,29 +43,31 @@ impl<'db> Generator<'_, 'db> {
                 Ok(Expr::atom(format!("l{}", local.0), self.repr(*local)))
             }
             Place::Field { base, field } => {
-                let load = if self.analysis.escape.object_is_thread_local(base) {
-                    "load_field_local"
-                } else {
-                    "load_field"
-                };
+                let needs = self.analysis.escape.object_needs(base);
                 let base = self.load(block, base)?;
                 let base = self.value_arg(&base);
-                let code = self.fallible(block, &format!("vm.{load}({base}, {field})"))?;
+                let load = Self::by_locality(
+                    needs,
+                    &format!("vm.load_field_local({base}, {field})"),
+                    &format!("vm.load_field({base}, {field})"),
+                );
+                let code = self.fallible(block, &load)?;
                 Ok(Expr::new(code, Repr::Value))
             }
             Place::Index { base, index, kind } => {
                 if !matches!(kind, baml_compiler2_mir::IndexKind::Array) {
                     return unsupported("map index");
                 }
-                let load = if self.analysis.escape.object_is_thread_local(base) {
-                    "load_array_element_local"
-                } else {
-                    "load_array_element"
-                };
+                let needs = self.analysis.escape.object_needs(base);
                 let base = self.load(block, base)?;
                 let base = self.value_arg(&base);
                 let index = self.value_arg(&Expr::atom(format!("l{}", index.0), self.repr(*index)));
-                let code = self.fallible(block, &format!("vm.{load}({base}, {index})"))?;
+                let load = Self::by_locality(
+                    needs,
+                    &format!("vm.load_array_element_local({base}, {index})"),
+                    &format!("vm.load_array_element({base}, {index})"),
+                );
+                let code = self.fallible(block, &load)?;
                 Ok(Expr::new(code, Repr::Value))
             }
             Place::Capture(index) => Ok(Expr::new(
@@ -106,33 +108,33 @@ impl<'db> Generator<'_, 'db> {
                 Ok(format!("l{} = {code};", local.0))
             }
             Place::Field { base, field } => {
-                let store = if self.analysis.escape.object_is_thread_local(base) {
-                    "store_field_local"
-                } else {
-                    "store_field"
-                };
+                let needs = self.analysis.escape.object_needs(base);
                 let value = self.value_arg(value);
                 let base = self.load(block, base)?;
                 let base = self.value_arg(&base);
-                let code =
-                    self.fallible(block, &format!("vm.{store}({base}, {field}, {value})"))?;
+                let store = Self::by_locality(
+                    needs,
+                    &format!("vm.store_field_local({base}, {field}, {value})"),
+                    &format!("vm.store_field({base}, {field}, {value})"),
+                );
+                let code = self.fallible(block, &store)?;
                 Ok(format!("{code};"))
             }
             Place::Index { base, index, kind } => {
                 if !matches!(kind, baml_compiler2_mir::IndexKind::Array) {
                     return unsupported("map index");
                 }
-                let store = if self.analysis.escape.object_is_thread_local(base) {
-                    "store_array_element_local"
-                } else {
-                    "store_array_element"
-                };
+                let needs = self.analysis.escape.object_needs(base);
                 let value = self.value_arg(value);
                 let base = self.load(block, base)?;
                 let base = self.value_arg(&base);
                 let index = self.value_arg(&Expr::atom(format!("l{}", index.0), self.repr(*index)));
-                let code =
-                    self.fallible(block, &format!("vm.{store}({base}, {index}, {value})"))?;
+                let store = Self::by_locality(
+                    needs,
+                    &format!("vm.store_array_element_local({base}, {index}, {value})"),
+                    &format!("vm.store_array_element({base}, {index}, {value})"),
+                );
+                let code = self.fallible(block, &store)?;
                 Ok(format!("{code};"))
             }
             Place::Deref(cell) => {

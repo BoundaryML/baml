@@ -26,6 +26,8 @@ const PROBES: &[&str] = &[
     "EscapeMapValue",
     "EscapeMap",
     "EscapeInsert",
+    "EscapeMaskMixed",
+    "EscapeMaskClosure",
     "EscapeReturnedAlias",
     "EscapeRecursive",
     "EscapeIterator",

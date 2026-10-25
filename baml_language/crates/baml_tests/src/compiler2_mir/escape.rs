@@ -44,6 +44,44 @@ fn classify(source: &str, function: &str) -> Vec<(String, bool)> {
         .collect()
 }
 
+/// For each named local of `function`, the parameters it is thread-local
+/// given (`EscapeFacts::object_needs`); and for each call to a source
+/// function, in block order, its arguments' needs.
+fn needs(source: &str, function: &str) -> (Vec<(String, u64)>, Vec<Vec<u64>>) {
+    let mut db = make_db();
+    let file = db.file("test.baml", source);
+    assert_no_diagnostic_errors(&db);
+    let loc = *file_functions(&db, file)
+        .iter()
+        .find(|&&loc| function_data(&db, loc).name.as_str() == function)
+        .unwrap_or_else(|| panic!("no function `{function}`"));
+    let mir = lower_function(&db, loc, OptLevel::Two)
+        .as_ref()
+        .unwrap_or_else(|error| panic!("MIR lowering failed: {error}"));
+    let MirFunctionKind::Bytecode(body) = &mir.kind else {
+        panic!("`{function}` must lower to bytecode")
+    };
+    let facts = escape::analyze(&db, body, mir.arity, OptLevel::Two);
+    let mut seen = std::collections::HashSet::new();
+    let locals = body
+        .locals
+        .iter()
+        .enumerate()
+        .filter_map(|(index, decl)| {
+            let name = decl.name.as_ref()?.to_string();
+            seen.insert(name.clone()).then(|| {
+                let place = baml_compiler2_mir::Place::Local(baml_compiler2_mir::Local(index));
+                (name, facts.object_needs(&place))
+            })
+        })
+        .collect();
+    let calls = (0..body.blocks.len())
+        .filter_map(|block| facts.call_arg_needs(baml_compiler2_mir::BlockId(block)))
+        .map(<[u64]>::to_vec)
+        .collect();
+    (locals, calls)
+}
+
 #[track_caller]
 fn assert_locality(source: &str, function: &str, expected: &[(&str, bool)]) {
     let actual = classify(source, function);
@@ -1011,4 +1049,51 @@ function main(shared: int[][]) -> int {
         "main",
         &[("xs", false), ("ys", false), ("zs", true), ("local", true)],
     );
+}
+
+const MASKED: &str = r#"
+function total(xs: int[], ys: int[]) -> int { xs[0] + ys[0] }
+function forward(xs: int[], shared: int[][]) -> int {
+  let mine = [1];
+  shared.push(mine);
+  total(xs, [2])
+}
+function leaky(xs: int[]) -> int {
+  let child = spawn { xs.length() };
+  await child
+}
+function main(outside: int[][]) -> int {
+  let xs = [1];
+  forward(xs, outside) + leaky([3])
+}
+"#;
+
+#[test]
+fn a_parameter_is_thread_local_given_its_own_bit() {
+    let (locals, _) = needs(MASKED, "forward");
+    let of = |name: &str| locals.iter().find(|(n, _)| n == name).unwrap().1;
+    assert_eq!(of("xs"), 0b01);
+    assert_eq!(of("shared"), 0b10);
+    // Stored into `shared`'s contents: as thread-local as `shared` is.
+    assert_eq!(of("mine"), 0b10);
+}
+
+#[test]
+fn a_parameter_the_body_leaks_is_never_thread_local() {
+    let (locals, _) = needs(MASKED, "leaky");
+    assert_eq!(
+        locals.iter().find(|(n, _)| n == "xs").unwrap().1,
+        escape::NEVER
+    );
+}
+
+#[test]
+fn callers_pass_what_they_prove_about_each_argument() {
+    // `total(xs, [2])`: `xs` given the caller's first bit, a fresh array always.
+    let (_, calls) = needs(MASKED, "forward");
+    assert_eq!(calls, vec![vec![0b01, 0]]);
+    // `forward(xs, outside)`: a fresh array always, a parameter given its bit.
+    // `leaky([3])` passes no mask at all: the callee leaks its argument.
+    let (_, calls) = needs(MASKED, "main");
+    assert_eq!(calls, vec![vec![0, 0b1]]);
 }
