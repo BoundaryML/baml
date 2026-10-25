@@ -64,6 +64,9 @@ pub(crate) struct ProgramContext<'a, 'db> {
     pub(crate) framed: &'a BTreeSet<usize>,
     /// Typed signatures of the direct entries of compiled bodies.
     pub(crate) signatures: &'a HashMap<usize, Signature>,
+    /// Per compiled body: the locality-mask bits some compiled caller can
+    /// set. A bit no caller sets compiles its condition to the locked path.
+    pub(crate) masks: &'a HashMap<usize, u64>,
 }
 
 pub(crate) struct Generator<'a, 'db> {
@@ -77,6 +80,8 @@ pub(crate) struct Generator<'a, 'db> {
     /// Functions whose bodies run with a VM frame, never a frame record.
     pub(crate) framed: &'a BTreeSet<usize>,
     pub(crate) signatures: &'a HashMap<usize, Signature>,
+    /// The locality-mask bits some caller can set ([`ProgramContext::masks`]).
+    pub(crate) mask_bits: u64,
     /// First spill slot used to root values across a suspension.
     pub(crate) spill_base: usize,
     /// Whether this body may suspend: it then polls at loop back edges and
@@ -127,6 +132,7 @@ impl<'a, 'db> Generator<'a, 'db> {
             pausing: program.pausing,
             framed: program.framed,
             signatures: program.signatures,
+            mask_bits: program.masks.get(&object).copied().unwrap_or(0),
             spill_base: 0,
             pauses: program.pausing.contains(&object),
             recursive: unit.recursive,
@@ -170,6 +176,59 @@ impl<'db> Generator<'_, 'db> {
         self.analysis.reprs[local.0]
     }
 
+    /// `needs` (`escape::EscapeFacts::needs`), or
+    /// [`baml_compiler2_mir::escape::NEVER`] when it includes a bit no caller sets.
+    fn reachable(&self, needs: u64) -> u64 {
+        if needs & !self.mask_bits == 0 {
+            needs
+        } else {
+            baml_compiler2_mir::escape::NEVER
+        }
+    }
+
+    /// `local` where the object is thread-local given `needs`
+    /// (`escape::EscapeFacts::needs`), else `locked`: a branch on the body's
+    /// locality mask when that depends on what the caller proved.
+    pub(super) fn by_locality(&self, needs: u64, local: &str, locked: &str) -> String {
+        match self.reachable(needs) {
+            0 => local.to_string(),
+            baml_compiler2_mir::escape::NEVER => locked.to_string(),
+            needs => {
+                format!("(if mask & {needs:#x} == {needs:#x} {{ {local} }} else {{ {locked} }})")
+            }
+        }
+    }
+
+    /// The locality mask a call in `block` passes its callee: bit `i` for each
+    /// argument the caller proves thread-local, now or given its own mask.
+    pub(super) fn callee_mask(&self, block: BlockId) -> String {
+        let Some(needs) = self.analysis.escape.call_arg_needs(block) else {
+            return "0".to_string();
+        };
+        let mut constant = 0u64;
+        let mut terms = Vec::new();
+        for (i, &needs) in needs
+            .iter()
+            .enumerate()
+            .take(baml_compiler2_mir::escape::MASKED_PARAMS)
+        {
+            match self.reachable(needs) {
+                baml_compiler2_mir::escape::NEVER => {}
+                0 => constant |= 1 << i,
+                needs => terms.push(format!(
+                    "(u64::from(mask & {needs:#x} == {needs:#x}) << {i})"
+                )),
+            }
+        }
+        if terms.is_empty() {
+            return format!("{constant:#x}");
+        }
+        if constant != 0 {
+            terms.insert(0, format!("{constant:#x}"));
+        }
+        terms.join(" | ")
+    }
+
     pub(crate) fn function(&mut self, symbol: &str) -> Gen<String> {
         if self.positions.block_pcs.is_empty() {
             return unsupported("bytecode without MIR positions (a deserialized program)");
@@ -208,7 +267,8 @@ impl<'db> Generator<'_, 'db> {
             let _ = write!(out, ", {param}");
             out
         });
-        self.emit_line(&format!("let r = {symbol}_d(vm, fr{passed});"));
+        // The VM proves nothing about a boxed call's arguments: mask 0.
+        self.emit_line(&format!("let r = {symbol}_d(vm, fr{passed}, 0);"));
         self.emit_line(&format!("Ok({})", coerce("r?", signature.ret, Repr::Value)));
         self.emit_line("}");
         let ret = signature.ret.rust_type();
@@ -222,8 +282,10 @@ impl<'db> Generator<'_, 'db> {
                     out
                 });
         // Every closure exit records the current PC before returning an error.
+        // `mask` has bit `i` set when the caller proved argument `i`, and all
+        // it reaches, thread-local (`escape::EscapeFacts::needs`).
         self.emit_line(&format!(
-            "#[inline]\npub fn {symbol}_d(vm: &mut BexVm, fr: &FrameRecord{typed}) -> R<{ret}> {{"
+            "#[inline]\n#[allow(unused_variables)]\npub fn {symbol}_d(vm: &mut BexVm, fr: &FrameRecord{typed}, mask: u64) -> R<{ret}> {{"
         ));
         self.emit_line("let mut pc: u32 = 0;");
         self.emit_line(&format!("let result = (|| -> R<{ret}> {{"));

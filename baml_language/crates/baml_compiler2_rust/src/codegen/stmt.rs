@@ -383,10 +383,18 @@ impl<'db> Generator<'_, 'db> {
             let Some((done, _)) = done else {
                 return unsupported("`baml.iter.Done` not found in the program");
             };
-            let step = format!(
-                "if i{iter} < bex_vm::compiled_rt::expect_int(vm.container_len(l{iter})?)? {{ \
-                 let v = vm.load_array_element(l{iter}, Value::int(i{iter}))?; i{iter} += 1; v }} \
-                 else {{ vm.new_instance(vm.record_object(fr, ObjectIndex::from_raw({done})), Vec::new()) }}"
+            // The walk reads the iterator's array, its contents.
+            let walk = |local: &str| {
+                format!(
+                    "if i{iter} < bex_vm::compiled_rt::expect_int(vm.container_len{local}(l{iter})?)? {{ \
+                     let v = vm.load_array_element{local}(l{iter}, Value::int(i{iter}))?; i{iter} += 1; v }} \
+                     else {{ vm.new_instance(vm.record_object(fr, ObjectIndex::from_raw({done})), Vec::new()) }}"
+                )
+            };
+            let step = self.by_locality(
+                self.analysis.escape.contents_needs(Local(iter)),
+                &walk("_local"),
+                &walk(""),
             );
             let code = self.store(id, destination, &Expr::new(step, Repr::Value))?;
             self.emit_statement(&code);
