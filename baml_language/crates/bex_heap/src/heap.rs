@@ -765,14 +765,20 @@ impl BexHeap {
     ///
     /// This is a no-op when either side is not a heap object, or when the container
     /// is in Gen0 (no card table for Gen0).
+    ///
+    /// Minor collections trace Gen0 and Gen1 together, so only a Gen2
+    /// container holding a reference to anything outside Gen2 needs a card.
+    /// The container is checked first: most are young, so most stores cost
+    /// one Gen2 lookup.
     #[inline]
     pub fn write_barrier(&self, container_ptr: HeapPtr, written_value: Value) {
-        if let Some(ref_ptr) = written_value.as_object_ptr() {
-            let container_gen = self.generation_of(container_ptr);
-            let ref_gen = self.generation_of(ref_ptr);
-            if container_gen > ref_gen {
-                self.mark_card_for_ptr(container_ptr);
-            }
+        let Some(ref_ptr) = written_value.as_object_ptr() else {
+            return;
+        };
+        if let Some((chunk_idx, offset)) = self.locate_in_gen2(container_ptr)
+            && self.locate_in_gen2(ref_ptr).is_none()
+        {
+            self.mark_card_at(chunk_idx, offset);
         }
     }
 
@@ -786,10 +792,8 @@ impl BexHeap {
     /// but it is always safe and the cost is negligible since most objects are Gen0.
     #[inline]
     pub fn conservative_write_barrier(&self, container_ptr: HeapPtr) {
-        let container_gen = self.generation_of(container_ptr);
-        if container_gen > Generation::Gen0 {
-            self.mark_card_for_ptr(container_ptr);
-        }
+        // Only Gen2 has cards, and `mark_card_for_ptr` ignores anything else.
+        self.mark_card_for_ptr(container_ptr);
     }
 
     /// Determine which generation an object pointer belongs to.
@@ -871,18 +875,25 @@ impl BexHeap {
     /// during GC.
     #[inline]
     pub fn mark_card_for_ptr(&self, container_ptr: HeapPtr) {
-        let raw_ptr = container_ptr.as_ptr() as *const Object;
-        // SAFETY: Only reads `gen2` chunk layout and stores into the atomic
-        // card table. Gen2 grows only at GC safepoints, so no concurrent write
-        // can invalidate either access.
-        unsafe {
-            if let Some((chunk_idx, offset)) =
-                Self::locate_in_chunked_vec(&*self.gen2.get(), raw_ptr)
-            {
-                let cards = &*self.gen2_cards.get();
-                cards.mark_dirty_by_offset(chunk_idx, offset);
-            }
+        if let Some((chunk_idx, offset)) = self.locate_in_gen2(container_ptr) {
+            self.mark_card_at(chunk_idx, offset);
         }
+    }
+
+    /// `ptr`'s `(chunk_idx, offset)` in Gen2, or `None` if it lives elsewhere.
+    #[inline]
+    fn locate_in_gen2(&self, ptr: HeapPtr) -> Option<(usize, usize)> {
+        // SAFETY: Gen2 changes only inside a collection; callers are mutators
+        // holding a heap permit or the collector itself.
+        unsafe { Self::locate_in_chunked_vec(&*self.gen2.get(), ptr.as_ptr() as *const Object) }
+    }
+
+    /// Mark the Gen2 card covering `(chunk_idx, offset)`.
+    #[inline]
+    fn mark_card_at(&self, chunk_idx: usize, offset: usize) {
+        // SAFETY: card stores are atomic; the table grows only at GC
+        // safepoints, alongside Gen2.
+        unsafe { (*self.gen2_cards.get()).mark_dirty_by_offset(chunk_idx, offset) }
     }
 
     /// Locate a raw pointer within a `ChunkedVec`, returning `(chunk_idx, offset_in_chunk)`.
