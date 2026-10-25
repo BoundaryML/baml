@@ -316,6 +316,7 @@ fn admission_fixpoint(
             .iter()
             .map(|(&object, unit)| (object, unit.analysis.signature(&unit.body)))
             .collect();
+        let masks = mask_bits(units);
         let symbols: HashMap<usize, String> = units
             .keys()
             .map(|&object| (object, symbol_for(index.display(object), object)))
@@ -332,6 +333,7 @@ fn admission_fixpoint(
                 pausing: &pausing,
                 framed: &framed,
                 signatures: &signatures,
+                masks: &masks,
             };
             let mut generator = Generator::new(&program, &mut builtins, object, unit);
             match generator.function(&symbols[&object]) {
@@ -444,6 +446,45 @@ impl<'db> Admission<'_, 'db> {
                 captures,
                 package,
             );
+        }
+    }
+}
+
+/// Per compiled body, the locality-mask bits some compiled caller can set:
+/// the least fixed point over direct calls, from entries the VM makes with
+/// mask 0. Only pruning: the mask a call passes at run time decides.
+fn mask_bits(units: &BTreeMap<usize, Unit<'_>>) -> HashMap<usize, u64> {
+    let mut bits: HashMap<usize, u64> = HashMap::new();
+    loop {
+        let mut changed = false;
+        for (caller, unit) in units {
+            let have = bits.get(caller).copied().unwrap_or(0);
+            for block in &unit.body.blocks {
+                let Some(callee) = unit.analysis.user_callees_at.get(&block.id.0) else {
+                    continue;
+                };
+                let Some(needs) = unit.analysis.escape.call_arg_needs(block.id) else {
+                    continue;
+                };
+                let mut passed = 0;
+                for (i, &needs) in needs
+                    .iter()
+                    .enumerate()
+                    .take(baml_compiler2_mir::escape::MASKED_PARAMS)
+                {
+                    if needs != baml_compiler2_mir::escape::NEVER && needs & !have == 0 {
+                        passed |= 1 << i;
+                    }
+                }
+                let entry = bits.entry(*callee).or_default();
+                if passed & !*entry != 0 {
+                    *entry |= passed;
+                    changed = true;
+                }
+            }
+        }
+        if !changed {
+            return bits;
         }
     }
 }

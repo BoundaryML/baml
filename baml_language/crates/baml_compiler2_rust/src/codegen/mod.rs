@@ -64,6 +64,9 @@ pub(crate) struct ProgramContext<'a, 'db> {
     pub(crate) framed: &'a BTreeSet<usize>,
     /// Typed signatures of the direct entries of compiled bodies.
     pub(crate) signatures: &'a HashMap<usize, Signature>,
+    /// Per compiled body: the locality-mask bits some compiled caller can
+    /// set. A bit no caller sets compiles its condition to the locked path.
+    pub(crate) masks: &'a HashMap<usize, u64>,
 }
 
 pub(crate) struct Generator<'a, 'db> {
@@ -77,6 +80,8 @@ pub(crate) struct Generator<'a, 'db> {
     /// Functions whose bodies run with a VM frame, never a frame record.
     pub(crate) framed: &'a BTreeSet<usize>,
     pub(crate) signatures: &'a HashMap<usize, Signature>,
+    /// The locality-mask bits some caller can set ([`ProgramContext::masks`]).
+    pub(crate) mask_bits: u64,
     /// First spill slot used to root values across a suspension.
     pub(crate) spill_base: usize,
     /// Whether this body may suspend: it then polls at loop back edges and
@@ -127,6 +132,7 @@ impl<'a, 'db> Generator<'a, 'db> {
             pausing: program.pausing,
             framed: program.framed,
             signatures: program.signatures,
+            mask_bits: program.masks.get(&object).copied().unwrap_or(0),
             spill_base: 0,
             pauses: program.pausing.contains(&object),
             recursive: unit.recursive,
@@ -170,11 +176,21 @@ impl<'db> Generator<'_, 'db> {
         self.analysis.reprs[local.0]
     }
 
+    /// `needs` (`escape::EscapeFacts::needs`), or
+    /// [`baml_compiler2_mir::escape::NEVER`] when it includes a bit no caller sets.
+    fn reachable(&self, needs: u64) -> u64 {
+        if needs & !self.mask_bits == 0 {
+            needs
+        } else {
+            baml_compiler2_mir::escape::NEVER
+        }
+    }
+
     /// `local` where the object is thread-local given `needs`
     /// (`escape::EscapeFacts::needs`), else `locked`: a branch on the body's
     /// locality mask when that depends on what the caller proved.
-    pub(super) fn by_locality(needs: u64, local: &str, locked: &str) -> String {
-        match needs {
+    pub(super) fn by_locality(&self, needs: u64, local: &str, locked: &str) -> String {
+        match self.reachable(needs) {
             0 => local.to_string(),
             baml_compiler2_mir::escape::NEVER => locked.to_string(),
             needs => {
@@ -196,7 +212,7 @@ impl<'db> Generator<'_, 'db> {
             .enumerate()
             .take(baml_compiler2_mir::escape::MASKED_PARAMS)
         {
-            match needs {
+            match self.reachable(needs) {
                 baml_compiler2_mir::escape::NEVER => {}
                 0 => constant |= 1 << i,
                 needs => terms.push(format!(

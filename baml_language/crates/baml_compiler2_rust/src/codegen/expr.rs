@@ -31,7 +31,7 @@ impl<'db> Generator<'_, 'db> {
                 let needs = self.analysis.escape.object_needs(place);
                 let container = self.load(block, place)?;
                 let container = self.value_arg(&container);
-                let len = Self::by_locality(
+                let len = self.by_locality(
                     needs,
                     &format!("vm.container_len_local({container})"),
                     &format!("vm.container_len({container})"),

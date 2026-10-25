@@ -46,7 +46,7 @@ impl<'db> Generator<'_, 'db> {
                 let needs = self.analysis.escape.object_needs(base);
                 let base = self.load(block, base)?;
                 let base = self.value_arg(&base);
-                let load = Self::by_locality(
+                let load = self.by_locality(
                     needs,
                     &format!("vm.load_field_local({base}, {field})"),
                     &format!("vm.load_field({base}, {field})"),
@@ -62,7 +62,7 @@ impl<'db> Generator<'_, 'db> {
                 let base = self.load(block, base)?;
                 let base = self.value_arg(&base);
                 let index = self.value_arg(&Expr::atom(format!("l{}", index.0), self.repr(*index)));
-                let load = Self::by_locality(
+                let load = self.by_locality(
                     needs,
                     &format!("vm.load_array_element_local({base}, {index})"),
                     &format!("vm.load_array_element({base}, {index})"),
@@ -112,7 +112,7 @@ impl<'db> Generator<'_, 'db> {
                 let value = self.value_arg(value);
                 let base = self.load(block, base)?;
                 let base = self.value_arg(&base);
-                let store = Self::by_locality(
+                let store = self.by_locality(
                     needs,
                     &format!("vm.store_field_local({base}, {field}, {value})"),
                     &format!("vm.store_field({base}, {field}, {value})"),
@@ -129,7 +129,7 @@ impl<'db> Generator<'_, 'db> {
                 let base = self.load(block, base)?;
                 let base = self.value_arg(&base);
                 let index = self.value_arg(&Expr::atom(format!("l{}", index.0), self.repr(*index)));
-                let store = Self::by_locality(
+                let store = self.by_locality(
                     needs,
                     &format!("vm.store_array_element_local({base}, {index}, {value})"),
                     &format!("vm.store_array_element({base}, {index}, {value})"),

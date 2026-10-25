@@ -76,6 +76,8 @@ pub(crate) struct Analysis {
     pub(crate) captures: Vec<Repr>,
     pub(crate) cfg: Cfg,
     pub(crate) user_callees: BTreeSet<usize>,
+    /// The compiled callee of each block whose terminator calls one directly.
+    pub(crate) user_callees_at: HashMap<usize, usize>,
     /// Type locals that need no frame type arguments.
     pub(crate) static_types: HashMap<usize, StaticTy>,
     /// Type locals built from the frame where they are used. In a body that
@@ -143,6 +145,7 @@ impl Analysis {
             unwinds: Vec::with_capacity(body.blocks.len()),
         };
         let mut user_callees = BTreeSet::new();
+        let mut user_callees_at = HashMap::new();
         let mut suspends = false;
         for block in &body.blocks {
             let terminator = block
@@ -151,8 +154,11 @@ impl Analysis {
                 .ok_or_else(|| Rejection::Invalid(format!("{} has no terminator", block.id)))?;
             cfg.flows.push(flow_of(terminator));
             cfg.unwinds.push(block.unwind.map(|b| b.0));
-            if let Terminator::Call { callee, .. } = terminator {
-                user_callees.extend(user_callee(db, index, callee));
+            if let Terminator::Call { callee, .. } = terminator
+                && let Some(callee) = user_callee(db, index, callee)
+            {
+                user_callees.insert(callee);
+                user_callees_at.insert(block.id.0, callee);
             }
             let array_iteration = array_iter_walk(body, arity, terminator, &array_iters).is_some()
                 || array_next_call(terminator, &array_iters).is_some();
@@ -177,6 +183,7 @@ impl Analysis {
             captures,
             cfg,
             user_callees,
+            user_callees_at,
             static_types,
             deferred_types,
             suspends,

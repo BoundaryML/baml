@@ -69,7 +69,7 @@ impl<'db> Generator<'_, 'db> {
                 let locked = (needs != 0).then(|| call(self.builtin_ordinal(key)));
                 let local = (needs != baml_compiler2_mir::escape::NEVER)
                     .then(|| call(self.builtin_ordinal(&format!("{key}$local"))));
-                let call = Self::by_locality(
+                let call = self.by_locality(
                     needs,
                     local.as_deref().unwrap_or_default(),
                     locked.as_deref().unwrap_or_default(),

@@ -391,7 +391,7 @@ impl<'db> Generator<'_, 'db> {
                      else {{ vm.new_instance(vm.record_object(fr, ObjectIndex::from_raw({done})), Vec::new()) }}"
                 )
             };
-            let step = Self::by_locality(
+            let step = self.by_locality(
                 self.analysis.escape.contents_needs(Local(iter)),
                 &walk("_local"),
                 &walk(""),
