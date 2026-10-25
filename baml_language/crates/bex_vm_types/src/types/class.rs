@@ -206,6 +206,12 @@ impl Instance {
         self.fields[idx].load()
     }
 
+    /// [`Self::try_load_field`] on an instance no other thread can reach.
+    #[inline]
+    pub fn try_load_field_relaxed(&self, idx: usize) -> Option<Value> {
+        self.fields.get(idx).map(AtomicValueSlot::load_relaxed)
+    }
+
     #[inline]
     pub fn try_store_field(&self, idx: usize, value: Value) -> Result<(), usize> {
         let Some(field) = self.fields.get(idx) else {
@@ -218,6 +224,12 @@ impl Instance {
     #[inline]
     pub fn store_field(&self, idx: usize, value: Value) {
         self.fields[idx].store(value);
+    }
+
+    /// [`Self::store_field`] on an instance no other thread can reach.
+    #[inline]
+    pub fn store_field_relaxed(&self, idx: usize, value: Value) {
+        self.fields[idx].store_relaxed(value);
     }
 
     pub fn field_values(&self) -> impl Iterator<Item = Value> + '_ {

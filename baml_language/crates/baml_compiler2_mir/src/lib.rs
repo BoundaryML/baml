@@ -1,4 +1,5 @@
 mod builder;
+pub mod escape;
 mod inference_provider;
 mod ir;
 mod lower;
