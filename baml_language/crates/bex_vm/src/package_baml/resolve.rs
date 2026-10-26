@@ -266,13 +266,15 @@ impl<'vm> ImplResolver<'vm> {
         rules
     }
 
-    /// The world [`Self::rules_for`] walks, as the cache keys it.
+    /// The world this resolver's answers depend on, as the cache keys it:
+    /// the packages [`Self::rules_for`] walks, plus the running code's
+    /// package, where nested projections reduce.
     fn world(self) -> World {
+        let lexical = self.vm.current_runtime_package();
         World {
-            root: self
-                .root_package
-                .unwrap_or_else(|| self.vm.current_runtime_package()),
+            root: self.root_package.unwrap_or(lexical),
             additional: self.additional_package,
+            lexical,
         }
     }
 
@@ -1494,6 +1496,7 @@ mod tests {
             world: World {
                 root: HeapPtr::null(),
                 additional: None,
+                lexical: HeapPtr::null(),
             },
             self_ty: &RealizedTy::Int,
             interface: head,
@@ -1586,6 +1589,54 @@ mod tests {
                 .resolve_implementation(&int, dead_head, &[])
                 .as_ref()
         ));
+    }
+
+    #[test]
+    fn a_collection_rekeys_answers_under_a_moved_world_root() {
+        use bex_heap::{CollectionLevel, TlabHolder};
+        use bex_vm_types::{Object, RootHaver as _};
+
+        let mut vm = crate::vm::tests::test_vm(Vec::new());
+        let head = defaulted_interface(&mut vm, "Defaulted");
+        // Any heap object can stand for a runtime package here: the walk
+        // skips a root that is not a package, and the answer is still keyed
+        // under that root.
+        let live_root = vm.alloc(Object::String(bex_str::BexStr::from("live package")));
+        let dead_root = vm.alloc(Object::String(bex_str::BexStr::from("dead package")));
+        let int = RealizedTy::Int;
+        for root in [live_root, dead_root] {
+            assert!(is_structural(
+                ImplResolver::for_package(&vm, root)
+                    .resolve_implementation(&int, head, &[])
+                    .as_ref()
+            ));
+        }
+        assert_eq!(vm.impl_cache.borrow().len(), 2);
+
+        let mut roots = Vec::new();
+        vm.collect_roots(&mut roots);
+        roots.extend([head.ptr(), live_root]);
+        // SAFETY: the test VM is the heap's only mutator and holds no
+        // pointer the root set misses.
+        #[allow(unsafe_code, reason = "a test drives the collector directly")]
+        let (_, _, forwarding) = unsafe {
+            vm.heap
+                .collect_garbage_generational(&roots, CollectionLevel::Major)
+        };
+        let moved_root = forwarding[&live_root];
+        assert_ne!(moved_root, live_root, "the collection moves the live root");
+        vm.forward_roots(&forwarding);
+
+        // The answer under the freed root is gone; the other one now lives
+        // under the moved root, so asking there is a hit that stores nothing.
+        assert_eq!(vm.impl_cache.borrow().len(), 1);
+        let head = TypeHead::new(forwarding[&head.ptr()], head.tag());
+        assert!(is_structural(
+            ImplResolver::for_package(&vm, moved_root)
+                .resolve_implementation(&int, head, &[])
+                .as_ref()
+        ));
+        assert_eq!(vm.impl_cache.borrow().len(), 1);
     }
 
     #[cfg(not(target_arch = "wasm32"))]

@@ -91,6 +91,74 @@ test "warm_dispatch_on_a_runtime_class_survives_collection" {
     assert.equal(irc_shout_many(irc_badge("tin"), 10), 70)
 }
 
+// Comparing two session values from this package keys the answer under the
+// session's package, a heap object a collection moves.
+function irc_churn_and_collect() -> null {
+    for (let round = 0; round < 3; round += 1) {
+        let garbage: string[][] = [];
+        for (let i = 0; i < 2000; i += 1) {
+            garbage.push(["x", "y", "z"]);
+        }
+        baml.sys.collect_garbage();
+    }
+    null
+}
+
+test "warm_dispatch_on_session_values_survives_collection" {
+    let session = reflect.Session.new()
+    session.eval(`class Value { n int }`)
+    let a = session.eval<unknown>(`Value { n: 1 }`)
+    let b = session.eval<unknown>(`Value { n: 2 }`)
+    for (let i = 0; i < 50; i += 1) {
+        assert.is_true(!baml.ops.equals_equals(a, b))
+    }
+    irc_churn_and_collect();
+    assert.is_true(!baml.ops.equals_equals(a, b))
+    assert.is_true(baml.ops.equals_equals(a, session.eval<unknown>(`Value { n: 1 }`)))
+    session.eval(`
+        implements baml.ops.Equals for Value {
+            function eq(self, other: Self) -> bool { true }
+        }
+    `)
+    assert.is_true(baml.ops.equals_equals(a, b))
+}
+
+// ─── a builder's witness lands while answers are warm ────────────────────────
+
+interface IrcGate {}
+
+interface IrcPick {
+    function pick(self) -> string throws never { "picked" }
+}
+
+implements<T extends IrcGate> IrcPick for T {}
+
+class IrcStaticGate {
+    implements IrcGate {}
+}
+
+function irc_pick_of(value: unknown) -> string {
+    match (value) {
+        let p: IrcPick => p.pick(),
+        _ => "none",
+    }
+}
+
+test "a_builder_witness_registered_with_warm_answers_dispatches" {
+    // Warm the blanket rule's answers through a static implementor.
+    for (let i = 0; i < 50; i += 1) {
+        assert.equal(irc_pick_of(IrcStaticGate {}), "picked")
+    }
+    assert.equal(irc_pick_of(1), "none")
+    let builder = reflect.Class.builder("Gated");
+    let built = builder.build(implementations = [reflect.Interface.implementation<IrcGate>()]);
+    let type Gated = built;
+    let gated: Gated = baml.json.to<Gated>({});
+    assert.equal(irc_pick_of(gated), "picked")
+    assert.is_true(built.as_type().implements(reflect.Type.of<IrcPick>()))
+    assert.equal(irc_pick_of(IrcStaticGate {}), "picked")
+}
+
 // ─── threads dispatching while a republish lands ─────────────────────────────
 
 class IrcWorker {

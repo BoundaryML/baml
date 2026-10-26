@@ -7,8 +7,8 @@
 //! reads ask that question on every call, so each VM keeps the answers here.
 //!
 //! An answer depends on three things: the question (the type, the interface
-//! and its arguments), the world the resolver searches (its root and
-//! additional runtime packages), and the rules that world holds. The key
+//! and its arguments), the world the resolver searches (its root, additional
+//! and lexical runtime packages), and the rules that world holds. The key
 //! holds the first two. The rules change only at a few points, and each one
 //! keeps the cache exact:
 //!
@@ -41,12 +41,16 @@ use rustc_hash::FxBuildHasher;
 const CAPACITY: usize = 4096;
 
 /// The dynamic world a resolver searches: the package its candidate walk
-/// starts from (null when no runtime package is involved) and the lexical
-/// package it also searches.
+/// starts from (null when no runtime package is involved), the package it
+/// also walks, and the package of the running code. The last one matters
+/// even when the walk skips it: substituting a rule's templates reduces
+/// associated-type projections through `BexVm::project`, which searches the
+/// running code's package.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct World {
     pub(crate) root: HeapPtr,
     pub(crate) additional: Option<HeapPtr>,
+    pub(crate) lexical: HeapPtr,
 }
 
 /// One resolver question, borrowing its types. Lookups hash this form, so a
@@ -100,6 +104,7 @@ impl Key {
     /// Follow a collection; `false` when the key names a freed object.
     fn forward(&mut self, follow: &mut impl FnMut(&mut HeapPtr) -> bool) -> bool {
         let mut live = follow(&mut self.world.root);
+        live &= follow(&mut self.world.lexical);
         if let Some(additional) = &mut self.world.additional {
             live &= follow(additional);
         }
