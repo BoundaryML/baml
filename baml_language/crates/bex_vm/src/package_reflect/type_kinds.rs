@@ -936,6 +936,20 @@ impl BamlClassClass for PackageReflectImpl {
         let Object::Class(class) = vm.get_object(class_ptr) else {
             unreachable!("a class type's head points at Object::Class")
         };
+        // Refuse what the compiler refuses for a class literal: a reflection
+        // kind view, whose values only reflection creates, and (below) a
+        // class holding native state.
+        if baml_type::type_kind::TypeKind::ALL
+            .iter()
+            .any(|kind| vm.lang_declaration(kind.class()) == Some(class_ptr))
+        {
+            return Err(invalid_argument(
+                vm,
+                format!(
+                    "reflect.Class.instantiate cannot build `{class_ty}`: reflection kinds are obtained from a type value"
+                ),
+            ));
+        }
         let param_count = class.generic_param_count;
         if type_args.len() != param_count {
             return Err(invalid_argument(
@@ -960,6 +974,20 @@ impl BamlClassClass for PackageReflectImpl {
                 (field.name.clone(), ty, nullable)
             })
             .collect();
+        // Only the class's own functions create `$rust_type` state. A given
+        // value could only be another instance's handle, relabelled: the
+        // membership test cannot see that, because it admits any handle.
+        if let Some((name, ..)) = declared
+            .iter()
+            .find(|(_, ty, _)| matches!(ty, bex_vm_types::RealizedTy::RustType))
+        {
+            return Err(invalid_argument(
+                vm,
+                format!(
+                    "reflect.Class.instantiate cannot build `{class_ty}`: its field `{name}` holds state that only the class's own functions create"
+                ),
+            ));
+        }
         // Values are stored exactly as given: the membership test only, never
         // `call_any`'s int-to-float widening, which would allocate a new value.
         let mut values = Vec::with_capacity(declared.len());

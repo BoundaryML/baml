@@ -103,7 +103,10 @@ class Class {
     /// - `reflect.errors.InvalidArgument` if `T` is not a class, if a value
     ///   is not of its field's type, if a field whose type does not accept
     ///   `null` is left out, or if a key names no field of `T`. The message
-    ///   names the field and the type it expects.
+    ///   names the field and the type it expects. It is also thrown for a
+    ///   class that a class literal cannot build either: a reflection kind
+    ///   such as `reflect.Class`, or a class holding native state such as
+    ///   `baml.fs.File`.
     ///
     /// # Examples
     ///

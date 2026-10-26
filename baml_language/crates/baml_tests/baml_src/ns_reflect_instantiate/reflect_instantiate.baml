@@ -279,6 +279,17 @@ test "instantiate rejects a type that is not a class" {
     )
 }
 
+test "instantiate rejects a class that a class literal cannot build" {
+    assert.equal(
+        instantiate_non_class(reflect.Type.of<reflect.Class>()),
+        "reflect.Class.instantiate cannot build `reflect.Class`: reflection kinds are obtained from a type value",
+    );
+    assert.equal(
+        instantiate_non_class(reflect.Type.of<baml.fs.File>()),
+        "reflect.Class.instantiate cannot build `baml.fs.File`: its field `_handle` holds state that only the class's own functions create",
+    )
+}
+
 // ─── value_of ────────────────────────────────────────────────────────────────
 
 test "value_of finds a variant by its declared name" {
