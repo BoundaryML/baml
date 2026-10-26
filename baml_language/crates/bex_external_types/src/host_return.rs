@@ -164,6 +164,15 @@ fn inbound_annotation_satisfies_ty(actual: &RuntimeTy, expected: &RuntimeTy) -> 
 /// crate — class checking is limited to name identity here and completed
 /// engine-side.
 fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
+    // Recursive container/union checks must use the same sparse-annotation
+    // rules as the root. A class payload can be anonymous: its nominal name
+    // and generic arguments live only in the annotation, not in the payload.
+    if let BexExternalValue::Union { metadata, .. } = value
+        && metadata.is_inbound_type_annotation
+    {
+        return validate_host_return(value, ty).is_ok();
+    }
+
     match ty {
         // `unknown` / `any`: accept anything. At the FFI boundary the declared
         // return type is concrete, so this is defensive.
@@ -805,6 +814,68 @@ mod tests {
             .expect_err("an annotation for another class must not satisfy User<int>");
         assert_eq!(error.expected, user.to_string());
         assert!(error.actual.contains("Other"));
+    }
+
+    #[test]
+    fn sparse_class_annotations_are_preserved_inside_containers() {
+        let item_name = TypeName::from_dotted_path("user.callbacks.Item");
+        for args in [vec![], vec![RuntimeTy::int()]] {
+            let expected = RuntimeTy::Class(item_name.clone(), args.into_boxed_slice());
+            let other_class = RuntimeTy::Class(
+                TypeName::from_dotted_path("user.callbacks.Other"),
+                Box::new([]),
+            );
+            let other_args = RuntimeTy::Class(item_name.clone(), Box::new([RuntimeTy::string()]));
+            for (annotation, accepted) in [
+                (expected.clone(), true),
+                (other_class, false),
+                (other_args, false),
+            ] {
+                // This is the bridge's representation of a registered class:
+                // its name and generic args live in the sparse annotation,
+                // while the class payload itself is anonymous.
+                let value = BexExternalValue::typed(
+                    BexExternalValue::Instance {
+                        class_name: String::new(),
+                        type_args: vec![],
+                        fields: IndexMap::new(),
+                    },
+                    annotation.clone(),
+                );
+                let list = BexExternalValue::Array {
+                    element_type: RuntimeTy::unknown(),
+                    items: vec![value.clone()],
+                };
+                let map = BexExternalValue::Map {
+                    key_type: RuntimeTy::string(),
+                    value_type: RuntimeTy::unknown(),
+                    entries: IndexMap::from_iter([("item".to_string(), value)]),
+                };
+                let nested = BexExternalValue::Array {
+                    element_type: RuntimeTy::unknown(),
+                    items: vec![map.clone()],
+                };
+                for (value, ty) in [
+                    (list.clone(), RuntimeTy::list(expected.clone())),
+                    (map, RuntimeTy::map(RuntimeTy::string(), expected.clone())),
+                    (
+                        nested,
+                        RuntimeTy::list(RuntimeTy::map(RuntimeTy::string(), expected.clone())),
+                    ),
+                    (
+                        list.clone(),
+                        RuntimeTy::optional(RuntimeTy::list(expected.clone())),
+                    ),
+                    (list, RuntimeTy::list(RuntimeTy::optional(expected.clone()))),
+                ] {
+                    assert_eq!(
+                        validate_host_return(&value, &ty).is_ok(),
+                        accepted,
+                        "annotation {annotation} against {ty}",
+                    );
+                }
+            }
+        }
     }
 
     #[test]
