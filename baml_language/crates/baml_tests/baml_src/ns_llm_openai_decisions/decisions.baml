@@ -601,6 +601,39 @@ test "skipped nullable fields are omitted and reconstructed as null" {
     assert.is_true(skipped_result())
 }
 
+class ExactChoice {
+    // The enum's wire key is "tech"; the literal's is "Technical".
+    // JSON serializes both values as "Technical", so assembling the class
+    // through JSON would lose which one was chosen.
+    route: Team | "Technical" @description("Choose a team or the literal label"),
+}
+
+function ExactChoiceResult(message: string) -> ExactChoice {
+    client: "openai-decisions/gpt-6-luna"
+    prompt: `
+        ${message}
+    `
+}
+
+function exact_class_choice(key: string) -> Team | "Technical" {
+    let body = baml.json.stringify({ "answers": [{ "name": "route", "type": "choice", "choice": key }] });
+    root.llm_mock.mock_json_serve([root.llm_mock.MockResponse.ok(body)], (
+        mock: root.llm_mock.MockJsonServer,
+    ) -> {
+        let cl = openai.DecisionsClient.new(api_key = "k", base_url = mock.base_url());
+        ai.Agent.new(client = cl).run(ExactChoiceResult@spec("outage")).value.route
+    })
+}
+
+test "class assembly keeps a chosen enum apart from an equal string literal" {
+    let literal: unknown = exact_class_choice("Technical");
+    assert.is_true(literal is string);
+    assert.equal(literal, "Technical");
+    let chosen: unknown = exact_class_choice("tech");
+    assert.is_true(chosen is Team);
+    assert.equal(chosen, Team.Technical)
+}
+
 function malformed(body: string, ty: reflect.Type? = null) -> bool {
     root.llm_mock.mock_json_serve([root.llm_mock.MockResponse.ok(body)], (
         mock: root.llm_mock.MockJsonServer,

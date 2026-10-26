@@ -1,5 +1,6 @@
 // Reflection owns traversal, metadata precedence, routing, and validation.
-// Reflected enums and classes are constructed through `let type` + JSON.
+// Reflected enums and classes are constructed through `let type` +
+// `reflect.Enum.value_of` / `reflect.Class.instantiate`.
 class ChoiceOption {
     key: string,
     description: string?,
@@ -39,7 +40,7 @@ function options(ty: reflect.Type) -> ChoiceOption[] {
                     ChoiceOption {
                         key: variant.meta.alias ?? variant.name,
                         description: variant.meta.description,
-                        value: baml.json.decode<T>(baml.json.stringify(variant.name)),
+                        value: reflect.Enum.value_of<T>(variant.name),
                     },
                 );
             }
@@ -419,10 +420,8 @@ function assemble(ty: reflect.Type, path: string[], values: map<string, unknown>
                 let _ = fields.set(field.name, assemble(field_type, path.concat([field.name]), values));
             }
         }
-        // JSON currently cannot preserve an already-selected enum versus string
-        // literal with the same JSON value. This matches the TypeSafe adapter limitation.
         let type T = ty;
-        return baml.json.decode<T>(baml.json.stringify(fields));
+        return reflect.Class.instantiate<T>(fields);
     }
     values.get(
         if (path.length() == 0) {

@@ -3,14 +3,14 @@ source: crates/baml_cli/src/describe_command_tests.rs
 expression: output
 ---
 class            reflect.Class                    <builtin>/reflect/kinds.baml:2
-class            reflect.Enum                     <builtin>/reflect/kinds.baml:111
-class            reflect.Union                    <builtin>/reflect/kinds.baml:177
-class            reflect.Literal                  <builtin>/reflect/kinds.baml:215
-class            reflect.Array                    <builtin>/reflect/kinds.baml:246
-class            reflect.Map                      <builtin>/reflect/kinds.baml:268
-class            reflect.Interface                <builtin>/reflect/kinds.baml:307
-class            reflect.Primitive                <builtin>/reflect/kinds.baml:330
-class            reflect.Function                 <builtin>/reflect/kinds.baml:347
+class            reflect.Enum                     <builtin>/reflect/kinds.baml:164
+class            reflect.Union                    <builtin>/reflect/kinds.baml:258
+class            reflect.Literal                  <builtin>/reflect/kinds.baml:296
+class            reflect.Array                    <builtin>/reflect/kinds.baml:327
+class            reflect.Map                      <builtin>/reflect/kinds.baml:349
+class            reflect.Interface                <builtin>/reflect/kinds.baml:388
+class            reflect.Primitive                <builtin>/reflect/kinds.baml:411
+class            reflect.Function                 <builtin>/reflect/kinds.baml:428
 class            reflect.Arg                      <builtin>/reflect/reflect.baml:2
 class            reflect.Meta                     <builtin>/reflect/reflect.baml:14
 class            reflect.WithMeta                 <builtin>/reflect/reflect.baml:27

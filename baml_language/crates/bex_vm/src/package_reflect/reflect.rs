@@ -2054,7 +2054,9 @@ fn value_realized_ty(vm: &BexVm, value: Value) -> RealizedTy {
 /// no BAML type to compare — an opaque native handle (see
 /// `value_concrete_ty`) — because refusing what we cannot check would reject
 /// working calls; the callee remains dynamically safe either way (values stay
-/// tagged).
+/// tagged). `reflect.Class.instantiate` uses the same test but fails closed:
+/// the instance it builds outlives the call, so nothing would catch the bad
+/// value later.
 fn value_fits(vm: &BexVm, value: Value, expected: &RealizedTy) -> bool {
     // No convention patching is needed on the way in: a reconstructed
     // signature spells "cannot throw" as `never`, exactly as the static

@@ -375,7 +375,8 @@ test "false and raw string choice keys" {
 
 class ExactChoice {
     // The enum's wire key is "tech"; the literal's is "Technical".
-    // JSON serializes both values as "Technical", losing their identity.
+    // JSON serializes both values as "Technical", so assembling the class
+    // through JSON would lose which one was chosen.
     route: Team | "Technical" @description("Choose a team or the literal label"),
 }
 
@@ -396,12 +397,13 @@ function exact_class_choice(key: string) -> Team | "Technical" {
     })
 }
 
-test "class JSON reconstruction currently resolves ambiguous strings to the literal" {
-    assert.equal(exact_class_choice("Technical"), "Technical");
-    // TODO(json): preserve the selected enum when it shares a literal's JSON representation.
-    // Both choices currently roundtrip through the same JSON string, which
-    // decodes as the more specific member: the literal.
-    assert.equal(exact_class_choice("tech"), "Technical")
+test "class assembly keeps a chosen enum apart from an equal string literal" {
+    let literal: unknown = exact_class_choice("Technical");
+    assert.is_true(literal is string);
+    assert.equal(literal, "Technical");
+    let chosen: unknown = exact_class_choice("tech");
+    assert.is_true(chosen is Team);
+    assert.equal(chosen, Team.Technical)
 }
 
 function MediaInput(media: image | audio | video | pdf) -> bool {
@@ -602,7 +604,7 @@ function bigint_class_choice(key: string) -> BigintChoice {
     })
 }
 
-test "bigint choices retain precision through nested generic class JSON reconstruction" {
+test "bigint choices retain precision through nested generic class assembly" {
     assert.equal(
         bigint_class_choice("123456789012345678901234567890"),
         123456789012345678901234567890n,
