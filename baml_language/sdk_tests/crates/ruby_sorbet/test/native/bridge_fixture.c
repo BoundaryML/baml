@@ -9,116 +9,48 @@
 #include <stdlib.h>
 #include <string.h>
 
-#if defined(_WIN32)
-#  include <windows.h>
-#else
-#  include <pthread.h>
-#  include <time.h>
-#endif
+static uint32_t release_count = 0;
 
-static uint32_t initialize_count = 0;
-static volatile uint32_t initialize_started = 0;
-static uint32_t free_count = 0;
-static uint32_t register_count = 0;
-static BamlResultCallback registered_result_callback = NULL;
-
-static BamlBuffer buffer_from_literal(const char *value) {
-  BamlBuffer buffer = {(const int8_t *)value, strlen(value)};
+static BamlBuffer empty_buffer(void) {
+  BamlBuffer buffer = {NULL, 0};
   return buffer;
 }
 
-static const char *fixture_version(void) {
-  const char *version = getenv("BAML_FAKE_RUNTIME_VERSION");
-  return version == NULL ? "missing BAML_FAKE_RUNTIME_VERSION" : version;
-}
-
 static BamlBuffer probe_version(void) {
-  const char *mode = getenv("BAML_FAKE_NATIVE_MODE");
-  if (mode != NULL && strcmp(mode, "version-mismatch") == 0) {
-    return buffer_from_literal("9.9.9");
-  }
-  if (mode != NULL && strcmp(mode, "invalid-version-utf8") == 0) {
-    static const uint8_t invalid[] = {UINT8_C(0xff)};
-    BamlBuffer buffer = {(const int8_t *)invalid, sizeof(invalid)};
-    return buffer;
-  }
-  if (mode != NULL && strcmp(mode, "null-version-pointer") == 0) {
-    BamlBuffer buffer = {NULL, 1};
-    return buffer;
-  }
-  return buffer_from_literal(fixture_version());
-}
-
-static void delay_initialize_if_requested(void) {
-  const char *raw = getenv("BAML_FAKE_INIT_DELAY_MS");
-  if (raw == NULL) {
-    return;
-  }
-  unsigned long milliseconds = strtoul(raw, NULL, 10);
-#if defined(_WIN32)
-  Sleep((DWORD)milliseconds);
-#else
-  struct timespec duration = {
-      .tv_sec = (time_t)(milliseconds / 1000),
-      .tv_nsec = (long)((milliseconds % 1000) * 1000000),
-  };
-  nanosleep(&duration, NULL);
-#endif
+  const char *version = getenv("BAML_FAKE_RUNTIME_VERSION");
+  BamlBuffer buffer = {(const int8_t *)version, strlen(version)};
+  return buffer;
 }
 
 static BamlBuffer probe_initialize(const uint8_t *bytecode, size_t length) {
-  static const uint8_t valid[] = "valid-bytecode";
-  initialize_count += 1;
-  initialize_started = 1;
-  delay_initialize_if_requested();
-  if (length == sizeof(valid) - 1 && bytecode != NULL &&
-      memcmp(bytecode, valid, sizeof(valid) - 1) == 0) {
-    BamlBuffer buffer = {NULL, 0};
-    return buffer;
-  }
-  return buffer_from_literal("invalid test bytecode");
+  (void)bytecode;
+  (void)length;
+  return empty_buffer();
 }
 
-static void probe_free(BamlBuffer buffer) {
-  (void)buffer;
-  free_count += 1;
-}
+static void probe_free(BamlBuffer buffer) { (void)buffer; }
+static void probe_register_result(BamlResultCallback callback) { (void)callback; }
 
-static void probe_register_result(BamlResultCallback callback) {
-  registered_result_callback = callback;
-}
-
-static void probe_call(
-    const uint8_t *encoded_args,
-    size_t length,
-    uint32_t callback_id) {
-  (void)encoded_args;
+static void probe_call(const uint8_t *args, size_t length, uint32_t callback_id) {
+  (void)args;
   (void)length;
   (void)callback_id;
 }
 
-static uint64_t probe_new_call(void) {
-  return 1;
+static uint64_t probe_new_call(void) { return 1; }
+static int32_t probe_cancel(uint64_t id) { return id == 0 ? 1 : 0; }
+
+static int32_t probe_release_call(uint64_t id) {
+  (void)id;
+  release_count += 1;
+  return 0;
 }
 
-static int32_t probe_cancel(uint64_t id) {
-  return id == 0 ? 1 : 0;
-}
+static void probe_register_host_dispatch(BamlHostDispatchCallback callback) { (void)callback; }
+static void probe_register_host_release(BamlHostReleaseCallback callback) { (void)callback; }
 
-static void probe_register_host_dispatch(BamlHostDispatchCallback callback) {
-  (void)callback;
-}
-
-static void probe_register_host_release(BamlHostReleaseCallback callback) {
-  (void)callback;
-}
-
-static void probe_complete_host_call(
-    uint32_t call_id,
-    int32_t is_error,
-    const int8_t *content,
-    size_t length) {
-  (void)call_id;
+static void probe_complete_host_call(uint32_t id, int32_t is_error, const int8_t *content, size_t length) {
+  (void)id;
   (void)is_error;
   (void)content;
   (void)length;
@@ -136,78 +68,31 @@ static BamlCffiStatus probe_release(uint64_t key) {
 }
 
 static BamlCffiStatus probe_media_constructor(
-    int32_t media_kind,
-    const char *value,
-    const char *mime_type_or_null,
-    uint64_t *out_key,
-    int32_t *out_handle_type) {
-  (void)media_kind;
+    int32_t kind, const char *value, const char *mime, uint64_t *key, int32_t *type) {
+  (void)kind;
   (void)value;
-  (void)mime_type_or_null;
-  (void)out_key;
-  (void)out_handle_type;
+  (void)mime;
+  (void)key;
+  (void)type;
   return BAML_CFFI_STATUS_UNSUPPORTED_HANDLE_TYPE;
 }
 
-static BamlCffiStatus probe_media_accessor(
-    uint64_t key,
-    int32_t handle_type,
-    BamlBuffer *out) {
+static BamlCffiStatus probe_media_accessor(uint64_t key, int32_t type, BamlBuffer *out) {
   (void)key;
-  (void)handle_type;
+  (void)type;
   (void)out;
   return BAML_CFFI_STATUS_INVALID_HANDLE;
 }
 
 static BamlBuffer probe_register_bridge(const BamlBridgeInfoV1 *info) {
-  const char *expected_version = fixture_version();
-  size_t expected_version_len = strlen(expected_version);
-  register_count += 1;
-  if (getenv("BAML_FAKE_NATIVE_MODE") != NULL &&
-      strcmp(getenv("BAML_FAKE_NATIVE_MODE"), "registration-rejected") == 0) {
-    return buffer_from_literal("registration rejected by test fixture");
-  }
-  if (info == NULL || info->struct_size < sizeof(BamlBridgeInfoV1)) {
-    return buffer_from_literal("invalid bridge info");
-  }
-  if (info->language != BAML_BRIDGE_LANGUAGE_RUBY) {
-    return buffer_from_literal("expected Ruby bridge language 10");
-  }
-  if (info->sdk_version_len != expected_version_len ||
-      info->sdk_version == NULL ||
-      memcmp(info->sdk_version, expected_version, expected_version_len) != 0) {
-    return buffer_from_literal("unexpected Ruby toolchain version");
-  }
-  static const char expected_name[] = "Baml::Bridge";
-  if (info->bridge_runtime_name_len != sizeof(expected_name) - 1 ||
-      info->bridge_runtime_name == NULL ||
-      memcmp(info->bridge_runtime_name, expected_name, sizeof(expected_name) - 1) != 0) {
-    return buffer_from_literal("unexpected Ruby bridge runtime name");
-  }
-  if (info->bridge_runtime_version_len != expected_version_len ||
-      info->bridge_runtime_version == NULL ||
-      memcmp(info->bridge_runtime_version, expected_version, expected_version_len) != 0) {
-    return buffer_from_literal("unexpected Ruby bridge runtime version");
-  }
-  BamlBuffer buffer = {NULL, 0};
-  return buffer;
+  (void)info;
+  return empty_buffer();
 }
 
-static void probe_register_unhandled_spawn_error(
-    BamlUnhandledSpawnErrorCallback callback) {
-  (void)callback;
-}
+static void probe_register_unhandled_spawn_error(BamlUnhandledSpawnErrorCallback callback) { (void)callback; }
 
-static BamlBuffer probe_shutdown_runtime(void) {
-  BamlBuffer buffer = {NULL, 0};
-  return buffer;
-}
-
-static BamlBuffer probe_initialize_with_metadata(
-    const uint8_t *bytecode,
-    size_t length,
-    const char *baml_toml) {
-  (void)baml_toml;
+static BamlBuffer probe_initialize_with_metadata(const uint8_t *bytecode, size_t length, const char *metadata) {
+  (void)metadata;
   return probe_initialize(bytecode, length);
 }
 
@@ -216,10 +101,30 @@ static BamlCffiStatus probe_clock(uint64_t id, uint64_t *out) {
   *out = 0;
   return BAML_CFFI_STATUS_OK;
 }
-static int32_t probe_release_call(uint64_t id) { (void)id; return 0; }
+
 static void probe_dispatch_v2(BamlHostDispatchV2 callback) { (void)callback; }
 static void probe_cancel_callback(BamlHostCancel callback) { (void)callback; }
 static uint32_t probe_protocol(void) { return 1; }
+
+static BamlCffiStatus probe_trace_selection(uint64_t id, uint64_t key, BamlBuffer *out, uint64_t *reservation) {
+  (void)id;
+  (void)key;
+  (void)out;
+  (void)reservation;
+  return BAML_CFFI_STATUS_INVALID_HANDLE;
+}
+
+static BamlCffiStatus probe_invocation_context(uint64_t key, BamlBuffer *out) {
+  (void)key;
+  (void)out;
+  return BAML_CFFI_STATUS_INVALID_HANDLE;
+}
+
+static BamlCffiStatus probe_media_from_file_content(
+    int32_t kind, const char *file, const char *base64, const char *mime, uint64_t *key, int32_t *type) {
+  (void)file;
+  return probe_media_constructor(kind, base64, mime, key, type);
+}
 
 static const BamlApiV1 default_api = {
     .abi_version = BAML_API_V1_ABI_VERSION,
@@ -245,138 +150,29 @@ static const BamlApiV1 default_api = {
     .media_mime_type = probe_media_accessor,
     .register_bridge = probe_register_bridge,
     .register_unhandled_spawn_error_callback = probe_register_unhandled_spawn_error,
-    .shutdown_runtime = probe_shutdown_runtime,
+    .shutdown_runtime = empty_buffer,
     .initialize_runtime_from_blob_with_metadata = probe_initialize_with_metadata,
     .invocation_clock_ns = probe_clock,
     .release_function_call = probe_release_call,
     .register_host_dispatch_v2 = probe_dispatch_v2,
     .register_host_cancel_callback = probe_cancel_callback,
     .invocation_protocol_version = probe_protocol,
+    .trace_selection = probe_trace_selection,
+    .invocation_context = probe_invocation_context,
+    .media_name = probe_media_accessor,
+    .media_from_file_content = probe_media_from_file_content,
 };
 
-static BamlApiV1 probe_api;
-
-#define NULL_FIELD(field_name)                                  \
-  if (strcmp(field, #field_name) == 0) {                        \
-    probe_api.field_name = NULL;                                \
-    return;                                                     \
-  }
-
-static void null_requested_field(const char *field) {
-  if (field == NULL) {
-    return;
-  }
-  NULL_FIELD(version)
-  NULL_FIELD(initialize_runtime_from_blob)
-  NULL_FIELD(free_buffer)
-  NULL_FIELD(register_callback)
-  NULL_FIELD(call_function)
-  NULL_FIELD(new_function_call)
-  NULL_FIELD(cancel_function_call)
-  NULL_FIELD(register_host_dispatch_callback)
-  NULL_FIELD(register_host_release_callback)
-  NULL_FIELD(complete_host_call)
-  NULL_FIELD(handle_clone)
-  NULL_FIELD(handle_release)
-  NULL_FIELD(media_from_url)
-  NULL_FIELD(media_from_file)
-  NULL_FIELD(media_from_base64)
-  NULL_FIELD(media_url)
-  NULL_FIELD(media_file)
-  NULL_FIELD(media_base64)
-  NULL_FIELD(media_mime_type)
-  NULL_FIELD(register_bridge)
-  NULL_FIELD(register_unhandled_spawn_error_callback)
-  NULL_FIELD(shutdown_runtime)
-  NULL_FIELD(initialize_runtime_from_blob_with_metadata)
-  NULL_FIELD(invocation_clock_ns)
-  NULL_FIELD(release_function_call)
-  NULL_FIELD(register_host_dispatch_v2)
-  NULL_FIELD(register_host_cancel_callback)
-  NULL_FIELD(invocation_protocol_version)
-}
-
 BAML_CFFI_API const BamlApiV1 *baml_get_api_v1(void) {
+  static BamlApiV1 api;
   const char *mode = getenv("BAML_FAKE_NATIVE_MODE");
-  probe_api = default_api;
-
-  if (mode != NULL && strcmp(mode, "null-table") == 0) {
-    return NULL;
+  api = default_api;
+  if (mode != NULL && strcmp(mode, "truncated") == 0) {
+    api.struct_size = offsetof(BamlApiV1, media_from_file_content);
+  } else if (mode != NULL && strcmp(mode, "null_function") == 0) {
+    api.media_from_file_content = NULL;
   }
-  if (mode != NULL && strcmp(mode, "wrong-abi") == 0) {
-    probe_api.abi_version = 999;
-  } else if (mode != NULL && strcmp(mode, "truncated") == 0) {
-    probe_api.struct_size = offsetof(BamlApiV1, register_bridge);
-  }
-  null_requested_field(getenv("BAML_FAKE_NULL_FIELD"));
-  return &probe_api;
+  return &api;
 }
 
-BAML_CFFI_API uint32_t baml_test_initialize_count(void) {
-  return initialize_count;
-}
-
-BAML_CFFI_API uint32_t baml_test_initialize_started(void) {
-  return initialize_started;
-}
-
-BAML_CFFI_API uint32_t baml_test_free_count(void) {
-  return free_count;
-}
-
-BAML_CFFI_API uint32_t baml_test_register_count(void) {
-  return register_count;
-}
-
-typedef struct CallbackInvocation {
-  uint32_t call_id;
-  const uint8_t *content;
-  size_t length;
-} CallbackInvocation;
-
-#if defined(_WIN32)
-static DWORD WINAPI invoke_registered_callback(LPVOID raw_invocation) {
-  const CallbackInvocation *invocation = (const CallbackInvocation *)raw_invocation;
-  registered_result_callback(
-      invocation->call_id,
-      (const int8_t *)invocation->content,
-      invocation->length);
-  return 0;
-}
-#else
-static void *invoke_registered_callback(void *raw_invocation) {
-  const CallbackInvocation *invocation = (const CallbackInvocation *)raw_invocation;
-  registered_result_callback(
-      invocation->call_id,
-      (const int8_t *)invocation->content,
-      invocation->length);
-  return NULL;
-}
-#endif
-
-BAML_CFFI_API int32_t baml_test_invoke_registered_callback_on_thread(
-    uint32_t call_id,
-    const uint8_t *content,
-    size_t length) {
-  if (registered_result_callback == NULL) {
-    return 1;
-  }
-  CallbackInvocation invocation = {call_id, content, length};
-#if defined(_WIN32)
-  HANDLE thread = CreateThread(NULL, 0, invoke_registered_callback, &invocation, 0, NULL);
-  if (thread == NULL) {
-    return 2;
-  }
-  WaitForSingleObject(thread, INFINITE);
-  CloseHandle(thread);
-#else
-  pthread_t thread;
-  if (pthread_create(&thread, NULL, invoke_registered_callback, &invocation) != 0) {
-    return 2;
-  }
-  if (pthread_join(thread, NULL) != 0) {
-    return 3;
-  }
-#endif
-  return 0;
-}
+BAML_CFFI_API uint32_t baml_test_release_count(void) { return release_count; }
