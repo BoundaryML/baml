@@ -405,9 +405,9 @@ impl BexHeap {
         let mut errors = Vec::new();
         for space in gens {
             let len = space.len();
-            // Resolve each stable chunk once, rather than taking the storage
-            // read lock for every slot. GC has exclusive access, and this scan
-            // neither grows nor clears any of the spaces it reads.
+            // Resolve each stable chunk once, rather than going through the
+            // chunk directory for every slot. GC has exclusive access, and
+            // this scan neither grows nor clears any of the spaces it reads.
             for start in (0..len).step_by(ChunkedVec::<Object>::CHUNK_SIZE) {
                 // SAFETY: start < len, so this chunk exists. Its initialized
                 // slots remain valid for the entire scan (before the swap).

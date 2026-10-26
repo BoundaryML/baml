@@ -928,8 +928,8 @@ impl BexHeap {
         vec: &ChunkedVec<Object>,
         raw_ptr: *const Object,
     ) -> Option<(usize, usize)> {
-        // `num_chunks` and `chunk_start_ptr` now serialize on the
-        // ChunkedVec's internal RwLock; concurrent growers are excluded.
+        // `num_chunks` and `chunk_start_ptr` are lock-free reads of the
+        // ChunkedVec's append-only chunk directory, safe under concurrent growth.
         let num_chunks = vec.num_chunks();
         for chunk_idx in 0..num_chunks {
             // SAFETY: `chunk_idx < num_chunks` by loop bound.
@@ -990,14 +990,18 @@ impl BexHeap {
     /// - **No globals**: BAML has no global mutable state, preventing races
     /// - **Safepoint GC**: Collection only runs when no VMs are executing
     /// - **ChunkedVec**: Growing never moves existing elements
+    ///
+    /// Returns a pointer to the written slot.
     #[inline]
-    pub(crate) unsafe fn write_runtime_object(&self, runtime_idx: usize, obj: Object) {
+    pub(crate) unsafe fn write_runtime_object(
+        &self,
+        runtime_idx: usize,
+        obj: Object,
+    ) -> *mut Object {
         // SAFETY: Caller ensures exclusive access to this index.
         // ChunkedVec's set() is internally safe for concurrent access to different indices.
         // All TLAB allocations target Gen0.
-        unsafe {
-            (*self.gen0.get()).set(runtime_idx, obj);
-        }
+        unsafe { (*self.gen0.get()).set(runtime_idx, obj) }
     }
 
     /// Get the current number of objects in the heap (compile-time + all
@@ -1055,19 +1059,19 @@ impl BexHeap {
 
         // The chunk-allocation policy mutex still serializes the
         // fetch_add → resize → canary-write critical section as a unit.
-        // (`ChunkedVec::resize_with` now self-synchronizes against
-        // concurrent `set` callers, so this is no longer load-bearing for
-        // memory safety — but keeping it preserves the existing "one
-        // grower at a time" policy and keeps the canary write paired with
+        // (`ChunkedVec` growth is safe against concurrent `set` callers on
+        // its own, so this is not load-bearing for memory safety — but it
+        // keeps one grower at a time and keeps the canary write paired with
         // the resize that produced its slot.)
         let _guard = self.growth_lock.lock().unwrap();
 
         let ct_len = self.compile_time.len();
         // SAFETY: `&*self.gen0.get()` produces a `&ChunkedVec<Object>`.
-        // The ChunkedVec's own RwLock now gates outer-Vec mutation, so this
-        // shared reference is sound to hold concurrently with other readers
-        // and growers; per-element exclusivity is gated separately by
-        // `UnsafeCell` + caller-side TLAB regions.
+        // ChunkedVec growth only appends to its chunk directory and never
+        // moves published storage, so this shared reference is sound to hold
+        // concurrently with other readers and growers; per-element
+        // exclusivity is gated separately by `UnsafeCell` + caller-side TLAB
+        // regions.
         let gen0 = unsafe { &*self.gen0.get() };
         if gen0.len() < reserve_end {
             gen0.resize_with(reserve_end, || {

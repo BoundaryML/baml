@@ -179,17 +179,12 @@ impl Tlab {
         // SAFETY: This TLAB has exclusive access to indices in [chunk.start, chunk.end)
         // and we've ensured alloc_ptr < alloc_limit after potential refill.
         // ChunkedVec guarantees stable pointers during concurrent growth.
-        unsafe {
-            self.heap.write_runtime_object(runtime_idx, obj);
-        }
+        // The returned pointer names the slot just written in Gen0.
+        let ptr = unsafe { self.heap.write_runtime_object(runtime_idx, obj) };
 
         // Track allocation for GC profiling
         #[cfg(feature = "gc_profiling")]
         self.heap.record_alloc();
-
-        // Get the pointer to the newly written object in Gen0.
-        // SAFETY: We just wrote to runtime_idx in Gen0, so it's valid.
-        let ptr = unsafe { (*self.heap.gen0.get()).get_ptr(runtime_idx) };
 
         // SAFETY: The pointer is valid and points to a valid object we just wrote
         let ptr = unsafe { self.heap.make_heap_ptr(ptr) };
@@ -1024,5 +1019,53 @@ mod tests {
 
         // Verify all 60 objects (3 threads × 20 objects) are accessible
         assert_eq!(seen.len(), 60);
+    }
+    /// Several threads allocate through their own TLABs while gen0 grows
+    /// across several chunk-directory slots (slot `s` holds `2^s` chunks of
+    /// 4096 objects). Allocation resolves its slot without a lock, so this is
+    /// the race the directory must survive: one thread's refill publishes a
+    /// new chunk while the others write and resolve slots in published ones.
+    /// Every object must read back intact afterwards.
+    #[test]
+    fn concurrent_allocation_while_gen0_grows_across_directory_slots() {
+        const THREADS: usize = 4;
+        // At least 3 full chunks of slots, so gen0 reaches directory slot 2.
+        const PER_THREAD: usize = if cfg!(miri) { 3_100 } else { 6_000 };
+        // Small TLABs make every thread refill, and so grow gen0, often.
+        let heap = BexHeap::with_tlab_size(vec![], 16);
+        let threads: Vec<_> = (0..THREADS)
+            .map(|thread| {
+                let heap = Arc::clone(&heap);
+                std::thread::spawn(move || {
+                    let mut tlab = Tlab::new(heap);
+                    (0..PER_THREAD)
+                        .map(|i| {
+                            let key = u32::try_from(thread * PER_THREAD + i).unwrap();
+                            (key, tlab.alloc_float(f64::from(key)))
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        let allocated: Vec<(u32, HeapPtr)> = threads
+            .into_iter()
+            .flat_map(|thread| thread.join().expect("an allocating thread panicked"))
+            .collect();
+
+        // SAFETY: every allocating thread has joined and no collection ran.
+        let gen0 = unsafe { heap.gen0_ref() };
+        assert!(
+            gen0.num_chunks() >= 4,
+            "gen0 should span directory slots 0..=2, has {} chunks",
+            gen0.num_chunks()
+        );
+        for (key, ptr) in allocated {
+            assert!(gen0.contains_ptr(ptr.as_ptr()));
+            // SAFETY: the allocating thread wrote this slot and has joined.
+            match unsafe { ptr.get() } {
+                Object::Float(value) => assert_eq!(*value, f64::from(key)),
+                other => panic!("slot for {key} holds {other:?}"),
+            }
+        }
     }
 }
