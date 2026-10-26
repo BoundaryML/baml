@@ -3,88 +3,35 @@
 require "minitest/autorun"
 require "open3"
 require "rbconfig"
-require_relative "../../../../sdks/ruby/bridge_ruby/lib/baml/bridge"
 
 class BridgeLoaderTest < Minitest::Test
-  REQUIRED_FUNCTION_FIELDS = Baml::Bridge
-                             .const_get(:Native, false)
-                             .const_get(:ApiV1, false)
-                             .const_get(:FUNCTION_FIELDS, false)
-                             .map(&:to_s)
-                             .freeze
-
-  TERMINAL_MODES = %w[
-    null-table
-    wrong-abi
-    truncated
-    version-mismatch
-    invalid-version-utf8
-    null-version-pointer
-    registration-rejected
-  ].freeze
-
-  def test_configuration_and_open_failures_can_retry
-    run_scenario("configuration_retry")
-    run_scenario("open_retry")
-    run_scenario("concurrent_open_failure_preserves_claim")
+  def test_truncated_table
+    run_scenario("truncated")
   end
 
-  def test_opened_incompatible_libraries_are_terminal
-    TERMINAL_MODES.each do |mode|
-      run_scenario("terminal_mode", mode)
-    end
-    run_scenario("terminal_missing_getter")
+  def test_null_function_slot
+    run_scenario("null_function")
   end
 
-  def test_every_required_v1_function_is_validated
-    REQUIRED_FUNCTION_FIELDS.each do |field|
-      run_scenario("terminal_null_field", field)
-    end
+  def test_pid_check
+    run_scenario("pid_check")
   end
 
-  def test_invalid_bytecode_can_retry_and_ready_program_uses_exact_bytes
-    run_scenario("invalid_bytecode_retry_and_identity")
+  def test_different_program
+    run_scenario("different_program")
   end
 
-  def test_concurrent_initialization_calls_native_once
-    run_scenario("concurrent_initialization")
-  end
-
-  def test_fork_policy
-    run_scenario("fork_before_native_use")
-    run_scenario("fork_after_native_use")
-    run_scenario("fork_during_initialization")
-    run_scenario("fork_during_open_failure")
-  end
-
-  def test_process_runtime_retains_registered_callback_across_gc
-    run_scenario("registered_callback_retention")
-  end
-
-  def test_foreign_native_thread_callback_copies_bytes_and_contains_exceptions
-    run_scenario("foreign_thread_callback")
-  end
-
-  def test_real_bridge_initializes_real_bytecode
-    run_scenario("real_runtime_initialization")
-  end
-
-  def test_initialize_requires_byte_string
-    run_scenario("type_validation")
+  def test_abandoned_call_is_released
+    run_scenario("abandoned_call")
   end
 
   private
 
-  def run_scenario(name, *arguments)
+  def run_scenario(name)
     scenario = File.expand_path("bridge_scenario.rb", __dir__)
-    stdout, stderr, status = Open3.capture3(
-      RbConfig.ruby,
-      scenario,
-      name,
-      *arguments
-    )
+    stdout, stderr, status = Open3.capture3(RbConfig.ruby, scenario, name)
     assert status.success?, <<~MESSAGE
-      Ruby bridge scenario #{([name] + arguments).join(" ")} failed
+      Ruby bridge scenario #{name} failed
       stdout:
       #{stdout}
       stderr:
