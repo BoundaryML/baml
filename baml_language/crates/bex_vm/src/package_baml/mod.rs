@@ -54,6 +54,9 @@ pub use spawn::{
 };
 mod stack_trace;
 mod string;
+mod sync;
+pub use sync::MonitorRoot;
+pub(crate) use sync::TaskMonitors;
 mod sys;
 mod time;
 mod toml;
