@@ -1031,6 +1031,7 @@ pub const SHORTHAND_PROVIDERS: &[(&str, Path)] = &[
     ("openrouter", compiler_path!(openai.OpenRouterClient.new)),
     ("anthropic", compiler_path!(anthropic.Client.new)),
     ("typesafeai", compiler_path!(typesafeai.Client.new)),
+    ("naceai", compiler_path!(naceai.Client.new)),
     ("google", compiler_path!(google.GeminiClient.new)),
     ("vertex", compiler_path!(google.VertexClient.new)),
     ("bedrock", compiler_path!(aws.BedrockClient.new)),

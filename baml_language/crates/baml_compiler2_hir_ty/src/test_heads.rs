@@ -45,7 +45,7 @@ struct World {
 /// Every package a test may spell. The world is built once and never
 /// mutated afterwards, so viewpoints can borrow its database for `'static`;
 /// a test naming a package outside this list is told to add it here.
-const PACKAGES: [&str; 22] = [
+const PACKAGES: [&str; 23] = [
     "ai",
     "anthropic",
     "app",
@@ -59,6 +59,7 @@ const PACKAGES: [&str; 22] = [
     "ifacepkg",
     "log",
     "me",
+    "naceai",
     "openai",
     "other",
     "pinpkg",

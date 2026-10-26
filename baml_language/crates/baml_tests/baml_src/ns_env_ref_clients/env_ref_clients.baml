@@ -415,7 +415,7 @@ test "resolve_unknown_prefix_is_typed" {
     );
     assert.contains(
         resolve_unknown_prefix_is_typed(),
-        "anthropic, typesafeai, google, vertex, bedrock, ai-gateway-images, claude-code",
+        "anthropic, typesafeai, naceai, google, vertex, bedrock, ai-gateway-images, claude-code",
     );
     assert.contains(resolve_unknown_prefix_is_typed(), "openai.GenericClient")
 }
@@ -445,7 +445,7 @@ test "resolve_of_a_ref_reads_at_call_time" {
         resolve_of_a_ref_reads_at_call_time(),
         "client selector env.BAML_TEST_ENV_REF_UNSET_CLIENT is not set",
     );
-    assert.contains(resolve_of_a_ref_reads_at_call_time(), "anthropic, typesafeai, google, vertex, bedrock")
+    assert.contains(resolve_of_a_ref_reads_at_call_time(), "anthropic, typesafeai, naceai, google, vertex, bedrock")
 }
 
 // ---------------------------------------------------------------------------

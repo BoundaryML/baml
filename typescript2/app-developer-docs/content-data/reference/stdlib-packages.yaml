@@ -9,6 +9,7 @@ packages:
   - openai
   - anthropic
   - typesafeai
+  - naceai
   - google
   - aws
   - vercel

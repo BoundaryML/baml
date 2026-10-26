@@ -72,11 +72,13 @@ pub enum LangPackage {
     Vercel,
     /// See [`Self::Openai`].
     ClaudeCode,
+    /// See [`Self::Openai`].
+    Naceai,
 }
 
 impl LangPackage {
     /// Every stdlib package, in declaration order: `ALL[i] as usize == i`.
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
         Self::Baml,
         Self::Reflect,
         Self::Ai,
@@ -91,6 +93,7 @@ impl LangPackage {
         Self::Aws,
         Self::Vercel,
         Self::ClaudeCode,
+        Self::Naceai,
     ];
 
     /// The package's `[package].name` in the stdlib manifests — the ONE
@@ -112,6 +115,7 @@ impl LangPackage {
             Self::Aws => "aws",
             Self::Vercel => "vercel",
             Self::ClaudeCode => "claude_code",
+            Self::Naceai => "naceai",
         }
     }
 
