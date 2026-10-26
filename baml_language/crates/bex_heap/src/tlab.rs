@@ -164,6 +164,12 @@ impl Tlab {
             self.refill();
         }
 
+        // BEP-042: an instance of a class with a finalizer joins the
+        // collector's finalizable list. Checked before the write moves `obj`.
+        // SAFETY: the allocating VM holds a heap permit, so an instance's
+        // class object is live.
+        let finalizable = unsafe { BexHeap::needs_finalizer_registration(&obj) };
+
         let global_idx = self.alloc_ptr;
         self.alloc_ptr += 1;
 
@@ -186,7 +192,11 @@ impl Tlab {
         let ptr = unsafe { (*self.heap.gen0.get()).get_ptr(runtime_idx) };
 
         // SAFETY: The pointer is valid and points to a valid object we just wrote
-        unsafe { self.heap.make_heap_ptr(ptr) }
+        let ptr = unsafe { self.heap.make_heap_ptr(ptr) };
+        if finalizable {
+            self.heap.register_finalizable(ptr);
+        }
+        ptr
     }
 
     /// Assign a fresh telemetry identity without registering a weak reference.

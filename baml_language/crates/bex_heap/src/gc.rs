@@ -152,67 +152,148 @@ impl BexHeap {
     /// and clears Gen0 and Gen1. After collection all survivors reside in Gen2.
     ///
     /// Returns `(GcStats, remapped_roots, forwarding_map)`.
-    /// BEP-042: scan the given from-space generations for instances that died
+    /// BEP-042: the instances in the given from-space generations that died
     /// this collection (not in `forwarding`), are not already cleaned, and
     /// whose class defines a `cleanup` finalizer. Returns each (old) instance
     /// pointer with its class's finalizer — the keep-alive seeds for
     /// finalization.
     ///
-    /// Cheap: most objects are not instances, and most instances belong to
-    /// classes without `cleanup` (one `Class::cleanup` read). Only the
-    /// dead-and-finalizable minority is collected.
+    /// Checks only the finalizable list ([`FinalizableInstances`]), not every
+    /// object in from-space: a dead object without a finalizer is never
+    /// visited. Every instance that could qualify is on the list (its
+    /// invariant), and each entry is tested against the same conditions a
+    /// walk of `gens` applies, so the seeds are the same. They come back in
+    /// the order such a walk finds them: by generation in `gens` order, then
+    /// by slot.
     ///
     /// SAFETY: call only at a GC safepoint, after the root trace has populated
     /// `forwarding`, and before the space swap — the from-space objects must
     /// still be intact.
+    ///
+    /// [`FinalizableInstances`]: crate::heap::FinalizableInstances
     unsafe fn scan_dead_finalizers(
         &self,
         forwarding: &HashMap<HeapPtr, HeapPtr>,
         gens: &[&ChunkedVec<Object>],
     ) -> Vec<(HeapPtr, HeapPtr)> {
         // Fast path: if no class defines `cleanup`, no instance can ever be
-        // finalizable, so skip the O(heap) from-space walk on every collection.
+        // finalizable.
         if !self
             .has_finalizable_classes
             .load(std::sync::atomic::Ordering::Acquire)
         {
             return Vec::new();
         }
+        let mut finalizable = self.finalizable.lock().expect("finalizable lock poisoned");
+        debug_assert!(
+            !finalizable.stale,
+            "the collection refreshes a stale finalizable list before tracing"
+        );
+        finalizable.instances.sort_unstable();
+        finalizable.instances.dedup();
         let mut seeds = Vec::new();
-        for space in gens {
+        for &ptr in &finalizable.instances {
+            #[cfg(test)]
+            tests::FINALIZER_SCAN_VISITS.with(|visits| visits.set(visits.get() + 1));
+            if forwarding.contains_key(&ptr) {
+                continue; // reachable from roots → not dead
+            }
+            // Not in `gens`: a gen2 instance a minor collection leaves alone.
+            // SAFETY: GC safepoint; only addresses are compared.
+            let Some((generation, slot)) =
+                gens.iter().enumerate().find_map(|(generation, space)| {
+                    unsafe { Self::locate_in_chunked_vec(space, ptr.as_ptr()) }.map(
+                        |(chunk_idx, offset)| {
+                            (
+                                generation,
+                                chunk_idx * ChunkedVec::<Object>::CHUNK_SIZE + offset,
+                            )
+                        },
+                    )
+                })
+            else {
+                continue;
+            };
+            // SAFETY: from-space object is still intact pre-swap.
+            let Object::Instance(inst) = (unsafe { ptr.get() }) else {
+                continue;
+            };
+            if inst.cleaned.is_cleaned() {
+                continue; // explicit/`defer` already cleaned it — SuppressFinalize
+            }
+            // A runtime-created class is itself collectible, so this
+            // collection may already have evacuated it: read it where it
+            // lives now. A compile-time class, or one this collection does
+            // not move, is still at `inst.class`.
+            let class_ptr = forwarding.get(&inst.class).copied().unwrap_or(inst.class);
+            // SAFETY: a forwarded pointer names an initialized destination
+            // slot; an unforwarded one names a slot no evacuation touched.
+            let Object::Class(class) = (unsafe { class_ptr.get() }) else {
+                continue;
+            };
+            // The finalizer is the class's own method, taken while the
+            // class is in hand. The instance keeps its class alive and the
+            // class its methods, so the closure copied from the seed
+            // carries the function along.
+            if let Some(cleanup) = class.cleanup() {
+                seeds.push(((generation, slot), ptr, cleanup));
+            }
+        }
+        seeds.sort_unstable_by_key(|&(order, ..)| order);
+        seeds
+            .into_iter()
+            .map(|(_, instance, cleanup)| (instance, cleanup))
+            .collect()
+    }
+
+    /// BEP-042: if an existing class gained a finalizer since the last
+    /// collection, rebuild the finalizable list from a walk of every
+    /// generation. Runs before the root trace, while every object is still
+    /// in place: evacuation leaves a tombstone where a live object was, so a
+    /// later walk would miss the live instances.
+    ///
+    /// SAFETY: GC safepoint, before any object is evacuated.
+    unsafe fn refresh_finalizable_instances(&self) {
+        let mut finalizable = self.finalizable.lock().expect("finalizable lock poisoned");
+        if !finalizable.stale {
+            return;
+        }
+        finalizable.instances.clear();
+        // SAFETY: GC safepoint; nothing has moved yet.
+        for space in unsafe { [self.gen0_ref(), self.gen1_ref(), self.gen2_ref()] } {
             for i in 0..space.len() {
                 // SAFETY: index in bounds; GC safepoint.
                 let ptr = unsafe { self.make_heap_ptr(space.get_ptr(i)) };
-                if forwarding.contains_key(&ptr) {
-                    continue; // reachable from roots → not dead
-                }
-                // SAFETY: from-space object is still intact pre-swap.
-                let Object::Instance(inst) = (unsafe { ptr.get() }) else {
-                    continue;
-                };
-                if inst.cleaned.is_cleaned() {
-                    continue; // explicit/`defer` already cleaned it — SuppressFinalize
-                }
-                // A runtime-created class is itself collectible, so this
-                // collection may already have evacuated it: read it where it
-                // lives now. A compile-time class, or one this collection does
-                // not move, is still at `inst.class`.
-                let class_ptr = forwarding.get(&inst.class).copied().unwrap_or(inst.class);
-                // SAFETY: a forwarded pointer names an initialized destination
-                // slot; an unforwarded one names a slot no evacuation touched.
-                let Object::Class(class) = (unsafe { class_ptr.get() }) else {
-                    continue;
-                };
-                // The finalizer is the class's own method, taken while the
-                // class is in hand. The instance keeps its class alive and the
-                // class its methods, so the closure copied from the seed
-                // carries the function along.
-                if let Some(cleanup) = class.cleanup() {
-                    seeds.push((ptr, cleanup));
+                // SAFETY: nothing has moved, so the object and its class are intact.
+                if unsafe { Self::needs_finalizer_registration(ptr.get()) } {
+                    finalizable.instances.push(ptr);
                 }
             }
         }
-        seeds
+        finalizable.stale = false;
+    }
+
+    /// BEP-042: move each finalizable entry to where this collection put it,
+    /// keep the gen2 entries a minor collection leaves in place, and drop the
+    /// dead. Called with the final `forwarding` map, before the space swap,
+    /// like [`update_function_lookup`](Self::update_function_lookup).
+    fn update_finalizable_instances(
+        &self,
+        forwarding: &HashMap<HeapPtr, HeapPtr>,
+        level: CollectionLevel,
+    ) {
+        self.finalizable
+            .lock()
+            .expect("finalizable lock poisoned")
+            .instances
+            .retain_mut(|ptr| {
+                if let Some(&new_ptr) = forwarding.get(ptr) {
+                    *ptr = new_ptr;
+                    true
+                } else {
+                    level == CollectionLevel::Minor && self.generation_of(*ptr) == Generation::Gen2
+                }
+            });
     }
 
     /// BEP-042 (major GC): keep alive every dead, not-yet-cleaned instance of a
@@ -464,6 +545,9 @@ impl BexHeap {
         // Advance epoch before creating any new runtime pointers.
         self.bump_epoch();
 
+        // SAFETY: GC safepoint; nothing has been evacuated yet.
+        unsafe { self.refresh_finalizable_instances() };
+
         // Count objects across all active generations for stats.
         // SAFETY: GC runs at safepoints, no VMs are executing.
         let old_count =
@@ -545,6 +629,7 @@ impl BexHeap {
         // Resolve weak function lookups before destroying from-space. These
         // pointers are deliberately absent from the root set.
         self.update_function_lookup(&forwarding, CollectionLevel::Major);
+        self.update_finalizable_instances(&forwarding, CollectionLevel::Major);
 
         profile.finish_phase(crate::gc_profile::HeapPhase::Fixup);
 
@@ -1490,6 +1575,9 @@ impl BexHeap {
 
         self.bump_epoch();
 
+        // SAFETY: GC safepoint; nothing has been evacuated yet.
+        unsafe { self.refresh_finalizable_instances() };
+
         let gen0_count = unsafe { self.gen0_ref().len() };
         let gen1_count = unsafe { self.gen1_ref().len() };
 
@@ -1615,6 +1703,7 @@ impl BexHeap {
         // Gen2 is not collected by a minor cycle. Missing forwarding entries
         // there are retained; missing entries in young generations are dead.
         self.update_function_lookup(&forwarding, CollectionLevel::Minor);
+        self.update_finalizable_instances(&forwarding, CollectionLevel::Minor);
 
         profile.finish_phase(crate::gc_profile::HeapPhase::Fixup);
 
@@ -3616,5 +3705,188 @@ mod tests {
             payload < whole + strings.len(),
             "{payload} counts the buffer more than once"
         );
+    }
+    thread_local! {
+        /// Entries the finalizer scan examined on this thread (test-only).
+        pub(super) static FINALIZER_SCAN_VISITS: std::cell::Cell<usize> =
+            const { std::cell::Cell::new(0) };
+    }
+
+    /// A class whose `cleanup` method is `finalizer`, or with no finalizer.
+    fn class_object(finalizer: Option<HeapPtr>) -> Object {
+        use baml_type::Name;
+        use bex_vm_types::{Class, ClassMethodDef, ObjectIndex};
+
+        let methods: indexmap::IndexMap<Name, ClassMethodDef> = finalizer
+            .into_iter()
+            .map(|function_ptr| {
+                (
+                    Name::new("cleanup"),
+                    ClassMethodDef {
+                        function: ObjectIndex::from_raw(0),
+                        function_ptr,
+                    },
+                )
+            })
+            .collect();
+        Object::Class(Box::new(Class {
+            path: bex_vm_types::types::LocalName::new(Vec::new(), Name::new("Resource")),
+            fields: vec![],
+            description: None,
+            alias: None,
+            docstring: None,
+            other: Default::default(),
+            stream_done: false,
+            type_tag: baml_type::typetag::TypeTag::from_i64(0),
+            cleanup: finalizer.map(|_| 0),
+            methods,
+            generic_param_count: 0,
+            owner: bex_vm_types::types::Owner::anonymous(),
+            telemetry_definition: bex_vm_types::DefinitionCell::default(),
+        }))
+    }
+
+    fn finalizable_entries(heap: &BexHeap) -> Vec<HeapPtr> {
+        let mut entries = heap.finalizable.lock().unwrap().instances.clone();
+        entries.sort_unstable();
+        entries.dedup();
+        entries
+    }
+
+    /// The finalizer scan examines the registered instances only: 10,000 dead
+    /// floats around them are never visited.
+    #[test]
+    fn finalizer_scan_visits_only_finalizable_instances() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let finalizer = tlab.alloc_string("cleanup".to_string());
+        let class = tlab.alloc(class_object(Some(finalizer)));
+        // A runtime class with a finalizer joins the heap, as a graft does.
+        heap.note_finalizable_class();
+        let live = tlab.alloc_instance(class, vec![]);
+        let dead = tlab.alloc_instance(class, vec![]);
+        for i in 0..10_000_u32 {
+            tlab.alloc_float(f64::from(i));
+        }
+        assert_eq!(finalizable_entries(&heap), {
+            let mut both = vec![live, dead];
+            both.sort_unstable();
+            both
+        });
+
+        FINALIZER_SCAN_VISITS.with(|visits| visits.set(0));
+        let (_, _, forwarding) = unsafe { heap.collect_garbage(&[live]) };
+
+        assert_eq!(FINALIZER_SCAN_VISITS.with(std::cell::Cell::get), 2);
+        assert_eq!(
+            heap.take_pending_finalizers(),
+            vec![(forwarding[&dead], forwarding[&finalizer])]
+        );
+        // The live instance and the resurrected dead one stay on the list.
+        let mut expected = vec![forwarding[&live], forwarding[&dead]];
+        expected.sort_unstable();
+        assert_eq!(finalizable_entries(&heap), expected);
+    }
+
+    /// An instance rooted through two minor collections moves gen0 → gen1 →
+    /// gen2, and its entry follows it. Dead in gen2, a minor collection leaves
+    /// it alone; a major one finalizes it exactly once, and once cleaned it is
+    /// neither finalized again nor kept on the list.
+    #[test]
+    fn finalizable_instance_follows_promotions_and_is_finalized_once() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let mut finalizer = tlab.alloc_string("cleanup".to_string());
+        let class = tlab.alloc(class_object(Some(finalizer)));
+        heap.note_finalizable_class();
+        let mut instance = tlab.alloc_instance(class, vec![]);
+        let follow = |ptr: HeapPtr, forwarding: &HashMap<HeapPtr, HeapPtr>| {
+            forwarding.get(&ptr).copied().unwrap_or(ptr)
+        };
+
+        for _ in 0..2 {
+            let (_, _, forwarding) =
+                unsafe { heap.collect_garbage_generational(&[instance], CollectionLevel::Minor) };
+            instance = forwarding[&instance];
+            finalizer = follow(finalizer, &forwarding);
+            assert!(heap.take_pending_finalizers().is_empty());
+            assert_eq!(finalizable_entries(&heap), vec![instance]);
+        }
+        assert_eq!(heap.generation_of(instance), Generation::Gen2);
+
+        let (_, _, forwarding) =
+            unsafe { heap.collect_garbage_generational(&[], CollectionLevel::Minor) };
+        finalizer = follow(finalizer, &forwarding);
+        assert!(heap.take_pending_finalizers().is_empty());
+        assert_eq!(finalizable_entries(&heap), vec![instance]);
+
+        let (_, _, forwarding) =
+            unsafe { heap.collect_garbage_generational(&[], CollectionLevel::Major) };
+        let pending = heap.take_pending_finalizers();
+        assert_eq!(
+            pending,
+            vec![(forwarding[&instance], forwarding[&finalizer])]
+        );
+        // The engine runs `cleanup`, which latches the instance.
+        let Object::Instance(finalized) = (unsafe { pending[0].0.get() }) else {
+            panic!("a finalizer seed is an instance");
+        };
+        assert!(finalized.cleaned.begin());
+
+        unsafe { heap.collect_garbage_generational(&[], CollectionLevel::Major) };
+        assert!(heap.take_pending_finalizers().is_empty());
+        assert!(finalizable_entries(&heap).is_empty());
+    }
+
+    /// A class that gains a finalizer after an instance of it exists
+    /// invalidates the list; the next collection rebuilds it from a walk of
+    /// every generation and finds the older instance.
+    #[test]
+    fn class_that_gains_a_finalizer_rebuilds_the_list() {
+        let heap = BexHeap::new(vec![]);
+        let mut tlab = Tlab::new(Arc::clone(&heap));
+        let finalizer = tlab.alloc_string("cleanup".to_string());
+        let class = tlab.alloc(class_object(None));
+        let older = tlab.alloc_instance(class, vec![]);
+        assert!(finalizable_entries(&heap).is_empty());
+
+        // The class gains a finalizer in place, as an edit through the VM's
+        // `ObjectMut` would; the guard then invalidates the list.
+        // SAFETY: single-threaded test; nothing else references the class object.
+        unsafe {
+            *class.get_mut() = class_object(Some(finalizer));
+        }
+        heap.invalidate_finalizable_instances();
+
+        let (_, _, forwarding) = unsafe { heap.collect_garbage(&[]) };
+        assert_eq!(
+            heap.take_pending_finalizers(),
+            vec![(forwarding[&older], forwarding[&finalizer])]
+        );
+    }
+
+    /// Seeds come back in from-space order, whatever order the instances were
+    /// registered in.
+    #[test]
+    fn finalizer_seeds_come_back_in_from_space_order() {
+        let heap = BexHeap::with_tlab_size(vec![], 4);
+        let mut low = Tlab::new(Arc::clone(&heap));
+        let mut high = Tlab::new(Arc::clone(&heap));
+        let finalizer = low.alloc_string("cleanup".to_string());
+        let class = low.alloc(class_object(Some(finalizer)));
+        heap.note_finalizable_class();
+        // `high` takes the next TLAB chunk, so its slots come after `low`'s,
+        // but it registers its instance first.
+        let late = high.alloc_instance(class, vec![]);
+        let early = low.alloc_instance(class, vec![]);
+        assert!(early.as_ptr() < late.as_ptr());
+
+        let (_, _, forwarding) = unsafe { heap.collect_garbage(&[]) };
+        let order: Vec<HeapPtr> = heap
+            .take_pending_finalizers()
+            .into_iter()
+            .map(|(instance, _)| instance)
+            .collect();
+        assert_eq!(order, vec![forwarding[&early], forwarding[&late]]);
     }
 }

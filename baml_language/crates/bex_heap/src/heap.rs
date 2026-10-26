@@ -105,6 +105,34 @@ pub struct HeapStats {
     pub reserved_slots: usize,
 }
 
+/// BEP-042: the instances a collection checks for finalization, so it need not
+/// walk every object in from-space.
+///
+/// Invariant, unless `stale`: every `Instance` in gen0, gen1 or gen2 whose
+/// class has a `cleanup` finalizer is in `instances`. Entries may repeat, and
+/// may name an instance whose class has since lost its finalizer or that was
+/// already cleaned: a collection re-checks each entry exactly as a full walk
+/// would, so extra entries change nothing.
+///
+/// Kept by:
+/// - [`BexHeap::register_finalizable`], called when such an instance is
+///   allocated ([`Tlab::alloc`](crate::Tlab::alloc)) or written in place
+///   (the VM's `ObjectMut`). That covers compile-time classes, runtime-compiled
+///   and session classes (a graft allocates a new class object before any
+///   instance of it exists), and an instance whose class changes.
+/// - [`BexHeap::invalidate_finalizable_instances`], when an existing class
+///   gains a finalizer: its older instances were never registered, so the next
+///   collection rebuilds the list from a walk of every generation, before it
+///   moves anything.
+/// - Every collection, which moves entries to their new addresses (promotions
+///   included), keeps the gen2 entries a minor collection does not touch, and
+///   drops the dead.
+#[derive(Default)]
+pub(crate) struct FinalizableInstances {
+    pub(crate) instances: Vec<HeapPtr>,
+    pub(crate) stale: bool,
+}
+
 /// Unified heap for the BEX virtual machine.
 ///
 /// All heap-allocated objects live here. The heap is shared across
@@ -226,9 +254,13 @@ pub struct BexHeap {
     /// ([`note_finalizable_class`](Self::note_finalizable_class)); never lowered.
     /// When `false`, the per-collection finalizer scan
     /// ([`scan_dead_finalizers`](Self::scan_dead_finalizers)) is skipped
-    /// entirely — programs that define no `cleanup` (the common case) pay no
-    /// per-GC scan cost.
+    /// entirely. When `true` (the stdlib's `Stream` defines `cleanup`, so in
+    /// practice always), the scan checks only [`Self::finalizable`].
     pub(crate) has_finalizable_classes: AtomicBool,
+
+    /// BEP-042: the instances a collection checks for finalization; see
+    /// [`FinalizableInstances`].
+    pub(crate) finalizable: Mutex<FinalizableInstances>,
 
     /// TLAB chunk size for new allocations.
     tlab_size: usize,
@@ -368,6 +400,7 @@ impl BexHeap {
             pending_finalizers: Mutex::new(Vec::new()),
             pending_unhandled_spawn_errors: Mutex::new(Vec::new()),
             has_finalizable_classes: AtomicBool::new(has_finalizable_classes),
+            finalizable: Mutex::new(FinalizableInstances::default()),
             tlab_size,
             max_tlab_size: tlab_size,
             gc_policy: crate::gc_policy::AllocationBudget::new(),
@@ -1195,6 +1228,45 @@ impl BexHeap {
     /// from here on scans for finalizable instances.
     pub fn note_finalizable_class(&self) {
         self.has_finalizable_classes.store(true, Ordering::Release);
+    }
+
+    /// BEP-042: whether `object` is an instance of a class with a `cleanup`
+    /// finalizer, and so belongs in the collector's finalizable list.
+    ///
+    /// # Safety
+    ///
+    /// If `object` is an instance, its class pointer must name a live object:
+    /// the caller holds a heap permit, or is the collector before it moves
+    /// anything.
+    #[inline]
+    pub unsafe fn needs_finalizer_registration(object: &Object) -> bool {
+        let Object::Instance(instance) = object else {
+            return false;
+        };
+        // SAFETY: the caller guarantees the class object is live.
+        matches!(unsafe { instance.class.get() }, Object::Class(class) if class.cleanup.is_some())
+    }
+
+    /// BEP-042: record `instance`, an instance of a class with a `cleanup`
+    /// finalizer, so collections check it for finalization (see
+    /// `FinalizableInstances`). Registering one twice is harmless.
+    pub fn register_finalizable(&self, instance: HeapPtr) {
+        self.finalizable
+            .lock()
+            .expect("finalizable lock poisoned")
+            .instances
+            .push(instance);
+    }
+
+    /// BEP-042: an existing class gained a `cleanup` finalizer. Its older
+    /// instances were never registered, so the next collection rebuilds the
+    /// finalizable list from a walk of every generation.
+    pub fn invalidate_finalizable_instances(&self) {
+        self.has_finalizable_classes.store(true, Ordering::Release);
+        self.finalizable
+            .lock()
+            .expect("finalizable lock poisoned")
+            .stale = true;
     }
 
     /// BEP-042: record an instance and its class's `cleanup` function (both by

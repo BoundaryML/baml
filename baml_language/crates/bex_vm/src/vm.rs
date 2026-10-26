@@ -127,10 +127,28 @@ use crate::{
 /// when dropped, and charges the difference to the VM's allocation account.
 /// It adds nothing to the access itself: that the object is not reachable from
 /// anywhere else meanwhile is `get_object_mut`'s contract, not this guard's.
+///
+/// On drop it also keeps the collector's finalizable list complete (BEP-042):
+/// an object the edit turned into an instance of a class with a `cleanup`
+/// finalizer is registered, and a class the edit gave a finalizer invalidates
+/// the list, since its existing instances were never registered.
 pub struct ObjectMut<'a> {
     object: &'a mut Object,
     debt: &'a bex_vm_types::AllocDebt,
     before: usize,
+    ptr: HeapPtr,
+    heap: &'a BexHeap,
+    finalizable_before: Finalizable,
+}
+
+/// What an object is to the collector's finalizable list.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Finalizable {
+    Neither,
+    /// An instance of a class with a `cleanup` finalizer.
+    Instance,
+    /// A class with a `cleanup` finalizer.
+    Class,
 }
 
 impl ObjectMut<'_> {
@@ -138,6 +156,16 @@ impl ObjectMut<'_> {
         let mut meter = bex_vm_types::Meter::charge();
         object.measure(&mut meter);
         meter.total()
+    }
+
+    fn finalizable(object: &Object) -> Finalizable {
+        match object {
+            Object::Class(class) if class.cleanup.is_some() => Finalizable::Class,
+            // SAFETY: the VM holds a heap permit while it mutates an object,
+            // so an instance's class object is live.
+            _ if unsafe { BexHeap::needs_finalizer_registration(object) } => Finalizable::Instance,
+            _ => Finalizable::Neither,
+        }
     }
 }
 
@@ -164,6 +192,15 @@ impl Drop for ObjectMut<'_> {
             isize::try_from(before - after).map_or(isize::MIN, |shrink| -shrink)
         };
         self.debt.add(delta);
+
+        let finalizable = Self::finalizable(self.object);
+        if finalizable != self.finalizable_before {
+            match finalizable {
+                Finalizable::Instance => self.heap.register_finalizable(self.ptr),
+                Finalizable::Class => self.heap.invalidate_finalizable_instances(),
+                Finalizable::Neither => {}
+            }
+        }
     }
 }
 
@@ -3776,8 +3813,11 @@ impl BexVm {
         let object = unsafe { ptr.get_mut() };
         ObjectMut {
             before: ObjectMut::footprint(object),
+            finalizable_before: ObjectMut::finalizable(object),
             object,
             debt: self.tlab.alloc_debt(),
+            ptr,
+            heap: &self.heap,
         }
     }
 
