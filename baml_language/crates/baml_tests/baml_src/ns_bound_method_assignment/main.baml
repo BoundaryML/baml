@@ -117,6 +117,75 @@ test "generic_receiver_frame_survives_storage" {
     assert.equal(generic_assignment<string>("hi"), ["string:hi:hi", "string:hi:hi"])
 }
 
+class GenericMethodWorker {
+    prefix: string,
+    function describe<T>(self, value: T) -> string {
+        self.prefix + ":" + reflect.Type.of<T>().to_string() + ":" + value.to_string()
+    }
+}
+
+function invoke_description<T>(f: (value: T) -> string throws never, value: T) -> string {
+    f(value)
+}
+
+function generic_method_assignment<T>(value: T) -> string[] {
+    let worker = GenericMethodWorker { prefix: "receiver" };
+    let h = GenericHolder<T> { f: null };
+    h.f = worker.describe;
+    let m: map<string, (value: T) -> string throws never> = {};
+    m["a"] = worker.describe;
+    let explicit = GenericHolder<T> { f: null };
+    explicit.f = worker.describe<T>;
+    let local: (value: T) -> string throws never = worker.describe;
+    [
+        h.f?.(value) ?? "missing",
+        m["a"](value),
+        explicit.f?.(value) ?? "missing",
+        local(value),
+        invoke_description(worker.describe, value),
+    ]
+}
+
+test "generic_method_on_non_generic_receiver_survives_storage" {
+    assert.equal(
+        generic_method_assignment<int>(7),
+        ["receiver:int:7", "receiver:int:7", "receiver:int:7", "receiver:int:7", "receiver:int:7"],
+    );
+    assert.equal(
+        generic_method_assignment<string>("hi"),
+        [
+            "receiver:string:hi",
+            "receiver:string:hi",
+            "receiver:string:hi",
+            "receiver:string:hi",
+            "receiver:string:hi",
+        ],
+    )
+}
+
+class GenericMethodBox<T> {
+    value: T,
+    function describe<U>(self, other: U) -> string {
+        reflect.Type.of<T>().to_string()
+            + ":"
+            + self.value.to_string()
+            + ":"
+            + reflect.Type.of<U>().to_string()
+            + ":"
+            + other.to_string()
+    }
+}
+
+function make_generic_method_box() -> GenericMethodBox<int> {
+    GenericMethodBox { value: 7 }
+}
+
+test "generic_method_arguments_append_to_receiver_arguments" {
+    let h = GenericHolder<string> { f: null };
+    h.f = make_generic_method_box().describe;
+    assert.equal(h.f?.("hi"), "int:7:string:hi")
+}
+
 interface Transform {
     function transform(self, x: int) -> int throws never;
 }
