@@ -26,12 +26,15 @@ const cases = [
     { name: 'GenericItems', type: 'Box<int>[]', read: 'value[0].value', make: () => [new Box({ value: 7, $types: { T: 'int' } })] },
     { name: 'GenericItemMap', type: 'map<string, Box<int>>', read: 'value["a"].value', make: () => ({ a: new Box({ value: 7, $types: { T: 'int' } }) }) },
     { name: 'Nested', type: 'map<string, Item[]>[]', read: 'value[0]["a"][0].value', make: () => [{ a: [new Item({ value: 7 })] }] },
+    { name: 'AliasItems', type: 'Recursive[]', read: 'value.length()', make: () => [new Item({ value: 7 })], expected: 1 },
+    { name: 'AliasItemMap', type: 'map<string, Recursive>', read: 'value.length()', make: () => ({ a: new Item({ value: 7 }) }), expected: 1 },
 ];
 
 const source = `
 class Item { value int }
 class Box<T> { value T }
 class ItemBox { items Item[] }
+type Recursive = Item | Recursive[]
 ${cases.map(({ name, type, read }) => `
 function Arg${name}(value: ${type}) -> int { ${read} }
 function Host${name}(f: () -> ${type}) -> int { let value = f(); ${read} }
@@ -75,6 +78,8 @@ describe('host callable class containers (#5226)', () => {
         ['GenericItemMap', () => ({ a: new Box({ value: 'bad', $types: { T: 'int' } }) })],
         ['GenericItems', () => [new Box({ value: 'bad', $types: { T: 'string' } })]],
         ['GenericItemMap', () => ({ a: new Box({ value: 'bad', $types: { T: 'string' } }) })],
+        ['AliasItems', () => [new Item({ value: 'bad' })]],
+        ['AliasItemMap', () => ({ a: new Item({ value: 'bad' }) })],
     ] as const)('rejects invalid class fields or generic arguments in %s (%#)', async (name, make) => {
         await expect(callFunction(runtime, `Arg${name}`, { value: make() })).rejects.toThrow();
         await expect(callFunction(runtime, `Host${name}`, { f: async () => make() })).rejects.toThrow(/HostContractViolation/);

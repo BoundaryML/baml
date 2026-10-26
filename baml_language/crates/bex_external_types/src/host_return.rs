@@ -164,30 +164,34 @@ fn inbound_annotation_satisfies_ty(actual: &RuntimeTy, expected: &RuntimeTy) -> 
 /// crate — class checking is limited to name identity here and completed
 /// engine-side.
 fn value_satisfies_ty(value: &BexExternalValue, ty: &RuntimeTy) -> bool {
-    // Recursive container/union checks must use the same sparse-annotation
-    // rules as the root. A class payload can be anonymous: its nominal name
-    // and generic arguments live only in the annotation, not in the payload.
-    if let BexExternalValue::Union { metadata, .. } = value
-        && metadata.is_inbound_type_annotation
-    {
-        return validate_host_return(value, ty).is_ok();
-    }
-
     match ty {
         // `unknown` / `any`: accept anything. At the FFI boundary the declared
         // return type is concrete, so this is defensive.
         RuntimeTy::Unknown => true,
 
-        // Union: matches at least one member. A `Union`-wrapped value is
-        // unwrapped and checked against the arms.
+        // Union: matches at least one member. Unwrap genuine union carriers;
+        // sparse annotations must stay attached while trying each member.
         RuntimeTy::Union(members) => match value {
-            BexExternalValue::Union { value: inner, .. } => {
+            BexExternalValue::Union {
+                value: inner,
+                metadata,
+            } if !metadata.is_inbound_type_annotation => {
                 members.iter().any(|m| value_satisfies_ty(inner, m))
             }
             _ => members.iter().any(|m| value_satisfies_ty(value, m)),
         },
 
         RuntimeTy::TypeAlias(name) if is_canonical_json_alias(name) => value_satisfies_json(value),
+
+        // A nested class carries its name and generic args in the sparse
+        // annotation, just like a root class. Check it before unwrapping the
+        // anonymous payload. Alias expansion remains engine-side.
+        RuntimeTy::Class(..)
+            if matches!(value, BexExternalValue::Union { metadata, .. }
+                if metadata.is_inbound_type_annotation) =>
+        {
+            validate_host_return(value, ty).is_ok()
+        }
 
         // A `Union`-wrapped value against a non-union declared type: validate
         // the inner value against the declared type.
@@ -876,6 +880,35 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn sparse_annotations_in_alias_containers_defer_to_engine_schema() {
+        let item = RuntimeTy::Class(TypeName::from_dotted_path("user.Item"), Box::new([]));
+        let alias = RuntimeTy::TypeAlias(TypeName::from_dotted_path("user.Recursive"));
+        let value = BexExternalValue::typed(
+            BexExternalValue::Instance {
+                class_name: String::new(),
+                type_args: vec![],
+                fields: IndexMap::new(),
+            },
+            item,
+        );
+        let list = BexExternalValue::Array {
+            element_type: RuntimeTy::unknown(),
+            items: vec![value.clone()],
+        };
+        let map = BexExternalValue::Map {
+            key_type: RuntimeTy::string(),
+            value_type: RuntimeTy::unknown(),
+            entries: IndexMap::from_iter([("item".to_string(), value)]),
+        };
+        assert!(validate_host_return(&list, &RuntimeTy::list(alias.clone())).is_ok());
+        assert!(
+            validate_host_return(&list, &RuntimeTy::list(RuntimeTy::optional(alias.clone())))
+                .is_ok()
+        );
+        assert!(validate_host_return(&map, &RuntimeTy::map(RuntimeTy::string(), alias)).is_ok());
     }
 
     #[test]
